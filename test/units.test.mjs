@@ -11,7 +11,7 @@ import { parsePrd, verifyCommands, withFrontmatterKey, fencedBlocks, findPlaceho
 import { makeRunner, isOurProcess } from "../lib/run.mjs";
 import { branchFor, prdIdFromBranch, isOurBranch, makeGit } from "../lib/git.mjs";
 import { writeFileSync, existsSync, utimesSync, mkdirSync } from "node:fs";
-import { validate, DEFAULTS } from "../lib/config.mjs";
+import { validate, DEFAULTS, merge, discoverHarnesses } from "../lib/config.mjs";
 import { messages } from "../lib/notify.mjs";
 import { repoFromRemote, remoteMatches } from "../lib/gh.mjs";
 import { CONFIG, T0, tempHome, claudeResultLines, codexLines, GOOD_PRD } from "./helpers.mjs";
@@ -247,4 +247,32 @@ test("the boundary comparison includes the boundary, and an instant floors to it
   assert.ok(!isAtOrAfter(null, "2026-09-24T02:00:05.000Z"));
   assert.equal(floorSecond("2026-09-24T02:00:05.937Z"), "2026-09-24T02:00:05.000Z");
   assert.equal(floorSecond(null), null);
+});
+
+test("a harness is discovered when none is configured, and naming one turns discovery off", () => {
+  // Whichever of the two the operator happens to have installed should be enough; nobody should have to write a
+  // path by hand for a binary already on their PATH.
+  const home = "/tmp/gallivant-discovery-home";
+  const discovered = discoverHarnesses(home);
+  for (const name of Object.keys(discovered)) {
+    assert.ok(discovered[name].bin.startsWith("/"), `${name} resolves to an absolute path`);
+    if (name === "claude") assert.equal(discovered[name].settings, join(home, "claude", "settings.json"));
+  }
+  // An empty harness object means "discover"; a named one is taken as written, even when the other is installed.
+  const auto = merge({ trusted_authors: ["me"], worktrees: "/tmp/wt" }, home);
+  assert.deepEqual(Object.keys(auto.harness), Object.keys(discovered));
+  const explicit = merge({ trusted_authors: ["me"], worktrees: "/tmp/wt", harness: { codex: { bin: "/opt/codex" } } }, home);
+  assert.deepEqual(Object.keys(explicit.harness), ["codex"], "an explicit harness is not merged with discovery");
+  assert.equal(explicit.harness.codex.bin, "/opt/codex");
+});
+
+test("one harness is a complete install; none at all names the fix", () => {
+  const base = { poll_seconds: 120, max_iterations: 3, checks_grace_minutes: 5, run_timeout_minutes: 30, max_budget_usd: 5,
+    rereview_minutes: 6, stall_hours: 6, trusted_authors: ["me"], reviewer: null, notify: null,
+    deliverable: DEFAULTS.deliverable, worktrees: "/tmp/wt", github_token_file: null, repos: [] };
+  assert.deepEqual(validate({ ...base, harness: { claude: { bin: "/bin/claude", settings: "/s.json" } } }, "/tmp/h"), []);
+  assert.deepEqual(validate({ ...base, harness: { codex: { bin: "/bin/codex" } } }, "/tmp/h"), []);
+  const none = validate({ ...base, harness: {} }, "/tmp/h");
+  assert.match(none[0], /no harness configured and none found/);
+  assert.match(none[0], /Install Claude Code or Codex/, "the message says what to do, not just what is wrong");
 });

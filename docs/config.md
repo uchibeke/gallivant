@@ -17,6 +17,7 @@
 | `notify` | null | `{ ntfy: "https://ntfy.sh/<topic>", email: null }`. Null means transitions are logged only. |
 | `worktrees` | required | Directory for per-PRD checkouts. Must be outside the Gallivant home. |
 | `github_token_file` | null | Null means the daemon and runs use your existing `gh` login. Set to the path of a fine-grained PAT to narrow what a run can reach; it is then used as `GH_TOKEN` by the daemon and every run. |
+| `harness` | discovered | Omit it and Gallivant uses whichever harnesses it finds on your PATH, so one installed harness is a complete install. Name one and only that one is used, which is what you want when two versions are installed or a harness is deliberately out of play. |
 | `harness.claude` | | `{ bin, settings }`. `bin` is the absolute path to `claude`; `settings` is the Gallivant settings file with the APort hook and sandbox. |
 | `harness.codex` | | `{ bin }`. |
 | `repos` | [] | Appended by `start` and `register`. Used by `up` to recover from GitHub. |
