@@ -10,7 +10,7 @@ import { join } from "node:path";
 import { mkdirSync, writeFileSync, readFileSync } from "node:fs";
 import { EventEmitter } from "node:events";
 import { handle, mount } from "../lib/commands/serve.mjs";
-import { listRuns, runDir } from "../lib/tracker/runs.mjs";
+import { listRuns, listFlatRuns, runDir } from "../lib/tracker/runs.mjs";
 import { streamRun, TAIL } from "../lib/tracker/stream.mjs";
 import { esc, CSP } from "../lib/tracker/pages.mjs";
 import { makeRunner } from "../lib/run.mjs";
@@ -102,7 +102,7 @@ test("the dashboard groups every entry the way status already groups them, and l
   assert.match(body, /widget#7/, "the needs-human entry is listed");
   assert.match(body, /conflict/, "with the reason status would show");
   assert.match(body, /href="\/run\?id=acme%2Fwidget%2Fwidget-export"/, "every row links to its run page");
-  assert.match(body, /daemon DOWN/, "no daemon.json means the page says so rather than implying health");
+  assert.match(body, /daemon has never run here/, "no daemon.json says so plainly rather than implying health");
 });
 
 test("the run page shows the entry's facts and the log pane, and 404s for an id the registry does not have", async () => {
@@ -274,13 +274,13 @@ test("the stylesheet is a served file whose every value is a custom property a h
   assert.equal(r.code, 200);
   assert.match(r.headers["content-type"], /text\/css/);
   const css = r.body();
-  for (const prop of ["--gv-bg", "--gv-fg", "--gv-accent", "--gv-font", "--gv-mono", "--gv-size", "--gv-line", "--gv-radius"])
+  for (const prop of ["--gv-canvas", "--gv-surface", "--gv-text", "--gv-accent", "--gv-font", "--gv-mono", "--gv-size", "--gv-line", "--gv-r"])
     assert.ok(css.includes(prop + ":"), `${prop} has a default a parent can override`);
-  // font-family takes the parent's where an iframe allows it, with a system stack behind it.
-  assert.match(css, /--gv-font: inherit,/);
-  // Both directions of the theme override, so a forced palette wins over the system setting either way.
-  assert.match(css, /:root\[data-theme="dark"\]/);
-  assert.match(css, /:root:not\(\[data-theme="light"\]\)/);
+  // The palette matches the host it is built to sit inside, so a mounted tracker is not a foreign page in a frame.
+  assert.match(css, /--gv-accent: #22d3ee/, "the accent is the host's cyan, not a second brand");
+  assert.match(css, /--gv-font: Inter,/);
+  // `?theme=light` is the opt-out, since the default is the host's dark canvas.
+  assert.match(css, /:root\[data-theme="light"\]/);
   // No fixed viewport assumption: the layout is a grid that collapses, and nothing is sized in vw or positioned fixed.
   assert.ok(!/\d+vw/.test(css), "no width is tied to the viewport, since the frame decides the width");
   assert.ok(!/position:\s*fixed/.test(css), "nothing is pinned to the viewport inside a frame");
@@ -336,10 +336,53 @@ test("every page carries a content-security-policy that allows no inline script"
   await js.ended;
   assert.equal(js.code, 200);
   assert.match(js.headers["content-type"], /javascript/);
-  // The one place a log line touches the DOM. Assigning it anywhere that parses markup (innerHTML, outerHTML,
-  // insertAdjacentHTML, document.write) would make every line the agent prints executable.
-  assert.ok(!/innerHTML|outerHTML|insertAdjacentHTML|document\.write/.test(js.body()), "a log line is assigned as text, never parsed as markup");
-  assert.match(js.body(), /\.textContent = text/);
+  // A log line becomes markup on purpose now, so tool calls and links can be told apart (the renderer is ported
+  // from command-center's logline.js). What keeps that safe is that the text is escaped before anything is built
+  // from it, and only markup this file wrote is ever inserted. The escape must therefore come first.
+  assert.match(js.body(), /const esc = s => String\(s\)\.replace/, "the renderer carries its own escaper");
+  assert.match(js.body(), /let html = esc\(text\);/, "text is escaped before any link is substituted into it");
+  // Anything the page writes as plain text still goes through textContent.
+  assert.match(js.body(), /el\.textContent = text/);
+});
+
+test("log lines render as structured rows, the way command-center renders them, and stay inert", async () => {
+  // The renderer is ported from command-center's public/logline.js, so a Gallivant log reads the same way there:
+  // tool calls in their own column, links shortened, the closing line coloured by outcome. This test drives the
+  // ported functions directly out of the served script, which is the only copy that reaches a browser.
+  const w = world();
+  const r = res();
+  handle(w.ctx, req("/tracker.js"), r);
+  await r.ended;
+  const src = r.body();
+  const { renderLine } = new Function(src.slice(src.indexOf("const esc = s =>")) + "; return { renderLine };")();
+
+  assert.equal(renderLine("  WebSearch: quiet hotels"), '<div class="ll t search"><span class="n">WebSearch</span><span class="a">quiet hotels</span></div>');
+  assert.equal(renderLine("  Bash: npm test"), '<div class="ll t shell"><span class="n">Bash</span><span class="a">npm test</span></div>');
+  assert.match(renderLine("done in 42s"), /class="ll d ok"/);
+  assert.match(renderLine("failed after 3s: boom"), /class="ll d bad"/);
+  assert.match(renderLine("see https://github.com/acme/widget/pull/142"), /<a href="https:\/\/github\.com\/acme\/widget\/pull\/142" target="_blank" rel="noopener noreferrer">github\.com\/142<\/a>/);
+
+  // Every line is agent output, so the escape has to hold whatever it contains. Parse what the renderer produced
+  // and check the DOM it would build: no tag but the three this file writes, no event handler, no non-http href.
+  for (const hostile of [
+    "<script>alert(1)</script>",
+    "  Bash: <img src=x onerror=alert(1)>",
+    "  <script>x</script>: arg",
+    "done in 1s <script>alert(1)</script>",
+    `see http://evil.com/"onmouseover="alert(1)`,
+    "  A: \" onload=\"alert(1)",
+    "javascript:alert(1)",
+  ]) {
+    const html = renderLine(hostile);
+    for (const [, name, attrs] of html.matchAll(/<([a-z]+)\b([^>]*)>/g)) {
+      assert.ok(["div", "span", "a"].includes(name), `${JSON.stringify(hostile)} produced a <${name}>`);
+      const pairs = [...attrs.matchAll(/([a-zA-Z-]+)="([^"]*)"/g)].map(m => m[1]);
+      assert.ok(!pairs.some(k => /^on/i.test(k)), `${JSON.stringify(hostile)} produced an event handler: ${attrs}`);
+      const href = /href="([^"]*)"/.exec(attrs);
+      assert.ok(!href || /^https?:/.test(href[1]), `${JSON.stringify(hostile)} produced a non-http href`);
+    }
+    assert.ok(!/<script/i.test(html), `${JSON.stringify(hostile)} produced a script tag`);
+  }
 });
 
 test("hostile text in a reason or a log line is escaped, not rendered", async () => {
@@ -452,6 +495,118 @@ test("the runs list is every run folder on disk, newest first, filterable by ent
   // only be a dead link.
   const orphan = listRuns(w.home, [], { isRunning: () => false });
   assert.deepEqual(orphan, []);
+});
+
+test("runs from another tool's flat tree are listed alongside Gallivant's own", async () => {
+  // Command center writes job.json and job.log into <project>/.content-pipeline/runs/<id>/, flat rather than keyed
+  // by entry, with the same field names. That layout is what lib/run.mjs was adapted from, so the same reader
+  // handles both trees and an operator has one runs table rather than two tabs.
+  const w = world({ runs: { "2026-09-24T02-00-00-000-fix": { lines: ["mine"], exit: 0, startedAt: 5000, endedAt: 6000 } }, latest: "2026-09-24T02-00-00-000-fix" });
+  const foreign = join(w.home, "elsewhere", "runs");
+  for (const [id, job] of Object.entries({
+    "2026-09-25T09-00-00-000-weekly": { name: "weekly", pid: 3, startedAt: 9000, exit: 0, endedAt: 12_000 },
+    "2026-09-25T10-00-00-000-plan": { name: "plan 2w", pid: 4, startedAt: 20_000, exit: 1, endedAt: 21_500 },
+  })) {
+    mkdirSync(join(foreign, id), { recursive: true });
+    writeFileSync(join(foreign, id, "job.log"), "hello\n");
+    writeFileSync(join(foreign, id, "job.json"), JSON.stringify({ id, ...job }));
+  }
+
+  const rows = listFlatRuns(foreign, { source: "aport-vault" });
+  assert.deepEqual(rows.map(r => r.run), ["2026-09-25T10-00-00-000-plan", "2026-09-25T09-00-00-000-weekly"], "newest first, as in the other view");
+  assert.equal(rows[0].exit, 1);
+  assert.equal(rows[0].durationMs, 1500);
+  assert.equal(rows[0].source, "aport-vault", "the project stands in for the entry these runs do not have");
+  assert.equal(rows[0].entry, null, "and there is no registry entry to address them by");
+  assert.equal(rows[0].handle, "plan 2w", "so the job's own name is what the row shows");
+
+  // Merged into the runs view when the host points the tracker at them.
+  const ctx = { ...w.ctx, runSources: [{ label: "aport-vault", dir: foreign }] };
+  const r = res();
+  handle(ctx, req("/runs"), r);
+  await r.ended;
+  const body = r.body();
+  assert.match(body, /3 runs, newest first/, "both trees in one table");
+  assert.ok(body.indexOf("plan") < body.indexOf("weekly"), "sorted across sources, not concatenated");
+  assert.match(body, /<span class="tag">aport-vault<\/span>/, "a foreign row says where it came from");
+  // A foreign run has no entry page, so it opens in this view instead, addressed by its source rather than by a
+  // registry id. Every /run link (the entry page) still names a registered entry.
+  const opened = [...body.matchAll(/\/run\?[^"]*\bid=([^&"]+)/g)].map(m => decodeURIComponent(m[1]));
+  assert.deepEqual([...new Set(opened)], [ID], "the entry page is only ever opened for a registered entry");
+  assert.match(body, /\/runs\?[^"]*open=2026-09-25T10-00-00-000-plan[^"]*source=aport-vault/, "a foreign run opens here, by source");
+
+  // Gallivant's own rows are unaffected and still open.
+  assert.match(body, /href="\/run\?id=acme%2Fwidget%2Fwidget-export"/);
+
+  // Filtering by entry is Gallivant's own tree only: no foreign run belongs to a registry entry.
+  const filtered = res();
+  handle(ctx, req(`/runs?entry=${encodeURIComponent(ID)}`), filtered);
+  await filtered.ended;
+  assert.match(filtered.body(), /1 run, newest first/);
+  assert.ok(!filtered.body().includes("aport-vault"));
+
+  // A source directory that does not exist is simply empty, not a crash: these paths are somebody else's to move.
+  assert.deepEqual(listFlatRuns(join(w.home, "nope")), []);
+});
+
+test("picking a run in the runs sidebar fills the pane beside it, rather than navigating away", async () => {
+  // The bug this covers: the sidebar listed runs and clicking one did nothing, because /runs had no detail pane and
+  // the rows pointed at the entry page (a different view) or, for a foreign run, at nothing at all.
+  const w = world({ runs: { "2026-09-24T02-00-00-000-fix": { lines: ["mine"], exit: 0, startedAt: 5000, endedAt: 6000 } }, latest: "2026-09-24T02-00-00-000-fix" });
+  const foreign = join(w.home, "elsewhere", "runs");
+  mkdirSync(join(foreign, "2026-09-25T10-00-00-000-plan"), { recursive: true });
+  writeFileSync(join(foreign, "2026-09-25T10-00-00-000-plan", "job.log"), "planning\n");
+  writeFileSync(join(foreign, "2026-09-25T10-00-00-000-plan", "job.json"), JSON.stringify({ id: "2026-09-25T10-00-00-000-plan", name: "plan 2w", pid: 7, startedAt: 9000, exit: 0, endedAt: 9400 }));
+  const ctx = { ...w.ctx, runSources: [{ label: "aport-vault", dir: foreign }] };
+
+  // Nothing picked: the table, and no pane.
+  const list = res();
+  handle(ctx, req("/runs"), list);
+  await list.ended;
+  assert.ok(!list.body().includes('id="log"'), "no run picked, no pane");
+  // Every sidebar row opens a run in this view, including the foreign one that has no entry page.
+  const hrefs = [...list.body().matchAll(/<a class="row" href="([^"]+)"/g)].map(m => m[1]);
+  assert.equal(hrefs.length, 2);
+  assert.ok(hrefs.every(h => h.includes("/runs?") && h.includes("open=")), `every row opens a run here, got ${hrefs.join(" ")}`);
+
+  // Picking Gallivant's own run shows its facts and a pane wired to stream it.
+  const mine = res();
+  handle(ctx, req("/runs?open=2026-09-24T02-00-00-000-fix"), mine);
+  await mine.ended;
+  assert.match(mine.body(), /id="log" data-entry="acme\/widget\/widget-export" data-source="" data-run="2026-09-24T02-00-00-000-fix"/);
+  assert.equal([...mine.body().matchAll(/aria-current="page"/g)].length, 2, "the nav tab and the picked row are both marked");
+
+  // Picking the foreign one addresses it by source, since it has no entry.
+  const theirs = res();
+  handle(ctx, req("/runs?open=2026-09-25T10-00-00-000-plan&source=aport-vault"), theirs);
+  await theirs.ended;
+  assert.match(theirs.body(), /id="log" data-entry="" data-source="aport-vault" data-run="2026-09-25T10-00-00-000-plan"/);
+  assert.match(theirs.body(), /plan 2w/, "the pane names the run");
+
+  // And that stream serves it, which is what makes the pane more than decoration.
+  const s = sink();
+  handle(ctx, req("/api/run/output?source=aport-vault&run=2026-09-25T10-00-00-000-plan", {}), s);
+  await s.ended;
+  assert.deepEqual(s.lines(), ["planning"]);
+
+  // A source nobody configured reaches no directory, however it is spelled.
+  for (const bad of ["../../../etc", "nope", ""]) {
+    const r = res();
+    handle(ctx, req(`/api/run/output?source=${encodeURIComponent(bad)}&run=2026-09-25T10-00-00-000-plan`), r);
+    await r.ended;
+    assert.equal(r.code, 404, `source ${JSON.stringify(bad)} is refused`);
+  }
+  // As does a run id that is not one, inside a source that is.
+  const traverse = res();
+  handle(ctx, req("/api/run/output?source=aport-vault&run=" + encodeURIComponent("../../../../etc")), traverse);
+  await traverse.ended;
+  assert.equal(traverse.code, 404);
+
+  // An `open` naming a run that is not on this page selects nothing rather than inventing a pane.
+  const ghost = res();
+  handle(ctx, req("/runs?open=2026-01-01T00-00-00-000-ghost"), ghost);
+  await ghost.ended;
+  assert.ok(!ghost.body().includes('id="log"'));
 });
 
 test("the stream sends the tail of a finished run and then a terminal frame, so the pane never waits forever", async () => {

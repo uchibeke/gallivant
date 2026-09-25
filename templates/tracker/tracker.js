@@ -86,31 +86,136 @@ if (by) by.addEventListener("change", () => {
 });
 
 // ---- log pane -------------------------------------------------------------------
-const pane = document.getElementById("log"), note = document.getElementById("logstate");
+const pane = document.getElementById("log"), state = document.getElementById("logstate");
+// The most lines the pane keeps on screen. Beyond this the oldest are dropped; the complete log is on disk.
+const MAX_LINES = 2000;
 if (pane) {
   // Auto-scroll follows the reader: the pane jumps to the bottom only when it was already at the bottom, so
   // scrolling up to read something does not yank you back down on the next line.
   const atBottom = () => pane.scrollHeight - pane.scrollTop - pane.clientHeight < 40;
-  const add = (text, cls) => {
+  // Lines arrive in bursts: a reconnect delivers hundreds at once, and a busy harness writes faster than the screen
+  // refreshes. Appending per line stalled the main thread badly enough that the browser dropped the stream and
+  // retried, which replayed the burst, which stalled it again. Buffer and paint once per frame instead.
+  let pending = [], painting = false, closed = false;
+  const paint = () => {
+    painting = false;
+    if (closed || !pending.length) return;
     const stick = atBottom();
-    const line = document.createElement("div");
-    if (cls) line.className = cls;
-    line.textContent = text;        // assigned as text, never parsed as markup: a log line can contain anything
-    pane.appendChild(line);
+    const frag = document.createElement("div");
+    frag.innerHTML = pending.map(renderLine).join("");
+    pane.append(frag);
+    pending = [];
     if (stick) pane.scrollTop = pane.scrollHeight;
+    // A very long pane costs memory and scroll performance for lines nobody scrolls back to. The whole log is on
+    // disk, so dropping the oldest rows here loses nothing.
+    while (pane.childElementCount > MAX_LINES) pane.firstElementChild.remove();
   };
-  const url = BASE + "/api/run/output?id=" + encodeURIComponent(pane.dataset.entry) + "&run=" + encodeURIComponent(pane.dataset.run);
+  const push = line => { pending.push(line); if (!painting) { painting = true; requestAnimationFrame(paint); } };
+  const note = (text, cls) => { const el = document.createElement("div"); el.className = "ll " + cls; el.textContent = text; pane.append(el); };
+  // A run from another tool has no registry entry and is addressed by its source label instead; one of Gallivant's
+  // own is addressed by entry. The server validates whichever arrives.
+  const q = new URLSearchParams({ run: pane.dataset.run });
+  if (pane.dataset.source) q.set("source", pane.dataset.source); else q.set("id", pane.dataset.entry);
+  const url = BASE + "/api/run/output?" + q.toString();
   const es = new EventSource(url);
-  es.addEventListener("skipped", e => add("[" + e.data + " earlier lines not shown; the whole log is in the run folder]", "meta"));
+  const say = text => { if (state) state.textContent = text; };
+  es.addEventListener("skipped", e => note(e.data + " earlier lines not shown; the whole log is in the run folder", "skip"));
   es.onmessage = e => {
     const text = JSON.parse(e.data);
     // A terminal frame is the one thing the stream sends that is not a log line, and it is where the pane stops
     // reconnecting. Every one of them is bracketed and nothing else the server sends is.
-    const done = /^\[(exit|no run|ended)\b/.test(text);
-    add(text, done ? "meta" : null);
-    if (done) { es.close(); if (note) note.textContent = text === "[no run]" ? "no run on disk" : "run finished"; }
+    if (/^\[(exit|no run|ended)\b/.test(text)) {
+      paint();
+      closed = true;
+      es.close();
+      note(text.slice(1, -1), "d " + (text === "[exit 0]" ? "ok" : "bad"));
+      say(text === "[no run]" ? "no run on disk" : text === "[exit 0]" ? "finished" : text.slice(1, -1));
+      return;
+    }
+    push(text);
   };
-  es.onopen = () => { if (note) note.textContent = "live"; };
+  es.onopen = () => say("live");
   // readyState 2 is closed, which is the normal end of a finished run and not a failure to report.
-  es.onerror = () => { if (note && es.readyState !== 2) note.textContent = "reconnecting"; };
+  es.onerror = () => { if (es.readyState !== 2) say("reconnecting"); };
+}
+
+// ---- log lines ------------------------------------------------------------------
+// Ported from command-center's public/logline.js, unchanged apart from the escaper, which is inlined here because
+// Gallivant has no md.js. A Gallivant run log is harness output, which is the exact shape that file was written
+// for: an indented "Tool: argument" line, or prose, with URLs and file paths inside either. Keeping the parse
+// identical is the point. Two copies that drift are how the five log panels it replaced went wrong in the first
+// place, so a fix to the regexes belongs in both.
+const esc = s => String(s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+
+
+// Tool calls arrive indented by the harness reducer in lib/harness.mjs: "  WebSearch: quiet hotels in Lisbon".
+const TOOL = /^ {2}([A-Za-z_][\w.]*):\s?(.*)$/;
+// A terminal line the runner appends: "done in 42s (harness exit 0)" or "failed after 271s: ...".
+const DONE = /^(done in |wrote |failed after )/;
+// The runner's own opening line, written by lib/harness_run.mjs before the harness says anything.
+const HEAD = /^harness \S+.*prompt \d+ chars/;
+// Bare URLs. Stops before trailing punctuation so a sentence-final period is not swallowed into the link.
+const URL_RE = /\bhttps?:\/\/[^\s<>"')\]]+[^\s<>"')\].,;:!?]/g;
+// A project-relative path with an extension: ideas/2026-09-25-trip.md, gtm/posts/one.md.
+const PATH_RE = /\b(?:[\w.-]+\/)+[\w.-]+\.[a-z]{1,5}\b/g;
+
+/** Which tools are worth colouring apart. Everything else is a neutral tool call. */
+const TOOL_KIND = {
+  WebSearch: "search", WebFetch: "fetch", Read: "read", Write: "write", Edit: "write",
+  Bash: "shell", Agent: "agent", Task: "agent", ToolSearch: "meta", ListAgents: "meta",
+  SendMessage: "meta", Monitor: "meta", Glob: "read", Grep: "read",
+};
+
+/**
+ * Classify one line.
+ *   { kind: "tool", tool, arg }   an indented tool call
+ *   { kind: "done", text, ok }    the run's own closing line
+ *   { kind: "text", text }        anything else the model said
+ */
+function parseLine(line) {
+  const raw = String(line);
+  const m = TOOL.exec(raw);
+  if (m) return { kind: "tool", tool: m[1], arg: m[2].trim(), tone: TOOL_KIND[m[1]] || "" };
+  const t = raw.trim();
+  if (HEAD.test(t)) return { kind: "head", text: t };
+  if (DONE.test(t)) return { kind: "done", text: t, ok: !t.startsWith("failed") };
+  return { kind: "text", text: t };
+}
+
+/** Escape text, then turn URLs and file paths inside it into links. Escaping first is what keeps this safe: every
+ *  replacement operates on already-escaped text and inserts only markup this function wrote. */
+function linkify(text, { fileHref } = {}) {
+  let html = esc(text);
+  html = html.replace(URL_RE, u => `<a href="${u}" target="_blank" rel="noopener noreferrer">${short(u)}</a>`);
+  if (fileHref) {
+    html = html.replace(PATH_RE, p => {
+      const href = fileHref(p);
+      return href ? `<a href="${href}" class="fl">${p}</a>` : p;
+    });
+  }
+  return html;
+}
+
+/** A URL short enough to read in a narrow panel: host plus the last meaningful segment. */
+function short(url) {
+  try {
+    const u = new URL(url);
+    const parts = u.pathname.split("/").filter(Boolean);
+    const tail = parts.length ? "/" + parts[parts.length - 1] : "";
+    const host = u.hostname.replace(/^www\./, "");
+    const s = host + (tail.length > 28 ? tail.slice(0, 27) + "…" : tail);
+    return esc(s.length > 48 ? s.slice(0, 47) + "…" : s);
+  } catch { return esc(url.length > 48 ? url.slice(0, 47) + "…" : url); }
+}
+
+/** One line as HTML. Paths are left as text here: the tracker has no file browser to open them in. */
+function renderLine(line, opts = {}) {
+  const p = parseLine(line);
+  if (p.kind === "tool") {
+    const arg = p.arg ? `<span class="a">${linkify(p.arg, opts)}</span>` : "";
+    return `<div class="ll t${p.tone ? " " + p.tone : ""}"><span class="n">${esc(p.tool)}</span>${arg}</div>`;
+  }
+  if (p.kind === "head") return `<div class="ll h">${linkify(p.text, opts)}</div>`;
+  if (p.kind === "done") return `<div class="ll d ${p.ok ? "ok" : "bad"}">${linkify(p.text, opts)}</div>`;
+  return `<div class="ll">${linkify(p.text, opts)}</div>`;
 }

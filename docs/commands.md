@@ -66,7 +66,7 @@ Three views, each with a sidebar listing everything the view holds:
 
 - `/` every registry entry as a row, grouped needs-you, running and done the same way `gallivant status` groups them, from the same `model()`.
 - `/run?id=<entry id>` one entry: handle, state, reason, harness, round, PR link, branch, checkout, session id, and the live log below.
-- `/runs` every run folder under `~/.gallivant/runs`, newest first, with its entry, start time, exit code and duration, filterable by entry. The history is already on disk; this is the index over it.
+- `/runs` every run folder under `~/.gallivant/runs`, newest first, with its entry, start time, exit code and duration, filterable by entry. Picking one in the sidebar opens its log in the pane beside the table. The history is already on disk; this is the index over it.
 
 The sidebar has one filter box that searches everything on the view, including fields the row does not show in full: an entry's id, reason and harness, a run's id and start time. Groups collapse, and which ones you closed is remembered per view. A filter overrides that, so a match inside a closed group still shows. `?by=harness` groups by harness instead of by state, and the choice rides along on every link, so a grouped view is a URL you can bookmark or frame.
 
@@ -76,6 +76,14 @@ Two things to know about it:
 
 - **It is read-only.** There is no route that starts, kills, resets or edits anything, and no method but GET is routed. Changing state stays the CLI's and the daemon's job, so a page left open in a tab can do nothing.
 - **It binds to 127.0.0.1 and has no password.** That is the same boundary as the CLI: anything that can reach it can already read `~/.gallivant`. Do not put it behind a tunnel or a reverse proxy that answers on a public address, because the pages show branch names, local paths and whatever the agent printed.
+
+### Runs from other tools
+
+A host can point the tracker at run folders it does not own, through `runSources` on the context it passes to
+`mount`: a list of `{ label, dir }`. Command center writes the same `job.json` and `job.log` under
+`<project>/.content-pipeline/runs/`, which is where Gallivant's runner came from, so those runs list and stream in
+the same table with no conversion. They are listed and opened by their source label, never by a registry id, since
+there is no registry outside Gallivant's own tree; a label that is not in the configured list reaches no directory.
 
 ### Running it inside another server
 
