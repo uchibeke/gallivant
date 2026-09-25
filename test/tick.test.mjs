@@ -2,7 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { makeTick, roundComment } from "../lib/tick.mjs";
 import { READY_LABEL, NEEDS_LABEL, ROUND_MARKER, NUDGE_MARKER } from "../lib/gh.mjs";
-import { CONFIG, T0, at, makeClock, fakeGh, fakeRunner, fakeGit, fakeNotify, seededState, prFixture, review, inline, checkRun, claudeResultLines, codexLines, silentLog, STATES } from "./helpers.mjs";
+import { CONFIG, T0, at, makeClock, fakeGh, fakeRunner, fakeGit, fakeNotify, seededState, prFixture, review, inline, checkRun, claudeResultLines, codexLines, silentLog, STATES, GOOD_PRD } from "./helpers.mjs";
 
 const BOT = "chatgpt-codex-connector[bot]";
 const clearReviewer = () => [review({ id: 2, by: BOT, bot: true, state: "COMMENTED", at: at(3), body: "**Reviewed commit:** `a1b2c3`" })];
@@ -27,7 +27,7 @@ test("reviewer findings resume the original session and move the cursor", async 
   assert.ok(run.args.includes("--resume") && run.args.includes("6f1c2d3e-1111-4111-8111-111111111111"));
   assert.match(run.args.at(-1), /P1: nonce/);
   assert.equal(run.opts.cwd, "/tmp/wt");
-  assert.equal(w.entry().cursor.since, at(6), "the cursor moves to dispatch time");
+  assert.equal(w.entry().cursor.since, at(5), "the cursor moves to the newest event read, not to dispatch time");
   assert.equal(w.entry().last.event, "review 2201 by chatgpt-codex-connector, inline 1 by chatgpt-codex-connector");
 });
 
@@ -268,7 +268,7 @@ test("a review that landed while the start run was still going is seen once the 
   await w.tick.tick(); // settles: PR open with the cursor at the PR's creation, so the review is new and dispatched at once
   assert.equal(w.runner.started.length, 2);
   assert.match(w.runner.started[1].args.at(-1), /review 7/);
-  assert.equal(w.entry().cursor.since, at(6), "the cursor then moves to dispatch time");
+  assert.equal(w.entry().cursor.since, at(3), "the cursor then moves to the review that was dispatched");
 });
 
 test("a failing check on a head the loop itself pushed is dispatched once, then stops with checks-red", async () => {
@@ -317,4 +317,54 @@ test("one failing entry does not stop the others", async () => {
   w.gh.prView = async () => { if (n++ === 0) throw new Error("boom"); return prFixture({ state: "MERGED" }); };
   const results = await w.tick.tick();
   assert.deepEqual(results.map(r => r.ok), [false, true]);
+});
+
+test("an event that lands while a run is being dispatched is not skipped: the cursor is the boundary that was read", async () => {
+  // The window is real: `ensureWorktree` clones when the checkout is gone, which takes minutes on a large repo.
+  const clock = makeClock();
+  const { state, id } = seededState();
+  const gh = fakeGh({ reviews: [review({ id: 2201, by: BOT, bot: true, state: "CHANGES_REQUESTED", at: at(5) })] });
+  const runner = fakeRunner(clock);
+  // A checkout that has to be cloned, and the clone takes ten minutes. A trusted comment arrives in the middle.
+  const git = {
+    ...fakeGit(),
+    exists: () => false,
+    fromBranch: async ({ path }) => {
+      clock.advance(10);
+      gh.data.comments.push({ id: 77, user: { login: "me", type: "User" }, body: "@gallivant fix the typo too", created_at: at(9) });
+      return path;
+    },
+  };
+  const tick = makeTick({ config: CONFIG, state, gh, git, notify: fakeNotify(), log: silentLog, clock, ownLogin: "me", runnerFor: () => runner, readPrd: () => null });
+
+  clock.advance(6);
+  await tick.tick();
+  assert.equal(runner.started.length, 1, "the review is dispatched");
+  assert.equal(state.get(id).cursor.since, at(5), "the cursor is the newest event read, not the +16 wall clock after the clone");
+
+  // The run ends having pushed, so the entry is free to dispatch again.
+  runner.finish(claudeResultLines());
+  gh.data.pr = prFixture({ headRefOid: "d4e5f6" });
+  gh.data.commitDates = { d4e5f6: at(8) };
+  await tick.tick(); // settles the push; the cursor moves to the push at +8, which is still before the comment at +9
+  assert.equal(state.get(id).iteration, 1);
+
+  await tick.tick();
+  assert.equal(runner.started.length, 2, "the comment that arrived during the clone is dispatched on a later tick");
+  assert.match(runner.started[1].args.at(-1), /the typo too/, "the command body, with the @gallivant fix prefix stripped");
+});
+
+test("with no events to bound it, the cursor moves to the time captured before the reads, not after the spawn", async () => {
+  const clock = makeClock();
+  const { state, id } = seededState({ cursor: { since: T0, fixed_sha: "a1b2c3", checks_sha: "a1b2c3", receipt_hash: null } });
+  const gh = fakeGh({ pr: prFixture({ statusCheckRollup: [checkRun({ name: "test", conclusion: "SUCCESS" })] }), reviews: clearReviewer() });
+  const runner = fakeRunner(clock);
+  const git = { ...fakeGit(), exists: () => false, fromBranch: async ({ path }) => { clock.advance(10); return path; } };
+  // A PRD whose receipt is missing, so the completion gate denies and dispatches a receipt round with no events.
+  const tick = makeTick({ config: CONFIG, state, gh, git, notify: fakeNotify(), log: silentLog, clock, ownLogin: "me", runnerFor: () => runner, readPrd: () => GOOD_PRD });
+
+  clock.advance(4);
+  await tick.tick();
+  assert.equal(runner.started.length, 1, "the gate denied and dispatched a receipt round");
+  assert.equal(state.get(id).cursor.since, at(4), "the pre-read instant, so the ten minutes of cloning are not skipped over");
 });

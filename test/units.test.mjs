@@ -8,10 +8,11 @@ import { quote, fixPrompt, startPrompt } from "../lib/prompt.mjs";
 import { buildRun, assertSafeArgv, adapters, compareVersions } from "../lib/harness.mjs";
 import { parsePrd, verifyCommands, withFrontmatterKey, fencedBlocks, findPlaceholder } from "../lib/prd.mjs";
 import { makeRunner, isOurProcess } from "../lib/run.mjs";
-import { branchFor, prdIdFromBranch, isOurBranch } from "../lib/git.mjs";
-import { writeFileSync, existsSync, utimesSync } from "node:fs";
+import { branchFor, prdIdFromBranch, isOurBranch, makeGit } from "../lib/git.mjs";
+import { writeFileSync, existsSync, utimesSync, mkdirSync } from "node:fs";
 import { validate, DEFAULTS } from "../lib/config.mjs";
 import { messages } from "../lib/notify.mjs";
+import { repoFromRemote, remoteMatches } from "../lib/gh.mjs";
 import { CONFIG, T0, tempHome, claudeResultLines, codexLines, GOOD_PRD } from "./helpers.mjs";
 
 test("state writes atomically and resolves handles", () => {
@@ -169,4 +170,58 @@ test("PRD helpers: fences of either kind, frontmatter rewritten from the parsed 
   assert.equal(findPlaceholder("Line one<br>\n<details><summary>x</summary>ok</details>"), null);
   assert.equal(findPlaceholder("As a <who>, I want"), "<who>");
   assert.equal(findPlaceholder("see <your repo>"), "<your repo>");
+});
+
+test("a remote URL is parsed into owner/repo and compared exactly, so a fork suffix is not the same repo", () => {
+  // The bug this replaced: `origin.includes(nameWithOwner)` accepted any repo whose name merely contained ours.
+  assert.equal(repoFromRemote("https://github.com/acme/widget-fork.git"), "acme/widget-fork");
+  assert.equal(remoteMatches("https://github.com/acme/widget-fork.git", "acme/widget"), false);
+  assert.equal(remoteMatches("https://github.com/widget/acme.git", "acme/widget"), false);
+  assert.equal(remoteMatches("https://github.com/other/acme-widget.git", "acme/widget"), false);
+
+  for (const url of [
+    "https://github.com/acme/widget",
+    "https://github.com/acme/widget.git",
+    "https://github.com/acme/widget/",
+    "https://x-access-token:tok@github.com/acme/widget.git",
+    "git@github.com:acme/widget",
+    "git@github.com:acme/widget.git",
+    "ssh://git@github.com/acme/widget",
+    "ssh://git@github.com/acme/widget.git",
+  ]) assert.equal(repoFromRemote(url), "acme/widget", url);
+
+  // GitHub treats owner and name case-insensitively, so the comparison does too.
+  assert.equal(remoteMatches("https://github.com/Acme/Widget.git", "acme/widget"), true);
+  // A repository whose name ends in .git is not confused with the suffix, and a dot is not a name.
+  assert.equal(repoFromRemote("https://github.com/acme/widget.js.git"), "acme/widget.js");
+  assert.equal(repoFromRemote("git@github.com:acme/.git"), null);
+  // Anything that is not a GitHub remote we understand.
+  for (const url of ["https://gitlab.com/acme/widget.git", "/srv/checkouts/widget", "", null]) assert.equal(repoFromRemote(url), null);
+});
+
+test("fromBranch reuses an existing checkout only when origin is exactly the repo, never a repo whose name contains it", async () => {
+  const home = tempHome();
+  const path = join(home, "wt");
+  mkdirSync(join(path, ".git"), { recursive: true });
+  const config = { ...CONFIG, home, worktrees: home };
+  // A fake `git` whose `remote get-url origin` answers whatever the case under test sets.
+  const gitWith = origin => {
+    const ran = [];
+    const exec = async (cmd, args) => {
+      ran.push([cmd, ...args]);
+      return { stdout: cmd === "git" && args[0] === "remote" ? `${origin}\n` : "", stderr: "" };
+    };
+    return { git: makeGit({ config, exec }), ran };
+  };
+
+  const fork = gitWith("https://github.com/acme/widget-fork.git");
+  await assert.rejects(
+    () => fork.git.fromBranch({ nameWithOwner: "acme/widget", prdId: "export", branch: "gallivant/export", path }),
+    /is a clone of https:\/\/github\.com\/acme\/widget-fork\.git, not acme\/widget/,
+  );
+  assert.ok(!fork.ran.some(c => c[1] === "checkout"), "a checkout that failed the check is never touched");
+
+  const same = gitWith("git@github.com:Acme/Widget.git");
+  assert.equal(await same.git.fromBranch({ nameWithOwner: "acme/widget", prdId: "export", branch: "gallivant/export", path }), path);
+  assert.deepEqual(same.ran.at(-1), ["git", "checkout", "gallivant/export"]);
 });

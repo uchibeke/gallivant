@@ -17,7 +17,8 @@ The only way a PRD becomes ready. Runs every rule of [the contract](prd.md), pri
 3. Checks the harness named in the PRD is signed in. If not, the entry is recorded as `needs-human` with reason `not-signed-in` and nothing else happens.
 4. Clones the repo into `<worktrees>/<repo>/<prd id>` (partial clone, blobs on demand) on a new branch `gallivant/<prd id>` from the remote default branch. Your own checkout is never touched.
 5. Saves the daemon's own copy of the PRD under `~/.gallivant/prds/`, which fix rounds and the completion gate read instead of the checkout, so a session cannot rewrite its own brief.
-6. Starts the session detached with the PRD as its prompt, records the session id, and remembers the repo for recovery.
+6. Copies the PRD into the new checkout at the same path it has in your repo, creating the directories it needs. The PRD is usually only in your own checkout, so the fresh clone off the default branch does not have it; this copy is what lets the session commit the brief with the implementation and lets the PR block point at a path that exists. It is writable by the session and is never read back for a decision.
+7. Starts the session detached with the PRD as its prompt, records the session id, and remembers the repo for recovery.
 
 The entry is `running` until the daemon sees the run end. Then either a PR exists on the branch and the entry enters `pr-open`, or it stops with `no-pr`.
 
@@ -28,6 +29,7 @@ Puts a PR into the loop that Gallivant did not open, or resets one that stopped.
 - With `--session` and `--worktree`, later fixes resume that session in that directory. Both harnesses key sessions by the directory they ran in, so the pair is required together.
 - Without `--session`, the first fix run starts a fresh session whose prompt tells it to read the PR with `gh pr view` and `gh pr diff` before changing anything.
 - Without `--worktree`, a checkout is created from the PR branch at the standard path.
+- A `--worktree` you pass is checked before it is accepted: its `origin` must be the PR's repository and it must already be on the PR's head branch. A path that fails either check is an error, since the harness edits and pushes from that directory. It is never relocated or re-cloned for you, because a resumed session is keyed to the directory it ran in.
 - On an entry that already exists: reason cleared, iteration reset to zero, a marked reset comment posted on the PR (so a count rebuilt from GitHub starts from zero too), cursor set to now, watching again. This is how you restart a `needs-human` PR after you fixed the conflict or answered the question. A fresh registration instead looks at the PR's whole history, so feedback already on it gets addressed.
 
 Fork PRs and closed PRs are refused. If the PR body has no Gallivant block, one is added.
