@@ -29,10 +29,10 @@ Puts a PR into the loop that Gallivant did not open, or resets one that stopped.
 - With `--session` and `--worktree`, later fixes resume that session in that directory. Both harnesses key sessions by the directory they ran in, so the pair is required together.
 - Without `--session`, the first fix run starts a fresh session whose prompt tells it to read the PR with `gh pr view` and `gh pr diff` before changing anything.
 - Without `--worktree`, a checkout is created from the PR branch at the standard path.
-- A `--worktree` you pass is checked before it is accepted: its `origin` must be the PR's repository and it must already be on the PR's head branch. A path that fails either check is an error, since the harness edits and pushes from that directory. It is never relocated or re-cloned for you, because a resumed session is keyed to the directory it ran in.
+- A `--worktree` you pass is resolved to an absolute path first, so `.` means the directory you typed it in and not whatever directory the daemon happens to run in later. It is then checked before it is accepted: its `origin` must be the PR's repository and it must already be on the PR's head branch. A path that fails either check is an error, since the harness edits and pushes from that directory. It is never relocated or re-cloned for you, because a resumed session is keyed to the directory it ran in.
 - On an entry that already exists: reason cleared, iteration reset to zero, a marked reset comment posted on the PR (so a count rebuilt from GitHub starts from zero too), cursor set to now, watching again. This is how you restart a `needs-human` PR after you fixed the conflict or answered the question. A fresh registration instead looks at the PR's whole history, so feedback already on it gets addressed.
 
-Fork PRs and closed PRs are refused. If the PR body has no Gallivant block, one is added.
+Fork PRs and closed PRs are refused. If the PR body has no Gallivant block, one is added; if it has one that names a different harness or session than the registration chose, it is rewritten to match. Recovery after a lost `state.json` reads that block, so a block left saying the old harness would restore the wrong one.
 
 ## `gallivant up [--once]`
 

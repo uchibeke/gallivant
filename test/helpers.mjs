@@ -48,7 +48,9 @@ export const prFixture = (over = {}) => ({
 
 export function fakeGh({ pr = prFixture(), reviews = [], inline: inlineComments = [], comments = [], prsByHead = [], commitDates = {}, files = {} } = {}) {
   const calls = [];
-  const since = (list, s) => list.filter(c => !s || Date.parse(c.created_at) > Date.parse(s));
+  // GitHub's `since` filter is inclusive of the boundary second, so the fake is too; anything else would hide the
+  // equal-timestamp case the cursor's dedup exists for.
+  const since = (list, s) => list.filter(c => !s || Date.parse(c.created_at) >= Date.parse(s));
   const g = {
     calls,
     data: { pr, reviews, inline: inlineComments, comments, prsByHead, commitDates, files },

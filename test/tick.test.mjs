@@ -2,7 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { makeTick, roundComment } from "../lib/tick.mjs";
 import { READY_LABEL, NEEDS_LABEL, ROUND_MARKER, NUDGE_MARKER } from "../lib/gh.mjs";
-import { CONFIG, T0, at, makeClock, fakeGh, fakeRunner, fakeGit, fakeNotify, seededState, prFixture, review, inline, checkRun, claudeResultLines, codexLines, silentLog, STATES, GOOD_PRD } from "./helpers.mjs";
+import { CONFIG, T0, at, makeClock, fakeGh, fakeRunner, fakeGit, fakeNotify, seededState, prFixture, review, inline, comment, checkRun, claudeResultLines, codexLines, silentLog, STATES, GOOD_PRD } from "./helpers.mjs";
 
 const BOT = "chatgpt-codex-connector[bot]";
 const clearReviewer = () => [review({ id: 2, by: BOT, bot: true, state: "COMMENTED", at: at(3), body: "**Reviewed commit:** `a1b2c3`" })];
@@ -367,4 +367,97 @@ test("with no events to bound it, the cursor moves to the time captured before t
   await tick.tick();
   assert.equal(runner.started.length, 1, "the gate denied and dispatched a receipt round");
   assert.equal(state.get(id).cursor.since, at(4), "the pre-read instant, so the ten minutes of cloning are not skipped over");
+});
+
+test("a second event stamped the same second as the one that moved the cursor is still dispatched, once", async () => {
+  // GitHub stamps to the second. The first fix dispatches a review at +5; while the clone runs, a trusted comment
+  // is written in that same second. A cursor compared strictly against +5 would bury it for good.
+  const clock = makeClock();
+  const { state, id } = seededState();
+  const gh = fakeGh({ reviews: [review({ id: 2201, by: BOT, bot: true, state: "CHANGES_REQUESTED", at: at(5) })] });
+  const runner = fakeRunner(clock);
+  const git = {
+    ...fakeGit(),
+    exists: () => false,
+    fromBranch: async ({ path }) => {
+      clock.advance(10);
+      gh.data.comments.push({ id: 77, user: { login: "me", type: "User" }, body: "@gallivant fix the typo too", created_at: at(5) });
+      return path;
+    },
+  };
+  const tick = makeTick({ config: CONFIG, state, gh, git, notify: fakeNotify(), log: silentLog, clock, ownLogin: "me", runnerFor: () => runner, readPrd: () => null });
+
+  clock.advance(6);
+  await tick.tick();
+  assert.equal(runner.started.length, 1, "the review is dispatched");
+  const cursor = state.get(id).cursor;
+  assert.equal(cursor.since, at(5));
+  assert.deepEqual(cursor.dispatched, ["review:2201"], "the cursor remembers what it handled at its own second");
+
+  runner.finish(claudeResultLines());
+  gh.data.pr = prFixture({ headRefOid: "d4e5f6" });
+  gh.data.commitDates = { d4e5f6: at(5) }; // the push lands in that second too, so the cursor does not move past it
+  await tick.tick();
+  assert.equal(state.get(id).iteration, 1);
+
+  await tick.tick();
+  assert.equal(runner.started.length, 2, "the comment sharing the review's second is dispatched on a later tick");
+  assert.match(runner.started[1].args.at(-1), /the typo too/);
+
+  // And it is not dispatched a second time: the run ends having pushed, and the next tick has nothing new.
+  runner.finish(claudeResultLines());
+  gh.data.pr = prFixture({ headRefOid: "778899" });
+  gh.data.commitDates = { "778899": at(5) };
+  await tick.tick();
+  await tick.tick();
+  assert.equal(runner.started.length, 2, "the command it already handled is not sent again");
+});
+
+test("an event already dispatched at the cursor's own second is never dispatched twice", async () => {
+  // The inclusive comparison is what makes the case above work; `cursor.dispatched` is what keeps it from replaying.
+  const w = world(
+    { cursor: { since: at(5), dispatched: ["command:77"], fixed_sha: "a1b2c3", checks_sha: "a1b2c3", receipt_hash: null }, rereview: { at: at(5), nudged: false } },
+    { reviews: clearReviewer(), comments: [comment({ id: 77, by: "me", at: at(5), body: "@gallivant fix the typo" })] },
+  );
+  w.clock.advance(6);
+  await w.tick.tick();
+  assert.equal(w.runner.started.length, 0, "the command at exactly the cursor was already handled");
+
+  // A second command in the very same second is not on the list, so it is new.
+  w.gh.data.comments.push(comment({ id: 78, by: "me", at: at(5), body: "@gallivant fix the other typo" }));
+  await w.tick.tick();
+  assert.equal(w.runner.started.length, 1);
+  assert.match(w.runner.started[0].args.at(-1), /the other typo/);
+  assert.equal(w.entry().last.event, "command 78 by me", "only the new one is in the round, not the one already handled");
+  assert.deepEqual(w.entry().cursor.dispatched.sort(), ["command:77", "command:78"], "both are remembered while the cursor sits on their second");
+});
+
+test("the dispatched list is dropped as soon as the cursor moves to another second", async () => {
+  const w = world(
+    { cursor: { since: at(5), dispatched: ["review:2201"], fixed_sha: "a1b2c3", checks_sha: "a1b2c3", receipt_hash: null } },
+    { reviews: [review({ id: 2202, by: BOT, bot: true, state: "CHANGES_REQUESTED", at: at(9) })] },
+  );
+  w.clock.advance(10);
+  await w.tick.tick();
+  assert.equal(w.entry().cursor.since, at(9));
+  assert.deepEqual(w.entry().cursor.dispatched, ["review:2202"], "only the new second's keys, so the list cannot grow without bound");
+});
+
+test("the server-side since filter is asked for an overlap, so the boundary second comes back even from an exclusive filter", async () => {
+  // GitHub filters on `updated_at` and the stamps are per second. Whether its filter is `>` or `>=` is not
+  // something the daemon gets to know, so it asks from a second earlier and deduplicates what comes back.
+  const clock = makeClock();
+  const { state, id } = seededState({ cursor: { since: at(5), dispatched: ["command:77"], fixed_sha: "a1b2c3", checks_sha: "a1b2c3", receipt_hash: null }, rereview: { at: at(5), nudged: false } });
+  const asked = [];
+  const gh = fakeGh({ reviews: clearReviewer(), comments: [comment({ id: 77, by: "me", at: at(5), body: "@gallivant fix the typo" }), comment({ id: 78, by: "me", at: at(5), body: "@gallivant fix the other typo" })] });
+  // A pessimistic server: strictly after, the way the old client-side filter behaved.
+  gh.issueComments = async (_r, _n, s) => { asked.push(s); return gh.data.comments.filter(c => !s || Date.parse(c.created_at) > Date.parse(s)); };
+  const runner = fakeRunner(clock);
+  const tick = makeTick({ config: CONFIG, state, gh, git: fakeGit(), notify: fakeNotify(), log: silentLog, clock, ownLogin: "me", runnerFor: () => runner, readPrd: () => null });
+
+  clock.advance(6);
+  await tick.tick();
+  assert.ok(asked.every(s => Date.parse(s) < Date.parse(at(5))), `the fetch starts before the cursor, not at it (asked ${asked})`);
+  assert.equal(runner.started.length, 1, "the comment sharing the cursor's second still reaches the daemon");
+  assert.equal(state.get(id).last.event, "command 78 by me", "and the one already dispatched is dropped by id, not by the fetch");
 });

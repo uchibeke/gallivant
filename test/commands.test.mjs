@@ -127,3 +127,44 @@ test("register without --worktree clones from the branch as before, with no chec
   assert.equal(verified, false, "the path register chose itself needs no verification");
   assert.match(r.worktree, /worktrees\/acme\/widget\/widget-export$/);
 });
+
+test("a relative --worktree is resolved against the calling directory before it is checked or stored", async () => {
+  // `register` runs wherever the operator happens to be; the daemon that reads the entry back runs somewhere else.
+  const seen = [];
+  const git = { ...registerGit(), originOf: async dir => { seen.push(dir); return "https://github.com/acme/widget.git"; }, currentBranch: async dir => { seen.push(dir); return "gallivant/widget-export"; } };
+  const w = registerWorld(git);
+  const cwd = process.cwd();
+  const r = await register(w.ctx, { url: w.url, worktree: "." });
+
+  assert.equal(r.worktree, cwd, "the path returned is absolute");
+  assert.equal(w.ctx.state.get(r.id).worktree, cwd, "and the registry holds the absolute path, not the `.` that was typed");
+  assert.deepEqual(new Set(seen), new Set([cwd]), "validation ran against the resolved path, never the relative one");
+});
+
+const BLOCK = ({ harness = "claude", session = "6f1c2d3e-1111-4111-8111-111111111111" } = {}) =>
+  `Adds export.\n\n<!-- gallivant\nprd: docs/prds/widget-export.md\nharness: ${harness}\nsession: ${session}\nbranch: gallivant/widget-export\n-->\n`;
+
+test("registering with a new --harness or --session rewrites the block, so recovery from GitHub restores the new identity", async () => {
+  for (const [over, expected] of [
+    [{ harness: "codex" }, /harness: codex[\s\S]*session: 6f1c2d3e-1111-4111-8111-111111111111/],
+    [{ session: "aaaaaaaa-2222-4222-8222-222222222222" }, /harness: claude[\s\S]*session: aaaaaaaa-2222-4222-8222-222222222222/],
+  ]) {
+    const w = registerWorld(registerGit());
+    w.ctx.gh.prView = async () => ({ ...prFixture({ headRefName: "gallivant/widget-export", createdAt: T0 }), body: BLOCK() });
+    await register(w.ctx, { url: w.url, worktree: "/checkouts/widget", ...over });
+
+    const written = w.calls.filter(c => c[0] === "setBody");
+    assert.equal(written.length, 1, "the stale block is rewritten once");
+    assert.match(written[0][1], expected);
+    assert.match(written[0][1], /prd: docs\/prds\/widget-export\.md/, "the PRD path the block already recorded is kept");
+  }
+});
+
+test("registering with no override, or one that agrees with the block, leaves the body alone", async () => {
+  for (const over of [{}, { harness: "claude" }, { session: "6f1c2d3e-1111-4111-8111-111111111111" }]) {
+    const w = registerWorld(registerGit());
+    w.ctx.gh.prView = async () => ({ ...prFixture({ headRefName: "gallivant/widget-export", createdAt: T0 }), body: BLOCK() });
+    await register(w.ctx, { url: w.url, worktree: "/checkouts/widget", ...over });
+    assert.deepEqual(w.calls.filter(c => c[0] === "setBody"), [], "a block that already says the right thing is not rewritten");
+  }
+});

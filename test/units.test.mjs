@@ -2,7 +2,8 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { join } from "node:path";
 import { readFileSync } from "node:fs";
-import { makeState, resolveHandle, newEntry, entryId, idSlug, prdIdOf, STATES } from "../lib/state.mjs";
+import { makeState, resolveHandle, newEntry, entryId, idSlug, prdIdOf, advanceCursor, STATES } from "../lib/state.mjs";
+import { isAtOrAfter, floorSecond } from "../lib/time.mjs";
 import { renderBlock, parseBlock, upsertBlock } from "../lib/block.mjs";
 import { quote, fixPrompt, startPrompt } from "../lib/prompt.mjs";
 import { buildRun, assertSafeArgv, adapters, compareVersions } from "../lib/harness.mjs";
@@ -224,4 +225,26 @@ test("fromBranch reuses an existing checkout only when origin is exactly the rep
   const same = gitWith("git@github.com:Acme/Widget.git");
   assert.equal(await same.git.fromBranch({ nameWithOwner: "acme/widget", prdId: "export", branch: "gallivant/export", path }), path);
   assert.deepEqual(same.ran.at(-1), ["git", "checkout", "gallivant/export"]);
+});
+
+test("the cursor carries the keys handled at its own second, and drops them the moment it moves", () => {
+  const base = { since: "2026-09-24T02:00:05.000Z", dispatched: ["review:1"], fixed_sha: "a1b2c3", checks_sha: "a1b2c3" };
+  // Same second, spelled differently: the list is kept and added to, never duplicated.
+  const same = advanceCursor(base, "2026-09-24T02:00:05Z", ["review:2", "review:1"]);
+  assert.deepEqual(same.dispatched.sort(), ["review:1", "review:2"]);
+  assert.equal(same.fixed_sha, "a1b2c3", "the rest of the cursor is carried through");
+  // A different second: only the new keys, so one busy PR cannot grow the registry without bound.
+  assert.deepEqual(advanceCursor(base, "2026-09-24T02:00:06.000Z", ["review:3"]).dispatched, ["review:3"]);
+  assert.deepEqual(advanceCursor(base, "2026-09-24T02:00:06.000Z").dispatched, []);
+  // A cursor written before this field existed reads as an empty list, not a crash.
+  assert.deepEqual(advanceCursor({ since: "2026-09-24T02:00:05.000Z" }, "2026-09-24T02:00:05.000Z", ["review:9"]).dispatched, ["review:9"]);
+});
+
+test("the boundary comparison includes the boundary, and an instant floors to its second", () => {
+  assert.ok(isAtOrAfter("2026-09-24T02:00:05.000Z", "2026-09-24T02:00:05.000Z"));
+  assert.ok(!isAtOrAfter("2026-09-24T02:00:04.999Z", "2026-09-24T02:00:05.000Z"));
+  assert.ok(isAtOrAfter("2026-09-24T02:00:05.000Z", null), "no cursor means everything is new");
+  assert.ok(!isAtOrAfter(null, "2026-09-24T02:00:05.000Z"));
+  assert.equal(floorSecond("2026-09-24T02:00:05.937Z"), "2026-09-24T02:00:05.000Z");
+  assert.equal(floorSecond(null), null);
 });
