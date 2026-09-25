@@ -20,6 +20,13 @@
 | `harness` | discovered | Omit it and Gallivant uses whichever harnesses it finds on your PATH, so one installed harness is a complete install. Name one and only that one is used, which is what you want when two versions are installed or a harness is deliberately out of play. |
 | `harness.claude` | | `{ bin, settings }`. `bin` is the absolute path to `claude`; `settings` is the Gallivant settings file with the APort hook and sandbox. |
 | `harness.codex` | | `{ bin }`. |
+
+Claude Code and Codex are the two supported harnesses. Others are not rejected on principle; the loop needs a
+harness that can start a run non-interactively, resume that specific session by id, and emit a machine-readable
+stream. `cursor-agent` meets all three (`--print --output-format stream-json`, `--resume <chatId>`) and is the next
+one to add. `gemini` can name a session with `--session-id` but resumes by index or file rather than by that id.
+`goose` resumes interactive sessions only, so there is nowhere for the loop to stand. `opencode` has `run -s <id>`
+and is gated on an APort target. The reasoning is kept next to the adapters in `lib/harness.mjs`.
 | `repos` | [] | Appended by `start` and `register`. Used by `up` to recover from GitHub. |
 
 ## The reviewer object
