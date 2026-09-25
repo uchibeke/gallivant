@@ -1,4 +1,13 @@
-# Gallivant PRD
+# Gallivant specification
+
+This is the product specification: what Gallivant is, how the loop works, and the acceptance criteria the
+implementation is audited against (see [docs/audit/PRD-COMPLIANCE.md](docs/audit/PRD-COMPLIANCE.md)).
+
+It is deliberately not a PRD in the sense this tool enforces. Run it through the contract and it fails ten of the
+eleven rules: 8,000 words against a 1,500 limit, numbered headings the parser cannot read, no top-level
+Given/When/Then. A PRD is one pull request of work, written to the contract in [docs/prd.md](docs/prd.md) and living
+in `docs/prds/`. A specification is the whole product. Keeping the names apart matters here, because the tool refuses
+to start on anything that fails the contract and a document called PRD.md that cannot be started is a trap.
 
 | | |
 |---|---|

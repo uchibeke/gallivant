@@ -1,5 +1,8 @@
 # Audit brief (shared by all auditors)
 
+> Note: the document these audits call `PRD.md` was renamed `SPEC.md` on 2026-09-25, because it is a product
+> specification and does not meet the PRD contract this tool enforces. The audits are left as written.
+
 Audit target: /Users/uchi/Downloads/projects/gallivant/PRD.md (version 0.2, pre-audit).
 
 ## What the operator asked for, in their own priorities

@@ -1,5 +1,8 @@
 # Designer audit: the operator's seat
 
+> Note: the document these audits call `PRD.md` was renamed `SPEC.md` on 2026-09-25, because it is a product
+> specification and does not meet the PRD contract this tool enforces. The audits are left as written.
+
 Auditor: product designer (developer tools, CLIs). Target: PRD.md 0.2, pre-audit. Date: 2026-09-23.
 
 ## Verdict

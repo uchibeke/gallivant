@@ -52,7 +52,7 @@ PRD (status: ready)  →  gallivant start  →  session in its own checkout  →
 | `gallivant why <repo>#<pr>` | Why a PR stopped, what was dispatched, what the harness last said. |
 | `gallivant remove <repo>#<pr>` | Forget an entry. The PR and the checkout are left alone. |
 
-The PRD contract is in [docs/prd.md](docs/prd.md). Details in [docs/commands.md](docs/commands.md), config keys in [docs/config.md](docs/config.md), what the guardrails do and do not cover in [docs/guardrails.md](docs/guardrails.md), and the module map in [docs/architecture.md](docs/architecture.md). The product spec is [PRD.md](PRD.md); the audit that shaped it is under `docs/audit/`.
+The PRD contract is in [docs/prd.md](docs/prd.md). Details in [docs/commands.md](docs/commands.md), config keys in [docs/config.md](docs/config.md), what the guardrails do and do not cover in [docs/guardrails.md](docs/guardrails.md), and the module map in [docs/architecture.md](docs/architecture.md). The product spec is [SPEC.md](SPEC.md); the audit that shaped it is under `docs/audit/`.
 
 ## Status
 

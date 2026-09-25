@@ -1,5 +1,8 @@
 # Audit: open-source user
 
+> Note: the document these audits call `PRD.md` was renamed `SPEC.md` on 2026-09-25, because it is a product
+> specification and does not meet the PRD contract this tool enforces. The audits are left as written.
+
 Persona: someone who finds Gallivant on GitHub, has a Mac, their own repos under `~/code`, one harness signed in (say Claude Code only), a reviewer bot that is not Codex (CodeRabbit, Copilot, or just humans), and no APort account. Audit target: PRD.md version 0.2.
 
 Everything below was checked against the machine on 2026-09-23: `claude` 2.1.263 and 2.1.177 (both installed), `codex` 0.155.1, `opencode` 1.18.31, aport-agent-guardrails 1.0.33 source at `/Users/uchi/Downloads/projects/aport-agent-guardrails`, command-center at `/Users/uchi/Downloads/projects/command-center`.
