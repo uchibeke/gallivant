@@ -75,6 +75,10 @@ header.top {
 header.top h1 { font-size: 1rem; margin: 0; font-weight: 600; }
 nav.views { display: flex; gap: 0.9rem; margin-left: auto; }
 nav.views a[aria-current] { font-weight: 600; text-decoration: none; border-bottom: 2px solid var(--gv-accent); }
+/* The way back out to a host that mounted this. Set apart from the view tabs, since it leaves the tracker. */
+nav.views a.home { color: var(--gv-dim); text-decoration: none; padding-right: 0.6rem; margin-right: 0.3rem; border-right: 1px solid var(--gv-line); }
+nav.views a.home:hover { color: var(--gv-fg); }
+nav.views a.home::before { content: "\2190"; margin-right: 0.3rem; }
 
 .layout { display: grid; grid-template-columns: var(--gv-sidebar) minmax(0, 1fr); align-items: start; }
 @media (max-width: 46rem) { .layout { grid-template-columns: minmax(0, 1fr); } aside { border-right: 0 !important; } }
