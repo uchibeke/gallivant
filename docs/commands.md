@@ -58,6 +58,33 @@ RUNNING
 
 Sections are in the order needs-you, running; `--all` adds done. The first line is `daemon DOWN` with exit code 1 when no daemon is alive. `--json` prints the same model for scripts and UIs.
 
+## `gallivant serve [--port 8791]`
+
+A local web page showing every entry and every run, with the log of a run tailing live. One place to look instead of `status`, `why` and `tail -f` in three terminals. It is meant to sit in an iframe in a dashboard, so it assumes no viewport size and never navigates the top-level window.
+
+Three views, each with a sidebar listing everything the view holds:
+
+- `/` every registry entry as a row, grouped needs-you, running and done the same way `gallivant status` groups them, from the same `model()`.
+- `/run?id=<entry id>` one entry: handle, state, reason, harness, round, PR link, branch, checkout, session id, and the live log below.
+- `/runs` every run folder under `~/.gallivant/runs`, newest first, with its entry, start time, exit code and duration, filterable by entry. The history is already on disk; this is the index over it.
+
+The sidebar has one filter box that searches everything on the view, including fields the row does not show in full: an entry's id, reason and harness, a run's id and start time. Groups collapse, and which ones you closed is remembered per view. A filter overrides that, so a match inside a closed group still shows. `?by=harness` groups by harness instead of by state, and the choice rides along on every link, so a grouped view is a URL you can bookmark or frame.
+
+JSON for scripts and for a dashboard's own widgets: `/api/status` (the same model `status --json` prints), `/api/runs`, `/api/run/status?id=<entry id>`, and `/api/run/output?id=<entry id>` for the log as server-sent events. `--port` takes anything from 1 to 65535; the default is 8791.
+
+Two things to know about it:
+
+- **It is read-only.** There is no route that starts, kills, resets or edits anything, and no method but GET is routed. Changing state stays the CLI's and the daemon's job, so a page left open in a tab can do nothing.
+- **It binds to 127.0.0.1 and has no password.** That is the same boundary as the CLI: anything that can reach it can already read `~/.gallivant`. Do not put it behind a tunnel or a reverse proxy that answers on a public address, because the pages show branch names, local paths and whatever the agent printed.
+
+### Embedding it
+
+`?theme=dark` or `?theme=light` on the iframe src forces the palette. Pass it from a parent that knows its own theme, because `prefers-color-scheme` inside an iframe follows the browser rather than the page that framed it, and a dark dashboard otherwise gets a light frame.
+
+Every colour, font and spacing value in `templates/tracker/tracker.css` is a `--gv-*` custom property with a default. A page on the same origin can override them and restyle everything. A page on another origin (command-center on another port is another origin) cannot reach into this document at all, whatever the properties are named, which is why the query parameter exists.
+
+The log pane sends the last 400 lines when it opens and says how many earlier ones it is not showing; the whole log is in the run folder. It reconnects on its own and resumes where it left off rather than starting again. It follows the log file rather than the harness process, so it works for a run the daemon started before its last restart, and it auto-scrolls only while you are already at the bottom.
+
 ## `gallivant why <handle>`
 
 For a stopped or running PR: state and reason, the PR and checkout paths, the session id and the by-hand command to open it (`claude --resume <id>` or `codex resume <id>` in the checkout), the last dispatched event, the run folder and exit code, cost when the harness reports it, permission denials, the harness's final message, and any APort audit lines from the run's time window.

@@ -9,6 +9,7 @@ import { status } from "../lib/commands/status.mjs";
 import { why } from "../lib/commands/why.mjs";
 import { doctor, renderDoctor } from "../lib/commands/doctor.mjs";
 import { ready } from "../lib/commands/ready.mjs";
+import { serve, DEFAULT_PORT } from "../lib/commands/serve.mjs";
 import { hasConfig } from "../lib/config.mjs";
 import { resolveHandle } from "../lib/state.mjs";
 
@@ -21,6 +22,7 @@ const HELP = `gallivant: write a PRD, mark it ready, go outside.
                                          watch a hand-made PR; on an existing entry, reset it
   gallivant up [--once]                  the daemon: recover from GitHub, then tick every poll_seconds
   gallivant status [--all] [--json]      needs-you, running, daemon health
+  gallivant serve [--port 8791]          the tracker on 127.0.0.1: every entry, every run, live logs. Read-only
   gallivant why <handle>                 why a PR stopped; handle is <repo>#<pr>, a PRD path, or the id
   gallivant remove <handle>              forget an entry; the PR, the branch and the checkout are left alone
 
@@ -29,7 +31,14 @@ Config: $GALLIVANT_HOME/config.json (default ~/.gallivant). Run doctor for the f
 const OPTIONS = {
   check: { type: "boolean" }, once: { type: "boolean" }, all: { type: "boolean" }, json: { type: "boolean" },
   send: { type: "boolean" }, probe: { type: "boolean" }, help: { type: "boolean", short: "h" },
-  harness: { type: "string" }, session: { type: "string" }, worktree: { type: "string" },
+  harness: { type: "string" }, session: { type: "string" }, worktree: { type: "string" }, port: { type: "string" },
+};
+
+const portOf = v => {
+  if (v === undefined) return DEFAULT_PORT;
+  const n = Number(v);
+  if (!Number.isInteger(n) || n < 1 || n > 65535) throw new Error(`--port takes a port number, not "${v}"`);
+  return n;
 };
 
 async function main(argv) {
@@ -55,6 +64,8 @@ async function main(argv) {
     case "register": { if (!arg) throw new Error("register needs a PR URL"); const r = await register(ctx, { url: arg, harness: values.harness, session: values.session, worktree: values.worktree }); console.log(`${r.id}: watching PR #${r.pr} with ${r.harness}`); return 0; }
     case "up": await up(ctx, { once: values.once }); return 0;
     case "status": { const r = status(ctx, { all: values.all, json: values.json }); console.log(r.text); return r.exitCode; }
+    // Never resolves: the server holds the process open until it is interrupted.
+    case "serve": { const port = portOf(values.port); await serve(ctx, { port }); console.log(`gallivant serve: http://127.0.0.1:${port}  read-only, this machine only. Ctrl-C to stop.`); return new Promise(() => {}); }
     case "why": { if (!arg) throw new Error("why needs a handle"); console.log(why(ctx, { handle: arg })); return 0; }
     case "remove": { if (!arg) throw new Error("remove needs a handle"); const id = resolveHandle(ctx.state.entries(), arg); ctx.state.remove(id); console.log(`${id}: removed from the registry`); return 0; }
     default: throw new Error(`unknown command "${cmd}"\n\n${HELP}`);

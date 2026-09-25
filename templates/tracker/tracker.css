@@ -1,0 +1,148 @@
+/* The tracker's one stylesheet, served as a file so the CSP needs no 'unsafe-inline' for styles either.
+ *
+ * Every colour, font and spacing value is a custom property with a default, so a host page can restyle this without
+ * a patch. How far that reaches depends on the origin:
+ *
+ *   Same origin (a parent on 127.0.0.1 reaching into the iframe's document, or one that injects a <style>):
+ *     setting these properties on the iframe's :root restyles everything here.
+ *   Cross origin (the ordinary case: command-center on another port is another origin):
+ *     the parent cannot touch this document at all. CSS does not cross an origin boundary, and no amount of
+ *     custom properties changes that. This is not a bug to be fixed later. The mechanism for that case is
+ *     ?theme=dark|light on the iframe src, which sets data-theme on <html> here and picks the palette below.
+ *
+ * font-family is `inherit` first so that where inheritance is available it is taken, with a system stack behind it.
+ */
+:root {
+  color-scheme: light dark;
+
+  --gv-bg: #fbfbfa;
+  --gv-fg: #1a1a18;
+  --gv-dim: #6b6b64;
+  --gv-line: #e2e2dc;
+  --gv-card: #fff;
+  --gv-hover: #f2f2ee;
+  --gv-accent: #2f5d50;
+  --gv-warn: #9a3d1f;
+  --gv-live: #1f6f4a;
+
+  --gv-font: inherit, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --gv-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  --gv-size: 14px;
+  --gv-size-small: 0.8rem;
+  --gv-line-height: 1.5;
+
+  --gv-gap: 0.5rem;
+  --gv-pad: 0.4rem 0.55rem;
+  --gv-radius: 0.3rem;
+  --gv-sidebar: 17rem;
+  --gv-log-height: 58vh;
+}
+
+/* An explicit choice from the parent wins in both directions; the system setting applies only when nobody chose. */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --gv-bg: #16161a; --gv-fg: #e6e6e1; --gv-dim: #92928a; --gv-line: #2c2c33;
+    --gv-card: #1d1d22; --gv-hover: #24242b; --gv-accent: #7fc0a9; --gv-warn: #e0906b; --gv-live: #6fc79b;
+  }
+}
+:root[data-theme="dark"] {
+  --gv-bg: #16161a; --gv-fg: #e6e6e1; --gv-dim: #92928a; --gv-line: #2c2c33;
+  --gv-card: #1d1d22; --gv-hover: #24242b; --gv-accent: #7fc0a9; --gv-warn: #e0906b; --gv-live: #6fc79b;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  background: var(--gv-bg);
+  color: var(--gv-fg);
+  font-family: var(--gv-font);
+  font-size: var(--gv-size);
+  line-height: var(--gv-line-height);
+}
+
+a { color: var(--gv-accent); }
+.dim { color: var(--gv-dim); }
+.warn { color: var(--gv-warn); }
+.live { color: var(--gv-live); }
+code, .mono { font-family: var(--gv-mono); font-size: 0.86em; }
+
+/* No fixed viewport anywhere: the layout is a grid that collapses to one column in a narrow frame. */
+header.top {
+  display: flex; flex-wrap: wrap; gap: var(--gv-gap) 1rem; align-items: baseline;
+  padding: 0.6rem 0.9rem; border-bottom: 1px solid var(--gv-line);
+}
+header.top h1 { font-size: 1rem; margin: 0; font-weight: 600; }
+nav.views { display: flex; gap: 0.9rem; margin-left: auto; }
+nav.views a[aria-current] { font-weight: 600; text-decoration: none; border-bottom: 2px solid var(--gv-accent); }
+
+.layout { display: grid; grid-template-columns: var(--gv-sidebar) minmax(0, 1fr); align-items: start; }
+@media (max-width: 46rem) { .layout { grid-template-columns: minmax(0, 1fr); } aside { border-right: 0 !important; } }
+
+aside {
+  border-right: 1px solid var(--gv-line);
+  padding: 0.6rem 0.5rem 2rem;
+  position: sticky; top: 0; max-height: 100vh; overflow: auto;
+}
+section.main { padding: 0.7rem 0.9rem 3rem; min-width: 0; }
+
+/* The filter row and the grouping switch. */
+.controls { display: flex; gap: var(--gv-gap); align-items: center; flex-wrap: wrap; margin-bottom: 0.5rem; }
+input[type="search"], select, button {
+  font: inherit; color: var(--gv-fg); background: var(--gv-card);
+  border: 1px solid var(--gv-line); border-radius: var(--gv-radius); padding: 0.2rem 0.4rem;
+}
+input[type="search"] { flex: 1 1 8rem; min-width: 0; }
+button { cursor: pointer; }
+.controls label { font-size: var(--gv-size-small); color: var(--gv-dim); }
+
+/* A sidebar group: a heading that toggles, then its rows. The caret rotates rather than being two glyphs. */
+.group { margin-bottom: 0.3rem; }
+.group > h3 {
+  display: flex; align-items: center; gap: 0.35rem; margin: 0;
+  font-size: var(--gv-size-small); font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em;
+  color: var(--gv-dim); padding: 0.25rem 0.3rem; cursor: pointer; border-radius: var(--gv-radius);
+  user-select: none;
+}
+.group > h3:hover { background: var(--gv-hover); }
+.group > h3 small { margin-left: auto; font-variant-numeric: tabular-nums; font-weight: 400; }
+.caret { width: 0.55rem; height: 0.55rem; flex: none; border-right: 1.5px solid currentColor; border-bottom: 1.5px solid currentColor; transform: rotate(45deg); transition: transform .12s; }
+.group.closed .caret { transform: rotate(-45deg); }
+.group.closed .rows { display: none; }
+
+.rows { display: flex; flex-direction: column; }
+a.row {
+  display: flex; align-items: baseline; gap: 0.4rem; padding: var(--gv-pad);
+  color: inherit; text-decoration: none; border-radius: var(--gv-radius); min-width: 0;
+}
+a.row:hover { background: var(--gv-hover); }
+a.row[aria-current] { background: var(--gv-hover); box-shadow: inset 2px 0 0 var(--gv-accent); }
+a.row .n { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+a.row small { margin-left: auto; color: var(--gv-dim); font-size: 0.75rem; white-space: nowrap; }
+.dot { width: 0.5rem; height: 0.5rem; border-radius: 50%; flex: none; background: var(--gv-dim); align-self: center; }
+.dot.running { background: var(--gv-live); }
+.dot.failed { background: var(--gv-warn); }
+.dot.needs { background: var(--gv-warn); }
+.empty, .hint { color: var(--gv-dim); padding: 0.4rem 0.5rem; font-size: var(--gv-size-small); }
+
+h2 { font-size: var(--gv-size-small); text-transform: uppercase; letter-spacing: 0.06em; color: var(--gv-dim); margin: 1.2rem 0 0.3rem; font-weight: 600; }
+h2:first-of-type { margin-top: 0.2rem; }
+
+table { width: 100%; border-collapse: collapse; }
+th { text-align: left; font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--gv-dim); font-weight: 600; padding: 0.3rem 0.5rem; }
+td { padding: 0.35rem 0.5rem; border-top: 1px solid var(--gv-line); vertical-align: top; }
+tr:hover td { background: var(--gv-hover); }
+td.num { text-align: right; font-variant-numeric: tabular-nums; }
+.tag { display: inline-block; padding: 0.02rem 0.35rem; border: 1px solid var(--gv-line); border-radius: 0.25rem; font-size: 0.75rem; background: var(--gv-card); white-space: nowrap; }
+
+dl.facts { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 0.2rem 0.9rem; margin: 0.6rem 0 0; }
+dl.facts dt { color: var(--gv-dim); font-size: var(--gv-size-small); }
+dl.facts dd { margin: 0; min-width: 0; overflow-wrap: anywhere; }
+
+#log {
+  background: var(--gv-card); border: 1px solid var(--gv-line); border-radius: var(--gv-radius);
+  padding: 0.55rem 0.65rem; height: var(--gv-log-height); min-height: 12rem; overflow: auto;
+  white-space: pre-wrap; overflow-wrap: anywhere; font-family: var(--gv-mono); font-size: 12px; line-height: 1.45;
+}
+#log div.meta { color: var(--gv-dim); }
+.note { font-size: var(--gv-size-small); color: var(--gv-dim); margin: 0.35rem 0 0; }

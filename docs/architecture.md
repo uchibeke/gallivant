@@ -25,9 +25,14 @@ lib/probe.mjs            health checks shared by doctor, start and the daemon
 lib/aport.mjs            what APort's installer leaves on disk: the mode file and the audit log, one parser each
 lib/log.mjs, fs.mjs, time.mjs
 
-lib/commands/            start, register, up (daemon + reconcile), status, why, doctor
+lib/tracker/stream.mjs   the SSE log tail: bounded first read, resume by last-event-id, follows the log file
+lib/tracker/runs.mjs     the index over ~/.gallivant/runs, and the id checks every route goes through
+lib/tracker/pages.mjs    the pages: escaping, the sidebar and its groups, the CSP
+lib/tracker/assets.mjs   templates/tracker/{tracker.css,tracker.js}, read once, plus the ?theme value
+
+lib/commands/            start, register, up (daemon + reconcile), status, why, doctor, serve
 test/                    node --test; helpers.mjs holds the fakes
-templates/               passport, Claude sandbox settings, gitconfig
+templates/               passport, Claude sandbox settings, gitconfig, tracker/{tracker.css,tracker.js}
 ```
 
 ## Design rules
@@ -53,6 +58,19 @@ For each registry entry that is not `done`:
 5. **Dispatch.** Past the cap, stop with `iterations`. Otherwise build the fix prompt, resume the session (or start one for a registered PR), move the cursor to the newest event and record the ids dispatched at that instant, record the run.
 6. **Ready.** No events, no run, not a draft, every check green (none counts as green), reviewer clear or absent. Then the completion gate (`deliverable.mjs`): the PR body's receipt must attest every acceptance criterion of the PRD with evidence; a deny starts a receipt round. Only then label and notify once.
 7. **Silence.** Reviewer configured and quiet since the last request: nudge once after `rereview_minutes`, stop with `reviewer-silent` after `stall_hours`.
+
+## The tracker
+
+`gallivant serve` is a read-only window onto the same files the CLI reads. It has no route that starts, kills or resets anything, only GET is routed, and nothing under `lib/tracker/` writes to disk, so the tick stays the only writer. Six rules hold it together:
+
+- **One model, three renderings.** The dashboard, the sidebar and `/api/status` all come from `model(ctx)` in `status.mjs`, the same function the text view uses. A group that appears in one appears in all of them.
+- **An id is validated against the registry, not by pattern.** Entry ids contain slashes, so a query string is accepted only when `state.get(id)` returns an entry; the path is then rebuilt from `idSlug`. Run ids go through `run.mjs`'s `[A-Za-z0-9_-]` check. Nothing from a URL is ever joined to a path directly.
+- **The log is followed as a file.** The stream watches `job.log` with `fs.watch` and a one-second timer underneath, not the child's pipes, so a browser attached after a daemon restart still sees a run this process never spawned. It sends the last 400 lines on connect with a `skipped` count, carries an `id:` on every frame, and honours `last-event-id`, so a reconnect resumes rather than replaying. `res.setTimeout(0)` on the response, the request and the socket keeps Node's five-minute `requestTimeout` from cutting a long fix round. This is ported from command-center, where each of those was a bug first.
+- **Everything interpolated is escaped, and the page runs no inline script.** PR titles, branch names, reasons, run names and log lines come from GitHub or an agent. The CSP is `default-src 'none'; script-src 'self'; style-src 'self'`, and the stylesheet and script are files under `templates/tracker/` served on their own routes, so there is no nonce to thread through a response and no hash to keep in step. Log lines reach the DOM through `textContent`.
+- **Grouping is a link, not state.** The sidebar groups by entry state or by harness, chosen with `?by=`, so a grouped view is something you can bookmark or frame and there is nothing to keep in sync between the server and the page. Two options and a small switch, not a grouping engine. Collapsed state is the one thing the page keeps, in `localStorage` per view; a filter ignores it and shows every match expanded, which is the detail that makes a search feel right.
+- **The palette can be forced from outside.** Every colour, font and spacing value is a `--gv-*` custom property with a default. A same-origin parent can override them; a cross-origin parent cannot touch this document at all, and CSS custom properties do not change that, so `?theme=dark|light` is the mechanism for that case. It stamps `data-theme` on the root element, because `prefers-color-scheme` inside an iframe follows the browser and not the page that framed it.
+
+Bound to `127.0.0.1`, no auth: the same trust boundary as the CLI, since anything that can reach it can already read `~/.gallivant`.
 
 ## Adding a harness
 
