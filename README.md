@@ -12,14 +12,36 @@ Node 22, zero dependencies, `gh` for all GitHub access, ntfy for notifications. 
 
 ```bash
 git clone https://github.com/uchibeke/gallivant && cd gallivant
-node bin/gallivant.mjs doctor          # prints the config to write, from your machine's values
+npm link                               # puts `gallivant` on your PATH; see Install below for the alternatives
+gallivant doctor                       # prints the config to write, from your machine's values
 # write ~/.gallivant/config.json, then follow each FAIL line until doctor passes
 cp templates/prd.md path/to/repo/docs/prds/your-prd.md   # write it
-node bin/gallivant.mjs ready path/to/repo/docs/prds/your-prd.md    # the contract; flips it to ready when it passes
-node bin/gallivant.mjs start path/to/repo/docs/prds/your-prd.md
-node bin/gallivant.mjs up              # in a terminal tab; on a Mac it holds off sleep itself
-node bin/gallivant.mjs status
+gallivant ready path/to/repo/docs/prds/your-prd.md       # the contract; flips it to ready when it passes
+gallivant start path/to/repo/docs/prds/your-prd.md
+gallivant up                           # in a terminal tab; on a Mac it holds off sleep itself
+gallivant status
 ```
+
+## Install
+
+There are no dependencies, so every option below is just a way to put one executable file on your PATH. Node 22 or
+newer is the only requirement.
+
+```bash
+npm link                    # from the clone: a symlink into your node bin directory. Undo with `npm unlink -g gallivant`.
+npm i -g .                  # a copy rather than a link, so edits to the clone do not take effect until you rerun it
+npm i -g github:uchibeke/gallivant   # straight from the repository, no clone
+```
+
+`npm link` is the one to use while the tool is still changing, because the command always runs the working tree. If
+you would rather not touch your global node directory at all, `alias gallivant="node ~/path/to/gallivant/bin/gallivant.mjs"`
+in your shell profile does the same job.
+
+Check it with `gallivant --help` from a directory that is not the clone. If the shell cannot find it, your npm
+global bin is not on PATH: `npm prefix -g` names the directory, and its `bin` subdirectory is what has to be there.
+
+Gallivant is not published to the npm registry. It reads `~/.gallivant/config.json` wherever it runs from, so the
+command works in any directory and always acts on the same registry.
 
 The full setup, including the scoped token, the branch ruleset and the APort installs, is in [docs/install.md](docs/install.md). It takes about an hour the first time.
 
