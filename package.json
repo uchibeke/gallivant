@@ -1,0 +1,16 @@
+{
+  "name": "gallivant",
+  "version": "0.1.0",
+  "description": "Write a PRD, mark it ready, go outside. Keeps coding-agent pull requests moving through review and CI without you.",
+  "type": "module",
+  "bin": { "gallivant": "bin/gallivant.mjs" },
+  "files": ["bin", "lib", "templates", "README.md", "LICENSE", "docs/*.md"],
+  "engines": { "node": ">=22" },
+  "scripts": {
+    "test": "node --test test/*.test.mjs",
+    "lint": "node --check bin/gallivant.mjs && for f in lib/*.mjs lib/commands/*.mjs; do node --check \"$f\" || exit 1; done"
+  },
+  "keywords": ["claude-code", "codex", "pull-request", "autonomous", "agent", "aport"],
+  "license": "Apache-2.0",
+  "repository": { "type": "git", "url": "https://github.com/uchibeke/gallivant.git" }
+}

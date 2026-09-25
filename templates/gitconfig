@@ -1,0 +1,9 @@
+# ~/.gallivant/gitconfig: used by every run through GIT_CONFIG_GLOBAL, so the operator's keychain token and
+# ~/.git-credentials are never read directly. gh supplies the token: your own login by default, or GH_TOKEN when github_token_file is set.
+[credential]
+	helper = !gh auth git-credential
+[user]
+	name = gallivant
+	email = gallivant@users.noreply.github.com
+[push]
+	default = current
