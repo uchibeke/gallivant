@@ -5,6 +5,11 @@
 // data attributes the server rendered, so this file knows no ids or paths of its own.
 "use strict";
 
+// Where this tracker is mounted: empty when it owns the origin, something like "/gallivant" when a host server
+// delegates a prefix to it. The server publishes it on <body data-base> because this file is served from one route
+// and cannot be told at build time where it lives.
+const BASE = document.body.dataset.base || "";
+
 // localStorage can throw, not only return null: a private window, a browser set to block site data, or a frame whose
 // storage the embedder partitioned away. Every read and write is guarded and the page works with no stored value.
 const LS = {
@@ -94,7 +99,7 @@ if (pane) {
     pane.appendChild(line);
     if (stick) pane.scrollTop = pane.scrollHeight;
   };
-  const url = "/api/run/output?id=" + encodeURIComponent(pane.dataset.entry) + "&run=" + encodeURIComponent(pane.dataset.run);
+  const url = BASE + "/api/run/output?id=" + encodeURIComponent(pane.dataset.entry) + "&run=" + encodeURIComponent(pane.dataset.run);
   const es = new EventSource(url);
   es.addEventListener("skipped", e => add("[" + e.data + " earlier lines not shown; the whole log is in the run folder]", "meta"));
   es.onmessage = e => {

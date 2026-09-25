@@ -9,7 +9,7 @@ import assert from "node:assert/strict";
 import { join } from "node:path";
 import { mkdirSync, writeFileSync, readFileSync } from "node:fs";
 import { EventEmitter } from "node:events";
-import { handle } from "../lib/commands/serve.mjs";
+import { handle, mount } from "../lib/commands/serve.mjs";
 import { listRuns, runDir } from "../lib/tracker/runs.mjs";
 import { streamRun, TAIL } from "../lib/tracker/stream.mjs";
 import { esc, CSP } from "../lib/tracker/pages.mjs";
@@ -588,6 +588,57 @@ test("a run whose process is gone but whose exit was never recorded says so, and
   handle(w.ctx, req("/tracker.js"), js);
   await js.ended;
   assert.match(js.body(), /exit\|no run\|ended/);
+});
+
+test("mounted under a prefix, every URL the pages emit carries it, and standalone keeps absolute paths", async () => {
+  const w = world({ runs: { "2026-09-24T02-00-00-000-fix": { lines: ["x"], exit: 0, endedAt: 1 } }, latest: "2026-09-24T02-00-00-000-fix" });
+  const tracker = mount(w.ctx, { base: "/gallivant" });
+  assert.equal(tracker.base, "/gallivant");
+
+  const get = async path => { const r = res(); tracker.handle(req(path), r); await r.ended; return r; };
+
+  // The prefix itself is the dashboard, not a 404: a host that delegates /gallivant means /gallivant to be the root.
+  const dash = await get("/gallivant");
+  assert.equal(dash.code, 200);
+  const links = [...new Set([...dash.body().matchAll(/(?:href|src)="(\/[^"]*)"/g)].map(m => m[1]))];
+  assert.ok(links.length > 3, "the page emits internal links");
+  assert.ok(links.every(l => l.startsWith("/gallivant/")), `every internal link sits under the mount, got ${links.join(" ")}`);
+  // The script is one static file, so it learns where it lives from the DOM rather than at build time.
+  assert.match(dash.body(), /<body data-base="\/gallivant">/);
+
+  for (const path of ["/gallivant/", "/gallivant/runs", "/gallivant/tracker.css", "/gallivant/tracker.js", `/gallivant/run?id=${encodeURIComponent(ID)}`, "/gallivant/api/status"])
+    assert.equal((await get(path)).code, 200, `${path} is served under the mount`);
+
+  // A 404 under the mount is the tracker's own, and its way back points at the mount rather than at the host's root.
+  const miss = await get("/gallivant/nope");
+  assert.equal(miss.code, 404);
+  assert.match(miss.body(), /href="\/gallivant\/"/);
+  // The legacy redirect lands inside the mount too, or it would leave the tracker entirely.
+  const old = await get("/gallivant/api/run/log?id=x");
+  assert.equal(old.code, 302);
+  assert.equal(old.headers.location, "/gallivant/api/run/output?id=x");
+  // And the id checks are unchanged by the prefix.
+  assert.equal((await get("/gallivant/run?id=" + encodeURIComponent("../../etc/passwd"))).code, 404);
+
+  // owns() is what a host asks before handing a request over: the prefix and everything under it, nothing else.
+  assert.ok(tracker.owns(req("/gallivant")));
+  assert.ok(tracker.owns(req("/gallivant/runs")));
+  assert.ok(!tracker.owns(req("/")), "the host keeps its own root");
+  assert.ok(!tracker.owns(req("/api/tree")), "and its own api");
+  assert.ok(!tracker.owns(req("/gallivanting")), "a path that merely starts with the same letters is not ours");
+
+  // Standalone is untouched: no prefix, absolute links, which is what `gallivant serve` serves.
+  const solo = res();
+  handle(w.ctx, req("/"), solo);
+  await solo.ended;
+  assert.match(solo.body(), /<body data-base="">/);
+  assert.ok([...solo.body().matchAll(/(?:href|src)="(\/[^"]*)"/g)].every(m => !m[1].startsWith("/gallivant")), "no mount path leaks into the standalone pages");
+
+  // A base is normalised rather than trusted, and an empty one is refused: mounting at the root is what serve() does.
+  assert.equal(mount(w.ctx, { base: "gallivant/" }).base, "/gallivant");
+  assert.equal(mount(w.ctx, { base: "//gallivant//" }).base, "/gallivant");
+  assert.throws(() => mount(w.ctx, { base: "/" }), /non-empty base/);
+  assert.throws(() => mount(w.ctx, { base: "" }), /non-empty base/);
 });
 
 test("/api/run/log still resolves, because the old path is in bookmarks", async () => {

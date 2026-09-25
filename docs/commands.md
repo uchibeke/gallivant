@@ -77,11 +77,38 @@ Two things to know about it:
 - **It is read-only.** There is no route that starts, kills, resets or edits anything, and no method but GET is routed. Changing state stays the CLI's and the daemon's job, so a page left open in a tab can do nothing.
 - **It binds to 127.0.0.1 and has no password.** That is the same boundary as the CLI: anything that can reach it can already read `~/.gallivant`. Do not put it behind a tunnel or a reverse proxy that answers on a public address, because the pages show branch names, local paths and whatever the agent printed.
 
-### Embedding it
+### Running it inside another server
+
+`gallivant serve` is one way to run the tracker, not the only one. The same router can be mounted inside a server you already start, so one process and one port serve both and there is no second thing to supervise:
+
+```js
+import { mount } from "gallivant/lib/commands/serve.mjs";
+import { makeContext } from "gallivant/lib/context.mjs";
+
+const tracker = mount(makeContext(), { base: "/gallivant" });
+
+createServer((req, res) => {
+  if (tracker.owns(req)) return tracker.handle(req, res);
+  // ... the host's own routes
+}).listen(8790, "127.0.0.1");
+```
+
+`owns(req)` is true for the prefix and anything under it; `handle(req, res)` serves it, including its own 404, its assets and the log stream. Every URL the pages emit is built from the mount path, so nothing is hardcoded to the root and the same code serves `/run?id=` standalone and `/gallivant/run?id=` mounted.
+
+Two things become the host's responsibility, because a mounted router cannot enforce them:
+
+- **The bind address.** Standalone, the tracker binds `127.0.0.1` itself and cannot be reached from another machine. Mounted, it answers wherever the host answers, so a host on `0.0.0.0` publishes the tracker too.
+- **Auth.** Nothing in the tracker asks who is calling. A host with a sign-in should check it before handing the request over, which also gives the tracker auth it does not have on its own.
+
+Mounting on the same origin is worth preferring for a second reason: the `--gv-*` properties below only work across the same origin, so a same-origin host can restyle the tracker to match itself.
+
+### Embedding it in a page
 
 `?theme=dark` or `?theme=light` on the iframe src forces the palette. Pass it from a parent that knows its own theme, because `prefers-color-scheme` inside an iframe follows the browser rather than the page that framed it, and a dark dashboard otherwise gets a light frame.
 
-Every colour, font and spacing value in `templates/tracker/tracker.css` is a `--gv-*` custom property with a default. A page on the same origin can override them and restyle everything. A page on another origin (command-center on another port is another origin) cannot reach into this document at all, whatever the properties are named, which is why the query parameter exists.
+Every colour, font and spacing value in `templates/tracker/tracker.css` is a `--gv-*` custom property with a default. A page on the same origin can override them and restyle everything. A page on another origin (a host on another port is another origin) cannot reach into this document at all, whatever the properties are named, which is why the query parameter exists.
+
+The tracker brings its own sidebar, filter and grouping, so it does not need a host's chrome around it. Give it a page or a full-height frame rather than a panel.
 
 The log pane sends the last 400 lines when it opens and says how many earlier ones it is not showing; the whole log is in the run folder. It reconnects on its own and resumes where it left off rather than starting again. It follows the log file rather than the harness process, so it works for a run the daemon started before its last restart, and it auto-scrolls only while you are already at the bottom.
 

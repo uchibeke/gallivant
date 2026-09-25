@@ -61,7 +61,7 @@ For each registry entry that is not `done`:
 
 ## The tracker
 
-`gallivant serve` is a read-only window onto the same files the CLI reads. It has no route that starts, kills or resets anything, only GET is routed, and nothing under `lib/tracker/` writes to disk, so the tick stays the only writer. Six rules hold it together:
+`gallivant serve` is a read-only window onto the same files the CLI reads. It has no route that starts, kills or resets anything, only GET is routed, and nothing under `lib/tracker/` writes to disk, so the tick stays the only writer. Seven rules hold it together:
 
 - **One model, three renderings.** The dashboard, the sidebar and `/api/status` all come from `model(ctx)` in `status.mjs`, the same function the text view uses. A group that appears in one appears in all of them.
 - **An id is validated against the registry, not by pattern.** Entry ids contain slashes, so a query string is accepted only when `state.get(id)` returns an entry; the path is then rebuilt from `idSlug`. Run ids go through `run.mjs`'s `[A-Za-z0-9_-]` check. Nothing from a URL is ever joined to a path directly.
@@ -70,7 +70,9 @@ For each registry entry that is not `done`:
 - **Grouping is a link, not state.** The sidebar groups by entry state or by harness, chosen with `?by=`, so a grouped view is something you can bookmark or frame and there is nothing to keep in sync between the server and the page. Two options and a small switch, not a grouping engine. Collapsed state is the one thing the page keeps, in `localStorage` per view; a filter ignores it and shows every match expanded, which is the detail that makes a search feel right.
 - **The palette can be forced from outside.** Every colour, font and spacing value is a `--gv-*` custom property with a default. A same-origin parent can override them; a cross-origin parent cannot touch this document at all, and CSS custom properties do not change that, so `?theme=dark|light` is the mechanism for that case. It stamps `data-theme` on the root element, because `prefers-color-scheme` inside an iframe follows the browser and not the page that framed it.
 
-Bound to `127.0.0.1`, no auth: the same trust boundary as the CLI, since anything that can reach it can already read `~/.gallivant`.
+- **The router is separable from the server.** `handle(ctx, req, res, { base })` is the whole of the routing and `mount(ctx, { base })` wraps it as `{ owns, handle }` for a host server to delegate a prefix to, so the tracker can run standalone on its own port or inside a server somebody else starts. Every URL the pages emit is built from the mount path rather than from the root, and the script reads that path from `<body data-base>` since it is one static file that cannot be told at build time where it lives. A mounted tracker inherits the host's bind address and auth, which is the host's responsibility and not something this module can enforce.
+
+Standalone it binds `127.0.0.1` with no auth: the same trust boundary as the CLI, since anything that can reach it can already read `~/.gallivant`.
 
 ## Adding a harness
 
