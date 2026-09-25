@@ -1,7 +1,7 @@
 // `start` and `register` against fakes: the filesystem is real (a temp dir), git and gh are not.
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { join } from "node:path";
+import { join, relative } from "node:path";
 import { mkdirSync, readFileSync, writeFileSync, chmodSync, statSync } from "node:fs";
 import { start } from "../lib/commands/start.mjs";
 import { register } from "../lib/commands/register.mjs";
@@ -53,6 +53,33 @@ test("start writes the PRD into the fresh checkout, so the branch carries the br
   assert.equal(w.ctx.state.get(r.id).prd, "docs/prds/widget-export.md");
   assert.equal(w.snapshots.get(r.id), GOOD_PRD, "the daemon keeps its own snapshot as the authoritative copy");
   assert.equal(statSync(join(w.worktree, "docs", "prds")).mode & 0o777, 0o755, "the directory git will commit is not private to the daemon");
+});
+
+test("start follows the repo, base branch and relative path the request names", async () => {
+  // Step B moved the repo off `start` and onto the Request. This does not catch a regression the pre-change code
+  // would have failed: the old `start` called git.toplevel then gh.repoInfo itself and got the same answers, so
+  // from outside the two are indistinguishable. What it does pin down is that start now consumes those three
+  // fields rather than recomputing them, so a source that fills them in differently is honoured. The failing-
+  // pre-change proof for the source's half of the contract is in sources.test.mjs.
+  const w = startWorld();
+  const elsewhere = join(w.home, "unrelated-checkout");
+  mkdirSync(elsewhere, { recursive: true });
+  w.ctx.git.toplevel = async () => elsewhere;
+  w.ctx.gh.repoInfo = async () => ({ nameWithOwner: "acme/other", defaultBranch: "trunk" });
+  const created = [];
+  w.ctx.git.create = async spec => { created.push(spec); return w.worktree; };
+
+  const r = await start(w.ctx, { path: w.prdPath });
+  assert.equal(r.id, "acme/other/widget-export", "the id is keyed by the repo the request named");
+  assert.equal(w.ctx.state.get(r.id).repo, "acme/other");
+  assert.deepEqual(created, [{ nameWithOwner: "acme/other", prdId: "widget-export", defaultBranch: "trunk" }], "the clone and the base branch follow the request");
+  assert.equal(w.ctx.state.get(r.id).prd, relative(elsewhere, w.prdPath), "and the brief's path is relative to that checkout");
+});
+
+test("a PRD outside a git checkout stops at the source, with git's own message and nothing recorded", async () => {
+  const w = startWorld();
+  await assert.rejects(() => start({ ...w.ctx, git: { ...w.ctx.git, toplevel: async () => { throw new Error("not a git repository"); } } }, { path: w.prdPath }), /not a git repository/);
+  assert.equal(w.ctx.state.entries().length, 0, "nothing is recorded when the repository cannot be named");
 });
 
 test("start puts the PRD wherever the operator keeps it, including a path the fresh clone has no directory for", async () => {

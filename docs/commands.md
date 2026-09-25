@@ -12,7 +12,7 @@ The only way a PRD becomes ready. Runs every rule of [the contract](prd.md), pri
 
 ## `gallivant start <prd.md>`
 
-1. Runs the full contract again and refuses on the first failing rule. There is no override flag.
+1. Reads the PRD into a Request (see [the contract](prd.md)), which names the target repository: the checkout the file itself is in, so the PRD has to live inside the repo it describes. Runs the full contract on it and refuses on the first failing rule. There is no override flag.
 2. Requires `status: ready`, which only `gallivant ready` sets.
 3. Checks the harness named in the PRD is signed in. If not, the entry is recorded as `needs-human` with reason `not-signed-in` and nothing else happens.
 4. Clones the repo into `<worktrees>/<repo>/<prd id>` (partial clone, blobs on demand) on a new branch `gallivant/<prd id>` from the remote default branch. Your own checkout is never touched.

@@ -28,6 +28,18 @@ gallivant start path/to/repo/docs/prds/widget-export.md
 
 `ready --check` prints every rule with ok or FAIL and, for a failure, what to change. `start` runs the same checks again and stops on the first failure, so editing a PRD after marking it ready cannot sneak a bad one through.
 
+## One gate, one implementation
+
+The checker does not read files. It takes a Request, which is what a source produces after reading whatever you typed:
+
+```
+{ id, repo, title, body, harness, status, source: { kind, url, author }, raw }
+```
+
+The only source today is the PRD file, under `lib/sources/prd.mjs`. It parses the frontmatter, takes the id from the filename, and asks git which checkout the file is in, so `repo` arrives as `owner/name` on the Request rather than being worked out later by `start`. Nothing about writing or checking a PRD changes because of this.
+
+What it buys is that the rules are the rules. `path` is the one rule that depends on where a brief lives rather than on what it says, and it declares that in its own data (`kinds: ["prd"]`); every other rule has no scope and applies to any Request. A source that has no path is not reported as failing a rule about filenames, and it is held to all ten of the others. That is the extension point: a brief arriving some other way is an adapter plus somewhere to record its verdict, not a second gate with its own drift.
+
 ## Ready is an APort decision
 
 `gallivant ready` records an APort decision as well as flipping the status. The PRD is treated as a deliverable under APort's `deliverable.task.complete.v1` policy: the eleven rules become the acceptance criteria of a per-PRD passport, the checker's verdict per rule becomes an attestation with evidence, the PRD text goes through the policy's output scan for placeholder text, and the summary names the PRD and its score. The built-in rules run first and list every problem; when they pass and `deliverable.evaluator` is `aport`, the same context and passport go to APort's verify endpoint, and its answer is recorded. Only an allow flips the status, and the decision id is written into the PRD's frontmatter as `aport_decision`, so a ready PRD carries the receipt of the decision that made it ready. Without a config, or with `deliverable: null`, the decision is local only. `ready` does not commit; the daemon works from its own snapshot of the PRD taken by `start`, so commit the PRD with the rest of your work whenever you like.
@@ -82,3 +94,15 @@ A round that only rewrites the receipt counts as a round: the daemon posts a mar
 Who decides. The built-in rules run first and list every problem at once. When they pass and `deliverable.evaluator` is `aport` (the default), the daemon builds a per-task passport in OAP shape, with the PRD's criteria as the policy's `acceptance_criteria` limits, and posts it with the context to APort's verify endpoint for `deliverable.task.complete.v1`. APort evaluates the passport as sent and its deny wins. If APort cannot be reached there is no decision: the PR stays where it is, nothing is dispatched, no round is counted, and the daemon asks again next tick. Set `deliverable.on_unreachable` to `local` to let the built-in verdict stand instead; the log then says which verdict was used. `evaluator: "local"` skips the hosted call. The API key recorded by the APort Claude install, if any, is sent so the calls count against your account; the route also works unauthenticated, rate limited per IP.
 
 APort's deny names one problem at a time (evaluation stops at the first failing rule) and does not include the criterion id, which is why the local pass runs first.
+
+## Provenance on a decision
+
+Both gates send a `meta` object inside the context they already send:
+
+```json
+"meta": { "framework": "codex", "gallivant_version": "0.1.0" }
+```
+
+`framework` is the harness that did the work, or that the brief names for a readiness decision. `gallivant_version` is the release that asked. A machine running Claude Code and Codex against one passport otherwise produces decisions nobody can tell apart afterwards, and the OAP decision object is closed (`additionalProperties: false`), so the request context is where this belongs. No specification change was needed: the policy packs leave `additionalProperties` unset, which in JSON Schema already permits extra properties, and the hosted validator's context schemas are `.unknown(true)`. An older verifier ignores the field.
+
+It is self-reported and it is never an authorization input. Gallivant asserts these two values and nothing verifies them, so a field the caller controls could be forged the moment anything read it back to decide something. It is recorded for audit and analytics, and the local rules ignore it entirely; a test asserts that a forged `meta` changes no verdict in either direction.

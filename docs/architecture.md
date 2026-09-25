@@ -11,7 +11,8 @@ lib/events.mjs           pure rules: what counts as an event, trust, reviewer ve
 lib/prompt.mjs           start, register and fix prompts; quoting and caps
 lib/harness.mjs          adapters: argv per harness and mode, session id extraction, outcome parsing, sign-in probe
 lib/block.mjs            the PR body block: render, strict parse
-lib/prd.mjs              the PRD contract: frontmatter, sections, rules, Verify commands
+lib/prd.mjs              the contract: frontmatter, sections, rules, Verify commands. Takes a Request, not a file
+lib/sources/             one adapter per source of a brief, and the registry that picks one. Only the PRD file today
 lib/deliverable.mjs      the completion gate: criteria from the PRD, the receipt, the policy's rules and deny codes
 
 lib/gh.mjs               the only GitHub access, through the gh CLI; login normalisation; markers and labels
@@ -33,6 +34,7 @@ templates/               passport, Claude sandbox settings, gitconfig
 
 - **The tick is the only writer.** Nothing changes state in exit handlers, timers or callbacks. A finished run is noticed on the next tick by asking the OS whether the pid is alive and reading the log. That is what makes a daemon restart mid-run safe.
 - **Rules are pure.** `events.mjs` takes the raw shapes `gh` returns and produces events. Every rule in the PRD has a unit test with no network.
+- **One gate, and the brief is a Request.** `check()` takes a source-neutral Request, `{ id, repo, title, body, harness, status, source: { kind, url, author }, raw }`, plus the parsed fields the rules read. A source under `lib/sources/` reads whatever the operator typed and produces one; today the only source is a PRD file, and its Request is exactly what `parsePrd` always returned. Two things follow. A rule that depends on where the brief lives rather than on what it says carries its own scope as data (`path` is the only one, `kinds: ["prd"]`), so a source without a path is not failed for a rule it cannot satisfy. And `repo` is a field the source fills in, not something a command derives: `start` reads `request.repo` and never calls `git.toplevel` itself. Adding a source is an adapter plus somewhere to record its verdict, never a second gate.
 - **Dependencies are injected.** `makeTick` receives `gh`, `git`, `runnerFor`, `notify`, `clock`. The test suite builds fakes in `test/helpers.mjs`; the CLI builds real ones in `context.mjs`.
 - **GitHub is the source of truth for identity; the registry for counters.** Both can be rebuilt: identity from the PR block, counters from the daemon's own marked comments (every round posts one, a reset posts one).
 - **Four cursors, one meaning each.** `since`: events at or after it are new. `fixed_sha`: the head when the last run started, so a push is the head moving. `checks_sha`: the head whose failing checks were already dispatched. `receipt_hash`: the completion receipt when the last run started. `since` is inclusive because GitHub stamps events to the second, so two that arrive in the same second share a timestamp; `dispatched` rides alongside it with the ids already handled at exactly that instant, and is cleared the moment the cursor moves to another second.

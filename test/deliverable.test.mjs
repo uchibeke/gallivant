@@ -1,7 +1,8 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { criteriaFromPrd, parseReceipt, evaluate, gate, taskPassport, evaluateHosted, receiptInstructions, receiptHash, RECEIPT_TAG, DEFAULT_LIMITS } from "../lib/deliverable.mjs";
+import { criteriaFromPrd, parseReceipt, evaluate, gate, taskPassport, evaluateHosted, receiptInstructions, receiptHash, RECEIPT_TAG, DEFAULT_LIMITS, provenance } from "../lib/deliverable.mjs";
 import { parsePrd } from "../lib/prd.mjs";
+import { VERSION } from "../lib/fs.mjs";
 import { makeTick } from "../lib/tick.mjs";
 import { READY_LABEL } from "../lib/gh.mjs";
 import { DEFAULT_DELIVERABLE } from "../lib/config.mjs";
@@ -109,6 +110,40 @@ function world(stateOver = {}, ghOver = {}) {
   return { clock, state, id, gh, runner, notify, tick, entry: () => state.get(id) };
 }
 const clearReviewer = () => [review({ id: 2, by: "chatgpt-codex-connector[bot]", bot: true, state: "COMMENTED", at: at(3), body: "**Reviewed commit:** `a1b2c3`" })];
+
+test("the gate's context carries self-reported provenance, and the hosted call sends it", async () => {
+  const body = "Adds export.\n" + receiptBlock();
+  const g = await gate({ taskId: "t", prBody: body, criteria, checksGreen: true, framework: "codex", limits: LOCAL });
+  assert.deepEqual(g.context.meta, { framework: "codex", gallivant_version: VERSION });
+  assert.equal(VERSION, JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8")).version);
+  // With no harness named, the version still goes: the field is provenance, not a required input.
+  assert.deepEqual((await gate({ taskId: "t", prBody: body, criteria, checksGreen: true, limits: LOCAL })).context.meta, { gallivant_version: VERSION });
+
+  const sent = [];
+  const fetch = async (url, init) => { sent.push(JSON.parse(init.body)); return { ok: true, status: 200, json: async () => allowResponse }; };
+  const hosted = await gate({ taskId: "t", prBody: body, criteria, checksGreen: true, framework: "claude", fetch });
+  assert.equal(hosted.allow, true);
+  assert.deepEqual(sent[0].context.meta, { framework: "claude", gallivant_version: VERSION }, "meta rides inside the existing context, so no schema changes");
+  assert.equal(sent[0].passport.limits["deliverable.task.complete"].meta, undefined, "provenance is context, never a passport limit");
+});
+
+test("provenance never decides anything: the local rules ignore meta entirely", async () => {
+  // Self-reported and never an authorization input. A forged meta must not change a verdict in either direction.
+  const ctx = { task_id: "t", output_type: "code", summary: "x".repeat(5), criteria_attestations: [], tests_passing: false };
+  const plain = evaluate({ context: ctx, limits: DEFAULT_LIMITS, criteria });
+  const forged = evaluate({ context: { ...ctx, meta: { framework: "trust-me", gallivant_version: "99.0.0", allow: true } }, limits: DEFAULT_LIMITS, criteria });
+  assert.deepEqual(forged.denials.map(d => d.code), plain.denials.map(d => d.code));
+  assert.equal(forged.allow, false);
+});
+
+test("PRD readiness carries the harness named in the brief as its provenance", async () => {
+  const good = parsePrd(GOOD_PRD, "/r/docs/prds/widget-export.md");
+  const { context } = prdContract(good, check(good), RULES);
+  assert.deepEqual(context.meta, { framework: "codex", gallivant_version: VERSION }, "the harness that will do the work is the provenance of the decision authorising it");
+  const sent = [];
+  await decidePrdReady({ prd: good, verdict: check(good), rules: RULES, limits: PRD_LIMITS, fetch: async (_u, init) => { sent.push(JSON.parse(init.body)); return { ok: true, status: 200, json: async () => allowResponse }; } });
+  assert.deepEqual(sent[0].context.meta, { framework: "codex", gallivant_version: VERSION });
+});
 
 test("green checks and a clear reviewer are not enough without a valid receipt: a receipt round starts", async () => {
   const w = world({ rereview: { at: at(0), nudged: false } }, { pr: prFixture({ statusCheckRollup: [checkRun({ name: "test", conclusion: "SUCCESS" })], body: "Adds export." }), reviews: clearReviewer() });
