@@ -1,0 +1,162 @@
+// `gallivant status`: the model first, then the text and the exit code. The tracker UI reads the same model, so
+// every claim about what an operator sees is made here against `model`, not against a rendered string.
+import { test } from "node:test";
+import assert from "node:assert/strict";
+import { join } from "node:path";
+import { model, render, status } from "../lib/commands/status.mjs";
+import { makeState, newEntry, STATES } from "../lib/state.mjs";
+import { writeJsonAtomic } from "../lib/fs.mjs";
+import { CONFIG, T0, at, tempHome, makeClock, silentLog } from "./helpers.mjs";
+
+const entryAt = (over = {}) => ({
+  ...newEntry({ prd: "docs/prds/widget-export.md", harness: "claude", session: null, repo: "acme/widget", branch: "gallivant/widget-export", worktree: "/tmp/wt", pr: 142, url: "https://github.com/acme/widget/pull/142", state: STATES.prOpen, nowIso: T0 }),
+  ...over,
+});
+
+/** A registry, a daemon file if the test asks for one, and a runner fake per entry. */
+function world({ entries = {}, daemon = null, runs = {} } = {}) {
+  const home = tempHome();
+  const state = makeState(home);
+  for (const [id, e] of Object.entries(entries)) state.put(id, e);
+  if (daemon) writeJsonAtomic(join(home, "daemon.json"), daemon);
+  const ctx = {
+    home,
+    config: { ...CONFIG, home },
+    state,
+    log: silentLog,
+    runnerFor: id => ({ current: () => runs[id] ?? null }),
+  };
+  return { ctx, state, home };
+}
+
+test("a needs-human entry lands in needs_you with its reason as the detail", () => {
+  const w = world({ entries: { "acme/widget/widget-export": entryAt({ state: STATES.needsHuman, reason: "no-push", iteration: 2 }) } });
+  const m = model(w.ctx);
+
+  assert.equal(m.running.length, 0);
+  assert.equal(m.done.length, 0);
+  assert.deepEqual(m.needs_you.map(r => [r.handle, r.label, r.detail, r.round]), [["widget#142", "needs-human", "no-push", "round 2/3"]]);
+});
+
+test("a ready entry lands in needs_you too, because it is a person who merges it", () => {
+  const w = world({ entries: { "acme/widget/widget-export": entryAt({ state: STATES.ready }) } });
+  const m = model(w.ctx);
+
+  assert.deepEqual(m.needs_you.map(r => [r.label, r.detail]), [["ready", "green, no blocking findings"]]);
+  assert.equal(m.needs_you[0].url, "https://github.com/acme/widget/pull/142", "the link a person opens to merge is in the row");
+});
+
+test("a done entry is in done and nowhere else, so a merged PR never clutters the two live sections", () => {
+  const w = world({ entries: { "acme/widget/widget-export": entryAt({ state: STATES.done }) } });
+  const m = model(w.ctx);
+
+  assert.deepEqual([m.needs_you.length, m.running.length], [0, 0]);
+  assert.deepEqual(m.done.map(r => [r.label, r.detail]), [["done", ""]]);
+});
+
+test("a pr-open entry waiting on the reviewer is running, and says whether it was already nudged", () => {
+  const waiting = world({ entries: { "acme/widget/widget-export": entryAt({ rereview: { at: T0, nudged: false } }) } });
+  assert.deepEqual(model(waiting.ctx).running.map(r => [r.label, r.detail]), [["waiting", "on reviewer"]]);
+
+  const nudged = world({ entries: { "acme/widget/widget-export": entryAt({ rereview: { at: T0, nudged: true } }) } });
+  assert.deepEqual(model(nudged.ctx).running.map(r => [r.label, r.detail]), [["waiting", "on reviewer, nudged once"]]);
+});
+
+test("a run in flight reads as running, labelled by whether it is the first session or a fix round", () => {
+  const run = { id: "2026-09-24T02-00-00-000-fix", running: true, startedAt: Date.parse(T0) };
+  const fixing = world({
+    entries: { "acme/widget/widget-export": entryAt({ state: STATES.prOpen, last: { at: T0, run: run.id, exit: null, event: "review 2201 by chatgpt-codex-connector" } }) },
+    runs: { "acme/widget/widget-export": run },
+  });
+  const fix = model(fixing.ctx).running;
+  assert.deepEqual(fix.map(r => [r.label, r.detail]), [["fixing", "review 2201 by chatgpt-codex-connector"]]);
+  assert.deepEqual(fix[0].run, { id: run.id, running: true, startedAt: run.startedAt }, "the row carries the run so a UI can link its log");
+
+  const starting = world({
+    entries: { "acme/widget/widget-export": entryAt({ state: STATES.running, pr: null, url: null, last: { at: T0, run: run.id, exit: null, event: "start" } }) },
+    runs: { "acme/widget/widget-export": run },
+  });
+  assert.deepEqual(model(starting.ctx).running.map(r => [r.handle, r.label]), [["acme/widget/widget-export", "implementing"]], "no PR yet, so the handle is the registry id");
+});
+
+test("a run whose process is gone but whose exit the tick has not recorded says it is settling, not that it is working", () => {
+  const run = { id: "2026-09-24T02-00-00-000-fix", running: false, startedAt: Date.parse(T0) };
+  const w = world({
+    entries: { "acme/widget/widget-export": entryAt({ last: { at: T0, run: run.id, exit: null, event: "review 2201 by chatgpt-codex-connector" } }) },
+    runs: { "acme/widget/widget-export": run },
+  });
+  assert.deepEqual(model(w.ctx).running.map(r => [r.label, r.detail]), [["fixing", "ended, settling on the next tick"]]);
+});
+
+test("a running entry with no run recorded says it is waiting for the daemon rather than claiming progress", () => {
+  const w = world({ entries: { "acme/widget/widget-export": entryAt({ state: STATES.running, pr: null, url: null, last: null }) } });
+  assert.deepEqual(model(w.ctx).running.map(r => [r.label, r.detail]), [["starting", "waiting for the daemon to settle the run"]]);
+});
+
+test("a daemon file left behind by a dead process reports dead, because liveness is asked of the operating system", () => {
+  const dead = world({ daemon: { pid: 0x7ffffffe, startedAt: T0, lastTick: T0, nextTick: at(2), probes: { gh: { ok: true, detail: "me" } } } });
+  const m = model(dead.ctx);
+  assert.equal(m.daemon.alive, false, "a stale pid in daemon.json is not a running daemon");
+  assert.equal(m.daemon.pid, 0x7ffffffe);
+  assert.deepEqual(m.daemon.probes, { gh: { ok: true, detail: "me" } }, "the probes the daemon last recorded are still shown");
+
+  const live = world({ daemon: { pid: process.pid, startedAt: T0, lastTick: T0, nextTick: at(2), probes: {} } });
+  assert.equal(model(live.ctx).daemon.alive, true);
+});
+
+test("no daemon file at all is a null daemon block, not a crash", () => {
+  assert.equal(model(world().ctx).daemon, null);
+});
+
+test("status exits 1 when no daemon is alive and 0 when one is, so a shell can tell", () => {
+  assert.equal(status(world().ctx).exitCode, 1, "no daemon file");
+  assert.equal(status(world({ daemon: { pid: 0x7ffffffe, startedAt: T0 } }).ctx).exitCode, 1, "a dead pid is not a daemon");
+  assert.equal(status(world({ daemon: { pid: process.pid, startedAt: T0 } }).ctx).exitCode, 0);
+});
+
+test("the rendered text carries each entry's handle, label and round, under the section it belongs to", () => {
+  const w = world({
+    entries: {
+      "acme/widget/widget-export": entryAt({ state: STATES.needsHuman, reason: "conflict", iteration: 1 }),
+      "acme/widget/widget-import": entryAt({ pr: 143, url: "https://github.com/acme/widget/pull/143", branch: "gallivant/widget-import", rereview: { at: T0, nudged: false }, iteration: 2 }),
+    },
+    daemon: { pid: process.pid, startedAt: T0, lastTick: T0, nextTick: at(2), probes: { gh: { ok: true } } },
+  });
+  const clock = makeClock(at(1));
+  const text = render(model(w.ctx), { clock });
+  const line = label => text.split("\n").find(l => l.includes(label));
+
+  assert.match(text, /^gallivant {2}daemon up since 1m ago {2}last tick 1m ago {2}next in 60s {2}gh ok$/m);
+  assert.match(text, /^NEEDS YOU$/m);
+  assert.match(line("needs-human"), /widget#142\s+needs-human\s+conflict\s+round 1\/3\s+1m ago\s+gallivant why widget#142/, "with the command that explains it");
+  assert.match(text, /^RUNNING$/m);
+  assert.match(line("waiting"), /widget#143\s+waiting\s+on reviewer\s+round 2\/3\s+1m ago/);
+  assert.ok(text.indexOf("NEEDS YOU") < text.indexOf("RUNNING"), "what needs a person comes first");
+});
+
+test("a down daemon is the first thing the text says, with the command that starts one", () => {
+  const text = render(model(world().ctx), { clock: makeClock() });
+  assert.equal(text.split("\n")[0], "gallivant  daemon DOWN  run: gallivant up");
+});
+
+test("done entries are hidden unless --all asks for them", () => {
+  const w = world({ entries: { "acme/widget/widget-export": entryAt({ state: STATES.done }) } });
+  const m = model(w.ctx);
+  assert.ok(!/^DONE$/m.test(render(m, { clock: makeClock() })));
+  assert.match(render(m, { all: true, clock: makeClock() }), /^DONE$/m);
+});
+
+test("--json prints the model itself, so a script and the text view cannot disagree", () => {
+  const w = world({ entries: { "acme/widget/widget-export": entryAt({ state: STATES.ready }) } });
+  const { text } = status(w.ctx, { json: true });
+  assert.deepEqual(JSON.parse(text), JSON.parse(JSON.stringify(model(w.ctx))));
+});
+
+test("the newest recorded error is in the model and in the header, so a problem nobody watched is not lost", () => {
+  const w = world({ entries: { "acme/widget/widget-export": entryAt() } });
+  w.ctx.log = { ...silentLog, latest: () => "2026-09-24T02:01:00.000Z error acme/widget/widget-export: gh: 403" };
+  const m = model(w.ctx);
+
+  assert.equal(m.latestError, "2026-09-24T02:01:00.000Z error acme/widget/widget-export: gh: 403");
+  assert.match(render(m, { clock: makeClock() }), /^latest error: .*gh: 403$/m);
+});

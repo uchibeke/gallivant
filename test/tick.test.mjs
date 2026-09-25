@@ -81,6 +81,7 @@ test("the iteration cap stops the loop before a run starts", async () => {
   assert.equal(w.runner.started.length, 0);
   assert.equal(w.entry().reason, "iterations");
   assert.equal(w.notify.sent.length, 1);
+  assert.ok(w.gh.calls.some(c => c[0] === "addLabel" && c[2] === NEEDS_LABEL), "the PR itself says a person is needed, not only the phone");
 });
 
 test("conflict, merged and closed are terminal", async () => {
@@ -246,6 +247,7 @@ test("a start run with no PR stops with no-pr; a codex start records the thread 
   await w.tick.tick();
   assert.equal(w.entry().reason, "no-pr");
   assert.equal(w.entry().session, "22222222-2222-4222-8222-222222222222");
+  assert.deepEqual(w.notify.sent, [["needs", null, "no-pr"]], "exactly one message, and it carries no PR number because there is none");
 });
 
 test("a needs-human entry without a PR is left alone: no PR lookup, no error", async () => {
