@@ -5,7 +5,7 @@ import { ROUND_MARKER, NUDGE_MARKER, RESET_MARKER, actor, normalizeLogin } from 
 import { CONFIG, T0, at, prFixture, review, inline, comment, checkRun, user } from "./helpers.mjs";
 
 const trust = makeTrust(CONFIG, "me");
-const entry = { cursor: { since: T0, fixed_sha: "a1b2c3", checks_sha: "a1b2c3" } };
+const entry = { cursor: { since: T0, fixed_sha: "a1b2c3d", checks_sha: "a1b2c3d" } };
 const BOT = "chatgpt-codex-connector";
 const derive = (over = {}) => deriveEvents({ pr: prFixture(), reviews: [], inline: [], entry, trust, ...over });
 
@@ -85,8 +85,8 @@ test("events before the cursor are ignored", () => {
 
 test("failed checks dispatch on a head whose failures were not dispatched yet, once per name", () => {
   const rollup = [checkRun({ name: "test", conclusion: "FAILURE" }), checkRun({ name: "test", conclusion: "FAILURE" }), checkRun({ name: "lint", conclusion: "SUCCESS" })];
-  assert.equal(derive({ pr: prFixture({ headRefOid: "a1b2c3", statusCheckRollup: rollup }) }).events.length, 0);
-  const { events } = derive({ pr: prFixture({ headRefOid: "d4e5f6", statusCheckRollup: rollup }) });
+  assert.equal(derive({ pr: prFixture({ headRefOid: "a1b2c3d", statusCheckRollup: rollup }) }).events.length, 0);
+  const { events } = derive({ pr: prFixture({ headRefOid: "d4e5f6a", statusCheckRollup: rollup }) });
   assert.equal(events.length, 1);
   assert.equal(events[0].runId, "9981");
   assert.deepEqual(failingChecks([{ __typename: "StatusContext", context: "ci/x", state: "FAILURE", targetUrl: "u" }]).map(c => c.name), ["ci/x"]);
@@ -147,4 +147,76 @@ test("hasOwnComment finds the daemon's own marked comment after a time and ignor
   assert.ok(hasOwnComment(list, "me", ROUND_MARKER, at(1)));
   assert.ok(!hasOwnComment(list, "me", ROUND_MARKER, at(2)), "the cursor is exclusive");
   assert.ok(!hasOwnComment(list, "me", NUDGE_MARKER, at(1)), "someone else's marker is not ours");
+});
+
+test("a clear review submitted in the boundary second counts; a stale one and one already dispatched do not", () => {
+  // The boundary is `rereview.at`, the second the loop asked for the re-review. A blocking review comes back as an
+  // event either way, but a clear one never is dispatched, so a strict comparison excluded it forever and the entry
+  // waited until it stopped as `reviewer-silent`.
+  const base = { inline: [], config: CONFIG, trust, sinceIso: at(5), headSha: "a1b2c3d" };
+  const boundary = review({ id: 9, by: `${BOT}[bot]`, bot: true, state: "APPROVED", at: at(5), body: "**Reviewed commit:** `a1b2c3d`" });
+  assert.equal(reviewerVerdict({ ...base, reviews: [boundary] }).verdict, "clear");
+
+  // Inclusivity does not let a review of an older commit clear the head: the reviewed-commit check is the guard.
+  const stale = review({ id: 10, by: `${BOT}[bot]`, bot: true, state: "APPROVED", at: at(5), body: "**Reviewed commit:** `9998887`" });
+  assert.equal(reviewerVerdict({ ...base, reviews: [stale] }).verdict, "waiting");
+  assert.match(reviewerVerdict({ ...base, reviews: [stale] }).note, /reviewer looked at 9998887, head is a1b2c3d/);
+
+  // And a review the daemon already dispatched at exactly that second is not also read as the reviewer clearing it.
+  assert.equal(reviewerVerdict({ ...base, reviews: [boundary], dispatched: ["review:9"] }).verdict, "waiting");
+  assert.equal(reviewerVerdict({ ...base, reviews: [boundary], dispatched: ["inline:9", "command:9"] }).verdict, "clear",
+    "the key is per id space, so an inline comment numbered 9 is not this review");
+
+  // A review before the boundary is still excluded: inclusive means at or after, not "any review ever".
+  assert.equal(reviewerVerdict({ ...base, reviews: [review({ id: 11, by: `${BOT}[bot]`, bot: true, state: "APPROVED", at: at(4) })] }).verdict, "waiting");
+});
+
+
+test("the harness's own notes on its own work are not feedback, while the operator's own comments still are", () => {
+  // On a one-operator install the operator's login IS the daemon's: config.md says `trusted_authors` is where your own
+  // login belongs. So the two capacities have to be told apart by what the comment is, not by who wrote it. The fix
+  // prompt asks the harness to reply on each inline thread; a harness that does that with `gh pr review --comment`
+  // plus top-level inline notes produced events the next tick dispatched a round to answer.
+  const ownReview = review({ id: 900, by: "me", state: "COMMENTED", at: at(5) });
+  const attached = derive({
+    reviews: [ownReview],
+    inline: [inline({ id: 11, reviewId: 900, by: "me", at: at(5), body: "Did this differently because X." }),
+      inline({ id: 12, reviewId: 900, by: "me", at: at(5), body: "Left this alone, out of scope." })],
+  }).events;
+  assert.deepEqual(attached, [], "notes hanging off our own review are the daemon explaining itself");
+
+  const reply = derive({ inline: [inline({ id: 13, by: "me", at: at(5), reply: 1, body: "done" })] }).events;
+  assert.deepEqual(reply, [], "and so is a thread reply, which is what the old rule already caught");
+
+  // The channel that must keep working: a person leaving a standalone inline comment on the PR.
+  const standalone = derive({ inline: [inline({ id: 14, by: "me", at: at(5), body: "rename this" })] }).events;
+  assert.deepEqual(standalone.map(e => [e.kind, e.id]), [["inline", 14]], "the operator's own review comment is the main feedback path");
+
+  // And a note attached to somebody else's review by our login is still feedback: it is not our review.
+  const onOthers = derive({
+    reviews: [review({ id: 901, by: `${BOT}[bot]`, bot: true, state: "COMMENTED", at: at(4) })],
+    inline: [inline({ id: 15, reviewId: 901, by: "me", at: at(5), body: "and this too" })],
+  }).events;
+  assert.deepEqual(onOthers.map(e => [e.kind, e.id]), [["review", 901], ["inline", 15]],
+    "the reviewer's own COMMENTED review with an attached note dispatches as it always did, note included");
+});
+
+test("a review that names no commit at all cannot clear a head, rather than clearing whichever head it finds", () => {
+  // `reviewed` falsy skipped the head-match guard entirely, so the verdict came out of `newest.state` alone. An absent
+  // value read as "nothing to worry about", which is the class the diff fail-open was. `commit_id` is null once the
+  // reviewed commit is gone from the repository, which is what a force-push plus garbage collection leaves.
+  const base = { inline: [], config: CONFIG, trust, sinceIso: T0 };
+  const nameless = review({ id: 20, by: `${BOT}[bot]`, bot: true, state: "APPROVED", at: at(1), body: "Looks good." });
+  const v = reviewerVerdict({ ...base, reviews: [nameless], headSha: "a1b2c3d" });
+  assert.equal(v.verdict, "waiting");
+  assert.match(v.note, /named no commit/);
+
+  // The two ways it can name one both still clear.
+  assert.equal(reviewerVerdict({ ...base, reviews: [{ ...nameless, body: "**Reviewed commit:** `a1b2c3d`" }], headSha: "a1b2c3d" }).verdict, "clear");
+  assert.equal(reviewerVerdict({ ...base, reviews: [{ ...nameless, commit_id: "a1b2c3d" }], headSha: "a1b2c3d" }).verdict, "clear");
+  // A short sha is not a sha: the body pattern needs 7 to 40 hex, which is what GitHub's own short form is.
+  assert.equal(reviewerVerdict({ ...base, reviews: [{ ...nameless, body: "**Reviewed commit:** `a1b2c3`" }], headSha: "a1b2c3d" }).verdict, "waiting",
+    "a six-character sha does not parse, and an unparsed one is not an answer about this head");
+  // A caller with no head to compare against is unchanged: it asked a different question.
+  assert.equal(reviewerVerdict({ ...base, reviews: [nameless] }).verdict, "clear");
 });

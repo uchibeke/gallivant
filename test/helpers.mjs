@@ -45,7 +45,7 @@ export const checkRun = ({ name, conclusion, status = "COMPLETED", runId = "9981
 
 export const prFixture = (over = {}) => ({
   number: 142, url: "https://github.com/acme/widget/pull/142", title: "Widget export", state: "OPEN", isDraft: false, mergeable: "MERGEABLE",
-  headRefOid: "a1b2c3", headRefName: "gallivant/widget-export", isCrossRepository: false, author: author("me"), createdAt: T0,
+  headRefOid: "a1b2c3d", headRefName: "gallivant/widget-export", isCrossRepository: false, author: author("me"), createdAt: T0,
   statusCheckRollup: [], labels: [], body: "Adds export.\n", baseRefName: "main", ...over,
 });
 
@@ -102,7 +102,7 @@ export function fakeRunner(clock) {
   return r;
 }
 
-export const fakeGit = () => ({ exists: () => true, fromBranch: async ({ path }) => path, create: async () => "/tmp/wt", headSha: async () => "a1b2c3", toplevel: async d => d });
+export const fakeGit = () => ({ exists: () => true, fromBranch: async ({ path }) => path, create: async () => "/tmp/wt", headSha: async () => "a1b2c3d", toplevel: async d => d });
 
 export function fakeNotify() {
   const sent = [];
@@ -152,7 +152,7 @@ export function seededState(over = {}) {
   const entry = {
     ...newEntry({ prd: "docs/prds/widget-export.md", harness: "claude", session: "6f1c2d3e-1111-4111-8111-111111111111", repo: "acme/widget", branch: "gallivant/widget-export", worktree: "/tmp/wt", pr: 142, state: STATES.prOpen, nowIso: T0 }),
     url: "https://github.com/acme/widget/pull/142",
-    cursor: { since: T0, fixed_sha: "a1b2c3" },
+    cursor: { since: T0, fixed_sha: "a1b2c3d" },
     rereview: { at: T0, nudged: false },
     ...over,
   };

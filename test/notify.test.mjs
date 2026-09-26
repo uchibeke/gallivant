@@ -85,7 +85,7 @@ test("a transition message carries the PR link and no diff or comment text", () 
 
 const seed = (id, over = {}) => [id, {
   ...newEntry({ prd: `docs/prds/${id.split("/").pop()}.md`, harness: "claude", session: "6f1c2d3e-1111-4111-8111-111111111111", repo: "acme/widget", branch: `gallivant/${id.split("/").pop()}`, worktree: "/tmp/wt", pr: over.pr, url: `https://github.com/acme/widget/pull/${over.pr}`, state: STATES.prOpen, nowIso: T0 }),
-  cursor: { since: T0, dispatched: [], fixed_sha: "a1b2c3", checks_sha: "a1b2c3", receipt_hash: null },
+  cursor: { since: T0, dispatched: [], fixed_sha: "a1b2c3d", checks_sha: "a1b2c3d", receipt_hash: null },
   rereview: { at: T0, nudged: false },
   ...over,
 }];
@@ -133,18 +133,18 @@ test("four entries each transitioning once in a single tick produce exactly four
   const w = night();
   // Ready: green checks and a reviewer that cleared the head.
   w.add("acme/widget/a", { pr: 201 }, {
-    pr: { headRefOid: "a1b2c3", statusCheckRollup: [checkRun({ name: "test", conclusion: "SUCCESS" })] },
-    reviews: [review({ id: 1, by: BOT, bot: true, state: "COMMENTED", at: at(3), body: "**Reviewed commit:** `a1b2c3`" })],
+    pr: { headRefOid: "a1b2c3d", statusCheckRollup: [checkRun({ name: "test", conclusion: "SUCCESS" })] },
+    reviews: [review({ id: 1, by: BOT, bot: true, state: "COMMENTED", at: at(3), body: "**Reviewed commit:** `a1b2c3d`" })],
   });
   // Conflict.
-  w.add("acme/widget/b", { pr: 202 }, { pr: { headRefOid: "a1b2c3", mergeable: "CONFLICTING" } });
+  w.add("acme/widget/b", { pr: 202 }, { pr: { headRefOid: "a1b2c3d", mergeable: "CONFLICTING" } });
   // The round budget is spent, and a review arrives.
   w.add("acme/widget/c", { pr: 203, iteration: 3 }, {
-    pr: { headRefOid: "a1b2c3" },
+    pr: { headRefOid: "a1b2c3d" },
     reviews: [review({ id: 2, by: BOT, bot: true, state: "CHANGES_REQUESTED", at: at(3) })],
   });
   // The reviewer has said nothing for longer than stall_hours.
-  w.add("acme/widget/d", { pr: 204, rereview: { at: at(-7 * 60), nudged: true } }, { pr: { headRefOid: "a1b2c3" } });
+  w.add("acme/widget/d", { pr: 204, rereview: { at: at(-7 * 60), nudged: true } }, { pr: { headRefOid: "a1b2c3d" } });
 
   w.clock.advance(4);
   const results = await w.tick.tick();
@@ -160,12 +160,12 @@ test("four entries each transitioning once in a single tick produce exactly four
 test("a second tick over the same four entries adds no notifications: a transition buzzes once, not every poll", async () => {
   const w = night();
   w.add("acme/widget/a", { pr: 201 }, {
-    pr: { headRefOid: "a1b2c3", statusCheckRollup: [checkRun({ name: "test", conclusion: "SUCCESS" })] },
-    reviews: [review({ id: 1, by: BOT, bot: true, state: "COMMENTED", at: at(3), body: "**Reviewed commit:** `a1b2c3`" })],
+    pr: { headRefOid: "a1b2c3d", statusCheckRollup: [checkRun({ name: "test", conclusion: "SUCCESS" })] },
+    reviews: [review({ id: 1, by: BOT, bot: true, state: "COMMENTED", at: at(3), body: "**Reviewed commit:** `a1b2c3d`" })],
   });
-  w.add("acme/widget/b", { pr: 202 }, { pr: { headRefOid: "a1b2c3", mergeable: "CONFLICTING" } });
-  w.add("acme/widget/c", { pr: 203, iteration: 3 }, { pr: { headRefOid: "a1b2c3" }, reviews: [review({ id: 2, by: BOT, bot: true, state: "CHANGES_REQUESTED", at: at(3) })] });
-  w.add("acme/widget/d", { pr: 204, rereview: { at: at(-7 * 60), nudged: true } }, { pr: { headRefOid: "a1b2c3" } });
+  w.add("acme/widget/b", { pr: 202 }, { pr: { headRefOid: "a1b2c3d", mergeable: "CONFLICTING" } });
+  w.add("acme/widget/c", { pr: 203, iteration: 3 }, { pr: { headRefOid: "a1b2c3d" }, reviews: [review({ id: 2, by: BOT, bot: true, state: "CHANGES_REQUESTED", at: at(3) })] });
+  w.add("acme/widget/d", { pr: 204, rereview: { at: at(-7 * 60), nudged: true } }, { pr: { headRefOid: "a1b2c3d" } });
 
   w.clock.advance(4);
   await w.tick.tick();
@@ -180,7 +180,7 @@ test("a second tick over the same four entries adds no notifications: a transiti
 
 test("an entry that runs a fix round to completion and then stops notifies once, at the stop", async () => {
   const w = night();
-  const id = w.add("acme/widget/a", { pr: 201 }, { pr: { headRefOid: "a1b2c3" }, reviews: [review({ id: 1, by: BOT, bot: true, state: "CHANGES_REQUESTED", at: at(3) })] });
+  const id = w.add("acme/widget/a", { pr: 201 }, { pr: { headRefOid: "a1b2c3d" }, reviews: [review({ id: 1, by: BOT, bot: true, state: "CHANGES_REQUESTED", at: at(3) })] });
 
   w.clock.advance(4);
   await w.tick.tick();
@@ -193,7 +193,7 @@ test("an entry that runs a fix round to completion and then stops notifies once,
 
 test("the entry that hit the round cap is labelled needs-human on GitHub as well as notified", async () => {
   const w = night();
-  w.add("acme/widget/c", { pr: 203, iteration: 3 }, { pr: { headRefOid: "a1b2c3" }, reviews: [review({ id: 2, by: BOT, bot: true, state: "CHANGES_REQUESTED", at: at(3) })] });
+  w.add("acme/widget/c", { pr: 203, iteration: 3 }, { pr: { headRefOid: "a1b2c3d" }, reviews: [review({ id: 2, by: BOT, bot: true, state: "CHANGES_REQUESTED", at: at(3) })] });
 
   w.clock.advance(4);
   await w.tick.tick();

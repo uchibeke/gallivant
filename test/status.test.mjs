@@ -42,8 +42,18 @@ test("a ready entry lands in needs_you too, because it is a person who merges it
   const w = world({ entries: { "acme/widget/widget-export": entryAt({ state: STATES.ready }) } });
   const m = model(w.ctx);
 
-  assert.deepEqual(m.needs_you.map(r => [r.label, r.detail]), [["ready", "green, no blocking findings"]]);
+  assert.deepEqual(m.needs_you.map(r => [r.label, r.detail]), [["ready", "green, no blocking findings, receipt accepted"]]);
   assert.equal(m.needs_you[0].url, "https://github.com/acme/widget/pull/142", "the link a person opens to merge is in the row");
+});
+
+test("a ready entry whose completion gate never ran says so, rather than reading like one that passed it", () => {
+  // An entry with no PRD snapshot reaches ready on the checks and the reviewer alone, with nothing about what the PR
+  // was supposed to deliver ever read. That used to be one line in errors.log and nothing on the row a person merges
+  // from, which said exactly what it says for a PR whose receipt was accepted.
+  const w = world({ entries: { "acme/widget/widget-export": entryAt({ state: STATES.ready, gate_skipped: "no PRD snapshot" }) } });
+  const row = model(w.ctx).needs_you[0];
+  assert.match(row.detail, /RECEIPT NOT CHECKED \(no PRD snapshot\)/);
+  assert.equal(row.gate_skipped, "no PRD snapshot", "and a UI reading the model can tell the two apart by a field");
 });
 
 test("a done entry is in done and nowhere else, so a merged PR never clutters the two live sections", () => {

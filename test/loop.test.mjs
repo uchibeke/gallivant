@@ -163,7 +163,7 @@ test("register then a tick resumes the registered session in the registered work
   const clock = makeClock();
   const state = makeState(home);
   const session = "aaaaaaaa-2222-4222-8222-222222222222";
-  const pr = prFixture({ number: 142, headRefName: "gallivant/widget-export", createdAt: T0, headRefOid: "a1b2c3", body: "Adds export.\n" });
+  const pr = prFixture({ number: 142, headRefName: "gallivant/widget-export", createdAt: T0, headRefOid: "a1b2c3d", body: "Adds export.\n" });
   const gh = fakeGh({ pr, comments: [comment({ id: 88, by: "me", at: at(5), body: "@gallivant fix the typo" })] });
   gh.user = async () => "me";
   const runner = fakeRunner(clock);

@@ -5,6 +5,7 @@ import assert from "node:assert/strict";
 import { reconcile } from "../lib/commands/up.mjs";
 import { makeState } from "../lib/state.mjs";
 import { renderBlock } from "../lib/block.mjs";
+import { receiptHash } from "../lib/deliverable.mjs";
 import { ROUND_MARKER, RESET_MARKER, NUDGE_MARKER } from "../lib/gh.mjs";
 import { CONFIG, T0, at, tempHome, prFixture, comment, silentLog, STATES } from "./helpers.mjs";
 
@@ -13,7 +14,7 @@ const SESSION = "6f1c2d3e-1111-4111-8111-111111111111";
 const blockBody = (over = {}) =>
   `Adds export.\n\n${renderBlock({ prd: "docs/prds/widget-export.md", harness: "claude", session: SESSION, branch: "gallivant/widget-export", ...over })}\n`;
 
-const openPr = (over = {}) => prFixture({ number: 142, headRefName: "gallivant/widget-export", body: blockBody(), createdAt: T0, headRefOid: "a1b2c3", ...over });
+const openPr = (over = {}) => prFixture({ number: 142, headRefName: "gallivant/widget-export", body: blockBody(), createdAt: T0, headRefOid: "a1b2c3d", ...over });
 
 /** A world for reconcile: one repo in config, whatever PRs and comments the test names, PRD snapshots in memory. */
 function world({ prs = [openPr()], comments = [], commitDates = {}, files = {}, snapshots = new Map() } = {}) {
@@ -73,21 +74,21 @@ test("the recovered iteration is the count of our own round comments since the l
 test("the recovered cursors sit at the head and the last own comment, so no history is replayed", async () => {
   const w = world({
     comments: [comment({ id: 1, by: "me", at: at(10), body: `@codex review\n\n${ROUND_MARKER}` })],
-    commitDates: { a1b2c3: at(4) },
+    commitDates: { a1b2c3d: at(4) },
   });
   await reconcile(w.ctx, "me");
   const e = w.ctx.state.get(w.id);
 
   assert.equal(e.cursor.since, at(10), "the later of the head's commit date and our last comment, so neither is re-read as new");
   assert.deepEqual(e.cursor.dispatched, [], "a fresh boundary has nothing already handled at it");
-  assert.equal(e.cursor.checks_sha, "a1b2c3", "the current head's failing checks count as already dispatched, so old red CI is not re-sent");
-  assert.equal(e.cursor.fixed_sha, "a1b2c3", "and the head is the push baseline, so nothing reads as a fresh push");
+  assert.equal(e.cursor.checks_sha, "a1b2c3d", "the current head's failing checks count as already dispatched, so old red CI is not re-sent");
+  assert.equal(e.cursor.fixed_sha, "a1b2c3d", "and the head is the push baseline, so nothing reads as a fresh push");
   assert.equal(e.rereview.at, at(10), "the reviewer clock starts from our last comment, not from the PR's creation");
   assert.equal(e.rereview.nudged, false);
 });
 
 test("with no comments of ours the cursor falls back to the head's commit date", async () => {
-  const w = world({ commitDates: { a1b2c3: at(7) } });
+  const w = world({ commitDates: { a1b2c3d: at(7) } });
   await reconcile(w.ctx, "me");
   assert.equal(w.ctx.state.get(w.id).cursor.since, at(7));
 });
@@ -205,4 +206,37 @@ test("a repo whose PR listing fails is logged and the next repo is still reconci
 
   assert.deepEqual(await reconcile(w.ctx, "me"), [w.id]);
   assert.ok(w.logged.some(([level, m]) => level === "warn" && /reconcile acme\/broken: gh: 403/.test(m)));
+});
+
+test("a snapshot that cannot be taken does not stop the daemon from watching the PR", async () => {
+  // `reconcile` runs before the first tick and outside the loop's catch, so an error escaping the snapshot would take
+  // the daemon down before it watched anything. The snapshot only decides whether the completion gate runs.
+  for (const [what, break_] of [
+    ["GitHub cannot be reached", ctx => { ctx.gh.fileAt = async () => { throw new Error("HTTP 502: Bad gateway"); }; }],
+    ["the snapshot cannot be written", ctx => { ctx.writePrd = () => { throw new Error("EACCES: permission denied"); }; }],
+  ]) {
+    const w = world({ files: { "docs/prds/widget-export.md": "# Widget export\n" } });
+    break_(w.ctx);
+    const added = await reconcile(w.ctx, "me");
+    assert.deepEqual(added, [w.id], `${what}: the PR is still adopted`);
+    assert.equal(w.ctx.state.get(w.id).state, STATES.prOpen);
+    assert.ok(w.logged.some(([, m]) => /PRD snapshot not taken/.test(m)), `${what}: the reason is logged (got ${JSON.stringify(w.logged)})`);
+  }
+});
+
+
+test("a recovered entry carries the receipt already on the PR, so a run that changed nothing is not a round", () => {
+  // `reconcile` wrote `receipt_hash: null` while holding the body that has the receipt in it. `settleRun` then read
+  // any pre-existing receipt as a change, so a run that did nothing counted as a round and posted "Completion receipt
+  // updated." to the PR, which `countRounds` read back as a real round on the recovery after that.
+  const body = `Adds export.\n\n\`\`\`gallivant-attestations\n{"task_id":"t","criteria_attestations":[]}\n\`\`\`\n${renderBlock({ prd: "docs/prds/widget-export.md", harness: "claude", session: SESSION, branch: "gallivant/widget-export" })}\n`;
+  const w = world({ prs: [openPr({ body })] });
+  return reconcile(w.ctx, "me").then(() => {
+    const e = w.ctx.state.get(w.id);
+    assert.equal(e.cursor.receipt_hash, receiptHash(body), "the fingerprint is the one the body already carries");
+    assert.notEqual(e.cursor.receipt_hash, null);
+    // A PR with no receipt at all still recovers as null, which is the honest answer for a body with nothing in it.
+    const bare = world();
+    return reconcile(bare.ctx, "me").then(() => assert.equal(bare.ctx.state.get(bare.id).cursor.receipt_hash, null));
+  });
 });

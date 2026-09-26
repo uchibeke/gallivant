@@ -41,6 +41,8 @@ Five paths are refused outright, and each refusal names what it protects:
 | Your home directory | Every credential, token, key and browser profile on the machine. If the answer to "which directory does this brief need" is `$HOME`, the brief needs splitting, not more access. |
 | Anything relative, or that does not exist | A relative path means something different depending on where the daemon was started. A missing one is a typo, and silently granting nothing would hide it. |
 
+Every one of those refusals compares the path with its symlinks resolved, not the path as written, because a link to `$HOME` or to `~/.claude` is the thing being refused however it is spelled.
+
 A parent of a refused directory is refused too, since granting the parent grants the child.
 
 What each harness does with the list:

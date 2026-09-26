@@ -102,7 +102,7 @@ When checks are green and the reviewer has no blocking findings, the daemon buil
 
 | Code | Meaning |
 |---|---|
-| `oap.receipt_missing` | No receipt block, or not valid JSON. |
+| `oap.receipt_missing` | No receipt block, not valid JSON, or a shape the rules cannot read: `criteria_attestations` not an array, or an element that is not an object carrying a `criterion_id` string. The reason says which. |
 | `oap.criteria_incomplete` | A criterion has no attestation. |
 | `oap.evidence_missing` | An attestation has empty evidence. |
 | `oap.criteria_not_met` | An attestation is not `met: true` (the string `"true"` does not count). |
@@ -110,6 +110,10 @@ When checks are green and the reviewer has no blocking findings, the daemon buil
 | `oap.summary_insufficient` | Summary under `min_summary_words`. |
 | `oap.tests_not_passing` | Checks on the head are not all green. |
 | `oap.blocked_pattern_detected` | The scanned output contains a blocked pattern. |
+
+A brief with no `## Acceptance criteria` section has nothing to attest, and nothing to attest is a deny, not a pass: every criteria rule is vacuously satisfied by an empty list, so the gate would otherwise allow on the summary and the checks alone. This matters because the snapshot the gate reads is taken from the PR branch when the daemon has none, and that copy was writable by the session.
+
+The output scan sees only the lines the diff adds, and it has to see all of them. A diff `gh pr diff` cannot return, and one over the one-megabyte scan cap, are both no decision at all rather than a partial scan reported as clean: the PR stays where it is, nothing is dispatched, no round is counted, and the next tick asks again. Split a change that large, or turn `scan_output` off if you do not want it scanned.
 
 A round that only rewrites the receipt counts as a round: the daemon posts a marked "Completion receipt updated" comment instead of a re-review request, since no code moved, so the round count on GitHub still matches the registry. The iteration cap applies. Limits live under `deliverable` in config, in the shape of the policy's passport limits; `"deliverable": null` turns the gate off.
 

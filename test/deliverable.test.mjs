@@ -109,7 +109,7 @@ function world(stateOver = {}, ghOver = {}) {
   const tick = makeTick({ config: CONFIG, state, gh, git: fakeGit(), notify, log: silentLog, clock, ownLogin: "me", runnerFor: () => runner, readPrd: () => GOOD_PRD, fetch: fetchWith(200, allowResponse) });
   return { clock, state, id, gh, runner, notify, tick, entry: () => state.get(id) };
 }
-const clearReviewer = () => [review({ id: 2, by: "chatgpt-codex-connector[bot]", bot: true, state: "COMMENTED", at: at(3), body: "**Reviewed commit:** `a1b2c3`" })];
+const clearReviewer = () => [review({ id: 2, by: "chatgpt-codex-connector[bot]", bot: true, state: "COMMENTED", at: at(3), body: "**Reviewed commit:** `a1b2c3d`" })];
 
 test("the gate's context carries self-reported provenance, and the hosted call sends it", async () => {
   const body = "Adds export.\n" + receiptBlock();
@@ -300,4 +300,65 @@ test("gallivant ready flips the status only on an allow and records the decision
   assert.deepEqual([again.ok, again.changed], [true, false]);
   const noConfig = await ready({ path, config: null, fetch: async () => { throw new Error("no config must mean no APort call"); } });
   assert.deepEqual([noConfig.ok, noConfig.changed], [true, false]);
+});
+
+test("a malformed attestation is a deny with a reason, never a thrown exception the tick logs on every poll", async () => {
+  // `"criteria_attestations": [null]` parsed as a receipt, then `evaluate` read `a.criterion_id` and threw. The
+  // per-entry catch logged it every poll, so the entry never got a corrective receipt round and never reached a
+  // diagnosable stop. A receipt is agent-written JSON, so its shape is checked where it is parsed.
+  const cases = [
+    [[null], /criteria_attestations\[0\] is not an attestation object/],
+    [["ac-1"], /criteria_attestations\[0\] is not an attestation object/],
+    [[{ met: true, evidence: "x" }], /criteria_attestations\[0\] is not an attestation object/],
+    [[{ criterion_id: 1, met: true, evidence: "x" }], /criteria_attestations\[0\] is not an attestation object/],
+    [[[{ criterion_id: "ac-1" }]], /criteria_attestations\[0\] is not an attestation object/],
+    [[{ criterion_id: "ac-1", met: true, evidence: "x" }, null], /criteria_attestations\[1\] is not an attestation object/],
+    ["nope", /criteria_attestations is not an array/],
+    [null, /criteria_attestations is not an array/],
+  ];
+  for (const [atts, reason] of cases) {
+    const what = JSON.stringify(atts);
+    assert.match(parseReceipt("x" + receiptBlock({ criteria_attestations: atts })).reason, reason, what);
+    const g = await gate({ taskId: "t", prBody: "x" + receiptBlock({ criteria_attestations: atts }), criteria, checksGreen: true, limits: LOCAL });
+    assert.equal(g.allow, false, what);
+    assert.deepEqual(g.denials.map(d => d.code), ["oap.receipt_missing"], `${what}: a code the fix round can carry`);
+    assert.match(g.denials[0].message, reason, what);
+  }
+  // A receipt that is not an object at all, and one that is an array, are refused the same way.
+  assert.match(parseReceipt("```" + RECEIPT_TAG + "\n[]\n```").reason, /not a JSON object/);
+  assert.match(parseReceipt("```" + RECEIPT_TAG + "\n42\n```").reason, /not a JSON object/);
+  assert.match(parseReceipt("```" + RECEIPT_TAG + "\nnull\n```").reason, /not a JSON object/);
+});
+
+test("evaluate itself never dereferences a malformed attestation, so no caller building a context by hand can crash it", () => {
+  // The second line of defence: `parseReceipt` refuses these, and `evaluate` counts them as missing rather than
+  // reading fields off them, so nothing passes by being unreadable.
+  const context = { task_id: "t", summary: "a b c d e f g h i j k l m n o p q r s t u v", tests_passing: true, criteria_attestations: [null, "ac-1", 7, { criterion_id: "ac-1", met: true, evidence: "src/x.ts" }] };
+  const r = evaluate({ context, limits: DEFAULT_LIMITS, criteria });
+  assert.equal(r.allow, false);
+  assert.deepEqual(r.denials.map(d => d.code), ["oap.criteria_incomplete"], "the readable one counts, the rest are simply absent");
+  assert.match(r.denials[0].message, /Missing attestations for: ac-2/);
+  assert.deepEqual(evaluate({ context: { ...context, criteria_attestations: "nope" }, limits: DEFAULT_LIMITS, criteria }).denials.map(d => d.code), ["oap.criteria_incomplete"]);
+});
+
+
+test("a brief with no acceptance criteria denies rather than passing with nothing evaluated", async () => {
+  // Every criteria rule is vacuously satisfied by an empty list: `missing`, `unknown`, `notMet` and `noEvidence` are
+  // all empty because there are no attestations to be any of those. What was left was the summary word count and the
+  // checks, both of which a green PR with a wordy receipt satisfies, so the gate allowed and the PR reached ready with
+  // not one acceptance criterion evaluated. Reachable through the snapshot taken from the agent-writable PR branch:
+  // delete the `## Acceptance criteria` heading and the gate stops checking.
+  const empty = evaluate({ context: { task_id: "t", summary: "a b c d e f g h i j k l m n o p q r s t u v w", tests_passing: true, criteria_attestations: [] }, limits: DEFAULT_LIMITS, criteria: [] });
+  assert.equal(empty.allow, false);
+  assert.deepEqual(empty.denials.map(d => d.code), ["oap.criteria_incomplete"]);
+  assert.match(empty.denials[0].message, /no acceptance criteria/);
+
+  // Through the gate, which is how the tick reaches it, and with a receipt the rules would otherwise accept.
+  const g = await gate({ taskId: "t", prBody: "x" + receiptBlock({ criteria_attestations: [] }), criteria: [], checksGreen: true, limits: LOCAL });
+  assert.equal(g.allow, false);
+  assert.deepEqual(g.denials.map(d => d.code), ["oap.criteria_incomplete"]);
+
+  // And a PRD parsed from a brief with the section removed yields exactly that empty list, which is the reachable path.
+  const noCriteria = parsePrd(GOOD_PRD.replace("## Acceptance criteria", "## Notes"), "/r/docs/prds/x.md");
+  assert.deepEqual(criteriaFromPrd(noCriteria), []);
 });

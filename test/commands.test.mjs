@@ -137,24 +137,28 @@ const registerGit = ({ origin = "https://github.com/acme/widget.git", branch = "
   fromBranch: async ({ path }) => path,
 });
 
-function registerWorld(git) {
+function registerWorld(git, { files = {}, snapshots = new Map() } = {}) {
   const home = tempHome();
   const pr = prFixture({ headRefName: "gallivant/widget-export", body: "Adds export.\n", createdAt: T0 });
   const calls = [];
+  const logged = [];
   const ctx = {
     home,
     config: { ...CONFIG, home, worktrees: join(home, "worktrees") },
     state: makeState(home),
-    log: silentLog,
+    log: { info: m => logged.push(m), warn: m => logged.push(m), error: m => logged.push(m), latest: () => null },
     git,
     gh: {
       prView: async () => pr,
       setBody: async (_r, _n, body) => { calls.push(["setBody", body]); },
       comment: async () => { calls.push(["comment"]); },
       ensureLabels: async () => {},
+      fileAt: async (_r, path, ref) => { calls.push(["fileAt", path, ref]); return files[path] ?? null; },
     },
+    readPrd: id => snapshots.get(id) ?? null,
+    writePrd: (id, text) => snapshots.set(id, text),
   };
-  return { ctx, calls, url: pr.url };
+  return { ctx, calls, logged, snapshots, url: pr.url };
 }
 
 test("an explicitly supplied --worktree is accepted only when it is the same repo on the PR's branch", async () => {
@@ -276,5 +280,87 @@ test("a block that cannot be written fails the registration instead of reporting
       /cannot write the gallivant block to .*pull\/142: HTTP 403.*Nothing was registered/s, what);
     assert.deepEqual(w.ctx.state.entries(), [], `${what}: nothing half-written in the registry`);
     assert.deepEqual(w.calls.filter(c => c[0] === "comment"), [], `${what}: no reset comment claiming the loop is watching again`);
+  }
+});
+
+test("a fresh registration takes the PRD snapshot the completion gate reads, from the PR's own branch", async () => {
+  // Without it `prdFor` has nothing, the gate logs "no PRD snapshot, completion gate skipped", and the PR can reach
+  // ready with not one acceptance criterion evaluated. `reconcile` already took it; `register` took only the path.
+  const w = registerWorld(registerGit(), { files: { "docs/prds/widget-export.md": GOOD_PRD } });
+  w.ctx.gh.prView = async () => ({ ...prFixture({ headRefName: "gallivant/widget-export", createdAt: T0 }), body: BLOCK() });
+  const r = await register(w.ctx, { url: w.url, worktree: "/checkouts/widget" });
+
+  assert.equal(w.snapshots.get(r.id), GOOD_PRD, "the daemon's own copy of the brief exists after registering");
+  assert.deepEqual(w.calls.filter(c => c[0] === "fileAt"), [["fileAt", "docs/prds/widget-export.md", "gallivant/widget-export"]],
+    "read from the PR's head branch, which is where that PRD lives");
+  assert.ok(w.logged.some(l => /PRD snapshot taken from the PR branch/.test(l)), `the log says the session could have edited that copy (got ${w.logged})`);
+});
+
+test("a block naming a PRD that is not on the branch logs and registers anyway", async () => {
+  const w = registerWorld(registerGit(), { files: {} });
+  w.ctx.gh.prView = async () => ({ ...prFixture({ headRefName: "gallivant/widget-export", createdAt: T0 }), body: BLOCK() });
+  const r = await register(w.ctx, { url: w.url, worktree: "/checkouts/widget" });
+
+  assert.equal(w.snapshots.size, 0, "nothing invented for a file the branch does not carry");
+  assert.equal(w.ctx.state.get(r.id).state, STATES.prOpen, "the PR is still watched; the gate is what is skipped");
+  assert.ok(w.logged.some(l => /docs\/prds\/widget-export\.md not found on gallivant\/widget-export/.test(l)), `the missing file is named (got ${w.logged})`);
+});
+
+test("a reset does not replace a snapshot the daemon already has with the copy the session could have edited", async () => {
+  // The pair with the two above: registering now reads the branch when there is no snapshot, so this pins down that
+  // it looks at the snapshot first and stops there. Both halves are one `ensurePrdSnapshot`, shared with `reconcile`.
+  const snapshots = new Map([["acme/widget/widget-export", "# The daemon's own copy\n"]]);
+  const asked = [];
+  const w = registerWorld(registerGit(), { files: { "docs/prds/widget-export.md": "# The branch copy\n" }, snapshots });
+  const readPrd = w.ctx.readPrd;
+  w.ctx.readPrd = id => { asked.push(id); return readPrd(id); };
+  w.ctx.gh.prView = async () => ({ ...prFixture({ headRefName: "gallivant/widget-export", createdAt: T0 }), body: BLOCK() });
+  w.ctx.state.put("acme/widget/widget-export", {
+    ...newEntry({ prd: "docs/prds/widget-export.md", harness: "claude", session: "6f1c2d3e-1111-4111-8111-111111111111", repo: "acme/widget", branch: "gallivant/widget-export", worktree: "/checkouts/widget", pr: 142, state: STATES.needsHuman, nowIso: T0 }),
+    url: "https://github.com/acme/widget/pull/142",
+  });
+
+  await register(w.ctx, { url: w.url, worktree: "/checkouts/widget" });
+  assert.equal(snapshots.get("acme/widget/widget-export"), "# The daemon's own copy\n");
+  assert.deepEqual(asked, ["acme/widget/widget-export"], "the snapshot on disk is what was consulted");
+  assert.deepEqual(w.calls.filter(c => c[0] === "fileAt"), [], "the authoritative snapshot is not even compared against the branch");
+});
+
+test("a GitHub read that fails while taking the snapshot leaves the PR registered rather than the command half done", async () => {
+  // The entry is what the daemon needs to watch the PR at all; the snapshot only decides whether the gate runs, and
+  // the next `reconcile` takes it. Failing the whole registration over it would be the worse trade.
+  const w = registerWorld(registerGit());
+  w.ctx.gh.prView = async () => ({ ...prFixture({ headRefName: "gallivant/widget-export", createdAt: T0 }), body: BLOCK() });
+  w.ctx.gh.fileAt = async () => { throw new Error("HTTP 502: Bad gateway"); };
+  const r = await register(w.ctx, { url: w.url, worktree: "/checkouts/widget" });
+
+  assert.equal(w.ctx.state.get(r.id).state, STATES.prOpen);
+  assert.ok(w.logged.some(l => /PRD snapshot not taken: HTTP 502/.test(l)), `the failure is logged (got ${w.logged})`);
+});
+
+
+test("a --session that is not a session id for the chosen harness is refused, and nothing is registered", async () => {
+  // The block validates a session per harness; `--session` did not, and its value reaches argv position 2 on the next
+  // fix round, right after `--resume` or `--name`. `assertSafeArgv` matches flag spellings, not values in unexpected
+  // positions, so `--session '--approval-mode=yolo'` was accepted, and goose derives its session FILE from the name.
+  const cases = [
+    ["--approval-mode=yolo", "claude"],
+    ["../../../etc/passwd", "goose"],
+    ["--settings", "claude"],
+    ["ses_f25fcd907ffesl1i92jsR2lh9I", "claude"],
+    ["6f1c2d3e-1111-4111-8111-111111111111", "goose"],
+  ];
+  for (const [session, harness] of cases) {
+    const w = registerWorld(registerGit());
+    await assert.rejects(() => register(w.ctx, { url: w.url, worktree: "/checkouts/widget", harness, session }),
+      new RegExp(`is not a ${harness} session id`), `${harness} must refuse ${JSON.stringify(session)}`);
+    assert.deepEqual(w.ctx.state.entries(), [], `${JSON.stringify(session)}: nothing half-written in the registry`);
+    assert.deepEqual(w.calls.filter(c => c[0] === "setBody"), [], "and no block written for a session that was refused");
+  }
+  // Each harness's own id is accepted, which is the same rule the block applies.
+  for (const [harness, session] of [["claude", "6f1c2d3e-1111-4111-8111-111111111111"], ["goose", "gallivant-068021d7-3490-4f2e-a6f1-30e1c00498c9"], ["opencode", "ses_f25fcd907ffesl1i92jsR2lh9I"]]) {
+    const w = registerWorld(registerGit());
+    const r = await register(w.ctx, { url: w.url, worktree: "/checkouts/widget", harness, session });
+    assert.equal(w.ctx.state.get(r.id).session, session, `${harness} accepts its own id`);
   }
 });

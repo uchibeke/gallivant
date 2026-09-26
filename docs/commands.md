@@ -26,17 +26,19 @@ The entry is `running` until the daemon sees the run end. Then either a PR exist
 
 Puts a PR into the loop that Gallivant did not open, or resets one that stopped.
 
-- With `--session` and `--worktree`, later fixes resume that session in that directory. Both harnesses key sessions by the directory they ran in, so the pair is required together.
+- With `--session` and `--worktree`, later fixes resume that session in that directory. Both harnesses key sessions by the directory they ran in, so the pair is required together. The id has to be one the chosen harness could have minted (a UUID for claude, codex and gemini, `ses_...` for opencode, `gallivant-<uuid>` for goose), the same rule the PR block is held to: the value ends up in the harness's argv, where goose in particular derives its session file from it.
 - Without `--session`, the first fix run starts a fresh session whose prompt tells it to read the PR with `gh pr view` and `gh pr diff` before changing anything.
 - Without `--worktree`, a checkout is created from the PR branch at the standard path.
 - A `--worktree` you pass is resolved to an absolute path first, so `.` means the directory you typed it in and not whatever directory the daemon happens to run in later. It is then checked before it is accepted: its `origin` must be the PR's repository and it must already be on the PR's head branch. A path that fails either check is an error, since the harness edits and pushes from that directory. It is never relocated or re-cloned for you, because a resumed session is keyed to the directory it ran in.
 - On an entry that already exists: reason cleared, iteration reset to zero, a marked reset comment posted on the PR (so a count rebuilt from GitHub starts from zero too), cursor set to now, watching again. This is how you restart a `needs-human` PR after you fixed the conflict or answered the question. A fresh registration instead looks at the PR's whole history, so feedback already on it gets addressed.
 
+When the block names a PRD that exists on the PR's branch, the daemon's own snapshot of it is taken, exactly as recovery does, because the completion gate reads that snapshot and nothing else: without it the gate is skipped and the PR can be marked ready with no acceptance criterion evaluated. A snapshot already on disk is kept rather than replaced with the copy the session could have edited, and a PRD the branch does not carry is logged and the PR watched without a gate.
+
 Fork PRs and closed PRs are refused. If the PR body has no Gallivant block, one is added; if it has one that names a different harness or session than the registration chose, it is rewritten to match. Recovery after a lost `state.json` reads that block, so a block left saying the old harness would restore the wrong one.
 
 ## `gallivant up [--once]`
 
-The daemon. On boot it writes `daemon.json`, refuses to run if another daemon is alive, and reconciles with GitHub: for every repo in `repos`, every open PR of yours on a `gallivant/*` branch with a valid block that is not in the registry is registered, with the iteration recovered by counting Gallivant's own round comments and the cursor set so old events are not replayed. Missing checkouts are recreated from the PR branch.
+The daemon. On boot it writes `daemon.json`, refuses to run if another daemon is alive, and reconciles with GitHub: for every repo in `repos`, every open PR of yours on a `gallivant/*` branch with a valid block that is not in the registry is registered, with the iteration recovered by counting Gallivant's own round comments and the cursor set so old events are not replayed. The PRD snapshot is taken from the PR branch when the daemon has none. Missing checkouts are recreated from the PR branch.
 
 Then it ticks every `poll_seconds`. Before each tick it probes `gh` and every configured harness; while any probe fails nothing is dispatched and one throttled error notification goes out per failing probe. Ticks chain on a timer and never overlap. `--once` runs a single tick and exits, which is useful for cron or for debugging.
 
@@ -49,12 +51,14 @@ gallivant  daemon up since 6h ago  last tick 40s ago  next in 80s  gh ok  claude
 
 NEEDS YOU
   widget#142        needs-human   conflict                  round 2/3   12m ago   gallivant why widget#142
-  api#31            ready         green, no blocking findings round 1/3   2h ago    https://github.com/acme/api/pull/31
+  api#31            ready         green, no blocking findings, receipt accepted  round 1/3   2h ago    https://github.com/acme/api/pull/31
 
 RUNNING
   guard#88          fixing        review 2201 by chatgpt...  round 1/3   3m ago
   widget#150        waiting       on reviewer, nudged once   round 0/3   4m ago
 ```
+
+A `ready` row says whether the completion gate accepted the receipt or never ran at all (`RECEIPT NOT CHECKED`, with the reason), because an entry with no PRD snapshot reaches ready on the checks and the reviewer alone and that is a different thing from passing the gate.
 
 Sections are in the order needs-you, running; `--all` adds done. The first line is `daemon DOWN` with exit code 1 when no daemon is alive. `--json` prints the same model for scripts and UIs.
 
