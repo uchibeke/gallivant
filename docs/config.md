@@ -17,16 +17,29 @@
 | `notify` | null | `{ ntfy: "https://ntfy.sh/<topic>", email: null }`. Null means transitions are logged only. |
 | `worktrees` | required | Directory for per-PRD checkouts. Must be outside the Gallivant home. |
 | `github_token_file` | null | Null means the daemon and runs use your existing `gh` login. Set to the path of a fine-grained PAT to narrow what a run can reach; it is then used as `GH_TOKEN` by the daemon and every run. |
+| `context_paths` | [] | Directories a run may READ in addition to its own checkout: a sibling repository, a folder of design notes. Absolute or `~`-prefixed, and each must exist. Writes do not widen. Your home directory, the Gallivant home, `~/.claude`, `~/.codex`, `~/.config/opencode` and `~/.aport` are refused, as is any parent of them. Claude Code renders each as `--add-dir <dir>`; Codex and Gemini CLI refuse the run rather than escalate; opencode and goose have no such flag and ignore it. Read [guardrails.md](guardrails.md#extra-read-directories-are-a-widening-not-a-feature) before setting it: whatever a run reads can leave in a commit or a PR body. |
 | `harness` | discovered | Omit it and Gallivant uses whichever harnesses it finds on your PATH, so one installed harness is a complete install. Name one and only that one is used, which is what you want when two versions are installed or a harness is deliberately out of play. |
 | `harness.claude` | | `{ bin, settings }`. `bin` is the absolute path to `claude`; `settings` is the Gallivant settings file with the APort hook and sandbox. |
 | `harness.codex` | | `{ bin }`. |
+| `harness.gemini` | | `{ bin }`. |
+| `harness.opencode` | | `{ bin }`. |
+| `harness.goose` | | `{ bin }`. |
 
-Claude Code and Codex are the two supported harnesses. Others are not rejected on principle; the loop needs a
-harness that can start a run non-interactively, resume that specific session by id, and emit a machine-readable
-stream. `cursor-agent` meets all three (`--print --output-format stream-json`, `--resume <chatId>`) and is the next
-one to add. `gemini` can name a session with `--session-id` but resumes by index or file rather than by that id.
-`goose` resumes interactive sessions only, so there is nowhere for the loop to stand. `opencode` has `run -s <id>`
-and is gated on an APort target. The reasoning is kept next to the adapters in `lib/harness.mjs`.
+Five harnesses are supported: Claude Code, Codex, Gemini CLI, opencode and goose. A harness can join when it does
+three things: start a run non-interactively, resume that specific session by id rather than "the latest", and emit
+a machine-readable stream the outcome can be read from. All five do, and each one's resume was checked by
+round-trip on 2026-09-25: a number written in one process came back when a second process resumed that session id.
+
+`cursor-agent` is the one that has the flags but is still out. `--print --output-format stream-json`, `--resume
+<chatId>` and `create-chat` cover the contract, but it is not signed in on the author's machine, so a headless run
+draws the interactive sign-in screen and exits non-zero. Nobody has seen its event stream, and writing an adapter
+against an unseen stream would be a guess. The blocker is a login, not a missing capability. The reasoning is kept
+next to the adapters in `lib/harness.mjs`.
+
+Sign-in checks are not equal across the five. `claude auth status` and `codex login status` report on credentials
+without spending a call, and `opencode auth list` prints the stored ones. Gemini CLI and goose have no such
+command, so their probe only proves the binary runs; an unauthenticated run fails at its first model call and
+shows up as a failed run rather than a failed probe.
 | `repos` | [] | Appended by `start` and `register`. Used by `up` to recover from GitHub. |
 
 ## The reviewer object
@@ -51,9 +64,25 @@ Flags are not configurable; they live in `lib/harness.mjs` and are the verified 
 
 - Claude Code: `-p --permission-mode auto --permission-prompts none --max-budget-usd <n> --settings <file> --output-format stream-json --verbose`, with `--session-id <uuid>` on start and `--resume <uuid>` on resume.
 - Codex: `exec --json -c approval_policy="never" -c sandbox_mode="workspace-write" -c sandbox_workspace_write.network_access=true --skip-git-repo-check`, with `exec resume <id>` on resume.
+- Gemini CLI: `--skip-trust --output-format stream-json -p`, with `--session-id <uuid>` on start and `--resume <uuid>` on resume. `--skip-trust` is mandatory: without it a headless run in an untrusted directory refuses and the run is wasted. The help text says `--resume` takes "latest" or an index; that is incomplete, and a UUID is the only form that resumes one specific session.
+- opencode: `run --format json`, with `--session <id>` on resume. Ids are minted by the server and cannot be pre-assigned, so the id is read back off the run's own JSONL, as with Codex.
+- goose: `run --output-format stream-json -t`, with `--name <id>` on start and `--resume --name <id>` on resume. `--session-id` looks like the flag to use but is resume-only and refuses without `--resume`, so it cannot name a session the daemon will come back to.
 
-Any `--dangerously-*` flag is refused by the adapter. Gallivant never edits `~/.claude/settings.json` or `~/.codex/config.toml`.
+`context_paths` renders per harness, and only Claude Code has a flag that grants read without also granting write:
+
+- Claude Code: `--add-dir <dir>` once per path, placed before the prompt. Writes stay bounded by the sandbox in the file `--settings` points at.
+- Codex: refused. `--add-dir` is documented by Codex itself as making directories *writable*, and `sandbox_permissions=["disk-full-read-access"]` is the whole disk. Checked against 0.157.0: a per-path spelling and `sandbox_workspace_write.readable_roots` are both reported as ignored settings, so the read would silently not happen.
+- Gemini CLI: refused. `--include-directories` adds to the workspace, which is Gemini's write boundary as well as its read boundary.
+- opencode and goose: no directory flag exists. The list is ignored and `doctor` reports that it has no effect on those runs, rather than failing a run over a setting the CLI cannot honour.
+
+An empty list renders nothing at all, so a run without extras has the argv it had before the setting existed.
+
+Any `--dangerously-*` flag is refused by the adapter, and so is each harness's own equivalent: `-y`/`--yolo` and
+`--approval-mode yolo` for Gemini CLI, `--auto` for opencode, and a `sandbox_mode` override whose value contains
+`danger` for Codex. goose has no such flag at all; it is bounded by the `GOOSE_MODE` environment variable, which
+the adapter pins to `smart_approve` and the same check refuses to loosen. Gallivant never edits
+`~/.claude/settings.json`, `~/.codex/config.toml` or `~/.config/goose/config.yaml`.
 
 ## Environment for runs
 
-Every run gets `GH_TOKEN` from the token file, `GIT_CONFIG_GLOBAL=~/.gallivant/gitconfig`, and for Claude `APORT_CLAUDE_CODE_CONFIG_DIR=<dir of the settings file>`. Runs are spawned with the checkout as the working directory and binaries by absolute path, so shell functions and aliases around `claude` or `codex` are bypassed.
+Every run gets `GH_TOKEN` from the token file, `GIT_CONFIG_GLOBAL=~/.gallivant/gitconfig`, and per harness: `APORT_CLAUDE_CODE_CONFIG_DIR=<dir of the settings file>` for Claude, `GEMINI_CLI_TRUST_WORKSPACE=true` for Gemini CLI, and `GOOSE_MODE=smart_approve` for goose. Runs are spawned with the checkout as the working directory and binaries by absolute path, so shell functions and aliases around `claude` or `codex` are bypassed.

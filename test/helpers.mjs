@@ -16,7 +16,10 @@ export const CONFIG = {
   deliverable: DEFAULT_DELIVERABLE,
   worktrees: "/tmp/gallivant-test-worktrees",
   github_token_file: null,
-  harness: { claude: { bin: "/bin/claude", settings: "/tmp/gallivant-test-home/claude/settings.json" }, codex: { bin: "/bin/codex" } },
+  harness: {
+    claude: { bin: "/bin/claude", settings: "/tmp/gallivant-test-home/claude/settings.json" }, codex: { bin: "/bin/codex" },
+    gemini: { bin: "/bin/gemini" }, opencode: { bin: "/bin/opencode" }, goose: { bin: "/bin/goose" },
+  },
   repos: ["acme/widget"],
 };
 
@@ -116,6 +119,30 @@ export const codexLines = ({ ok = true, text = "Done.", thread = "22222222-2222-
   JSON.stringify({ type: "thread.started", thread_id: thread }),
   JSON.stringify({ type: "item.completed", item: { type: "agent_message", text } }),
   JSON.stringify(ok ? { type: "turn.completed", usage: {} } : { type: "turn.failed", error: { message: "boom" } }),
+];
+
+// The three fixtures below are trimmed from real runs captured on 2026-09-25, so the field names are the CLIs'
+// own and not a guess. `stats`/`tokens` blocks are dropped where the adapter does not read them.
+
+export const geminiLines = ({ ok = true, text = "Done.", session = "f2abfca4-05e6-46a0-ab2c-e411ceb3ca07" } = {}) => [
+  JSON.stringify({ type: "init", timestamp: T0, session_id: session, model: "auto" }),
+  JSON.stringify({ type: "message", timestamp: T0, role: "user", content: "go" }),
+  JSON.stringify({ type: "message", timestamp: T0, role: "assistant", content: text, delta: true }),
+  JSON.stringify(ok ? { type: "result", timestamp: T0, status: "success", stats: { total_tokens: 11297 } }
+    : { type: "result", timestamp: T0, status: "error", error: { message: "quota exhausted" } }),
+];
+
+export const opencodeLines = ({ ok = true, text = "Done.", session = "ses_f25fcd907ffesl1i92jsR2lh9I", cost = 0.0016 } = {}) => [
+  JSON.stringify({ type: "step_start", sessionID: session, part: { type: "step-start", sessionID: session } }),
+  JSON.stringify({ type: "text", sessionID: session, part: { type: "text", text, sessionID: session } }),
+  JSON.stringify({ type: "step_finish", sessionID: session, part: { type: "step-finish", reason: ok ? "stop" : "aborted", cost, sessionID: session } }),
+];
+
+/** goose splits one assistant reply across several `message` events, so the fixture does too. */
+export const gooseLines = ({ ok = true, chunks = ["Do", "ne."], cost = 0.0036 } = {}) => [
+  ...chunks.map(c => JSON.stringify({ type: "message", message: { id: "3a596abb", role: "assistant", content: [{ type: "text", text: c }] } })),
+  ...(ok ? [] : [JSON.stringify({ type: "error", error: { message: "provider refused" } })]),
+  JSON.stringify({ type: "complete", total_tokens: 8368, cost_usd: cost }),
 ];
 
 /** A registry in a temp dir with one pr-open entry, ready for the tick. */

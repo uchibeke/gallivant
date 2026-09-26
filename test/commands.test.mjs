@@ -16,6 +16,14 @@ function signedInBin(dir) {
   return bin;
 }
 
+/** The same for claude, whose sign-in check reads `loggedIn` out of `claude auth status` rather than the exit code. */
+function signedInClaudeBin(dir) {
+  const bin = join(dir, "claude-stub");
+  writeFileSync(bin, '#!/bin/sh\necho \'{"loggedIn": true}\'\nexit 0\n');
+  chmodSync(bin, 0o755);
+  return bin;
+}
+
 /** The operator's own checkout, with the PRD written where `gallivant start` is run against it. */
 function operatorRepo(root, rel = "docs/prds/widget-export.md") {
   mkdirSync(join(root, "docs", "prds"), { recursive: true });
@@ -53,6 +61,32 @@ test("start writes the PRD into the fresh checkout, so the branch carries the br
   assert.equal(w.ctx.state.get(r.id).prd, "docs/prds/widget-export.md");
   assert.equal(w.snapshots.get(r.id), GOOD_PRD, "the daemon keeps its own snapshot as the authoritative copy");
   assert.equal(statSync(join(w.worktree, "docs", "prds")).mode & 0o777, 0o755, "the directory git will commit is not private to the daemon");
+});
+
+test("start renders the resolved read-only directories into the run, and refuses a harness that cannot grant them", async () => {
+  const extra = tempHome();
+  // codex, which cannot grant read on one directory, is refused before anything is recorded.
+  const cx = startWorld();
+  cx.ctx.config = { ...cx.ctx.config, context_paths: [extra] };
+  await assert.rejects(() => start(cx.ctx, { path: cx.prdPath }), /refusing to run codex with context_paths/);
+
+  // claude, which can, gets one --add-dir per resolved path, config list first then the brief's own.
+  const w = startWorld();
+  const fromPrd = tempHome();
+  writeFileSync(w.prdPath, GOOD_PRD.replace("harness: codex", `harness: claude\ncontext_paths: ${fromPrd}`));
+  w.ctx.config = { ...w.ctx.config, context_paths: [extra], harness: { claude: { bin: signedInClaudeBin(w.home), settings: join(w.home, "claude", "settings.json") } } };
+  const runner = fakeRunner(makeClock());
+  w.ctx.runnerFor = () => runner;
+  await start(w.ctx, { path: w.prdPath });
+  const args = runner.started[0].args;
+  assert.deepEqual(args.filter((a, i) => args[i - 1] === "--add-dir"), [extra, fromPrd], "the config list first, then the brief's own addition");
+
+  // A brief asking for the home directory is refused by name, and nothing is recorded.
+  const bad = startWorld();
+  writeFileSync(bad.prdPath, GOOD_PRD.replace("harness: codex", "harness: claude\ncontext_paths: ~"));
+  bad.ctx.config = { ...bad.ctx.config, harness: { claude: { bin: signedInClaudeBin(bad.home), settings: "/s.json" } } };
+  await assert.rejects(() => start(bad.ctx, { path: bad.prdPath }), /frontmatter context_paths: "~" is your home directory/);
+  assert.deepEqual(Object.keys(bad.ctx.state.entries()), [], "a refused brief leaves no entry behind");
 });
 
 test("start follows the repo, base branch and relative path the request names", async () => {

@@ -119,7 +119,7 @@ test("a PR with a missing or malformed block is ignored and the reason is logged
     ["Adds export.\n", /no block/],
     [`Adds export.\n\n<!-- gallivant\nprd: docs/prds/widget-export.md\nharness: claude\nsession: ${SESSION}\n`, /unterminated block/],
     ["Adds export.\n\n<!-- gallivant\nharness: claude\nsession: none\nbranch: gallivant/widget-export\n-->\n", /missing prd/],
-    [blockBody({ harness: "gemini" }), /invalid harness: gemini/],
+    [blockBody({ harness: "bash" }), /invalid harness: bash/],
     [blockBody({ session: "not-a-uuid" }), /invalid session: not-a-uuid/],
     [blockBody({ prd: "../../etc/passwd.md" }), /invalid prd/],
     [blockBody({ branch: "gallivant/other" }), /block branch differs from head/],

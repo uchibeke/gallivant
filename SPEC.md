@@ -22,7 +22,7 @@ to start on anything that fails the contract and a document called PRD.md that c
 
 Gallivant is a small open-source daemon plus CLI. You write a PRD, mark it ready, and go outside. Gallivant starts a coding-agent session for it and keeps the resulting pull request moving on its own: it watches for reviewer findings, human review comments and failed checks, resumes the session that opened the PR to fix them, pushes, asks the reviewer to look again, and stops with one notification when the PR is ready for a human or stuck.
 
-Day one supports Claude Code and Codex as fixers, with APort hooks on both. The session that opened the PR is the session that fixes it, resumed by session id. Every PR carries the harness and session id in its body so the loop can be rebuilt from GitHub after the local state is lost.
+Claude Code, Codex, Gemini CLI, opencode and goose are supported as fixers, with APort hooks on Claude Code and Codex. The session that opened the PR is the session that fixes it, resumed by session id. Every PR carries the harness and session id in its body so the loop can be rebuilt from GitHub after the local state is lost.
 
 Gallivant is the engine. Any UI is optional on top. Issue-label input is milestone 2, OpenCode is milestone 3.
 
@@ -44,7 +44,7 @@ A fourth, softer problem: the existing Telegram bot streams everything, so it ge
 - A PR with reviewer or human review findings, or a failing check, gets a fix pushed by the same session within one polling interval.
 - After a fix is pushed, the reviewer is asked to review again, automatically.
 - A PR reaches `ready-for-human` or `needs-human` on its own. The operator gets one notification per transition, by ntfy, with email forwarding through ntfy's `Email` header.
-- Harness is a per-PRD choice between Claude Code and Codex on day one. Swapping is one field.
+- Harness is a per-PRD choice among the supported harnesses. Swapping is one field.
 - APort hooks are installed on both harnesses on day one. Section 6.11 says exactly what they enforce and what other controls carry the rest.
 - Runs on a Mac first, in a terminal. A Linux box later needs one config file and one service unit.
 - The loop is recoverable from GitHub. Delete `state.json`, run `gallivant up`, and every open Gallivant PR is picked back up.
@@ -237,9 +237,29 @@ Verified on 2026-09-23 against Claude Code 2.1.263 and Codex 0.155.1. `codex exe
 | Spend cap | `--max-budget-usd` | none in the CLI; wall-clock timeout only |
 | Environment | `APORT_CLAUDE_CODE_CONFIG_DIR=~/.gallivant/claude`, `GH_TOKEN` from the token file, `GIT_CONFIG_GLOBAL=~/.gallivant/gitconfig` | same `GH_TOKEN` and `GIT_CONFIG_GLOBAL` |
 | By hand | `claude --from-pr <n>` in the worktree opens the linked session interactively | `codex resume <id>` in the worktree |
-| Later | OpenCode (M3): `opencode run --format json --auto`, resume with `-s <id>` | |
 
-The adapter refuses to run if the resolved argv contains any `--dangerously-*` flag. Gallivant does not edit `~/.claude/settings.json` or `~/.codex/config.toml`. Codex's `~/.codex/config.toml` GitHub connector settings stay as they are; the fix prompt uses `gh`.
+Three more harnesses were added on 2026-09-25 against Gemini CLI 0.59.0, opencode 1.18.31 and goose 1.50.1. Each
+resume was checked by round-trip, not by reading help text: a number written in one process came back when a
+second process resumed that session id.
+
+| | Gemini CLI | opencode | goose |
+|---|---|---|---|
+| Start | `gemini --skip-trust --session-id <uuid> --output-format stream-json -p "<prompt>"` | `opencode run --format json "<prompt>"` | `goose run --name <id> --output-format stream-json -t "<prompt>"` |
+| Resume | `gemini --skip-trust --resume <uuid> --output-format stream-json -p "<prompt>"` | `opencode run --session <id> --format json "<prompt>"` | `goose run --resume --name <id> --output-format stream-json -t "<prompt>"` |
+| Session id | Chosen up front with `--session-id`. `--resume` takes that UUID; the help text's "latest or an index" is incomplete | Server-minted `ses_...`, read off `sessionID` on the first JSONL line. Cannot be pre-assigned: `opencode session` has only `list` and `delete` | Chosen up front as `--name`. `--session-id` is resume-only and refuses without `--resume`, so it cannot create one |
+| Outcome | `result` event, `status: "success"` | `step_finish` event, `part.reason === "stop"`, with `part.cost` | `complete` event, plus any `error` event |
+| Last message | `message` events with `role: "assistant"` | `text` events | `message` events joined: goose splits one reply across several, so the last event is a fragment |
+| No prompts | `--approval-mode` left at its default, and `--yolo` refused | `--auto` refused | `GOOSE_MODE=smart_approve` in the run env; goose has no CLI flag for this |
+| Sandbox | none of its own; the worktree and the wall-clock timeout bound it | same | same |
+| Spend cap | none in the CLI; timeout only | none; `step_finish` reports cost after the fact | none; `complete` reports `cost_usd` after the fact |
+| Environment | `GEMINI_CLI_TRUST_WORKSPACE=true` | none of its own | `GOOSE_MODE=smart_approve` |
+| By hand | `gemini --resume <uuid>` in the worktree | `opencode run -s <id>` | `goose run --resume --name <id> -s` |
+| Later | cursor-agent, once it is signed in: it has `--print --output-format stream-json`, `--resume <chatId>` and `create-chat`, but a headless run here draws the sign-in screen and exits non-zero, so its stream shape is unverified | | |
+
+The adapter refuses to run if the resolved argv contains any `--dangerously-*` flag, and each harness's own
+equivalent besides: `-y`/`--yolo` and `--approval-mode yolo`, opencode's `--auto`, and a Codex `sandbox_mode`
+override whose value contains `danger`. Because goose's permission mode is an environment variable rather than a
+flag, the same refusal covers `GOOSE_MODE`. Gallivant does not edit `~/.claude/settings.json` or `~/.codex/config.toml`. Codex's `~/.codex/config.toml` GitHub connector settings stay as they are; the fix prompt uses `gh`.
 
 ### 6.8 Tick
 
@@ -291,7 +311,7 @@ The fenced framing is prompt hygiene, not a control. The controls are in 6.11.
 ### 6.10 Commands and worktrees
 
 - `gallivant start <prd path>`: creates the worktree at `<worktrees>/<repo>/<prd id>` from the remote default branch on branch `gallivant/<prd id>`, starts the session with the PRD contents, records the session id, appends the repo to `repos`. The registry entry is `running`. The PRD file is not modified.
-- `gallivant register <pr-url> [--harness claude|codex] [--session <id>] [--worktree <path>]`: puts a hand-made PR, or one opened from an iTerm session, into the loop. With `--session`, later fixes resume that session; `--worktree` must then be the directory the session ran in, because both harnesses key sessions by cwd. Without `--session`, the first fix run starts a fresh session whose prompt tells it to read the PR with `gh pr view` and `gh pr diff`. Without `--worktree`, the worktree is created from the PR branch at the standard path. On an existing entry, `register` is the reset described in 6.8 step 10.
+- `gallivant register <pr-url> [--harness <name>] [--session <id>] [--worktree <path>]`: puts a hand-made PR, or one opened from an iTerm session, into the loop. With `--session`, later fixes resume that session; `--worktree` must then be the directory the session ran in, because both harnesses key sessions by cwd. Without `--session`, the first fix run starts a fresh session whose prompt tells it to read the PR with `gh pr view` and `gh pr diff`. Without `--worktree`, the worktree is created from the PR branch at the standard path. On an existing entry, `register` is the reset described in 6.8 step 10.
 - `gallivant up`: the daemon. On boot it reconciles: for each repo in `repos`, `gh pr list --author @me --state open`, keep PRs whose head repo equals the base repo and whose branch starts with `gallivant/`, parse the block with strict patterns (uuid, `docs/prds/[a-z0-9-]+\.md`, `gallivant/[a-z0-9-]+`, harness in the known set), and register any PR not already in the registry with `since` set to the later of the daemon's last own comment and the head commit date, `fixed_sha` to the head, `iteration` to the count of round comments. A block that fails validation is logged and ignored. Missing worktrees are recreated from the PR branch at the recorded path. The daemon holds a pidfile under `~/.gallivant` and exits if another daemon is alive.
 - `gallivant status [--all] [--json]`: section 6.12.
 - `gallivant why <handle>`: prints `reason`, `last.event`, the harness's final assistant message from `job.log` (not raw JSON), and APort audit lines from the run's time window.

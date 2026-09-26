@@ -22,7 +22,7 @@ The only way a PRD becomes ready. Runs every rule of [the contract](prd.md), pri
 
 The entry is `running` until the daemon sees the run end. Then either a PR exists on the branch and the entry enters `pr-open`, or it stops with `no-pr`.
 
-## `gallivant register <pr-url> [--harness claude|codex] [--session <id>] [--worktree <dir>]`
+## `gallivant register <pr-url> [--harness <name>] [--session <id>] [--worktree <dir>]`
 
 Puts a PR into the loop that Gallivant did not open, or resets one that stopped.
 

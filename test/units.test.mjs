@@ -1,20 +1,21 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { join } from "node:path";
+import { join, dirname } from "node:path";
 import { readFileSync } from "node:fs";
+import { spawnSync } from "node:child_process";
 import { makeState, resolveHandle, newEntry, entryId, idSlug, prdIdOf, advanceCursor, STATES } from "../lib/state.mjs";
 import { isAtOrAfter, floorSecond } from "../lib/time.mjs";
 import { renderBlock, parseBlock, upsertBlock } from "../lib/block.mjs";
 import { quote, fixPrompt, startPrompt } from "../lib/prompt.mjs";
-import { buildRun, assertSafeArgv, adapters, compareVersions } from "../lib/harness.mjs";
+import { buildRun, assertSafeArgv, assertSafeEnv, adapters, compareVersions, contextSupport } from "../lib/harness.mjs";
 import { parsePrd, verifyCommands, withFrontmatterKey, fencedBlocks, findPlaceholder } from "../lib/prd.mjs";
 import { makeRunner, isOurProcess } from "../lib/run.mjs";
 import { branchFor, prdIdFromBranch, isOurBranch, makeGit } from "../lib/git.mjs";
 import { writeFileSync, existsSync, utimesSync, mkdirSync } from "node:fs";
-import { validate, DEFAULTS, merge, discoverHarnesses } from "../lib/config.mjs";
+import { validate, DEFAULTS, merge, discoverHarnesses, whence, validateContextPaths, resolveContextPaths, parseContextPathsMeta } from "../lib/config.mjs";
 import { messages } from "../lib/notify.mjs";
 import { repoFromRemote, remoteMatches } from "../lib/gh.mjs";
-import { CONFIG, T0, tempHome, claudeResultLines, codexLines, GOOD_PRD } from "./helpers.mjs";
+import { CONFIG, T0, tempHome, claudeResultLines, codexLines, geminiLines, opencodeLines, gooseLines, GOOD_PRD } from "./helpers.mjs";
 
 test("state writes atomically and resolves handles", () => {
   const home = tempHome();
@@ -82,8 +83,103 @@ test("harness argv: claude resumes with --settings and no dangerous flags; codex
   assert.deepEqual(x.args.slice(0, 2), ["exec", "--json"]);
   assert.ok(x.args.includes('sandbox_mode="workspace-write"'));
   assert.throws(() => assertSafeArgv(["--dangerously-skip-permissions"]), /refusing/);
-  assert.throws(() => buildRun({ harness: "opencode", config: CONFIG, mode: "start", prompt: "p" }), /unknown harness/);
+  assert.throws(() => buildRun({ harness: "bash", config: CONFIG, mode: "start", prompt: "p" }), /unknown harness/);
 });
+
+test("harness argv: gemini, opencode and goose each carry the session id on resume", () => {
+  const g = buildRun({ harness: "gemini", config: CONFIG, mode: "start", session: "u1", prompt: "p", cwd: "/w" });
+  assert.deepEqual(g.args, ["--skip-trust", "--session-id", "u1", "--output-format", "stream-json", "-p", "p"]);
+  assert.equal(g.env.GEMINI_CLI_TRUST_WORKSPACE, "true", "a daemon run must not be refused for an untrusted directory");
+  // --resume takes the uuid, not an index; the help text's "latest or an index" is incomplete.
+  assert.deepEqual(buildRun({ harness: "gemini", config: CONFIG, mode: "resume", session: "u1", prompt: "p" }).args.slice(0, 3), ["--skip-trust", "--resume", "u1"]);
+
+  const o = buildRun({ harness: "opencode", config: CONFIG, mode: "start", session: null, prompt: "p", cwd: "/w" });
+  assert.deepEqual(o.args, ["run", "--format", "json", "p"]);
+  assert.deepEqual(buildRun({ harness: "opencode", config: CONFIG, mode: "resume", session: "ses_x", prompt: "p" }).args, ["run", "--session", "ses_x", "--format", "json", "p"]);
+
+  // goose names a session with -n and resumes THAT one with -r plus the same -n. --session-id cannot create one.
+  const s = buildRun({ harness: "goose", config: CONFIG, mode: "start", session: "gallivant-x", prompt: "p", cwd: "/w" });
+  assert.deepEqual(s.args, ["run", "--name", "gallivant-x", "--output-format", "stream-json", "-t", "p"]);
+  assert.deepEqual(buildRun({ harness: "goose", config: CONFIG, mode: "resume", session: "gallivant-x", prompt: "p" }).args.slice(0, 4), ["run", "--resume", "--name", "gallivant-x"]);
+  assert.ok(!s.args.includes("--session-id"), "--session-id is resume-only and cannot name a new session");
+  assert.equal(s.env.GOOSE_MODE, "smart_approve");
+});
+
+test("argv safety: every harness's own way of disabling permissions is refused", () => {
+  // One case per harness, each the real flag that CLI accepts.
+  assert.throws(() => assertSafeArgv(["-p", "--dangerously-skip-permissions"]), /refusing to run with --dangerously-skip-permissions/);
+  assert.throws(() => assertSafeArgv(["exec", "--dangerously-bypass-approvals-and-sandbox"]), /refusing/);
+  assert.throws(() => assertSafeArgv(["exec", "-c", 'sandbox_mode="danger-full-access"']), /refusing/);
+  assert.throws(() => assertSafeArgv(["--yolo"]), /refusing to run with --yolo/);
+  assert.throws(() => assertSafeArgv(["-y"]), /refusing to run with -y/);
+  assert.throws(() => assertSafeArgv(["--approval-mode", "yolo"]), /refusing to run with --approval-mode yolo/);
+  assert.throws(() => assertSafeArgv(["run", "--auto"]), /refusing to run with --auto/);
+  // goose has no such flag at all; its permission mode is an env var, so the refusal has to live there too.
+  assert.throws(() => assertSafeEnv({ GOOSE_MODE: "auto" }), /refusing to run with GOOSE_MODE=auto/);
+  assert.deepEqual(assertSafeEnv({ GOOSE_MODE: "smart_approve" }), { GOOSE_MODE: "smart_approve" });
+  // The approval mode gemini does want is not refused, and neither is codex's own override.
+  assert.doesNotThrow(() => assertSafeArgv(["--approval-mode", "default", "-c", 'approval_policy="never"']));
+  // Nothing the adapters actually build may trip the check.
+  for (const h of ["claude", "codex", "gemini", "opencode", "goose"]) {
+    assert.doesNotThrow(() => buildRun({ harness: h, config: CONFIG, mode: "resume", session: "s", prompt: "p", cwd: "/w" }), h);
+  }
+});
+
+test("outcomes: gemini result status, opencode step_finish, goose chunked message events", () => {
+  const g = adapters.gemini.outcome(geminiLines({ text: "Pushed." }));
+  assert.deepEqual([g.ok, g.finished, g.lastMessage], [true, true, "Pushed."]);
+  assert.equal(adapters.gemini.sessionFrom(geminiLines()), "f2abfca4-05e6-46a0-ab2c-e411ceb3ca07");
+  assert.deepEqual([adapters.gemini.outcome(geminiLines({ ok: false })).ok, adapters.gemini.outcome(geminiLines({ ok: false })).error], [false, "quota exhausted"]);
+  // A run killed before it printed a result is unfinished, not a silent success.
+  assert.equal(adapters.gemini.outcome(['{"type":"init","session_id":"x"}']).finished, false);
+
+  const o = adapters.opencode.outcome(opencodeLines({ cost: 0.0016, text: "Pushed." }));
+  assert.deepEqual([o.ok, o.finished, o.cost, o.lastMessage], [true, true, 0.0016, "Pushed."]);
+  assert.equal(adapters.opencode.sessionFrom(opencodeLines()), "ses_f25fcd907ffesl1i92jsR2lh9I");
+  assert.equal(adapters.opencode.newSession(), null, "opencode ids are server-minted; the run reports one back");
+  assert.match(adapters.opencode.outcome(opencodeLines({ ok: false })).error, /aborted/);
+
+  // goose splits a reply across events, so the adapter joins them; taking the last one would read "ne.".
+  const s = adapters.goose.outcome(gooseLines({ chunks: ["858", "5"] }));
+  assert.deepEqual([s.ok, s.finished, s.lastMessage], [true, true, "8585"]);
+  assert.equal(s.cost, 0.0036);
+  assert.deepEqual([adapters.goose.outcome(gooseLines({ ok: false })).ok, adapters.goose.outcome(gooseLines({ ok: false })).error], [false, "provider refused"]);
+  assert.equal(adapters.goose.outcome([]).finished, false);
+  assert.match(adapters.goose.newSession(), /^gallivant-[0-9a-f-]{36}$/);
+});
+
+test("a harness whose id cannot be read back off the run must generate it up front", () => {
+  // Two ways to learn a session id, and every adapter has to have exactly one of them. goose is the case that
+  // makes this worth asserting: it never prints its session name into the JSONL, so newSession() generating the
+  // name is the only reason a later resume can find the session. An adapter with neither would start a run the
+  // daemon could never resume, and nothing else in the code would notice.
+  for (const [name, a] of Object.entries(adapters)) {
+    const generates = a.newSession() !== null;
+    const reports = a.sessionFrom !== undefined && a.sessionFrom(codexLines()) !== undefined;
+    assert.ok(generates || reports, `${name} can neither generate nor report a session id`);
+  }
+  assert.equal(adapters.goose.sessionFrom(gooseLines()), null, "goose does not report its name back");
+  assert.match(adapters.goose.newSession(), /^gallivant-/, "so it has to generate one it can resume by");
+  assert.equal(adapters.opencode.newSession(), null, "opencode cannot pre-assign, so it must report one back");
+  assert.ok(adapters.opencode.sessionFrom(opencodeLines()));
+});
+
+// Checks the argv against the real CLIs rather than against our own assumption, so a flag renamed upstream fails
+// here instead of in production. Skipped when a binary is not installed; --help is free and makes no model call.
+// opencode prints its help to stderr, so both streams are read; reading only stdout silently passes on empty text.
+for (const [harness, argv, flags] of [
+  ["gemini", ["--help"], ["--skip-trust", "--session-id", "--resume", "--output-format"]],
+  ["opencode", ["run", "--help"], ["--session", "--format"]],
+  ["goose", ["run", "--help"], ["--name", "--resume", "--output-format"]],
+]) {
+  const bin = whence(harness);
+  test(`${harness} still accepts the flags the adapter passes`, { skip: bin ? false : `${harness} is not installed` }, () => {
+    const r = spawnSync(bin, argv, { encoding: "utf8", timeout: 60_000 });
+    const help = `${r.stdout || ""}${r.stderr || ""}`;
+    assert.ok(help.length > 200, `${harness} --help printed nothing to read`);
+    for (const f of flags) assert.ok(help.includes(f), `${harness} --help no longer mentions ${f}`);
+  });
+}
 
 test("outcomes: claude result event and codex turn events", () => {
   const ok = adapters.claude.outcome(claudeResultLines({ cost: 0.7, text: "Pushed." }));
@@ -107,7 +203,7 @@ test("the start prompt carries the branch, base and Verify commands", () => {
 
 test("config validation names every problem and accepts the fixture", () => {
   assert.deepEqual(validate(CONFIG), []);
-  const bad = validate({ ...DEFAULTS, trusted_authors: [], worktrees: "~/.gallivant/wt", harness: { opencode: { bin: "/x" } }, reviewer: { login: "x" } });
+  const bad = validate({ ...DEFAULTS, trusted_authors: [], worktrees: "~/.gallivant/wt", harness: { bash: { bin: "/x" } }, reviewer: { login: "x" } });
   assert.ok(bad.some(p => /trusted_authors/.test(p)));
   assert.ok(bad.some(p => /Gallivant home/.test(p)));
   assert.ok(bad.some(p => /not a known harness/.test(p)));
@@ -274,5 +370,124 @@ test("one harness is a complete install; none at all names the fix", () => {
   assert.deepEqual(validate({ ...base, harness: { codex: { bin: "/bin/codex" } } }, "/tmp/h"), []);
   const none = validate({ ...base, harness: {} }, "/tmp/h");
   assert.match(none[0], /no harness configured and none found/);
-  assert.match(none[0], /Install Claude Code or Codex/, "the message says what to do, not just what is wrong");
+  assert.match(none[0], /set harness.<name>.bin explicitly/, "the message says what to do, not just what is wrong");
+  assert.match(none[0], /claude, codex, gemini, opencode, goose/, "and which binaries it looked for");
+});
+
+test("context_paths: a real directory is accepted, a missing or relative one is named", () => {
+  const home = tempHome();
+  const good = tempHome();
+  assert.deepEqual(validateContextPaths([good], home), []);
+  assert.deepEqual(validateContextPaths([], home), [], "an empty list is not a problem");
+  assert.deepEqual(validateContextPaths(undefined, home), [], "an absent list is not a problem either");
+  const missing = validateContextPaths([join(good, "no-such-dir")], home);
+  assert.equal(missing.length, 1);
+  assert.match(missing[0], /does not exist/);
+  assert.match(missing[0], /no-such-dir/, "the message names the path the operator wrote");
+  // A file is not a directory, and neither is a blank entry.
+  writeFileSync(join(good, "a-file"), "x");
+  assert.match(validateContextPaths([join(good, "a-file")], home)[0], /does not exist/);
+  assert.match(validateContextPaths([""], home)[0], /non-empty strings/);
+  assert.match(validateContextPaths("not-an-array", home)[0], /must be an array/);
+  // `./docs` expands to an absolute path under the process cwd, so the check has to run on the raw entry.
+  assert.match(validateContextPaths(["../siblings"], home)[0], /not an absolute path/);
+});
+
+test("context_paths: every directory that would defeat the guardrails is refused by name", () => {
+  const home = tempHome();
+  // The Gallivant home itself, and any parent of it: reading either reaches the settings file and the registry.
+  assert.match(validateContextPaths([home], home)[0], /contains the Gallivant home/);
+  assert.match(validateContextPaths([dirname(home)], home)[0], /contains the Gallivant home/);
+  for (const [dir, label] of [["~/.claude", /~\/\.claude/], ["~/.codex", /~\/\.codex/], ["~/.aport", /~\/\.aport/], ["~/.config/opencode", /opencode/]]) {
+    const problems = validateContextPaths([dir], home);
+    assert.equal(problems.length, 1, dir);
+    assert.match(problems[0], label, dir);
+    assert.match(problems[0], /settings and passport that bound the run/, dir);
+  }
+  // The home directory itself is refused on its own terms: it is every credential on the machine, not one project.
+  const atHome = validateContextPaths(["~"], home);
+  assert.equal(atHome.length, 1);
+  assert.match(atHome[0], /your home directory/);
+  // And `~` is refused even when the Gallivant home lives elsewhere, so the check is not a side effect of the first.
+  assert.match(validateContextPaths(["~"], "/tmp/elsewhere-gallivant")[0], /your home directory/);
+  // A real project directory under the home is fine; only the home itself is too much.
+  assert.deepEqual(validateContextPaths([tempHome()], home), []);
+});
+
+test("context_paths: validate() reports a bad list alongside every other config problem", () => {
+  const bad = validate({ ...CONFIG, context_paths: ["/definitely/not/here"] }, CONFIG.home);
+  assert.equal(bad.length, 1);
+  assert.match(bad[0], /context_paths: "\/definitely\/not\/here" does not exist/);
+});
+
+test("context_paths render as the flag each harness actually has, and an empty list renders nothing", () => {
+  const dirs = ["/srv/design-docs", "/srv/sibling-repo"];
+  // Claude: --add-dir per directory, before the prompt, with writes still bounded by the sandbox in --settings.
+  const c = buildRun({ harness: "claude", config: CONFIG, mode: "start", session: "s", prompt: "p", cwd: "/w", contextPaths: dirs });
+  assert.deepEqual(c.args.slice(-5), ["--add-dir", "/srv/design-docs", "--add-dir", "/srv/sibling-repo", "p"]);
+  assert.ok(c.args.includes("--settings"), "the sandbox that bounds writes is still passed");
+  // The empty case is byte-identical to a run built before this setting existed.
+  assert.deepEqual(buildRun({ harness: "claude", config: CONFIG, mode: "start", session: "s", prompt: "p", cwd: "/w", contextPaths: [] }).args,
+    buildRun({ harness: "claude", config: CONFIG, mode: "start", session: "s", prompt: "p", cwd: "/w" }).args);
+  for (const h of ["claude", "codex", "gemini", "opencode", "goose"]) {
+    const plain = buildRun({ harness: h, config: CONFIG, mode: "resume", session: "s", prompt: "p", cwd: "/w" });
+    assert.deepEqual(buildRun({ harness: h, config: CONFIG, mode: "resume", session: "s", prompt: "p", cwd: "/w", contextPaths: [] }).args, plain.args, h);
+  }
+});
+
+test("a harness that cannot grant read on one directory refuses; one with no flag ignores the list", () => {
+  const dirs = ["/srv/design-docs"];
+  // Codex: --add-dir is WRITABLE and disk-full-read-access is the whole disk, so neither is a read grant on a path.
+  assert.throws(() => buildRun({ harness: "codex", config: CONFIG, mode: "start", session: null, prompt: "p", cwd: "/w", contextPaths: dirs }),
+    /refusing to run codex with context_paths/);
+  assert.throws(() => buildRun({ harness: "codex", config: CONFIG, mode: "start", session: null, prompt: "p", cwd: "/w", contextPaths: dirs }),
+    /disk-full-read-access/, "the refusal says what codex would have had to grant instead");
+  // Gemini: --include-directories adds to the workspace, which is its write boundary too.
+  assert.throws(() => buildRun({ harness: "gemini", config: CONFIG, mode: "start", session: "u1", prompt: "p", cwd: "/w", contextPaths: dirs }),
+    /refusing to run gemini with context_paths/);
+  // Neither escalates instead of refusing.
+  for (const h of ["codex", "gemini"]) {
+    assert.equal(contextSupport(h).kind, "refuse", h);
+    try { buildRun({ harness: h, config: CONFIG, mode: "start", session: "s", prompt: "p", cwd: "/w", contextPaths: dirs }); assert.fail(`${h} should refuse`); }
+    catch (e) { assert.doesNotMatch(e.message, /disk-full-read-access"\]/, "the refusal is not the escalated argv"); }
+  }
+  // opencode and goose have no directory flag: the run proceeds unchanged rather than failing over a setting they
+  // cannot honour. `doctor` is where the operator is told it had no effect.
+  for (const h of ["opencode", "goose"]) {
+    const with_ = buildRun({ harness: h, config: CONFIG, mode: "start", session: "gallivant-x", prompt: "p", cwd: "/w", contextPaths: dirs });
+    const without = buildRun({ harness: h, config: CONFIG, mode: "start", session: "gallivant-x", prompt: "p", cwd: "/w" });
+    assert.deepEqual(with_.args, without.args, h);
+    assert.ok(!with_.args.some(a => String(a).includes("/srv/design-docs")), `${h} argv must not carry a path it cannot honour`);
+    assert.equal(contextSupport(h).kind, "none", h);
+  }
+  assert.equal(contextSupport("claude").kind, "grant");
+});
+
+test("a PRD's own context_paths add to the config list and are held to the same rules", () => {
+  const home = tempHome();
+  const fromConfig = tempHome();
+  const fromPrd = tempHome();
+  const cfg = { ...CONFIG, home, context_paths: [fromConfig] };
+  // Merged, not replaced: the brief's directory is added to the operator's list.
+  const prd = parsePrd(`---\nstatus: ready\nharness: claude\ncontext_paths: ${fromPrd}\n---\n\n# A brief\n`, "docs/prds/a-brief.md");
+  assert.deepEqual(resolveContextPaths(cfg, prd), [fromConfig, fromPrd]);
+  // A list form and a comma-separated form both parse; a duplicate is not passed twice.
+  assert.deepEqual(parseContextPathsMeta(`[${fromPrd}, ${fromConfig}]`), [fromPrd, fromConfig]);
+  assert.deepEqual(resolveContextPaths(cfg, parsePrd(`---\ncontext_paths: ${fromConfig}\n---\n# x\n`, "docs/prds/x.md")), [fromConfig]);
+  // No frontmatter key, or no PRD at all, leaves the config list exactly as it was.
+  assert.deepEqual(resolveContextPaths(cfg, parsePrd("---\nstatus: ready\n---\n# x\n", "docs/prds/x.md")), [fromConfig]);
+  assert.deepEqual(resolveContextPaths(cfg, null), [fromConfig]);
+  assert.deepEqual(resolveContextPaths({ ...CONFIG, context_paths: undefined }, null), []);
+  // A PRD cannot widen past what the config file itself is refused for: same validator, same refusals.
+  for (const attempt of ["~", "~/.claude", home]) {
+    const problems = validateContextPaths(parseContextPathsMeta(attempt), home, "a-brief frontmatter context_paths");
+    assert.equal(problems.length, 1, attempt);
+    assert.match(problems[0], /a-brief frontmatter context_paths/, "the message names the PRD, not the config file");
+  }
+  // And a refused entry never reaches an adapter. An entry recovered from GitHub by `up` did not pass through
+  // `start`, and a directory that existed at start may be gone by the third fix round, so the merge drops it.
+  for (const attempt of ["~", "~/.claude", home, "/definitely/not/here", "../relative"]) {
+    const widened = parsePrd(`---\nharness: claude\ncontext_paths: ${attempt}\n---\n# x\n`, "docs/prds/x.md");
+    assert.deepEqual(resolveContextPaths(cfg, widened), [fromConfig], attempt);
+  }
 });

@@ -18,7 +18,7 @@ const HELP = `gallivant: write a PRD, mark it ready, go outside.
   gallivant doctor [--send] [--probe]   install checklist and health probe
   gallivant ready <prd.md> [--check]     check the PRD against the contract; flip it to ready when it passes
   gallivant start <prd.md>               start a session for a ready PRD in its own checkout
-  gallivant register <pr-url> [--harness claude|codex] [--session <id>] [--worktree <dir>]
+  gallivant register <pr-url> [--harness <name>] [--session <id>] [--worktree <dir>]
                                          watch a hand-made PR; on an existing entry, reset it
   gallivant up [--once]                  the daemon: recover from GitHub, then tick every poll_seconds
   gallivant status [--all] [--json]      needs-you, running, daemon health

@@ -4,7 +4,7 @@ Write a PRD, mark it ready, go outside.
 
 Gallivant starts a coding-agent session for a PRD, and then keeps the pull request moving on its own: it watches for reviewer findings, human review comments and failed checks, resumes the session that opened the PR to fix them, pushes, asks the reviewer to look again, and stops with one notification when the PR is ready for a person or stuck.
 
-It supports Claude Code and Codex as fixers, with [APort](https://github.com/aporthq/aport-agent-guardrails) hooks on both. The session that opened the PR is the session that fixes it, resumed by session id. Every PR carries the harness and session id in its body, so the loop can be rebuilt from GitHub after local state is lost.
+It supports Claude Code, Codex, Gemini CLI, opencode and goose as fixers, with [APort](https://github.com/aporthq/aport-agent-guardrails) hooks on Claude Code and Codex. The session that opened the PR is the session that fixes it, resumed by session id. Every PR carries the harness and session id in its body, so the loop can be rebuilt from GitHub after local state is lost.
 
 Node 22, zero dependencies, `gh` for all GitHub access, ntfy for notifications. No GitHub App, no webhook server, no database.
 
@@ -79,6 +79,6 @@ The PRD contract is in [docs/prd.md](docs/prd.md). Details in [docs/commands.md]
 
 ## Status
 
-Version 0.1. Claude Code and Codex fixers, the review and CI loop, recovery from GitHub, ntfy notifications, the read-only tracker. Not yet: PRD queueing, GitHub-issue input, OpenCode, a service installer. See the milestones in the PRD.
+Version 0.1. Claude Code, Codex, Gemini CLI, opencode and goose fixers, the review and CI loop, recovery from GitHub, ntfy notifications, the read-only tracker. Not yet: PRD queueing, GitHub-issue input, cursor-agent (it has the flags but is not signed in here, so its event stream is unverified), a service installer. See the milestones in the PRD.
 
 Apache-2.0.

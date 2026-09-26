@@ -28,6 +28,28 @@ gallivant start path/to/repo/docs/prds/widget-export.md
 
 `ready --check` prints every rule with ok or FAIL and, for a failure, what to change. `start` runs the same checks again and stops on the first failure, so editing a PRD after marking it ready cannot sneak a bad one through.
 
+## Optional frontmatter
+
+Two keys beyond `status` and `harness` are read if present, and neither is part of the eleven rules:
+
+- `aport_decision` is written by `gallivant ready`, the receipt of the decision that made the PRD ready.
+- `context_paths` gives this one brief read access to directories outside its checkout, added to whatever
+  `config.json` already lists rather than replacing it. Comma-separated, or a `[a, b]` list:
+
+  ```
+  ---
+  status: ready
+  harness: claude
+  context_paths: ~/work/schemas, ~/Projects/design-system
+  ---
+  ```
+
+  Every entry is held to the same refusals as the config key, so a PRD cannot grant itself `$HOME`, the Gallivant
+  home or a harness config directory. `start` fails with the offending path named and nothing is recorded. This is
+  the operator's list, not the agent's: fix rounds read the snapshot of the brief taken when the run started, so
+  editing the PRD in the checkout changes nothing about what later runs can read. See
+  [guardrails.md](guardrails.md#extra-read-directories-are-a-widening-not-a-feature) for what it costs.
+
 ## One gate, one implementation
 
 The checker does not read files. It takes a Request, which is what a source produces after reading whatever you typed:

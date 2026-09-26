@@ -19,6 +19,47 @@ Before a PR can be ready for a human, the daemon evaluates a completion receipt 
 
 Only reviews and comments by `trusted_authors` and the configured reviewer bot. Comments edited after posting, comments created while a run was in progress, the daemon's own comments, and the harness's thread replies are skipped. Failing checks are named with their run id; the harness fetches the log itself, so the daemon never handles log text. Everything quoted into a prompt sits inside a four-backtick fence with internal fences neutralised and a 4,000-character cap. That is hygiene, not a control: assume an injection will sometimes succeed, and rely on the table above to bound what it can do.
 
+## Extra read directories are a widening, not a feature
+
+`context_paths` lets you hand a session read access to directories outside its checkout: a sibling repository it has
+to call into, a folder of design notes, an API schema it must match. Writes do not move. On Claude Code the paths go
+through `--add-dir`, and the sandbox in the Gallivant settings file still bounds every write to the worktree.
+
+What it costs. Reading is an exfiltration path. Anything the agent reads can come back out in a commit, a PR body,
+a comment or a run log, and a prompt injection in a review comment is enough to ask for it. A private key in a
+directory you added is a private key in a public PR. So the recommendation is a narrow one: name the directory the
+brief actually needs, not the parent that happens to contain it. `~/work/schemas` rather than `~/work`.
+`~/Projects/design-system` rather than `~/Projects`.
+
+Five paths are refused outright, and each refusal names what it protects:
+
+| Refused | Because |
+|---|---|
+| The Gallivant home, or any parent of it | It holds the registry, the run logs and `claude/settings.json`, the sandbox definition that bounds the run's writes. A run that can read it can read the rules it is being held to. |
+| `~/.claude`, `~/.codex`, `~/.config/opencode` | Harness credentials and config. These are already in the passport's `blocked_paths`; refusing them here means the read never gets as far as the hook. |
+| `~/.aport` | The passport itself, and the audit trail. |
+| Your home directory | Every credential, token, key and browser profile on the machine. If the answer to "which directory does this brief need" is `$HOME`, the brief needs splitting, not more access. |
+| Anything relative, or that does not exist | A relative path means something different depending on where the daemon was started. A missing one is a typo, and silently granting nothing would hide it. |
+
+A parent of a refused directory is refused too, since granting the parent grants the child.
+
+What each harness does with the list:
+
+| Harness | Effect |
+|---|---|
+| Claude Code | `--add-dir <dir>` per path. Read access widens, the sandbox still bounds writes. |
+| Codex | Refused. `--add-dir` makes a directory **writable**, and the only read permission Codex documents is `disk-full-read-access`, the whole disk. Giving a run the entire filesystem to read in order to hand it one directory is worse than the problem; the run fails with that explanation instead. |
+| Gemini CLI | Refused, for the same shape of reason. `--include-directories` adds to the *workspace*, and Gemini's own file-system tool reference says every file tool, `write_file` included, operates inside the workspace root. There is no read-only spelling. |
+| opencode, goose | No directory flag exists, so the list has no effect. The run proceeds unchanged rather than failing over a setting the CLI cannot honour, and `gallivant doctor` says so per harness when you have a list configured. |
+
+Nothing here escalates quietly. A harness that cannot do what was asked either refuses the run or reports that the
+setting did nothing.
+
+A PRD can add to the list for itself with a `context_paths:` key in its frontmatter, held to exactly the same
+refusals. It is the operator's list either way: the daemon's fix rounds read the snapshot of the brief taken when
+the run started, not the copy in the checkout, so a session cannot widen its own reads by editing the PRD it was
+given.
+
 ## Recovery from GitHub is guarded
 
 On boot, `up` registers only PRs authored by the token's login, with same-repo heads, on `gallivant/*` branches, whose block passes strict validation (uuid session, `docs/...md` PRD path, known harness). Iteration is recovered by counting the daemon's own marked comments, never read from the block, so editing a PR body cannot reset the cap.
@@ -35,6 +76,7 @@ APort's Codex hook is beta. It fails closed on `apply_patch` payloads that touch
 
 - The daemon runs as your user on the Mac. The sandbox, the token scope and the ruleset are what stand between an escaped run and your home directory. On a Linux box, run it as a dedicated user.
 - Codex `network_access=true` removes the network boundary inside the checkout. Accepted on day one; the token scope and the ruleset bound what a push can do.
+- `context_paths` widens what a run can read and therefore what an injected run can leak. The refusals above stop the worst of it; the narrowness of the paths you choose is the rest.
 - Run logs hold everything the harness printed, including tool inputs. They are mode 600 under a mode 700 directory and never served. Delete `~/.gallivant/runs` whenever you like.
 
 ## Follow-ups filed against APort
