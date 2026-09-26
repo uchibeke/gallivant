@@ -37,6 +37,20 @@ draws the interactive sign-in screen and exits non-zero. Nobody has seen its eve
 against an unseen stream would be a guess. The blocker is a login, not a missing capability. The reasoning is kept
 next to the adapters in `lib/harness.mjs`.
 
+## What is deliberately not a key
+
+Two bounds the daemon enforces have no setting, and both are fixed numbers with their reasoning written at the
+constant.
+
+- **How many consecutive failures of one GitHub write stop an entry.** Five, in `lib/tick.mjs`. Three steps in the
+  tick wait rather than proceed when a write will not land, and each of them stops the entry with reason `stuck` once
+  that write has failed five ticks in a row. The only question the number answers is "transient or permanent": at the
+  default `poll_seconds: 120` it is ten minutes, which outlasts a GitHub rate-limit window and falls far short of a
+  revoked token or a missing permission. `max_iterations` is not reused for it because that counts fix rounds, which
+  cost a harness run each, where these cost one API call.
+- **How many entries the tick works on at once.** Four, also in `lib/tick.mjs`. Entries never block each other, and
+  `gh` is the shared resource.
+
 Sign-in checks are not equal across the five. `claude auth status` and `codex login status` report on credentials
 without spending a call, and `opencode auth list` prints the stored ones. Gemini CLI and goose have no such
 command, so their probe only proves the binary runs; an unauthenticated run fails at its first model call and

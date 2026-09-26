@@ -7,6 +7,7 @@ import { makeState } from "../lib/state.mjs";
 import { renderBlock } from "../lib/block.mjs";
 import { receiptHash } from "../lib/deliverable.mjs";
 import { ROUND_MARKER, RESET_MARKER, NUDGE_MARKER } from "../lib/gh.mjs";
+import { deriveEvents, makeTrust } from "../lib/events.mjs";
 import { CONFIG, T0, at, tempHome, prFixture, comment, silentLog, STATES } from "./helpers.mjs";
 
 const SESSION = "6f1c2d3e-1111-4111-8111-111111111111";
@@ -81,10 +82,29 @@ test("the recovered cursors sit at the head and the last own comment, so no hist
 
   assert.equal(e.cursor.since, at(10), "the later of the head's commit date and our last comment, so neither is re-read as new");
   assert.deepEqual(e.cursor.dispatched, [], "a fresh boundary has nothing already handled at it");
-  assert.equal(e.cursor.checks_sha, "a1b2c3d", "the current head's failing checks count as already dispatched, so old red CI is not re-sent");
+  assert.equal(e.cursor.checks_sha, null, "no head's failing checks count as dispatched on a recovery, the same answer register gives");
   assert.equal(e.cursor.fixed_sha, "a1b2c3d", "and the head is the push baseline, so nothing reads as a fresh push");
-  assert.equal(e.rereview.at, at(10), "the reviewer clock starts from our last comment, not from the PR's creation");
   assert.equal(e.rereview.nudged, false);
+});
+
+test("a recovered entry's reviewer clock is floored at the nudge window, so a stale PR is not stopped on the first tick", async () => {
+  // `reconcile` wrote `later(lastOwn, pr.createdAt)` raw. A PR whose last round comment was older than `stall_hours`
+  // was stopped `reviewer-silent` on the FIRST tick after a crash recovery, for silence that accrued while no daemon
+  // was running to ask, and the operator had to `register` it to get it back. The clock now goes through
+  // `reviewerClock`, the same function the tick's own writers use, so a recovered entry gets the grace a nudged one does.
+  const w = world({
+    comments: [comment({ id: 1, by: "me", at: at(10), body: `@codex review\n\n${ROUND_MARKER}` })],
+    commitDates: { a1b2c3d: at(4) },
+  });
+  await reconcile(w.ctx, "me");
+  const { rereview } = w.ctx.state.get(w.id);
+
+  // The floor is `rereview_minutes` before now, and `reconcile` reads the wall clock, so the assertion is on the age.
+  const waited = Date.now() - Date.parse(rereview.at);
+  assert.ok(waited >= 0, `the ask is not in the future (${rereview.at})`);
+  assert.ok(waited <= CONFIG.rereview_minutes * 60_000 + 5_000, `the ask is no older than the nudge window, not the comment's own age (${rereview.at})`);
+  assert.ok(Date.parse(rereview.at) > Date.parse(at(10)), "so the two-day-old round comment is not what the stall timer measures from");
+  assert.ok(waited < CONFIG.stall_hours * 3_600_000, "and nothing about it is already past the reviewer-silent threshold");
 });
 
 test("with no comments of ours the cursor falls back to the head's commit date", async () => {
@@ -239,4 +259,27 @@ test("a recovered entry carries the receipt already on the PR, so a run that cha
     const bare = world();
     return reconcile(bare.ctx, "me").then(() => assert.equal(bare.ctx.state.get(bare.id).cursor.receipt_hash, null));
   });
+});
+
+test("a red head at recovery is dispatched, not suppressed: reconcile and register give the same answer", async () => {
+  // `reconcile` set `checks_sha` to the recovered head, which told `deriveEvents` those failures had already been sent.
+  // `register` set it to null for the same situation, so the same red PR was dispatched or ignored depending on which
+  // command adopted it, with neither file acknowledging the other.
+  //
+  // Null is the right answer for both. A fix that had been dispatched AND had pushed would have moved the head, so red
+  // checks on the head that is actually there have not been addressed by anything. And suppressing them was not the same
+  // as stopping for them: `checks-red` only fires when the reviewer verdict is not "waiting", and on a recovery with a
+  // bot reviewer that has said nothing it is waiting, so the entry sat on an unaddressed red head until it stopped with
+  // `reviewer-silent`, naming a reviewer problem for a CI problem.
+  const w = world({ commitDates: { a1b2c3d: at(4) } });
+  await reconcile(w.ctx, "me");
+  const e = w.ctx.state.get(w.id);
+
+  assert.equal(e.cursor.checks_sha, null, "no head's failures count as dispatched on a recovery");
+  assert.equal(e.cursor.fixed_sha, "a1b2c3d", "which is a different question from which head the loop last acted on");
+
+  // Read through the rule that consumes it: the failing check on the recovered head is a new event.
+  const pr = openPr({ statusCheckRollup: [{ __typename: "CheckRun", name: "test", status: "COMPLETED", conclusion: "FAILURE", detailsUrl: "https://github.com/acme/widget/actions/runs/9981/job/1", completedAt: at(5) }] });
+  const { events } = deriveEvents({ pr, reviews: [], inline: [], comments: [], entry: e, trust: makeTrust(CONFIG, "me") });
+  assert.deepEqual(events.map(x => [x.kind, x.name]), [["check", "test"]], "so the loop fixes the red head instead of waiting on a reviewer for it");
 });

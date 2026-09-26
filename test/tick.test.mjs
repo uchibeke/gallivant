@@ -963,7 +963,8 @@ test("nothing spawns until the state that owns the run is durable: a ready-label
   assert.equal(w.runner.started.length, 0, "no process is running that the registry does not know about");
   assert.equal(w.entry().state, STATES.ready, "and nothing about the entry moved, so the next tick repeats the same work");
   assert.equal(w.entry().cursor.since, T0, "the cursor did not advance past feedback that was never dispatched");
-  assert.ok(w.logged.some(l => /ready label not removed .*not dispatching/.test(l)), `the tick of nothing is explained (got ${w.logged})`);
+  assert.ok(w.logged.some(l => /ready label removal failed .*not dispatching/.test(l)), `the tick of nothing is explained (got ${w.logged})`);
+  assert.deepEqual(w.entry().retry, { op: "ready label removal", count: 1 }, "and the wait is counted, so it cannot go on forever");
 
   // GitHub answers, and the same review is dispatched exactly once.
   fail = false;
@@ -1060,4 +1061,176 @@ test("a start run whose identity block will not write stays in running and retri
   assert.equal(e.cursor.fixed_sha, "aaaa111");
   assert.match(w.gh.data.pr.body, /<!-- gallivant\nprd: docs\/prds\/widget-export.md\nharness: claude\nsession: 6f1c2d3e-1111-4111-8111-111111111111\nbranch: gallivant\/widget-export\n-->/);
   assert.equal(w.runner.started.length, 1, "and nothing was spawned a second time while it waited");
+});
+
+test("a ready-label removal that keeps failing stops the entry with stuck, and one that recovers does not", async () => {
+  // Last round's fix traded a bad state for an indefinite wait: `reopen` before the spawn is right, but a `removeLabel`
+  // that keeps failing blocked the dispatch forever, with a `log.warn` per tick as the only trace. A daemon whose whole
+  // purpose is that the operator can go to bed must not leave an entry stuck silently.
+  const w = world({ state: STATES.ready, cursor: { since: T0, dispatched: [], fixed_sha: "a1b2c3d", checks_sha: null, receipt_hash: null } },
+    { pr: prFixture({ statusCheckRollup: [checkRun({ name: "test", conclusion: "SUCCESS" })] }), reviews: [review({ id: 2201, by: BOT, bot: true, state: "CHANGES_REQUESTED", at: at(5) })] });
+  w.gh.removeLabel = async () => { throw new Error("HTTP 403: Resource not accessible by personal access token"); };
+  w.clock.advance(6);
+
+  // Four ticks of declining, each one counted, and nothing stopped.
+  for (let i = 1; i <= 4; i++) {
+    await w.tick.tick();
+    assert.deepEqual(w.entry().retry, { op: "ready label removal", count: i }, `tick ${i} counts the failure`);
+    assert.equal(w.entry().state, STATES.ready, `tick ${i} leaves the retryable state`);
+    assert.deepEqual(w.notify.sent, [], `tick ${i} rings nobody: it may still be transient`);
+  }
+  assert.equal(w.runner.started.length, 0, "and nothing was ever spawned behind the label that would not come off");
+
+  // The fifth crosses the threshold and the entry stops, with the write named.
+  await w.tick.tick();
+  const e = w.entry();
+  assert.deepEqual([e.state, e.reason], [STATES.needsHuman, "stuck"], "the fifth failure stops it rather than waiting a sixth time");
+  assert.equal(e.retry, null, "and the counter goes with the stop, so a reset does not inherit it");
+  assert.match(e.last.event, /ready label removal failed 5 ticks in a row: HTTP 403/, "the operator is told which write, and what GitHub said");
+  assert.deepEqual(w.notify.sent, [["needs", 142, "stuck"]], "rung exactly once, like every other stop");
+  assert.ok(w.gh.calls.some(c => c[0] === "addLabel" && c[2] === NEEDS_LABEL), "and the PR itself says a person is needed");
+
+  await w.tick.tick();
+  assert.equal(w.notify.sent.length, 1, "told once, not on every poll after that");
+});
+
+test("a failure followed by a success resets the count, so an entry that recovers is never stopped for the ticks it lost", async () => {
+  // The whole point of a CONSECUTIVE counter. A counter that only went up would stop an entry whose GitHub came back.
+  const w = world({ state: STATES.ready, cursor: { since: T0, dispatched: [], fixed_sha: "a1b2c3d", checks_sha: null, receipt_hash: null } },
+    { pr: prFixture({ statusCheckRollup: [checkRun({ name: "test", conclusion: "SUCCESS" })] }), reviews: [review({ id: 2201, by: BOT, bot: true, state: "CHANGES_REQUESTED", at: at(5) })] });
+  let fail = true;
+  w.gh.removeLabel = async (repo, n, label) => { w.gh.calls.push(["removeLabel", n, label]); if (fail) throw new Error("HTTP 502: bad gateway"); };
+  w.clock.advance(6);
+
+  // Four failures: one short of the threshold.
+  for (let i = 0; i < 4; i++) await w.tick.tick();
+  assert.equal(w.entry().retry.count, 4);
+
+  // GitHub answers. The label comes off, the review is dispatched, and the count is gone.
+  fail = false;
+  await w.tick.tick();
+  const e = w.entry();
+  assert.equal(e.retry, null, "the count is cleared by the write landing, not carried");
+  assert.deepEqual([e.state, e.reason], [STATES.prOpen, null], "and the entry proceeds normally");
+  assert.equal(w.runner.started.length, 1, "the feedback that was waiting is dispatched");
+  assert.deepEqual(w.notify.sent, [], "nobody was ever told: nothing stopped");
+
+  // It genuinely starts from zero: the next failure of the same write is attempt one.
+  w.runner.finish(claudeResultLines());
+  w.gh.data.pr = prFixture({ headRefOid: "d4e5f6a", statusCheckRollup: [checkRun({ name: "test", conclusion: "SUCCESS" })] });
+  w.gh.data.commitDates = { d4e5f6a: at(11) };
+  w.clock.advance(5);
+  await w.tick.tick();
+  assert.equal(w.entry().retry, null, "a settled round leaves no counter behind either");
+});
+
+test("a single failure of a declining write stops nothing and notifies nobody", async () => {
+  const w = world({ state: STATES.running, pr: null, url: undefined, cursor: { since: T0, fixed_sha: null }, rereview: { at: null, nudged: false }, last: { at: T0, run: "1-start", exit: null, event: "start" } },
+    { pr: prFixture({ number: 143, body: "Implements export.", headRefOid: "aaaa111", createdAt: at(20) }), prsByHead: [prFixture({ number: 143, body: "Implements export.", headRefOid: "aaaa111", createdAt: at(20) })] });
+  w.gh.setBody = async () => { throw new Error("HTTP 403: rate limited"); };
+  w.runner.start("start", "/bin/claude", [], { cwd: "/tmp/wt" });
+  w.runner.finish(claudeResultLines());
+  w.clock.advance(25);
+  await w.tick.tick();
+
+  assert.deepEqual([w.entry().state, w.entry().reason], [STATES.running, null], "one failure is a tick of waiting, nothing more");
+  assert.equal(w.entry().retry.count, 1);
+  assert.deepEqual(w.notify.sent, [], "and a phone that rings on the first rate limit is a phone the operator silences");
+});
+
+test("the block write shares the one counter, so the second unbounded wait closes with the first", async () => {
+  // The two cases are the same defect on sibling paths, which is this codebase's recurring shape, so they share one
+  // mechanism: a second counter for the second case would be the next finding.
+  const opened = prFixture({ number: 143, url: "https://github.com/acme/widget/pull/143", body: "Implements export.", headRefOid: "aaaa111", createdAt: at(20) });
+  const w = world({ state: STATES.running, pr: null, url: undefined, cursor: { since: T0, fixed_sha: null }, rereview: { at: null, nudged: false }, last: { at: T0, run: "1-start", exit: null, event: "start" } },
+    { pr: opened, prsByHead: [opened] });
+  w.gh.setBody = async () => { throw new Error("HTTP 403: Resource not accessible by personal access token"); };
+  w.runner.start("start", "/bin/claude", [], { cwd: "/tmp/wt" });
+  w.runner.finish(claudeResultLines());
+  w.clock.advance(25);
+
+  for (let i = 1; i <= 4; i++) {
+    await w.tick.tick();
+    assert.deepEqual(w.entry().retry, { op: "PR #143 block write", count: i }, `tick ${i} counts this write, by name`);
+    assert.equal(w.entry().state, STATES.running);
+    assert.equal(w.entry().pr, null, `tick ${i} still does not claim to watch a PR whose block is missing`);
+    assert.deepEqual(w.notify.sent, []);
+  }
+  await w.tick.tick();
+  const e = w.entry();
+  assert.deepEqual([e.state, e.reason], [STATES.needsHuman, "stuck"], "the PR is no longer held open and unwatched in silence");
+  assert.match(e.last.event, /PR #143 block write failed 5 ticks in a row/, "and the reason names the write, so the operator knows it is a token permission");
+  assert.deepEqual(w.notify.sent, [["needs", 143, "stuck"]], "and the message names the PR the daemon had found, not `?`");
+  assert.equal(e.url, "https://github.com/acme/widget/pull/143", "which the operator can click through to");
+  assert.equal(e.session, "6f1c2d3e-1111-4111-8111-111111111111", "the session survives the stop, so a register can resume it");
+  assert.equal(w.runner.started.length, 1, "nothing was spawned a second time across five ticks of waiting");
+});
+
+test("a head change whose ready label will not come off is bounded too, by the same counter", async () => {
+  // The third caller of the same declining write. It used to throw out to the per-entry catch, which logs one line to
+  // errors.log per tick and notifies nobody, so it was the same unbounded wait wearing a different coat.
+  const w = world({ state: STATES.ready, cursor: { since: T0, dispatched: [], fixed_sha: "a1b2c3d", checks_sha: null, receipt_hash: null } },
+    { pr: prFixture({ headRefOid: "d4e5f6a", statusCheckRollup: [checkRun({ name: "test", conclusion: "SUCCESS", at: at(5) })] }), commitDates: { d4e5f6a: at(5) } });
+  w.gh.removeLabel = async () => { throw new Error("HTTP 502: bad gateway"); };
+  w.clock.advance(6);
+
+  const results = await w.tick.tick();
+  assert.deepEqual(results.map(r => r.ok), [true], "handled in the tick, not thrown at the per-entry catch");
+  assert.deepEqual(w.entry().retry, { op: "ready label removal", count: 1 });
+  assert.equal(w.entry().cursor.fixed_sha, "a1b2c3d", "and the new head is not judged while the PR still says a human may merge the old one");
+
+  for (let i = 0; i < 4; i++) await w.tick.tick();
+  assert.deepEqual([w.entry().state, w.entry().reason], [STATES.needsHuman, "stuck"]);
+  assert.match(w.entry().last.event, /ready label removal failed 5 ticks in a row/);
+  assert.deepEqual(w.notify.sent, [["needs", 142, "stuck"]]);
+});
+
+test("a review at exactly the cursor second on a head that just moved: headChanged before the verdict is the safe order", async () => {
+  // The one question the last audit left open. `headChanged` now runs BEFORE `reviewerVerdict`, and the verdict is
+  // handed `entry.cursor.dispatched`, so the worry was an interaction between the two at the one instant where the
+  // cursor's inclusive boundary and its dedup list both matter.
+  //
+  // The answer, driven both ways below: there is no interaction, and the order that exists is the safer of the two.
+  // `headChanged` writes `fixed_sha` and `rereview`; it never touches `cursor.since` or `cursor.dispatched`, so the
+  // dedup the verdict relies on is exactly what it would have been. And `rereview.at` only ever moves FORWARD through
+  // `reviewerClock` (`later(later(pushedAt, floor), previousAsk)`), so running it first can only narrow the verdict's
+  // window. Narrowing turns a "clear" into a "waiting", never the reverse, and "waiting" is the answer that waits
+  // rather than the answer that marks a PR ready.
+  const clear = body => review({ id: 3001, by: BOT, bot: true, state: "COMMENTED", at: at(5), body });
+
+  // 1. The review the loop already dispatched sits at the cursor second and names the new head. It must not also read
+  // as the reviewer clearing that head: `dispatched` is what stops it, and the head change does not disturb it.
+  const dispatched = world(
+    { cursor: { since: at(5), dispatched: ["review:3001"], fixed_sha: "a1b2c3d", checks_sha: null, receipt_hash: null }, rereview: { at: at(5), nudged: false } },
+    { pr: prFixture({ headRefOid: "d4e5f6a", statusCheckRollup: [checkRun({ name: "test", conclusion: "SUCCESS", at: at(6) })] }), reviews: [clear("**Reviewed commit:** `d4e5f6a`")], commitDates: { d4e5f6a: at(6) } });
+  dispatched.clock.advance(7);
+  await dispatched.tick.tick();
+  let e = dispatched.entry();
+  assert.equal(e.cursor.fixed_sha, "d4e5f6a", "the head change landed");
+  assert.deepEqual(e.cursor.dispatched, ["review:3001"], "and it left the dedup list alone, which is why the verdict is unchanged by it");
+  assert.equal(e.cursor.since, at(5), "the event cursor too: only the events step moves that");
+  assert.equal(e.state, STATES.prOpen, "a review the loop is already fixing does not clear the head it moved to");
+  assert.deepEqual(dispatched.notify.sent, [], "so nobody was told a PR was ready on the strength of feedback still being worked");
+
+  // 2. The same second, but a review that was NOT dispatched and does clear the new head. Under the old order the
+  // verdict ran against the OLD reviewer clock, which is earlier, so this review was inside the window and the entry
+  // went ready on a head `fixed_sha` had not caught up to. The reset moves the ask to the push, which is after it.
+  const fresh = world(
+    { cursor: { since: at(5), dispatched: [], fixed_sha: "a1b2c3d", checks_sha: null, receipt_hash: null }, rereview: { at: at(5), nudged: false } },
+    { pr: prFixture({ headRefOid: "d4e5f6a", statusCheckRollup: [checkRun({ name: "test", conclusion: "SUCCESS", at: at(6) })] }), reviews: [clear("**Reviewed commit:** `d4e5f6a`")], commitDates: { d4e5f6a: at(6) } });
+  fresh.clock.advance(7);
+  await fresh.tick.tick();
+  e = fresh.entry();
+  assert.equal(e.state, STATES.prOpen, "a review stamped before the push it appears to clear is not an answer about this head");
+  assert.equal(e.rereview.at, at(6), "because the ask moved to the push, which is one minute after the review");
+  assert.equal(e.rereview.nudged, false);
+  assert.deepEqual(fresh.notify.sent, []);
+
+  // 3. And the reviewer answering the head it was actually asked about still clears it, on the next tick, so the
+  // narrowing is a boundary and not a door that stays shut.
+  fresh.gh.data.reviews = [review({ id: 3002, by: BOT, bot: true, state: "COMMENTED", at: at(8), body: "**Reviewed commit:** `d4e5f6a`" })];
+  fresh.clock.advance(2);
+  await fresh.tick.tick();
+  assert.equal(fresh.entry().state, STATES.ready);
+  assert.deepEqual(fresh.notify.sent, [["ready", 142]]);
 });

@@ -170,3 +170,26 @@ test("the newest recorded error is in the model and in the header, so a problem 
   assert.equal(m.latestError, "2026-09-24T02:01:00.000Z error acme/widget/widget-export: gh: 403");
   assert.match(render(m, { clock: makeClock() }), /^latest error: .*gh: 403$/m);
 });
+
+test("an entry retrying one GitHub write says so, rather than claiming a finished run is still settling", () => {
+  // A start run whose identity block will not write keeps `last.exit` unrecorded on purpose, because that is the state
+  // the next tick re-enters. The side effect was that `status` read the entry as a run in flight, and since the process
+  // HAD ended, printed "ended, settling on the next tick" on every poll. The tick was not settling it; it was retrying
+  // one write and counting the failures, which is the thing worth printing.
+  const w = world({
+    entries: { "acme/widget/widget-export": entryAt({ state: STATES.running, pr: null, url: null, last: { at: T0, run: "1-start", exit: null, event: "start" }, retry: { op: "PR #143 block write", count: 3 } }) },
+    runs: { "acme/widget/widget-export": { id: "1-start", running: false, startedAt: Date.parse(T0) } },
+  });
+  const m = model(w.ctx);
+
+  assert.deepEqual(m.running.map(r => [r.label, r.detail]), [["implementing", "PR #143 block write failing (3), retrying"]]);
+  assert.deepEqual(m.running[0].retry, { op: "PR #143 block write", count: 3 }, "and the same facts reach --json and the tracker");
+});
+
+test("an entry with no retry in flight reads exactly as it did", () => {
+  const w = world({
+    entries: { "acme/widget/widget-export": entryAt({ state: STATES.running, last: { at: T0, run: "1-start", exit: null, event: "start" } }) },
+    runs: { "acme/widget/widget-export": { id: "1-start", running: false, startedAt: Date.parse(T0) } },
+  });
+  assert.deepEqual(model(w.ctx).running.map(r => [r.label, r.detail]), [["implementing", "ended, settling on the next tick"]]);
+});

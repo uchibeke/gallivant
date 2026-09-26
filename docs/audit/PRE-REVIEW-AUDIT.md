@@ -831,3 +831,209 @@ after changes any interaction with `reviewerVerdict`'s `dispatched` argument. `e
 the verdict and `headChanged` does not touch it, so I believe it does not, but the two were never ordered this way for
 `pr-open` before and I have not driven the case where a reviewer's review sits at exactly the cursor second on a head
 that just moved.
+
+---
+
+# Round seven: the three items round six reported rather than fixed
+
+Appended 2026-09-26 against `feat/v0.1`, on top of `b81ffd7`. Round six named three defects and declined to fix them,
+and named one question it could not answer. All four are closed here. The suite went from 275 to 289 tests; each new
+or changed test was run against the pre-change files and observed to fail, except the one that answers the open
+question, which passes against both because it demonstrates rather than fixes (said so at the site).
+
+## 1. The unbounded silent wait, closed with one counter for three callers
+
+Round six's own prediction: "the shape already exists (`needsHuman` with a reason after N consecutive failures), and
+the counter would have to live on the entry. I am naming this as the most likely next finding from this diff." It was.
+
+**What was wrong.** Three steps in the tick decline rather than proceed when one GitHub write will not land, because
+proceeding leaves a worse state than waiting. Two were named in round six and a third was not:
+
+| Step | The write | What a permanent failure left |
+|---|---|---|
+| `dispatch`, before the spawn | `reopen`'s `removeLabel` | `ready` forever, feedback waiting, nothing spawned, one `log.warn` per tick |
+| `settleRun`, `running` → `pr-open` | `gh.setBody`, the identity block | `running` forever, an open PR unwatched, one `log.warn` per tick |
+| `headChanged`, a moved head on a ready entry | the same `removeLabel` | a throw out to the per-entry catch, so one `log.error` per tick and the new head never judged |
+
+The third is the sibling round six's own sweep would have found next: it is the same declining write, reached from a
+different caller, and it was worse than the other two because it did not even decline deliberately. It threw.
+
+**The fix.** `entry.retry` is `{ op, count }`, and two functions in `tick.mjs` own it:
+
+- `retryFailed(id, entry, op, err, { action, onStop })` increments the count when `op` matches the one already
+  recorded and starts from one when it does not, logs the attempt with its number, and at `MAX_WRITE_FAILURES` stops
+  the entry through `needsHuman(id, "stuck", ...)` with `last.event` naming the write, the streak and GitHub's own
+  message.
+- `retryOk(id, entry)` clears the field, and writes nothing when there is nothing to clear.
+
+Consecutive, not cumulative, and that is the whole point: `retryOk` runs on the success path of each of the three
+callers, and the `running` → `pr-open` transition folds `retry: null` into the save that IS that write succeeding.
+A different `op` failing resets rather than accumulating, because the count answers "is this one write permanently
+broken" and two broken writes are two answers.
+
+`onStop` exists for one case. The start-run path has read the PR number by the time the block write refuses it, and a
+stopped entry that names its PR is one the operator can click through to, while a *retrying* one must not claim to
+watch a PR whose identity block is still missing (round six's own invariant, and a test asserts it on every retrying
+tick). So `pr` and `url` are recorded on the stop and never on a retry.
+
+**The threshold: five, as a constant with a comment, not a config key.** The brief asked for the reasoning, so:
+
+- `max_iterations` is the wrong knob and the brief already said why. It counts fix rounds. A round costs a harness run
+  and money; these cost one API call. Tying them would either stop a transient rate limit after three ticks or let a
+  revoked token run for as long as the operator was willing to pay for rounds.
+- A new key would be one more thing in `config.json` with no right answer to tune it to. The only question the number
+  answers is "transient or permanent", and it does not vary by install. At the default `poll_seconds: 120`, five ticks
+  is ten minutes: longer than a GitHub rate-limit window or an abuse pause, and far short of a token that cannot write
+  PR bodies, which no amount of waiting fixes.
+- An operator who lowered it would get earlier stops for transient failures, which is the failure mode that already
+  annoys them; one who raised it would get exactly the silence this finding is about. Neither direction is an
+  improvement, which is the test for whether something should be a key.
+
+`docs/config.md` now has a "What is deliberately not a key" section so the next reader does not go looking for it.
+
+**The reason string.** `stuck`, consistent with `no-push`, `checks-red`, `reviewer-silent` and `context-paths`: a
+hyphenated state of the entry, not a sentence. What tells the operator what to do is `last.event`, which carries the
+write, the streak and GitHub's message verbatim, and `docs/commands.md` now translates the two messages this actually
+produces in practice (`Resource not accessible by personal access token` on a body write means the token cannot edit
+PR descriptions; on a label write, that it cannot edit issues) and says the way back is `register`.
+
+**Tests**, all five failing against the pre-change `lib/`:
+
+- repeated failure of the ready-label removal stops with `stuck` on the fifth tick, exactly one notification, the
+  needs-human label on the PR, the write and GitHub's message in `last.event`, and nothing notified on the tick after;
+- four failures then a success: the count is cleared, the entry proceeds, the waiting feedback is dispatched, nobody
+  was ever told, and the next failure of the same write is attempt one again;
+- a single failure stops nothing and notifies nobody;
+- the block write, driven to the stop, sharing the same counter by name and keeping `pr` null on every retrying tick;
+- the third caller, `headChanged`, handled inside the tick rather than thrown at the per-entry catch.
+
+## 2. `up.mjs`: the recovered reviewer clock, fixed
+
+Round six reported this rather than fixing it because "the silence is arguably true". The brief disagreed and gave the
+reasoning to apply; applying it, the brief is right, and the reason round six's version is not quite wrong is worth
+recording: the silence IS true as a fact about the reviewer. It is not true as a fact about the daemon, and the timer
+is the daemon's. `stall_hours` measures how long the daemon has been asking without an answer, and during the window
+in question the daemon was not asking, it was not running. Charging the entry for it stops a PR on the first tick
+after a crash for a wait nobody was serving, tells the operator nothing they can act on, and costs them a `register`.
+
+So `rereview.at` on a recovered entry now goes through the same floor the tick's writers use. That meant moving the
+rule: `reviewerClock` was a closure inside `makeTick` over `config` and `clock`, and `reconcile` lives in `up.mjs` and
+has neither. It is now a pure exported function in `events.mjs`,
+`reviewerClock({ config, pushedAt, previousAsk, floorAt })`, which is where the separation of concern puts it (a rule
+over data, no side effects) and which makes it unit-testable on its own for the first time. `tick.mjs` keeps a
+one-line `askedAt(entry, pushedAt)` adapter so its two call sites read as they did.
+
+There are now four writers of `rereview.at` that have a head in hand, and all four reach the one function. The three
+that do not are `newEntry` (null, no head yet), the nudge (carries `at` unchanged) and `register`'s reset (`now`,
+which is the ask, and safe by construction).
+
+**Tests**: a unit test on `reviewerClock` itself covering all four of its clauses, and a recovery test asserting that
+a PR whose last round comment is two days old comes back with an ask no older than `rereview_minutes` and nothing
+already past `stall_hours`. The recovery test fails against the pre-change `up.mjs`.
+
+## 3. `checks_sha` on recovery versus on register: `register` was right, and both now say so
+
+Round six recorded both answers as defensible. They are not equally defensible, and the argument that decides it is
+one neither file made.
+
+`reconcile`'s case was "the daemon may already have dispatched them before it lost the registry". Trace what "already
+dispatched" can mean on the head that is actually there at recovery:
+
+- Dispatched and the fix pushed: the head MOVED, so the red checks on the current head are a different head's checks.
+  Nothing to suppress.
+- Dispatched and the fix did not push: the run is orphaned by the crash, its work is lost, and redoing it is the point.
+- Never dispatched: obviously dispatch.
+
+So no head qualifies as "already sent" on a recovery, and `register`'s `null` is the correct answer for both commands.
+
+The second half of the argument is what makes the old behaviour actively wrong rather than merely conservative.
+Suppressing the failures is not the same as stopping for them. `checks-red` fires only when the reviewer verdict is
+not `waiting` (`tick.mjs:569`), and on a recovery with a bot reviewer that has not spoken since the recovered cursor
+it IS waiting. So a genuinely red head arrived suppressed, fell past the `checks-red` branch, went to the silence step
+and stopped the entry with `reviewer-silent` after `stall_hours`, naming a reviewer problem for a CI problem. The
+operator was told the wrong thing about the wrong actor.
+
+`reconcile` now writes `checks_sha: null`, with the reasoning at the site, and `register.mjs:97` carries the matching
+comment naming `reconcile` so neither file can drift again. **Test**: a recovery test asserting the null and then
+reading it through the rule that consumes it, `deriveEvents`, so the assertion is about the behaviour and not just the
+field. Fails against the pre-change `up.mjs`.
+
+## Also: the `status` wording
+
+Round six: "`status` shows the entry as `running` when the process has in fact ended... I cannot claim the wording is
+right." It was not. `inFlight` is `last.run && last.exit == null`, which the block-write retry deliberately leaves
+true, so the row read `implementing  ended, settling on the next tick` on every poll. The process had ended; the tick
+was not settling it, it was retrying one write and counting the failures.
+
+`model()` now has a branch above `inFlight`: when `entry.retry` is set, the detail is
+`<op> failing (<count>), retrying`. It outranks the run's liveness because it is what the entry is actually waiting
+on. `retry` is also on the row, so `--json` and the tracker get the same facts, and `why` prints a fuller line saying
+the wait is bounded and what it stops with. Two tests: the retrying row, and an in-flight row with no retry reading
+exactly as it did.
+
+## The open question: `headChanged` before `reviewerVerdict`, and the `dispatched` argument
+
+Round six stated this rather than guessing. The answer is that there is no interaction, and the order that exists is
+the safer of the two orders. Two independent reasons, and the test drives both:
+
+1. **`headChanged` does not touch either half of the pair the verdict depends on.** It writes `state`,
+   `gate_skipped`, `cursor.fixed_sha` and `rereview`. `cursor.since` and `cursor.dispatched` are carried through by
+   the `{ ...entry.cursor, fixed_sha }` spread untouched, so the list the verdict is handed is byte-identical to the
+   one it would have been handed under the old order. Only the events step and `advanceCursor` move that pair.
+2. **`rereview.at` only ever moves forward, so running it first can only narrow the verdict's window.**
+   `reviewerClock` is `later(later(pushedAt, floor), previousAsk)`, and `previousAsk` is the current value, so the
+   result is never earlier than what was there. A narrower window excludes more reviews, which turns `clear` into
+   `waiting` and never the reverse. `waiting` is the answer that waits; `clear` is the answer that marks a PR ready.
+   An order that can only fail toward waiting is the safe one.
+
+Driven at exactly the second in question, on a head that just moved:
+
+- a review at the cursor second, in `cursor.dispatched`, naming the NEW head: `dispatched` excludes it from the
+  verdict, the head change leaves the list alone, and the entry stays `pr-open` rather than going ready on the
+  strength of feedback it is still fixing;
+- the same second, a review NOT in `dispatched`, clearing the new head: under the old order the verdict ran against
+  the OLD reviewer clock, which is earlier, so the review was inside the window and the entry went ready on a head
+  `fixed_sha` had not caught up to. The reset moves the ask to the push, which is after the review, so it now waits;
+- the reviewer then answers the head it was actually asked about, and the entry goes ready on the next tick, so the
+  narrowing is a boundary and not a door that stays shut.
+
+That test passes against the pre-change tree as well, and says so at the top: it demonstrates a property of the
+existing order rather than fixing a defect. It is here so the question cannot be open a third time.
+
+## What these changes make newly possible
+
+Four rounds running, a fix produced the next round's finding, so the same read-back.
+
+**The counter.** An entry can now stop for a reason that is not about the PR at all. `stuck` says "GitHub would not
+let me do one thing five times in a row", and the operator's action is to fix a token or wait out an outage, not to
+look at the diff. That is a new *kind* of stop on a tool whose other twelve reasons are all about the work, and the
+mitigation is entirely in the message: `last.event` carries the write and GitHub's words, `why` prints it, and
+`docs/commands.md` translates the two spellings that actually occur. The residual risk I can name: a GitHub outage
+longer than ten minutes now stops every watched entry that happens to need one of these three writes during it, each
+with its own notification, where before they all waited silently. That is the trade the finding asked for and I think
+it is right (a stopped entry with a reason is recoverable by one `register`; a silent one is not recoverable at all,
+because nobody knows it needs recovering), but a very long outage is now noisier than it was. If a future round wants
+that quieter, the answer is a notification class rather than a longer threshold.
+
+**`retry` on the entry.** One more field that `register` has to clear, and it does, with a test. This is the fourth
+field in that list (`reason`, `iteration`, `retry`, and the cursor), and the next one added will be the next thing
+someone forgets. Flagged here for whoever adds a fifth.
+
+**`reviewerClock` moved to `events.mjs`.** Newly possible: a caller can pass a `floorAt` that is not now. Every caller
+today passes the current time, and the parameter exists only because `reconcile` has no injected clock while the tick
+does. A caller that passed an older `floorAt` would reintroduce exactly the bug this fixed, so the name is `floorAt`
+and not `now` and the doc comment says what it is for. Second-order: `events.mjs` now imports `later` and
+`floorSecond` from `time.mjs`, which it did not before. Still pure.
+
+**`checks_sha: null` on recovery.** Newly possible: a boot that adopts a red PR now dispatches a fix round for it
+immediately, which costs a harness run the old behaviour did not spend. That is the intended trade, and it is bounded
+by the recovered `iteration`: an entry recovered at `max_iterations` stops with `iterations` rather than dispatching.
+An operator who boots the daemon against five red PRs will get five fix rounds, where before they got five PRs that
+did nothing until the reviewer clock expired. I believe that is what they wanted from a daemon, but it is a real
+change in what a boot costs.
+
+**The `status` branch.** Newly possible: a row can say `fixing  ready label removal failing (3), retrying` while a fix
+run is genuinely still alive, because `retry` now outranks `inFlight`. Not reachable today: the ready-label removal
+happens before the spawn and the entry cannot be retrying it while a run of its own is in flight, since `retry` is
+cleared on the tick that dispatches. If a fourth caller of `retryFailed` is ever added on a path that runs alongside a
+live run, that row would hide the run, and this is where to look.

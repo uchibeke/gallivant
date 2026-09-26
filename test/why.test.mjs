@@ -119,3 +119,20 @@ test("an unknown handle is refused by name rather than printing someone else's e
   const w = world();
   assert.throws(() => why(w.ctx, { handle: "widget#999" }), /no entry for widget#999/);
 });
+
+test("a retry in progress is explained, with what is failing and what happens if it keeps failing", () => {
+  const w = world({ entry: { state: STATES.running, retry: { op: "ready label removal", count: 3 } } });
+  const out = why(w.ctx, { handle: "widget#142" });
+
+  assert.match(out, /waiting on GitHub: ready label removal has failed 3 ticks in a row/);
+  assert.match(out, /the entry stops with "stuck" if it keeps failing/, "so the operator knows the wait is bounded and does not have to guess");
+});
+
+test("a stopped entry names the write that would not land, so `stuck` is never a bare word", () => {
+  const w = world({ entry: { state: STATES.needsHuman, reason: "stuck", last: { at: at(2), event: "PR #143 block write failed 5 ticks in a row: HTTP 403: Resource not accessible by personal access token" } } });
+  const out = why(w.ctx, { handle: "widget#142" });
+
+  assert.match(out, /needs-human \(stuck\)/);
+  assert.match(out, /PR #143 block write failed 5 ticks in a row: HTTP 403/);
+  assert.doesNotMatch(out, /waiting on GitHub/, "the counter is cleared by the stop, so nothing says it is still retrying");
+});

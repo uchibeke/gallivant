@@ -42,6 +42,11 @@ Fork PRs and closed PRs are refused. If the PR body has no Gallivant block, one 
 
 The daemon. On boot it writes `daemon.json`, refuses to run if another daemon is alive, and reconciles with GitHub: for every repo in `repos`, every open PR of yours on a `gallivant/*` branch with a valid block that is not in the registry is registered, with the iteration recovered by counting Gallivant's own round comments and the cursor set so old events are not replayed. The PRD snapshot is taken from the PR branch when the daemon has none. Missing checkouts are recreated from the PR branch.
 
+A recovered entry is treated as newly asking, not as mid-conversation, and in two ways that `register` already worked this way:
+
+- The reviewer clock is floored at `rereview_minutes` ago, so a PR whose last round comment is seven hours old is not stopped `reviewer-silent` on the very first tick. The silence accrued while no daemon was running to ask, and stopping for it tells you nothing you can act on while costing you a `register` to resume.
+- Failing checks on the recovered head are dispatched rather than treated as already sent. A fix that had been dispatched and had pushed would have moved the head, so red CI on the head that is actually there has not been addressed by anything; the only case a recovery could dispatch twice is a run that was still in flight when the daemon died, and that run's work is lost anyway.
+
 Then it ticks every `poll_seconds`. Before each tick it probes `gh` and every configured harness; while any probe fails nothing is dispatched and one throttled error notification goes out per failing probe. Ticks chain on a timer and never overlap. `--once` runs a single tick and exits, which is useful for cron or for debugging.
 
 On a Mac the daemon runs `caffeinate -i` for its own lifetime.
@@ -129,6 +134,8 @@ The log pane sends the last 400 lines when it opens and says how many earlier on
 ## `gallivant why <handle>`
 
 For a stopped or running PR: state and reason, the PR and checkout paths, the session id and the by-hand command to open it (`claude --resume <id>` or `codex resume <id>` in the checkout), the last dispatched event, the run folder and exit code, cost when the harness reports it, permission denials, the harness's final message, and any APort audit lines from the run's time window.
+
+An entry whose tick is waiting on one GitHub write also gets a line naming that write and how many ticks it has failed, so a PR that looks idle says why it is idle. `status` says the same thing on its row. After five consecutive failures the entry stops with reason `stuck` and `last event` carries the write and GitHub's own message, which is usually a token permission: `Resource not accessible by personal access token` on a body write means the token cannot edit PR descriptions, and on a label write that it cannot edit issues. Fix the token, then `gallivant register <pr-url>` to resume.
 
 ## `gallivant remove <handle>`
 

@@ -421,3 +421,23 @@ test("a reset comment that cannot be posted fails the reset instead of zeroing t
   assert.equal(after.iteration, 0);
   assert.deepEqual([after.state, after.reason], [STATES.prOpen, null]);
 });
+
+test("a reset clears the retry counter, so a stuck entry does not stop again on the first write that fails", async () => {
+  // `retry` counts consecutive failures of one GitHub write the tick declines a step for, and `stuck` is what it stops
+  // with. Left behind, an entry reset after a `stuck` stop would carry four failures into its next tick and stop on the
+  // very first failure of that write, which is the opposite of what a reset means.
+  const w = registerWorld(registerGit());
+  w.ctx.gh.prView = async () => ({ ...prFixture({ headRefName: "gallivant/widget-export", createdAt: T0 }), body: BLOCK() });
+  w.ctx.state.put("acme/widget/widget-export", {
+    ...newEntry({ prd: "docs/prds/widget-export.md", harness: "claude", session: "6f1c2d3e-1111-4111-8111-111111111111", repo: "acme/widget", branch: "gallivant/widget-export", worktree: "/checkouts/widget", pr: 142, state: STATES.needsHuman, nowIso: T0 }),
+    url: "https://github.com/acme/widget/pull/142",
+    reason: "stuck",
+    retry: { op: "ready label removal", count: 4 },
+  });
+
+  const r = await register(w.ctx, { url: w.url, worktree: "/checkouts/widget" });
+  const e = w.ctx.state.get(r.id);
+  assert.equal(e.retry, null, "the counter goes with the reason it produced");
+  assert.equal(e.reason, null);
+  assert.equal(e.state, STATES.prOpen);
+});

@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { deriveEvents, makeTrust, isGreen, reviewerVerdict, countRounds, failingChecks, addedLines, hasOwnComment } from "../lib/events.mjs";
+import { deriveEvents, makeTrust, isGreen, reviewerVerdict, reviewerClock, countRounds, failingChecks, addedLines, hasOwnComment } from "../lib/events.mjs";
 import { ROUND_MARKER, NUDGE_MARKER, RESET_MARKER, actor, normalizeLogin } from "../lib/gh.mjs";
 import { CONFIG, T0, at, prFixture, review, inline, comment, checkRun, user } from "./helpers.mjs";
 
@@ -219,4 +219,18 @@ test("a review that names no commit at all cannot clear a head, rather than clea
     "a six-character sha does not parse, and an unparsed one is not an answer about this head");
   // A caller with no head to compare against is unchanged: it asked a different question.
   assert.equal(reviewerVerdict({ ...base, reviews: [nameless] }).verdict, "clear");
+});
+
+test("the reviewer clock never sets an ask further back than the nudge window, nor before the previous ask", () => {
+  // The rule lives here rather than in the tick because the tick is not its only writer: `reconcile` sets the same
+  // field on a recovered entry and used to set it raw, which stopped a stale PR as `reviewer-silent` on the first tick
+  // after a crash recovery, for silence that accrued while no daemon was running to ask.
+  const floorAt = at(600); // ten hours after T0
+  const window = CONFIG.rereview_minutes;
+
+  assert.equal(reviewerClock({ config: CONFIG, pushedAt: at(598), floorAt }), at(598), "a recent push is taken literally");
+  assert.equal(reviewerClock({ config: CONFIG, pushedAt: T0, floorAt }), at(600 - window), "a commit made ten hours ago is floored to the nudge window, not believed");
+  assert.equal(reviewerClock({ config: CONFIG, pushedAt: null, floorAt }), at(600 - window), "and so is no push date at all");
+  assert.equal(reviewerClock({ config: CONFIG, pushedAt: T0, previousAsk: at(599), floorAt }), at(599), "never before the previous ask: the reviewer cannot have been asked earlier than it was");
+  assert.equal(reviewerClock({ config: CONFIG, pushedAt: "2026-09-24T11:58:00.500Z", floorAt }), at(598), "floored to the second, so it never sorts after a GitHub timestamp in the same second");
 });
