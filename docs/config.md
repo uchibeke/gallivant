@@ -24,6 +24,7 @@
 | `harness.gemini` | | `{ bin }`. |
 | `harness.opencode` | | `{ bin }`. |
 | `harness.goose` | | `{ bin }`. |
+| `repos` | [] | Appended by `start` and `register`. Used by `up` to recover from GitHub. |
 
 Five harnesses are supported: Claude Code, Codex, Gemini CLI, opencode and goose. A harness can join when it does
 three things: start a run non-interactively, resume that specific session by id rather than "the latest", and emit
@@ -40,7 +41,6 @@ Sign-in checks are not equal across the five. `claude auth status` and `codex lo
 without spending a call, and `opencode auth list` prints the stored ones. Gemini CLI and goose have no such
 command, so their probe only proves the binary runs; an unauthenticated run fails at its first model call and
 shows up as a failed run rather than a failed probe.
-| `repos` | [] | Appended by `start` and `register`. Used by `up` to recover from GitHub. |
 
 ## The reviewer object
 
