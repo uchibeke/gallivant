@@ -74,3 +74,50 @@ test("when the default branch cannot be read, a ~DEFAULT_BRANCH ruleset still co
   const byName = ruleset({ conditions: { ref_name: { include: ["refs/heads/main"], exclude: [] } } });
   assert.equal((await protectsDefaultBranch(blind, "acme/widget", [byName])).ok, false, "a name-matched ruleset cannot be confirmed without the name");
 });
+
+// The passport check. It is the only other doctor check that speaks for a security control, and until now it read
+// only `data.file.write`, so a passport that let a run Read or Grep the settings file bounding it, the APort passport
+// itself and the harness config directories passed clean while the docs promised those reads were blocked.
+import { passportGaps, CONTROL_PLANE } from "../lib/commands/doctor.mjs";
+import { expand } from "../lib/fs.mjs";
+import { readFileSync } from "node:fs";
+
+const WORKTREES = "/Users/x/.gallivant-worktrees";
+const pathsFor = extra => [...CONTROL_PLANE.map(c => `${c}/**`), ...extra];
+const passport = (over = {}) => ({
+  limits: {
+    "data.file.write": { allowed_paths: [`${WORKTREES}/**`], blocked_paths: pathsFor(["**/.env"]) },
+    "data.file.read": { blocked_paths: pathsFor(["**/.env", "**/auth.json"]) },
+    ...over,
+  },
+});
+
+test("a passport that blocks the control plane for writes and reads alike passes", () => {
+  assert.deepEqual(passportGaps(passport(), WORKTREES), []);
+});
+
+test("a passport that blocks the control plane for writes only is reported, because reads of it are an injection's first move", () => {
+  // The shipped template's old read list: `.env`, opencode, gallivant, ssh, aws, and one file inside ~/.codex.
+  const readOnlyEnv = passport({ "data.file.read": { blocked_paths: ["**/.env", "**/.env.*", expand("~/.codex/auth.json"), expand("~/.config/opencode") + "/**", expand("~/.gallivant") + "/**", expand("~/.ssh/**"), "**/auth.json"] } });
+  const gaps = passportGaps(readOnlyEnv, WORKTREES);
+  assert.equal(gaps.length, 1);
+  assert.match(gaps[0], /^data\.file\.read blocked_paths missing /);
+  assert.match(gaps[0], /~\/\.claude/);
+  assert.match(gaps[0], /~\/\.aport/);
+  assert.match(gaps[0], /~\/\.codex/, "one file inside ~/.codex is not the directory");
+});
+
+test("a missing write block, a missing worktrees root and a missing read block are each named", () => {
+  assert.deepEqual(passportGaps({ limits: {} }, WORKTREES), [
+    "data.file.write allowed_paths does not contain the worktrees root",
+    `data.file.write blocked_paths missing ${CONTROL_PLANE.join(", ")}`,
+    `data.file.read blocked_paths missing ${CONTROL_PLANE.join(", ")}`,
+  ]);
+  assert.deepEqual(passportGaps(null, WORKTREES).length, 3, "no passport at all is every gap, not a crash");
+});
+
+test("the shipped template passes its own check once its placeholders are filled", () => {
+  const url = new URL("../templates/passport.gallivant.json", import.meta.url);
+  const filled = readFileSync(url, "utf8").replaceAll("{{home}}", expand("~")).replaceAll("{{worktrees}}", WORKTREES);
+  assert.deepEqual(passportGaps(JSON.parse(filled), WORKTREES), [], "doctor's fix instructions tell the operator to copy this file, so it has to pass");
+});

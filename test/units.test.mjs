@@ -14,7 +14,7 @@ import { branchFor, prdIdFromBranch, isOurBranch, makeGit } from "../lib/git.mjs
 import { writeFileSync, existsSync, utimesSync, mkdirSync } from "node:fs";
 import { validate, DEFAULTS, merge, discoverHarnesses, whence, validateContextPaths, resolveContextPaths, parseContextPathsMeta } from "../lib/config.mjs";
 import { messages } from "../lib/notify.mjs";
-import { repoFromRemote, remoteMatches } from "../lib/gh.mjs";
+import { repoFromRemote, remoteMatches, makeGh } from "../lib/gh.mjs";
 import { CONFIG, T0, tempHome, claudeResultLines, codexLines, geminiLines, opencodeLines, gooseLines, GOOD_PRD } from "./helpers.mjs";
 
 test("state writes atomically and resolves handles", () => {
@@ -490,4 +490,13 @@ test("a PRD's own context_paths add to the config list and are held to the same 
     const widened = parsePrd(`---\nharness: claude\ncontext_paths: ${attempt}\n---\n# x\n`, "docs/prds/x.md");
     assert.deepEqual(resolveContextPaths(cfg, widened), [fromConfig], attempt);
   }
+});
+
+test("prDiff reports a failure instead of returning nothing, so the output scan cannot mistake it for a clean diff", async () => {
+  // `addedLines(null)` is "", and an empty string contains no blocked pattern, so a swallowed failure read as a pass.
+  const failing = makeGh({ exec: async () => { throw new Error("gh pr diff: HTTP 502"); } });
+  await assert.rejects(() => failing.prDiff("acme/widget", 142), /HTTP 502/);
+
+  const working = makeGh({ exec: async () => ({ stdout: "+const x = 1;\n" }) });
+  assert.equal(await working.prDiff("acme/widget", 142), "+const x = 1;\n");
 });

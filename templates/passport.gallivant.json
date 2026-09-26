@@ -30,12 +30,16 @@
       "blocked_paths": [
         "**/.env",
         "**/.env.*",
-        "{{home}}/.codex/auth.json",
+        "{{home}}/.claude/**",
+        "{{home}}/.codex/**",
         "{{home}}/.config/opencode/**",
         "{{home}}/.gallivant/**",
+        "{{home}}/.aport/**",
         "{{home}}/.ssh/**",
         "{{home}}/.aws/**",
-        "**/auth.json"
+        "**/auth.json",
+        "**/*.pem",
+        "**/*.key"
       ]
     },
     "system.command.execute": {

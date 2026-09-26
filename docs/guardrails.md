@@ -67,7 +67,11 @@ On boot, `up` registers only PRs authored by the token's login, with same-repo h
 
 ## The passport
 
-`templates/passport.gallivant.json`: capabilities for file read and write, command execution, web fetch and subagent creation. `allowed_commands` is `["*"]` on purpose: a restrictive list denies any command containing `&&`, `;` or `|`, so the first `git add -A && git commit` of every run would fail. Write `allowed_paths` is the worktrees root; `blocked_paths` for read and write cover `~/.claude`, `~/.codex`, `~/.config/opencode`, `~/.gallivant` and `~/.aport`, so a run cannot edit its own guardrails.
+`templates/passport.gallivant.json`: capabilities for file read and write, command execution, web fetch and subagent creation. `allowed_commands` is `["*"]` on purpose: a restrictive list denies any command containing `&&`, `;` or `|`, so the first `git add -A && git commit` of every run would fail. Write `allowed_paths` is the worktrees root.
+
+`blocked_paths` cover `~/.claude`, `~/.codex`, `~/.config/opencode`, `~/.gallivant` and `~/.aport` in **both** directions. Blocking writes stops a run editing the rules it is held to. Blocking reads stops it learning them: `~/.claude/settings.json` is the sandbox definition, `~/.aport` holds the passport and the audit trail, and `~/.codex` and `~/.claude` hold harness credentials. An injected run that can Read or Grep those knows where the boundary is and what sits behind it, which is the first move before trying to get around it.
+
+That template is the **local-mode default**, and it is the passport `doctor` checks: it reads `data.file.write` and `data.file.read` on `<aport dir>/passport.json` and fails the check, naming the paths, when either list is short. A **hosted** passport is a different thing. Its limits live in the aport.io dashboard and are whatever the operator set there; `doctor` prints the agent id and what the limits should say, but it cannot read them and cannot change them. If you run hosted, copy the two `blocked_paths` lists out of the template into the dashboard yourself.
 
 ## Codex
 

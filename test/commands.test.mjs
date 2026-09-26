@@ -5,7 +5,8 @@ import { join, relative } from "node:path";
 import { mkdirSync, readFileSync, writeFileSync, chmodSync, statSync } from "node:fs";
 import { start } from "../lib/commands/start.mjs";
 import { register } from "../lib/commands/register.mjs";
-import { makeState } from "../lib/state.mjs";
+import { makeState, newEntry, STATES } from "../lib/state.mjs";
+import { isAtOrAfter, floorSecond } from "../lib/time.mjs";
 import { CONFIG, T0, tempHome, prFixture, fakeRunner, makeClock, silentLog, GOOD_PRD } from "./helpers.mjs";
 
 /** A `bin` that exits 0, so `checkSignIn` for codex passes without a real harness installed. */
@@ -227,5 +228,53 @@ test("registering with no override, or one that agrees with the block, leaves th
     w.ctx.gh.prView = async () => ({ ...prFixture({ headRefName: "gallivant/widget-export", createdAt: T0 }), body: BLOCK() });
     await register(w.ctx, { url: w.url, worktree: "/checkouts/widget", ...over });
     assert.deepEqual(w.calls.filter(c => c[0] === "setBody"), [], "a block that already says the right thing is not rewritten");
+  }
+});
+
+test("a reset cursor is floored to the second, so feedback posted in that same second is still dispatched", async () => {
+  // `nowIso()` carries milliseconds; GitHub stamps comments and reviews to the second. The event comparison is
+  // inclusive of its own boundary, so a cursor of 02:00:00.500Z sat after every comment created at 02:00:00Z and
+  // buried it for good.
+  const w = registerWorld(registerGit());
+  w.ctx.gh.prView = async () => ({ ...prFixture({ headRefName: "gallivant/widget-export", createdAt: T0 }), body: BLOCK() });
+  w.ctx.state.put("acme/widget/widget-export", {
+    ...newEntry({ prd: "docs/prds/widget-export.md", harness: "claude", session: "6f1c2d3e-1111-4111-8111-111111111111", repo: "acme/widget", branch: "gallivant/widget-export", worktree: "/checkouts/widget", pr: 142, state: STATES.needsHuman, nowIso: T0 }),
+    url: "https://github.com/acme/widget/pull/142",
+  });
+
+  const before = floorSecond(new Date().toISOString());
+  const r = await register(w.ctx, { url: w.url, worktree: "/checkouts/widget" });
+  const e = w.ctx.state.get(r.id);
+
+  assert.equal(e.cursor.since, floorSecond(e.cursor.since), "the event cursor carries no milliseconds");
+  assert.equal(e.rereview.at, floorSecond(e.rereview.at), "and neither does the reviewer clock");
+  assert.equal(e.rereview.at, e.cursor.since);
+  assert.ok(isAtOrAfter(e.cursor.since, before), `the cursor is the reset time, not something older (${e.cursor.since} vs ${before})`);
+
+  // The point of the flooring, spelled as `deriveEvents` reads it: a comment GitHub stamped in the reset's own
+  // second, with no milliseconds of its own, is at or after the cursor and therefore new.
+  const comment = e.cursor.since.replace(".000Z", "Z");
+  assert.equal(isAtOrAfter(comment, e.cursor.since), true, "a comment written in the cursor's own second is dispatched");
+  // The same comment against the cursor as it used to be written, somewhere inside that second: lost.
+  const unfloored = new Date(Date.parse(e.cursor.since) + 500).toISOString();
+  assert.equal(isAtOrAfter(comment, unfloored), false, "which the old millisecond cursor denied");
+});
+
+test("a block that cannot be written fails the registration instead of reporting success without it", async () => {
+  // The block is the identity of record: reconciliation rebuilds an entry from it after state.json is lost. A
+  // registration that said "watching" with no block written, or with a block still naming the old session, would
+  // have recovery skip the PR or resume the wrong session.
+  for (const [what, body, over] of [
+    ["a fresh registration", "Adds export.\n", {}],
+    ["an override of a block that names another harness", BLOCK({ harness: "codex" }), { harness: "claude" }],
+  ]) {
+    const w = registerWorld(registerGit());
+    w.ctx.gh.prView = async () => ({ ...prFixture({ headRefName: "gallivant/widget-export", createdAt: T0 }), body });
+    w.ctx.gh.setBody = async () => { throw new Error("HTTP 403: Resource not accessible by personal access token"); };
+
+    await assert.rejects(() => register(w.ctx, { url: w.url, worktree: "/checkouts/widget", ...over }),
+      /cannot write the gallivant block to .*pull\/142: HTTP 403.*Nothing was registered/s, what);
+    assert.deepEqual(w.ctx.state.entries(), [], `${what}: nothing half-written in the registry`);
+    assert.deepEqual(w.calls.filter(c => c[0] === "comment"), [], `${what}: no reset comment claiming the loop is watching again`);
   }
 });

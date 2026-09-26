@@ -211,6 +211,40 @@ test("an unreachable evaluator leaves the PR waiting: no receipt round, no itera
   assert.ok(!gh.calls.some(c => c[0] === "addLabel"));
 });
 
+test("a diff the output scan cannot read is no decision, so a blocked pattern is never let through as a clean scan", async () => {
+  // The fail-open, end to end. The receipt is valid and the checks are green, so the only rule left is the output
+  // scan, and the diff carries a blocked pattern. `prDiff` used to swallow its own failure and answer null;
+  // `addedLines(null)` is the empty string, which no pattern matches, so the gate allowed and the PR went ready with
+  // `console.log(` in it. Unreadable now means undecided: pr-open, no round, no label, and the reason logged.
+  const body = "Adds export.\n" + receiptBlock();
+  const pr = prFixture({ statusCheckRollup: [checkRun({ name: "test", conclusion: "SUCCESS" })], body });
+  for (const [label, prDiff] of [
+    ["a failure", async () => { throw new Error("gh pr diff: HTTP 502"); }],
+    ["nothing at all", async () => null],
+  ]) {
+    const clock = makeClock();
+    const { state, id } = seededState({ rereview: { at: at(0), nudged: false } });
+    const gh = fakeGh({ pr, reviews: clearReviewer() });
+    gh.prDiff = prDiff;
+    const runner = fakeRunner(clock);
+    const logged = [];
+    const log = { ...silentLog, info: m => logged.push(m), warn: m => logged.push(m) };
+    // `evaluator: "local"` so the built-in rules give the verdict and no hosted call is in the way.
+    const config = { ...CONFIG, deliverable: { ...CONFIG.deliverable, evaluator: "local" } };
+    const tick = makeTick({ config, state, gh, git: fakeGit(), notify: fakeNotify(), log, clock, ownLogin: "me", runnerFor: () => runner, readPrd: () => GOOD_PRD, fetch: async () => { throw new Error("no hosted call on a local evaluator"); } });
+
+    clock.advance(4);
+    await tick.tick();
+    assert.deepEqual([state.get(id).state, state.get(id).iteration, runner.started.length], [STATES.prOpen, 0, 0], `${label}: waiting, not ready and not a round`);
+    assert.ok(!gh.calls.some(c => c[0] === "addLabel"), `${label}: no ready label`);
+    assert.ok(logged.some(l => /diff unreadable/.test(l)), `${label}: the reason is logged (got ${logged})`);
+  }
+
+  // And with a diff the daemon can read, the same PR is denied on the pattern rather than allowed.
+  const denied = await gate({ taskId: "widget/widget-export", prBody: body, criteria, checksGreen: true, diff: 'console.log("x")', limits: LOCAL });
+  assert.deepEqual([denied.allow, denied.denials[0].code], [false, "oap.blocked_pattern_detected"]);
+});
+
 // ---- PRD readiness as an APort decision ------------------------------------------------------------------------
 import { prdContract, decidePrdReady, PRD_LIMITS, PRD_BLOCKED_PATTERNS } from "../lib/deliverable.mjs";
 import { check, RULES } from "../lib/prd.mjs";

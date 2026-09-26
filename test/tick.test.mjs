@@ -13,8 +13,11 @@ function world(stateOver = {}, ghOver = {}, { config = CONFIG, readPrd = () => n
   const gh = fakeGh(ghOver);
   const runner = fakeRunner(clock);
   const notify = fakeNotify();
-  const tick = makeTick({ config, state, gh, git: fakeGit(), notify, log: silentLog, clock, ownLogin: "me", runnerFor: () => runner, readPrd });
-  return { clock, state, id, gh, runner, notify, tick, entry: () => state.get(id) };
+  // Every line the tick logged, so a test can assert that a decision it did not take was at least explained.
+  const logged = [];
+  const log = { info: m => logged.push(m), warn: m => logged.push(m), error: m => logged.push(m), latest: () => null };
+  const tick = makeTick({ config, state, gh, git: fakeGit(), notify, log, clock, ownLogin: "me", runnerFor: () => runner, readPrd });
+  return { clock, state, id, gh, runner, notify, tick, logged, entry: () => state.get(id) };
 }
 
 test("reviewer findings resume the original session and move the cursor", async () => {
@@ -491,4 +494,86 @@ test("a harness that refuses context_paths stops the entry instead of retrying t
   // And the next tick leaves it alone rather than refusing again.
   await w.tick.tick();
   assert.equal(w.notify.sent.length, 1);
+});
+
+test("a diff the gate cannot read is no decision, not a clean scan: the PR stays in pr-open and nothing is dispatched", async () => {
+  // `gh pr diff` fails transiently. The old code turned that into null, `addedLines(null)` into "", and an empty
+  // string passes the blocked-pattern scan trivially, so a PR carrying a blocked pattern could be marked ready.
+  const w = world({ rereview: { at: T0, nudged: false } }, {
+    pr: prFixture({ statusCheckRollup: [checkRun({ name: "test", conclusion: "SUCCESS" })] }),
+    reviews: clearReviewer(),
+  }, { readPrd: () => GOOD_PRD });
+  w.gh.prDiff = async () => { throw new Error("HTTP 502: Bad gateway"); };
+  w.clock.advance(4);
+  await w.tick.tick();
+
+  assert.equal(w.entry().state, STATES.prOpen, "the entry is left where it was, to be asked again next tick");
+  assert.equal(w.runner.started.length, 0, "no receipt round, so the round budget is untouched");
+  assert.equal(w.entry().iteration, 0);
+  assert.deepEqual(w.gh.calls.filter(c => c[0] === "addLabel"), []);
+  assert.deepEqual(w.notify.sent, []);
+  assert.ok(w.logged.some(l => /no decision yet \(diff unreadable: .*Bad gateway/.test(l)), `the reason is logged (got ${w.logged})`);
+});
+
+test("with the output scan off, a failing prDiff cannot affect the gate, because no diff is fetched at all", async () => {
+  const config = { ...CONFIG, deliverable: { ...CONFIG.deliverable, evaluator: "local", scan_output: false } };
+  const w = world({ rereview: { at: T0, nudged: false } }, {
+    pr: prFixture({ statusCheckRollup: [checkRun({ name: "test", conclusion: "SUCCESS" })] }),
+    reviews: clearReviewer(),
+  }, { config, readPrd: () => GOOD_PRD });
+  let asked = 0;
+  w.gh.prDiff = async () => { asked += 1; throw new Error("HTTP 502: Bad gateway"); };
+  w.clock.advance(4);
+  await w.tick.tick();
+
+  assert.equal(asked, 0, "scan_output off means the diff is never requested");
+  assert.equal(w.runner.started.length, 1, "the gate ran and denied the missing receipt, as it would with any diff");
+  assert.match(w.runner.started[0].args.at(-1), /oap\.receipt_missing/);
+});
+
+test("a PR that was ready and then stops loses the ready label as it gains needs-human", async () => {
+  // Both labels at once is a contradiction for a person reading the PR and for anything automating on labels.
+  const w = world({ state: STATES.ready }, { pr: prFixture({ mergeable: "CONFLICTING" }) });
+  await w.tick.tick();
+  assert.deepEqual([w.entry().state, w.entry().reason], [STATES.needsHuman, "conflict"]);
+  const labels = w.gh.calls.filter(c => c[0] === "addLabel" || c[0] === "removeLabel");
+  assert.deepEqual(labels, [["removeLabel", 142, READY_LABEL], ["addLabel", 142, NEEDS_LABEL]]);
+});
+
+test("every path into needs-human clears the ready label, not only the conflict one", async () => {
+  // Three more stops a ready entry can reach: a run of its own that hangs, one that ends without pushing, and a new
+  // review with the round budget already spent. The label pair has to come out the same way from all of them.
+  const cases = [
+    ["timeout", {}, async w => { w.runner.start("fix", "/bin/claude", [], {}); w.clock.advance(31); }],
+    ["no-push", {}, async w => { w.runner.start("fix", "/bin/claude", [], {}); w.runner.finish(claudeResultLines()); }],
+    ["iterations", { iteration: CONFIG.max_iterations }, async w => { w.clock.advance(6); }],
+  ];
+  for (const [reason, over, arrange] of cases) {
+    const w = world({ state: STATES.ready, last: { at: T0, run: "1-fix", exit: null, event: "review" }, ...over },
+      { reviews: [review({ id: 2301, by: BOT, bot: true, state: "CHANGES_REQUESTED", at: at(5) })] });
+    await arrange(w);
+    await w.tick.tick();
+    assert.equal(w.entry().reason, reason);
+    assert.ok(w.gh.calls.some(c => c[0] === "removeLabel" && c[2] === READY_LABEL), `${reason} drops the ready label`);
+    assert.ok(w.gh.calls.some(c => c[0] === "addLabel" && c[2] === NEEDS_LABEL), `${reason} adds the needs-human label`);
+  }
+});
+
+test("the cursor a settled round writes is floored too, so GitHub cannot date it out of reach", async () => {
+  // The receipt-rewrite branch, and the fallback when GitHub cannot date the head, both used `nowIso()`, which
+  // carries milliseconds. A cursor of 02:05:00.400Z sits after every comment stamped 02:05:00Z.
+  const clock = makeClock();
+  clock.set(new Date(Date.parse(at(5)) + 400).toISOString());
+  const { state, id } = seededState({ last: { at: T0, run: "1-fix", exit: null, event: "review" } });
+  const gh = fakeGh({ pr: prFixture({ headRefOid: "d4e5f6" }) }); // pushed, and commitDate answers null
+  const runner = fakeRunner(clock);
+  const tick = makeTick({ config: CONFIG, state, gh, git: fakeGit(), notify: fakeNotify(), log: silentLog, clock, ownLogin: "me", runnerFor: () => runner, readPrd: () => null });
+  runner.start("fix", "/bin/claude", [], {});
+  runner.finish(claudeResultLines());
+  await tick.tick();
+
+  const e = state.get(id);
+  assert.equal(e.iteration, 1);
+  assert.equal(e.cursor.since, at(5), "the fallback push time drops its milliseconds");
+  assert.equal(e.rereview.at, at(5));
 });
