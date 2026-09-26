@@ -243,8 +243,12 @@ test("a ready PR reopens on a trusted inline comment and drops the label", async
 });
 
 test("a start run that opened a PR enters pr-open with the block written and the PR's creation time as the reviewer clock", async () => {
+  // `prView` answers for the PR the entry ends up watching, with the same head `prListByHead` reported. The fake used
+  // to answer the default fixture's #142 on `a1b2c3d` here, which was invisible while nothing compared the head and
+  // is now read, correctly, as a push nobody told the loop about.
+  const opened = { number: 143, url: "https://github.com/acme/widget/pull/143", title: "Widget export", state: "OPEN", isDraft: false, mergeable: "MERGEABLE", body: "Implements export.", headRefOid: "aaaa111", headRefName: "gallivant/widget-export", isCrossRepository: false, createdAt: at(20), statusCheckRollup: [], labels: [], baseRefName: "main" };
   const w = world({ state: STATES.running, pr: null, url: undefined, cursor: { since: T0, fixed_sha: null }, rereview: { at: null, nudged: false }, last: { at: T0, run: "1-start", exit: null, event: "start" } },
-    { prsByHead: [{ number: 143, url: "https://github.com/acme/widget/pull/143", body: "Implements export.", headRefOid: "aaaa111", isCrossRepository: false, createdAt: at(20) }] });
+    { pr: opened, prsByHead: [opened] });
   w.runner.start("start", "/bin/claude", [], { cwd: "/tmp/wt" });
   w.runner.finish(claudeResultLines());
   w.clock.advance(25);
@@ -941,4 +945,119 @@ test("the skipped-gate flag describes the ready state it was recorded with, and 
   const stopped = world({ state: STATES.ready, gate_skipped: "no PRD snapshot" }, { pr: prFixture({ mergeable: "CONFLICTING" }) });
   await stopped.tick.tick();
   assert.deepEqual([stopped.entry().state, stopped.entry().gate_skipped], [STATES.needsHuman, null]);
+});
+
+test("nothing spawns until the state that owns the run is durable: a ready-label removal that fails dispatches nothing", async () => {
+  // The spawn used to come first. `startRun` launched the process, then `reopen` threw on the label removal, so the
+  // save below it never ran: `last.run` still named an earlier run, the cursor never recorded the feedback, and
+  // `settleRun` read the live process as an unrelated leftover and ignored it. When it exited, the same review was
+  // still new and a SECOND fixer was spawned for it, against a tree the first one had been editing.
+  const w = world({ state: STATES.ready, cursor: { since: T0, dispatched: [], fixed_sha: "a1b2c3d", checks_sha: null, receipt_hash: null } },
+    { pr: prFixture({ statusCheckRollup: [checkRun({ name: "test", conclusion: "SUCCESS" })] }), reviews: [review({ id: 2201, by: BOT, bot: true, state: "CHANGES_REQUESTED", at: at(5) })] });
+  let fail = true;
+  w.gh.removeLabel = async (repo, n, label) => { w.gh.calls.push(["removeLabel", n, label]); if (fail) throw new Error("HTTP 502: bad gateway"); };
+  w.clock.advance(6);
+  const results = await w.tick.tick();
+
+  assert.deepEqual(results.map(r => r.ok), [true], "the tick handled it rather than throwing out to the per-entry catch");
+  assert.equal(w.runner.started.length, 0, "no process is running that the registry does not know about");
+  assert.equal(w.entry().state, STATES.ready, "and nothing about the entry moved, so the next tick repeats the same work");
+  assert.equal(w.entry().cursor.since, T0, "the cursor did not advance past feedback that was never dispatched");
+  assert.ok(w.logged.some(l => /ready label not removed .*not dispatching/.test(l)), `the tick of nothing is explained (got ${w.logged})`);
+
+  // GitHub answers, and the same review is dispatched exactly once.
+  fail = false;
+  await w.tick.tick();
+  assert.equal(w.runner.started.length, 1, "one fixer for one review");
+  assert.equal(w.entry().last.run, w.runner.started[0].id, "and the registry owns the run it spawned");
+  assert.equal(w.entry().state, STATES.prOpen);
+  assert.equal(w.entry().cursor.since, at(5));
+
+  // The run ends having pushed. Nothing is left over to dispatch a second time.
+  w.runner.finish(claudeResultLines());
+  w.gh.data.pr = prFixture({ headRefOid: "d4e5f6a", statusCheckRollup: [checkRun({ name: "test", conclusion: "SUCCESS" })] });
+  w.gh.data.commitDates = { d4e5f6a: at(11) };
+  w.clock.advance(5);
+  await w.tick.tick();
+  await w.tick.tick();
+  assert.equal(w.runner.started.length, 1, "the review that was handled is never dispatched again");
+});
+
+test("an untracked head change resets the reviewer clock in pr-open too, not only after ready", async () => {
+  // The head-change guard ran only for `ready`. A human or a bot pushing onto a watched PR left `fixed_sha`,
+  // `rereview.at` and `rereview.nudged` all describing the head before it, so the same tick that noticed the push
+  // could stop the entry as `reviewer-silent` on a wait that expired before the new commit existed, and the nudge
+  // already spent on the old head was never reissued for this one.
+  const w = world({ state: STATES.prOpen, cursor: { since: T0, dispatched: [], fixed_sha: "a1b2c3d", checks_sha: null, receipt_hash: null }, rereview: { at: T0, nudged: true } },
+    { pr: prFixture({ headRefOid: "d4e5f6a", statusCheckRollup: [checkRun({ name: "test", conclusion: "SUCCESS", at: at(415) })] }), commitDates: { d4e5f6a: at(415) } });
+  w.clock.advance(420); // seven hours: `stall_hours` is 6, so the old clock is long expired
+  await w.tick.tick();
+
+  const e = w.entry();
+  assert.equal(e.state, STATES.prOpen, "a commit pushed five minutes ago is not a reviewer who went silent for seven hours");
+  assert.equal(e.reason, null);
+  assert.deepEqual(w.notify.sent, [], "and nobody's phone rang for a silence that never happened");
+  assert.equal(e.cursor.fixed_sha, "d4e5f6a", "the head the loop will act on is the one that is there");
+  assert.equal(e.rereview.at, at(415), "the wait for a review of this commit starts at the push");
+  assert.equal(e.rereview.nudged, false, "and the nudge is available again for the head nobody has been asked about");
+  assert.ok(w.logged.some(l => /head moved to d4e5f6a; watching again/.test(l)), `the reset is explained (got ${w.logged})`);
+  assert.ok(!w.logged.some(l => /after ready/.test(l)), "and it does not claim the entry was ready");
+
+  // Past the nudge window on the NEW clock, the reviewer is asked for this head.
+  w.clock.advance(7);
+  await w.tick.tick();
+  assert.equal(w.entry().rereview.nudged, true);
+  assert.ok(w.gh.calls.some(c => c[0] === "comment" && c[2].includes(NUDGE_MARKER)), "the re-review is asked for through the nudge the silence step owns");
+});
+
+test("a head whose committer date is older than the nudge window does not stop the entry on the tick that noticed it", async () => {
+  // The other half of the same reset: `reviewerClock` floors the committer date at the nudge window, so a commit made
+  // on Monday and pushed on Thursday does not arrive with a clock that is already expired. Both watching states go
+  // through the one function, so neither can regress on its own.
+  for (const state of [STATES.prOpen, STATES.ready]) {
+    const w = world({ state, cursor: { since: T0, dispatched: [], fixed_sha: "a1b2c3d", checks_sha: null, receipt_hash: null }, rereview: { at: T0, nudged: false } },
+      { pr: prFixture({ headRefOid: "d4e5f6a", statusCheckRollup: [checkRun({ name: "test", conclusion: "SUCCESS", at: at(600) })] }), commitDates: { d4e5f6a: T0 } });
+    w.clock.advance(600); // ten hours after a commit dated ten hours ago
+    await w.tick.tick();
+
+    const e = w.entry();
+    assert.equal(e.state, STATES.prOpen, `${state}: a commit's age is not the reviewer's silence`);
+    assert.equal(e.reason, null, `${state}: nothing stopped it`);
+    assert.equal(e.rereview.at, at(594), `${state}: the clock is floored at the nudge window, not taken from the commit`);
+    assert.equal(e.rereview.nudged, false, `${state}: and the nudge has not been spent`);
+    assert.deepEqual(w.notify.sent, [], `${state}: nobody was told`);
+  }
+});
+
+test("a start run whose identity block will not write stays in running and retries, rather than reaching pr-open with no block", async () => {
+  // The block is what reconciliation rebuilds an entry from once `state.json` is gone. A swallowed failure moved the
+  // entry to `pr-open` anyway, so the advertised recovery skipped the PR and the session it names could not be
+  // resumed. `register`'s equivalent throws; the tick has no operator, so it needs a state the next tick retries from.
+  const opened = { ...prFixture({ number: 143, url: "https://github.com/acme/widget/pull/143", body: "Implements export.", headRefOid: "aaaa111", createdAt: at(20) }) };
+  const w = world({ state: STATES.running, pr: null, url: undefined, cursor: { since: T0, fixed_sha: null }, rereview: { at: null, nudged: false }, last: { at: T0, run: "1-start", exit: null, event: "start" } },
+    { pr: opened, prsByHead: [opened] });
+  let fail = true;
+  w.gh.setBody = async (repo, n, body) => { w.gh.calls.push(["setBody", n, body]); if (fail) throw new Error("HTTP 403: rate limited"); w.gh.data.pr.body = body; };
+  w.runner.start("start", "/bin/claude", [], { cwd: "/tmp/wt" });
+  w.runner.finish(claudeResultLines());
+  w.clock.advance(25);
+  const results = await w.tick.tick();
+
+  assert.deepEqual(results.map(r => r.ok), [true], "the tick handled it rather than throwing out to the per-entry catch");
+  let e = w.entry();
+  assert.equal(e.state, STATES.running, "the entry has not left the state whose next tick retries this");
+  assert.equal(e.pr, null, "and it does not claim to watch a PR it cannot identify");
+  assert.equal(e.last.exit, null, "`last.exit` is what settleRun re-enters on, so it stays unrecorded");
+  assert.equal(e.session, "6f1c2d3e-1111-4111-8111-111111111111", "the session is kept, so a retry never mints a second one");
+  assert.ok(w.logged.some(l => /block write failed .*staying in running/.test(l)), `the retryable state is named (got ${w.logged})`);
+
+  // It genuinely retries: the next tick writes the block and moves on, in that same pass.
+  fail = false;
+  await w.tick.tick();
+  e = w.entry();
+  assert.equal(e.state, STATES.prOpen);
+  assert.equal(e.pr, 143);
+  assert.equal(e.cursor.fixed_sha, "aaaa111");
+  assert.match(w.gh.data.pr.body, /<!-- gallivant\nprd: docs\/prds\/widget-export.md\nharness: claude\nsession: 6f1c2d3e-1111-4111-8111-111111111111\nbranch: gallivant\/widget-export\n-->/);
+  assert.equal(w.runner.started.length, 1, "and nothing was spawned a second time while it waited");
 });

@@ -649,3 +649,185 @@ another agent under it; both were reproduced in the broken state and re-run in t
 - **The ready label write was best-effort after the state moved.** `save(state: ready)` came first and `addLabel`'s
   failure was logged and dropped, so a rate-limited GitHub left a ready entry with no label and no retry. Now the
   label goes on first and a failure returns without moving the state (`lib/tick.mjs:330`).
+
+---
+
+# Round six: the holistic check after fixing five Codex findings
+
+Appended 2026-09-26 against `feat/v0.1`, on top of `bbf3b4c`. Five findings were fixed in `lib/tick.mjs` (three),
+`lib/commands/start.mjs` and `lib/commands/register.mjs`; the suite went from 269 to 275 tests, and each of the six
+new tests was run against the pre-change file and observed to fail. What follows is the three questions the brief
+asked after the fixes, answered against the tree as it now stands.
+
+## 1. Ordering: every transition, and whether a failure at any point is recoverable
+
+The rule the three ordering findings share: **a durable write that another actor will read must land before, or in the
+same step as, the thing it describes.** Three sub-rules fall out of it, and each of the three findings was one of them
+being broken on one path while its sibling honoured it.
+
+- A **process** must be recorded before anything else can fail (finding 1).
+- A **state the next tick retries from** must be what a tick failure leaves, because a tick has no operator
+  (finding 3).
+- A **marker another reader counts from** must exist before the local count that assumes it (finding 5).
+
+Every transition in the tick, in the order the steps run:
+
+| # | Transition | Durable writes, in order | Safe? |
+|---|---|---|---|
+| 1 | `running` → `pr-open` (start run ended, PR found) | `gh.setBody` (the identity block), then `save(state, pr, session, cursor, rereview)` | **Yes, now.** The block was best-effort and is now a precondition: a failure saves the session only and returns, leaving `running` with `last.exit` unrecorded, which is what `settleRun` re-enters on. Driven: the next tick writes the block and completes the transition in that same pass, with no second spawn. |
+| 2 | `running` → `needs-human` (`no-pr`) | `save(needs-human)`, then the two labels, then `notify` | Yes. Entry has no PR, so there is nothing to label; the state is the signal and `needsHuman` retries the labels through `labels_pending` when there is a PR. |
+| 3 | `running`/`pr-open` → `needs-human` (`timeout`) | `runner.kill`, then `save`, then labels, then `notify` | Yes. The kill is not durable state; a crash after it and before the save leaves a dead process and an entry whose `last.run` has no exit, which the next tick settles through the ordinary path. |
+| 4 | `pr-open` → `pr-open`, round counted (a run that pushed or rewrote the receipt) | `gh.comment` (the round comment), then `save(cursor, iteration, rereview)` | Yes, and deliberately this way round: the comment goes first so a crash leaves a comment rather than losing one, and `commentOnce` makes the retry harmless by recognising the marker. The reverse order would count a round on the PR nobody was told about. |
+| 5 | `pr-open` → `needs-human` (`no-push`, `harness-error`) | `save`, then labels, then `notify` | Yes. Same shape as 2, and `labels_pending` covers the label half. |
+| 6 | `ready`/`pr-open` → `pr-open` (untracked head change) | `gh.removeLabel` when it was ready, then `save(fixed_sha, rereview)` | Yes. The label comes off first for the same reason it goes on last in the ready transition: the PR must not say a human may merge a commit the loop is about to judge. A throw leaves the whole judgement for the next tick, which re-reads the same head. |
+| 7 | `pr-open`/`ready` → `pr-open`, run dispatched | `gh.removeLabel` when it was ready, then `runner.start`, then `save(state, cursor, last.run)` | **Yes, now.** This was finding 1: the spawn was first and the label removal could throw between it and the save. Everything that can throw is now above the spawn, and the save is immediately below it with no `await` between. |
+| 8 | `pr-open` → `needs-human` (`iterations`, `context-paths`, `no-worktree`) | `save`, then labels, then `notify` | Yes. All three are refusals decided before anything was spawned, so there is no run to orphan. |
+| 9 | `pr-open` → `ready` | `gh.addLabel`, then `save(state)`, then `notify` | Yes, fixed last round. The label goes on first because a later tick returns early on `ready`, so a swallowed label write would have no retry; a failure returns and leaves `pr-open`, which is the retryable state. |
+| 10 | `pr-open` → `needs-human` (`conflict`, `draft`, `reviewer-blocking`, `checks-red`, `reviewer-silent`) | `save`, then labels, then `notify` | Yes. The state is the stop; `labels_pending` retries the labels; the four that carry a `last.event` guard notify once per head. |
+| 11 | `pr-open` → `pr-open`, nudged | `gh.comment`, then `save(rereview.nudged)` | Yes. Same as 4: comment first, idempotent on the marker. |
+| 12 | anything → `done` | `save(state)` | Yes. One write, and GitHub already holds the truth. |
+| 13 | `needs-human` → `needs-human`, labels finished | labels, then `save(labels_pending: false)` | Yes. Write first, flag second; a crash between them repeats a label write that is idempotent. |
+
+Outside the tick, the two commands:
+
+| Transition | Writes, in order | Safe? |
+|---|---|---|
+| `start`: nothing → `running` | spec built, snapshot written, clone, brief written into the clone, spawn, `state.put` | **Yes, now.** This was finding 4: `buildRun` could refuse after the clone. Every refusal is now above the clone, and the spawn is immediately before the `state.put` that owns it. The snapshot write moved below the spec build too, so a refused run leaves no snapshot either. |
+| `register`: nothing/existing → `pr-open` | block write, reset comment, `state.put`, snapshot | **Yes, now.** This was finding 5: the reset comment was best-effort before the local reset. Both GitHub writes are now preconditions and both precede `state.put`, so a failure in either leaves the registry untouched and the same command reruns cleanly. The snapshot stays deliberately last and deliberately non-fatal, with the reasoning written at its call site: an entry watched with no snapshot is worse than an aborted registration only if the gate then passes silently, and that is carried on the entry as `gate_skipped` for `status` and `why` to say. |
+
+The asymmetry between finding 3 and finding 5 is the point worth keeping. Both are "the write that another reader
+counts on was best-effort", and the two get opposite fixes because the actor differs. `register` has an operator in
+front of it, so refusing is the whole recovery. The tick has none and must never abandon an entry, so it needs a state
+the next tick re-enters. `running` with `last.exit` unrecorded is that state, and it retries rather than spins because
+the work it repeats is two GitHub reads and one write: when the write lands, the entry completes the transition in
+that same pass.
+
+## 2. Sibling paths: the recurring shape, hunted deliberately
+
+Three sweeps, as the brief asked.
+
+**Every `.catch(` in `lib/tick.mjs`.** There is now exactly one, and it is the intended kind:
+
+- `tick.mjs:180`, `headPushedAt`: `gh.commitDate(...).then(d => d || fallback).catch(() => fallback)`. A deliberate
+  fallback, not a swallowed write: the caller always has a usable answer, and the value is then floored by
+  `reviewerClock` anyway. Sound.
+
+The two that were swallowed writes are gone: `tick.mjs:196` (the block write, finding 3) and the two label writes
+fixed in earlier rounds. So the class the audits kept naming in this file is, as of this round, empty.
+
+**Every `.catch(` in `lib/commands/`.** Seven, of which five are fine and two are worth stating:
+
+- `register.mjs:109` and `start.mjs:79`, `ensureLabels`: a repo-level convenience whose absence costs nothing the
+  entry depends on. Sound, and both spellings agree.
+- `doctor.mjs:76,97,104,195`: four reads whose whole job is to report a gap. A throw would be the wrong answer for a
+  command that exists to print what is wrong. Sound.
+- `up.mjs:45`, `gh.commitDate(...).catch(() => null)` inside `reconcile`: the same deliberate fallback as
+  `headPushedAt`, with `pr.createdAt` behind it. Sound.
+- `register.mjs`'s `ensurePrdSnapshot` has no catch of its own any more; `prd.mjs` owns the decision, which is the
+  consolidation the structure audit's finding 11 asked for. Worth noting that the two callers therefore now agree,
+  which they did not when that audit was written.
+
+**Every write of `rereview`.** Seven, and one sibling asymmetry is live:
+
+| Site | Value written | Floored at the nudge window? |
+|---|---|---|
+| `state.mjs:146` (`newEntry`) | `null` | n/a, there is no head yet |
+| `tick.mjs:160` (`headChanged`) | `reviewerClock(entry, pushedAt)` | **Yes** |
+| `tick.mjs:263` (start run → `pr-open`) | `pr.createdAt` | n/a: a PR cannot be older than its own creation by more than the window in any way that matters, and the events cursor is the same value |
+| `tick.mjs:289` (a round that pushed) | `reviewerClock(entry, pushedAt)` | **Yes** |
+| `tick.mjs:514` (the nudge) | carries `at` unchanged, sets `nudged` | n/a |
+| `register.mjs:98` | `floorSecond(nowIso())` on a reset, `pr.createdAt` on a fresh one | Safe by construction: a reset's clock is now |
+| **`up.mjs:57` (`reconcile`)** | `later(lastOwn, pr.createdAt)`, **unfloored** | **No** |
+
+The `reconcile` write is the one sibling of `reviewerClock` that does not go through it, and it is reachable. Driven
+against the tree: a PR whose block is valid, whose last Gallivant round comment is seven hours old, recovered with
+`stall_hours: 6`, is stopped on the **first tick after recovery**:
+
+```
+recovered rereview.at: 2026-09-24T02:00:00.000Z   (the round comment's own time, 7h before now)
+first tick after recovery -> state: needs-human  reason: reviewer-silent  notify: [["needs",142,"reviewer-silent"]]
+```
+
+Not fixed, and reported rather than fixed for a reason: unlike F7, the silence here is arguably true. The daemon did
+ask, seven hours ago, and the reviewer did not answer; a recovery that forgave that would hide a real stall. But the
+asymmetry is real and the operator-visible behaviour is "the daemon booted and immediately stopped a PR", which reads
+as a recovery bug whether or not it is one. Whoever owns the reviewer story should decide whether a recovered entry
+gets a grace window, and if it does, `reviewerClock` is where it belongs so there is one answer rather than two.
+
+**Every place a head sha is compared.** Five, and they now reduce to three questions with one comparison each:
+
+- `tick.mjs:153` (`headChanged`), "is the head the one the loop last acted on?" **This is the consolidation.** It
+  was two sites' worth of behaviour implemented for one state; both watching states now reach the one function.
+- `tick.mjs:271` (`settleRun`), "did the run that just ended push?" Same field, different question, and it must stay
+  separate: it is asked about a run, not about an entry being judged.
+- `events.mjs:98`, failing checks against `cursor.checks_sha`; `tick.mjs:506`, the `checks-red` stop against the same.
+  One field, one question, asked in the pure function and in the stop that follows it. Consistent.
+- `events.mjs:161-162`, the reviewed commit against the head. The `!reviewed` case is `waiting`, which is F3's fix, so
+  the absent-value sibling is closed here.
+
+Two more sibling observations from the same sweep, neither fixed:
+
+- `up.mjs:56` sets `checks_sha: pr.headRefOid` on a recovered entry, so a head that is genuinely red at recovery has
+  its failures suppressed rather than dispatched. `register.mjs:97` sets `checks_sha: null` for the same situation, so
+  a registered PR's red head IS dispatched. Two commands, the same question, opposite answers. `reconcile`'s choice
+  is defensible (the daemon may already have dispatched them before it lost the registry) and `register`'s is too (an
+  operator registering a PR wants its current state addressed), but nothing in either file says the other exists.
+- `writeStopLabels` tracks its retry on `addLabel` and logs `removeLabel`'s failure separately. That is deliberate and
+  documented at the site. Noted so a later reader does not "fix" the asymmetry into a retry loop on a label that
+  `removeLabel` already treats as absent.
+
+## 3. What these fixes make newly possible
+
+Three rounds running, a fix produced the next round's finding, so each change is read back for the same question.
+
+**Finding 1, `reopen` moved above the spawn.** What is newly possible: a transient `removeLabel` failure now blocks
+the dispatch rather than merely mislabelling it. An entry can therefore sit in `ready` with feedback waiting, doing
+nothing, for as long as GitHub refuses that one call. That is strictly better than a double fixer, and it is bounded
+in a way the old behaviour was not (the cursor does not move, so the work is not lost), but it is a new way for an
+entry to be stuck with no stop and no notification: the only trace is the `log.warn` on each tick. If a future round
+wants a stop for it, the shape already exists (`needsHuman` with a reason after N consecutive failures), and the
+counter would have to live on the entry. **I am naming this as the most likely next finding from this diff.**
+
+**Finding 2, one `headChanged` for both states.** What is newly possible: a `pr-open` entry's `rereview.nudged` now
+resets on any head change, so a PR receiving frequent pushes can be nudged once per push rather than once per round.
+With `rereview_minutes: 6` and a human pushing every ten minutes, that is a nudge comment per push. `commentOnce`
+bounds it (a nudge already posted after `rereview.at` is not reposted), and the nudge only fires past the window, so
+the real bound is one comment per `rereview_minutes` rather than one per push. I believe that is acceptable and it is
+the same rate the round path already allows, but it is a genuine behaviour change on a path that previously never
+nudged twice, and it is worth a look by whoever owns the reviewer story. Second-order: `headChanged` now runs on every
+`pr-open` tick, which means one extra `gh.commitDate` per head change where there used to be none for this state.
+That is one API call on a transition, not per tick, since the next tick's `fixed_sha` already matches.
+
+**Finding 3, the block write made retryable in `running`.** What is newly possible: an entry can now stay in `running`
+indefinitely while GitHub refuses `setBody`, with its PR open and unwatched. The old behaviour reached `pr-open` and
+watched the PR with no block; the new one does not watch it at all until the block lands. Which is worse depends on
+what fails: for a permissions problem that will not resolve (a token without write access to the body), the new
+behaviour is a silent stall where the old one was a silently unrecoverable entry. Both are bad and neither is stopped.
+The honest answer is that this trades one unbounded wait for another and picks the one whose invariant survives; a
+stop after N failures would close both, and it is the same missing counter as finding 1's. Also newly true: `status`
+shows the entry as `running` when the process has in fact ended, because `last.exit` is deliberately unrecorded. The
+`status` line for `running` reads "start run in progress", which is now sometimes untrue. Nobody is misled about
+anything actionable, but I cannot claim the wording is right.
+
+**Finding 4, the spec built before the clone.** What is newly possible: the run spec's `cwd` is now
+`worktreePath(...)` rather than `git.create`'s return value. No adapter reads `ctx.cwd` today, so the two can only
+disagree harmlessly, and `start` logs a warning when they do. If `cwd` ever reaches argv, that warning has to become a
+refusal, and the comment at the site says so. The other change: the PRD snapshot is now written after the spec is
+built, so a refused run no longer leaves a snapshot behind. That is a cleanup rather than a risk. I can see no third
+consequence of this one.
+
+**Finding 5, the reset comment made a precondition.** What is newly possible: `register` can now fail on an entry that
+exists where it previously succeeded, and the failure mode is "GitHub will not let me comment". A repository where the
+token can read and write bodies but not post comments would have had a working reset and now has none. That is the
+intended trade (the reset was never really working there: the boundary was not being recorded), but it is a new
+refusal on a command operators reach for when something is already wrong, which is the worst moment for a new
+refusal. The message names the cause, the PR and what was not changed, which is the mitigation. Second-order: the
+comment is now posted before `state.put`, so a crash between them leaves a reset comment on the PR with no local
+reset, and the next `register` posts a second one. `countRounds` takes the **last** reset marker, so two markers count
+the same as one. Verified by reading `events.mjs:183`.
+
+One thing I cannot answer, stated rather than guessed: whether `headChanged` running before the verdict rather than
+after changes any interaction with `reviewerVerdict`'s `dispatched` argument. `entry.cursor.dispatched` is passed to
+the verdict and `headChanged` does not touch it, so I believe it does not, but the two were never ordered this way for
+`pr-open` before and I have not driven the case where a reviewer's review sits at exactly the cursor second on a head
+that just moved.

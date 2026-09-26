@@ -364,3 +364,60 @@ test("a --session that is not a session id for the chosen harness is refused, an
     assert.equal(w.ctx.state.get(r.id).session, session, `${harness} accepts its own id`);
   }
 });
+
+test("start validates the run specification before it clones, so a refused harness leaves no worktree to clean up", async () => {
+  // `buildRun` refuses a harness that cannot grant `context_paths` as read-only, and it used to be called four lines
+  // after `git.create`. The refusal arrived with the repository already cloned and nothing in the registry, so the
+  // next `gallivant start` failed on `git.create` ("worktree already exists") and the operator had to find and delete
+  // the directory by hand. Nothing in the spec needs the checkout: `worktreePath` is a pure function of the config,
+  // the repo and the PRD id, and `git.create` clones to that same path.
+  const w = startWorld();
+  const extra = tempHome();
+  const created = [];
+  w.ctx.config = { ...w.ctx.config, context_paths: [extra] };
+  w.ctx.git.create = async spec => { created.push(spec); return w.worktree; };
+  w.ctx.writePrd = () => { throw new Error("the snapshot should not be written for a run that cannot be built"); };
+
+  await assert.rejects(() => start(w.ctx, { path: w.prdPath }), /refusing to run codex with context_paths/);
+  assert.deepEqual(created, [], "nothing was cloned for a run that was never going to start");
+  assert.deepEqual(w.ctx.state.entries(), [], "and nothing is in the registry either");
+
+  // The sign-in probe still runs first, so its refusal also precedes the clone. Both are knowable before it.
+  const signedOut = startWorld();
+  const clones = [];
+  signedOut.ctx.config = { ...signedOut.ctx.config, harness: { ...signedOut.ctx.config.harness, codex: { bin: join(signedOut.home, "nope") } } };
+  signedOut.ctx.git.create = async () => { clones.push(1); return signedOut.worktree; };
+  await assert.rejects(() => start(signedOut.ctx, { path: signedOut.prdPath }), /is not signed in/);
+  assert.deepEqual(clones, [], "a signed-out harness is refused before the clone as well");
+});
+
+test("a reset comment that cannot be posted fails the reset instead of zeroing the iteration without its marker", async () => {
+  // The reset comment IS the reset boundary: `countRounds` finds its marker and counts the round comments after it.
+  // With the comment missing and `state.json` later lost, a recovery rebuilds the iteration this command had just
+  // zeroed, and an entry restored at `max_iterations` stops with `reason: "iterations"` on its next event, having
+  // done no work in the round at all.
+  const w = registerWorld(registerGit());
+  w.ctx.gh.prView = async () => ({ ...prFixture({ headRefName: "gallivant/widget-export", createdAt: T0 }), body: BLOCK() });
+  w.ctx.gh.comment = async () => { w.calls.push(["comment"]); throw new Error("HTTP 403: Resource not accessible by personal access token"); };
+  const id = "acme/widget/widget-export";
+  const existing = {
+    ...newEntry({ prd: "docs/prds/widget-export.md", harness: "claude", session: "6f1c2d3e-1111-4111-8111-111111111111", repo: "acme/widget", branch: "gallivant/widget-export", worktree: "/checkouts/widget", pr: 142, state: STATES.needsHuman, nowIso: T0 }),
+    reason: "iterations", iteration: 3,
+  };
+  w.ctx.state.put(id, existing);
+
+  await assert.rejects(() => register(w.ctx, { url: w.url, worktree: "/checkouts/widget" }),
+    /cannot post the reset comment on .*pull\/142: HTTP 403.*Nothing was reset.*keeps its 3 rounds/s);
+
+  const e = w.ctx.state.get(id);
+  assert.equal(e.iteration, 3, "the local count still matches what GitHub can be counted back to");
+  assert.deepEqual([e.state, e.reason], [STATES.needsHuman, "iterations"], "and the entry is exactly as it was, nothing half-reset");
+  assert.equal(e.cursor.since, existing.cursor.since, "the cursor did not move either");
+
+  // GitHub answers and the same command does the whole reset in one go.
+  w.ctx.gh.comment = async () => { w.calls.push(["comment"]); };
+  await register(w.ctx, { url: w.url, worktree: "/checkouts/widget" });
+  const after = w.ctx.state.get(id);
+  assert.equal(after.iteration, 0);
+  assert.deepEqual([after.state, after.reason], [STATES.prOpen, null]);
+});
