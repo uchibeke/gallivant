@@ -55,7 +55,7 @@ For each registry entry that is not `done`:
 2. **Fetch.** `gh pr view --json` for state, head, checks, issue comments, labels and body; REST for reviews and inline comments since the cursor, asked for from a second before it so the boundary second comes back whatever GitHub's filter does with it.
 3. **Terminal.** Merged or closed is `done`. Conflicting is `needs-human`. A `needs-human` entry is checked for nothing else.
 4. **Events.** The rules in `events.mjs`. Failing checks count against `checks_sha`, so red CI on a head the loop itself pushed is dispatched once; if it stays red on that head after the fix, the entry stops with `checks-red`.
-5. **Dispatch.** Past the cap, stop with `iterations`. Otherwise build the fix prompt, resume the session (or start one for a registered PR), move the cursor to the newest event and record the ids dispatched at that instant, record the run.
+5. **Dispatch.** Past the cap, stop with `iterations`. Otherwise build the fix prompt, resume the session (or start one for a registered PR), move the cursor to the newest event and record the ids dispatched at that instant, record the run. A harness that refuses the configured `context_paths` would refuse identically on every poll, so that entry stops with `context-paths` rather than looping.
 6. **Ready.** No events, no run, not a draft, every check green (none counts as green), reviewer clear or absent. Then the completion gate (`deliverable.mjs`): the PR body's receipt must attest every acceptance criterion of the PRD with evidence; a deny starts a receipt round. Only then label and notify once.
 7. **Silence.** Reviewer configured and quiet since the last request: nudge once after `rereview_minutes`, stop with `reviewer-silent` after `stall_hours`.
 

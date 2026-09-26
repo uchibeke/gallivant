@@ -2,18 +2,18 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { makeTick, roundComment } from "../lib/tick.mjs";
 import { READY_LABEL, NEEDS_LABEL, ROUND_MARKER, NUDGE_MARKER } from "../lib/gh.mjs";
-import { CONFIG, T0, at, makeClock, fakeGh, fakeRunner, fakeGit, fakeNotify, seededState, prFixture, review, inline, comment, checkRun, claudeResultLines, codexLines, silentLog, STATES, GOOD_PRD } from "./helpers.mjs";
+import { CONFIG, T0, at, makeClock, fakeGh, fakeRunner, fakeGit, fakeNotify, seededState, prFixture, review, inline, comment, checkRun, claudeResultLines, codexLines, silentLog, STATES, GOOD_PRD, tempHome } from "./helpers.mjs";
 
 const BOT = "chatgpt-codex-connector[bot]";
 const clearReviewer = () => [review({ id: 2, by: BOT, bot: true, state: "COMMENTED", at: at(3), body: "**Reviewed commit:** `a1b2c3`" })];
 
-function world(stateOver = {}, ghOver = {}) {
+function world(stateOver = {}, ghOver = {}, { config = CONFIG, readPrd = () => null } = {}) {
   const clock = makeClock();
   const { state, id } = seededState(stateOver);
   const gh = fakeGh(ghOver);
   const runner = fakeRunner(clock);
   const notify = fakeNotify();
-  const tick = makeTick({ config: CONFIG, state, gh, git: fakeGit(), notify, log: silentLog, clock, ownLogin: "me", runnerFor: () => runner, readPrd: () => null });
+  const tick = makeTick({ config, state, gh, git: fakeGit(), notify, log: silentLog, clock, ownLogin: "me", runnerFor: () => runner, readPrd });
   return { clock, state, id, gh, runner, notify, tick, entry: () => state.get(id) };
 }
 
@@ -462,4 +462,33 @@ test("the server-side since filter is asked for an overlap, so the boundary seco
   assert.ok(asked.every(s => Date.parse(s) < Date.parse(at(5))), `the fetch starts before the cursor, not at it (asked ${asked})`);
   assert.equal(runner.started.length, 1, "the comment sharing the cursor's second still reaches the daemon");
   assert.equal(state.get(id).last.event, "command 78 by me", "and the one already dispatched is dropped by id, not by the fetch");
+});
+
+test("a fix round carries the configured read-only directories, from the snapshot and not from the checkout", async () => {
+  const fromConfig = tempHome();
+  const fromSnapshot = tempHome();
+  // The daemon's snapshot names one extra directory; the copy in the checkout is not consulted at all.
+  const snapshot = GOOD_PRD.replace("harness: codex", `harness: claude\ncontext_paths: ${fromSnapshot}`);
+  const w = world({}, { reviews: [review({ id: 1, by: BOT, bot: true, state: "CHANGES_REQUESTED", at: at(5) })] },
+    { config: { ...CONFIG, context_paths: [fromConfig] }, readPrd: () => snapshot });
+  w.clock.advance(6);
+  await w.tick.tick();
+  const args = w.runner.started[0].args;
+  assert.deepEqual(args.filter((a, i) => args[i - 1] === "--add-dir"), [fromConfig, fromSnapshot]);
+});
+
+test("a harness that refuses context_paths stops the entry instead of retrying the same refusal every tick", async () => {
+  // codex cannot grant read on one directory, so the refusal is the same on every poll. Retrying is a loop.
+  const w = world({ harness: "codex", session: "thread_1" },
+    { reviews: [review({ id: 1, by: BOT, bot: true, state: "CHANGES_REQUESTED", at: at(5) })] },
+    { config: { ...CONFIG, context_paths: [tempHome()] } });
+  w.clock.advance(6);
+  await w.tick.tick();
+  assert.equal(w.runner.started.length, 0, "no run is spawned with an argv the adapter refused");
+  assert.deepEqual([w.entry().state, w.entry().reason], [STATES.needsHuman, "context-paths"]);
+  assert.match(w.entry().last.event, /refusing to run codex with context_paths/);
+  assert.equal(w.notify.sent.length, 1, "the operator is told once, not on every tick");
+  // And the next tick leaves it alone rather than refusing again.
+  await w.tick.tick();
+  assert.equal(w.notify.sent.length, 1);
 });

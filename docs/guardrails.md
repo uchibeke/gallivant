@@ -53,7 +53,8 @@ What each harness does with the list:
 | opencode, goose | No directory flag exists, so the list has no effect. The run proceeds unchanged rather than failing over a setting the CLI cannot honour, and `gallivant doctor` says so per harness when you have a list configured. |
 
 Nothing here escalates quietly. A harness that cannot do what was asked either refuses the run or reports that the
-setting did nothing.
+setting did nothing. In the daemon a refusal stops that entry with the reason `context-paths`, since the same
+refusal would come back on every poll; `gallivant why <handle>` prints it.
 
 A PRD can add to the list for itself with a `context_paths:` key in its frontmatter, held to exactly the same
 refusals. It is the operator's list either way: the daemon's fix rounds read the snapshot of the brief taken when

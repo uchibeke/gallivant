@@ -141,6 +141,7 @@ PR merged or closed at any point → done, no notification
   "notify": { "ntfy": "https://ntfy.sh/<32 random characters>", "email": null },
   "worktrees": "<parent directory of the git root>/.gallivant-worktrees",
   "github_token_file": null,
+  "context_paths": [],
   "harness": {
     "claude": { "bin": "<zsh -lc 'whence -p claude'>", "settings": "~/.gallivant/claude/settings.json" },
     "codex":  { "bin": "<zsh -lc 'whence -p codex'>" }
@@ -154,6 +155,7 @@ PR merged or closed at any point → done, no notification
 - `notify.email`: when set, every notification also goes out with ntfy's `Email:` header. `notify` may be absent; then transitions are logged only.
 - `worktrees`: outside `~/.gallivant` on purpose. See 6.10.
 - `github_token_file`: null uses the operator's existing `gh` login. A fine-grained PAT limited to the participating repos narrows what a run can reach. See 6.11.
+- `context_paths`: directories a run may READ in addition to its own checkout. Writes do not widen. `$HOME`, `~/.gallivant`, `~/.claude`, `~/.codex`, `~/.config/opencode`, `~/.aport` and any parent of those are refused, because a run that can read them can read the settings and passport that bound it. Claude Code renders each as `--add-dir`; Codex and Gemini CLI have no per-path read grant and refuse the run rather than escalate to full disk read or to write; opencode and goose have no directory flag and ignore the list. A PRD may add to it for itself with a `context_paths:` frontmatter key. See 6.11.
 - `harness.*.bin`: absolute paths, so shell functions and aliases are bypassed. Argv templates live in `lib/harness.mjs`, not in config, so nobody has to know the flags.
 - `repos`: appended by `start` and `register`. Used by `up` for recovery.
 
