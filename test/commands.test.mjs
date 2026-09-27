@@ -8,8 +8,9 @@ import { register } from "../lib/commands/register.mjs";
 import { makeState, newEntry, STATES } from "../lib/state.mjs";
 import { parseBlock } from "../lib/block.mjs";
 import { isAtOrAfter, floorSecond } from "../lib/time.mjs";
+import { templatePath } from "../lib/fs.mjs";
 import { CONFIG, T0, tempHome, prFixture, fakeRunner, makeClock, silentLog, GOOD_PRD } from "./helpers.mjs";
-import { newPrd, templatePath } from "../lib/commands/new.mjs";
+import { newPrd } from "../lib/commands/new.mjs";
 import { check } from "../lib/prd.mjs";
 import { request as prdRequest } from "../lib/sources/prd.mjs";
 
