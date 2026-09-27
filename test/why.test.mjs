@@ -126,6 +126,16 @@ test("a retry in progress is explained, with what is failing and what happens if
 
   assert.match(out, /waiting on GitHub: ready label removal has failed 3 ticks in a row/);
   assert.match(out, /the entry stops with "stuck" if it keeps failing/, "so the operator knows the wait is bounded and does not have to guess");
+  assert.doesNotMatch(out, /otherwise ready/, "a removal is a step toward a fix round, not a PR held one label short");
+
+  // The ready-label WRITE is the one op that means everything a person waits for has already happened. An operator
+  // reading this screen needs to know the PR is finished and GitHub is the only thing in the way, because the action is
+  // to fix a token, not to look at the diff.
+  const blocked = world({ entry: { state: STATES.prOpen, retry: { op: "ready label write", count: 2 } } });
+  const out2 = why(blocked.ctx, { handle: "widget#142" });
+  assert.match(out2, /waiting on GitHub: ready label write has failed 2 ticks in a row/);
+  assert.match(out2, /this PR is otherwise ready: checks green, reviewer clear, receipt accepted/);
+  assert.match(out2, /Only the gallivant:ready-for-human label will not write/);
 });
 
 test("a stopped entry names the write that would not land, so `stuck` is never a bare word", () => {

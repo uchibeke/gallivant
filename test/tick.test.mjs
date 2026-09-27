@@ -76,6 +76,77 @@ test("a fix run that pushed posts the round comment, bumps iteration, resets the
   assert.ok(roundComment(CONFIG).includes(ROUND_MARKER));
 });
 
+test("a round comment that will not post is bounded, and never lets the next tick stop the entry for no-push", async () => {
+  // The fifth caller of the retry bound, found by enumerating the remaining writes rather than by a failure. The comment
+  // is a precondition of counting the round: `countRounds` rebuilds the iteration from these markers after `state.json`
+  // is lost, and the re-review request it carries is what `rereview.at` claims was asked. So the save must not run
+  // without it, which was already the case. What was missing is the bound: a throw left `last.exit` unrecorded, which is
+  // the state the next tick re-enters, so `settleRun` re-read the PR and tried the comment again forever, one
+  // `errors.log` line per tick from the per-entry catch, with the round never counted.
+  const w = world({}, { reviews: [review({ id: 1, by: BOT, bot: true, state: "CHANGES_REQUESTED", at: at(5) })] });
+  w.clock.advance(6);
+  await w.tick.tick();                       // dispatch the fix
+  w.clock.advance(10);
+  w.runner.finish(claudeResultLines({ cost: 1.25 }));
+  w.gh.data.pr = prFixture({ headRefOid: "d4e5f6a" });
+  w.gh.comment = async () => { throw new Error("HTTP 403: Resource not accessible by personal access token"); };
+
+  for (let i = 1; i <= 4; i++) {
+    const results = await w.tick.tick();
+    const e = w.entry();
+    assert.deepEqual(e.retry, { op: "round comment", count: i }, `tick ${i} counts the failure`);
+    assert.equal(e.iteration, 0, `tick ${i} does not count a round whose comment is not on the PR`);
+    assert.equal(e.last.exit, null, "and leaves the settle re-enterable, which is what the retry depends on");
+    assert.deepEqual(results.map(r => r.ok), [true], "handled inside the tick, not thrown at the per-entry catch");
+    assert.deepEqual(w.notify.sent, [], `tick ${i} rings nobody`);
+    // The half-settled entry must not have the rest of the tick run against it. Returning "this entry waits" is what
+    // makes that true: `headChanged` used to advance `cursor.fixed_sha` to the very head this round had just pushed, and
+    // then the NEXT tick re-read the settle with `pushed` false and stopped the entry with `no-push` for a push that
+    // had plainly happened. Two ticks was all it took.
+    assert.equal(e.cursor.fixed_sha, "a1b2c3d", `tick ${i} leaves the head the round was dispatched against`);
+    assert.notEqual(e.reason, "no-push", `tick ${i} does not stop for a push that did happen`);
+  }
+
+  await w.tick.tick();
+  const e = w.entry();
+  assert.deepEqual([e.state, e.reason], [STATES.needsHuman, "stuck"], "the fifth failure stops it");
+  assert.match(e.last.event, /round comment failed 5 ticks in a row: HTTP 403/);
+  assert.equal(e.last.exit, 0, "and the stop records the run's exit, so the settle is finished");
+  assert.equal(e.last.cost, 1.25, "with what the round cost, which the operator is paying for either way");
+  assert.equal(e.iteration, 0, "the round is still not counted: it was never announced on the PR");
+  assert.deepEqual(w.notify.sent, [["needs", 142, "stuck"]]);
+
+  // Nothing is re-attempted after the stop. Leaving `last.exit` null here kept `settleRun` re-entering this branch on
+  // every tick AFTER the stop, counting a fresh streak against an entry nobody was waiting on.
+  await w.tick.tick();
+  assert.equal(w.entry().retry, null, "no fresh streak against a stopped entry");
+  assert.equal(w.notify.sent.length, 1, "and it is not re-notified");
+});
+
+test("a round comment that fails once and then posts counts the round exactly once, on the tick that posts it", async () => {
+  const w = world({}, { reviews: [review({ id: 1, by: BOT, bot: true, state: "CHANGES_REQUESTED", at: at(5) })] });
+  w.clock.advance(6);
+  await w.tick.tick();
+  w.clock.advance(10);
+  w.runner.finish(claudeResultLines({ cost: 1.25 }));
+  w.gh.data.pr = prFixture({ headRefOid: "d4e5f6a" });
+  let fail = true;
+  const posted = [];
+  const realComment = w.gh.comment;
+  w.gh.comment = async (repo, n, body) => { if (fail) throw new Error("HTTP 502: bad gateway"); posted.push(body); return realComment(repo, n, body); };
+
+  await w.tick.tick();
+  assert.equal(w.entry().iteration, 0);
+  fail = false;
+  await w.tick.tick();
+  const e = w.entry();
+  assert.equal(e.iteration, 1, "counted once, on the tick the comment landed");
+  assert.equal(e.retry, null, "and the count is cleared by that write landing");
+  assert.equal(e.cursor.fixed_sha, "d4e5f6a", "the cursor catches up on the same tick");
+  assert.equal(posted.length, 1, "one comment, not one per attempt");
+  assert.deepEqual(w.notify.sent, [], "nobody was ever told: nothing stopped");
+});
+
 test("a fix run that did not push stops with no-push; a failed run stops with harness-error", async () => {
   for (const [lines, reason] of [[claudeResultLines({ ok: true }), "no-push"], [claudeResultLines({ ok: false }), "harness-error"]]) {
     const w = world({}, { reviews: [review({ id: 1, by: BOT, bot: true, state: "CHANGES_REQUESTED", at: at(5) })] });
@@ -689,14 +760,53 @@ test("a ready label that will not write keeps the entry in pr-open and is retrie
 
   assert.equal(w.entry().state, STATES.prOpen, "pr-open is the retryable state");
   assert.deepEqual(w.notify.sent, [], "and nobody is told a PR is ready while the PR itself says nothing");
-  assert.ok(w.logged.some(l => /ready label failed \(HTTP 502.*trying again next tick/.test(l)), `the failure is explained (got ${w.logged})`);
+  assert.ok(w.logged.some(l => /ready label write failed \(HTTP 502.*attempt 1 of 5/.test(l)), `the failure is explained (got ${w.logged})`);
+  assert.deepEqual(w.entry().retry, { op: "ready label write", count: 1 }, "and it is counted, so the wait is bounded");
 
   // The next tick judges the same head again and the label takes. One notification, not one per attempt.
   await w.tick.tick();
   assert.equal(attempts, 2, "the same work is retried, not a second round of anything");
   assert.equal(w.entry().state, STATES.ready);
+  assert.equal(w.entry().retry, null, "the count is cleared by the write landing, and never sits on a ready entry");
   assert.deepEqual(w.notify.sent, [["ready", 142]]);
   assert.equal(w.entry().iteration, 0, "a label retry is not a fix round");
+});
+
+test("a ready label that will NEVER write stops the entry with stuck, rather than re-running the gate every tick forever", async () => {
+  // The fourth caller of the bound, and the one the round that added the other three predicted. A token that cannot
+  // write labels at all never recovers, and this path had no counter: the entry stayed in `pr-open`, repeating the
+  // readiness judgement and the label attempt on every poll for as long as the daemon ran, with one `log.warn` each
+  // time and nothing that would ever stop or notify. Every readiness condition had already passed, so `status` said
+  // the entry was waiting on the reviewer, which the reviewer had already answered.
+  const w = world({ rereview: { at: T0, nudged: false } }, {
+    pr: prFixture({ statusCheckRollup: [checkRun({ name: "test", conclusion: "SUCCESS" })] }),
+    reviews: clearReviewer(),
+  });
+  // Counted per label, because the stop itself writes the OTHER one: `needsHuman` tries `gallivant:needs-human` on the
+  // tick that stops the entry, and that attempt is not a sixth try at the ready label.
+  const attempts = { [READY_LABEL]: 0, [NEEDS_LABEL]: 0 };
+  w.gh.addLabel = async (repo, n, label) => { attempts[label]++; throw new Error("HTTP 403: Resource not accessible by personal access token"); };
+  w.clock.advance(4);
+
+  for (let i = 1; i <= 4; i++) {
+    await w.tick.tick();
+    assert.deepEqual(w.entry().retry, { op: "ready label write", count: i }, `tick ${i} counts the failure`);
+    assert.equal(w.entry().state, STATES.prOpen, `tick ${i} leaves the retryable state`);
+    assert.deepEqual(w.notify.sent, [], `tick ${i} rings nobody: a 403 may be a token being rotated`);
+  }
+
+  await w.tick.tick();
+  const e = w.entry();
+  assert.deepEqual([e.state, e.reason], [STATES.needsHuman, "stuck"], "the fifth failure stops it rather than polling forever");
+  assert.equal(e.retry, null, "and the counter goes with the stop");
+  assert.match(e.last.event, /ready label write failed 5 ticks in a row: HTTP 403/, "naming the write and what GitHub said");
+  assert.deepEqual(w.notify.sent, [["needs", 142, "stuck"]], "rung once, like every other stop");
+  assert.equal(attempts[READY_LABEL], 5, "and the ready label was attempted five times, not indefinitely");
+  assert.equal(attempts[NEEDS_LABEL], 1, "while the stop tried to say so on the PR, which is a different write");
+
+  await w.tick.tick();
+  assert.equal(w.notify.sent.length, 1, "told once, not on every poll after that");
+  assert.equal(attempts[READY_LABEL], 5, "and the ready label is never attempted again once the entry has stopped");
 });
 
 test("a clear review in the very second the re-review was asked for clears the entry, rather than waiting until reviewer-silent", async () => {
@@ -1061,6 +1171,35 @@ test("a start run whose identity block will not write stays in running and retri
   assert.equal(e.cursor.fixed_sha, "aaaa111");
   assert.match(w.gh.data.pr.body, /<!-- gallivant\nprd: docs\/prds\/widget-export.md\nharness: claude\nsession: 6f1c2d3e-1111-4111-8111-111111111111\nbranch: gallivant\/widget-export\n-->/);
   assert.equal(w.runner.started.length, 1, "and nothing was spawned a second time while it waited");
+});
+
+test("reopen's label removal reaches the retry counter through the real gh, not just through a fake that throws", async () => {
+  // Every other test of this path replaces `gh.removeLabel` with a function that throws, which proves the tick handles
+  // a throw and proves nothing about whether the real one throws. It did not: `strict` was opt-in, `writeStopLabels`
+  // passed it and `reopen` did not, so a 403 on the ready-label removal resolved as a success. The dispatch then went
+  // ahead with `gallivant:ready-for-human` still on the PR and the counter never saw a failure to count. So this test
+  // wires the REAL `removeLabel` to a `gh` CLI that refuses the write, with no options at the call site.
+  const w = world({ state: STATES.ready, cursor: { since: T0, dispatched: [], fixed_sha: "a1b2c3d", checks_sha: null, receipt_hash: null } },
+    { pr: prFixture({ statusCheckRollup: [checkRun({ name: "test", conclusion: "SUCCESS" })] }), reviews: [review({ id: 2301, by: BOT, bot: true, state: "CHANGES_REQUESTED", at: at(5) })] });
+  const edits = [];
+  const real = makeGh({ exec: async (cmd, args) => { edits.push(args); throw new Error("gh pr edit: HTTP 403: Resource not accessible by personal access token"); } });
+  w.gh.removeLabel = real.removeLabel;
+  w.clock.advance(6);
+
+  await w.tick.tick();
+  assert.deepEqual(edits.at(-1), ["pr", "edit", "142", "--repo", "acme/widget", "--remove-label", READY_LABEL],
+    "the removal was attempted");
+  const e = w.entry();
+  assert.deepEqual(e.retry, { op: "ready label removal", count: 1 }, "and the refusal was counted, not swallowed");
+  assert.equal(e.state, STATES.ready, "the entry stays in the retryable state");
+  assert.equal(w.runner.started.length, 0, "nothing was spawned behind a label that is still on the PR");
+
+  // Driven to the stop, so the bound holds through the real client too.
+  for (let i = 0; i < 4; i++) await w.tick.tick();
+  const stopped = w.entry();
+  assert.deepEqual([stopped.state, stopped.reason], [STATES.needsHuman, "stuck"]);
+  assert.match(stopped.last.event, /ready label removal failed 5 ticks in a row: .*HTTP 403/);
+  assert.equal(w.runner.started.length, 0, "and no fixer ever ran for feedback the loop could not relabel for");
 });
 
 test("a ready-label removal that keeps failing stops the entry with stuck, and one that recovers does not", async () => {

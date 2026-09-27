@@ -6,6 +6,7 @@ import { mkdirSync, readFileSync, writeFileSync, chmodSync, statSync } from "nod
 import { start } from "../lib/commands/start.mjs";
 import { register } from "../lib/commands/register.mjs";
 import { makeState, newEntry, STATES } from "../lib/state.mjs";
+import { parseBlock } from "../lib/block.mjs";
 import { isAtOrAfter, floorSecond } from "../lib/time.mjs";
 import { CONFIG, T0, tempHome, prFixture, fakeRunner, makeClock, silentLog, GOOD_PRD } from "./helpers.mjs";
 
@@ -226,6 +227,61 @@ test("registering with a new --harness or --session rewrites the block, so recov
   }
 });
 
+test("a --harness change drops an inherited session the new harness cannot mean, and says so", async () => {
+  // `--session` is validated against the chosen harness. An INHERITED one was not: `--harness opencode` with no
+  // `--session` carried claude's UUID straight through, and opencode needs `ses_...`. The next fix round then resumed an
+  // id its harness cannot mean, and `parseBlock` refused the block written with it on the way back, which kills the
+  // recovery the block exists for. A session from another harness is meaningless rather than wrong, so it is dropped.
+  const id = "acme/widget/widget-export";
+  const cases = [
+    // Inherited from the registry entry.
+    { seedSession: "6f1c2d3e-1111-4111-8111-111111111111", body: "Adds export.\n", from: "claude" },
+    // Inherited from the PR block, with no registry entry of its own to read it from.
+    { seedSession: null, body: BLOCK({ harness: "claude", session: "6f1c2d3e-1111-4111-8111-111111111111" }), from: "claude" },
+  ];
+  for (const c of cases) {
+    const w = registerWorld(registerGit());
+    w.ctx.gh.prView = async () => ({ ...prFixture({ headRefName: "gallivant/widget-export", createdAt: T0 }), body: c.body });
+    if (c.seedSession) w.ctx.state.put(id, {
+      ...newEntry({ prd: "docs/prds/widget-export.md", harness: "claude", session: c.seedSession, repo: "acme/widget", branch: "gallivant/widget-export", worktree: "/checkouts/widget", pr: 142, state: STATES.prOpen, nowIso: T0 }),
+      url: "https://github.com/acme/widget/pull/142",
+    });
+
+    const r = await register(w.ctx, { url: w.url, worktree: "/checkouts/widget", harness: "opencode" });
+
+    assert.equal(r.session, null, "the command reports no session, so it never claims a resume it did not keep");
+    assert.equal(w.ctx.state.get(r.id).session, null, "and the registry holds none");
+    assert.equal(w.ctx.state.get(r.id).harness, "opencode");
+    // The block must say the same thing, or recovery restores the id that was just dropped.
+    const body = w.calls.filter(x => x[0] === "setBody").at(-1)[1];
+    assert.match(body, /harness: opencode/);
+    assert.doesNotMatch(body, /6f1c2d3e/, "the incompatible id is not written back to the PR either");
+    // And `parseBlock` reads it back, which is the whole point: an id opencode cannot mean was refused here.
+    assert.equal(parseBlock(body).block.harness, "opencode");
+    assert.equal(parseBlock(body).block.session, null);
+    // The operator is told, because they may have wanted that conversation.
+    assert.ok(w.logged.some(l => /is not a opencode session id.*dropped.*fresh opencode session/.test(l)),
+      `the drop is logged with both harnesses (got ${w.logged})`);
+  }
+});
+
+test("a --harness change KEEPS an inherited session the new harness can mean, and an explicit bad one still refuses", async () => {
+  // The clearing is about compatibility, not about the flag: claude and codex both key sessions by UUID, so a claude
+  // session id is a valid codex one and dropping it would cost a conversation for nothing.
+  const w = registerWorld(registerGit());
+  w.ctx.gh.prView = async () => ({ ...prFixture({ headRefName: "gallivant/widget-export", createdAt: T0 }), body: BLOCK({ harness: "claude" }) });
+  const r = await register(w.ctx, { url: w.url, worktree: "/checkouts/widget", harness: "codex" });
+  assert.equal(r.session, "6f1c2d3e-1111-4111-8111-111111111111", "a UUID means the same thing to codex, so it is kept");
+  assert.ok(!w.logged.some(l => /dropped/.test(l)), "and nothing is dropped, so nothing is logged about it");
+
+  // An operator who TYPED an id meant that id, so that case still refuses rather than quietly clearing.
+  const typed = registerWorld(registerGit());
+  typed.ctx.gh.prView = async () => ({ ...prFixture({ headRefName: "gallivant/widget-export", createdAt: T0 }), body: BLOCK() });
+  await assert.rejects(() => register(typed.ctx, { url: typed.url, worktree: "/checkouts/widget", harness: "opencode", session: "6f1c2d3e-1111-4111-8111-111111111111" }),
+    /is not a opencode session id; nothing was registered/);
+  assert.deepEqual(typed.calls.filter(x => x[0] === "setBody"), [], "and nothing was written for a session that was refused");
+});
+
 test("registering with no override, or one that agrees with the block, leaves the body alone", async () => {
   for (const over of [{}, { harness: "claude" }, { session: "6f1c2d3e-1111-4111-8111-111111111111" }]) {
     const w = registerWorld(registerGit());
@@ -389,6 +445,63 @@ test("start validates the run specification before it clones, so a refused harne
   signedOut.ctx.git.create = async () => { clones.push(1); return signedOut.worktree; };
   await assert.rejects(() => start(signedOut.ctx, { path: signedOut.prdPath }), /is not signed in/);
   assert.deepEqual(clones, [], "a signed-out harness is refused before the clone as well");
+});
+
+test("a reset that fails halfway leaves GitHub and the registry agreeing on ONE identity, never on two", async () => {
+  // Both writes are preconditions and both throw, so what the ORDER decides is what GitHub is left saying when the
+  // second one fails. The body write went first, so a comment that then failed left `register` reporting that nothing
+  // was reset, the registry still on the OLD harness and session, and the PR already recording the NEW ones. A running
+  // daemon reads the registry and a later recovery reads the block, so the two resumed different harnesses for the same
+  // PR, and nothing anywhere compared them. The body write is the point of no return, so it goes last.
+  const id = "acme/widget/widget-export";
+  const seed = () => ({
+    ...newEntry({ prd: "docs/prds/widget-export.md", harness: "claude", session: "6f1c2d3e-1111-4111-8111-111111111111", repo: "acme/widget", branch: "gallivant/widget-export", worktree: "/checkouts/widget", pr: 142, state: STATES.needsHuman, nowIso: T0 }),
+    reason: "iterations", iteration: 3,
+  });
+
+  // The comment fails. Nothing durable has been written yet, so the PR still records claude and the registry still
+  // records claude: one identity, on both sides.
+  const a = registerWorld(registerGit());
+  a.ctx.gh.prView = async () => ({ ...prFixture({ headRefName: "gallivant/widget-export", createdAt: T0 }), body: BLOCK() });
+  a.ctx.gh.comment = async () => { a.calls.push(["comment"]); throw new Error("HTTP 403: Resource not accessible by personal access token"); };
+  a.ctx.state.put(id, seed());
+  await assert.rejects(() => register(a.ctx, { url: a.url, worktree: "/checkouts/widget", harness: "codex" }),
+    /cannot post the reset comment.*recorded harness and session are unchanged/s);
+  assert.deepEqual(a.calls.filter(c => c[0] === "setBody"), [], "the identity write never ran, so the PR still names the old harness");
+  assert.equal(a.ctx.state.get(id).harness, "claude", "and so does the registry: they agree");
+
+  // The comment lands and the BODY fails. The reset comment is on the PR and nothing else changed, so both sides still
+  // say claude. A duplicate reset comment is harmless: `countRounds` takes the last marker, so two count as one.
+  const b = registerWorld(registerGit());
+  b.ctx.gh.prView = async () => ({ ...prFixture({ headRefName: "gallivant/widget-export", createdAt: T0 }), body: BLOCK() });
+  b.ctx.gh.setBody = async () => { b.calls.push(["setBody"]); throw new Error("HTTP 403: Resource not accessible by personal access token"); };
+  b.ctx.state.put(id, seed());
+  await assert.rejects(() => register(b.ctx, { url: b.url, worktree: "/checkouts/widget", harness: "codex" }),
+    /cannot write the gallivant block.*keeps harness claude and session 6f1c2d3e.*still what the PR records/s);
+  const stillOld = b.ctx.state.get(id);
+  assert.deepEqual([stillOld.harness, stillOld.session], ["claude", "6f1c2d3e-1111-4111-8111-111111111111"],
+    "the registry keeps the old identity");
+  assert.equal(stillOld.iteration, 3, "and the reset did not land locally either");
+  assert.equal(b.calls.filter(c => c[0] === "comment").length, 1, "the comment is on the PR, which is safe: countRounds takes the LAST marker");
+
+  // An existing entry on a PR with no block at all is the one case where "the PR still records that" would be false:
+  // the registry has an identity and GitHub has none, which is what the write was about to fix. The message says so.
+  const c = registerWorld(registerGit());
+  c.ctx.gh.prView = async () => ({ ...prFixture({ headRefName: "gallivant/widget-export", createdAt: T0 }), body: "Adds export.\n" });
+  c.ctx.gh.setBody = async () => { throw new Error("HTTP 403: Resource not accessible by personal access token"); };
+  c.ctx.state.put(id, seed());
+  await assert.rejects(() => register(c.ctx, { url: c.url, worktree: "/checkouts/widget" }),
+    /the PR still records no identity at all/s);
+  assert.equal(c.ctx.state.get(id).harness, "claude", "and the registry is untouched either way");
+
+  // The operator fixes the cause and runs the same command. The whole reset lands, and the second comment changes no
+  // count, so the retry is complete rather than partial.
+  b.ctx.gh.setBody = async (_r, _n, body) => { b.calls.push(["setBody", body]); };
+  const r = await register(b.ctx, { url: b.url, worktree: "/checkouts/widget", harness: "codex" });
+  const done = b.ctx.state.get(r.id);
+  assert.equal(done.harness, "codex", "the registry now records the new harness");
+  assert.match(b.calls.filter(c => c[0] === "setBody").at(-1)[1], /harness: codex/, "and so does the PR: still one identity");
+  assert.equal(done.iteration, 0, "and the reset itself landed");
 });
 
 test("a reset comment that cannot be posted fails the reset instead of zeroing the iteration without its marker", async () => {

@@ -33,6 +33,8 @@ Puts a PR into the loop that Gallivant did not open, or resets one that stopped.
 - A `--worktree` you pass is resolved to an absolute path first, so `.` means the directory you typed it in and not whatever directory the daemon happens to run in later. It is then checked before it is accepted: its `origin` must be the PR's repository and it must already be on the PR's head branch. A path that fails either check is an error, since the harness edits and pushes from that directory. It is never relocated or re-cloned for you, because a resumed session is keyed to the directory it ran in.
 - On an entry that already exists: reason cleared, iteration reset to zero, a marked reset comment posted on the PR (so a count rebuilt from GitHub starts from zero too), cursor set to now, watching again. This is how you restart a `needs-human` PR after you fixed the conflict or answered the question. A fresh registration instead looks at the PR's whole history, so feedback already on it gets addressed.
 - That reset comment is the reset boundary, so posting it is a precondition of the reset and not a best-effort extra. A count rebuilt from GitHub finds its marker and counts only the round comments after it; with the comment missing and `state.json` later lost, recovery reconstructs the rounds this command had just zeroed, and an entry restored at `max_iterations` stops with `iterations` on its next event having done no work in the round. If it cannot be posted, `register` refuses and changes nothing: the entry keeps its iteration, its state and its cursor, and running the same command again once GitHub answers does the whole reset in one go.
+- A reset with a new `--harness` or `--session` makes two durable writes to GitHub, and they are ordered so a failure between them cannot leave GitHub and the registry disagreeing about which harness or session this PR belongs to. The reset comment goes first because it is safely repeatable: a count rebuilt from GitHub takes the LAST reset marker, so a second one counts as one. The identity block goes last, because that write is what a recovery reads the harness and the session out of. So a failed block write leaves a reset comment on the PR, the registry untouched, and both sides still naming the old identity; the same command run again completes the reset.
+- Changing `--harness` without giving a new `--session` drops an inherited session the new harness cannot mean, and says so on the way past. A claude session id is a UUID and an opencode one is `ses_...`, so carrying the old one across would have the next fix round resume an id its harness cannot resolve and write a block that cannot be read back. A session from another harness is meaningless rather than wrong, so it is dropped rather than refused, and the next fix round starts a fresh one. An id you typed yourself is a different case and is still refused, because you meant that id. A harness change between two that agree on the format, claude to codex say, keeps the session.
 
 When the block names a PRD that exists on the PR's branch, the daemon's own snapshot of it is taken, exactly as recovery does, because the completion gate reads that snapshot and nothing else: without it the gate is skipped and the PR can be marked ready with no acceptance criterion evaluated. A snapshot already on disk is kept rather than replaced with the copy the session could have edited, and a PRD the branch does not carry is logged and the PR watched without a gate.
 
@@ -63,9 +65,12 @@ NEEDS YOU
 RUNNING
   guard#88          fixing        review 2201 by chatgpt...  round 1/3   3m ago
   widget#150        waiting       on reviewer, nudged once   round 0/3   4m ago
+  api#44            blocked       ready label write failing (3), retrying  round 1/3  6m ago
 ```
 
 A `ready` row says whether the completion gate accepted the receipt or never ran at all (`RECEIPT NOT CHECKED`, with the reason), because an entry with no PRD snapshot reaches ready on the checks and the reviewer alone and that is a different thing from passing the gate.
+
+A row whose detail names a GitHub write is an entry whose tick is declining one step until that write lands, with the failures counted; see `gallivant why` below for the five writes this can be. `blocked` is the one of those to read twice: every readiness condition has already passed and only the label that says so will not write, so the label is `blocked` rather than `fixing`. The others read `fixing` or `implementing`, which is true for them, because a fix round really does follow.
 
 Sections are in the order needs-you, running; `--all` adds done. The first line is `daemon DOWN` with exit code 1 when no daemon is alive. `--json` prints the same model for scripts and UIs.
 
@@ -135,7 +140,18 @@ The log pane sends the last 400 lines when it opens and says how many earlier on
 
 For a stopped or running PR: state and reason, the PR and checkout paths, the session id and the by-hand command to open it (`claude --resume <id>` or `codex resume <id>` in the checkout), the last dispatched event, the run folder and exit code, cost when the harness reports it, permission denials, the harness's final message, and any APort audit lines from the run's time window.
 
-An entry whose tick is waiting on one GitHub write also gets a line naming that write and how many ticks it has failed, so a PR that looks idle says why it is idle. `status` says the same thing on its row. After five consecutive failures the entry stops with reason `stuck` and `last event` carries the write and GitHub's own message, which is usually a token permission: `Resource not accessible by personal access token` on a body write means the token cannot edit PR descriptions, and on a label write that it cannot edit issues. Fix the token, then `gallivant register <pr-url>` to resume.
+An entry whose tick is waiting on one GitHub write also gets a line naming that write and how many ticks it has failed, so a PR that looks idle says why it is idle. `status` says the same thing on its row. After five consecutive failures the entry stops with reason `stuck` and `last event` carries the write and GitHub's own message, which is usually a token permission: `Resource not accessible by personal access token` on a body write means the token cannot edit PR descriptions, on a label write that it cannot edit issues, and on a comment that it cannot write to the PR conversation. Fix the token, then `gallivant register <pr-url>` to resume.
+
+The five writes that can put an entry there, and what each one is holding up:
+
+| `retry.op` | What it is holding up |
+|---|---|
+| `ready label removal` | a fix round for new feedback, or judging a head that just moved, while the PR still says a human may merge |
+| `PR #<n> block write` | a start run leaving `running`, so the PR is open but not yet watched |
+| `ready label write` | nothing: every readiness condition passed and only the label saying so will not write |
+| `round comment` | counting a round whose push has already landed, since the comment is the count's own boundary on GitHub |
+
+`ready label write` is the one worth reading twice. The work is done and the PR is finished; what is missing is the label a person looks for. `why` says so in as many words, and `status` labels that row `blocked` rather than `fixing`, because nothing is being fixed.
 
 ## `gallivant remove <handle>`
 

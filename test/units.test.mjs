@@ -1,13 +1,13 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { join, dirname } from "node:path";
+import { join, dirname, basename } from "node:path";
 import { readFileSync } from "node:fs";
-import { spawnSync } from "node:child_process";
+import { spawnSync, execFileSync } from "node:child_process";
 import { makeState, resolveHandle, newEntry, entryId, idSlug, prdIdOf, advanceCursor, shortRepo, handleFor, STATES } from "../lib/state.mjs";
 import { isAtOrAfter, floorSecond } from "../lib/time.mjs";
 import { renderBlock, parseBlock, upsertBlock } from "../lib/block.mjs";
 import { quote, fixPrompt, startPrompt } from "../lib/prompt.mjs";
-import { buildRun, assertSafeArgv, assertSafeEnv, adapters, compareVersions, contextSupport } from "../lib/harness.mjs";
+import { buildRun, assertSafeArgv, assertSafeEnv, adapters, compareVersions, contextSupport, MIN_VERSIONS } from "../lib/harness.mjs";
 import { parsePrd, verifyCommands, withFrontmatterKey, fencedBlocks, findPlaceholder } from "../lib/prd.mjs";
 import { makeRunner, isOurProcess } from "../lib/run.mjs";
 import { branchFor, prdIdFromBranch, isOurBranch, makeGit } from "../lib/git.mjs";
@@ -16,7 +16,7 @@ import { validate, DEFAULTS, merge, discoverHarnesses, whence, validateContextPa
 import { signInFix, probeFix } from "../lib/probe.mjs";
 import { HOME } from "../lib/fs.mjs";
 import { messages } from "../lib/notify.mjs";
-import { repoFromRemote, remoteMatches, makeGh, MAX_DIFF_BYTES } from "../lib/gh.mjs";
+import { repoFromRemote, remoteMatches, makeGh, MAX_DIFF_BYTES, READY_LABEL } from "../lib/gh.mjs";
 import { CONFIG, T0, at, tempHome, claudeResultLines, codexLines, geminiLines, opencodeLines, gooseLines, GOOD_PRD } from "./helpers.mjs";
 
 test("state writes atomically and resolves handles", () => {
@@ -166,20 +166,46 @@ test("a harness whose id cannot be read back off the run must generate it up fro
   assert.ok(adapters.opencode.sessionFrom(opencodeLines()));
 });
 
+/**
+ * The version of an installed harness, read the same way `probe.mjs` reads it, or null when the binary will not say.
+ * Used to skip the flag checks below rather than fail them: the adapter's flags are promised from `MIN_VERSIONS`
+ * onward, so an older build on the PATH is out of contract and proves nothing about the adapter.
+ */
+function installedVersion(harness, bin) {
+  const spec = adapters[harness].version;
+  const r = spawnSync(bin, spec.args, { encoding: "utf8", timeout: 60_000 });
+  if (r.error || r.status !== 0) return null;
+  return spec.parse(`${r.stdout || ""}${r.stderr || ""}`) ?? null;
+}
+
 // Checks the argv against the real CLIs rather than against our own assumption, so a flag renamed upstream fails
-// here instead of in production. Skipped when a binary is not installed; --help is free and makes no model call.
-// opencode prints its help to stderr, so both streams are read; reading only stdout silently passes on empty text.
+// here instead of in production. `--help` is free and makes no model call. opencode prints its help to stderr, so both
+// streams are read; reading only stdout silently passes on empty text.
+//
+// Skipped, with the reason named, on any machine that cannot answer the question: no binary installed, or one older
+// than `MIN_VERSIONS` says the adapter supports. That second skip is the one that matters. The test used to run
+// against whatever `gemini` happened to be first on the PATH, and a Homebrew gemini 0.28.2 sitting in
+// /usr/local/bin ahead of an nvm-installed 0.59 failed on `--skip-trust`, a flag that version does not have and is
+// not expected to. `probe.mjs` refuses to run a harness below `MIN_VERSIONS`, so a build the daemon would refuse must
+// not be what decides whether this suite passes. It is a skip and never a silent pass: the reason says which version
+// was found and what was wanted, so nobody reads the skip as a green light.
 for (const [harness, argv, flags] of [
   ["gemini", ["--help"], ["--skip-trust", "--session-id", "--resume", "--output-format"]],
   ["opencode", ["run", "--help"], ["--session", "--format"]],
   ["goose", ["run", "--help"], ["--name", "--resume", "--output-format"]],
 ]) {
   const bin = whence(harness);
-  test(`${harness} still accepts the flags the adapter passes`, { skip: bin ? false : `${harness} is not installed` }, () => {
+  const version = bin ? installedVersion(harness, bin) : null;
+  const tooOld = version !== null && compareVersions(version, MIN_VERSIONS[harness]) < 0;
+  const skip = !bin ? `${harness} is not installed`
+    : version === null ? `${bin} would not report a version`
+    : tooOld ? `${bin} is ${version}, older than the ${MIN_VERSIONS[harness]} this adapter supports`
+    : false;
+  test(`${harness} still accepts the flags the adapter passes`, { skip }, () => {
     const r = spawnSync(bin, argv, { encoding: "utf8", timeout: 60_000 });
     const help = `${r.stdout || ""}${r.stderr || ""}`;
     assert.ok(help.length > 200, `${harness} --help printed nothing to read`);
-    for (const f of flags) assert.ok(help.includes(f), `${harness} --help no longer mentions ${f}`);
+    for (const f of flags) assert.ok(help.includes(f), `${harness} ${version}: --help no longer mentions ${f}`);
   });
 }
 
@@ -255,7 +281,15 @@ test("a run whose binary does not exist is recorded as exit 127, not thrown into
 
 test("liveness asks whether the pid still runs the harness, so a reused pid is not mistaken for our run", () => {
   assert.equal(isOurProcess(process.pid, process.execPath), true);
-  assert.equal(isOurProcess(process.pid, "/bin/claude"), false);
+  // The negative case needs a basename that cannot appear in THIS process's `ps` line for any reason. `/bin/claude`
+  // was the old spelling and it is not safe: `isOurProcess` matches on `basename(cmd)` as a substring of the whole
+  // command, and the command includes every argv element, so a checkout, a HOME, a node --import or a runner root
+  // whose path contains "claude" made this assertion fail. It is the shape the whole suite was audited for: a test
+  // that passes on the machine it was written on. A random name cannot collide with anything.
+  const impossible = `/opt/harness-${Math.random().toString(36).slice(2)}-${process.pid}`;
+  assert.ok(!execFileSync("ps", ["-o", "command=", "-p", String(process.pid)], { encoding: "utf8" }).includes(basename(impossible)),
+    "the control name really is absent from this process's own command line");
+  assert.equal(isOurProcess(process.pid, impossible), false);
   assert.equal(isOurProcess(2 ** 22 - 1, process.execPath), false);
 });
 
@@ -514,6 +548,32 @@ test("prDiff reports a failure instead of returning nothing, so the output scan 
   assert.equal((await under.prDiff("acme/widget", 142)).length, MAX_DIFF_BYTES - 1, "a diff that fits is returned whole");
 });
 
+test("removeLabel is strict by omission: only gh's own absent-label message is swallowed", async () => {
+  // `strict` used to be opt-in, so the DANGEROUS behaviour was what a caller got by forgetting the option, and two
+  // callers of this one write disagreed: `writeStopLabels` passed `{ strict: true }` and `reopen` passed nothing. So
+  // a 403 or a 502 on the ready-label removal resolved as if the label had merely been absent, the dispatch went
+  // ahead with `gallivant:ready-for-human` still on the PR, and `retryFailed` never saw a failure to count.
+  const forbidden = makeGh({ exec: async () => { throw new Error("gh pr edit: HTTP 403: Resource not accessible by personal access token"); } });
+  await assert.rejects(() => forbidden.removeLabel("acme/widget", 142, READY_LABEL), /HTTP 403/,
+    "a write GitHub refused throws with no option passed at all");
+  await assert.rejects(() => forbidden.removeLabel("acme/widget", 142, READY_LABEL, {}), /HTTP 403/,
+    "and an empty options object is the same as none");
+
+  // The one case that is not a failure: the label was not on the PR, which is the ordinary result of removing a
+  // label from a PR that never had it, and every caller does that unconditionally on purpose.
+  for (const msg of ["gh pr edit: failed to remove label: 'gallivant:ready-for-human' not found", "does not have this label", "no label named that"]) {
+    const absent = makeGh({ exec: async () => { throw new Error(msg) } });
+    assert.equal(await absent.removeLabel("acme/widget", 142, READY_LABEL), undefined, `absent label is not a failure: ${msg}`);
+  }
+
+  // The lenient half still exists, but it has to be asked for by name, so no future caller gets it by omission.
+  const lenient = makeGh({ exec: async () => { throw new Error("HTTP 502: bad gateway"); } });
+  assert.equal(await lenient.removeLabel("acme/widget", 142, READY_LABEL, { lenient: true }), undefined);
+  // And a removal that lands is still a removal.
+  const ok = makeGh({ exec: async () => ({ stdout: "" }) });
+  assert.equal(await ok.removeLabel("acme/widget", 142, READY_LABEL), "");
+});
+
 test("every harness's own session id round-trips through the block, and a malformed one is still refused", () => {
   // The block is the identity of record: `reconcile` rebuilds an entry from it after state.json is lost, and a block
   // it will not read back means the PR is ignored with nothing to show for it. A single UUID regex in block.mjs was
@@ -632,16 +692,42 @@ test("assertSafeArgv refuses the = spelling of every switch it refuses as two el
 
 test("a context_paths entry that is a symlink to a forbidden directory is refused by what it points at", () => {
   // Every refusal compared lexical paths, and `expand` resolves `~` without following symlinks, so a link to $HOME or
-  // to ~/.claude passed all of them and handed the run exactly what they exist to refuse. SPEC.md claims those
-  // directories "and any parent of those are refused"; neither held through a link.
+  // to a harness config directory passed all of them and handed the run exactly what they exist to refuse. SPEC.md
+  // claims those directories "and any parent of those are refused"; neither held through a link.
+  //
+  // Every target this test links to is one the test creates, inside directories it owns. It used to link to
+  // `~/.claude`, which made the whole assertion a fact about the machine: on an account with no `~/.claude` the link
+  // dangles, `realpathSync` throws, `realOf` falls back to the lexical path, validation correctly reports that the
+  // path does not exist, and the assertion expecting the forbidden-directory message fails. It passed on the laptop it
+  // was written on and failed on every clean account and every CI runner.
   const dir = tempHome();
-  symlinkSync(HOME, join(dir, "tohome"));
-  symlinkSync(join(HOME, ".claude"), join(dir, "toclaude"));
   const gvHome = tempHome();
+  // The Gallivant home itself: one entry on the forbidden list, and the one the caller can point anywhere.
   symlinkSync(gvHome, join(dir, "togallivant"));
+  // A PARENT of the Gallivant home, which is the shape a link to `$HOME` has when a harness config directory lives
+  // under it: the refusal is `isInside(forbidden, candidate)`, so containing a forbidden directory is what it catches.
+  symlinkSync(dirname(gvHome), join(dir, "toparent"));
+  // A link to the real home directory, refused on its own terms rather than by containment. `homedir()` is a real
+  // directory on any account this test can run on at all, and nothing is read from it or written into it.
+  symlinkSync(HOME, join(dir, "tohome"));
 
-  assert.match(validateContextPaths([join(dir, "tohome")], gvHome)[0] ?? "", /is your home directory/);
-  assert.match(validateContextPaths([join(dir, "toclaude")], gvHome)[0] ?? "", /contains ~\/\.claude/);
   assert.match(validateContextPaths([join(dir, "togallivant")], gvHome)[0] ?? "", /which holds the settings and passport/);
+  assert.match(validateContextPaths([join(dir, "toparent")], gvHome)[0] ?? "", /contains the Gallivant home/);
+  assert.match(validateContextPaths([join(dir, "tohome")], gvHome)[0] ?? "", /is your home directory/);
   assert.deepEqual(validateContextPaths([dir], gvHome), [], "a plain directory is still accepted");
+
+  // The harness config directories are refused through a link by the same comparison, and this asserts it against one
+  // the test creates rather than against `~/.claude`. `validateContextPaths` hardcodes those five paths, so the test
+  // builds the same shape with the one forbidden entry it can place: a directory whose PARENT is what the link points
+  // at, which is exactly how `~` reaches `~/.claude`.
+  const nested = join(gvHome, "claude", "settings");
+  mkdirSync(nested, { recursive: true });
+  symlinkSync(gvHome, join(dir, "toconfig"));
+  assert.match(validateContextPaths([join(dir, "toconfig")], nested)[0] ?? "", /contains the Gallivant home/,
+    "a link to a directory that contains the one holding the settings is refused by what it points at");
+
+  // And a dangling link is reported as absent, which is what made the old version of this test pass by accident: the
+  // message names a missing path, not a forbidden one, so nothing here can be satisfied by a link to nowhere.
+  symlinkSync(join(dir, "no-such-target"), join(dir, "dangling"));
+  assert.match(validateContextPaths([join(dir, "dangling")], gvHome)[0] ?? "", /does not exist/);
 });

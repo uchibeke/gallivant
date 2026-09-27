@@ -42,7 +42,7 @@ next to the adapters in `lib/harness.mjs`.
 Two bounds the daemon enforces have no setting, and both are fixed numbers with their reasoning written at the
 constant.
 
-- **How many consecutive failures of one GitHub write stop an entry.** Five, in `lib/tick.mjs`. Three steps in the
+- **How many consecutive failures of one GitHub write stop an entry.** Five, in `lib/tick.mjs`. Five steps in the
   tick wait rather than proceed when a write will not land, and each of them stops the entry with reason `stuck` once
   that write has failed five ticks in a row. The only question the number answers is "transient or permanent": at the
   default `poll_seconds: 120` it is ten minutes, which outlasts a GitHub rate-limit window and falls far short of a

@@ -4,6 +4,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { join } from "node:path";
 import { model, render, status } from "../lib/commands/status.mjs";
+import { READY_LABEL_REMOVAL, READY_LABEL_WRITE } from "../lib/tick.mjs";
 import { makeState, newEntry, STATES } from "../lib/state.mjs";
 import { writeJsonAtomic } from "../lib/fs.mjs";
 import { CONFIG, T0, at, tempHome, makeClock, silentLog } from "./helpers.mjs";
@@ -184,6 +185,29 @@ test("an entry retrying one GitHub write says so, rather than claiming a finishe
 
   assert.deepEqual(m.running.map(r => [r.label, r.detail]), [["implementing", "PR #143 block write failing (3), retrying"]]);
   assert.deepEqual(m.running[0].retry, { op: "PR #143 block write", count: 3 }, "and the same facts reach --json and the tracker");
+});
+
+test("a pr-open entry retrying the READY label says blocked, not fixing: nothing is being fixed", () => {
+  // The fourth caller of the retry bound interacts with this row, and the round that predicted a fourth would appear
+  // flagged this as where to look. The prediction was about `retry` hiding a live run, which cannot happen (`settleRun`
+  // returns before this branch while a run this entry owns is alive). The real interaction is the label: the other
+  // three ops are steps on the way to a fix round, so `fixing` is true for them, but the ready-label WRITE is reached
+  // only once checks are green, the reviewer is clear and the receipt is accepted. Reading `fixing` off the state alone
+  // told the operator a round was under way on a PR that was one label away from them.
+  const w = world({
+    entries: { "acme/widget/widget-export": entryAt({ state: STATES.prOpen, retry: { op: READY_LABEL_WRITE, count: 3 } }) },
+  });
+  const m = model(w.ctx);
+  assert.deepEqual(m.running.map(r => [r.label, r.detail]), [["blocked", "ready label write failing (3), retrying"]]);
+  assert.deepEqual(m.running[0].retry, { op: READY_LABEL_WRITE, count: 3 }, "and --json and the tracker get the same facts");
+
+  // The other ops on the same state are unchanged: a removal really does precede a fix round.
+  const fixing = world({ entries: { "acme/widget/widget-export": entryAt({ state: STATES.prOpen, retry: { op: READY_LABEL_REMOVAL, count: 2 } }) } });
+  assert.deepEqual(model(fixing.ctx).running.map(r => r.label), ["fixing"]);
+
+  // And the row is not the "waiting on reviewer" fallback, which is what it used to be before this path was counted at
+  // all: that said the entry was waiting on a reviewer who had already answered.
+  assert.ok(!m.running.some(r => /reviewer/.test(r.detail)), "the row names GitHub, not the reviewer");
 });
 
 test("an entry with no retry in flight reads exactly as it did", () => {

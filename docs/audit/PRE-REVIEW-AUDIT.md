@@ -1037,3 +1037,318 @@ run is genuinely still alive, because `retry` now outranks `inFlight`. Not reach
 happens before the spawn and the entry cannot be retrying it while a run of its own is in flight, since `retry` is
 cleared on the tick that dispatches. If a fourth caller of `retryFailed` is ever added on a path that runs alongside a
 live run, that row would hide the run, and this is where to look.
+
+---
+
+# Round eight: the sibling that omission chose, and the tests that only passed here
+
+Appended 2026-09-26 against `feat/v0.1`, on top of `8ec1716`. Five findings, all five real, all five fixed. Four are
+direct consequences of round seven's own diff, which is the pattern this document exists to name; the fifth is a test
+defect that had been latent since the symlink refusals were written. The suite went from 289 to 298 tests. Every new or
+changed test was run against the pre-change files and observed to fail, with two exceptions that say so at the site
+because they guard a success path rather than fix a defect.
+
+Two extra defects were found by the sweeps at the end and fixed with the findings, because both are the same shape and
+leaving a known unbounded wait in the tree after being asked to enumerate them would be worse than reporting it.
+
+## 1. `strict` was opt-in, so omission chose the dangerous half
+
+**What was wrong.** `gh.removeLabel` took `{ strict = false }`. With `strict`, everything but gh's own "label not
+found" throws; without it, every rejection was swallowed. Two callers of that one write, and they disagreed:
+`writeStopLabels` passed `{ strict: true }`, `reopen` passed nothing. So a 403 or a 502 on the ready-label removal
+resolved as though the label had merely been absent. `reopen`'s two callers then went ahead: `dispatch` spawned a fixer
+and `headChanged` judged a new head, both with `gallivant:ready-for-human` still on the PR, and `retryFailed` never saw
+a failure to count. Round seven's whole first finding was about bounding that wait, and the bound was unreachable from
+one of the two paths that needed it.
+
+**The fix, and why this one rather than passing the flag.** The option is now `lenient`, defaulting to false, and the
+throw is what a caller gets by writing nothing. Passing `{ strict: true }` at the second call site would have closed
+this instance and left the shape: a third caller would still have got the dangerous behaviour by omission, and the
+reason this slipped is precisely that omission was the dangerous spelling. The test for whether a default is right is
+what a forgetful caller gets, and there is no reading of a label write where "GitHub refused it" should be
+indistinguishable from "it was not there". Inverting the name rather than the value matters too: a future caller who
+wants the old behaviour has to write `{ lenient: true }` at the site, which is a claim about intent that a reader can
+check. There are no callers of `lenient` in the tree; it exists so that there can be one honestly.
+
+**Tests.** A unit test on `makeGh` itself with a fake `exec`, covering a refused write with no options and with `{}`,
+gh's three spellings of an absent label, the explicit `lenient` case, and a removal that lands. Fails pre-change on the
+first assertion. Plus a tick test that wires the REAL `removeLabel` to a `gh` that refuses, which is the gap the old
+tests left: every existing test of this path replaced `gh.removeLabel` with a function that throws, which proves the
+tick handles a throw and proves nothing about whether the real one throws. It now drives the counter to the stop
+through the real client.
+
+## 2. The ready-label write: the fourth caller, exactly as predicted
+
+Round seven: "If a fourth caller of `retryFailed` is ever added..." It was not added; it was already there and
+uncounted. `gh.addLabel(READY_LABEL)` on the way into `ready` caught its own failure, logged, and returned. With a
+token that permanently cannot write labels, the entry stayed in `pr-open` and the next tick judged the same head again:
+the same reviewer verdict, the same checks read, the same completion gate evaluated, the same label refused, forever.
+Worse than the other three in two ways the other three are not. Every readiness condition had already passed, so
+nothing was pending except the label; and the gate is not free, so with a hosted evaluator the operator paid for a
+decision that had already been made, once per poll.
+
+**The fix.** Through `retryFailed` with `op: "ready label write"`, cleared before the state moves rather than after, so
+`retry` is never set on a `ready` entry where a stale count would outrank the ready row and hide the one thing the
+operator is being asked to do.
+
+**The prediction, checked.** Round seven flagged that `retry` outranks `inFlight` on the status row and that a fourth
+caller on a path running alongside a live run would hide that run. That specific interaction is not reachable and the
+reasoning is unchanged: `settleRun` returns before this branch whenever a run this entry owns is alive, so an entry
+cannot be retrying this write with its own run in flight. The prediction pointed at the right line for the wrong
+reason. The real interaction is the row's LABEL, which was read off the state alone: a `pr-open` entry retrying
+anything read `fixing`, which is true for the two removals (a fix round really does follow one) and false for this one,
+where the work is finished. The row now says `blocked` for this op and `fixing` for the others. That needed one op name
+shared between `tick.mjs` and `status.mjs`; it is exported from `tick.mjs`, which is the file that writes it, because
+`lib/` does not import from `lib/commands/`. `why` gains a line saying the PR is otherwise ready and only the label
+will not write, since the operator's action is to fix a token rather than look at the diff.
+
+**Tests**, all failing pre-change: the bound driven to `stuck` with the ready label attempted exactly five times (and
+the needs-human label once, by the stop, which is a different write); the existing single-failure test updated to
+assert the count and that it never sits on a `ready` entry; the `blocked` row against the two other ops on the same
+state; the `why` line.
+
+## 3. `register`: the point of no return, put last
+
+**What was wrong.** A reset with a new `--harness` or `--session` makes two durable GitHub writes. The body write went
+first. It is the one that changes the recovery identity, since `reconcile` rebuilds an entry from the block alone once
+`state.json` is gone. So a comment that then failed left `register` reporting that nothing was reset, the registry
+still on the old identity, and the PR already recording the new one. A running daemon reads the registry and a later
+recovery reads the block, so the two resumed different harnesses or different sessions for the same PR, and nothing
+anywhere compares them.
+
+**What was chosen, and the reasoning asked for.** The order is reversed: comment, then body. The question is which
+write cannot be taken back, and the test is what each failure leaves behind.
+
+- The comment is safely repeatable. `countRounds` takes the LAST reset marker among the daemon's own comments and
+  counts the round comments after it (`events.mjs:208`), so a second marker counts exactly as one does. A duplicate is
+  cosmetic.
+- The body write is not repeatable in the sense that matters: its effect is not "a marker exists" but "the identity of
+  record is now X". Once it lands, every reader of the block sees the new identity whether or not anything local agrees.
+
+So the body write is the point of no return and it goes last. A failed body write now leaves a reset comment on the PR,
+the registry untouched, and both sides still naming the old identity, which is a state the same command completes. A
+failed comment leaves nothing durable at all. Neither failure can produce two identities. Both still throw, because
+`register` is one interactive command with an operator in front of it; what changed is what GitHub is left saying. The
+refusal messages now name the identity that survived, so the operator is told which harness and session the PR still
+records rather than only that nothing happened.
+
+**Test**: both halves driven, then the retry after the body write is fixed, asserting one identity on both sides at
+every point and that the duplicate comment changes nothing. Fails pre-change.
+
+## 4. The inherited session, revalidated: cleared, and said out loud
+
+**What was wrong.** `--session` is checked against the chosen harness (`isSessionFor`, round five). An INHERITED
+session never was. `--harness opencode` with no `--session` carried the old harness's id straight through, so a claude
+UUID became an opencode session id. The next fix round resumed an id opencode cannot resolve, and the block written
+with it was refused by `parseBlock` on the way back, which kills the recovery the block exists for.
+
+**Cleared, not refused, and why.** The brief guessed clearing and the brief is right, but the reason is worth stating
+because it is not "clearing is friendlier". A refusal is the correct answer to a value that is wrong. This value is not
+wrong, it is meaningless: opencode cannot resume claude's conversation whatever that conversation is called, so there
+is no id the operator could supply that would make the inherited one work. The honest result of "this harness has no
+session for this PR" is no session, which is exactly the state a fresh registration is in, and the next fix round
+starts one. Refusing would leave the operator with a command that cannot succeed until they pass `--session` with a
+value they do not have.
+
+What it must not be is silent, because the operator loses a conversation they may have wanted. Three things say so: the
+log names both harnesses and the dropped id and says a fresh session will be started, `register` returns the session it
+actually stored so no caller can report a resume that did not happen, and the block written to the PR carries the same
+null so a recovery cannot restore the id that was just dropped.
+
+An explicitly typed `--session` still refuses, unchanged. An operator who typed an id meant that id, and the right
+answer to a typo is not to quietly ignore it. And a harness change between two that agree on the format, claude to
+codex, keeps the session, because dropping it there would cost a conversation for nothing.
+
+**Tests**: the drop from both sources it can be inherited from (the registry entry and the PR block), asserting the
+returned value, the registry, the block, `parseBlock` reading that block back, and the log line. Plus the guard against
+over-clearing: claude to codex keeps the id and logs nothing, and an explicit bad `--session` still refuses with
+nothing written. The drop test fails pre-change; the keep test passes both ways and says so, since it protects a
+behaviour rather than fixing one.
+
+## 5. The tests that only passed on this laptop
+
+**The symlink test.** It linked to `join(HOME, ".claude")` and asserted the forbidden-directory message. On an account
+with no `~/.claude` the link dangles, `realpathSync` throws, `realOf` falls back to the lexical path, validation
+correctly reports that the path does not exist, and the assertion fails. Verified by running the suite with `HOME`
+pointed at an empty directory: it failed exactly as described.
+
+Every target the test links to is now one the test creates. The assertion is not weakened; it is made stronger, because
+the shapes are now enumerated rather than implied. `validateContextPaths` refuses a candidate when
+`isInside(realOf(forbidden), candidate)`, so what the `~/.claude` case was really testing is "a link to a directory
+that CONTAINS a forbidden one". The test builds that from the one forbidden entry it controls, the Gallivant home,
+which the function takes as a parameter: a link to the home itself, a link to its parent, and a link to a directory
+that contains the home holding the settings. The real home directory is still used for the one refusal that is about
+`$HOME` itself rather than containment, which is safe because `homedir()` exists on any account the suite can run on at
+all and nothing is read from it or written into it. And a dangling link is now asserted to report "does not exist",
+which is the assertion that makes the accident impossible to repeat: nothing in this test can be satisfied by a link to
+nowhere.
+
+**The rest of the suite, swept as the brief asked.** Two more found, both fixed, and the brief's example of a doctor
+test resolving against shared `/private/tmp` is genuinely gone (every `existsSync` and `statSync` in the suite is
+against a directory the test created with `tempHome()`, and the four shared `/tmp/gallivant-test-*` paths in `CONFIG`
+are string values that are never created, read or stat'd).
+
+- **`gemini still accepts the flags the adapter passes`**, `test/units.test.mjs`. It skipped when the binary was
+  absent, which is why it looked handled, and then asserted `--skip-trust` against whatever `gemini` was first on the
+  PATH with no version check at all. On this machine a Homebrew gemini 0.28.2 in `/usr/local/bin` sits ahead of an
+  nvm-installed one, and 0.28.2 does not have that flag and is not expected to: `MIN_VERSIONS.gemini` is `0.59.0` and
+  `probe.mjs` refuses to RUN a harness below it. So the suite was failing on a build the daemon would itself refuse.
+  It now reads the version the same way `probe.mjs` does and skips with the version and the minimum in the reason. A
+  skip and never a silent pass: the reason names what was found and what was wanted. The same gate covers opencode and
+  goose, which had the same hole and happened not to be hit.
+- **`liveness asks whether the pid still runs the harness`**, `test/units.test.mjs`. It asserted
+  `isOurProcess(process.pid, "/bin/claude") === false`, which holds only while no part of this process's command line
+  contains the string "claude". `isOurProcess` matches `basename(cmd)` as a substring of the whole `ps` line, and the
+  line carries every argv element, so a checkout path, a `HOME`, a runner root or a `--import` containing "claude"
+  broke it. Found by accident: the sandbox used to simulate a clean machine lives under a directory named
+  `claude-501`, and the assertion failed there. The control name is now random per run, with an assertion that it
+  really is absent from this process's own command line before the negative case is asserted.
+
+**The clean-machine run, simulated rather than assumed.** `HOME` pointed at an empty directory and `whence` stubbed to
+return null for every harness, which is what "no harness binaries installed" means to every line of this code, since
+`whence` is the one place the suite asks the machine what is installed. 298 tests, 0 failures, 3 skips, each naming the
+harness that is not installed. Repeated from a path with no "claude" in it, to be sure the simulation was not itself
+the thing under test.
+
+## The sweeps
+
+### 1. Every declining write, enumerated
+
+Ten GitHub writes outside `gh.mjs`. Bounded means it counts on `entry.retry` and stops with `stuck`.
+
+| Site | Write | Verdict |
+|---|---|---|
+| `tick.mjs`, `reopen` via `dispatch` | `removeLabel(READY)` | **Bounded** |
+| `tick.mjs`, `reopen` via `headChanged` | `removeLabel(READY)` | **Bounded** |
+| `tick.mjs`, `settleRun` leaving `running` | `setBody` (identity block) | **Bounded** |
+| `tick.mjs`, the ready branch | `addLabel(READY)` | **Bounded**, this round (finding 2) |
+| `tick.mjs`, `settleRun` counting a round | `comment` (round marker) | **Bounded**, this round (below) |
+| `tick.mjs`, `writeStopLabels` → `removeLabel` | `removeLabel(READY)` | Deliberately lenient, documented at the site: the entry IS stopped, and `addLabel` is what the `labels_pending` retry tracks |
+| `tick.mjs`, `writeStopLabels` → `addLabel` | `addLabel(NEEDS)` | Bounded by a different mechanism: `labels_pending` on the entry, retried on every tick of a stopped entry until it lands. Not counted, and correctly so: there is no worse state to escalate to |
+| `tick.mjs`, the nudge | `comment` (nudge marker) | Deliberately unbounded, and defensibly: a throw goes to the per-entry catch, `rereview.nudged` is not set, so the next tick nudges again. The entry is not held: `stall_hours` still expires and stops it with `reviewer-silent`. So the wait IS bounded, by the timer that was already running. See the note below |
+| `register.mjs`, `comment` and `setBody` | the reset | Neither: a command with an operator. Both throw, both ordered (finding 3) |
+| `register.mjs` / `start.mjs`, `ensureLabels` | label creation | Deliberately lenient, both spellings agree: a repo convenience nothing depends on |
+
+Two of those were unbounded when this sweep started and are not now.
+
+**The round comment, fixed.** `settleRun`'s round comment threw to the per-entry catch, so the `save` below never ran,
+`last.exit` stayed unrecorded, and the next tick re-entered the settle and tried again. Driven against the tree: eight
+ticks, eight identical `errors.log` lines, `iteration` still 1, nothing stopped and nobody told. Now the fifth caller
+of `retryFailed`. The comment stays a precondition of counting the round, which it already was and rightly: a count
+rebuilt from GitHub is made of these markers, and `rereview.at` claims the re-review was asked, which the comment is.
+
+Fixing it exposed two sibling defects that the fix itself would otherwise have introduced, and both are worth recording
+because both are the same "one path, not its sibling" shape:
+
+- **The decline returned `false`.** `settleRun` returns "does this entry wait". The block write's decline returns
+  `false` safely, because `tickEntry` returns early on `state === running` regardless. This one leaves the entry in
+  `pr-open`, so `false` let the rest of the tick run against a half-settled entry: `headChanged` advanced
+  `cursor.fixed_sha` to the very head the round had just pushed, and the NEXT tick re-read the settle with `pushed`
+  false and stopped the entry with `no-push` for a push that had plainly happened. Two ticks was all it took. It now
+  returns `!stopped`.
+- **`retryFailed` discarded `onStop.last`.** The spread was `{ ...onStop, retry: null, last: {...} }`, so a caller
+  passing `last` had it silently overwritten. Nobody had passed one before. This caller must, because `last.exit` has
+  to stay null WHILE retrying (it is the registry state the settle re-enters on) and must be recorded ON the stop, or
+  `settleRun` keeps re-entering the branch after the entry has stopped and counts a fresh streak against an entry
+  nobody is waiting on. `onStop.last` is now merged; `event` and `at` remain `retryFailed`'s to write.
+
+**The nudge, examined and left alone.** It is the one remaining write in the tick with no counter, and that is right
+rather than an oversight. Every other unbounded wait this document has named had the property that nothing else would
+ever move the entry. The nudge does not: the silence timer it exists to serve keeps running, and `stall_hours` stops
+the entry with `reviewer-silent` whether or not the nudge was ever posted. A counter would stop the same entry sooner
+with a less useful reason. Recorded so that a later sweep does not "fix" it into a sixth caller.
+
+### 2. Booleans that default to the unsafe value
+
+Finding 1's shape, hunted deliberately. Every defaulted option in `lib/`:
+
+- `gh.mjs` `removeLabel`, `{ lenient = false }`: was the instance. Now safe by omission.
+- `doctor({ send = false, probe = false })`: both default to the INERT value (no notification sent, no live harness
+  session run). Safe direction, and there is one caller, which passes both from argv.
+- `makeContext({ needConfig = true })`: defaults to doing MORE validation. Safe direction.
+- `status`/`render` `{ all, json }`: display only.
+- `buildRun({ contextPaths = [] })`: defaults to granting nothing. This is the one where the wrong default would be a
+  real security hole, and it is right.
+- `deliverable` limits (`scan_output`, `require_summary`, `require_tests_passing`, `on_unreachable`): every one
+  defaults to the strict value in `DEFAULT_DELIVERABLE`, and `merge` folds an operator's partial `deliverable` over
+  those defaults key by key, so omitting one in `config.json` gets the strict value rather than disabling the check.
+  Verified by reading `config.mjs:178`.
+- **One reported, not changed: `ready({ checkOnly = false })`.** Omitting it gets the side-effecting behaviour: the
+  PRD's `status` is set to `ready` and the file is written. It has exactly one caller, `bin/gallivant.mjs:56`, which
+  always passes `checkOnly: values.check` from argv, so it cannot be got wrong by omission today. It is named here
+  because it is the same shape as finding 1 and the same argument applies if a second caller ever appears: the
+  dangerous half should be the one you ask for.
+
+### 3. What these fixes make newly possible
+
+Answered per change, as every round since the fourth has.
+
+**Finding 1, `removeLabel` strict by default.** Newly possible: `writeStopLabels` now sees throws it used to see too
+(it already passed `strict`), but `reopen` now throws where it previously resolved, which means both its callers can
+decline where they previously proceeded. That is the fix, and it is the intended new behaviour. The second-order
+effect is a rate change on an existing path: `headChanged` on a `ready` entry now declines and counts where it
+previously judged the new head with a stale label, so during a GitHub outage a `ready` entry whose head moves reaches
+`stuck` in five ticks rather than silently mislabelling. That is louder than before, which round seven already
+identified as the trade this mechanism makes. Third: nothing else in the tree calls `removeLabel`, so there is no
+caller that was relying on the swallow. I checked.
+
+**Finding 2, the ready-label write bounded.** Newly possible, and this is the one I would watch: a PR that has passed
+every readiness condition can now STOP instead of waiting. The operator is told `stuck` about a PR that is, by every
+other measure, finished and mergeable by hand. The label is the only thing missing, and a person who goes to the PR can
+merge it. That is strictly better than the old silence, but it is a new way for a finished PR to appear in NEEDS YOU
+with a reason that is not about the PR, so the row says `blocked` and `why` says the PR is otherwise ready. Also newly
+true: the completion gate is no longer re-evaluated indefinitely on this path, which for a hosted evaluator is a real
+cost reduction and, less obviously, means a gate decision that WOULD have flipped (a passport change, an APort policy
+edit) is no longer picked up by the accidental re-evaluation. Nothing depended on that, because a gate re-evaluation
+that flipped to deny would have started a receipt round from a `pr-open` entry that was one label away from ready,
+which was never intended behaviour. I am satisfied it was accidental rather than load-bearing, but it is a behaviour
+that existed and no longer does.
+
+**Finding 3, the write order in `register`.** Newly possible: a reset can now leave a reset comment on a PR that was
+not reset, where before it could leave a rewritten identity block on one that was not reset. Both are litter; the
+difference is that a stray marker is read by `countRounds`, which takes the last one, and a stray identity is read by
+`reconcile`, which believes it. So the litter is now the harmless kind. Second-order, and I want it on the record: the
+comment is posted before the body write, so an operator who runs `register --harness codex` against a repo where the
+token can comment but not write bodies now gets a reset comment on every attempt. Five attempts, five markers, and
+`countRounds` still reads one boundary. Noisy on the PR, correct in the count.
+
+**Finding 4, the session cleared.** Newly possible: a `--harness` change can now silently cost a resumable
+conversation, in the sense that the operator did not ask for it to be dropped. It is logged and returned, which is the
+mitigation, but a log line is weaker than a refusal and an operator running `register` in a hurry may not read it.
+The alternative was a command that cannot succeed, which I judged worse. Second-order: `chosenSession` can now be null
+where the block had a value, so the block is rewritten (the `stale` check compares `block.session !== chosenSession`)
+on a reset that the operator may have thought was only about the harness. That is correct, since the block must not
+keep an id the entry no longer has, but it means finding 3's ordering is now reached by a case that did not reach it
+before: a harness change across incompatible formats always writes the body.
+
+**Finding 5, the tests isolated.** Newly possible: the harness flag checks can now be skipped on a machine where they
+would have run, if `--version` reports something older than `MIN_VERSIONS` or will not report at all. That is a real
+loss of coverage on exactly the machines where an upstream flag rename would bite, and the honest statement is that
+this trades a false failure for a possible silent gap. The skip reason names the version so the gap is visible in the
+output rather than implied, which is the best I can do without pinning a harness version the project does not install.
+For the symlink test I can see no new risk: it asserts more shapes than before and every target is one it creates.
+
+**The round comment bounded.** Newly possible: a round that pushed can now end with the push on GitHub, the fix in the
+branch, and the entry stopped with `stuck` and `iteration` NOT incremented. The work is not lost (it is pushed) and the
+round is not counted, so a `register` reset followed by another round is charged from the same iteration. That is a
+free round from the budget's point of view, which I believe is the right side to err on for a round the daemon could
+not announce, but it is a case where `iteration` and the work actually done disagree. Second-order: `last.exit` is now
+recorded on this stop and not on the retries, which is the distinction `settleRun` re-enters on, so anything that reads
+`last.exit` as "the run is finished" is correct for the first time on this path.
+
+**`retryFailed` merging `onStop.last`.** Newly possible: a caller can now shape the `last` a stop records. Only one
+does, and `event` and `at` are still written by `retryFailed` itself, so the field the operator reads cannot be
+overridden by a caller. A caller that passed `last.event` would have it silently ignored, which is the same class of
+trap in the other direction; it is noted here rather than guarded, because there is no caller and a guard for a
+hypothetical one is harder to read than the four lines it would protect.
+
+## What I would look at next
+
+Not fixed, named, in the order I would rank them.
+
+1. **`iteration` and the work done can disagree**, on the round-comment stop above. It is the only place in the tree
+   where a pushed round is not counted, and whoever owns the budget story should decide whether a stop like that should
+   count the round it could not announce.
+2. **`ready({ checkOnly = false })`**, the last boolean whose omission is the side-effecting half. One caller today.
+3. **The nudge has no counter, on purpose.** The reasoning is in the table above. It belongs on a list of things a
+   later sweep will want to "fix", so it is on this one.
