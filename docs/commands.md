@@ -149,9 +149,11 @@ The five writes that can put an entry there, and what each one is holding up:
 | `ready label removal` | a fix round for new feedback, or judging a head that just moved, while the PR still says a human may merge |
 | `PR #<n> block write` | a start run leaving `running`, so the PR is open but not yet watched |
 | `ready label write` | nothing: every readiness condition passed and only the label saying so will not write |
-| `round comment` | counting a round whose push has already landed, since the comment is the count's own boundary on GitHub |
+| `round comment` | announcing a round that is already counted. The push landed and the budget was charged for it; the PR has not been told, and until it is, the re-review has not been asked and the entry judges nothing |
 
 `ready label write` is the one worth reading twice. The work is done and the PR is finished; what is missing is the label a person looks for. `why` says so in as many words, and `status` labels that row `blocked` rather than `fixing`, because nothing is being fixed.
+
+`round comment` is the other one. The round it announces is already counted, so the registry is one round ahead of what the PR says, and the count on the PR is what a recovery after a lost `state.json` rebuilds from. `why` prints both numbers: which round is counted, and how many a recovery would find until the comment posts. The gap is at most one round, and it closes the moment the comment lands.
 
 ## `gallivant remove <handle>`
 

@@ -291,6 +291,31 @@ test("registering with no override, or one that agrees with the block, leaves th
   }
 });
 
+test("a reset clears the round comment a counted round still owed, because the reset zeroes the round", async () => {
+  // `round_comment` is the comment a counted round owes the PR, and the entry it sits on is usually one that stopped
+  // with `stuck` because that comment would not post, which is exactly the entry an operator resets after fixing the
+  // token. Carried across the reset it would announce a round the registry no longer claims: the next tick would post
+  // "round 0" and `why` would report a recovery counting minus one. The reset comment this command posts is the new
+  // boundary anyway, so every marker before it is already outside the count.
+  const w = registerWorld(registerGit());
+  w.ctx.gh.prView = async () => ({ ...prFixture({ headRefName: "gallivant/widget-export", createdAt: T0 }), body: BLOCK() });
+  w.ctx.state.put("acme/widget/widget-export", {
+    ...newEntry({ prd: "docs/prds/widget-export.md", harness: "claude", session: "6f1c2d3e-1111-4111-8111-111111111111", repo: "acme/widget", branch: "gallivant/widget-export", worktree: "/checkouts/widget", pr: 142, state: STATES.needsHuman, nowIso: T0 }),
+    url: "https://github.com/acme/widget/pull/142",
+    reason: "stuck", iteration: 2, labels_pending: true,
+    retry: { op: "round comment", count: 5 },
+    round_comment: { kind: "round", since: T0, pushed_at: T0 },
+  });
+
+  const r = await register(w.ctx, { url: w.url, worktree: "/checkouts/widget" });
+  const e = w.ctx.state.get(r.id);
+  assert.equal(e.iteration, 0, "the count is zeroed, as it always was");
+  assert.equal(e.round_comment, null, "and the comment that count owed goes with it");
+  assert.equal(e.retry, null, "as does the streak that stopped the entry");
+  assert.equal(e.labels_pending, false, "and the needs-human label a stop owed, since nothing is stopped now");
+  assert.equal(e.reason, null);
+});
+
 test("a reset cursor is floored to the second, so feedback posted in that same second is still dispatched", async () => {
   // `nowIso()` carries milliseconds; GitHub stamps comments and reviews to the second. The event comparison is
   // inclusive of its own boundary, so a cursor of 02:00:00.500Z sat after every comment created at 02:00:00Z and

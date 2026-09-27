@@ -1352,3 +1352,221 @@ Not fixed, named, in the order I would rank them.
 2. **`ready({ checkOnly = false })`**, the last boolean whose omission is the side-effecting half. One caller today.
 3. **The nudge has no counter, on purpose.** The reasoning is in the table above. It belongs on a list of things a
    later sweep will want to "fix", so it is on this one.
+
+---
+
+# Round nine: the counter and the work, made to agree
+
+Appended 2026-09-26 against `feat/v0.1`, on top of `6a321d8`. One finding, the first item round eight left on its own
+"what I would look at next" list. Every new or changed test was run against the
+pre-change files and observed to fail on a substantive assertion, not on a field that did not exist yet. The suite went
+from 298 to 305 tests.
+
+## The undercount, reproduced first
+
+Round eight's own words for it: "a round that pushed can now end with the push on GitHub, the fix in the branch, and the
+entry stopped with `stuck` and `iteration` NOT incremented". Driven twice before anything was changed, because a defect
+described in prose is not the same as one you have watched happen.
+
+The single-lifetime form. An entry at `iteration: max_iterations - 1` dispatched its last allowed round. The run pushed
+`d4e5f6a`. The round comment was refused five times and the entry stopped:
+
+```
+dispatched round 3 of 3
+final: {"state":"needs-human","reason":"stuck","iteration":2}
+the PR received 3 pushed rounds; the registry says 2
+```
+
+The compounding form, which is the one that matters for the money. `countRounds` rebuilds `iteration` from the daemon's
+own round comments, so a round with no comment is invisible to a recovery too, and the two undercounts agree with each
+other. Six rounds with the comment refused on every even one, and the registry lost after each of those (a crash, a
+machine move, a `state.json` on a disk that filled):
+
+```
+round 1: pushed (total 1); registry iteration=1; countRounds=1
+round 2: pushed (total 2); registry iteration=1; countRounds=1
+   --- registry lost; recovery rebuilds iteration = 1
+round 3: pushed (total 3); registry iteration=2; countRounds=2
+round 4: pushed (total 4); registry iteration=2; countRounds=2
+   --- registry lost; recovery rebuilds iteration = 2
+round 5: pushed (total 5); registry iteration=3; countRounds=3
+round 6: STOPPED reason=iterations at iteration 3, real pushes 5
+
+max_iterations=3. Real pushed rounds: 5.
+```
+
+Five paid harness runs against a cap of three. Every one of those rounds was real work: a session resumed, a branch
+moved, an operator's money spent. `max_iterations` is the only thing bounding that, so an undercount is not a
+bookkeeping nit, it is a bound that does not bind.
+
+One thing the reproduction also settled, and it is worth recording because it narrows the claim. WITHIN one daemon
+lifetime the leak is exactly one round and then the entry stops: `settleRun` returns "this entry waits" while the
+comment is owed, so no second round can be dispatched under it, and five refusals end the entry. The unbounded form
+needs the registry to be lost and rebuilt from GitHub, which is the case round eight identified as the one the existing
+"recovery agrees with the registry" property cannot catch, because both sides are wrong by the same amount.
+
+## The fix: count the push, owe the comment
+
+`iteration` moves in the settle, before the comment is attempted, in the same save that records the run's exit and
+advances the cursor. The comment becomes a debt on the entry (`round_comment: { kind, since, pushed_at? }`) which one
+step in `tickEntry` pays, on the tick that counted the round and on every later tick until it lands.
+
+**Why this rather than the alternatives**, all three of which the brief offered and none of which I had an attachment
+to going in.
+
+*Keep the ordering and make the decline recoverable.* This is the smallest diff and it was my first instinct. It fails
+on the thing that makes the defect bad: the recovery. However carefully the decline records the push locally, the
+recovered count is made of comments on the PR, and a round with no comment is not in it. Fixing the local undercount
+while leaving the recovered one would have produced a registry that was right and a recovery that was wrong, which is
+worse than two wrongs that agree, because now the two disagree and nothing compares them.
+
+*Treat the pair as one transaction, irreversible half last.* This is round seven's rule and it is the right rule. It
+just does not say what round seven's cases said, because the irreversible half here is neither of the two writes. The
+push already happened, in a process that exited before `settleRun` was called. Applying the rule honestly means asking
+which of the two REMAINING writes cannot be taken back, and the answer is that both can: the local save is replaced by
+the next save, and the comment is idempotent against its marker through `commentOnce`. So the rule does not order them,
+and the question becomes which one records a fact and which one announces it.
+
+*Count the push.* That is this one. The push is the fact. It is on GitHub, it cost money, and nothing that fails
+afterwards can un-spend it. The comment is an announcement of that fact, and an announcement that will not send does
+not make the fact untrue. Choosing this also makes the recovery agree for every round whose comment eventually lands,
+which is every round except one on a stopped entry, and that is the residual property 4 answers below.
+
+What the comment KEEPS being is the recovery's boundary, and that is why it is still bounded and still declines the rest
+of its tick. It is also still the re-review request, which turns out to be the load-bearing reason the decline has to
+stay: see property 1's second half.
+
+## The four properties, their tests, and what each one did pre-change
+
+All in `test/tick.test.mjs` unless named otherwise. Driven through the real `makeTick` with `test/helpers.mjs` fakes,
+as the existing tick tests are.
+
+**1. A round that pushed is counted exactly once, whether the comment posted immediately, posted on a later attempt, or
+never posted at all.** `property 1: a round that pushed is counted exactly once, whether the comment posts now, later,
+or never` builds three worlds, one push each, three fates for the comment. Pre-change: `counted on the push, not on the
+comment`, `0 !== 1`. Pre-change the first of the three counted 1 and the other two counted 0, so the counter agreed
+with the work in one case out of three.
+
+**2. `iteration` never counts a round twice, including across a decline and a later success, and including when the
+entry is recovered from GitHub in between.** `property 2: no round is counted twice, across a decline, a later success,
+and a recovery in between` drives four declines and then a success and asserts one round, one comment on the PR, and
+`countRounds` also one, which is the recovered value. Pre-change: `four declines, one round`, `0 !== 1`. The
+double-count trap is real and the idempotency that closes it is `commentOnce` against `round_comment.since` rather than
+the current cursor: the cursor has already advanced past the push by the time the comment is attempted, so asking "is
+the marker there since the cursor" answers no for a comment this very step had posted, and the entry would post one per
+tick and count one per tick. The boundary is stored with the debt for exactly that reason.
+
+**3. The cap still stops the entry at `max_iterations` with reason `iterations`, counting real pushes rather than
+successful comments.** `property 3: the cap counts pushes, so a round whose comment was refused still spends the budget`
+has three parts: the refused round is charged, the cap still fires on an entry already at it, and then the sharp form in
+one daemon lifetime with nothing reset by hand. An entry at `max_iterations - 1` spends its last round, the comment is
+refused once and then posts, and the next event stops it with `iterations` rather than buying a round the budget did not
+have. Pre-change: `the push is charged to the budget it spent`, `2 !== 3`. Pre-change that entry was charged 2 and went
+on to dispatch a fourth round.
+
+**4. `countRounds` and the registry do not silently disagree.** `property 4: the registry and countRounds agree
+whenever the marker is on the PR, and say so when it is not`. Pre-change: `counted`, `1 !== 2`.
+
+The honest answer, which the brief asked for plainly. They agree exactly for every round whose comment landed, on the
+first attempt or the fifth. They cannot agree for a round whose comment never landed at all, and after this change that
+means precisely one thing: the entry has STOPPED with `stuck`, because five refusals is what it takes to get there. The
+gap is then exactly one round, it cannot be more than one, and it is on an entry nobody is watching for more work.
+
+**Why it is not fixed here, and it is a choice rather than a limit.** The gap is only reachable if `state.json` is lost
+while that entry is stopped. The durable channels a recovery reads are the round comments (the write that is refusing)
+and the identity block in the PR body. Putting the counter in the block was considered and rejected: `block.mjs` says
+"identity only, no counters" in its first line, and the reason is not tidiness. A PR body is publicly editable, the
+block is parsed strictly because of that, and a counter that bounds spend is the last field to put somewhere a
+contributor can retype. So the residual gap is stated instead of hidden, in three places: the registry keeps
+`round_comment` on the stopped entry, so the fact survives locally; `gallivant why` prints both numbers ("round 2 is
+counted and its push is on the branch; ... a recovery from GitHub would count 1 round until it posts"); and the test
+asserts the gap is exactly one and stays one. What an operator does about it is run `register`, which zeroes the count
+deliberately and posts a new boundary, and that is the same answer as for every other `stuck` stop.
+
+The one thing I would flag for a later round rather than fix here: `reconcile` resumes a PR carrying
+`gallivant:needs-human` as `pr-open` without looking at the label, so the stopped entry above comes back watched. That
+is not about this defect (it is true of every stop reason) and changing it would change recovery semantics for all of
+them, so it is named rather than touched.
+
+Two more tests, both failing pre-change: the bound itself, rewritten for the new ordering
+(`a round comment that will not post is bounded, does not repeat the ask, and does not judge the reviewer's silence`),
+and the receipt-only round, which is the other kind and had no coverage of this path at all
+(`a receipt-only round is counted on the receipt and its comment owed the same way, without touching the reviewer
+clock`). Plus the interaction with a stop that outranks it (`a stop that matters more than the comment wins, and the
+counted round survives it`): a PR that conflicts while its round comment is owed stops with `conflict` rather than
+`stuck`, because `conflict` is what a person can act on, and the count and the debt both survive that stop so `why` can
+still say which round the PR was never told about. Plus one in `test/commands.test.mjs` for a bug this change introduced
+and closed, below.
+
+## A bug the change introduced, found by re-reading the diff
+
+`register`'s reset zeroes `iteration` and clears `retry`. It did not clear `round_comment`, because the field did not
+exist when that line was written. The entry an operator resets after a `stuck` stop is exactly the entry carrying this
+debt, so the reset would have left a counted round's comment owed on an entry claiming zero rounds: the next tick would
+post "round 0" and `why` would report a recovery counting minus one. Cleared with `retry` and for the same reason, with
+`labels_pending` alongside it (inert rather than wrong there, since it is only read on a `needs-human` entry and
+`needsHuman` recomputes it, but a reset entry carrying a debt from before the reset is a thing a reader has to reason
+about and there is no reading of it that should survive). Test: `a reset clears the round comment a counted round still
+owed, because the reset zeroes the round`, failing pre-change on `and the comment that count owed goes with it`.
+
+## What this makes newly possible
+
+Answered per change, as every round since the fourth has, and with the brief's specific question answered first because
+it is the right question: if the increment moves earlier, what else reads `iteration` or `cursor.fixed_sha` between the
+old and new write points, and can any of it now see a state it could not see before?
+
+**The readers, enumerated.** Between the two write points the only readers of `iteration` inside the tick are
+`fixOrStop` (the cap) and the two notification bodies; `cursor.fixed_sha` is read by `headChanged` and by the settle's
+own `pushed` test on the next pass. Outside the tick, `status`, `why` and the tracker read both, and `reconcile` writes
+`iteration` from `countRounds`.
+
+**And the answer is that none of them can see the new state, because the decline still holds the tick.** Checked rather
+than argued, by driving each:
+
+- The cap, with a new review waiting on the same tick as a refused comment: `iteration` is 3 of 3 and `reason` is null,
+  `runs` is 1. The owed comment returns before the events step, so `fixOrStop` is never reached. It fires with
+  `iterations` on the tick the comment finally lands, counting the real push, which is the correct behaviour and is the
+  third part of property 3's test.
+- `headChanged`, with a human force-pushing a third head while the comment is owed: `fixed_sha` stays on the head the
+  round pushed and `rereview` is untouched. Same reason.
+- The notifications: a `stuck` stop on this write now says "Stopped in round 3/3" where it used to say 2/3. That is the
+  intended change and it is the number the operator needs, since the budget really is spent.
+
+**So the new state is visible to `status`, `why` and the tracker, and to nothing that decides anything.** That is the
+property I wanted and it is not an accident of the diff: the decline is what makes it true, and the decline is there
+for an independent reason that turns out to be the same one. The comment is also the re-review request, so an entry that
+owes one has asked the reviewer nothing. If the tick ran on under it, `rereview.at` would either be advanced (claiming
+an ask nobody made, and giving the reviewer a fresh `stall_hours` of silence to accrue against a question that was never
+put) or left where it was and then judged, stopping the entry `reviewer-silent` for a silence it caused itself. Both
+were checked. The clock now moves in `postRoundComment` and only there, dated from the committer date carried on the
+debt, so an ask is claimed exactly when the request is on the PR.
+
+**Newly possible, the list.**
+
+- A `stuck` stop on this write now reports a round the PR does not mention. The registry is one ahead of GitHub, briefly
+  and then permanently if the entry stops. `why` says so with both numbers; nothing decides on it. This is the residual
+  in property 4 and it is the cost of the trade.
+- The round comment can now be posted on a tick that does nothing else, so a PR can receive its round comment one poll
+  after the push rather than in the same pass. At the default 120s that is two minutes of a reviewer not yet asked, on
+  a path where GitHub had just refused a write anyway.
+- A receipt-only round is now counted while its comment is owed, which means `status` shows a round that the PR does not
+  show, for that kind of round too. Same shape, same mitigation.
+- The `no-push` stop is no longer reachable for a push that happened. It was not reachable before this change either
+  (round eight closed it by returning `!stopped`), but the reason is now structural rather than a returned boolean: the
+  cursor has already moved to the pushed head, so a re-entered settle cannot read `pushed` as false. One fewer thing
+  held up by one line.
+- `retryFailed`'s `onStop.last` merge now has no caller. Kept, with the comment rewritten to say so: the ordering trap
+  it fixes is real for the next caller and a silently discarded `last` is the harder of the two bugs to find. Noted so
+  a later sweep does not read the comment, find no caller, and delete the guard.
+- One attempt per tick, and this was a defect in the first version of this fix rather than a consequence of it. Posting
+  the comment in the settle AND in the `tickEntry` step gave the bound two attempts on the tick that counted the round,
+  so five consecutive refusals arrived after three ticks. The settle now counts and records the debt; one place posts.
+  Worth recording because "two callers of one write" is the exact shape this document keeps finding, and I introduced it
+  and caught it in the same hour.
+
+## The clean-machine run
+
+`HOME` pointed at an empty directory with a `.zshrc` and `.zprofile` that shadow `whence` to report nothing for every
+harness and for `jq`, which is what "no harness binaries installed" means to every line of this code. 305 tests, 0
+failures, 3 skips, each naming the harness that is not installed. Repeated from a copy of the tree at a path with no
+"claude" in it, for the reason round eight found the hard way.

@@ -96,6 +96,9 @@ export function fakeRunner(clock) {
     settle: (id, infer) => { if (cur?.id === id && cur.exit === null) { cur.exit = infer(cur.lines); cur.endedAt = clock.now(); } return { ...cur }; },
     kill: id => { if (cur?.id === id) { cur.running = false; cur.exit = 137; cur.killed = true; } return true; },
     history: () => runs.map(x => x.id),
+    // `why` reads it to print the run directory, so the fake answers it rather than throwing: a test that drives the
+    // tick and then asks `why` what the operator would see should not have to swap in a real runner to get that far.
+    dirOf: id => `/tmp/fake-runs/${id}`,
     /** Test control: the current run ends with these log lines. */
     finish(lines, { exit = null } = {}) { cur.running = false; cur.lines = lines; if (exit !== null) cur.exit = exit; },
   };

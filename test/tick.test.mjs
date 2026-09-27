@@ -1,8 +1,12 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { makeTick, roundComment } from "../lib/tick.mjs";
+import { makeTick, roundComment, receiptRoundComment } from "../lib/tick.mjs";
 import { READY_LABEL, NEEDS_LABEL, ROUND_MARKER, NUDGE_MARKER, makeGh } from "../lib/gh.mjs";
 import { RECEIPT_TAG } from "../lib/deliverable.mjs";
+// The recovery side of the count and the operator's view of it, both driven here rather than mocked: the property the
+// round-comment tests below assert is that `iteration`, `countRounds` and what `why` prints all say the same thing.
+import { countRounds } from "../lib/events.mjs";
+import { why } from "../lib/commands/why.mjs";
 import { CONFIG, T0, at, makeClock, fakeGh, fakeRunner, fakeGit, fakeNotify, seededState, prFixture, review, inline, comment, checkRun, claudeResultLines, codexLines, silentLog, STATES, GOOD_PRD, tempHome } from "./helpers.mjs";
 
 const BOT = "chatgpt-codex-connector[bot]";
@@ -76,54 +80,269 @@ test("a fix run that pushed posts the round comment, bumps iteration, resets the
   assert.ok(roundComment(CONFIG).includes(ROUND_MARKER));
 });
 
-test("a round comment that will not post is bounded, and never lets the next tick stop the entry for no-push", async () => {
-  // The fifth caller of the retry bound, found by enumerating the remaining writes rather than by a failure. The comment
-  // is a precondition of counting the round: `countRounds` rebuilds the iteration from these markers after `state.json`
-  // is lost, and the re-review request it carries is what `rereview.at` claims was asked. So the save must not run
-  // without it, which was already the case. What was missing is the bound: a throw left `last.exit` unrecorded, which is
-  // the state the next tick re-enters, so `settleRun` re-read the PR and tried the comment again forever, one
-  // `errors.log` line per tick from the per-entry catch, with the round never counted.
+// The round comment no longer decides whether the round happened. Five tests, one per property the brief named, plus
+// the two that were here before, rewritten for the new ordering. The property under all five: a PUSH is what a round
+// is, and `max_iterations` counts pushes. The comment is the announcement, and an announcement that will not send does
+// not make the push untrue.
+
+test("property 1: a round that pushed is counted exactly once, whether the comment posts now, later, or never", async () => {
+  // Three worlds, one push each, three fates for the comment. Pre-change the first counted 1 and the other two
+  // counted 0, so the counter agreed with the work in one case out of three.
+  const push = async w => {
+    w.clock.advance(6);
+    await w.tick.tick();                     // dispatch
+    w.clock.advance(10);
+    w.runner.finish(claudeResultLines({ cost: 1.25 }));
+    w.gh.data.pr = prFixture({ headRefOid: "d4e5f6a" });
+  };
+  const reviews = () => [review({ id: 1, by: BOT, bot: true, state: "CHANGES_REQUESTED", at: at(5) })];
+
+  const now = world({}, { reviews: reviews() });
+  await push(now);
+  await now.tick.tick();
+  assert.equal(now.entry().iteration, 1, "posted on the first attempt");
+  assert.equal(countRounds(now.gh.data.comments, "me"), 1, "and the marker is on the PR, so a recovery counts it too");
+  assert.ok(!now.entry().round_comment, "nothing is owed");
+
+  const later = world({}, { reviews: reviews() });
+  await push(later);
+  let refuse = true;
+  const real = later.gh.comment;
+  later.gh.comment = async (...a) => { if (refuse) throw new Error("HTTP 502: bad gateway"); return real(...a); };
+  await later.tick.tick();
+  assert.equal(later.entry().iteration, 1, "counted on the push, not on the comment");
+  // `since` is the cursor the round was counted AT, stored with the debt because the cursor has since moved past the
+  // push: asking `commentOnce` "is the marker there since the current cursor" would answer no for a comment this very
+  // step had posted, and the entry would post one per tick.
+  assert.deepEqual(later.entry().round_comment, { kind: "round", since: at(5), pushed_at: at(16) }, "the comment is owed, against the boundary the round was counted at");
+  refuse = false;
+  await later.tick.tick();
+  assert.equal(later.entry().iteration, 1, "posting it later does not count a second round");
+  assert.equal(later.entry().round_comment, null, "and clears the debt");
+
+  const never = world({}, { reviews: reviews() });
+  await push(never);
+  never.gh.comment = async () => { throw new Error("HTTP 403: Resource not accessible by personal access token"); };
+  for (let i = 0; i < 6; i++) await never.tick.tick();
+  const e = never.entry();
+  assert.equal(e.iteration, 1, "the round it could never announce is still counted: the push is the fact");
+  assert.deepEqual([e.state, e.reason], [STATES.needsHuman, "stuck"], "and five refusals still stop the entry");
+});
+
+test("property 2: no round is counted twice, across a decline, a later success, and a recovery in between", async () => {
+  // Two ways to double count, both checked. The retry path: the settle tick counts, the comment declines, and the next
+  // tick must post without counting again. The recovery path: the registry is rebuilt from the PR while the comment is
+  // still owed, and the count must not be the recovered count PLUS the round the next settle would add.
+  const w = world({}, { reviews: [review({ id: 1, by: BOT, bot: true, state: "CHANGES_REQUESTED", at: at(5) })] });
+  w.clock.advance(6);
+  await w.tick.tick();
+  w.clock.advance(10);
+  w.runner.finish(claudeResultLines());
+  w.gh.data.pr = prFixture({ headRefOid: "d4e5f6a" });
+  let refuse = true;
+  const real = w.gh.comment;
+  const posted = [];
+  w.gh.comment = async (r, n, b) => { if (refuse) throw new Error("HTTP 502"); posted.push(b); return real(r, n, b); };
+
+  await w.tick.tick();
+  for (let i = 0; i < 3; i++) await w.tick.tick();               // three more declines
+  assert.equal(w.entry().iteration, 1, "four declines, one round");
+  refuse = false;
+  await w.tick.tick();
+  await w.tick.tick();                                          // and a tick with nothing owed
+  assert.equal(w.entry().iteration, 1, "still one round");
+  assert.equal(posted.length, 1, "one comment, not one per attempt");
+  assert.equal(countRounds(w.gh.data.comments, "me"), 1, "and one marker on the PR, so a recovery counts one too");
+});
+
+test("property 3: the cap counts pushes, so a round whose comment was refused still spends the budget", async () => {
+  // The spend argument, driven. An entry one round below the cap pushes its last allowed round and the comment is
+  // refused. Pre-change the registry said `max_iterations - 1`, so the PR had received three rounds and was charged
+  // two, and every later recovery or reset rebuilt from a count that was short.
+  const w = world({ iteration: CONFIG.max_iterations - 1 }, { reviews: [review({ id: 1, by: BOT, bot: true, state: "CHANGES_REQUESTED", at: at(5) })] });
+  w.gh.comment = async () => { throw new Error("HTTP 403"); };
+  w.clock.advance(6);
+  await w.tick.tick();
+  assert.equal(w.runner.started.length, 1, "the last allowed round is dispatched");
+  w.runner.finish(claudeResultLines());
+  w.gh.data.pr = prFixture({ headRefOid: "d4e5f6a" });
+  for (let i = 0; i < 5; i++) await w.tick.tick();
+  assert.equal(w.entry().iteration, CONFIG.max_iterations, "the push is charged to the budget it spent");
+
+  // And the cap itself still fires with `iterations`, counting that push.
+  const spent = world({ iteration: CONFIG.max_iterations }, { reviews: [review({ id: 2, by: BOT, bot: true, state: "CHANGES_REQUESTED", at: at(5) })] });
+  spent.clock.advance(6);
+  await spent.tick.tick();
+  assert.equal(spent.runner.started.length, 0, "no run starts");
+  assert.deepEqual([spent.entry().state, spent.entry().reason], [STATES.needsHuman, "iterations"]);
+
+  // The sharpest form, in one daemon lifetime with nothing reset by hand: an entry one round below the cap spends its
+  // last round, the comment is refused once and then posts, and the next event stops it with `iterations` rather than
+  // buying a round the budget did not have. Pre-change this entry was charged `max_iterations - 1` and went on to
+  // dispatch a round past the cap, which is the spend the cap exists to prevent.
+  const edge = world({ iteration: CONFIG.max_iterations - 1 },
+    { reviews: [review({ id: 3, by: BOT, bot: true, state: "CHANGES_REQUESTED", at: at(5) })], commitDates: { d4e5f6a: at(10) } });
+  let refuse = true;
+  const realComment = edge.gh.comment;
+  edge.gh.comment = async (...a) => { if (refuse) throw new Error("HTTP 403"); return realComment(...a); };
+  edge.clock.advance(6);
+  await edge.tick.tick();
+  edge.runner.finish(claudeResultLines());
+  edge.gh.data.pr = prFixture({ headRefOid: "d4e5f6a" });
+  edge.clock.advance(10);
+  await edge.tick.tick();                                   // the settle counts the round; the comment is refused
+  assert.equal(edge.entry().iteration, CONFIG.max_iterations, "the last allowed round is spent and charged");
+  edge.gh.data.reviews.push(review({ id: 4, by: BOT, bot: true, state: "CHANGES_REQUESTED", at: at(30) }));
+  edge.clock.advance(20);
+  refuse = false;
+  await edge.tick.tick();                                   // the comment posts, then the waiting review meets the cap
+  assert.deepEqual([edge.entry().state, edge.entry().reason], [STATES.needsHuman, "iterations"], "the cap stops it on the real count");
+  assert.equal(edge.runner.started.length, 1, "and no round past the cap is ever dispatched");
+  assert.deepEqual(edge.notify.sent, [["needs", 142, "iterations"]]);
+});
+
+test("property 4: the registry and countRounds agree whenever the marker is on the PR, and say so when it is not", async () => {
+  // The count on GitHub is what `reconcile` rebuilds `iteration` from, so the two must agree. They do for every round
+  // whose comment landed, on the first attempt or the fifth. The one case where they cannot is a round whose comment
+  // never posted at all, which now means the entry has STOPPED with `stuck`: the gap is exactly one round, it is on a
+  // stopped entry, and `why` says so, because a recovery from GitHub alone would charge one round fewer.
+  const w = world({ iteration: 1 }, {
+    reviews: [review({ id: 1, by: BOT, bot: true, state: "CHANGES_REQUESTED", at: at(5) })],
+    comments: [comment({ id: 1, by: "me", at: at(1), body: `@codex review\n\n${ROUND_MARKER}` })],
+  });
+  w.clock.advance(6);
+  await w.tick.tick();
+  w.runner.finish(claudeResultLines());
+  w.gh.data.pr = prFixture({ headRefOid: "d4e5f6a" });
+  let refuse = true;
+  const real = w.gh.comment;
+  w.gh.comment = async (...a) => { if (refuse) throw new Error("HTTP 403"); return real(...a); };
+
+  await w.tick.tick();
+  assert.equal(w.entry().iteration, 2, "counted");
+  assert.equal(countRounds(w.gh.data.comments, "me"), 1, "not yet on the PR: the registry is one ahead while the comment is owed");
+  const text = why({ config: CONFIG, state: w.state, runnerFor: () => w.runner }, { handle: "widget#142" });
+  assert.match(text, /round 2 is counted and its push is on the branch/, "and `why` says which round the PR has not been told about");
+  assert.match(text, /a recovery from GitHub would count 1 round until it posts/, "with the number a recovery would rebuild");
+
+  refuse = false;
+  await w.tick.tick();
+  assert.equal(w.entry().iteration, countRounds(w.gh.data.comments, "me"), "once it posts, the two agree exactly");
+  assert.equal(w.entry().round_comment, null);
+  assert.doesNotMatch(why({ config: CONFIG, state: w.state, runnerFor: () => w.runner }, { handle: "widget#142" }), /is counted and its push is on the branch/);
+
+  // The absent case, stated rather than implied: five refusals, the entry stops, and the gap is one and stays one.
+  const stuck = world({ iteration: 1 }, {
+    reviews: [review({ id: 1, by: BOT, bot: true, state: "CHANGES_REQUESTED", at: at(5) })],
+    comments: [comment({ id: 1, by: "me", at: at(1), body: `@codex review\n\n${ROUND_MARKER}` })],
+  });
+  stuck.gh.comment = async () => { throw new Error("HTTP 403") };
+  stuck.clock.advance(6);
+  await stuck.tick.tick();
+  stuck.runner.finish(claudeResultLines());
+  stuck.gh.data.pr = prFixture({ headRefOid: "d4e5f6a" });
+  for (let i = 0; i < 7; i++) await stuck.tick.tick();
+  const s = stuck.entry();
+  assert.deepEqual([s.state, s.reason], [STATES.needsHuman, "stuck"]);
+  assert.equal(s.iteration - countRounds(stuck.gh.data.comments, "me"), 1, "the gap is one round, and one is the most it can ever be");
+  assert.ok(s.round_comment, "the debt stays on the entry, so `why` keeps saying which round the PR was never told about");
+});
+
+test("a stop that matters more than the comment wins, and the counted round survives it", async () => {
+  // The round comment step runs after the terminal checks, so a stop with a reason of its own preempts it: a PR that
+  // conflicts while its round comment is owed stops with `conflict`, not with `stuck` about a comment. That is the right
+  // order, because `conflict` is the thing a person can act on and the comment is not. What must survive is the count,
+  // and the debt, so `why` can still say which round the PR was never told about.
+  const w = world({}, { reviews: [review({ id: 1, by: BOT, bot: true, state: "CHANGES_REQUESTED", at: at(5) })] });
+  w.gh.comment = async () => { throw new Error("HTTP 403") };
+  w.clock.advance(6);
+  await w.tick.tick();
+  w.runner.finish(claudeResultLines());
+  w.gh.data.pr = prFixture({ headRefOid: "d4e5f6a" });
+  await w.tick.tick();
+  assert.equal(w.entry().iteration, 1);
+  w.gh.data.pr = prFixture({ headRefOid: "d4e5f6a", mergeable: "CONFLICTING" });
+  await w.tick.tick();
+  const e = w.entry();
+  assert.deepEqual([e.state, e.reason], [STATES.needsHuman, "conflict"], "the reason a person can act on wins");
+  assert.equal(e.iteration, 1, "and the round the push earned is still counted");
+  assert.ok(e.round_comment, "with the comment still recorded as owed");
+  assert.deepEqual(w.notify.sent, [["needs", 142, "conflict"]], "told once, about the conflict");
+});
+
+test("a receipt-only round is counted on the receipt and its comment owed the same way, without touching the reviewer clock", async () => {
+  // The other kind of round. There is no push, so there is no re-review to ask for and no committer date to date it
+  // from: the receipt in the PR body changed, which is progress, and it counts. The comment saying so is owed exactly
+  // as the pushed round's is, and landing it must not start the reviewer clock, because nothing asked the reviewer
+  // anything. Pre-change the receipt round was not counted either while its comment was refused.
+  const w = world({ cursor: { since: at(0), dispatched: [], fixed_sha: "a1b2c3d", checks_sha: null, receipt_hash: null } },
+    { reviews: [review({ id: 1, by: BOT, bot: true, state: "CHANGES_REQUESTED", at: at(5) })] });
+  let refuse = true;
+  const real = w.gh.comment;
+  w.gh.comment = async (...a) => { if (refuse) throw new Error("HTTP 403"); return real(...a); };
+  w.clock.advance(6);
+  await w.tick.tick();
+  w.runner.finish(claudeResultLines());
+  // Same head, a receipt in the body that was not there when the run started.
+  w.gh.data.pr = prFixture({ headRefOid: "a1b2c3d", body: `Adds export.${receiptBlock()}` });
+  await w.tick.tick();
+  let e = w.entry();
+  assert.equal(e.iteration, 1, "the receipt change is a round and is counted by it");
+  assert.deepEqual(e.round_comment, { kind: "receipt", since: at(5) }, "with no `pushed_at`: there is no push to date a clock from");
+  assert.equal(e.rereview.at, T0, "and no ask is claimed");
+  refuse = false;
+  await w.tick.tick();
+  e = w.entry();
+  assert.equal(e.iteration, 1, "posting it counts nothing further");
+  assert.equal(e.round_comment, null);
+  assert.equal(e.rereview.at, T0, "and landing a receipt comment still asks the reviewer nothing");
+  assert.ok(w.gh.data.comments.some(c => c.body === receiptRoundComment()), "the receipt-round comment is what was posted");
+});
+
+test("a round comment that will not post is bounded, does not repeat the ask, and does not judge the reviewer's silence", async () => {
+  // Rewritten for the new ordering. The bound is unchanged: five consecutive refusals and the entry stops with
+  // `stuck`, naming the write. What changed is what it is bounding. The round is already counted and the cursor has
+  // already moved, so the decline is not "this round did not happen"; it is "the rest of this tick must not run",
+  // because the comment is also the re-review request and an entry that owes one has asked the reviewer nothing.
   const w = world({}, { reviews: [review({ id: 1, by: BOT, bot: true, state: "CHANGES_REQUESTED", at: at(5) })] });
   w.clock.advance(6);
   await w.tick.tick();                       // dispatch the fix
   w.clock.advance(10);
   w.runner.finish(claudeResultLines({ cost: 1.25 }));
   w.gh.data.pr = prFixture({ headRefOid: "d4e5f6a" });
-  w.gh.comment = async () => { throw new Error("HTTP 403: Resource not accessible by personal access token"); };
+  w.gh.comment = async () => { throw new Error("HTTP 403: Resource not accessible by personal access token") };
 
   for (let i = 1; i <= 4; i++) {
     const results = await w.tick.tick();
     const e = w.entry();
-    assert.deepEqual(e.retry, { op: "round comment", count: i }, `tick ${i} counts the failure`);
-    assert.equal(e.iteration, 0, `tick ${i} does not count a round whose comment is not on the PR`);
-    assert.equal(e.last.exit, null, "and leaves the settle re-enterable, which is what the retry depends on");
+    assert.deepEqual(e.retry, { op: "round comment", count: i }, `tick ${i} counts the failure, once per tick and not twice`);
+    assert.equal(e.iteration, 1, `tick ${i} keeps the one round the one push earned`);
+    assert.equal(e.last.exit, 0, "the settle is finished: the exit is recorded before the comment is ever attempted");
+    assert.equal(e.cursor.fixed_sha, "d4e5f6a", "and the cursor is on the head the round pushed");
     assert.deepEqual(results.map(r => r.ok), [true], "handled inside the tick, not thrown at the per-entry catch");
     assert.deepEqual(w.notify.sent, [], `tick ${i} rings nobody`);
-    // The half-settled entry must not have the rest of the tick run against it. Returning "this entry waits" is what
-    // makes that true: `headChanged` used to advance `cursor.fixed_sha` to the very head this round had just pushed, and
-    // then the NEXT tick re-read the settle with `pushed` false and stopped the entry with `no-push` for a push that
-    // had plainly happened. Two ticks was all it took.
-    assert.equal(e.cursor.fixed_sha, "a1b2c3d", `tick ${i} leaves the head the round was dispatched against`);
-    assert.notEqual(e.reason, "no-push", `tick ${i} does not stop for a push that did happen`);
+    // The ask is the comment, so the clock must not move while the comment is owed. Moving it would give the reviewer a
+    // fresh silence window for a question nobody put, and the entry would wait `stall_hours` on nothing.
+    assert.equal(e.rereview.at, T0, `tick ${i} does not claim a re-review was asked`);
+    assert.equal(e.rereview.nudged, false);
+    assert.notEqual(e.reason, "reviewer-silent", `tick ${i} does not judge the reviewer on a question it never asked`);
+    assert.equal(w.runner.started.length, 1, `tick ${i} does not charge a second round while the first is unannounced`);
   }
 
   await w.tick.tick();
   const e = w.entry();
   assert.deepEqual([e.state, e.reason], [STATES.needsHuman, "stuck"], "the fifth failure stops it");
   assert.match(e.last.event, /round comment failed 5 ticks in a row: HTTP 403/);
-  assert.equal(e.last.exit, 0, "and the stop records the run's exit, so the settle is finished");
   assert.equal(e.last.cost, 1.25, "with what the round cost, which the operator is paying for either way");
-  assert.equal(e.iteration, 0, "the round is still not counted: it was never announced on the PR");
+  assert.equal(e.iteration, 1, "and the round is counted: the push happened and the budget was spent on it");
   assert.deepEqual(w.notify.sent, [["needs", 142, "stuck"]]);
 
-  // Nothing is re-attempted after the stop. Leaving `last.exit` null here kept `settleRun` re-entering this branch on
-  // every tick AFTER the stop, counting a fresh streak against an entry nobody was waiting on.
   await w.tick.tick();
   assert.equal(w.entry().retry, null, "no fresh streak against a stopped entry");
   assert.equal(w.notify.sent.length, 1, "and it is not re-notified");
 });
 
-test("a round comment that fails once and then posts counts the round exactly once, on the tick that posts it", async () => {
+test("a round comment that fails once and then posts asks for the re-review on the tick that posts it", async () => {
   const w = world({}, { reviews: [review({ id: 1, by: BOT, bot: true, state: "CHANGES_REQUESTED", at: at(5) })] });
   w.clock.advance(6);
   await w.tick.tick();
@@ -136,13 +355,18 @@ test("a round comment that fails once and then posts counts the round exactly on
   w.gh.comment = async (repo, n, body) => { if (fail) throw new Error("HTTP 502: bad gateway"); posted.push(body); return realComment(repo, n, body); };
 
   await w.tick.tick();
-  assert.equal(w.entry().iteration, 0);
+  assert.equal(w.entry().iteration, 1, "the round is counted by the push");
+  assert.equal(w.entry().cursor.fixed_sha, "d4e5f6a", "and the cursor with it");
+  assert.equal(w.entry().rereview.at, T0, "but the ask has not been made");
   fail = false;
+  w.clock.advance(3);
   await w.tick.tick();
   const e = w.entry();
-  assert.equal(e.iteration, 1, "counted once, on the tick the comment landed");
+  assert.equal(e.iteration, 1, "posting it does not count a second round");
   assert.equal(e.retry, null, "and the count is cleared by that write landing");
-  assert.equal(e.cursor.fixed_sha, "d4e5f6a", "the cursor catches up on the same tick");
+  // Through `reviewerClock`, from the committer date of the head the round pushed, floored at the nudge window.
+  assert.equal(e.rereview.at, at(16), "the ask is dated from the push the comment is about, not from the retry");
+  assert.equal(e.rereview.nudged, false);
   assert.equal(posted.length, 1, "one comment, not one per attempt");
   assert.deepEqual(w.notify.sent, [], "nobody was ever told: nothing stopped");
 });
