@@ -2,13 +2,16 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { join, relative } from "node:path";
-import { mkdirSync, readFileSync, writeFileSync, chmodSync, statSync } from "node:fs";
+import { mkdirSync, readFileSync, writeFileSync, chmodSync, statSync, existsSync } from "node:fs";
 import { start } from "../lib/commands/start.mjs";
 import { register } from "../lib/commands/register.mjs";
 import { makeState, newEntry, STATES } from "../lib/state.mjs";
 import { parseBlock } from "../lib/block.mjs";
 import { isAtOrAfter, floorSecond } from "../lib/time.mjs";
 import { CONFIG, T0, tempHome, prFixture, fakeRunner, makeClock, silentLog, GOOD_PRD } from "./helpers.mjs";
+import { newPrd, templatePath } from "../lib/commands/new.mjs";
+import { check } from "../lib/prd.mjs";
+import { request as prdRequest } from "../lib/sources/prd.mjs";
 
 /** A `bin` that exits 0, so `checkSignIn` for codex passes without a real harness installed. */
 function signedInBin(dir) {
@@ -578,4 +581,43 @@ test("a reset clears the retry counter, so a stuck entry does not stop again on 
   assert.equal(e.retry, null, "the counter goes with the reason it produced");
   assert.equal(e.reason, null);
   assert.equal(e.state, STATES.prOpen);
+});
+
+// `gallivant new`, which exists because every quickstart told the operator to `cp templates/prd.md`, a path that
+// resolves only inside a Gallivant clone. The tool knows where its own template is; the reader should not have to.
+test("new writes a PRD into the repo root from anywhere inside it, and the contract then refuses the unedited template", async () => {
+  const root = tempHome();
+  const deep = join(root, "src", "nested");
+  mkdirSync(deep, { recursive: true });
+  // Real git answers with the repo root for any directory inside it, which is the whole point of asking it rather
+  // than using the cwd. `tempHome()` can sit behind a symlink, so the fake does not compare paths.
+  const ctx = { git: { toplevel: async () => root }, config: { harness: { codex: { bin: "/b/codex" } } }, log: silentLog };
+  const r = await newPrd(ctx, { name: "Widget Export!" });
+  // The name is slugified to what the contract's `path` rule accepts, and it lands at the root rather than the cwd.
+  assert.equal(r.id, "widget-export");
+  assert.equal(r.path, join(root, "docs", "prds", "widget-export.md"));
+  assert.ok(existsSync(r.path));
+  // The harness comes from the config, so the brief names one the operator can actually run.
+  assert.equal(r.harness, "codex");
+  assert.match(readFileSync(r.path, "utf8"), /^harness: codex$/m);
+  // A template that passed the contract would be a template nobody edits. It must fail loudly instead.
+  const verdict = check(prdRequest(readFileSync(r.path, "utf8"), r.path));
+  assert.equal(verdict.ok, false, "the starting template is not a valid PRD; editing it is the work");
+});
+
+test("new refuses a name with nothing usable in it, an existing file, an unconfigured harness, and a directory outside a repo", async () => {
+  const root = tempHome();
+  const ctx = { git: { toplevel: async () => root }, config: { harness: { claude: { bin: "/b/claude" } } }, log: silentLog };
+  await assert.rejects(() => newPrd(ctx, { name: "!!!" }), /no letters or digits/);
+  await assert.rejects(() => newPrd(ctx, { name: "x", harness: "goose" }), /not configured/);
+  await newPrd(ctx, { name: "dup" });
+  await assert.rejects(() => newPrd(ctx, { name: "dup" }), /already exists/);
+  const outside = { ...ctx, git: { toplevel: async () => { throw new Error("not a git repository"); } } };
+  await assert.rejects(() => newPrd(outside, { name: "x" }), /not inside a git repository/);
+});
+
+test("the packaged template is found by the installed package, not by a relative path", () => {
+  // The bug this guards: `cp templates/prd.md ...` in the docs, which an operator standing in their own repo cannot run.
+  for (const name of ["prd.md", "passport.gallivant.json"]) assert.ok(existsSync(templatePath(name)), `${name} ships with the package`);
+  assert.ok(templatePath("prd.md").startsWith("/"), "resolved absolutely, so it works from any cwd");
 });

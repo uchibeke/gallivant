@@ -9,6 +9,7 @@ import { status } from "../lib/commands/status.mjs";
 import { why } from "../lib/commands/why.mjs";
 import { doctor, renderDoctor } from "../lib/commands/doctor.mjs";
 import { ready } from "../lib/commands/ready.mjs";
+import { newPrd } from "../lib/commands/new.mjs";
 import { serve, DEFAULT_PORT } from "../lib/commands/serve.mjs";
 import { hasConfig } from "../lib/config.mjs";
 import { resolveHandle } from "../lib/state.mjs";
@@ -16,6 +17,8 @@ import { resolveHandle } from "../lib/state.mjs";
 const HELP = `gallivant: write a PRD, mark it ready, go outside.
 
   gallivant doctor [--send] [--probe]   install checklist and health probe
+  gallivant new <name> [--harness <name>] [--dir <repo>]
+                                         write a starting PRD into docs/prds/ of the repo you are in
   gallivant ready <prd.md> [--check]     check the PRD against the contract; flip it to ready when it passes
   gallivant start <prd.md>               start a session for a ready PRD in its own checkout
   gallivant register <pr-url> [--harness <name>] [--session <id>] [--worktree <dir>]
@@ -31,7 +34,7 @@ Config: $GALLIVANT_HOME/config.json (default ~/.gallivant). Run doctor for the f
 const OPTIONS = {
   check: { type: "boolean" }, once: { type: "boolean" }, all: { type: "boolean" }, json: { type: "boolean" },
   send: { type: "boolean" }, probe: { type: "boolean" }, help: { type: "boolean", short: "h" },
-  harness: { type: "string" }, session: { type: "string" }, worktree: { type: "string" }, port: { type: "string" },
+  harness: { type: "string" }, session: { type: "string" }, worktree: { type: "string" }, dir: { type: "string" }, port: { type: "string" },
 };
 
 const portOf = v => {
@@ -66,6 +69,12 @@ async function main(argv) {
     case "status": { const r = status(ctx, { all: values.all, json: values.json }); console.log(r.text); return r.exitCode; }
     // Never resolves: the server holds the process open until it is interrupted.
     case "serve": { const port = portOf(values.port); await serve(ctx, { port }); console.log(`gallivant serve: http://127.0.0.1:${port}  read-only, this machine only. Ctrl-C to stop.`); return new Promise(() => {}); }
+    case "new": {
+      if (!arg) throw new Error("new needs a name, for example: gallivant new widget-export");
+      const r = await newPrd(ctx, { name: arg, harness: values.harness, dir: values.dir });
+      console.log(`${r.rel}\n\nEdit it, then:\n  gallivant ready ${r.rel} --check\n  gallivant ready ${r.rel}\n  gallivant start ${r.rel}`);
+      return 0;
+    }
     case "why": { if (!arg) throw new Error("why needs a handle"); console.log(why(ctx, { handle: arg })); return 0; }
     case "remove": { if (!arg) throw new Error("remove needs a handle"); const id = resolveHandle(ctx.state.entries(), arg); ctx.state.remove(id); console.log(`${id}: removed from the registry`); return 0; }
     default: throw new Error(`unknown command "${cmd}"\n\n${HELP}`);

@@ -15,9 +15,10 @@ git clone https://github.com/uchibeke/gallivant && cd gallivant
 npm link                               # puts `gallivant` on your PATH; see Install below for the alternatives
 gallivant doctor                       # prints the config to write, from your machine's values
 # write ~/.gallivant/config.json, then follow each FAIL line until doctor passes
-cp templates/prd.md path/to/repo/docs/prds/your-prd.md   # write it
-gallivant ready path/to/repo/docs/prds/your-prd.md       # the contract; flips it to ready when it passes
-gallivant start path/to/repo/docs/prds/your-prd.md
+cd path/to/your/repo                   # every command below works from anywhere inside it
+gallivant new your-prd                 # writes docs/prds/your-prd.md from the packaged template
+gallivant ready docs/prds/your-prd.md  # the contract; flips it to ready when it passes
+gallivant start docs/prds/your-prd.md
 gallivant up                           # in a terminal tab; on a Mac it holds off sleep itself
 gallivant status
 ```

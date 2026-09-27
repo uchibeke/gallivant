@@ -6,6 +6,20 @@ Handles: every command that takes one accepts `<repo>#<pr>` (short name or `owne
 
 The install checklist and the health probe, one line per check, each failure with the exact command or file that fixes it. With no config it prints a complete config built from this machine. `--send` posts a test notification. `--probe` runs a real Claude session in a temp directory and confirms a write inside is allowed and a write outside is denied. Exit code 1 while anything fails.
 
+## `gallivant new <name> [--harness <name>] [--dir <repo>]`
+
+Writes `docs/prds/<name>.md` into the repository you are standing in, from the template that ships with the package.
+Run it from anywhere inside that repository: the root comes from git, not from the current directory, so a
+subdirectory writes to the same place as the root. The name is lowercased and dashed to what the contract's `path`
+rule accepts, so `gallivant new "Widget Export!"` writes `docs/prds/widget-export.md`.
+
+The `harness:` line names whichever harness your config has, so the brief cannot ask for one you have not installed.
+`--dir` is for the case where you are not inside the target repository.
+
+It writes one file and nothing else: no registry entry, no branch, no network. The template deliberately fails the
+contract, because a starting point that passed it would be a starting point nobody edits. `gallivant ready <path>
+--check` prints what is still missing.
+
 ## `gallivant ready <prd.md> [--check]`
 
 The only way a PRD becomes ready. Runs every rule of [the contract](prd.md), prints the checklist, asks APort to decide readiness against a per-PRD passport built from those rules, and flips `status: draft` to `ready` (recording the decision id as `aport_decision`) only on an allow. It does not commit the file. `--check` prints the checklist without writing or deciding. Exit code 1 while anything fails.

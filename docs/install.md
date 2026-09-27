@@ -112,7 +112,7 @@ harness: claude
 ## Out of scope
 ```
 
-Start from `templates/prd.md`. Every section has rules, listed in [prd.md](prd.md); `gallivant ready` checks them and `start` refuses a PRD that fails any.
+Run `gallivant new <name>` inside the repository the work belongs to; it writes `docs/prds/<name>.md` from the packaged template. Every section has rules, listed in [prd.md](prd.md); `gallivant ready` checks them and `start` refuses a PRD that fails any.
 
 ```bash
 gallivant ready path/to/repo/docs/prds/widget-export.md

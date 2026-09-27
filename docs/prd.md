@@ -3,7 +3,7 @@
 A PRD is the whole brief a session gets, and the only thing you write by hand. So the rules are strict, there is no override flag, and `gallivant start` refuses a PRD that has not passed `gallivant ready`.
 
 ```bash
-cp templates/prd.md path/to/repo/docs/prds/widget-export.md
+gallivant new widget-export     # from anywhere inside the repo the work belongs to
 # write it
 gallivant ready path/to/repo/docs/prds/widget-export.md --check   # the checklist, nothing written
 gallivant ready path/to/repo/docs/prds/widget-export.md           # flips status to ready and commits the file
