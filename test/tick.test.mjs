@@ -835,7 +835,8 @@ test("a codex fix resumes with exec resume and the config overrides", async () =
   await w.tick.tick();
   const args = w.runner.started[0].args;
   assert.deepEqual(args.slice(0, 3), ["exec", "resume", "22222222-2222-4222-8222-222222222222"]);
-  assert.ok(args.includes('approval_policy="never"'));
+  assert.ok(args.includes('approval_policy="on-request"'));
+  assert.ok(args.includes('approvals_reviewer="auto_review"'));
   assert.ok(!args.some(a => a.startsWith("--dangerously")));
 });
 

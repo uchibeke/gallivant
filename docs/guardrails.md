@@ -4,8 +4,8 @@ Unattended runs act with your GitHub identity on your code. Each guarantee below
 
 | Guarantee | Control | APort's part |
 |---|---|---|
-| Writes stay in the checkout | Claude: the Bash sandbox in the Gallivant settings file. Codex: the `workspace-write` sandbox. | Denies Write and Edit tool calls outside `allowed_paths`. Does not see `echo x > ~/.zshrc` inside a Bash command. |
-| No reads of secrets | Same sandboxes, plus each harness's own denied reads. | Denies Read and Grep calls on `.env*`, `.ssh`, `.aws`, `*.pem`, `*.key` and the passport's `blocked_paths`. Does not see `cat .env` inside Bash. |
+| Filesystem access is bounded | Claude: the Bash sandbox in the Gallivant settings file. Codex: `workspace-write`, with boundary-crossing commands reviewed by Codex's automatic reviewer. An approved command runs outside that sandbox; the reviewer is a decision, not filesystem isolation. | Denies Write and Edit tool calls outside `allowed_paths`. Does not see `echo x > ~/.zshrc` inside a Bash command. |
+| Reads of secrets are restricted | The sandboxes and each harness's denied reads; Codex's automatic reviewer checks escalation requests for credential probing. This is not a guarantee about an approved command running outside the sandbox. | Denies Read and Grep calls on `.env*`, `.ssh`, `.aws`, `*.pem`, `*.key` and the passport's `blocked_paths`. Does not see `cat .env` inside Bash. |
 | Network limited | Claude: `sandbox.network.allowedDomains`. Codex: none once `network_access=true`, which `git push` needs. | Denies WebFetch and WebSearch outside `allowed_domains`. Does not see `curl` inside Bash. |
 | No push to the default branch, no force push | A GitHub ruleset on each repo: no deletion, no force push, pull request required, no bypass actors. `doctor` prints the call. Sessions are also told not to rebase, because keeping a branch on its base is the daemon's job and it does it with a merge commit, which needs no force. | `blocked_patterns` substring-matches `push --force`, `push origin main` and the like. Best effort; APort does not parse refspecs. |
 | Blast radius of a successful injection | Optional but recommended: a fine-grained PAT limited to the participating repos with no Workflows permission (`github_token_file`). By default runs act as your own login, which reaches every repo it can. Either way the credential is resolved by the daemon and handed to the run in its environment, so `~/.git-credentials`, the keychain and `~/.config/gh` stay out of a run's path. | An audit log of every tool call, for reconstruction. |
@@ -13,9 +13,34 @@ Unattended runs act with your GitHub identity on your code. Each guarantee below
 | No harness attribution in the history | A `commit-msg` hook in each checkout's `.git/hooks`, written at clone time and on every reuse. A message with a `Co-Authored-By:` trailer naming a harness or its vendor, or a "Generated with" / robot line, exits non-zero and no commit object is created. One mechanism for all five harnesses, because it fires on whoever runs `git commit`. | none |
 | Commits are yours, not a bot's | `user.name` and `user.email` in the run env, on git's command line where no repo can override them, resolved per run from your own git config by the daemon. No identity on the machine means the run is refused before it is spawned. | none |
 
+## Codex Git writes need automatic approval
+
+Codex protects `.git` even inside a `workspace-write` checkout. Gallivant therefore pins
+`approval_policy="on-request"` and `approvals_reviewer="auto_review"` for **both start and resume**. The sandbox
+stays enabled. Codex's own reviewer decides whether an escalation may run, without waiting for an operator click.
+A reviewer or guardrail refusal still means stop and report; changing permissions or bypassing the sandbox is forbidden.
+This is the [documented automatic-review path](https://learn.chatgpt.com/docs/sandboxing/auto-review), not a grant
+of unrestricted access. Review calls can add usage and latency, and managed Codex policy can refuse them.
+
+The previous `approval_policy="never"` stranded runs at `.git/index.lock`, `.git/config`, and remote-tracking ref
+updates. Saved command allow rules made some simple Git commands work, while compound commands containing heredocs
+still failed. A successful remote push could even exit zero after its local tracking update failed. Gallivant's shared
+prompt now distinguishes a sandbox error from a policy denial, asks for the supported approval path, and requires
+checking the staged diff, remote HEAD, and upstream. No personal command allow rules are required by Gallivant.
+
+The real start/resume regression probe uses the adapter and run environment against a disposable local bare remote:
+
+```bash
+node --test test/live-codex-git.mjs
+```
+
+Run it from a Gallivant clone with Codex signed in. It spends model calls, makes no GitHub writes, and prints the
+temporary directory holding its logs and test repository. It is deliberately separate from `npm test`. `doctor`'s
+credential probe uses `git ls-remote`; that checks authentication, not Codex's Git write permissions.
+
 ## How a run gets a GitHub credential
 
-A run never reads a credential store. It cannot: the sandbox denies the keychain, the Linux secret service, `~/.git-credentials` and `~/.config/gh`. The daemon resolves one instead and puts it in the run's environment as `GH_TOKEN`, where a git credential helper carried in the same environment reads it. No file outside the worktree is named, which is what makes the sandbox's denial harmless rather than fatal. Order and details are in [config.md](config.md#github-credentials).
+The run's Git credential helper does not read a credential store. The daemon resolves a credential and puts it in the run's environment as `GH_TOKEN`, where a git credential helper carried in the same environment reads it. No file outside the worktree is named, so sandboxed Git does not need the keychain, the Linux secret service, `~/.git-credentials` or `~/.config/gh`. Order and details are in [config.md](config.md#github-credentials).
 
 What bounds the credential, and what does not:
 
@@ -28,7 +53,7 @@ What bounds the credential, and what does not:
 
 A run that cannot get a credential does not start. Spending a budget on work that then cannot be pushed is a failure mode, not a safe default.
 
-`doctor`'s `run git push` line is how you check this before trusting it. It runs a real `git ls-remote` against the first configured repository with the run's own environment and `HOME` pointed at a path that does not exist, so it reproduces a sandboxed run's condition rather than your shell's, and on failure it prints git's own words rather than a paraphrase. That matters: the message git prints when it has no credential names `~/.git-credentials`, which is not always the file it failed on, and paraphrasing it once cost two debugging sessions.
+`doctor`'s `run git push` line checks the credential transport. It runs `git ls-remote` against the first configured repository with the run's environment and `HOME` pointed at a path that does not exist. It does not run inside Codex's sandbox or prove Git write access. On failure it prints git's own words: the message git prints when it has no credential names `~/.git-credentials`, which is not always the file it failed on.
 
 ## What must be delivered
 
@@ -101,7 +126,7 @@ The sandbox and the ruleset stop what they can see. Three things they cannot see
 - **No merge, no default branch, no new PRs, no force-push, no rebase.** Keeping the branch on its base is the daemon's job, done with a merge commit, so a rebase is not help; it rewrites commits a reviewer has already commented on.
 - **No `git stash`, in any form.** This one is not about the branch. The stash stack belongs to the repository, not to a worktree: every worktree of the same clone shares one stack. So a `stash pop` in a run can drop another worktree's entry into its tree, and a `stash push -u` sweeps up untracked files nobody meant to move. The quiet failure is a session that stashes and is then killed or runs out of budget before popping, which leaves your tree changed with nothing in the run's state saying so. A real run did this twice, to find out whether a test failure was pre-existing. That is a fair question, so the rule names the answers that do not touch shared state: a second tree with `git worktree add <temp path> <base>`, or one file at the base with `git show <base>:<path>`.
 - **No harness attribution.** No `Co-Authored-By:` trailer naming a model or its vendor, and no "Generated with" or robot-emoji line, in a commit message or a PR body. This is the one rule in this list that is also enforced: a `commit-msg` hook refuses the commit, so a session that forgets finds out at once rather than on a public pull request, which is where a live run's four commits carried `Co-Authored-By: Claude Opus 5 (1M context) <noreply@anthropic.com>`. Naming a harness in prose is allowed, because a change that is genuinely about an adapter has to be describable. The PR body half is not enforceable locally and is asked for in the prompt; see below.
-- **A denial is a boundary, not an obstacle.** A blocked tool call means stop and report, not re-spell the command, move it into a script, or find another path to the same effect. A real run hit a blocked-pattern rule on the literal names of two environment variables set inline, wrote a shell script that set the same variables, and ran it five times. Nothing it did was forbidden in isolation. An agent measured on finishing its task treats a block as a puzzle unless it is told what a block is, so the rule says that, and asks for the block in the final message: a pattern that fires on a legitimate call is a passport bug, and the report is how you find out.
+- **A denial is a boundary, not an obstacle.** A reviewer or guardrail refusal means stop and report, not re-spell the command, move it into a script, or find another path to the same effect. A sandbox permission error may use the harness's supported approval request first; that is how authorized Codex Git writes proceed. A real run hit a blocked-pattern rule on the literal names of two environment variables set inline, wrote a shell script that set the same variables, and ran it five times. The prompt forbids that route around a policy denial and asks for the reason in the final message.
 
 ## Who commits, and what the message may say
 

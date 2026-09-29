@@ -84,6 +84,13 @@ test("harness argv: claude resumes with --settings and no dangerous flags; codex
   const x = buildRun({ harness: "codex", config: CONFIG, mode: "start", session: null, prompt: "p", cwd: "/w" });
   assert.deepEqual(x.args.slice(0, 2), ["exec", "--json"]);
   assert.ok(x.args.includes('sandbox_mode="workspace-write"'));
+  for (const mode of ["start", "resume"]) {
+    const run = buildRun({ harness: "codex", config: CONFIG, mode, session: "s", prompt: "p", cwd: "/w" });
+    assert.ok(run.args.includes('approval_policy="on-request"'), `${mode}: Git metadata writes can request approval`);
+    assert.ok(run.args.includes('approvals_reviewer="auto_review"'), `${mode}: no human approval prompt in a headless run`);
+    assert.ok(run.args.includes('sandbox_mode="workspace-write"'), `${mode}: the sandbox remains enabled`);
+    assert.ok(!run.args.includes('approval_policy="never"'));
+  }
   assert.throws(() => assertSafeArgv(["--dangerously-skip-permissions"]), /refusing/);
   assert.throws(() => buildRun({ harness: "bash", config: CONFIG, mode: "start", prompt: "p" }), /unknown harness/);
 });

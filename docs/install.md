@@ -2,7 +2,7 @@
 
 About an hour the first time. `gallivant doctor` checks every step and prints the fix for any that is missing, so you can do them in any order and re-run it.
 
-Requirements: macOS or Linux, Node 22 or newer, `gh` signed in, `jq`, and at least one of Claude Code (2.1.263 or newer) or Codex CLI (0.155.1 or newer) signed in.
+Requirements: macOS or Linux, Node 22 or newer, `gh` signed in, `jq`, and at least one of Claude Code (2.1.263 or newer) or Codex CLI (0.158.0 or newer) signed in.
 
 ## 1. The command
 
@@ -98,7 +98,7 @@ npx @aporthq/aport-agent-guardrails codex --global --enforcement=warn
 codex          # once: run /hooks and trust the APort hook. This step cannot be automated.
 ```
 
-Warn, not enforce, on Codex: APort's Codex hook is beta and fails closed on multi-file `apply_patch`, which would stall every real edit. On Codex the bounds are the `workspace-write` sandbox, the scoped token and the ruleset; APort is the audit trail. See [guardrails.md](guardrails.md).
+Warn, not enforce, on Codex: APort's Codex hook is beta and fails closed on multi-file `apply_patch`, which would stall every real edit. On Codex the controls are the `workspace-write` sandbox, Codex's automatic approval reviewer for Git metadata writes and other escalations, the scoped token and the ruleset; APort is the audit trail. Gallivant sets the approval mode for start and resume; no changes to your Codex config or saved command rules are needed. See [guardrails.md](guardrails.md#codex-git-writes-need-automatic-approval).
 
 ## 8. First PRD
 

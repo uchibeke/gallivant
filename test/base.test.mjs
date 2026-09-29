@@ -653,6 +653,10 @@ test("every prompt says a guardrail denial is a boundary and asks for a report i
     assert.match(p, /do not write a wrapper script, re-spell the command, move it into a file/, "the routes around it are named, because the run that did this took one of them");
     assert.match(p, /say in your final message what was blocked and what you were trying to do/, "and the honest response is spelled out");
     assert.match(p, /The block may well be wrong/, "worded so a correct instinct to verify is not read as forbidden");
+    assert.match(p, /supported approval\/escalation request/);
+    assert.match(p, /If the reviewer or a guardrail denies it, stop and report the denial/);
+    assert.match(p, /Do not change permissions, move Git metadata, or bypass the sandbox/);
+    assert.match(p, /push can exit zero even when writing local tracking metadata failed/);
   }
 });
 
