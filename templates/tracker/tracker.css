@@ -1,0 +1,272 @@
+/* The tracker's one stylesheet, served as a file so the CSP needs no 'unsafe-inline' for styles either.
+ *
+ * The values match command-center's design system (public/app.css): the same canvas, surface, accent, radii, pill
+ * buttons and Inter/JetBrains Mono pairing, so a tracker mounted inside it reads as part of the same tool rather
+ * than as a foreign page in a frame. They are duplicated rather than imported because Gallivant has no dependency
+ * on command-center and must look right standalone too; the custom properties below are how a host overrides them.
+ *
+ * Every colour, font and spacing value is a custom property with a default. How far a host's override reaches
+ * depends on the origin:
+ *
+ *   Same origin (mounted on the host's own server, which is the arrangement to prefer):
+ *     setting these properties on :root restyles everything here.
+ *   Cross origin (a separate port is a separate origin):
+ *     the parent cannot touch this document at all. CSS does not cross an origin boundary, and no amount of custom
+ *     properties changes that. The mechanism for that case is ?theme=dark|light on the URL.
+ */
+:root {
+  color-scheme: dark;
+
+  --gv-canvas: #06090f;
+  --gv-surface: #0d1117;
+  --gv-bench: #0b1120;
+  --gv-text: #e8ecf1;
+  --gv-muted: #7a8ba3;
+  --gv-subtle: #64748b;
+  --gv-line: rgba(255, 255, 255, .08);
+  --gv-line-strong: rgba(255, 255, 255, .2);
+  --gv-hover: rgba(255, 255, 255, .04);
+  --gv-accent: #22d3ee;
+  --gv-accent-soft: rgba(34, 211, 238, .1);
+  --gv-success: #10b981;
+  --gv-warning: #f59e0b;
+  --gv-danger: #ef4444;
+
+  --gv-font: Inter, -apple-system, system-ui, "Segoe UI", sans-serif;
+  --gv-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+  --gv-size: 14px;
+
+  --gv-r: 12px;
+  --gv-pad: 20px;
+  --gv-sidebar: 300px;
+}
+
+/* The light palette is opt-in, because the host this is built to sit inside is dark. `?theme=light` asks for it. */
+:root[data-theme="light"] {
+  color-scheme: light;
+  --gv-canvas: #f7f8fa; --gv-surface: #fff; --gv-bench: #f0f2f5; --gv-text: #10151c; --gv-muted: #5b6b80;
+  --gv-subtle: #7d8a9b; --gv-line: rgba(0, 0, 0, .1); --gv-line-strong: rgba(0, 0, 0, .22);
+  --gv-hover: rgba(0, 0, 0, .04); --gv-accent: #0891b2; --gv-accent-soft: rgba(8, 145, 178, .1);
+}
+
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+
+body {
+  margin: 0;
+  background: var(--gv-canvas);
+  color: var(--gv-text);
+  font-family: var(--gv-font);
+  font-size: var(--gv-size);
+  line-height: 1.5;
+}
+
+a { color: var(--gv-accent); }
+.dim { color: var(--gv-subtle); }
+.warn { color: var(--gv-warning); }
+.live { color: var(--gv-success); }
+code, .mono { font-family: var(--gv-mono); font-size: .86em; }
+
+/* No fixed viewport assumption: this is often a frame, so the layout is a grid that collapses to one column. */
+header.top {
+  display: flex; flex-wrap: wrap; gap: 10px; align-items: center;
+  padding: 14px var(--gv-pad); border-bottom: 1px solid var(--gv-line); background: var(--gv-surface);
+}
+header.top h1 { font-size: var(--gv-size); margin: 0; font-weight: 600; letter-spacing: -.01em; }
+nav.views { display: flex; gap: 6px; align-items: center; margin-left: auto; }
+nav.views a {
+  color: var(--gv-muted); text-decoration: none; font-size: 13px;
+  padding: 5px 12px; border-radius: 999px; border: 1px solid transparent;
+}
+nav.views a:hover { color: var(--gv-text); background: var(--gv-hover); }
+nav.views a[aria-current] { color: var(--gv-accent); border-color: var(--gv-accent); }
+/* The way back out to a host that mounted this. Set apart, since it leaves the tracker. */
+nav.views a.home { color: var(--gv-subtle); margin-right: 4px; padding-right: 14px; border-right: 1px solid var(--gv-line); border-radius: 0; }
+nav.views a.home:hover { color: var(--gv-text); background: none; }
+nav.views a.home::before { content: "\2190"; margin-right: 6px; }
+
+.layout { display: grid; grid-template-columns: var(--gv-sidebar) minmax(0, 1fr); align-items: start; }
+@media (max-width: 46rem) { .layout { grid-template-columns: minmax(0, 1fr); } aside { border-right: 0 !important; } }
+
+aside {
+  background: var(--gv-surface); border-right: 1px solid var(--gv-line);
+  padding: 12px 8px var(--gv-pad); position: sticky; top: 0; max-height: 100vh; overflow: auto;
+}
+section.main { padding: var(--gv-pad); min-width: 0; }
+
+/* controls */
+.controls { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin: 0 4px 10px; }
+input[type="search"], select {
+  background: var(--gv-bench); border: 1px solid var(--gv-line); border-radius: 10px;
+  padding: 8px 12px; color: inherit; font: inherit; outline: none; min-width: 0;
+}
+input[type="search"] { flex: 1 1 8rem; }
+input[type="search"]:focus, select:focus { border-color: rgba(34, 211, 238, .5); }
+.controls label { font-size: 11px; text-transform: uppercase; letter-spacing: .14em; color: var(--gv-subtle); }
+
+/* A sidebar group: a heading that toggles, then its rows. Same caret and type scale as the host's explorer. */
+.group > h3 {
+  margin: 14px 4px 4px; padding: 2px 8px; font-size: 11px; text-transform: uppercase; letter-spacing: .14em;
+  color: var(--gv-subtle); font-weight: 600; display: flex; align-items: center; gap: 6px;
+  border-radius: 8px; cursor: pointer; user-select: none;
+}
+.group > h3:hover { color: var(--gv-muted); }
+.group > h3 .n { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.group > h3 small { text-transform: none; letter-spacing: 0; font-weight: 400; font-family: var(--gv-mono); font-size: 10.5px; color: var(--gv-subtle); }
+.caret { width: 0; height: 0; border: 4px solid transparent; border-left: 5px solid var(--gv-subtle); flex: none; transform: rotate(90deg); transition: transform .12s; }
+.group.closed .caret { transform: none; }
+.group.closed .rows { display: none; }
+
+.rows { display: flex; flex-direction: column; }
+a.row {
+  display: flex; align-items: center; gap: 10px; padding: 9px 12px; border-radius: 10px;
+  color: var(--gv-muted); text-decoration: none; min-height: 38px; min-width: 0;
+}
+a.row:hover { background: var(--gv-hover); color: var(--gv-text); }
+a.row[aria-current] { background: var(--gv-accent-soft); color: var(--gv-text); box-shadow: inset 0 0 0 1px rgba(34, 211, 238, .5); }
+a.row .n { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+a.row small { font-family: var(--gv-mono); font-size: 10px; color: var(--gv-subtle); white-space: nowrap; }
+.dot { width: 8px; height: 8px; border-radius: 50%; flex: none; background: var(--gv-subtle); }
+.dot.running { background: var(--gv-success); }
+.dot.failed, .dot.needs { background: var(--gv-danger); }
+.empty, .hint { color: var(--gv-subtle); padding: 8px 12px; font-size: 13px; }
+
+h2 { font-size: 11px; text-transform: uppercase; letter-spacing: .14em; color: var(--gv-subtle); margin: 28px 0 8px; font-weight: 600; }
+h2:first-of-type { margin-top: 0; }
+
+/* A table is a card on the canvas, like the host's .doc */
+table { width: 100%; border-collapse: collapse; font-size: 13.5px; background: var(--gv-surface); border: 1px solid var(--gv-line); border-radius: var(--gv-r); overflow: hidden; }
+th { text-align: left; font-size: 11px; text-transform: uppercase; letter-spacing: .14em; color: var(--gv-subtle); font-weight: 600; padding: 10px 12px; }
+td { padding: 9px 12px; border-top: 1px solid var(--gv-line); vertical-align: top; }
+tbody tr:hover td { background: var(--gv-hover); }
+td.num { text-align: right; font-variant-numeric: tabular-nums; font-family: var(--gv-mono); font-size: 12px; }
+.tag { display: inline-flex; align-items: center; gap: 6px; padding: 3px 10px; border-radius: 999px; font-size: 12px; border: 1px solid var(--gv-line); color: var(--gv-muted); white-space: nowrap; }
+.tag.live { color: var(--gv-success); border-color: rgba(16, 185, 129, .35); }
+.tag.bad { color: var(--gv-danger); border-color: rgba(239, 68, 68, .35); }
+
+dl.facts {
+  display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 8px 20px; margin: 0 0 24px;
+  background: var(--gv-surface); border: 1px solid var(--gv-line); border-radius: var(--gv-r); padding: 16px 18px;
+}
+dl.facts dt { color: var(--gv-subtle); font-size: 11px; text-transform: uppercase; letter-spacing: .14em; padding-top: 2px; }
+dl.facts dd { margin: 0; min-width: 0; overflow-wrap: anywhere; }
+dl.facts code { background: var(--gv-bench); padding: 1px 6px; border-radius: 6px; }
+
+/* The control that reaches back into the log, above the pane, because that is the direction it loads in. */
+.loadmore { display: flex; align-items: baseline; gap: 10px; margin: 0 0 6px; flex-wrap: wrap; }
+.loadmore button {
+  font: inherit; font-size: 12px; font-family: var(--gv-mono); color: var(--gv-text);
+  background: var(--gv-bench); border: 1px solid var(--gv-line); border-radius: var(--gv-r);
+  padding: 4px 10px; cursor: pointer;
+}
+.loadmore button:hover:not(:disabled) { background: var(--gv-hover); border-color: var(--gv-accent); }
+.loadmore button:disabled { opacity: .5; cursor: default; }
+.loadmore .hint { margin: 0; padding: 0; font-size: 11px; color: var(--gv-subtle); font-family: var(--gv-mono); }
+
+#log {
+  background: var(--gv-bench); border: 1px solid var(--gv-line); border-radius: var(--gv-r);
+  padding: 14px 16px; height: 58vh; min-height: 12rem; overflow: auto;
+  white-space: pre-wrap; overflow-wrap: anywhere; font-family: var(--gv-mono); font-size: 12px; line-height: 1.6;
+  color: var(--gv-text);
+}
+/* Log lines, matching command-center's .ll rules (public/app.css) since the renderer is the same one. */
+.ll { padding: 1px 0; word-break: break-word; }
+.ll + .ll { margin-top: 1px; }
+.ll a { color: var(--gv-accent); text-decoration: none; border-bottom: 1px solid rgba(34, 211, 238, .28); }
+.ll a:hover { border-bottom-color: var(--gv-accent); }
+.ll a.fl { color: var(--gv-success); border-bottom-color: rgba(16, 185, 129, .3); }
+/* The markdown a model writes in its prose. Inline only: the reader has already put a heading or a list item on its
+   own row, so what is left inside a row is emphasis, code and links. */
+.ll b { font-weight: 600; color: var(--gv-text); }
+.ll i { font-style: italic; }
+.ll code { font-family: var(--gv-mono); font-size: .92em; background: var(--gv-hover); padding: 1px 5px; border-radius: 4px; }
+.ll:not(.t):not(.d):not(.skip):not(.raw) { color: var(--gv-text); margin: 6px 0 2px; font-family: var(--gv-font); font-size: 12.5px; }
+
+/* The block level of a model's markdown: a list, a table, a blockquote, a fence, a rule. `report` in
+ * lib/harness_log.mjs scans them out of the prose and the renderer draws each as one row, so everything the pane
+ * already does per row (the cap, the trim, the heartbeat lookup by data-id) is unchanged.
+ *
+ * `#log` sets `white-space: pre-wrap`, which is right for a log line and wrong inside a block: the markup already
+ * carries the structure, so a newline between two <li> would otherwise draw as a blank line. Every block resets it,
+ * and the fence sets it back, because inside a <pre> the whitespace IS the content. */
+.ll.blk { white-space: normal; }
+.ll.blk ul.md, .ll.blk ol.md { margin: 2px 0; padding-left: 1.4em; }
+.ll.blk li { margin: 1px 0; }
+/* Nesting is an indent class rather than a nested list: `report` measured the indent and a flat list with a margin
+   reads the same at the two or three levels a log pane ever shows, without a tree built from agent output. */
+.ll.blk li.d1 { margin-left: 1.2em; } .ll.blk li.d2 { margin-left: 2.4em; } .ll.blk li.d3 { margin-left: 3.6em; }
+/* ::marker is left to the browser, which already numbers an <ol> and bullets a <ul> in the reader's own locale. */
+.ll.blk li::marker { color: var(--gv-subtle); }
+
+/* A fenced block. Nothing inside it is markdown and nothing inside it is a link: it is the characters the model typed
+   between the fences, escaped and shown. It scrolls sideways on its own rather than wrapping, because a wrapped line
+   of code reads as two statements. */
+.ll.fence { white-space: normal; margin: 8px 0; }
+.ll.fence pre {
+  margin: 0; padding: 10px 12px; overflow-x: auto;
+  background: var(--gv-surface); border: 1px solid var(--gv-line); border-radius: 8px;
+  font-family: var(--gv-mono); font-size: 11.5px; line-height: 1.55; color: var(--gv-text);
+  white-space: pre; tab-size: 2;
+}
+/* The language off the fence line, shown as a label and used for nothing else: no highlighter is loaded, because the
+   CSP is `script-src 'self'` and a highlighter would be a fetch this page is not allowed to make. */
+.ll.fence[data-lang] pre { padding-top: 22px; }
+.ll.fence[data-lang]::before {
+  content: attr(data-lang); display: block; position: relative; top: 16px; left: 12px; height: 0;
+  font-family: var(--gv-mono); font-size: 10px; letter-spacing: .08em; text-transform: uppercase; color: var(--gv-subtle);
+}
+/* A fence whose closer has not arrived yet: half the block is on screen and the rest is still streaming. Saying so is
+   better than letting it look like a finished block that happens to end mid-statement. */
+.ll.fence.open pre { border-style: dashed; border-color: var(--gv-line-strong); }
+
+/* A pipe table. The wrapper is what scrolls: the pane sits in the layout grid, so a table wide enough to push it out
+   would move the whole column instead of scrolling inside it. */
+.ll.blk .tw { overflow-x: auto; margin: 6px 0; }
+.ll.blk table.md {
+  width: auto; min-width: 100%; border-collapse: collapse; font-size: 11.5px;
+  background: var(--gv-surface); border: 1px solid var(--gv-line); border-radius: 8px; overflow: hidden;
+}
+.ll.blk table.md th, .ll.blk table.md td { padding: 5px 10px; text-align: left; vertical-align: top; }
+.ll.blk table.md th {
+  font-size: 10px; text-transform: uppercase; letter-spacing: .1em; color: var(--gv-subtle); font-weight: 600;
+  border-bottom: 1px solid var(--gv-line); white-space: nowrap;
+}
+.ll.blk table.md td { border-top: 1px solid var(--gv-line); }
+.ll.blk table.md tbody tr:first-child td { border-top: 0; }
+
+/* A blockquote, as the one block a run of `>` lines is. The marker used to be stripped per line, which left the rows
+   apart and nothing on the page saying they were a quote at all. */
+.ll.blk blockquote {
+  margin: 6px 0; padding: 2px 0 2px 12px; border-left: 2px solid var(--gv-line-strong); color: var(--gv-muted);
+}
+.ll.blk blockquote p { margin: 4px 0; }
+
+/* A horizontal rule. Its own row, so it separates the rows around it the way the model meant it to. */
+.ll.hr { height: 0; margin: 10px 0; border-top: 1px solid var(--gv-line); padding: 0; }
+/* A line no reader claimed: the harness's own stderr, a truncated write, a runner line. It keeps the monospace of the
+   file it came out of rather than borrowing the prose font, because it is not prose and reading it as a sentence the
+   model wrote is misleading. The rule marks it too: this is what the harness printed, verbatim. */
+.ll.raw { color: var(--gv-warning); border-left: 2px solid var(--gv-line); padding-left: 8px; }
+.ll.t { display: grid; grid-template-columns: 96px 1fr; gap: 10px; align-items: baseline; color: var(--gv-muted); }
+.ll.t .n { font-size: 10.5px; letter-spacing: .04em; text-transform: uppercase; color: var(--gv-subtle); text-align: right; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ll.t .a { overflow-wrap: anywhere; }
+/* How long a call has been running, written onto the call's own row by its heartbeats rather than added as a row of
+   its own. Twenty-one heartbeats for one `npm ci` would be twenty-one identical lines; this is one line counting up. */
+.ll.t .e { margin-left: 8px; font-size: 10.5px; color: var(--gv-warning); white-space: nowrap; }
+/* A call with no argument has no `.a` cell for the timer to sit in, so it becomes a direct child of the grid. Put it
+   in the second column rather than letting it start a row of its own under the tool name. */
+.ll.t > .e { grid-column: 2; margin-left: 0; }
+.ll.t.search .n { color: var(--gv-accent); } .ll.t.fetch .n { color: #8b9fd4; }
+.ll.t.write .n { color: var(--gv-success); } .ll.t.shell .n { color: var(--gv-warning); }
+.ll.t.agent .n { color: #c084fc; } .ll.t.meta .n { color: var(--gv-subtle); opacity: .7; }
+/* A failing tool result. Not in command-center's set: its reducer never put one on screen, and here an error coming
+   back from a tool is the thing an operator is scanning the pane for. */
+.ll.t.bad .n { color: var(--gv-danger); } .ll.t.bad .a { color: var(--gv-muted); }
+.ll.d { margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--gv-line); font-weight: 600; }
+.ll.d.ok { color: var(--gv-success); } .ll.d.bad { color: var(--gv-danger); }
+/* A guardrail denial reuses the closing line, because it is the same weight of news, and marks the label so it does
+   not read as the run having ended. */
+.ll.d .n { font-family: var(--gv-mono); letter-spacing: .06em; }
+.ll.h, .ll.skip { color: var(--gv-subtle); font-size: 11px; padding-bottom: 8px; margin-bottom: 6px; border-bottom: 1px dashed var(--gv-line); }
+@media (max-width: 700px) { .ll.t { grid-template-columns: 1fr; gap: 0; } .ll.t .n { text-align: left; } }
+.note { font-size: 12px; color: var(--gv-subtle); margin: 8px 0 0; font-family: var(--gv-mono); }

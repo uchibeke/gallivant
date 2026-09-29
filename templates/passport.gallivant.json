@@ -1,0 +1,83 @@
+{
+  "passport_id": "00000000-0000-4000-8000-000000000000",
+  "kind": "template",
+  "spec_version": "oap/1.0",
+  "owner_id": "user_gallivant",
+  "owner_type": "user",
+  "assurance_level": "L2",
+  "status": "active",
+  "capabilities": [
+    { "id": "data.file.read", "params": {} },
+    { "id": "data.file.write", "params": {} },
+    { "id": "system.command.execute", "params": {} },
+    { "id": "web.fetch", "params": {} },
+    { "id": "agent.session.create", "params": {} }
+  ],
+  "limits": {
+    "data.file.write": {
+      "allowed_paths": ["{{worktrees}}/**"],
+      "blocked_paths": [
+        "{{home}}/.claude/**",
+        "{{home}}/.codex/**",
+        "{{home}}/.config/opencode/**",
+        "{{home}}/.gallivant/**",
+        "{{home}}/.aport/**",
+        "**/.env",
+        "**/.env.*"
+      ]
+    },
+    "data.file.read": {
+      "blocked_paths": [
+        "**/.env",
+        "**/.env.*",
+        "{{home}}/.claude/**",
+        "{{home}}/.codex/**",
+        "{{home}}/.config/opencode/**",
+        "{{home}}/.gallivant/**",
+        "{{home}}/.aport/**",
+        "{{home}}/.ssh/**",
+        "{{home}}/.aws/**",
+        "**/auth.json",
+        "**/*.pem",
+        "**/*.key"
+      ]
+    },
+    "system.command.execute": {
+      "allowed_commands": ["*"],
+      "blocked_patterns": [
+        "push --force",
+        "push -f",
+        "--force-with-lease",
+        "push origin main",
+        "push origin master",
+        "HEAD:main",
+        "HEAD:master",
+        "--no-verify",
+        "sudo",
+        "rm -rf ~",
+        "rm -rf /",
+        "gh auth token",
+        "security find-",
+        "launchctl",
+        "printenv",
+        "auth.json"
+      ],
+      "max_execution_time": 1800,
+      "require_confirmation": false
+    },
+    "web.fetch": {
+      "allowed_domains": [
+        "github.com",
+        "api.github.com",
+        "raw.githubusercontent.com",
+        "registry.npmjs.org",
+        "pypi.org",
+        "files.pythonhosted.org"
+      ]
+    }
+  },
+  "regions": [],
+  "created_at": "2026-09-23T00:00:00Z",
+  "updated_at": "2026-09-23T00:00:00Z",
+  "version": "1.0.0"
+}

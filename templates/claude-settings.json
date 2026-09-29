@@ -1,0 +1,17 @@
+{
+  "_comment": "Merge the sandbox block into ~/.gallivant/claude/settings.json after the APort installer has written the hooks block there. The installer adds hooks.PreToolUse; this file only shows the sandbox part.",
+  "sandbox": {
+    "enabled": true,
+    "autoAllowBashIfSandboxed": true,
+    "network": {
+      "allowedDomains": [
+        "github.com",
+        "api.github.com",
+        "*.githubusercontent.com",
+        "registry.npmjs.org",
+        "pypi.org",
+        "files.pythonhosted.org"
+      ]
+    }
+  }
+}
