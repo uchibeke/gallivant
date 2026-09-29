@@ -24,7 +24,7 @@ import { why } from "../lib/commands/why.mjs";
 import { resume } from "../lib/commands/resume.mjs";
 import { makeState, newEntry, STATES } from "../lib/state.mjs";
 import {
-  CONFIG, T0, tempHome, fakeGh, fakeRunner, fakeGit, fakeNotify, makeClock, silentLog, GOOD_PRD, prFixture, claudeResultLines, fakeCredential, fakeIdentity } from "./helpers.mjs";
+  CONFIG, T0, tempHome, fakeGh, fakeRunner, fakeGit, fakeNotify, makeClock, silentLog, GOOD_PRD, prFixture, claudeResultLines, fakeCredential, fakeIdentity, harnessBin } from "./helpers.mjs";
 
 // ---- the edits, one per case in the taxonomy -----------------------------------------------------------------------
 
@@ -99,7 +99,7 @@ function world({ repoText = GOOD_PRD, snapshotText = GOOD_PRD, checkout = null, 
     // completion gate decides without a network call. Neither is what this file is about: both are there so the one step
     // under test, the brief comparison immediately before that gate, is reached in one tick rather than five.
     home, state, gh, git: fakeGit(), notify, log: silentLog, clock,
-    config: { ...CONFIG, reviewer: null, deliverable: deliverable && { ...deliverable, evaluator: "local", scan_output: false } },
+    config: { ...CONFIG, harness: { ...CONFIG.harness, codex: { bin: harnessBin(home) } }, reviewer: null, deliverable: deliverable && { ...deliverable, evaluator: "local", scan_output: false } },
     ownLogin: "me", runnerFor: () => runner,
     readPrd: key => prds.get(key) ?? null,
     writePrd: (key, text) => prds.set(key, text),

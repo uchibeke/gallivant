@@ -15,7 +15,7 @@ import { makeTick } from "../lib/tick.mjs";
 import { startPrompt, resumePrompt, fixPrompt } from "../lib/prompt.mjs";
 import { model } from "../lib/commands/status.mjs";
 import { READY_LABEL } from "../lib/gh.mjs";
-import { CONFIG, GOOD_PRD, T0, tempHome, fakeGh, fakeGit, fakeRunner, fakeNotify, fakeCredential, fakeIdentity, makeClock, silentLog } from "./helpers.mjs";
+import { CONFIG, GOOD_PRD, T0, tempHome, fakeGh, fakeGit, fakeRunner, fakeNotify, fakeCredential, fakeIdentity, makeClock, silentLog, harnessBin } from "./helpers.mjs";
 
 const REL = "docs/prds/widget-export.md";
 const SOURCE = "docs/support.md";
@@ -35,7 +35,7 @@ function world() {
   let brief = BRIEF;
   const ctx = {
     home, state, clock, gh, git: fakeGit(), log: silentLog, notify: fakeNotify(), ownLogin: "me",
-    config: { ...CONFIG, reviewer: null, deliverable: null }, credential: fakeCredential(), identity: fakeIdentity(),
+    config: { ...CONFIG, harness: { codex: { bin: harnessBin(home) } }, reviewer: null, deliverable: null }, credential: fakeCredential(), identity: fakeIdentity(),
     runnerFor: () => runner, readPrd: () => brief, writePrd: (_id, text) => { brief = text; },
     readSource: (_id, rel) => sources.get(rel) ?? null, writeSource: (_id, rel, text) => sources.set(rel, text),
   };

@@ -19,6 +19,8 @@ Codex protects `.git` even inside a `workspace-write` checkout. Gallivant theref
 `approval_policy="on-request"` and `approvals_reviewer="auto_review"` for **both start and resume**. The sandbox
 stays enabled. Codex's own reviewer decides whether an escalation may run, without waiting for an operator click.
 A reviewer or guardrail refusal still means stop and report; changing permissions or bypassing the sandbox is forbidden.
+Start, manual resume and the daemon check the configured binary's version and sign-in before launching work. An old
+or unreadable version stops the launch with an upgrade instruction; the minimum is enforced, not just listed by `doctor`.
 This is the [documented automatic-review path](https://learn.chatgpt.com/docs/sandboxing/auto-review), not a grant
 of unrestricted access. Review calls can add usage and latency, and managed Codex policy can refuse them.
 
