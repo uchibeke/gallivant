@@ -83,6 +83,8 @@ cp templates/passport.gallivant.json ~/.gallivant/claude/aport/passport.json
 
 Merge the sandbox block from `templates/claude-settings.json` into `~/.gallivant/claude/settings.json` next to the hooks block the installer wrote. Every Claude run loads that file with `--settings` and sets `APORT_CLAUDE_CODE_CONFIG_DIR`, so the hook and the sandbox apply only to Gallivant runs.
 
+On macOS the template enables `sandbox.enableWeakerNetworkIsolation` so `gh` can use Apple's certificate verification service. Without it, a valid GitHub login can fail inside the sandbox with `x509: OSStatus -26276`. This grants access to `com.apple.trustd.agent` and opens a potential exfiltration route through that service; review the [security tradeoff](guardrails.md#claude-on-macos-needs-certificate-verification) before applying it. The setting has no effect on Linux. `doctor` detects the missing setting on macOS and explains the repair; it does not change settings automatically.
+
 Any APort passport option works: a hosted passport created by the installer, an existing hosted `agent_id`, or a local file. With a hosted passport the limits live in the aport.io dashboard, so set `data.file.write` `allowed_paths` there to your worktrees directory and `blocked_paths` to the control-plane directories listed in `templates/passport.gallivant.json`; with a local passport, copy the template. `doctor` reports which mode is in use.
 
 ```bash

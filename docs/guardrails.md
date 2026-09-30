@@ -6,7 +6,7 @@ Unattended runs act with your GitHub identity on your code. Each guarantee below
 |---|---|---|
 | Filesystem access is bounded | Claude: the Bash sandbox in the Gallivant settings file. Codex: `workspace-write`, with boundary-crossing commands reviewed by Codex's automatic reviewer. An approved command runs outside that sandbox; the reviewer is a decision, not filesystem isolation. | Denies Write and Edit tool calls outside `allowed_paths`. Does not see `echo x > ~/.zshrc` inside a Bash command. |
 | Reads of secrets are restricted | The sandboxes and each harness's denied reads; Codex's automatic reviewer checks escalation requests for credential probing. This is not a guarantee about an approved command running outside the sandbox. | Denies Read and Grep calls on `.env*`, `.ssh`, `.aws`, `*.pem`, `*.key` and the passport's `blocked_paths`. Does not see `cat .env` inside Bash. |
-| Network limited | Claude: `sandbox.network.allowedDomains`. Codex: none once `network_access=true`, which `git push` needs. | Denies WebFetch and WebSearch outside `allowed_domains`. Does not see `curl` inside Bash. |
+| Network limited | Claude: `sandbox.network.allowedDomains`, with the macOS certificate-service exception described below. Codex: none once `network_access=true`, which `git push` needs. | Denies WebFetch and WebSearch outside `allowed_domains`. Does not see `curl` inside Bash. |
 | No push to the default branch, no force push | A GitHub ruleset on each repo: no deletion, no force push, pull request required, no bypass actors. `doctor` prints the call. Sessions are also told not to rebase, because keeping a branch on its base is the daemon's job and it does it with a merge commit, which needs no force. | `blocked_patterns` substring-matches `push --force`, `push origin main` and the like. Best effort; APort does not parse refspecs. |
 | Blast radius of a successful injection | Optional but recommended: a fine-grained PAT limited to the participating repos with no Workflows permission (`github_token_file`). By default runs act as your own login, which reaches every repo it can. Either way the credential is resolved by the daemon and handed to the run in its environment, so `~/.git-credentials`, the keychain and `~/.config/gh` stay out of a run's path. | An audit log of every tool call, for reconstruction. |
 | Runaway spend | `--max-budget-usd` on Claude runs, `run_timeout_minutes` on both (per repository, else the global; default 720, a catch for a wedged session rather than a spend limit), `max_iterations` per PR. | none |
@@ -39,6 +39,24 @@ node --test test/live-codex-git.mjs
 Run it from a Gallivant clone with Codex signed in. It spends model calls, makes no GitHub writes, and prints the
 temporary directory holding its logs and test repository. It is deliberately separate from `npm test`. `doctor`'s
 credential probe uses `git ls-remote`; that checks authentication, not Codex's Git write permissions.
+
+## Claude on macOS needs certificate verification
+
+Claude's macOS sandbox blocks the Apple trust service used by Go programs such as `gh`. A run can therefore fail
+with `tls: failed to verify certificate: x509: OSStatus -26276` even when its GitHub credential is valid and `curl`
+works. The Claude settings template enables `sandbox.enableWeakerNetworkIsolation` to permit
+`com.apple.trustd.agent`. This is a native Claude setting in the existing operator-owned settings file, loaded for
+both start and resume. `doctor` detects its absence on macOS; Linux does not require it.
+
+This permission has a real cost: [Anthropic's sandbox runtime documentation](https://github.com/anthropics/sandbox-runtime#configuration-options)
+warns that it opens a potential exfiltration route through the trust service. The filesystem sandbox and domain
+allowlist remain configured, but the allowlist does not bound this additional route. TLS certificate verification
+stays enabled. Keep this grant in Gallivant's operator-owned Claude settings, outside the agent's writable checkout.
+Do not disable the sandbox or exclude `gh` from it to repair certificate errors.
+
+Harness adapters already translate Gallivant's shared run lifecycle into each CLI's native permissions. This
+Claude/macOS requirement belongs to that setup; it adds no task-specific switch or alternative completion path.
+APort's pre-tool policy and Gallivant's deliverable-completion gate remain separate checks.
 
 ## How a run gets a GitHub credential
 

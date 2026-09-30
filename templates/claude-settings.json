@@ -1,8 +1,9 @@
 {
-  "_comment": "Merge the sandbox block into ~/.gallivant/claude/settings.json after the APort installer has written the hooks block there. The installer adds hooks.PreToolUse; this file only shows the sandbox part.",
+  "_comment": "Merge the sandbox block into ~/.gallivant/claude/settings.json after the APort installer has written the hooks block there. On macOS, enableWeakerNetworkIsolation permits Apple's trustd.agent so gh can verify TLS certificates; it opens a potential exfiltration route through that service. It has no effect on Linux. See docs/guardrails.md. Keep this in operator-owned settings, never project settings.",
   "sandbox": {
     "enabled": true,
     "autoAllowBashIfSandboxed": true,
+    "enableWeakerNetworkIsolation": true,
     "network": {
       "allowedDomains": [
         "github.com",
