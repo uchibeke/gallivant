@@ -563,12 +563,16 @@ test("prDiff reports a failure instead of returning nothing, so the output scan 
   // the scan as though it were the whole thing, so a blocked pattern past the cutoff was never looked at. The cap
   // stays, because a diff of any size in memory is its own problem; what it produces is a refusal to decide.
   const capped = makeGh({ exec: async () => ({ stdout: "a".repeat(MAX_DIFF_BYTES) + "\n+TODO after the cutoff\n" }) });
-  await assert.rejects(() => capped.prDiff("acme/widget", 142), /at or over the 1000000-byte scan cap: truncated/);
+  await assert.rejects(() => capped.prDiff("acme/widget", 142), /at or over the \d+-byte scan cap/);
   // Exactly at the cap counts as truncated: a diff of that length is indistinguishable from one the cap cut short.
   const exact = makeGh({ exec: async () => ({ stdout: "a".repeat(MAX_DIFF_BYTES) }) });
-  await assert.rejects(() => exact.prDiff("acme/widget", 142), /truncated/);
+  await assert.rejects(() => exact.prDiff("acme/widget", 142), /incomplete output scan/);
   const under = makeGh({ exec: async () => ({ stdout: "a".repeat(MAX_DIFF_BYTES - 1) }) });
   assert.equal((await under.prDiff("acme/widget", 142)).length, MAX_DIFF_BYTES - 1, "a diff that fits is returned whole");
+  const large = "+" + "x".repeat(5_030_593) + "\n+TODO at the end\n";
+  assert.equal(await makeGh({ exec: async () => ({ stdout: large }) }).prDiff("acme/widget", 142), large, "the full real-world size is read, including its tail");
+  const unicode = makeGh({ exec: async () => ({ stdout: "é".repeat(MAX_DIFF_BYTES / 2) }) });
+  await assert.rejects(() => unicode.prDiff("acme/widget", 142), /scan cap/, "the cap measures bytes, not characters");
 });
 
 test("removeLabel is strict by omission: only gh's own absent-label message is swallowed", async () => {

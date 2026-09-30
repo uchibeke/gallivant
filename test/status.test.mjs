@@ -4,7 +4,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { join } from "node:path";
 import { model, render, status } from "../lib/commands/status.mjs";
-import { READY_LABEL_REMOVAL, READY_LABEL_WRITE } from "../lib/tick.mjs";
+import { READY_LABEL_REMOVAL, READY_LABEL_WRITE, COMPLETION_GATE } from "../lib/tick.mjs";
 import { makeState, newEntry, STATES } from "../lib/state.mjs";
 import { writeJsonAtomic } from "../lib/fs.mjs";
 import { processIdentity } from "../lib/daemon.mjs";
@@ -15,6 +15,14 @@ import { CONFIG, T0, at, tempHome, makeClock, silentLog } from "./helpers.mjs";
 const entryAt = (over = {}) => ({
   ...newEntry({ prd: "docs/prds/widget-export.md", harness: "claude", session: null, repo: "acme/widget", branch: "gallivant/widget-export", worktree: "/tmp/wt", pr: 142, url: "https://github.com/acme/widget/pull/142", state: STATES.prOpen, nowIso: T0 }),
   ...over,
+});
+
+test("a completion gate wait names its cause instead of waiting on an already-clear reviewer", () => {
+  const w = world({ entries: { "acme/widget/widget-export": entryAt({ retry: { op: COMPLETION_GATE, count: 2, error: "aport verify 413: request_too_large" } }) } });
+  const row = model(w.ctx).running[0];
+  assert.equal(row.label, "blocked");
+  assert.match(row.detail, /completion gate.*413/);
+  assert.doesNotMatch(row.detail, /on reviewer/);
 });
 
 /** A registry, a daemon file if the test asks for one, and a runner fake per entry. */
