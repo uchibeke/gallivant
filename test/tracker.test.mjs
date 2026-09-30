@@ -17,6 +17,8 @@ import { esc, CSP } from "../lib/tracker/pages.mjs";
 import { makeRunner } from "../lib/run.mjs";
 import { makeState, newEntry, idSlug, STATES } from "../lib/state.mjs";
 import { CONFIG, T0, tempHome, makeClock, silentLog } from "./helpers.mjs";
+import { processIdentity } from "../lib/daemon.mjs";
+import { codeStamp, writeJsonAtomic } from "../lib/fs.mjs";
 
 /** A fake response: records the status, the headers and the body, and resolves `ended` when the handler is done. */
 function res() {
@@ -100,6 +102,34 @@ test("run controls refuse remote peers, rebinding, cross-origin forms and missin
   const remotePage = res();
   handle(w.ctx, { ...req(`/run?id=${encodeURIComponent(ID)}`, localHeaders), socket: { ...localSocket, remoteAddress: "192.168.1.10" } }, remotePage);
   assert.doesNotMatch(remotePage.body(), /data-token=/);
+});
+
+test("mounted UI rejects every control behind a stale daemon without occupying the request slot", async () => {
+  const w = world();
+  const daemon = { pid: process.pid, identity: processIdentity(process.pid), code: 1 };
+  assert.ok(daemon.identity);
+  writeJsonAtomic(join(w.home, "daemon.json"), daemon);
+  const mounted = mount(w.ctx);
+  const page = res();
+  mounted.handle({ ...req(`/gallivant/run?id=${encodeURIComponent(ID)}`, localHeaders), socket: localSocket }, page);
+  const token = /data-token="([a-f0-9]+)"/.exec(page.body())[1];
+  const before = readFileSync(w.state.file, "utf8");
+  const post = async action => {
+    const request = Readable.from([JSON.stringify({ action, ...(action === "message" ? { note: "Keep my draft" } : {}) })]);
+    Object.assign(request, { method: "POST", url: `/gallivant/api/run/control?id=${encodeURIComponent(ID)}`, headers: { ...localHeaders, "x-gallivant-token": token }, socket: localSocket });
+    const response = res();
+    await mounted.handle(request, response); await response.ended;
+    return response;
+  };
+  for (const action of ["recheck", "resume", "message"]) {
+    const response = await post(action);
+    assert.equal(response.code, 409);
+    assert.match(JSON.parse(response.body()).error, /older code.*gallivant down && gallivant up/);
+    assert.equal(readFileSync(w.state.file, "utf8"), before);
+  }
+  writeJsonAtomic(join(w.home, "daemon.json"), { ...daemon, code: codeStamp() });
+  assert.equal((await post("message")).code, 202);
+  assert.equal(w.state.get(ID).control.note, "Keep my draft");
 });
 
 test("invalid, oversized and unknown-target control requests never write state", async () => {

@@ -80,7 +80,7 @@ async function main(argv) {
     console.log(`${r.entry}: ${r.action} queued; it will wait for any active run to finish.`);
     if (!values["no-daemon"]) {
       try { await upInBackground(ctx); }
-      catch (e) { console.log(`Request saved, but the daemon could not start: ${e.message}\n  gallivant up`); }
+      catch (e) { console.error(`Request saved, but the daemon could not start: ${e.message}\nAfter fixing the daemon, the saved request will be picked up; do not resend it.`); return 1; }
     }
     return 0;
   }
