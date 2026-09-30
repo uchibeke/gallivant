@@ -9,6 +9,7 @@ import assert from "node:assert/strict";
 import { join } from "node:path";
 import { mkdirSync, writeFileSync, readFileSync } from "node:fs";
 import { EventEmitter } from "node:events";
+import { Readable } from "node:stream";
 import { handle, mount } from "../lib/commands/serve.mjs";
 import { listRuns, listFlatRuns, runDir } from "../lib/tracker/runs.mjs";
 import { streamRun, TAIL } from "../lib/tracker/stream.mjs";
@@ -49,6 +50,75 @@ function sink() {
 const req = (url, headers = {}) => ({ method: "GET", url, headers, socket: { setTimeout() {} }, setTimeout() {} });
 
 const ID = "acme/widget/widget-export";
+
+const localHeaders = { host: "127.0.0.1:8791", origin: "http://127.0.0.1:8791", "content-type": "application/json" };
+const localSocket = { remoteAddress: "127.0.0.1", localPort: 8791, setTimeout() {} };
+
+test("local run controls queue through the mounted route and reject duplicate clicks", async () => {
+  const w = world({ entry: { state: STATES.needsHuman, reason: "checks-red" } });
+  const mounted = mount(w.ctx);
+  const page = res();
+  mounted.handle({ ...req(`/gallivant/run?id=${encodeURIComponent(ID)}`, localHeaders), socket: localSocket }, page);
+  const token = /data-token="([a-f0-9]+)"/.exec(page.body())?.[1];
+  assert.ok(token);
+  assert.match(page.body(), /Recheck PR/);
+  assert.match(page.body(), /Messages wait for the active run to finish/);
+  async function post() {
+    const request = Readable.from([JSON.stringify({ action: "recheck" })]);
+    Object.assign(request, { method: "POST", url: `/gallivant/api/run/control?id=${encodeURIComponent(ID)}`, headers: { ...localHeaders, "x-gallivant-token": token }, socket: localSocket });
+    const response = res();
+    await mounted.handle(request, response); await response.ended;
+    return response;
+  }
+  assert.equal((await post()).code, 202);
+  assert.equal(w.state.get(ID).control.status, "queued");
+  assert.equal(w.state.get(ID).state, STATES.needsHuman, "HTTP does not run the recovery itself");
+  assert.equal((await post()).code, 409);
+});
+
+test("run controls refuse remote peers, rebinding, cross-origin forms and missing CSRF tokens", async () => {
+  const w = world();
+  const page = res();
+  handle(w.ctx, { ...req(`/run?id=${encodeURIComponent(ID)}`, localHeaders), socket: localSocket }, page);
+  const token = /data-token="([a-f0-9]+)"/.exec(page.body())[1];
+  for (const change of [
+    { headers: { ...localHeaders, "x-gallivant-token": "wrong" } },
+    { headers: { ...localHeaders, "x-gallivant-token": token, origin: "https://evil.example" } },
+    { headers: { ...localHeaders, "x-gallivant-token": token, host: "evil.example:8791", origin: "http://evil.example:8791" } },
+    { headers: { ...localHeaders, "x-gallivant-token": token, origin: undefined } },
+    { socket: { ...localSocket, remoteAddress: "192.168.1.10" } },
+    { socket: { ...localSocket, localPort: 9999 } },
+  ]) {
+    const request = Readable.from(['{"action":"resume","note":"do something"}']);
+    Object.assign(request, { method: "POST", url: `/api/run/control?id=${encodeURIComponent(ID)}`, headers: { ...localHeaders, "x-gallivant-token": token }, socket: localSocket, ...change });
+    const response = res(); await handle(w.ctx, request, response); await response.ended;
+    assert.equal(response.code, 403);
+    assert.equal(w.state.get(ID).control, undefined);
+  }
+  const remotePage = res();
+  handle(w.ctx, { ...req(`/run?id=${encodeURIComponent(ID)}`, localHeaders), socket: { ...localSocket, remoteAddress: "192.168.1.10" } }, remotePage);
+  assert.doesNotMatch(remotePage.body(), /data-token=/);
+});
+
+test("invalid, oversized and unknown-target control requests never write state", async () => {
+  const w = world();
+  const page = res();
+  handle(w.ctx, { ...req(`/run?id=${encodeURIComponent(ID)}`, localHeaders), socket: localSocket }, page);
+  const token = /data-token="([a-f0-9]+)"/.exec(page.body())[1];
+  for (const [body, target, contentType, code] of [
+    ["{", ID, "application/json", 400],
+    ["null", ID, "application/json", 400],
+    ["x".repeat(32769), ID, "application/json", 413],
+    ['{"action":"recheck"}', "../../etc", "application/json", 404],
+    ['{"action":"recheck"}', ID, "text/plain", 415],
+    ['{"action":"shell"}', ID, "application/json", 409],
+  ]) {
+    const request = Readable.from([body]);
+    Object.assign(request, { method: "POST", url: `/api/run/control?id=${encodeURIComponent(target)}`, headers: { ...localHeaders, "content-type": contentType, "x-gallivant-token": token }, socket: localSocket });
+    const response = res(); await handle(w.ctx, request, response); await response.ended;
+    assert.equal(response.code, code); assert.equal(w.state.get(ID).control, undefined);
+  }
+});
 
 /**
  * A home with a registry and a run tree on disk. `runs` maps a run id to { lines, exit, pid }, written exactly as

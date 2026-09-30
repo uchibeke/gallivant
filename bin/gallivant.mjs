@@ -14,6 +14,7 @@ import { resume } from "../lib/commands/resume.mjs";
 import { serve, DEFAULT_PORT } from "../lib/commands/serve.mjs";
 import { hasConfig } from "../lib/config.mjs";
 import { resolveHandle } from "../lib/state.mjs";
+import { requestControl } from "../lib/control.mjs";
 
 const HELP = `gallivant: write a PRD, mark it ready, go outside.
 
@@ -29,11 +30,13 @@ const HELP = `gallivant: write a PRD, mark it ready, go outside.
   gallivant up [--once]                  the daemon: recover from GitHub, then tick every poll_seconds
   gallivant down                         stop the daemon. A run already spawned keeps going
   gallivant status [--all] [--json]      needs-you, running, daemon health
-  gallivant serve [--port 8791]          the tracker on 127.0.0.1: every entry, every run, live logs. Read-only
+  gallivant serve [--port 8791]          local tracker: live logs, PR recheck and session updates
   gallivant why <handle>                 why a PR stopped; handle is <repo>#<pr>, a PRD path, or the id
   gallivant resume <handle> [--note "..."] [--resnapshot]
                                          put a stopped entry back to work in the session that was doing it;
                                          --resnapshot makes an edited brief the one the gate judges
+  gallivant recheck <handle>           queue a PR recheck without resetting its budget
+  gallivant say <handle> --note "..."  queue an update for the same session after its current run
   gallivant remove <handle>              forget an entry; the PR, the branch and the checkout are left alone
 
 Config: $GALLIVANT_HOME/config.json (default ~/.gallivant). Run doctor for the file to write.`;
@@ -70,6 +73,17 @@ async function main(argv) {
   }
 
   const ctx = makeContext();
+  if (cmd === "recheck" || cmd === "say") {
+    if (!arg) throw new Error(`${cmd} needs a handle`);
+    if (cmd === "say" && !values.note?.trim()) throw new Error("say needs --note with a message");
+    const r = requestControl(ctx, { handle: arg, action: cmd === "say" ? "resume" : "recheck", note: values.note });
+    console.log(`${r.entry}: ${r.action} queued; it will wait for any active run to finish.`);
+    if (!values["no-daemon"]) {
+      try { await upInBackground(ctx); }
+      catch (e) { console.log(`Request saved, but the daemon could not start: ${e.message}\n  gallivant up`); }
+    }
+    return 0;
+  }
   switch (cmd) {
     case "start": {
       if (!arg) throw new Error("start needs a PRD path");
@@ -102,7 +116,7 @@ async function main(argv) {
     }
     case "status": { const r = status(ctx, { all: values.all, json: values.json }); console.log(r.text); return r.exitCode; }
     // Never resolves: the server holds the process open until it is interrupted.
-    case "serve": { const port = portOf(values.port); await serve(ctx, { port }); console.log(`gallivant serve: http://127.0.0.1:${port}  read-only, this machine only. Ctrl-C to stop.`); return new Promise(() => {}); }
+    case "serve": { const port = portOf(values.port); await serve(ctx, { port }); console.log(`gallivant serve: http://127.0.0.1:${port}  this machine only. Ctrl-C to stop.`); return new Promise(() => {}); }
     case "new": {
       if (!arg) throw new Error("new needs a name, for example: gallivant new widget-export");
       const r = await newPrd(ctx, { name: arg, harness: values.harness, dir: values.dir });

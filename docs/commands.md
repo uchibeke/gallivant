@@ -127,8 +127,23 @@ JSON for scripts and for a dashboard's own widgets: `/api/status` (the same mode
 
 Two things to know about it:
 
-- **It is read-only.** There is no route that starts, kills, resets or edits anything, and no method but GET is routed. Changing state stays the CLI's and the daemon's job, so a page left open in a tab can do nothing.
+- **GET is read-only; run controls require a local POST.** The run page offers Recheck PR and Resume agent / send update. These enqueue one request in the existing registry; the daemon applies it after any active run settles. The write requires a loopback peer, a loopback Host matching the serving port, an exact same-origin request and a per-server CSRF token. Mounted trackers keep the host's authentication, and remote readers do not receive controls.
 - **It binds to 127.0.0.1 and has no password.** That is the same boundary as the CLI: anything that can reach it can already read `~/.gallivant`. Do not put it behind a tunnel or a reverse proxy that answers on a public address, because the pages show branch names, local paths and whatever the agent printed.
+
+### Rechecking and updating a run
+
+`needs-human` stops normal review and check processing. GitHub labels may trigger a repository's workflows, but they do not restart Gallivant. After resolving the cause, use **Recheck PR** on `/run?id=...`, or:
+
+```sh
+gallivant recheck agent-passport#396
+gallivant say agent-passport#396 --note "The external blocker is resolved; continue within the approved brief."
+```
+
+Recheck returns the entry to watching without resetting its iteration count or check dispatch markers. The existing loop reads checks, review and the completion gate again. It does not rerun GitHub Actions or override a failed check. Unchanged failures stop again without spending another fixer round. To deliberately reset a spent round budget, use `register`.
+
+Resume agent / send update and `say` use the existing `resume --note` path: same session and worktree, with the usual checks for uncommitted work and changed briefs. A message is limited to 4,000 characters so it cannot exceed the existing prompt quote limit. It does not change the contract or grant new permissions. A running agent receives it in a subsequent run, not mid-turn. One outstanding request is accepted per entry; requests survive restarts and show queued, applying, applied or failed on the page and in `gallivant why`. A request interrupted while applying is not automatically replayed, because it might already have started a run.
+
+The daemon must be running and its health probes must pass. CLI requests start it unless `--no-daemon` is used; the UI saves the request and waits. With the default poll interval, pickup takes up to about two minutes, plus any active run and GitHub response time. After upgrading, restart the daemon and the process serving the tracker, including Command Center if mounted there, to load the new controls. No Telegram transport or stdin streaming is implemented by these controls.
 
 ### Runs from other tools
 

@@ -71,7 +71,9 @@ PRD (status: ready)  →  gallivant start  →  session in its own checkout  →
 | `gallivant register <pr-url>` | Watch a PR you opened by hand, or reset a stopped one. |
 | `gallivant up` | The daemon. Recovers from GitHub on boot, then ticks. |
 | `gallivant status [--all] [--json]` | What needs you, what is running, whether the daemon is alive. |
-| `gallivant serve [--port 8791]` | The tracker: a read-only page on 127.0.0.1 with every entry, every run and live log tailing. |
+| `gallivant serve [--port 8791]` | Local tracker with every run, live logs, PR recheck and session updates. |
+| `gallivant recheck <handle>` | Recheck a stopped PR without resetting its round budget. |
+| `gallivant say <handle> --note "..."` | Queue an update for the same session after its active run finishes. |
 | `gallivant why <repo>#<pr>` | Why a PR stopped, what was dispatched, what the harness last said. |
 | `gallivant remove <repo>#<pr>` | Forget an entry. The PR and the checkout are left alone. |
 
@@ -79,6 +81,6 @@ The PRD contract is in [docs/prd.md](docs/prd.md). Details in [docs/commands.md]
 
 ## Status
 
-Version 0.1. Claude Code, Codex, Gemini CLI, opencode and goose fixers, the review and CI loop, recovery from GitHub, ntfy notifications, the read-only tracker. Not yet: PRD queueing, GitHub-issue input, cursor-agent (it has the flags but is not signed in here, so its event stream is unverified), a service installer. See the milestones in the PRD.
+Version 0.1. Claude Code, Codex, Gemini CLI, opencode and goose fixers, the review and CI loop, recovery from GitHub, ntfy notifications, and the local tracker with recovery controls. Not yet: mid-turn message delivery, Telegram, PRD queueing, GitHub-issue input, cursor-agent (its event stream is unverified), or a service installer. See the milestones in the PRD.
 
 Apache-2.0.

@@ -93,6 +93,16 @@ aside {
   padding: 12px 8px var(--gv-pad); position: sticky; top: 0; max-height: 100vh; overflow: auto;
 }
 section.main { padding: var(--gv-pad); min-width: 0; }
+.run-controls { border: 1px solid var(--gv-line); border-radius: 10px; padding: 16px; margin: 18px 0; }
+.run-controls h2 { margin-top: 0; }
+.run-controls label { display: block; margin: 12px 0 6px; }
+.run-controls textarea { box-sizing: border-box; width: 100%; max-width: 100%; resize: vertical; padding: 10px; background: var(--gv-bench); color: var(--gv-text); border: 1px solid var(--gv-line); border-radius: 6px; font: inherit; }
+.run-buttons { display: flex; flex-wrap: wrap; gap: 10px; }
+.run-buttons button { min-height: 44px; padding: 8px 14px; border: 1px solid var(--gv-line); border-radius: 6px; background: var(--gv-surface); color: var(--gv-text); font: inherit; cursor: pointer; }
+.run-buttons button:hover:not(:disabled) { background: var(--gv-hover); }
+.run-buttons button:disabled { opacity: .55; cursor: default; }
+.run-controls :focus-visible { outline: 2px solid var(--gv-accent); outline-offset: 3px; }
+.run-controls pre, #control-status { white-space: pre-wrap; overflow-wrap: anywhere; }
 
 /* controls */
 .controls { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin: 0 4px 10px; }

@@ -12,6 +12,53 @@
 // and cannot be told at build time where it lives.
 const BASE = document.body.dataset.base || "";
 
+// Buttons and operator messages share one request. Acknowledgement means queued, never mid-turn delivery.
+const runControls = document.getElementById("run-controls");
+if (runControls) {
+  const buttons = [...runControls.querySelectorAll("button[data-action]")];
+  const note = document.getElementById("run-note");
+  const status = document.getElementById("control-status");
+  const endpoint = `${BASE}/api/run/control?id=${encodeURIComponent(runControls.dataset.entry)}`;
+  const locked = value => { buttons.forEach(b => { b.disabled = value; }); note.disabled = value; };
+  const poll = async () => {
+    try {
+      const response = await fetch(endpoint);
+      if (!response.ok) throw new Error("Could not check the request. Reload to see its status.");
+      const data = await response.json();
+      const control = data.control;
+      if (!control) throw new Error("Request status is unavailable. Reload before retrying.");
+      status.textContent = `${control.status}: ${control.message || "Waiting for the daemon and any active run."}`;
+      if (control.status === "queued" || control.status === "applying") { setTimeout(poll, 3000); return; }
+      // Refresh facts and follow the newest run after the daemon has applied the request.
+      const url = new URL(location.href);
+      url.searchParams.delete("run");
+      location.replace(url.href);
+    } catch (e) { status.textContent = e.message; setTimeout(poll, 5000); }
+  };
+  for (const button of buttons) button.addEventListener("click", async () => {
+    if (button.dataset.action === "recheck" && note.value.trim()) {
+      status.textContent = "Use Resume agent / send update to deliver your message, or clear it to recheck the PR.";
+      note.focus(); return;
+    }
+    const disabled = buttons.map(b => b.disabled);
+    locked(true); status.textContent = "Queuing request…";
+    try {
+      const response = await fetch(endpoint, {
+        method: "POST", headers: { "Content-Type": "application/json", "X-Gallivant-Token": runControls.dataset.token },
+        body: JSON.stringify({ action: button.dataset.action, note: note.value }),
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "Request failed. Reload to check its status before retrying.");
+      status.textContent = "Queued. Waiting for the daemon and any active run.";
+      setTimeout(poll, 1000);
+    } catch (e) {
+      status.textContent = e.message;
+      buttons.forEach((b, i) => { b.disabled = disabled[i]; }); note.disabled = false;
+    }
+  });
+  if (runControls.dataset.pending === "true") setTimeout(poll, 1000);
+}
+
 // localStorage can throw, not only return null: a private window, a browser set to block site data, or a frame whose
 // storage the embedder partitioned away. Every read and write is guarded and the page works with no stored value.
 const LS = {

@@ -55,7 +55,7 @@ A fourth, softer problem: the existing Telegram bot streams everything, so it ge
 
 - Merging a pull request. Gallivant never merges a PR, never force-pushes, never touches a default branch. It does merge the base branch INTO a work branch before each round of work, which adds a commit and rewrites nothing; see 6.8b.
 - Replacing GitHub as the tracker. PRDs are markdown in their repos, or (M2) GitHub issues. PRs live on GitHub.
-- A chat interface. Notifications are one-way. Steering happens by commenting on the PR.
+- A standalone chat assistant or remote chat transport. The local run page and CLI may queue operator updates and PR rechecks through the existing daemon and resume path; mid-turn delivery and Telegram remain separate work.
 - Multi-user, multi-account. One operator, one GitHub login, one machine.
 - Persona agents reviewing PRDs. The operator reviews PRDs by hand for now.
 - Its own reviewer. Codex review, another review bot, or a human are the reviewers. Gallivant only routes their findings.
