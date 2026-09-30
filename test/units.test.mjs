@@ -16,8 +16,23 @@ import { validate, DEFAULTS, merge, discoverHarnesses, whence, validateContextPa
 import { signInFix, probeFix } from "../lib/probe.mjs";
 import { HOME } from "../lib/fs.mjs";
 import { messages } from "../lib/notify.mjs";
+import { guardrailMode } from "../lib/aport.mjs";
 import { repoFromRemote, remoteMatches, makeGh, MAX_DIFF_BYTES, READY_LABEL } from "../lib/gh.mjs";
 import { CONFIG, T0, at, tempHome, claudeResultLines, codexLines, geminiLines, opencodeLines, gooseLines, GOOD_PRD } from "./helpers.mjs";
+
+test("APort diagnostics report the enforcement the hook uses when aliases conflict", () => {
+  const dir = tempHome();
+  for (const [text, expected] of [
+    ["APORT_ENFORCEMENT_MODE=enforce\nAPORT_ENFORCEMENT=warn\n", "enforce"],
+    ["APORT_ENFORCEMENT_MODE=warn\nAPORT_ENFORCEMENT=enforce\n", "warn"],
+    ["APORT_ENFORCEMENT=warn\n", "warn"],
+    ["APORT_GUARDRAIL_ENFORCEMENT=warn\n", "warn"],
+    ["", "enforce"],
+  ]) {
+    writeFileSync(join(dir, "guardrail-mode.env"), text);
+    assert.equal(guardrailMode(dir).enforcement, expected);
+  }
+});
 
 test("state writes atomically and resolves handles", () => {
   const home = tempHome();
