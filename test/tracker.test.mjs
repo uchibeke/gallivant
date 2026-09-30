@@ -62,7 +62,9 @@ test("local run controls queue through the mounted route and reject duplicate cl
   const token = /data-token="([a-f0-9]+)"/.exec(page.body())?.[1];
   assert.ok(token);
   assert.match(page.body(), /Recheck PR/);
-  assert.match(page.body(), /Messages wait for the active run to finish/);
+  assert.match(page.body(), /data-action="resume"[^>]*>Resume agent<\/button>/);
+  assert.match(page.body(), /<form id="message-form"[\s\S]*data-action="message"[^>]*>Send message<\/button>/);
+  assert.match(page.body(), /Delivered in the next run of this session/);
   async function post() {
     const request = Readable.from([JSON.stringify({ action: "recheck" })]);
     Object.assign(request, { method: "POST", url: `/gallivant/api/run/control?id=${encodeURIComponent(ID)}`, headers: { ...localHeaders, "x-gallivant-token": token }, socket: localSocket });
@@ -112,6 +114,8 @@ test("invalid, oversized and unknown-target control requests never write state",
     ['{"action":"recheck"}', "../../etc", "application/json", 404],
     ['{"action":"recheck"}', ID, "text/plain", 415],
     ['{"action":"shell"}', ID, "application/json", 409],
+    ['{"action":"message","note":" "}', ID, "application/json", 409],
+    ['{"action":"resume","note":"unsent draft"}', ID, "application/json", 409],
   ]) {
     const request = Readable.from([body]);
     Object.assign(request, { method: "POST", url: `/api/run/control?id=${encodeURIComponent(target)}`, headers: { ...localHeaders, "content-type": contentType, "x-gallivant-token": token }, socket: localSocket });

@@ -23,14 +23,30 @@ function world(over = {}) {
 test("requests survive a new context, refuse duplicates, and never silently truncate", () => {
   const w = world();
   const before = w.state.get(w.id);
-  requestControl(w.ctx, { handle: w.id, action: "resume", note: "Keep the approved scope." });
+  requestControl(w.ctx, { handle: w.id, action: "message", note: "Keep the approved scope." });
   assert.equal(makeState(w.home).get(w.id).control.note, "Keep the approved scope.");
   assert.throws(() => requestControl(w.ctx, { handle: w.id, action: "recheck" }), /already queued/);
-  assert.throws(() => requestControl(w.ctx, { handle: w.id, action: "resume", note: "x".repeat(4001) }), /4000/);
+  assert.throws(() => requestControl(w.ctx, { handle: w.id, action: "message", note: "x".repeat(4001) }), /4000/);
   assert.throws(() => requestControl(w.ctx, { handle: w.id, action: "shell" }), /Unknown/);
-  assert.throws(() => requestControl(w.ctx, { handle: w.id, action: "recheck", note: "Do not lose me" }), /Send a message/);
+  assert.throws(() => requestControl(w.ctx, { handle: w.id, action: "recheck", note: "Do not lose me" }), /Use Send message/);
   assert.equal(w.state.get(w.id).iteration, before.iteration);
   assert.equal(w.runner.started.length, 0);
+});
+
+test("messages require text and a session; fixed actions never accept a draft", async () => {
+  const w = world();
+  assert.throws(() => requestControl(w.ctx, { handle: w.id, action: "message", note: "   " }), /Write a message/);
+  for (const action of ["resume", "recheck"]) {
+    assert.throws(() => requestControl(w.ctx, { handle: w.id, action, note: "unsent draft" }), /Use Send message/);
+  }
+  assert.equal(w.state.get(w.id).control, undefined);
+  requestControl(w.ctx, { handle: w.id, action: "resume" });
+  await applyControl(w.ctx, w.id);
+  assert.equal(w.runner.started.length, 1);
+  assert.equal(w.state.get(w.id).control.note, "");
+  assert.equal(w.state.get(w.id).control.message, "Resumed the same agent session.");
+  w.state.update(w.id, { session: null });
+  assert.throws(() => requestControl(w.ctx, { handle: w.id, action: "message", note: "Hello" }), /no session/);
 });
 
 test("a stopped PR rechecks without spending a run, resetting budgets or changing its contract", async () => {
@@ -73,11 +89,11 @@ test("the same recheck can reach ready after the external check passes", async (
   assert.equal(w.runner.started.length, 0);
 });
 
-test("an update waits for a live run, then uses the existing resume with the same session and worktree", async () => {
+test("a message waits for a live run, then uses the existing resume with the same session and worktree", async () => {
   const w = world();
   w.runner.start("old", "claude", [], {});
   const before = w.state.get(w.id);
-  requestControl(w.ctx, { handle: w.id, action: "resume", note: "Use the revised fixture. ``` keep literal" });
+  requestControl(w.ctx, { handle: w.id, action: "message", note: "Use the revised fixture. ``` keep literal" });
   assert.equal(await applyControl(w.ctx, w.id), false);
   assert.equal(w.state.get(w.id).control.status, "queued");
   assert.equal(w.runner.started.length, 1);
@@ -87,15 +103,16 @@ test("an update waits for a live run, then uses the existing resume with the sam
   assert.ok(run.args.includes(before.session));
   assert.equal(run.opts.cwd, before.worktree);
   assert.match(run.args.at(-1), /Use the revised fixture/);
+  assert.match(w.state.get(w.id).control.message, /with your message/);
   assert.match(run.args.at(-1), /does not change the approved brief/);
   assert.equal(w.state.get(w.id).control.status, "applied");
   assert.equal(w.state.get(w.id).iteration, before.iteration);
 });
 
-test("failed resume preserves the message and dirty work; a later request can retry", async () => {
+test("failed message delivery preserves the message and dirty work; a later request can retry", async () => {
   const w = world();
   w.ctx.git.dirty = async () => ({ modified: 2, untracked: 0 });
-  requestControl(w.ctx, { handle: w.id, action: "resume", note: "Finish the docs." });
+  requestControl(w.ctx, { handle: w.id, action: "message", note: "Finish the docs." });
   await applyControl(w.ctx, w.id);
   assert.equal(w.state.get(w.id).control.status, "failed");
   assert.equal(w.state.get(w.id).control.note, "Finish the docs.");
@@ -106,7 +123,7 @@ test("failed resume preserves the message and dirty work; a later request can re
 
 test("interrupted delivery is not replayed, and closed PRs cannot be resumed", async () => {
   const w = world();
-  const request = requestControl(w.ctx, { handle: w.id, action: "resume", note: "one update" });
+  const request = requestControl(w.ctx, { handle: w.id, action: "message", note: "one update" });
   w.state.update(w.id, { control: { ...request, status: "applying" } });
   await applyControl(w.ctx, w.id);
   assert.equal(w.state.get(w.id).control.status, "failed");

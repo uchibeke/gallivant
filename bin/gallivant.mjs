@@ -76,7 +76,7 @@ async function main(argv) {
   if (cmd === "recheck" || cmd === "say") {
     if (!arg) throw new Error(`${cmd} needs a handle`);
     if (cmd === "say" && !values.note?.trim()) throw new Error("say needs --note with a message");
-    const r = requestControl(ctx, { handle: arg, action: cmd === "say" ? "resume" : "recheck", note: values.note });
+    const r = requestControl(ctx, { handle: arg, action: cmd === "say" ? "message" : "recheck", note: values.note });
     console.log(`${r.entry}: ${r.action} queued; it will wait for any active run to finish.`);
     if (!values["no-daemon"]) {
       try { await upInBackground(ctx); }
