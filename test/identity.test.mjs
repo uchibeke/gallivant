@@ -154,12 +154,13 @@ test("the hook inlined into the script agrees with the module's matcher on every
   assert.equal(missing, 0, "an unreadable message file does not block the commit");
 });
 
-test("the hook refuses a real commit and lets a clean one through, as the operator", { skip: !hasGit() }, () => {
+for (const packageType of [null, "module", "commonjs"]) test(`the hook rejects attribution and commits cleanly in a ${packageType ?? "plain"} repository`, { skip: !hasGit() }, () => {
   // Driven through real git, because the claim is about git's behaviour: an exit of 1 from `commit-msg` must leave NO
   // commit object, not a commit with a warning. A string test cannot show that.
   const dir = mkdtempSync(join(tmpdir(), "gallivant-commit-"));
   const git = (args, env = {}) => execFileSync("git", args, { cwd: dir, env: { ...process.env, ...env }, stdio: ["ignore", "pipe", "pipe"], encoding: "utf8" });
   git(["init", "-q", "."]);
+  if (packageType) writeFileSync(join(dir, "package.json"), JSON.stringify({ type: packageType }));
   writeFileSync(join(dir, "a.txt"), "x\n");
   git(["add", "a.txt"]);
   const hooks = join(dir, ".git", "hooks");

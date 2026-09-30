@@ -8,7 +8,7 @@
 // assertions are about which source won and where the value landed, never about a value that could be real.
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { writeFileSync, mkdtempSync, readFileSync, existsSync, rmSync } from "node:fs";
+import { writeFileSync, mkdtempSync, mkdirSync, readFileSync, existsSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { execFileSync } from "node:child_process";
@@ -57,6 +57,23 @@ test("runEnv with no credential sets git's config and no token, so a read-only g
   assert.equal(env.GH_TOKEN, undefined);
   assert.equal(env.GIT_CONFIG_NOSYSTEM, "1");
   assert.equal(env.GIT_CONFIG_COUNT, String(RUN_GIT_CONFIG.length));
+});
+
+test("gh in a run ignores inaccessible or invalid personal config, including after changing directory", t => {
+  try { execFileSync("gh", ["--version"], { stdio: "ignore" }); }
+  catch { t.skip("GitHub CLI is not installed"); return; }
+  const home = tempHome(), worktree = join(home, "clone"), personal = join(home, "personal-gh");
+  mkdirSync(worktree);
+  mkdirSync(personal);
+  writeFileSync(join(personal, "config.yml"), "invalid: [unterminated YAML\n");
+  const env = { ...process.env, GH_CONFIG_DIR: personal };
+  assert.throws(() => execFileSync("gh", ["config", "get", "git_protocol"], { env, stdio: "pipe" }));
+  const run = { ...env, ...runEnv(CONFIG, { token: "t-marker" }, null, worktree) };
+  for (const cwd of [worktree, home]) {
+    assert.equal(execFileSync("gh", ["config", "get", "git_protocol"], { cwd, env: run, encoding: "utf8" }).trim(), "https");
+  }
+  assert.equal(run.GH_TOKEN, "t-marker");
+  assert.ok(!existsSync(run.GH_CONFIG_DIR), "read-only gh commands need no personal config or generated files");
 });
 
 // The regression guard, and the one that matters more than the fix. The defect was not a wrong VALUE in the run

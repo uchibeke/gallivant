@@ -42,7 +42,7 @@ credential probe uses `git ls-remote`; that checks authentication, not Codex's G
 
 ## How a run gets a GitHub credential
 
-The run's Git credential helper does not read a credential store. The daemon resolves a credential and puts it in the run's environment as `GH_TOKEN`, where a git credential helper carried in the same environment reads it. No file outside the worktree is named, so sandboxed Git does not need the keychain, the Linux secret service, `~/.git-credentials` or `~/.config/gh`. Order and details are in [config.md](config.md#github-credentials).
+The run's Git credential helper does not read a credential store. The daemon resolves a credential and puts it in the run's environment as `GH_TOKEN`, where a git credential helper carried in the same environment reads it. No file outside the worktree is named, so sandboxed Git does not need the keychain, the Linux secret service, `~/.git-credentials` or `~/.config/gh`. Agent runs also set `GH_CONFIG_DIR` inside the private clone so the GitHub CLI can use that token without loading the operator's personal config; this applies to start, resume and fix rounds. Order and details are in [config.md](config.md#github-credentials).
 
 What bounds the credential, and what does not:
 
