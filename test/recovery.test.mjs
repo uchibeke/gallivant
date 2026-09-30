@@ -11,7 +11,7 @@ import { deriveEvents, makeTrust } from "../lib/events.mjs";
 import { CONFIG, T0, at, tempHome, prFixture, comment, silentLog, STATES, fakeCredential, fakeIdentity } from "./helpers.mjs";
 import { join } from "node:path";
 import { nowIso } from "../lib/time.mjs";
-import { writeJsonAtomic } from "../lib/fs.mjs";
+import { codeStamp, writeJsonAtomic } from "../lib/fs.mjs";
 import { processIdentity } from "../lib/daemon.mjs";
 
 const SESSION = "6f1c2d3e-1111-4111-8111-111111111111";
@@ -309,6 +309,27 @@ test("upInBackground reports a daemon that died immediately rather than waiting 
   // A bad config kills the daemon on boot. That must read as a failure with somewhere to look, not as a long pause.
   const dead = () => ({ unref() {}, exitCode: 1 });
   await assert.rejects(() => upInBackground({ home, log: silentLog }, { spawnFn: dead, waitMs: 5_000 }), /exited immediately/);
+});
+
+test("background startup never reports a stale daemon as usable, before or during startup", async () => {
+  const home = tempHome();
+  const record = { pid: process.pid, identity: processIdentity(process.pid), code: 1 };
+  assert.ok(record.identity);
+  writeJsonAtomic(join(home, "daemon.json"), record);
+  let spawned = 0;
+  const spawnFn = () => {
+    spawned++;
+    writeJsonAtomic(join(home, "daemon.json"), record);
+    return { unref() {}, exitCode: null };
+  };
+  await assert.rejects(() => upInBackground({ home }, { spawnFn }), /older code.*gallivant down && gallivant up/);
+  assert.equal(spawned, 0, "do not start a competing daemon or signal the existing one");
+  writeJsonAtomic(join(home, "daemon.json"), { ...record, stoppedAt: T0 });
+  await assert.rejects(() => upInBackground({ home }, { spawnFn }), /older code/);
+  assert.equal(spawned, 1, "a stale owner that appears during startup is refused too");
+  writeJsonAtomic(join(home, "daemon.json"), { ...record, code: codeStamp() });
+  assert.equal(await upInBackground({ home }, { spawnFn }), null);
+  assert.equal(spawned, 1);
 });
 
 test("upInBackground gives up with the log to read when the daemon never reports itself", async () => {

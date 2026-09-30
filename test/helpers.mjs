@@ -1,12 +1,33 @@
 // Fakes for the tick's dependencies. Each records what it was asked so a test can assert on calls, and each is
 // controllable so a test can move the world (a review arrives, a run ends, time passes).
-import { mkdtempSync } from "node:fs";
+import { mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { makeState, newEntry, STATES } from "../lib/state.mjs";
 import { silentLog } from "../lib/log.mjs";
 import { DEFAULT_DELIVERABLE, DEFAULTS } from "../lib/config.mjs";
 import { NO_IDENTITY } from "../lib/identity.mjs";
+import { MIN_VERSIONS } from "../lib/harness.mjs";
+
+/** Real executable probes, no installed harness or model calls. Also records which preflight ran first. */
+export function harnessBin(dir, harness = "codex", { version = MIN_VERSIONS[harness], signedIn = true, versionExit = 0, signInOutput = null } = {}) {
+  const bin = join(dir, `${harness}-stub`);
+  const calls = join(dir, `${harness}-calls.jsonl`);
+  const source = `#!${process.execPath}
+import { appendFileSync } from 'node:fs';
+const args = process.argv.slice(2);
+appendFileSync(${JSON.stringify(calls)}, JSON.stringify(args) + '\\n');
+if (args[0] === '--version') {
+  console.log(${JSON.stringify(version)});
+  process.exit(${versionExit});
+}
+console.log(${JSON.stringify(signInOutput ?? (harness === "claude" ? JSON.stringify({ loggedIn: signedIn }) : "login status"))});
+process.exit(${signedIn ? 0 : 1});
+`;
+  // .mjs makes this independent of the temporary directory's package scope.
+  writeFileSync(`${bin}.mjs`, source, { mode: 0o755 });
+  return `${bin}.mjs`;
+}
 
 export const CONFIG = {
   home: "/tmp/gallivant-test-home",

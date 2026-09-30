@@ -15,7 +15,7 @@ import { makeTick } from "../lib/tick.mjs";
 import { startPrompt, resumePrompt, fixPrompt } from "../lib/prompt.mjs";
 import { model } from "../lib/commands/status.mjs";
 import { READY_LABEL } from "../lib/gh.mjs";
-import { CONFIG, GOOD_PRD, T0, tempHome, fakeGh, fakeGit, fakeRunner, fakeNotify, fakeCredential, fakeIdentity, makeClock, silentLog } from "./helpers.mjs";
+import { CONFIG, GOOD_PRD, T0, tempHome, fakeGh, fakeGit, fakeRunner, fakeNotify, fakeCredential, fakeIdentity, makeClock, silentLog, harnessBin } from "./helpers.mjs";
 
 const REL = "docs/prds/widget-export.md";
 const SOURCE = "docs/support.md";
@@ -35,7 +35,7 @@ function world() {
   let brief = BRIEF;
   const ctx = {
     home, state, clock, gh, git: fakeGit(), log: silentLog, notify: fakeNotify(), ownLogin: "me",
-    config: { ...CONFIG, reviewer: null, deliverable: null }, credential: fakeCredential(), identity: fakeIdentity(),
+    config: { ...CONFIG, harness: { codex: { bin: harnessBin(home) } }, reviewer: null, deliverable: null }, credential: fakeCredential(), identity: fakeIdentity(),
     runnerFor: () => runner, readPrd: () => brief, writePrd: (_id, text) => { brief = text; },
     readSource: (_id, rel) => sources.get(rel) ?? null, writeSource: (_id, rel, text) => sources.set(rel, text),
   };
@@ -233,10 +233,38 @@ test("daemon exclusion survives missing health, rejects a second owner, and rele
 
 test("a stale daemon lock can be recovered without trusting its reusable PID", () => {
   const home = tempHome();
-  writeJsonAtomic(join(home, "daemon.lock"), { pid: process.pid, identity: "old process", instance: "old" });
+  writeJsonAtomic(join(home, "daemon.lock"), { pid: process.pid, identity: "v2:old process", instance: "old" });
   const lock = acquireDaemon(home);
   try { assert.equal(readDaemon(home).instance, lock.owner.instance); }
   finally { lock.release(); }
+});
+
+test("daemon identity and exclusion survive a caller's locale and timezone change", () => {
+  const home = tempHome();
+  const saved = Object.fromEntries(["LC_ALL", "LANG", "TZ"].map(k => [k, process.env[k]]));
+  let lock;
+  try {
+    Object.assign(process.env, { LC_ALL: "C", LANG: "C", TZ: "UTC" });
+    lock = acquireDaemon(home);
+    Object.assign(process.env, { LC_ALL: "en_CA.UTF-8", LANG: "en_CA.UTF-8", TZ: "America/Toronto" });
+    assert.equal(processIdentity(process.pid), lock.owner.identity);
+    assert.equal(readDaemon(home).alive, true);
+    assert.throws(() => acquireDaemon(home), /already running/);
+  } finally {
+    lock?.release();
+    for (const [k, v] of Object.entries(saved)) {
+      if (v === undefined) delete process.env[k]; else process.env[k] = v;
+    }
+  }
+});
+
+test("a live legacy daemon with an unverifiable identity cannot be replaced", () => {
+  const home = tempHome();
+  const original = { pid: process.pid, identity: "Wed 30 Sep 09:57:37 2026 node gallivant up", instance: "legacy" };
+  writeJsonAtomic(join(home, "daemon.lock"), original);
+  assert.equal(readDaemon(home).unverified, true);
+  assert.throws(() => acquireDaemon(home), /already running/);
+  assert.deepEqual(JSON.parse(readFileSync(join(home, "daemon.lock"), "utf8")), original);
 });
 
 test("a failure to publish daemon ownership prevents the GitHub probe", async () => {

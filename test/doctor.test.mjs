@@ -3,7 +3,38 @@
 // check that passes on an unprotected default branch is worse than no check: it reports a control that is not there.
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { protectsDefaultBranch } from "../lib/commands/doctor.mjs";
+import { protectsDefaultBranch, claudeSandboxCheck } from "../lib/commands/doctor.mjs";
+
+test("doctor reports macOS gh certificate failures without weakening Linux settings or modifying the input", () => {
+  const settings = { sandbox: { enabled: true, autoAllowBashIfSandboxed: true, network: { allowedDomains: ["api.github.com"] } } };
+  const before = structuredClone(settings);
+  const path = "/operator/gallivant/claude/settings.json";
+  const mac = claudeSandboxCheck(settings, path, "darwin");
+  assert.equal(mac.ok, false);
+  assert.match(mac.detail, /OSStatus -26276/);
+  assert.match(mac.fix, /sandbox.enableWeakerNetworkIsolation/);
+  assert.ok(mac.fix.includes(path));
+  assert.match(mac.fix, /exfiltration/);
+  assert.equal(claudeSandboxCheck(settings, path, "linux").ok, true);
+  assert.deepEqual(settings, before);
+  settings.sandbox.enableWeakerNetworkIsolation = true;
+  assert.equal(claudeSandboxCheck(settings, path, "darwin").ok, true);
+  settings.sandbox.enableWeakerNetworkIsolation = false;
+  assert.equal(claudeSandboxCheck(settings, path, "darwin").ok, false);
+});
+
+test("allowing the macOS certificate service cannot hide a missing sandbox or domain allowlist", () => {
+  for (const sandbox of [
+    { enableWeakerNetworkIsolation: true },
+    { enabled: false, autoAllowBashIfSandboxed: true, enableWeakerNetworkIsolation: true, network: { allowedDomains: ["api.github.com"] } },
+    { enabled: true, autoAllowBashIfSandboxed: true, enableWeakerNetworkIsolation: true, network: { allowedDomains: [] } },
+    { enabled: true, autoAllowBashIfSandboxed: true, enableWeakerNetworkIsolation: true, network: { allowedDomains: "api.github.com" } },
+  ]) {
+    const result = claudeSandboxCheck({ sandbox }, "/operator/settings.json", "darwin");
+    assert.equal(result.ok, false);
+    assert.match(result.detail, /sandbox block missing or invalid/);
+  }
+});
 
 const gh = (branch = "main") => ({ repoDefaultBranch: async () => branch });
 

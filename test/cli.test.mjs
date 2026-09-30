@@ -3,7 +3,9 @@ import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import { dirname, join } from "node:path";
 import { mkdirSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
-import { GOOD_PRD, tempHome } from "./helpers.mjs";
+import { GOOD_PRD, tempHome, CONFIG, seededState } from "./helpers.mjs";
+import { processIdentity } from "../lib/daemon.mjs";
+import { codeStamp, writeJsonAtomic } from "../lib/fs.mjs";
 
 test("ready --check ignores invalid runtime config and leaves the brief and home unchanged", () => {
   const home = tempHome();
@@ -26,4 +28,31 @@ test("ready --check ignores invalid runtime config and leaves the brief and home
   assert.equal(recorded.status, 1);
   assert.match(recorded.stderr, /config|JSON/i);
   assert.equal(readFileSync(path, "utf8"), GOOD_PRD);
+});
+
+test("say and recheck refuse stale daemons before saving anything, including with --no-daemon", () => {
+  const { home, state, id } = seededState();
+  writeJsonAtomic(join(home, "config.json"), { ...CONFIG, worktrees: tempHome(), harness: { codex: { bin: process.execPath } }, notify: null });
+  const daemon = { pid: process.pid, identity: processIdentity(process.pid), code: 1 };
+  assert.ok(daemon.identity);
+  writeJsonAtomic(join(home, "daemon.json"), daemon);
+  const before = readFileSync(state.file, "utf8");
+  const run = args => spawnSync(process.execPath, [new URL("../bin/gallivant.mjs", import.meta.url).pathname, ...args], {
+    env: { ...process.env, GALLIVANT_HOME: home }, encoding: "utf8", timeout: 5000,
+  });
+  for (const command of [["say", id, "--note", "Please check the fixture."], ["recheck", id]]) {
+    for (const flags of [[], ["--no-daemon"]]) {
+      const result = run([...command, ...flags]);
+      assert.equal(result.status, 1, result.stderr + result.stdout);
+      assert.match(result.stderr, /older code.*gallivant down && gallivant up/);
+      assert.doesNotMatch(result.stdout, /queued/);
+      assert.equal(readFileSync(state.file, "utf8"), before);
+    }
+  }
+  // Simulate a restart: the same request now succeeds without creating a second daemon.
+  writeJsonAtomic(join(home, "daemon.json"), { ...daemon, code: codeStamp() });
+  const current = run(["say", id, "--note", "Please check the fixture."]);
+  assert.equal(current.status, 0, current.stderr + current.stdout);
+  assert.match(current.stdout, /message queued/);
+  assert.equal(state.get(id).control.note, "Please check the fixture.");
 });

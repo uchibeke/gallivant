@@ -2,7 +2,7 @@
 
 About an hour the first time. `gallivant doctor` checks every step and prints the fix for any that is missing, so you can do them in any order and re-run it.
 
-Requirements: macOS or Linux, Node 22 or newer, `gh` signed in, `jq`, and at least one of Claude Code (2.1.263 or newer) or Codex CLI (0.155.1 or newer) signed in.
+Requirements: macOS or Linux, Node 22 or newer, `gh` signed in, `jq`, and at least one of Claude Code (2.1.263 or newer) or Codex CLI (0.158.0 or newer) signed in.
 
 ## 1. The command
 
@@ -83,6 +83,8 @@ cp templates/passport.gallivant.json ~/.gallivant/claude/aport/passport.json
 
 Merge the sandbox block from `templates/claude-settings.json` into `~/.gallivant/claude/settings.json` next to the hooks block the installer wrote. Every Claude run loads that file with `--settings` and sets `APORT_CLAUDE_CODE_CONFIG_DIR`, so the hook and the sandbox apply only to Gallivant runs.
 
+On macOS the template enables `sandbox.enableWeakerNetworkIsolation` so `gh` can use Apple's certificate verification service. Without it, a valid GitHub login can fail inside the sandbox with `x509: OSStatus -26276`. This grants access to `com.apple.trustd.agent` and opens a potential exfiltration route through that service; review the [security tradeoff](guardrails.md#claude-on-macos-needs-certificate-verification) before applying it. The setting has no effect on Linux. `doctor` detects the missing setting on macOS and explains the repair; it does not change settings automatically.
+
 Any APort passport option works: a hosted passport created by the installer, an existing hosted `agent_id`, or a local file. With a hosted passport the limits live in the aport.io dashboard, so set `data.file.write` `allowed_paths` there to your worktrees directory and `blocked_paths` to the control-plane directories listed in `templates/passport.gallivant.json`; with a local passport, copy the template. `doctor` reports which mode is in use.
 
 ```bash
@@ -98,7 +100,7 @@ npx @aporthq/aport-agent-guardrails codex --global --enforcement=warn
 codex          # once: run /hooks and trust the APort hook. This step cannot be automated.
 ```
 
-Warn, not enforce, on Codex: APort's Codex hook is beta and fails closed on multi-file `apply_patch`, which would stall every real edit. On Codex the bounds are the `workspace-write` sandbox, the scoped token and the ruleset; APort is the audit trail. See [guardrails.md](guardrails.md).
+Warn, not enforce, on Codex: APort's Codex hook is beta and fails closed on multi-file `apply_patch`, which would stall every real edit. On Codex the controls are the `workspace-write` sandbox, Codex's automatic approval reviewer for Git metadata writes and other escalations, the scoped token and the ruleset; APort is the audit trail. Gallivant sets the approval mode for start and resume; no changes to your Codex config or saved command rules are needed. See [guardrails.md](guardrails.md#codex-git-writes-need-automatic-approval).
 
 ## 8. First PRD
 

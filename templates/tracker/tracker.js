@@ -12,6 +12,75 @@
 // and cannot be told at build time where it lives.
 const BASE = document.body.dataset.base || "";
 
+// Fixed actions and messages share delivery, but only Send message reads the composer's draft.
+const runControls = document.getElementById("run-controls");
+if (runControls) {
+  const buttons = [...runControls.querySelectorAll("button[data-action]")];
+  const note = document.getElementById("run-note");
+  const form = document.getElementById("message-form");
+  const status = document.getElementById("control-status");
+  const refresh = document.getElementById("control-refresh");
+  const lastMessage = document.getElementById("last-message");
+  const endpoint = `${BASE}/api/run/control?id=${encodeURIComponent(runControls.dataset.entry)}`;
+  let pending = runControls.dataset.pending === "true";
+  let closed = false;
+  const syncButtons = () => buttons.forEach(button => {
+    button.disabled = pending || closed || button.dataset.available !== "true"
+      || (button.dataset.action === "message" && !note.value.trim());
+  });
+  const label = action => buttons.find(b => b.dataset.action === action)?.textContent || "Request";
+  const poll = async () => {
+    try {
+      const response = await fetch(endpoint);
+      if (!response.ok) throw new Error("Could not check the request. Reload to see its status.");
+      const data = await response.json();
+      const control = data.control;
+      if (!control) throw new Error("Request status is unavailable. Reload before retrying.");
+      status.textContent = `${label(control.action)} — ${control.status}: ${control.message || "Waiting for the daemon and any active run."}`;
+      if (control.status === "queued" || control.status === "applying") { setTimeout(poll, 3000); return; }
+      pending = false;
+      closed = data.state === "done";
+      syncButtons();
+      // Follow the newest run unless that would discard a draft or interrupt typing.
+      if (!note.value && document.activeElement !== note) { location.replace(refresh.href); return; }
+      refresh.hidden = false;
+    } catch (e) { status.textContent = e.message; setTimeout(poll, 5000); }
+  };
+  const submit = async action => {
+    const button = buttons.find(b => b.dataset.action === action);
+    if (!button || button.disabled) return;
+    const draft = action === "message" ? note.value : "";
+    pending = true; syncButtons(); refresh.hidden = true;
+    status.textContent = `${label(action)} — queuing…`;
+    try {
+      const response = await fetch(endpoint, {
+        method: "POST", headers: { "Content-Type": "application/json", "X-Gallivant-Token": runControls.dataset.token },
+        body: JSON.stringify(action === "message" ? { action, note: draft } : { action }),
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "Request failed. Reload to check its status before retrying.");
+      if (action === "message") {
+        // A user can keep composing while delivery is pending. Never erase newer edits.
+        if (note.value === draft) note.value = "";
+        lastMessage.querySelector("pre").textContent = draft;
+        lastMessage.hidden = false;
+      }
+      status.textContent = `${label(action)} — queued. Waiting for the daemon and any active run.`;
+      setTimeout(poll, 1000);
+    } catch (e) {
+      status.textContent = `${label(action)} — ${e.message}`;
+      pending = false; syncButtons();
+    }
+  };
+  for (const button of buttons.filter(b => b.dataset.action !== "message")) {
+    button.addEventListener("click", () => submit(button.dataset.action));
+  }
+  form.addEventListener("submit", event => { event.preventDefault(); submit("message"); });
+  note.addEventListener("input", syncButtons);
+  syncButtons();
+  if (pending) setTimeout(poll, 1000);
+}
+
 // localStorage can throw, not only return null: a private window, a browser set to block site data, or a frame whose
 // storage the embedder partitioned away. Every read and write is guarded and the page works with no stored value.
 const LS = {

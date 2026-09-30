@@ -8,7 +8,7 @@ import { resume } from "../lib/commands/resume.mjs";
 import { makeState, newEntry, STATES } from "../lib/state.mjs";
 import { mkdirSync } from "node:fs";
 import { join } from "node:path";
-import { CONFIG, T0, tempHome, fakeRunner, makeClock, silentLog, GOOD_PRD, fakeCredential, fakeIdentity } from "./helpers.mjs";
+import { CONFIG, T0, tempHome, fakeRunner, makeClock, silentLog, GOOD_PRD, fakeCredential, fakeIdentity, harnessBin } from "./helpers.mjs";
 
 const SESSION = "fb6b8691-7805-45ac-b4c3-06c2f4f24184";
 
@@ -28,11 +28,25 @@ function world(over = {}) {
   const cloned = [];
   return {
     id, state, runner, cloned,
-    ctx: { credential: fakeCredential(), identity: fakeIdentity(), home, config: CONFIG, state, log: silentLog, clock,
+    ctx: { credential: fakeCredential(), identity: fakeIdentity(), home, config: { ...CONFIG, harness: { ...CONFIG.harness, claude: { ...CONFIG.harness.claude, bin: harnessBin(home, "claude") } } }, state, log: silentLog, clock,
       git: { exists: () => true, fromBranch: async a => { cloned.push(a.path); mkdirSync(a.path, { recursive: true }); return a.path; } },
       runnerFor: () => runner, readPrd: () => GOOD_PRD, writePrd: () => {}, notify: {}, gh: { removeLabel: async () => {} } },
   };
 }
+
+test("manual resume refuses an old Codex before restoring or merging the checkout or changing state", async () => {
+  const w = world({ harness: "codex", base: "main" });
+  w.ctx.config.harness.codex = { bin: harnessBin(w.ctx.home, "codex", { version: "0.155.1" }) };
+  const before = structuredClone(w.state.get(w.id));
+  let touched = false;
+  w.ctx.git.exists = () => { touched = true; return false; };
+  w.ctx.git.mergeBase = async () => { touched = true; };
+  await assert.rejects(() => resume(w.ctx, { handle: "widget-export" }), /0\.155\.1 is older than 0\.158\.0/);
+  assert.equal(touched, false);
+  assert.deepEqual(w.cloned, []);
+  assert.equal(w.runner.started.length, 0);
+  assert.deepEqual(w.state.get(w.id), before);
+});
 
 test("resume refuses a checkout whose last run left work uncommitted, and names the commands", async () => {
   // The bug this pins, from a live run. A start run produced a 33-file research package, passed both of its Verify

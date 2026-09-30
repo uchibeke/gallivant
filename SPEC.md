@@ -55,7 +55,7 @@ A fourth, softer problem: the existing Telegram bot streams everything, so it ge
 
 - Merging a pull request. Gallivant never merges a PR, never force-pushes, never touches a default branch. It does merge the base branch INTO a work branch before each round of work, which adds a commit and rewrites nothing; see 6.8b.
 - Replacing GitHub as the tracker. PRDs are markdown in their repos, or (M2) GitHub issues. PRs live on GitHub.
-- A chat interface. Notifications are one-way. Steering happens by commenting on the PR.
+- A standalone chat assistant or remote chat transport. The local run page and CLI may queue operator updates and PR rechecks through the existing daemon and resume path; mid-turn delivery and Telegram remain separate work.
 - Multi-user, multi-account. One operator, one GitHub login, one machine.
 - Persona agents reviewing PRDs. The operator reviews PRDs by hand for now.
 - Its own reviewer. Codex review, another review bot, or a human are the reviewers. Gallivant only routes their findings.
@@ -365,15 +365,15 @@ names the model a run used, so an operator reading a run that hit its budget kno
 
 ### 6.7 Harness matrix
 
-Verified on 2026-09-23 against Claude Code 2.1.263 and Codex 0.155.1. `codex exec --full-auto` does not exist on 0.155.1; the earlier draft and the audit brief were wrong. All commands run with `cwd` set to the worktree. Both harnesses key sessions by cwd, so the worktree must still exist at resume time.
+Verified against Claude Code 2.1.263 and Codex 0.158.0. Codex config overrides are shared by start and resume, whose flags differ. All commands run with `cwd` set to the worktree; the same checkout is retained for resume.
 
 | | Claude Code | Codex |
 |---|---|---|
-| Start | `claude -p --session-id <uuid> --permission-mode auto --permission-prompts none --max-budget-usd <n> --settings ~/.gallivant/claude/settings.json --output-format stream-json "<prompt>"` | `codex exec --json -c approval_policy="never" -c sandbox_mode="workspace-write" -c sandbox_workspace_write.network_access=true --skip-git-repo-check "<prompt>"` |
-| Resume | `claude -p --resume <uuid> --permission-mode auto --permission-prompts none --max-budget-usd <n> --settings ~/.gallivant/claude/settings.json --output-format stream-json "<prompt>"` | `codex exec resume <id> --json -c approval_policy="never" -c sandbox_mode="workspace-write" -c sandbox_workspace_write.network_access=true --skip-git-repo-check "<prompt>"` |
+| Start | `claude -p --session-id <uuid> --permission-mode auto --permission-prompts none --max-budget-usd <n> --settings ~/.gallivant/claude/settings.json --output-format stream-json "<prompt>"` | `codex exec --json -c approval_policy="on-request" -c approvals_reviewer="auto_review" -c sandbox_mode="workspace-write" -c sandbox_workspace_write.network_access=true --skip-git-repo-check "<prompt>"` |
+| Resume | `claude -p --resume <uuid> --permission-mode auto --permission-prompts none --max-budget-usd <n> --settings ~/.gallivant/claude/settings.json --output-format stream-json "<prompt>"` | `codex exec resume <id> --json -c approval_policy="on-request" -c approvals_reviewer="auto_review" -c sandbox_mode="workspace-write" -c sandbox_workspace_write.network_access=true --skip-git-repo-check "<prompt>"` |
 | Session id | Chosen up front with `--session-id` | `thread_id` on the first `thread.started` line of the JSONL |
-| No prompts | `--permission-prompts none`: anything that would prompt is denied and shows up as `permission_denials` in the final `result` event | `approval_policy="never"` |
-| Sandbox | Claude's Bash sandbox, enabled in the Gallivant settings file with a domain allowlist | Codex `workspace-write` seatbelt; `network_access=true` is required for `git push` and removes the network boundary. M0 confirms the push works. |
+| No prompts | `--permission-prompts none`: anything that would prompt is denied and shows up as `permission_denials` in the final `result` event | `approval_policy="on-request"` plus `approvals_reviewer="auto_review"`: Codex reviews escalations without an operator click; refusal still stops the action. |
+| Sandbox | Claude's Bash sandbox, enabled in the Gallivant settings file with a domain allowlist | Codex `workspace-write`; `.git` writes require approval. Approved commands run outside the sandbox. `network_access=true` permits network access. The opt-in `test/live-codex-git.mjs` verifies commit, push and local tracking updates on both start and resume. |
 | Spend cap | `--max-budget-usd` | none in the CLI; wall-clock timeout only |
 | Environment | `APORT_CLAUDE_CODE_CONFIG_DIR=~/.gallivant/claude`, `GH_TOKEN` from the resolved credential, and git's own `GIT_CONFIG_COUNT` pairs carrying the credential helper, identity and `push.default`, with `GIT_CONFIG_NOSYSTEM=1` and `GIT_CONFIG_GLOBAL=/dev/null`. No file outside the worktree is named: a sandboxed run cannot read one. | same `GH_TOKEN` and the same git config pairs |
 | By hand | `claude --from-pr <n>` in the worktree opens the linked session interactively | `codex resume <id>` in the worktree |
@@ -504,8 +504,8 @@ APort is installed on both harnesses on day one. What it enforces today, and wha
 
 | Guarantee | Control | APort's part |
 |---|---|---|
-| Writes stay in the worktree | Claude: Bash sandbox in the Gallivant settings file, plus `blockReadsOutsideWorkingDirectories` left as the operator has it (with `--permission-prompts none` an out-of-tree read is denied, not prompted). Codex: `workspace-write` seatbelt. | Denies Write and Edit tool calls outside `allowed_paths`. Does not see `echo x > ~/.zshrc` inside a Bash command. |
-| No reads of secrets | Same sandboxes; `.env*` and key files in the harness's own denied reads | Denies Read and Grep calls on `.env*`, `.ssh`, `.aws`, `*.pem`, `*.key` and the extra `blocked_paths` in the passport. Does not see `cat .env` inside Bash. |
+| Filesystem access is bounded | Claude: Bash sandbox in the Gallivant settings file, plus `blockReadsOutsideWorkingDirectories` left as the operator has it. Codex: `workspace-write`, with escalations reviewed automatically; an approved command runs outside that sandbox. | Denies Write and Edit tool calls outside `allowed_paths`. Does not see `echo x > ~/.zshrc` inside a Bash command. |
+| Reads of secrets are restricted | The sandboxes and harness denied reads; Codex's automatic reviewer checks escalation requests for credential probing. Approved commands run outside the sandbox. | Denies Read and Grep calls on `.env*`, `.ssh`, `.aws`, `*.pem`, `*.key` and the extra `blocked_paths` in the passport. Does not see `cat .env` inside Bash. |
 | Network limited | Claude: `sandbox.network.allowedDomains`. Codex: none once `network_access=true`. | Denies WebFetch and WebSearch outside `allowed_domains`. Does not see `curl` inside Bash or git's own traffic. |
 | No push to the default branch, no force push | A GitHub ruleset on each participating repo: restrict updates and deletions on the default branch, block force pushes, no bypass actors. | `blocked_patterns` substring matches on `push --force`, `push -f`, `push origin main`, `push origin master`, `HEAD:main`, `HEAD:master`. Best effort. APort does not parse `git push` refspecs. |
 | Blast radius of a successful injection | A fine-grained PAT limited to the participating repos with Contents, Pull requests and Issues write, Checks and Actions read, no Workflows permission. Passed as `GH_TOKEN` to runs and to the daemon, where a credential helper carried in the same environment reads it, so the operator's keychain token and `~/.git-credentials` are never used by a run. `GIT_CONFIG_NOSYSTEM=1` drops git's system file, which on a Mac sets `credential.helper = osxkeychain`. The bound is the token's scope and the ruleset, not the transport. | Audit log of every tool call, for reconstruction. |
@@ -705,7 +705,7 @@ Day one is M0 plus M1 plus M1b: five to six hours, not four. The Claude-only pat
 | `gh auth status` | authenticated | `gh auth login` |
 | Token file | `~/.gallivant/gh-token` exists, mode 0600, `gh api user` with it succeeds, and it is fine-grained (no `x-oauth-scopes` header) | how to create the PAT and which permissions |
 | Run git push | a real `git ls-remote` against the first configured repo, run with the run's own environment and `HOME` pointed at a path that does not exist, so it reproduces a sandboxed run rather than the operator's shell | git's own error, verbatim, and the path it failed on when it names one |
-| Harness binaries | each `harness.*.bin` resolves to a real file, `--version` is at least 2.1.263 for Claude and 0.155.1 for Codex, and `zsh -lc 'whence -p <name>'` agrees | the resolved path to paste into config |
+| Harness binaries | each `harness.*.bin` resolves to a real file, `--version` is at least 2.1.263 for Claude and 0.158.0 for Codex, and `zsh -lc 'whence -p <name>'` agrees | the resolved path to paste into config |
 | Sign-in | Claude: `claude -p "echo ok"` in a temp dir exits 0. Codex: `codex login status` | the login command |
 | `jq` | present | install command |
 | Claude settings file | `harness.claude.settings` exists, has the APort PreToolUse hook with matcher `*`, and has `sandbox.enabled: true`, `sandbox.autoAllowBashIfSandboxed: true`, `sandbox.network.allowedDomains` non-empty | the install command from 6.11 and the sandbox block to paste |

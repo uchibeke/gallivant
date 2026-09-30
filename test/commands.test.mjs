@@ -2,33 +2,20 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { join, relative, dirname } from "node:path";
-import { mkdirSync, readFileSync, writeFileSync, chmodSync, statSync, existsSync } from "node:fs";
+import { mkdirSync, readFileSync, writeFileSync, statSync, existsSync } from "node:fs";
 import { start } from "../lib/commands/start.mjs";
 import { register } from "../lib/commands/register.mjs";
 import { makeState, newEntry, STATES } from "../lib/state.mjs";
 import { parseBlock } from "../lib/block.mjs";
 import { isAtOrAfter, floorSecond } from "../lib/time.mjs";
 import { templatePath } from "../lib/fs.mjs";
-import { CONFIG, T0, tempHome, prFixture, fakeRunner, makeClock, silentLog, GOOD_PRD, fakeCredential, fakeIdentity } from "./helpers.mjs";
+import { CONFIG, T0, tempHome, prFixture, fakeRunner, makeClock, silentLog, GOOD_PRD, fakeCredential, fakeIdentity, harnessBin } from "./helpers.mjs";
 import { newPrd } from "../lib/commands/new.mjs";
 import { check } from "../lib/prd.mjs";
 import { request as prdRequest } from "../lib/sources/prd.mjs";
 
-/** A `bin` that exits 0, so `checkSignIn` for codex passes without a real harness installed. */
-function signedInBin(dir) {
-  const bin = join(dir, "codex-stub");
-  writeFileSync(bin, "#!/bin/sh\nexit 0\n");
-  chmodSync(bin, 0o755);
-  return bin;
-}
-
-/** The same for claude, whose sign-in check reads `loggedIn` out of `claude auth status` rather than the exit code. */
-function signedInClaudeBin(dir) {
-  const bin = join(dir, "claude-stub");
-  writeFileSync(bin, '#!/bin/sh\necho \'{"loggedIn": true}\'\nexit 0\n');
-  chmodSync(bin, 0o755);
-  return bin;
-}
+const signedInBin = dir => harnessBin(dir, "codex");
+const signedInClaudeBin = dir => harnessBin(dir, "claude");
 
 /** The operator's own checkout, with the PRD written where `gallivant start` is run against it. */
 function operatorRepo(root, rel = "docs/prds/widget-export.md") {
@@ -66,6 +53,22 @@ function startWorld({ credential = fakeCredential(), identity = fakeIdentity() }
   };
   return { ctx, prdPath, worktree, snapshots, home };
 }
+
+test("start refuses old, unreadable and signed-out harnesses before cloning, snapshotting or spawning", async () => {
+  for (const options of [{ version: "0.155.1" }, { version: "unknown" }, { signedIn: false }]) {
+    const w = startWorld();
+    w.ctx.config.harness.codex.bin = harnessBin(w.home, "codex", options);
+    const runner = fakeRunner(makeClock());
+    w.ctx.runnerFor = () => runner;
+    let cloned = false;
+    w.ctx.git.create = async () => { cloned = true; return w.worktree; };
+    await assert.rejects(() => start(w.ctx, { path: w.prdPath }), /codex is not ready/);
+    assert.equal(cloned, false);
+    assert.equal(w.snapshots.size, 0);
+    assert.deepEqual(w.ctx.state.entries(), []);
+    assert.equal(runner.started.length, 0);
+  }
+});
 
 test("start refuses when no credential can be resolved, so nothing is cloned, recorded or spawned", async () => {
   // The defect this whole change exists for, from the other end. A run with no credential implements the brief, commits
@@ -514,12 +517,12 @@ test("start validates the run specification before it clones, so a refused harne
   assert.deepEqual(created, [], "nothing was cloned for a run that was never going to start");
   assert.deepEqual(w.ctx.state.entries(), [], "and nothing is in the registry either");
 
-  // The sign-in probe still runs first, so its refusal also precedes the clone. Both are knowable before it.
+  // The readiness probe still runs first, so a missing binary is also refused before the clone.
   const signedOut = startWorld();
   const clones = [];
   signedOut.ctx.config = { ...signedOut.ctx.config, harness: { ...signedOut.ctx.config.harness, codex: { bin: join(signedOut.home, "nope") } } };
   signedOut.ctx.git.create = async () => { clones.push(1); return signedOut.worktree; };
-  await assert.rejects(() => start(signedOut.ctx, { path: signedOut.prdPath }), /is not signed in/);
+  await assert.rejects(() => start(signedOut.ctx, { path: signedOut.prdPath }), /is not ready/);
   assert.deepEqual(clones, [], "a signed-out harness is refused before the clone as well");
 });
 

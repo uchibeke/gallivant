@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { makeTick, roundComment, receiptRoundComment, nudgeComment } from "../lib/tick.mjs";
-import { READY_LABEL, NEEDS_LABEL, ROUND_MARKER, NUDGE_MARKER, makeGh } from "../lib/gh.mjs";
+import { READY_LABEL, NEEDS_LABEL, ROUND_MARKER, NUDGE_MARKER, makeGh, MAX_DIFF_BYTES } from "../lib/gh.mjs";
 import { RECEIPT_TAG } from "../lib/deliverable.mjs";
 // The recovery side of the count and the operator's view of it, both driven here rather than mocked: the property the
 // round-comment tests below assert is that `iteration`, `countRounds` and what `why` prints all say the same thing.
@@ -10,8 +10,6 @@ import { why } from "../lib/commands/why.mjs";
 import { CONFIG, T0, at, makeClock, fakeGh, fakeRunner, fakeGit, fakeNotify, seededState, prFixture, review, inline, comment, checkRun, claudeResultLines, codexLines, silentLog, STATES, GOOD_PRD, tempHome, fakeCredential, fakeIdentity } from "./helpers.mjs";
 
 const BOT = "chatgpt-codex-connector[bot]";
-// The scan cap, spelled out rather than imported, so this file still loads against a `gh.mjs` that does not export it.
-const MAX_DIFF_BYTES = 1_000_000;
 const clearReviewer = () => [review({ id: 2, by: BOT, bot: true, state: "COMMENTED", at: at(3), body: "**Reviewed commit:** `a1b2c3d`" })];
 
 /** A receipt the completion gate accepts for GOOD_PRD's two criteria, so a test can reach the output scan. */
@@ -835,7 +833,8 @@ test("a codex fix resumes with exec resume and the config overrides", async () =
   await w.tick.tick();
   const args = w.runner.started[0].args;
   assert.deepEqual(args.slice(0, 3), ["exec", "resume", "22222222-2222-4222-8222-222222222222"]);
-  assert.ok(args.includes('approval_policy="never"'));
+  assert.ok(args.includes('approval_policy="on-request"'));
+  assert.ok(args.includes('approvals_reviewer="auto_review"'));
   assert.ok(!args.some(a => a.startsWith("--dangerously")));
 });
 
@@ -1045,7 +1044,7 @@ test("a diff the gate cannot read is no decision, not a clean scan: the PR stays
   assert.equal(w.entry().iteration, 0);
   assert.deepEqual(w.gh.calls.filter(c => c[0] === "addLabel"), []);
   assert.deepEqual(w.notify.sent, []);
-  assert.ok(w.logged.some(l => /no decision yet \(diff unreadable: .*Bad gateway/.test(l)), `the reason is logged (got ${w.logged})`);
+  assert.ok(w.logged.some(l => /completion gate failed \(diff unreadable: .*Bad gateway/.test(l)), `the reason is logged (got ${w.logged})`);
 });
 
 test("with the output scan off, a failing prDiff cannot affect the gate, because no diff is fetched at all", async () => {
@@ -1173,7 +1172,7 @@ test("a ready entry whose head has not moved stays ready and is not re-judged", 
   assert.deepEqual(w.notify.sent, [], "and nobody is told a second time");
 });
 
-test("a diff at the scan cap leaves the entry pending with truncation named, and one under the cap is scanned", async () => {
+test("a diff at the scan cap leaves the entry pending with the scan cap named, and one under the cap is scanned", async () => {
   // `MAX_DIFF_BYTES` used to slice and hand the prefix to the blocked-pattern scan as though it were the whole diff,
   // so a blocked pattern after the cutoff was never looked at and the gate could allow.
   const big = world({ rereview: { at: T0, nudged: false } }, {
@@ -1190,7 +1189,7 @@ test("a diff at the scan cap leaves the entry pending with truncation named, and
   assert.deepEqual(big.gh.calls.filter(c => c[0] === "addLabel"), [], "a partial scan never becomes an allow");
   assert.deepEqual(big.notify.sent, []);
   assert.equal(big.runner.started.length, 0, "and no receipt round, so the round budget is untouched");
-  assert.ok(big.logged.some(l => /no decision yet \(diff unreadable: .*truncated/.test(l)), `truncation is named (got ${big.logged})`);
+  assert.ok(big.logged.some(l => /completion gate failed \(diff unreadable: .*scan cap/.test(l)), `the scan cap is named (got ${big.logged})`);
 
   // The same diff a byte under the cap is read whole, and the pattern in it is found rather than missed.
   const small = world({ rereview: { at: T0, nudged: false } }, {

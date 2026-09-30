@@ -1,12 +1,12 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { criteriaFromPrd, parseReceipt, evaluate, gate, taskPassport, evaluateHosted, receiptInstructions, receiptHash, RECEIPT_TAG, DEFAULT_LIMITS, provenance } from "../lib/deliverable.mjs";
+import { criteriaFromPrd, parseReceipt, evaluate, gate, taskPassport, evaluateHosted, receiptInstructions, receiptHash, RECEIPT_TAG, DEFAULT_LIMITS, MAX_POLICY_BYTES, provenance } from "../lib/deliverable.mjs";
 import { parsePrd } from "../lib/prd.mjs";
 import { VERSION } from "../lib/fs.mjs";
-import { makeTick } from "../lib/tick.mjs";
+import { makeTick, COMPLETION_GATE } from "../lib/tick.mjs";
 import { READY_LABEL } from "../lib/gh.mjs";
 import { DEFAULT_DELIVERABLE } from "../lib/config.mjs";
-import { CONFIG, GOOD_PRD, at, makeClock, fakeGh, fakeRunner, fakeGit, fakeNotify, seededState, prFixture, review, checkRun, claudeResultLines, silentLog, STATES, fakeCredential, fakeIdentity } from "./helpers.mjs";
+import { CONFIG, GOOD_PRD, at, makeClock, fakeGh, fakeRunner, fakeGit, fakeNotify, seededState, prFixture, review, comment, checkRun, claudeResultLines, silentLog, STATES, fakeCredential, fakeIdentity } from "./helpers.mjs";
 
 const prd = parsePrd(GOOD_PRD, "/r/docs/prds/widget-export.md");
 const criteria = criteriaFromPrd(prd);
@@ -80,6 +80,71 @@ test("the per-task passport carries the criteria as the policy's limits, and the
   assert.equal(sent.passport.agent_id, p.agent_id);
   assert.equal(sent.context.agent_id, p.agent_id);
   assert.match(sent.context.idempotency_key, /^t-[0-9a-f]{12}$/);
+});
+
+test("hosted completion scans every byte of large escaped Unicode output in bounded requests", async () => {
+  const output = '🙂é"\\\n'.repeat(90_000) + "final tail";
+  const passport = taskPassport({ taskId: "large", criteria });
+  const calls = [];
+  const result = await evaluateHosted({ passport, context: { task_id: "large", output_content: output, criteria_attestations: [{ criterion_id: "ac-1", met: true, evidence: "file" }] }, fetch: async (_url, init) => {
+    assert.ok(Buffer.byteLength(init.body) <= MAX_POLICY_BYTES, "the entire escaped JSON envelope fits the hosted limit");
+    const body = JSON.parse(init.body);
+    assert.deepEqual(body.passport, passport, "every chunk keeps every policy limit");
+    assert.equal(body.context.criteria_attestations.length, 1);
+    calls.push(body.context);
+    return { ok: true, status: 200, json: async () => ({ decision: { allow: true, decision_id: `dec_${calls.length}` } }) };
+  } });
+  assert.ok(calls.length > 1);
+  let covered = 0;
+  for (const c of calls) {
+    const offset = c.meta.output_scan.offset;
+    assert.ok(offset <= covered, "no gap between pieces");
+    assert.equal(c.output_content, output.slice(offset, offset + c.output_content.length));
+    assert.ok(!/^[\uDC00-\uDFFF]|[\uD800-\uDBFF]$/.test(c.output_content), "no split Unicode character");
+    covered = offset + c.output_content.length;
+  }
+  assert.equal(covered, output.length, "the final tail was evaluated too");
+  assert.equal(new Set(calls.map(c => c.idempotency_key)).size, calls.length);
+  assert.equal(result.allow, true);
+  assert.equal(result.decisionIds.length, calls.length);
+});
+
+test("a hosted finding spanning a chunk boundary, or in the final chunk, wins over prior allows", async () => {
+  const needle = "BOUNDARY_BLOCKED";
+  const passport = taskPassport({ taskId: "boundary", criteria, limits: { ...DEFAULT_LIMITS, blocked_patterns: [needle] } });
+  const clean = "x".repeat(MAX_POLICY_BYTES * 2);
+  let boundary;
+  await evaluateHosted({ passport, context: { task_id: "boundary", output_content: clean }, fetch: async (_url, init) => {
+    boundary ??= JSON.parse(init.body).context.output_content.length;
+    return { ok: true, status: 200, json: async () => allowResponse };
+  } });
+  for (const offset of [boundary - 5, clean.length - needle.length]) {
+    const output = clean.slice(0, offset) + needle + clean.slice(offset + needle.length);
+    let calls = 0;
+    const result = await evaluateHosted({ passport, context: { task_id: "boundary", output_content: output }, fetch: async (_url, init) => {
+      calls++;
+      const hit = JSON.parse(init.body).context.output_content.includes(needle);
+      return { ok: true, status: 200, json: async () => hit ? denyResponse : allowResponse };
+    } });
+    assert.ok(calls > 1, "an earlier piece passed before the finding");
+    assert.equal(result.allow, false);
+  }
+});
+
+test("a failed later chunk never turns earlier hosted allows into completion", async () => {
+  let calls = 0;
+  const result = await gate({ taskId: "large", prBody: receiptBlock(), criteria, checksGreen: true, diff: "z".repeat(MAX_POLICY_BYTES * 2), fetch: async () => {
+    if (++calls === 2) throw new Error("connection lost after first chunk");
+    return { ok: true, status: 200, json: async () => allowResponse };
+  } });
+  assert.equal(calls, 2);
+  assert.equal(result.allow, false);
+  assert.equal(result.pending, true);
+});
+
+test("the local blocked-pattern scan agrees with the hosted case-insensitive matcher", () => {
+  const result = evaluate({ criteria, limits: LOCAL, context: { ...parseReceipt(receiptBlock()).receipt, tests_passing: true, output_content: "CONSOLE.LOG('debug')" } });
+  assert.ok(result.denials.some(d => d.code === "oap.blocked_pattern_detected"));
 });
 
 test("with evaluator aport the hosted verdict confirms or overrides a local pass; an outage waits by default and falls back only when asked", async () => {
@@ -197,7 +262,7 @@ test("the gate respects the iteration cap and is skipped when deliverable is nul
   assert.equal(state.get(id).state, STATES.ready);
 });
 
-test("an unreachable evaluator leaves the PR waiting: no receipt round, no iteration, no label", async () => {
+test("an unreachable evaluator retries without spending a round, then stops with the cause after five failures", async () => {
   const body = "Adds export.\n" + receiptBlock();
   const clock = makeClock();
   const { state, id } = seededState({ rereview: { at: at(0), nudged: false } });
@@ -209,6 +274,46 @@ test("an unreachable evaluator leaves the PR waiting: no receipt round, no itera
   await tick.tick();
   assert.deepEqual([state.get(id).state, state.get(id).iteration, runner.started.length], [STATES.prOpen, 0, 0]);
   assert.ok(!gh.calls.some(c => c[0] === "addLabel"));
+  assert.equal(state.get(id).retry.op, COMPLETION_GATE);
+  assert.match(state.get(id).retry.error, /ECONNREFUSED/);
+  for (let i = 0; i < 3; i++) await tick.tick();
+  assert.equal(state.get(id).state, STATES.needsHuman, "five consecutive failures stop the wait");
+  assert.equal(state.get(id).reason, "stuck");
+  assert.match(state.get(id).last.event, /completion gate.*ECONNREFUSED/);
+  assert.equal(runner.started.length, 0, "an infrastructure failure must not spend a fixer run");
+});
+
+test("a current-head Codex clean comment and a large output reach ready after a transient gate failure", async () => {
+  const clock = makeClock();
+  const { state, id } = seededState({ rereview: { at: at(0), nudged: false } });
+  const pr = prFixture({ statusCheckRollup: [checkRun({ name: "test", conclusion: "SUCCESS" })], body: receiptBlock() });
+  const gh = fakeGh({ pr, comments: [comment({ id: 3, by: "chatgpt-codex-connector[bot]", bot: true, at: at(3),
+    body: "Codex Review: Didn't find any major issues. Already looking forward to the next diff.\n\n**Reviewed commit:** `a1b2c3d`" })] });
+  gh.prDiff = async () => "+" + "z".repeat(5_000_000) + "\n+last line\n";
+  const runner = fakeRunner(clock), notify = fakeNotify();
+  let fail = true, calls = 0, lastOutput;
+  const tick = makeTick({ credential: fakeCredential(), identity: fakeIdentity(), config: CONFIG, state, gh, git: fakeGit(), notify, log: silentLog, clock, ownLogin: "me", runnerFor: () => runner, readPrd: () => GOOD_PRD,
+    fetch: async (_url, { body }) => {
+      if (fail) throw new Error("temporary outage");
+      assert.ok(Buffer.byteLength(body) <= MAX_POLICY_BYTES);
+      lastOutput = JSON.parse(body).context.output_content;
+      calls++;
+      return { ok: true, status: 200, json: async () => allowResponse };
+    } });
+  clock.advance(4);
+  await tick.tick();
+  assert.equal(state.get(id).retry.op, COMPLETION_GATE);
+  fail = false;
+  await tick.tick();
+  assert.equal(state.get(id).state, STATES.ready);
+  assert.equal(state.get(id).retry, null);
+  assert.ok(calls > 20, "every part of the five-megabyte output was evaluated");
+  assert.match(lastOutput, /last line$/);
+  assert.ok(gh.calls.some(c => c[0] === "addLabel" && c[2] === READY_LABEL));
+  assert.equal(runner.started.length, 0);
+  assert.equal(state.get(id).iteration, 0);
+  await tick.tick();
+  assert.equal(notify.sent.length, 1, "ready is notified only once");
 });
 
 test("a diff the output scan cannot read is no decision, so a blocked pattern is never let through as a clean scan", async () => {

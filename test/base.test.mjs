@@ -14,7 +14,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { join } from "node:path";
-import { mkdirSync, writeFileSync, chmodSync } from "node:fs";
+import { mkdirSync, writeFileSync } from "node:fs";
 import { execFileSync } from "node:child_process";
 import { start } from "../lib/commands/start.mjs";
 import { resume } from "../lib/commands/resume.mjs";
@@ -27,7 +27,7 @@ import { why } from "../lib/commands/why.mjs";
 import { model as statusModel, render as statusRender } from "../lib/commands/status.mjs";
 import { readJson, writeJsonAtomic } from "../lib/fs.mjs";
 import { configPath } from "../lib/config.mjs";
-import { CONFIG, T0, at, tempHome, makeClock, fakeGh, fakeGit, fakeRunner, fakeNotify, seededState, prFixture, review, silentLog, STATES, GOOD_PRD, claudeResultLines, fakeIdentity } from "./helpers.mjs";
+import { CONFIG, T0, at, tempHome, makeClock, fakeGh, fakeGit, fakeRunner, fakeNotify, seededState, prFixture, review, silentLog, STATES, GOOD_PRD, claudeResultLines, fakeIdentity, harnessBin } from "./helpers.mjs";
 
 const BOT = "chatgpt-codex-connector[bot]";
 
@@ -143,7 +143,7 @@ test("rememberRepo writes a bare name with no base, adds one when asked, and nev
 
 // --- start: the cut, the prompt, the refusal ---------------------------------------------------------------------
 
-const signedInBin = dir => { const bin = join(dir, "codex-stub"); writeFileSync(bin, "#!/bin/sh\nexit 0\n"); chmodSync(bin, 0o755); return bin; };
+const signedInBin = dir => harnessBin(dir);
 
 /**
  * A `start` world whose config, default branch and `--base` a test chooses. `git.create` and `gh.branchExists` record
@@ -508,7 +508,7 @@ function resumeWorld(entryOver = {}, { git = {} } = {}) {
   const runner = fakeRunner(clock);
   const logged = [];
   const ctx = {
-    home, config: { ...CONFIG, home }, state,
+    home, config: { ...CONFIG, home, harness: { ...CONFIG.harness, claude: { ...CONFIG.harness.claude, bin: harnessBin(home, "claude") } } }, state,
     log: { info: m => logged.push(m), warn: m => logged.push(m), error: m => logged.push(m), latest: () => null },
     git: { exists: () => true, fromBranch: async ({ path }) => path, unpushed: async () => [], mergeBase: async (_d, base) => ({ merged: false, base }), ...git },
     gh: fakeGh(), notify: fakeNotify(), runnerFor: () => runner, readPrd: () => GOOD_PRD, writePrd: () => {},
@@ -653,6 +653,10 @@ test("every prompt says a guardrail denial is a boundary and asks for a report i
     assert.match(p, /do not write a wrapper script, re-spell the command, move it into a file/, "the routes around it are named, because the run that did this took one of them");
     assert.match(p, /say in your final message what was blocked and what you were trying to do/, "and the honest response is spelled out");
     assert.match(p, /The block may well be wrong/, "worded so a correct instinct to verify is not read as forbidden");
+    assert.match(p, /supported approval\/escalation request/);
+    assert.match(p, /If the reviewer or a guardrail denies it, stop and report the denial/);
+    assert.match(p, /Do not change permissions, move Git metadata, or bypass the sandbox/);
+    assert.match(p, /push can exit zero even when writing local tracking metadata failed/);
   }
 });
 

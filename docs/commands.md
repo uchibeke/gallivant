@@ -71,7 +71,7 @@ Fork PRs and closed PRs are refused. If the PR body has no Gallivant block, one 
 
 ## `gallivant up [--once]`
 
-The daemon. On boot it acquires `daemon.lock` before contacting GitHub and refuses to run if another daemon owns it. The lock records the PID, process start time and command; `ps` must be available to verify that identity. `daemon.json` reports health separately, so a failed health write cannot allow a second daemon. Background startup returns once ownership is published, while GitHub initialization may still be running. `down` verifies the recorded identity before sending SIGTERM, so a reused PID is not enough to stop a process. An older daemon without an identity must be verified and stopped manually before restarting.
+The daemon. On boot it acquires `daemon.lock` before contacting GitHub and refuses to run if another daemon owns it. The lock records the PID, process start time and command; `ps` must be available to verify that identity. Its output uses a fixed locale and UTC, so a different terminal cannot mistake formatting differences for a replacement process. `daemon.json` reports health separately, so a failed health write cannot allow a second daemon. Background startup returns once ownership is published, while GitHub initialization may still be running. `down` verifies the recorded identity before sending SIGTERM, so a reused PID is not enough to stop a process. A live older daemon with a missing or unversioned identity is reported as `UNVERIFIED` and must be verified and stopped manually before restarting; its lock is never silently replaced.
 
 It then reconciles with GitHub: for every repo in `repos`, every open PR of yours on a `gallivant/*` branch with a valid block that is not in the registry is registered, with the iteration recovered by counting Gallivant's own round comments and the cursor set so old events are not replayed. The PRD snapshot is taken from the PR branch when the daemon has none. Missing checkouts are recreated from the PR branch.
 
@@ -127,8 +127,23 @@ JSON for scripts and for a dashboard's own widgets: `/api/status` (the same mode
 
 Two things to know about it:
 
-- **It is read-only.** There is no route that starts, kills, resets or edits anything, and no method but GET is routed. Changing state stays the CLI's and the daemon's job, so a page left open in a tab can do nothing.
+- **GET is read-only; run controls require a local POST.** The run page groups Recheck PR and Resume agent separately from the message composer and its Send message button. These enqueue one request in the existing registry; the daemon applies it after any active run settles. The write requires a loopback peer, a loopback Host matching the serving port, an exact same-origin request and a per-server CSRF token. Mounted trackers keep the host's authentication, and remote readers do not receive controls.
 - **It binds to 127.0.0.1 and has no password.** That is the same boundary as the CLI: anything that can reach it can already read `~/.gallivant`. Do not put it behind a tunnel or a reverse proxy that answers on a public address, because the pages show branch names, local paths and whatever the agent printed.
+
+### Rechecking and updating a run
+
+`needs-human` stops normal review and check processing. GitHub labels may trigger a repository's workflows, but they do not restart Gallivant. After resolving the cause, use **Recheck PR** on `/run?id=...`, or:
+
+```sh
+gallivant recheck agent-passport#396
+gallivant say agent-passport#396 --note "The external blocker is resolved; continue within the approved brief."
+```
+
+Recheck returns the entry to watching without resetting its iteration count or check dispatch markers. The existing loop reads checks, review and the completion gate again. It does not rerun GitHub Actions or override a failed check. Unchanged failures stop again without spending another fixer round. To deliberately reset a spent round budget, use `register`.
+
+**Resume agent** continues the same session on its current instructions. **Send message** and `say` deliver your text to the agent in that session. They are distinct request types using the existing resume path, with the same worktree and usual checks for uncommitted work and changed briefs. The fixed buttons never send or discard the message composer’s draft. A message is limited to 4,000 characters so it cannot exceed the existing prompt quote limit. It does not change the contract or grant new permissions. A running agent receives it in a subsequent run, not mid-turn. One outstanding request is accepted per entry; requests survive restarts and show queued, applying, applied or failed on the page and in `gallivant why`. A request interrupted while applying is not automatically replayed, because it might already have started a run.
+
+A live daemon running older code is refused before a request is saved, by both the CLI and the UI. Restart it with `gallivant down && gallivant up`, then submit again; active agent runs survive that restart. The daemon must be running and its health probes must pass. CLI requests start it unless `--no-daemon` is used; the UI saves the request and waits. With the default poll interval, pickup takes up to about two minutes, plus any active run and GitHub response time. After upgrading, restart the daemon and the process serving the tracker, including Command Center if mounted there, to load the new controls. No Telegram transport or stdin streaming is implemented by these controls.
 
 ### Runs from other tools
 

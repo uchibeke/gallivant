@@ -16,8 +16,23 @@ import { validate, DEFAULTS, merge, discoverHarnesses, whence, validateContextPa
 import { signInFix, probeFix } from "../lib/probe.mjs";
 import { HOME } from "../lib/fs.mjs";
 import { messages } from "../lib/notify.mjs";
+import { guardrailMode } from "../lib/aport.mjs";
 import { repoFromRemote, remoteMatches, makeGh, MAX_DIFF_BYTES, READY_LABEL } from "../lib/gh.mjs";
 import { CONFIG, T0, at, tempHome, claudeResultLines, codexLines, geminiLines, opencodeLines, gooseLines, GOOD_PRD } from "./helpers.mjs";
+
+test("APort diagnostics report the enforcement the hook uses when aliases conflict", () => {
+  const dir = tempHome();
+  for (const [text, expected] of [
+    ["APORT_ENFORCEMENT_MODE=enforce\nAPORT_ENFORCEMENT=warn\n", "enforce"],
+    ["APORT_ENFORCEMENT_MODE=warn\nAPORT_ENFORCEMENT=enforce\n", "warn"],
+    ["APORT_ENFORCEMENT=warn\n", "warn"],
+    ["APORT_GUARDRAIL_ENFORCEMENT=warn\n", "warn"],
+    ["", "enforce"],
+  ]) {
+    writeFileSync(join(dir, "guardrail-mode.env"), text);
+    assert.equal(guardrailMode(dir).enforcement, expected);
+  }
+});
 
 test("state writes atomically and resolves handles", () => {
   const home = tempHome();
@@ -84,6 +99,13 @@ test("harness argv: claude resumes with --settings and no dangerous flags; codex
   const x = buildRun({ harness: "codex", config: CONFIG, mode: "start", session: null, prompt: "p", cwd: "/w" });
   assert.deepEqual(x.args.slice(0, 2), ["exec", "--json"]);
   assert.ok(x.args.includes('sandbox_mode="workspace-write"'));
+  for (const mode of ["start", "resume"]) {
+    const run = buildRun({ harness: "codex", config: CONFIG, mode, session: "s", prompt: "p", cwd: "/w" });
+    assert.ok(run.args.includes('approval_policy="on-request"'), `${mode}: Git metadata writes can request approval`);
+    assert.ok(run.args.includes('approvals_reviewer="auto_review"'), `${mode}: no human approval prompt in a headless run`);
+    assert.ok(run.args.includes('sandbox_mode="workspace-write"'), `${mode}: the sandbox remains enabled`);
+    assert.ok(!run.args.includes('approval_policy="never"'));
+  }
   assert.throws(() => assertSafeArgv(["--dangerously-skip-permissions"]), /refusing/);
   assert.throws(() => buildRun({ harness: "bash", config: CONFIG, mode: "start", prompt: "p" }), /unknown harness/);
 });
@@ -556,12 +578,16 @@ test("prDiff reports a failure instead of returning nothing, so the output scan 
   // the scan as though it were the whole thing, so a blocked pattern past the cutoff was never looked at. The cap
   // stays, because a diff of any size in memory is its own problem; what it produces is a refusal to decide.
   const capped = makeGh({ exec: async () => ({ stdout: "a".repeat(MAX_DIFF_BYTES) + "\n+TODO after the cutoff\n" }) });
-  await assert.rejects(() => capped.prDiff("acme/widget", 142), /at or over the 1000000-byte scan cap: truncated/);
+  await assert.rejects(() => capped.prDiff("acme/widget", 142), /at or over the \d+-byte scan cap/);
   // Exactly at the cap counts as truncated: a diff of that length is indistinguishable from one the cap cut short.
   const exact = makeGh({ exec: async () => ({ stdout: "a".repeat(MAX_DIFF_BYTES) }) });
-  await assert.rejects(() => exact.prDiff("acme/widget", 142), /truncated/);
+  await assert.rejects(() => exact.prDiff("acme/widget", 142), /incomplete output scan/);
   const under = makeGh({ exec: async () => ({ stdout: "a".repeat(MAX_DIFF_BYTES - 1) }) });
   assert.equal((await under.prDiff("acme/widget", 142)).length, MAX_DIFF_BYTES - 1, "a diff that fits is returned whole");
+  const large = "+" + "x".repeat(5_030_593) + "\n+TODO at the end\n";
+  assert.equal(await makeGh({ exec: async () => ({ stdout: large }) }).prDiff("acme/widget", 142), large, "the full real-world size is read, including its tail");
+  const unicode = makeGh({ exec: async () => ({ stdout: "é".repeat(MAX_DIFF_BYTES / 2) }) });
+  await assert.rejects(() => unicode.prDiff("acme/widget", 142), /scan cap/, "the cap measures bytes, not characters");
 });
 
 test("removeLabel is strict by omission: only gh's own absent-label message is swallowed", async () => {

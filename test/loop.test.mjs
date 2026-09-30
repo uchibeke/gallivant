@@ -4,22 +4,13 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { join } from "node:path";
-import { mkdirSync, writeFileSync, chmodSync } from "node:fs";
-import { randomUUID } from "node:crypto";
+import { mkdirSync, writeFileSync } from "node:fs";
 import { start } from "../lib/commands/start.mjs";
 import { register } from "../lib/commands/register.mjs";
 import { makeTick } from "../lib/tick.mjs";
 import { makeState } from "../lib/state.mjs";
 import { READY_LABEL } from "../lib/gh.mjs";
-import { CONFIG, T0, at, tempHome, makeClock, fakeGh, fakeRunner, fakeGit, fakeNotify, seededState, prFixture, comment, silentLog, STATES, GOOD_PRD, fakeCredential, fakeIdentity } from "./helpers.mjs";
-
-/** A harness stub whose `signIn` check is whatever the test asks for: exit 0 passes, anything else fails. */
-function harnessStub(dir, { exit = 0, out = "" } = {}) {
-  const bin = join(dir, `harness-stub-${randomUUID()}`);
-  writeFileSync(bin, `#!/bin/sh\n${out ? `echo "${out}"\n` : ""}exit ${exit}\n`);
-  chmodSync(bin, 0o755);
-  return bin;
-}
+import { CONFIG, T0, at, tempHome, makeClock, fakeGh, fakeRunner, fakeGit, fakeNotify, seededState, prFixture, comment, silentLog, STATES, GOOD_PRD, fakeCredential, fakeIdentity, harnessBin } from "./helpers.mjs";
 
 function startWorld({ signIn = {} } = {}) {
   const home = tempHome();
@@ -34,7 +25,7 @@ function startWorld({ signIn = {} } = {}) {
   const snapshots = new Map();
   const ctx = {
     home,
-    config: { ...CONFIG, home, worktrees: join(home, "worktrees"), harness: { ...CONFIG.harness, codex: { bin: harnessStub(home, signIn) } } },
+    config: { ...CONFIG, home, worktrees: join(home, "worktrees"), harness: { ...CONFIG.harness, codex: { bin: harnessBin(home, "codex", signIn) } } },
     state: makeState(home),
     log: silentLog,
     gh: {
@@ -75,7 +66,7 @@ test("a start on claude records the session id the resume will use", async () =>
   const w = startWorld();
   writeFileSync(w.prdPath, GOOD_PRD.replace("harness: codex", "harness: claude"));
   // Claude's own sign-in check reads its JSON, so the stub answers the way a signed-in CLI does.
-  w.ctx.config.harness.claude = { ...CONFIG.harness.claude, bin: harnessStub(w.home, { out: '{\\"loggedIn\\": true}' }), settings: join(w.home, "settings.json") };
+  w.ctx.config.harness.claude = { ...CONFIG.harness.claude, bin: harnessBin(w.home, "claude"), settings: join(w.home, "settings.json") };
 
   const r = await start(w.ctx, { path: w.prdPath });
   const e = w.ctx.state.get(r.id);
@@ -85,11 +76,11 @@ test("a start on claude records the session id the resume will use", async () =>
 });
 
 test("a signed-out harness stops start with the harness and the detail named, and records nothing", async () => {
-  const w = startWorld({ signIn: { exit: 1, out: "Not logged in. Run codex login." } });
+  const w = startWorld({ signIn: { signedIn: false, signInOutput: "Not logged in. Run codex login." } });
   await assert.rejects(() => start(w.ctx, { path: w.prdPath }), err => {
-    assert.match(err.message, /^codex is not signed in \(/, "the message names which harness");
+    assert.match(err.message, /^codex is not ready \(/, "the message names which harness");
     assert.match(err.message, /Not logged in\. Run codex login\./, "and passes the harness's own words through");
-    assert.match(err.message, /sign in and run start again/);
+    assert.match(err.message, /codex login/);
     return true;
   });
 
@@ -101,7 +92,7 @@ test("a signed-out harness stops start with the harness and the detail named, an
 test("a harness whose sign-in check cannot run at all is refused the same way", async () => {
   const w = startWorld();
   w.ctx.config.harness.codex = { bin: join(w.home, "no-such-binary") };
-  await assert.rejects(() => start(w.ctx, { path: w.prdPath }), /codex is not signed in/);
+  await assert.rejects(() => start(w.ctx, { path: w.prdPath }), /codex is not ready/);
   assert.equal(w.ctx.state.entries().length, 0);
 });
 
