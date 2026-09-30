@@ -286,6 +286,15 @@ test("a daemon that recorded no stamp is reported neither fresh nor stale, becau
   assert.doesNotMatch(render(model({ state: makeState(home), config: CONFIG, home, log: silentLog }), { clock: makeClock(T0) }), /older than what is installed/);
 });
 
+test("status does not suggest starting another daemon when a legacy owner is still alive", () => {
+  const w = world({ daemon: { pid: process.pid, identity: "legacy process identity", startedAt: T0 } });
+  const result = status(w.ctx);
+  assert.equal(result.exitCode, 1);
+  assert.match(result.text, /daemon UNVERIFIED/);
+  assert.match(result.text, /verify and stop/);
+  assert.doesNotMatch(result.text, /daemon DOWN|run: gallivant up/);
+});
+
 test("a dead daemon is never stale, whatever it was running", async () => {
   const { readDaemon } = await import("../lib/commands/up.mjs");
   const home = tempHome();
