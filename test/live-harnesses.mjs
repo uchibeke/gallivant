@@ -130,7 +130,7 @@ async function turn(entry, phase, attempt) {
   const spec = buildRun({ harness, config, mode: phase, session, prompt: codingPrompt(phase, remote), cwd });
   // Native overrides belong to this test, not Gallivant's per-task configuration.
   const overrides = [];
-  if (harness === "opencode" && (NAMED_CASES[entry.id] || previousTurn)) overrides.push("--model", NAMED_CASES[entry.id]?.model || previousTurn.models[0]);
+  if (harness === "opencode") overrides.push("--model", entry.configured.model);
   if (harness === "gemini" && (previousTurn || entry.configured.model !== "unknown")) overrides.push("--model", previousTurn?.models[0] || entry.configured.model);
   if (harness === "goose" && entry.configured.provider !== "unknown" && entry.configured.model !== "unknown") overrides.push("--provider", entry.configured.provider, "--model", entry.configured.model);
   spec.args.splice(harness === "gemini" ? 0 : spec.args.length - (harness === "goose" ? 2 : 1), 0, ...overrides);
@@ -208,7 +208,7 @@ async function turn(entry, phase, attempt) {
     assert.equal(record.models.length, 1, "effective model must be knowable and constant, without fallback");
     assert.ok(!record.models[0].includes("unknown"), "model metadata missing");
     if (previousTurn) assert.deepEqual(record.models, previousTurn.models, "resume changed effective model");
-    if (harness === "opencode" && NAMED_CASES[entry.id]) assert.equal(record.models[0], NAMED_CASES[entry.id].model);
+    if (harness === "opencode") assert.equal(record.models[0], entry.configured.model, "OpenCode effective model differs from the recorded provider/model");
     if (harness === "goose") assert.equal(record.models[0], `${entry.configured.provider}/${entry.configured.model}`);
     failureStage = "verification";
     record.testToolCalls = testExecution(harness, lines, exported).filter(id => !previousTurn?.testToolCalls?.includes(id));
@@ -255,7 +255,14 @@ try {
       if (NAMED_CASES[id]) entry.configured = { ...NAMED_CASES[id] };
       assert.ok(!report.cases.some(c => c.harness === harness && JSON.stringify(c.configured) === JSON.stringify(entry.configured)), "This provider/model combination already ran");
       report.cases.push(entry);
-      if (/deepseek/i.test(JSON.stringify(entry.configured))) { entry.blocked = "DeepSeek excluded by the current operator scope; no model call made."; checkpoint(); continue; }
+    }
+    if (/deepseek/i.test(JSON.stringify(entry.configured))) { entry.blocked = "DeepSeek excluded by the current operator scope; no model call made."; checkpoint(); continue; }
+    // Pin the observed default just like a named case. Missing components and routing
+    // aliases cannot safely establish the provider/model against operator exclusions.
+    if (entry.harness === "opencode" && (!/^[\w.-]+\/[\w][\w./:-]*$/.test(entry.configured.model)
+      || /(^|\/)(unknown|undefined|null|auto|default)(\/|$)/i.test(entry.configured.model))) {
+      entry.blocked = "OpenCode provider/model cannot be established from the recorded settings; configure an explicit allowed provider/model through native setup before authorizing a new suite. No model call made.";
+      checkpoint(); continue;
     }
     if (!invocation.versions[entry.harness]?.ok) {
       entry.blocked = `version preflight failed (${invocation.versions[entry.harness]?.detail || "missing check"}); install ${entry.harness} ${MIN_VERSIONS[entry.harness]} or newer at ${invocation.binaries[entry.harness] || "the configured bin path"}`;

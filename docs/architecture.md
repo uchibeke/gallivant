@@ -58,6 +58,11 @@ Named Meta/xAI/Alibaba cases use Goose's native saved providers and OpenCode's s
 providers; they do not establish Zen/Go subscription access. Exact batch commands and blocked results are
 in the audit. DeepSeek is excluded from new calls and Tencent remains deferred.
 
+Every OpenCode turn pins `--model` to the case's recorded provider/model, including the existing-default
+case. An unknown, incomplete or routing-alias default blocks before fixture creation or launch. Changing
+native defaults afterward cannot change that pinned argument, and exported model evidence must match the
+recorded selection on both turns. Named Console providers keep their exact selectors.
+
 Disposable turns clear inherited Git/GitHub/SSH, credential-manager and editor askpass variables, then
 restore `runEnv`'s Git identity and isolated config with terminal credential prompts disabled. Git accepts only
 file transport and its SSH command refuses execution, preventing default SSH identity fallback while keeping

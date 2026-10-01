@@ -39,8 +39,11 @@ appendFileSync(root + '/calls.jsonl', JSON.stringify(args.slice(0, 2)) + '\\n');
 if (args[0] === '--version') { process.stdout.write(readFileSync(root + '/version', 'utf8')); process.exit(0); }
 if (args[0] === 'export') {
   writeFileSync(root + '/exported.json', JSON.stringify({ at: Date.now() }));
-  process.stdout.write(JSON.stringify({ info: { directory: process.cwd() }, messages: [] })); process.exit(0);
+  const [providerID, ...modelID] = mode === 'model-evidence' ? readFileSync(root + '/effective-model.txt', 'utf8').trim().split('/') : [];
+  const messages = mode === 'model-evidence' ? [{ info: { role: 'assistant', providerID, modelID: modelID.join('/') } }] : [];
+  process.stdout.write(JSON.stringify({ info: { directory: process.cwd() }, messages })); process.exit(0);
 }
+writeFileSync(root + '/run-args.json', JSON.stringify(args.slice(0, -1)));
 writeFileSync(root + '/environment.json', JSON.stringify({
   tokens: ${JSON.stringify(tokenNames)}.filter(key => key in process.env),
   gitAuth: ${JSON.stringify(gitAuthNames)}.filter(key => key in process.env),
@@ -52,6 +55,10 @@ writeFileSync(root + '/environment.json', JSON.stringify({
 }));
 process.stdout.write(JSON.stringify({ type: 'text', sessionID: 'ses_offline123' }) + '\\n');
 if (mode === 'exit') process.exit(1);
+if (mode === 'model-evidence') {
+  process.stdout.write(JSON.stringify({ type: 'step_finish', sessionID: 'ses_offline123', part: { reason: 'stop' } }) + '\\n');
+  process.exit(0); // Synthetic metadata for verifier tests, not live coding evidence.
+}
 const errors = {
   'command-permission-error': 'bash: ./live.test.mjs: Permission denied',
   'command-eperm-error': 'chmod: function.mjs: Operation not permitted',
@@ -86,18 +93,22 @@ setInterval(() => {}, 1000);
   return root;
 }
 
-function invoke(root, { watchdog = false, env = {}, retry = false, crashAfterSpawn = false } = {}) {
+function invoke(root, { watchdog = false, env = {}, retry = false, crashAfterSpawn = false,
+  caseId = "opencode-console-meta", changeDefaultTo = null } = {}) {
   const source = `
 import os from 'node:os';
 import { existsSync, writeFileSync } from 'node:fs';
 import cp from 'node:child_process';
 import { syncBuiltinESMExports } from 'node:module';
 os.homedir = () => ${JSON.stringify(root)};
-if (${crashAfterSpawn}) {
+if (${crashAfterSpawn} || ${JSON.stringify(changeDefaultTo)} !== null) {
   const spawn = cp.spawn;
   cp.spawn = (cmd, args, options) => {
+    if (cmd === ${JSON.stringify(join(root, "probe.mjs"))} && args[0] === 'run' && ${JSON.stringify(changeDefaultTo)} !== null) {
+      writeFileSync(${JSON.stringify(join(root, ".config", "opencode", "opencode.json"))}, JSON.stringify({ model: ${JSON.stringify(changeDefaultTo)} }));
+    }
     const child = spawn(cmd, args, options);
-    if (cmd === ${JSON.stringify(join(root, "probe.mjs"))} && args[0] === 'run') {
+    if (${crashAfterSpawn} && cmd === ${JSON.stringify(join(root, "probe.mjs"))} && args[0] === 'run') {
       writeFileSync(${JSON.stringify(join(root, "crashed-child.json"))}, JSON.stringify({ pid: child.pid }));
       process.kill(process.pid, 'SIGKILL'); // Between spawn and the runner's job/ledger updates.
     }
@@ -114,8 +125,8 @@ if (${watchdog}) {
     : timeout(fn, ms, ...args);
 }
 process.argv = [process.execPath, 'live-harnesses.mjs', '--live', ...${JSON.stringify(retry
-    ? ["--retry", root, "opencode-console-meta:start", "docs/audit/harness-live-validation.md"]
-    : ["--append", root, "opencode-console-meta"])}];
+    ? ["--retry", root, `${caseId}:start`, "docs/audit/harness-live-validation.md"]
+    : ["--append", root, caseId])}];
 await import(${JSON.stringify(new URL("./live-harnesses.mjs", import.meta.url).href)});
 `;
   const child = spawn(process.execPath, ["--input-type=module", "-e", source], {
@@ -143,6 +154,67 @@ function cleanup(root, child) {
   }
   rmSync(root, { recursive: true, force: true });
 }
+
+test("live OpenCode default pins the snapshot despite a changed default and rejects mismatched exports", async () => {
+  const model = "offline-provider/offline-model";
+  for (const selectedFrom of ["settings", "recent"]) for (const exportedModel of [model, "offline-provider/different-model"]) {
+    const root = fixture("model-evidence");
+    let run;
+    try {
+      mkdirSync(join(root, ".config", "opencode"), { recursive: true });
+      if (selectedFrom === "settings") writeFileSync(join(root, ".config", "opencode", "opencode.json"), JSON.stringify({ model }));
+      else {
+        mkdirSync(join(root, ".local", "state", "opencode"), { recursive: true });
+        writeFileSync(join(root, ".local", "state", "opencode", "model.json"), JSON.stringify({ recent: [{ providerID: "offline-provider", modelID: "offline-model" }] }));
+      }
+      writeFileSync(join(root, "effective-model.txt"), exportedModel);
+      // Only this isolated fake HOME changes. No installed CLI or provider is called.
+      run = invoke(root, { caseId: "opencode-default", changeDefaultTo: "offline-provider/deepseek-excluded" });
+      const result = await run.done;
+      assert.equal(result.code, 1, result.stderr);
+      const entry = read(join(root, "report.json")).cases[0], turn = entry.turns[0];
+      assert.equal(entry.configured.model, model);
+      assert.equal(read(join(root, ".config", "opencode", "opencode.json")).model, "offline-provider/deepseek-excluded");
+      const args = read(join(root, "run-args.json"));
+      assert.equal(args.filter(arg => arg === "--model").length, 1);
+      assert.equal(args[args.indexOf("--model") + 1], model);
+      assert.deepEqual(turn.models, [exportedModel]);
+      assert.equal(turn.status, "failed", "an offline metadata probe must never count as coding success");
+      const verifier = readFileSync(join(root, turn.failure.evidence), "utf8");
+      if (exportedModel === model) {
+        assert.equal(turn.failure.stage, "verification");
+        assert.match(verifier, /No successful node:test tool execution/);
+      } else {
+        assert.equal(turn.failure.stage, "adapter");
+        assert.match(verifier, /OpenCode effective model differs from the recorded provider\/model/);
+      }
+      assert.equal(entry.turns.length, 1, "no resume may follow unverified probe output");
+    } finally { cleanup(root, run?.child); }
+  }
+});
+
+test("live OpenCode default blocks unknown ambiguous and excluded selections before a turn", async () => {
+  for (const model of [null, "unknown", "model-without-provider", "undefined/model", "provider/auto", "provider/default", "provider/deepseek-excluded"]) {
+    const root = fixture();
+    let run;
+    try {
+      if (model !== null) {
+        mkdirSync(join(root, ".config", "opencode"), { recursive: true });
+        writeFileSync(join(root, ".config", "opencode", "opencode.json"), JSON.stringify({ model }));
+      }
+      run = invoke(root, { caseId: "opencode-default" });
+      const result = await run.done;
+      assert.equal(result.code, 1, result.stderr);
+      const entry = read(join(root, "report.json")).cases[0];
+      assert.match(entry.blocked, /cannot be established|DeepSeek excluded/);
+      assert.deepEqual(entry.turns, []);
+      assert.equal(entry.cwd, undefined);
+      assert.equal(entry.retry, undefined);
+      assert.equal(existsSync(join(root, "run-args.json")), false);
+      assert.deepEqual(readFileSync(join(root, "calls.jsonl"), "utf8").trim().split("\n").map(JSON.parse), [["--version"]]);
+    } finally { cleanup(root, run?.child); }
+  }
+});
 
 test("live monitor allows command permission recovery and still stops explicit approval refusals", async () => {
   for (const mode of ["command-permission-error", "command-eperm-error", "command-kind-error", "approval-refusal", "sandbox-refusal"]) {

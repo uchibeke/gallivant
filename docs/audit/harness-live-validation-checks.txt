@@ -352,3 +352,27 @@ Reservation/errno review follow-up on 2026-10-01 UTC (review 5385436681):
   Full PR credential/Console-connection, known-secret and blocked-pattern scans: 0 matches.
   No installed harness, provider call, live retry or operator configuration change.
   Historical evidence, exhausted allowances and false AC-2/AC-3 attestations remain unchanged.
+
+OpenCode-default review follow-up on 2026-10-01 UTC (review 5386885175, comment 4161609055):
+  Every OpenCode turn pins the recorded provider/model with --model, including
+  opencode-default. Exported model metadata must equal that selection on both turns.
+  Unknown, incomplete and routing-alias selections block before fixture creation
+  or a turn reservation. The recorded exclusion is checked on every invocation.
+  Regressions in test/live_suite.test.mjs:
+    live OpenCode default pins the snapshot despite a changed default and rejects mismatched exports
+    live OpenCode default blocks unknown ambiguous and excluded selections before a turn
+  Offline entrypoint tests capture argv after changing the isolated fake HOME's
+  default immediately before spawn. Settings and recent-model snapshots remain
+  pinned, mismatched exports fail, and seven unavailable/excluded inputs launch
+  no turn. Synthetic metadata never counts as successful live coding evidence.
+  Focused regressions: exit 0; tests 2; pass 2; fail 0
+  Private output: /private/tmp/gallivant-opencode-default-focused-tests.txt
+  npm test: exit 0; tests 634; pass 634; fail 0; cancelled 0; skipped 0; deferred tests 0
+  duration_ms 56003.471333
+  Private output: /private/tmp/gallivant-opencode-default-all-tests.txt
+  npm run lint: exit 0
+  Changed test tooling syntax checks: exit 0
+  git diff --check: exit 0
+  Full PR credential/Console-connection, known-secret and blocked-pattern scans: 0 matches.
+  No installed harness, provider call, live retry or operator configuration change.
+  Historical evidence, exhausted allowances and false AC-2/AC-3 attestations remain unchanged.

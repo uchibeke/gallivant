@@ -133,6 +133,17 @@ unclassified records without a stage cannot qualify automatically. Historical
 results and the two previously documented directory-fix retries are preserved;
 no old record is relabeled to obtain another call.
 
+Every OpenCode start and resume pins the recorded provider/model with `--model`.
+For `opencode-default`, the snapshot comes from the existing settings or recent
+model record; later native-default changes do not alter that argument. Unknown,
+incomplete or routing-alias selections block before fixture creation and turn
+reservation, with a native-setup remedy and no substituted model. DeepSeek
+exclusions are checked against the recorded selection on each invocation, and
+exported model evidence must match it even for the default case. Named Console
+providers retain their exact selectors. Offline probes cover settings/recent
+snapshots, a changed default immediately before spawn, mismatched exports and
+blocked unknown/excluded defaults; these probes add no live provider evidence.
+
 The refusal classifier distinguishes an explicit permission request or rejection
 from ordinary command stderr such as `bash: ./live.test.mjs: Permission denied`
 or an `EACCES` file error. Generic `Operation not permitted`, `EPERM` and serialized
