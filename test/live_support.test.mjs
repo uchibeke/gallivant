@@ -6,7 +6,63 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { adapters } from "../lib/harness.mjs";
 import { runEnv } from "../lib/git.mjs";
-import { BRANCH, NAMED_CASES, TURN_MS, SUITE_MS, selection, classify, costEvidence, refusalEvidence, openSuiteLedger, sessionIdentity, effectiveModels, testExecution, verifyCheckout, verifyResumeFixture, verifySessionDirectory, verifyStartFixture } from "./live-support.mjs";
+import { harnessBin } from "./helpers.mjs";
+import { BRANCH, NAMED_CASES, TURN_MS, SUITE_MS, auditLiveInvocation, selection, classify, costEvidence, refusalEvidence, openSuiteLedger, sessionIdentity, effectiveModels, testExecution, verifyCheckout, verifyResumeFixture, verifySessionDirectory, verifyStartFixture } from "./live-support.mjs";
+
+test("live retry and append recheck current binaries while preserving earlier version evidence", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "gallivant-live-versions-"));
+  try {
+    const config = { harness: Object.fromEntries(["gemini", "opencode", "goose"].map(h => [h, { bin: harnessBin(dir, h) }])) };
+    const report = { cases: [{ id: "goose-meta", turns: [{ invocation: 0, status: "failed" }] }] };
+    const first = await auditLiveInvocation(report, config, { mode: "start", selected: ["goose-meta"], source: { revision: "first" } });
+    const original = structuredClone(report);
+    const replacement = join(dir, "replacement");
+    mkdirSync(replacement);
+    config.harness.goose.bin = harnessBin(replacement, "goose", { version: "2.0.0" });
+    const retried = await auditLiveInvocation(report, config, { mode: "retry", selected: ["goose-meta"], source: { revision: "fixed" } });
+    assert.deepEqual(retried.versions, { goose: { ok: true, detail: "2.0.0" } });
+    assert.deepEqual(retried.binaries, { goose: config.harness.goose.bin });
+    assert.notEqual(retried.binaries.goose, first.binaries.goose);
+    assert.equal(retried.source.revision, "fixed");
+    assert.ok(Number.isFinite(Date.parse(retried.checkedAt)));
+    // An upgrade at the same configured path must be detected too, once per selected harness.
+    harnessBin(dir, "opencode", { version: "2.0.0" });
+    const appended = await auditLiveInvocation(report, config, { mode: "append", selected: ["opencode-console-meta", "opencode-console-xai"], source: { revision: "fixed" } });
+    assert.deepEqual(appended.versions, { opencode: { ok: true, detail: "2.0.0" } });
+    assert.deepEqual(appended.binaries, { opencode: config.harness.opencode.bin });
+    assert.deepEqual(report.invocations, [first, retried, appended]);
+    assert.deepEqual(report.invocations[0], original.invocations[0]);
+    assert.deepEqual(report.versions, original.versions);
+    assert.deepEqual(report.binaries, original.binaries);
+    assert.deepEqual(report.cases, original.cases);
+    const calls = (root, harness) => readFileSync(join(root, `${harness}-calls.jsonl`), "utf8").trim().split("\n").map(JSON.parse);
+    assert.deepEqual(calls(dir, "goose"), [["--version"]]);
+    assert.deepEqual(calls(dir, "gemini"), [["--version"]]);
+    assert.deepEqual(calls(dir, "opencode"), [["--version"], ["--version"]]);
+    assert.deepEqual(calls(replacement, "goose"), [["--version"]]);
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
+test("live resumed invocation refuses stale success for downgraded unreadable or missing binaries", async () => {
+  for (const mode of ["retry", "append"]) {
+    for (const options of [{ version: "0.1.0" }, { version: "unrecognised" }, { versionExit: 1 }, null]) {
+      const dir = mkdtempSync(join(tmpdir(), "gallivant-live-version-failure-"));
+      try {
+        const bin = options ? harnessBin(dir, "goose", options) : join(dir, "missing-goose");
+        const report = { versions: { goose: { ok: true, detail: "1.50.1" } }, binaries: { goose: "/previous/goose" }, cases: [] };
+        const original = structuredClone(report);
+        const audit = await auditLiveInvocation(report, { harness: { goose: { bin } } }, { mode, selected: ["goose-meta"], source: { revision: "fixed" } });
+        assert.equal(audit.versions.goose.ok, false);
+        assert.match(audit.versions.goose.detail, /older than|could not read version/);
+        assert.equal(audit.binaries.goose, bin);
+        assert.equal(report.invocations[0], audit);
+        assert.deepEqual(report.versions, original.versions);
+        assert.deepEqual(report.binaries, original.binaries);
+        if (options) assert.deepEqual(readFileSync(join(dir, "goose-calls.jsonl"), "utf8").trim().split("\n").map(JSON.parse), [["--version"]]);
+      } finally { rmSync(dir, { recursive: true, force: true }); }
+    }
+  }
+});
 
 test("live suite ledger rejection preserves supplied directory permissions and contents", () => {
   const root = realpathSync(mkdtempSync(join(tmpdir(), "gallivant-ledger-rejection-")));

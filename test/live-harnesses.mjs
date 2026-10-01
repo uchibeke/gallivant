@@ -7,11 +7,11 @@ import { homedir, tmpdir } from "node:os";
 import { basename, dirname, isAbsolute, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { setTimeout as delay } from "node:timers/promises";
-import { adapterFor, assertSafeArgv, buildRun } from "../lib/harness.mjs";
+import { adapterFor, assertSafeArgv, buildRun, MIN_VERSIONS } from "../lib/harness.mjs";
 import { runEnv } from "../lib/git.mjs";
 import { isOurProcess, makeRunner } from "../lib/run.mjs";
 import { checkVersion } from "../lib/probe.mjs";
-import { BRANCH, NAMED_CASES, TURN_MS, SUITE_MS, classify, codingPrompt, costEvidence, effectiveModels, openSuiteLedger, parseEvents, refusalEvidence, safeLabel, selection, sessionIdentity, testExecution, verifyCheckout, verifyResumeFixture, verifySessionDirectory, verifyStartFixture } from "./live-support.mjs";
+import { BRANCH, NAMED_CASES, TURN_MS, SUITE_MS, auditLiveInvocation, classify, codingPrompt, costEvidence, effectiveModels, harnessForCase, openSuiteLedger, parseEvents, refusalEvidence, safeLabel, selection, sessionIdentity, testExecution, verifyCheckout, verifyResumeFixture, verifySessionDirectory, verifyStartFixture } from "./live-support.mjs";
 
 const repo = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const args = process.argv.slice(2);
@@ -61,6 +61,7 @@ for (const [harness, configured] of Object.entries(operatorConfig?.harness || {}
   if (config.harness[harness] && typeof configured.bin === "string") config.harness[harness].bin = configured.bin;
 }
 let active = null;
+let invocationIndex;
 for (const signal of ["SIGINT", "SIGTERM"]) process.on(signal, () => {
   if (active) active.runner.kill(active.id);
   report.interrupted = signal;
@@ -143,7 +144,7 @@ async function turn(entry, phase, attempt) {
   const startedAt = new Date().toISOString();
   const job = runner.start(`${phase}-${attempt}`, spec.cmd, spec.args, { cwd, env });
   active = { runner, id: job.id };
-  const record = { phase, attempt, startedAt, source, command: [spec.cmd, ...spec.args.slice(0, -1), "<prompt in private cmd.json>"], run: relative(root, runner.dirOf(job.id)), status: "running" };
+  const record = { phase, attempt, startedAt, source, invocation: invocationIndex, command: [spec.cmd, ...spec.args.slice(0, -1), "<prompt in private cmd.json>"], run: relative(root, runner.dirOf(job.id)), status: "running" };
   entry.turns.push(record);
   checkpoint();
   process.stdout.write(`${entry.id} ${phase} attempt ${attempt}: ${record.run}\n`);
@@ -228,16 +229,15 @@ async function turn(entry, phase, attempt) {
 
 try {
   process.stdout.write(`Private evidence: ${root}\n`);
+  const invocation = await auditLiveInvocation(report, config, { mode: retry ? "retry" : append ? "append" : "start", selected, source });
+  invocationIndex = report.invocations.length - 1;
   if (!retry && !append) {
-    report.versions = {};
-    for (const harness of Object.keys(config.harness)) report.versions[harness] = await checkVersion(harness, config);
-    report.binaries = Object.fromEntries(Object.entries(config.harness).map(([h, value]) => [h, value.bin]));
     report.pathVersions = {};
     for (const [harness, value] of Object.entries(config.harness)) {
       if (value.bin !== harness) report.pathVersions[harness] = await checkVersion(harness, { harness: { [harness]: { bin: harness } } });
     }
-    checkpoint();
   }
+  checkpoint();
   for (const id of selected) {
     if (Date.now() >= deadline || report.interrupted || report.suiteTimedOut) break;
     let entry = report.cases.find(c => c.id === id);
@@ -250,7 +250,7 @@ try {
       assert.equal(classify(`${refusalEvidence(failedLines)}\n${adapterFor(entry.harness).outcome(failedLines).error || ""}`).category, "unclassified", "A corrected parser must not turn an earlier unclassified external failure into a retry");
     } else {
       assert.ok(!entry, "This case already ran; only a justified targeted retry can repeat it");
-      const harness = id.startsWith("opencode") ? "opencode" : id.startsWith("goose") ? "goose" : id;
+      const harness = harnessForCase(id);
       const dir = join(root, id);
       mkdirSync(dir, { mode: 0o700 });
       entry = { id, harness, configured: configured(harness), requestedSession: adapterFor(harness).newSession(), turns: [] };
@@ -258,9 +258,14 @@ try {
       assert.ok(!report.cases.some(c => c.harness === harness && JSON.stringify(c.configured) === JSON.stringify(entry.configured)), "This provider/model combination already ran");
       report.cases.push(entry);
       if (/deepseek/i.test(JSON.stringify(entry.configured))) { entry.blocked = "DeepSeek excluded by the current operator scope; no model call made."; checkpoint(); continue; }
-      if (!report.versions[harness].ok) { entry.blocked = "version preflight failed; install the adapter's minimum supported version"; checkpoint(); continue; }
-      Object.assign(entry, fixture(dir));
     }
+    if (!invocation.versions[entry.harness]?.ok) {
+      entry.blocked = `version preflight failed (${invocation.versions[entry.harness]?.detail || "missing check"}); install ${entry.harness} ${MIN_VERSIONS[entry.harness]} or newer at ${invocation.binaries[entry.harness] || "the configured bin path"}`;
+      entry.blockedInvocation = invocationIndex;
+      checkpoint(); continue;
+    }
+    if (entry.blockedInvocation !== undefined) { delete entry.blocked; delete entry.blockedInvocation; }
+    if (!retry) Object.assign(entry, fixture(join(root, id)));
     const firstPhase = retry ? retryPhase : "start";
     const first = await turn(entry, firstPhase, retry ? 2 : 1);
     if (first.isolationFailure) { report.isolationFailure = entry.id; break; }

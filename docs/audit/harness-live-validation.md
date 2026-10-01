@@ -122,6 +122,15 @@ npm run test:live-harnesses -- --live --retry /absolute/private/suite-root CASE:
 
 Use `CASE:resume` to retry only a failed resume. One retry per combination is allowed; the source must have changed, external failures/denials cannot be retried, and the original deadline still applies. `--append /absolute/private/suite-root NEW_CASE` can add an untested combination within that same deadline. No retry or append starts unrelated phases. A new operator-authorized suite after remedy uses a new private directory and must be reported as new evidence.
 
+Each invocation records its configured binaries and fresh version probes in the
+private ledger's `invocations` array. Retry and append check only the selected
+harnesses, once per harness, using the current configuration and shared version
+probe. Unsupported, unreadable or missing binaries block calls before fixture
+creation or retry reservation, with the required version and binary path recorded
+as the remedy. New turns reference their invocation; earlier turns and the original
+version/PATH audit remain unchanged. Offline executable probes cover binary-path
+changes, upgrades, downgrades and failed probes without using a provider.
+
 Every resume, including a targeted retry, now checks the last passed turn's Git
 state before launching a model call or consuming the retry allowance. The checkout
 must be clean at that recorded commit on the probe branch, with the same upstream,

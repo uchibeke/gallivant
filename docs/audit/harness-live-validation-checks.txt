@@ -134,3 +134,22 @@ Resume-preflight review follow-up on 2026-10-01 UTC (review 5374106319, comment 
   Full PR credential/Console-connection, known-secret and blocked-pattern scans: 0 matches.
   No model calls, live retries, provider changes or permission changes were made.
   Historical evidence and false AC-2/AC-3 attestations remain unchanged.
+
+Version-preflight review follow-up on 2026-10-01 UTC (review 5379832759, comment 4155841484):
+  Retry/append record fresh checks of the selected configured binaries, and gate
+  every turn on those results while preserving the original version/PATH audit.
+  New turn records reference the invocation containing their binary/version evidence.
+  Regressions in test/live_support.test.mjs:
+    live retry and append recheck current binaries while preserving earlier version evidence
+    live resumed invocation refuses stale success for downgraded unreadable or missing binaries
+  Focused executable-probe regressions: exit 0; tests 2; pass 2; fail 0
+  Private output: /private/tmp/gallivant-version-review-focused-tests.txt
+  npm test: exit 0; tests 609; pass 609; fail 0; cancelled 0; skipped 0; deferred tests 0
+  duration_ms 25717.371833
+  Private output: /private/tmp/gallivant-version-review-all-tests.txt
+  npm run lint: exit 0
+  Live tooling syntax checks: exit 0
+  git diff --check: exit 0
+  Full PR credential/Console-connection, known-secret and blocked-pattern scans: 0 matches.
+  No provider calls or live retries were made; provider settings and permissions remain unchanged.
+  Historical evidence and false AC-2/AC-3 attestations remain unchanged.

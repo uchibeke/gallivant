@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
 import { chmodSync, lstatSync, readFileSync, realpathSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
+import { checkVersion } from "../lib/probe.mjs";
 
 export const TURN_MS = 180_000;
 export const SUITE_MS = 30 * 60_000;
@@ -21,12 +22,26 @@ const SELECTABLE = [...new Set([...CASES, ...Object.keys(NAMED_CASES)])];
 export const BRANCH = "gallivant/live-probe";
 export const parseEvents = lines => lines.flatMap(line => { try { return [JSON.parse(line)]; } catch { return []; } });
 export const safeLabel = value => typeof value === "string" && /^[\w./:-]{1,160}$/.test(value) ? value : "unknown";
+export const harnessForCase = id => id.startsWith("opencode") ? "opencode" : id.startsWith("goose") ? "goose" : id;
 
 export function selection(args) {
   const selected = args.length ? args : CASES;
   assert.ok(selected.every(id => SELECTABLE.includes(id)), `Select only: ${SELECTABLE.join(", ")}`);
   assert.equal(new Set(selected).size, selected.length, "duplicate cases would spend extra calls");
   return selected;
+}
+
+// Each invocation checks the binaries it will actually use; never overwrite an earlier invocation's evidence.
+export async function auditLiveInvocation(report, config, { mode, selected, source }) {
+  const audit = { mode, selected: [...selected], source, checkedAt: new Date().toISOString(), versions: {}, binaries: {} };
+  const harnesses = mode === "start" ? Object.keys(config.harness) : [...new Set(selected.map(harnessForCase))];
+  for (const harness of harnesses) {
+    audit.binaries[harness] = config.harness[harness]?.bin ?? null;
+    audit.versions[harness] = await checkVersion(harness, config);
+  }
+  (report.invocations ||= []).push(audit);
+  if (mode === "start") { report.versions = audit.versions; report.binaries = audit.binaries; }
+  return audit;
 }
 
 // Existing roots are operator input. Do not change their permissions until the ledger identifies this suite.
