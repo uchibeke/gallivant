@@ -68,3 +68,18 @@ Named provider batch follow-up on 2026-10-01 UTC:
     named live provider cases pin Console routes and saved Goose selectors
   Existing external verifier regression now also rejects a contaminated remote
   before a start call. The PWD regression failed before its fix and passes after it.
+
+Suite-root review follow-up on 2026-10-01 UTC (review 5373874387, comment 4150924692):
+  Existing --retry/--append roots are read and validated before chmod.
+  Missing, malformed, mismatched and invalid ledgers leave directory modes and
+  contents unchanged; valid matching ledgers retain mode-0700 privacy handling.
+  Regressions in test/live_support.test.mjs:
+    live suite ledger rejection preserves supplied directory permissions and contents
+    live suite opens its matching ledger before making the root private
+  npm test: exit 0; tests 590; pass 590; fail 0; cancelled 0; skipped 0; todo 0
+  duration_ms 16562.957584
+  Private output: /private/tmp/gallivant-suite-root-review-tests.txt
+  npm run lint: exit 0
+  Live tooling syntax checks: exit 0
+  git diff --check: exit 0
+  No model calls or live retries were made for this review fix.

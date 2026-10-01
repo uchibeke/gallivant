@@ -1,7 +1,7 @@
 // Test-only evidence checks. Importing this module never launches a harness.
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { lstatSync, readFileSync, realpathSync, writeFileSync } from "node:fs";
+import { chmodSync, lstatSync, readFileSync, realpathSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
 export const TURN_MS = 180_000;
@@ -27,6 +27,19 @@ export function selection(args) {
   assert.ok(selected.every(id => SELECTABLE.includes(id)), `Select only: ${SELECTABLE.join(", ")}`);
   assert.equal(new Set(selected).size, selected.length, "duplicate cases would spend extra calls");
   return selected;
+}
+
+// Existing roots are operator input. Do not change their permissions until the ledger identifies this suite.
+export function openSuiteLedger(root) {
+  let report;
+  try { report = JSON.parse(readFileSync(join(root, "report.json"), "utf8")); }
+  catch { throw new Error("Missing or unreadable suite ledger"); }
+  assert.ok(report && report.privateEvidence === realpathSync(root)
+    && typeof report.startedAt === "string" && Number.isFinite(Date.parse(report.startedAt))
+    && report.turnLimitMs === TURN_MS && report.suiteLimitMs === SUITE_MS
+    && Array.isArray(report.cases), "Invalid suite ledger for this directory");
+  chmodSync(root, 0o700);
+  return report;
 }
 
 export function classify(text, timedOut = false) {

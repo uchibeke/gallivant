@@ -1,12 +1,51 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { mkdtempSync, mkdirSync, writeFileSync } from "node:fs";
+import { chmodSync, mkdtempSync, mkdirSync, readFileSync, readdirSync, realpathSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { adapters } from "../lib/harness.mjs";
 import { runEnv } from "../lib/git.mjs";
-import { BRANCH, NAMED_CASES, selection, classify, refusalEvidence, sessionIdentity, effectiveModels, testExecution, verifyCheckout, verifySessionDirectory, verifyStartFixture } from "./live-support.mjs";
+import { BRANCH, NAMED_CASES, TURN_MS, SUITE_MS, selection, classify, refusalEvidence, openSuiteLedger, sessionIdentity, effectiveModels, testExecution, verifyCheckout, verifySessionDirectory, verifyStartFixture } from "./live-support.mjs";
+
+test("live suite ledger rejection preserves supplied directory permissions and contents", () => {
+  const root = realpathSync(mkdtempSync(join(tmpdir(), "gallivant-ledger-rejection-")));
+  const ledger = { privateEvidence: root, startedAt: "2026-10-01T00:00:00.000Z", turnLimitMs: TURN_MS, suiteLimitMs: SUITE_MS, cases: [] };
+  try {
+    chmodSync(root, 0o755);
+    writeFileSync(join(root, "unrelated.txt"), "Keep this shared directory unchanged.\n");
+    const reject = () => {
+      const files = readdirSync(root).map(name => [name, readFileSync(join(root, name), "utf8")]);
+      assert.throws(() => openSuiteLedger(root), /suite ledger/);
+      assert.equal(statSync(root).mode & 0o777, 0o755);
+      assert.deepEqual(readdirSync(root).map(name => [name, readFileSync(join(root, name), "utf8")]), files);
+    };
+    reject(); // No ledger: the reported mistyped-directory case.
+    for (const contents of ["{broken", "null", "{}",
+      JSON.stringify({ ...ledger, privateEvidence: join(root, "another-suite") }),
+      JSON.stringify({ ...ledger, startedAt: "not a date" }),
+      JSON.stringify({ ...ledger, turnLimitMs: TURN_MS + 1 }),
+      JSON.stringify({ ...ledger, suiteLimitMs: SUITE_MS + 1 }),
+      JSON.stringify({ ...ledger, cases: {} }),
+    ]) {
+      writeFileSync(join(root, "report.json"), contents);
+      reject();
+    }
+  } finally { rmSync(root, { recursive: true, force: true }); }
+});
+
+test("live suite opens its matching ledger before making the root private", () => {
+  const root = realpathSync(mkdtempSync(join(tmpdir(), "gallivant-ledger-valid-")));
+  const report = { privateEvidence: root, startedAt: "2026-10-01T00:00:00.000Z", turnLimitMs: TURN_MS, suiteLimitMs: SUITE_MS, cases: [] };
+  const text = JSON.stringify(report) + "\n";
+  try {
+    chmodSync(root, 0o755);
+    writeFileSync(join(root, "report.json"), text);
+    assert.deepEqual(openSuiteLedger(root), report);
+    assert.equal(statSync(root).mode & 0o777, 0o700);
+    assert.equal(readFileSync(join(root, "report.json"), "utf8"), text);
+  } finally { rmSync(root, { recursive: true, force: true }); }
+});
 
 test("live selection is explicit, unique, and includes both OpenCode cases", () => {
   assert.deepEqual(selection([]), ["gemini", "opencode-default", "opencode-go", "goose"]);

@@ -11,7 +11,7 @@ import { adapterFor, assertSafeArgv, buildRun } from "../lib/harness.mjs";
 import { runEnv } from "../lib/git.mjs";
 import { isOurProcess, makeRunner } from "../lib/run.mjs";
 import { checkVersion } from "../lib/probe.mjs";
-import { BRANCH, NAMED_CASES, TURN_MS, SUITE_MS, classify, codingPrompt, effectiveModels, parseEvents, refusalEvidence, safeLabel, selection, sessionIdentity, testExecution, verifyCheckout, verifySessionDirectory, verifyStartFixture } from "./live-support.mjs";
+import { BRANCH, NAMED_CASES, TURN_MS, SUITE_MS, classify, codingPrompt, effectiveModels, openSuiteLedger, parseEvents, refusalEvidence, safeLabel, selection, sessionIdentity, testExecution, verifyCheckout, verifySessionDirectory, verifyStartFixture } from "./live-support.mjs";
 
 const repo = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const args = process.argv.slice(2);
@@ -39,9 +39,9 @@ if (retry) {
 } else {
   selected = selection(args);
   root = mkdtempSync(join(realpathSync(tmpdir()), "gallivant-live-harnesses-"));
+  chmodSync(root, 0o700);
 }
 assert.ok(relative(repo, root).startsWith(".."), "Private evidence must be outside the repository");
-chmodSync(root, 0o700);
 const save = (path, value) => writeFileSync(path, JSON.stringify(value, null, 2) + "\n", { mode: 0o600 });
 const json = path => { try { return JSON.parse(readFileSync(path, "utf8")); } catch { return null; } };
 const sourceFiles = ["lib/harness.mjs", "lib/run.mjs", "lib/git.mjs", "test/live-harnesses.mjs", "test/live-support.mjs"];
@@ -50,8 +50,7 @@ const source = {
   sha256: Object.fromEntries(sourceFiles.map(p => [p, createHash("sha256").update(readFileSync(join(repo, p))).digest("hex")])),
 };
 const ledgerPath = join(root, "report.json");
-const report = retry || append ? json(ledgerPath) : { startedAt: new Date().toISOString(), source, privateEvidence: root, turnLimitMs: TURN_MS, suiteLimitMs: SUITE_MS, cases: [] };
-assert.ok(report, "Missing suite ledger");
+const report = retry || append ? openSuiteLedger(root) : { startedAt: new Date().toISOString(), source, privateEvidence: root, turnLimitMs: TURN_MS, suiteLimitMs: SUITE_MS, cases: [] };
 const deadline = Date.parse(report.startedAt) + SUITE_MS;
 const checkpoint = () => save(ledgerPath, report);
 const identity = { name: "Live adapter probe", email: "probe@example.invalid" };
