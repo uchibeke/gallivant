@@ -194,3 +194,17 @@ test("actionable failures do not echo subprocess credentials", () => {
   assert.match(controlFailure(new Error("The PR is no longer open.")), /follow-up PRD/);
   assert.doesNotMatch(controlFailure(new Error("fetch failed https://secret@github.com")), /secret/);
 });
+
+test("an unverifiable interrupt fails visibly and retains the message without starting a replacement", () => {
+  const w = world({ state: STATES.prOpen });
+  const job = w.runner.start("fix", "claude", [], {});
+  w.state.update(w.id, { last: { run: job.id, exit: null } });
+  requestControl(w.ctx, { handle: w.id, action: "message", note: "Keep the detail.", interrupt: true });
+  w.runner.kill = () => { throw Object.assign(new Error("unverified group"), { code: "RUN_STOP_UNVERIFIED" }); };
+  interruptControl(w.ctx, w.id);
+  assert.equal(w.state.get(w.id).control.status, "failed");
+  assert.equal(w.state.get(w.id).control.note, "Keep the detail.");
+  assert.equal(w.state.get(w.id).reason, "run-stop-unverified");
+  assert.match(w.state.get(w.id).control.message, /process group/);
+  assert.equal(w.runner.started.length, 1);
+});
