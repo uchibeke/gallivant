@@ -29,3 +29,14 @@ Regression coverage:
 
 The ordinary Git-verifier regression uses authored test fixtures, not a live model.
 It is not evidence that any blocked harness completed either phase.
+
+Review follow-up on 2026-10-01 UTC (review 5373648819, inline comment 4150730824):
+  Fixed Goose provider-error detection to inspect the joined assistant text.
+  Regression: Goose provider error envelope survives streamed chunk boundaries.
+  Covers every split position across events/content blocks, with and without earlier output.
+  The regression failed before the fix and passes afterward; no live calls were repeated.
+  npm test: exit 0; tests 584; pass 584; fail 0; cancelled 0; skipped 0; todo 0
+  duration_ms 15901.675792
+  Private output: /private/tmp/gallivant-harness-review-tests.txt
+  npm run lint: exit 0
+  git diff --check: exit 0

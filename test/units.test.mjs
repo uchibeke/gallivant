@@ -62,6 +62,26 @@ test("Goose provider failure followed by complete is not success", () => {
   assert.match(credits.error, /creditsExhausted/);
 });
 
+test("Goose provider error envelope survives streamed chunk boundaries", () => {
+  const error = "Request failed: Resource not found (404).";
+  const envelope = `Ran into this error: ${error}`;
+  const message = chunks => JSON.stringify({ type: "message", message: { role: "assistant", content: chunks.map(text => ({ type: "text", text })) } });
+  const complete = JSON.stringify({ type: "complete", total_tokens: 0 });
+  for (let split = 1; split < envelope.length; split++) {
+    const chunks = [envelope.slice(0, split), envelope.slice(split)];
+    for (const lines of [chunks.map(chunk => message([chunk])), [message(chunks)]]) {
+      for (const prefix of [[], [message(["Earlier successful work."])]]) {
+        const result = adapters.goose.outcome([...prefix, ...lines, complete]);
+        assert.equal(result.ok, false, `split ${split} must not hide the provider error`);
+        assert.equal(result.finished, true);
+        assert.equal(result.error, error, `split ${split} must retain the complete error`);
+        assert.equal(result.lastMessage, `${prefix.length ? "Earlier successful work." : ""}${envelope}`);
+      }
+    }
+  }
+  assert.equal(adapters.goose.outcome([message(["The request "]), message(["completed."]), complete]).ok, true);
+});
+
 test("state writes atomically and resolves handles", () => {
   const home = tempHome();
   const s = makeState(home);
