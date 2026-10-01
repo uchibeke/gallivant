@@ -11,7 +11,7 @@ import { adapterFor, assertSafeArgv, buildRun } from "../lib/harness.mjs";
 import { runEnv } from "../lib/git.mjs";
 import { isOurProcess, makeRunner } from "../lib/run.mjs";
 import { checkVersion } from "../lib/probe.mjs";
-import { BRANCH, NAMED_CASES, TURN_MS, SUITE_MS, classify, codingPrompt, effectiveModels, openSuiteLedger, parseEvents, refusalEvidence, safeLabel, selection, sessionIdentity, testExecution, verifyCheckout, verifySessionDirectory, verifyStartFixture } from "./live-support.mjs";
+import { BRANCH, NAMED_CASES, TURN_MS, SUITE_MS, classify, codingPrompt, costEvidence, effectiveModels, openSuiteLedger, parseEvents, refusalEvidence, safeLabel, selection, sessionIdentity, testExecution, verifyCheckout, verifySessionDirectory, verifyStartFixture } from "./live-support.mjs";
 
 const repo = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const args = process.argv.slice(2);
@@ -167,7 +167,7 @@ async function turn(entry, phase, attempt) {
   record.endedAt = new Date().toISOString();
   record.elapsedMs = Date.parse(record.endedAt) - Date.parse(startedAt);
   record.exit = runner.read(job.id)?.exit;
-  record.costUsd = outcome.cost ?? "unknown";
+  Object.assign(record, costEvidence(entry, outcome.cost));
   record.outcome = { ok: outcome.ok, finished: outcome.finished, denials: outcome.denials.length };
   const classified = classify(`${refusalEvidence(lines)}\n${outcome.error || ""}`, timedOut);
   // Collect model/session evidence even on a rejected or failed turn. Export is a read-only metadata command.

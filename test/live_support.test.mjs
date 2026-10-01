@@ -6,7 +6,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { adapters } from "../lib/harness.mjs";
 import { runEnv } from "../lib/git.mjs";
-import { BRANCH, NAMED_CASES, TURN_MS, SUITE_MS, selection, classify, refusalEvidence, openSuiteLedger, sessionIdentity, effectiveModels, testExecution, verifyCheckout, verifySessionDirectory, verifyStartFixture } from "./live-support.mjs";
+import { BRANCH, NAMED_CASES, TURN_MS, SUITE_MS, selection, classify, costEvidence, refusalEvidence, openSuiteLedger, sessionIdentity, effectiveModels, testExecution, verifyCheckout, verifySessionDirectory, verifyStartFixture } from "./live-support.mjs";
 
 test("live suite ledger rejection preserves supplied directory permissions and contents", () => {
   const root = realpathSync(mkdtempSync(join(tmpdir(), "gallivant-ledger-rejection-")));
@@ -63,6 +63,46 @@ test("named live provider cases pin Console routes and saved Goose selectors", (
   assert.equal(NAMED_CASES["opencode-console-alibaba"].model, "console-alibaba/qwen3.8-max");
   const names = Object.keys(NAMED_CASES).filter(id => id !== "opencode-go");
   assert.deepEqual(selection(names), names);
+});
+
+test("live cost evidence keeps Console BYOK billing unknown and native values separate", () => {
+  for (const id of ["opencode-console-meta", "opencode-console-xai", "opencode-console-alibaba"]) {
+    for (const cost of [0, 0.25, null, undefined]) {
+      assert.deepEqual(costEvidence({ id, harness: "opencode", configured: NAMED_CASES[id] }, cost), {
+        costUsd: "unknown", nativeReportedCostUsd: cost ?? "unknown",
+      });
+    }
+  }
+  // A Console model selected as the existing default has the same unknown billing semantics.
+  assert.deepEqual(costEvidence({ id: "opencode-default", harness: "opencode", configured: { model: "console-xai/grok-4.5" } }, 0), {
+    costUsd: "unknown", nativeReportedCostUsd: 0,
+  });
+  for (const cost of [0, 0.25, null, undefined]) {
+    assert.deepEqual(costEvidence({ id: "opencode-go", harness: "opencode", configured: NAMED_CASES["opencode-go"] }, cost), {
+      costUsd: cost ?? "unknown", nativeReportedCostUsd: cost ?? "unknown",
+    });
+  }
+});
+
+test("live provider access rejection is distinct from tool permission refusal", () => {
+  const lines = message => [JSON.stringify({ type: "error", error: { message } })];
+  for (const message of ["model grok is not allowed for this account", "model command-r is not allowed for this account", "Provider access is not allowed for this subscription"]) {
+    const evidence = refusalEvidence(lines(message));
+    const result = classify(evidence);
+    assert.equal(result.category, "provider-rejection");
+    assert.match(result.remedy, /exact provider\/model and subscription/);
+    assert.doesNotMatch(result.remedy, /scoped approval/);
+    assert.equal(classify(`${evidence}\nThe user rejected permission to use this specific tool call.`).category, "permissions");
+  }
+  for (const error of ["Tool execution is not allowed by the current policy.", "not allowed"]) {
+    const tool = JSON.stringify({ type: "tool_use", part: { state: { status: "error", error } } });
+    assert.equal(classify(refusalEvidence([tool])).category, "permissions");
+    const gemini = JSON.stringify({ type: "tool_result", status: "error", error: { message: error } });
+    assert.equal(classify(refusalEvidence([gemini])).category, "permissions");
+  }
+  const providerFromTool = JSON.stringify({ type: "tool_use", part: { state: { status: "error", error: "model grok is not allowed for this account" } } });
+  assert.equal(classify(refusalEvidence([providerFromTool])).category, "provider-rejection");
+  assert.equal(classify("This is not allowed").category, "unclassified");
 });
 
 test("live failure classification keeps external failures distinct and denials take priority", () => {

@@ -42,13 +42,20 @@ export function openSuiteLedger(root) {
   return report;
 }
 
+export function costEvidence(entry, nativeCost) {
+  const nativeReportedCostUsd = nativeCost ?? "unknown";
+  // Custom Console routes emit cost metadata without establishing the provider's BYOK charge.
+  const consoleByok = entry.harness === "opencode" && entry.configured.model?.startsWith("console-");
+  return { costUsd: consoleByok ? "unknown" : nativeReportedCostUsd, nativeReportedCostUsd };
+}
+
 export function classify(text, timedOut = false) {
   // A denial takes precedence over a model's claim of success or a later timeout.
   if (/APort denied|guardrail.{0,40}(denied|blocked)|auto.?review.{0,40}(denied|rejected)/i.test(text))
     return { category: "guardrail", remedy: "Ask the operator to review the named guardrail decision; do not retry or route around it." };
   if (/operation not permitted|sandbox.{0,40}(denied|restricted)|PermissionDenied|Path not in workspace|outside the allowed workspace/i.test(text))
     return { category: "sandbox", remedy: "Use the host's supported scoped approval for the recorded operation; do not change sandbox policy." };
-  if (/requires? (approval|confirmation)|permission.{0,40}(denied|rejected|auto-reject)|rejected permission|permission requested:|not allowed|approval.{0,40}(required|stdin)|non.interactive.{0,60}(approve|permission)/i.test(text))
+  if (/requires? (approval|confirmation)|permission.{0,40}(denied|rejected|auto-reject)|rejected permission|permission requested:|approval.{0,40}(required|stdin)|non.interactive.{0,60}(approve|permission)/i.test(text))
     return { category: "permissions", remedy: "Review the recorded tool request and provide a supported scoped approval path for closed stdin; do not enable blanket approval." };
   if (/quota|creditsExhausted|RESOURCE_EXHAUSTED|insufficient.{0,20}(balance|credit)|rate.limit|\b429\b/i.test(text))
     return { category: "quota", remedy: "Restore quota for the recorded provider/model or wait for its stated reset, then explicitly schedule a new suite." };
@@ -56,8 +63,11 @@ export function classify(text, timedOut = false) {
     return { category: "credentials", remedy: "Repair this provider's existing login/key through its normal setup, then explicitly schedule a new suite; do not search for other credentials." };
   if (/Recursive JSON schemas are not currently supported/i.test(text))
     return { category: "provider-rejection", remedy: "Resolve the native provider's tool-schema compatibility for this exact model before scheduling a new suite; do not remove guards or extensions to evade the rejection." };
-  if (/model.{0,60}(not found|not available|not supported)|ProviderModelNotFound|\b403\b|\b404\b|forbidden|provider.{0,40}reject/i.test(text))
+  if (/model.{0,60}(not found|not available|not supported|not allowed)|ProviderModelNotFound|\b403\b|\b404\b|forbidden|provider.{0,40}(reject|not allowed)/i.test(text))
     return { category: "provider-rejection", remedy: "Confirm this exact provider/model and subscription permit the task; enable access through the operator without substituting a model." };
+  // "Not allowed" alone can describe entitlement. Check provider context first, even for a model named command-r.
+  if (/\b(tool|command|path|directory)\b.{0,40}not allowed/i.test(text))
+    return { category: "permissions", remedy: "Review the recorded tool request and provide a supported scoped approval path for closed stdin; do not enable blanket approval." };
   if (timedOut) return { category: "timeout", remedy: "Inspect the private log for provider latency or a pending approval. Do not increase the 180-second turn limit." };
   return { category: "unclassified", remedy: "Inspect the private stream and verifier log. Only a demonstrated adapter defect justifies a targeted retry after a regression-tested fix." };
 }
@@ -68,12 +78,13 @@ export function refusalEvidence(lines) {
   return lines.flatMap(line => {
     let e;
     try { e = JSON.parse(line); } catch { return [line]; }
-    if (e.type === "tool_result" && e.status === "error") return [JSON.stringify(e.error), e.output || ""];
-    if (e.part?.state?.status === "error") return [e.part.state.error || ""];
+    // Preserve tool context for terse native permission errors such as just "not allowed".
+    if (e.type === "tool_result" && e.status === "error") return [`Tool failure: ${JSON.stringify(e.error)}`, `Tool failure: ${e.output || ""}`];
+    if (e.part?.state?.status === "error") return [`Tool failure: ${e.part.state.error || ""}`];
     if (e.type === "error") return [JSON.stringify(e.error || e.message)];
     // Goose provider errors and tool errors appear inside content blocks.
     return (e.message?.content || []).flatMap(c => c.type === "error" ? [JSON.stringify(c)]
-      : c.type === "toolResponse" && c.toolResult?.isError ? [JSON.stringify(c.toolResult)] : []);
+      : c.type === "toolResponse" && c.toolResult?.isError ? [`Tool failure: ${JSON.stringify(c.toolResult)}`] : []);
   }).join("\n");
 }
 

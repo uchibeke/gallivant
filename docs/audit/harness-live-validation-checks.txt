@@ -83,3 +83,19 @@ Suite-root review follow-up on 2026-10-01 UTC (review 5373874387, comment 415092
   Live tooling syntax checks: exit 0
   git diff --check: exit 0
   No model calls or live retries were made for this review fix.
+
+Cost/classification review follow-up on 2026-10-01 UTC (review 5373951191):
+  Comments 4150983921 and 4150983922 addressed.
+  Console BYOK ledger costs remain unknown; native values are recorded separately.
+  Provider/model access rejections no longer match generic tool permissions.
+  Structured tool context still identifies terse native "not allowed" refusals.
+  Regressions in test/live_support.test.mjs:
+    live cost evidence keeps Console BYOK billing unknown and native values separate
+    live provider access rejection is distinct from tool permission refusal
+  npm test: exit 0; tests 592; pass 592; fail 0; cancelled 0; skipped 0; todo 0
+  duration_ms 12079.904708
+  Private output: /private/tmp/gallivant-cost-classification-review-tests-final.txt
+  npm run lint: exit 0
+  Live tooling syntax checks: exit 0
+  git diff --check: exit 0
+  No model calls or live retries were made; historical results remain unchanged.
