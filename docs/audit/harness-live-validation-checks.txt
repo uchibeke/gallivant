@@ -1,0 +1,31 @@
+Validation on 2026-10-01 UTC, branch gallivant/harness-live-validation
+
+npm test: exit 0
+  tests 583; pass 583; fail 0; cancelled 0; skipped 0; todo 0
+  duration_ms 13831.938542
+  Private output: /private/tmp/gallivant-harness-validation-tests-final.txt
+  Host-approved process inspection was required by existing daemon/liveness tests.
+  The initial restricted run failed those process-identity checks; no expectations were weakened.
+
+npm run lint: exit 0
+node --check test/live-harnesses.mjs: exit 0
+node --check test/live-support.mjs: exit 0
+git diff --check: exit 0
+git diff --cached --check: exit 0
+Staged added-line credential scan: 0 provider-token/private-key patterns or known environment secret matches.
+
+Live suite: exit 1, intentionally not counted as an ordinary-test pass.
+  5 start attempts; 0 resume attempts; 0 targeted retries.
+  All cases blocked by workspace/permission policy, provider rejection, or credits.
+  See harness-live-validation.json and harness-live-validation.md for exact evidence.
+
+Regression coverage:
+  OpenCode outcome sums all step costs and preserves unknown cost
+  Goose provider failure followed by complete is not success
+  live identity requires the actual adapter identity and refuses a new session on resume
+  live model evidence comes from structured metadata and retains fallback models
+  live test execution requires matching successful tool output, not narration
+  external live verifier rejects missing push and uncommitted resume, then proves both real Git turns
+
+The ordinary Git-verifier regression uses authored test fixtures, not a live model.
+It is not evidence that any blocked harness completed either phase.

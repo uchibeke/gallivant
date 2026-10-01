@@ -1,0 +1,367 @@
+{
+  "auditedAt": "2026-10-01T00:38:22.739Z",
+  "startedAt": "2026-10-01T00:26:36.926Z",
+  "endedAt": "2026-10-01T00:32:12.056Z",
+  "elapsedMs": 335130,
+  "command": "npm run test:live-harnesses -- --live",
+  "supplementalCommand": "npm run test:live-harnesses -- --live --append \"$TMPDIR/gallivant-live-harnesses-nI76KK\" goose-deepseek",
+  "privateEvidence": "$TMPDIR/gallivant-live-harnesses-nI76KK",
+  "sourceSnapshots": {
+    "initial": {
+      "revision": "650e2b3d5c2b898ed76e3f0d0d1f37b33c4f68fe",
+      "sha256": {
+        "lib/harness.mjs": "bcc3483e14926794b7141c5fd7ff6b3e8063a9aa407abaa613bfbfcdd5751c36",
+        "lib/run.mjs": "34be7a7114d021586e4ac5acf221dec976a3447e87111b22ba83c05a9e3953a3",
+        "lib/git.mjs": "30d1cf74bc66df0548e885870e951ef06ab63c61ee181a1e5a1d144f2138f7c5",
+        "test/live-harnesses.mjs": "cdf9762676ddce06f2f9a47959df652859385c3fb371fafba152697c6e3ed132",
+        "test/live-support.mjs": "eee83e24f983ccde964a98c561fcdc709a2a0f5a450564513e52e35cef06d72c"
+      }
+    },
+    "supplemental": {
+      "revision": "650e2b3d5c2b898ed76e3f0d0d1f37b33c4f68fe",
+      "sha256": {
+        "lib/harness.mjs": "a6a0258d881eb4629e9707e81b5cd1ee313f09f39bbe66671ed9707a126f6781",
+        "lib/run.mjs": "34be7a7114d021586e4ac5acf221dec976a3447e87111b22ba83c05a9e3953a3",
+        "lib/git.mjs": "30d1cf74bc66df0548e885870e951ef06ab63c61ee181a1e5a1d144f2138f7c5",
+        "test/live-harnesses.mjs": "a28df66e5ea6a4d615658c95c3568bd02db81bb6e56a06f5f064f24456b22f71",
+        "test/live-support.mjs": "b2f24d7039f178e8062b8cae516e91bdb7ed4d0a4fefee34150fe6d55dc95dfb"
+      }
+    }
+  },
+  "versions": {
+    "claude": {
+      "ok": false,
+      "detail": "2.1.177 is older than 2.1.263"
+    },
+    "codex": {
+      "ok": true,
+      "detail": "0.158.0"
+    },
+    "gemini": {
+      "ok": true,
+      "detail": "0.59.0"
+    },
+    "opencode": {
+      "ok": true,
+      "detail": "1.18.31"
+    },
+    "goose": {
+      "ok": true,
+      "detail": "1.50.1"
+    }
+  },
+  "turnLimitMs": 180000,
+  "suiteLimitMs": 1800000,
+  "modelTurns": 5,
+  "resumeTurns": 0,
+  "targetedRetries": 0,
+  "records": [
+    {
+      "case": "gemini",
+      "harness": "gemini",
+      "version": "0.59.0",
+      "configured": {
+        "provider": "gemini-api-key",
+        "model": "unknown"
+      },
+      "effectiveModels": [
+        "gemini-3.5-flash"
+      ],
+      "session": "1ea5c3d6-bf66-49ac-a64d-841ac9dde8a2",
+      "storedSession": "1ea5c3d6-bf66-49ac-a64d-841ac9dde8a2",
+      "start": {
+        "startedAt": "2026-10-01T00:26:39.013Z",
+        "endedAt": "2026-10-01T00:27:37.005Z",
+        "elapsedMs": 57992,
+        "command": [
+          "gemini",
+          "--skip-trust",
+          "--session-id",
+          "1ea5c3d6-bf66-49ac-a64d-841ac9dde8a2",
+          "--output-format",
+          "stream-json",
+          "-p",
+          "<prompt in private cmd.json>"
+        ],
+        "exit": 137,
+        "status": "blocked",
+        "category": "sandbox",
+        "originalOutcome": {
+          "ok": false,
+          "finished": false,
+          "denials": 0
+        },
+        "correctedOutcome": {
+          "ok": false,
+          "finished": false
+        },
+        "costUsd": "unknown",
+        "originalLastStepCostUsd": "unknown",
+        "rawEvidence": "gemini/runs/2026-10-01T00-26-39-013-start-1/job.log",
+        "modelEvidence": "gemini/start-1-session.jsonl"
+      },
+      "resume": {
+        "status": "blocked",
+        "reason": "Start did not write/test/commit/push; no resume call made."
+      },
+      "liveVerified": false,
+      "externalVerification": {
+        "files": [],
+        "tests": "not run: required files absent",
+        "head": "5df07e990cfa818601b51b13b32e67a67ba0796b",
+        "initial": "5df07e990cfa818601b51b13b32e67a67ba0796b",
+        "newCommit": false,
+        "clean": true,
+        "upstream": null,
+        "remoteHead": null
+      },
+      "sourceSnapshot": "initial"
+    },
+    {
+      "case": "opencode-default",
+      "harness": "opencode",
+      "version": "1.18.31",
+      "configured": {
+        "model": "opencode-go/deepseek-v4-flash"
+      },
+      "effectiveModels": [
+        "opencode-go/deepseek-v4-flash"
+      ],
+      "session": "ses_f0b23eecdffeV2ffUDKVlAPUVC",
+      "storedSession": "ses_f0b23eecdffeV2ffUDKVlAPUVC",
+      "start": {
+        "startedAt": "2026-10-01T00:27:37.106Z",
+        "endedAt": "2026-10-01T00:27:51.382Z",
+        "elapsedMs": 14276,
+        "command": [
+          "opencode",
+          "run",
+          "--format",
+          "json",
+          "<prompt in private cmd.json>"
+        ],
+        "exit": 0,
+        "status": "blocked",
+        "category": "permissions",
+        "originalOutcome": {
+          "ok": false,
+          "finished": true,
+          "denials": 0
+        },
+        "correctedOutcome": {
+          "ok": false,
+          "finished": true
+        },
+        "costUsd": 0.003868254,
+        "originalLastStepCostUsd": 0.000544884,
+        "rawEvidence": "opencode-default/runs/2026-10-01T00-27-37-106-start-1/job.log",
+        "modelEvidence": "opencode-default/start-1-session.json"
+      },
+      "resume": {
+        "status": "blocked",
+        "reason": "Start did not write/test/commit/push; no resume call made."
+      },
+      "liveVerified": false,
+      "externalVerification": {
+        "files": [],
+        "tests": "not run: required files absent",
+        "head": "98d2c6521c0318e51d3f81a18fb7f7c36017ad4e",
+        "initial": "98d2c6521c0318e51d3f81a18fb7f7c36017ad4e",
+        "newCommit": false,
+        "clean": true,
+        "upstream": null,
+        "remoteHead": null
+      },
+      "sourceSnapshot": "initial"
+    },
+    {
+      "case": "opencode-go",
+      "harness": "opencode",
+      "version": "1.18.31",
+      "configured": {
+        "model": "opencode-go/qwen3.8-max"
+      },
+      "effectiveModels": [
+        "opencode-go/qwen3.8-max"
+      ],
+      "session": "ses_f0b23b6ffffeNECqqmWlfQLIqc",
+      "storedSession": "ses_f0b23b6ffffeNECqqmWlfQLIqc",
+      "start": {
+        "startedAt": "2026-10-01T00:27:51.490Z",
+        "endedAt": "2026-10-01T00:30:00.772Z",
+        "elapsedMs": 129282,
+        "command": [
+          "opencode",
+          "run",
+          "--format",
+          "json",
+          "--model",
+          "opencode-go/qwen3.8-max",
+          "<prompt in private cmd.json>"
+        ],
+        "exit": 0,
+        "status": "blocked",
+        "category": "permissions",
+        "originalOutcome": {
+          "ok": false,
+          "finished": true,
+          "denials": 0
+        },
+        "correctedOutcome": {
+          "ok": false,
+          "finished": true
+        },
+        "costUsd": 0.076778,
+        "originalLastStepCostUsd": 0.015336,
+        "rawEvidence": "opencode-go/runs/2026-10-01T00-27-51-490-start-1/job.log",
+        "modelEvidence": "opencode-go/start-1-session-full.json"
+      },
+      "resume": {
+        "status": "blocked",
+        "reason": "Start did not write/test/commit/push; no resume call made."
+      },
+      "liveVerified": false,
+      "externalVerification": {
+        "files": [],
+        "tests": "not run: required files absent",
+        "head": "4e9ece58b9dfd006fc7346ad8418ef3a1d250a6e",
+        "initial": "4e9ece58b9dfd006fc7346ad8418ef3a1d250a6e",
+        "newCommit": false,
+        "clean": true,
+        "upstream": null,
+        "remoteHead": null
+      },
+      "sourceSnapshot": "initial"
+    },
+    {
+      "case": "goose",
+      "harness": "goose",
+      "version": "1.50.1",
+      "configured": {
+        "provider": "groq",
+        "model": "llama-3.3-70b-versatile"
+      },
+      "effectiveModels": [
+        "groq/llama-3.3-70b-versatile"
+      ],
+      "session": "gallivant-a6d2803d-3b8a-4077-8dde-a6df316c1a77",
+      "storedSession": "20261001_1",
+      "start": {
+        "startedAt": "2026-10-01T00:30:00.872Z",
+        "endedAt": "2026-10-01T00:30:24.580Z",
+        "elapsedMs": 23708,
+        "command": [
+          "goose",
+          "run",
+          "--name",
+          "gallivant-a6d2803d-3b8a-4077-8dde-a6df316c1a77",
+          "--output-format",
+          "stream-json",
+          "--provider",
+          "groq",
+          "--model",
+          "llama-3.3-70b-versatile",
+          "-t",
+          "<prompt in private cmd.json>"
+        ],
+        "exit": 0,
+        "status": "blocked",
+        "category": "provider-rejection",
+        "originalOutcome": {
+          "ok": true,
+          "finished": true,
+          "denials": 0
+        },
+        "correctedOutcome": {
+          "ok": false,
+          "finished": true
+        },
+        "costUsd": "unknown",
+        "originalLastStepCostUsd": "unknown",
+        "rawEvidence": "goose/runs/2026-10-01T00-30-00-872-start-1/job.log",
+        "modelEvidence": "goose/start-1-session.json"
+      },
+      "resume": {
+        "status": "blocked",
+        "reason": "Start did not write/test/commit/push; no resume call made."
+      },
+      "liveVerified": false,
+      "externalVerification": {
+        "files": [],
+        "tests": "not run: required files absent",
+        "head": "ea15f5afd4e44a361d3286b853fa9e4baa0c14a5",
+        "initial": "ea15f5afd4e44a361d3286b853fa9e4baa0c14a5",
+        "newCommit": false,
+        "clean": true,
+        "upstream": null,
+        "remoteHead": null
+      },
+      "sourceSnapshot": "initial"
+    },
+    {
+      "case": "goose-deepseek",
+      "harness": "goose",
+      "version": "1.50.1",
+      "configured": {
+        "provider": "custom_deepseek",
+        "model": "deepseek-v4-pro"
+      },
+      "effectiveModels": [
+        "custom_deepseek/deepseek-v4-pro"
+      ],
+      "session": "gallivant-91b7d841-3d56-4bcb-8440-71c633ab45cf",
+      "storedSession": "20261001_2",
+      "start": {
+        "startedAt": "2026-10-01T00:32:10.220Z",
+        "endedAt": "2026-10-01T00:32:12.035Z",
+        "elapsedMs": 1815,
+        "command": [
+          "goose",
+          "run",
+          "--name",
+          "gallivant-91b7d841-3d56-4bcb-8440-71c633ab45cf",
+          "--output-format",
+          "stream-json",
+          "--provider",
+          "custom_deepseek",
+          "--model",
+          "deepseek-v4-pro",
+          "-t",
+          "<prompt in private cmd.json>"
+        ],
+        "exit": 0,
+        "status": "blocked",
+        "category": "quota",
+        "originalOutcome": {
+          "ok": true,
+          "finished": true,
+          "denials": 0
+        },
+        "correctedOutcome": {
+          "ok": false,
+          "finished": true
+        },
+        "costUsd": "unknown",
+        "originalLastStepCostUsd": "unknown",
+        "rawEvidence": "goose-deepseek/runs/2026-10-01T00-32-10-221-start-1/job.log",
+        "modelEvidence": "goose-deepseek/start-1-session.json"
+      },
+      "resume": {
+        "status": "blocked",
+        "reason": "Start did not write/test/commit/push; no resume call made."
+      },
+      "liveVerified": false,
+      "externalVerification": {
+        "files": [],
+        "tests": "not run: required files absent",
+        "head": "e4ba5dda3ad42d8e675fc5b55d1b41cb5d0dac40",
+        "initial": "e4ba5dda3ad42d8e675fc5b55d1b41cb5d0dac40",
+        "newCommit": false,
+        "clean": true,
+        "upstream": null,
+        "remoteHead": null
+      },
+      "sourceSnapshot": "supplemental"
+    }
+  ]
+}

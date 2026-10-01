@@ -34,6 +34,34 @@ test("APort diagnostics report the enforcement the hook uses when aliases confli
   }
 });
 
+test("OpenCode outcome sums all step costs and preserves unknown cost", () => {
+  const step = (reason, cost) => JSON.stringify({ type: "step_finish", part: { reason, ...(cost === undefined ? {} : { cost }) } });
+  const lines = [step("tool-calls", 0.02), step("tool-calls", 0.03), step("stop", 0.01)];
+  assert.ok(Math.abs(adapters.opencode.outcome(lines).cost - 0.06) < 1e-12);
+  assert.equal(adapters.opencode.outcome([step("tool-calls"), step("stop", 0)]).cost, null);
+  assert.equal(adapters.opencode.outcome([step("stop", 0)]).cost, 0);
+  assert.equal(adapters.opencode.outcome([step("tool-calls", 0.02), JSON.stringify({ type: "error", message: "failure" })]).ok, false);
+});
+
+test("Goose provider failure followed by complete is not success", () => {
+  const lines = [
+    JSON.stringify({ type: "message", message: { role: "assistant", content: [{ type: "text", text: "Ran into this error: Request failed: Resource not found (404). The requested model does not exist or you do not have access to it." }] } }),
+    JSON.stringify({ type: "complete", total_tokens: 0 }),
+  ];
+  const result = adapters.goose.outcome(lines);
+  assert.equal(result.ok, false);
+  assert.equal(result.finished, true);
+  assert.match(result.error, /404/);
+  assert.equal(result.cost, null);
+  assert.equal(adapters.goose.outcome([JSON.stringify({ type: "message", message: { role: "assistant", content: [{ type: "text", text: "Earlier successful work." }] } }), ...lines]).ok, false);
+  const credits = adapters.goose.outcome([
+    JSON.stringify({ type: "message", message: { role: "assistant", content: [{ type: "systemNotification", notificationType: "creditsExhausted", msg: "Please check your account with your provider to add more credits." }] } }),
+    JSON.stringify({ type: "complete", total_tokens: 0 }),
+  ]);
+  assert.equal(credits.ok, false);
+  assert.match(credits.error, /creditsExhausted/);
+});
+
 test("state writes atomically and resolves handles", () => {
   const home = tempHome();
   const s = makeState(home);

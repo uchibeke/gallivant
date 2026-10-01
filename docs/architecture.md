@@ -39,6 +39,23 @@ templates/               passport, Claude sandbox settings, PRD, tracker/{tracke
 
 ## Design rules
 
+Harness implementation and demonstrated support are separate. The [live support matrix](audit/harness-live-validation.md)
+records installed versions, provider/model combinations, permission boundaries, budget controls and blocked phases.
+Claude/Codex have existing production evidence; Gemini, OpenCode and Goose currently have blocked coding attempts,
+not successful start/resume proof. Provider subscription eligibility is independent of the harness adapter.
+
+Repeat with `npm run test:live-harnesses -- --live` after the recorded operator remedies. The opt-in
+`test/live-harnesses.mjs` is outside `test/*.test.mjs`; it uses the existing `buildRun`, `runEnv`, `makeRunner`,
+version probe and outcome/session readers. Test-local native model overrides do not add per-task model selection
+to Gallivant. `test/live-support.mjs` verifies model evidence, adapter identity, actual test tool execution, files,
+behavior, commits, upstream and remote HEAD. Calls are sequential, at most 180 seconds per turn and 30 minutes
+per suite, with one start/resume pair and at most one justified targeted retry per combination. Refusals stop
+the affected phase; they are never converted into permission overrides. Raw streams and exports stay private.
+
+A passing disposable test would still not establish GitHub review/completion behavior. Full support requires
+an authorized PRD through `ready`/`start`, PR creation, review/CI feedback, a same-session pushed fix and the
+completion gate. Keep that lifecycle evidence separate from session fixtures and disposable local Git tests.
+
 - **The tick is the only writer.** Nothing changes state in exit handlers, timers or callbacks. A finished run is noticed on the next tick by asking the OS whether the pid is alive and reading the log. That is what makes a daemon restart mid-run safe.
 - **Rules are pure.** `events.mjs` takes the raw shapes `gh` returns and produces events. Every rule in the PRD has a unit test with no network.
 - **One gate, and the brief is a Request.** `check()` takes a source-neutral Request, `{ id, repo, title, body, harness, status, source: { kind, url, author }, raw }`, plus the parsed fields the rules read. A source under `lib/sources/` reads whatever the operator typed and produces one; today the only source is a PRD file, and its Request is exactly what `parsePrd` always returned. Two things follow. A rule that depends on where the brief lives rather than on what it says carries its own scope as data (`kinds: ["prd"]`: `path`, and `sources` because it resolves the files a brief carries against the repository root that path gives it), so a source without a path is not failed for a rule it cannot satisfy. And `repo` is a field the source fills in, not something a command derives: `start` reads `request.repo` and never calls `git.toplevel` itself. Adding a source is an adapter plus somewhere to record its verdict, never a second gate.
