@@ -133,6 +133,13 @@ unclassified records without a stage cannot qualify automatically. Historical
 results and the two previously documented directory-fix retries are preserved;
 no old record is relabeled to obtain another call.
 
+Suite checkpoints use the shared atomic JSON writer: a private temporary file is
+written and flushed before replacing `report.json` by rename. A partial write,
+process termination during the write, or rename failure leaves the last completed
+checkpoint readable, including its earlier attempt history and retry reservations.
+Offline fault injection exercises the actual suite entrypoint without provider calls;
+both the ledger and any interrupted temporary file remain private.
+
 After all synchronous preflight work, a final check immediately before launch
 requires usable suite time beyond the existing six-second termination reserve.
 This also applies to automatic resume and targeted retries. An exhausted or

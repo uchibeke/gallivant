@@ -9,6 +9,7 @@ import { fileURLToPath } from "node:url";
 import { setTimeout as delay } from "node:timers/promises";
 import { adapterFor, assertSafeArgv, buildRun, MIN_VERSIONS } from "../lib/harness.mjs";
 import { runEnv } from "../lib/git.mjs";
+import { writeJsonAtomic } from "../lib/fs.mjs";
 import { isOurProcess, makeRunner } from "../lib/run.mjs";
 import { checkVersion } from "../lib/probe.mjs";
 import { BRANCH, NAMED_CASES, TURN_MS, SUITE_MS, assertAdapterRetry, auditLiveInvocation, classify, codingPrompt, costEvidence, effectiveModels, harnessForCase, launchLiveTurn, openSuiteLedger, parseEvents, refusalEvidence, safeLabel, selection, sessionIdentity, testExecution, turnFailure, verifyCheckout, verifyResumeFixture, verifySessionDirectory, verifyStartFixture } from "./live-support.mjs";
@@ -42,7 +43,6 @@ if (retry) {
   chmodSync(root, 0o700);
 }
 assert.ok(relative(repo, root).startsWith(".."), "Private evidence must be outside the repository");
-const save = (path, value) => writeFileSync(path, JSON.stringify(value, null, 2) + "\n", { mode: 0o600 });
 const json = path => { try { return JSON.parse(readFileSync(path, "utf8")); } catch { return null; } };
 const sourceFiles = ["lib/harness.mjs", "lib/run.mjs", "lib/git.mjs", "test/live-harnesses.mjs", "test/live-support.mjs"];
 const source = {
@@ -52,7 +52,7 @@ const source = {
 const ledgerPath = join(root, "report.json");
 const report = retry || append ? openSuiteLedger(root) : { startedAt: new Date().toISOString(), source, privateEvidence: root, turnLimitMs: TURN_MS, suiteLimitMs: SUITE_MS, cases: [] };
 const deadline = Date.parse(report.startedAt) + SUITE_MS;
-const checkpoint = () => save(ledgerPath, report);
+const checkpoint = () => writeJsonAtomic(ledgerPath, report);
 const identity = { name: "Live adapter probe", email: "probe@example.invalid" };
 const config = { harness: Object.fromEntries(["claude", "codex", "gemini", "opencode", "goose"].map(h => [h, { bin: h }])) };
 // Gallivant may configure a different binary from PATH. Copy only binary selectors into the test config.

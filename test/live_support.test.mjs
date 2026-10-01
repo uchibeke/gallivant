@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { execFileSync } from "node:child_process";
+import { execFileSync, spawnSync } from "node:child_process";
 import { chmodSync, mkdtempSync, mkdirSync, readFileSync, readdirSync, realpathSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -8,6 +8,70 @@ import { adapters } from "../lib/harness.mjs";
 import { runEnv } from "../lib/git.mjs";
 import { harnessBin } from "./helpers.mjs";
 import { BRANCH, NAMED_CASES, TURN_MS, SUITE_MS, STOP_GRACE_MS, assertAdapterRetry, auditLiveInvocation, launchLiveTurn, selection, classify, costEvidence, refusalEvidence, openSuiteLedger, sessionIdentity, effectiveModels, testExecution, turnFailure, verifyCheckout, verifyResumeFixture, verifySessionDirectory, verifyStartFixture } from "./live-support.mjs";
+
+test("live suite checkpoints preserve the ledger through partial writes, termination and rename failures", () => {
+  for (const fault of ["partial-write", "terminated-write", "rename", null]) {
+    const root = realpathSync(mkdtempSync(join(tmpdir(), "gallivant-ledger-checkpoint-")));
+    const ledger = join(root, "report.json");
+    const report = { privateEvidence: root, startedAt: new Date().toISOString(), turnLimitMs: TURN_MS, suiteLimitMs: SUITE_MS,
+      cases: [{ id: "goose-meta", retry: { phase: "start", fix: "recorded-fix.md" }, turns: [{ phase: "start", attempt: 2, status: "failed", run: "saved-evidence" }] }],
+    };
+    const original = JSON.stringify(report) + "\n";
+    writeFileSync(ledger, original, { mode: 0o600 });
+    try {
+      // Run the actual suite entrypoint, but replace version probes with an unsupported
+      // offline version and isolate homedir. No installed harness or provider is called.
+      const child = spawnSync(process.execPath, ["--input-type=module", "-e", `
+        import assert from 'node:assert/strict';
+        import fs from 'node:fs';
+        import os from 'node:os';
+        import cp from 'node:child_process';
+        import { syncBuiltinESMExports } from 'node:module';
+        const ledger = ${JSON.stringify(ledger)}, fault = ${JSON.stringify(fault)};
+        const write = fs.writeFileSync, rename = fs.renameSync;
+        os.homedir = () => ${JSON.stringify(root)};
+        cp.execFile = (cmd, args, opts, done) => {
+          assert.equal(cmd, 'opencode'); assert.deepEqual(args, ['--version']);
+          done(null, '0.0.0\\n', '');
+        };
+        fs.writeFileSync = (path, data, options) => {
+          if ((path === ledger || path.startsWith(ledger + '.')) && ['partial-write', 'terminated-write'].includes(fault)) {
+            write(path, String(data).slice(0, 9), options);
+            if (fault === 'terminated-write') process.kill(process.pid, 'SIGKILL');
+            throw Object.assign(new Error('injected partial checkpoint write'), { code: 'ENOSPC' });
+          }
+          return write(path, data, options);
+        };
+        fs.renameSync = (from, to) => {
+          if (to === ledger && fault === 'rename') throw new Error('injected checkpoint rename failure');
+          return rename(from, to);
+        };
+        syncBuiltinESMExports();
+        process.argv = [process.execPath, 'live-harnesses.mjs', '--live', '--append', ${JSON.stringify(root)}, 'opencode-console-meta'];
+        await import(${JSON.stringify(new URL("./live-harnesses.mjs", import.meta.url).href)});
+      `], { encoding: "utf8", timeout: 15_000 });
+      assert.equal(child.error, undefined);
+      if (fault === "terminated-write") assert.equal(child.signal, "SIGKILL");
+      else {
+        assert.equal(child.status, 1, child.stderr); // A failed checkpoint or unsupported version must stop the suite.
+        if (fault) assert.match(child.stderr, /injected (partial checkpoint write|checkpoint rename failure)/);
+      }
+      const saved = openSuiteLedger(root);
+      if (fault) {
+        assert.equal(readFileSync(ledger, "utf8"), original, "failed checkpoints must leave the previous ledger byte-for-byte intact");
+        assert.deepEqual(saved, report);
+      } else {
+        assert.deepEqual(saved.cases[0], report.cases[0], "replacement must preserve past attempts and retry reservations");
+        assert.equal(saved.invocations[0].versions.opencode.ok, false);
+        assert.match(saved.cases[1].blocked, /version preflight failed/);
+      }
+      assert.equal(statSync(ledger).mode & 0o777, 0o600);
+      const temps = readdirSync(root).filter(p => p.endsWith(".tmp"));
+      assert.equal(temps.length, fault ? 1 : 0);
+      for (const path of temps) assert.equal(statSync(join(root, path)).mode & 0o777, 0o600);
+    } finally { rmSync(root, { recursive: true, force: true }); }
+  }
+});
 
 test("live task verification failures remain ineligible for adapter retries after source changes", () => {
   for (const taskFailure of ["wrong greeting", "missing test", "missing push"]) {

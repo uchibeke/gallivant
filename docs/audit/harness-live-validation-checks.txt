@@ -195,3 +195,24 @@ Verifier-retry review follow-up on 2026-10-01 UTC (review 5380342659, comment 41
   Full PR credential/Console-connection, known-secret and blocked-pattern scans: 0 matches.
   No provider calls or live retries were made; historical records remain unchanged.
   AC-2/AC-3 remain false pending the documented operator remedies and successful live evidence.
+
+Atomic-ledger review follow-up on 2026-10-01 UTC (review 5380708449, comment 4156547483):
+  Every live-suite checkpoint now uses lib/fs.mjs writeJsonAtomic instead of
+  truncating report.json in place. The prior valid ledger survives partial writes,
+  process termination during writes, and failed renames. Temporary files stay private.
+  Regression in test/live_support.test.mjs:
+    live suite checkpoints preserve the ledger through partial writes, termination and rename failures
+  Actual suite entrypoint exercised with an offline unsupported-version probe;
+  no installed harness or provider invoked. Saved attempt history and retry
+  reservations remain intact in all three failure cases and successful replacement.
+  Focused regression: exit 0; tests 1; pass 1; fail 0
+  Private output: /private/tmp/gallivant-atomic-ledger-focused-tests.txt
+  npm test: exit 0; tests 617; pass 617; fail 0; cancelled 0; skipped 0; deferred tests 0
+  duration_ms 30306.279125
+  Private output: /private/tmp/gallivant-atomic-ledger-all-tests.txt
+  npm run lint: exit 0
+  Live tooling syntax checks: exit 0
+  git diff --check: exit 0
+  Full PR credential/Console-connection, known-secret and blocked-pattern scans: 0 matches.
+  No provider calls or live retries were made; historical records remain unchanged.
+  AC-2/AC-3 remain false pending the documented operator remedies and successful live evidence.
