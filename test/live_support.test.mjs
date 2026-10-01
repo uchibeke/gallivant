@@ -7,7 +7,80 @@ import { join } from "node:path";
 import { adapters } from "../lib/harness.mjs";
 import { runEnv } from "../lib/git.mjs";
 import { harnessBin } from "./helpers.mjs";
-import { BRANCH, NAMED_CASES, TURN_MS, SUITE_MS, STOP_GRACE_MS, auditLiveInvocation, launchLiveTurn, selection, classify, costEvidence, refusalEvidence, openSuiteLedger, sessionIdentity, effectiveModels, testExecution, verifyCheckout, verifyResumeFixture, verifySessionDirectory, verifyStartFixture } from "./live-support.mjs";
+import { BRANCH, NAMED_CASES, TURN_MS, SUITE_MS, STOP_GRACE_MS, assertAdapterRetry, auditLiveInvocation, launchLiveTurn, selection, classify, costEvidence, refusalEvidence, openSuiteLedger, sessionIdentity, effectiveModels, testExecution, turnFailure, verifyCheckout, verifyResumeFixture, verifySessionDirectory, verifyStartFixture } from "./live-support.mjs";
+
+test("live task verification failures remain ineligible for adapter retries after source changes", () => {
+  for (const taskFailure of ["wrong greeting", "missing test", "missing push"]) {
+    const evidence = mkdtempSync(join(tmpdir(), "gallivant-task-failure-"));
+    const cwd = join(evidence, "checkout"), remote = join(evidence, "remote.git");
+    mkdirSync(cwd);
+    const env = { ...process.env, ...runEnv({}, null, { name: "Retry verifier test", email: "test@example.invalid" }, cwd) };
+    const git = (...args) => execFileSync("git", args, { cwd, env, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] }).trim();
+    try {
+      git("init", "--bare", `--initial-branch=${BRANCH}`, remote);
+      git("init", "-b", BRANCH);
+      git("remote", "add", "origin", remote);
+      git("commit", "--allow-empty", "-m", "Initialize task failure fixture");
+      const previous = git("rev-parse", "HEAD");
+      const greeting = taskFailure === "wrong greeting" ? "Hi, " : "Hello, ";
+      writeFileSync(join(cwd, "function.mjs"), `export const greet = name => '${greeting}' + name + '!';\n`);
+      git("add", "function.mjs");
+      if (taskFailure !== "missing test") {
+        writeFileSync(join(cwd, "live.test.mjs"), `import {test} from 'node:test'; import assert from 'node:assert/strict'; import {greet} from './function.mjs'; test('greet',()=>assert.equal(greet('Lin'), '${greeting}Lin!'));\n`);
+        git("add", "live.test.mjs");
+      }
+      git("commit", "-m", "Record task failure fixture");
+      if (taskFailure !== "missing push") git("push", "-u", "origin", BRANCH);
+      let error;
+      try { verifyCheckout({ cwd, remote, env, previous, phase: "start", evidence }); } catch (e) { error = e; }
+      assert.ok(error, `${taskFailure} must fail external verification`);
+      if (taskFailure === "missing test") assert.equal(error.code, "ENOENT");
+      else {
+        assert.match(readFileSync(join(evidence, "start-tests.txt"), "utf8"), /# pass 1/);
+        assert.match(error.message, taskFailure === "wrong greeting" ? /AssertionError/ : /upstream/);
+      }
+      const source = { sha256: { "lib/harness.mjs": "before", "test/live-support.mjs": "before" } };
+      const record = { source, outcome: { ok: true, finished: true, denials: 0 }, ...turnFailure(classify(""), "verification", "start-1-verifier.txt") };
+      assert.equal(record.status, "failed");
+      assert.equal(record.failure.category, "verification");
+      assert.equal(record.failure.evidence, "start-1-verifier.txt");
+      assert.match(record.failure.remedy, /cannot use an adapter retry/);
+      for (const changedFile of Object.keys(source.sha256)) {
+        assert.throws(() => assertAdapterRetry(record, { sha256: { ...source.sha256, [changedFile]: "after" } }), /ineligible/);
+      }
+    } finally { rmSync(evidence, { recursive: true, force: true }); }
+  }
+});
+
+test("live retry gate requires a recorded adapter stage and rejects legacy unclassified failures", () => {
+  const source = { sha256: { "lib/harness.mjs": "before" } };
+  const changed = { sha256: { "lib/harness.mjs": "after" } };
+  const failure = turnFailure(classify("missing adapter result event"), "adapter", "start-1-verifier.txt");
+  const record = { source, ...failure };
+  assert.equal(record.failure.category, "unclassified");
+  assertAdapterRetry(record, changed);
+  assert.throws(() => assertAdapterRetry(record, source), /source change/);
+  assert.throws(() => assertAdapterRetry({ ...record, status: "passed" }, changed), /ineligible/);
+  assert.throws(() => assertAdapterRetry(undefined, changed), /ineligible/);
+  const legacy = structuredClone(record);
+  delete legacy.failure.stage;
+  const before = structuredClone(legacy);
+  assert.throws(() => assertAdapterRetry(legacy, changed), /legacy failures without a stage/);
+  assert.deepEqual(legacy, before, "legacy evidence must not be rewritten to qualify for retry");
+  assert.throws(() => assertAdapterRetry({ ...record, failure: { ...record.failure, stage: "verification" } }, changed), /ineligible/);
+});
+
+test("live external failure classification takes priority over verifier errors and stays non-retriable", () => {
+  for (const message of ["APort denied", "Operation not permitted", "permission denied for shell", "401 unauthorized", "429 quota exceeded", "ProviderModelNotFound", "turn time limit reached"]) {
+    const classified = classify(message, message === "turn time limit reached");
+    for (const stage of ["adapter", "verification"]) {
+      const result = turnFailure(classified, stage, "verifier.txt");
+      assert.equal(result.status, "blocked");
+      assert.deepEqual(result.failure, { ...classified, stage, evidence: "verifier.txt" });
+      assert.throws(() => assertAdapterRetry({ source: { sha256: { adapter: "before" } }, ...result }, { sha256: { adapter: "after" } }), /ineligible/);
+    }
+  }
+});
 
 test("live launch leaves exhausted or interrupted phases unstarted without spending a retry", () => {
   const now = 1_000_000;

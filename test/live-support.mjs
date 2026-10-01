@@ -108,6 +108,21 @@ export function classify(text, timedOut = false) {
   return { category: "unclassified", remedy: "Inspect the private stream and verifier log. Only a demonstrated adapter defect justifies a targeted retry after a regression-tested fix." };
 }
 
+export function turnFailure(classified, stage, evidence) {
+  const failure = { ...classified, stage, evidence };
+  if (classified.category === "unclassified" && stage === "verification") {
+    failure.category = "verification";
+    failure.remedy = "Preserve the failed task evidence. File, test and Git verification failures cannot use an adapter retry; another model call requires a newly authorized suite.";
+  }
+  return { status: ["unclassified", "verification"].includes(failure.category) ? "failed" : "blocked", failure };
+}
+
+export function assertAdapterRetry(failed, source) {
+  assert.ok(failed?.status === "failed" && failed.failure?.category === "unclassified" && failed.failure.stage === "adapter",
+    "Only a recorded unclassified adapter-check failure can be retried; verification failures, external blocks and legacy failures without a stage are ineligible");
+  assert.notDeepEqual(source.sha256, failed.source.sha256, "A targeted retry requires a source change");
+}
+
 // Exclude echoed prompts and narrated assistant text. Only structured tool failures and CLI diagnostics can
 // terminate a running child; a prompt mentioning a denial must never trip its own monitor.
 export function refusalEvidence(lines) {

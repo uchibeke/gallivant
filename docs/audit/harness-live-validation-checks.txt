@@ -174,3 +174,24 @@ Deadline review follow-up on 2026-10-01 UTC (review 5380066474, comment 41560316
   Full PR credential/Console-connection, known-secret and blocked-pattern scans: 0 matches.
   No provider calls, live retries or policy changes were made; historical evidence is unchanged.
   AC-2/AC-3 remain false pending the documented operator remedies and successful live evidence.
+
+Verifier-retry review follow-up on 2026-10-01 UTC (review 5380342659, comment 4156251341):
+  File/test/Git verification failures have a distinct non-retriable category.
+  Retries require a recorded adapter-check stage; older unclassified records without
+  a stage are rejected without altering their evidence. External blocks keep their remedies.
+  Regressions in test/live_support.test.mjs:
+    live task verification failures remain ineligible for adapter retries after source changes
+    live retry gate requires a recorded adapter stage and rejects legacy unclassified failures
+    live external failure classification takes priority over verifier errors and stays non-retriable
+  Focused regressions: exit 0; tests 3; pass 3; fail 0
+  Wrong greeting, missing test and missing push use real disposable Git fixtures.
+  Private output: /private/tmp/gallivant-verifier-retry-review-focused-tests.txt
+  npm test: exit 0; tests 616; pass 616; fail 0; cancelled 0; skipped 0; deferred tests 0
+  duration_ms 25936.300667
+  Private output: /private/tmp/gallivant-verifier-retry-review-all-tests.txt
+  npm run lint: exit 0
+  Live tooling syntax checks: exit 0
+  git diff --check: exit 0
+  Full PR credential/Console-connection, known-secret and blocked-pattern scans: 0 matches.
+  No provider calls or live retries were made; historical records remain unchanged.
+  AC-2/AC-3 remain false pending the documented operator remedies and successful live evidence.

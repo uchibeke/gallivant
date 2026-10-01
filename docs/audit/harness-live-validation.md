@@ -122,6 +122,17 @@ npm run test:live-harnesses -- --live --retry /absolute/private/suite-root CASE:
 
 Use `CASE:resume` to retry only a failed resume. One retry per combination is allowed; the source must have changed, external failures/denials cannot be retried, and the original deadline still applies. `--append /absolute/private/suite-root NEW_CASE` can add an untested combination within that same deadline. No retry or append starts unrelated phases. A new operator-authorized suite after remedy uses a new private directory and must be reported as new evidence.
 
+New failed turns record the failing stage. Missing test-tool evidence and external
+file, behavior, test or Git checks use the non-retriable `verification` category,
+even when the adapter reports success and source files have since changed.
+Recognized provider, permission and timeout failures retain their original
+classification and remedy. An unclassified adapter-stage failure remains only a
+candidate for investigation: a documented adapter defect, regression-tested fix,
+source change and clean fixture are still required for a targeted retry. Legacy
+unclassified records without a stage cannot qualify automatically. Historical
+results and the two previously documented directory-fix retries are preserved;
+no old record is relabeled to obtain another call.
+
 After all synchronous preflight work, a final check immediately before launch
 requires usable suite time beyond the existing six-second termination reserve.
 This also applies to automatic resume and targeted retries. An exhausted or

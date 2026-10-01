@@ -11,7 +11,7 @@ import { adapterFor, assertSafeArgv, buildRun, MIN_VERSIONS } from "../lib/harne
 import { runEnv } from "../lib/git.mjs";
 import { isOurProcess, makeRunner } from "../lib/run.mjs";
 import { checkVersion } from "../lib/probe.mjs";
-import { BRANCH, NAMED_CASES, TURN_MS, SUITE_MS, auditLiveInvocation, classify, codingPrompt, costEvidence, effectiveModels, harnessForCase, launchLiveTurn, openSuiteLedger, parseEvents, refusalEvidence, safeLabel, selection, sessionIdentity, testExecution, verifyCheckout, verifyResumeFixture, verifySessionDirectory, verifyStartFixture } from "./live-support.mjs";
+import { BRANCH, NAMED_CASES, TURN_MS, SUITE_MS, assertAdapterRetry, auditLiveInvocation, classify, codingPrompt, costEvidence, effectiveModels, harnessForCase, launchLiveTurn, openSuiteLedger, parseEvents, refusalEvidence, safeLabel, selection, sessionIdentity, testExecution, turnFailure, verifyCheckout, verifyResumeFixture, verifySessionDirectory, verifyStartFixture } from "./live-support.mjs";
 
 const repo = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const args = process.argv.slice(2);
@@ -193,6 +193,7 @@ async function turn(entry, phase, attempt) {
     } catch { record.metadataError = "Gemini resolved model transcript unavailable; init alias alone is insufficient."; }
   }
   record.models = effectiveModels(harness, lines, exported);
+  let failureStage = "adapter";
   try {
     if (harness === "opencode") {
       try { verifySessionDirectory(exported, cwd); record.directoryVerified = true; }
@@ -210,14 +211,14 @@ async function turn(entry, phase, attempt) {
     if (previousTurn) assert.deepEqual(record.models, previousTurn.models, "resume changed effective model");
     if (harness === "opencode" && NAMED_CASES[entry.id]) assert.equal(record.models[0], NAMED_CASES[entry.id].model);
     if (harness === "goose") assert.equal(record.models[0], `${entry.configured.provider}/${entry.configured.model}`);
+    failureStage = "verification";
     record.testToolCalls = testExecution(harness, lines, exported).filter(id => !previousTurn?.testToolCalls?.includes(id));
     assert.ok(record.testToolCalls.length, "No successful node:test tool execution in harness evidence");
     record.verification = verifyCheckout({ cwd, remote, env, previous: previousTurn?.verification.head || entry.initial, phase, evidence });
     record.status = "passed";
   } catch (e) {
     writeFileSync(join(evidence, `${phase}-${attempt}-verifier.txt`), e.stack, { mode: 0o600 });
-    record.status = classified.category === "unclassified" ? "failed" : "blocked";
-    record.failure = { ...classified, evidence: `${entry.id}/${phase}-${attempt}-verifier.txt` };
+    Object.assign(record, turnFailure(classified, failureStage, `${entry.id}/${phase}-${attempt}-verifier.txt`));
   }
   checkpoint();
   process.stdout.write(`${entry.id} ${phase}: ${record.status}; ${record.failure?.category || record.models.join(", ")}; ${record.elapsedMs}ms\n`);
@@ -241,8 +242,7 @@ try {
     if (retry) {
       assert.ok(entry && !entry.retry, "Only one targeted retry is allowed per combination");
       const failed = entry.turns.findLast(t => t.phase === retryPhase);
-      assert.ok(failed && failed.status === "failed" && failed.failure.category === "unclassified", "External blocks and denials cannot be retried as adapter fixes");
-      assert.notDeepEqual(source.sha256, failed.source.sha256, "A targeted retry requires a source change");
+      assertAdapterRetry(failed, source);
       const failedLines = readFileSync(join(root, failed.run, "job.log"), "utf8").split("\n");
       assert.equal(classify(`${refusalEvidence(failedLines)}\n${adapterFor(entry.harness).outcome(failedLines).error || ""}`).category, "unclassified", "A corrected parser must not turn an earlier unclassified external failure into a retry");
     } else {
