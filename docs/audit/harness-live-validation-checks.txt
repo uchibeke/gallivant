@@ -294,3 +294,28 @@ Transport/start-retry review follow-up on 2026-10-01 UTC (review 5385025050):
   Full PR credential/Console-connection, known-secret and blocked-pattern scans: 0 matches.
   No installed harness, provider call, live retry or operator configuration change.
   Historical evidence, exhausted allowances and false AC-2/AC-3 attestations remain unchanged.
+
+Command-permission review follow-up on 2026-10-01 UTC (review 5385238188, comment 4160247075):
+  The classifier no longer treats ordinary command stderr containing Permission denied
+  as an approval decision. Explicit permission requests/rejections and existing
+  guardrail/sandbox refusals still stop the turn; private diagnostics are preserved.
+  Regression in test/live_support.test.mjs:
+    live refusal classification distinguishes command stderr from explicit approval decisions
+  Regression in test/live_suite.test.mjs:
+    live monitor allows command permission recovery and still stops explicit approval refusals
+  Gemini, OpenCode and Goose error envelopes and raw CLI diagnostics are covered.
+  The actual suite monitor lets an offline child reach its recovery marker after
+  a command error, but kills a child reporting an explicit approval rejection.
+  Focused regressions: exit 0; tests 6; pass 6; fail 0
+  Private output: /private/tmp/gallivant-command-permission-focused-tests.txt
+  npm test: exit 0; tests 629; pass 629; fail 0; cancelled 0; skipped 0; deferred tests 0
+  duration_ms 32748.307542
+  Private output: /private/tmp/gallivant-command-permission-all-tests.txt
+  npm run lint: exit 0
+  Changed test tooling syntax checks: exit 0
+  git diff --check: exit 0
+  Full PR credential/Console-connection, known-secret and blocked-pattern scans: 0 matches.
+  The initial environment scan matched an indexed Git configuration key name;
+  configuration names were excluded while credential values remained in the scan.
+  No installed harness, provider call, live retry or operator configuration change.
+  Historical evidence, exhausted allowances and false AC-2/AC-3 attestations remain unchanged.

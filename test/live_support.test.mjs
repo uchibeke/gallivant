@@ -135,7 +135,7 @@ test("live retry gate requires a recorded adapter stage and rejects legacy uncla
 });
 
 test("live external failure classification takes priority over verifier errors and stays non-retriable", () => {
-  for (const message of ["APort denied", "Operation not permitted", "permission denied for shell", "401 unauthorized", "429 quota exceeded", "ProviderModelNotFound", "turn time limit reached"]) {
+  for (const message of ["APort denied", "Operation not permitted", "permission request denied for shell", "401 unauthorized", "429 quota exceeded", "ProviderModelNotFound", "turn time limit reached"]) {
     const classified = classify(message, message === "turn time limit reached");
     for (const stage of ["adapter", "verification"]) {
       const result = turnFailure(classified, stage, "verifier.txt");
@@ -402,7 +402,7 @@ test("live failure classification keeps external failures distinct and denials t
   for (const [message, category] of [
     ["APort denied tool; 429 quota exceeded", "guardrail"],
     ["Operation not permitted", "sandbox"],
-    ["permission denied for shell", "permissions"],
+    ["permission request denied for shell", "permissions"],
     ["The user rejected permission to use this specific tool call.", "permissions"],
     ["Path not in workspace", "sandbox"],
     ["RESOURCE_EXHAUSTED quota", "quota"],
@@ -419,6 +419,32 @@ test("live refusal monitor ignores prompt echoes and stops on actual tool errors
   assert.equal(refusalEvidence([prompt]), "");
   assert.equal(classify(refusalEvidence([JSON.stringify({ type: "tool_use", part: { state: { status: "error", error: "The user rejected permission to use this specific tool call." } } })])).category, "permissions");
   assert.equal(classify(refusalEvidence([JSON.stringify({ type: "message", message: { role: "assistant", content: [{ type: "error", kind: "authentication", message: "401 Unauthorized" }] } })])).category, "credentials");
+});
+
+test("live refusal classification distinguishes command stderr from explicit approval decisions", () => {
+  const envelopes = message => [
+    message, // CLI stderr may also contain a failed shell command's diagnostic.
+    JSON.stringify({ type: "tool_result", status: "error", error: { message }, output: message }),
+    JSON.stringify({ type: "tool_use", part: { state: { status: "error", error: message } } }),
+    JSON.stringify({ type: "message", message: { content: [{ type: "toolResponse", toolResult: { isError: true, content: [{ type: "text", text: message }] } }] } }),
+  ];
+  for (const message of ["bash: ./live.test.mjs: Permission denied", "EACCES: permission denied, open 'function.mjs'", "permission denied for shell"]) {
+    for (const line of envelopes(message)) {
+      const evidence = refusalEvidence([line]);
+      assert.ok(evidence.includes(message), "keep command diagnostics available for investigation");
+      assert.equal(classify(evidence).category, "unclassified");
+    }
+  }
+  for (const message of [
+    "The user rejected permission to use this specific tool call.",
+    "permission requested: external_directory; auto-rejecting",
+    "Permission request denied for shell", "Tool approval required in non-interactive mode",
+  ]) {
+    for (const line of envelopes(message)) assert.equal(classify(refusalEvidence([line])).category, "permissions");
+  }
+  for (const message of ["APort denied tool", "sandbox restricted this path", "Path not in workspace", "PermissionDenied"]) {
+    for (const line of envelopes(message)) assert.ok(["guardrail", "sandbox"].includes(classify(refusalEvidence([line])).category));
+  }
 });
 
 test("live OpenCode directory evidence rejects tools rooted outside the disposable checkout", () => {

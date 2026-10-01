@@ -52,6 +52,17 @@ writeFileSync(root + '/environment.json', JSON.stringify({
 }));
 process.stdout.write(JSON.stringify({ type: 'text', sessionID: 'ses_offline123' }) + '\\n');
 if (mode === 'exit') process.exit(1);
+if (mode === 'command-permission-error' || mode === 'approval-refusal') {
+  const error = mode === 'command-permission-error' ? 'bash: ./live.test.mjs: Permission denied' : 'The user rejected permission to use this specific tool call.';
+  process.stdout.write(JSON.stringify({ type: 'tool_use', part: { state: { status: 'error', error } } }) + '\\n');
+  if (mode === 'command-permission-error') {
+    // Leave time for the real suite monitor to consume the failed command before recovery.
+    await new Promise(resolve => setTimeout(resolve, 1000));
+    writeFileSync(root + '/recovered.txt', 'offline command recovery reached');
+    process.exit(1); // No simulated coding success is treated as live evidence.
+  }
+  await new Promise(() => { setInterval(() => {}, 1000); }); // An explicit refusal must be killed.
+}
 if (mode === 'write-fail') {
   const git = (...argv) => execFileSync('git', argv, { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }).trim();
   appendFileSync(root + '/fixtures.jsonl', JSON.stringify({ cwd: process.cwd(), head: git('rev-parse', 'HEAD'), files: git('ls-files'), remoteRefs: git('ls-remote', '--refs', 'origin') }) + '\\n');
@@ -110,6 +121,26 @@ function cleanup(root, child) {
   }
   rmSync(root, { recursive: true, force: true });
 }
+
+test("live monitor allows command permission recovery and still stops explicit approval refusals", async () => {
+  for (const mode of ["command-permission-error", "approval-refusal"]) {
+    const root = fixture(mode);
+    let run;
+    try {
+      run = invoke(root);
+      const result = await run.done;
+      assert.equal(result.code, 1, result.stderr);
+      const turn = read(join(root, "report.json")).cases[0].turns[0];
+      const refused = mode === "approval-refusal";
+      assert.equal(existsSync(join(root, "recovered.txt")), !refused);
+      assert.equal(turn.exit, refused ? 137 : 1);
+      assert.equal(turn.status, refused ? "blocked" : "failed");
+      assert.equal(turn.failure.category, refused ? "permissions" : "unclassified");
+      if (refused) assert.match(turn.failure.remedy, /scoped approval/);
+      else assert.doesNotMatch(turn.failure.remedy, /scoped approval/);
+    } finally { cleanup(root, run?.child); }
+  }
+});
 
 test("live child environment excludes inherited GitHub tokens through the shared runner", async () => {
   const root = fixture();

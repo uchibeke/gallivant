@@ -133,6 +133,16 @@ unclassified records without a stage cannot qualify automatically. Historical
 results and the two previously documented directory-fix retries are preserved;
 no old record is relabeled to obtain another call.
 
+The refusal classifier distinguishes an explicit permission request or rejection
+from ordinary command stderr such as `bash: ./live.test.mjs: Permission denied`
+or an `EACCES` file error. Those diagnostics remain in the private evidence, but
+do not kill a turn or prescribe an approval remedy by themselves. A harness can
+correct its command within the same turn and time budget. Explicit approval,
+guardrail and sandbox refusals still stop the phase; this does not permit changing
+policy or retrying a denied operation. Offline envelope tests cover Gemini,
+OpenCode and Goose, and a disposable child verifies both command recovery and
+termination on an explicit rejection. Historical live outcomes are unchanged.
+
 An eligible start retry creates a distinct empty checkout and local bare remote
 under the same private suite root. `previousStartFixture` retains the original
 checkout/remote/initial-commit/session pointers; the first attempt's files, commits,

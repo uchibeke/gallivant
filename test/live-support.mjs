@@ -115,7 +115,9 @@ export function classify(text, timedOut = false) {
     return { category: "guardrail", remedy: "Ask the operator to review the named guardrail decision; do not retry or route around it." };
   if (/operation not permitted|sandbox.{0,40}(denied|restricted)|PermissionDenied|Path not in workspace|outside the allowed workspace/i.test(text))
     return { category: "sandbox", remedy: "Use the host's supported scoped approval for the recorded operation; do not change sandbox policy." };
-  if (/requires? (approval|confirmation)|permission.{0,40}(denied|rejected|auto-reject)|rejected permission|permission requested:|approval.{0,40}(required|stdin)|non.interactive.{0,60}(approve|permission)/i.test(text))
+  // Ordinary command stderr (EACCES / "Permission denied") is not an approval
+  // decision. Require explicit request/policy wording; let the harness correct the command.
+  if (/requires? (approval|confirmation)|permission[^\n]{0,40}(rejected|auto-reject)|permission (request|approval)[^\n]{0,40}denied|rejected permission|permission requested:|approval[^\n]{0,40}(required|stdin)|non.interactive[^\n]{0,60}(approve|permission)/i.test(text))
     return { category: "permissions", remedy: "Review the recorded tool request and provide a supported scoped approval path for closed stdin; do not enable blanket approval." };
   if (/quota|creditsExhausted|RESOURCE_EXHAUSTED|insufficient.{0,20}(balance|credit)|rate.limit|\b429\b/i.test(text))
     return { category: "quota", remedy: "Restore quota for the recorded provider/model or wait for its stated reset, then explicitly schedule a new suite." };
