@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { join, dirname, basename } from "node:path";
-import { readFileSync } from "node:fs";
+import { readFileSync, realpathSync } from "node:fs";
 import { spawnSync, execFileSync } from "node:child_process";
 import { makeState, resolveHandle, newEntry, entryId, idSlug, prdIdOf, advanceCursor, shortRepo, handleFor, STATES } from "../lib/state.mjs";
 import { isAtOrAfter, floorSecond } from "../lib/time.mjs";
@@ -60,6 +60,22 @@ test("Goose provider failure followed by complete is not success", () => {
   ]);
   assert.equal(credits.ok, false);
   assert.match(credits.error, /creditsExhausted/);
+});
+
+test("Goose typed authentication error followed by complete is not success", () => {
+  const error = "Authentication failed. Status: 401 Unauthorized. Incorrect API key provided.";
+  for (const content of [{ type: "error", kind: "authentication", message: error }, { type: "error", kind: "authentication" }]) {
+    const result = adapters.goose.outcome([
+      JSON.stringify({ type: "message", message: { role: "assistant", content: [{ type: "text", text: "Working." }] } }),
+      JSON.stringify({ type: "message", message: { role: "assistant", content: [content] } }),
+      JSON.stringify({ type: "complete", total_tokens: 0 }),
+    ]);
+    assert.equal(result.ok, false);
+    assert.equal(result.finished, true);
+    assert.equal(result.error, content.message || content.kind);
+    assert.equal(result.lastMessage, "Working.");
+    assert.equal(result.cost, null);
+  }
 });
 
 test("Goose provider error envelope survives streamed chunk boundaries", () => {
@@ -336,6 +352,23 @@ test("registry writes hold a lock; a stale lock is broken, a fresh one blocks", 
   s.put("a/b/c", { pr: 1 });
   assert.ok(!existsSync(lock), "a lock older than thirty seconds is stale and removed");
   assert.equal(s.get("a/b/c").pr, 1);
+});
+
+test("runner pins PWD to the checkout for tools that prefer it over process.cwd", async () => {
+  const parent = tempHome(), checkout = tempHome();
+  const r = makeRunner(join(tempHome(), "runs"), { probe: () => false });
+  const code = `const fs = require('node:fs'); const path = require('node:path');
+    const root = process.env.PWD || process.cwd();
+    fs.writeFileSync(path.join(root, 'tool-output.txt'), 'probe');
+    console.log(JSON.stringify({ root, cwd: process.cwd() }));`;
+  const job = r.start("cwd-probe", process.execPath, ["-e", code], { cwd: checkout, env: { PWD: parent } });
+  for (let i = 0; i < 100 && r.read(job.id)?.exit === null; i++) await new Promise(res => setTimeout(res, 20));
+  assert.equal(r.read(job.id).exit, 0);
+  const { root, cwd } = JSON.parse(r.lines(job.id)[0]);
+  assert.equal(root, checkout);
+  assert.equal(realpathSync(root), realpathSync(cwd));
+  assert.equal(readFileSync(join(checkout, "tool-output.txt"), "utf8"), "probe");
+  assert.equal(existsSync(join(parent, "tool-output.txt")), false, "a tool must not write in the parent directory");
 });
 
 test("a run whose binary does not exist is recorded as exit 127, not thrown into the daemon", async () => {

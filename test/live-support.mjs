@@ -1,13 +1,23 @@
 // Test-only evidence checks. Importing this module never launches a harness.
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { lstatSync, readFileSync, writeFileSync } from "node:fs";
+import { lstatSync, readFileSync, realpathSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
 export const TURN_MS = 180_000;
 export const SUITE_MS = 30 * 60_000;
 export const CASES = ["gemini", "opencode-default", "opencode-go", "goose"];
-const SELECTABLE = [...CASES, "goose-deepseek"];
+// Native, test-local selections. Console BYOK routes are distinct from OpenCode Zen/Go subscriptions.
+export const NAMED_CASES = Object.freeze({
+  "opencode-go": { model: "opencode-go/qwen3.8-max" },
+  "goose-meta": { provider: "meta", model: "muse-spark-1.1" },
+  "goose-xai": { provider: "xai", model: "grok-4.5" },
+  "goose-alibaba": { provider: "alibaba", model: "qwen3.7-max" },
+  "opencode-console-meta": { model: "console-meta/muse-spark-1.1" },
+  "opencode-console-xai": { model: "console-xai/grok-4.5" },
+  "opencode-console-alibaba": { model: "console-alibaba/qwen3.8-max" },
+});
+const SELECTABLE = [...new Set([...CASES, ...Object.keys(NAMED_CASES)])];
 export const BRANCH = "gallivant/live-probe";
 export const parseEvents = lines => lines.flatMap(line => { try { return [JSON.parse(line)]; } catch { return []; } });
 export const safeLabel = value => typeof value === "string" && /^[\w./:-]{1,160}$/.test(value) ? value : "unknown";
@@ -31,6 +41,8 @@ export function classify(text, timedOut = false) {
     return { category: "quota", remedy: "Restore quota for the recorded provider/model or wait for its stated reset, then explicitly schedule a new suite." };
   if (/API.key.{0,30}(invalid|missing|not|expired)|unauthorized|UNAUTHENTICATED|\b401\b|authentication.{0,30}(fail|required)/i.test(text))
     return { category: "credentials", remedy: "Repair this provider's existing login/key through its normal setup, then explicitly schedule a new suite; do not search for other credentials." };
+  if (/Recursive JSON schemas are not currently supported/i.test(text))
+    return { category: "provider-rejection", remedy: "Resolve the native provider's tool-schema compatibility for this exact model before scheduling a new suite; do not remove guards or extensions to evade the rejection." };
   if (/model.{0,60}(not found|not available|not supported)|ProviderModelNotFound|\b403\b|\b404\b|forbidden|provider.{0,40}reject/i.test(text))
     return { category: "provider-rejection", remedy: "Confirm this exact provider/model and subscription permit the task; enable access through the operator without substituting a model." };
   if (timedOut) return { category: "timeout", remedy: "Inspect the private log for provider latency or a pending approval. Do not increase the 180-second turn limit." };
@@ -46,8 +58,9 @@ export function refusalEvidence(lines) {
     if (e.type === "tool_result" && e.status === "error") return [JSON.stringify(e.error), e.output || ""];
     if (e.part?.state?.status === "error") return [e.part.state.error || ""];
     if (e.type === "error") return [JSON.stringify(e.error || e.message)];
-    // Goose tool errors appear inside toolResponse content blocks.
-    return (e.message?.content || []).filter(c => c.type === "toolResponse" && c.toolResult?.isError).map(c => JSON.stringify(c.toolResult));
+    // Goose provider errors and tool errors appear inside content blocks.
+    return (e.message?.content || []).flatMap(c => c.type === "error" ? [JSON.stringify(c)]
+      : c.type === "toolResponse" && c.toolResult?.isError ? [JSON.stringify(c.toolResult)] : []);
   }).join("\n");
 }
 
@@ -81,6 +94,20 @@ export function effectiveModels(harness, lines, exported) {
   const model = s?.model_config?.model_name ?? s?.model_config?.model ?? s?.model;
   const provider = s?.provider_name ?? s?.provider;
   return model && provider ? [`${safeLabel(provider)}/${safeLabel(model)}`] : [];
+}
+
+export function verifySessionDirectory(exported, cwd) {
+  assert.ok(exported?.info?.directory, "OpenCode export must identify its actual tool directory");
+  assert.equal(realpathSync(exported.info.directory), realpathSync(cwd), "OpenCode tool directory escaped the disposable checkout");
+}
+
+export function verifyStartFixture({ cwd, remote, initial, env }) {
+  const git = (...args) => execFileSync("git", args, { cwd, env, encoding: "utf8", timeout: 10_000, stdio: ["ignore", "pipe", "pipe"] }).trim();
+  assert.equal(git("rev-parse", "HEAD"), initial, "start fixture already has model commits");
+  assert.equal(git("status", "--porcelain"), "", "start fixture must be clean");
+  assert.equal(git("ls-files"), "", "start fixture must contain no prewritten files");
+  assert.equal(git("remote", "get-url", "origin"), remote, "start fixture remote changed");
+  assert.equal(git("ls-remote", "--refs", "origin"), "", "start fixture remote already contains commits; do not retry in a contaminated fixture");
 }
 
 /** A successful test TOOL result, never the echoed prompt or the assistant's claimed success. */
@@ -128,7 +155,7 @@ export function verifyCheckout({ cwd, remote, env, previous, phase, evidence }) 
 
 export function codingPrompt(phase, remote) {
   return `This is an authorized, disposable Gallivant live adapter test. Work only in this checkout; its only remote is the local bare Git repository ${remote}. Do not access GitHub, other repositories, credentials, configuration, permissions, or hooks. Do not use subagents or delegate. Do not install dependencies or select another model/provider.
-${phase === "start" ? "Write function.mjs exporting greet(name), returning Hello, then a space, then the name unchanged, then an exclamation mark. Write live.test.mjs using node:test and node:assert/strict, with assertions for normal and space-padded names." : "Continue the SAME session and existing work. Change greet(name) to trim leading/trailing whitespace from the name. Update live.test.mjs to assert the changed padded-name behavior and preserve the normal-name test."}
+${phase === "start" ? 'Write function.mjs exporting greet(name), returning exactly "Hello, " + name + "!" (include the comma and space after Hello; leave the name unchanged). For greet("  Ada  "), return "Hello,   Ada  !". Write live.test.mjs using node:test and node:assert/strict, with assertions for normal and space-padded names.' : 'Continue the SAME session and existing work. Change greet(name) to trim leading/trailing whitespace from the name, returning exactly "Hello, " + name.trim() + "!". For greet("  Ada  "), return "Hello, Ada!". Update live.test.mjs to assert the changed padded-name behavior and preserve the normal-name test.'}
 Run node --test --test-reporter=tap live.test.mjs and fix any failures. These must be real file edits and tool calls. Stage only function.mjs and live.test.mjs, check the staged diff, create exactly one commit with a plain descriptive message, and push with upstream to origin ${BRANCH}. Verify clean status, upstream, and remote HEAD. Keep file writes and Git writes in separate tool calls. Stop on command failures. No harness attribution or Co-Authored-By trailers.
-A guardrail/reviewer denial is a boundary: stop and report it, never re-spell or wrap a denied command. For a filesystem sandbox error only, use the harness's supported scoped approval if available. Never weaken safety or use blanket approval. If approval needs interactive stdin, report blocked. Do not narrate success without doing the work.`;
+A guardrail/reviewer denial is a boundary: stop and report it, never re-spell or wrap a denied command. For a filesystem sandbox error only, use the harness's supported scoped approval if available. Never weaken safety or use blanket approval. If approval needs interactive stdin, report blocked. Do not rebase, force-push, create an orphan branch, or change origin. Stop on any failed Git command. Do not narrate success without doing the work.`;
 }

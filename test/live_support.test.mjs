@@ -6,12 +6,24 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { adapters } from "../lib/harness.mjs";
 import { runEnv } from "../lib/git.mjs";
-import { BRANCH, selection, classify, refusalEvidence, sessionIdentity, effectiveModels, testExecution, verifyCheckout } from "./live-support.mjs";
+import { BRANCH, NAMED_CASES, selection, classify, refusalEvidence, sessionIdentity, effectiveModels, testExecution, verifyCheckout, verifySessionDirectory, verifyStartFixture } from "./live-support.mjs";
 
 test("live selection is explicit, unique, and includes both OpenCode cases", () => {
   assert.deepEqual(selection([]), ["gemini", "opencode-default", "opencode-go", "goose"]);
   assert.throws(() => selection(["opencode-go", "opencode-go"]), /duplicate/);
   assert.throws(() => selection(["claude"]), /Select only/);
+  assert.throws(() => selection(["goose-deepseek"]), /Select only/);
+});
+
+test("named live provider cases pin Console routes and saved Goose selectors", () => {
+  assert.deepEqual(NAMED_CASES["goose-meta"], { provider: "meta", model: "muse-spark-1.1" });
+  assert.deepEqual(NAMED_CASES["goose-xai"], { provider: "xai", model: "grok-4.5" });
+  assert.deepEqual(NAMED_CASES["goose-alibaba"], { provider: "alibaba", model: "qwen3.7-max" });
+  assert.equal(NAMED_CASES["opencode-console-meta"].model, "console-meta/muse-spark-1.1");
+  assert.equal(NAMED_CASES["opencode-console-xai"].model, "console-xai/grok-4.5");
+  assert.equal(NAMED_CASES["opencode-console-alibaba"].model, "console-alibaba/qwen3.8-max");
+  const names = Object.keys(NAMED_CASES).filter(id => id !== "opencode-go");
+  assert.deepEqual(selection(names), names);
 });
 
 test("live failure classification keeps external failures distinct and denials take priority", () => {
@@ -24,6 +36,7 @@ test("live failure classification keeps external failures distinct and denials t
     ["RESOURCE_EXHAUSTED quota", "quota"],
     ["401 unauthorized", "credentials"],
     ["ProviderModelNotFound", "provider-rejection"],
+    ["Bad request (400): Recursive JSON schemas are not currently supported.", "provider-rejection"],
     ["no result event", "unclassified"],
   ]) assert.equal(classify(message).category, category);
   assert.equal(classify("", true).category, "timeout");
@@ -33,6 +46,14 @@ test("live refusal monitor ignores prompt echoes and stops on actual tool errors
   const prompt = JSON.stringify({ type: "message", role: "user", content: "APort denied is an example" });
   assert.equal(refusalEvidence([prompt]), "");
   assert.equal(classify(refusalEvidence([JSON.stringify({ type: "tool_use", part: { state: { status: "error", error: "The user rejected permission to use this specific tool call." } } })])).category, "permissions");
+  assert.equal(classify(refusalEvidence([JSON.stringify({ type: "message", message: { role: "assistant", content: [{ type: "error", kind: "authentication", message: "401 Unauthorized" }] } })])).category, "credentials");
+});
+
+test("live OpenCode directory evidence rejects tools rooted outside the disposable checkout", () => {
+  const checkout = mkdtempSync(join(tmpdir(), "gallivant-directory-probe-"));
+  assert.throws(() => verifySessionDirectory({}, checkout), /actual tool directory/);
+  assert.throws(() => verifySessionDirectory({ info: { directory: tmpdir() } }, checkout), /escaped/);
+  verifySessionDirectory({ info: { directory: checkout } }, checkout);
 });
 
 test("live identity requires the actual adapter identity and refuses a new session on resume", () => {
@@ -75,6 +96,10 @@ test("external live verifier rejects missing push and uncommitted resume, then p
   git("remote", "add", "origin", remote);
   git("commit", "--allow-empty", "-m", "Initialize verifier fixture");
   let previous = git("rev-parse", "HEAD");
+  verifyStartFixture({ cwd, remote, initial: previous, env });
+  git("push", "origin", "HEAD:refs/heads/contaminated");
+  assert.throws(() => verifyStartFixture({ cwd, remote, initial: previous, env }), /remote already contains commits/);
+  git("push", "origin", ":refs/heads/contaminated");
   for (const phase of ["start", "resume"]) {
     const trim = phase === "resume";
     writeFileSync(join(cwd, "function.mjs"), `export const greet = name => 'Hello, ' + name${trim ? ".trim()" : ""} + '!';\n`);

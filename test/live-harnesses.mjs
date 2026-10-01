@@ -11,7 +11,7 @@ import { adapterFor, assertSafeArgv, buildRun } from "../lib/harness.mjs";
 import { runEnv } from "../lib/git.mjs";
 import { isOurProcess, makeRunner } from "../lib/run.mjs";
 import { checkVersion } from "../lib/probe.mjs";
-import { BRANCH, TURN_MS, SUITE_MS, classify, codingPrompt, effectiveModels, parseEvents, refusalEvidence, safeLabel, selection, sessionIdentity, testExecution, verifyCheckout } from "./live-support.mjs";
+import { BRANCH, NAMED_CASES, TURN_MS, SUITE_MS, classify, codingPrompt, effectiveModels, parseEvents, refusalEvidence, safeLabel, selection, sessionIdentity, testExecution, verifyCheckout, verifySessionDirectory, verifyStartFixture } from "./live-support.mjs";
 
 const repo = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const args = process.argv.slice(2);
@@ -56,6 +56,11 @@ const deadline = Date.parse(report.startedAt) + SUITE_MS;
 const checkpoint = () => save(ledgerPath, report);
 const identity = { name: "Live adapter probe", email: "probe@example.invalid" };
 const config = { harness: Object.fromEntries(["claude", "codex", "gemini", "opencode", "goose"].map(h => [h, { bin: h }])) };
+// Gallivant may configure a different binary from PATH. Copy only binary selectors into the test config.
+const operatorConfig = json(join(homedir(), ".gallivant", "config.json"));
+for (const [harness, configured] of Object.entries(operatorConfig?.harness || {})) {
+  if (config.harness[harness] && typeof configured.bin === "string") config.harness[harness].bin = configured.bin;
+}
 let active = null;
 for (const signal of ["SIGINT", "SIGTERM"]) process.on(signal, () => {
   if (active) active.runner.kill(active.id);
@@ -126,12 +131,13 @@ async function turn(entry, phase, attempt) {
   const spec = buildRun({ harness, config, mode: phase, session, prompt: codingPrompt(phase, remote), cwd });
   // Native overrides belong to this test, not Gallivant's per-task configuration.
   const overrides = [];
-  if (harness === "opencode" && (entry.id === "opencode-go" || previousTurn)) overrides.push("--model", entry.id === "opencode-go" ? "opencode-go/qwen3.8-max" : previousTurn.models[0]);
+  if (harness === "opencode" && (NAMED_CASES[entry.id] || previousTurn)) overrides.push("--model", NAMED_CASES[entry.id]?.model || previousTurn.models[0]);
   if (harness === "gemini" && (previousTurn || entry.configured.model !== "unknown")) overrides.push("--model", previousTurn?.models[0] || entry.configured.model);
   if (harness === "goose" && entry.configured.provider !== "unknown" && entry.configured.model !== "unknown") overrides.push("--provider", entry.configured.provider, "--model", entry.configured.model);
   spec.args.splice(harness === "gemini" ? 0 : spec.args.length - (harness === "goose" ? 2 : 1), 0, ...overrides);
   assertSafeArgv(spec.args);
   const env = { ...process.env, ...runEnv(config, null, identity, cwd), ...spec.env };
+  if (phase === "start") verifyStartFixture({ ...entry, env });
   const startedAt = new Date().toISOString();
   const job = runner.start(`${phase}-${attempt}`, spec.cmd, spec.args, { cwd, env });
   active = { runner, id: job.id };
@@ -188,6 +194,10 @@ async function turn(entry, phase, attempt) {
   }
   record.models = effectiveModels(harness, lines, exported);
   try {
+    if (harness === "opencode") {
+      try { verifySessionDirectory(exported, cwd); record.directoryVerified = true; }
+      catch (e) { record.isolationFailure = true; throw e; }
+    }
     assert.ok(!timedOut, "turn time limit reached");
     assert.equal(record.exit, 0, "harness exited nonzero");
     assert.ok(outcome.ok && outcome.finished, "adapter outcome not successful");
@@ -198,7 +208,7 @@ async function turn(entry, phase, attempt) {
     assert.equal(record.models.length, 1, "effective model must be knowable and constant, without fallback");
     assert.ok(!record.models[0].includes("unknown"), "model metadata missing");
     if (previousTurn) assert.deepEqual(record.models, previousTurn.models, "resume changed effective model");
-    if (entry.id === "opencode-go") assert.equal(record.models[0], "opencode-go/qwen3.8-max");
+    if (harness === "opencode" && NAMED_CASES[entry.id]) assert.equal(record.models[0], NAMED_CASES[entry.id].model);
     if (harness === "goose") assert.equal(record.models[0], `${entry.configured.provider}/${entry.configured.model}`);
     record.testToolCalls = testExecution(harness, lines, exported).filter(id => !previousTurn?.testToolCalls?.includes(id));
     assert.ok(record.testToolCalls.length, "No successful node:test tool execution in harness evidence");
@@ -219,6 +229,11 @@ try {
   if (!retry && !append) {
     report.versions = {};
     for (const harness of Object.keys(config.harness)) report.versions[harness] = await checkVersion(harness, config);
+    report.binaries = Object.fromEntries(Object.entries(config.harness).map(([h, value]) => [h, value.bin]));
+    report.pathVersions = {};
+    for (const [harness, value] of Object.entries(config.harness)) {
+      if (value.bin !== harness) report.pathVersions[harness] = await checkVersion(harness, { harness: { [harness]: { bin: harness } } });
+    }
     checkpoint();
   }
   for (const id of selected) {
@@ -239,16 +254,20 @@ try {
       const dir = join(root, id);
       mkdirSync(dir, { mode: 0o700 });
       entry = { id, harness, configured: configured(harness), requestedSession: adapterFor(harness).newSession(), turns: [] };
-      if (id === "opencode-go") entry.configured = { model: "opencode-go/qwen3.8-max" };
-      if (id === "goose-deepseek") entry.configured = { provider: "custom_deepseek", model: "deepseek-v4-pro" };
+      if (NAMED_CASES[id]) entry.configured = { ...NAMED_CASES[id] };
       assert.ok(!report.cases.some(c => c.harness === harness && JSON.stringify(c.configured) === JSON.stringify(entry.configured)), "This provider/model combination already ran");
       report.cases.push(entry);
+      if (/deepseek/i.test(JSON.stringify(entry.configured))) { entry.blocked = "DeepSeek excluded by the current operator scope; no model call made."; checkpoint(); continue; }
       if (!report.versions[harness].ok) { entry.blocked = "version preflight failed; install the adapter's minimum supported version"; checkpoint(); continue; }
       Object.assign(entry, fixture(dir));
     }
     const firstPhase = retry ? retryPhase : "start";
     const first = await turn(entry, firstPhase, retry ? 2 : 1);
-    if (first.status === "passed" && firstPhase === "start" && !entry.turns.some(t => t.phase === "resume")) await turn(entry, "resume", 1);
+    if (first.isolationFailure) { report.isolationFailure = entry.id; break; }
+    if (first.status === "passed" && firstPhase === "start" && !entry.turns.some(t => t.phase === "resume")) {
+      const resumed = await turn(entry, "resume", 1);
+      if (resumed.isolationFailure) { report.isolationFailure = entry.id; break; }
+    }
     if (!entry.turns.some(t => t.phase === "resume")) entry.resumeBlocked = "Start was not verified; no resume model call made.";
   }
   report.endedAt = new Date().toISOString();

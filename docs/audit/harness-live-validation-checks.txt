@@ -40,3 +40,31 @@ Review follow-up on 2026-10-01 UTC (review 5373648819, inline comment 4150730824
   Private output: /private/tmp/gallivant-harness-review-tests.txt
   npm run lint: exit 0
   git diff --check: exit 0
+
+Named provider batch follow-up on 2026-10-01 UTC:
+  npm test: exit 0; tests 588; pass 588; fail 0; cancelled 0; skipped 0; todo 0
+  duration_ms 15648.365334
+  Private output: /private/tmp/gallivant-provider-batch-tests.txt
+  npm run lint: exit 0
+  node --check test/live-harnesses.mjs: exit 0
+  node --check test/live-support.mjs: exit 0
+  git diff --check: exit 0
+  Credential/connection scan: 0 token/private-key/Console connection-ID patterns;
+  0 known environment secret values in the changed files.
+  Private permissions: two roots mode 0700; 24 logs/commands/exports mode 0600.
+
+  Goose batch: 3 starts, 0 resumes, 0 retries; 19301 ms; exit 1.
+  OpenCode Console batch: 3 original starts, 2 targeted start retries, 0 resumes;
+  746597 ms including investigation/retries; each invocation exit 1.
+  Longest additional turn: 164551 ms. No new DeepSeek calls; Tencent deferred.
+  Full preserved history: 13 start attempts, 0 resumes, 2 targeted retries.
+  Live attempts remain blocked/failed; ordinary green tests are not live proof.
+  Evidence: harness-live-validation-providers.json and directory-fix.md.
+
+  New regressions:
+    Goose typed authentication error followed by complete is not success
+    runner pins PWD to the checkout for tools that prefer it over process.cwd
+    live OpenCode directory evidence rejects tools rooted outside the disposable checkout
+    named live provider cases pin Console routes and saved Goose selectors
+  Existing external verifier regression now also rejects a contaminated remote
+  before a start call. The PWD regression failed before its fix and passes after it.

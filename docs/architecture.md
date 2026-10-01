@@ -41,7 +41,7 @@ templates/               passport, Claude sandbox settings, PRD, tracker/{tracke
 
 Harness implementation and demonstrated support are separate. The [live support matrix](audit/harness-live-validation.md)
 records installed versions, provider/model combinations, permission boundaries, budget controls and blocked phases.
-Claude/Codex have existing production evidence; Gemini, OpenCode and Goose currently have blocked coding attempts,
+Claude/Codex have existing production evidence; Gemini, OpenCode and Goose currently have blocked or failed coding attempts,
 not successful start/resume proof. Provider subscription eligibility is independent of the harness adapter.
 
 Repeat with `npm run test:live-harnesses -- --live` after the recorded operator remedies. The opt-in
@@ -51,6 +51,14 @@ to Gallivant. `test/live-support.mjs` verifies model evidence, adapter identity,
 behavior, commits, upstream and remote HEAD. Calls are sequential, at most 180 seconds per turn and 30 minutes
 per suite, with one start/resume pair and at most one justified targeted retry per combination. Refusals stop
 the affected phase; they are never converted into permission overrides. Raw streams and exports stay private.
+Named Meta/xAI/Alibaba cases use Goose's native saved providers and OpenCode's separate Console BYOK
+providers; they do not establish Zen/Go subscription access. Exact batch commands and blocked results are
+in the audit. DeepSeek is excluded from new calls and Tencent remains deferred.
+
+The shared runner pins child `PWD` to its requested working directory. OpenCode 1.18.31 prefers that
+environment variable for its tool directory, so changing `spawn.cwd` alone is insufficient. The live suite
+checks native session directory evidence and stops on a mismatch; start fixtures must have no prewritten
+files or remote commits. See the audit's directory incident and recovery record before repeating a failed case.
 
 A passing disposable test would still not establish GitHub review/completion behavior. Full support requires
 an authorized PRD through `ready`/`start`, PR creation, review/CI feedback, a same-session pushed fix and the
