@@ -140,6 +140,13 @@ checkpoint readable, including its earlier attempt history and retry reservation
 Offline fault injection exercises the actual suite entrypoint without provider calls;
 both the ledger and any interrupted temporary file remain private.
 
+Disposable fixture, turn, verifier and export environments explicitly exclude
+`GH_TOKEN`, `GITHUB_TOKEN`, `GH_ENTERPRISE_TOKEN` and `GITHUB_ENTERPRISE_TOKEN`,
+including through the shared runner's parent-environment merge. Native provider
+authentication is retained, and `runEnv` still isolates Git config and places gh
+configuration in the disposable checkout. This strips inherited GitHub token
+access; it does not replace the harness's native permission or sandbox boundary.
+
 After all synchronous preflight work, a final check immediately before launch
 requires usable suite time beyond the existing six-second termination reserve.
 This also applies to automatic resume and targeted retries. An exhausted or
@@ -149,6 +156,13 @@ deadline and 180-second turn cap are unchanged. Retry reservations remain durabl
 before launch, but the final check includes time spent saving them and releases
 them when insufficient time prevents launch.
 
+The suite awaits the runner's process-group kill fallback for every stop, including
+watchdog and SIGINT/SIGTERM stops that already recorded exit 137. It waits before
+metadata export, clearing the active run, or exiting an exceptional path. The
+fallback also terminates surviving group members when the original leader exits
+on SIGTERM. Interrupted turns remain blocked. Offline process-tree regressions
+cover both a leader that ignores SIGTERM and one that exits ahead of its child.
+
 Each invocation records its configured binaries and fresh version probes in the
 private ledger's `invocations` array. Retry and append check only the selected
 harnesses, once per harness, using the current configuration and shared version
@@ -157,6 +171,12 @@ creation or retry reservation, with the required version and binary path recorde
 as the remedy. New turns reference their invocation; earlier turns and the original
 version/PATH audit remain unchanged. Offline executable probes cover binary-path
 changes, upgrades, downgrades and failed probes without using a provider.
+
+After upgrading an unsupported binary, the same `--append` command can reuse its
+version-blocked entry only when it has no turns, retry reservation or fixture yet.
+The recorded provider/model, requested session and original suite deadline remain
+unchanged. A spent turn, another kind of block, or exhausted deadline still prevents
+this path from making a call; a version change does not grant an additional attempt.
 
 Every resume, including a targeted retry, now checks the last passed turn's Git
 state before launching a model call or consuming the retry allowance. The checkout

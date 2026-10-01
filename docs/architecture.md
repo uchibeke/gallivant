@@ -55,6 +55,12 @@ Named Meta/xAI/Alibaba cases use Goose's native saved providers and OpenCode's s
 providers; they do not establish Zen/Go subscription access. Exact batch commands and blocked results are
 in the audit. DeepSeek is excluded from new calls and Tencent remains deferred.
 
+Disposable turns explicitly exclude inherited GitHub and GitHub Enterprise token variables while retaining
+native provider setup. Short-lived callers use the runner's `waitForKill` after requesting a stop so the
+process-group fallback runs before exit; the live suite also waits before metadata export. An append can
+reuse a version-blocked case after upgrade only if it has no turn, retry reservation or fixture, within the
+original deadline and with the recorded provider/model unchanged.
+
 The shared runner pins child `PWD` to its requested working directory. OpenCode 1.18.31 prefers that
 environment variable for its tool directory, so changing `spawn.cwd` alone is insufficient. The live suite
 checks native session directory evidence and stops on a mismatch; start fixtures must have no prewritten

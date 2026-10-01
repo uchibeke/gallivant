@@ -216,3 +216,31 @@ Atomic-ledger review follow-up on 2026-10-01 UTC (review 5380708449, comment 415
   Full PR credential/Console-connection, known-secret and blocked-pattern scans: 0 matches.
   No provider calls or live retries were made; historical records remain unchanged.
   AC-2/AC-3 remain false pending the documented operator remedies and successful live evidence.
+
+Live-boundaries review follow-up on 2026-10-01 UTC (review 5384268305):
+  Comments 4159436871, 4159436881, 4159436887 addressed with offline regressions.
+  liveRunEnv excludes all four GitHub/GitHub Enterprise token environment variables,
+  including through makeRunner's inherited-env merge, while retaining provider setup.
+  The shared runner exposes waitForKill, keeping its fallback referenced for callers
+  that must await shutdown. The fallback also handles a leader exiting before its child.
+  Signal/watchdog kills are awaited before metadata or exit and remain blocked outcomes.
+  Append may reuse only an unspent version-preflight block, keeping the original
+  provider/model, session selector, invocation history, deadline and retry allowance.
+  Regressions in test/live_suite.test.mjs:
+    live child environment excludes inherited GitHub tokens through the shared runner
+    live append reuses an unspent version block after upgrade without resetting its budget or selection
+    live append rejects attempted, reserved, fixture-bearing and non-version blocks
+    live signal and watchdog stops await the process-group fallback before metadata and exit
+  SIGINT, SIGTERM and watchdog cases exercise real disposable process trees, including
+  a leader that exits on SIGTERM and a surviving child that ignores it.
+  Focused regressions: exit 0; tests 7; pass 7; fail 0
+  Private output: /private/tmp/gallivant-live-boundaries-focused-tests.txt
+  npm test: exit 0; tests 624; pass 624; fail 0; cancelled 0; skipped 0; deferred tests 0
+  duration_ms 24222.528917
+  Private output: /private/tmp/gallivant-live-boundaries-all-tests.txt
+  npm run lint: exit 0
+  Live tooling syntax checks: exit 0
+  git diff --check: exit 0
+  Full PR credential/Console-connection, known-secret and blocked-pattern scans: 0 matches.
+  No installed harness, provider call, live retry, provider setting or permission change.
+  Historical evidence and false AC-2/AC-3 attestations remain unchanged.

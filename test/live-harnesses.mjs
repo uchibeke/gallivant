@@ -8,11 +8,10 @@ import { basename, dirname, isAbsolute, join, relative, resolve } from "node:pat
 import { fileURLToPath } from "node:url";
 import { setTimeout as delay } from "node:timers/promises";
 import { adapterFor, assertSafeArgv, buildRun, MIN_VERSIONS } from "../lib/harness.mjs";
-import { runEnv } from "../lib/git.mjs";
 import { writeJsonAtomic } from "../lib/fs.mjs";
 import { isOurProcess, makeRunner } from "../lib/run.mjs";
 import { checkVersion } from "../lib/probe.mjs";
-import { BRANCH, NAMED_CASES, TURN_MS, SUITE_MS, assertAdapterRetry, auditLiveInvocation, classify, codingPrompt, costEvidence, effectiveModels, harnessForCase, launchLiveTurn, openSuiteLedger, parseEvents, refusalEvidence, safeLabel, selection, sessionIdentity, testExecution, turnFailure, verifyCheckout, verifyResumeFixture, verifySessionDirectory, verifyStartFixture } from "./live-support.mjs";
+import { BRANCH, NAMED_CASES, TURN_MS, SUITE_MS, assertAdapterRetry, assertUnspentVersionBlock, auditLiveInvocation, classify, codingPrompt, costEvidence, effectiveModels, harnessForCase, launchLiveTurn, liveRunEnv, openSuiteLedger, parseEvents, refusalEvidence, safeLabel, selection, sessionIdentity, testExecution, turnFailure, verifyCheckout, verifyResumeFixture, verifySessionDirectory, verifyStartFixture } from "./live-support.mjs";
 
 const repo = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const args = process.argv.slice(2);
@@ -112,7 +111,7 @@ function capture(cmd, argv, cwd, env, path) {
 function fixture(dir) {
   const cwd = join(dir, "checkout"), remote = join(dir, "remote.git");
   mkdirSync(cwd, { mode: 0o700 });
-  const env = { ...process.env, ...runEnv(config, null, identity, cwd) };
+  const env = liveRunEnv(config, identity, cwd);
   const git = (...argv) => capture("git", argv, cwd, env, join(dir, "fixture-git.txt")).trim();
   git("init", "--bare", `--initial-branch=${BRANCH}`, remote);
   git("init", "-b", BRANCH);
@@ -136,7 +135,7 @@ async function turn(entry, phase, attempt) {
   if (harness === "goose" && entry.configured.provider !== "unknown" && entry.configured.model !== "unknown") overrides.push("--provider", entry.configured.provider, "--model", entry.configured.model);
   spec.args.splice(harness === "gemini" ? 0 : spec.args.length - (harness === "goose" ? 2 : 1), 0, ...overrides);
   assertSafeArgv(spec.args);
-  const env = { ...process.env, ...runEnv(config, null, identity, cwd), ...spec.env };
+  const env = liveRunEnv(config, identity, cwd, spec.env);
   if (phase === "start") verifyStartFixture({ ...entry, env });
   else verifyResumeFixture({ ...entry, env, previous: previousTurn?.verification });
   const launch = launchLiveTurn({ report, entry, phase, attempt, deadline, runner, spec, env, fix, source, invocation: invocationIndex, checkpoint });
@@ -148,11 +147,10 @@ async function turn(entry, phase, attempt) {
   checkpoint();
   process.stdout.write(`${entry.id} ${phase} attempt ${attempt}: ${record.run}\n`);
   let timedOut = false;
-  let refused = false;
   while (runner.read(job.id)?.exit === null) {
     if (["guardrail", "permissions", "sandbox"].includes(classify(refusalEvidence(runner.lines(job.id))).category)) {
       assert.ok(runner.kill(job.id) || runner.read(job.id)?.exit !== null, "Cannot stop refused process; stop suite and resolve host process permissions");
-      refused = true; break;
+      break;
     }
     if (Date.now() >= limit || report.interrupted || report.suiteTimedOut) {
       assert.ok(runner.kill(job.id) || runner.read(job.id)?.exit !== null, "Cannot enforce deadline; stop suite and resolve host process permissions");
@@ -160,8 +158,10 @@ async function turn(entry, phase, attempt) {
     }
     await delay(200);
   }
-  // Wait for makeRunner's process-group SIGKILL fallback before launching another harness.
-  if (timedOut || refused) await delay(5_100);
+  // Includes watchdog/signal kills, which set exit 137 before this loop observes a timeout.
+  // The runner keeps its fallback timer referenced until the process-group kill has run.
+  await runner.waitForKill(job.id);
+  timedOut ||= !!(report.suiteTimedOut || report.interrupted);
   active = null;
   const lines = runner.lines(job.id);
   const outcome = adapter.outcome(lines);
@@ -245,8 +245,10 @@ try {
       assertAdapterRetry(failed, source);
       const failedLines = readFileSync(join(root, failed.run, "job.log"), "utf8").split("\n");
       assert.equal(classify(`${refusalEvidence(failedLines)}\n${adapterFor(entry.harness).outcome(failedLines).error || ""}`).category, "unclassified", "A corrected parser must not turn an earlier unclassified external failure into a retry");
+    } else if (entry) {
+      assert.ok(append, "This case already ran; only an explicit append can reuse an unspent version block");
+      assertUnspentVersionBlock(entry, report);
     } else {
-      assert.ok(!entry, "This case already ran; only a justified targeted retry can repeat it");
       const harness = harnessForCase(id);
       const dir = join(root, id);
       mkdirSync(dir, { mode: 0o700 });
@@ -281,5 +283,8 @@ try {
   process.exitCode = report.unstarted.length || report.cases.some(c => c.blocked || ["start", "resume"].some(phase => c.turns.findLast(t => t.phase === phase)?.status !== "passed")) ? 1 : 0;
 } finally {
   clearTimeout(watchdog);
-  if (active) active.runner.kill(active.id);
+  if (active) {
+    active.runner.kill(active.id);
+    await active.runner.waitForKill(active.id);
+  }
 }

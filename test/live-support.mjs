@@ -4,6 +4,7 @@ import { execFileSync } from "node:child_process";
 import { chmodSync, lstatSync, readFileSync, realpathSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { checkVersion } from "../lib/probe.mjs";
+import { runEnv } from "../lib/git.mjs";
 
 export const TURN_MS = 180_000;
 export const SUITE_MS = 30 * 60_000;
@@ -24,6 +25,22 @@ export const BRANCH = "gallivant/live-probe";
 export const parseEvents = lines => lines.flatMap(line => { try { return [JSON.parse(line)]; } catch { return []; } });
 export const safeLabel = value => typeof value === "string" && /^[\w./:-]{1,160}$/.test(value) ? value : "unknown";
 export const harnessForCase = id => id.startsWith("opencode") ? "opencode" : id.startsWith("goose") ? "goose" : id;
+
+// Undefined overrides also prevent makeRunner's parent-env merge from restoring tokens.
+// Keep native provider configuration intact; this is a disposable Git task with no GitHub work.
+export function liveRunEnv(config, identity, cwd, extra = {}) {
+  return { ...process.env, ...runEnv(config, null, identity, cwd), ...extra,
+    GH_TOKEN: undefined, GITHUB_TOKEN: undefined, GH_ENTERPRISE_TOKEN: undefined, GITHUB_ENTERPRISE_TOKEN: undefined,
+  };
+}
+
+export function assertUnspentVersionBlock(entry, report) {
+  assert.ok(Number.isInteger(entry.blockedInvocation) && entry.blockedInvocation >= 0
+    && report.invocations?.[entry.blockedInvocation]?.versions?.[entry.harness]?.ok === false
+    && Array.isArray(entry.turns) && entry.turns.length === 0 && !entry.retry
+    && !entry.cwd && !entry.remote && !entry.initial,
+  "This case already ran or was not blocked solely by version preflight; only an unspent version-blocked case can be appended again");
+}
 
 export function selection(args) {
   const selected = args.length ? args : CASES;
