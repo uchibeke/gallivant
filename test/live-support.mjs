@@ -7,6 +7,7 @@ import { checkVersion } from "../lib/probe.mjs";
 
 export const TURN_MS = 180_000;
 export const SUITE_MS = 30 * 60_000;
+export const STOP_GRACE_MS = 6_000; // Includes the runner's five-second TERM -> KILL grace.
 export const CASES = ["gemini", "opencode-default", "opencode-go", "goose"];
 // Native, test-local selections. Console BYOK routes are distinct from OpenCode Zen/Go subscriptions.
 export const NAMED_CASES = Object.freeze({
@@ -42,6 +43,26 @@ export async function auditLiveInvocation(report, config, { mode, selected, sour
   (report.invocations ||= []).push(audit);
   if (mode === "start") { report.versions = audit.versions; report.binaries = audit.binaries; }
   return audit;
+}
+
+// Call only after synchronous preflight. Nothing that can spend time belongs between this check and start.
+export function launchLiveTurn({ report, entry, phase, attempt, deadline, runner, spec, env, fix, source, invocation, checkpoint }, now = Date.now) {
+  // Preserve the durable retry reservation across a crash after launch, but include its I/O in the final check.
+  if (attempt === 2) { entry.retry = { phase, fix, source }; checkpoint(); }
+  const startedMs = now();
+  const startedAt = new Date(startedMs).toISOString();
+  const limit = Math.min(startedMs + TURN_MS, deadline) - STOP_GRACE_MS;
+  if (report.interrupted || report.suiteTimedOut || startedMs >= limit) {
+    if (attempt === 2) delete entry.retry;
+    (report.unstartedTurns ||= []).push({
+      case: entry.id, phase, attempt, invocation, checkedAt: startedAt,
+      reason: report.interrupted ? "suite interrupted before launch" : "suite has no usable time after reserving termination grace",
+    });
+    checkpoint();
+    return null;
+  }
+  const job = runner.start(`${phase}-${attempt}`, spec.cmd, spec.args, { cwd: entry.cwd, env });
+  return { job, startedAt, limit };
 }
 
 // Existing roots are operator input. Do not change their permissions until the ledger identifies this suite.

@@ -153,3 +153,24 @@ Version-preflight review follow-up on 2026-10-01 UTC (review 5379832759, comment
   Full PR credential/Console-connection, known-secret and blocked-pattern scans: 0 matches.
   No provider calls or live retries were made; provider settings and permissions remain unchanged.
   Historical evidence and false AC-2/AC-3 attestations remain unchanged.
+
+Deadline review follow-up on 2026-10-01 UTC (review 5380066474, comment 4156031609):
+  Every turn rechecks usable time after synchronous preflight and retry checkpoint I/O,
+  immediately before runner.start. Exhausted phases are persisted as unstarted.
+  Retry reservations remain durable before launch and are released if the time check blocks it.
+  Regressions in test/live_support.test.mjs:
+    live launch leaves exhausted or interrupted phases unstarted without spending a retry
+    live automatic resume rechecks time spent by the first turn and synchronous preflight
+    live launch preserves both time caps and persists retries before starting a child
+    live deadline includes retry checkpoint time and releases an unlaunched reservation
+  Focused clock/runner regressions: exit 0; tests 4; pass 4; fail 0
+  Private output: /private/tmp/gallivant-deadline-review-focused-tests-final.txt
+  npm test: exit 0; tests 613; pass 613; fail 0; cancelled 0; skipped 0; deferred tests 0
+  duration_ms 26680.841917
+  Private output: /private/tmp/gallivant-deadline-review-all-tests-final.txt
+  npm run lint: exit 0
+  Live tooling syntax checks: exit 0
+  git diff --check: exit 0
+  Full PR credential/Console-connection, known-secret and blocked-pattern scans: 0 matches.
+  No provider calls, live retries or policy changes were made; historical evidence is unchanged.
+  AC-2/AC-3 remain false pending the documented operator remedies and successful live evidence.

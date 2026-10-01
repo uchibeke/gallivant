@@ -11,7 +11,7 @@ import { adapterFor, assertSafeArgv, buildRun, MIN_VERSIONS } from "../lib/harne
 import { runEnv } from "../lib/git.mjs";
 import { isOurProcess, makeRunner } from "../lib/run.mjs";
 import { checkVersion } from "../lib/probe.mjs";
-import { BRANCH, NAMED_CASES, TURN_MS, SUITE_MS, auditLiveInvocation, classify, codingPrompt, costEvidence, effectiveModels, harnessForCase, openSuiteLedger, parseEvents, refusalEvidence, safeLabel, selection, sessionIdentity, testExecution, verifyCheckout, verifyResumeFixture, verifySessionDirectory, verifyStartFixture } from "./live-support.mjs";
+import { BRANCH, NAMED_CASES, TURN_MS, SUITE_MS, auditLiveInvocation, classify, codingPrompt, costEvidence, effectiveModels, harnessForCase, launchLiveTurn, openSuiteLedger, parseEvents, refusalEvidence, safeLabel, selection, sessionIdentity, testExecution, verifyCheckout, verifyResumeFixture, verifySessionDirectory, verifyStartFixture } from "./live-support.mjs";
 
 const repo = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const args = process.argv.slice(2);
@@ -139,17 +139,14 @@ async function turn(entry, phase, attempt) {
   const env = { ...process.env, ...runEnv(config, null, identity, cwd), ...spec.env };
   if (phase === "start") verifyStartFixture({ ...entry, env });
   else verifyResumeFixture({ ...entry, env, previous: previousTurn?.verification });
-  // A contaminated fixture must not spend the retry allowance or another model call.
-  if (attempt === 2) { entry.retry = { phase, fix, source }; checkpoint(); }
-  const startedAt = new Date().toISOString();
-  const job = runner.start(`${phase}-${attempt}`, spec.cmd, spec.args, { cwd, env });
+  const launch = launchLiveTurn({ report, entry, phase, attempt, deadline, runner, spec, env, fix, source, invocation: invocationIndex, checkpoint });
+  if (!launch) return null;
+  const { job, startedAt, limit } = launch;
   active = { runner, id: job.id };
   const record = { phase, attempt, startedAt, source, invocation: invocationIndex, command: [spec.cmd, ...spec.args.slice(0, -1), "<prompt in private cmd.json>"], run: relative(root, runner.dirOf(job.id)), status: "running" };
   entry.turns.push(record);
   checkpoint();
   process.stdout.write(`${entry.id} ${phase} attempt ${attempt}: ${record.run}\n`);
-  // Reserve the runner's five-second TERM -> KILL grace inside the hard budget.
-  const limit = Math.min(Date.parse(startedAt) + TURN_MS, deadline) - 6_000;
   let timedOut = false;
   let refused = false;
   while (runner.read(job.id)?.exit === null) {
@@ -268,9 +265,11 @@ try {
     if (!retry) Object.assign(entry, fixture(join(root, id)));
     const firstPhase = retry ? retryPhase : "start";
     const first = await turn(entry, firstPhase, retry ? 2 : 1);
+    if (!first) break;
     if (first.isolationFailure) { report.isolationFailure = entry.id; break; }
     if (first.status === "passed" && firstPhase === "start" && !entry.turns.some(t => t.phase === "resume")) {
       const resumed = await turn(entry, "resume", 1);
+      if (!resumed) break;
       if (resumed.isolationFailure) { report.isolationFailure = entry.id; break; }
     }
     if (!entry.turns.some(t => t.phase === "resume")) entry.resumeBlocked = "Start was not verified; no resume model call made.";

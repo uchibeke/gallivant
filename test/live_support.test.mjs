@@ -7,7 +7,107 @@ import { join } from "node:path";
 import { adapters } from "../lib/harness.mjs";
 import { runEnv } from "../lib/git.mjs";
 import { harnessBin } from "./helpers.mjs";
-import { BRANCH, NAMED_CASES, TURN_MS, SUITE_MS, auditLiveInvocation, selection, classify, costEvidence, refusalEvidence, openSuiteLedger, sessionIdentity, effectiveModels, testExecution, verifyCheckout, verifyResumeFixture, verifySessionDirectory, verifyStartFixture } from "./live-support.mjs";
+import { BRANCH, NAMED_CASES, TURN_MS, SUITE_MS, STOP_GRACE_MS, auditLiveInvocation, launchLiveTurn, selection, classify, costEvidence, refusalEvidence, openSuiteLedger, sessionIdentity, effectiveModels, testExecution, verifyCheckout, verifyResumeFixture, verifySessionDirectory, verifyStartFixture } from "./live-support.mjs";
+
+test("live launch leaves exhausted or interrupted phases unstarted without spending a retry", () => {
+  const now = 1_000_000;
+  for (const phase of ["start", "resume"]) for (const attempt of [1, 2]) {
+    for (const [remaining, flags] of [[-1, {}], [0, {}], [STOP_GRACE_MS - 1, {}], [STOP_GRACE_MS, {}], [SUITE_MS, { suiteTimedOut: true }], [SUITE_MS, { interrupted: "SIGTERM" }]]) {
+      const entry = { id: "goose-meta", cwd: "/unused", turns: phase === "resume" ? [{ phase: "start", status: "passed" }] : [] };
+      if (attempt === 2) entry.turns.push({ phase, attempt: 1, status: "failed" });
+      const before = structuredClone(entry);
+      const report = { ...flags };
+      let persisted;
+      const launch = launchLiveTurn({ report, entry, phase, attempt, deadline: now + remaining, invocation: 2,
+        checkpoint() { persisted = structuredClone({ entry, report }); },
+        runner: { start() { assert.fail("an exhausted or interrupted suite must not launch a child"); } },
+      }, () => now);
+      assert.equal(launch, null);
+      assert.deepEqual(entry, before, "no turn or retry reservation may be consumed");
+      assert.equal(report.unstartedTurns.length, 1);
+      assert.deepEqual(persisted, { entry, report });
+      assert.deepEqual(report.unstartedTurns[0], {
+        case: entry.id, phase, attempt, invocation: 2, checkedAt: new Date(now).toISOString(),
+        reason: flags.interrupted ? "suite interrupted before launch" : "suite has no usable time after reserving termination grace",
+      });
+    }
+  }
+});
+
+test("live automatic resume rechecks time spent by the first turn and synchronous preflight", () => {
+  let now = 1_000_000;
+  const deadline = now + SUITE_MS;
+  const calls = [];
+  const report = {};
+  const entry = { id: "goose-meta", cwd: "/unused", turns: [] };
+  const options = { report, entry, attempt: 1, deadline, spec: { cmd: "offline-probe", args: [] },
+    checkpoint() {},
+    runner: { start(...args) { calls.push(args); return { id: "first" }; } },
+  };
+  const first = launchLiveTurn({ ...options, phase: "start" }, () => now);
+  assert.equal(first.job.id, "first");
+  entry.turns.push({ phase: "start", status: "passed", startedAt: first.startedAt });
+  // Model work, metadata collection and synchronous preflight can consume the outer loop's remaining time.
+  now = deadline - STOP_GRACE_MS;
+  assert.equal(launchLiveTurn({ ...options, phase: "resume" }, () => now), null);
+  assert.equal(calls.length, 1);
+  assert.equal(entry.turns.length, 1);
+  assert.equal(entry.turns[0].status, "passed");
+  assert.equal(report.unstartedTurns[0].phase, "resume");
+});
+
+test("live launch preserves both time caps and persists retries before starting a child", () => {
+  const now = 1_000_000;
+  for (const [remaining, usable] of [[SUITE_MS, 174_000], [90_000, 84_000], [STOP_GRACE_MS + 1, 1]]) {
+    const entry = { id: "goose-meta", cwd: "/unused", turns: [] };
+    const source = { revision: "fixed" }, fix = "docs/audit/fix.md", env = { PROBE: "offline" };
+    const report = {};
+    let persisted;
+    const options = { report, entry, phase: "resume", attempt: 2, deadline: now + remaining, fix, source, env,
+      checkpoint() { persisted = structuredClone(entry); },
+      spec: { cmd: "offline-probe", args: ["resume"] },
+      runner: { start(...args) {
+        assert.deepEqual(persisted.retry, { phase: "resume", fix, source });
+        assert.deepEqual(args, ["resume-2", "offline-probe", ["resume"], { cwd: entry.cwd, env }]);
+        return { id: "retry" };
+      } },
+    };
+    const launch = launchLiveTurn(options, () => now);
+    assert.equal(launch.job.id, "retry");
+    assert.equal(launch.startedAt, new Date(now).toISOString());
+    assert.equal(launch.limit, now + usable);
+    assert.deepEqual(entry.retry, { phase: "resume", fix, source });
+    assert.equal(report.unstartedTurns, undefined);
+  }
+  const entry = { id: "goose-meta", cwd: "/unused", turns: [] };
+  assert.throws(() => launchLiveTurn({ report: {}, entry, phase: "resume", attempt: 2,
+    deadline: now + SUITE_MS, spec: { cmd: "offline-probe", args: [] },
+    checkpoint() {},
+    runner: { start() { throw new Error("child could not start"); } },
+  }, () => now), /child could not start/);
+  assert.equal(entry.retry.phase, "resume", "a launch exception must not erase a durable reservation");
+});
+
+test("live deadline includes retry checkpoint time and releases an unlaunched reservation", () => {
+  let now = 1_000_000;
+  const deadline = now + SUITE_MS;
+  const entry = { id: "goose-meta", cwd: "/unused", turns: [{ phase: "resume", attempt: 1, status: "failed" }] };
+  const report = {};
+  const saved = [];
+  const result = launchLiveTurn({ report, entry, phase: "resume", attempt: 2, deadline,
+    checkpoint() {
+      saved.push(structuredClone({ entry, report }));
+      now = deadline - STOP_GRACE_MS;
+    },
+    runner: { start() { assert.fail("checkpoint time exhausted the suite budget"); } },
+  }, () => now);
+  assert.equal(result, null);
+  assert.equal(saved.length, 2);
+  assert.equal(saved[0].entry.retry.phase, "resume");
+  assert.equal(saved[1].entry.retry, undefined);
+  assert.equal(saved[1].entry.turns.length, 1);
+  assert.equal(saved[1].report.unstartedTurns[0].phase, "resume");
+});
 
 test("live retry and append recheck current binaries while preserving earlier version evidence", async () => {
   const dir = mkdtempSync(join(tmpdir(), "gallivant-live-versions-"));
