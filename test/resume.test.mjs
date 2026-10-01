@@ -6,7 +6,9 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { resume } from "../lib/commands/resume.mjs";
 import { makeState, newEntry, STATES } from "../lib/state.mjs";
-import { mkdirSync } from "node:fs";
+import { mkdirSync, writeFileSync, readFileSync } from "node:fs";
+import { execFileSync } from "node:child_process";
+import { makeGit } from "../lib/git.mjs";
 import { join } from "node:path";
 import { CONFIG, T0, tempHome, fakeRunner, makeClock, silentLog, GOOD_PRD, fakeCredential, fakeIdentity, harnessBin } from "./helpers.mjs";
 
@@ -48,29 +50,20 @@ test("manual resume refuses an old Codex before restoring or merging the checkou
   assert.deepEqual(w.state.get(w.id), before);
 });
 
-test("resume refuses a checkout whose last run left work uncommitted, and names the commands", async () => {
-  // The bug this pins, from a live run. A start run produced a 33-file research package, passed both of its Verify
-  // commands and never committed. The next resume merged the base first, git refused because the dirty files would be
-  // overwritten, and `mergeBase` reported every merge error as `conflict: true`. So the operator was told the branch
-  // could not be merged with its base, which reads as two versions of a file disagreeing, and went looking for conflict
-  // markers in a tree that had none.
-  //
-  // The check lives here rather than in the tick because only a resume can tell the two dirty trees apart: a fix round
-  // dispatches against a worktree whose session may be mid-edit, and stopping for that would stop every healthy entry.
-  const w = world();
+test("resume preserves unfinished and carried work and defers only the base merge", async () => {
+  const w = world({ base: "main", sources: ["AGENTS.md"] });
   let merged = 0;
   w.ctx.git.dirty = async () => ({ modified: 6, untracked: 41 });
   w.ctx.git.mergeBase = async () => { merged++; return { merged: true }; };
-  await assert.rejects(() => resume(w.ctx, { handle: "widget-export" }), e => {
-    assert.match(e.message, /6 modified and 41 untracked files/, "the counts, which are the difference between nearly done and did nothing");
-    assert.match(e.message, /are not committed/, "named for what it is, not as a conflict");
-    assert.match(e.message, /git add -A && git commit/, "and the command that resolves it");
-    assert.doesNotMatch(e.message, /conflict/i, "the word that sent an operator looking for markers that were not there");
-    return true;
-  });
-  assert.equal(merged, 0, "read before the merge is attempted, so nothing is fetched, merged or aborted");
-  assert.equal(w.runner.started.length, 0, "and no session is spawned");
-  assert.equal(w.state.get(w.id).reason, "no-pr", "the entry is untouched: a refusal is not a state change");
+  await resume(w.ctx, { handle: "widget-export", note: "Restore the detailed article." });
+  assert.equal(merged, 0);
+  assert.equal(w.runner.started.length, 1);
+  const prompt = w.runner.started[0].args.at(-1);
+  assert.match(prompt, /6 modified and 41 untracked/);
+  assert.match(prompt, /base merge was deferred/);
+  assert.match(prompt, /AGENTS.md/);
+  assert.match(prompt, /Do not stash, reset, discard, or blanket-stage/);
+  assert.match(prompt, /Restore the detailed article/);
 });
 
 test("resume carries on when the checkout is clean, so the check costs a reading and nothing else", async () => {
@@ -82,6 +75,36 @@ test("resume carries on when the checkout is clean, so the check costs a reading
   await resume(w.ctx, { handle: "widget-export" });
   assert.equal(merged, 1, "the base is still brought in");
   assert.equal(w.runner.started.length, 1, "and the session is resumed");
+});
+
+test("correction leaves the real index, carried instructions and partial files byte-for-byte intact", async () => {
+  const w = world({ base: "main", sources: ["AGENTS.md"] });
+  const dir = w.state.get(w.id).worktree;
+  const git = (...args) => execFileSync("git", args, { cwd: dir, stdio: "pipe" });
+  git("init", "-q");
+  writeFileSync(join(dir, "article.md"), "original\n");
+  git("add", "article.md");
+  git("-c", "user.name=Test", "-c", "user.email=test@example.com", "-c", "commit.gpgsign=false", "commit", "-qm", "Initial article");
+  writeFileSync(join(dir, "article.md"), "staged changes\n");
+  git("add", "article.md");
+  writeFileSync(join(dir, "article.md"), "unfinished correction\n");
+  writeFileSync(join(dir, "AGENTS.md"), "operator instructions\n");
+  const index = readFileSync(join(dir, ".git/index"));
+  w.ctx.git.dirty = makeGit({ config: w.ctx.config }).dirty;
+  w.ctx.git.mergeBase = async () => assert.fail("a dirty checkout must not merge");
+  await resume(w.ctx, { handle: w.id, note: "Preserve the detailed article." });
+  assert.deepEqual(readFileSync(join(dir, ".git/index")), index);
+  assert.equal(readFileSync(join(dir, "article.md"), "utf8"), "unfinished correction\n");
+  assert.equal(readFileSync(join(dir, "AGENTS.md"), "utf8"), "operator instructions\n");
+  assert.equal(w.runner.started.length, 1);
+});
+
+test("unreadable worktree status cannot authorize a merge or resume", async () => {
+  const w = world({ base: "main" });
+  w.ctx.git.dirty = makeGit({ config: w.ctx.config, exec: async () => { throw new Error("status unreadable"); } }).dirty;
+  w.ctx.git.mergeBase = async () => assert.fail("must not merge");
+  await assert.rejects(() => resume(w.ctx, { handle: w.id }), /status unreadable/);
+  assert.equal(w.runner.started.length, 0);
 });
 
 test("a git with no dirty reader resumes as before, because a missing check is not a clean tree", async () => {

@@ -36,7 +36,8 @@ const HELP = `gallivant: write a PRD, mark it ready, go outside.
                                          put a stopped entry back to work in the session that was doing it;
                                          --resnapshot makes an edited brief the one the gate judges
   gallivant recheck <handle>           queue a PR recheck without resetting its budget
-  gallivant say <handle> --note "..."  queue an update for the same session after its current run
+  gallivant say <handle> --note "..." [--interrupt]
+                                         send an update in the same session; --interrupt stops the active run first
   gallivant remove <handle>              forget an entry; the PR, the branch and the checkout are left alone
 
 Config: $GALLIVANT_HOME/config.json (default ~/.gallivant). Run doctor for the file to write.`;
@@ -44,7 +45,7 @@ Config: $GALLIVANT_HOME/config.json (default ~/.gallivant). Run doctor for the f
 const OPTIONS = {
   check: { type: "boolean" }, once: { type: "boolean" }, all: { type: "boolean" }, json: { type: "boolean" },
   send: { type: "boolean" }, probe: { type: "boolean" }, help: { type: "boolean", short: "h" },
-  "no-daemon": { type: "boolean" }, note: { type: "string" }, resnapshot: { type: "boolean" },
+  "no-daemon": { type: "boolean" }, note: { type: "string" }, resnapshot: { type: "boolean" }, interrupt: { type: "boolean" },
   base: { type: "string" }, harness: { type: "string" }, session: { type: "string" }, worktree: { type: "string" }, dir: { type: "string" }, port: { type: "string" },
 };
 
@@ -76,8 +77,8 @@ async function main(argv) {
   if (cmd === "recheck" || cmd === "say") {
     if (!arg) throw new Error(`${cmd} needs a handle`);
     if (cmd === "say" && !values.note?.trim()) throw new Error("say needs --note with a message");
-    const r = requestControl(ctx, { handle: arg, action: cmd === "say" ? "message" : "recheck", note: values.note });
-    console.log(`${r.entry}: ${r.action} queued; it will wait for any active run to finish.`);
+    const r = requestControl(ctx, { handle: arg, action: cmd === "say" ? "message" : "recheck", note: values.note, interrupt: values.interrupt });
+    console.log(`${r.entry}: ${r.action} queued; ${r.interrupt ? "the daemon will stop the active run and resume its session with your message" : "it will wait for any active run to finish"}.`);
     if (!values["no-daemon"]) {
       try { await upInBackground(ctx); }
       catch (e) { console.error(`Request saved, but the daemon could not start: ${e.message}\nAfter fixing the daemon, the saved request will be picked up; do not resend it.`); return 1; }

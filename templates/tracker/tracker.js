@@ -21,6 +21,11 @@ if (runControls) {
   const status = document.getElementById("control-status");
   const refresh = document.getElementById("control-refresh");
   const lastMessage = document.getElementById("last-message");
+  const interrupt = document.getElementById("interrupt-run");
+  document.getElementById("restore-message")?.addEventListener("click", () => {
+    if (!note.value.trim()) note.value = lastMessage.querySelector("pre").textContent;
+    note.focus(); syncButtons();
+  });
   const endpoint = `${BASE}/api/run/control?id=${encodeURIComponent(runControls.dataset.entry)}`;
   let pending = runControls.dataset.pending === "true";
   let closed = false;
@@ -40,6 +45,11 @@ if (runControls) {
       if (control.status === "queued" || control.status === "applying") { setTimeout(poll, 3000); return; }
       pending = false;
       closed = data.state === "done";
+      if (data.lastMessage?.note) {
+        lastMessage.querySelector("pre").textContent = data.lastMessage.note;
+        lastMessage.hidden = false;
+      }
+      if (control.status === "failed" && control.action === "message" && !note.value) note.value = control.note || lastMessage.querySelector("pre").textContent;
       syncButtons();
       // Follow the newest run unless that would discard a draft or interrupt typing.
       if (!note.value && document.activeElement !== note) { location.replace(refresh.href); return; }
@@ -55,7 +65,7 @@ if (runControls) {
     try {
       const response = await fetch(endpoint, {
         method: "POST", headers: { "Content-Type": "application/json", "X-Gallivant-Token": runControls.dataset.token },
-        body: JSON.stringify(action === "message" ? { action, note: draft } : { action }),
+        body: JSON.stringify(action === "message" ? { action, note: draft, ...(interrupt?.checked ? { interrupt: true } : {}) } : { action }),
       });
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Request failed. Reload to check its status before retrying.");
