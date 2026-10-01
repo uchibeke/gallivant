@@ -268,3 +268,29 @@ Git-auth environment review follow-up on 2026-10-01 UTC (review 5384881535, comm
   No installed harness, SSH agent, credential helper or network provider was invoked
   by this regression. Environment filtering is not a replacement for native sandboxing.
   Historical evidence and false AC-2/AC-3 attestations remain unchanged.
+
+Transport/start-retry review follow-up on 2026-10-01 UTC (review 5385025050):
+  Comments 4160069437 and 4160069445 addressed with offline regressions.
+  liveRunEnv pins GIT_ALLOW_PROTOCOL=file and GIT_SSH_COMMAND=false after clearing
+  inherited authentication channels, preserving HOME and native provider setup.
+  Git accepts a local bare push and rejects direct SSH, HTTP(S) and Git URLs before
+  connecting; the pinned SSH command refuses execution without reading identity files.
+  An eligible start retry now creates a distinct empty checkout/bare remote, records
+  previousStartFixture and new per-turn fixture pointers, and preserves original evidence.
+  Regression in test/live_suite.test.mjs:
+    live Git transport permits local remotes and refuses SSH default identities and network URLs
+    live start retry preserves authored evidence and uses a fresh checkout and bare remote
+  The offline retry authors, commits and pushes in attempt one, then confirms attempt
+  two starts empty while old files, commit, remote HEAD and log remain unchanged.
+  A further retry is refused; source/defect, denial, version and deadline gates remain.
+  Focused regressions: exit 0; tests 4; pass 4; fail 0
+  Private output: /private/tmp/gallivant-transport-retry-focused-tests.txt
+  npm test: exit 0; tests 627; pass 627; fail 0; cancelled 0; skipped 0; deferred tests 0
+  duration_ms 27503.5485
+  Private output: /private/tmp/gallivant-transport-retry-all-tests.txt
+  npm run lint: exit 0
+  Live tooling syntax checks: exit 0
+  git diff --check: exit 0
+  Full PR credential/Console-connection, known-secret and blocked-pattern scans: 0 matches.
+  No installed harness, provider call, live retry or operator configuration change.
+  Historical evidence, exhausted allowances and false AC-2/AC-3 attestations remain unchanged.

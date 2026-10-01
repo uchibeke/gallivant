@@ -34,7 +34,11 @@ export function liveRunEnv(config, identity, cwd, extra = {}) {
   for (const key of Object.keys(env)) {
     if (/^(?:GIT_|GH_|GITHUB_|SSH_|GCM_|VSCODE_(?:GIT|SSH)_)/i.test(key)) env[key] = undefined;
   }
-  return { ...env, ...runEnv(config, null, identity, cwd), GIT_TERMINAL_PROMPT: "0" };
+  return { ...env, ...runEnv(config, null, identity, cwd), GIT_TERMINAL_PROMPT: "0",
+    // Local bare remotes need no network transport or SSH identity, including keys
+    // discoverable from HOME. Keep HOME intact for the selected provider's setup.
+    GIT_ALLOW_PROTOCOL: "file", GIT_SSH_COMMAND: "false",
+  };
 }
 
 export function assertUnspentVersionBlock(entry, report) {

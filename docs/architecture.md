@@ -56,8 +56,9 @@ providers; they do not establish Zen/Go subscription access. Exact batch command
 in the audit. DeepSeek is excluded from new calls and Tencent remains deferred.
 
 Disposable turns clear inherited Git/GitHub/SSH, credential-manager and editor askpass variables, then
-restore `runEnv`'s Git identity and isolated config with terminal credential prompts disabled. Native provider
-setup is retained; environment filtering does not replace native sandboxing. Short-lived callers use the
+restore `runEnv`'s Git identity and isolated config with terminal credential prompts disabled. Git accepts only
+file transport and its SSH command refuses execution, preventing default SSH identity fallback while keeping
+provider `HOME` intact. Child-environment controls do not replace native sandboxing. Short-lived callers use the
 runner's `waitForKill` after requesting a stop so the process-group fallback runs before exit; the live suite
 also waits before metadata export. An append can
 reuse a version-blocked case after upgrade only if it has no turn, retry reservation or fixture, within the
@@ -67,6 +68,9 @@ The shared runner pins child `PWD` to its requested working directory. OpenCode 
 environment variable for its tool directory, so changing `spawn.cwd` alone is insufficient. The live suite
 checks native session directory evidence and stops on a mismatch; start fixtures must have no prewritten
 files or remote commits. See the audit's directory incident and recovery record before repeating a failed case.
+An eligible start retry gets a distinct pristine checkout/remote while retaining the original fixture and
+turn evidence; resume retries still require the last passed checkout and remote state. Retry and time limits
+are unchanged, and no historical failure or exhausted retry is relabeled by these fixes.
 
 A passing disposable test would still not establish GitHub review/completion behavior. Full support requires
 an authorized PRD through `ready`/`start`, PR creation, review/CI feedback, a same-session pushed fix and the

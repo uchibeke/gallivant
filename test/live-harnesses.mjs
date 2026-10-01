@@ -142,7 +142,9 @@ async function turn(entry, phase, attempt) {
   if (!launch) return null;
   const { job, startedAt, limit } = launch;
   active = { runner, id: job.id };
-  const record = { phase, attempt, startedAt, source, invocation: invocationIndex, command: [spec.cmd, ...spec.args.slice(0, -1), "<prompt in private cmd.json>"], run: relative(root, runner.dirOf(job.id)), status: "running" };
+  const record = { phase, attempt, startedAt, source, invocation: invocationIndex,
+    fixture: { cwd, remote, initial: entry.initial, requestedSession: entry.requestedSession },
+    command: [spec.cmd, ...spec.args.slice(0, -1), "<prompt in private cmd.json>"], run: relative(root, runner.dirOf(job.id)), status: "running" };
   entry.turns.push(record);
   checkpoint();
   process.stdout.write(`${entry.id} ${phase} attempt ${attempt}: ${record.run}\n`);
@@ -265,6 +267,15 @@ try {
     }
     if (entry.blockedInvocation !== undefined) { delete entry.blocked; delete entry.blockedInvocation; }
     if (!retry) Object.assign(entry, fixture(join(root, id)));
+    else if (retryPhase === "start" && !entry.previousStartFixture) {
+      // A parser defect may be discovered after real edits/commits/pushes. Preserve
+      // that evidence and retry the start in a distinct pristine checkout/remote.
+      const previous = { cwd: entry.cwd, remote: entry.remote, initial: entry.initial, requestedSession: entry.requestedSession };
+      const fresh = fixture(mkdtempSync(join(root, id, "start-retry-")));
+      entry.previousStartFixture = previous;
+      Object.assign(entry, fresh, { requestedSession: adapterFor(entry.harness).newSession() });
+      checkpoint();
+    }
     const firstPhase = retry ? retryPhase : "start";
     const first = await turn(entry, firstPhase, retry ? 2 : 1);
     if (!first) break;

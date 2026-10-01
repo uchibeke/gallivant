@@ -133,6 +133,16 @@ unclassified records without a stage cannot qualify automatically. Historical
 results and the two previously documented directory-fix retries are preserved;
 no old record is relabeled to obtain another call.
 
+An eligible start retry creates a distinct empty checkout and local bare remote
+under the same private suite root. `previousStartFixture` retains the original
+checkout/remote/initial-commit/session pointers; the first attempt's files, commits,
+remote and logs are not reset or overwritten. New turn records include their
+fixture pointers. Harnesses with caller-selected session names receive a fresh
+start name, and any subsequent resume uses that successful retry's recorded identity.
+The prepared retry fixture is checkpointed and still must pass pristine-start checks.
+This does not grant another retry, reset the suite deadline, or permit a retry of
+provider/permission failures. Resume retries still require the last passed state.
+
 Suite checkpoints use the shared atomic JSON writer: a private temporary file is
 written and flushed before replacing `report.json` by rename. A partial write,
 process termination during the write, or rename failure leaves the last completed
@@ -146,10 +156,13 @@ including through the shared runner's parent-environment merge. This removes
 GitHub tokens, SSH agent sockets and commands, askpass programs, editor credential
 IPC handles, injected Git config/headers and client-certificate selectors.
 The suite then restores only `runEnv`'s Git identity/config isolation and disposable
-gh config path, and disables terminal credential prompts. Native provider setup is
-retained. These changes remove inherited credential channels; they do not prevent
-an unrestricted process from reading credentials on disk or replace the harness's
-native permission or sandbox boundary. No operator settings were changed.
+gh config path, and disables terminal credential prompts. Git is then restricted to
+the `file` transport (`GIT_ALLOW_PROTOCOL=file`), and its SSH command is pinned to
+`false`, so Git never falls back to default identity files or SSH config. `HOME`
+and native provider setup remain intact. These child-environment controls do not
+prevent an unrestricted process from overriding its environment, running raw SSH
+or reading credentials on disk; native permission and sandbox boundaries are still
+required. No operator settings were changed.
 
 After all synchronous preflight work, a final check immediately before launch
 requires usable suite time beyond the existing six-second termination reserve.
