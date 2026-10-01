@@ -244,3 +244,27 @@ Live-boundaries review follow-up on 2026-10-01 UTC (review 5384268305):
   Full PR credential/Console-connection, known-secret and blocked-pattern scans: 0 matches.
   No installed harness, provider call, live retry, provider setting or permission change.
   Historical evidence and false AC-2/AC-3 attestations remain unchanged.
+
+Git-auth environment review follow-up on 2026-10-01 UTC (review 5384881535, comment 4159947917):
+  liveRunEnv clears inherited and adapter-provided Git/GitHub/SSH, credential-manager
+  and editor askpass variables before restoring only runEnv's Git identity/config.
+  Undefined overrides survive the shared runner's parent-env merge; terminal Git
+  credential prompts are disabled. Provider setup and operator settings are unchanged.
+  Regression in test/live_suite.test.mjs:
+    live child environment strips Git and SSH credential channels and restores only trusted Git config
+  Actual suite child checks cover SSH sockets, askpass programs, command overrides,
+  config/authorization-header injection, stale config slots, client-certificate selectors
+  and editor credential IPC handles. Git itself reports no injected header, only the
+  expected helper, and the disposable identity; provider sentinel remains available.
+  Focused regressions: exit 0; tests 2; pass 2; fail 0
+  Private output: /private/tmp/gallivant-git-auth-focused-tests.txt
+  npm test: exit 0; tests 625; pass 625; fail 0; cancelled 0; skipped 0; deferred tests 0
+  duration_ms 27094.608666
+  Private output: /private/tmp/gallivant-git-auth-all-tests.txt
+  npm run lint: exit 0
+  Live tooling syntax checks: exit 0
+  git diff --check: exit 0
+  Full PR credential/Console-connection, known-secret and blocked-pattern scans: 0 matches.
+  No installed harness, SSH agent, credential helper or network provider was invoked
+  by this regression. Environment filtering is not a replacement for native sandboxing.
+  Historical evidence and false AC-2/AC-3 attestations remain unchanged.

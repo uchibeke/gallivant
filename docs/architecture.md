@@ -55,9 +55,11 @@ Named Meta/xAI/Alibaba cases use Goose's native saved providers and OpenCode's s
 providers; they do not establish Zen/Go subscription access. Exact batch commands and blocked results are
 in the audit. DeepSeek is excluded from new calls and Tencent remains deferred.
 
-Disposable turns explicitly exclude inherited GitHub and GitHub Enterprise token variables while retaining
-native provider setup. Short-lived callers use the runner's `waitForKill` after requesting a stop so the
-process-group fallback runs before exit; the live suite also waits before metadata export. An append can
+Disposable turns clear inherited Git/GitHub/SSH, credential-manager and editor askpass variables, then
+restore `runEnv`'s Git identity and isolated config with terminal credential prompts disabled. Native provider
+setup is retained; environment filtering does not replace native sandboxing. Short-lived callers use the
+runner's `waitForKill` after requesting a stop so the process-group fallback runs before exit; the live suite
+also waits before metadata export. An append can
 reuse a version-blocked case after upgrade only if it has no turn, retry reservation or fixture, within the
 original deadline and with the recorded provider/model unchanged.
 

@@ -26,12 +26,15 @@ export const parseEvents = lines => lines.flatMap(line => { try { return [JSON.p
 export const safeLabel = value => typeof value === "string" && /^[\w./:-]{1,160}$/.test(value) ? value : "unknown";
 export const harnessForCase = id => id.startsWith("opencode") ? "opencode" : id.startsWith("goose") ? "goose" : id;
 
-// Undefined overrides also prevent makeRunner's parent-env merge from restoring tokens.
-// Keep native provider configuration intact; this is a disposable Git task with no GitHub work.
+// Undefined overrides prevent makeRunner's parent-env merge from restoring credential
+// channels. Rebuild Git settings from runEnv only, after clearing inherited/adapter values.
+// Native provider setup is retained; these disposable tasks have no GitHub work.
 export function liveRunEnv(config, identity, cwd, extra = {}) {
-  return { ...process.env, ...runEnv(config, null, identity, cwd), ...extra,
-    GH_TOKEN: undefined, GITHUB_TOKEN: undefined, GH_ENTERPRISE_TOKEN: undefined, GITHUB_ENTERPRISE_TOKEN: undefined,
-  };
+  const env = { ...process.env, ...extra };
+  for (const key of Object.keys(env)) {
+    if (/^(?:GIT_|GH_|GITHUB_|SSH_|GCM_|VSCODE_(?:GIT|SSH)_)/i.test(key)) env[key] = undefined;
+  }
+  return { ...env, ...runEnv(config, null, identity, cwd), GIT_TERMINAL_PROMPT: "0" };
 }
 
 export function assertUnspentVersionBlock(entry, report) {

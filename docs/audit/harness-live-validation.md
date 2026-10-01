@@ -140,12 +140,16 @@ checkpoint readable, including its earlier attempt history and retry reservation
 Offline fault injection exercises the actual suite entrypoint without provider calls;
 both the ledger and any interrupted temporary file remain private.
 
-Disposable fixture, turn, verifier and export environments explicitly exclude
-`GH_TOKEN`, `GITHUB_TOKEN`, `GH_ENTERPRISE_TOKEN` and `GITHUB_ENTERPRISE_TOKEN`,
-including through the shared runner's parent-environment merge. Native provider
-authentication is retained, and `runEnv` still isolates Git config and places gh
-configuration in the disposable checkout. This strips inherited GitHub token
-access; it does not replace the harness's native permission or sandbox boundary.
+Disposable fixture, turn, verifier and export environments clear inherited `GIT_*`,
+`GH_*`, `GITHUB_*`, `SSH_*`, `GCM_*`, `VSCODE_GIT_*` and `VSCODE_SSH_*` variables,
+including through the shared runner's parent-environment merge. This removes
+GitHub tokens, SSH agent sockets and commands, askpass programs, editor credential
+IPC handles, injected Git config/headers and client-certificate selectors.
+The suite then restores only `runEnv`'s Git identity/config isolation and disposable
+gh config path, and disables terminal credential prompts. Native provider setup is
+retained. These changes remove inherited credential channels; they do not prevent
+an unrestricted process from reading credentials on disk or replace the harness's
+native permission or sandbox boundary. No operator settings were changed.
 
 After all synchronous preflight work, a final check immediately before launch
 requires usable suite time beyond the existing six-second termination reserve.

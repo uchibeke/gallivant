@@ -9,6 +9,10 @@ import { setTimeout as delay } from "node:timers/promises";
 import { assertUnspentVersionBlock, liveRunEnv, SUITE_MS, TURN_MS } from "./live-support.mjs";
 
 const tokenNames = ["GH_TOKEN", "GITHUB_TOKEN", "GH_ENTERPRISE_TOKEN", "GITHUB_ENTERPRISE_TOKEN"];
+const gitAuthNames = ["SSH_AUTH_SOCK", "SSH_AGENT_PID", "SSH_ASKPASS", "SSH_ASKPASS_REQUIRE",
+  "GIT_ASKPASS", "GIT_SSH", "GIT_SSH_COMMAND", "GIT_SSH_VARIANT", "GIT_CONFIG_PARAMETERS", "GIT_CONFIG_SYSTEM",
+  "GIT_CONFIG_KEY_99", "GIT_CONFIG_VALUE_99", "GIT_SSL_CERT", "GIT_SSL_KEY", "GCM_CREDENTIAL_STORE",
+  "VSCODE_GIT_ASKPASS_NODE", "VSCODE_GIT_ASKPASS_MAIN", "VSCODE_GIT_ASKPASS_EXTRA_ARGS", "VSCODE_GIT_IPC_HANDLE", "VSCODE_SSH_ASKPASS_HANDLE"];
 const read = path => JSON.parse(readFileSync(path, "utf8"));
 const waitUntil = async predicate => {
   for (let i = 0; i < 200; i++) { if (predicate()) return; await delay(50); }
@@ -28,7 +32,7 @@ function fixture(mode = "exit") {
   const descendant = `process.on('SIGTERM', () => {}); process.stdout.write('ready'); setInterval(() => {}, 1000);`;
   writeFileSync(bin, `#!${process.execPath}
 import { readFileSync, writeFileSync, appendFileSync } from 'node:fs';
-import { spawn } from 'node:child_process';
+import { execFileSync, spawn } from 'node:child_process';
 const root = ${JSON.stringify(root)}, mode = ${JSON.stringify(mode)};
 const args = process.argv.slice(2);
 appendFileSync(root + '/calls.jsonl', JSON.stringify(args.slice(0, 2)) + '\\n');
@@ -39,8 +43,10 @@ if (args[0] === 'export') {
 }
 writeFileSync(root + '/environment.json', JSON.stringify({
   tokens: ${JSON.stringify(tokenNames)}.filter(key => key in process.env),
+  gitAuth: ${JSON.stringify(gitAuthNames)}.filter(key => key in process.env),
   providerPreserved: process.env.GEMINI_API_KEY === 'offline-provider-sentinel',
   ghConfig: process.env.GH_CONFIG_DIR,
+  gitConfigKeys: execFileSync('git', ['config', '--name-only', '--list'], { encoding: 'utf8' }).trim().split('\\n'),
 }));
 process.stdout.write(JSON.stringify({ type: 'text', sessionID: 'ses_offline123' }) + '\\n');
 if (mode === 'exit') process.exit(1);
@@ -53,7 +59,7 @@ setInterval(() => {}, 1000);
   return root;
 }
 
-function invoke(root, { watchdog = false } = {}) {
+function invoke(root, { watchdog = false, env = {} } = {}) {
   const source = `
 import os from 'node:os';
 import { existsSync } from 'node:fs';
@@ -72,7 +78,7 @@ process.argv = [process.execPath, 'live-harnesses.mjs', '--live', '--append', ${
 await import(${JSON.stringify(new URL("./live-harnesses.mjs", import.meta.url).href)});
 `;
   const child = spawn(process.execPath, ["--input-type=module", "-e", source], {
-    env: { ...process.env, ...Object.fromEntries(tokenNames.map(key => [key, "offline-github-sentinel"])), GEMINI_API_KEY: "offline-provider-sentinel" },
+    env: { ...process.env, ...Object.fromEntries(tokenNames.map(key => [key, "offline-github-sentinel"])), GEMINI_API_KEY: "offline-provider-sentinel", ...env },
     stdio: ["ignore", "pipe", "pipe"],
   });
   let stderr = "";
@@ -108,6 +114,45 @@ test("live child environment excludes inherited GitHub tokens through the shared
     assert.deepEqual(actual.tokens, []);
     assert.equal(actual.providerPreserved, true);
     assert.equal(actual.ghConfig, join(root, "opencode-console-meta", "checkout", ".git", "gallivant-gh"));
+  } finally { cleanup(root, run?.child); }
+});
+
+test("live child environment strips Git and SSH credential channels and restores only trusted Git config", async () => {
+  const root = fixture();
+  let run;
+  try {
+    const inherited = { ...Object.fromEntries(gitAuthNames.map(key => [key, "offline-auth-sentinel"])),
+      GIT_CONFIG_PARAMETERS: "'credential.helper=!false'",
+      GIT_CONFIG_COUNT: "1", GIT_CONFIG_KEY_0: "http.extraHeader", GIT_CONFIG_VALUE_0: "Authorization: offline-header",
+    };
+    const identity = { name: "Offline probe", email: "probe@example.invalid" };
+    const env = liveRunEnv({}, identity, root, { ...inherited,
+      GIT_CONFIG_GLOBAL: "/untrusted/config", GIT_CONFIG_NOSYSTEM: "0", GH_CONFIG_DIR: "/untrusted/gh",
+      GIT_TERMINAL_PROMPT: "1", GEMINI_API_KEY: "offline-provider-sentinel",
+    });
+    for (const key of gitAuthNames) assert.equal(env[key], undefined, key);
+    assert.equal(env.GIT_CONFIG_GLOBAL, "/dev/null");
+    assert.equal(env.GIT_CONFIG_NOSYSTEM, "1");
+    assert.equal(env.GH_CONFIG_DIR, join(root, ".git", "gallivant-gh"));
+    assert.equal(env.GIT_TERMINAL_PROMPT, "0");
+    assert.equal(env.GEMINI_API_KEY, "offline-provider-sentinel");
+    const pairs = Array.from({ length: Number(env.GIT_CONFIG_COUNT) }, (_, i) => [env[`GIT_CONFIG_KEY_${i}`], env[`GIT_CONFIG_VALUE_${i}`]]);
+    assert.deepEqual(pairs.filter(([key]) => key.startsWith("user.")), [["user.name", identity.name], ["user.email", identity.email]]);
+    assert.equal(pairs.some(([key]) => key === "http.extraHeader"), false);
+
+    // The actual suite uses this environment for fixture Git operations, the shared
+    // runner and metadata exports. No SSH agent, helper or network endpoint is contacted.
+    run = invoke(root, { env: inherited });
+    const result = await run.done;
+    assert.equal(result.code, 1, result.stderr); // The offline harness intentionally fails.
+    const actual = read(join(root, "environment.json"));
+    assert.deepEqual(actual.gitAuth, []);
+    assert.deepEqual(actual.tokens, []);
+    assert.equal(actual.providerPreserved, true);
+    assert.equal(actual.gitConfigKeys.includes("http.extraheader"), false);
+    assert.equal(actual.gitConfigKeys.filter(key => key === "credential.helper").length, 1);
+    assert.ok(actual.gitConfigKeys.includes("user.name") && actual.gitConfigKeys.includes("user.email"));
+    assert.equal(read(join(root, "report.json")).cases[0].turns.length, 1);
   } finally { cleanup(root, run?.child); }
 });
 
