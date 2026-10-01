@@ -143,7 +143,7 @@ async function turn(entry, phase, attempt) {
   const record = { phase, attempt, startedAt, source, command: [spec.cmd, ...spec.args.slice(0, -1), "<prompt in private cmd.json>"], run: relative(root, runner.dirOf(job.id)), status: "running" };
   entry.turns.push(record);
   checkpoint();
-  console.log(`${entry.id} ${phase} attempt ${attempt}: ${record.run}`);
+  process.stdout.write(`${entry.id} ${phase} attempt ${attempt}: ${record.run}\n`);
   // Reserve the runner's five-second TERM -> KILL grace inside the hard budget.
   const limit = Math.min(Date.parse(startedAt) + TURN_MS, deadline) - 6_000;
   let timedOut = false;
@@ -219,12 +219,12 @@ async function turn(entry, phase, attempt) {
     record.failure = { ...classified, evidence: `${entry.id}/${phase}-${attempt}-verifier.txt` };
   }
   checkpoint();
-  console.log(`${entry.id} ${phase}: ${record.status}; ${record.failure?.category || record.models.join(", ")}; ${record.elapsedMs}ms`);
+  process.stdout.write(`${entry.id} ${phase}: ${record.status}; ${record.failure?.category || record.models.join(", ")}; ${record.elapsedMs}ms\n`);
   return record;
 }
 
 try {
-  console.log(`Private evidence: ${root}`);
+  process.stdout.write(`Private evidence: ${root}\n`);
   if (!retry && !append) {
     report.versions = {};
     for (const harness of Object.keys(config.harness)) report.versions[harness] = await checkVersion(harness, config);

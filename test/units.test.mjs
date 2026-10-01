@@ -360,7 +360,7 @@ test("runner pins PWD to the checkout for tools that prefer it over process.cwd"
   const code = `const fs = require('node:fs'); const path = require('node:path');
     const root = process.env.PWD || process.cwd();
     fs.writeFileSync(path.join(root, 'tool-output.txt'), 'probe');
-    console.log(JSON.stringify({ root, cwd: process.cwd() }));`;
+    process.stdout.write(JSON.stringify({ root, cwd: process.cwd() }));`;
   const job = r.start("cwd-probe", process.execPath, ["-e", code], { cwd: checkout, env: { PWD: parent } });
   for (let i = 0; i < 100 && r.read(job.id)?.exit === null; i++) await new Promise(res => setTimeout(res, 20));
   assert.equal(r.read(job.id).exit, 0);

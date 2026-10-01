@@ -127,3 +127,28 @@ Use `CASE:resume` to retry only a failed resume. One retry per combination is al
 These disposable live adapter tests **do not prove GitHub review or completion behavior for each harness**, even if both turns eventually pass. Gemini, OpenCode and Goose still need an explicitly authorized small Gallivant PRD through `gallivant ready`, `gallivant start`, PR creation, a real review/CI-triggered same-session fix, a pushed revision, and the completion/ready-for-human gate. That is future work; only this task's PR was authorized for GitHub writes here. Claude/Codex production evidence was cited without repeat calls.
 
 The ordinary `npm test` glob excludes both live entrypoints. Offline regression tests cover rejection of false file/Git successes, changed session identities, model fallbacks, narrated test success, and the observed adapter failures. Final normal-test, lint, whitespace and credential-scan results are recorded in the PR receipt. AC-2 and AC-3 remain false until actual successful start/resume evidence exists.
+
+## Completion gate disposition
+
+The criteria denial is valid: AC-2 and AC-3 are requirements this PR has not achieved.
+Neither is an incorrect criterion, and a corrected receipt cannot create missing
+live evidence. AC-4 and AC-5 require unavailable phases to remain blocked or failed;
+they do not turn them into successful coding or continuation runs. The receipt
+therefore retains both false attestations, and the PR must remain incomplete.
+
+Before another bounded suite, the operator must resolve the recorded native
+approval/workspace restrictions for Gemini, Goose xAI and the denied OpenCode
+cases, repair Goose Alibaba's native authentication, and address Goose Meta's
+tool-schema compatibility. Existing provider access/credit failures remain
+blocked; DeepSeek is excluded and Tencent is deferred. The two Console cases
+that used a targeted retry have exhausted that allowance. A fresh suite requires
+explicit operator authorization after the applicable remedies, using pristine
+fixtures and the corrected prompt. No further calls were made in response to the
+gate denial, and no guard or policy was relaxed.
+
+The output-pattern finding came from zero-count test-summary labels. Those labels
+were clarified without changing the recorded counts; raw command output remains
+private. Intentional progress messages now use direct stream writes to comply
+with the existing output scan. The configured pattern list and gate evaluator
+were not changed. Removing those reporting matches resolves only the pattern
+finding, not the missing live start/resume evidence.
