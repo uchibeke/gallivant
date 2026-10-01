@@ -2,7 +2,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { execFileSync, spawn, spawnSync } from "node:child_process";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
@@ -52,10 +52,17 @@ writeFileSync(root + '/environment.json', JSON.stringify({
 }));
 process.stdout.write(JSON.stringify({ type: 'text', sessionID: 'ses_offline123' }) + '\\n');
 if (mode === 'exit') process.exit(1);
-if (mode === 'command-permission-error' || mode === 'approval-refusal') {
-  const error = mode === 'command-permission-error' ? 'bash: ./live.test.mjs: Permission denied' : 'The user rejected permission to use this specific tool call.';
+const errors = {
+  'command-permission-error': 'bash: ./live.test.mjs: Permission denied',
+  'command-eperm-error': 'chmod: function.mjs: Operation not permitted',
+  'command-kind-error': 'PermissionDenied',
+  'approval-refusal': 'The user rejected permission to use this specific tool call.',
+  'sandbox-refusal': 'Sandbox policy: Operation not permitted',
+};
+if (errors[mode]) {
+  const error = errors[mode];
   process.stdout.write(JSON.stringify({ type: 'tool_use', part: { state: { status: 'error', error } } }) + '\\n');
-  if (mode === 'command-permission-error') {
+  if (mode.startsWith('command-')) {
     // Leave time for the real suite monitor to consume the failed command before recovery.
     await new Promise(resolve => setTimeout(resolve, 1000));
     writeFileSync(root + '/recovered.txt', 'offline command recovery reached');
@@ -79,12 +86,24 @@ setInterval(() => {}, 1000);
   return root;
 }
 
-function invoke(root, { watchdog = false, env = {}, retry = false } = {}) {
+function invoke(root, { watchdog = false, env = {}, retry = false, crashAfterSpawn = false } = {}) {
   const source = `
 import os from 'node:os';
-import { existsSync } from 'node:fs';
+import { existsSync, writeFileSync } from 'node:fs';
+import cp from 'node:child_process';
 import { syncBuiltinESMExports } from 'node:module';
 os.homedir = () => ${JSON.stringify(root)};
+if (${crashAfterSpawn}) {
+  const spawn = cp.spawn;
+  cp.spawn = (cmd, args, options) => {
+    const child = spawn(cmd, args, options);
+    if (cmd === ${JSON.stringify(join(root, "probe.mjs"))} && args[0] === 'run') {
+      writeFileSync(${JSON.stringify(join(root, "crashed-child.json"))}, JSON.stringify({ pid: child.pid }));
+      process.kill(process.pid, 'SIGKILL'); // Between spawn and the runner's job/ledger updates.
+    }
+    return child;
+  };
+}
 syncBuiltinESMExports();
 // Trigger the actual watchdog callback once the offline process tree is ready,
 // without changing the deadline, fallback timer, or any provider settings.
@@ -119,11 +138,14 @@ function cleanup(root, child) {
     const pids = read(join(root, "ready.json"));
     try { process.kill(-pids.leader, "SIGKILL"); } catch { /* already reaped */ }
   }
+  if (existsSync(join(root, "crashed-child.json"))) {
+    try { process.kill(-read(join(root, "crashed-child.json")).pid, "SIGKILL"); } catch { /* already reaped */ }
+  }
   rmSync(root, { recursive: true, force: true });
 }
 
 test("live monitor allows command permission recovery and still stops explicit approval refusals", async () => {
-  for (const mode of ["command-permission-error", "approval-refusal"]) {
+  for (const mode of ["command-permission-error", "command-eperm-error", "command-kind-error", "approval-refusal", "sandbox-refusal"]) {
     const root = fixture(mode);
     let run;
     try {
@@ -131,13 +153,52 @@ test("live monitor allows command permission recovery and still stops explicit a
       const result = await run.done;
       assert.equal(result.code, 1, result.stderr);
       const turn = read(join(root, "report.json")).cases[0].turns[0];
-      const refused = mode === "approval-refusal";
+      const refused = mode.endsWith("-refusal");
       assert.equal(existsSync(join(root, "recovered.txt")), !refused);
       assert.equal(turn.exit, refused ? 137 : 1);
       assert.equal(turn.status, refused ? "blocked" : "failed");
-      assert.equal(turn.failure.category, refused ? "permissions" : "unclassified");
+      assert.equal(turn.failure.category, refused ? (mode === "sandbox-refusal" ? "sandbox" : "permissions") : "unclassified");
       if (refused) assert.match(turn.failure.remedy, /scoped approval/);
       else assert.doesNotMatch(turn.failure.remedy, /scoped approval/);
+    } finally { cleanup(root, run?.child); }
+  }
+});
+
+test("live append reserves new and upgraded cases before a crash after spawn", async () => {
+  for (const upgraded of [false, true]) {
+    const root = fixture();
+    let run;
+    try {
+      if (upgraded) {
+        writeFileSync(join(root, "version"), "0.0.0");
+        run = invoke(root);
+        assert.equal((await run.done).code, 1);
+        assert.equal(read(join(root, "report.json")).cases[0].blockedInvocation, 0);
+        writeFileSync(join(root, "version"), "2.0.0");
+      }
+      run = invoke(root, { crashAfterSpawn: true });
+      assert.equal((await run.done).signal, "SIGKILL");
+      const saved = read(join(root, "report.json")), entry = saved.cases[0], turn = entry.turns[0];
+      assert.equal(entry.blockedInvocation, undefined);
+      assert.equal(entry.turns.length, 1);
+      assert.equal(turn.status, "running");
+      assert.equal(turn.phase, "start");
+      assert.equal(turn.attempt, 1);
+      assert.equal(turn.invocation, upgraded ? 1 : 0);
+      assert.equal(turn.source.revision, saved.invocations[turn.invocation].source.revision);
+      assert.deepEqual(turn.fixture, { cwd: entry.cwd, remote: entry.remote, initial: entry.initial, requestedSession: entry.requestedSession });
+      assert.ok(existsSync(join(entry.cwd, ".git")) && existsSync(entry.remote));
+      assert.ok(Number.isFinite(Date.parse(turn.reservedAt)));
+      assert.equal(turn.run, null, "the crash precedes the post-launch checkpoint");
+      assert.equal(turn.command[0], join(root, "probe.mjs"));
+      const runs = readdirSync(turn.runRoot);
+      assert.equal(runs.length, 1);
+      assert.ok(existsSync(join(turn.runRoot, runs[0], "cmd.json")), "reservation locates runner evidence even before job.json exists");
+      run = invoke(root);
+      const result = await run.done;
+      assert.equal(result.code, 1);
+      assert.match(result.stderr, /already ran/);
+      assert.deepEqual(read(join(root, "report.json")).cases[0], entry, "another invocation must preserve the spent reservation");
     } finally { cleanup(root, run?.child); }
   }
 });

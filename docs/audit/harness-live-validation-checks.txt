@@ -319,3 +319,36 @@ Command-permission review follow-up on 2026-10-01 UTC (review 5385238188, commen
   configuration names were excluded while credential values remained in the scan.
   No installed harness, provider call, live retry or operator configuration change.
   Historical evidence, exhausted allowances and false AC-2/AC-3 attestations remain unchanged.
+
+Reservation/errno review follow-up on 2026-10-01 UTC (review 5385436681):
+  Comments 4160418114 and 4160418125 addressed with offline regressions.
+  Every start/resume attempt now checkpoints its case, fixture, source, invocation,
+  command and running reservation before runner.start. reservedAt and runRoot locate
+  private evidence even if a crash precedes the job-ID checkpoint. Such reservations
+  stay spent and cannot qualify for an unspent append or adapter retry.
+  The final deadline check includes reservation I/O; checkpoint failure prevents
+  launch, and time exhausted before launch releases the unspent reservation.
+  Generic Operation not permitted, EPERM and PermissionDenied diagnostics require
+  workspace/sandbox context before classification as a sandbox refusal. Explicit
+  sandbox, approval and guardrail refusals still stop the child.
+  Regressions in test/live_support.test.mjs:
+    live reservations survive launch crashes for every phase and attempt
+    live launch never spawns after a failed or exhausted reservation checkpoint
+    live refusal classification distinguishes command stderr from explicit approval decisions
+  Regressions in test/live_suite.test.mjs:
+    live append reserves new and upgraded cases before a crash after spawn
+    live monitor allows command permission recovery and still stops explicit approval refusals
+  SIGKILL is injected immediately after an offline child's spawn, before runner
+  metadata or post-launch ledger writes; both new and upgraded cases retain their
+  reservation, fixture and runner evidence and reject a duplicate append.
+  Focused regressions: exit 0; tests 12; pass 12; fail 0
+  Private output: /private/tmp/gallivant-reservations-errno-focused-tests.txt
+  npm test: exit 0; tests 632; pass 632; fail 0; cancelled 0; skipped 0; deferred tests 0
+  duration_ms 44378.272416
+  Private output: /private/tmp/gallivant-reservations-errno-all-tests.txt
+  npm run lint: exit 0
+  Changed test tooling syntax checks: exit 0
+  git diff --check: exit 0
+  Full PR credential/Console-connection, known-secret and blocked-pattern scans: 0 matches.
+  No installed harness, provider call, live retry or operator configuration change.
+  Historical evidence, exhausted allowances and false AC-2/AC-3 attestations remain unchanged.

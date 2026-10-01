@@ -135,7 +135,7 @@ test("live retry gate requires a recorded adapter stage and rejects legacy uncla
 });
 
 test("live external failure classification takes priority over verifier errors and stays non-retriable", () => {
-  for (const message of ["APort denied", "Operation not permitted", "permission request denied for shell", "401 unauthorized", "429 quota exceeded", "ProviderModelNotFound", "turn time limit reached"]) {
+  for (const message of ["APort denied", "Sandbox: Operation not permitted", "permission request denied for shell", "401 unauthorized", "429 quota exceeded", "ProviderModelNotFound", "turn time limit reached"]) {
     const classified = classify(message, message === "turn time limit reached");
     for (const stage of ["adapter", "verification"]) {
       const result = turnFailure(classified, stage, "verifier.txt");
@@ -156,6 +156,7 @@ test("live launch leaves exhausted or interrupted phases unstarted without spend
       const report = { ...flags };
       let persisted;
       const launch = launchLiveTurn({ report, entry, phase, attempt, deadline: now + remaining, invocation: 2,
+        spec: { cmd: "offline-probe", args: [] },
         checkpoint() { persisted = structuredClone({ entry, report }); },
         runner: { start() { assert.fail("an exhausted or interrupted suite must not launch a child"); } },
       }, () => now);
@@ -183,7 +184,7 @@ test("live automatic resume rechecks time spent by the first turn and synchronou
   };
   const first = launchLiveTurn({ ...options, phase: "start" }, () => now);
   assert.equal(first.job.id, "first");
-  entry.turns.push({ phase: "start", status: "passed", startedAt: first.startedAt });
+  first.record.status = "passed";
   // Model work, metadata collection and synchronous preflight can consume the outer loop's remaining time.
   now = deadline - STOP_GRACE_MS;
   assert.equal(launchLiveTurn({ ...options, phase: "resume" }, () => now), null);
@@ -232,6 +233,7 @@ test("live deadline includes retry checkpoint time and releases an unlaunched re
   const report = {};
   const saved = [];
   const result = launchLiveTurn({ report, entry, phase: "resume", attempt: 2, deadline,
+    spec: { cmd: "offline-probe", args: [] },
     checkpoint() {
       saved.push(structuredClone({ entry, report }));
       now = deadline - STOP_GRACE_MS;
@@ -244,6 +246,76 @@ test("live deadline includes retry checkpoint time and releases an unlaunched re
   assert.equal(saved[1].entry.retry, undefined);
   assert.equal(saved[1].entry.turns.length, 1);
   assert.equal(saved[1].report.unstartedTurns[0].phase, "resume");
+});
+
+test("live reservations survive launch crashes for every phase and attempt", () => {
+  for (const phase of ["start", "resume"]) for (const attempt of [1, 2]) {
+    const root = realpathSync(mkdtempSync(join(tmpdir(), "gallivant-reservation-crash-")));
+    const ledger = join(root, "report.json");
+    const earlier = phase === "resume" ? [{ phase: "start", attempt: 1, status: "passed" }] : [];
+    if (attempt === 2) earlier.push({ phase, attempt: 1, status: "failed" });
+    const entry = { id: "goose-meta", harness: "goose", cwd: join(root, "checkout"), remote: join(root, "remote.git"),
+      initial: "offline-fixture-commit", requestedSession: "offline-session", configured: { provider: "meta", model: "offline-model" }, turns: earlier };
+    const report = { privateEvidence: root, startedAt: new Date().toISOString(), turnLimitMs: TURN_MS, suiteLimitMs: SUITE_MS, cases: [entry] };
+    writeFileSync(ledger, JSON.stringify(report), { mode: 0o600 });
+    try {
+      const child = spawnSync(process.execPath, ["--input-type=module", "-e", `
+        import { readFileSync } from 'node:fs';
+        import { writeJsonAtomic } from ${JSON.stringify(new URL("../lib/fs.mjs", import.meta.url).href)};
+        import { launchLiveTurn, SUITE_MS } from ${JSON.stringify(new URL("./live-support.mjs", import.meta.url).href)};
+        const ledger = ${JSON.stringify(ledger)};
+        const report = JSON.parse(readFileSync(ledger, 'utf8')), entry = report.cases[0];
+        launchLiveTurn({ report, entry, phase: ${JSON.stringify(phase)}, attempt: ${attempt},
+          deadline: Date.now() + SUITE_MS, invocation: 0, source: { revision: 'offline-source' }, fix: 'offline-fix.md',
+          spec: { cmd: 'offline-probe', args: ['prompt'] },
+          checkpoint: () => writeJsonAtomic(ledger, report),
+          runner: { root: ${JSON.stringify(join(root, "runs"))}, start() { process.kill(process.pid, 'SIGKILL'); } },
+        });
+      `], { encoding: "utf8", timeout: 5000 });
+      assert.equal(child.error, undefined);
+      assert.equal(child.signal, "SIGKILL", child.stderr);
+      const saved = openSuiteLedger(root).cases[0];
+      assert.deepEqual(saved.turns.slice(0, -1), earlier);
+      const record = saved.turns.at(-1);
+      assert.equal(record.phase, phase);
+      assert.equal(record.attempt, attempt);
+      assert.equal(record.status, "running");
+      assert.equal(record.run, null);
+      assert.equal(record.runRoot, join(root, "runs"));
+      assert.equal(record.source.revision, "offline-source");
+      assert.equal(record.invocation, 0);
+      assert.equal(record.command[0], "offline-probe");
+      assert.ok(Number.isFinite(Date.parse(record.reservedAt)));
+      assert.deepEqual(record.fixture, { cwd: entry.cwd, remote: entry.remote, initial: entry.initial, requestedSession: entry.requestedSession });
+      assert.equal(saved.retry?.phase, attempt === 2 ? phase : undefined);
+      assert.throws(() => assertAdapterRetry(record, { sha256: { changed: "after" } }), /ineligible/);
+    } finally { rmSync(root, { recursive: true, force: true }); }
+  }
+});
+
+test("live launch never spawns after a failed or exhausted reservation checkpoint", () => {
+  for (const phase of ["start", "resume"]) for (const attempt of [1, 2]) {
+    for (const fault of ["write-failure", "deadline"]) {
+      let now = 1000, launches = 0;
+      const deadline = now + SUITE_MS;
+      const entry = { id: "goose-meta", turns: [] }, report = {};
+      const options = { entry, report, phase, attempt, deadline, spec: { cmd: "offline-probe", args: [] },
+        checkpoint() {
+          if (fault === "write-failure") throw new Error("reservation write failed");
+          now = deadline - STOP_GRACE_MS;
+        },
+        runner: { start() { launches++; } },
+      };
+      if (fault === "write-failure") assert.throws(() => launchLiveTurn(options, () => now), /reservation write failed/);
+      else {
+        assert.equal(launchLiveTurn(options, () => now), null);
+        assert.deepEqual(entry.turns, []);
+        assert.equal(entry.retry, undefined);
+        assert.equal(report.unstartedTurns[0].phase, phase);
+      }
+      assert.equal(launches, 0);
+    }
+  }
 });
 
 test("live retry and append recheck current binaries while preserving earlier version evidence", async () => {
@@ -401,7 +473,7 @@ test("live provider access rejection is distinct from tool permission refusal", 
 test("live failure classification keeps external failures distinct and denials take priority", () => {
   for (const [message, category] of [
     ["APort denied tool; 429 quota exceeded", "guardrail"],
-    ["Operation not permitted", "sandbox"],
+    ["Sandbox: Operation not permitted", "sandbox"],
     ["permission request denied for shell", "permissions"],
     ["The user rejected permission to use this specific tool call.", "permissions"],
     ["Path not in workspace", "sandbox"],
@@ -428,7 +500,8 @@ test("live refusal classification distinguishes command stderr from explicit app
     JSON.stringify({ type: "tool_use", part: { state: { status: "error", error: message } } }),
     JSON.stringify({ type: "message", message: { content: [{ type: "toolResponse", toolResult: { isError: true, content: [{ type: "text", text: message }] } }] } }),
   ];
-  for (const message of ["bash: ./live.test.mjs: Permission denied", "EACCES: permission denied, open 'function.mjs'", "permission denied for shell"]) {
+  for (const message of ["bash: ./live.test.mjs: Permission denied", "EACCES: permission denied, open 'function.mjs'", "permission denied for shell",
+    "Operation not permitted", "EPERM: Operation not permitted, chmod 'function.mjs'", "PermissionDenied", "Error { kind: PermissionDenied, message: Operation not permitted }"]) {
     for (const line of envelopes(message)) {
       const evidence = refusalEvidence([line]);
       assert.ok(evidence.includes(message), "keep command diagnostics available for investigation");
@@ -442,7 +515,8 @@ test("live refusal classification distinguishes command stderr from explicit app
   ]) {
     for (const line of envelopes(message)) assert.equal(classify(refusalEvidence([line])).category, "permissions");
   }
-  for (const message of ["APort denied tool", "sandbox restricted this path", "Path not in workspace", "PermissionDenied"]) {
+  for (const message of ["APort denied tool", "sandbox restricted this path", "Path not in workspace",
+    "Sandbox: Operation not permitted", "PermissionDenied by sandbox policy", "sandbox returned EPERM", "outside the allowed workspace"]) {
     for (const line of envelopes(message)) assert.ok(["guardrail", "sandbox"].includes(classify(refusalEvidence([line])).category));
   }
 });

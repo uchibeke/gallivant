@@ -51,8 +51,9 @@ to Gallivant. `test/live-support.mjs` verifies model evidence, adapter identity,
 behavior, commits, upstream and remote HEAD. Calls are sequential, at most 180 seconds per turn and 30 minutes
 per suite, with one start/resume pair and at most one justified targeted retry per combination. Refusals stop
 the affected phase; they are never converted into permission overrides. Ordinary command stderr such as
-`Permission denied` is retained for investigation without triggering an approval stop; explicit permission
-requests/rejections, guardrail decisions and sandbox diagnostics still stop the turn. Raw streams and exports stay private.
+`Permission denied`, `Operation not permitted` or `PermissionDenied` is retained for investigation without
+triggering an approval stop. Sandbox classification requires workspace/sandbox context; explicit permission
+requests/rejections and guardrail decisions still stop the turn. Raw streams and exports stay private.
 Named Meta/xAI/Alibaba cases use Goose's native saved providers and OpenCode's separate Console BYOK
 providers; they do not establish Zen/Go subscription access. Exact batch commands and blocked results are
 in the audit. DeepSeek is excluded from new calls and Tencent remains deferred.
@@ -73,6 +74,12 @@ files or remote commits. See the audit's directory incident and recovery record 
 An eligible start retry gets a distinct pristine checkout/remote while retaining the original fixture and
 turn evidence; resume retries still require the last passed checkout and remote state. Retry and time limits
 are unchanged, and no historical failure or exhausted retry is relabeled by these fixes.
+
+Every turn reserves its case, fixture, source, invocation and running record in the atomic ledger before
+launch, including first starts and resumes. The reservation points to the private runner directory even if
+a crash prevents recording the job ID. A running reservation cannot be appended or retried as an unspent
+case; inspect its private runner evidence and resolve any surviving process before scheduling further work.
+The final deadline check includes reservation I/O and releases the reservation only when no launch occurred.
 
 A passing disposable test would still not establish GitHub review/completion behavior. Full support requires
 an authorized PRD through `ready`/`start`, PR creation, review/CI feedback, a same-session pushed fix and the

@@ -135,7 +135,9 @@ no old record is relabeled to obtain another call.
 
 The refusal classifier distinguishes an explicit permission request or rejection
 from ordinary command stderr such as `bash: ./live.test.mjs: Permission denied`
-or an `EACCES` file error. Those diagnostics remain in the private evidence, but
+or an `EACCES` file error. Generic `Operation not permitted`, `EPERM` and serialized
+`PermissionDenied` errors also require explicit workspace/sandbox context to be
+classified as sandbox refusals. Those diagnostics remain in the private evidence, but
 do not kill a turn or prescribe an approval remedy by themselves. A harness can
 correct its command within the same turn and time budget. Explicit approval,
 guardrail and sandbox refusals still stop the phase; this does not permit changing
@@ -179,9 +181,18 @@ requires usable suite time beyond the existing six-second termination reserve.
 This also applies to automatic resume and targeted retries. An exhausted or
 interrupted suite records the requested phase in `unstartedTurns`, preserves all
 completed turns, and stops without a model call or consuming the retry allowance. The suite
-deadline and 180-second turn cap are unchanged. Retry reservations remain durable
-before launch, but the final check includes time spent saving them and releases
-them when insufficient time prevents launch.
+deadline and 180-second turn cap are unchanged. Every turn now persists its case,
+fixture and running reservation before launch, including first starts, first resumes
+and targeted retries. The record includes `reservedAt`, source, invocation, command
+and `runRoot`, which locates the private runner evidence if a crash precedes the
+post-launch job-ID checkpoint. An uncertain running reservation remains spent and
+cannot pass the append/retry gates. Inspect that runner directory and resolve any
+surviving process before authorizing further work; do not erase the reservation to
+obtain another attempt. The final deadline check includes time spent saving the
+reservation and releases it only when insufficient time prevents launch. A failed
+reservation checkpoint prevents launch entirely. Offline regressions cover SIGKILL
+after spawn for new and previously version-blocked cases, reservation survival for
+every phase/attempt, checkpoint failures and deadline expiry during the write.
 
 The suite awaits the runner's process-group kill fallback for every stop, including
 watchdog and SIGINT/SIGTERM stops that already recorded exit 137. It waits before

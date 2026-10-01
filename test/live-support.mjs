@@ -71,12 +71,20 @@ export async function auditLiveInvocation(report, config, { mode, selected, sour
 
 // Call only after synchronous preflight. Nothing that can spend time belongs between this check and start.
 export function launchLiveTurn({ report, entry, phase, attempt, deadline, runner, spec, env, fix, source, invocation, checkpoint }, now = Date.now) {
-  // Preserve the durable retry reservation across a crash after launch, but include its I/O in the final check.
-  if (attempt === 2) { entry.retry = { phase, fix, source }; checkpoint(); }
+  // Every potentially paid launch needs a durable reservation, including first starts
+  // and resumes. A crash after spawn must not make the case look unspent on restart.
+  const record = { phase, attempt, reservedAt: new Date(now()).toISOString(), source, invocation,
+    fixture: { cwd: entry.cwd, remote: entry.remote, initial: entry.initial, requestedSession: entry.requestedSession },
+    command: [spec.cmd, ...spec.args.slice(0, -1), "<prompt in private cmd.json>"],
+    runRoot: runner.root, run: null, status: "running" };
+  entry.turns.push(record);
+  if (attempt === 2) entry.retry = { phase, fix, source };
+  checkpoint();
   const startedMs = now();
   const startedAt = new Date(startedMs).toISOString();
   const limit = Math.min(startedMs + TURN_MS, deadline) - STOP_GRACE_MS;
   if (report.interrupted || report.suiteTimedOut || startedMs >= limit) {
+    entry.turns.pop(); // No child was launched; release only this reservation.
     if (attempt === 2) delete entry.retry;
     (report.unstartedTurns ||= []).push({
       case: entry.id, phase, attempt, invocation, checkedAt: startedAt,
@@ -86,7 +94,8 @@ export function launchLiveTurn({ report, entry, phase, attempt, deadline, runner
     return null;
   }
   const job = runner.start(`${phase}-${attempt}`, spec.cmd, spec.args, { cwd: entry.cwd, env });
-  return { job, startedAt, limit };
+  record.startedAt = startedAt;
+  return { job, record, startedAt, limit };
 }
 
 // Existing roots are operator input. Do not change their permissions until the ledger identifies this suite.
@@ -113,7 +122,8 @@ export function classify(text, timedOut = false) {
   // A denial takes precedence over a model's claim of success or a later timeout.
   if (/APort denied|guardrail.{0,40}(denied|blocked)|auto.?review.{0,40}(denied|rejected)/i.test(text))
     return { category: "guardrail", remedy: "Ask the operator to review the named guardrail decision; do not retry or route around it." };
-  if (/operation not permitted|sandbox.{0,40}(denied|restricted)|PermissionDenied|Path not in workspace|outside the allowed workspace/i.test(text))
+  // Errno text alone does not identify a sandbox decision; require policy context.
+  if (/sandbox.{0,60}(denied|restricted|operation not permitted|PermissionDenied|EPERM)|(operation not permitted|PermissionDenied|EPERM).{0,60}sandbox|Path not in workspace|outside the allowed workspace/i.test(text))
     return { category: "sandbox", remedy: "Use the host's supported scoped approval for the recorded operation; do not change sandbox policy." };
   // Ordinary command stderr (EACCES / "Permission denied") is not an approval
   // decision. Require explicit request/policy wording; let the harness correct the command.

@@ -140,12 +140,9 @@ async function turn(entry, phase, attempt) {
   else verifyResumeFixture({ ...entry, env, previous: previousTurn?.verification });
   const launch = launchLiveTurn({ report, entry, phase, attempt, deadline, runner, spec, env, fix, source, invocation: invocationIndex, checkpoint });
   if (!launch) return null;
-  const { job, startedAt, limit } = launch;
+  const { job, record, startedAt, limit } = launch;
   active = { runner, id: job.id };
-  const record = { phase, attempt, startedAt, source, invocation: invocationIndex,
-    fixture: { cwd, remote, initial: entry.initial, requestedSession: entry.requestedSession },
-    command: [spec.cmd, ...spec.args.slice(0, -1), "<prompt in private cmd.json>"], run: relative(root, runner.dirOf(job.id)), status: "running" };
-  entry.turns.push(record);
+  record.run = relative(root, runner.dirOf(job.id));
   checkpoint();
   process.stdout.write(`${entry.id} ${phase} attempt ${attempt}: ${record.run}\n`);
   let timedOut = false;
