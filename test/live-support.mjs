@@ -134,6 +134,20 @@ export function verifyStartFixture({ cwd, remote, initial, env }) {
   assert.equal(git("ls-remote", "--refs", "origin"), "", "start fixture remote already contains commits; do not retry in a contaminated fixture");
 }
 
+export function verifyResumeFixture({ cwd, remote, previous, env }) {
+  assert.ok(previous?.head && previous.clean === true, "resume requires a verified previous turn");
+  const git = (...args) => execFileSync("git", args, { cwd, env, encoding: "utf8", timeout: 10_000, stdio: ["ignore", "pipe", "pipe"] }).trim();
+  assert.equal(git("rev-parse", "HEAD"), previous.head, "resume fixture HEAD changed since the last passed turn");
+  assert.equal(git("status", "--porcelain"), "", "resume fixture must be clean since the last passed turn");
+  assert.equal(git("branch", "--show-current"), BRANCH, "resume fixture branch changed");
+  assert.equal(git("remote", "get-url", "origin"), remote, "resume fixture remote changed");
+  assert.equal(git("remote", "get-url", "--push", "--all", "origin"), remote, "resume fixture push destination changed");
+  assert.equal(git("rev-parse", "--abbrev-ref", "@{upstream}"), `origin/${BRANCH}`, "resume fixture upstream changed");
+  assert.equal(git("rev-parse", "@{upstream}"), previous.head, "resume fixture upstream moved since the last passed turn");
+  assert.equal(git("--git-dir", remote, "rev-parse", "HEAD"), previous.head, "resume fixture bare remote HEAD changed since the last passed turn");
+  assert.equal(git("ls-remote", "origin", `refs/heads/${BRANCH}`).split(/\s/)[0], previous.head, "resume fixture remote branch changed since the last passed turn");
+}
+
 /** A successful test TOOL result, never the echoed prompt or the assistant's claimed success. */
 export function testExecution(harness, lines, exported) {
   const evs = parseEvents(lines);

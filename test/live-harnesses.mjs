@@ -11,7 +11,7 @@ import { adapterFor, assertSafeArgv, buildRun } from "../lib/harness.mjs";
 import { runEnv } from "../lib/git.mjs";
 import { isOurProcess, makeRunner } from "../lib/run.mjs";
 import { checkVersion } from "../lib/probe.mjs";
-import { BRANCH, NAMED_CASES, TURN_MS, SUITE_MS, classify, codingPrompt, costEvidence, effectiveModels, openSuiteLedger, parseEvents, refusalEvidence, safeLabel, selection, sessionIdentity, testExecution, verifyCheckout, verifySessionDirectory, verifyStartFixture } from "./live-support.mjs";
+import { BRANCH, NAMED_CASES, TURN_MS, SUITE_MS, classify, codingPrompt, costEvidence, effectiveModels, openSuiteLedger, parseEvents, refusalEvidence, safeLabel, selection, sessionIdentity, testExecution, verifyCheckout, verifyResumeFixture, verifySessionDirectory, verifyStartFixture } from "./live-support.mjs";
 
 const repo = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const args = process.argv.slice(2);
@@ -137,6 +137,9 @@ async function turn(entry, phase, attempt) {
   assertSafeArgv(spec.args);
   const env = { ...process.env, ...runEnv(config, null, identity, cwd), ...spec.env };
   if (phase === "start") verifyStartFixture({ ...entry, env });
+  else verifyResumeFixture({ ...entry, env, previous: previousTurn?.verification });
+  // A contaminated fixture must not spend the retry allowance or another model call.
+  if (attempt === 2) { entry.retry = { phase, fix, source }; checkpoint(); }
   const startedAt = new Date().toISOString();
   const job = runner.start(`${phase}-${attempt}`, spec.cmd, spec.args, { cwd, env });
   active = { runner, id: job.id };
@@ -245,8 +248,6 @@ try {
       assert.notDeepEqual(source.sha256, failed.source.sha256, "A targeted retry requires a source change");
       const failedLines = readFileSync(join(root, failed.run, "job.log"), "utf8").split("\n");
       assert.equal(classify(`${refusalEvidence(failedLines)}\n${adapterFor(entry.harness).outcome(failedLines).error || ""}`).category, "unclassified", "A corrected parser must not turn an earlier unclassified external failure into a retry");
-      entry.retry = { phase: retryPhase, fix, source };
-      checkpoint();
     } else {
       assert.ok(!entry, "This case already ran; only a justified targeted retry can repeat it");
       const harness = id.startsWith("opencode") ? "opencode" : id.startsWith("goose") ? "goose" : id;

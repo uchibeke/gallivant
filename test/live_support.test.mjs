@@ -6,7 +6,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { adapters } from "../lib/harness.mjs";
 import { runEnv } from "../lib/git.mjs";
-import { BRANCH, NAMED_CASES, TURN_MS, SUITE_MS, selection, classify, costEvidence, refusalEvidence, openSuiteLedger, sessionIdentity, effectiveModels, testExecution, verifyCheckout, verifySessionDirectory, verifyStartFixture } from "./live-support.mjs";
+import { BRANCH, NAMED_CASES, TURN_MS, SUITE_MS, selection, classify, costEvidence, refusalEvidence, openSuiteLedger, sessionIdentity, effectiveModels, testExecution, verifyCheckout, verifyResumeFixture, verifySessionDirectory, verifyStartFixture } from "./live-support.mjs";
 
 test("live suite ledger rejection preserves supplied directory permissions and contents", () => {
   const root = realpathSync(mkdtempSync(join(tmpdir(), "gallivant-ledger-rejection-")));
@@ -194,4 +194,58 @@ test("external live verifier rejects missing push and uncommitted resume, then p
     assert.equal(checked.clean, true);
     previous = checked.head;
   }
+});
+
+test("live resume preflight accepts only the last passed checkout and remote without changing either", async t => {
+  const cases = [
+    ["unchanged verified start", () => {}, null],
+    ["missing passed turn", f => { f.previous = null; }, /verified previous turn/],
+    ["uncommitted edits", f => writeFileSync(join(f.cwd, "function.mjs"), "partial resume\n"), /must be clean/],
+    ["staged edits", f => { writeFileSync(join(f.cwd, "function.mjs"), "partial resume\n"); f.git("add", "function.mjs"); }, /must be clean/],
+    ["untracked edits", f => writeFileSync(join(f.cwd, "partial.txt"), "partial resume\n"), /must be clean/],
+    ["unpublished resume commit", f => f.git("commit", "--allow-empty", "-m", "Failed resume fixture"), /HEAD changed/],
+    ["pushed resume commit", f => { f.git("commit", "--allow-empty", "-m", "Failed resume fixture"); f.git("push", "origin", BRANCH); }, /HEAD changed/],
+    ["changed branch", f => f.git("switch", "-c", "other-probe"), /branch changed/],
+    ["missing upstream", f => f.git("branch", "--unset-upstream"), /upstream/],
+    ["moved tracking ref", f => f.git("update-ref", `refs/remotes/origin/${BRANCH}`, f.previous.parent), /upstream moved/],
+    ["changed origin", f => f.git("remote", "set-url", "origin", join(f.evidence, "other.git")), /remote changed/],
+    ["changed push destination", f => f.git("remote", "set-url", "--push", "origin", join(f.evidence, "other.git")), /push destination changed/],
+    ["changed bare remote with unchanged local tracking ref", f => f.git("--git-dir", f.remote, "update-ref", `refs/heads/${BRANCH}`, f.previous.parent), /bare remote HEAD changed/],
+    ["changed remote branch with unchanged bare HEAD", f => {
+      f.git("--git-dir", f.remote, "update-ref", "--no-deref", "HEAD", f.previous.head);
+      f.git("--git-dir", f.remote, "update-ref", `refs/heads/${BRANCH}`, f.previous.parent);
+    }, /remote branch changed/],
+  ];
+  for (const [name, change, error] of cases) await t.test(name, () => {
+    const evidence = mkdtempSync(join(tmpdir(), "gallivant-resume-preflight-"));
+    const cwd = join(evidence, "checkout"), remote = join(evidence, "remote.git");
+    mkdirSync(cwd);
+    const env = { ...process.env, ...runEnv({}, null, { name: "Resume verifier test", email: "test@example.invalid" }, cwd) };
+    const git = (...args) => execFileSync("git", args, { cwd, env, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] }).trim();
+    try {
+      git("init", "--bare", `--initial-branch=${BRANCH}`, remote);
+      git("init", "-b", BRANCH);
+      git("remote", "add", "origin", remote);
+      git("commit", "--allow-empty", "-m", "Initialize resume verifier fixture");
+      const initial = git("rev-parse", "HEAD");
+      writeFileSync(join(cwd, "function.mjs"), "export const greet = name => 'Hello, ' + name + '!';\n");
+      writeFileSync(join(cwd, "live.test.mjs"), "import {test} from 'node:test'; import assert from 'node:assert/strict'; import {greet} from './function.mjs'; test('greet',()=>assert.equal(greet(' Ada '), 'Hello,  Ada !'));\n");
+      git("add", "function.mjs", "live.test.mjs");
+      git("commit", "-m", "Record passed start fixture");
+      git("push", "-u", "origin", BRANCH);
+      const previous = verifyCheckout({ cwd, remote, env, previous: initial, phase: "start", evidence });
+      const fixture = { cwd, remote, env, previous, evidence, git };
+      change(fixture);
+      const state = () => ({
+        head: git("rev-parse", "HEAD"), status: git("status", "--porcelain"), branch: git("branch", "--show-current"),
+        refs: git("show-ref"), remoteRefs: git("--git-dir", remote, "show-ref", "--head"),
+        config: readFileSync(join(cwd, ".git", "config"), "utf8"),
+        files: readdirSync(cwd).filter(name => name !== ".git").map(name => [name, readFileSync(join(cwd, name), "utf8")]),
+      });
+      const before = state();
+      if (error) assert.throws(() => verifyResumeFixture(fixture), error);
+      else verifyResumeFixture(fixture);
+      assert.deepEqual(state(), before, "preflight must preserve failed-turn evidence");
+    } finally { rmSync(evidence, { recursive: true, force: true }); }
+  });
 });

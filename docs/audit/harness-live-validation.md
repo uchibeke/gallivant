@@ -122,6 +122,17 @@ npm run test:live-harnesses -- --live --retry /absolute/private/suite-root CASE:
 
 Use `CASE:resume` to retry only a failed resume. One retry per combination is allowed; the source must have changed, external failures/denials cannot be retried, and the original deadline still applies. `--append /absolute/private/suite-root NEW_CASE` can add an untested combination within that same deadline. No retry or append starts unrelated phases. A new operator-authorized suite after remedy uses a new private directory and must be reported as new evidence.
 
+Every resume, including a targeted retry, now checks the last passed turn's Git
+state before launching a model call or consuming the retry allowance. The checkout
+must be clean at that recorded commit on the probe branch, with the same upstream,
+local bare origin, push destination, remote branch and remote HEAD. Partial edits,
+commits or pushes from a failed resume stop the suite; the preflight preserves the
+failed-turn evidence and does not reset or overwrite it. Resolve the cause and
+obtain authorization for a fresh suite if the saved state no longer matches.
+Offline regression `live resume preflight accepts only the last passed checkout
+and remote without changing either` covers the valid state and thirteen rejection
+cases. This review fix made no model calls and does not alter any live result.
+
 ## Remaining lifecycle validation
 
 These disposable live adapter tests **do not prove GitHub review or completion behavior for each harness**, even if both turns eventually pass. Gemini, OpenCode and Goose still need an explicitly authorized small Gallivant PRD through `gallivant ready`, `gallivant start`, PR creation, a real review/CI-triggered same-session fix, a pushed revision, and the completion/ready-for-human gate. That is future work; only this task's PR was authorized for GitHub writes here. Claude/Codex production evidence was cited without repeat calls.
