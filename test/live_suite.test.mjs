@@ -23,7 +23,7 @@ const running = pid => {
   catch { return false; }
 };
 
-function fixture(mode = "exit") {
+function fixture(mode = "exit", harness = "opencode") {
   const root = realpathSync(mkdtempSync(join(tmpdir(), "gallivant-suite-offline-")));
   mkdirSync(join(root, ".gallivant"));
   writeFileSync(join(root, "report.json"), JSON.stringify({ privateEvidence: root, startedAt: new Date().toISOString(), turnLimitMs: TURN_MS, suiteLimitMs: SUITE_MS, cases: [] }));
@@ -37,6 +37,7 @@ const root = ${JSON.stringify(root)}, mode = ${JSON.stringify(mode)};
 const args = process.argv.slice(2);
 appendFileSync(root + '/calls.jsonl', JSON.stringify(args.slice(0, 2)) + '\\n');
 if (args[0] === '--version') { process.stdout.write(readFileSync(root + '/version', 'utf8')); process.exit(0); }
+if (args[0] === 'session' && args[1] === 'export') { process.stdout.write('{}'); process.exit(0); }
 if (args[0] === 'export') {
   writeFileSync(root + '/exported.json', JSON.stringify({ at: Date.now() }));
   const [providerID, ...modelID] = mode === 'model-evidence' ? readFileSync(root + '/effective-model.txt', 'utf8').trim().split('/') : [];
@@ -89,7 +90,7 @@ const child = spawn(process.execPath, ['-e', ${JSON.stringify(descendant)}], { s
 child.stdout.once('data', () => writeFileSync(root + '/ready.json', JSON.stringify({ leader: process.pid, child: child.pid })));
 setInterval(() => {}, 1000);
 `, { mode: 0o700 });
-  writeFileSync(join(root, ".gallivant", "config.json"), JSON.stringify({ harness: { opencode: { bin } } }));
+  writeFileSync(join(root, ".gallivant", "config.json"), JSON.stringify({ harness: { [harness]: { bin } } }));
   return root;
 }
 
@@ -212,6 +213,68 @@ test("live OpenCode default blocks unknown ambiguous and excluded selections bef
       assert.equal(entry.retry, undefined);
       assert.equal(existsSync(join(root, "run-args.json")), false);
       assert.deepEqual(readFileSync(join(root, "calls.jsonl"), "utf8").trim().split("\n").map(JSON.parse), [["--version"]]);
+    } finally { cleanup(root, run?.child); }
+  }
+});
+
+test("live Goose blocks unknown provider or model before creating a fixture or turn", async () => {
+  for (const source of ["settings", "environment"]) {
+    for (const [provider, model] of [[null, null], ["meta", null], [null, "muse-spark-1.1"],
+      ["unknown", "muse-spark-1.1"], ["meta", "unknown"], ["invalid provider", "muse-spark-1.1"],
+      ["meta", "invalid model"], ["meta", "auto"], ["meta", "deepseek-excluded"]]) {
+      const root = fixture("exit", "goose");
+      let run;
+      try {
+        const env = { GOOSE_PROVIDER: undefined, GOOSE_MODEL: undefined };
+        if (source === "environment") Object.assign(env, { GOOSE_PROVIDER: provider ?? undefined, GOOSE_MODEL: model ?? undefined });
+        else {
+          mkdirSync(join(root, ".config", "goose"), { recursive: true });
+          writeFileSync(join(root, ".config", "goose", "config.yaml"),
+            `${provider === null ? "" : `GOOSE_PROVIDER: '${provider}'\n`}${model === null ? "" : `GOOSE_MODEL: '${model}'\n`}`);
+        }
+        run = invoke(root, { caseId: "goose", env });
+        const result = await run.done;
+        assert.equal(result.code, 1, result.stderr);
+        const entry = read(join(root, "report.json")).cases[0];
+        assert.match(entry.blocked, /cannot be established|DeepSeek excluded/);
+        assert.deepEqual(entry.turns, []);
+        assert.equal(entry.cwd, undefined);
+        assert.equal(entry.remote, undefined);
+        assert.equal(entry.retry, undefined);
+        assert.equal(existsSync(join(root, "goose", "checkout")), false);
+        assert.equal(existsSync(join(root, "run-args.json")), false);
+        assert.deepEqual(readFileSync(join(root, "calls.jsonl"), "utf8").trim().split("\n").map(JSON.parse), [["--version"]]);
+      } finally { cleanup(root, run?.child); }
+    }
+  }
+});
+
+test("live Goose pins known settings environment and named selectors explicitly", async () => {
+  for (const source of ["settings", "environment", "goose-meta", "goose-xai", "goose-alibaba"]) {
+    const root = fixture("exit", "goose");
+    let run;
+    try {
+      const env = { GOOSE_PROVIDER: undefined, GOOSE_MODEL: undefined };
+      const expected = source === "goose-xai" ? ["xai", "grok-4.5"] : source === "goose-alibaba" ? ["alibaba", "qwen3.7-max"] : ["meta", "muse-spark-1.1"];
+      if (source === "environment") Object.assign(env, { GOOSE_PROVIDER: expected[0], GOOSE_MODEL: expected[1] });
+      if (source === "settings") {
+        mkdirSync(join(root, ".config", "goose"), { recursive: true });
+        writeFileSync(join(root, ".config", "goose", "config.yaml"), "active_provider: meta\nproviders:\n  meta:\n    model: muse-spark-1.1\n");
+      }
+      const caseId = source.startsWith("goose-") ? source : "goose";
+      run = invoke(root, { caseId, env });
+      const result = await run.done;
+      assert.equal(result.code, 1, result.stderr); // Offline probe deliberately fails; never live evidence.
+      const entry = read(join(root, "report.json")).cases[0];
+      assert.equal(entry.blocked, undefined);
+      assert.deepEqual(entry.configured, { provider: expected[0], model: expected[1] });
+      assert.equal(entry.turns.length, 1);
+      const args = read(join(root, "run-args.json"));
+      for (const [flag, value] of [["--provider", expected[0]], ["--model", expected[1]]]) {
+        assert.equal(args.filter(arg => arg === flag).length, 1);
+        assert.equal(args[args.indexOf(flag) + 1], value);
+      }
+      assert.equal(entry.turns[0].status, "failed");
     } finally { cleanup(root, run?.child); }
   }
 });

@@ -144,6 +144,15 @@ providers retain their exact selectors. Offline probes cover settings/recent
 snapshots, a changed default immediately before spawn, mismatched exports and
 blocked unknown/excluded defaults; these probes add no live provider evidence.
 
+Goose also blocks before fixture creation or a turn reservation when either saved
+provider or model is missing, unparseable or ambiguous. Known selectors are always
+passed as `--provider` and `--model`; the suite never omits those flags to fall back
+to a native default it could not audit. The remedy is to establish explicit allowed
+selectors through native setup before authorizing a new suite. Offline regressions
+cover missing/invalid environment and settings values, excluded models, valid saved
+provider settings and all three named Goose cases. These tests use isolated probe
+executables and synthetic selectors; historical live evidence remains unchanged.
+
 The refusal classifier distinguishes an explicit permission request or rejection
 from ordinary command stderr such as `bash: ./live.test.mjs: Permission denied`
 or an `EACCES` file error. Generic `Operation not permitted`, `EPERM` and serialized

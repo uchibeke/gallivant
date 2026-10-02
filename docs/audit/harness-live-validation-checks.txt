@@ -376,3 +376,27 @@ OpenCode-default review follow-up on 2026-10-01 UTC (review 5386885175, comment 
   Full PR credential/Console-connection, known-secret and blocked-pattern scans: 0 matches.
   No installed harness, provider call, live retry or operator configuration change.
   Historical evidence, exhausted allowances and false AC-2/AC-3 attestations remain unchanged.
+
+Goose-selector review follow-up on 2026-10-01 UTC (review 5386954245, comment 4161672991):
+  Goose requires known provider and model selectors before fixture creation or turn
+  reservation. Unknown, missing, invalid or ambiguous selectors are recorded as
+  blocked with a native-setup remedy, and both overrides are always passed for
+  allowed selections. There is no silent fallback to an unaudited native default.
+  Regressions in test/live_suite.test.mjs:
+    live Goose blocks unknown provider or model before creating a fixture or turn
+    live Goose pins known settings environment and named selectors explicitly
+  Eighteen settings/environment cases launch only the offline version probe and
+  no turn; five valid environment, saved-provider and named-case selections pass
+  the exact provider/model flags to an offline child. Probe failures are preserved
+  as failures and are never counted as successful live coding evidence.
+  Focused regressions: exit 0; tests 2; pass 2; fail 0
+  Private output: /private/tmp/gallivant-goose-selector-focused-tests.txt
+  npm test: exit 0; tests 636; pass 636; fail 0; cancelled 0; skipped 0; deferred tests 0
+  duration_ms 64594.397416
+  Private output: /private/tmp/gallivant-goose-selector-all-tests.txt
+  npm run lint: exit 0
+  Changed test tooling syntax checks: exit 0
+  git diff --check: exit 0
+  Full PR credential/Console-connection, known-secret and blocked-pattern scans: 0 matches.
+  No installed harness, provider call, live retry or operator configuration change.
+  Historical evidence, exhausted allowances and false AC-2/AC-3 attestations remain unchanged.

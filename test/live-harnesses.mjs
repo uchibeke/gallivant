@@ -132,7 +132,7 @@ async function turn(entry, phase, attempt) {
   const overrides = [];
   if (harness === "opencode") overrides.push("--model", entry.configured.model);
   if (harness === "gemini" && (previousTurn || entry.configured.model !== "unknown")) overrides.push("--model", previousTurn?.models[0] || entry.configured.model);
-  if (harness === "goose" && entry.configured.provider !== "unknown" && entry.configured.model !== "unknown") overrides.push("--provider", entry.configured.provider, "--model", entry.configured.model);
+  if (harness === "goose") overrides.push("--provider", entry.configured.provider, "--model", entry.configured.model);
   spec.args.splice(harness === "gemini" ? 0 : spec.args.length - (harness === "goose" ? 2 : 1), 0, ...overrides);
   assertSafeArgv(spec.args);
   const env = liveRunEnv(config, identity, cwd, spec.env);
@@ -262,6 +262,11 @@ try {
     if (entry.harness === "opencode" && (!/^[\w.-]+\/[\w][\w./:-]*$/.test(entry.configured.model)
       || /(^|\/)(unknown|undefined|null|auto|default)(\/|$)/i.test(entry.configured.model))) {
       entry.blocked = "OpenCode provider/model cannot be established from the recorded settings; configure an explicit allowed provider/model through native setup before authorizing a new suite. No model call made.";
+      checkpoint(); continue;
+    }
+    if (entry.harness === "goose" && [entry.configured.provider, entry.configured.model].some(value =>
+      !value || safeLabel(value) !== value || /(^|\/)(unknown|undefined|null|auto|default)(\/|$)/i.test(value))) {
+      entry.blocked = "Goose provider/model cannot be established from the recorded settings; configure explicit allowed provider and model selectors through native setup before authorizing a new suite. No model call made.";
       checkpoint(); continue;
     }
     if (!invocation.versions[entry.harness]?.ok) {
