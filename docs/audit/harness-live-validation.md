@@ -237,6 +237,18 @@ pending. Offline regressions inject full-volume errors into ledger and runner wr
 and verify that the leader and its descendant stop before the suite exits. The last
 durable running reservation remains spent when the final checkpoint cannot be saved.
 
+The same ownership rule applies before startup returns a job handle. The shared
+runner now awaits process-group termination after a failed `job.json` or
+`latest-run` write, using the PID it just spawned rather than relying on damaged
+bookkeeping. Initial dispatch, resume/fix dispatch, and the live launcher all await
+startup. The parent log descriptor closes on successful startup, pre-spawn failure,
+and post-spawn cleanup; callbacks preserve the original startup error without
+retrying failed writes. Offline suite regressions cover missing/truncated job data,
+pointer failures, leaders that ignore SIGTERM or exit before their children, and a
+pre-spawn command-record failure. Generated ledger reservations retain their
+fixture/evidence pointers and remain ineligible for append or adapter retry. These
+fixtures provide cleanup evidence only; no live coding result was changed.
+
 Each invocation records its configured binaries and fresh version probes in the
 private ledger's `invocations` array. Retry and append check only the selected
 harnesses, once per harness, using the current configuration and shared version

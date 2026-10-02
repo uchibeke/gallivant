@@ -150,7 +150,7 @@ async function turn(entry, phase, attempt) {
   const env = liveRunEnv(config, identity, cwd, spec.env);
   if (phase === "start") verifyStartFixture({ ...entry, env });
   else verifyResumeFixture({ ...entry, env, previous: previousTurn?.verification });
-  const launch = launchLiveTurn({ report, entry, phase, attempt, deadline, runner, spec, env, fix, source, invocation: invocationIndex, checkpoint });
+  const launch = await launchLiveTurn({ report, entry, phase, attempt, deadline, runner, spec, env, fix, source, invocation: invocationIndex, checkpoint });
   if (!launch) return null;
   const { job, record, startedAt, limit } = launch;
   active = { runner, id: job.id };

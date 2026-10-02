@@ -81,6 +81,13 @@ write failure before descendants are stopped. An append can
 reuse a version-blocked case after upgrade only if it has no turn, retry reservation or fixture, within the
 original deadline and with the recorded provider/model unchanged.
 
+Runner startup is awaited by initial dispatch, resume/fix dispatch, and the live suite. The runner
+owns its freshly spawned PID until it returns a recorded job; a failed `job.json` or `latest-run`
+write terminates that process group and awaits the existing kill fallback before rejecting. This
+cleanup uses the in-memory job even if disk bookkeeping is missing or truncated. Startup-error
+callbacks cannot repeat failed writes, and the parent's log descriptor closes on every startup path.
+Live turn reservations remain spent when startup bookkeeping fails.
+
 The shared runner pins child `PWD` to its requested working directory. OpenCode 1.18.31 prefers that
 environment variable for its tool directory, so changing `spawn.cwd` alone is insufficient. The live suite
 checks native session directory evidence and stops on a mismatch; start fixtures must have no prewritten

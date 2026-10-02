@@ -361,7 +361,7 @@ test("runner pins PWD to the checkout for tools that prefer it over process.cwd"
     const root = process.env.PWD || process.cwd();
     fs.writeFileSync(path.join(root, 'tool-output.txt'), 'probe');
     process.stdout.write(JSON.stringify({ root, cwd: process.cwd() }));`;
-  const job = r.start("cwd-probe", process.execPath, ["-e", code], { cwd: checkout, env: { PWD: parent } });
+  const job = await r.start("cwd-probe", process.execPath, ["-e", code], { cwd: checkout, env: { PWD: parent } });
   for (let i = 0; i < 100 && r.read(job.id)?.exit === null; i++) await new Promise(res => setTimeout(res, 20));
   assert.equal(r.read(job.id).exit, 0);
   const { root, cwd } = JSON.parse(r.lines(job.id)[0]);
@@ -374,7 +374,7 @@ test("runner pins PWD to the checkout for tools that prefer it over process.cwd"
 test("a run whose binary does not exist is recorded as exit 127, not thrown into the daemon", async () => {
   const root = join(tempHome(), "runs");
   const r = makeRunner(root, { probe: () => false });
-  const job = r.start("x", "/nonexistent/gallivant-bin", [], { cwd: tempHome() });
+  const job = await r.start("x", "/nonexistent/gallivant-bin", [], { cwd: tempHome() });
   for (let i = 0; i < 50 && r.read(job.id)?.exit === null; i++) await new Promise(res => setTimeout(res, 20));
   const done = r.read(job.id);
   assert.equal(done.exit, 127);

@@ -6,7 +6,7 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, realpath
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
-import { assertUnspentVersionBlock, liveRunEnv, SUITE_MS, TURN_MS } from "./live-support.mjs";
+import { assertAdapterRetry, assertUnspentVersionBlock, liveRunEnv, SUITE_MS, TURN_MS } from "./live-support.mjs";
 
 const tokenNames = ["GH_TOKEN", "GITHUB_TOKEN", "GH_ENTERPRISE_TOKEN", "GITHUB_ENTERPRISE_TOKEN"];
 const gitAuthNames = ["SSH_AUTH_SOCK", "SSH_AGENT_PID", "SSH_ASKPASS", "SSH_ASKPASS_REQUIRE",
@@ -95,7 +95,7 @@ setInterval(() => {}, 1000);
 }
 
 function invoke(root, { watchdog = false, env = {}, retry = false, crashAfterSpawn = false,
-  caseId = "opencode-console-meta", changeDefaultTo = null, writeFault = null } = {}) {
+  caseId = "opencode-console-meta", changeDefaultTo = null, writeFault = null, startupFault = null } = {}) {
   const source = `
 import os from 'node:os';
 import fs from 'node:fs';
@@ -103,6 +103,38 @@ import { existsSync, writeFileSync } from 'node:fs';
 import cp from 'node:child_process';
 import { syncBuiltinESMExports } from 'node:module';
 os.homedir = () => ${JSON.stringify(root)};
+if (${JSON.stringify(startupFault)} !== null) {
+  const fault = ${JSON.stringify(startupFault)};
+  const write = fs.writeFileSync, open = fs.openSync, close = fs.closeSync;
+  let logFd;
+  fs.openSync = (path, ...args) => {
+    const fd = open(path, ...args);
+    if (String(path).endsWith('/job.log')) logFd = fd;
+    return fd;
+  };
+  fs.closeSync = fd => {
+    const result = close(fd);
+    if (fd === logFd) write(${JSON.stringify(join(root, "log-fd-closed.json"))}, JSON.stringify({ at: Date.now() }));
+    return result;
+  };
+  fs.writeFileSync = (path, data, ...args) => {
+    const target = String(path);
+    if (target.endsWith('/' + (fault === 'job-partial' ? 'job.json' : fault))) {
+      if (fault !== 'cmd.json') {
+        // The harness must install its handlers and spawn a descendant before the
+        // bookkeeping failure, so cleanup has to exercise the real kill fallback.
+        const deadline = Date.now() + 10_000;
+        while (!existsSync(${JSON.stringify(join(root, "ready.json"))}) && Date.now() < deadline)
+          Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 20);
+        if (!existsSync(${JSON.stringify(join(root, "ready.json"))})) throw new Error('offline process tree did not become ready');
+      }
+      if (fault === 'job-partial') write(path, String(data).slice(0, 9), ...args);
+      write(${JSON.stringify(join(root, "startup-fault.json"))}, JSON.stringify({ at: Date.now(), target }));
+      throw Object.assign(new Error('injected startup bookkeeping failure'), { code: 'ENOSPC' });
+    }
+    return write(path, data, ...args);
+  };
+}
 if (${JSON.stringify(writeFault)} !== null) {
   const write = fs.writeFileSync;
   fs.writeFileSync = (path, ...args) => {
@@ -619,6 +651,51 @@ test("live signal and watchdog stops await fallback even when evidence writes fa
           assert.ok(read(join(root, "write-fault.json")).at - stoppedAt >= 4_800, "interruption checkpoint must follow fallback");
           assert.ok(read(join(root, "exported.json")).at - stoppedAt >= 4_800, "metadata must follow fallback");
         } else assert.equal(existsSync(join(root, "exported.json")), false, "surface runner write errors before metadata");
+      } finally { cleanup(root, run?.child); }
+    });
+  }
+});
+
+test("live startup bookkeeping failures stop the owned process group before rejecting", async t => {
+  for (const [startupFault, mode] of [
+    ["job.json", "ignore"], ["job-partial", "leader-exits"],
+    ["latest-run", "ignore"], ["latest-run", "leader-exits"], ["cmd.json", "ignore"],
+  ]) {
+    await t.test(`${startupFault} ${mode}`, async t => {
+      const root = fixture(mode);
+      let run;
+      try {
+        run = invoke(root, { startupFault });
+        const result = await run.done;
+        assert.equal(result.code, 1, result.stderr);
+        assert.match(result.stderr, /injected startup bookkeeping failure/);
+        const fault = read(join(root, "startup-fault.json"));
+        assert.ok(existsSync(join(root, "log-fd-closed.json")), "parent log descriptor must close on every failure path");
+        if (startupFault === "cmd.json") {
+          assert.equal(existsSync(join(root, "ready.json")), false);
+          assert.equal(existsSync(join(root, "environment.json")), false, "pre-spawn failure must not launch a child");
+        } else {
+          assert.ok(result.at - fault.at >= 4_800, "startup cannot reject before its kill fallback");
+          const pids = read(join(root, "ready.json"));
+          await waitUntil(() => !running(pids.leader) && !running(pids.child));
+          if (startupFault === "job.json") assert.equal(existsSync(fault.target), false);
+          if (startupFault === "job-partial") assert.throws(() => read(fault.target), SyntaxError);
+        }
+        assert.equal(existsSync(join(root, "exported.json")), false);
+        const report = read(join(root, "report.json")), entry = report.cases[0], turn = entry.turns[0];
+        assert.equal(entry.turns.length, 1);
+        assert.equal(turn.status, "running", "the durable reservation must remain spent");
+        assert.equal(turn.run, null, "start failed before returning a job handle");
+        assert.ok(existsSync(turn.runRoot));
+        assert.equal(turn.fixture.cwd, entry.cwd);
+        assert.equal(turn.fixture.remote, entry.remote);
+        assert.equal(entry.retry, undefined);
+        assert.throws(() => assertUnspentVersionBlock(entry, report), /only an unspent version-blocked case/);
+        assert.throws(() => assertAdapterRetry(turn, { sha256: { changed: "after" } }), /ineligible/);
+        const calls = readFileSync(join(root, "calls.jsonl"), "utf8").trim().split("\n").map(JSON.parse);
+        assert.equal(calls.filter(args => args[0] === "run").length, startupFault === "cmd.json" ? 0 : 1);
+        t.diagnostic(JSON.stringify({ startupFault, mode, status: turn.status, run: turn.run,
+          fixtureRecorded: true, runRootRecorded: true, resumed: false, elapsedAfterFaultMs: result.at - fault.at }));
       } finally { cleanup(root, run?.child); }
     });
   }

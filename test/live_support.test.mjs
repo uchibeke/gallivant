@@ -171,7 +171,7 @@ test("live retry gate excludes recognized unsuccessful outcomes without classifi
   }
 });
 
-test("live launch leaves exhausted or interrupted phases unstarted without spending a retry", () => {
+test("live launch leaves exhausted or interrupted phases unstarted without spending a retry", async () => {
   const now = 1_000_000;
   for (const phase of ["start", "resume"]) for (const attempt of [1, 2]) {
     for (const [remaining, flags] of [[-1, {}], [0, {}], [STOP_GRACE_MS - 1, {}], [STOP_GRACE_MS, {}], [SUITE_MS, { suiteTimedOut: true }], [SUITE_MS, { interrupted: "SIGTERM" }]]) {
@@ -180,7 +180,7 @@ test("live launch leaves exhausted or interrupted phases unstarted without spend
       const before = structuredClone(entry);
       const report = { ...flags };
       let persisted;
-      const launch = launchLiveTurn({ report, entry, phase, attempt, deadline: now + remaining, invocation: 2,
+      const launch = await launchLiveTurn({ report, entry, phase, attempt, deadline: now + remaining, invocation: 2,
         spec: { cmd: "offline-probe", args: [] },
         checkpoint() { persisted = structuredClone({ entry, report }); },
         runner: { start() { assert.fail("an exhausted or interrupted suite must not launch a child"); } },
@@ -197,7 +197,7 @@ test("live launch leaves exhausted or interrupted phases unstarted without spend
   }
 });
 
-test("live automatic resume rechecks time spent by the first turn and synchronous preflight", () => {
+test("live automatic resume rechecks time spent by the first turn and synchronous preflight", async () => {
   let now = 1_000_000;
   const deadline = now + SUITE_MS;
   const calls = [];
@@ -207,19 +207,19 @@ test("live automatic resume rechecks time spent by the first turn and synchronou
     checkpoint() {},
     runner: { start(...args) { calls.push(args); return { id: "first" }; } },
   };
-  const first = launchLiveTurn({ ...options, phase: "start" }, () => now);
+  const first = await launchLiveTurn({ ...options, phase: "start" }, () => now);
   assert.equal(first.job.id, "first");
   first.record.status = "passed";
   // Model work, metadata collection and synchronous preflight can consume the outer loop's remaining time.
   now = deadline - STOP_GRACE_MS;
-  assert.equal(launchLiveTurn({ ...options, phase: "resume" }, () => now), null);
+  assert.equal(await launchLiveTurn({ ...options, phase: "resume" }, () => now), null);
   assert.equal(calls.length, 1);
   assert.equal(entry.turns.length, 1);
   assert.equal(entry.turns[0].status, "passed");
   assert.equal(report.unstartedTurns[0].phase, "resume");
 });
 
-test("live launch preserves both time caps and persists retries before starting a child", () => {
+test("live launch preserves both time caps and persists retries before starting a child", async () => {
   const now = 1_000_000;
   for (const [remaining, usable] of [[SUITE_MS, 174_000], [90_000, 84_000], [STOP_GRACE_MS + 1, 1]]) {
     const entry = { id: "goose-meta", cwd: "/unused", turns: [] };
@@ -235,7 +235,7 @@ test("live launch preserves both time caps and persists retries before starting 
         return { id: "retry" };
       } },
     };
-    const launch = launchLiveTurn(options, () => now);
+    const launch = await launchLiveTurn(options, () => now);
     assert.equal(launch.job.id, "retry");
     assert.equal(launch.startedAt, new Date(now).toISOString());
     assert.equal(launch.limit, now + usable);
@@ -243,7 +243,7 @@ test("live launch preserves both time caps and persists retries before starting 
     assert.equal(report.unstartedTurns, undefined);
   }
   const entry = { id: "goose-meta", cwd: "/unused", turns: [] };
-  assert.throws(() => launchLiveTurn({ report: {}, entry, phase: "resume", attempt: 2,
+  await assert.rejects(() => launchLiveTurn({ report: {}, entry, phase: "resume", attempt: 2,
     deadline: now + SUITE_MS, spec: { cmd: "offline-probe", args: [] },
     checkpoint() {},
     runner: { start() { throw new Error("child could not start"); } },
@@ -251,13 +251,13 @@ test("live launch preserves both time caps and persists retries before starting 
   assert.equal(entry.retry.phase, "resume", "a launch exception must not erase a durable reservation");
 });
 
-test("live deadline includes retry checkpoint time and releases an unlaunched reservation", () => {
+test("live deadline includes retry checkpoint time and releases an unlaunched reservation", async () => {
   let now = 1_000_000;
   const deadline = now + SUITE_MS;
   const entry = { id: "goose-meta", cwd: "/unused", turns: [{ phase: "resume", attempt: 1, status: "failed" }] };
   const report = {};
   const saved = [];
-  const result = launchLiveTurn({ report, entry, phase: "resume", attempt: 2, deadline,
+  const result = await launchLiveTurn({ report, entry, phase: "resume", attempt: 2, deadline,
     spec: { cmd: "offline-probe", args: [] },
     checkpoint() {
       saved.push(structuredClone({ entry, report }));
@@ -290,7 +290,7 @@ test("live reservations survive launch crashes for every phase and attempt", () 
         import { launchLiveTurn, SUITE_MS } from ${JSON.stringify(new URL("./live-support.mjs", import.meta.url).href)};
         const ledger = ${JSON.stringify(ledger)};
         const report = JSON.parse(readFileSync(ledger, 'utf8')), entry = report.cases[0];
-        launchLiveTurn({ report, entry, phase: ${JSON.stringify(phase)}, attempt: ${attempt},
+        await launchLiveTurn({ report, entry, phase: ${JSON.stringify(phase)}, attempt: ${attempt},
           deadline: Date.now() + SUITE_MS, invocation: 0, source: { revision: 'offline-source' }, fix: 'offline-fix.md',
           spec: { cmd: 'offline-probe', args: ['prompt'] },
           checkpoint: () => writeJsonAtomic(ledger, report),
@@ -318,7 +318,7 @@ test("live reservations survive launch crashes for every phase and attempt", () 
   }
 });
 
-test("live launch never spawns after a failed or exhausted reservation checkpoint", () => {
+test("live launch never spawns after a failed or exhausted reservation checkpoint", async () => {
   for (const phase of ["start", "resume"]) for (const attempt of [1, 2]) {
     for (const fault of ["write-failure", "deadline"]) {
       let now = 1000, launches = 0;
@@ -331,9 +331,9 @@ test("live launch never spawns after a failed or exhausted reservation checkpoin
         },
         runner: { start() { launches++; } },
       };
-      if (fault === "write-failure") assert.throws(() => launchLiveTurn(options, () => now), /reservation write failed/);
+      if (fault === "write-failure") await assert.rejects(() => launchLiveTurn(options, () => now), /reservation write failed/);
       else {
-        assert.equal(launchLiveTurn(options, () => now), null);
+        assert.equal(await launchLiveTurn(options, () => now), null);
         assert.deepEqual(entry.turns, []);
         assert.equal(entry.retry, undefined);
         assert.equal(report.unstartedTurns[0].phase, phase);

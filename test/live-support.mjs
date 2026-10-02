@@ -70,7 +70,7 @@ export async function auditLiveInvocation(report, config, { mode, selected, sour
 }
 
 // Call only after synchronous preflight. Nothing that can spend time belongs between this check and start.
-export function launchLiveTurn({ report, entry, phase, attempt, deadline, runner, spec, env, fix, source, invocation, checkpoint }, now = Date.now) {
+export async function launchLiveTurn({ report, entry, phase, attempt, deadline, runner, spec, env, fix, source, invocation, checkpoint }, now = Date.now) {
   // Every potentially paid launch needs a durable reservation, including first starts
   // and resumes. A crash after spawn must not make the case look unspent on restart.
   const record = { phase, attempt, reservedAt: new Date(now()).toISOString(), source, invocation,
@@ -93,7 +93,7 @@ export function launchLiveTurn({ report, entry, phase, attempt, deadline, runner
     checkpoint();
     return null;
   }
-  const job = runner.start(`${phase}-${attempt}`, spec.cmd, spec.args, { cwd: entry.cwd, env });
+  const job = await runner.start(`${phase}-${attempt}`, spec.cmd, spec.args, { cwd: entry.cwd, env });
   record.startedAt = startedAt;
   return { job, record, startedAt, limit };
 }

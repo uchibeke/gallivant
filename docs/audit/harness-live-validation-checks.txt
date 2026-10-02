@@ -428,3 +428,36 @@ Shutdown/native-outcome review follow-up on 2026-10-02 UTC (review 5387097938):
   Full PR credential/Console-connection, known-secret and blocked-pattern scans: 0 matches.
   No installed harness, provider call, live retry, operator setting or review budget changed.
   Historical evidence, exhausted allowances and false AC-2/AC-3 attestations remain unchanged.
+
+Startup-bookkeeping review follow-up on 2026-10-02 UTC (review 5387189688, comment 4161881934):
+  Prior revision: 28becafaeca7bfeae11d067bbed7e5354556498d.
+  Rule reviewed: the runner owns the newly spawned process until it returns a
+  recorded job; bookkeeping failure must stop that process group before rejection.
+  Shared makeRunner.start now awaits its existing termination fallback using the
+  in-memory job, independent of missing/truncated job.json or a failed latest-run.
+  Initial dispatch (lib/commands/start.mjs), resume/fix dispatch (lib/tick.mjs), and
+  the live launcher await startup. Startup-failure callbacks suppress duplicate
+  failed writes. Parent log descriptors close on success and every startup failure.
+  Focused regression in test/live_suite.test.mjs:
+    live startup bookkeeping failures stop the owned process group before rejecting
+  Five actual-suite cases cover missing/truncated job data, latest-run failures
+  with leaders ignoring SIGTERM or exiting before descendants, and a pre-spawn
+  cmd.json failure. The generated ledger summaries retain status=running, run=null,
+  fixture and runRoot pointers, and no resume; append/retry reject the reservations.
+  Focused post-spawn errors propagated 5010, 5007, 5011 and 5006 ms after injection,
+  after the fallback; the pre-spawn failure launched no harness. Tests verify all spawned processes stop
+  and the parent's log descriptor closes. These are offline cleanup fixtures only.
+  Reviewed changed source, sibling callers, startup/callback/descriptor cleanup,
+  existing deadline/reservation tests and generated ledger summaries against the brief.
+  Focused checks: exit 0; tests 14; pass 14; fail 0
+  Private output: /private/tmp/gallivant-startup-bookkeeping-focused-tests.txt
+  npm test: exit 0; tests 650; pass 650; fail 0; cancelled 0; skipped 0; deferred tests 0
+  duration_ms 121311.344625
+  Private output: /private/tmp/gallivant-startup-bookkeeping-all-tests.txt
+  npm run lint: exit 0
+  Private output: /private/tmp/gallivant-startup-bookkeeping-lint.txt
+  Changed test tooling syntax checks: exit 0
+  git diff --check: exit 0
+  Full PR credential/Console-connection, known-secret and blocked-pattern scans: 0 matches.
+  No live provider calls, settings, permission changes or budget resets.
+  Prior live evidence and false AC-2/AC-3 attestations remain unchanged.
