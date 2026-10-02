@@ -39,6 +39,79 @@ templates/               passport, Claude sandbox settings, PRD, tracker/{tracke
 
 ## Design rules
 
+Harness implementation and demonstrated support are separate. The [live support matrix](audit/harness-live-validation.md)
+records installed versions, provider/model combinations, permission boundaries, budget controls and blocked phases.
+Claude/Codex have existing production evidence; Gemini, OpenCode and Goose currently have blocked or failed coding attempts,
+not successful start/resume proof. Provider subscription eligibility is independent of the harness adapter.
+
+Repeat with `npm run test:live-harnesses -- --live` after the recorded operator remedies. The opt-in
+`test/live-harnesses.mjs` is outside `test/*.test.mjs`; it uses the existing `buildRun`, `runEnv`, `makeRunner`,
+version probe and outcome/session readers. Test-local native model overrides do not add per-task model selection
+to Gallivant. `test/live-support.mjs` verifies model evidence, adapter identity, actual test tool execution, files,
+behavior, commits, upstream and remote HEAD. Calls are sequential, at most 180 seconds per turn and 30 minutes
+per suite, with one start/resume pair and at most one justified targeted retry per combination. Refusals stop
+the affected phase; they are never converted into permission overrides. Ordinary command stderr such as
+`Permission denied`, `Operation not permitted` or `PermissionDenied` is retained for investigation without
+triggering an approval stop. Sandbox classification requires workspace/sandbox context; explicit permission
+requests/rejections and guardrail decisions still stop the turn. Raw streams and exports stay private.
+Recognized unsuccessful native outcomes (such as an aborted OpenCode step) are recorded as
+`native-failure`, not adapter defects. The retry gate checks both saved outcome metadata and the
+current parser's reading of the saved stream; a source change cannot qualify these failures for retry.
+Goose's textual provider-error prefix must start an assistant message/content block. The adapter reads
+across streamed chunks from those boundaries, preserving native failures after earlier output without
+treating error examples embedded in prose or code fences as failed turns. Typed native errors remain failures.
+Named Meta/xAI/Alibaba cases use Goose's native saved providers and OpenCode's separate Console BYOK
+providers; they do not establish Zen/Go subscription access. Exact batch commands and blocked results are
+in the audit. DeepSeek is excluded from new calls and Tencent remains deferred.
+
+Every OpenCode turn pins `--model` to the case's recorded provider/model, including the existing-default
+case. An unknown, incomplete or routing-alias default blocks before fixture creation or launch. Changing
+native defaults afterward cannot change that pinned argument, and exported model evidence must match the
+recorded selection on both turns. Named Console providers keep their exact selectors.
+Goose likewise requires known provider and model selectors before fixture creation or turn reservation;
+both are always passed explicitly. Missing or unparseable settings block without falling back to its
+mutable default. Native environment/settings and the named Meta/xAI/Alibaba selectors remain supported.
+
+Disposable turns clear inherited Git/GitHub/SSH, credential-manager and editor askpass variables, then
+restore `runEnv`'s Git identity and isolated config with terminal credential prompts disabled. Git accepts only
+file transport and its SSH command refuses execution, preventing default SSH identity fallback while keeping
+provider `HOME` intact. Disposable environments override `GH_CONFIG_DIR` with `/dev/null` and disable gh
+prompts: gh fails configuration loading before stored-account, keyring or API lookup. An empty gh config
+directory alone does not prevent keyring fallback. Production `runEnv` keeps its separate gh configuration.
+Child-environment controls do not replace native sandboxing. Short-lived callers use the
+runner's `waitForKill` after requesting a stop so the process-group fallback runs before exit; the live suite
+also waits before metadata export. Signal/watchdog callbacks defer checkpoints to the main async path;
+failed ledger or runner metadata writes still reference and await the kill fallback before surfacing
+the error. A pending kill owns its exit record, so an early leader exit cannot cause another metadata
+write failure before descendants are stopped. An append can
+reuse a version-blocked case after upgrade only if it has no turn, retry reservation or fixture, within the
+original deadline and with the recorded provider/model unchanged.
+
+Runner startup is awaited by initial dispatch, resume/fix dispatch, and the live suite. The runner
+owns its freshly spawned PID until it returns a recorded job; a failed `job.json` or `latest-run`
+write terminates that process group and awaits the existing kill fallback before rejecting. This
+cleanup uses the in-memory job even if disk bookkeeping is missing or truncated. Startup-error
+callbacks cannot repeat failed writes, and the parent's log descriptor closes on every startup path.
+Live turn reservations remain spent when startup bookkeeping fails.
+
+The shared runner pins child `PWD` to its requested working directory. OpenCode 1.18.31 prefers that
+environment variable for its tool directory, so changing `spawn.cwd` alone is insufficient. The live suite
+checks native session directory evidence and stops on a mismatch; start fixtures must have no prewritten
+files or remote commits. See the audit's directory incident and recovery record before repeating a failed case.
+An eligible start retry gets a distinct pristine checkout/remote while retaining the original fixture and
+turn evidence; resume retries still require the last passed checkout and remote state. Retry and time limits
+are unchanged, and no historical failure or exhausted retry is relabeled by these fixes.
+
+Every turn reserves its case, fixture, source, invocation and running record in the atomic ledger before
+launch, including first starts and resumes. The reservation points to the private runner directory even if
+a crash prevents recording the job ID. A running reservation cannot be appended or retried as an unspent
+case; inspect its private runner evidence and resolve any surviving process before scheduling further work.
+The final deadline check includes reservation I/O and releases the reservation only when no launch occurred.
+
+A passing disposable test would still not establish GitHub review/completion behavior. Full support requires
+an authorized PRD through `ready`/`start`, PR creation, review/CI feedback, a same-session pushed fix and the
+completion gate. Keep that lifecycle evidence separate from session fixtures and disposable local Git tests.
+
 - **The tick is the only writer.** Nothing changes state in exit handlers, timers or callbacks. A finished run is noticed on the next tick by asking the OS whether the pid is alive and reading the log. That is what makes a daemon restart mid-run safe.
 - **Rules are pure.** `events.mjs` takes the raw shapes `gh` returns and produces events. Every rule in the PRD has a unit test with no network.
 - **One gate, and the brief is a Request.** `check()` takes a source-neutral Request, `{ id, repo, title, body, harness, status, source: { kind, url, author }, raw }`, plus the parsed fields the rules read. A source under `lib/sources/` reads whatever the operator typed and produces one; today the only source is a PRD file, and its Request is exactly what `parsePrd` always returned. Two things follow. A rule that depends on where the brief lives rather than on what it says carries its own scope as data (`kinds: ["prd"]`: `path`, and `sources` because it resolves the files a brief carries against the repository root that path gives it), so a source without a path is not failed for a rule it cannot satisfy. And `repo` is a field the source fills in, not something a command derives: `start` reads `request.repo` and never calls `git.toplevel` itself. Adding a source is an adapter plus somewhere to record its verdict, never a second gate.

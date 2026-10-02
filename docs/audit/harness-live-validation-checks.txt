@@ -1,0 +1,551 @@
+Validation on 2026-10-01 UTC, branch gallivant/harness-live-validation
+
+npm test: exit 0
+  tests 583; pass 583; fail 0; cancelled 0; skipped 0; deferred tests 0
+  duration_ms 13831.938542
+  Private output: /private/tmp/gallivant-harness-validation-tests-final.txt
+  Host-approved process inspection was required by existing daemon/liveness tests.
+  The initial restricted run failed those process-identity checks; no expectations were weakened.
+
+npm run lint: exit 0
+node --check test/live-harnesses.mjs: exit 0
+node --check test/live-support.mjs: exit 0
+git diff --check: exit 0
+git diff --cached --check: exit 0
+Staged added-line credential scan: 0 provider-token/private-key patterns or known environment secret matches.
+
+Live suite: exit 1, intentionally not counted as an ordinary-test pass.
+  5 start attempts; 0 resume attempts; 0 targeted retries.
+  All cases blocked by workspace/permission policy, provider rejection, or credits.
+  See harness-live-validation.json and harness-live-validation.md for exact evidence.
+
+Regression coverage:
+  OpenCode outcome sums all step costs and preserves unknown cost
+  Goose provider failure followed by complete is not success
+  live identity requires the actual adapter identity and refuses a new session on resume
+  live model evidence comes from structured metadata and retains fallback models
+  live test execution requires matching successful tool output, not narration
+  external live verifier rejects missing push and uncommitted resume, then proves both real Git turns
+
+The ordinary Git-verifier regression uses authored test fixtures, not a live model.
+It is not evidence that any blocked harness completed either phase.
+
+Review follow-up on 2026-10-01 UTC (review 5373648819, inline comment 4150730824):
+  Fixed Goose provider-error detection to inspect the joined assistant text.
+  Regression: Goose provider error envelope survives streamed chunk boundaries.
+  Covers every split position across events/content blocks, with and without earlier output.
+  The regression failed before the fix and passes afterward; no live calls were repeated.
+  npm test: exit 0; tests 584; pass 584; fail 0; cancelled 0; skipped 0; deferred tests 0
+  duration_ms 15901.675792
+  Private output: /private/tmp/gallivant-harness-review-tests.txt
+  npm run lint: exit 0
+  git diff --check: exit 0
+
+Named provider batch follow-up on 2026-10-01 UTC:
+  npm test: exit 0; tests 588; pass 588; fail 0; cancelled 0; skipped 0; deferred tests 0
+  duration_ms 15648.365334
+  Private output: /private/tmp/gallivant-provider-batch-tests.txt
+  npm run lint: exit 0
+  node --check test/live-harnesses.mjs: exit 0
+  node --check test/live-support.mjs: exit 0
+  git diff --check: exit 0
+  Credential/connection scan: 0 token/private-key/Console connection-ID patterns;
+  0 known environment secret values in the changed files.
+  Private permissions: two roots mode 0700; 24 logs/commands/exports mode 0600.
+
+  Goose batch: 3 starts, 0 resumes, 0 retries; 19301 ms; exit 1.
+  OpenCode Console batch: 3 original starts, 2 targeted start retries, 0 resumes;
+  746597 ms including investigation/retries; each invocation exit 1.
+  Longest additional turn: 164551 ms. No new DeepSeek calls; Tencent deferred.
+  Full preserved history: 13 start attempts, 0 resumes, 2 targeted retries.
+  Live attempts remain blocked/failed; ordinary green tests are not live proof.
+  Evidence: harness-live-validation-providers.json and directory-fix.md.
+
+  New regressions:
+    Goose typed authentication error followed by complete is not success
+    runner pins PWD to the checkout for tools that prefer it over process.cwd
+    live OpenCode directory evidence rejects tools rooted outside the disposable checkout
+    named live provider cases pin Console routes and saved Goose selectors
+  Existing external verifier regression now also rejects a contaminated remote
+  before a start call. The PWD regression failed before its fix and passes after it.
+
+Suite-root review follow-up on 2026-10-01 UTC (review 5373874387, comment 4150924692):
+  Existing --retry/--append roots are read and validated before chmod.
+  Missing, malformed, mismatched and invalid ledgers leave directory modes and
+  contents unchanged; valid matching ledgers retain mode-0700 privacy handling.
+  Regressions in test/live_support.test.mjs:
+    live suite ledger rejection preserves supplied directory permissions and contents
+    live suite opens its matching ledger before making the root private
+  npm test: exit 0; tests 590; pass 590; fail 0; cancelled 0; skipped 0; deferred tests 0
+  duration_ms 16562.957584
+  Private output: /private/tmp/gallivant-suite-root-review-tests.txt
+  npm run lint: exit 0
+  Live tooling syntax checks: exit 0
+  git diff --check: exit 0
+  No model calls or live retries were made for this review fix.
+
+Cost/classification review follow-up on 2026-10-01 UTC (review 5373951191):
+  Comments 4150983921 and 4150983922 addressed.
+  Console BYOK ledger costs remain unknown; native values are recorded separately.
+  Provider/model access rejections no longer match generic tool permissions.
+  Structured tool context still identifies terse native "not allowed" refusals.
+  Regressions in test/live_support.test.mjs:
+    live cost evidence keeps Console BYOK billing unknown and native values separate
+    live provider access rejection is distinct from tool permission refusal
+  npm test: exit 0; tests 592; pass 592; fail 0; cancelled 0; skipped 0; deferred tests 0
+  duration_ms 12079.904708
+  Private output: /private/tmp/gallivant-cost-classification-review-tests-final.txt
+  npm run lint: exit 0
+  Live tooling syntax checks: exit 0
+  git diff --check: exit 0
+  No model calls or live retries were made; historical results remain unchanged.
+
+Completion-gate follow-up on 2026-10-01 UTC:
+  Clarified zero-count test-summary labels without changing historical counts.
+  Intentional CLI progress and the runner probe now use direct stream writes.
+  npm test: exit 0; tests 592; pass 592; fail 0; cancelled 0; skipped 0; deferred tests 0
+  duration_ms 12428.871542
+  Private output: /private/tmp/gallivant-gate-followup-tests-final.txt
+  npm run lint: exit 0
+  node --check test/live-harnesses.mjs: exit 0
+  git diff --check: exit 0
+  Full PR diff checked against the configured blocked-pattern list: 0 matches.
+  Local deterministic gate: allow false; only oap.criteria_not_met (ac-2, ac-3).
+  Private evaluation: /private/tmp/gallivant-gate-followup-local-evaluation.json
+  This local check is not a hosted completion decision or a claim of CI status.
+  See harness-live-validation.md Completion gate disposition for operator remedies.
+  Gate policy, acceptance criteria and prior live evidence remain unchanged.
+  No model calls or live retries were made; completion remains blocked.
+
+Resume-preflight review follow-up on 2026-10-01 UTC (review 5374106319, comment 4151117881):
+  Resume checks the last passed checkout, branch, upstream, origin/push destination,
+  bare remote HEAD and remote branch before any model call or retry reservation.
+  Regression in test/live_support.test.mjs:
+    live resume preflight accepts only the last passed checkout and remote without changing either
+  One valid state and thirteen rejection cases use disposable Git repositories.
+  node --test test/live_support.test.mjs: exit 0; tests 28; pass 28; fail 0
+  Private output: /private/tmp/gallivant-resume-preflight-tests.txt
+  npm test: exit 0; tests 607; pass 607; fail 0; cancelled 0; skipped 0; deferred tests 0
+  duration_ms 36053.168083
+  Private output: /private/tmp/gallivant-resume-preflight-all-tests.txt
+  npm run lint: exit 0
+  Live tooling syntax checks: exit 0
+  git diff --check: exit 0
+  Full PR credential/Console-connection, known-secret and blocked-pattern scans: 0 matches.
+  No model calls, live retries, provider changes or permission changes were made.
+  Historical evidence and false AC-2/AC-3 attestations remain unchanged.
+
+Version-preflight review follow-up on 2026-10-01 UTC (review 5379832759, comment 4155841484):
+  Retry/append record fresh checks of the selected configured binaries, and gate
+  every turn on those results while preserving the original version/PATH audit.
+  New turn records reference the invocation containing their binary/version evidence.
+  Regressions in test/live_support.test.mjs:
+    live retry and append recheck current binaries while preserving earlier version evidence
+    live resumed invocation refuses stale success for downgraded unreadable or missing binaries
+  Focused executable-probe regressions: exit 0; tests 2; pass 2; fail 0
+  Private output: /private/tmp/gallivant-version-review-focused-tests.txt
+  npm test: exit 0; tests 609; pass 609; fail 0; cancelled 0; skipped 0; deferred tests 0
+  duration_ms 25717.371833
+  Private output: /private/tmp/gallivant-version-review-all-tests.txt
+  npm run lint: exit 0
+  Live tooling syntax checks: exit 0
+  git diff --check: exit 0
+  Full PR credential/Console-connection, known-secret and blocked-pattern scans: 0 matches.
+  No provider calls or live retries were made; provider settings and permissions remain unchanged.
+  Historical evidence and false AC-2/AC-3 attestations remain unchanged.
+
+Deadline review follow-up on 2026-10-01 UTC (review 5380066474, comment 4156031609):
+  Every turn rechecks usable time after synchronous preflight and retry checkpoint I/O,
+  immediately before runner.start. Exhausted phases are persisted as unstarted.
+  Retry reservations remain durable before launch and are released if the time check blocks it.
+  Regressions in test/live_support.test.mjs:
+    live launch leaves exhausted or interrupted phases unstarted without spending a retry
+    live automatic resume rechecks time spent by the first turn and synchronous preflight
+    live launch preserves both time caps and persists retries before starting a child
+    live deadline includes retry checkpoint time and releases an unlaunched reservation
+  Focused clock/runner regressions: exit 0; tests 4; pass 4; fail 0
+  Private output: /private/tmp/gallivant-deadline-review-focused-tests-final.txt
+  npm test: exit 0; tests 613; pass 613; fail 0; cancelled 0; skipped 0; deferred tests 0
+  duration_ms 26680.841917
+  Private output: /private/tmp/gallivant-deadline-review-all-tests-final.txt
+  npm run lint: exit 0
+  Live tooling syntax checks: exit 0
+  git diff --check: exit 0
+  Full PR credential/Console-connection, known-secret and blocked-pattern scans: 0 matches.
+  No provider calls, live retries or policy changes were made; historical evidence is unchanged.
+  AC-2/AC-3 remain false pending the documented operator remedies and successful live evidence.
+
+Verifier-retry review follow-up on 2026-10-01 UTC (review 5380342659, comment 4156251341):
+  File/test/Git verification failures have a distinct non-retriable category.
+  Retries require a recorded adapter-check stage; older unclassified records without
+  a stage are rejected without altering their evidence. External blocks keep their remedies.
+  Regressions in test/live_support.test.mjs:
+    live task verification failures remain ineligible for adapter retries after source changes
+    live retry gate requires a recorded adapter stage and rejects legacy unclassified failures
+    live external failure classification takes priority over verifier errors and stays non-retriable
+  Focused regressions: exit 0; tests 3; pass 3; fail 0
+  Wrong greeting, missing test and missing push use real disposable Git fixtures.
+  Private output: /private/tmp/gallivant-verifier-retry-review-focused-tests.txt
+  npm test: exit 0; tests 616; pass 616; fail 0; cancelled 0; skipped 0; deferred tests 0
+  duration_ms 25936.300667
+  Private output: /private/tmp/gallivant-verifier-retry-review-all-tests.txt
+  npm run lint: exit 0
+  Live tooling syntax checks: exit 0
+  git diff --check: exit 0
+  Full PR credential/Console-connection, known-secret and blocked-pattern scans: 0 matches.
+  No provider calls or live retries were made; historical records remain unchanged.
+  AC-2/AC-3 remain false pending the documented operator remedies and successful live evidence.
+
+Atomic-ledger review follow-up on 2026-10-01 UTC (review 5380708449, comment 4156547483):
+  Every live-suite checkpoint now uses lib/fs.mjs writeJsonAtomic instead of
+  truncating report.json in place. The prior valid ledger survives partial writes,
+  process termination during writes, and failed renames. Temporary files stay private.
+  Regression in test/live_support.test.mjs:
+    live suite checkpoints preserve the ledger through partial writes, termination and rename failures
+  Actual suite entrypoint exercised with an offline unsupported-version probe;
+  no installed harness or provider invoked. Saved attempt history and retry
+  reservations remain intact in all three failure cases and successful replacement.
+  Focused regression: exit 0; tests 1; pass 1; fail 0
+  Private output: /private/tmp/gallivant-atomic-ledger-focused-tests.txt
+  npm test: exit 0; tests 617; pass 617; fail 0; cancelled 0; skipped 0; deferred tests 0
+  duration_ms 30306.279125
+  Private output: /private/tmp/gallivant-atomic-ledger-all-tests.txt
+  npm run lint: exit 0
+  Live tooling syntax checks: exit 0
+  git diff --check: exit 0
+  Full PR credential/Console-connection, known-secret and blocked-pattern scans: 0 matches.
+  No provider calls or live retries were made; historical records remain unchanged.
+  AC-2/AC-3 remain false pending the documented operator remedies and successful live evidence.
+
+Live-boundaries review follow-up on 2026-10-01 UTC (review 5384268305):
+  Comments 4159436871, 4159436881, 4159436887 addressed with offline regressions.
+  liveRunEnv excludes all four GitHub/GitHub Enterprise token environment variables,
+  including through makeRunner's inherited-env merge, while retaining provider setup.
+  The shared runner exposes waitForKill, keeping its fallback referenced for callers
+  that must await shutdown. The fallback also handles a leader exiting before its child.
+  Signal/watchdog kills are awaited before metadata or exit and remain blocked outcomes.
+  Append may reuse only an unspent version-preflight block, keeping the original
+  provider/model, session selector, invocation history, deadline and retry allowance.
+  Regressions in test/live_suite.test.mjs:
+    live child environment excludes inherited GitHub tokens through the shared runner
+    live append reuses an unspent version block after upgrade without resetting its budget or selection
+    live append rejects attempted, reserved, fixture-bearing and non-version blocks
+    live signal and watchdog stops await the process-group fallback before metadata and exit
+  SIGINT, SIGTERM and watchdog cases exercise real disposable process trees, including
+  a leader that exits on SIGTERM and a surviving child that ignores it.
+  Focused regressions: exit 0; tests 7; pass 7; fail 0
+  Private output: /private/tmp/gallivant-live-boundaries-focused-tests.txt
+  npm test: exit 0; tests 624; pass 624; fail 0; cancelled 0; skipped 0; deferred tests 0
+  duration_ms 24222.528917
+  Private output: /private/tmp/gallivant-live-boundaries-all-tests.txt
+  npm run lint: exit 0
+  Live tooling syntax checks: exit 0
+  git diff --check: exit 0
+  Full PR credential/Console-connection, known-secret and blocked-pattern scans: 0 matches.
+  No installed harness, provider call, live retry, provider setting or permission change.
+  Historical evidence and false AC-2/AC-3 attestations remain unchanged.
+
+Git-auth environment review follow-up on 2026-10-01 UTC (review 5384881535, comment 4159947917):
+  liveRunEnv clears inherited and adapter-provided Git/GitHub/SSH, credential-manager
+  and editor askpass variables before restoring only runEnv's Git identity/config.
+  Undefined overrides survive the shared runner's parent-env merge; terminal Git
+  credential prompts are disabled. Provider setup and operator settings are unchanged.
+  Regression in test/live_suite.test.mjs:
+    live child environment strips Git and SSH credential channels and restores only trusted Git config
+  Actual suite child checks cover SSH sockets, askpass programs, command overrides,
+  config/authorization-header injection, stale config slots, client-certificate selectors
+  and editor credential IPC handles. Git itself reports no injected header, only the
+  expected helper, and the disposable identity; provider sentinel remains available.
+  Focused regressions: exit 0; tests 2; pass 2; fail 0
+  Private output: /private/tmp/gallivant-git-auth-focused-tests.txt
+  npm test: exit 0; tests 625; pass 625; fail 0; cancelled 0; skipped 0; deferred tests 0
+  duration_ms 27094.608666
+  Private output: /private/tmp/gallivant-git-auth-all-tests.txt
+  npm run lint: exit 0
+  Live tooling syntax checks: exit 0
+  git diff --check: exit 0
+  Full PR credential/Console-connection, known-secret and blocked-pattern scans: 0 matches.
+  No installed harness, SSH agent, credential helper or network provider was invoked
+  by this regression. Environment filtering is not a replacement for native sandboxing.
+  Historical evidence and false AC-2/AC-3 attestations remain unchanged.
+
+Transport/start-retry review follow-up on 2026-10-01 UTC (review 5385025050):
+  Comments 4160069437 and 4160069445 addressed with offline regressions.
+  liveRunEnv pins GIT_ALLOW_PROTOCOL=file and GIT_SSH_COMMAND=false after clearing
+  inherited authentication channels, preserving HOME and native provider setup.
+  Git accepts a local bare push and rejects direct SSH, HTTP(S) and Git URLs before
+  connecting; the pinned SSH command refuses execution without reading identity files.
+  An eligible start retry now creates a distinct empty checkout/bare remote, records
+  previousStartFixture and new per-turn fixture pointers, and preserves original evidence.
+  Regression in test/live_suite.test.mjs:
+    live Git transport permits local remotes and refuses SSH default identities and network URLs
+    live start retry preserves authored evidence and uses a fresh checkout and bare remote
+  The offline retry authors, commits and pushes in attempt one, then confirms attempt
+  two starts empty while old files, commit, remote HEAD and log remain unchanged.
+  A further retry is refused; source/defect, denial, version and deadline gates remain.
+  Focused regressions: exit 0; tests 4; pass 4; fail 0
+  Private output: /private/tmp/gallivant-transport-retry-focused-tests.txt
+  npm test: exit 0; tests 627; pass 627; fail 0; cancelled 0; skipped 0; deferred tests 0
+  duration_ms 27503.5485
+  Private output: /private/tmp/gallivant-transport-retry-all-tests.txt
+  npm run lint: exit 0
+  Live tooling syntax checks: exit 0
+  git diff --check: exit 0
+  Full PR credential/Console-connection, known-secret and blocked-pattern scans: 0 matches.
+  No installed harness, provider call, live retry or operator configuration change.
+  Historical evidence, exhausted allowances and false AC-2/AC-3 attestations remain unchanged.
+
+Command-permission review follow-up on 2026-10-01 UTC (review 5385238188, comment 4160247075):
+  The classifier no longer treats ordinary command stderr containing Permission denied
+  as an approval decision. Explicit permission requests/rejections and existing
+  guardrail/sandbox refusals still stop the turn; private diagnostics are preserved.
+  Regression in test/live_support.test.mjs:
+    live refusal classification distinguishes command stderr from explicit approval decisions
+  Regression in test/live_suite.test.mjs:
+    live monitor allows command permission recovery and still stops explicit approval refusals
+  Gemini, OpenCode and Goose error envelopes and raw CLI diagnostics are covered.
+  The actual suite monitor lets an offline child reach its recovery marker after
+  a command error, but kills a child reporting an explicit approval rejection.
+  Focused regressions: exit 0; tests 6; pass 6; fail 0
+  Private output: /private/tmp/gallivant-command-permission-focused-tests.txt
+  npm test: exit 0; tests 629; pass 629; fail 0; cancelled 0; skipped 0; deferred tests 0
+  duration_ms 32748.307542
+  Private output: /private/tmp/gallivant-command-permission-all-tests.txt
+  npm run lint: exit 0
+  Changed test tooling syntax checks: exit 0
+  git diff --check: exit 0
+  Full PR credential/Console-connection, known-secret and blocked-pattern scans: 0 matches.
+  The initial environment scan matched an indexed Git configuration key name;
+  configuration names were excluded while credential values remained in the scan.
+  No installed harness, provider call, live retry or operator configuration change.
+  Historical evidence, exhausted allowances and false AC-2/AC-3 attestations remain unchanged.
+
+Reservation/errno review follow-up on 2026-10-01 UTC (review 5385436681):
+  Comments 4160418114 and 4160418125 addressed with offline regressions.
+  Every start/resume attempt now checkpoints its case, fixture, source, invocation,
+  command and running reservation before runner.start. reservedAt and runRoot locate
+  private evidence even if a crash precedes the job-ID checkpoint. Such reservations
+  stay spent and cannot qualify for an unspent append or adapter retry.
+  The final deadline check includes reservation I/O; checkpoint failure prevents
+  launch, and time exhausted before launch releases the unspent reservation.
+  Generic Operation not permitted, EPERM and PermissionDenied diagnostics require
+  workspace/sandbox context before classification as a sandbox refusal. Explicit
+  sandbox, approval and guardrail refusals still stop the child.
+  Regressions in test/live_support.test.mjs:
+    live reservations survive launch crashes for every phase and attempt
+    live launch never spawns after a failed or exhausted reservation checkpoint
+    live refusal classification distinguishes command stderr from explicit approval decisions
+  Regressions in test/live_suite.test.mjs:
+    live append reserves new and upgraded cases before a crash after spawn
+    live monitor allows command permission recovery and still stops explicit approval refusals
+  SIGKILL is injected immediately after an offline child's spawn, before runner
+  metadata or post-launch ledger writes; both new and upgraded cases retain their
+  reservation, fixture and runner evidence and reject a duplicate append.
+  Focused regressions: exit 0; tests 12; pass 12; fail 0
+  Private output: /private/tmp/gallivant-reservations-errno-focused-tests.txt
+  npm test: exit 0; tests 632; pass 632; fail 0; cancelled 0; skipped 0; deferred tests 0
+  duration_ms 44378.272416
+  Private output: /private/tmp/gallivant-reservations-errno-all-tests.txt
+  npm run lint: exit 0
+  Changed test tooling syntax checks: exit 0
+  git diff --check: exit 0
+  Full PR credential/Console-connection, known-secret and blocked-pattern scans: 0 matches.
+  No installed harness, provider call, live retry or operator configuration change.
+  Historical evidence, exhausted allowances and false AC-2/AC-3 attestations remain unchanged.
+
+OpenCode-default review follow-up on 2026-10-01 UTC (review 5386885175, comment 4161609055):
+  Every OpenCode turn pins the recorded provider/model with --model, including
+  opencode-default. Exported model metadata must equal that selection on both turns.
+  Unknown, incomplete and routing-alias selections block before fixture creation
+  or a turn reservation. The recorded exclusion is checked on every invocation.
+  Regressions in test/live_suite.test.mjs:
+    live OpenCode default pins the snapshot despite a changed default and rejects mismatched exports
+    live OpenCode default blocks unknown ambiguous and excluded selections before a turn
+  Offline entrypoint tests capture argv after changing the isolated fake HOME's
+  default immediately before spawn. Settings and recent-model snapshots remain
+  pinned, mismatched exports fail, and seven unavailable/excluded inputs launch
+  no turn. Synthetic metadata never counts as successful live coding evidence.
+  Focused regressions: exit 0; tests 2; pass 2; fail 0
+  Private output: /private/tmp/gallivant-opencode-default-focused-tests.txt
+  npm test: exit 0; tests 634; pass 634; fail 0; cancelled 0; skipped 0; deferred tests 0
+  duration_ms 56003.471333
+  Private output: /private/tmp/gallivant-opencode-default-all-tests.txt
+  npm run lint: exit 0
+  Changed test tooling syntax checks: exit 0
+  git diff --check: exit 0
+  Full PR credential/Console-connection, known-secret and blocked-pattern scans: 0 matches.
+  No installed harness, provider call, live retry or operator configuration change.
+  Historical evidence, exhausted allowances and false AC-2/AC-3 attestations remain unchanged.
+
+Goose-selector review follow-up on 2026-10-01 UTC (review 5386954245, comment 4161672991):
+  Goose requires known provider and model selectors before fixture creation or turn
+  reservation. Unknown, missing, invalid or ambiguous selectors are recorded as
+  blocked with a native-setup remedy, and both overrides are always passed for
+  allowed selections. There is no silent fallback to an unaudited native default.
+  Regressions in test/live_suite.test.mjs:
+    live Goose blocks unknown provider or model before creating a fixture or turn
+    live Goose pins known settings environment and named selectors explicitly
+  Eighteen settings/environment cases launch only the offline version probe and
+  no turn; five valid environment, saved-provider and named-case selections pass
+  the exact provider/model flags to an offline child. Probe failures are preserved
+  as failures and are never counted as successful live coding evidence.
+  Focused regressions: exit 0; tests 2; pass 2; fail 0
+  Private output: /private/tmp/gallivant-goose-selector-focused-tests.txt
+  npm test: exit 0; tests 636; pass 636; fail 0; cancelled 0; skipped 0; deferred tests 0
+  duration_ms 64594.397416
+  Private output: /private/tmp/gallivant-goose-selector-all-tests.txt
+  npm run lint: exit 0
+  Changed test tooling syntax checks: exit 0
+  git diff --check: exit 0
+  Full PR credential/Console-connection, known-secret and blocked-pattern scans: 0 matches.
+  No installed harness, provider call, live retry or operator configuration change.
+  Historical evidence, exhausted allowances and false AC-2/AC-3 attestations remain unchanged.
+
+Shutdown/native-outcome review follow-up on 2026-10-02 UTC (review 5387097938):
+  Comments 4161799657 and 4161799658; prior revision 69fdbad24f90fc9d802092691c0a9160c202fe89.
+  Signal/watchdog callbacks defer checkpoints to the main async path. The fallback
+  timer is referenced even if runner metadata cannot be written, and is awaited
+  before surfacing the write error. The shared runner avoids a second terminal
+  write while a kill is pending, including when the leader exits before its child.
+  Recognized unsuccessful native outcomes use the non-retriable native-failure
+  category. Retry preflight checks both saved outcomes and the current parser's
+  reading of the saved stream; changing source hashes cannot admit these failures.
+  Regressions:
+    test/live_suite.test.mjs: live signal and watchdog stops await fallback even when evidence writes fail
+    test/live_suite.test.mjs: live recognized native failures cannot spend a retry through current or legacy ledgers
+    test/live_support.test.mjs: live retry gate excludes recognized unsuccessful outcomes without classification keywords
+  Five shutdown cases inject full-volume errors in ledger or runner writes under
+  SIGINT, SIGTERM and watchdog stops. Real disposable leaders/descendants stop;
+  failed checkpoints preserve the spent running reservation. Five adapter outcome
+  fixtures and three suite-entrypoint ledger variants reject native-failure retries.
+  npm test: exit 0; tests 644; pass 644; fail 0; cancelled 0; skipped 0; deferred tests 0
+  duration_ms 94950.532708
+  Private output: /private/tmp/gallivant-shutdown-native-all-tests.txt
+  npm run lint: exit 0
+  Private output: /private/tmp/gallivant-shutdown-native-lint.txt
+  Changed test tooling syntax checks: exit 0
+  git diff --check: exit 0
+  Full PR credential/Console-connection, known-secret and blocked-pattern scans: 0 matches.
+  No installed harness, provider call, live retry, operator setting or review budget changed.
+  Historical evidence, exhausted allowances and false AC-2/AC-3 attestations remain unchanged.
+
+Startup-bookkeeping review follow-up on 2026-10-02 UTC (review 5387189688, comment 4161881934):
+  Prior revision: 28becafaeca7bfeae11d067bbed7e5354556498d.
+  Rule reviewed: the runner owns the newly spawned process until it returns a
+  recorded job; bookkeeping failure must stop that process group before rejection.
+  Shared makeRunner.start now awaits its existing termination fallback using the
+  in-memory job, independent of missing/truncated job.json or a failed latest-run.
+  Initial dispatch (lib/commands/start.mjs), resume/fix dispatch (lib/tick.mjs), and
+  the live launcher await startup. Startup-failure callbacks suppress duplicate
+  failed writes. Parent log descriptors close on success and every startup failure.
+  Focused regression in test/live_suite.test.mjs:
+    live startup bookkeeping failures stop the owned process group before rejecting
+  Five actual-suite cases cover missing/truncated job data, latest-run failures
+  with leaders ignoring SIGTERM or exiting before descendants, and a pre-spawn
+  cmd.json failure. The generated ledger summaries retain status=running, run=null,
+  fixture and runRoot pointers, and no resume; append/retry reject the reservations.
+  Focused post-spawn errors propagated 5010, 5007, 5011 and 5006 ms after injection,
+  after the fallback; the pre-spawn failure launched no harness. Tests verify all spawned processes stop
+  and the parent's log descriptor closes. These are offline cleanup fixtures only.
+  Reviewed changed source, sibling callers, startup/callback/descriptor cleanup,
+  existing deadline/reservation tests and generated ledger summaries against the brief.
+  Focused checks: exit 0; tests 14; pass 14; fail 0
+  Private output: /private/tmp/gallivant-startup-bookkeeping-focused-tests.txt
+  npm test: exit 0; tests 650; pass 650; fail 0; cancelled 0; skipped 0; deferred tests 0
+  duration_ms 121311.344625
+  Private output: /private/tmp/gallivant-startup-bookkeeping-all-tests.txt
+  npm run lint: exit 0
+  Private output: /private/tmp/gallivant-startup-bookkeeping-lint.txt
+  Changed test tooling syntax checks: exit 0
+  git diff --check: exit 0
+  Full PR credential/Console-connection, known-secret and blocked-pattern scans: 0 matches.
+  No live provider calls, settings, permission changes or budget resets.
+  Prior live evidence and false AC-2/AC-3 attestations remain unchanged.
+
+Goose-envelope review follow-up on 2026-10-02 UTC (review 5387478188, comment 4162132981):
+  Prior revision: e44f36bbfb4c6ff8b12cca85baeaad8f1af0125c.
+  Rule reviewed: a native textual provider failure must begin an assistant
+  message/content block; matching an example inside arbitrary prose is not evidence
+  of failure. The shared Goose parser checks those offsets in the joined stream,
+  preserving split prefixes, later native errors and the complete assistant reply.
+  Typed errors, credits notifications, unfinished turns and cost behavior remain covered.
+  Regression reproduced before the fix: focused tests 4, pass 3, fail 1; the
+  quoted-success fixture incorrectly returned ok=false and its example as error.
+  Private output: /private/tmp/gallivant-goose-envelope-before-tests.txt
+  Regressions in test/units.test.mjs:
+    Goose successful prose can quote provider error envelopes
+    Goose native errors remain failures after quoted examples
+    Goose provider error envelope survives streamed chunk boundaries
+  Inline, multiline and fenced examples remain successful across prefix splits;
+  user/tool text is excluded, and a later native failure retains its own diagnostic.
+  Every split of the native envelope remains a failure at event/content boundaries.
+  Focused checks: exit 0; tests 5; pass 5; fail 0
+  duration_ms 3404.981375
+  Private output: /private/tmp/gallivant-goose-envelope-focused-tests.txt
+  Reviewed source and sibling consumers: lib/tick.mjs settlement and
+  test/live-harnesses.mjs outcome/retry preflight reuse the adapter; the live refusal
+  monitor in test/live-support.mjs already excludes narrated assistant text.
+  Representative generated outcome records:
+    /private/tmp/gallivant-goose-envelope-outcomes.json
+    quoted-success: ok=true, finished=true, error=null
+    split-native-failure and quoted-then-native-failure: ok=false, exact native 503 error
+    typed-authentication-failure: ok=false, error=401 Unauthorized
+  Reply text and unknown cost=null were inspected against the brief. These are
+  synthetic parser fixtures, not additional live coding or session evidence.
+  npm test: exit 0; tests 652; pass 652; fail 0; cancelled 0; skipped 0; deferred tests 0
+  duration_ms 121124.448792
+  Private output: /private/tmp/gallivant-goose-envelope-all-tests.txt
+  npm run lint: exit 0
+  Private output: /private/tmp/gallivant-goose-envelope-lint.txt
+  Changed test syntax check: exit 0
+  git diff --check: exit 0
+  Full PR credential/Console-connection, known-secret and blocked-pattern scans: 0 matches.
+  No live provider calls, operator settings, permissions or round/retry budgets changed.
+  Prior live evidence, exhausted allowances and false AC-2/AC-3 attestations remain unchanged.
+
+GitHub-CLI store review follow-up on 2026-10-02 UTC (review 5387636526, comment 4162265874):
+  Prior revision: 420d8eaeb0186cdddd646cd600941f1345c9710a.
+  Installed gh: 2.100.0 (2026-09-03).
+  Rule reviewed: disposable live tasks must not inherit GitHub authentication
+  through either environment tokens or native persisted-account/keyring lookup.
+  Production runEnv already isolates the gh config path, but an empty directory
+  does not block ActiveToken's host-keyring fallback or explicit secure-storage lookup.
+  Public source reviewed at cli/cli v2.100.0:
+    internal/config/config.go: NewConfig, ActiveToken, TokenFromKeyring
+    pkg/cmd/auth/token/token.go: tokenRun loads Config before authentication
+  liveRunEnv now overrides GH_CONFIG_DIR=/dev/null and GH_PROMPT_DISABLED=1,
+  failing gh configuration loading before authentication or command handling.
+  HOME/provider data and production runEnv are preserved. The live-child regression
+  uses only synthetic stores; no operator permission, account, keyring entry or
+  provider setting was changed.
+  Regression in test/live_suite.test.mjs:
+    live GitHub CLI cannot load persisted accounts or reach authentication through the shared runner
+  Before the fix, config loading succeeded: focused tests 1, pass 0, fail 1.
+  Authentication probes were not launched on that path; no keyring was queried.
+  Private output: /private/tmp/gallivant-gh-store-before-tests.txt
+  Offline suite child uses only synthetic HOME, XDG and inherited gh stores.
+  Its config/token/secure-storage-token/API/PR commands all exit 1 at configuration
+  loading with empty stdout. The synthetic stores remain unchanged after the turn,
+  provider environment and HOME are retained, and the turn is failed with no resume.
+  Representative generated output reviewed against the brief:
+    /private/tmp/gallivant-gh-store-observed.json
+    ghConfig=/dev/null; homePreserved=true; providerPreserved=true
+    commands=5; all status=1, blocked=true, stdoutEmpty=true; turnStatus=failed
+  Reviewed shared callers and boundaries: live fixture Git, start/resume/retry
+  turns, external verifier and metadata exports use the same live environment;
+  makeRunner's parent merge cannot restore the overridden gh config or stripped
+  tokens. The fix creates no new files or cleanup paths in the suite. Existing
+  native sandbox controls and local-only Git transport remain required and intact.
+  Focused environment/transport tests: exit 0; tests 4; pass 4; fail 0
+  duration_ms 3509.474333
+  Private output: /private/tmp/gallivant-gh-store-focused-tests.txt
+  npm test: exit 0; tests 653; pass 653; fail 0; cancelled 0; skipped 0; deferred tests 0
+  duration_ms 121827.273583
+  Private output: /private/tmp/gallivant-gh-store-all-tests.txt
+  npm run lint: exit 0
+  Private output: /private/tmp/gallivant-gh-store-lint.txt
+  Changed test tooling syntax checks: exit 0
+  git diff --check: exit 0
+  Full PR credential/Console-connection, known-secret and blocked-pattern scans: 0 matches.
+  No live provider calls, operator settings, permissions or round/retry budgets changed.
+  Prior live evidence, exhausted allowances and false AC-2/AC-3 attestations remain unchanged.

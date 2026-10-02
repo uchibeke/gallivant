@@ -8,6 +8,7 @@
   "engines": { "node": ">=22" },
   "scripts": {
     "test": "node --test test/*.test.mjs",
+    "test:live-harnesses": "node test/live-harnesses.mjs",
     "lint": "node --check bin/gallivant.mjs && for f in lib/*.mjs lib/*/*.mjs; do node --check \"$f\" || exit 1; done"
   },
   "keywords": ["claude-code", "codex", "pull-request", "autonomous", "agent", "aport"],
