@@ -35,6 +35,10 @@ export function liveRunEnv(config, identity, cwd, extra = {}) {
     if (/^(?:GIT_|GH_|GITHUB_|SSH_|GCM_|VSCODE_(?:GIT|SSH)_)/i.test(key)) env[key] = undefined;
   }
   return { ...env, ...runEnv(config, null, identity, cwd), GIT_TERMINAL_PROMPT: "0",
+    // An empty gh config can still fall back to the host keyring. A non-directory
+    // makes gh fail configuration loading before any account/keyring/API lookup.
+    // This applies only to disposable live work; HOME remains intact for providers.
+    GH_CONFIG_DIR: "/dev/null", GH_PROMPT_DISABLED: "1",
     // Local bare remotes need no network transport or SSH identity, including keys
     // discoverable from HOME. Keep HOME intact for the selected provider's setup.
     GIT_ALLOW_PROTOCOL: "file", GIT_SSH_COMMAND: "false",

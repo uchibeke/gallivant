@@ -502,3 +502,50 @@ Goose-envelope review follow-up on 2026-10-02 UTC (review 5387478188, comment 41
   Full PR credential/Console-connection, known-secret and blocked-pattern scans: 0 matches.
   No live provider calls, operator settings, permissions or round/retry budgets changed.
   Prior live evidence, exhausted allowances and false AC-2/AC-3 attestations remain unchanged.
+
+GitHub-CLI store review follow-up on 2026-10-02 UTC (review 5387636526, comment 4162265874):
+  Prior revision: 420d8eaeb0186cdddd646cd600941f1345c9710a.
+  Installed gh: 2.100.0 (2026-09-03).
+  Rule reviewed: disposable live tasks must not inherit GitHub authentication
+  through either environment tokens or native persisted-account/keyring lookup.
+  Production runEnv already isolates the gh config path, but an empty directory
+  does not block ActiveToken's host-keyring fallback or explicit secure-storage lookup.
+  Public source reviewed at cli/cli v2.100.0:
+    internal/config/config.go: NewConfig, ActiveToken, TokenFromKeyring
+    pkg/cmd/auth/token/token.go: tokenRun loads Config before authentication
+  liveRunEnv now overrides GH_CONFIG_DIR=/dev/null and GH_PROMPT_DISABLED=1,
+  failing gh configuration loading before authentication or command handling.
+  HOME/provider data and production runEnv are preserved. The live-child regression
+  uses only synthetic stores; no operator permission, account, keyring entry or
+  provider setting was changed.
+  Regression in test/live_suite.test.mjs:
+    live GitHub CLI cannot load persisted accounts or reach authentication through the shared runner
+  Before the fix, config loading succeeded: focused tests 1, pass 0, fail 1.
+  Authentication probes were not launched on that path; no keyring was queried.
+  Private output: /private/tmp/gallivant-gh-store-before-tests.txt
+  Offline suite child uses only synthetic HOME, XDG and inherited gh stores.
+  Its config/token/secure-storage-token/API/PR commands all exit 1 at configuration
+  loading with empty stdout. The synthetic stores remain unchanged after the turn,
+  provider environment and HOME are retained, and the turn is failed with no resume.
+  Representative generated output reviewed against the brief:
+    /private/tmp/gallivant-gh-store-observed.json
+    ghConfig=/dev/null; homePreserved=true; providerPreserved=true
+    commands=5; all status=1, blocked=true, stdoutEmpty=true; turnStatus=failed
+  Reviewed shared callers and boundaries: live fixture Git, start/resume/retry
+  turns, external verifier and metadata exports use the same live environment;
+  makeRunner's parent merge cannot restore the overridden gh config or stripped
+  tokens. The fix creates no new files or cleanup paths in the suite. Existing
+  native sandbox controls and local-only Git transport remain required and intact.
+  Focused environment/transport tests: exit 0; tests 4; pass 4; fail 0
+  duration_ms 3509.474333
+  Private output: /private/tmp/gallivant-gh-store-focused-tests.txt
+  npm test: exit 0; tests 653; pass 653; fail 0; cancelled 0; skipped 0; deferred tests 0
+  duration_ms 121827.273583
+  Private output: /private/tmp/gallivant-gh-store-all-tests.txt
+  npm run lint: exit 0
+  Private output: /private/tmp/gallivant-gh-store-lint.txt
+  Changed test tooling syntax checks: exit 0
+  git diff --check: exit 0
+  Full PR credential/Console-connection, known-secret and blocked-pattern scans: 0 matches.
+  No live provider calls, operator settings, permissions or round/retry budgets changed.
+  Prior live evidence, exhausted allowances and false AC-2/AC-3 attestations remain unchanged.

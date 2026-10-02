@@ -207,8 +207,17 @@ Disposable fixture, turn, verifier and export environments clear inherited `GIT_
 including through the shared runner's parent-environment merge. This removes
 GitHub tokens, SSH agent sockets and commands, askpass programs, editor credential
 IPC handles, injected Git config/headers and client-certificate selectors.
-The suite then restores only `runEnv`'s Git identity/config isolation and disposable
-gh config path, and disables terminal credential prompts. Git is then restricted to
+The suite then restores only `runEnv`'s Git identity/config isolation and disables
+terminal credential prompts. Disposable environments override `GH_CONFIG_DIR` with
+`/dev/null` and set `GH_PROMPT_DISABLED=1`; the installed gh 2.100.0 fails loading
+configuration before account, keyring, API or PR command handling. An empty config
+directory alone is insufficient: [gh's active-token lookup](https://github.com/cli/cli/blob/v2.100.0/internal/config/config.go)
+can fall back to host keyring storage, and [auth token](https://github.com/cli/cli/blob/v2.100.0/pkg/cmd/auth/token/token.go)
+can explicitly select secure storage. Review 5387636526 (comment 4162265874) is
+covered by an offline suite regression using synthetic HOME/XDG/inherited stores;
+config, token, secure-storage token, API and PR probes all fail before authentication,
+with no stdout credential and no change to those stores. Provider HOME/settings remain
+available, and production `runEnv` is unchanged. Git is then restricted to
 the `file` transport (`GIT_ALLOW_PROTOCOL=file`), and its SSH command is pinned to
 `false`, so Git never falls back to default identity files or SSH config. `HOME`
 and native provider setup remain intact. These child-environment controls do not

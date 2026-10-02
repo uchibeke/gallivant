@@ -75,7 +75,10 @@ mutable default. Native environment/settings and the named Meta/xAI/Alibaba sele
 Disposable turns clear inherited Git/GitHub/SSH, credential-manager and editor askpass variables, then
 restore `runEnv`'s Git identity and isolated config with terminal credential prompts disabled. Git accepts only
 file transport and its SSH command refuses execution, preventing default SSH identity fallback while keeping
-provider `HOME` intact. Child-environment controls do not replace native sandboxing. Short-lived callers use the
+provider `HOME` intact. Disposable environments override `GH_CONFIG_DIR` with `/dev/null` and disable gh
+prompts: gh fails configuration loading before stored-account, keyring or API lookup. An empty gh config
+directory alone does not prevent keyring fallback. Production `runEnv` keeps its separate gh configuration.
+Child-environment controls do not replace native sandboxing. Short-lived callers use the
 runner's `waitForKill` after requesting a stop so the process-group fallback runs before exit; the live suite
 also waits before metadata export. Signal/watchdog callbacks defer checkpoints to the main async path;
 failed ledger or runner metadata writes still reference and await the kill fallback before surfacing

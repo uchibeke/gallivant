@@ -32,7 +32,7 @@ function fixture(mode = "exit", harness = "opencode") {
   const descendant = `process.on('SIGTERM', () => {}); process.stdout.write('ready'); setInterval(() => {}, 1000);`;
   writeFileSync(bin, `#!${process.execPath}
 import { readFileSync, writeFileSync, appendFileSync } from 'node:fs';
-import { execFileSync, spawn } from 'node:child_process';
+import { execFileSync, spawn, spawnSync } from 'node:child_process';
 const root = ${JSON.stringify(root)}, mode = ${JSON.stringify(mode)};
 const args = process.argv.slice(2);
 appendFileSync(root + '/calls.jsonl', JSON.stringify(args.slice(0, 2)) + '\\n');
@@ -49,12 +49,29 @@ writeFileSync(root + '/environment.json', JSON.stringify({
   tokens: ${JSON.stringify(tokenNames)}.filter(key => key in process.env),
   gitAuth: ${JSON.stringify(gitAuthNames)}.filter(key => key in process.env),
   providerPreserved: process.env.GEMINI_API_KEY === 'offline-provider-sentinel',
+  home: process.env.HOME,
   ghConfig: process.env.GH_CONFIG_DIR,
   gitTransport: process.env.GIT_ALLOW_PROTOCOL,
   gitSshCommand: process.env.GIT_SSH_COMMAND,
   gitConfigKeys: execFileSync('git', ['config', '--name-only', '--list'], { encoding: 'utf8' }).trim().split('\\n'),
 }));
 process.stdout.write(JSON.stringify({ type: 'text', sessionID: 'ses_offline123' }) + '\\n');
+if (mode === 'gh-store') {
+  const commands = [];
+  const check = args => {
+    const result = spawnSync('gh', args, { encoding: 'utf8', timeout: 5000 });
+    const blocked = result.status !== 0 && /failed to read configuration:.*not a directory/.test(result.stderr);
+    commands.push({ args, status: result.status, blocked, stdoutEmpty: result.stdout === '' });
+    return blocked;
+  };
+  // Do not run authentication probes unless configuration loading already failed.
+  // This also lets the regression fail on the old environment without consulting a keyring.
+  if (check(['config', 'list'])) {
+    for (const args of [['auth', 'token'], ['auth', 'token', '--secure-storage'], ['api', '/user'], ['pr', 'view']]) check(args);
+  }
+  writeFileSync(root + '/gh-store.json', JSON.stringify({ commands }));
+  process.exit(1); // This is an offline environment check, not live coding evidence.
+}
 if (mode === 'exit') process.exit(1);
 if (mode === 'model-evidence' || mode === 'native-aborted') {
   process.stdout.write(JSON.stringify({ type: 'step_finish', sessionID: 'ses_offline123', part: { reason: mode === 'native-aborted' ? 'aborted' : 'stop' } }) + '\\n');
@@ -397,7 +414,48 @@ test("live child environment excludes inherited GitHub tokens through the shared
     const actual = read(join(root, "environment.json"));
     assert.deepEqual(actual.tokens, []);
     assert.equal(actual.providerPreserved, true);
-    assert.equal(actual.ghConfig, join(root, "opencode-console-meta", "checkout", ".git", "gallivant-gh"));
+    assert.equal(actual.ghConfig, "/dev/null");
+  } finally { cleanup(root, run?.child); }
+});
+
+test("live GitHub CLI cannot load persisted accounts or reach authentication through the shared runner", async t => {
+  const root = fixture("gh-store");
+  let run;
+  try {
+    const dirs = [join(root, ".config", "gh"), join(root, "xdg", "gh"), join(root, "inherited-gh")];
+    const hosts = "github.com:\n    user: offline-account\n    oauth_token: offline-stored-gh-sentinel\n    users:\n        offline-account:\n            oauth_token: offline-stored-gh-sentinel\n";
+    for (const dir of dirs) {
+      mkdirSync(dir, { recursive: true });
+      writeFileSync(join(dir, "hosts.yml"), hosts, { mode: 0o600 });
+      writeFileSync(join(dir, "config.yml"), "git_protocol: ssh\n", { mode: 0o600 });
+    }
+    const env = { HOME: root, XDG_CONFIG_HOME: join(root, "xdg"), GH_CONFIG_DIR: dirs[2] };
+    // Inspect only synthetic configuration; gh may migrate its fixture format.
+    // No account, token or keyring lookup is needed for this control.
+    const control = spawnSync("gh", ["config", "list"], { env: { ...process.env, ...env }, encoding: "utf8", timeout: 5000 });
+    assert.equal(control.status, 0, control.stderr);
+    assert.match(control.stdout, /git_protocol=ssh/);
+    const snapshots = dirs.map(dir => readFileSync(join(dir, "hosts.yml"), "utf8"));
+    run = invoke(root, { env });
+    const result = await run.done;
+    assert.equal(result.code, 1, result.stderr);
+    const observed = read(join(root, "gh-store.json"));
+    assert.equal(observed.commands[0].blocked, true, "gh must fail loading configuration before consulting persisted accounts or keyring storage");
+    assert.equal(observed.commands.length, 5);
+    for (const command of observed.commands) {
+      assert.equal(command.status, 1, command.args.join(" "));
+      assert.equal(command.blocked, true, command.args.join(" "));
+      assert.equal(command.stdoutEmpty, true, command.args.join(" "));
+    }
+    const actual = read(join(root, "environment.json"));
+    assert.equal(actual.home, root);
+    assert.equal(actual.providerPreserved, true);
+    assert.deepEqual(actual.tokens, []);
+    for (const [i, dir] of dirs.entries()) assert.equal(readFileSync(join(dir, "hosts.yml"), "utf8"), snapshots[i]);
+    const turn = read(join(root, "report.json")).cases[0].turns[0];
+    assert.notEqual(turn.status, "passed");
+    t.diagnostic(JSON.stringify({ ghConfig: actual.ghConfig, providerPreserved: actual.providerPreserved,
+      homePreserved: actual.home === root, commands: observed.commands, turnStatus: turn.status }));
   } finally { cleanup(root, run?.child); }
 });
 
@@ -418,7 +476,8 @@ test("live child environment strips Git and SSH credential channels and restores
     for (const key of gitAuthNames) assert.equal(env[key], undefined, key);
     assert.equal(env.GIT_CONFIG_GLOBAL, "/dev/null");
     assert.equal(env.GIT_CONFIG_NOSYSTEM, "1");
-    assert.equal(env.GH_CONFIG_DIR, join(root, ".git", "gallivant-gh"));
+    assert.equal(env.GH_CONFIG_DIR, "/dev/null");
+    assert.equal(env.GH_PROMPT_DISABLED, "1");
     assert.equal(env.GIT_TERMINAL_PROMPT, "0");
     assert.equal(env.GIT_ALLOW_PROTOCOL, "file");
     assert.equal(env.GIT_SSH_COMMAND, "false");
