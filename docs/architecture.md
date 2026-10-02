@@ -57,6 +57,9 @@ requests/rejections and guardrail decisions still stop the turn. Raw streams and
 Recognized unsuccessful native outcomes (such as an aborted OpenCode step) are recorded as
 `native-failure`, not adapter defects. The retry gate checks both saved outcome metadata and the
 current parser's reading of the saved stream; a source change cannot qualify these failures for retry.
+Goose's textual provider-error prefix must start an assistant message/content block. The adapter reads
+across streamed chunks from those boundaries, preserving native failures after earlier output without
+treating error examples embedded in prose or code fences as failed turns. Typed native errors remain failures.
 Named Meta/xAI/Alibaba cases use Goose's native saved providers and OpenCode's separate Console BYOK
 providers; they do not establish Zen/Go subscription access. Exact batch commands and blocked results are
 in the audit. DeepSeek is excluded from new calls and Tencent remains deferred.

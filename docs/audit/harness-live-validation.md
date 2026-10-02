@@ -62,6 +62,17 @@ Raw evidence is private at `$TMPDIR/gallivant-live-harnesses-nI76KK` (the suite 
 
 Two initial adapter defects were fixed in `lib/harness.mjs`: OpenCode cost aggregation omitted earlier tool steps; Goose marked the observed HTTP error envelope and structured credits notification successful merely because a `complete` event followed them. `test/units.test.mjs` covers both cases, including every split of the provider-error envelope across streamed chunks (review 5373648819). Replaying saved streams yields corrected costs and failed outcomes. These parser fixes do not resolve external blocks, so **no extra live model calls were spent on them**.
 
+Review 5387478188 (comment 4162132981) refined Goose's textual error detection:
+the prefix must begin an assistant message/content block, then can continue across
+streamed chunks. Embedded quoted examples, including multiline prose and code
+fences, remain successful completed replies; a later native error still fails with
+its own diagnostic. Typed authentication errors and credits notifications retain
+their existing behavior. Offline regressions reproduce the original false failure
+and preserve every split of a native error; generated outcome samples confirm the
+reply, completion and unknown-cost fields. Daemon settlement and live validation
+reuse this shared parser, while the live refusal monitor already excludes assistant
+prose. This fix adds no live evidence or new retry allowance.
+
 OpenCode's large session export was truncated when stdout was a pipe. Directing the same read-only export to a private file produced complete JSON and confirmed qwen3.8-max. The metadata capture helper now uses file descriptors. Gemini's `init.model=auto` was not treated as a resolved model: its exact UUID's native transcript supplies gemini-3.5-flash.
 
 ## Additional Meta, xAI and Alibaba batches

@@ -461,3 +461,44 @@ Startup-bookkeeping review follow-up on 2026-10-02 UTC (review 5387189688, comme
   Full PR credential/Console-connection, known-secret and blocked-pattern scans: 0 matches.
   No live provider calls, settings, permission changes or budget resets.
   Prior live evidence and false AC-2/AC-3 attestations remain unchanged.
+
+Goose-envelope review follow-up on 2026-10-02 UTC (review 5387478188, comment 4162132981):
+  Prior revision: e44f36bbfb4c6ff8b12cca85baeaad8f1af0125c.
+  Rule reviewed: a native textual provider failure must begin an assistant
+  message/content block; matching an example inside arbitrary prose is not evidence
+  of failure. The shared Goose parser checks those offsets in the joined stream,
+  preserving split prefixes, later native errors and the complete assistant reply.
+  Typed errors, credits notifications, unfinished turns and cost behavior remain covered.
+  Regression reproduced before the fix: focused tests 4, pass 3, fail 1; the
+  quoted-success fixture incorrectly returned ok=false and its example as error.
+  Private output: /private/tmp/gallivant-goose-envelope-before-tests.txt
+  Regressions in test/units.test.mjs:
+    Goose successful prose can quote provider error envelopes
+    Goose native errors remain failures after quoted examples
+    Goose provider error envelope survives streamed chunk boundaries
+  Inline, multiline and fenced examples remain successful across prefix splits;
+  user/tool text is excluded, and a later native failure retains its own diagnostic.
+  Every split of the native envelope remains a failure at event/content boundaries.
+  Focused checks: exit 0; tests 5; pass 5; fail 0
+  duration_ms 3404.981375
+  Private output: /private/tmp/gallivant-goose-envelope-focused-tests.txt
+  Reviewed source and sibling consumers: lib/tick.mjs settlement and
+  test/live-harnesses.mjs outcome/retry preflight reuse the adapter; the live refusal
+  monitor in test/live-support.mjs already excludes narrated assistant text.
+  Representative generated outcome records:
+    /private/tmp/gallivant-goose-envelope-outcomes.json
+    quoted-success: ok=true, finished=true, error=null
+    split-native-failure and quoted-then-native-failure: ok=false, exact native 503 error
+    typed-authentication-failure: ok=false, error=401 Unauthorized
+  Reply text and unknown cost=null were inspected against the brief. These are
+  synthetic parser fixtures, not additional live coding or session evidence.
+  npm test: exit 0; tests 652; pass 652; fail 0; cancelled 0; skipped 0; deferred tests 0
+  duration_ms 121124.448792
+  Private output: /private/tmp/gallivant-goose-envelope-all-tests.txt
+  npm run lint: exit 0
+  Private output: /private/tmp/gallivant-goose-envelope-lint.txt
+  Changed test syntax check: exit 0
+  git diff --check: exit 0
+  Full PR credential/Console-connection, known-secret and blocked-pattern scans: 0 matches.
+  No live provider calls, operator settings, permissions or round/retry budgets changed.
+  Prior live evidence, exhausted allowances and false AC-2/AC-3 attestations remain unchanged.

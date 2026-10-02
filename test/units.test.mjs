@@ -94,8 +94,57 @@ test("Goose provider error envelope survives streamed chunk boundaries", () => {
         assert.equal(result.lastMessage, `${prefix.length ? "Earlier successful work." : ""}${envelope}`);
       }
     }
+    const contentResult = adapters.goose.outcome([message(["Earlier successful work.", ...chunks]), complete]);
+    assert.equal(contentResult.ok, false, `split ${split} must retain a native error at a later content boundary`);
+    assert.equal(contentResult.error, error);
   }
   assert.equal(adapters.goose.outcome([message(["The request "]), message(["completed."]), complete]).ok, true);
+});
+
+test("Goose successful prose can quote provider error envelopes", () => {
+  const envelope = "Ran into this error: Request failed: Resource not found (404).";
+  const message = (chunks, role = "assistant") => JSON.stringify({ type: "message", message: { role, content: chunks.map(text => ({ type: "text", text })) } });
+  const complete = JSON.stringify({ type: "complete", cost_usd: 0.0036 });
+  for (const prose of [
+    `Added a regression for \`${envelope}\` and pushed the fix.`,
+    `The documented failure is:\n${envelope}\nThe tests pass.`,
+    `\`\`\`text\n${envelope}\n\`\`\`\nAdded documentation and pushed.`,
+    `"${envelope}" is an example from the fixture.`,
+  ]) {
+    const start = prose.indexOf(envelope);
+    const variants = [[message([prose])]];
+    // The quoted prefix can also cross streamed event or content boundaries.
+    for (let split = start + 1; split < start + envelope.length; split++) {
+      const chunks = [prose.slice(0, split), prose.slice(split)];
+      variants.push(chunks.map(chunk => message([chunk])), [message(chunks)]);
+    }
+    for (const lines of variants) {
+      const result = adapters.goose.outcome([...lines, complete]);
+      assert.deepEqual(result, { ok: true, finished: true, lastMessage: prose, denials: [], cost: 0.0036, error: null });
+    }
+  }
+  // A user prompt or tool result containing the envelope is not a native assistant failure.
+  for (const role of ["user", "tool"]) {
+    const result = adapters.goose.outcome([message([envelope], role), message(["Pushed."]), complete]);
+    assert.equal(result.ok, true);
+    assert.equal(result.lastMessage, "Pushed.");
+    assert.equal(result.error, null);
+  }
+});
+
+test("Goose native errors remain failures after quoted examples", () => {
+  const quoted = "Documented `Ran into this error: Request failed: example (404).`";
+  const error = "Request failed: provider unavailable (503).";
+  const chunks = [quoted, "Ran into this error: ", error];
+  const message = content => JSON.stringify({ type: "message", message: { role: "assistant", content } });
+  const content = chunks.map(text => ({ type: "text", text }));
+  for (const lines of [[message(content)], content.map(c => message([c]))]) {
+    const result = adapters.goose.outcome([...lines, JSON.stringify({ type: "complete" })]);
+    assert.equal(result.ok, false);
+    assert.equal(result.finished, true);
+    assert.equal(result.error, error);
+    assert.equal(result.lastMessage, chunks.join(""));
+  }
 });
 
 test("state writes atomically and resolves handles", () => {
