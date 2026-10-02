@@ -61,16 +61,28 @@ for (const [harness, configured] of Object.entries(operatorConfig?.harness || {}
 }
 let active = null;
 let invocationIndex;
+let stopError;
+function requestStop() {
+  if (!active || active.stopping) return;
+  active.stopping = true;
+  try {
+    assert.ok(active.runner.kill(active.id) || active.runner.read(active.id)?.exit !== null,
+      "Cannot stop process; resolve host process permissions before another suite");
+  } catch (error) { stopError ||= error; }
+  finally {
+    // kill can schedule its fallback and then fail to write job.json. Reference
+    // the timer even then; the main async path awaits it before surfacing errors.
+    active.runner.waitForKill(active.id);
+  }
+}
 for (const signal of ["SIGINT", "SIGTERM"]) process.on(signal, () => {
-  if (active) active.runner.kill(active.id);
   report.interrupted = signal;
-  checkpoint();
   process.exitCode = 1;
+  requestStop(); // Checkpoint only in the main async path, after the kill fallback.
 });
 const watchdog = setTimeout(() => {
   report.suiteTimedOut = true;
-  if (active) active.runner.kill(active.id);
-  checkpoint();
+  requestStop();
 }, Math.max(1, deadline - Date.now()));
 
 // Read only model selectors, never authentication files. No global setting is changed.
@@ -147,12 +159,13 @@ async function turn(entry, phase, attempt) {
   process.stdout.write(`${entry.id} ${phase} attempt ${attempt}: ${record.run}\n`);
   let timedOut = false;
   while (runner.read(job.id)?.exit === null) {
+    if (stopError) throw stopError;
     if (["guardrail", "permissions", "sandbox"].includes(classify(refusalEvidence(runner.lines(job.id))).category)) {
-      assert.ok(runner.kill(job.id) || runner.read(job.id)?.exit !== null, "Cannot stop refused process; stop suite and resolve host process permissions");
+      requestStop();
       break;
     }
     if (Date.now() >= limit || report.interrupted || report.suiteTimedOut) {
-      assert.ok(runner.kill(job.id) || runner.read(job.id)?.exit !== null, "Cannot enforce deadline; stop suite and resolve host process permissions");
+      requestStop();
       timedOut = true; break;
     }
     await delay(200);
@@ -160,6 +173,7 @@ async function turn(entry, phase, attempt) {
   // Includes watchdog/signal kills, which set exit 137 before this loop observes a timeout.
   // The runner keeps its fallback timer referenced until the process-group kill has run.
   await runner.waitForKill(job.id);
+  if (stopError) throw stopError;
   timedOut ||= !!(report.suiteTimedOut || report.interrupted);
   active = null;
   const lines = runner.lines(job.id);
@@ -217,7 +231,7 @@ async function turn(entry, phase, attempt) {
     record.status = "passed";
   } catch (e) {
     writeFileSync(join(evidence, `${phase}-${attempt}-verifier.txt`), e.stack, { mode: 0o600 });
-    Object.assign(record, turnFailure(classified, failureStage, `${entry.id}/${phase}-${attempt}-verifier.txt`));
+    Object.assign(record, turnFailure(classified, failureStage, `${entry.id}/${phase}-${attempt}-verifier.txt`, outcome));
   }
   checkpoint();
   process.stdout.write(`${entry.id} ${phase}: ${record.status}; ${record.failure?.category || record.models.join(", ")}; ${record.elapsedMs}ms\n`);
@@ -243,7 +257,9 @@ try {
       const failed = entry.turns.findLast(t => t.phase === retryPhase);
       assertAdapterRetry(failed, source);
       const failedLines = readFileSync(join(root, failed.run, "job.log"), "utf8").split("\n");
-      assert.equal(classify(`${refusalEvidence(failedLines)}\n${adapterFor(entry.harness).outcome(failedLines).error || ""}`).category, "unclassified", "A corrected parser must not turn an earlier unclassified external failure into a retry");
+      const failedOutcome = adapterFor(entry.harness).outcome(failedLines);
+      assertAdapterRetry({ ...failed, outcome: failedOutcome }, source);
+      assert.equal(classify(`${refusalEvidence(failedLines)}\n${failedOutcome.error || ""}`).category, "unclassified", "A corrected parser must not turn an earlier unclassified external failure into a retry");
     } else if (entry) {
       assert.ok(append, "This case already ran; only an explicit append can reuse an unspent version block");
       assertUnspentVersionBlock(entry, report);
@@ -304,7 +320,8 @@ try {
 } finally {
   clearTimeout(watchdog);
   if (active) {
-    active.runner.kill(active.id);
+    requestStop();
     await active.runner.waitForKill(active.id);
   }
+  if (stopError) throw stopError;
 }

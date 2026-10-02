@@ -144,18 +144,23 @@ export function classify(text, timedOut = false) {
   return { category: "unclassified", remedy: "Inspect the private stream and verifier log. Only a demonstrated adapter defect justifies a targeted retry after a regression-tested fix." };
 }
 
-export function turnFailure(classified, stage, evidence) {
+export function turnFailure(classified, stage, evidence, outcome) {
   const failure = { ...classified, stage, evidence };
-  if (classified.category === "unclassified" && stage === "verification") {
+  if (classified.category === "unclassified" && outcome?.finished === true && outcome.ok === false) {
+    failure.stage = "native";
+    failure.category = "native-failure";
+    failure.remedy = "Preserve the recognized unsuccessful native outcome. It is not evidence of an adapter defect and cannot use an adapter retry; another model call requires a newly authorized suite.";
+  } else if (classified.category === "unclassified" && stage === "verification") {
     failure.category = "verification";
     failure.remedy = "Preserve the failed task evidence. File, test and Git verification failures cannot use an adapter retry; another model call requires a newly authorized suite.";
   }
-  return { status: ["unclassified", "verification"].includes(failure.category) ? "failed" : "blocked", failure };
+  return { status: ["unclassified", "verification", "native-failure"].includes(failure.category) ? "failed" : "blocked", failure };
 }
 
 export function assertAdapterRetry(failed, source) {
-  assert.ok(failed?.status === "failed" && failed.failure?.category === "unclassified" && failed.failure.stage === "adapter",
-    "Only a recorded unclassified adapter-check failure can be retried; verification failures, external blocks and legacy failures without a stage are ineligible");
+  assert.ok(failed?.status === "failed" && failed.failure?.category === "unclassified" && failed.failure.stage === "adapter"
+    && !(failed.outcome?.finished === true && failed.outcome.ok === false),
+    "Only a recorded unclassified adapter-check failure can be retried; recognized native failures, verification failures, external blocks and legacy failures without a stage are ineligible");
   assert.notDeepEqual(source.sha256, failed.source.sha256, "A targeted retry requires a source change");
 }
 

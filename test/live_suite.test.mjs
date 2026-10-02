@@ -56,8 +56,8 @@ writeFileSync(root + '/environment.json', JSON.stringify({
 }));
 process.stdout.write(JSON.stringify({ type: 'text', sessionID: 'ses_offline123' }) + '\\n');
 if (mode === 'exit') process.exit(1);
-if (mode === 'model-evidence') {
-  process.stdout.write(JSON.stringify({ type: 'step_finish', sessionID: 'ses_offline123', part: { reason: 'stop' } }) + '\\n');
+if (mode === 'model-evidence' || mode === 'native-aborted') {
+  process.stdout.write(JSON.stringify({ type: 'step_finish', sessionID: 'ses_offline123', part: { reason: mode === 'native-aborted' ? 'aborted' : 'stop' } }) + '\\n');
   process.exit(0); // Synthetic metadata for verifier tests, not live coding evidence.
 }
 const errors = {
@@ -95,13 +95,27 @@ setInterval(() => {}, 1000);
 }
 
 function invoke(root, { watchdog = false, env = {}, retry = false, crashAfterSpawn = false,
-  caseId = "opencode-console-meta", changeDefaultTo = null } = {}) {
+  caseId = "opencode-console-meta", changeDefaultTo = null, writeFault = null } = {}) {
   const source = `
 import os from 'node:os';
+import fs from 'node:fs';
 import { existsSync, writeFileSync } from 'node:fs';
 import cp from 'node:child_process';
 import { syncBuiltinESMExports } from 'node:module';
 os.homedir = () => ${JSON.stringify(root)};
+if (${JSON.stringify(writeFault)} !== null) {
+  const write = fs.writeFileSync;
+  fs.writeFileSync = (path, ...args) => {
+    const target = String(path);
+    if (existsSync(${JSON.stringify(join(root, "ready.json"))}) &&
+        (target.startsWith(${JSON.stringify(join(root, "report.json"))}) ||
+         (${JSON.stringify(writeFault)} === 'job' && target.endsWith('/job.json')))) {
+      write(${JSON.stringify(join(root, "write-fault.json"))}, JSON.stringify({ at: Date.now(), target }));
+      throw Object.assign(new Error('injected evidence volume full'), { code: 'ENOSPC' });
+    }
+    return write(path, ...args);
+  };
+}
 if (${crashAfterSpawn} || ${JSON.stringify(changeDefaultTo)} !== null) {
   const spawn = cp.spawn;
   cp.spawn = (cmd, args, options) => {
@@ -475,6 +489,40 @@ test("live start retry preserves authored evidence and uses a fresh checkout and
   } finally { cleanup(root, run?.child); }
 });
 
+test("live recognized native failures cannot spend a retry through current or legacy ledgers", async () => {
+  for (const ledgerKind of ["current", "legacy-outcome", "legacy-parser"]) {
+    const root = fixture("native-aborted");
+    let run;
+    try {
+      run = invoke(root);
+      const result = await run.done;
+      assert.equal(result.code, 1, result.stderr);
+      const report = read(join(root, "report.json"));
+      const entry = report.cases[0], turn = entry.turns[0];
+      assert.deepEqual(turn.outcome, { ok: false, finished: true, denials: 0 });
+      assert.equal(turn.status, "failed");
+      assert.equal(turn.failure.category, "native-failure");
+      assert.equal(turn.failure.stage, "native");
+      assert.equal(entry.turns.length, 1, "an aborted start cannot launch a resume");
+      // Only synthetic offline history is adjusted to exercise earlier ledgers and parsers.
+      turn.source.sha256["lib/harness.mjs"] = "offline-pre-fix-revision";
+      if (ledgerKind !== "current") turn.failure = { ...turn.failure, category: "unclassified", stage: "adapter" };
+      if (ledgerKind === "legacy-parser") turn.outcome.finished = false;
+      writeFileSync(join(root, "report.json"), JSON.stringify(report));
+      const calls = readFileSync(join(root, "calls.jsonl"), "utf8").trim().split("\n").map(JSON.parse);
+      run = invoke(root, { retry: true });
+      const denied = await run.done;
+      assert.equal(denied.code, 1);
+      assert.match(denied.stderr, /recognized native failures.*ineligible/);
+      const after = read(join(root, "report.json"));
+      assert.deepEqual(after.cases[0], entry, "failed retry preflight must preserve evidence and allowance");
+      assert.equal(after.cases[0].retry, undefined);
+      const afterCalls = readFileSync(join(root, "calls.jsonl"), "utf8").trim().split("\n").map(JSON.parse);
+      assert.deepEqual(afterCalls.filter(args => args[0] !== "--version"), calls.filter(args => args[0] !== "--version"));
+    } finally { cleanup(root, run?.child); }
+  }
+});
+
 test("live append reuses an unspent version block after upgrade without resetting its budget or selection", async () => {
   const root = fixture();
   let run;
@@ -537,6 +585,40 @@ test("live signal and watchdog stops await the process-group fallback before met
         if (reason === "watchdog") assert.equal(report.suiteTimedOut, true);
         else assert.equal(report.interrupted, reason);
         assert.equal(report.cases[0].turns[0].failure.category, "timeout");
+      } finally { cleanup(root, run?.child); }
+    });
+  }
+});
+
+test("live signal and watchdog stops await fallback even when evidence writes fail", async t => {
+  for (const [reason, mode, writeFault] of [
+    ["SIGINT", "ignore", "ledger"], ["SIGTERM", "leader-exits", "ledger"],
+    ["watchdog", "ignore", "ledger"], ["SIGINT", "ignore", "job"], ["SIGTERM", "leader-exits", "job"],
+  ]) {
+    await t.test(`${reason} ${writeFault}`, async () => {
+      const root = fixture(mode);
+      let run;
+      try {
+        run = invoke(root, { watchdog: reason === "watchdog", writeFault });
+        await waitUntil(() => existsSync(join(root, "ready.json")));
+        const pids = read(join(root, "ready.json"));
+        const saved = readFileSync(join(root, "report.json"), "utf8");
+        const stoppedAt = Date.now();
+        if (reason !== "watchdog") run.child.kill(reason);
+        const result = await run.done;
+        assert.equal(result.code, 1, result.stderr);
+        assert.match(result.stderr, /injected evidence volume full/);
+        assert.ok(result.at - stoppedAt >= 4_800, "write failure cannot bypass the five-second fallback");
+        await waitUntil(() => !running(pids.leader) && !running(pids.child));
+        assert.equal(readFileSync(join(root, "report.json"), "utf8"), saved, "last durable reservation survives failed writes");
+        const entry = JSON.parse(saved).cases[0];
+        assert.equal(entry.turns.length, 1);
+        assert.equal(entry.turns[0].status, "running");
+        assert.throws(() => assertUnspentVersionBlock(entry, JSON.parse(saved)), /only an unspent version-blocked case/);
+        if (writeFault === "ledger") {
+          assert.ok(read(join(root, "write-fault.json")).at - stoppedAt >= 4_800, "interruption checkpoint must follow fallback");
+          assert.ok(read(join(root, "exported.json")).at - stoppedAt >= 4_800, "metadata must follow fallback");
+        } else assert.equal(existsSync(join(root, "exported.json")), false, "surface runner write errors before metadata");
       } finally { cleanup(root, run?.child); }
     });
   }

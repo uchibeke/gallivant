@@ -54,6 +54,9 @@ the affected phase; they are never converted into permission overrides. Ordinary
 `Permission denied`, `Operation not permitted` or `PermissionDenied` is retained for investigation without
 triggering an approval stop. Sandbox classification requires workspace/sandbox context; explicit permission
 requests/rejections and guardrail decisions still stop the turn. Raw streams and exports stay private.
+Recognized unsuccessful native outcomes (such as an aborted OpenCode step) are recorded as
+`native-failure`, not adapter defects. The retry gate checks both saved outcome metadata and the
+current parser's reading of the saved stream; a source change cannot qualify these failures for retry.
 Named Meta/xAI/Alibaba cases use Goose's native saved providers and OpenCode's separate Console BYOK
 providers; they do not establish Zen/Go subscription access. Exact batch commands and blocked results are
 in the audit. DeepSeek is excluded from new calls and Tencent remains deferred.
@@ -71,7 +74,10 @@ restore `runEnv`'s Git identity and isolated config with terminal credential pro
 file transport and its SSH command refuses execution, preventing default SSH identity fallback while keeping
 provider `HOME` intact. Child-environment controls do not replace native sandboxing. Short-lived callers use the
 runner's `waitForKill` after requesting a stop so the process-group fallback runs before exit; the live suite
-also waits before metadata export. An append can
+also waits before metadata export. Signal/watchdog callbacks defer checkpoints to the main async path;
+failed ledger or runner metadata writes still reference and await the kill fallback before surfacing
+the error. A pending kill owns its exit record, so an early leader exit cannot cause another metadata
+write failure before descendants are stopped. An append can
 reuse a version-blocked case after upgrade only if it has no turn, retry reservation or fixture, within the
 original deadline and with the recorded provider/model unchanged.
 

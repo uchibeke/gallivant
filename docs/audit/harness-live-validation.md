@@ -175,6 +175,15 @@ The prepared retry fixture is checkpointed and still must pass pristine-start ch
 This does not grant another retry, reset the suite deadline, or permit a retry of
 provider/permission failures. Resume retries still require the last passed state.
 
+Recognized unsuccessful native outcomes, including OpenCode's `aborted` step reason,
+are recorded as `native-failure` even when they contain no classification keyword.
+They cannot qualify for an adapter retry after a source change. Retry preflight
+checks both recorded outcome metadata and the current parser's result from the
+saved stream, preserving older evidence without reclassifying it to allow a call.
+Offline regressions cover all five adapters' outcomes; the real suite entrypoint
+checks aborted OpenCode turns against current/older ledger shapes. No live result
+or exhausted allowance was changed.
+
 Suite checkpoints use the shared atomic JSON writer: a private temporary file is
 written and flushed before replacing `report.json` by rename. A partial write,
 process termination during the write, or rename failure leaves the last completed
@@ -220,6 +229,13 @@ metadata export, clearing the active run, or exiting an exceptional path. The
 fallback also terminates surviving group members when the original leader exits
 on SIGTERM. Interrupted turns remain blocked. Offline process-tree regressions
 cover both a leader that ignores SIGTERM and one that exits ahead of its child.
+Signal and watchdog callbacks do not checkpoint directly: the main async path
+records the interruption after waiting for the fallback. If writing runner metadata
+fails during a stop, the fallback is still referenced and awaited before the error
+is surfaced. The runner also avoids a second exit-record write while that kill is
+pending. Offline regressions inject full-volume errors into ledger and runner writes
+and verify that the leader and its descendant stop before the suite exits. The last
+durable running reservation remains spent when the final checkpoint cannot be saved.
 
 Each invocation records its configured binaries and fresh version probes in the
 private ledger's `invocations` array. Retry and append check only the selected

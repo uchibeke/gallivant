@@ -400,3 +400,31 @@ Goose-selector review follow-up on 2026-10-01 UTC (review 5386954245, comment 41
   Full PR credential/Console-connection, known-secret and blocked-pattern scans: 0 matches.
   No installed harness, provider call, live retry or operator configuration change.
   Historical evidence, exhausted allowances and false AC-2/AC-3 attestations remain unchanged.
+
+Shutdown/native-outcome review follow-up on 2026-10-02 UTC (review 5387097938):
+  Comments 4161799657 and 4161799658; prior revision 69fdbad24f90fc9d802092691c0a9160c202fe89.
+  Signal/watchdog callbacks defer checkpoints to the main async path. The fallback
+  timer is referenced even if runner metadata cannot be written, and is awaited
+  before surfacing the write error. The shared runner avoids a second terminal
+  write while a kill is pending, including when the leader exits before its child.
+  Recognized unsuccessful native outcomes use the non-retriable native-failure
+  category. Retry preflight checks both saved outcomes and the current parser's
+  reading of the saved stream; changing source hashes cannot admit these failures.
+  Regressions:
+    test/live_suite.test.mjs: live signal and watchdog stops await fallback even when evidence writes fail
+    test/live_suite.test.mjs: live recognized native failures cannot spend a retry through current or legacy ledgers
+    test/live_support.test.mjs: live retry gate excludes recognized unsuccessful outcomes without classification keywords
+  Five shutdown cases inject full-volume errors in ledger or runner writes under
+  SIGINT, SIGTERM and watchdog stops. Real disposable leaders/descendants stop;
+  failed checkpoints preserve the spent running reservation. Five adapter outcome
+  fixtures and three suite-entrypoint ledger variants reject native-failure retries.
+  npm test: exit 0; tests 644; pass 644; fail 0; cancelled 0; skipped 0; deferred tests 0
+  duration_ms 94950.532708
+  Private output: /private/tmp/gallivant-shutdown-native-all-tests.txt
+  npm run lint: exit 0
+  Private output: /private/tmp/gallivant-shutdown-native-lint.txt
+  Changed test tooling syntax checks: exit 0
+  git diff --check: exit 0
+  Full PR credential/Console-connection, known-secret and blocked-pattern scans: 0 matches.
+  No installed harness, provider call, live retry, operator setting or review budget changed.
+  Historical evidence, exhausted allowances and false AC-2/AC-3 attestations remain unchanged.

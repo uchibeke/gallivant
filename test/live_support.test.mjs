@@ -138,11 +138,36 @@ test("live external failure classification takes priority over verifier errors a
   for (const message of ["APort denied", "Sandbox: Operation not permitted", "permission request denied for shell", "401 unauthorized", "429 quota exceeded", "ProviderModelNotFound", "turn time limit reached"]) {
     const classified = classify(message, message === "turn time limit reached");
     for (const stage of ["adapter", "verification"]) {
-      const result = turnFailure(classified, stage, "verifier.txt");
+      const result = turnFailure(classified, stage, "verifier.txt", { ok: false, finished: true });
       assert.equal(result.status, "blocked");
       assert.deepEqual(result.failure, { ...classified, stage, evidence: "verifier.txt" });
       assert.throws(() => assertAdapterRetry({ source: { sha256: { adapter: "before" } }, ...result }, { sha256: { adapter: "after" } }), /ineligible/);
     }
+  }
+});
+
+test("live retry gate excludes recognized unsuccessful outcomes without classification keywords", () => {
+  const source = { sha256: { adapter: "before" } }, changed = { sha256: { adapter: "after" } };
+  for (const [harness, event] of [
+    ["claude", { type: "result", is_error: true, result: "aborted" }],
+    ["codex", { type: "turn.failed", error: { message: "aborted" } }],
+    ["gemini", { type: "result", status: "error", error: { message: "aborted" } }],
+    ["opencode", { type: "step_finish", part: { reason: "aborted" } }],
+    ["goose", { type: "error", message: "aborted" }],
+  ]) {
+    const outcome = adapters[harness].outcome([JSON.stringify(event)]);
+    assert.equal(outcome.ok, false);
+    assert.equal(outcome.finished, true);
+    const classified = classify(outcome.error);
+    assert.equal(classified.category, "unclassified");
+    const result = turnFailure(classified, "adapter", "verifier.txt", outcome);
+    assert.equal(result.failure.category, "native-failure");
+    assert.equal(result.failure.stage, "native");
+    assert.equal(result.status, "failed");
+    assert.throws(() => assertAdapterRetry({ source, outcome, ...result }, changed), /ineligible/);
+    // Earlier ledgers may retain the obsolete adapter-stage classification.
+    const legacy = { source, outcome, ...turnFailure(classified, "adapter", "verifier.txt") };
+    assert.throws(() => assertAdapterRetry(legacy, changed), /recognized native failures/);
   }
 });
 
