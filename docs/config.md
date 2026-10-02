@@ -5,7 +5,7 @@
 | Key | Default | Meaning |
 |---|---|---|
 | `poll_seconds` | 120 | Tick interval. Minimum 30. |
-| `max_iterations` | 20 | Automatic fix-round allowance per PR. A pushed fix or changed completion receipt consumes a round. At the cap, further automatic work stops with `needs-human`. Explicit operator resumes can exceed the cap; their progress still counts. |
+| `max_iterations` | 30 | Automatic fix-round allowance per PR. A pushed fix or changed completion receipt consumes a round. At the cap, further automatic work stops with `needs-human`. Explicit operator resumes can exceed the cap; their progress still counts. |
 | `checks_grace_minutes` | 5 | A head younger than this with no checks reported is not green yet; GitHub shows an empty check list for the first seconds after a push. A head older than this with no checks at all counts as green. |
 | `run_timeout_minutes` | 720 | A run older than this is killed (SIGKILL) and the PR stops with `timeout`. It is a catch for a wedged session, not a spend limit; see below. Overridable per repository. |
 | `max_budget_usd` | 5 | Passed to Claude runs as `--max-budget-usd`. Codex has no equivalent; the timeout bounds it. |
@@ -26,11 +26,18 @@
 | `harness.goose` | | `{ bin }`. |
 | `repos` | [] | The repositories Gallivant watches, appended by `start` and `register` and read by `up` to recover from GitHub. Each entry is either `"owner/name"` or an object: `{ "repo": "owner/name", "base": "staging", "run_timeout_minutes": 90 }`. Both object keys are optional. See below. |
 
-The default allows 20 rounds because multi-part tasks can still receive distinct, actionable review findings after
-fifteen rounds. It remains a fixed allowance: reaching it requires an operator decision, and it never increases itself.
+The default allows 30 rounds as an upper allowance for unattended review. It is not a target or a promise of completion:
+large tasks can exhaust it, while missing external prerequisites cannot be solved by more rounds. Reaching the cap
+requires an operator decision, and it never increases itself.
 Existing explicit `max_iterations` settings keep their value. More rounds allow more time and model spend; they do
 not resolve missing credentials, permission denials or unavailable providers. Recheck a stopped PR after changing
 the setting and restarting the daemon; its session, worktree and consumed rounds are preserved.
+
+For unattended work, keep briefs small enough to review, confirm provider access and scoped tool permissions before
+launch, and keep external setup separate from implementation acceptance. Shared agent instructions require a review
+of related code paths before pushing and return control to the daemon for subsequent review batches. These instructions
+help reduce repeated narrow fixes; the existing tests, reviewer and completion gate still decide readiness. A run is
+ready for human review only when its actual criteria pass; more allowance does not authorize fabricating evidence.
 
 Five harnesses are supported: Claude Code, Codex, Gemini CLI, opencode and goose. A harness can join when it does
 three things: start a run non-interactively, resume that specific session by id rather than "the latest", and emit
