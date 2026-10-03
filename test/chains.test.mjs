@@ -116,6 +116,36 @@ test("queue approves a plan without starting work; ticks start its first PRD exa
   assert.equal(w.clones.length, 1);
 });
 
+test("an active legacy-prefix milestone survives upgrade and its neutral-prefix successor still waits for merge", async () => {
+  const w = world();
+  await w.queue();
+  await tickChains(w.ctx);
+  const original = w.ctx.state.get(FIRST);
+  // Persist the identity an older release actually wrote, then reconstruct the registry as on daemon upgrade.
+  w.ctx.state.update(FIRST, { branch: "gallivant/first-step" });
+  w.ctx.state = makeState(w.home);
+  await tickChains(w.ctx);
+  assert.equal(w.ctx.state.getChain("release").status, "active", "legacy naming is not an identity change");
+  assert.equal(w.ctx.state.getChain("release").steps[0].entry.token, original.start_token);
+  assert.equal(w.starts(), 1, "no duplicate process is launched during adoption");
+  assert.equal(w.ctx.state.get(FIRST).branch, "gallivant/first-step", "the live branch is not renamed");
+  w.markPr(FIRST, { state: "OPEN", entryState: STATES.ready });
+  await tickChains(w.ctx);
+  await tickChains(w.ctx);
+  assert.equal(w.ctx.state.getChain("release").index, 0);
+  assert.equal(w.ctx.state.get(SECOND), null, "ready is still not a predecessor merge");
+  w.markPr(FIRST, { state: "MERGED", entryState: STATES.done });
+  await tickChains(w.ctx);
+  assert.equal(w.starts(), 1, "merge observation and successor launch remain separate transitions");
+  await tickChains(w.ctx);
+  assert.equal(w.starts(), 2);
+  assert.equal(w.ctx.state.get(SECOND).branch, "work/second-step", "new milestones use the neutral convention");
+  assert.equal(w.ctx.state.get(FIRST).branch, "gallivant/first-step");
+  assert.equal(w.ctx.state.get(FIRST).start_token, original.start_token);
+  assert.ok(w.ancestry.some(call => call.includes(MERGE)), "the confirmed merge must still belong to the approved base");
+  assert.deepEqual(w.kills, []);
+});
+
 test("two schedulers sharing persisted state cannot both clone or start the same queued milestone", async () => {
   const w = world();
   await w.queue();
@@ -333,7 +363,10 @@ test("queue validates every step before recording a plan", async () => {
 });
 
 test("replacing a pinned entry's branch or start token cannot substitute other work as the approved milestone", async () => {
-  for (const changed of [{ branch: "gallivant/replacement" }, { start_token: "replacement-start" }]) {
+  for (const changed of [
+    { branch: "gallivant/replacement" }, { branch: "work/replacement" }, { branch: "feature/first-step" },
+    { branch: "gallivant/first-step/extra" }, { branch: "work/first-step-extra" }, { start_token: "replacement-start" },
+  ]) {
     const w = world();
     await w.queue();
     await tickChains(w.ctx);
