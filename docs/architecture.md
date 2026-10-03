@@ -19,7 +19,8 @@ lib/hash.mjs             one fingerprint spelling: twelve hex characters of a sh
 lib/sources/             one adapter per source of a brief, and the registry that picks one. Only the PRD file today
 lib/deliverable.mjs      the completion gate: criteria from the PRD, the receipt, the policy's rules and deny codes
 
-lib/gh.mjs               the only GitHub access, through the gh CLI; login normalisation; markers and labels
+lib/public-format.mjs    neutral GitHub names and legacy read aliases
+lib/gh.mjs               daemon GitHub access through gh; public write validation and status-label migration
 lib/git.mjs              per-PRD checkouts (partial clones), the base-branch merge, run environment
 lib/run.mjs              detached runs; liveness checks that the pid still runs the harness, adapted from command-center
 lib/state.mjs            the registry: atomic writes under a lock file, pure ids, handle resolution

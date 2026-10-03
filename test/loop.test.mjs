@@ -53,7 +53,7 @@ test("a successful start records a running entry with its session, our branch na
   // GOOD_PRD names codex, whose sessions are keyed by the directory and only get an id once the first turn starts.
   assert.equal(e.harness, "codex");
   assert.equal(e.session, null, "codex has no id to record until its first turn reports a thread");
-  assert.equal(e.branch, "gallivant/widget-export", "the branch follows the convention recovery reads back");
+  assert.equal(e.branch, "work/widget-export", "new branches use the neutral convention recovery reads back");
   assert.equal(e.worktree, w.worktree, "and the entry points at the checkout the run was spawned in");
   assert.equal(e.pr, null);
   assert.equal(e.iteration, 0);

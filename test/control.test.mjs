@@ -5,6 +5,7 @@ import { join } from "node:path";
 import { requestControl, applyControl, interruptControl, lastMessage, controlFailure } from "../lib/control.mjs";
 import { makeState } from "../lib/state.mjs";
 import { makeTick } from "../lib/tick.mjs";
+import { NEEDS_LABEL } from "../lib/gh.mjs";
 import { CONFIG, seededState, makeClock, fakeGh, fakeGit, fakeNotify, fakeRunner, fakeCredential, fakeIdentity, harnessBin, GOOD_PRD, silentLog, STATES, review, at, checkRun, prFixture } from "./helpers.mjs";
 
 function world(over = {}) {
@@ -63,7 +64,7 @@ test("a stopped PR rechecks without spending a run, resetting budgets or changin
   assert.deepEqual(after.cursor, before.cursor);
   assert.equal(after.prd_fingerprint, before.prd_fingerprint);
   assert.equal(w.runner.started.length, 0);
-  assert.ok(w.gh.calls.some(c => c[0] === "removeLabel" && c[2] === "gallivant:needs-human"));
+  assert.ok(w.gh.calls.some(c => c[0] === "removeLabel" && c[2] === NEEDS_LABEL));
 });
 
 test("rechecking unchanged red checks stops again; it does not bypass CI or spend another fixer", async () => {

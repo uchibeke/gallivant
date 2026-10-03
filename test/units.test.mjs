@@ -173,8 +173,8 @@ test("the PR block round-trips and rejects anything malformed", () => {
   assert.match(parseBlock(renderBlock({ ...block, harness: "bash" })).reason, /invalid harness/);
   assert.equal(parseBlock(renderBlock({ ...block, session: null })).block.session, null);
   assert.match(parseBlock(renderBlock({ ...block, prd: "docs/../../etc/x.md" })).reason, /invalid prd/);
-  const replaced = upsertBlock(body.replace("harness: codex", "harness: bash"), block);
-  assert.equal((replaced.match(/<!-- gallivant/g) || []).length, 1, "an invalid block is replaced, not duplicated");
+  const replaced = upsertBlock(renderBlock({ ...block, harness: "bash" }), block);
+  assert.equal((replaced.match(/<!-- work-session/g) || []).length, 1, "an invalid block is replaced, not duplicated");
   assert.deepEqual(parseBlock(replaced).block, block);
 });
 
@@ -282,7 +282,7 @@ test("outcomes: gemini result status, opencode step_finish, goose chunked messag
   assert.equal(s.cost, 0.0036);
   assert.deepEqual([adapters.goose.outcome(gooseLines({ ok: false })).ok, adapters.goose.outcome(gooseLines({ ok: false })).error], [false, "provider refused"]);
   assert.equal(adapters.goose.outcome([]).finished, false);
-  assert.match(adapters.goose.newSession(), /^gallivant-[0-9a-f-]{36}$/);
+  assert.match(adapters.goose.newSession(), /^work-[0-9a-f-]{36}$/);
 });
 
 test("a harness whose id cannot be read back off the run must generate it up front", () => {
@@ -296,7 +296,7 @@ test("a harness whose id cannot be read back off the run must generate it up fro
     assert.ok(generates || reports, `${name} can neither generate nor report a session id`);
   }
   assert.equal(adapters.goose.sessionFrom(gooseLines()), null, "goose does not report its name back");
-  assert.match(adapters.goose.newSession(), /^gallivant-/, "so it has to generate one it can resume by");
+  assert.match(adapters.goose.newSession(), /^work-/, "so it has to generate one it can resume by");
   assert.equal(adapters.opencode.newSession(), null, "opencode cannot pre-assign, so it must report one back");
   assert.ok(adapters.opencode.sessionFrom(opencodeLines()));
 });
@@ -385,7 +385,8 @@ test("registry ids are pure functions of repo and PRD, and every path keyed by t
   assert.equal(entryId("Acme/Widget", "export"), "acme/widget/export");
   assert.equal(idSlug("acme/widget/export"), "acme__widget__export");
   assert.equal(prdIdOf("acme/widget/export"), "export");
-  assert.equal(branchFor("export"), "gallivant/export");
+  assert.equal(branchFor("export"), "work/export");
+  assert.equal(prdIdFromBranch("work/export"), "export");
   assert.equal(prdIdFromBranch("gallivant/export"), "export");
   assert.equal(prdIdFromBranch("feature/x"), null);
   assert.ok(isOurBranch("gallivant/x") && !isOurBranch("main"));

@@ -137,6 +137,23 @@ test("resume spawns the recorded session in the recorded worktree and clears the
   assert.match(r.attach, /claude --resume/);
 });
 
+test("direct resume records its public-output boundary before launch and preserves an existing boundary", async t => {
+  const wall = Date.parse("2026-10-03T12:00:00.750Z");
+  t.mock.method(Date, "now", () => wall);
+  for (const prior of [undefined, "2026-10-02T08:00:00.000Z"]) {
+    const w = world(prior ? { public_since: prior } : {});
+    const launch = w.runner.start;
+    w.runner.start = (...args) => {
+      const boundary = w.state.get(w.id).public_since;
+      assert.equal(boundary, prior ?? "2026-10-03T12:00:00.000Z");
+      assert.ok(Date.parse(boundary) <= wall, "already persisted before the child can publish");
+      return launch(...args);
+    };
+    await resume(w.ctx, { handle: "widget-export" });
+    assert.equal(w.state.get(w.id).public_since, prior ?? "2026-10-03T12:00:00.000Z");
+  }
+});
+
 test("the prompt says why the last run stopped, and carries the brief's Verify commands", async () => {
   const w = world();
   await resume(w.ctx, { handle: "widget-export", note: "budget raised to 200" });
@@ -146,7 +163,7 @@ test("the prompt says why the last run stopped, and carries the brief's Verify c
   assert.match(prompt, /ended before opening the pull request/);
   assert.match(prompt, /budget raised to 200/, "the operator's note reaches it");
   assert.match(prompt, /npm run lint/, "the Verify commands come from the daemon's snapshot");
-  assert.match(prompt, /gallivant-attestations/, "and the completion receipt it still owes");
+  assert.match(prompt, /work-attestations/, "and the completion receipt it still owes");
 });
 
 test("an entry already watching a PR resumes into pr-open rather than running", async () => {

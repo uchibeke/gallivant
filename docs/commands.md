@@ -36,7 +36,7 @@ The only way a PRD becomes ready. Runs every rule of [the contract](prd.md), pri
 3. Checks the harness named in the PRD is signed in. If not, the entry is recorded as `needs-human` with reason `not-signed-in` and nothing else happens.
 4. Builds the run specification: the prompt, the session id, and the argv the harness will be spawned with, including the read-only `context_paths`. This happens before the clone, because it is the last step that can refuse and the clone is the only one that leaves something behind. A harness that cannot grant those directories as read-only is refused here, with nothing cloned and nothing registered, so rerunning `start` after fixing the config works rather than failing on a leftover worktree.
 5. Works out the base branch: the pull request this will open targets it, and the new branch is cut from it. `--base` wins, then the base configured for this repository in `repos`, then the repository's default branch, which is the fallback and what an operator who configures nothing gets. A `--base` is written into `repos` so it is typed once per repository. A base that GitHub does not have fails here, before anything is cloned: left to `gh pr create --base` it would fail after the run had implemented the brief and spent the budget. See [the base branch](config.md#the-base-branch).
-6. Clones the repo into `<worktrees>/<repo>/<prd id>` (partial clone, blobs on demand) on a new branch `gallivant/<prd id>` cut from that base, fetched first so the cut is from the current base rather than a stale local ref. Your own checkout is never touched.
+6. Clones the repo into `<worktrees>/<repo>/<prd id>` (partial clone, blobs on demand) on a new branch `work/<prd id>` cut from that base, fetched first so the cut is from the current base rather than a stale local ref. Your own checkout is never touched.
 7. Saves the daemon's own copy of the PRD and each carried `sources` file under `~/.gallivant/prds/`. Fix rounds and the completion gate read these snapshots, so a session cannot rewrite its own brief. Records where your copy lives, plus a fingerprint of the contract, for later comparison: see [editing the brief after the work has started](prd.md#editing-the-brief-after-the-work-has-started).
 8. Copies those snapshots into the checkout at their original repository paths, creating directories as needed. The PRD is usually only in your own checkout; this copy lets the session commit it with the implementation. Copies in the session's checkout are writable and are never read back for a decision.
 9. Starts the session detached with the PRD as its prompt, records the session id, and remembers the repo for recovery.
@@ -78,7 +78,7 @@ not require a separate chain retry. See [PRD chains](chains.md) for the workflow
 
 Puts a PR into the loop that Gallivant did not open, or resets one that stopped.
 
-- With `--session` and `--worktree`, later fixes resume that session in that directory. Both harnesses key sessions by the directory they ran in, so the pair is required together. The id has to be one the chosen harness could have minted (a UUID for claude, codex and gemini, `ses_...` for opencode, `gallivant-<uuid>` for goose), the same rule the PR block is held to: the value ends up in the harness's argv, where goose in particular derives its session file from it.
+- With `--session` and `--worktree`, later fixes resume that session in that directory. Both harnesses key sessions by the directory they ran in, so the pair is required together. The id has to be one the chosen harness could have minted (a UUID for claude, codex and gemini, `ses_...` for opencode, `work-<uuid>` or legacy `gallivant-<uuid>` for goose), the same rule the PR block is held to: the value ends up in the harness's argv, where goose in particular derives its session file from it.
 - Without `--session`, the first fix run starts a fresh session whose prompt tells it to read the PR with `gh pr view` and `gh pr diff` before changing anything.
 - Without `--worktree`, a checkout is created from the PR branch at the standard path.
 - A `--worktree` you pass is resolved to an absolute path first, so `.` means the directory you typed it in and not whatever directory the daemon happens to run in later. It is then checked before it is accepted: its `origin` must be the PR's repository and it must already be on the PR's head branch. A path that fails either check is an error, since the harness edits and pushes from that directory. It is never relocated or re-cloned for you, because a resumed session is keyed to the directory it ran in.
@@ -89,13 +89,13 @@ Puts a PR into the loop that Gallivant did not open, or resets one that stopped.
 
 When the block names a PRD that exists on the PR's branch, the daemon's own snapshot of it is taken, exactly as recovery does, because the completion gate reads that snapshot and nothing else: without it the gate is skipped and the PR can be marked ready with no acceptance criterion evaluated. A snapshot already on disk is kept rather than replaced with the copy the session could have edited, and a PRD the branch does not carry is logged and the PR watched without a gate.
 
-Fork PRs and closed PRs are refused. If the PR body has no Gallivant block, one is added; if it has one that names a different harness or session than the registration chose, it is rewritten to match. Recovery after a lost `state.json` reads that block, so a block left saying the old harness would restore the wrong one.
+Fork PRs and closed PRs are refused. On managed `work/*` or legacy `gallivant/*` branches, the neutral recovery record is added or migrated to match the selected harness/session and PRD. Recovery after a lost `state.json` reads that record, so it must agree with the registry. A hand-made branch outside those conventions remains explicitly registered in local state; it receives no invalid recovery record and is still excluded from automatic recovery.
 
 ## `gallivant up [--once]`
 
 The daemon. On boot it acquires `daemon.lock` before contacting GitHub and refuses to run if another daemon owns it. The lock records the PID, process start time and command; `ps` must be available to verify that identity. Its output uses a fixed locale and UTC, so a different terminal cannot mistake formatting differences for a replacement process. `daemon.json` reports health separately, so a failed health write cannot allow a second daemon. Background startup returns once ownership is published, while GitHub initialization may still be running. `down` verifies the recorded identity before sending SIGTERM, so a reused PID is not enough to stop a process. A live older daemon with a missing or unversioned identity is reported as `UNVERIFIED` and must be verified and stopped manually before restarting; its lock is never silently replaced.
 
-It then reconciles with GitHub: for every repo in `repos`, every open PR of yours on a `gallivant/*` branch with a valid block that is not in the registry is registered, with the iteration recovered by counting Gallivant's own round comments and the cursor set so old events are not replayed. The PRD snapshot is taken from the PR branch when the daemon has none. Missing checkouts are recreated from the PR branch.
+It then reconciles with GitHub: for every repo in `repos`, every open PR of yours on a `work/*` (or legacy `gallivant/*`) branch with a valid block that is not in the registry is registered, with the iteration recovered by counting Gallivant's own round comments and the cursor set so old events are not replayed. The PRD snapshot is taken from the PR branch when the daemon has none. Missing checkouts are recreated from the PR branch.
 
 A recovered entry is treated as newly asking, not as mid-conversation, and in two ways that `register` already worked this way:
 
@@ -330,6 +330,44 @@ Forgets an entry. The PR, its branch, its labels and the checkout are left as th
 - A round comment after every push: the text of `reviewer.rereview_comment`, `@codex review` by default, with an HTML marker so it can recognise its own comments; a marked "Completion receipt updated" comment after a round that only rewrote the receipt; a marked reset comment when `register` resets an entry.
 - One nudge comment if the reviewer has not answered within `rereview_minutes`. It is the same text as the round comment, told apart only by its marker, so it never goes out on the tick that already posted a round: one push earns one asking of the reviewer.
 - With `reviewer` set to null nothing asks anyone for anything: the round comment says `Pushed a fix.` and there is no nudge.
-- The labels `gallivant:ready-for-human` and `gallivant:needs-human`, created once per repo the first time it is watched.
-- The Gallivant block in the PR body, once.
+- The labels `status:ready-for-review` and `status:needs-attention`, created once per repo the first time it is watched. Ready means checks, reviewer and receipt gates passed; it does not mean merged or complete. Label writes remove legacy spellings and the opposite status before signalling the new state.
+- A neutral `work-session` recovery record in the PR body. It contains a versioned base64url JSON identity, with strict decoded validation. This is transport encoding, not encryption or authorization.
 - Nothing else. The harness posts its own thread replies during a fix run; those are recognised and never treated as events.
+
+
+### Public formatting and compatibility
+
+New branches use `work/<prd-id>`, receipts use a `work-attestations` JSON fence, and daemon comments use
+neutral `work-round`, `work-nudge` and `work-reset` markers. Human follow-up can use `/fix`.
+Legacy branches, recovery blocks, receipt fences, commands and comment markers remain readable; existing
+branches and sessions are not renamed. Round/reset history still counts across formats, and changing only
+a receipt's transport format or informational task ID does not constitute progress.
+
+Recovery metadata preserves exact PRD paths, branch names and session IDs in its encoded record, including
+old identifiers; decoding does not grant trust. Recovery still checks the actual same-repository head and
+validated harness/session. Receipt task IDs are stable neutral tokens; the completion gate binds evaluation
+to its own trusted task ID. Prose and evidence are not redacted or altered by format migration, and ambiguous
+duplicate metadata or receipts must be repaired rather than silently choosing one.
+
+Existing branch names and historical commits/comments can still expose earlier naming. Upgrading does not
+rewrite history or rename live branches. Existing integrations that select the old status labels should move
+to the new labels; no branded alias is written merely to keep an external label filter matching.
+
+
+Managed pull requests use GitHub's regular review workflow. Start prompts require an ordinary PR; if a harness
+nevertheless creates a draft, the daemon converts it to ready for review and gives the reviewer a fresh window.
+Registering an existing PR explicitly adopts the same regular-PR policy. This presentation change does not mark
+work complete, satisfy acceptance criteria, waive checks or review, merge the PR, or clear an unrelated stop.
+Incomplete work remains accurately described with unmet attestations.
+
+Daemon-authored title, body and comment writes reject the runner name case-insensitively. The daemon checks the
+actual published PR title/body and new own-account replies before marking work ready; violations request a bounded
+wording correction in the existing session. New commits are checked by the installed commit-message hook. Technical
+source files, PRD basenames, local commands and existing history keep their actual names; they are not renamed or
+rewritten to satisfy a public-text rule. Choose a truthful neutral description or another concrete evidence pointer
+when a literal path would name the runner in PR prose.
+
+Harnesses still invoke their own GitHub tools directly. A prompt and a later daemon check cannot promise that an
+incorrect draft or branded phrase never appears briefly before correction. This implementation enforces daemon
+writes and readiness, not an exclusive network publication boundary. The encoded recovery record is also not secret:
+it can be decoded to inspect the precise existing branch/session identity.

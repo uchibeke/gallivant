@@ -189,7 +189,7 @@ test("a configured base is the branch the clone is cut from and the branch the p
   assert.equal(r.base, "staging");
   assert.equal(r.baseSource, "config");
   assert.deepEqual(w.created, [{ nameWithOwner: "acme/widget", prdId: "widget-export", base: "staging" }], "the branch is cut from the configured base, not from main");
-  assert.match(w.prompts[0], /gh pr create --base staging --head gallivant\/widget-export/, "and the session is told to open against it");
+  assert.match(w.prompts[0], /gh pr create --base staging --head work\/widget-export/, "and the session is told to open against it");
   assert.doesNotMatch(w.prompts[0], /--base main/);
   assert.equal(w.ctx.state.get(r.id).base, "staging", "recorded on the entry, which is what the merge before each round reads");
 });

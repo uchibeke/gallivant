@@ -52,7 +52,7 @@ PRD (status: ready)  →  gallivant start  →  session in its own checkout  →
                                                                               │
               ┌───────────────────────────────────────────────────────────────┘
               ▼
-      tick every 2 minutes: reviewer review, trusted inline comment, failed check, @gallivant fix
+      tick every 2 minutes: reviewer review, trusted inline comment, failed check, /fix
               │
               ▼
       resume the session with the feedback  →  push  →  ask the reviewer again  →  round += 1
