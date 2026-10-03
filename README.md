@@ -4,7 +4,7 @@ Write a PRD, mark it ready, go outside.
 
 Gallivant starts a coding-agent session for a PRD, and then keeps the pull request moving on its own: it watches for reviewer findings, human review comments and failed checks, resumes the session that opened the PR to fix them, pushes, asks the reviewer to look again, and stops with one notification when the PR is ready for a person or stuck.
 
-It supports Claude Code, Codex, Gemini CLI, opencode and goose as fixers, with [APort](https://github.com/aporthq/aport-agent-guardrails) hooks on Claude Code and Codex. The session that opened the PR is the session that fixes it, resumed by session id. Every PR carries the harness and session id in its body, so the loop can be rebuilt from GitHub after local state is lost.
+It implements adapters for Claude Code, Codex, Gemini CLI, OpenCode and Goose, with [APort](https://github.com/aporthq/aport-agent-guardrails) hooks on Claude Code and Codex. Claude/Codex have production evidence; the current Gemini, OpenCode and Goose coding probes have blocked or failed results from native permissions, provider setup, and live-test defects. See the [version/provider support matrix and live evidence](docs/audit/harness-live-validation.md) before selecting a harness. The loop resumes the recorded session that opened the PR. Every PR carries the harness and session id in its body, so the loop can be rebuilt from GitHub after local state is lost.
 
 Node 22, zero dependencies, `gh` for all GitHub access, ntfy for notifications. No GitHub App, no webhook server, no database.
 
@@ -100,6 +100,10 @@ See [chains](docs/chains.md) for editing the queued plan, recovery and cancellat
 
 ## Status
 
-Version 0.1. Claude Code, Codex, Gemini CLI, opencode and goose fixers, the review and CI loop, recovery from GitHub, ntfy notifications, the local tracker with recovery controls, and sequential PRD chains gated on human merges. Not yet: mid-turn message delivery, Telegram, GitHub-issue input, cursor-agent (its event stream is unverified), or a service installer. See the milestones in the PRD.
+Version 0.1. Five implemented adapters, the review and CI loop, recovery from GitHub, ntfy notifications, the local tracker with recovery controls, and sequential PRD chains gated on human merges. Adapter implementation does not establish access through a provider subscription. The [latest audit](docs/audit/harness-live-validation.md) distinguishes production evidence, blocked live attempts and fixtures, including the configured Claude binary (2.1.263) versus the older PATH binary (2.1.177). Gemini, OpenCode and Goose are not yet verified for unattended coding and same-session Git pushes on this machine.
+
+After resolving the documented blockers, repeat the opt-in live suite from a source checkout with `npm run test:live-harnesses -- --live`. The report also gives exact commands for the named Goose and OpenCode Console BYOK batches; these connections are separate from Zen/Go subscriptions. DeepSeek is excluded from new calls; Tencent remains deferred. The suite uses existing settings, performs sequential bounded model calls, and keeps raw logs privately outside the repository. `npm test` never runs this suite. These disposable local-remote tests do not prove GitHub review/completion behavior: the next step is an authorized Gallivant PRD through PR creation, review/CI-triggered continuation and the completion gate, as described in the report.
+
+Not yet: mid-turn message delivery, Telegram, GitHub-issue input, cursor-agent (its event stream is unverified), or a service installer. See the milestones in the PRD.
 
 Apache-2.0.

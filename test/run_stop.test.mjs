@@ -19,7 +19,7 @@ for (const detached of [false, true]) test(`cancelled runs wait for tool subproc
   const child = `require('node:fs').writeFileSync(${JSON.stringify(marker)}, String(process.pid)); process.on('SIGTERM', () => {}); setInterval(() => {}, 1000);`;
   const parent = `require('node:child_process').spawn(process.execPath, ['-e', ${JSON.stringify(child)}], {stdio: 'ignore', detached: ${detached}}); setInterval(() => {}, 1000);`;
   const runner = makeRunner(join(home, "runs"));
-  const job = runner.start("stop-test", process.execPath, ["-e", parent], { cwd: home });
+  const job = await runner.start("stop-test", process.execPath, ["-e", parent], { cwd: home });
   t.after(() => {
     for (const pid of [job.pid, existsSync(marker) ? Number(readFileSync(marker, "utf8")) : 0].filter(Boolean)) {
       try { process.kill(pid, "SIGKILL"); } catch { /* gone */ }
@@ -29,7 +29,8 @@ for (const detached of [false, true]) test(`cancelled runs wait for tool subproc
   assert.equal(runner.kill(job.id), true);
   await delay(100); // The leader exits; its child deliberately ignores TERM.
   assert.equal(runner.current().running, true);
-  assert.throws(() => runner.start("overlap", process.execPath, ["-e", ""], { cwd: home }), /run in progress/);
+  await assert.rejects(() => runner.start("overlap", process.execPath, ["-e", ""], { cwd: home }), /run in progress/);
+  await runner.waitForKill(job.id);
   await until(() => !runner.current().running);
   assert.equal(runner.read(job.id).exit, 137);
 });

@@ -366,7 +366,7 @@ test("ambiguous spawn failure retains its claim across reload and retry cannot d
   const w = world();
   await w.queue();
   const runner = w.ctx.runnerFor(FIRST), spawn = runner.start;
-  runner.start = (...args) => { spawn(...args); throw new Error("lost connection after child might have started"); };
+  runner.start = async (...args) => { await spawn(...args); throw new Error("lost connection after child might have started"); };
   await tickChains(w.ctx);
   assert.equal(w.starts(), 1);
   assert.ok(w.ctx.state.startClaim(FIRST));

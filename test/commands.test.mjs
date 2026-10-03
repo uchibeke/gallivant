@@ -111,6 +111,22 @@ test("start writes the PRD into the fresh checkout, so the branch carries the br
   assert.equal(statSync(join(w.worktree, "docs", "prds")).mode & 0o777, 0o755, "the directory git will commit is not private to the daemon");
 });
 
+test("start awaits durable runner startup before registering the claimed run", async () => {
+  const w = startWorld(), runner = fakeRunner(makeClock()), launch = runner.start;
+  const id = "acme/widget/widget-export";
+  runner.start = async (...args) => {
+    assert.ok(w.ctx.state.startClaim(id));
+    assert.equal(w.ctx.state.get(id), null);
+    await Promise.resolve();
+    return launch(...args);
+  };
+  w.ctx.runnerFor = () => runner;
+  const result = await start(w.ctx, { path: w.prdPath });
+  assert.equal(result.run, runner.current().id);
+  assert.equal(w.ctx.state.get(id).last.run, result.run);
+  assert.equal(w.ctx.state.startClaim(id), null);
+});
+
 test("start renders the resolved read-only directories into the run, and refuses a harness that cannot grant them", async () => {
   const extra = tempHome();
   // codex, which cannot grant read on one directory, is refused before anything is recorded.

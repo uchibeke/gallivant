@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { join, dirname, basename } from "node:path";
-import { readFileSync } from "node:fs";
+import { readFileSync, realpathSync } from "node:fs";
 import { spawnSync, execFileSync } from "node:child_process";
 import { makeState, resolveHandle, newEntry, entryId, idSlug, prdIdOf, advanceCursor, shortRepo, handleFor, STATES } from "../lib/state.mjs";
 import { isAtOrAfter, floorSecond } from "../lib/time.mjs";
@@ -31,6 +31,119 @@ test("APort diagnostics report the enforcement the hook uses when aliases confli
   ]) {
     writeFileSync(join(dir, "guardrail-mode.env"), text);
     assert.equal(guardrailMode(dir).enforcement, expected);
+  }
+});
+
+test("OpenCode outcome sums all step costs and preserves unknown cost", () => {
+  const step = (reason, cost) => JSON.stringify({ type: "step_finish", part: { reason, ...(cost === undefined ? {} : { cost }) } });
+  const lines = [step("tool-calls", 0.02), step("tool-calls", 0.03), step("stop", 0.01)];
+  assert.ok(Math.abs(adapters.opencode.outcome(lines).cost - 0.06) < 1e-12);
+  assert.equal(adapters.opencode.outcome([step("tool-calls"), step("stop", 0)]).cost, null);
+  assert.equal(adapters.opencode.outcome([step("stop", 0)]).cost, 0);
+  assert.equal(adapters.opencode.outcome([step("tool-calls", 0.02), JSON.stringify({ type: "error", message: "failure" })]).ok, false);
+});
+
+test("Goose provider failure followed by complete is not success", () => {
+  const lines = [
+    JSON.stringify({ type: "message", message: { role: "assistant", content: [{ type: "text", text: "Ran into this error: Request failed: Resource not found (404). The requested model does not exist or you do not have access to it." }] } }),
+    JSON.stringify({ type: "complete", total_tokens: 0 }),
+  ];
+  const result = adapters.goose.outcome(lines);
+  assert.equal(result.ok, false);
+  assert.equal(result.finished, true);
+  assert.match(result.error, /404/);
+  assert.equal(result.cost, null);
+  assert.equal(adapters.goose.outcome([JSON.stringify({ type: "message", message: { role: "assistant", content: [{ type: "text", text: "Earlier successful work." }] } }), ...lines]).ok, false);
+  const credits = adapters.goose.outcome([
+    JSON.stringify({ type: "message", message: { role: "assistant", content: [{ type: "systemNotification", notificationType: "creditsExhausted", msg: "Please check your account with your provider to add more credits." }] } }),
+    JSON.stringify({ type: "complete", total_tokens: 0 }),
+  ]);
+  assert.equal(credits.ok, false);
+  assert.match(credits.error, /creditsExhausted/);
+});
+
+test("Goose typed authentication error followed by complete is not success", () => {
+  const error = "Authentication failed. Status: 401 Unauthorized. Incorrect API key provided.";
+  for (const content of [{ type: "error", kind: "authentication", message: error }, { type: "error", kind: "authentication" }]) {
+    const result = adapters.goose.outcome([
+      JSON.stringify({ type: "message", message: { role: "assistant", content: [{ type: "text", text: "Working." }] } }),
+      JSON.stringify({ type: "message", message: { role: "assistant", content: [content] } }),
+      JSON.stringify({ type: "complete", total_tokens: 0 }),
+    ]);
+    assert.equal(result.ok, false);
+    assert.equal(result.finished, true);
+    assert.equal(result.error, content.message || content.kind);
+    assert.equal(result.lastMessage, "Working.");
+    assert.equal(result.cost, null);
+  }
+});
+
+test("Goose provider error envelope survives streamed chunk boundaries", () => {
+  const error = "Request failed: Resource not found (404).";
+  const envelope = `Ran into this error: ${error}`;
+  const message = chunks => JSON.stringify({ type: "message", message: { role: "assistant", content: chunks.map(text => ({ type: "text", text })) } });
+  const complete = JSON.stringify({ type: "complete", total_tokens: 0 });
+  for (let split = 1; split < envelope.length; split++) {
+    const chunks = [envelope.slice(0, split), envelope.slice(split)];
+    for (const lines of [chunks.map(chunk => message([chunk])), [message(chunks)]]) {
+      for (const prefix of [[], [message(["Earlier successful work."])]]) {
+        const result = adapters.goose.outcome([...prefix, ...lines, complete]);
+        assert.equal(result.ok, false, `split ${split} must not hide the provider error`);
+        assert.equal(result.finished, true);
+        assert.equal(result.error, error, `split ${split} must retain the complete error`);
+        assert.equal(result.lastMessage, `${prefix.length ? "Earlier successful work." : ""}${envelope}`);
+      }
+    }
+    const contentResult = adapters.goose.outcome([message(["Earlier successful work.", ...chunks]), complete]);
+    assert.equal(contentResult.ok, false, `split ${split} must retain a native error at a later content boundary`);
+    assert.equal(contentResult.error, error);
+  }
+  assert.equal(adapters.goose.outcome([message(["The request "]), message(["completed."]), complete]).ok, true);
+});
+
+test("Goose successful prose can quote provider error envelopes", () => {
+  const envelope = "Ran into this error: Request failed: Resource not found (404).";
+  const message = (chunks, role = "assistant") => JSON.stringify({ type: "message", message: { role, content: chunks.map(text => ({ type: "text", text })) } });
+  const complete = JSON.stringify({ type: "complete", cost_usd: 0.0036 });
+  for (const prose of [
+    `Added a regression for \`${envelope}\` and pushed the fix.`,
+    `The documented failure is:\n${envelope}\nThe tests pass.`,
+    `\`\`\`text\n${envelope}\n\`\`\`\nAdded documentation and pushed.`,
+    `"${envelope}" is an example from the fixture.`,
+  ]) {
+    const start = prose.indexOf(envelope);
+    const variants = [[message([prose])]];
+    // The quoted prefix can also cross streamed event or content boundaries.
+    for (let split = start + 1; split < start + envelope.length; split++) {
+      const chunks = [prose.slice(0, split), prose.slice(split)];
+      variants.push(chunks.map(chunk => message([chunk])), [message(chunks)]);
+    }
+    for (const lines of variants) {
+      const result = adapters.goose.outcome([...lines, complete]);
+      assert.deepEqual(result, { ok: true, finished: true, lastMessage: prose, denials: [], cost: 0.0036, error: null });
+    }
+  }
+  // A user prompt or tool result containing the envelope is not a native assistant failure.
+  for (const role of ["user", "tool"]) {
+    const result = adapters.goose.outcome([message([envelope], role), message(["Pushed."]), complete]);
+    assert.equal(result.ok, true);
+    assert.equal(result.lastMessage, "Pushed.");
+    assert.equal(result.error, null);
+  }
+});
+
+test("Goose native errors remain failures after quoted examples", () => {
+  const quoted = "Documented `Ran into this error: Request failed: example (404).`";
+  const error = "Request failed: provider unavailable (503).";
+  const chunks = [quoted, "Ran into this error: ", error];
+  const message = content => JSON.stringify({ type: "message", message: { role: "assistant", content } });
+  const content = chunks.map(text => ({ type: "text", text }));
+  for (const lines of [[message(content)], content.map(c => message([c]))]) {
+    const result = adapters.goose.outcome([...lines, JSON.stringify({ type: "complete" })]);
+    assert.equal(result.ok, false);
+    assert.equal(result.finished, true);
+    assert.equal(result.error, error);
+    assert.equal(result.lastMessage, chunks.join(""));
   }
 });
 
@@ -290,10 +403,27 @@ test("registry writes hold a lock; a stale lock is broken, a fresh one blocks", 
   assert.equal(s.get("a/b/c").pr, 1);
 });
 
+test("runner pins PWD to the checkout for tools that prefer it over process.cwd", async () => {
+  const parent = tempHome(), checkout = tempHome();
+  const r = makeRunner(join(tempHome(), "runs"), { probe: () => false });
+  const code = `const fs = require('node:fs'); const path = require('node:path');
+    const root = process.env.PWD || process.cwd();
+    fs.writeFileSync(path.join(root, 'tool-output.txt'), 'probe');
+    process.stdout.write(JSON.stringify({ root, cwd: process.cwd() }));`;
+  const job = await r.start("cwd-probe", process.execPath, ["-e", code], { cwd: checkout, env: { PWD: parent } });
+  for (let i = 0; i < 100 && r.read(job.id)?.exit === null; i++) await new Promise(res => setTimeout(res, 20));
+  assert.equal(r.read(job.id).exit, 0);
+  const { root, cwd } = JSON.parse(r.lines(job.id)[0]);
+  assert.equal(root, checkout);
+  assert.equal(realpathSync(root), realpathSync(cwd));
+  assert.equal(readFileSync(join(checkout, "tool-output.txt"), "utf8"), "probe");
+  assert.equal(existsSync(join(parent, "tool-output.txt")), false, "a tool must not write in the parent directory");
+});
+
 test("a run whose binary does not exist is recorded as exit 127, not thrown into the daemon", async () => {
   const root = join(tempHome(), "runs");
   const r = makeRunner(root, { probe: () => false });
-  const job = r.start("x", "/nonexistent/gallivant-bin", [], { cwd: tempHome() });
+  const job = await r.start("x", "/nonexistent/gallivant-bin", [], { cwd: tempHome() });
   for (let i = 0; i < 50 && r.read(job.id)?.exit === null; i++) await new Promise(res => setTimeout(res, 20));
   const done = r.read(job.id);
   assert.equal(done.exit, 127);

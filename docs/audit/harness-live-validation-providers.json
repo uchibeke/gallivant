@@ -1,0 +1,813 @@
+{
+  "auditedAt": "2026-10-01T01:15:53.585Z",
+  "historicalReport": "harness-live-validation.json",
+  "scope": "Meta, xAI and Alibaba/Qwen in native Goose and named OpenCode Console BYOK; no new DeepSeek calls; Tencent deferred",
+  "turnLimitMs": 180000,
+  "suiteLimitMs": 1800000,
+  "privateEvidencePolicy": "Raw logs, exports and commands remain outside Git in mode-0700 roots with mode-0600 files. No credentials or Console connection IDs copied.",
+  "batches": [
+    {
+      "harness": "goose",
+      "startedAt": "2026-10-01T00:57:09.782Z",
+      "endedAt": "2026-10-01T00:57:29.083Z",
+      "elapsedMs": 19301,
+      "command": "npm run test:live-harnesses -- --live goose-meta goose-xai goose-alibaba",
+      "privateEvidence": "$TMPDIR/gallivant-live-harnesses-LlfkcM",
+      "versions": {
+        "claude": {
+          "ok": true,
+          "detail": "2.1.263"
+        },
+        "codex": {
+          "ok": true,
+          "detail": "0.158.0"
+        },
+        "gemini": {
+          "ok": true,
+          "detail": "0.59.0"
+        },
+        "opencode": {
+          "ok": true,
+          "detail": "1.18.31"
+        },
+        "goose": {
+          "ok": true,
+          "detail": "1.50.1"
+        }
+      },
+      "configuredBinaries": {
+        "claude": "/Users/uchi/.nvm/versions/node/v22.22.0/bin/claude",
+        "codex": "/Users/uchi/.local/bin/codex",
+        "gemini": "gemini",
+        "opencode": "opencode",
+        "goose": "goose"
+      },
+      "pathVersions": {
+        "claude": {
+          "ok": false,
+          "detail": "2.1.177 is older than 2.1.263"
+        },
+        "codex": {
+          "ok": true,
+          "detail": "0.158.0"
+        }
+      },
+      "sourceSnapshots": {
+        "goose-meta-start-1": {
+          "revision": "04f55e11dd9008681763b0cbe04754cd17135ac8",
+          "sha256": {
+            "lib/harness.mjs": "1f0506dc192473d7edd15271bd26c619b15dd5d1543f716457799eea3caa6c22",
+            "lib/run.mjs": "34be7a7114d021586e4ac5acf221dec976a3447e87111b22ba83c05a9e3953a3",
+            "lib/git.mjs": "30d1cf74bc66df0548e885870e951ef06ab63c61ee181a1e5a1d144f2138f7c5",
+            "test/live-harnesses.mjs": "711bb214b7f1769241dd987c14805924dfa268e3ac19bfbf5dc503bd4a7dafe8",
+            "test/live-support.mjs": "ced09799fcd0d6e59458712c0d63234bbec981ad50d3cc5141f96935544f488a"
+          }
+        },
+        "goose-xai-start-1": {
+          "revision": "04f55e11dd9008681763b0cbe04754cd17135ac8",
+          "sha256": {
+            "lib/harness.mjs": "1f0506dc192473d7edd15271bd26c619b15dd5d1543f716457799eea3caa6c22",
+            "lib/run.mjs": "34be7a7114d021586e4ac5acf221dec976a3447e87111b22ba83c05a9e3953a3",
+            "lib/git.mjs": "30d1cf74bc66df0548e885870e951ef06ab63c61ee181a1e5a1d144f2138f7c5",
+            "test/live-harnesses.mjs": "711bb214b7f1769241dd987c14805924dfa268e3ac19bfbf5dc503bd4a7dafe8",
+            "test/live-support.mjs": "ced09799fcd0d6e59458712c0d63234bbec981ad50d3cc5141f96935544f488a"
+          }
+        },
+        "goose-alibaba-start-1": {
+          "revision": "04f55e11dd9008681763b0cbe04754cd17135ac8",
+          "sha256": {
+            "lib/harness.mjs": "1f0506dc192473d7edd15271bd26c619b15dd5d1543f716457799eea3caa6c22",
+            "lib/run.mjs": "34be7a7114d021586e4ac5acf221dec976a3447e87111b22ba83c05a9e3953a3",
+            "lib/git.mjs": "30d1cf74bc66df0548e885870e951ef06ab63c61ee181a1e5a1d144f2138f7c5",
+            "test/live-harnesses.mjs": "711bb214b7f1769241dd987c14805924dfa268e3ac19bfbf5dc503bd4a7dafe8",
+            "test/live-support.mjs": "ced09799fcd0d6e59458712c0d63234bbec981ad50d3cc5141f96935544f488a"
+          }
+        }
+      },
+      "records": [
+        {
+          "case": "goose-meta",
+          "harness": "goose",
+          "version": "1.50.1",
+          "configured": {
+            "provider": "meta",
+            "model": "muse-spark-1.1"
+          },
+          "evidenceKind": "live adapter attempt",
+          "permissionBoundary": "smart_approve; existing native extensions and provider credential lookup",
+          "budget": "180 seconds per turn; 30 minutes per harness batch; no native USD cap",
+          "initialCommit": "74fa620dfcbc384395b3348a41fb4af06c2c73c1",
+          "diagnostic": "HTTP 400: Recursive JSON schemas are not currently supported.",
+          "turns": [
+            {
+              "phase": "start",
+              "attempt": 1,
+              "startedAt": "2026-10-01T00:57:12.652Z",
+              "endedAt": "2026-10-01T00:57:21.943Z",
+              "elapsedMs": 9291,
+              "command": [
+                "goose",
+                "run",
+                "--name",
+                "gallivant-10a1a8af-b9d4-468d-bafa-bc3f30268326",
+                "--output-format",
+                "stream-json",
+                "--provider",
+                "meta",
+                "--model",
+                "muse-spark-1.1",
+                "-t",
+                "<prompt in private cmd.json>"
+              ],
+              "run": "goose-meta/runs/2026-10-01T00-57-12-652-start-1",
+              "sourceSnapshot": "goose-meta-start-1",
+              "exit": 0,
+              "originalStatus": "failed",
+              "status": "blocked",
+              "category": "provider-rejection",
+              "originalOutcome": {
+                "ok": false,
+                "finished": true,
+                "denials": 0
+              },
+              "correctedOutcome": {
+                "ok": false,
+                "finished": true
+              },
+              "effectiveModels": [
+                "meta/muse-spark-1.1"
+              ],
+              "identity": {
+                "adapterSession": "gallivant-10a1a8af-b9d4-468d-bafa-bc3f30268326",
+                "storedSession": "20261001_3"
+              },
+              "modelEvidence": "goose-meta/start-1-session.json",
+              "toolDirectory": "not recorded",
+              "testToolCalls": [],
+              "verification": null,
+              "costUsd": "unknown",
+              "nativeReportedCostUsd": "unknown",
+              "costNote": "No cost metadata; unknown is not zero.",
+              "remedy": "Resolve the native provider's tool-schema compatibility for this exact model before scheduling a new suite; do not remove guards or extensions to evade the rejection.",
+              "privateLog": "goose-meta/runs/2026-10-01T00-57-12-652-start-1/job.log",
+              "privateVerifier": "goose-meta/start-1-verifier.txt"
+            }
+          ],
+          "resume": {
+            "status": "blocked",
+            "reason": "Start was not verified; no resume model call made."
+          },
+          "liveVerified": false,
+          "externalVerification": {
+            "files": [],
+            "head": "74fa620dfcbc384395b3348a41fb4af06c2c73c1",
+            "parent": null,
+            "clean": true,
+            "status": "",
+            "upstream": null,
+            "remoteHead": null,
+            "failure": "ENOENT: no such file or directory, lstat '$TMPDIR/gallivant-live-harnesses-LlfkcM/goose-meta/checkout/function.mjs'"
+          }
+        },
+        {
+          "case": "goose-xai",
+          "harness": "goose",
+          "version": "1.50.1",
+          "configured": {
+            "provider": "xai",
+            "model": "grok-4.5"
+          },
+          "evidenceKind": "live adapter attempt",
+          "permissionBoundary": "smart_approve; existing native extensions and provider credential lookup",
+          "budget": "180 seconds per turn; 30 minutes per harness batch; no native USD cap",
+          "initialCommit": "27c0e7386ac529c1ffda023cd54bf2d0564006d9",
+          "diagnostic": "Tool approval required in non-interactive mode with GooseMode::smart_approve; interactive stdin unavailable. Blanket Auto mode was not enabled.",
+          "turns": [
+            {
+              "phase": "start",
+              "attempt": 1,
+              "startedAt": "2026-10-01T00:57:22.243Z",
+              "endedAt": "2026-10-01T00:57:26.698Z",
+              "elapsedMs": 4455,
+              "command": [
+                "goose",
+                "run",
+                "--name",
+                "gallivant-da053a5c-7eb5-43d6-a414-6d4b03cb8442",
+                "--output-format",
+                "stream-json",
+                "--provider",
+                "xai",
+                "--model",
+                "grok-4.5",
+                "-t",
+                "<prompt in private cmd.json>"
+              ],
+              "run": "goose-xai/runs/2026-10-01T00-57-22-243-start-1",
+              "sourceSnapshot": "goose-xai-start-1",
+              "exit": 1,
+              "originalStatus": "blocked",
+              "status": "blocked",
+              "category": "permissions",
+              "originalOutcome": {
+                "ok": false,
+                "finished": false,
+                "denials": 0
+              },
+              "correctedOutcome": {
+                "ok": false,
+                "finished": false
+              },
+              "effectiveModels": [
+                "xai/grok-4.5"
+              ],
+              "identity": {
+                "adapterSession": "gallivant-da053a5c-7eb5-43d6-a414-6d4b03cb8442",
+                "storedSession": "20261001_4"
+              },
+              "modelEvidence": "goose-xai/start-1-session.json",
+              "toolDirectory": "not recorded",
+              "testToolCalls": [],
+              "verification": null,
+              "costUsd": "unknown",
+              "nativeReportedCostUsd": "unknown",
+              "costNote": "No cost metadata; unknown is not zero.",
+              "remedy": "Review the recorded tool request and provide a supported scoped approval path for closed stdin; do not enable blanket approval.",
+              "privateLog": "goose-xai/runs/2026-10-01T00-57-22-243-start-1/job.log",
+              "privateVerifier": "goose-xai/start-1-verifier.txt"
+            }
+          ],
+          "resume": {
+            "status": "blocked",
+            "reason": "Start was not verified; no resume model call made."
+          },
+          "liveVerified": false,
+          "externalVerification": {
+            "files": [],
+            "head": "27c0e7386ac529c1ffda023cd54bf2d0564006d9",
+            "parent": null,
+            "clean": true,
+            "status": "",
+            "upstream": null,
+            "remoteHead": null,
+            "failure": "ENOENT: no such file or directory, lstat '$TMPDIR/gallivant-live-harnesses-LlfkcM/goose-xai/checkout/function.mjs'"
+          }
+        },
+        {
+          "case": "goose-alibaba",
+          "harness": "goose",
+          "version": "1.50.1",
+          "configured": {
+            "provider": "alibaba",
+            "model": "qwen3.7-max"
+          },
+          "evidenceKind": "live adapter attempt",
+          "permissionBoundary": "smart_approve; existing native extensions and provider credential lookup",
+          "budget": "180 seconds per turn; 30 minutes per harness batch; no native USD cap",
+          "initialCommit": "434e191677ed389a7221534fc6a5f5b8f0f2a208",
+          "diagnostic": "Typed authentication error: 401 Unauthorized; Incorrect API key provided. Endpoint omitted.",
+          "turns": [
+            {
+              "phase": "start",
+              "attempt": 1,
+              "startedAt": "2026-10-01T00:57:26.864Z",
+              "endedAt": "2026-10-01T00:57:28.959Z",
+              "elapsedMs": 2095,
+              "command": [
+                "goose",
+                "run",
+                "--name",
+                "gallivant-a42cccdb-fe4a-4365-8e77-04bafdba712a",
+                "--output-format",
+                "stream-json",
+                "--provider",
+                "alibaba",
+                "--model",
+                "qwen3.7-max",
+                "-t",
+                "<prompt in private cmd.json>"
+              ],
+              "run": "goose-alibaba/runs/2026-10-01T00-57-26-864-start-1",
+              "sourceSnapshot": "goose-alibaba-start-1",
+              "exit": 0,
+              "originalStatus": "failed",
+              "status": "blocked",
+              "category": "credentials",
+              "originalOutcome": {
+                "ok": true,
+                "finished": true,
+                "denials": 0
+              },
+              "correctedOutcome": {
+                "ok": false,
+                "finished": true
+              },
+              "effectiveModels": [
+                "alibaba/qwen3.7-max"
+              ],
+              "identity": {
+                "adapterSession": "gallivant-a42cccdb-fe4a-4365-8e77-04bafdba712a",
+                "storedSession": "20261001_5"
+              },
+              "modelEvidence": "goose-alibaba/start-1-session.json",
+              "toolDirectory": "not recorded",
+              "testToolCalls": [],
+              "verification": null,
+              "costUsd": "unknown",
+              "nativeReportedCostUsd": "unknown",
+              "costNote": "No cost metadata; unknown is not zero.",
+              "remedy": "Repair this provider's existing login/key through its normal setup, then explicitly schedule a new suite; do not search for other credentials.",
+              "privateLog": "goose-alibaba/runs/2026-10-01T00-57-26-864-start-1/job.log",
+              "privateVerifier": "goose-alibaba/start-1-verifier.txt"
+            }
+          ],
+          "resume": {
+            "status": "blocked",
+            "reason": "Start was not verified; no resume model call made."
+          },
+          "liveVerified": false,
+          "externalVerification": {
+            "files": [],
+            "head": "434e191677ed389a7221534fc6a5f5b8f0f2a208",
+            "parent": null,
+            "clean": true,
+            "status": "",
+            "upstream": null,
+            "remoteHead": null,
+            "failure": "ENOENT: no such file or directory, lstat '$TMPDIR/gallivant-live-harnesses-LlfkcM/goose-alibaba/checkout/function.mjs'"
+          }
+        }
+      ],
+      "startTurns": 3,
+      "resumeTurns": 0,
+      "targetedRetries": 0
+    },
+    {
+      "harness": "opencode",
+      "startedAt": "2026-10-01T01:01:26.881Z",
+      "endedAt": "2026-10-01T01:13:53.478Z",
+      "elapsedMs": 746597,
+      "command": "npm run test:live-harnesses -- --live opencode-console-meta opencode-console-xai opencode-console-alibaba",
+      "privateEvidence": "$TMPDIR/gallivant-live-harnesses-blFUMD",
+      "versions": {
+        "claude": {
+          "ok": true,
+          "detail": "2.1.263"
+        },
+        "codex": {
+          "ok": true,
+          "detail": "0.158.0"
+        },
+        "gemini": {
+          "ok": true,
+          "detail": "0.59.0"
+        },
+        "opencode": {
+          "ok": true,
+          "detail": "1.18.31"
+        },
+        "goose": {
+          "ok": true,
+          "detail": "1.50.1"
+        }
+      },
+      "configuredBinaries": {
+        "claude": "/Users/uchi/.nvm/versions/node/v22.22.0/bin/claude",
+        "codex": "/Users/uchi/.local/bin/codex",
+        "gemini": "gemini",
+        "opencode": "opencode",
+        "goose": "goose"
+      },
+      "pathVersions": {
+        "claude": {
+          "ok": false,
+          "detail": "2.1.177 is older than 2.1.263"
+        },
+        "codex": {
+          "ok": true,
+          "detail": "0.158.0"
+        }
+      },
+      "sourceSnapshots": {
+        "opencode-console-meta-start-1": {
+          "revision": "04f55e11dd9008681763b0cbe04754cd17135ac8",
+          "sha256": {
+            "lib/harness.mjs": "1f0506dc192473d7edd15271bd26c619b15dd5d1543f716457799eea3caa6c22",
+            "lib/run.mjs": "34be7a7114d021586e4ac5acf221dec976a3447e87111b22ba83c05a9e3953a3",
+            "lib/git.mjs": "30d1cf74bc66df0548e885870e951ef06ab63c61ee181a1e5a1d144f2138f7c5",
+            "test/live-harnesses.mjs": "711bb214b7f1769241dd987c14805924dfa268e3ac19bfbf5dc503bd4a7dafe8",
+            "test/live-support.mjs": "ced09799fcd0d6e59458712c0d63234bbec981ad50d3cc5141f96935544f488a"
+          }
+        },
+        "opencode-console-xai-start-1": {
+          "revision": "04f55e11dd9008681763b0cbe04754cd17135ac8",
+          "sha256": {
+            "lib/harness.mjs": "1f0506dc192473d7edd15271bd26c619b15dd5d1543f716457799eea3caa6c22",
+            "lib/run.mjs": "34be7a7114d021586e4ac5acf221dec976a3447e87111b22ba83c05a9e3953a3",
+            "lib/git.mjs": "30d1cf74bc66df0548e885870e951ef06ab63c61ee181a1e5a1d144f2138f7c5",
+            "test/live-harnesses.mjs": "711bb214b7f1769241dd987c14805924dfa268e3ac19bfbf5dc503bd4a7dafe8",
+            "test/live-support.mjs": "ced09799fcd0d6e59458712c0d63234bbec981ad50d3cc5141f96935544f488a"
+          }
+        },
+        "opencode-console-xai-start-2": {
+          "revision": "04f55e11dd9008681763b0cbe04754cd17135ac8",
+          "sha256": {
+            "lib/harness.mjs": "c5ce40b407e737909a740397d7094bbb10765538cb2153b95b92e3932a375744",
+            "lib/run.mjs": "f53e1757fca76dab90d470034bf57eaae7d7a84f55534df44a18d8e51321ac63",
+            "lib/git.mjs": "30d1cf74bc66df0548e885870e951ef06ab63c61ee181a1e5a1d144f2138f7c5",
+            "test/live-harnesses.mjs": "5b0c290ae147bf91ecd30b310f34dc8da7421d865ff8f29064a3f0921119c7ab",
+            "test/live-support.mjs": "871e005d83a785386c2d9c541fe140435eeb8a0df91684eb2fafbe4ea0aa41e2"
+          }
+        },
+        "opencode-console-alibaba-start-1": {
+          "revision": "04f55e11dd9008681763b0cbe04754cd17135ac8",
+          "sha256": {
+            "lib/harness.mjs": "1f0506dc192473d7edd15271bd26c619b15dd5d1543f716457799eea3caa6c22",
+            "lib/run.mjs": "34be7a7114d021586e4ac5acf221dec976a3447e87111b22ba83c05a9e3953a3",
+            "lib/git.mjs": "30d1cf74bc66df0548e885870e951ef06ab63c61ee181a1e5a1d144f2138f7c5",
+            "test/live-harnesses.mjs": "711bb214b7f1769241dd987c14805924dfa268e3ac19bfbf5dc503bd4a7dafe8",
+            "test/live-support.mjs": "ced09799fcd0d6e59458712c0d63234bbec981ad50d3cc5141f96935544f488a"
+          }
+        },
+        "opencode-console-alibaba-start-2": {
+          "revision": "04f55e11dd9008681763b0cbe04754cd17135ac8",
+          "sha256": {
+            "lib/harness.mjs": "c5ce40b407e737909a740397d7094bbb10765538cb2153b95b92e3932a375744",
+            "lib/run.mjs": "f53e1757fca76dab90d470034bf57eaae7d7a84f55534df44a18d8e51321ac63",
+            "lib/git.mjs": "30d1cf74bc66df0548e885870e951ef06ab63c61ee181a1e5a1d144f2138f7c5",
+            "test/live-harnesses.mjs": "d8fca1789552cc4bb252e473a58163186015b297402e266339d0bcc5dd5eeb27",
+            "test/live-support.mjs": "3fa298a521f8a6d32844565c697d89bdb0911fb02a2d1ab70888d967bbf9357e"
+          }
+        }
+      },
+      "records": [
+        {
+          "case": "opencode-console-meta",
+          "harness": "opencode",
+          "version": "1.18.31",
+          "configured": {
+            "model": "console-meta/muse-spark-1.1"
+          },
+          "evidenceKind": "live adapter attempt",
+          "permissionBoundary": "existing native permissions; Console BYOK route; no auto approval; no Gallivant OS sandbox",
+          "budget": "180 seconds per turn; 30 minutes per harness batch; no native USD cap",
+          "initialCommit": "b542bfa7efb8b585d3918bdc5ef4ac9f28b08a06",
+          "diagnostic": "Native external_directory permission auto-rejected for the case directory. Export also reveals the wrong tool directory before the runner fix.",
+          "turns": [
+            {
+              "phase": "start",
+              "attempt": 1,
+              "startedAt": "2026-10-01T01:01:32.027Z",
+              "endedAt": "2026-10-01T01:01:51.509Z",
+              "elapsedMs": 19482,
+              "command": [
+                "opencode",
+                "run",
+                "--format",
+                "json",
+                "--model",
+                "console-meta/muse-spark-1.1",
+                "<prompt in private cmd.json>"
+              ],
+              "run": "opencode-console-meta/runs/2026-10-01T01-01-32-028-start-1",
+              "sourceSnapshot": "opencode-console-meta-start-1",
+              "exit": 137,
+              "originalStatus": "blocked",
+              "status": "blocked",
+              "category": "permissions and directory isolation",
+              "originalOutcome": {
+                "ok": false,
+                "finished": true,
+                "denials": 0
+              },
+              "correctedOutcome": {
+                "ok": false,
+                "finished": true
+              },
+              "effectiveModels": [
+                "console-meta/muse-spark-1.1"
+              ],
+              "identity": {
+                "adapterSession": "ses_f0b04e02cffezJcUXtgH5V16Tm",
+                "storedSession": "ses_f0b04e02cffezJcUXtgH5V16Tm"
+              },
+              "modelEvidence": "opencode-console-meta/start-1-session.json",
+              "toolDirectory": "PR worktree (isolation failure)",
+              "testToolCalls": [],
+              "verification": null,
+              "costUsd": "unknown",
+              "nativeReportedCostUsd": 0,
+              "costNote": "Custom Console route emitted zero cost metadata; actual BYOK cost is unknown.",
+              "remedy": "Use the corrected shared runner and verify the native session directory. Preserve existing permissions; only original xAI/Alibaba starts received one targeted retry.",
+              "privateLog": "opencode-console-meta/runs/2026-10-01T01-01-32-028-start-1/job.log",
+              "privateVerifier": "opencode-console-meta/start-1-verifier.txt"
+            }
+          ],
+          "resume": {
+            "status": "blocked",
+            "reason": "Start was not verified; no resume model call made."
+          },
+          "liveVerified": false,
+          "externalVerification": {
+            "files": [],
+            "head": "b542bfa7efb8b585d3918bdc5ef4ac9f28b08a06",
+            "parent": null,
+            "clean": true,
+            "status": "",
+            "upstream": null,
+            "remoteHead": null,
+            "failure": "ENOENT: no such file or directory, lstat '$TMPDIR/gallivant-live-harnesses-blFUMD/opencode-console-meta/checkout/function.mjs'"
+          }
+        },
+        {
+          "case": "opencode-console-xai",
+          "harness": "opencode",
+          "version": "1.18.31",
+          "configured": {
+            "model": "console-xai/grok-4.5"
+          },
+          "evidenceKind": "live adapter attempt",
+          "permissionBoundary": "existing native permissions; Console BYOK route; no auto approval; no Gallivant OS sandbox",
+          "budget": "180 seconds per turn; 30 minutes per harness batch; no native USD cap",
+          "initialCommit": "0994dfd58ca19b7b417bea9f3aa17afa35bd9904",
+          "diagnostic": "Original start changed the PR worktree instead of its empty fixture. Retry used the correct directory but attempted recovery/rebase after a push rejection against the contaminated local remote; stopped and failed.",
+          "turns": [
+            {
+              "phase": "start",
+              "attempt": 1,
+              "startedAt": "2026-10-01T01:01:52.783Z",
+              "endedAt": "2026-10-01T01:02:52.261Z",
+              "elapsedMs": 59478,
+              "command": [
+                "opencode",
+                "run",
+                "--format",
+                "json",
+                "--model",
+                "console-xai/grok-4.5",
+                "<prompt in private cmd.json>"
+              ],
+              "run": "opencode-console-xai/runs/2026-10-01T01-01-52-783-start-1",
+              "sourceSnapshot": "opencode-console-xai-start-1",
+              "exit": 0,
+              "originalStatus": "failed",
+              "status": "failed",
+              "category": "directory isolation",
+              "originalOutcome": {
+                "ok": true,
+                "finished": true,
+                "denials": 0
+              },
+              "correctedOutcome": {
+                "ok": true,
+                "finished": true
+              },
+              "effectiveModels": [
+                "console-xai/grok-4.5"
+              ],
+              "identity": {
+                "adapterSession": "ses_f0b048ff3ffeNWmpB6C725SYZR",
+                "storedSession": "ses_f0b048ff3ffeNWmpB6C725SYZR"
+              },
+              "modelEvidence": "opencode-console-xai/start-1-session.json",
+              "toolDirectory": "PR worktree (isolation failure)",
+              "testToolCalls": [
+                "call-f1f65627-d2e5-4f4c-b517-a50bb6e465a9-2"
+              ],
+              "verification": null,
+              "costUsd": "unknown",
+              "nativeReportedCostUsd": 0,
+              "costNote": "Custom Console route emitted zero cost metadata; actual BYOK cost is unknown.",
+              "remedy": "Use the corrected shared runner and verify the native session directory. Preserve existing permissions; only original xAI/Alibaba starts received one targeted retry.",
+              "privateLog": "opencode-console-xai/runs/2026-10-01T01-01-52-783-start-1/job.log",
+              "privateVerifier": "opencode-console-xai/start-1-verifier.txt"
+            },
+            {
+              "phase": "start",
+              "attempt": 2,
+              "startedAt": "2026-10-01T01:08:32.866Z",
+              "endedAt": "2026-10-01T01:09:54.822Z",
+              "elapsedMs": 81956,
+              "command": [
+                "opencode",
+                "run",
+                "--format",
+                "json",
+                "--model",
+                "console-xai/grok-4.5",
+                "<prompt in private cmd.json>"
+              ],
+              "run": "opencode-console-xai/runs/2026-10-01T01-08-32-867-start-2",
+              "sourceSnapshot": "opencode-console-xai-start-2",
+              "exit": 137,
+              "originalStatus": "failed",
+              "status": "failed",
+              "category": "contaminated fixture and instruction violation",
+              "originalOutcome": {
+                "ok": false,
+                "finished": true,
+                "denials": 0
+              },
+              "correctedOutcome": {
+                "ok": false,
+                "finished": true
+              },
+              "effectiveModels": [
+                "console-xai/grok-4.5"
+              ],
+              "identity": {
+                "adapterSession": "ses_f0afe73f3ffe5reg8W0eEk26Jj",
+                "storedSession": "ses_f0afe73f3ffe5reg8W0eEk26Jj"
+              },
+              "modelEvidence": "opencode-console-xai/start-2-session.json",
+              "toolDirectory": "disposable checkout",
+              "testToolCalls": [],
+              "verification": null,
+              "costUsd": "unknown",
+              "nativeReportedCostUsd": 0,
+              "costNote": "Custom Console route emitted zero cost metadata; actual BYOK cost is unknown.",
+              "remedy": "No more retries in this batch. Review the directory fix and fixture preflight, then explicitly authorize a fresh bounded suite in a pristine checkout/remote; never rebase or force-push to repair this probe.",
+              "privateLog": "opencode-console-xai/runs/2026-10-01T01-08-32-867-start-2/job.log",
+              "privateVerifier": "opencode-console-xai/start-2-verifier.txt"
+            }
+          ],
+          "resume": {
+            "status": "blocked",
+            "reason": "Start was not verified; no resume model call made."
+          },
+          "liveVerified": false,
+          "targetedRetry": {
+            "phase": "start",
+            "fix": "docs/audit/harness-live-validation-directory-fix.md",
+            "command": "npm run test:live-harnesses -- --live --retry \"$TMPDIR/gallivant-live-harnesses-blFUMD\" opencode-console-xai:start docs/audit/harness-live-validation-directory-fix.md"
+          },
+          "externalVerification": {
+            "files": [
+              "function.mjs",
+              "live.test.mjs"
+            ],
+            "head": "d5a8bc0203527da691b76a1fc567b89d9cab3665",
+            "parent": "e1eb2eb988da135d769153c28f455371b5f49b14",
+            "clean": false,
+            "status": "M  live.test.mjs",
+            "upstream": null,
+            "remoteHead": "e1eb2eb988da135d769153c28f455371b5f49b14",
+            "failure": "Git state is dirty after external tests; no upstream and HEAD differs from remote HEAD.",
+            "tests": {
+              "passed": 2,
+              "failed": 0,
+              "evidence": "opencode-console-xai/start-tests.txt"
+            }
+          }
+        },
+        {
+          "case": "opencode-console-alibaba",
+          "harness": "opencode",
+          "version": "1.18.31",
+          "configured": {
+            "model": "console-alibaba/qwen3.8-max"
+          },
+          "evidenceKind": "live adapter attempt",
+          "permissionBoundary": "existing native permissions; Console BYOK route; no auto approval; no Gallivant OS sandbox",
+          "budget": "180 seconds per turn; 30 minutes per harness batch; no native USD cap",
+          "initialCommit": "9bee06fde6e8eda8c08c5835350dadcf499d99b0",
+          "diagnostic": "Original start used the PR worktree and was stopped. Retry used the correct checkout, authored files, passed its tests, committed and pushed, but the external greeting check failed. The original prompt did not explicitly require the comma demanded by the verifier; corrected for future suites, without another retry or converting this result to a pass.",
+          "turns": [
+            {
+              "phase": "start",
+              "attempt": 1,
+              "startedAt": "2026-10-01T01:02:53.001Z",
+              "endedAt": "2026-10-01T01:03:50.680Z",
+              "elapsedMs": 57679,
+              "command": [
+                "opencode",
+                "run",
+                "--format",
+                "json",
+                "--model",
+                "console-alibaba/qwen3.8-max",
+                "<prompt in private cmd.json>"
+              ],
+              "run": "opencode-console-alibaba/runs/2026-10-01T01-02-53-001-start-1",
+              "sourceSnapshot": "opencode-console-alibaba-start-1",
+              "exit": 137,
+              "originalStatus": "failed",
+              "status": "failed",
+              "category": "directory isolation",
+              "originalOutcome": {
+                "ok": false,
+                "finished": true,
+                "denials": 0
+              },
+              "correctedOutcome": {
+                "ok": false,
+                "finished": true
+              },
+              "effectiveModels": [
+                "console-alibaba/qwen3.8-max"
+              ],
+              "identity": {
+                "adapterSession": "ses_f0b03a687ffeSFE8tFt3hJ5yIc",
+                "storedSession": "ses_f0b03a687ffeSFE8tFt3hJ5yIc"
+              },
+              "modelEvidence": "opencode-console-alibaba/start-1-session.json",
+              "toolDirectory": "PR worktree (isolation failure)",
+              "testToolCalls": [],
+              "verification": null,
+              "costUsd": "unknown",
+              "nativeReportedCostUsd": 0,
+              "costNote": "Custom Console route emitted zero cost metadata; actual BYOK cost is unknown.",
+              "remedy": "Use the corrected shared runner and verify the native session directory. Preserve existing permissions; only original xAI/Alibaba starts received one targeted retry.",
+              "privateLog": "opencode-console-alibaba/runs/2026-10-01T01-02-53-001-start-1/job.log",
+              "privateVerifier": "opencode-console-alibaba/start-1-verifier.txt"
+            },
+            {
+              "phase": "start",
+              "attempt": 2,
+              "startedAt": "2026-10-01T01:11:05.814Z",
+              "endedAt": "2026-10-01T01:13:50.365Z",
+              "elapsedMs": 164551,
+              "command": [
+                "opencode",
+                "run",
+                "--format",
+                "json",
+                "--model",
+                "console-alibaba/qwen3.8-max",
+                "<prompt in private cmd.json>"
+              ],
+              "run": "opencode-console-alibaba/runs/2026-10-01T01-11-05-821-start-2",
+              "sourceSnapshot": "opencode-console-alibaba-start-2",
+              "exit": 0,
+              "originalStatus": "failed",
+              "status": "failed",
+              "category": "test specification ambiguity",
+              "originalOutcome": {
+                "ok": true,
+                "finished": true,
+                "denials": 0
+              },
+              "correctedOutcome": {
+                "ok": true,
+                "finished": true
+              },
+              "effectiveModels": [
+                "console-alibaba/qwen3.8-max"
+              ],
+              "identity": {
+                "adapterSession": "ses_f0afc1832ffe6Ab50k7hYhZ5Rb",
+                "storedSession": "ses_f0afc1832ffe6Ab50k7hYhZ5Rb"
+              },
+              "modelEvidence": "opencode-console-alibaba/start-2-session.json",
+              "toolDirectory": "disposable checkout",
+              "testToolCalls": [
+                "call_8a58921c22914be7b30b5b03"
+              ],
+              "verification": null,
+              "costUsd": "unknown",
+              "nativeReportedCostUsd": 0,
+              "costNote": "Custom Console route emitted zero cost metadata; actual BYOK cost is unknown.",
+              "remedy": "Use the corrected explicit greeting prompt in a newly authorized bounded suite. This combination exhausted its targeted retry allowance; no resume or further retry was made.",
+              "privateLog": "opencode-console-alibaba/runs/2026-10-01T01-11-05-821-start-2/job.log",
+              "privateVerifier": "opencode-console-alibaba/start-2-verifier.txt"
+            }
+          ],
+          "resume": {
+            "status": "blocked",
+            "reason": "Start was not verified; no resume model call made."
+          },
+          "liveVerified": false,
+          "targetedRetry": {
+            "phase": "start",
+            "fix": "docs/audit/harness-live-validation-directory-fix.md",
+            "command": "npm run test:live-harnesses -- --live --retry \"$TMPDIR/gallivant-live-harnesses-blFUMD\" opencode-console-alibaba:start docs/audit/harness-live-validation-directory-fix.md"
+          },
+          "externalVerification": {
+            "files": [
+              "function.mjs",
+              "live.test.mjs"
+            ],
+            "head": "2babbab9c59738053a29836625673d99e053f790",
+            "parent": "9bee06fde6e8eda8c08c5835350dadcf499d99b0",
+            "clean": true,
+            "status": "",
+            "upstream": "origin/gallivant/live-probe",
+            "remoteHead": "2babbab9c59738053a29836625673d99e053f790",
+            "failure": "Greeting mismatch: actual \"Hello   Ada  !\", expected \"Hello,   Ada  !\"; ambiguous original prompt.",
+            "tests": {
+              "passed": 2,
+              "failed": 0,
+              "evidence": "opencode-console-alibaba/start-tests.txt"
+            }
+          }
+        }
+      ],
+      "startTurns": 5,
+      "resumeTurns": 0,
+      "targetedRetries": 2
+    }
+  ],
+  "startTurns": 8,
+  "resumeTurns": 0,
+  "targetedRetries": 2
+}
