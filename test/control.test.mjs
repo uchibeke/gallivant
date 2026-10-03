@@ -208,3 +208,22 @@ test("an unverifiable interrupt fails visibly and retains the message without st
   assert.match(w.state.get(w.id).control.message, /process group/);
   assert.equal(w.runner.started.length, 1);
 });
+
+test("the daemon notifies and retries stop labels when an operator interrupt cannot inspect the process", async () => {
+  const w = world({ state: STATES.prOpen });
+  const job = w.runner.start("fix", "claude", [], {});
+  w.state.update(w.id, { last: { run: job.id, exit: null } });
+  requestControl(w.ctx, { handle: w.id, action: "message", note: "Preserve the detail.", interrupt: true });
+  w.runner.kill = () => { throw Object.assign(new Error("ps unavailable"), { code: "RUN_STOP_UNVERIFIED" }); };
+  const addLabel = w.gh.addLabel;
+  w.gh.addLabel = async () => { throw new Error("GitHub unavailable"); };
+  await w.tick.tick();
+  assert.equal(w.state.get(w.id).control.status, "failed");
+  assert.equal(w.state.get(w.id).labels_pending, true);
+  assert.deepEqual(w.ctx.notify.sent, [["needs", 142, "run-stop-unverified"]]);
+  w.gh.addLabel = addLabel;
+  await w.tick.tick();
+  assert.equal(w.state.get(w.id).labels_pending, false);
+  assert.equal(w.ctx.notify.sent.length, 1);
+  assert.equal(w.runner.started.length, 1);
+});

@@ -560,6 +560,30 @@ test("a run past the timeout is killed and the entry stops", async () => {
   assert.equal(w.entry().reason, "timeout");
 });
 
+for (const killed of [false, true]) test(`unverifiable shutdown stops visibly without duplicate notifications (already killed=${killed})`, async () => {
+  const w = world({ last: { at: T0, run: "1-fix", exit: null, event: "review" } });
+  w.runner.start("fix", "/bin/claude", [], {});
+  const current = w.runner.current;
+  w.runner.current = () => ({ ...current(), killed });
+  w.runner.kill = () => { throw Object.assign(new Error("ps unavailable"), { code: "RUN_STOP_UNVERIFIED" }); };
+  const addLabel = w.gh.addLabel;
+  w.gh.addLabel = async () => { throw new Error("temporary GitHub outage"); };
+  w.clock.advance(31);
+  await w.tick.tick();
+  assert.deepEqual([w.entry().state, w.entry().reason], [STATES.needsHuman, "run-stop-unverified"]);
+  assert.equal(w.entry().last.exit, null, "an unverified stop cannot claim an exit");
+  assert.match(w.entry().last.event, /may still be running.*Inspect its process tree/);
+  assert.equal(w.entry().labels_pending, true);
+  assert.deepEqual(w.notify.sent, [["needs", 142, "run-stop-unverified"]]);
+  w.gh.addLabel = addLabel;
+  await w.tick.tick();
+  await w.tick.tick();
+  assert.equal(w.entry().labels_pending, false);
+  assert.ok(w.gh.calls.some(c => c[0] === "addLabel" && c[2] === NEEDS_LABEL));
+  assert.equal(w.notify.sent.length, 1);
+  assert.equal(w.runner.started.length, 1, "the live/unverified writer is never replaced");
+});
+
 /**
  * A kill records what it interrupted. The run this exists for was SIGKILLed at 31.2 minutes against a 30 minute limit
  * having done a whole review round and written its commit message to a temp file, one tool call short of `git commit`.

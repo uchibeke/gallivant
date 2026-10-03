@@ -64,6 +64,10 @@ test("resume preserves unfinished and carried work and defers only the base merg
   assert.match(prompt, /AGENTS.md/);
   assert.match(prompt, /Do not stash, reset, discard, or blanket-stage/);
   assert.match(prompt, /Restore the detailed article/);
+  assert.match(prompt, /After committing only the task's changes, fetch origin and merge `origin\/main` into this task branch before verification and push/);
+  assert.match(prompt, /Do not merge a pull request or write to the default\/base branch/);
+  assert.match(prompt, /rerun the Verify commands on the combined result before pushing/);
+  assert.doesNotMatch(prompt, /keeping this branch on its base is done for you/);
 });
 
 test("resume carries on when the checkout is clean, so the check costs a reading and nothing else", async () => {
@@ -75,6 +79,7 @@ test("resume carries on when the checkout is clean, so the check costs a reading
   await resume(w.ctx, { handle: "widget-export" });
   assert.equal(merged, 1, "the base is still brought in");
   assert.equal(w.runner.started.length, 1, "and the session is resumed");
+  assert.match(w.runner.started[0].args.at(-1), /keeping this branch on its base is done for you/);
 });
 
 test("correction leaves the real index, carried instructions and partial files byte-for-byte intact", async () => {

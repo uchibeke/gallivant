@@ -166,7 +166,7 @@ gallivant say agent-passport#396 --note "The external blocker is resolved; conti
 
 Recheck returns the entry to watching without resetting its iteration count or check dispatch markers. The existing loop reads checks, review and the completion gate again. It does not rerun GitHub Actions or override a failed check. Unchanged failures stop again without spending another fixer round. To deliberately reset a spent round budget, use `register`.
 
-**Resume agent** continues the same session on its current instructions. **Send message** and `say` deliver your correction to that session, including after an agent has finished and its PR is ready for human review. A closed or merged PR requires a follow-up PRD. Both use the existing resume path and preserve the approved brief, permissions and review budget. Uncommitted files and the index stay intact; only the automatic base merge is deferred when the tree is dirty. The agent is told to inspect partial work and preserve unrelated edits and carried instructions. Replacing a changed brief or carried files still requires an explicit `resume --resnapshot`. With unfinished work present, each replacement must match either the previous snapshot or the newly accepted bytes; conflicting session edits stop the resnapshot before any file or snapshot is replaced.
+**Resume agent** continues the same session on its current instructions. **Send message** and `say` deliver your correction to that session, including after an agent has finished and its PR is ready for human review. A closed or merged PR requires a follow-up PRD. Both use the existing resume path and preserve the approved brief, permissions and review budget. Uncommitted files and the index stay intact; only the automatic base merge is deferred when the tree is dirty. The agent must inspect partial work, commit only its task changes, then fetch and merge the intended base into its task branch before rerunning verification and pushing. It must preserve unrelated edits and carried instructions, stopping if they prevent that merge. This never authorizes merging the PR or writing to its base. Replacing a changed brief or carried files still requires an explicit `resume --resnapshot`. Every existing replacement file, including ignored files absent from Git status, must match either the previous snapshot or the newly accepted bytes; conflicting session edits stop the resnapshot before any file or snapshot is replaced.
 
 During a run, messages queue until it finishes by default. Select **Interrupt the active run to apply this message**, or use:
 
@@ -294,11 +294,13 @@ An entry with no session is refused, because there is nothing to resume and `sta
 with a run already in flight or still awaiting daemon settlement, since replacing its record would lose its outcome. A missing checkout is
 recreated from the branch first; the session's memory lives in the harness, not the directory.
 
-The base branch is merged in before the session carries on, which is the case that needs it most: an entry stopped
+When the checkout is clean, the base branch is merged in before the session carries on, which is the case that needs it most: an entry stopped
 hours or days ago and the base has moved since. The session is told about the merge commit so it does not try to undo a
 commit that is not its own. A merge that conflicts is aborted and the resume is refused, printing the conflict and the
 `git merge` command that resolves it, so nothing is resumed into a checkout with conflict markers in it. See [keeping a
 branch on its base](config.md#keeping-a-branch-on-its-base).
+
+A dirty checkout is preserved: the resumed session is explicitly told to commit only its task changes, fetch and merge the intended base into the task branch, resolve conflicts within scope, then verify and push. Unrelated edits that prevent the merge must be reported rather than discarded or committed. This exception does not authorize merging a PR, writing to the base, rebasing or force-pushing.
 
 So is an entry whose brief has changed, and that refusal is the opposite of what a resume usually does. The session
 holds what the last run learned, and what it learned is the OLD brief: resuming into a changed contract would put a
@@ -314,6 +316,8 @@ The same rule covers the bytes of every carried `sources` file and changes to th
 the accepted files, copies them into the checkout and tells the session what moved. Remove a deleted file from the
 manifest before accepting that deletion. A harness change is refused even with `--resnapshot`; an existing session
 cannot move between harnesses. When resuming a ready PR, removing its ready label is a precondition of spawning work.
+
+If timeout or interruption cannot verify the owned process tree, the task becomes `needs-human` with reason `run-stop-unverified`. Its PR labels and notification identify the stop; failed label writes retry even while the process may still be running. Inspect `gallivant why` and the daemon log, restore process inspection, and resolve any surviving owned processes before resuming. No replacement starts over an unverified writer.
 
 The daemon comes up if it is not already running, for the same reason `start` brings it up.
 
