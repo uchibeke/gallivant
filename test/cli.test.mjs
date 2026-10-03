@@ -7,6 +7,27 @@ import { GOOD_PRD, tempHome, CONFIG, seededState } from "./helpers.mjs";
 import { processIdentity } from "../lib/daemon.mjs";
 import { codeStamp, writeJsonAtomic } from "../lib/fs.mjs";
 
+test("chain CLI shows persisted progress, retries explicitly and cancels future work", () => {
+  const { home, state } = seededState();
+  writeJsonAtomic(join(home, "config.json"), { ...CONFIG, worktrees: tempHome(), harness: { codex: { bin: process.execPath } }, notify: null });
+  state.createChain({ name: "launch", repo: "acme/widget", base: "main", status: "stopped", index: 0, reason: "GitHub unavailable",
+    steps: ["foundation", "release"].map(id => ({ id: `acme/widget/${id}`, path: `/repo/docs/prds/${id}.md`, dispatch: null })) });
+  const run = args => spawnSync(process.execPath, [new URL("../bin/gallivant.mjs", import.meta.url).pathname, "chain", ...args], {
+    env: { ...process.env, GALLIVANT_HOME: home }, encoding: "utf8", timeout: 5000,
+  });
+  const listed = run([]);
+  assert.equal(listed.status, 0, listed.stderr);
+  assert.match(listed.stdout, /launch: stopped.*0\/2 merged.*GitHub unavailable/);
+  const retried = run(["launch", "--retry", "--no-daemon"]);
+  assert.equal(retried.status, 0, retried.stderr);
+  assert.equal(state.getChain("launch").status, "active");
+  const cancelled = run(["launch", "--cancel"]);
+  assert.equal(cancelled.status, 0, cancelled.stderr);
+  assert.equal(state.getChain("launch").status, "cancelled");
+  assert.equal(run(["launch", "--retry"]).status, 1);
+  assert.equal(run(["launch", "--cancel", "--retry"]).status, 1);
+});
+
 test("ready --check ignores invalid runtime config and leaves the brief and home unchanged", () => {
   const home = tempHome();
   const path = join(tempHome(), "docs/prds/widget-export.md");

@@ -215,7 +215,7 @@ test("a retry in progress is explained, with what is failing and what happens if
   const out2 = why(blocked.ctx, { handle: "widget#142" });
   assert.match(out2, /waiting on GitHub: ready label write has failed 2 ticks in a row/);
   assert.match(out2, /this PR is otherwise ready: checks green, reviewer clear, receipt accepted/);
-  assert.match(out2, /Only the gallivant:ready-for-human label will not write/);
+  assert.match(out2, /Only the status:ready-for-review label will not write/);
 });
 
 test("a stopped entry names the write that would not land, so `stuck` is never a bare word", () => {

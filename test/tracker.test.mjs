@@ -66,7 +66,7 @@ test("local run controls queue through the mounted route and reject duplicate cl
   assert.match(page.body(), /Recheck PR/);
   assert.match(page.body(), /data-action="resume"[^>]*>Resume agent<\/button>/);
   assert.match(page.body(), /<form id="message-form"[\s\S]*data-action="message"[^>]*>Send message<\/button>/);
-  assert.match(page.body(), /Delivered in the next run of this session/);
+  assert.match(page.body(), /Continues the same session with your correction/);
   async function post() {
     const request = Readable.from([JSON.stringify({ action: "recheck" })]);
     Object.assign(request, { method: "POST", url: `/gallivant/api/run/control?id=${encodeURIComponent(ID)}`, headers: { ...localHeaders, "x-gallivant-token": token }, socket: localSocket });

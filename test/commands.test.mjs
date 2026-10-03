@@ -3,13 +3,14 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { join, relative, dirname } from "node:path";
 import { mkdirSync, readFileSync, writeFileSync, statSync, existsSync } from "node:fs";
+import { makeTick } from "../lib/tick.mjs";
 import { start } from "../lib/commands/start.mjs";
 import { register } from "../lib/commands/register.mjs";
 import { makeState, newEntry, STATES } from "../lib/state.mjs";
-import { parseBlock } from "../lib/block.mjs";
+import { normalizePublicBody, parseBlock } from "../lib/block.mjs";
 import { isAtOrAfter, floorSecond } from "../lib/time.mjs";
 import { templatePath } from "../lib/fs.mjs";
-import { CONFIG, T0, tempHome, prFixture, fakeRunner, makeClock, silentLog, GOOD_PRD, fakeCredential, fakeIdentity, harnessBin } from "./helpers.mjs";
+import { CONFIG, T0, tempHome, prFixture, fakeRunner, fakeGh, fakeGit, fakeNotify, codexLines, comment, makeClock, silentLog, GOOD_PRD, fakeCredential, fakeIdentity, harnessBin } from "./helpers.mjs";
 import { newPrd } from "../lib/commands/new.mjs";
 import { check } from "../lib/prd.mjs";
 import { request as prdRequest } from "../lib/sources/prd.mjs";
@@ -111,6 +112,52 @@ test("start writes the PRD into the fresh checkout, so the branch carries the br
   assert.equal(statSync(join(w.worktree, "docs", "prds")).mode & 0o777, 0o755, "the directory git will commit is not private to the daemon");
 });
 
+test("start awaits durable runner startup before registering the claimed run", async () => {
+  const w = startWorld(), runner = fakeRunner(makeClock()), launch = runner.start;
+  const id = "acme/widget/widget-export";
+  runner.start = async (...args) => {
+    assert.ok(w.ctx.state.startClaim(id));
+    assert.equal(w.ctx.state.get(id), null);
+    await Promise.resolve();
+    return launch(...args);
+  };
+  w.ctx.runnerFor = () => runner;
+  const result = await start(w.ctx, { path: w.prdPath });
+  assert.equal(result.run, runner.current().id);
+  assert.equal(w.ctx.state.get(id).last.run, result.run);
+  assert.equal(w.ctx.state.startClaim(id), null);
+});
+
+test("a run completed before the first tick still has its earliest own comments checked", async t => {
+  let wall = Date.parse("2026-10-03T12:00:00.750Z");
+  t.mock.method(Date, "now", () => wall);
+  const w = startWorld();
+  const runner = fakeRunner({ now: () => wall });
+  const launch = runner.start;
+  let firstCommentAt;
+  runner.start = (...args) => {
+    const job = launch(...args);
+    if (args[0] === "start") {
+      firstCommentAt = floorSecond(new Date(wall).toISOString());
+      runner.finish(codexLines(), { exit: 0 });
+      wall += 60_000;
+    }
+    return job;
+  };
+  w.ctx.runnerFor = () => runner;
+  const result = await start(w.ctx, { path: w.prdPath });
+  const entry = w.ctx.state.get(result.id);
+  assert.equal(entry.public_since, firstCommentAt);
+  assert.equal(runner.current().running, false, "the first poll has not run, but the child already finished");
+  const pr = prFixture({ headRefName: result.branch, createdAt: firstCommentAt });
+  const gh = fakeGh({ pr, prsByHead: [pr], comments: [comment({ id: 81, by: "me", at: firstCommentAt, body: "Gallivant implemented this change." })] });
+  const tick = makeTick({ ...w.ctx, ownLogin: "me", clock: { now: () => wall }, gh,
+    git: { ...fakeGit(), ...w.ctx.git }, notify: fakeNotify(), readPrd: id => w.snapshots.get(id) });
+  await tick.tick();
+  assert.equal(runner.started.at(-1).name, "public-text", "the old first-tick boundary would silently exclude this comment");
+  assert.match(runner.started.at(-1).args.at(-1), /comment 81/);
+});
+
 test("start renders the resolved read-only directories into the run, and refuses a harness that cannot grant them", async () => {
   const extra = tempHome();
   // codex, which cannot grant read on one directory, is refused before anything is recorded.
@@ -200,6 +247,12 @@ function registerWorld(git, { files = {}, snapshots = new Map() } = {}) {
     gh: {
       prView: async () => pr,
       setBody: async (_r, _n, body) => { calls.push(["setBody", body]); },
+      setRecoveryMetadata: async (repo, n, identity, { taskId } = {}) => {
+        const current = await ctx.gh.prView(repo, n);
+        const body = normalizePublicBody(current.body, { identity, taskId });
+        if (body !== current.body) await ctx.gh.setBody(repo, n, body);
+        return { ...current, body };
+      },
       comment: async () => { calls.push(["comment"]); },
       ensureLabels: async () => {},
       fileAt: async (_r, path, ref) => { calls.push(["fileAt", path, ref]); return files[path] ?? null; },
@@ -243,12 +296,32 @@ test("register without --worktree clones from the branch as before, with no chec
   assert.match(r.worktree, /worktrees\/acme\/widget\/widget-export$/);
 });
 
+test("register refuses a pending start before touching its checkout or PR", async () => {
+  let cloned = false;
+  const w = registerWorld({ ...registerGit(), fromBranch: async () => { cloned = true; return "/tmp/unwanted"; } });
+  w.ctx.state.claimStart("acme/widget/widget-export");
+  await assert.rejects(() => register(w.ctx, { url: w.url }), /reserved/);
+  assert.equal(cloned, false);
+  assert.deepEqual(w.calls, []);
+});
+
 test("register accepts a hand-made branch outside the gallivant prefix", async () => {
   const w = registerWorld(registerGit());
   w.ctx.gh.prView = async () => prFixture({ headRefName: "feat/manual-export", createdAt: T0 });
   const r = await register(w.ctx, { url: w.url });
   assert.equal(r.id, "acme/widget/manual-export");
   assert.equal(w.ctx.state.get(r.id).branch, "feat/manual-export");
+});
+
+test("registration captures public-output observation now and preserves it across resets", async t => {
+  let wall = Date.parse("2026-10-03T12:00:00.750Z");
+  t.mock.method(Date, "now", () => wall);
+  const w = registerWorld(registerGit());
+  const result = await register(w.ctx, { url: w.url });
+  assert.equal(w.ctx.state.get(result.id).public_since, "2026-10-03T12:00:00.000Z");
+  wall += 120_000;
+  await register(w.ctx, { url: w.url });
+  assert.equal(w.ctx.state.get(result.id).public_since, "2026-10-03T12:00:00.000Z", "reset cannot hide unresolved earlier replies");
 });
 
 test("a relative --worktree is resolved against the calling directory before it is checked or stored", async () => {
@@ -269,8 +342,8 @@ const BLOCK = ({ harness = "claude", session = "6f1c2d3e-1111-4111-8111-11111111
 
 test("registering with a new --harness or --session rewrites the block, so recovery from GitHub restores the new identity", async () => {
   for (const [over, expected] of [
-    [{ harness: "codex" }, /harness: codex[\s\S]*session: none/],
-    [{ session: "aaaaaaaa-2222-4222-8222-222222222222" }, /harness: claude[\s\S]*session: aaaaaaaa-2222-4222-8222-222222222222/],
+    [{ harness: "codex" }, { harness: "codex", session: null }],
+    [{ session: "aaaaaaaa-2222-4222-8222-222222222222" }, { harness: "claude", session: "aaaaaaaa-2222-4222-8222-222222222222" }],
   ]) {
     const w = registerWorld(registerGit());
     w.ctx.gh.prView = async () => ({ ...prFixture({ headRefName: "gallivant/widget-export", createdAt: T0 }), body: BLOCK() });
@@ -278,8 +351,10 @@ test("registering with a new --harness or --session rewrites the block, so recov
 
     const written = w.calls.filter(c => c[0] === "setBody");
     assert.equal(written.length, 1, "the stale block is rewritten once");
-    assert.match(written[0][1], expected);
-    assert.match(written[0][1], /prd: docs\/prds\/widget-export\.md/, "the PRD path the block already recorded is kept");
+    const actual = parseBlock(written[0][1]).block;
+    assert.equal(actual.harness, expected.harness);
+    assert.equal(actual.session, expected.session);
+    assert.equal(actual.prd, "docs/prds/widget-export.md", "the PRD path the block already recorded is kept");
   }
 });
 
@@ -310,7 +385,7 @@ test("a --harness change drops an inherited session the new harness cannot mean,
     assert.equal(w.ctx.state.get(r.id).harness, "opencode");
     // The block must say the same thing, or recovery restores the id that was just dropped.
     const body = w.calls.filter(x => x[0] === "setBody").at(-1)[1];
-    assert.match(body, /harness: opencode/);
+    assert.equal(parseBlock(body).block.harness, "opencode");
     assert.doesNotMatch(body, /6f1c2d3e/, "the incompatible id is not written back to the PR either");
     // And `parseBlock` reads it back, which is the whole point: an id opencode cannot mean was refused here.
     assert.equal(parseBlock(body).block.harness, "opencode");
@@ -336,13 +411,24 @@ test("a harness change drops another harness's session even when both use UUIDs"
   assert.deepEqual(typed.calls.filter(x => x[0] === "setBody"), [], "and nothing was written for a session that was refused");
 });
 
-test("registering with no override, or one that agrees with the block, leaves the body alone", async () => {
+test("registering with no identity override migrates only the legacy block", async () => {
   for (const over of [{}, { harness: "claude" }, { session: "6f1c2d3e-1111-4111-8111-111111111111" }]) {
     const w = registerWorld(registerGit());
     w.ctx.gh.prView = async () => ({ ...prFixture({ headRefName: "gallivant/widget-export", createdAt: T0 }), body: BLOCK() });
     await register(w.ctx, { url: w.url, worktree: "/checkouts/widget", ...over });
-    assert.deepEqual(w.calls.filter(c => c[0] === "setBody"), [], "a block that already says the right thing is not rewritten");
+    const written = w.calls.filter(c => c[0] === "setBody");
+    assert.equal(written.length, 1);
+    assert.deepEqual(parseBlock(written[0][1]).block, parseBlock(BLOCK()).block, "format migration preserves identity");
+    assert.doesNotMatch(written[0][1], /gallivant/i);
   }
+});
+
+test("register leaves an already-neutral matching recovery record untouched", async () => {
+  const w = registerWorld(registerGit());
+  const body = normalizePublicBody(BLOCK());
+  w.ctx.gh.prView = async () => ({ ...prFixture(), body });
+  await register(w.ctx, { url: w.url, worktree: "/checkouts/widget" });
+  assert.deepEqual(w.calls.filter(c => c[0] === "setBody"), []);
 });
 
 test("a reset clears the round comment a counted round still owed, because the reset zeroes the round", async () => {
@@ -579,7 +665,7 @@ test("a reset that fails halfway leaves GitHub and the registry agreeing on ONE 
   const r = await register(b.ctx, { url: b.url, worktree: "/checkouts/widget", harness: "codex" });
   const done = b.ctx.state.get(r.id);
   assert.equal(done.harness, "codex", "the registry now records the new harness");
-  assert.match(b.calls.filter(c => c[0] === "setBody").at(-1)[1], /harness: codex/, "and so does the PR: still one identity");
+  assert.equal(parseBlock(b.calls.filter(c => c[0] === "setBody").at(-1)[1]).block.harness, "codex", "and so does the PR: still one identity");
   assert.equal(done.iteration, 0, "and the reset itself landed");
 });
 

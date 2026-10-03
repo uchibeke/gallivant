@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { deriveEvents, makeTrust, isGreen, reviewerVerdict, reviewerClock, countRounds, failingChecks, addedLines, hasOwnComment } from "../lib/events.mjs";
+import { isFixCommand, deriveEvents, makeTrust, isGreen, reviewerVerdict, reviewerClock, countRounds, failingChecks, addedLines, hasOwnComment } from "../lib/events.mjs";
 import { ROUND_MARKER, NUDGE_MARKER, RESET_MARKER, actor, normalizeLogin } from "../lib/gh.mjs";
 import { CONFIG, T0, at, prFixture, review, inline, comment, checkRun, user } from "./helpers.mjs";
 
@@ -87,6 +87,17 @@ test("@gallivant fix from a trusted author is a command; own markers, bots and s
     comment({ id: 66, by: "me", at: at(-10), body: "@gallivant fix the old thing", edited: true }),
   ] });
   assert.deepEqual(events.map(e => [e.kind, e.body]), [["command", "the flaky test too"], ["command", "this too"]]);
+});
+
+test("/fix and the two historical handles use the same trusted-command parser", () => {
+  for (const command of ["/fix", " /FIX", "@work fix", "@gallivant fix"]) {
+    const body = `${command} preserve the existing article`;
+    assert.ok(isFixCommand(body));
+    const { events } = derive({ comments: [comment({ id: 70, by: "me", at: at(5), body })] });
+    assert.deepEqual(events.map(e => [e.kind, e.body]), [["command", "preserve the existing article"]]);
+    assert.deepEqual(derive({ comments: [comment({ id: 71, by: "stranger", at: at(5), body })] }).events, []);
+  }
+  for (const body of ["/fixed", "/fixes", "Please /fix this", "@worker fix", null, ""]) assert.equal(isFixCommand(body), false);
 });
 
 test("events before the cursor are ignored", () => {

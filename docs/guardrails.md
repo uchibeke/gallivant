@@ -129,7 +129,7 @@ given.
 
 ## Recovery from GitHub is guarded
 
-On boot, `up` registers only PRs authored by the token's login, with same-repo heads, on `gallivant/*` branches, whose block passes strict validation (uuid session, `docs/...md` PRD path, known harness). Iteration is recovered by counting the daemon's own marked comments, never read from the block, so editing a PR body cannot reset the cap.
+On boot, `up` registers only PRs authored by the token's login, with same-repo heads, on `work/*` or legacy `gallivant/*` branches, whose decoded recovery block passes strict validation (harness-specific session, repository-relative Markdown PRD path, known harness). Iteration is recovered by counting the daemon's own marked comments, never read from the block, so editing a PR body cannot reset the cap.
 
 ## The passport
 

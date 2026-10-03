@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { join, dirname } from "node:path";
 import { mkdirSync, writeFileSync, readFileSync, symlinkSync, rmSync, statSync, linkSync } from "node:fs";
 import { EventEmitter } from "node:events";
+import { execFileSync } from "node:child_process";
 import { makeGit } from "../lib/git.mjs";
 import { readRepositoryText, writeRepositoryText } from "../lib/repository_files.mjs";
 import { parsePrd, check, contractDiff, sourceDivergence } from "../lib/prd.mjs";
@@ -127,6 +128,66 @@ test("resume refuses changed supporting bytes until accepted, then updates both 
   assert.match(w.runner.started[0].args.at(-1), /source changed: docs\/support.md/);
 });
 
+test("explicit resnapshot preserves unfinished work and unchanged carried instructions", async () => {
+  const w = world();
+  w.ctx.git.dirty = async () => ({ modified: 2, untracked: 0 });
+  w.ctx.git.mergeBase = async () => assert.fail("must defer base merge");
+  const next = BRIEF.replace("CSV with three rows downloads.", "CSV with three rows downloads and preserves every field.");
+  writeFileSync(join(w.checkout, REL), next);
+  writeFileSync(join(w.worktree, "article.md"), "partial article edit");
+  await w.run({ resnapshot: true });
+  assert.equal(w.ctx.readPrd(), next);
+  assert.equal(readFileSync(join(w.worktree, REL), "utf8"), next);
+  assert.equal(readFileSync(join(w.worktree, SOURCE), "utf8"), "original support");
+  assert.equal(readFileSync(join(w.worktree, "article.md"), "utf8"), "partial article edit");
+  assert.equal(w.runner.started.length, 1);
+});
+
+test("resnapshot refuses conflicting session edits before changing any snapshot or file", async () => {
+  for (const rel of [REL, SOURCE]) {
+    const w = world();
+    w.ctx.git.dirty = async () => ({ modified: 1, untracked: 0 });
+    writeFileSync(join(w.checkout, SOURCE), "accepted update");
+    writeFileSync(join(w.checkout, REL), BRIEF.replace("CSV with three rows downloads.", "CSV with three rows downloads and preserves every field."));
+    writeFileSync(join(w.worktree, rel), "session's unfinished edit");
+    await assert.rejects(() => w.run({ resnapshot: true }), /local edits differ/);
+    assert.equal(w.ctx.readPrd(), BRIEF);
+    assert.equal(w.sources.get(SOURCE), "original support");
+    assert.equal(readFileSync(join(w.worktree, rel), "utf8"), "session's unfinished edit");
+    assert.equal(w.runner.started.length, 0);
+  }
+});
+
+test("resnapshot of an unchanged contract cannot overwrite edited carried files", async () => {
+  const w = world();
+  w.ctx.git.dirty = async () => ({ modified: 1, untracked: 0 });
+  writeFileSync(join(w.worktree, SOURCE), "unfinished session edits");
+  await assert.rejects(() => w.run({ resnapshot: true }), /local edits differ/);
+  assert.equal(readFileSync(join(w.worktree, SOURCE), "utf8"), "unfinished session edits");
+  assert.equal(w.runner.started.length, 0);
+});
+
+test("a clean Git status cannot authorize overwriting ignored PRD or carried-file edits", async () => {
+  for (const rel of [REL, SOURCE]) {
+    const w = world();
+    const git = (...args) => execFileSync("git", args, { cwd: w.worktree, stdio: "pipe" });
+    git("init", "-q");
+    writeFileSync(join(w.worktree, ".gitignore"), "docs/\n");
+    git("add", ".gitignore");
+    git("-c", "user.name=Test", "-c", "user.email=test@example.com", "-c", "commit.gpgsign=false", "commit", "-qm", "Ignore carried instructions");
+    w.ctx.git.dirty = makeGit({ config: w.ctx.config }).dirty;
+    writeFileSync(join(w.checkout, SOURCE), "accepted support update");
+    writeFileSync(join(w.checkout, REL), BRIEF.replace("CSV with three rows downloads.", "CSV with three rows downloads and preserves every field."));
+    writeFileSync(join(w.worktree, rel), "ignored unfinished session edit");
+    assert.deepEqual(await w.ctx.git.dirty(w.worktree), { modified: 0, untracked: 0 });
+    await assert.rejects(() => w.run({ resnapshot: true }), /local edits differ/);
+    assert.equal(w.ctx.readPrd(), BRIEF);
+    assert.equal(w.sources.get(SOURCE), "original support");
+    assert.equal(readFileSync(join(w.worktree, rel), "utf8"), "ignored unfinished session edit");
+    assert.equal(w.runner.started.length, 0);
+  }
+});
+
 test("a deleted source must be removed from the manifest before resnapshot can accept it", async () => {
   const w = world();
   rmSync(join(w.checkout, SOURCE));
@@ -166,6 +227,9 @@ test("a failed spawn retains the accepted brief changes for the next resume", as
   await assert.rejects(() => w.run({ resnapshot: true }), /identity/i);
   writeFileSync(join(w.worktree, SOURCE), "stale copy after failed write");
   w.ctx.identity = fakeIdentity();
+  await assert.rejects(() => w.run(), /local edits differ/);
+  assert.equal(readFileSync(join(w.worktree, SOURCE), "utf8"), "stale copy after failed write");
+  writeFileSync(join(w.worktree, SOURCE), "new bytes");
   await w.run();
   assert.match(w.runner.started[0].args.at(-1), /THE BRIEF HAS CHANGED/);
   assert.equal(readFileSync(join(w.worktree, SOURCE), "utf8"), "new bytes");

@@ -215,7 +215,7 @@ mergeable CONFLICTING at any point → needs-human, reason conflict, notify once
 PR merged or closed at any point → done, no notification
 ```
 
-`iteration` is the number of round comments the daemon has posted on the PR. It equals the number of fix runs that pushed. A run that does not push stops the loop with a readable reason, so runs and round comments never drift apart. With `max_iterations: 5`, rounds 1 to 5 push; the sixth qualifying event goes to `needs-human`.
+`iteration` counts completed fix runs that pushed or changed the completion receipt. The count is persisted before its round comment is posted, and a failed comment write is retried without refunding the round. With the default `max_iterations: 30`, the daemon allows rounds 1 to 30; the next qualifying event goes to `needs-human`. Explicit operator resumes may exceed that automatic allowance, and any progress they make is still counted. A successful run with no change returns to watching so readiness can be judged; a failed run stops with a readable reason.
 
 ### 6.3 Config
 
@@ -224,7 +224,7 @@ PR merged or closed at any point → done, no notification
 ```json
 {
   "poll_seconds": 120,
-  "max_iterations": 5,
+  "max_iterations": 30,
   "run_timeout_minutes": 30,
   "max_budget_usd": 5,
   "rereview_minutes": 6,

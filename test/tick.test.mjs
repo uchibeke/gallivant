@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { makeTick, roundComment, receiptRoundComment, nudgeComment } from "../lib/tick.mjs";
 import { READY_LABEL, NEEDS_LABEL, ROUND_MARKER, NUDGE_MARKER, makeGh, MAX_DIFF_BYTES } from "../lib/gh.mjs";
 import { RECEIPT_TAG } from "../lib/deliverable.mjs";
+import { parseBlock, renderBlock } from "../lib/block.mjs";
 // The recovery side of the count and the operator's view of it, both driven here rather than mocked: the property the
 // round-comment tests below assert is that `iteration`, `countRounds` and what `why` prints all say the same thing.
 import { countRounds } from "../lib/events.mjs";
@@ -37,6 +38,162 @@ function world(stateOver = {}, ghOver = {}, { config = CONFIG, readPrd = () => n
   const tick = makeTick({ credential: fakeCredential(), identity: fakeIdentity(),  config, state, gh, git, notify, log, clock, ownLogin: "me", runnerFor: () => runner, readPrd });
   return { clock, state, id, gh, git, runner, notify, tick, logged, entry: () => state.get(id) };
 }
+
+test("a ready PR with branded prose is reopened for correction before any readiness signal", async () => {
+  const w = world({ state: STATES.ready, public_since: T0 }, {
+    pr: prFixture({ title: "GALLIVANT: add export", statusCheckRollup: [checkRun({ name: "test", conclusion: "SUCCESS" })] }),
+    reviews: clearReviewer(),
+  });
+  w.clock.advance(5);
+  await w.tick.tick();
+  assert.equal(w.runner.started.length, 1);
+  assert.ok(w.gh.calls.some(c => c[0] === "removeLabel" && c[2] === READY_LABEL));
+  assert.match(w.runner.started[0].args.at(-1), /PR title mentions the runner name/);
+  assert.equal(w.entry().state, STATES.prOpen);
+  assert.equal(w.gh.data.pr.title, "GALLIVANT: add export", "prose is not blindly redacted");
+  assert.deepEqual(w.notify.sent, []);
+});
+
+test("public wording-only progress counts once without requiring an empty commit", async () => {
+  const w = world({ public_since: T0 }, { pr: prFixture({ title: "Gallivant export" }) });
+  await w.tick.tick();
+  assert.equal(w.runner.started.length, 1);
+  w.gh.data.pr.title = "Export CSV";
+  w.runner.finish(claudeResultLines());
+  w.clock.advance(1);
+  await w.tick.tick();
+  assert.equal(w.entry().iteration, 1);
+  assert.equal(w.entry().cursor.fixed_sha, "a1b2c3d");
+  assert.ok(w.gh.calls.some(c => c[0] === "comment" && c[2].startsWith("Review text updated.")));
+  await w.tick.tick();
+  assert.equal(w.entry().iteration, 1);
+  assert.equal(w.runner.started.length, 1);
+});
+
+test("public corrections preserve unseen feedback and owe a new marker after an earlier round", async () => {
+  const w = world({ iteration: 1, public_since: T0, cursor: { since: at(0), dispatched: [], fixed_sha: "a1b2c3d", checks_sha: null, receipt_hash: null } }, {
+    pr: prFixture({ title: "Gallivant export" }),
+    comments: [comment({ id: 1, by: "me", at: at(1), body: roundComment(CONFIG) })],
+    reviews: [review({ id: 77, by: "me", at: at(2), state: "CHANGES_REQUESTED", body: "Fix the empty export case." })],
+  });
+  w.clock.advance(3);
+  w.gh.now = () => at(4);
+  await w.tick.tick();
+  assert.equal(w.runner.started[0].name, "public-text");
+  w.gh.data.pr.title = "Export CSV";
+  w.runner.finish(claudeResultLines());
+  w.clock.advance(1);
+  await w.tick.tick();
+  assert.equal(w.runner.started.length, 2, "the pending review is dispatched after the wording correction");
+  assert.match(w.runner.started[1].args.at(-1), /Fix the empty export case/);
+  assert.equal(w.entry().iteration, 2);
+  assert.equal(countRounds(w.gh.data.comments, "me"), 2, "the previous round marker cannot pay this correction's debt");
+});
+
+test("new own review summaries are scanned separately from bot reviews", async () => {
+  const w = world({ public_since: T0 }, {
+    reviews: [review({ id: 44, by: "me", at: at(1), state: "COMMENTED", body: "Gallivant fixed this." }),
+      review({ id: 45, by: BOT, bot: true, at: at(1), state: "COMMENTED", body: "Gallivant reviewed." })],
+  });
+  w.clock.advance(2);
+  await w.tick.tick();
+  assert.match(w.runner.started[0].args.at(-1), /review comment 44 mentions the runner name/);
+  assert.doesNotMatch(w.runner.started[0].args.at(-1), /review comment 45 mentions/);
+});
+
+test("a public correction that changes nothing stops instead of spending unbounded runs", async () => {
+  const w = world({}, { pr: prFixture({ title: "Gallivant export" }) });
+  await w.tick.tick();
+  w.runner.finish(claudeResultLines());
+  await w.tick.tick();
+  assert.equal(w.entry().reason, "public-format");
+  await w.tick.tick();
+  assert.equal(w.runner.started.length, 1);
+});
+
+test("new own inline comments are checked even after the event cursor advances", async () => {
+  const w = world({ public_since: T0, cursor: { since: at(10), fixed_sha: "a1b2c3d", checks_sha: null, receipt_hash: null } }, {
+    inline: [inline({ id: 44, by: "me", at: at(3), body: "Gallivant fixed this." })],
+    comments: [comment({ id: 45, by: "someone-else", at: at(4), body: "Gallivant?" })],
+  });
+  w.clock.advance(11);
+  await w.tick.tick();
+  assert.match(w.runner.started[0].args.at(-1), /inline comment 44 mentions the runner name/);
+  assert.doesNotMatch(w.runner.started[0].args.at(-1), /PR comment 45 mentions/);
+});
+
+test("historical own comments are left intact and legacy operator commands still work", async () => {
+  const w = world({ public_since: at(5) }, {
+    comments: [comment({ id: 1, by: "me", at: at(1), body: "Gallivant did this previously." }),
+      comment({ id: 2, by: "me", at: at(6), body: "@gallivant fix the empty export" })],
+  });
+  w.clock.advance(7);
+  await w.tick.tick();
+  assert.match(w.runner.started[0].args.at(-1), /the empty export/);
+  assert.doesNotMatch(w.runner.started[0].args.at(-1), /published pull request does not meet/);
+});
+
+test("regular PR conversion is bounded on failure and never dispatches a paid repair for an API error", async () => {
+  const w = world({}, { pr: prFixture({ isDraft: true }) });
+  let attempts = 0;
+  w.gh.markReady = async () => { attempts++; throw new Error("HTTP 403"); };
+  for (let i = 0; i < 6; i++) await w.tick.tick();
+  assert.equal(attempts, 5);
+  assert.equal(w.entry().state, STATES.needsHuman);
+  assert.equal(w.entry().reason, "stuck");
+  assert.match(w.entry().last.event, /regular PR conversion/);
+  assert.equal(w.runner.started.length, 0);
+});
+
+test("making a draft regular cannot turn an unmet criterion into ready work", async () => {
+  const receipt = receiptBlock().replace('"met": true', '"met": false');
+  const w = world({}, {
+    pr: prFixture({ isDraft: true, body: "Adds export." + receipt, statusCheckRollup: [checkRun({ name: "test", conclusion: "SUCCESS" })] }),
+  }, { config: { ...CONFIG, reviewer: null, deliverable: { ...CONFIG.deliverable, evaluator: "local" } }, readPrd: () => GOOD_PRD });
+  w.clock.advance(7);
+  await w.tick.tick();
+  assert.equal(w.gh.data.pr.isDraft, false);
+  assert.equal(w.runner.started.length, 0);
+  await w.tick.tick();
+  assert.equal(w.runner.started.length, 1);
+  assert.match(w.runner.started[0].args.at(-1), /oap.criteria_not_met/);
+  assert.notEqual(w.entry().state, STATES.ready);
+  assert.ok(!w.gh.calls.some(c => c[0] === "addLabel" && c[2] === READY_LABEL));
+  assert.match(w.gh.data.pr.body, /"met": false/);
+});
+
+test("a public correction refused at the iteration limit leaves no in-flight correction state", async () => {
+  const w = world({ iteration: CONFIG.max_iterations }, { pr: prFixture({ title: "Gallivant export" }) });
+  await w.tick.tick();
+  assert.equal(w.entry().reason, "iterations");
+  assert.equal(w.entry().public_fix, undefined);
+  assert.equal(w.runner.started.length, 0);
+});
+
+test("legacy draft-only stops recover but unrelated stops keep their reason", async () => {
+  const draft = world({ state: STATES.needsHuman, reason: "draft" }, { pr: prFixture({ isDraft: true }) });
+  await draft.tick.tick();
+  assert.equal(draft.entry().state, STATES.prOpen);
+  assert.equal(draft.gh.data.pr.isDraft, false);
+  const blocked = world({ state: STATES.needsHuman, reason: "checks-red" }, { pr: prFixture({ isDraft: true }) });
+  await blocked.tick.tick();
+  assert.equal(blocked.entry().reason, "checks-red");
+  assert.equal(blocked.gh.data.pr.isDraft, true);
+});
+
+test("neutral label migration preserves stopped-state reasons and catches ready label write failures", async () => {
+  const stopped = world({ state: STATES.needsHuman, reason: "conflict" }, {
+    pr: prFixture({ labels: [{ name: "gallivant:needs-human" }] }),
+  });
+  await stopped.tick.tick();
+  assert.ok(stopped.gh.calls.some(c => c[0] === "addLabel" && c[2] === NEEDS_LABEL));
+  assert.equal(stopped.entry().reason, "conflict");
+  const ready = world({ state: STATES.ready }, { pr: prFixture({ labels: [{ name: "gallivant:ready-for-human" }] }) });
+  ready.gh.addLabel = async () => { throw new Error("label unavailable"); };
+  await ready.tick.tick();
+  assert.equal(ready.entry().retry.op, "ready label write");
+  assert.equal(ready.runner.started.length, 0);
+});
 
 test("a checkout already on disk still gets the commit-msg hook, because no clone path runs for it", async () => {
   // The bug this pins, found on a live resume. `installHooks` was called from every path that CLONES a checkout, so a
@@ -560,6 +717,30 @@ test("a run past the timeout is killed and the entry stops", async () => {
   assert.equal(w.entry().reason, "timeout");
 });
 
+for (const killed of [false, true]) test(`unverifiable shutdown stops visibly without duplicate notifications (already killed=${killed})`, async () => {
+  const w = world({ last: { at: T0, run: "1-fix", exit: null, event: "review" } });
+  w.runner.start("fix", "/bin/claude", [], {});
+  const current = w.runner.current;
+  w.runner.current = () => ({ ...current(), killed });
+  w.runner.kill = () => { throw Object.assign(new Error("ps unavailable"), { code: "RUN_STOP_UNVERIFIED" }); };
+  const addLabel = w.gh.addLabel;
+  w.gh.addLabel = async () => { throw new Error("temporary GitHub outage"); };
+  w.clock.advance(31);
+  await w.tick.tick();
+  assert.deepEqual([w.entry().state, w.entry().reason], [STATES.needsHuman, "run-stop-unverified"]);
+  assert.equal(w.entry().last.exit, null, "an unverified stop cannot claim an exit");
+  assert.match(w.entry().last.event, /may still be running.*Inspect its process tree/);
+  assert.equal(w.entry().labels_pending, true);
+  assert.deepEqual(w.notify.sent, [["needs", 142, "run-stop-unverified"]]);
+  w.gh.addLabel = addLabel;
+  await w.tick.tick();
+  await w.tick.tick();
+  assert.equal(w.entry().labels_pending, false);
+  assert.ok(w.gh.calls.some(c => c[0] === "addLabel" && c[2] === NEEDS_LABEL));
+  assert.equal(w.notify.sent.length, 1);
+  assert.equal(w.runner.started.length, 1, "the live/unverified writer is never replaced");
+});
+
 /**
  * A kill records what it interrupted. The run this exists for was SIGKILLed at 31.2 minutes against a 30 minute limit
  * having done a whole review round and written its commit message to a temp file, one tool call short of `git commit`.
@@ -746,7 +927,8 @@ test("a start run that opened a PR enters pr-open with the block written and the
   assert.equal(e.cursor.fixed_sha, "aaaa111");
   assert.equal(e.rereview.at, at(20));
   const body = w.gh.calls.find(c => c[0] === "setBody")[2];
-  assert.match(body, /<!-- gallivant\nprd: docs\/prds\/widget-export.md\nharness: claude\nsession: 6f1c2d3e-1111-4111-8111-111111111111\nbranch: gallivant\/widget-export\n-->/);
+  assert.doesNotMatch(body, /gallivant/i);
+  assert.equal(parseBlock(body).block.session, "6f1c2d3e-1111-4111-8111-111111111111");
 });
 
 test("a start run with no PR stops with no-pr; a codex start records the thread id", async () => {
@@ -1417,24 +1599,20 @@ test("a live run this entry did not dispatch is ignored, not waited on for thirt
   assert.match(w.runner.started[1].args.at(-1), /review 2301/);
 });
 
-test("a draft PR that meets every other ready condition asks a person instead of sitting forever", async () => {
-  // The ready branch declines a draft, and then every stop below declines it too: the reviewer is clear so neither the
-  // blocking nor the waiting branch fires, and the checks are green so the red one does not. The entry sat in pr-open
-  // with nothing left that could happen to it, while `status` said "waiting on reviewer".
+test("a draft becomes regular for review without waiving its completion receipt", async () => {
   const w = world({ rereview: { at: T0, nudged: true } }, {
     pr: prFixture({ isDraft: true, statusCheckRollup: [checkRun({ name: "test", conclusion: "SUCCESS" })] }),
     reviews: clearReviewer(),
-  });
-  w.clock.advance(4);
+  }, { config: { ...CONFIG, reviewer: { ...CONFIG.reviewer, author: null } } });
+  w.clock.advance(4.0075); // 450 ms into GitHub's timestamp second
   await w.tick.tick();
-
-  assert.deepEqual([w.entry().state, w.entry().reason], [STATES.needsHuman, "draft"]);
-  assert.match(w.entry().last.event, /^draft, otherwise ready, on a1b2c3d/);
-  assert.deepEqual(w.notify.sent, [["needs", 142, "draft"]]);
-
-  // Once per head, not once per poll.
+  assert.equal(w.gh.data.pr.isDraft, false);
+  assert.deepEqual(w.gh.calls.filter(c => c[0] === "markReady"), [["markReady", 142]]);
+  assert.equal(w.entry().state, STATES.prOpen);
+  assert.equal(w.entry().rereview.at, at(4));
+  assert.deepEqual(w.notify.sent, [], "reviewability is not task completion");
   await w.tick.tick();
-  assert.equal(w.notify.sent.length, 1);
+  assert.equal(w.gh.calls.filter(c => c[0] === "markReady").length, 1);
 });
 
 test("a checkout that cannot be recreated stops the entry and rings once, instead of logging the same line forever", async () => {
@@ -1629,7 +1807,8 @@ test("a start run whose identity block will not write stays in running and retri
   assert.equal(e.state, STATES.prOpen);
   assert.equal(e.pr, 143);
   assert.equal(e.cursor.fixed_sha, "aaaa111");
-  assert.match(w.gh.data.pr.body, /<!-- gallivant\nprd: docs\/prds\/widget-export.md\nharness: claude\nsession: 6f1c2d3e-1111-4111-8111-111111111111\nbranch: gallivant\/widget-export\n-->/);
+  assert.doesNotMatch(w.gh.data.pr.body, /gallivant/i);
+  assert.equal(parseBlock(w.gh.data.pr.body).block.branch, "gallivant/widget-export");
   assert.equal(w.runner.started.length, 1, "and nothing was spawned a second time while it waited");
 });
 

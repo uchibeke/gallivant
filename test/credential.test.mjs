@@ -323,10 +323,10 @@ test("a resumed session is told which commits are already made, so it pushes rat
   ];
   const p = resumePrompt({ repo: "acme/widget", pr: null, reason: "no-push", unpushed });
   assert.match(p, /2 commits on this branch are already made and NOT yet pushed/);
-  assert.match(p, /do not redo it and do not rewrite them/);
+  assert.match(p, /Preserve this work; make any corrections in new commits/);
   assert.match(p, /1111111 Add canonical repair/);
   assert.match(p, /2222222 Cover the redirect case/);
-  assert.match(p, /Push them first/);
+  assert.match(p, /operator's correction and the approved brief before pushing/);
   // And with nothing unpushed the paragraph is absent rather than asserting something untrue.
   assert.ok(!/already made and NOT yet pushed/.test(resumePrompt({ repo: "acme/widget", pr: 7, reason: "iterations" })));
 });

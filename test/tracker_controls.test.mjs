@@ -4,7 +4,7 @@ import { ASSETS } from "../lib/tracker/assets.mjs";
 
 // Run the actual browser script; these elements only supply events, values and attributes.
 function controls({ session = true, pending = false } = {}) {
-  const el = props => ({ value: "", textContent: "", hidden: true, on: {},
+  const el = props => ({ value: "", textContent: "", hidden: true, on: {}, focus() {},
     addEventListener(event, fn) { this.on[event] = fn; }, ...props });
   const buttons = ["recheck", "resume", "message"].map(action => el({
     textContent: action, dataset: { action, available: String(action === "recheck" || session) },
@@ -15,6 +15,7 @@ function controls({ session = true, pending = false } = {}) {
     "run-note": el(), "message-form": el(), "control-status": el(),
     "control-refresh": el({ href: "http://localhost/gallivant/run?id=acme%2Fwidget%2Ftask" }),
     "last-message": el({ querySelector: () => last }),
+    "restore-message": el(), "interrupt-run": el({ checked: false }),
   };
   const document = { body: { dataset: { base: "/gallivant" } }, getElementById: id => elements[id] ?? null, activeElement: null };
   const requests = [], timers = [], navigations = [];
@@ -103,4 +104,23 @@ test("pending requests restore safely; no-session and closed tasks keep agent ac
   await closed.poll();
   assert.ok(closed.buttons.every(b => b.disabled));
   assert.equal(closed.elements["run-note"].value, "An unsent draft");
+});
+
+
+test("interrupt is explicit and failed messages can be edited and resent", async () => {
+  const ui = controls();
+  ui.input("Preserve all article sections.");
+  ui.elements["interrupt-run"].checked = true;
+  await ui.click("message");
+  assert.equal(ui.requests[0].interrupt, true);
+  ui.result = { state: "needs-human", control: { action: "message", status: "failed", note: "Preserve all article sections.", message: "Review the changed brief." } };
+  await ui.poll();
+  assert.equal(ui.elements["run-note"].value, "Preserve all article sections.");
+  assert.deepEqual(ui.navigations, []);
+  ui.input("");
+  ui.elements["restore-message"].on.click();
+  assert.equal(ui.elements["run-note"].value, "Preserve all article sections.");
+  ui.input("New draft");
+  ui.elements["restore-message"].on.click();
+  assert.equal(ui.elements["run-note"].value, "New draft");
 });

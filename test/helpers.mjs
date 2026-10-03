@@ -101,6 +101,15 @@ export function fakeGh({ pr = prFixture(), reviews = [], inline: inlineComments 
     addLabel: async (repo, n, label) => { calls.push(["addLabel", n, label]); },
     removeLabel: async (repo, n, label) => { calls.push(["removeLabel", n, label]); },
     setBody: async (repo, n, body) => { calls.push(["setBody", n, body]); g.data.pr.body = body; },
+    markReady: async (_repo, n) => { calls.push(["markReady", n]); g.data.pr.isDraft = false; },
+    setRecoveryMetadata: async (repo, n, identity, { taskId } = {}) => {
+      const { normalizePublicBody } = await import("../lib/block.mjs");
+      const source = (await g.prListByHead(repo, identity.branch)).find(p => p.number === n) ?? g.data.pr;
+      const body = normalizePublicBody(source.body, { identity, taskId });
+      if (body !== source.body) await g.setBody(repo, n, body);
+      source.body = body;
+      return { ...source, body };
+    },
   };
   return g;
 }

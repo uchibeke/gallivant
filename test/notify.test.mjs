@@ -113,6 +113,12 @@ function night() {
     addLabel: async (_r, pr, label) => { labels.push([pr, label]); },
     removeLabel: async () => {},
     setBody: async () => {},
+    setRecoveryMetadata: async (_r, n, identity, { taskId } = {}) => {
+      const { normalizePublicBody } = await import("../lib/block.mjs");
+      const pr = ghFor(byPr(n)).pr;
+      pr.body = normalizePublicBody(pr.body, { identity, taskId });
+      return pr;
+    },
   };
   const labels = [];
   const prToId = new Map();

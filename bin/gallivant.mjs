@@ -15,6 +15,7 @@ import { serve, DEFAULT_PORT } from "../lib/commands/serve.mjs";
 import { hasConfig } from "../lib/config.mjs";
 import { resolveHandle } from "../lib/state.mjs";
 import { requestControl } from "../lib/control.mjs";
+import { queueChain, retryChain, cancelChain, renderChains } from "../lib/chains.mjs";
 
 const HELP = `gallivant: write a PRD, mark it ready, go outside.
 
@@ -27,6 +28,10 @@ const HELP = `gallivant: write a PRD, mark it ready, go outside.
                                          --base sets the branch the PR targets and remembers it for this repository
   gallivant register <pr-url> [--harness <name>] [--session <id>] [--worktree <dir>]
                                          watch a hand-made PR; on an existing entry, reset it
+  gallivant chain <name> <prd1.md> <prd2.md> ... [--base <branch>]
+                                         queue ready PRDs; each starts after the previous PR is merged
+  gallivant chain [<name>] [--cancel | --retry [--resnapshot]]
+                                         inspect chains, stop future work, or retry after fixing a blocker
   gallivant up [--once]                  the daemon: recover from GitHub, then tick every poll_seconds
   gallivant down                         stop the daemon. A run already spawned keeps going
   gallivant status [--all] [--json]      needs-you, running, daemon health
@@ -36,7 +41,8 @@ const HELP = `gallivant: write a PRD, mark it ready, go outside.
                                          put a stopped entry back to work in the session that was doing it;
                                          --resnapshot makes an edited brief the one the gate judges
   gallivant recheck <handle>           queue a PR recheck without resetting its budget
-  gallivant say <handle> --note "..."  queue an update for the same session after its current run
+  gallivant say <handle> --note "..." [--interrupt]
+                                         send an update in the same session; --interrupt stops the active run first
   gallivant remove <handle>              forget an entry; the PR, the branch and the checkout are left alone
 
 Config: $GALLIVANT_HOME/config.json (default ~/.gallivant). Run doctor for the file to write.`;
@@ -44,8 +50,9 @@ Config: $GALLIVANT_HOME/config.json (default ~/.gallivant). Run doctor for the f
 const OPTIONS = {
   check: { type: "boolean" }, once: { type: "boolean" }, all: { type: "boolean" }, json: { type: "boolean" },
   send: { type: "boolean" }, probe: { type: "boolean" }, help: { type: "boolean", short: "h" },
-  "no-daemon": { type: "boolean" }, note: { type: "string" }, resnapshot: { type: "boolean" },
+  "no-daemon": { type: "boolean" }, note: { type: "string" }, resnapshot: { type: "boolean" }, interrupt: { type: "boolean" },
   base: { type: "string" }, harness: { type: "string" }, session: { type: "string" }, worktree: { type: "string" }, dir: { type: "string" }, port: { type: "string" },
+  cancel: { type: "boolean" }, retry: { type: "boolean" },
 };
 
 const portOf = v => {
@@ -76,8 +83,8 @@ async function main(argv) {
   if (cmd === "recheck" || cmd === "say") {
     if (!arg) throw new Error(`${cmd} needs a handle`);
     if (cmd === "say" && !values.note?.trim()) throw new Error("say needs --note with a message");
-    const r = requestControl(ctx, { handle: arg, action: cmd === "say" ? "message" : "recheck", note: values.note });
-    console.log(`${r.entry}: ${r.action} queued; it will wait for any active run to finish.`);
+    const r = requestControl(ctx, { handle: arg, action: cmd === "say" ? "message" : "recheck", note: values.note, interrupt: values.interrupt });
+    console.log(`${r.entry}: ${r.action} queued; ${r.interrupt ? "the daemon will stop the active run and resume its session with your message" : "it will wait for any active run to finish"}.`);
     if (!values["no-daemon"]) {
       try { await upInBackground(ctx); }
       catch (e) { console.error(`Request saved, but the daemon could not start: ${e.message}\nAfter fixing the daemon, the saved request will be picked up; do not resend it.`); return 1; }
@@ -85,6 +92,24 @@ async function main(argv) {
     return 0;
   }
   switch (cmd) {
+    case "chain": {
+      const paths = positionals.slice(2);
+      const operation = paths.length > 0 || values.retry;
+      if (values.cancel && (values.retry || values.resnapshot || paths.length)) throw new Error("--cancel cannot be combined with a new plan or --retry");
+      if (values.resnapshot && !values.retry) throw new Error("chain --resnapshot requires --retry");
+      if (values.retry && paths.length) throw new Error("--retry uses the existing plan; do not pass PRD paths");
+      if ((values.cancel || values.retry) && !arg) throw new Error("a chain name is required");
+      if (values.base && !paths.length) throw new Error("--base is set when queuing a new chain");
+      if (paths.length) await queueChain(ctx, { name: arg, paths, base: values.base });
+      else if (values.cancel) cancelChain(ctx, arg);
+      else if (values.retry) await retryChain(ctx, { name: arg, resnapshot: values.resnapshot });
+      console.log(renderChains(ctx, arg));
+      if (operation && !values["no-daemon"]) {
+        try { await upInBackground(ctx); }
+        catch (e) { console.error(`Chain saved, but the daemon could not start: ${e.message}\nRun gallivant up after fixing it; do not queue the chain again.`); return 1; }
+      } else if (operation) console.log("Saved. Run gallivant up to dispatch the chain.");
+      return 0;
+    }
     case "start": {
       if (!arg) throw new Error("start needs a PRD path");
       const r = await start(ctx, { path: arg, base: values.base });
