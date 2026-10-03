@@ -196,6 +196,18 @@ without spending a call, and `opencode auth list` prints the stored ones. Gemini
 command, so their probe only proves the binary runs; an unauthenticated run fails at its first model call and
 shows up as a failed run rather than a failed probe.
 
+These checks do not prove access to the selected model, installed-plugin behavior or a browser/capture surface.
+`doctor` compares the configured executable with the login shell's command, resolves symlinks, and prints both
+versions when they differ. A newer configured CLI can work while a nested bare command starts an older one;
+do not point the config back at that older CLI just to silence the mismatch. Use the configured path explicitly
+or align the shell with the verified installation.
+
+Every start and resume tells the agent which executable Gallivant actually launched and asks it to check mandatory
+external prerequisites before substantial work. This is an agent instruction, not a deterministic capability gate:
+the daemon cannot infer every task's required host or purchase a model call on each health poll. Required live tests
+still need their actual evidence, tied to the final artifact. Missing access or a capture surface must remain an
+explicit blocker; fix that prerequisite before resuming the same session, rather than raising its iteration limit.
+
 ## The reviewer object
 
 Gallivant does not know or care which tool reviews the pull request. Three fields say who the reviewer is, how to

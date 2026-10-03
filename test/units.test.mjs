@@ -112,18 +112,18 @@ test("harness argv: claude resumes with --settings and no dangerous flags; codex
 
 test("harness argv: gemini, opencode and goose each carry the session id on resume", () => {
   const g = buildRun({ harness: "gemini", config: CONFIG, mode: "start", session: "u1", prompt: "p", cwd: "/w" });
-  assert.deepEqual(g.args, ["--skip-trust", "--session-id", "u1", "--output-format", "stream-json", "-p", "p"]);
+  assert.deepEqual(g.args.slice(0, -1), ["--skip-trust", "--session-id", "u1", "--output-format", "stream-json", "-p"]);
   assert.equal(g.env.GEMINI_CLI_TRUST_WORKSPACE, "true", "a daemon run must not be refused for an untrusted directory");
   // --resume takes the uuid, not an index; the help text's "latest or an index" is incomplete.
   assert.deepEqual(buildRun({ harness: "gemini", config: CONFIG, mode: "resume", session: "u1", prompt: "p" }).args.slice(0, 3), ["--skip-trust", "--resume", "u1"]);
 
   const o = buildRun({ harness: "opencode", config: CONFIG, mode: "start", session: null, prompt: "p", cwd: "/w" });
-  assert.deepEqual(o.args, ["run", "--format", "json", "p"]);
-  assert.deepEqual(buildRun({ harness: "opencode", config: CONFIG, mode: "resume", session: "ses_x", prompt: "p" }).args, ["run", "--session", "ses_x", "--format", "json", "p"]);
+  assert.deepEqual(o.args.slice(0, -1), ["run", "--format", "json"]);
+  assert.deepEqual(buildRun({ harness: "opencode", config: CONFIG, mode: "resume", session: "ses_x", prompt: "p" }).args.slice(0, -1), ["run", "--session", "ses_x", "--format", "json"]);
 
   // goose names a session with -n and resumes THAT one with -r plus the same -n. --session-id cannot create one.
   const s = buildRun({ harness: "goose", config: CONFIG, mode: "start", session: "gallivant-x", prompt: "p", cwd: "/w" });
-  assert.deepEqual(s.args, ["run", "--name", "gallivant-x", "--output-format", "stream-json", "-t", "p"]);
+  assert.deepEqual(s.args.slice(0, -1), ["run", "--name", "gallivant-x", "--output-format", "stream-json", "-t"]);
   assert.deepEqual(buildRun({ harness: "goose", config: CONFIG, mode: "resume", session: "gallivant-x", prompt: "p" }).args.slice(0, 4), ["run", "--resume", "--name", "gallivant-x"]);
   assert.ok(!s.args.includes("--session-id"), "--session-id is resume-only and cannot name a new session");
   assert.equal(s.env.GOOSE_MODE, "smart_approve");
@@ -498,7 +498,7 @@ test("context_paths render as the flag each harness actually has, and an empty l
   // the run would die with "Input must be provided either through stdin or as a prompt argument".
   const c = buildRun({ harness: "claude", config: CONFIG, mode: "start", session: "s", prompt: "p", cwd: "/w", contextPaths: dirs });
   assert.deepEqual(c.args.slice(0, 4), ["--add-dir", "/srv/design-docs", "--add-dir", "/srv/sibling-repo"]);
-  assert.equal(c.args.at(-1), "p", "the prompt stays last");
+  assert.ok(c.args.at(-1).endsWith("\n\np"), "the prompt stays last");
   assert.ok(c.args.includes("--settings"), "the sandbox that bounds writes is still passed");
   // The empty case is byte-identical to a run built before this setting existed.
   assert.deepEqual(buildRun({ harness: "claude", config: CONFIG, mode: "start", session: "s", prompt: "p", cwd: "/w", contextPaths: [] }).args,
@@ -785,7 +785,7 @@ test("a context path never lands where it can swallow the prompt", () => {
       let spec;
       try { spec = buildRun({ harness, config: cfg, mode, session: "11111111-1111-4111-8111-111111111111", prompt: "THE PROMPT", cwd: "/w", contextPaths: ["/tmp/ctx"] }); }
       catch { continue; }   // a harness that refuses context paths has nothing to order
-      assert.equal(spec.args.at(-1), "THE PROMPT", `${harness} ${mode}: the prompt is the last element`);
+      assert.ok(spec.args.at(-1).endsWith("\n\nTHE PROMPT"), `${harness} ${mode}: the prompt is the last element`);
       // Only a flag that accepts a value can steal the prompt. A boolean one (`--verbose`) is harmless, so the
       // assertion is about the context flags specifically: every one must be followed by its own directory.
       for (const [i, arg] of spec.args.entries()) {
