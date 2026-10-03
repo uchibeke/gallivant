@@ -68,6 +68,7 @@ PRD (status: ready)  →  gallivant start  →  session in its own checkout  →
 | `gallivant doctor [--send] [--probe]` | Install checklist and health probe. Every failing line prints its fix. |
 | `gallivant ready <prd.md> [--check]` | Check a PRD against [the contract](docs/prd.md); flip it to ready only when every rule passes. |
 | `gallivant start <prd.md>` | Start a session for a ready PRD in its own checkout. Refuses anything that fails the contract. |
+| `gallivant chain <name> <first.md> <next.md> ...` | Queue ready PRDs in order. Start each successor only after you merge the preceding PR. |
 | `gallivant register <pr-url>` | Watch a PR you opened by hand, or reset a stopped one. |
 | `gallivant up` | The daemon. Recovers from GitHub on boot, then ticks. |
 | `gallivant status [--all] [--json]` | What needs you, what is running, whether the daemon is alive. |
@@ -79,8 +80,26 @@ PRD (status: ready)  →  gallivant start  →  session in its own checkout  →
 
 The PRD contract is in [docs/prd.md](docs/prd.md). Details in [docs/commands.md](docs/commands.md), config keys in [docs/config.md](docs/config.md), what the guardrails do and do not cover in [docs/guardrails.md](docs/guardrails.md), and the module map in [docs/architecture.md](docs/architecture.md). The product spec is [SPEC.md](SPEC.md); the audit that shaped it is under `docs/audit/`.
 
+## Plan a sequence
+
+Gallivant automates the work; a human accepts each milestone into the base branch. Prepare two or more ready PRDs
+in the same repository, then queue them once:
+
+```sh
+gallivant chain launch docs/prds/foundation.md docs/prds/integration.md docs/prds/launch.md
+gallivant chain launch
+```
+
+The existing daemon starts the first PRD and handles its implementation, checks and review. You merge its PR; the
+daemon confirms that merge on the planned base and starts the next PRD from the updated base. Closing a PR without
+merging stops the chain. Gallivant never merges for you, and marking a run ready does not unlock its successor.
+
+A multi-day plan can wait while you are away from a merge decision. Make each PRD a cohesive, reviewable milestone
+so small implementation steps do not each demand approval. Independent work can still run alongside a chain.
+See [chains](docs/chains.md) for editing the queued plan, recovery and cancellation.
+
 ## Status
 
-Version 0.1. Claude Code, Codex, Gemini CLI, opencode and goose fixers, the review and CI loop, recovery from GitHub, ntfy notifications, and the local tracker with recovery controls. Not yet: mid-turn message delivery, Telegram, PRD queueing, GitHub-issue input, cursor-agent (its event stream is unverified), or a service installer. See the milestones in the PRD.
+Version 0.1. Claude Code, Codex, Gemini CLI, opencode and goose fixers, the review and CI loop, recovery from GitHub, ntfy notifications, the local tracker with recovery controls, and sequential PRD chains gated on human merges. Not yet: mid-turn message delivery, Telegram, GitHub-issue input, cursor-agent (its event stream is unverified), or a service installer. See the milestones in the PRD.
 
 Apache-2.0.

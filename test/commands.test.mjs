@@ -243,6 +243,15 @@ test("register without --worktree clones from the branch as before, with no chec
   assert.match(r.worktree, /worktrees\/acme\/widget\/widget-export$/);
 });
 
+test("register refuses a pending start before touching its checkout or PR", async () => {
+  let cloned = false;
+  const w = registerWorld({ ...registerGit(), fromBranch: async () => { cloned = true; return "/tmp/unwanted"; } });
+  w.ctx.state.claimStart("acme/widget/widget-export");
+  await assert.rejects(() => register(w.ctx, { url: w.url }), /reserved/);
+  assert.equal(cloned, false);
+  assert.deepEqual(w.calls, []);
+});
+
 test("register accepts a hand-made branch outside the gallivant prefix", async () => {
   const w = registerWorld(registerGit());
   w.ctx.gh.prView = async () => prFixture({ headRefName: "feat/manual-export", createdAt: T0 });

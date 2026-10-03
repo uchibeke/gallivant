@@ -15,6 +15,7 @@ import { serve, DEFAULT_PORT } from "../lib/commands/serve.mjs";
 import { hasConfig } from "../lib/config.mjs";
 import { resolveHandle } from "../lib/state.mjs";
 import { requestControl } from "../lib/control.mjs";
+import { queueChain, retryChain, cancelChain, renderChains } from "../lib/chains.mjs";
 
 const HELP = `gallivant: write a PRD, mark it ready, go outside.
 
@@ -27,6 +28,10 @@ const HELP = `gallivant: write a PRD, mark it ready, go outside.
                                          --base sets the branch the PR targets and remembers it for this repository
   gallivant register <pr-url> [--harness <name>] [--session <id>] [--worktree <dir>]
                                          watch a hand-made PR; on an existing entry, reset it
+  gallivant chain <name> <prd1.md> <prd2.md> ... [--base <branch>]
+                                         queue ready PRDs; each starts after the previous PR is merged
+  gallivant chain [<name>] [--cancel | --retry [--resnapshot]]
+                                         inspect chains, stop future work, or retry after fixing a blocker
   gallivant up [--once]                  the daemon: recover from GitHub, then tick every poll_seconds
   gallivant down                         stop the daemon. A run already spawned keeps going
   gallivant status [--all] [--json]      needs-you, running, daemon health
@@ -47,6 +52,7 @@ const OPTIONS = {
   send: { type: "boolean" }, probe: { type: "boolean" }, help: { type: "boolean", short: "h" },
   "no-daemon": { type: "boolean" }, note: { type: "string" }, resnapshot: { type: "boolean" }, interrupt: { type: "boolean" },
   base: { type: "string" }, harness: { type: "string" }, session: { type: "string" }, worktree: { type: "string" }, dir: { type: "string" }, port: { type: "string" },
+  cancel: { type: "boolean" }, retry: { type: "boolean" },
 };
 
 const portOf = v => {
@@ -86,6 +92,24 @@ async function main(argv) {
     return 0;
   }
   switch (cmd) {
+    case "chain": {
+      const paths = positionals.slice(2);
+      const operation = paths.length > 0 || values.retry;
+      if (values.cancel && (values.retry || values.resnapshot || paths.length)) throw new Error("--cancel cannot be combined with a new plan or --retry");
+      if (values.resnapshot && !values.retry) throw new Error("chain --resnapshot requires --retry");
+      if (values.retry && paths.length) throw new Error("--retry uses the existing plan; do not pass PRD paths");
+      if ((values.cancel || values.retry) && !arg) throw new Error("a chain name is required");
+      if (values.base && !paths.length) throw new Error("--base is set when queuing a new chain");
+      if (paths.length) await queueChain(ctx, { name: arg, paths, base: values.base });
+      else if (values.cancel) cancelChain(ctx, arg);
+      else if (values.retry) await retryChain(ctx, { name: arg, resnapshot: values.resnapshot });
+      console.log(renderChains(ctx, arg));
+      if (operation && !values["no-daemon"]) {
+        try { await upInBackground(ctx); }
+        catch (e) { console.error(`Chain saved, but the daemon could not start: ${e.message}\nRun gallivant up after fixing it; do not queue the chain again.`); return 1; }
+      } else if (operation) console.log("Saved. Run gallivant up to dispatch the chain.");
+      return 0;
+    }
     case "start": {
       if (!arg) throw new Error("start needs a PRD path");
       const r = await start(ctx, { path: arg, base: values.base });

@@ -60,6 +60,35 @@ test("an open PR of ours with a valid block is adopted with its identity taken f
   assert.equal(e.worktree, `${CONFIG.worktrees}/acme/widget/widget-export`, "the checkout path is derived, and recreated lazily by the tick");
 });
 
+test("boot recovery preserves pending starts instead of adopting their PR or overwriting their snapshots", async () => {
+  const w = world();
+  const claim = w.ctx.state.claimStart(w.id);
+  assert.deepEqual(await reconcile(w.ctx, "me"), []);
+  assert.equal(w.ctx.state.get(w.id), null);
+  assert.equal(w.ctx.state.startClaim(w.id).token, claim.token);
+  assert.equal(w.snapshots.size, 0);
+  assert.ok(w.logged.some(([, message]) => /reserved/.test(message)));
+});
+
+test("a reservation racing boot recovery cannot prevent the daemon from starting", async () => {
+  const w = world();
+  w.ctx.gh.issueComments = async () => { w.ctx.state.claimStart(w.id); return []; };
+  assert.deepEqual(await reconcile(w.ctx, "me"), []);
+  assert.equal(w.ctx.state.get(w.id), null);
+  assert.ok(w.ctx.state.startClaim(w.id));
+});
+
+test("a slow recovery fetch cannot replace the snapshot approved by a concurrent start", async () => {
+  const w = world();
+  w.ctx.gh.fileAt = async () => {
+    w.ctx.state.claimStart(w.id);
+    w.ctx.writePrd(w.id, "Approved operator brief");
+    return "Different PR branch brief";
+  };
+  assert.deepEqual(await reconcile(w.ctx, "me"), []);
+  assert.equal(w.ctx.readPrd(w.id), "Approved operator brief");
+});
+
 test("the recovered iteration is the count of our own round comments since the last reset comment", async () => {
   const w = world({
     comments: [

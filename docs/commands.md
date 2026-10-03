@@ -52,6 +52,28 @@ case where you are about to run `gallivant up` in the foreground yourself.
 A daemon started this way is detached, so it outlives the terminal that ran `start`, and its output goes to
 `~/.gallivant/daemon.log`. A second `start` does not add a second daemon.
 
+## `gallivant chain [<name> [<first.md> <next.md> ...]] [--base <branch>]`
+
+Queue at least two ready PRDs in order. All must be new tasks in one checkout of the same repository and on the same
+resolved base. `--base` selects the base for a new chain; otherwise the repository config or default branch applies.
+The daemon starts the first task and starts each successor only after GitHub confirms the preceding PR was merged
+into that base. The final merge completes the chain. `ready-for-human`, a completed agent process and a local `done`
+entry never satisfy the dependency; closing without merging stops the chain. Gallivant never merges for you.
+
+With no arguments, lists chains. With only a name, shows that chain's milestones and current wait or stop. Queueing
+brings the existing daemon up if needed. Independent runs continue alongside it.
+
+| Command | Effect |
+|---|---|
+| `gallivant chain launch first.md next.md` | Approve the order and current brief/source fingerprints, then queue dispatch. |
+| `gallivant chain launch --retry` | Recheck a stopped chain after its cause is resolved. |
+| `gallivant chain launch --retry --resnapshot` | Explicitly accept updated briefs and carried sources for unstarted tasks. |
+| `gallivant chain launch --cancel` | Stop future dispatch; preserve already started work and its review loop. |
+
+Changed queued inputs require explicit reapproval. An ambiguous pending start is never cleared by retry because a
+session may already have started. Recover an ordinary stopped milestone with its existing run controls; that does
+not require a separate chain retry. See [PRD chains](chains.md) for the workflow, source preservation and recovery.
+
 ## `gallivant register <pr-url> [--harness <name>] [--session <id>] [--worktree <dir>]`
 
 Puts a PR into the loop that Gallivant did not open, or resets one that stopped.
@@ -110,6 +132,9 @@ A `brief-moved` row is an entry whose brief you have edited since it started, in
 A row whose detail names a GitHub write is an entry whose tick is declining one step until that write lands, with the failures counted; see `gallivant why` below for the five writes this can be. `blocked` is the one of those to read twice: every readiness condition has already passed and only the label that says so will not write, so the label is `blocked` rather than `fixing`. The others read `fixing` or `implementing`, which is true for them, because a fix round really does follow.
 
 Sections are in the order needs-you, running; `--all` adds done. The first line is `daemon DOWN` with exit code 1 when no daemon is alive. `--json` prints the same model for scripts and UIs.
+
+Chain progress is shown alongside runs. `gallivant chain <name>` shows the full ordered plan and explains which
+milestone or merge it is waiting for. Unstarted milestones have no agent run yet.
 
 ## `gallivant serve [--port 8791]`
 

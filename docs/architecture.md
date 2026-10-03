@@ -7,6 +7,8 @@ bin/gallivant.mjs        CLI: parse args, build the context, call one command
 lib/context.mjs          wires the real dependencies once (config, state, gh, git, notify, log, runner)
 
 lib/tick.mjs             the state machine. Settle runs, fetch, terminal states, events, dispatch, ready, silence.
+lib/chains.mjs           approved linear plans; dispatch after confirmed merges through the same start path
+lib/start_contract.mjs   shared start validation, exact input fingerprints and carried-file preservation
 lib/events.mjs           pure rules: what counts as an event, trust, reviewer verdict, green checks, round counting
 lib/prompt.mjs           start, register and fix prompts; quoting and caps
 lib/harness.mjs          adapters: argv per harness and mode, session id extraction, outcome parsing, sign-in probe
@@ -39,7 +41,7 @@ templates/               passport, Claude sandbox settings, PRD, tracker/{tracke
 
 ## Design rules
 
-- **The tick is the only writer.** Nothing changes state in exit handlers, timers or callbacks. A finished run is noticed on the next tick by asking the OS whether the pid is alive and reading the log. That is what makes a daemon restart mid-run safe.
+- **The daemon owns automatic transitions.** Operator commands record starts, controls and approved plans; the tick settles runs, handles reviews and advances chains. A finished run is noticed on the next tick by asking the OS whether the pid is alive and reading the log. That is what makes a daemon restart mid-run safe.
 - **Rules are pure.** `events.mjs` takes the raw shapes `gh` returns and produces events. Every rule in the PRD has a unit test with no network.
 - **One gate, and the brief is a Request.** `check()` takes a source-neutral Request, `{ id, repo, title, body, harness, status, source: { kind, url, author }, raw }`, plus the parsed fields the rules read. A source under `lib/sources/` reads whatever the operator typed and produces one; today the only source is a PRD file, and its Request is exactly what `parsePrd` always returned. Two things follow. A rule that depends on where the brief lives rather than on what it says carries its own scope as data (`kinds: ["prd"]`: `path`, and `sources` because it resolves the files a brief carries against the repository root that path gives it), so a source without a path is not failed for a rule it cannot satisfy. And `repo` is a field the source fills in, not something a command derives: `start` reads `request.repo` and never calls `git.toplevel` itself. Adding a source is an adapter plus somewhere to record its verdict, never a second gate.
 - **Dependencies are injected.** `makeTick` receives `gh`, `git`, `runnerFor`, `notify`, `clock`. The test suite builds fakes in `test/helpers.mjs`; the CLI builds real ones in `context.mjs`.
@@ -60,6 +62,32 @@ templates/               passport, Claude sandbox settings, PRD, tracker/{tracke
 - **Adapters own the flags.** Config holds binaries and paths only. A CLI upgrade changes `harness.mjs`, and `assertSafeArgv` refuses any `--dangerously-*` flag no matter who adds it.
 - **Reuse over build.** `gh` for the API, the harness's own resume and no-prompt flags, APort's own installers, ntfy's email header, command-center's runner layout so its log viewer can read a Gallivant run.
 - **One value, resolved in one place.** The base branch is read by three things that must agree: the branch the checkout is cut from, the `gh pr create --base` the session is told to run, and the branch merged in before each round. `resolveBase` in `config.mjs` is the only thing that decides it, from the flag, then the repository's entry in `repos`, then the repository's default branch. Three callers working it out for themselves would agree by luck, and the failure when they stopped agreeing would be a pull request opened against a branch nobody chose.
+- **Automate delivery; humans approve integration.** Chains advance only on a confirmed merge into their approved base. A successful process, `ready-for-human` or `done` is not a dependency signal. The implementation stays a linear queue inside the existing daemon, without automatic merges or stacked branches.
+
+## Chains
+
+`gallivant chain` records an approved linear plan in the same `state.json` as the run registry: ordered task IDs,
+repository and base, input fingerprints, progress and dispatch ownership. The CLI approves the plan; the daemon
+dispatches its milestones through the ordinary start path. Every milestone is a new task in one repository and on
+one base, with the existing contract, credential, harness and completion gates.
+
+A successor waits for fresh GitHub evidence that its predecessor's PR is `MERGED` into the planned base. The base
+used by the new checkout must contain that merge commit before an agent starts. `CLOSED` stops the chain, while an
+ordinary `needs-human` task stays the current milestone and uses existing run recovery. The final merge completes
+the plan. Human review time is an intentional wait, not an iteration to spend or a timeout to work around.
+
+Registration reserves future task IDs. A durable start claim is written under the registry's lock before clone or
+spawn, preventing a CLI start from racing a queued dispatch. The claim is cleared atomically when the run entry is
+recorded. No state lock is held across network calls. On recovery, a recorded run can be reconciled; a start whose
+outcome is ambiguous stops visibly instead of risking duplicate work. `--retry` does not discard that claim.
+
+Queued PRD and source fingerprints cover the bytes handed to the start path. Changed inputs require explicit
+`chain --retry --resnapshot` approval for unstarted tasks; active tasks retain their normal `resume --resnapshot`
+flow. Carried inputs cannot silently replace base files changed since plan approval. Cancellation prevents future
+dispatch without removing or stopping an active task. See [chains](chains.md) for operator commands.
+
+Queued plans cannot be reconstructed from PR metadata: GitHub has no representation of approved work that has not
+started. Existing PR recovery remains unchanged, but preserving `state.json` is necessary to preserve a chain.
 
 ## The tick, step by step
 
