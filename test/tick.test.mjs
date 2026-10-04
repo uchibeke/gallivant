@@ -565,7 +565,7 @@ test("a receipt-only round is counted on the receipt and its comment owed the sa
   await w.tick.tick();
   let e = w.entry();
   assert.equal(e.iteration, 1, "the receipt change is a round and is counted by it");
-  assert.deepEqual(e.round_comment, { kind: "receipt", since: at(6) }, "the run-start announcement boundary has no `pushed_at`: there is no push to date a clock from");
+  assert.deepEqual(e.round_comment, { kind: "receipt", since: new Date(Date.parse(at(6)) - 1000).toISOString() }, "the announcement includes the run-start second and has no push to date a clock from");
   assert.equal(e.rereview.at, T0, "and no ask is claimed");
   refuse = false;
   await w.tick.tick();
@@ -637,7 +637,7 @@ test("receipt-only settlement preserves feedback while owing its own recoverable
   await w.tick.tick();
   assert.equal(w.entry().cursor.since, cursor.since, "a receipt is not acknowledgement of newer feedback");
   assert.deepEqual(w.entry().cursor.dispatched, cursor.dispatched);
-  assert.deepEqual(w.entry().round_comment, { kind: "receipt", since: at(6) }, "an older marker cannot pay the resumed run's debt");
+  assert.deepEqual(w.entry().round_comment, { kind: "receipt", since: new Date(Date.parse(at(6)) - 1000).toISOString() }, "an older marker cannot pay the resumed run's debt");
   assert.equal(w.entry().iteration, 2);
   assert.equal(countRounds(w.gh.data.comments, "me"), 2, "recovery observes both genuine rounds");
   assert.equal(w.entry().rereview.at, T0);
@@ -648,6 +648,33 @@ test("receipt-only settlement preserves feedback while owing its own recoverable
   assert.equal(countRounds(w.gh.data.comments, "me"), 2);
   assert.equal(attempts, 1, "a retry recognizes the receipt announcement already posted");
   assert.equal(w.entry().rereview.at, T0);
+});
+
+test("receipt announcement retries recognize GitHub timestamps in the run-start second", async () => {
+  const startedAt = new Date(Date.parse(at(6)) + 750).toISOString();
+  const priorSecond = new Date(Date.parse(at(6)) - 1000).toISOString();
+  const w = world({ iteration: 1, last: { at: startedAt, run: "1-resume", exit: null, event: "resumed" } }, {
+    comments: [comment({ id: 1, by: "me", at: priorSecond, body: receiptRoundComment() })],
+  }, { config: { ...CONFIG, reviewer: null } });
+  w.clock.set(startedAt);
+  w.runner.start("resume", "/bin/claude", [], {});
+  w.runner.finish(claudeResultLines());
+  w.gh.data.pr.body = `Adds export.${receiptBlock()}`;
+  w.gh.now = () => at(6); // GitHub drops milliseconds, even for a comment posted after the run starts.
+  const post = w.gh.comment;
+  let attempts = 0;
+  w.gh.comment = async (...args) => {
+    await post(...args);
+    if (++attempts === 1) throw new Error("response lost after GitHub accepted comment");
+  };
+  await w.tick.tick();
+  assert.equal(attempts, 1, "the prior-second marker cannot discharge this round's debt");
+  assert.equal(w.entry().iteration, 2);
+  assert.equal(countRounds(w.gh.data.comments, "me"), 2);
+  await w.tick.tick();
+  assert.equal(attempts, 1, "recognize the successful post in the run-start second");
+  assert.equal(w.entry().round_comment, null);
+  assert.equal(w.entry().iteration, countRounds(w.gh.data.comments, "me"));
 });
 
 test("a round comment that will not post is bounded, does not repeat the ask, and does not judge the reviewer's silence", async () => {
