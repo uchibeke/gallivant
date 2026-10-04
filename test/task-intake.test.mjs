@@ -11,6 +11,7 @@ import { start } from "../lib/commands/start.mjs";
 import { taskCommand, readTaskStdin } from "../lib/commands/task.mjs";
 import { check, parsePrd } from "../lib/prd.mjs";
 import { makeRunner } from "../lib/run.mjs";
+import { runEnv, RUN_GIT_CONFIG } from "../lib/git.mjs";
 import { makeState } from "../lib/state.mjs";
 import { writeJsonAtomic } from "../lib/fs.mjs";
 import { contentDigest } from "../lib/start_contract.mjs";
@@ -368,7 +369,7 @@ test("native durable runner stores offline preparation logs, usage, runtime and 
   const w = world(), bin = join(w.home, "offline-codex.mjs");
   const operatorHome = join(w.home, "provider-home"), ghConfig = join(operatorHome, ".config/gh");
   mkdirSync(ghConfig, { recursive: true }); writeFileSync(join(ghConfig, "hosts.yml"), "github.com:\n  oauth_token: stored-fixture-only\n");
-  const overrides = { HOME: operatorHome, XDG_CONFIG_HOME: join(operatorHome, ".config"), GH_CONFIG_DIR: ghConfig, GH_TOKEN: "gh-fixture-only", GITHUB_TOKEN: "github-fixture-only", GH_ENTERPRISE_TOKEN: "ghe-fixture-only", GITHUB_ENTERPRISE_TOKEN: "enterprise-fixture-only", OPENAI_API_KEY: "provider-fixture-only", CODEX_HOME: join(operatorHome, ".codex") };
+  const overrides = { HOME: operatorHome, XDG_CONFIG_HOME: join(operatorHome, ".config"), GH_CONFIG_DIR: ghConfig, GH_TOKEN: "gh-fixture-only", GITHUB_TOKEN: "github-fixture-only", GH_ENTERPRISE_TOKEN: "ghe-fixture-only", GITHUB_ENTERPRISE_TOKEN: "enterprise-fixture-only", OPENAI_API_KEY: "provider-fixture-only", CODEX_HOME: join(operatorHome, ".codex"), SSH_AUTH_SOCK: "/fixture-only/agent.sock", SSH_ASKPASS: "/fixture-only/askpass", GIT_ASKPASS: "/fixture-only/askpass", GIT_CONFIG_PARAMETERS: "'credential.helper=fixture-only'", GIT_CONFIG_VALUE_99: "fixture-only", GIT_DIR: "/fixture-only/operator.git" };
   const previous = Object.fromEntries(Object.keys(overrides).map(key => [key, process.env[key]]));
   t.after(() => { for (const [key, value] of Object.entries(previous)) { if (value === undefined) delete process.env[key]; else process.env[key] = value; } });
   Object.assign(process.env, overrides);
@@ -385,6 +386,8 @@ else {
   try { readFileSync(join(process.env.GH_CONFIG_DIR, 'hosts.yml')); } catch (e) { configError = e.code; }
   writeFileSync('environment.json', JSON.stringify({
     tokenKeysPresent: ['GH_TOKEN', 'GITHUB_TOKEN', 'GH_ENTERPRISE_TOKEN', 'GITHUB_ENTERPRISE_TOKEN'].filter(k => k in process.env),
+    inheritedGitSshKeys: ['SSH_AUTH_SOCK', 'SSH_ASKPASS', 'GIT_ASKPASS', 'GIT_CONFIG_PARAMETERS', 'GIT_CONFIG_VALUE_99', 'GIT_DIR'].filter(k => k in process.env),
+    gitGlobal: process.env.GIT_CONFIG_GLOBAL, gitNoSystem: process.env.GIT_CONFIG_NOSYSTEM, gitSsh: process.env.GIT_SSH_COMMAND, gitProtocols: process.env.GIT_ALLOW_PROTOCOL,
     ghConfig: process.env.GH_CONFIG_DIR, configError, home: process.env.HOME,
     providerKey: process.env.OPENAI_API_KEY, codexHome: process.env.CODEX_HOME, pwd: process.env.PWD,
   }));
@@ -407,6 +410,7 @@ else {
   assert.ok(!argv.args.includes("--model")); assert.ok(argv.args.includes('sandbox_mode="workspace-write"'));
   const environment = JSON.parse(readFileSync(join(argv.cwd, "environment.json"), "utf8"));
   assert.deepEqual(environment.tokenKeysPresent, []); assert.equal(environment.ghConfig, "/dev/null"); assert.equal(environment.configError, "ENOTDIR");
+  assert.deepEqual(environment.inheritedGitSshKeys, []); assert.equal(environment.gitGlobal, "/dev/null"); assert.equal(environment.gitNoSystem, "1"); assert.equal(environment.gitSsh, "false"); assert.equal(environment.gitProtocols, "");
   assert.equal(environment.home, operatorHome); assert.equal(environment.providerKey, overrides.OPENAI_API_KEY); assert.equal(environment.codexHome, overrides.CODEX_HOME); assert.equal(environment.pwd, argv.cwd);
   const baseline = makeRunner(join(w.home, "baseline-runs"));
   const job = await baseline.start("inherited-env", process.execPath, ["-e", "console.log(JSON.stringify({github:process.env.GH_TOKEN,config:process.env.GH_CONFIG_DIR,provider:process.env.OPENAI_API_KEY}))"], { cwd: w.home });
@@ -415,6 +419,54 @@ else {
   while (baseline.current().running) { assert.ok(Date.now() < deadline, "baseline child failed to settle"); await new Promise(resolve => setTimeout(resolve, 40)); }
   assert.deepEqual(JSON.parse(baseline.lines(job.id).join("\n")), { github: overrides.GH_TOKEN, config: ghConfig, provider: overrides.OPENAI_API_KEY });
   assert.deepEqual(w.ctx.state.entries(), []);
+});
+
+test("preparation and repairs refuse inherited Git helpers, askpass and SSH authentication without provider changes", async t => {
+  const w = world(), providerHome = join(w.home, "provider-home"), spyBin = join(w.home, "spies"), marker = join(w.home, "credential-used");
+  mkdirSync(providerHome); mkdirSync(spyBin);
+  // Every potential SSH/helper executable is an offline spy, even when testing a
+  // regressed environment. No test can reach a network or an operator credential.
+  const spy = join(spyBin, "ssh");
+  writeFileSync(spy, `#!${process.execPath}\nimport { appendFileSync } from 'node:fs'; appendFileSync(${JSON.stringify(marker)}, 'called\\n'); console.log('fixture-only');\n`, { mode: 0o755 });
+  const globalConfig = join(providerHome, ".gitconfig"), systemConfig = join(w.home, "system.gitconfig");
+  const config = `[credential]\n\thelper = !${spy}\n[core]\n\taskPass = ${spy}\n\tsshCommand = ${spy}\n`;
+  writeFileSync(globalConfig, config); writeFileSync(systemConfig, config);
+  const overrides = {
+    HOME: providerHome, PATH: `${spyBin}:${process.env.PATH}`, OPENAI_API_KEY: "provider-fixture-only",
+    GIT_CONFIG_SYSTEM: systemConfig, GIT_CONFIG_GLOBAL: globalConfig, GIT_CONFIG_NOSYSTEM: "0",
+    GIT_CONFIG_PARAMETERS: `'credential.helper=!${spy}'`, GIT_CONFIG_COUNT: "1", GIT_CONFIG_KEY_0: "credential.helper", GIT_CONFIG_VALUE_0: `!${spy}`, GIT_CONFIG_VALUE_99: "stale-fixture-only",
+    GIT_ASKPASS: spy, GIT_SSH: spy, GIT_SSH_COMMAND: spy, GIT_ALLOW_PROTOCOL: "file:ssh:https:ext", SSH_AUTH_SOCK: join(w.home, "agent.sock"), SSH_AGENT_PID: "999999", SSH_ASKPASS: spy, SSH_ASKPASS_REQUIRE: "force",
+  };
+  const previous = Object.fromEntries(Object.keys(overrides).map(key => [key, process.env[key]]));
+  t.after(() => { for (const [key, value] of Object.entries(previous)) { if (value === undefined) delete process.env[key]; else process.env[key] = value; } });
+  Object.assign(process.env, overrides);
+  const runner = fakeRunner({ now: Date.now }), launch = runner.start;
+  runner.start = (...args) => {
+    const job = launch(...args), { env, cwd, inheritEnv } = args[3];
+    assert.equal(inheritEnv, false); assert.equal(env.HOME, providerHome); assert.equal(env.OPENAI_API_KEY, overrides.OPENAI_API_KEY);
+    for (const key of Object.keys(overrides).filter(k => /^(GIT_|SSH_)/.test(k))) {
+      if (!(key in runEnv()) && !["GIT_SSH_COMMAND", "GIT_ALLOW_PROTOCOL"].includes(key)) assert.ok(!(key in env), `inherited ${key}`);
+    }
+    for (const [key, value] of Object.entries(runEnv())) assert.equal(env[key], value);
+    assert.equal(env.GIT_ALLOW_PROTOCOL, ""); assert.equal(env.GIT_SSH_COMMAND, "false"); assert.equal(env.GIT_TERMINAL_PROMPT, "0");
+    const git = (args, input) => spawnSync("git", args, { cwd, env, input, encoding: "utf8", timeout: 2000 });
+    const helpers = git(["config", "--get-all", "credential.helper"]);
+    assert.equal(helpers.status, 0, helpers.stderr); assert.equal(helpers.stdout.trim(), RUN_GIT_CONFIG.find(([key]) => key === "credential.helper")[1]);
+    const credential = git(["credential", "fill"], "protocol=https\nhost=fixture.invalid\n\n");
+    assert.equal(credential.status, 128, credential.stderr); assert.equal(credential.stdout, ""); assert.match(credential.stderr, /terminal prompts disabled/);
+    const ssh = git(["ls-remote", "ssh://fixture.invalid/repo"]);
+    assert.equal(ssh.status, 128, ssh.stderr); assert.match(ssh.stderr, /transport 'ssh' not allowed/);
+    const file = git(["ls-remote", join(w.home, "fixture-only.git")]);
+    assert.equal(file.status, 128, file.stderr); assert.match(file.stderr, /transport 'file' not allowed/);
+    assert.equal(existsSync(marker), false, "no helper, askpass program or SSH client was invoked");
+    const data = JSON.parse(args[2].at(-1).split("INTAKE DATA (JSON):\n").at(-1));
+    runner.finish(codexLines({ text: runner.started.length === 1 ? "invalid JSON" : JSON.stringify(draftFor(data)) }), { exit: 0 });
+    return job;
+  };
+  w.ctx.runnerFor = () => runner;
+  const r = await createTaskService(w.ctx).prepare({ text: REQUEST });
+  assert.equal(r.status, "ready", r.failures.join("\n")); assert.equal(r.preparation.repairs, 1); assert.equal(runner.started.length, 2);
+  assert.match(r.draft.text, /Do not add dependencies/); assert.deepEqual(w.ctx.state.entries(), []);
 });
 
 test("packed package exposes shared operations and help in a clean installed directory", () => {

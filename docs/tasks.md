@@ -21,9 +21,13 @@ build manifests and instructions above selected files are included automatically
 Context is bounded to 256 KiB and requests to 32 KiB; choose fewer files if needed.
 Preparation receives these documents in its prompt and does not inherit global
 `context_paths` read grants. GitHub token variables are removed from its child
-environment and `GH_CONFIG_DIR=/dev/null` disables stored GitHub CLI credentials;
-provider authentication and harness settings remain available. This credential
-separation does not add an OS sandbox to a harness that has none.
+environment and `GH_CONFIG_DIR=/dev/null` disables stored GitHub CLI credentials.
+Inherited Git/SSH overrides, askpass programs and agent sockets are removed.
+The existing Git environment disables user/system configuration. Terminal
+credential prompts and Git transports are disabled so provider-home settings
+cannot authenticate fetches or pushes. Provider authentication and harness
+settings remain available. Credential separation does not add an OS sandbox to
+a harness that has none.
 
 The result includes contract `version: 1`, a durable `taskId`, a state `revision`,
 original input, requirements, answers, assumptions, requirement mapping, draft
