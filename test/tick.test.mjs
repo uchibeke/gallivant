@@ -565,7 +565,7 @@ test("a receipt-only round is counted on the receipt and its comment owed the sa
   await w.tick.tick();
   let e = w.entry();
   assert.equal(e.iteration, 1, "the receipt change is a round and is counted by it");
-  assert.deepEqual(e.round_comment, { kind: "receipt", since: at(5) }, "with no `pushed_at`: there is no push to date a clock from");
+  assert.deepEqual(e.round_comment, { kind: "receipt", since: at(6) }, "the run-start announcement boundary has no `pushed_at`: there is no push to date a clock from");
   assert.equal(e.rereview.at, T0, "and no ask is claimed");
   refuse = false;
   await w.tick.tick();
@@ -574,6 +574,80 @@ test("a receipt-only round is counted on the receipt and its comment owed the sa
   assert.equal(e.round_comment, null);
   assert.equal(e.rereview.at, T0, "and landing a receipt comment still asks the reviewer nothing");
   assert.ok(w.gh.data.comments.some(c => c.body === receiptRoundComment()), "the receipt-round comment is what was posted");
+});
+
+test("a receipt-only run dispatches reviews arriving during the run exactly once", async () => {
+  const w = world({}, {
+    reviews: [review({ id: 11, by: BOT, bot: true, state: "CHANGES_REQUESTED", at: at(5), body: "Correct the original receipt evidence." })],
+    inline: [inline({ id: 21, reviewId: 11, by: BOT, bot: true, at: at(5), body: "Original receipt finding." })],
+  });
+  w.clock.advance(6);
+  w.gh.now = () => new Date(w.clock.now()).toISOString();
+  await w.tick.tick();
+  assert.equal(w.runner.started.length, 1);
+  assert.deepEqual(w.entry().cursor.dispatched, ["review:11", "inline:21"]);
+
+  // A newer review arrives after dispatch, so the active session has never seen these findings.
+  w.gh.data.reviews.push(review({ id: 22, by: BOT, bot: true, state: "CHANGES_REQUESTED", at: at(8), body: "Check stale evidence before handoff." }));
+  w.gh.data.inline.push(
+    inline({ id: 31, reviewId: 22, by: BOT, bot: true, at: at(8), body: "Keep the original bundle immutable." }),
+    inline({ id: 32, reviewId: 22, by: BOT, bot: true, at: at(8), body: "Verify the recipient actually ran the correction." }),
+  );
+  w.clock.advance(4);
+  w.gh.data.pr.body = `Adds export.${receiptBlock()}`;
+  w.runner.finish(claudeResultLines());
+  await w.tick.tick();
+
+  assert.equal(w.runner.started.length, 2, "new findings are dispatched instead of discarded behind the settle timestamp");
+  const prompt = w.runner.started[1].args.at(-1);
+  assert.match(prompt, /Check stale evidence before handoff/);
+  assert.match(prompt, /Keep the original bundle immutable/);
+  assert.match(prompt, /Verify the recipient actually ran the correction/);
+  assert.doesNotMatch(prompt, /Correct the original receipt evidence|Original receipt finding/);
+  assert.equal(w.entry().state, STATES.prOpen);
+  assert.equal(w.entry().reason, null);
+  assert.equal(w.entry().iteration, 1, "the changed receipt still counts as one round");
+  assert.equal(w.entry().rereview.at, T0, "receipt progress never invents a re-review request");
+  assert.deepEqual(w.entry().cursor.dispatched, ["review:22", "inline:31", "inline:32"]);
+  assert.equal(w.entry().cursor.since, at(8), "only actually dispatched feedback advances the cursor");
+  await w.tick.tick();
+  await w.tick.tick();
+  assert.equal(w.runner.started.length, 2, "the same review cannot start another run");
+  assert.deepEqual(w.notify.sent, []);
+});
+
+test("receipt-only settlement preserves feedback while owing its own recoverable round marker", async () => {
+  const cursor = { since: at(0), dispatched: ["review:11"], fixed_sha: "a1b2c3d", checks_sha: "a1b2c3d", receipt_hash: null };
+  const w = world({ iteration: 1, cursor, last: { at: at(6), run: "1-resume", exit: null, event: "resumed" } }, {
+    comments: [comment({ id: 1, by: "me", at: at(2), body: roundComment(CONFIG) })],
+  }, { config: { ...CONFIG, reviewer: null } });
+  w.clock.advance(6);
+  w.runner.start("resume", "/bin/claude", [], {});
+  w.runner.finish(claudeResultLines());
+  w.gh.data.pr.body = `Adds export.${receiptBlock()}`;
+  w.clock.advance(4);
+  w.gh.now = () => new Date(w.clock.now()).toISOString();
+  const post = w.gh.comment;
+  let attempts = 0;
+  w.gh.comment = async (...args) => {
+    await post(...args);
+    if (++attempts === 1) throw new Error("connection lost after posting");
+  };
+
+  await w.tick.tick();
+  assert.equal(w.entry().cursor.since, cursor.since, "a receipt is not acknowledgement of newer feedback");
+  assert.deepEqual(w.entry().cursor.dispatched, cursor.dispatched);
+  assert.deepEqual(w.entry().round_comment, { kind: "receipt", since: at(6) }, "an older marker cannot pay the resumed run's debt");
+  assert.equal(w.entry().iteration, 2);
+  assert.equal(countRounds(w.gh.data.comments, "me"), 2, "recovery observes both genuine rounds");
+  assert.equal(w.entry().rereview.at, T0);
+
+  await w.tick.tick();
+  assert.equal(w.entry().round_comment, null);
+  assert.equal(w.entry().iteration, 2);
+  assert.equal(countRounds(w.gh.data.comments, "me"), 2);
+  assert.equal(attempts, 1, "a retry recognizes the receipt announcement already posted");
+  assert.equal(w.entry().rereview.at, T0);
 });
 
 test("a round comment that will not post is bounded, does not repeat the ask, and does not judge the reviewer's silence", async () => {
