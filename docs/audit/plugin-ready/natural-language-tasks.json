@@ -1,0 +1,226 @@
+{
+  "version": 1,
+  "task_id": "task-c93def694fe561146955c469",
+  "implementation_commit": "e1b0a71f8815e59005357c20830751de9eb6365f",
+  "recorded_at": "2026-10-04T22:55:21Z",
+  "versions": {
+    "package": "0.1.0",
+    "node": "v22.22.0",
+    "configured_codex": "0.160.0",
+    "task_contract": 1
+  },
+  "commands": [
+    {
+      "command": "npm test",
+      "exit_code": 0,
+      "tests": 764,
+      "passed": 764,
+      "raw_log": "/private/tmp/natural-language-tasks-npm-test.log"
+    },
+    {
+      "command": "npm run lint",
+      "exit_code": 0,
+      "raw_log": "/private/tmp/natural-language-tasks-lint.log"
+    },
+    {
+      "command": "npm run test:task-intake",
+      "exit_code": 0,
+      "tests": 22,
+      "passed": 22,
+      "raw_log": "/private/tmp/natural-language-tasks-focused.log"
+    },
+    {
+      "command": "git diff --check",
+      "exit_code": 0,
+      "observed_output": "empty output"
+    }
+  ],
+  "offline_cases": [
+    {
+      "test_name": "clear request persists a stable original, repository, base, harness and canonical reviewable draft without implementation writes",
+      "outcome": "passed",
+      "evidence": "test/task-intake.test.mjs::clear request persists a stable original, repository, base, harness and canonical reviewable draft without implementation writes"
+    },
+    {
+      "test_name": "CLI and structured preparation, answers, validation and start use equivalent versioned transitions",
+      "outcome": "passed",
+      "evidence": "test/task-intake.test.mjs::CLI and structured preparation, answers, validation and start use equivalent versioned transitions"
+    },
+    {
+      "test_name": "conflicting constraints stay visible and answers resume the same identity, including duplicate and stale replies",
+      "outcome": "passed",
+      "evidence": "test/task-intake.test.mjs::conflicting constraints stay visible and answers resume the same identity, including duplicate and stale replies"
+    },
+    {
+      "test_name": "invalid output is repaired at most three times and cannot remove explicit constraints",
+      "outcome": "passed",
+      "evidence": "test/task-intake.test.mjs::invalid output is repaired at most three times and cannot remove explicit constraints"
+    },
+    {
+      "test_name": "real checker failures are repaired, while a hosted readiness denial stays denied without dispatch or a fabricated pass",
+      "outcome": "passed",
+      "evidence": "test/task-intake.test.mjs::real checker failures are repaired, while a hosted readiness denial stays denied without dispatch or a fabricated pass"
+    },
+    {
+      "test_name": "hostile selected context cannot add authority, switch runtime, inject sources, or invent stack Verify commands",
+      "outcome": "passed",
+      "evidence": "test/task-intake.test.mjs::hostile selected context cannot add authority, switch runtime, inject sources, or invent stack Verify commands"
+    },
+    {
+      "test_name": "source documents available only in the operator tree are pinned and delivered through existing start snapshots",
+      "outcome": "passed",
+      "evidence": "test/task-intake.test.mjs::source documents available only in the operator tree are pinned and delivered through existing start snapshots"
+    },
+    {
+      "test_name": "run authorization dispatches once and stale or modified approved revisions conflict",
+      "outcome": "passed",
+      "evidence": "test/task-intake.test.mjs::run authorization dispatches once and stale or modified approved revisions conflict"
+    },
+    {
+      "test_name": "crash recovery reconciles accepted dispatch ownership and refuses uncertain launch acceptance",
+      "outcome": "passed",
+      "evidence": "test/task-intake.test.mjs::crash recovery reconciles accepted dispatch ownership and refuses uncertain launch acceptance"
+    },
+    {
+      "test_name": "preparation uses the existing runner in a separate workspace, records usage and reconciles a lost response",
+      "outcome": "passed",
+      "evidence": "test/task-intake.test.mjs::preparation uses the existing runner in a separate workspace, records usage and reconciles a lost response"
+    },
+    {
+      "test_name": "noninteractive stdin is bounded and question answers never open terminal prompts",
+      "outcome": "passed",
+      "evidence": "test/task-intake.test.mjs::noninteractive stdin is bounded and question answers never open terminal prompts"
+    },
+    {
+      "test_name": "package export and CLI inspection work from a clean directory without config, network or daemon import effects",
+      "outcome": "passed",
+      "evidence": "test/task-intake.test.mjs::package export and CLI inspection work from a clean directory without config, network or daemon import effects"
+    },
+    {
+      "test_name": "concurrent task mutations retain one live owner; a second caller cannot change accepted requirements",
+      "outcome": "passed",
+      "evidence": "test/task-intake.test.mjs::concurrent task mutations retain one live owner; a second caller cannot change accepted requirements"
+    },
+    {
+      "test_name": "a repository without a known Verify command asks for one and uses the explicitly supplied answer",
+      "outcome": "passed",
+      "evidence": "test/task-intake.test.mjs::a repository without a known Verify command asks for one and uses the explicitly supplied answer"
+    },
+    {
+      "test_name": "pending readiness resumes through the real gate without replanning or losing accepted requirements",
+      "outcome": "passed",
+      "evidence": "test/task-intake.test.mjs::pending readiness resumes through the real gate without replanning or losing accepted requirements"
+    },
+    {
+      "test_name": "uncertain start claims and changed carried snapshots never authorize another implementation",
+      "outcome": "passed",
+      "evidence": "test/task-intake.test.mjs::uncertain start claims and changed carried snapshots never authorize another implementation"
+    },
+    {
+      "test_name": "provider failure and exhausted runtime stop preparation without validator repairs or repeat calls",
+      "outcome": "passed",
+      "evidence": "test/task-intake.test.mjs::provider failure and exhausted runtime stop preparation without validator repairs or repeat calls"
+    },
+    {
+      "test_name": "native durable runner stores offline preparation logs, usage, runtime and isolated argv",
+      "outcome": "passed",
+      "evidence": "test/task-intake.test.mjs::native durable runner stores offline preparation logs, usage, runtime and isolated argv"
+    },
+    {
+      "test_name": "packed package exposes shared operations and help in a clean installed directory",
+      "outcome": "passed",
+      "evidence": "test/task-intake.test.mjs::packed package exposes shared operations and help in a clean installed directory"
+    },
+    {
+      "test_name": "structured input errors and CLI JSON startup errors retain the operation contract version",
+      "outcome": "passed",
+      "evidence": "test/task-intake.test.mjs::structured input errors and CLI JSON startup errors retain the operation contract version"
+    },
+    {
+      "test_name": "known start preflight failures can recover after fixing the cause; attempted spawns retain ownership",
+      "outcome": "passed",
+      "evidence": "test/task-intake.test.mjs::known start preflight failures can recover after fixing the cause; attempted spawns retain ownership"
+    },
+    {
+      "test_name": "intake preserves base precedence without persisting a resolved default as an explicit override",
+      "outcome": "passed",
+      "evidence": "test/task-intake.test.mjs::intake preserves base precedence without persisting a resolved default as an explicit override"
+    }
+  ],
+  "representative_fixture": {
+    "provenance": "Deterministic offline fixture; not live-provider evidence",
+    "original_request": "Add CSV export for the widget table.\nDo not add dependencies.",
+    "saved_draft": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-6ZIljt/tasks/task-a1a896015714afff3ae33dc4/drafts/revision-2/docs/prds/task-a1a896015714afff3ae33dc4.md",
+    "sha256": "98e173fe650cfd860510eb69456d161fb3a21917b4e4ad27e5d4c46570ad8f66",
+    "canonical_prd": "---\nstatus: ready\nharness: codex\n---\n\n# Export widgets from the table\n\n## Problem\n\nFinance admins reconcile widget spending in spreadsheets every month. Today the widget table has no export action, so admins copy each visible row by hand and make transcription errors. A scoped export will preserve the selected records and their values while making the monthly reconciliation repeatable and reducing manual work for these users.\n\n## User stories\n\n- As a finance admin, I want to export widgets, so that I can reconcile spending.\n\n## Acceptance criteria\n\n- Given a table with three widgets, when Export is selected, then the requested file contains exactly three widget rows. Explicit requirement r-1: \"Add CSV export for the widget table.\"\n- Given the current package manifest, when CSV export is installed, then dependency declarations remain unchanged. Explicit requirement r-2: \"Do not add dependencies.\"\n\n## Verify\n\n- `npm test`\n- `npm run lint`\n\n## Where to look\n\n- src/export/\n\n## Out of scope\n\n- PDF export and unrelated table changes.\n\n## Assumptions\n\n- Export includes the currently visible rows.\n\n## Requirements mapping\n\n- r-1: \"Add CSV export for the widget table.\" \u2192 ac-1\n- r-2: \"Do not add dependencies.\" \u2192 ac-2\n",
+    "readiness": {
+      "allow": true,
+      "source": "local fixture context using the actual ready command and checker"
+    },
+    "implementation_dispatch": null,
+    "review_outcome": null
+  },
+  "source_review": {
+    "implementation_revision": "e1b0a71f8815e59005357c20830751de9eb6365f",
+    "representative_output_inspected": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-6ZIljt/tasks/task-a1a896015714afff3ae33dc4/drafts/revision-2/docs/prds/task-a1a896015714afff3ae33dc4.md",
+    "boundaries_checked": [
+      "CLI and structured clients",
+      "request/answer revision writes",
+      "planner result replay",
+      "readiness write acknowledgement",
+      "source snapshots and refused paths",
+      "start claims, preflight errors and attempted spawn failures",
+      "task listing after failed input checks",
+      "base precedence and duplicate-start state"
+    ],
+    "regressions": [
+      "preparation uses the existing runner in a separate workspace, records usage and reconciles a lost response",
+      "pending readiness resumes through the real gate without replanning or losing accepted requirements",
+      "known start preflight failures can recover after fixing the cause; attempted spawns retain ownership",
+      "source documents available only in the operator tree are pinned and delivered through existing start snapshots",
+      "run authorization dispatches once and stale or modified approved revisions conflict",
+      "intake preserves base precedence without persisting a resolved default as an explicit override"
+    ]
+  },
+  "live": {
+    "status": "unverified",
+    "criterion_id": "ac-12",
+    "met": false,
+    "prerequisite_checks": [
+      {
+        "command": "\"/Users/uchi/.local/share/gallivant/codex/node_modules/.bin/codex\" --version",
+        "observed": "codex-cli 0.160.0; PATH alias creation warned Operation not permitted",
+        "proves_model_access": false
+      },
+      {
+        "command": "gh auth status",
+        "observed": "Signed in to github.com as uchibeke",
+        "proves_disposable_repo_authorization": false
+      }
+    ],
+    "host_plugin_browser_surface": "No required host/plugin/browser surface for this CLI and in-process milestone",
+    "blockers": [
+      {
+        "observed": "No authorized disposable GitHub repository/environment supplied",
+        "remedy": "Supply a specific disposable repository authorized for the tiny implementation and forced correction"
+      },
+      {
+        "observed": "No explicit live spending allowance supplied",
+        "remedy": "Grant a bounded allowance for preparation, implementation, one forced CI/review correction and restart reconciliation"
+      },
+      {
+        "observed": "Runtime model access not exercised; version/sign-in checks are not inference evidence",
+        "remedy": "Supply configured credentials and actual model access, then exercise the authorized case without switching model/provider or weakening permissions"
+      }
+    ],
+    "original_request": null,
+    "requirements": null,
+    "readiness_decision": null,
+    "implementation_dispatch": null,
+    "review_outcome": null,
+    "provider_ids": [],
+    "cost_usd": null,
+    "artifacts": [],
+    "next_steps": "docs/audit/plugin-ready/checklist.md"
+  }
+}
