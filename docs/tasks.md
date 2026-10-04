@@ -19,6 +19,11 @@ selection uses the explicit flag or the first configured harness, as `new` does.
 Selected context consists of explicit repository files. Root `AGENTS.md`, common
 build manifests and instructions above selected files are included automatically.
 Context is bounded to 256 KiB and requests to 32 KiB; choose fewer files if needed.
+Preparation receives these documents in its prompt and does not inherit global
+`context_paths` read grants. GitHub token variables are removed from its child
+environment and `GH_CONFIG_DIR=/dev/null` disables stored GitHub CLI credentials;
+provider authentication and harness settings remain available. This credential
+separation does not add an OS sandbox to a harness that has none.
 
 The result includes contract `version: 1`, a durable `taskId`, a state `revision`,
 original input, requirements, answers, assumptions, requirement mapping, draft
@@ -63,7 +68,8 @@ the normal per-run layout with a separate `intake/<task-id>` identity. Generated
 source paths must be selected documents. The existing `sources` gate validates
 them and `start` delivers pinned bytes to the implementation checkout, including
 documents that exist only in the operator tree. Symlinks, escapes, globs, control
-characters and secret/agent configuration paths are refused. Editing the original
+characters and secret/agent configuration paths are refused by intake. Existing
+hand-authored PRDs retain their source-manifest rules. Editing the original
 source after approval does not silently change the selected snapshot.
 
 At most three validator repairs occur, across the entire intake, and at most 16

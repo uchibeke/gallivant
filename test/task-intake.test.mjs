@@ -7,6 +7,7 @@ import { PassThrough } from "node:stream";
 import { createTaskService } from "../lib/tasks.mjs";
 import { taskStore } from "../lib/task_store.mjs";
 import { ready } from "../lib/commands/ready.mjs";
+import { start } from "../lib/commands/start.mjs";
 import { taskCommand, readTaskStdin } from "../lib/commands/task.mjs";
 import { check, parsePrd } from "../lib/prd.mjs";
 import { makeRunner } from "../lib/run.mjs";
@@ -14,7 +15,7 @@ import { makeState } from "../lib/state.mjs";
 import { writeJsonAtomic } from "../lib/fs.mjs";
 import { contentDigest } from "../lib/start_contract.mjs";
 import { draftFor } from "./fixtures/task-intake.mjs";
-import { tempHome, CONFIG, harnessBin, fakeCredential, fakeIdentity, silentLog, fakeRunner, makeClock, codexLines } from "./helpers.mjs";
+import { tempHome, CONFIG, GOOD_PRD, harnessBin, fakeCredential, fakeIdentity, silentLog, fakeRunner, makeClock, codexLines } from "./helpers.mjs";
 
 const REQUEST = "Add CSV export for the widget table.\nDo not add dependencies.";
 function world(overrides = {}) {
@@ -138,6 +139,10 @@ test("hostile selected context cannot add authority, switch runtime, inject sour
   assert.match(r.failures[0], /secret or agent configuration/);
   const wrongStack = world({ prepare: async (_ctx, task) => { const out = draftFor(task); out.verify = ["cargo test"]; return JSON.stringify(out); } });
   const wrong = await wrongStack.service.prepare({ text: REQUEST }); assert.match(wrong.failures[0], /not supported by the selected repository: cargo test/);
+  const saved = world(), approved = await saved.service.prepare({ text: REQUEST });
+  const store = taskStore(saved.home), record = store.read(approved.taskId);
+  record.output.sources.push(".config/docs/setup.md"); store.save(record);
+  await assert.rejects(() => saved.service.validate({ taskId: approved.taskId, expectedRevision: approved.revision }), e => e.code === "TASK_CONFLICT" && /secret or agent configuration/.test(e.message));
 });
 
 test("source documents available only in the operator tree are pinned and delivered through existing start snapshots", async () => {
@@ -150,12 +155,28 @@ test("source documents available only in the operator tree are pinned and delive
   assert.equal(w.sources.get(`${started.implementation.id}:docs/local-plan.md`), "Operator-only contract. Preserve CSV columns.");
   assert.equal(readFileSync(join(started.implementation.worktree, "docs", "local-plan.md"), "utf8"), "Operator-only contract. Preserve CSV columns.");
   assert.equal(w.snapshots.get(started.implementation.id), started.draft.text);
-  for (const path of ["../outside.md", ".env", ".aws/credentials", ".codex/config.toml", ".agents/settings.json", ".git/config", "/etc/passwd", "docs/line\nbreak.md"]) {
+  for (const path of ["../outside.md", ".env", ".env.example", ".config/docs/setup.md", ".aws/credentials", ".codex/config.toml", ".agents/settings.json", ".git/config", "/etc/passwd", "docs/line\nbreak.md"]) {
     await assert.rejects(() => w.service.prepare({ text: REQUEST, context: [path] }), /secret|safe|absolute|leaves/);
   }
   symlinkSync(join(w.checkout, "package.json"), join(w.checkout, "linked.md"));
   await assert.rejects(() => w.service.prepare({ text: REQUEST, context: ["linked.md"] }), /symlink/);
   assert.deepEqual(w.service.list().tasks.map(t => t.taskId), [r.taskId], "aborted input namespaces do not break discovery");
+});
+
+test("hand-authored example and configuration documents still pass readiness and source snapshot delivery", async () => {
+  const w = world(), files = { ".env.example": "EXAMPLE_ONLY=replace-me\n", ".config/docs/setup.md": "Project setup documentation.\n" };
+  for (const [path, text] of Object.entries(files)) {
+    mkdirSync(dirname(join(w.checkout, path)), { recursive: true }); writeFileSync(join(w.checkout, path), text);
+  }
+  const path = join(w.checkout, "docs/prds/manual-sources.md"); mkdirSync(dirname(path), { recursive: true });
+  writeFileSync(path, GOOD_PRD.replace("status: ready", "status: draft").replace("harness: codex", "harness: codex\nsources:\n  - .env.example\n  - .config/docs/setup.md"));
+  assert.equal((await ready({ path, config: w.ctx.config, log: silentLog })).ok, true);
+  const entry = await start(w.ctx, { path });
+  for (const [rel, text] of Object.entries(files)) {
+    assert.equal(w.sources.get(`${entry.id}:${rel}`), text);
+    assert.equal(readFileSync(join(entry.worktree, rel), "utf8"), text);
+  }
+  assert.equal(w.service.list().tasks.length, 0, "manual starts do not create intake records");
 });
 
 test("run authorization dispatches once and stale or modified approved revisions conflict", async () => {
@@ -222,6 +243,39 @@ test("preparation uses the existing runner in a separate workspace, records usag
   savedOutput.status = "preparing"; savedOutput.attempts[0].consumed = false; store.save(savedOutput);
   const replayed = await service.resume({ taskId: r.taskId, expectedRevision: savedOutput.revision });
   assert.equal(replayed.status, "ready"); assert.equal(runner.started.length, 1);
+});
+
+test("preparation and repairs omit global context grants while implementation retains its harness behavior", async () => {
+  for (const harness of ["claude", "codex"]) {
+    const w = world(), extra = tempHome();
+    w.ctx.config.context_paths = [extra];
+    w.ctx.config.harness = { [harness]: { bin: harnessBin(w.home, harness), ...(harness === "claude" ? { settings: join(w.home, "claude/settings.json") } : {}) } };
+    mkdirSync(join(w.checkout, "docs")); writeFileSync(join(w.checkout, "docs/selected.md"), "Only this selected document.");
+    const runner = fakeRunner({ now: Date.now }), launch = runner.start, implementationRunner = w.ctx.runnerFor;
+    runner.start = (...args) => {
+      const job = launch(...args), data = JSON.parse(args[2].at(-1).split("INTAKE DATA (JSON):\n").at(-1));
+      const text = runner.started.length === 1 ? "invalid JSON" : JSON.stringify(draftFor(data));
+      runner.finish(harness === "codex" ? codexLines({ text }) : [JSON.stringify({ type: "result", result: text, is_error: false, permission_denials: [] })], { exit: 0 });
+      return job;
+    };
+    w.ctx.runnerFor = id => id.startsWith("intake/") ? runner : implementationRunner(id);
+    const service = createTaskService(w.ctx), r = await service.prepare({ text: REQUEST, context: ["docs/selected.md"] });
+    assert.equal(r.status, "ready"); assert.equal(r.preparation.repairs, 1); assert.equal(runner.started.length, 2);
+    for (const run of runner.started) {
+      assert.ok(!run.args.includes("--add-dir")); assert.ok(!run.args.includes(extra));
+      assert.match(run.args.at(-1), /Only this selected document/);
+      assert.equal(run.opts.inheritEnv, false); assert.equal(run.opts.env.GH_CONFIG_DIR, "/dev/null");
+    }
+    const dispatched = await service.start({ taskId: r.taskId, expectedRevision: r.revision, run: true });
+    if (harness === "claude") {
+      assert.equal(dispatched.status, "started");
+      const run = w.runners.get(dispatched.implementation.id).started[0];
+      assert.ok(run.args.includes("--add-dir")); assert.ok(run.args.includes(extra));
+      assert.equal(run.opts.env.GH_TOKEN, "t-for-test", "implementation still gets its resolved credential");
+    } else {
+      assert.equal(dispatched.status, "blocked"); assert.match(dispatched.failures[0], /context_paths/);
+    }
+  }
 });
 
 test("noninteractive stdin is bounded and question answers never open terminal prompts", async () => {
@@ -310,10 +364,36 @@ test("provider failure and exhausted runtime stop preparation without validator 
   assert.equal(blocked.status, "blocked"); assert.match(blocked.failures[0], /runtime allowance exhausted/); assert.equal(pending.current().killed, true);
 });
 
-test("native durable runner stores offline preparation logs, usage, runtime and isolated argv", async () => {
+test("native durable runner stores offline preparation logs, usage, runtime and isolated argv", async t => {
   const w = world(), bin = join(w.home, "offline-codex.mjs");
+  const operatorHome = join(w.home, "provider-home"), ghConfig = join(operatorHome, ".config/gh");
+  mkdirSync(ghConfig, { recursive: true }); writeFileSync(join(ghConfig, "hosts.yml"), "github.com:\n  oauth_token: stored-fixture-only\n");
+  const overrides = { HOME: operatorHome, XDG_CONFIG_HOME: join(operatorHome, ".config"), GH_CONFIG_DIR: ghConfig, GH_TOKEN: "gh-fixture-only", GITHUB_TOKEN: "github-fixture-only", GH_ENTERPRISE_TOKEN: "ghe-fixture-only", GITHUB_ENTERPRISE_TOKEN: "enterprise-fixture-only", OPENAI_API_KEY: "provider-fixture-only", CODEX_HOME: join(operatorHome, ".codex") };
+  const previous = Object.fromEntries(Object.keys(overrides).map(key => [key, process.env[key]]));
+  t.after(() => { for (const [key, value] of Object.entries(previous)) { if (value === undefined) delete process.env[key]; else process.env[key] = value; } });
+  Object.assign(process.env, overrides);
   const fixture = new URL("./fixtures/task-intake.mjs", import.meta.url).href;
-  writeFileSync(bin, `#!${process.execPath}\nimport { draftFor } from ${JSON.stringify(fixture)};\nconst args = process.argv.slice(2);\nif (args[0] === '--version') console.log('0.160.0');\nelse if (args[0] === 'login') console.log('offline fixture');\nelse { const data = JSON.parse(args.at(-1).split('INTAKE DATA (JSON):\\n').at(-1)); console.log(JSON.stringify({ type: 'thread.started', thread_id: '22222222-2222-4222-8222-222222222222' })); console.log(JSON.stringify({ type: 'item.completed', item: { type: 'agent_message', text: JSON.stringify(draftFor(data)) } })); console.log(JSON.stringify({ type: 'turn.completed', usage: { input_tokens: 120, output_tokens: 40 } })); }\n`, { mode: 0o755 });
+  writeFileSync(bin, `#!${process.execPath}
+import { draftFor } from ${JSON.stringify(fixture)};
+import { readFileSync, writeFileSync } from 'node:fs';
+import { join } from 'node:path';
+const args = process.argv.slice(2);
+if (args[0] === '--version') console.log('0.160.0');
+else if (args[0] === 'login') console.log('offline fixture');
+else {
+  let configError;
+  try { readFileSync(join(process.env.GH_CONFIG_DIR, 'hosts.yml')); } catch (e) { configError = e.code; }
+  writeFileSync('environment.json', JSON.stringify({
+    tokenKeysPresent: ['GH_TOKEN', 'GITHUB_TOKEN', 'GH_ENTERPRISE_TOKEN', 'GITHUB_ENTERPRISE_TOKEN'].filter(k => k in process.env),
+    ghConfig: process.env.GH_CONFIG_DIR, configError, home: process.env.HOME,
+    providerKey: process.env.OPENAI_API_KEY, codexHome: process.env.CODEX_HOME, pwd: process.env.PWD,
+  }));
+  const data = JSON.parse(args.at(-1).split('INTAKE DATA (JSON):\\n').at(-1));
+  console.log(JSON.stringify({ type: 'thread.started', thread_id: '22222222-2222-4222-8222-222222222222' }));
+  console.log(JSON.stringify({ type: 'item.completed', item: { type: 'agent_message', text: JSON.stringify(draftFor(data)) } }));
+  console.log(JSON.stringify({ type: 'turn.completed', usage: { input_tokens: 120, output_tokens: 40 } }));
+}
+`, { mode: 0o755 });
   w.ctx.config.harness.codex.bin = bin;
   const runners = new Map();
   w.ctx.runnerFor = id => { if (!runners.has(id)) runners.set(id, makeRunner(join(w.home, "runs", id.replaceAll("/", "__")))); return runners.get(id); };
@@ -325,6 +405,15 @@ test("native durable runner stores offline preparation logs, usage, runtime and 
   const argv = JSON.parse(readFileSync(join(dirname(attempt.log), "cmd.json"), "utf8"));
   assert.equal(argv.cmd, bin); assert.ok(argv.cwd.includes("/preparation/turn-1"));
   assert.ok(!argv.args.includes("--model")); assert.ok(argv.args.includes('sandbox_mode="workspace-write"'));
+  const environment = JSON.parse(readFileSync(join(argv.cwd, "environment.json"), "utf8"));
+  assert.deepEqual(environment.tokenKeysPresent, []); assert.equal(environment.ghConfig, "/dev/null"); assert.equal(environment.configError, "ENOTDIR");
+  assert.equal(environment.home, operatorHome); assert.equal(environment.providerKey, overrides.OPENAI_API_KEY); assert.equal(environment.codexHome, overrides.CODEX_HOME); assert.equal(environment.pwd, argv.cwd);
+  const baseline = makeRunner(join(w.home, "baseline-runs"));
+  const job = await baseline.start("inherited-env", process.execPath, ["-e", "console.log(JSON.stringify({github:process.env.GH_TOKEN,config:process.env.GH_CONFIG_DIR,provider:process.env.OPENAI_API_KEY}))"], { cwd: w.home });
+  t.after(async () => { baseline.kill(job.id); await baseline.waitForKill(job.id); });
+  const deadline = Date.now() + 10_000;
+  while (baseline.current().running) { assert.ok(Date.now() < deadline, "baseline child failed to settle"); await new Promise(resolve => setTimeout(resolve, 40)); }
+  assert.deepEqual(JSON.parse(baseline.lines(job.id).join("\n")), { github: overrides.GH_TOKEN, config: ghConfig, provider: overrides.OPENAI_API_KEY });
   assert.deepEqual(w.ctx.state.entries(), []);
 });
 
