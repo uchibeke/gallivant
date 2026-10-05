@@ -1,8 +1,8 @@
 {
   "version": 1,
   "task_id": "task-c93def694fe561146955c469",
-  "implementation_commit": "fdcc810864f9653e6f78edff12dc108b07c927b8",
-  "recorded_at": "2026-10-05T03:25:11.351Z",
+  "implementation_commit": "32e2c3ec9618f40a6d65879439c7c00a08a74afb",
+  "recorded_at": "2026-10-05T03:58:29.896424+00:00",
   "versions": {
     "package": "0.1.0",
     "node": "v22.22.0",
@@ -13,21 +13,21 @@
     {
       "command": "npm test",
       "exit_code": 0,
-      "tests": 799,
-      "passed": 799,
-      "raw_log": "/private/tmp/natural-language-tasks-command-safety-npm-test.log"
+      "raw_log": "/private/tmp/natural-language-tasks-recovery-final-npm-test.log",
+      "tests": 806,
+      "passed": 806
     },
     {
       "command": "npm run lint",
       "exit_code": 0,
-      "raw_log": "/private/tmp/natural-language-tasks-command-safety-lint.log"
+      "raw_log": "/private/tmp/natural-language-tasks-recovery-lint.log"
     },
     {
       "command": "npm run test:task-intake",
       "exit_code": 0,
-      "tests": 57,
-      "passed": 57,
-      "raw_log": "/private/tmp/natural-language-tasks-command-safety-final-focused.log"
+      "raw_log": "/private/tmp/natural-language-tasks-recovery-final-focused.log",
+      "tests": 62,
+      "passed": 62
     },
     {
       "command": "git diff --check",
@@ -232,6 +232,16 @@
       "evidence": "test/task-intake.test.mjs::provider failure and exhausted runtime stop preparation without validator repairs or repeat calls"
     },
     {
+      "test_name": "recovered completed preparation enforces its persisted deadline while preserving recorded usage and timely output",
+      "outcome": "passed",
+      "evidence": "test/task-intake.test.mjs::recovered completed preparation enforces its persisted deadline while preserving recorded usage and timely output"
+    },
+    {
+      "test_name": "settled preparation replay refuses old over-budget output without another run or validation repair",
+      "outcome": "passed",
+      "evidence": "test/task-intake.test.mjs::settled preparation replay refuses old over-budget output without another run or validation repair"
+    },
+    {
       "test_name": "preparation environments admit only selected provider settings and isolate native profiles for every adapter",
       "outcome": "passed",
       "evidence": "test/task-intake.test.mjs::preparation environments admit only selected provider settings and isolate native profiles for every adapter"
@@ -317,6 +327,21 @@
       "evidence": "test/task-intake.test.mjs::known start preflight failures can recover after fixing the cause; attempted spawns retain ownership"
     },
     {
+      "test_name": "post-clone source conflicts retain snapshots and recovery ownership after correction, restart and duplicate start",
+      "outcome": "passed",
+      "evidence": "test/task-intake.test.mjs::post-clone source conflicts retain snapshots and recovery ownership after correction, restart and duplicate start"
+    },
+    {
+      "test_name": "a partial clone failure retains its claim and intake intent before any runner can be spawned",
+      "outcome": "passed",
+      "evidence": "test/task-intake.test.mjs::a partial clone failure retains its claim and intake intent before any runner can be spawned"
+    },
+    {
+      "test_name": "pre-clone snapshot failures release clean start ownership and can retry the approved intake once",
+      "outcome": "passed",
+      "evidence": "test/task-intake.test.mjs::pre-clone snapshot failures release clean start ownership and can retry the approved intake once"
+    },
+    {
       "test_name": "intake preserves base precedence without persisting a resolved default as an explicit override",
       "outcome": "passed",
       "evidence": "test/task-intake.test.mjs::intake preserves base precedence without persisting a resolved default as an explicit override"
@@ -325,7 +350,7 @@
   "representative_fixture": {
     "provenance": "Deterministic offline fixture; not live-provider evidence",
     "original_request": "Add CSV export for the widget table.\nDo not add dependencies.",
-    "saved_draft": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-8Jvutc/tasks/task-a1a896015714afff3ae33dc4/drafts/revision-2/docs/prds/task-a1a896015714afff3ae33dc4.md",
+    "saved_draft": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-eyeW8F/tasks/task-a1a896015714afff3ae33dc4/drafts/revision-2/docs/prds/task-a1a896015714afff3ae33dc4.md",
     "sha256": "e0fcb9be67e1233f4ab02bfc1e95fc82160dff58fb02f2472c47a21fe945e6b1",
     "canonical_prd": "---\nstatus: ready\nharness: codex\nsources:\n  - AGENTS.md\n  - package.json\n---\n\n# Export widgets from the table\n\n## Problem\n\nFinance admins reconcile widget spending in spreadsheets every month. Today the widget table has no export action, so admins copy each visible row by hand and make transcription errors. A scoped export will preserve the selected records and their values while making the monthly reconciliation repeatable and reducing manual work for these users.\n\n## User stories\n\n- As a finance admin, I want to export widgets, so that I can reconcile spending.\n\n## Acceptance criteria\n\n- Given a table with three widgets, when Export is selected, then the requested file contains exactly three widget rows. Explicit requirement r-1: \"Add CSV export for the widget table.\"\n- Given the current package manifest, when CSV export is installed, then dependency declarations remain unchanged. Explicit requirement r-2: \"Do not add dependencies.\"\n\n## Verify\n\n- `npm test`\n- `npm run lint`\n\n## Where to look\n\n- src/export/\n\n## Out of scope\n\n- PDF export and unrelated table changes.\n\n## Assumptions\n\n- Export includes the currently visible rows.\n\n## Requirements mapping\n\n- r-1: \"Add CSV export for the widget table.\" → ac-1\n- r-2: \"Do not add dependencies.\" → ac-2\n",
     "readiness": {
@@ -346,8 +371,8 @@
     ]
   },
   "source_review": {
-    "implementation_revision": "fdcc810864f9653e6f78edff12dc108b07c927b8",
-    "representative_output_inspected": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-8Jvutc/tasks/task-a1a896015714afff3ae33dc4/drafts/revision-2/docs/prds/task-a1a896015714afff3ae33dc4.md",
+    "implementation_revision": "32e2c3ec9618f40a6d65879439c7c00a08a74afb",
+    "representative_output_inspected": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-eyeW8F/tasks/task-a1a896015714afff3ae33dc4/drafts/revision-2/docs/prds/task-a1a896015714afff3ae33dc4.md",
     "boundaries_checked": [
       "CLI and structured clients",
       "request/answer revision writes",
@@ -379,7 +404,10 @@
       "existing sources path validation, draft snapshots, readiness digest and start delivery carry authorizing files from dirty/feature checkout into a fresh base; native operator edits cannot change pinned bytes, omitted sources require bounded repair, and a saved brief that loses its authorizer is refused before dispatch",
       "automatically included root/nested instructions infer recognizable verification actions only; release/publish/deploy, mixed Make/Maven targets, paid/live scripts and composed shell expressions are excluded; known package scripts and selected manager override unrelated snippets",
       "separately persisted owner Verify choices versus cached inference at preparation, answer, prompt, inspection, saved validation and start; legacy caches cannot regain authority; invalid non-array owner input fails before accepted writes",
-      "automatic text lockfile selection uses existing path/text/combined byte protections and pinned context; packageManager precedes single-manager lock evidence; absent, unsupported or conflicting manager evidence withholds script inference and reaches identical CLI/structured questions; answer-time context and source carriage resolve manager evidence without replacing accepted bytes"
+      "automatic text lockfile selection uses existing path/text/combined byte protections and pinned context; packageManager precedes single-manager lock evidence; absent, unsupported or conflicting manager evidence withholds script inference and reaches identical CLI/structured questions; answer-time context and source carriage resolve manager evidence without replacing accepted bytes",
+      "completed detached preparation uses the persisted deadline before accepting output; native recorded and conservative inferred end times, exact-boundary completion and legacy elapsed-only replay retain usage/log/cost and stop readiness, repair or dispatch on overrun",
+      "the shared start path persists token-owned clone metadata before git.create; partial clone and post-clone source/base/PRD failures retain claims and intake/chain dispatch intent, expose structured/CLI recovery pointers and never delete, reclone or respawn on ordinary retry; pre-clone snapshot errors release clean ownership",
+      "manual PRDs, queued chains and intake dispatch share the clone/spawn ownership boundary; state reload, duplicate retry, wrong-token writes, accepted snapshots and immutable native source files retain their existing guards"
     ],
     "regressions": [
       "preparation uses the existing runner in a separate workspace, records usage and reconciles a lost response",
@@ -423,12 +451,20 @@
       "answer-time lockfiles establish manager evidence without reviving cached inference or changing pinned bytes",
       "packageManager takes precedence over other lockfiles while matching evidence and known script checks stay required",
       "automatic lockfiles retain context path and byte protections before preparation or answer writes",
-      "explicit Verify selections remain arrays and invalid preparation or answer input leaves accepted state untouched"
+      "explicit Verify selections remain arrays and invalid preparation or answer input leaves accepted state untouched",
+      "recovered completed preparation enforces its persisted deadline while preserving recorded usage and timely output",
+      "settled preparation replay refuses old over-budget output without another run or validation repair",
+      "post-clone source conflicts retain snapshots and recovery ownership after correction, restart and duplicate start",
+      "a partial clone failure retains its claim and intake intent before any runner can be spawned",
+      "pre-clone snapshot failures release clean start ownership and can retry the approved intake once",
+      "test/commands.test.mjs::hand-authored start retains clone ownership after a base PRD path conflict without spawning or recloning",
+      "test/chains.test.mjs::chain post-clone base refusal retains dispatch and start ownership across reload and retry",
+      "test/chain_io.test.mjs::durable start claims exclude another start and registration; only their owner can release or register"
     ],
-    "literal_output_inspected": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-ZV9eKV/tasks/task-611d3bad92193a144dd76a6f/drafts/revision-5/docs/prds/task-611d3bad92193a144dd76a6f.md",
-    "answer_context_output_inspected": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-dKxn5Q/tasks/task-408257ccad2fc4ea76b760c0/drafts/revision-4/docs/prds/task-408257ccad2fc4ea76b760c0.md",
-    "verify_manifest_output_inspected": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-QDDQMa/tasks/task-0efd5ffbcbb6c97dcb5fcb9e/drafts/revision-3/docs/prds/task-0efd5ffbcbb6c97dcb5fcb9e.md",
-    "manager_lockfile_output_inspected": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-wfcqrG/tasks/task-7c56a7de4581dfb788ef9b5a/drafts/revision-3/docs/prds/task-7c56a7de4581dfb788ef9b5a.md"
+    "literal_output_inspected": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-YT4kUE/tasks/task-9f538f3b60078088f631d887/drafts/revision-5/docs/prds/task-9f538f3b60078088f631d887.md",
+    "answer_context_output_inspected": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-GyBbWY/tasks/task-d21c94c7a17012e1454c6854/drafts/revision-4/docs/prds/task-d21c94c7a17012e1454c6854.md",
+    "verify_manifest_output_inspected": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-PK2KPP/tasks/task-eb970c64db1557f5bdc92ccb/drafts/revision-3/docs/prds/task-eb970c64db1557f5bdc92ccb.md",
+    "manager_lockfile_output_inspected": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-hyhFL1/tasks/task-7c56a7de4581dfb788ef9b5a/drafts/revision-3/docs/prds/task-7c56a7de4581dfb788ef9b5a.md"
   },
   "live": {
     "status": "unverified",
@@ -613,6 +649,32 @@
       ],
       "evidence": "test/task-intake.test.mjs::text lockfiles select the package manager and travel with its manifest through repair and fresh-base dispatch; test/task-intake.test.mjs::unknown or conflicting managers ask matching CLI and structured questions and accept explicit owner checks; test/task-intake.test.mjs::answer-time lockfiles establish manager evidence without reviving cached inference or changing pinned bytes; test/task-intake.test.mjs::packageManager takes precedence over other lockfiles while matching evidence and known script checks stay required; test/task-intake.test.mjs::automatic lockfiles retain context path and byte protections before preparation or answer writes",
       "observed": "Supported text lockfiles automatically join pinned package context, and packageManager takes precedence over otherwise unambiguous manager evidence. No npm fallback remains. Unknown/conflicting/unsupported evidence returns commandIssues for material clarification, and equivalent CLI/structured answers select explicit commands under the same task identity. Npm/pnpm/Yarn/Bun manifest and lockfile authorizers must be carried before readiness; fresh-base dispatch receives accepted bytes, retries do not reread changed native locks, and duplicate starts retain one run. Symlink/binary/oversized lockfile refusals preserve accepted state."
+    },
+    {
+      "comment_id": 4180559486,
+      "files": [
+        "lib/task_prepare.mjs",
+        "test/task-intake.test.mjs",
+        "docs/tasks.md"
+      ],
+      "evidence": "test/task-intake.test.mjs::recovered completed preparation enforces its persisted deadline while preserving recorded usage and timely output; test/task-intake.test.mjs::settled preparation replay refuses old over-budget output without another run or validation repair",
+      "observed": "Recovered completed output is checked against the saved deadline even when the native child is no longer running. Recorded on-time and exact-boundary output remains usable after a later reopen; late or conservatively inferred late completion and legacy over-budget replay block with usage, cost and logs retained. No readiness, repair, implementation or repeated model call is accepted."
+    },
+    {
+      "comment_id": 4180559488,
+      "files": [
+        "lib/commands/start.mjs",
+        "lib/state.mjs",
+        "lib/tasks.mjs",
+        "lib/commands/task.mjs",
+        "test/task-intake.test.mjs",
+        "test/commands.test.mjs",
+        "test/chains.test.mjs",
+        "test/chain_io.test.mjs",
+        "docs/tasks.md"
+      ],
+      "evidence": "test/task-intake.test.mjs::post-clone source conflicts retain snapshots and recovery ownership after correction, restart and duplicate start; test/task-intake.test.mjs::a partial clone failure retains its claim and intake intent before any runner can be spawned; test/task-intake.test.mjs::pre-clone snapshot failures release clean start ownership and can retry the approved intake once; test/commands.test.mjs::hand-authored start retains clone ownership after a base PRD path conflict without spawning or recloning; test/chains.test.mjs::chain post-clone base refusal retains dispatch and start ownership across reload and retry; test/chain_io.test.mjs::durable start claims exclude another start and registration; only their owner can release or register",
+      "observed": "The durable start claim records planned checkout, branch and base before cloning. A partial clone or later source, PRD or chain-base refusal retains ownership and dispatch intent across restart/correction/duplicate start, exposes dispatchRecovery and an inspection instruction, and prevents a second clone or spawn without deleting evidence. Pre-clone storage failures release clean claims and permit the same approved intake to start once after correction; wrong-token clone metadata writes remain refused."
     }
   ],
   "offline_credential_check": {
@@ -649,7 +711,7 @@
   "literal_quote_case": {
     "provenance": "Deterministic offline fixture; not live-provider evidence",
     "evidence": "test/task-intake.test.mjs::literal placeholder tokens in requests and answers survive quoted mapping, repair, readiness and dispatch",
-    "saved_draft": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-ZV9eKV/tasks/task-611d3bad92193a144dd76a6f/drafts/revision-5/docs/prds/task-611d3bad92193a144dd76a6f.md",
+    "saved_draft": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-YT4kUE/tasks/task-9f538f3b60078088f631d887/drafts/revision-5/docs/prds/task-9f538f3b60078088f631d887.md",
     "sha256": "e07fe2497b58c015cbef8ce1b0b4e8a14882e97d2c447902f91a3e0059da8399",
     "original_request": "Remove the TODO, resolve FIXME, finalize TBD, replace <placeholder>, clarify ??????, and correct lorem ipsum.\nKeep the literal \\u0054ODO text and do not add dependencies.",
     "answers": {
@@ -701,7 +763,7 @@
   "answer_context_case": {
     "provenance": "Deterministic offline fixture; not live-provider evidence",
     "evidence": "test/task-intake.test.mjs::CLI and structured answers pin additional context, carry instructions and sources, and dispatch once",
-    "saved_draft": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-dKxn5Q/tasks/task-408257ccad2fc4ea76b760c0/drafts/revision-4/docs/prds/task-408257ccad2fc4ea76b760c0.md",
+    "saved_draft": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-GyBbWY/tasks/task-d21c94c7a17012e1454c6854/drafts/revision-4/docs/prds/task-d21c94c7a17012e1454c6854.md",
     "sha256": "d0724a7f1c6a774f334301685d16957b398ae80ea3abac0c95a6cb9eccf38ada",
     "original_request": "Add CSV export for the widget table.\nDo not add dependencies.",
     "answers": {
@@ -774,7 +836,7 @@
     },
     "offline_status": "started",
     "offline_dispatch": {
-      "id": "acme/widget/task-408257ccad2fc4ea76b760c0",
+      "id": "acme/widget/task-d21c94c7a17012e1454c6854",
       "run": "1-start",
       "provenance": "Existing start path with fakeRunner; no live provider"
     },
@@ -783,7 +845,7 @@
   "verify_manifest_case": {
     "provenance": "Deterministic offline fixture; not live-provider evidence",
     "evidence": "test/task-intake.test.mjs::feature-only Verify scripts require their pinned manifest through repair and fresh-base dispatch",
-    "saved_draft": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-QDDQMa/tasks/task-0efd5ffbcbb6c97dcb5fcb9e/drafts/revision-3/docs/prds/task-0efd5ffbcbb6c97dcb5fcb9e.md",
+    "saved_draft": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-PK2KPP/tasks/task-eb970c64db1557f5bdc92ccb/drafts/revision-3/docs/prds/task-eb970c64db1557f5bdc92ccb.md",
     "sha256": "e8c806ef0e8506788a3709c0415e86fe5c2df25879548a6aa9d24bee83d04671",
     "original_request": "Add CSV export for the widget table.\nDo not add dependencies.",
     "requirements": [
@@ -814,17 +876,17 @@
       "source": "Actual readiness/checker path using the local fixture context"
     },
     "offline_dispatch": {
-      "id": "acme/widget/task-0efd5ffbcbb6c97dcb5fcb9e",
+      "id": "acme/widget/task-eb970c64db1557f5bdc92ccb",
       "run": "1-start",
       "provenance": "Existing start path with fakeRunner; no live provider",
-      "worktree": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-QDDQMa/worktrees/acme/widget/task-0efd5ffbcbb6c97dcb5fcb9e"
+      "worktree": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-PK2KPP/worktrees/acme/widget/task-eb970c64db1557f5bdc92ccb"
     },
     "observable_command": {
       "command": "npm run test:local",
       "exit_code": 0,
       "phase": "Test fixture after offline implementation dispatch; never preparation",
       "artifact": {
-        "path": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-QDDQMa/worktrees/acme/widget/task-0efd5ffbcbb6c97dcb5fcb9e/verified-local",
+        "path": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-PK2KPP/worktrees/acme/widget/task-eb970c64db1557f5bdc92ccb/verified-local",
         "contents": "ok"
       }
     },
@@ -833,7 +895,7 @@
   "manager_lockfile_case": {
     "provenance": "Deterministic offline fixture; not live-provider evidence",
     "evidence": "test/task-intake.test.mjs::text lockfiles select the package manager and travel with its manifest through repair and fresh-base dispatch",
-    "saved_draft": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-wfcqrG/tasks/task-7c56a7de4581dfb788ef9b5a/drafts/revision-3/docs/prds/task-7c56a7de4581dfb788ef9b5a.md",
+    "saved_draft": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-hyhFL1/tasks/task-7c56a7de4581dfb788ef9b5a/drafts/revision-3/docs/prds/task-7c56a7de4581dfb788ef9b5a.md",
     "sha256": "5851319f1ba999900afd52a2916e3a92d6b1eb85b72a7360426840ac7b18b14f",
     "original_request": "Add CSV export for the widget table.\nDo not add dependencies.",
     "requirements": [
@@ -875,6 +937,22 @@
   "offline_test_environment": {
     "initial_observation": "Workspace sandbox blocks ps: zsh: operation not permitted: ps; the focused suite refused process ownership before task preparation",
     "remedy_observed": "Required offline suites ran successfully using the supported require_escalated test path; existing native ownership checks, runtime flags and implementation permissions were unchanged",
-    "model_calls": 0
+    "model_calls": 0,
+    "current_batch": {
+      "initial_runs": [
+        {
+          "command": "npm test",
+          "exit_code": 1,
+          "raw_log": "/private/tmp/natural-language-tasks-recovery-npm-test.log"
+        },
+        {
+          "command": "npm run test:task-intake",
+          "exit_code": 1,
+          "raw_log": "/private/tmp/natural-language-tasks-recovery-focused.log"
+        }
+      ],
+      "observed": "A new test imported claudeLines instead of the existing claudeResultLines helper; only the intake module failed to load. The import was corrected and the complete required suites then passed.",
+      "model_calls": 0
+    }
   }
 }
