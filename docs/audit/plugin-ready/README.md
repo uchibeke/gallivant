@@ -19,7 +19,7 @@ source mapping, execution authorization and stopping conditions.
 | Dispatch ownership and recovery | existing `lib/state.mjs` claims; lost preparation/ready acknowledgements, post-clone source/base/partial-clone failures, retained clone metadata, token checks, clean pre-clone retry and duplicate/uncertain dispatch tests across tasks, hand-authored starts and chains |
 | Operator-only sources | `lib/task_contract.mjs` intake path policy, Verify command provenance and existing source snapshots; feature-only manifest and lockfile delivery to a fresh base, supported-stack authorizers, answer-time manifest/manager pinning, lockfile path/byte refusal, boundary-quote and raw boundary-whitespace refusal across selection/answers/generated/saved output and legacy identity replay, internal-quote/space filename round-trip and delivery, saved-source refusal and modified snapshot tests |
 | Hand-authored source compatibility | shared `parseSourcesMeta`; readiness and start delivery of `.env.example` and `.config/docs/setup.md` |
-| CLI / structured parity and package safety | `lib/commands/task.mjs`, exports; operation parity and clean packed-package tests |
+| CLI / structured parity and package safety | `lib/commands/task.mjs`, exports; operation parity and clean packed-package tests; initial/repair permission-denial text and usage persisted across CLI rendering, inspection, native recovery and settled replay without retry or dispatch |
 | Existing lifecycle and defaults | full existing offline suite; no harness/model/provider/permission defaults changed |
 
 The observed native executable was

@@ -92,6 +92,11 @@ Credential separation does not add an OS sandbox to a harness that has none.
 An unsupported provider environment variable is not forwarded implicitly: use
 the selected harness's native auth/config profile. Profile failures stop before a
 model launch and return an actionable failure; they are not validator repairs.
+Permission denials also stop preparation, including when the harness exits zero.
+The result and saved attempt retain the denied calls and any guardrail reasons
+recorded by the adapter, alongside provider errors and the run-log path. Reopening
+or recovering that failed attempt preserves the report without another planning
+turn, readiness decision or implementation dispatch.
 
 The result includes contract `version: 1`, a durable `taskId`, a state `revision`,
 original input, requirements, answers, assumptions, requirement mapping, draft

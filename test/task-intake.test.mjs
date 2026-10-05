@@ -1227,6 +1227,76 @@ test("provider failure and exhausted runtime stop preparation without validator 
   assert.equal(blocked.status, "blocked"); assert.match(blocked.failures[0], /runtime allowance exhausted/); assert.equal(pending.current().killed, true);
 });
 
+const preparationDenialLines = ({ message, isError = false }) => [
+  JSON.stringify({ type: "system", subtype: "init", session_id: "6f1c2d3e-1111-4111-8111-111111111111" }),
+  JSON.stringify({ type: "user", tool_result_meta: [{ non_execution_kind: "permission-rule" }], message: { content: [{ type: "tool_result", tool_use_id: "denied-read", is_error: true, content: "APort denied this tool call. Policy: read. Reason: fixture.permission. Detail: selected file access refused." }] } }),
+  JSON.stringify({ type: "result", is_error: isError, result: isError ? "provider failed after refusal" : message, total_cost_usd: 0.37, usage: { input_tokens: 12, output_tokens: 5 }, permission_denials: [{ tool_name: "Bash", tool_use_id: "denied-read", tool_input: { command: "cat docs/selected.md" } }, { tool_name: "Read", tool_use_id: "unexplained-read", tool_input: { file_path: "docs/another.md" } }] }),
+];
+const preparationDenialText = 'Bash: {"command":"cat docs/selected.md"}\n    APort denied this tool call. Policy: read. Reason: fixture.permission. Detail: selected file access refused.; Read: {"file_path":"docs/another.md"}';
+
+test("Claude preparation preserves denial text through CLI and structured initial and repair failures without retry or dispatch", async t => {
+  for (const cli of [false, true]) for (const repair of [false, true]) for (const isError of [false, true]) {
+    const w = world(), runner = fakeRunner({ now: Date.now }), launch = runner.start;
+    w.ctx.config.harness = { claude: { bin: harnessBin(w.home, "claude"), settings: join(w.home, "claude/settings.json") } };
+    runner.start = (...args) => {
+      const job = launch(...args), task = JSON.parse(args[2].at(-1).split("INTAKE DATA (JSON):\n").at(-1));
+      runner.finish(repair && runner.started.length === 1 ? claudeResultLines({ text: "invalid JSON" }) : preparationDenialLines({ message: JSON.stringify(draftFor(task)), isError }));
+      return job;
+    };
+    w.ctx.runnerFor = () => runner;
+    const service = createTaskService(w.ctx, { decideReady: () => { throw Error("denied output must not reach readiness"); }, dispatch: () => { throw Error("denied output must not dispatch"); } });
+    const result = await (cli ? taskCommand(w.ctx, { args: ["prepare", REQUEST], values: { harness: "claude", run: true }, service }) : service.prepare({ text: REQUEST, harness: "claude", run: true }));
+    const reason = (isError ? "provider failed after refusal; " : "") + preparationDenialText;
+    assert.equal(result.version, 1); assert.equal(result.status, "blocked"); assert.equal(result.original, REQUEST);
+    assert.equal(result.preparation.repairs, Number(repair)); assert.equal(runner.started.length, repair ? 2 : 1);
+    const attempt = result.preparation.attempts.at(-1);
+    assert.equal(attempt.ok, false); assert.equal(attempt.error, reason); assert.equal(attempt.cost, 0.37);
+    assert.deepEqual(attempt.usage, [{ input_tokens: 12, output_tokens: 5 }]); assert.equal(attempt.settled, true);
+    assert.equal(runner.current().exit, isError ? 1 : 0, "native/inferred exit is distinct from denied output");
+    assert.equal(result.failures[0], `preparation failed: ${reason}; inspect ${attempt.log}`);
+    assert.ok(renderTask(result).includes(reason)); assert.ok(!result.failures[0].includes("exit 0"));
+    assert.equal(result.draft, null); assert.equal(result.readiness, null); assert.equal(result.implementation, null);
+    const store = taskStore(w.home), saved = store.read(result.taskId);
+    assert.equal(saved.attempts.at(-1).error, reason); assert.equal(saved.errorCode, "TASK_PREPARATION_FAILED");
+    assert.deepEqual(saved.requirements.map(r => r.text), REQUEST.split("\n"));
+    const reopened = createTaskService(w.ctx);
+    assert.deepEqual(reopened.inspect({ taskId: result.taskId }), result);
+    assert.deepEqual(await reopened.resume({ taskId: result.taskId, expectedRevision: result.revision }), result);
+    assert.equal(runner.started.length, repair ? 2 : 1); assert.deepEqual(w.ctx.state.entries(), []); assert.equal(w.daemonCalls(), 0);
+    if (!cli && !repair && !isError) t.diagnostic(`Preparation denial fixture intake: ${join(w.home, "tasks", result.taskId, "intake.json")}`);
+  }
+});
+
+test("recovered Claude preparation denials survive native settlement and settled replay without accepting output or another launch", async t => {
+  for (const exit of [0, null]) {
+    const w = world(), first = await w.service.prepare({ text: REQUEST }), store = taskStore(w.home), record = store.read(first.taskId), began = Date.now();
+    record.status = "preparing"; record.harness = "claude"; record.output = null; record.draft = null; record.readiness = null;
+    record.attempts = [{ name: "prepare-1", run: "recovered-denial", cwd: w.home, startedAt: began - 10, deadline: began + 10000, settled: false, cost: null, usage: null }];
+    store.save(record);
+    const root = join(w.home, "recovered-runs"), run = join(root, "recovered-denial"); mkdirSync(run, { recursive: true });
+    writeFileSync(join(root, "latest-run"), "recovered-denial");
+    writeFileSync(join(run, "job.log"), preparationDenialLines({ message: JSON.stringify(draftFor(record)) }).join("\n") + "\n");
+    writeJsonAtomic(join(run, "job.json"), { id: "recovered-denial", name: "prepare-1", pid: 123456789, bin: "offline-fixture", startedAt: began - 10, exit, ...(exit === null ? {} : { endedAt: began }) });
+    const runner = makeRunner(root, { probe: () => false }); let starts = 0;
+    runner.start = () => { starts++; throw Error("denials must not retry"); }; w.ctx.runnerFor = () => runner;
+    const service = createTaskService(w.ctx), blocked = await service.resume({ taskId: first.taskId, expectedRevision: first.revision });
+    assert.equal(blocked.status, "blocked"); assert.equal(blocked.preparation.attempts[0].error, preparationDenialText);
+    assert.equal(blocked.preparation.attempts[0].ok, false); assert.equal(blocked.preparation.attempts[0].cost, 0.37);
+    assert.deepEqual(blocked.preparation.attempts[0].usage, [{ input_tokens: 12, output_tokens: 5 }]);
+    assert.equal(blocked.failures[0], `preparation failed: ${preparationDenialText}; inspect ${join(run, "job.log")}`);
+    assert.equal(runner.current().exit, 0); assert.equal(blocked.draft, null); assert.equal(blocked.readiness, null);
+    // Model a crash after settling the failed attempt but before saving the
+    // blocked task transition. Replaying it must retain the same operator text.
+    const settled = store.read(first.taskId); settled.status = "preparing"; settled.failures = []; store.save(settled);
+    const replay = await createTaskService(w.ctx).resume({ taskId: first.taskId, expectedRevision: settled.revision });
+    assert.equal(replay.status, "blocked"); assert.deepEqual(replay.failures, blocked.failures);
+    assert.deepEqual(replay.preparation.attempts, blocked.preparation.attempts); assert.equal(replay.preparation.repairs, 0);
+    assert.deepEqual(await service.resume({ taskId: replay.taskId, expectedRevision: replay.revision }), replay);
+    assert.equal(starts, 0); assert.deepEqual(w.ctx.state.entries(), []); assert.equal(w.daemonCalls(), 0);
+    t.diagnostic(`Recovered denial fixture intake: ${join(w.home, "tasks", replay.taskId, "intake.json")}`);
+  }
+});
+
 test("recovered completed preparation enforces its persisted deadline while preserving recorded usage and timely output", async t => {
   let wall=20_000;t.mock.method(Date,"now",()=>wall);
   for(const c of [{name:"late",endedAt:10_051},{name:"timely",endedAt:10_049},{name:"boundary",endedAt:10_050},{name:"unknown-late",endedAt:null},{name:"unknown-timely",endedAt:null,wall:10_049},{name:"cost-late",endedAt:10_051,harness:"claude"}]){
