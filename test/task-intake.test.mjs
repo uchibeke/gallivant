@@ -23,6 +23,7 @@ import { draftFor } from "./fixtures/task-intake.mjs";
 import { tempHome, CONFIG, GOOD_PRD, harnessBin, fakeCredential, fakeIdentity, silentLog, fakeRunner, makeClock, codexLines, claudeResultLines, geminiLines, opencodeLines, gooseLines } from "./helpers.mjs";
 
 const REQUEST = "Add CSV export for the widget table.\nDo not add dependencies.";
+const providerFile = key => key === "AWS_CONFIG_FILE" ? "[default]\nregion = fixture-region\n" : key === "AWS_SHARED_CREDENTIALS_FILE" ? "[default]\naws_access_key_id = provider-id\naws_secret_access_key = provider-secret\n" : `fixture:${key}`;
 function world(overrides = {}) {
   const home = tempHome(), checkout = join(home, "operator");
   mkdirSync(checkout);
@@ -1232,7 +1233,6 @@ test("preparation snapshots provider directories across adapters without native 
     ["codex", ".codex/skills", {}], ["codex", ".codex/plugins", {}],
     ["claude", ".claude/plugins", {}], ["gemini", ".gemini/extensions", {}],
     ["opencode", ".config/opencode/node_modules", {}],
-    ["claude", ".aws", { CLAUDE_CODE_USE_BEDROCK: "1" }], ["goose", ".aws", { GOOSE_PROVIDER: "bedrock" }],
   ];
   for (const [, path] of cases) {
     mkdirSync(join(operator, path), { recursive: true }); writeFileSync(join(operator, path, "resource"), "fixture-native-resource");
@@ -1330,8 +1330,9 @@ test("explicit provider file aliases refuse before initial or repair launch with
     ["goose","AWS_WEB_IDENTITY_TOKEN_FILE",{GOOSE_PROVIDER:"bedrock"}], ["opencode","OPENCODE_CONFIG",{}],
   ];
   for(const [harness,key,mode] of cases)for(const repair of [false,true]){
-    const w=world(),native=join(w.home,"native-auth.json"),alias=join(w.home,"selected-auth.json");writeFileSync(native,"provider-fixture");
-    if(!repair)symlinkSync(native,alias);else writeFileSync(alias,"provider-fixture");
+    const w=world(),native=join(w.home,"native-auth.json"),alias=join(w.home,"selected-auth.json"),bytes=key.startsWith("AWS_")?providerFile(key):"provider-fixture";writeFileSync(native,bytes);
+    if (mode.CLAUDE_CODE_USE_BEDROCK || mode.GOOSE_PROVIDER === "bedrock") { mkdirSync(join(w.home,".aws")); writeFileSync(join(w.home,".aws/credentials"),providerFile("AWS_SHARED_CREDENTIALS_FILE")); }
+    if(!repair)symlinkSync(native,alias);else writeFileSync(alias,bytes);
     w.ctx.config.harness[harness]={bin:harnessBin(w.home,harness,{signInOutput:harness==="opencode"?"1 credential":null})};Object.assign(w.ctx.env,mode,{[key]:alias});
     const runner=fakeRunner({now:Date.now}),launch=runner.start;let starts=0;
     const lines={claude:()=>claudeResultLines({text:"invalid-output"}),gemini:()=>geminiLines({text:"invalid-output"}),opencode:()=>opencodeLines({text:"invalid-output"}),goose:()=>gooseLines({chunks:["invalid-output"]})};
@@ -1340,7 +1341,7 @@ test("explicit provider file aliases refuse before initial or repair launch with
     const service=createTaskService(w.ctx),r=await service.prepare({text:REQUEST,harness});
     assert.equal(r.status,"blocked");assert.match(r.failures[0],/selected provider entry is a symbolic link/);assert.equal(starts,repair?1:0);
     assert.equal(r.preparation.attempts.length,repair?1:0);assert.equal(r.preparation.repairs,repair?1:0);
-    assert.equal(readFileSync(native,"utf8"),"provider-fixture");assert.equal(lstatSync(alias).isSymbolicLink(),true);
+    assert.equal(readFileSync(native,"utf8"),bytes);assert.equal(lstatSync(alias).isSymbolicLink(),true);
     await service.resume({taskId:r.taskId,expectedRevision:r.revision});assert.equal(starts,repair?1:0);assert.deepEqual(w.ctx.state.entries(),[]);
   }
 });
@@ -1376,15 +1377,123 @@ test("escaping, cyclic, broken and special provider resources stop before launch
 test("cloud provider credentials are available only in explicitly selected provider modes", () => {
   const root = tempHome(), operator = join(root, "operator-home");
   mkdirSync(join(operator, ".aws"), { recursive: true }); writeFileSync(join(operator, ".aws/credentials"), "provider-fixture-only");
-  const source = { HOME: operator, AWS_ACCESS_KEY_ID: "provider-id", AWS_SECRET_ACCESS_KEY: "provider-secret", AWS_SESSION_TOKEN: "provider-token", NPM_TOKEN: "unrelated", DATABASE_URL: "unrelated", CLAUDE_CODE_USE_BEDROCK: "1", GOOSE_PROVIDER: "bedrock" };
+  const source = { HOME: operator, AWS_ACCESS_KEY_ID: "provider-id", AWS_SECRET_ACCESS_KEY: "provider-secret", AWS_SESSION_TOKEN: "provider-token", AWS_REGION: "fixture-region", NPM_TOKEN: "unrelated", DATABASE_URL: "unrelated", CLAUDE_CODE_USE_BEDROCK: "1", GOOSE_PROVIDER: "bedrock" };
   for (const harness of ["claude", "goose"]) {
     const env = preparationEnvironment(harness, join(root, harness), {}, source);
     assert.equal(env.AWS_SECRET_ACCESS_KEY, source.AWS_SECRET_ACCESS_KEY); assert.equal(env.AWS_SESSION_TOKEN, source.AWS_SESSION_TOKEN);
-    assert.equal(readFileSync(join(env.HOME, ".aws/credentials"), "utf8"), "provider-fixture-only");
+    assert.equal(readFileSync(env.AWS_SHARED_CREDENTIALS_FILE, "utf8"), "");
+    assert.equal(readFileSync(join(operator, ".aws/credentials"), "utf8"), "provider-fixture-only");
     assert.ok(!("NPM_TOKEN" in env)); assert.ok(!("DATABASE_URL" in env));
   }
   const env = preparationEnvironment("codex", join(root, "codex"), {}, source);
   assert.ok(!("AWS_SECRET_ACCESS_KEY" in env)); assert.ok(!("CLAUDE_CODE_USE_BEDROCK" in env)); assert.equal(existsSync(join(env.HOME, ".aws")), false);
+});
+
+test("Bedrock snapshots only the selected AWS profile from ambient or explicit files and removes legacy shared secrets", () => {
+  for (const harness of ["claude", "goose"]) for (const name of ["default", "dev"]) for (const explicit of [false, true]) for (const configOnly of [false, true]) {
+    const root = tempHome(), operator = join(root, "operator"), caller = join(root, "caller"), cwd = join(root, "turn"), native = join(operator, ".aws");
+    mkdirSync(native, { recursive: true }); mkdirSync(caller);
+    const config = "[default]\nregion = default-region\naws_access_key_id = default-config-id\naws_secret_access_key = default-config-secret\naws_session_token = default-config-token\n[profile dev]\nregion = dev-region\n# unrelated-comment-secret\naws_access_key_id = dev-config-id\naws_secret_access_key = dev-config-secret\naws_session_token = dev-config-token\n[profile other]\ncredential_process = unrelated-native-command\naws_secret_access_key = other-config-secret\n";
+    const credentials = (configOnly ? "" : "[default]\naws_access_key_id = default-id\naws_secret_access_key = default-secret\n[dev]\naws_access_key_id = dev-id\naws_secret_access_key = dev-secret\naws_session_token = dev-token\n") + "[other]\naws_access_key_id = other-id\naws_secret_access_key = other-secret\n";
+    writeFileSync(join(native, "config"), config); writeFileSync(join(native, "credentials"), credentials);
+    mkdirSync(join(native, "sso/cache"), { recursive: true }); writeFileSync(join(native, "sso/cache/token.json"), "unrelated-sso-secret");
+    writeFileSync(join(native, "unrelated"), "unrelated-native-secret");
+    const source = { HOME: operator, ...(name === "default" ? {} : { AWS_PROFILE: name }), ...(harness === "claude" ? { CLAUDE_CODE_USE_BEDROCK: "1" } : { GOOSE_PROVIDER: "bedrock" }) };
+    if (explicit) {
+      writeFileSync(join(caller, "config"), config); writeFileSync(join(caller, "credentials"), credentials);
+      Object.assign(source, { AWS_CONFIG_FILE: "config", AWS_SHARED_CREDENTIALS_FILE: "credentials" });
+    }
+    // A pre-fix private turn may contain both a whole-directory alias and copies
+    // of explicit multi-account files. Neither may survive rebuilding that turn.
+    mkdirSync(join(cwd, "home/.provider-files/AWS_SHARED_CREDENTIALS_FILE"), { recursive: true });
+    writeFileSync(join(cwd, "home/.provider-files/AWS_SHARED_CREDENTIALS_FILE/old"), credentials);
+    symlinkSync(native, join(cwd, "home/.aws"));
+    for (const turn of ["initial", "repair"]) {
+      mkdirSync(join(cwd, "home/.provider-files/AWS_CONFIG_FILE"), { recursive: true }); writeFileSync(join(cwd, "home/.provider-files/AWS_CONFIG_FILE/old"), config);
+      const env = preparationEnvironment(harness, cwd, {}, source, caller);
+      assert.deepEqual(readdirSync(join(env.HOME, ".aws")).sort(), ["config", "credentials"]);
+      assert.equal(existsSync(join(env.HOME, ".provider-files/AWS_SHARED_CREDENTIALS_FILE")), false);
+      assert.equal(existsSync(join(env.HOME, ".provider-files/AWS_CONFIG_FILE")), false);
+      assert.equal(readFileSync(env.AWS_CONFIG_FILE, "utf8"), `[${name === "default" ? name : `profile ${name}`}]\nregion = ${name}-region\n${configOnly ? `aws_access_key_id = ${name}-config-id\naws_secret_access_key = ${name}-config-secret\n` : ""}${configOnly || name === "default" ? `aws_session_token = ${name}-config-token\n` : ""}`);
+      const expected = configOnly ? "" : `[${name}]\naws_access_key_id = ${name}-id\naws_secret_access_key = ${name}-secret\n${name === "dev" ? "aws_session_token = dev-token\n" : ""}`;
+      assert.equal(readFileSync(env.AWS_SHARED_CREDENTIALS_FILE, "utf8"), expected);
+      for (const key of ["AWS_CONFIG_FILE", "AWS_SHARED_CREDENTIALS_FILE"]) {
+        assert.equal(lstatSync(env[key]).isSymbolicLink(), false); assert.equal(statSync(env[key]).mode & 0o777, 0o600);
+        assert.ok(env[key].startsWith(env.HOME + "/")); writeFileSync(env[key], "private edit");
+      }
+      assert.equal(readFileSync(join(native, "credentials"), "utf8"), credentials); assert.equal(readFileSync(join(native, "config"), "utf8"), config);
+      assert.equal(readFileSync(join(native, "sso/cache/token.json"), "utf8"), "unrelated-sso-secret");
+      if (explicit) { assert.equal(readFileSync(join(caller, "credentials"), "utf8"), credentials); assert.equal(readFileSync(join(caller, "config"), "utf8"), config); }
+      assert.equal(env.AWS_PROFILE, source.AWS_PROFILE, turn);
+    }
+  }
+});
+
+test("direct Bedrock credentials and web identity never carry native account files or unused explicit authentication", () => {
+  for (const harness of ["claude", "goose"]) for (const profile of [null, "dev"]) for (const web of [false, true]) {
+    const root = tempHome(), operator = join(root, "operator"), caller = join(root, "caller"); mkdirSync(operator); mkdirSync(caller);
+    const unrelated = join(root, "unrelated"); mkdirSync(unrelated); writeFileSync(join(unrelated, "secret"), "unrelated-native-secret"); symlinkSync(unrelated, join(operator, ".aws"));
+    writeFileSync(join(caller, "token"), "selected-web-token");
+    const source = { HOME: operator, AWS_REGION: "selected-region", ...(profile ? { AWS_PROFILE: profile } : {}), ...(harness === "claude" ? { CLAUDE_CODE_USE_BEDROCK: "1" } : { GOOSE_PROVIDER: "bedrock" }), AWS_SHARED_CREDENTIALS_FILE: "unused-missing-credentials", ...(web ? { AWS_ROLE_ARN: "selected-role", AWS_WEB_IDENTITY_TOKEN_FILE: "token" } : { AWS_ACCESS_KEY_ID: "env-id", AWS_SECRET_ACCESS_KEY: "env-secret", AWS_SESSION_TOKEN: "env-token", AWS_WEB_IDENTITY_TOKEN_FILE: "unused-missing-token" }) };
+    for (const turn of ["initial", "repair"]) {
+      const old = join(root, turn, "home/.provider-files/AWS_WEB_IDENTITY_TOKEN_FILE"); mkdirSync(old, { recursive: true }); writeFileSync(join(old, "old"), "unused-old-web-token");
+      const env = preparationEnvironment(harness, join(root, turn), {}, source, caller);
+      assert.equal(readFileSync(env.AWS_CONFIG_FILE, "utf8"), "");
+      const credentials = readFileSync(env.AWS_SHARED_CREDENTIALS_FILE, "utf8");
+      assert.equal(credentials, !web && profile ? "[dev]\naws_access_key_id = env-id\naws_secret_access_key = env-secret\naws_session_token = env-token\n" : "");
+      if (web) { assert.equal(readFileSync(env.AWS_WEB_IDENTITY_TOKEN_FILE, "utf8"), "selected-web-token"); assert.equal(env.AWS_ROLE_ARN, source.AWS_ROLE_ARN); }
+      else { assert.equal(env.AWS_WEB_IDENTITY_TOKEN_FILE, undefined); assert.equal(env.AWS_SECRET_ACCESS_KEY, source.AWS_SECRET_ACCESS_KEY); }
+      assert.equal(existsSync(join(env.HOME, ".aws/secret")), false); assert.equal(readFileSync(join(unrelated, "secret"), "utf8"), "unrelated-native-secret");
+      assert.equal(existsSync(join(old, "old")), false);
+    }
+  }
+});
+
+test("Bedrock preparation and repairs retain selected profile settings without exposing other accounts or dispatching", async t => {
+  for (const harness of ["claude", "goose"]) {
+    const w = world(); mkdirSync(join(w.home, ".aws"));
+    const credentials = "[dev]\naws_access_key_id = selected-id\naws_secret_access_key = selected-secret\n[other]\naws_secret_access_key = unrelated-secret\n";
+    writeFileSync(join(w.home, ".aws/credentials"), credentials); writeFileSync(join(w.home, ".aws/config"), "[profile dev]\nregion = selected-region\n[profile other]\nregion = unrelated-region\n");
+    w.ctx.config.harness[harness] = { bin: harnessBin(w.home, harness) };
+    Object.assign(w.ctx.env, { AWS_PROFILE: "dev", ...(harness === "claude" ? { CLAUDE_CODE_USE_BEDROCK: "1" } : { GOOSE_PROVIDER: "bedrock" }) });
+    const runner = fakeRunner({ now: Date.now }), launch = runner.start; let starts = 0;
+    runner.start = async (name, cmd, args, opts) => {
+      starts++; const job = launch(name, cmd, args, opts);
+      assert.equal(opts.inheritEnv, false); assert.equal(opts.env.AWS_PROFILE, "dev");
+      assert.equal(readFileSync(opts.env.AWS_CONFIG_FILE, "utf8"), "[profile dev]\nregion = selected-region\n");
+      assert.equal(readFileSync(opts.env.AWS_SHARED_CREDENTIALS_FILE, "utf8"), "[dev]\naws_access_key_id = selected-id\naws_secret_access_key = selected-secret\n");
+      const task = taskStore(w.home).read(opts.cwd.split("/").at(-3));
+      const text = starts === 1 ? "invalid-output" : JSON.stringify(draftFor(task));
+      runner.finish(harness === "claude" ? claudeResultLines({ text }) : gooseLines({ chunks: [text] }), { exit: 0 }); return job;
+    };
+    w.ctx.runnerFor = () => runner;
+    const service = createTaskService(w.ctx), r = await service.prepare({ text: REQUEST, harness });
+    assert.equal(r.status, "ready"); assert.equal(starts, 2); assert.equal(r.preparation.repairs, 1); assert.equal(r.preparation.attempts.length, 2);
+    assert.match(r.draft.text, /Explicit requirement r-2: "Do not add dependencies\."/); assert.equal(r.readiness.allow, true); assert.deepEqual(w.ctx.state.entries(), []);
+    assert.equal(readFileSync(join(w.home, ".aws/credentials"), "utf8"), credentials); t.diagnostic(`Bedrock fixture draft: ${r.draft.path}`);
+  }
+});
+
+test("unisolatable AWS profiles stop initial or repair preparation with actionable guidance and no retry", async () => {
+  const invalid = ["[profile dev]\nsource_profile = other\nrole_arn = selected-role\n", "[profile dev]\nsso_session = shared-session\n", "[profile dev]\nregion = a\nregion = b\n", "[profile dev]\nregion = a\n[profile dev]\nregion = b\n", "[profile other]\nregion = unrelated\n"];
+  for (const harness of ["claude", "goose"]) for (const cli of [false, true]) for (const repair of [false, true]) for (const config of invalid) {
+    const w = world(); mkdirSync(join(w.home, ".aws"));
+    const credentials = config.includes("[profile other]") ? "[other]\naws_access_key_id = other-id\naws_secret_access_key = other-secret\n" : "[dev]\naws_access_key_id = dev-id\naws_secret_access_key = dev-secret\n";
+    writeFileSync(join(w.home, ".aws/credentials"), repair ? "[dev]\naws_access_key_id = dev-id\naws_secret_access_key = dev-secret\n" : credentials);
+    const file = join(w.home, ".aws/config"); writeFileSync(file, repair ? "[profile dev]\nregion = selected-region\n" : config);
+    w.ctx.config.harness[harness] = { bin: harnessBin(w.home, harness) };
+    Object.assign(w.ctx.env, { AWS_PROFILE: "dev", ...(harness === "claude" ? { CLAUDE_CODE_USE_BEDROCK: "1" } : { GOOSE_PROVIDER: "bedrock" }) });
+    const runner = fakeRunner({ now: Date.now }), launch = runner.start; let starts = 0;
+    runner.start = async (...args) => { starts++; const job = launch(...args); writeFileSync(file, config); writeFileSync(join(w.home, ".aws/credentials"), credentials); runner.finish(harness === "claude" ? claudeResultLines({ text: "invalid-output" }) : gooseLines({ chunks: ["invalid-output"] }), { exit: 0 }); return job; };
+    w.ctx.runnerFor = () => runner; const service = createTaskService(w.ctx);
+    const r = await (cli ? taskCommand(w.ctx, { args: ["prepare", REQUEST], values: { harness }, service }) : service.prepare({ text: REQUEST, harness }));
+    assert.equal(r.version, 1); assert.equal(r.status, "blocked"); assert.match(r.failures[0], /selected AWS profile cannot be isolated; provide temporary AWS_ACCESS_KEY_ID\/AWS_SECRET_ACCESS_KEY/);
+    assert.equal(starts, repair ? 1 : 0); assert.equal(r.preparation.attempts.length, starts); assert.equal(r.preparation.repairs, repair ? 1 : 0);
+    assert.equal(r.requirements[1].text, "Do not add dependencies."); assert.deepEqual(w.ctx.state.entries(), []);
+    assert.equal(existsSync(join(w.home, "tasks", r.taskId, "preparation", `turn-${starts + 1}`, "home/.aws")), false);
+    const saved = taskStore(w.home).read(r.taskId); assert.deepEqual(await service.resume({ taskId: r.taskId, expectedRevision: r.revision }), r); assert.deepEqual(taskStore(w.home).read(r.taskId), saved); assert.equal(starts, repair ? 1 : 0);
+    assert.equal(readFileSync(join(w.home, ".aws/credentials"), "utf8"), credentials); assert.equal(readFileSync(file, "utf8"), config);
+  }
 });
 
 test("explicit provider auth and config file settings use private snapshots with the original contents and precedence", () => {
@@ -1392,7 +1501,7 @@ test("explicit provider auth and config file settings use private snapshots with
   mkdirSync(operator); mkdirSync(native);
   const keys = ["GOOGLE_APPLICATION_CREDENTIALS","AWS_CONFIG_FILE","AWS_SHARED_CREDENTIALS_FILE","AWS_WEB_IDENTITY_TOKEN_FILE","OPENCODE_CONFIG"];
   const files = Object.fromEntries(keys.map(key => [key,join(native,`${key}.json`)]));
-  for (const [key,path] of Object.entries(files)) writeFileSync(path,`fixture:${key}`,{mode:0o600});
+  for (const [key,path] of Object.entries(files)) writeFileSync(path,providerFile(key),{mode:0o600});
   const cases = [
     ["gemini",{},[keys[0]]], ["claude",{CLAUDE_CODE_USE_VERTEX:"1"},[keys[0]]],
     ["claude",{CLAUDE_CODE_USE_BEDROCK:"1"},keys.slice(1,4)], ["goose",{GOOSE_PROVIDER:"bedrock"},keys.slice(1,4)],
@@ -1406,9 +1515,9 @@ test("explicit provider auth and config file settings use private snapshots with
         if (!selected.includes(key)) { assert.equal(env[key],undefined); continue; }
         assert.notEqual(env[key],files[key]); assert.ok(env[key].startsWith(env.HOME+"/"));
         assert.equal(lstatSync(env[key]).isSymbolicLink(),false); assert.equal(statSync(env[key]).mode & 0o777,0o600);
-        assert.equal(readFileSync(env[key],"utf8"),`fixture:${key}`);
+        assert.equal(readFileSync(env[key],"utf8"),providerFile(key));
         writeFileSync(env[key],"private credential/config edit"); rmSync(env[key]);
-        assert.equal(readFileSync(files[key],"utf8"),`fixture:${key}`);
+        assert.equal(readFileSync(files[key],"utf8"),providerFile(key));
       }
     }
   }
@@ -1422,7 +1531,7 @@ test("relative provider files and profile roots resolve from the caller director
   mkdirSync(operator, { recursive: true });
   const files = Object.fromEntries(["GOOGLE_APPLICATION_CREDENTIALS", "AWS_CONFIG_FILE", "AWS_SHARED_CREDENTIALS_FILE", "AWS_WEB_IDENTITY_TOKEN_FILE", "OPENCODE_CONFIG"].map(key => [key, `credentials/${key}.json`]));
   mkdirSync(join(caller, "credentials"));
-  for (const [key, path] of Object.entries(files)) writeFileSync(join(caller, path), `fixture:${key}`, { mode: 0o600 });
+  for (const [key, path] of Object.entries(files)) writeFileSync(join(caller, path), providerFile(key), { mode: 0o600 });
   const resources = {
     "profiles/codex/auth.json": "codex-auth", "profiles/claude/.credentials.json": "claude-auth",
     "profiles/opencode/opencode.json": "opencode-config", "profiles/config/goose/config.yaml": "goose-config",
@@ -1446,8 +1555,8 @@ test("relative provider files and profile roots resolve from the caller director
       for (const key of Object.keys(files)) {
         if (!selected.includes(key)) { assert.equal(env[key], undefined); continue; }
         assert.ok(env[key].startsWith(env.HOME + "/")); assert.equal(lstatSync(env[key]).isSymbolicLink(), false);
-        assert.equal(readFileSync(env[key], "utf8"), `fixture:${key}`); assert.equal(statSync(env[key]).mode & 0o777, 0o600);
-        writeFileSync(env[key], "private edit"); assert.equal(readFileSync(join(caller, files[key]), "utf8"), `fixture:${key}`);
+        assert.equal(readFileSync(env[key], "utf8"), providerFile(key)); assert.equal(statSync(env[key]).mode & 0o777, 0o600);
+        writeFileSync(env[key], "private edit"); assert.equal(readFileSync(join(caller, files[key]), "utf8"), providerFile(key));
       }
       if (harness === "opencode") {
         assert.equal(readFileSync(join(env.XDG_DATA_HOME, "opencode/auth.json"), "utf8"), "opencode-auth");

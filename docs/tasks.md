@@ -39,20 +39,35 @@ Preparation receives these documents in its prompt and does not inherit global
 selected adapter's explicit provider authentication/settings allowlist, defined
 in `lib/harness.mjs`. Unrelated tokens, database URLs, other adapters' keys and
 shell startup overrides are excluded. Preparation has a private `HOME`, XDG roots
-and temporary directory. The selected adapter's native auth/config files,
-configured resource directories and explicitly selected AWS profile directory
-are copied into private snapshots, so parent traversal and preparation writes
+and temporary directory. The selected adapter's native auth/config files and
+configured resource directories are copied into private snapshots, so parent
+traversal and preparation writes
 cannot reach native files through those entries. A selected entry itself must be
 a regular file or directory: even an internal or broken top-level symlink is
 refused before launch. Replace that entry with the intended provider file or
 directory. Links inside a selected resource directory are materialized; links
 outside that directory, cycles, broken links and special files stop preparation
 before launch and remove partial copies. Previous
-sessions and unrelated home-directory credentials are excluded. Shared AWS
-credentials require explicit Bedrock selection; Claude's explicit Vertex mode can also use
+sessions and unrelated home-directory credentials are excluded. AWS authentication
+requires explicit Bedrock selection. Preparation projects only `AWS_PROFILE`
+(or `default`) from the shared config and credentials files, including files
+selected through `AWS_CONFIG_FILE` and `AWS_SHARED_CREDENTIALS_FILE`. Other
+profiles, comments, caches and unrelated files are excluded. Complete selected
+file credentials also exclude overridden config credentials. Complete environment
+credentials or explicit web identity omit native file credentials; an environment
+region also avoids reading unused ambient configuration. Named profiles resolve
+the same explicit environment identity in SDKs that prioritize profile lookup.
+Private files use mode `0600`, and rebuilding removes earlier shared snapshots.
+Flat static profiles and supported region/retry settings retain their values;
+credential chains, SSO/cache dependencies, ambiguous sections or unsupported
+settings stop before launch without automatic retry. Export scoped temporary
+`AWS_ACCESS_KEY_ID`/`AWS_SECRET_ACCESS_KEY` credentials and `AWS_REGION`, or select
+a dedicated static profile through the AWS file settings. See the
+[AWS shared-file format](https://docs.aws.amazon.com/sdkref/latest/guide/file-format.html).
+Claude's explicit Vertex mode can also use
 native Google credentials. Gemini with `GOOGLE_GENAI_USE_VERTEXAI=true` carries
 only `gcloud/application_default_credentials.json` into its private config root.
-Explicit `GOOGLE_APPLICATION_CREDENTIALS`, AWS auth/config file settings and
+Explicit `GOOGLE_APPLICATION_CREDENTIALS`, AWS web-identity token files and
 `OPENCODE_CONFIG` also point to private copies, retaining the selected contents
 and authentication precedence. Refreshes and edits stay in the preparation turn.
 Relative provider file and profile paths use the original invocation directory,
