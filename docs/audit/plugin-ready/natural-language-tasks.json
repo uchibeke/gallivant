@@ -1,8 +1,8 @@
 {
   "version": 1,
   "task_id": "task-c93def694fe561146955c469",
-  "implementation_commit": "c8ca3faecd6b1f1a98ae8540339a3ae22af7f7aa",
-  "recorded_at": "2026-10-05T15:27:36.234Z",
+  "implementation_commit": "609595e8a1f3d1c042b72d95be18610401318a1f",
+  "recorded_at": "2026-10-05T15:53:14.518Z",
   "versions": {
     "package": "0.1.0",
     "node": "v22.22.0",
@@ -13,26 +13,26 @@
     {
       "command": "npm test",
       "exit_code": 0,
-      "raw_log": "/private/tmp/natural-language-tasks-stories-npm-test-retry.log",
-      "tests": 856,
-      "passed": 856
+      "raw_log": "/private/tmp/natural-language-tasks-create-npm-test.log",
+      "tests": 861,
+      "passed": 861
     },
     {
       "command": "npm run lint",
       "exit_code": 0,
-      "raw_log": "/private/tmp/natural-language-tasks-stories-lint.log"
+      "raw_log": "/private/tmp/natural-language-tasks-create-lint.log"
     },
     {
       "command": "npm run test:task-intake",
       "exit_code": 0,
-      "raw_log": "/private/tmp/natural-language-tasks-stories-intake.log",
-      "tests": 112,
-      "passed": 112
+      "raw_log": "/private/tmp/natural-language-tasks-create-intake.log",
+      "tests": 114,
+      "passed": 114
     },
     {
       "command": "git diff --check",
       "exit_code": 0,
-      "raw_log": "/private/tmp/natural-language-tasks-stories-diff-check.log",
+      "raw_log": "/private/tmp/natural-language-tasks-create-diff-check.log",
       "observed_output": "empty output"
     }
   ],
@@ -596,6 +596,31 @@
       "test_name": "oversized legacy recovery settles owned preparation usage before refusal without another launch",
       "outcome": "passed",
       "evidence": "test/task-intake.test.mjs::oversized legacy recovery settles owned preparation usage before refusal without another launch"
+    },
+    {
+      "test_name": "create classifies failures before executor invocation separately from possible partial clones",
+      "outcome": "passed",
+      "evidence": "test/units.test.mjs::create classifies failures before executor invocation separately from possible partial clones"
+    },
+    {
+      "test_name": "hand-authored start releases a known stale-worktree refusal before cloning and retries after correction",
+      "outcome": "passed",
+      "evidence": "test/commands.test.mjs::hand-authored start releases a known stale-worktree refusal before cloning and retries after correction"
+    },
+    {
+      "test_name": "chain known create refusal releases start and dispatch ownership for an explicit corrected retry",
+      "outcome": "passed",
+      "evidence": "test/chains.test.mjs::chain known create refusal releases start and dispatch ownership for an explicit corrected retry"
+    },
+    {
+      "test_name": "CLI and structured known create preflight refusals release ownership and retry the same approved intake once",
+      "outcome": "passed",
+      "evidence": "test/task-intake.test.mjs::CLI and structured known create preflight refusals release ownership and retry the same approved intake once"
+    },
+    {
+      "test_name": "native create failures after executor invocation retain intake ownership even after the clone is removed",
+      "outcome": "passed",
+      "evidence": "test/task-intake.test.mjs::native create failures after executor invocation retain intake ownership even after the clone is removed"
     }
   ],
   "representative_fixture": {
@@ -622,7 +647,7 @@
     ]
   },
   "source_review": {
-    "implementation_revision": "c8ca3faecd6b1f1a98ae8540339a3ae22af7f7aa",
+    "implementation_revision": "609595e8a1f3d1c042b72d95be18610401318a1f",
     "representative_output_inspected": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-OciO1z/tasks/task-a1a896015714afff3ae33dc4/drafts/revision-2/docs/prds/task-a1a896015714afff3ae33dc4.md",
     "boundaries_checked": [
       "CLI and structured clients",
@@ -693,7 +718,8 @@
       "Both idempotent identity branches versus resume/initial validation and existing start; saved authorization only, request/answer signatures before replay, pinned draft/source/readiness hashes, unresolved or denied approval, pre-spawn intent/start claim, accepted ownership reconciliation, blocked replay, duplicate revision/run stability and normal daemon/no-daemon handling",
       "Story-to-owner requirement links, stable IDs and canonical rendering versus initial/answered repair, saved validation/start and approved crash recovery; existing requirement-to-criterion/question coverage and hand-authored checker/start behavior",
       "Shared requirement capacity versus text/CLI requests, combined/partial/idempotent answers, context reads, accepted revisions/operation IDs, prompt construction, mapping arrays and running/completed/settled native offline recovery; usage retained and no extra repair launch",
-      "Offline ready-file writer versus signal/watchdog existence/read barriers, crash injection, startup bookkeeping fault paths and cleanup PID reads; atomic publication reuses lib/fs.mjs without changing runtime, provider or permission defaults"
+      "Offline ready-file writer versus signal/watchdog existence/read barriers, crash injection, startup bookkeeping fault paths and cleanup PID reads; atomic publication reuses lib/fs.mjs without changing runtime, provider or permission defaults",
+      "Creator preflight versus executor invocation: stale .git, parent conflicts, credential and identity resolution, partial clone/fetch/checkout errors; shared start release, intake/chain dispatch intents, pinned approvals, crash reload, blocked/explicit/duplicate retry, source delivery and possible spawn ownership; fromBranch and public remove keep their existing behavior"
     ],
     "regressions": [
       "preparation uses the existing runner in a separate workspace, records usage and reconciles a lost response",
@@ -795,7 +821,12 @@
       "test/task-intake.test.mjs::oversized requirement input is refused before repository lookup, snapshots or preparation",
       "test/task-intake.test.mjs::requirement capacity includes answers atomically while exact-boundary input and idempotent replies remain accepted",
       "test/task-intake.test.mjs::partial answers and legacy recovery cannot exceed mapping capacity or purchase repair turns",
-      "test/task-intake.test.mjs::oversized legacy recovery settles owned preparation usage before refusal without another launch"
+      "test/task-intake.test.mjs::oversized legacy recovery settles owned preparation usage before refusal without another launch",
+      "test/units.test.mjs::create classifies failures before executor invocation separately from possible partial clones",
+      "test/commands.test.mjs::hand-authored start releases a known stale-worktree refusal before cloning and retries after correction",
+      "test/chains.test.mjs::chain known create refusal releases start and dispatch ownership for an explicit corrected retry",
+      "test/task-intake.test.mjs::CLI and structured known create preflight refusals release ownership and retry the same approved intake once",
+      "test/task-intake.test.mjs::native create failures after executor invocation retain intake ownership even after the clone is removed"
     ],
     "literal_output_inspected": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-YT4kUE/tasks/task-9f538f3b60078088f631d887/drafts/revision-5/docs/prds/task-9f538f3b60078088f631d887.md",
     "answer_context_output_inspected": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-GyBbWY/tasks/task-d21c94c7a17012e1454c6854/drafts/revision-4/docs/prds/task-d21c94c7a17012e1454c6854.md",
@@ -983,6 +1014,16 @@
       "sha256": "9f413400c525ef46ac544c693340c6fab2a5bc463abfc40035f5db14c52e835f",
       "checker_passed": true,
       "readiness_digest_matches": true
+    },
+    "create_preflight_output_inspected": {
+      "live": false,
+      "path": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-SQpNco/tasks/task-fad3f2c42819a551d0744485/drafts/revision-2/docs/prds/task-fad3f2c42819a551d0744485.md",
+      "record": "/private/tmp/natural-language-tasks-create-output-review.json",
+      "fixture_record": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-SQpNco/create-preflight-fixture.json",
+      "sha256": "2e06de9ebcf505fe3d3322bd769ce8c97f97e11fe1f771687dfab895ec966975",
+      "checker_passed": true,
+      "readiness_digest_matches": true,
+      "delivered_bytes_match": true
     }
   },
   "live": {
@@ -1439,6 +1480,20 @@
       ],
       "evidence": "docs/audit/plugin-ready/natural-language-tasks.json story_capacity_case",
       "observed": "Use one 128-entry capacity for immutable fragments and mappings. Refuse oversized requests before repository resolution and overflowing answers before context/state writes. Legacy owned turns retain settlement/usage, then stop without purchasing repair turns."
+    },
+    {
+      "comment_id": 4185849489,
+      "files": [
+        "lib/git.mjs",
+        "lib/commands/start.mjs",
+        "test/task-intake.test.mjs",
+        "test/commands.test.mjs",
+        "test/chains.test.mjs",
+        "test/units.test.mjs",
+        "docs/tasks.md"
+      ],
+      "evidence": "docs/audit/plugin-ready/natural-language-tasks.json create_preflight_case",
+      "observed": "Known create refusals before clone executor invocation now release ownership through existing start/task/chain gates. Partial or unknown clone outcomes remain reserved across cleanup/restart and cannot duplicate dispatch."
     }
   ],
   "offline_credential_check": {
@@ -1723,66 +1778,58 @@
         {
           "command": "npm test",
           "exit_code": 0,
-          "raw_log": "/private/tmp/natural-language-tasks-stories-npm-test-retry.log",
-          "tests": 856,
-          "passed": 856
+          "raw_log": "/private/tmp/natural-language-tasks-create-npm-test.log",
+          "tests": 861,
+          "passed": 861
         },
         {
           "command": "npm run lint",
           "exit_code": 0,
-          "raw_log": "/private/tmp/natural-language-tasks-stories-lint.log"
+          "raw_log": "/private/tmp/natural-language-tasks-create-lint.log"
         },
         {
           "command": "npm run test:task-intake",
           "exit_code": 0,
-          "raw_log": "/private/tmp/natural-language-tasks-stories-intake.log",
-          "tests": 112,
-          "passed": 112
+          "raw_log": "/private/tmp/natural-language-tasks-create-intake.log",
+          "tests": 114,
+          "passed": 114
         },
         {
           "command": "git diff --check",
           "exit_code": 0,
-          "raw_log": "/private/tmp/natural-language-tasks-stories-diff-check.log",
+          "raw_log": "/private/tmp/natural-language-tasks-create-diff-check.log",
           "observed_output": "empty output"
         }
       ],
       "focused_regressions": {
-        "command": "node --test --test-name-pattern='unlinked hostile stories|unowned stories|story bindings|oversized requirement input|requirement capacity includes|partial answers and legacy recovery cannot|oversized legacy recovery|unmapped hostile|persistent unmapped|legacy unmapped|requirement mappings allow|idempotent preparation and answer retries|literal placeholder|CLI and structured preparation|partial answers retain|legacy interrupted answers' test/task-intake.test.mjs",
+        "command": "node --test --test-name-pattern='known create preflight refusals|native create failures after executor|hand-authored start releases a known|chain known create refusal|create classifies failures|post-clone|partial clone failure|pre-clone snapshot|known start preflight|ambiguous spawn failure|fresh and adopted clones|failure after persisting the started' test/task-intake.test.mjs test/commands.test.mjs test/chains.test.mjs test/units.test.mjs test/review.test.mjs",
         "exit_code": 0,
-        "raw_log": "/private/tmp/natural-language-tasks-stories-targeted.log",
-        "tests": 19,
-        "passed": 19
+        "raw_log": "/private/tmp/natural-language-tasks-create-targeted.log",
+        "tests": 13,
+        "passed": 13
       },
-      "supporting_checks": [
-        {
-          "command": "node --test --test-name-pattern='live signal and watchdog stops await' test/live_suite.test.mjs",
-          "exit_code": 0,
-          "raw_log": "/private/tmp/natural-language-tasks-stories-ready-publication.log",
-          "tests": 10,
-          "passed": 10
-        }
-      ],
+      "supporting_checks": [],
       "initial_runs": [
         {
-          "command": "node --test --test-name-pattern='unlinked hostile stories|unowned stories|story bindings|oversized requirement input|requirement capacity includes|partial answers and legacy recovery cannot' test/task-intake.test.mjs",
+          "command": "node --test --test-name-pattern='known create preflight refusals|native create failures after executor|hand-authored start releases a known|chain known create refusal|create classifies failures' test/task-intake.test.mjs test/commands.test.mjs test/chains.test.mjs test/units.test.mjs",
           "exit_code": 1,
-          "raw_log": "/private/tmp/natural-language-tasks-stories-red.log",
-          "tests": 6,
+          "raw_log": "/private/tmp/natural-language-tasks-create-red.log",
+          "tests": 5,
           "passed": 0,
-          "failed": 6,
-          "observed": "Unlinked extra stories reached dispatch without repair. Oversized request/partial-answer state was accepted into preparation, and a combined overflowing answer reached missing-context file reads instead of capacity validation. The owned-story control required the new binding format."
+          "failed": 5,
+          "observed": "The sandbox prevented process identity inspection for the intake exclusion lock, and the first chain fixture had only one path. The chain fixture was corrected to the existing two-path contract; the same offline command was rerun with supported process-inspection escalation."
         },
         {
-          "command": "npm test",
+          "command": "node --test --test-name-pattern='known create preflight refusals|native create failures after executor|hand-authored start releases a known|chain known create refusal|create classifies failures' test/task-intake.test.mjs test/commands.test.mjs test/chains.test.mjs test/units.test.mjs",
           "exit_code": 1,
-          "raw_log": "/private/tmp/natural-language-tasks-stories-npm-test.log",
-          "tests": 856,
-          "passed": 854,
-          "failed": 2,
-          "observed": "The unchanged SIGINT ledger fixture observed ready.json before its JSON write completed, failing its subtest/parent with Unexpected end of JSON input. The shared fixture now uses the existing atomic JSON writer; all 10 signal/watchdog checks and the full rerun pass."
+          "raw_log": "/private/tmp/natural-language-tasks-create-red-authorized.log",
+          "tests": 5,
+          "passed": 1,
+          "failed": 4,
+          "observed": "Known stale-worktree refusals retained hand-authored, chain and intake ownership; create provided no pre-executor classification. Four regressions failed. The post-executor partial-clone ownership control passed."
         }
       ],
-      "observed": "Story ownership is checked in shared parsing before repair/readiness or saved dispatch. CLI and structured results expose requirement links; fresh answered output retains every explicit fragment and one implementation run. The common 128-entry mapping capacity now bounds requests before repository lookup and accumulated answers before context/state mutation. Exact-boundary, partial/idempotent answer and owned-turn recovery checks pass without extra planning calls. The repeated ready-file JSON publication race was fixed only in the offline fixture using the existing atomic writer; native/provider settings are unchanged. Native preparation enforcement and G8 live evidence remain unverified.",
+      "observed": "The creator marks cloneAttempted immediately before the executor call, after path checks and credential/identity environment resolution. Only explicit false classification releases the shared start claim and task/chain dispatch intent. Unknown/clone/fetch/checkout/source/spawn failures retain ownership; no automatic deletion or second launch was added. Explicit corrected retries retain saved authorization, requirements and source bytes and dispatch once. All required offline commands and focused checks pass. Native enforcement and G8 live qualification remain unverified; no model/provider calls or repeated blocked native probes occurred.",
       "model_calls": 0
     },
     "previous_batches": [
@@ -2421,6 +2468,73 @@
           }
         ],
         "observed": "Both retry paths recover the actual persisted authorized ready checkpoint through existing exact readiness and dispatch ownership gates. CLI and structured callers preserve preparation-only authorization, accepted source bytes and changed-input conflicts; one recovered implementation and normal daemon invocation are retained across duplicate replay. Full/intake/lint/diff commands and focused/adjacent checks pass. The initial watchdog JSON race is retained with an unchanged-base comparison and isolated pass. Native preparation enforcement and G8 live qualification remain unverified; no provider/model calls or repeated blocked native probes occurred.",
+        "model_calls": 0
+      },
+      {
+        "commands": [
+          {
+            "command": "npm test",
+            "exit_code": 0,
+            "raw_log": "/private/tmp/natural-language-tasks-stories-npm-test-retry.log",
+            "tests": 856,
+            "passed": 856
+          },
+          {
+            "command": "npm run lint",
+            "exit_code": 0,
+            "raw_log": "/private/tmp/natural-language-tasks-stories-lint.log"
+          },
+          {
+            "command": "npm run test:task-intake",
+            "exit_code": 0,
+            "raw_log": "/private/tmp/natural-language-tasks-stories-intake.log",
+            "tests": 112,
+            "passed": 112
+          },
+          {
+            "command": "git diff --check",
+            "exit_code": 0,
+            "raw_log": "/private/tmp/natural-language-tasks-stories-diff-check.log",
+            "observed_output": "empty output"
+          }
+        ],
+        "focused_regressions": {
+          "command": "node --test --test-name-pattern='unlinked hostile stories|unowned stories|story bindings|oversized requirement input|requirement capacity includes|partial answers and legacy recovery cannot|oversized legacy recovery|unmapped hostile|persistent unmapped|legacy unmapped|requirement mappings allow|idempotent preparation and answer retries|literal placeholder|CLI and structured preparation|partial answers retain|legacy interrupted answers' test/task-intake.test.mjs",
+          "exit_code": 0,
+          "raw_log": "/private/tmp/natural-language-tasks-stories-targeted.log",
+          "tests": 19,
+          "passed": 19
+        },
+        "supporting_checks": [
+          {
+            "command": "node --test --test-name-pattern='live signal and watchdog stops await' test/live_suite.test.mjs",
+            "exit_code": 0,
+            "raw_log": "/private/tmp/natural-language-tasks-stories-ready-publication.log",
+            "tests": 10,
+            "passed": 10
+          }
+        ],
+        "initial_runs": [
+          {
+            "command": "node --test --test-name-pattern='unlinked hostile stories|unowned stories|story bindings|oversized requirement input|requirement capacity includes|partial answers and legacy recovery cannot' test/task-intake.test.mjs",
+            "exit_code": 1,
+            "raw_log": "/private/tmp/natural-language-tasks-stories-red.log",
+            "tests": 6,
+            "passed": 0,
+            "failed": 6,
+            "observed": "Unlinked extra stories reached dispatch without repair. Oversized request/partial-answer state was accepted into preparation, and a combined overflowing answer reached missing-context file reads instead of capacity validation. The owned-story control required the new binding format."
+          },
+          {
+            "command": "npm test",
+            "exit_code": 1,
+            "raw_log": "/private/tmp/natural-language-tasks-stories-npm-test.log",
+            "tests": 856,
+            "passed": 854,
+            "failed": 2,
+            "observed": "The unchanged SIGINT ledger fixture observed ready.json before its JSON write completed, failing its subtest/parent with Unexpected end of JSON input. The shared fixture now uses the existing atomic JSON writer; all 10 signal/watchdog checks and the full rerun pass."
+          }
+        ],
+        "observed": "Story ownership is checked in shared parsing before repair/readiness or saved dispatch. CLI and structured results expose requirement links; fresh answered output retains every explicit fragment and one implementation run. The common 128-entry mapping capacity now bounds requests before repository lookup and accumulated answers before context/state mutation. Exact-boundary, partial/idempotent answer and owned-turn recovery checks pass without extra planning calls. The repeated ready-file JSON publication race was fixed only in the offline fixture using the existing atomic writer; native/provider settings are unchanged. Native preparation enforcement and G8 live evidence remain unverified.",
         "model_calls": 0
       }
     ]
@@ -3837,5 +3951,147 @@
       }
     },
     "observed": "Every generated story now links to authorized requirement IDs whose mappings are validated through the existing criterion/question rules. Unlinked strings, missing/unknown/duplicate links and malformed story IDs cannot create new implementation scope. Generated and saved failures use the same bounded repair or exact start gate. Oversized fragments are rejected atomically before new inference; already-owned recovery records usage before refusal. Readiness remains structural evidence, and all model/implementation records here are offline fixtures, not native/live qualification."
+  },
+  "create_preflight_case": {
+    "met": true,
+    "implementation_commit": "609595e8a1f3d1c042b72d95be18610401318a1f",
+    "model_calls": 0,
+    "source_refs": [
+      "lib/git.mjs",
+      "lib/commands/start.mjs",
+      "lib/tasks.mjs",
+      "lib/chains.mjs",
+      "lib/state.mjs",
+      "lib/control.mjs",
+      "docs/tasks.md",
+      "docs/prds/natural-language-tasks.md",
+      "docs/plans/plugin-ready-gallivant.md"
+    ],
+    "regressions": [
+      "test/units.test.mjs::create classifies failures before executor invocation separately from possible partial clones",
+      "test/commands.test.mjs::hand-authored start releases a known stale-worktree refusal before cloning and retries after correction",
+      "test/chains.test.mjs::chain known create refusal releases start and dispatch ownership for an explicit corrected retry",
+      "test/task-intake.test.mjs::CLI and structured known create preflight refusals release ownership and retry the same approved intake once",
+      "test/task-intake.test.mjs::native create failures after executor invocation retain intake ownership even after the clone is removed"
+    ],
+    "initial_runs": [
+      {
+        "command": "node --test --test-name-pattern='known create preflight refusals|native create failures after executor|hand-authored start releases a known|chain known create refusal|create classifies failures' test/task-intake.test.mjs test/commands.test.mjs test/chains.test.mjs test/units.test.mjs",
+        "exit_code": 1,
+        "raw_log": "/private/tmp/natural-language-tasks-create-red.log",
+        "tests": 5,
+        "passed": 0,
+        "failed": 5,
+        "observed": "The sandbox prevented process identity inspection for the intake exclusion lock, and the first chain fixture had only one path. The chain fixture was corrected to the existing two-path contract; the same offline command was rerun with supported process-inspection escalation."
+      },
+      {
+        "command": "node --test --test-name-pattern='known create preflight refusals|native create failures after executor|hand-authored start releases a known|chain known create refusal|create classifies failures' test/task-intake.test.mjs test/commands.test.mjs test/chains.test.mjs test/units.test.mjs",
+        "exit_code": 1,
+        "raw_log": "/private/tmp/natural-language-tasks-create-red-authorized.log",
+        "tests": 5,
+        "passed": 1,
+        "failed": 4,
+        "observed": "Known stale-worktree refusals retained hand-authored, chain and intake ownership; create provided no pre-executor classification. Four regressions failed. The post-executor partial-clone ownership control passed."
+      }
+    ],
+    "focused_regression": {
+      "command": "node --test --test-name-pattern='known create preflight refusals|native create failures after executor|hand-authored start releases a known|chain known create refusal|create classifies failures|post-clone|partial clone failure|pre-clone snapshot|known start preflight|ambiguous spawn failure|fresh and adopted clones|failure after persisting the started' test/task-intake.test.mjs test/commands.test.mjs test/chains.test.mjs test/units.test.mjs test/review.test.mjs",
+      "exit_code": 0,
+      "raw_log": "/private/tmp/natural-language-tasks-create-targeted.log",
+      "tests": 13,
+      "passed": 13
+    },
+    "representative_output": {
+      "live": false,
+      "model_calls": 0,
+      "record": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-SQpNco/create-preflight-fixture.json",
+      "path": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-SQpNco/tasks/task-fad3f2c42819a551d0744485/drafts/revision-2/docs/prds/task-fad3f2c42819a551d0744485.md",
+      "sha256": "2e06de9ebcf505fe3d3322bd769ce8c97f97e11fe1f771687dfab895ec966975",
+      "original": "Add CSV export for the widget table.\nDo not add dependencies.",
+      "requirements": [
+        {
+          "id": "r-1",
+          "text": "Add CSV export for the widget table."
+        },
+        {
+          "id": "r-2",
+          "text": "Do not add dependencies."
+        }
+      ],
+      "stories": [
+        {
+          "id": "us-1",
+          "text": "As a finance admin, I want to export widgets, so that I can reconcile spending.",
+          "requirements": [
+            "r-1"
+          ]
+        }
+      ],
+      "mapping": [
+        {
+          "requirementId": "r-1",
+          "criteria": [
+            "ac-1"
+          ]
+        },
+        {
+          "requirementId": "r-2",
+          "criteria": [
+            "ac-2"
+          ]
+        }
+      ],
+      "readiness": {
+        "allow": true,
+        "hash": "2e06de9ebcf505fe3d3322bd769ce8c97f97e11fe1f771687dfab895ec966975",
+        "digest": "fe892a8a670eeef87fb4c7b8b27e48bee6113504b567037eda7ea01aee11ec8d",
+        "decisionId": null,
+        "report": "ok   path          lives under docs/prds/ with a lowercase-dash filename\nok   frontmatter   frontmatter has status (draft|ready) and harness (claude|codex|gemini|opencode|goose)\nok   title         one H1 title, 8 to 80 characters\nok   problem       ## Problem: at least 40 words on what is wrong today and for whom\nok   stories       ## User stories: every bullet reads 'As a <who>, I want <what>, so that <why>'\nok   criteria      ## Acceptance criteria: every bullet is Given / When / Then, at least one per story\nok   verify        ## Verify: at least one command the session must run green; no sudo, rm -rf or piped installers\nok   look          ## Where to look: files or directories to start from, or 'none'\nok   scope         ## Out of scope: at least one bullet\nok   placeholders  no TODO, TBD, FIXME, ???, lorem or <angle-bracket> placeholders anywhere\nok   size          under 1,500 words; a PRD is one pull request, split anything bigger\nok   sources       every file in `sources` exists, is readable text, and is named inside the repository\n\ntask-fad3f2c42819a551d0744485: ready to start.\nAPort decision (local): allow\nstatus set to ready. Commit the PRD when you commit the rest of your work.",
+        "revision": 3
+      },
+      "failed": {
+        "status": "blocked",
+        "failures": [
+          "worktree already exists at /var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-SQpNco/worktrees/acme/widget/task-fad3f2c42819a551d0744485"
+        ],
+        "dispatchRecovery": null
+      },
+      "implementation": {
+        "id": "acme/widget/task-fad3f2c42819a551d0744485",
+        "worktree": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-SQpNco/worktrees/acme/widget/task-fad3f2c42819a551d0744485",
+        "branch": "work/task-fad3f2c42819a551d0744485",
+        "base": "main",
+        "baseSource": "default",
+        "session": null,
+        "run": "1-start",
+        "state": "running",
+        "pr": null,
+        "url": null
+      },
+      "clone_calls": 1,
+      "implementation_calls": 1,
+      "checker_passed": true,
+      "readiness_digest_matches": true,
+      "delivered_bytes_match": true,
+      "reviewed_against": [
+        "docs/prds/natural-language-tasks.md",
+        "docs/plans/plugin-ready-gallivant.md"
+      ]
+    },
+    "known_pre_executor_refusals": [
+      "existing .git",
+      "parent path is a file",
+      "credential resolver failure",
+      "identity resolver failure"
+    ],
+    "uncertain_paths_retained": [
+      "unknown create error",
+      "clone executor failure",
+      "fetch failure",
+      "checkout failure",
+      "post-clone source conflict",
+      "possible spawn"
+    ],
+    "observed": "The creator marks cloneAttempted immediately before the executor call, after path checks and credential/identity environment resolution. Only explicit false classification releases the shared start claim and task/chain dispatch intent. Unknown/clone/fetch/checkout/source/spawn failures retain ownership; no automatic deletion or second launch was added. Explicit corrected retries retain saved authorization, requirements and source bytes and dispatch once. All required offline commands and focused checks pass. Native enforcement and G8 live qualification remain unverified; no model/provider calls or repeated blocked native probes occurred."
   }
 }
