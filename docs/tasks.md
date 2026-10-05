@@ -198,11 +198,24 @@ context alone cannot authorize additional implementation scope. Unmapped criteri
 trigger bounded repair, and saved drafts with them cannot validate or start.
 Each planner story must include a nonempty, duplicate-free list of authorized
 requirement IDs. Those links appear in the generated brief and structured result.
+Links organize requirements; they do not approve planner-written behavior. The
+service replaces every story and criterion's prose with a deterministic wrapper
+and exact, JSON-quoted owner fragments. For a validated clarification, it quotes
+both the original fragment and the saved answer, with the answer governing
+conflicting parts; the original also remains in the requirements mapping.
+A falsely linked deployment outcome therefore never becomes
+an executable criterion or story. Owner-requested deployment remains intact.
+Generated rationale, assumptions, locations and exclusions are advisory and cannot
+add to or override this scope. Material ambiguity still requires an owner answer;
+the wrapper does not claim to resolve it or prove semantic correctness.
 Unlinked stories, unknown IDs and older string-only stories trigger repair on new
 turns and fail saved validation or dispatch. Inspect an older brief and prepare a
 new intake to establish its story ownership; no authorization is inferred from
-untrusted context. The readiness checker validates these associations structurally;
-review their meaning with the assumptions and requirement mapping.
+untrusted context. Saved validation recomputes the same owner-derived body, so an
+older draft containing planner-written executable scope cannot dispatch even if
+its recorded hash and readiness digest match. Existing owned implementation runs
+still reconcile without a duplicate launch. No extra confirmation is added to
+already authorized `--run` work.
 Each question's requirement IDs must exactly match its unresolved mappings, with
 no duplicate IDs. Saved ownership limits which fragments an answer can clarify.
 Reopening an older unanswered question proves ownership from its saved mappings;
