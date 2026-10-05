@@ -1,8 +1,8 @@
 {
   "version": 1,
   "task_id": "task-c93def694fe561146955c469",
-  "implementation_commit": "17eaf7c5a7b36eead37dbacde8d87a0875c848d5",
-  "recorded_at": "2026-10-05T18:07:02.611466Z",
+  "implementation_commit": "5bb20ad67108558399b8ec2b6a5b2d3c322fcbf8",
+  "recorded_at": "2026-10-05T18:44:50.384704Z",
   "versions": {
     "package": "0.1.0",
     "node": "v22.22.0",
@@ -13,26 +13,26 @@
     {
       "command": "npm test",
       "exit_code": 0,
-      "raw_log": "/private/tmp/natural-language-tasks-subprojects-npm-test.log",
-      "tests": 875,
-      "passed": 875
+      "raw_log": "/private/tmp/natural-language-tasks-claude-mode-npm-test-final.log",
+      "tests": 879,
+      "passed": 879
     },
     {
       "command": "npm run lint",
       "exit_code": 0,
-      "raw_log": "/private/tmp/natural-language-tasks-subprojects-lint.log"
+      "raw_log": "/private/tmp/natural-language-tasks-claude-mode-lint-final.log"
     },
     {
       "command": "npm run test:task-intake",
       "exit_code": 0,
-      "raw_log": "/private/tmp/natural-language-tasks-subprojects-intake.log",
-      "tests": 128,
-      "passed": 128
+      "raw_log": "/private/tmp/natural-language-tasks-claude-mode-intake.log",
+      "tests": 132,
+      "passed": 132
     },
     {
       "command": "git diff --check",
       "exit_code": 0,
-      "raw_log": "/private/tmp/natural-language-tasks-subprojects-diff-check-final.log",
+      "raw_log": "/private/tmp/natural-language-tasks-claude-mode-diff-check-final.log",
       "observed_output": "empty output"
     }
   ],
@@ -691,6 +691,26 @@
       "test_name": "automatic nested lockfiles retain source safety and answer atomicity before planning",
       "outcome": "passed",
       "evidence": "test/task-intake.test.mjs::automatic nested lockfiles retain source safety and answer atomicity before planning"
+    },
+    {
+      "test_name": "Claude cloud preparation excludes direct credentials and login state while preserving selected authentication and mode cleanup",
+      "outcome": "passed",
+      "evidence": "test/task-intake.test.mjs::Claude cloud preparation excludes direct credentials and login state while preserving selected authentication and mode cleanup"
+    },
+    {
+      "test_name": "Claude ambiguous modes and settings credential overrides refuse before copying auth and clean reused private state",
+      "outcome": "passed",
+      "evidence": "test/task-intake.test.mjs::Claude ambiguous modes and settings credential overrides refuse before copying auth and clean reused private state"
+    },
+    {
+      "test_name": "Claude selected cloud authentication reaches CLI and structured initial answer and repair turns without direct account secrets",
+      "outcome": "passed",
+      "evidence": "test/task-intake.test.mjs::Claude selected cloud authentication reaches CLI and structured initial answer and repair turns without direct account secrets"
+    },
+    {
+      "test_name": "Claude authentication selection failures stop CLI and structured initial answer and repair preparation without retries",
+      "outcome": "passed",
+      "evidence": "test/task-intake.test.mjs::Claude authentication selection failures stop CLI and structured initial answer and repair preparation without retries"
     }
   ],
   "representative_fixture": {
@@ -717,8 +737,8 @@
     ]
   },
   "source_review": {
-    "implementation_revision": "17eaf7c5a7b36eead37dbacde8d87a0875c848d5",
-    "representative_output_inspected": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-2ceUe2/tasks/task-8d1d022a6f9025672e9fbeac/drafts/revision-3/docs/prds/task-8d1d022a6f9025672e9fbeac.md",
+    "implementation_revision": "5bb20ad67108558399b8ec2b6a5b2d3c322fcbf8",
+    "representative_output_inspected": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-X2nH2Z/tasks/task-cee14c6977d7cc9ac257e300/drafts/revision-5/docs/prds/task-cee14c6977d7cc9ac257e300.md",
     "boundaries_checked": [
       "CLI and structured clients",
       "request/answer revision writes",
@@ -798,7 +818,11 @@
       "Preparation replay settles already-owned running/completed/settled usage before oversized legacy state blocks, clears stale readiness and refuses further turns. Unowned recovery, draftPrompt, parseDraft, direct rendering and saved readiness/dispatch reuse existing validation and ownership helpers. No hand-authored checker, provider/model/permission defaults or implementation transport changed.",
       "Explicit owner commands retain their original bytes while the shared collector binds all selected exact-leaf manifests in the recognized tool family at any repository depth. JavaScript commands carry matching-manager text lockfiles; Go, Cargo, Make and pytest project overrides reuse the same rule, preserving Maven/.NET support and canonical inference restrictions. Lookalike commands and backup filenames do not acquire provenance.",
       "Selected and pinned nested package.json files discover only colocated supported text lockfiles. Existing repository path, symlink, text and combined 256 KiB protections run before planning and before prospective answer writes. Root package-manager evidence, accepted snapshot bytes, operation replay and immutable owner constraints retain their existing behavior.",
-      "Draft prompts, parseDraft, structured commandSources and saved validate/start/resume share collectCommands. Omitted nested manifests or locks trigger bounded repair or refusal even with a forged matching saved approval; fresh-base dispatch carries accepted manifest/lock bytes despite later operator edits or stale base files, and duplicate dispatch remains single-owned."
+      "Draft prompts, parseDraft, structured commandSources and saved validate/start/resume share collectCommands. Omitted nested manifests or locks trigger bounded repair or refusal even with a forged matching saved approval; fresh-base dispatch carries accepted manifest/lock bytes despite later operator edits or stale base files, and duplicate dispatch remains single-owned.",
+      "Claude mode selection precedes credential forwarding and profile copying. Exactly one documented enabled cloud flag admits only its existing AWS/Google/Foundry authentication; direct tokens and both login files are absent in cloud modes, while disabled cloud flags preserve direct authentication and configured model/permission bytes. Multiple or unknown selectors refuse without a provider fallback.",
+      "The generic adapter allowlist no longer includes direct Claude credentials. The shared preparation environment admits those keys only for direct mode, validates native settings as JSON, and refuses provider/authentication env overrides with an export/dedicated-profile remedy. Existing selectedResource, carry, AWS profile and ADC helpers retain path and private-copy checks; no ordinary implementation environment or model/provider/permission default changed.",
+      "Rebuilding removes old private Claude login and cloud credential copies before mode/settings refusal. Entire legacy private directory aliases are removed as entries, preserving native files; selected native/private overlap is checked before cleanup. Unselected login aliases are never read in cloud mode, while direct selected login aliases still refuse.",
+      "CLI and structured initial preparation, answers and repair share the same environment and refusal path. Readiness/canonical output retain owner constraints and exact source hashes; successful answer replay launches no extra turn. Refusals persist TASK_PREPARATION_ENV, retain owned usage and accepted requirements, create no launch intent for the refused turn, and neither repair/retry automatically nor dispatch implementation even with saved run authorization."
     ],
     "regressions": [
       "preparation uses the existing runner in a separate workspace, records usage and reconciles a lost response",
@@ -919,7 +943,11 @@
       "test/task-intake.test.mjs::selected subproject manifests bind explicit tool invocations without inferring project overrides",
       "test/task-intake.test.mjs::CLI and structured subproject checks pin nested manifests and automatic lockfiles through answers repair and fresh-base dispatch",
       "test/task-intake.test.mjs::saved subproject checks cannot omit nested manifests or lockfiles even with a matching approval",
-      "test/task-intake.test.mjs::automatic nested lockfiles retain source safety and answer atomicity before planning"
+      "test/task-intake.test.mjs::automatic nested lockfiles retain source safety and answer atomicity before planning",
+      "test/task-intake.test.mjs::Claude cloud preparation excludes direct credentials and login state while preserving selected authentication and mode cleanup",
+      "test/task-intake.test.mjs::Claude ambiguous modes and settings credential overrides refuse before copying auth and clean reused private state",
+      "test/task-intake.test.mjs::Claude selected cloud authentication reaches CLI and structured initial answer and repair turns without direct account secrets",
+      "test/task-intake.test.mjs::Claude authentication selection failures stop CLI and structured initial answer and repair preparation without retries"
     ],
     "literal_output_inspected": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-YT4kUE/tasks/task-9f538f3b60078088f631d887/drafts/revision-5/docs/prds/task-9f538f3b60078088f631d887.md",
     "answer_context_output_inspected": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-GyBbWY/tasks/task-d21c94c7a17012e1454c6854/drafts/revision-4/docs/prds/task-d21c94c7a17012e1454c6854.md",
@@ -1120,7 +1148,8 @@
     },
     "owner_derived_scope_output_inspected": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-Vt73zE/tasks/task-a0503d56f0c9910ddb9612b0/drafts/revision-4/docs/prds/task-a0503d56f0c9910ddb9612b0.md",
     "clarification_capacity_output_inspected": "/private/tmp/natural-language-tasks-clarification-output-review.json",
-    "subproject_manifest_output_inspected": "/private/tmp/natural-language-tasks-subprojects-output-review.json"
+    "subproject_manifest_output_inspected": "/private/tmp/natural-language-tasks-subprojects-output-review.json",
+    "claude_selected_mode_output_inspected": "/private/tmp/natural-language-tasks-claude-mode-output-review-profile-final.json"
   },
   "live": {
     "status": "unverified",
@@ -1633,6 +1662,17 @@
       ],
       "evidence": "docs/audit/plugin-ready/natural-language-tasks.json subproject_manifest_case",
       "observed": "Explicit subproject checks now pin selected nested manifests and matching manager lockfiles through the shared command collector. Colocated JavaScript text locks enter the existing bounded, path-safe snapshot flow at preparation and answer time. CLI and structured repair, saved validation and fresh-base dispatch enforce the same rule, including sibling selected Go/Cargo/Make/pytest manifests without expanding automatic command inference. Four new regressions, 15 focused checks, 875 full-suite tests and 128 intake tests pass; lint and diff checks pass. A reviewed 233-word canonical fixture retains both owner constraints, exact readiness and delivered source bytes, then runs the explicit npm subproject check successfully in its disposable checkout. Model calls are zero; native enforcement and live qualification remain unverified."
+    },
+    {
+      "comment_id": 4187312737,
+      "files": [
+        "lib/harness.mjs",
+        "lib/task_environment.mjs",
+        "test/task-intake.test.mjs",
+        "docs/tasks.md"
+      ],
+      "evidence": "docs/audit/plugin-ready/natural-language-tasks.json claude_selected_mode_case",
+      "observed": "Claude preparation now scopes direct tokens and login snapshots to direct mode. Bedrock, Vertex and Foundry retain only their selected authentication with model/permission settings preserved. Ambiguous mode flags and native settings authentication overrides stop before model launch with actionable guidance. Private login/cloud material is cleared on rebuild, legacy aliases are removed without deleting native files, and profile overlap is rejected before cleanup. Four regressions, 13 final focused checks, 879 final full-suite tests and 132 intake tests pass; lint and whitespace checks pass. The reviewed 305-word brief preserves the original request, saved answer and dependency constraint, exact readiness and three scoped offline preparation turns with recorded synthetic usage and no implementation dispatch. Model calls are zero. Native enforcement and live qualification remain unverified."
     }
   ],
   "offline_credential_check": {
@@ -1917,48 +1957,72 @@
         {
           "command": "npm test",
           "exit_code": 0,
-          "raw_log": "/private/tmp/natural-language-tasks-subprojects-npm-test.log",
-          "tests": 875,
-          "passed": 875
+          "raw_log": "/private/tmp/natural-language-tasks-claude-mode-npm-test-final.log",
+          "tests": 879,
+          "passed": 879
         },
         {
           "command": "npm run lint",
           "exit_code": 0,
-          "raw_log": "/private/tmp/natural-language-tasks-subprojects-lint.log"
+          "raw_log": "/private/tmp/natural-language-tasks-claude-mode-lint-final.log"
         },
         {
           "command": "npm run test:task-intake",
           "exit_code": 0,
-          "raw_log": "/private/tmp/natural-language-tasks-subprojects-intake.log",
-          "tests": 128,
-          "passed": 128
+          "raw_log": "/private/tmp/natural-language-tasks-claude-mode-intake.log",
+          "tests": 132,
+          "passed": 132
         },
         {
           "command": "git diff --check",
           "exit_code": 0,
-          "raw_log": "/private/tmp/natural-language-tasks-subprojects-diff-check-final.log",
+          "raw_log": "/private/tmp/natural-language-tasks-claude-mode-diff-check-final.log",
           "observed_output": "empty output"
         }
       ],
       "focused_regressions": {
-        "command": "node --test --test-name-pattern='selected subproject manifests|structured subproject checks|saved subproject checks|automatic nested lockfiles|Verify provenance|explicit Maven|explicit owner Verify|lockfiles|packageManager takes|explicit argument-bearing' test/task-intake.test.mjs",
+        "command": "node --test --test-name-pattern='Claude cloud preparation|Claude ambiguous modes|Claude selected cloud authentication|Claude authentication selection failures|Foundry|cloud provider|preparation environments admit|relative provider files|Gemini Vertex|Bedrock snapshots|direct Bedrock|Bedrock preparation' test/task-intake.test.mjs",
         "exit_code": 0,
-        "raw_log": "/private/tmp/natural-language-tasks-subprojects-targeted.log",
-        "tests": 15,
-        "passed": 15
+        "raw_log": "/private/tmp/natural-language-tasks-claude-mode-targeted-profile-final.log",
+        "tests": 13,
+        "passed": 13
       },
       "initial_runs": [
         {
-          "command": "node --test --test-name-pattern='selected subproject manifests|structured subproject checks|saved subproject checks|automatic nested lockfiles' test/task-intake.test.mjs",
+          "command": "node --test --test-name-pattern='Claude cloud preparation|Claude ambiguous modes|Claude selected cloud authentication' test/task-intake.test.mjs",
           "exit_code": 1,
-          "raw_log": "/private/tmp/natural-language-tasks-subprojects-red.log",
-          "tests": 4,
+          "raw_log": "/private/tmp/natural-language-tasks-claude-mode-red.log",
+          "tests": 3,
           "passed": 0,
-          "failed": 4,
-          "observed": "Prior source omitted nested JavaScript manifests and lockfiles, accepted an omitted-source saved brief with a matching approval, and allowed unsafe automatic nested lockfiles to go unread before planning."
+          "failed": 3,
+          "observed": "Prior source exposed direct Claude credentials in cloud modes, accepted settings authentication overrides, and blocked the preparation fixture when its child asserted that unrelated direct credentials must be absent."
+        },
+        {
+          "command": "node --test --test-name-pattern='Claude cloud preparation|Claude ambiguous modes|Claude selected cloud authentication|Claude authentication selection failures|Foundry|cloud provider|preparation environments admit|relative provider files|Gemini Vertex|Bedrock snapshots|direct Bedrock|Bedrock preparation' test/task-intake.test.mjs",
+          "exit_code": 0,
+          "raw_log": "/private/tmp/natural-language-tasks-claude-mode-targeted.log",
+          "tests": 13,
+          "passed": 13,
+          "observed": "First focused pass preceded the final legacy directory-alias cleanup and native/private overlap guard."
+        },
+        {
+          "command": "node --test --test-name-pattern='Claude cloud preparation|Claude ambiguous modes|Claude selected cloud authentication|Claude authentication selection failures|Foundry|cloud provider|preparation environments admit|relative provider files|Gemini Vertex|Bedrock snapshots|direct Bedrock|Bedrock preparation' test/task-intake.test.mjs",
+          "exit_code": 0,
+          "raw_log": "/private/tmp/natural-language-tasks-claude-mode-targeted-final.log",
+          "tests": 13,
+          "passed": 13,
+          "observed": "Legacy alias cleanup passed; native/private overlap was then checked before cleanup and final suites were rerun."
+        },
+        {
+          "command": "npm test",
+          "exit_code": 0,
+          "raw_log": "/private/tmp/natural-language-tasks-claude-mode-npm-test.log",
+          "tests": 879,
+          "passed": 879,
+          "observed": "Full pass preceded the pre-cleanup native/private overlap guard. Final full, focused and intake checks use the final source."
         }
       ],
-      "observed": "Explicit subproject checks now pin selected nested manifests and matching manager lockfiles through the shared command collector. Colocated JavaScript text locks enter the existing bounded, path-safe snapshot flow at preparation and answer time. CLI and structured repair, saved validation and fresh-base dispatch enforce the same rule, including sibling selected Go/Cargo/Make/pytest manifests without expanding automatic command inference. Four new regressions, 15 focused checks, 875 full-suite tests and 128 intake tests pass; lint and diff checks pass. A reviewed 233-word canonical fixture retains both owner constraints, exact readiness and delivered source bytes, then runs the explicit npm subproject check successfully in its disposable checkout. Model calls are zero; native enforcement and live qualification remain unverified.",
+      "observed": "Claude preparation now scopes direct tokens and login snapshots to direct mode. Bedrock, Vertex and Foundry retain only their selected authentication with model/permission settings preserved. Ambiguous mode flags and native settings authentication overrides stop before model launch with actionable guidance. Private login/cloud material is cleared on rebuild, legacy aliases are removed without deleting native files, and profile overlap is rejected before cleanup. Four regressions, 13 final focused checks, 879 final full-suite tests and 132 intake tests pass; lint and whitespace checks pass. The reviewed 305-word brief preserves the original request, saved answer and dependency constraint, exact readiness and three scoped offline preparation turns with recorded synthetic usage and no implementation dispatch. Model calls are zero. Native enforcement and live qualification remain unverified.",
       "model_calls": 0
     },
     "previous_batches": [
@@ -2872,6 +2936,55 @@
           }
         ],
         "observed": "Saved question ownership, answer acceptance order and immutable answer-fragment provenance now determine clarification precedence independently of optional planner tags. New output, direct rendering and saved validation normalize the same scope; matching legacy hashes and approval digests cannot dispatch an unclarified original. Original text and unrelated constraints remain intact. The checker word limit and canonical renderer provide a lower bound before repository lookup or prospective answer context reads/state writes. Oversized legacy preparation settles owned usage before refusal without buying new planning or repair turns. All required offline commands and 20 focused checks pass; model calls are zero. Native preparation enforcement and G8 live qualification remain unverified, with prior failures and exact remedies preserved.",
+        "model_calls": 0
+      },
+      {
+        "commands": [
+          {
+            "command": "npm test",
+            "exit_code": 0,
+            "raw_log": "/private/tmp/natural-language-tasks-subprojects-npm-test.log",
+            "tests": 875,
+            "passed": 875
+          },
+          {
+            "command": "npm run lint",
+            "exit_code": 0,
+            "raw_log": "/private/tmp/natural-language-tasks-subprojects-lint.log"
+          },
+          {
+            "command": "npm run test:task-intake",
+            "exit_code": 0,
+            "raw_log": "/private/tmp/natural-language-tasks-subprojects-intake.log",
+            "tests": 128,
+            "passed": 128
+          },
+          {
+            "command": "git diff --check",
+            "exit_code": 0,
+            "raw_log": "/private/tmp/natural-language-tasks-subprojects-diff-check-final.log",
+            "observed_output": "empty output"
+          }
+        ],
+        "focused_regressions": {
+          "command": "node --test --test-name-pattern='selected subproject manifests|structured subproject checks|saved subproject checks|automatic nested lockfiles|Verify provenance|explicit Maven|explicit owner Verify|lockfiles|packageManager takes|explicit argument-bearing' test/task-intake.test.mjs",
+          "exit_code": 0,
+          "raw_log": "/private/tmp/natural-language-tasks-subprojects-targeted.log",
+          "tests": 15,
+          "passed": 15
+        },
+        "initial_runs": [
+          {
+            "command": "node --test --test-name-pattern='selected subproject manifests|structured subproject checks|saved subproject checks|automatic nested lockfiles' test/task-intake.test.mjs",
+            "exit_code": 1,
+            "raw_log": "/private/tmp/natural-language-tasks-subprojects-red.log",
+            "tests": 4,
+            "passed": 0,
+            "failed": 4,
+            "observed": "Prior source omitted nested JavaScript manifests and lockfiles, accepted an omitted-source saved brief with a matching approval, and allowed unsafe automatic nested lockfiles to go unread before planning."
+          }
+        ],
+        "observed": "Explicit subproject checks now pin selected nested manifests and matching manager lockfiles through the shared command collector. Colocated JavaScript text locks enter the existing bounded, path-safe snapshot flow at preparation and answer time. CLI and structured repair, saved validation and fresh-base dispatch enforce the same rule, including sibling selected Go/Cargo/Make/pytest manifests without expanding automatic command inference. Four new regressions, 15 focused checks, 875 full-suite tests and 128 intake tests pass; lint and diff checks pass. A reviewed 233-word canonical fixture retains both owner constraints, exact readiness and delivered source bytes, then runs the explicit npm subproject check successfully in its disposable checkout. Model calls are zero; native enforcement and live qualification remain unverified.",
         "model_calls": 0
       }
     ]
@@ -4940,6 +5053,212 @@
       "Draft prompts, parseDraft, structured commandSources and saved validate/start/resume share collectCommands. Omitted nested manifests or locks trigger bounded repair or refusal even with a forged matching saved approval; fresh-base dispatch carries accepted manifest/lock bytes despite later operator edits or stale base files, and duplicate dispatch remains single-owned."
     ],
     "observed": "Explicit subproject checks now pin selected nested manifests and matching manager lockfiles through the shared command collector. Colocated JavaScript text locks enter the existing bounded, path-safe snapshot flow at preparation and answer time. CLI and structured repair, saved validation and fresh-base dispatch enforce the same rule, including sibling selected Go/Cargo/Make/pytest manifests without expanding automatic command inference. Four new regressions, 15 focused checks, 875 full-suite tests and 128 intake tests pass; lint and diff checks pass. A reviewed 233-word canonical fixture retains both owner constraints, exact readiness and delivered source bytes, then runs the explicit npm subproject check successfully in its disposable checkout. Model calls are zero; native enforcement and live qualification remain unverified.",
+    "live_limitation": "Native preparation enforcement (ac-4) and G8 live qualification (ac-12) remain unverified; prior external failures and exact remedies are preserved and no unchanged blocked capability was retried."
+  },
+  "claude_selected_mode_case": {
+    "met": true,
+    "implementation_commit": "5bb20ad67108558399b8ec2b6a5b2d3c322fcbf8",
+    "review_id": 5418845466,
+    "comment_ids": [
+      4187312737
+    ],
+    "model_calls": 0,
+    "source_refs": [
+      "lib/harness.mjs",
+      "lib/task_environment.mjs",
+      "lib/task_prepare.mjs",
+      "lib/tasks.mjs",
+      "test/task-intake.test.mjs",
+      "docs/tasks.md",
+      "docs/prds/natural-language-tasks.md",
+      "docs/plans/plugin-ready-gallivant.md"
+    ],
+    "primary_references": [
+      "https://code.claude.com/docs/en/env-vars",
+      "https://code.claude.com/docs/en/settings"
+    ],
+    "regressions": [
+      "test/task-intake.test.mjs::Claude cloud preparation excludes direct credentials and login state while preserving selected authentication and mode cleanup",
+      "test/task-intake.test.mjs::Claude ambiguous modes and settings credential overrides refuse before copying auth and clean reused private state",
+      "test/task-intake.test.mjs::Claude selected cloud authentication reaches CLI and structured initial answer and repair turns without direct account secrets",
+      "test/task-intake.test.mjs::Claude authentication selection failures stop CLI and structured initial answer and repair preparation without retries"
+    ],
+    "initial_runs": [
+      {
+        "command": "node --test --test-name-pattern='Claude cloud preparation|Claude ambiguous modes|Claude selected cloud authentication' test/task-intake.test.mjs",
+        "exit_code": 1,
+        "raw_log": "/private/tmp/natural-language-tasks-claude-mode-red.log",
+        "tests": 3,
+        "passed": 0,
+        "failed": 3,
+        "observed": "Prior source exposed direct Claude credentials in cloud modes, accepted settings authentication overrides, and blocked the preparation fixture when its child asserted that unrelated direct credentials must be absent."
+      },
+      {
+        "command": "node --test --test-name-pattern='Claude cloud preparation|Claude ambiguous modes|Claude selected cloud authentication|Claude authentication selection failures|Foundry|cloud provider|preparation environments admit|relative provider files|Gemini Vertex|Bedrock snapshots|direct Bedrock|Bedrock preparation' test/task-intake.test.mjs",
+        "exit_code": 0,
+        "raw_log": "/private/tmp/natural-language-tasks-claude-mode-targeted.log",
+        "tests": 13,
+        "passed": 13,
+        "observed": "First focused pass preceded the final legacy directory-alias cleanup and native/private overlap guard."
+      },
+      {
+        "command": "node --test --test-name-pattern='Claude cloud preparation|Claude ambiguous modes|Claude selected cloud authentication|Claude authentication selection failures|Foundry|cloud provider|preparation environments admit|relative provider files|Gemini Vertex|Bedrock snapshots|direct Bedrock|Bedrock preparation' test/task-intake.test.mjs",
+        "exit_code": 0,
+        "raw_log": "/private/tmp/natural-language-tasks-claude-mode-targeted-final.log",
+        "tests": 13,
+        "passed": 13,
+        "observed": "Legacy alias cleanup passed; native/private overlap was then checked before cleanup and final suites were rerun."
+      },
+      {
+        "command": "npm test",
+        "exit_code": 0,
+        "raw_log": "/private/tmp/natural-language-tasks-claude-mode-npm-test.log",
+        "tests": 879,
+        "passed": 879,
+        "observed": "Full pass preceded the pre-cleanup native/private overlap guard. Final full, focused and intake checks use the final source."
+      }
+    ],
+    "focused_regression": {
+      "command": "node --test --test-name-pattern='Claude cloud preparation|Claude ambiguous modes|Claude selected cloud authentication|Claude authentication selection failures|Foundry|cloud provider|preparation environments admit|relative provider files|Gemini Vertex|Bedrock snapshots|direct Bedrock|Bedrock preparation' test/task-intake.test.mjs",
+      "exit_code": 0,
+      "raw_log": "/private/tmp/natural-language-tasks-claude-mode-targeted-profile-final.log",
+      "tests": 13,
+      "passed": 13
+    },
+    "output_review_initial_failure": {
+      "command": "node --input-type=module output review",
+      "exit_code": 1,
+      "observed": "TypeError: Cannot read properties of undefined (reading checkout) at output-review helper line 10; the helper incorrectly accessed r.repository.",
+      "model_calls": 0,
+      "remedy": "Use the recorded fixture directory as the saved intake root; rerun the read-only output review."
+    },
+    "output_review_command_log": "/private/tmp/natural-language-tasks-claude-mode-output-review-profile-final.log",
+    "representative_output": {
+      "live": false,
+      "model_calls": 0,
+      "record": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-X2nH2Z/claude-mode-fixture.json",
+      "path": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-X2nH2Z/tasks/task-cee14c6977d7cc9ac257e300/drafts/revision-5/docs/prds/task-cee14c6977d7cc9ac257e300.md",
+      "sha256": "b55db05ff7c8f2fc6a9837fd90e2d0d4a7a74e08870f652bd2b80ca79899f174",
+      "words": 305,
+      "original": "Add CSV export for the widget table.\nDo not add dependencies.",
+      "requirements": [
+        {
+          "id": "r-1",
+          "text": "Add CSV export for the widget table."
+        },
+        {
+          "id": "r-2",
+          "text": "Do not add dependencies."
+        },
+        {
+          "id": "a-q-r-1-1",
+          "text": "Use CSV."
+        }
+      ],
+      "mapping": [
+        {
+          "requirementId": "r-1",
+          "criteria": [
+            "ac-1"
+          ],
+          "resolvedBy": "q-r-1"
+        },
+        {
+          "requirementId": "r-2",
+          "criteria": [
+            "ac-2"
+          ]
+        },
+        {
+          "requirementId": "a-q-r-1-1",
+          "criteria": [
+            "ac-3"
+          ]
+        }
+      ],
+      "sources": [
+        {
+          "path": "AGENTS.md",
+          "hash": "03c3e02659634826151da10c34ca31473b2ca7542d54de33cf169678555d7b34"
+        },
+        {
+          "path": "package.json",
+          "hash": "4f05b82adac690557b1bef490211ec333ff378ca9dbe8fc0a58624bddd3ae281"
+        }
+      ],
+      "readiness": {
+        "allow": true,
+        "hash": "b55db05ff7c8f2fc6a9837fd90e2d0d4a7a74e08870f652bd2b80ca79899f174",
+        "digest": "1a5eeda8dc9dac5a9e164f90d1a727b7c7621a016f8b339f8ea8d9366cf70f4e",
+        "decisionId": null,
+        "report": "ok   path          lives under docs/prds/ with a lowercase-dash filename\nok   frontmatter   frontmatter has status (draft|ready) and harness (claude|codex|gemini|opencode|goose)\nok   title         one H1 title, 8 to 80 characters\nok   problem       ## Problem: at least 40 words on what is wrong today and for whom\nok   stories       ## User stories: every bullet reads 'As a <who>, I want <what>, so that <why>'\nok   criteria      ## Acceptance criteria: every bullet is Given / When / Then, at least one per story\nok   verify        ## Verify: at least one command the session must run green; no sudo, rm -rf or piped installers\nok   look          ## Where to look: files or directories to start from, or 'none'\nok   scope         ## Out of scope: at least one bullet\nok   placeholders  no TODO, TBD, FIXME, ???, lorem or <angle-bracket> placeholders anywhere\nok   size          under 1,500 words; a PRD is one pull request, split anything bigger\nok   sources       every file in `sources` exists, is readable text, and is named inside the repository\n\ntask-cee14c6977d7cc9ac257e300: ready to start.\nAPort decision (local): allow\nstatus set to ready. Commit the PRD when you commit the rest of your work.",
+        "revision": 6
+      },
+      "implementation": null,
+      "launches": [
+        {
+          "cwd": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-X2nH2Z/tasks/task-cee14c6977d7cc9ac257e300/preparation/turn-1",
+          "mode": "1",
+          "model": "selected-model",
+          "selected_keys": [
+            "ANTHROPIC_FOUNDRY_RESOURCE",
+            "ANTHROPIC_FOUNDRY_API_KEY"
+          ],
+          "direct_keys_absent": true,
+          "login_files_absent": true,
+          "cloud_files_absent": true,
+          "model_permission_settings_preserved": true
+        },
+        {
+          "cwd": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-X2nH2Z/tasks/task-cee14c6977d7cc9ac257e300/preparation/turn-2",
+          "mode": "1",
+          "model": "selected-model",
+          "selected_keys": [
+            "ANTHROPIC_FOUNDRY_RESOURCE",
+            "ANTHROPIC_FOUNDRY_API_KEY"
+          ],
+          "direct_keys_absent": true,
+          "login_files_absent": true,
+          "cloud_files_absent": true,
+          "model_permission_settings_preserved": true
+        },
+        {
+          "cwd": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-X2nH2Z/tasks/task-cee14c6977d7cc9ac257e300/preparation/turn-3",
+          "mode": "1",
+          "model": "selected-model",
+          "selected_keys": [
+            "ANTHROPIC_FOUNDRY_RESOURCE",
+            "ANTHROPIC_FOUNDRY_API_KEY"
+          ],
+          "direct_keys_absent": true,
+          "login_files_absent": true,
+          "cloud_files_absent": true,
+          "model_permission_settings_preserved": true
+        }
+      ],
+      "usage": {
+        "attempts": 3,
+        "repairs": 1,
+        "cost_usd": 0.03
+      },
+      "checker_passed": true,
+      "canonical_validation_passed": true,
+      "readiness_digest_matches": true,
+      "native_files_unchanged": true,
+      "no_implementation_dispatch": true,
+      "reviewed_against": [
+        "docs/prds/natural-language-tasks.md",
+        "docs/plans/plugin-ready-gallivant.md"
+      ],
+      "limitation": "Deterministic preparation runner and authentication fixtures; no live provider/model calls or installed native tools-off qualification."
+    },
+    "boundaries_checked": [
+      "Claude mode selection precedes credential forwarding and profile copying. Exactly one documented enabled cloud flag admits only its existing AWS/Google/Foundry authentication; direct tokens and both login files are absent in cloud modes, while disabled cloud flags preserve direct authentication and configured model/permission bytes. Multiple or unknown selectors refuse without a provider fallback.",
+      "The generic adapter allowlist no longer includes direct Claude credentials. The shared preparation environment admits those keys only for direct mode, validates native settings as JSON, and refuses provider/authentication env overrides with an export/dedicated-profile remedy. Existing selectedResource, carry, AWS profile and ADC helpers retain path and private-copy checks; no ordinary implementation environment or model/provider/permission default changed.",
+      "Rebuilding removes old private Claude login and cloud credential copies before mode/settings refusal. Entire legacy private directory aliases are removed as entries, preserving native files; selected native/private overlap is checked before cleanup. Unselected login aliases are never read in cloud mode, while direct selected login aliases still refuse.",
+      "CLI and structured initial preparation, answers and repair share the same environment and refusal path. Readiness/canonical output retain owner constraints and exact source hashes; successful answer replay launches no extra turn. Refusals persist TASK_PREPARATION_ENV, retain owned usage and accepted requirements, create no launch intent for the refused turn, and neither repair/retry automatically nor dispatch implementation even with saved run authorization."
+    ],
+    "observed": "Claude preparation now scopes direct tokens and login snapshots to direct mode. Bedrock, Vertex and Foundry retain only their selected authentication with model/permission settings preserved. Ambiguous mode flags and native settings authentication overrides stop before model launch with actionable guidance. Private login/cloud material is cleared on rebuild, legacy aliases are removed without deleting native files, and profile overlap is rejected before cleanup. Four regressions, 13 final focused checks, 879 final full-suite tests and 132 intake tests pass; lint and whitespace checks pass. The reviewed 305-word brief preserves the original request, saved answer and dependency constraint, exact readiness and three scoped offline preparation turns with recorded synthetic usage and no implementation dispatch. Model calls are zero. Native enforcement and live qualification remain unverified.",
     "live_limitation": "Native preparation enforcement (ac-4) and G8 live qualification (ac-12) remain unverified; prior external failures and exact remedies are preserved and no unchanged blocked capability was retried."
   }
 }
