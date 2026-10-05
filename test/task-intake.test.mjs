@@ -94,6 +94,113 @@ test("conflicting constraints stay visible and answers resume the same identity,
   await assert.rejects(() => w.service.answer({ ...answer, answers: { "q-r-1": "Use JSON." } }), { code: "TASK_CONFLICT" });
 });
 
+test("CLI and structured answers pin additional context, carry instructions and sources, and dispatch once", async t => {
+  const run = async cli => {
+    const plans = [];
+    const w = world({ prepare: async (_ctx, task) => {
+      plans.push(structuredClone(task));
+      const output = draftFor(task, { question: true });
+      if (task.answers["q-r-1"]) output.verify.push("git diff --check");
+      return JSON.stringify(output);
+    } });
+    mkdirSync(join(w.checkout, "docs/export"), { recursive: true });
+    writeFileSync(join(w.checkout, "docs/original.md"), "Original pinned context.");
+    writeFileSync(join(w.checkout, "docs/export/AGENTS.md"), "Verify the export with `git diff --check`.\n");
+    const documents = { "docs/export/format.md": "CSV uses UTF-8 and headers.", "docs/export/rows.md": "Export only visible rows." };
+    for (const [path, text] of Object.entries(documents)) writeFileSync(join(w.checkout, path), text);
+    let r = await w.service.prepare({ text: REQUEST, context: ["docs/original.md"], run: true });
+    const first = r, pinned = taskStore(w.home).read(r.taskId).context;
+    writeFileSync(join(w.checkout, "AGENTS.md"), "Changed after preparation.");
+    writeFileSync(join(w.checkout, "docs/original.md"), "Changed after preparation.");
+    const input = { taskId: r.taskId, expectedRevision: r.revision, answers: { "q-r-1": "Use CSV and the selected export documents." }, context: Object.keys(documents), operationId: "context-answer" };
+    const invoke = input => cli ? taskCommand(w.ctx, { args: ["answer", input.taskId], service: w.service, values: { revision: String(input.expectedRevision), "request-id": input.operationId, answer: Object.entries(input.answers).map(([k,v]) => `${k}=${v}`), context: input.context } }) : w.service.answer(input);
+    r = await invoke(input);
+    assert.equal(r.version, 1); assert.equal(r.taskId, first.taskId); assert.equal(r.status, "started");
+    assert.equal(plans.length, 2); assert.equal(w.ctx.state.entries().length, 1); assert.equal(w.daemonCalls(), 1);
+    assert.equal(check(parsePrd(r.draft.text, r.draft.path)).ok, true);
+    t.diagnostic(`Answer-context fixture draft: ${r.draft.path}`);
+    for (const c of pinned) assert.deepEqual(plans[1].context.find(p => p.path === c.path), c);
+    assert.ok(plans[1].commandCandidates.includes("git diff --check")); assert.match(r.draft.text, /`git diff --check`/);
+    assert.equal(r.original, REQUEST); assert.match(r.draft.text, /Do not add dependencies/);
+    for (const [path,text] of Object.entries(documents)) {
+      assert.equal(plans[1].context.find(c => c.path === path).text, text);
+      assert.equal(readFileSync(r.artifacts.find(a => a.id === `source:${path}`).path, "utf8"), text);
+      assert.equal(w.sources.get(`acme/widget/${r.taskId}:${path}`), text);
+    }
+    assert.equal(r.sources.find(c => c.path === "docs/export/AGENTS.md").hash, contentDigest("Verify the export with `git diff --check`.\n"));
+    const saved = taskStore(w.home).read(r.taskId);
+    rmSync(join(w.checkout, "docs/export/format.md"));
+    assert.equal((await invoke(input)).implementation.run, r.implementation.run, "duplicate answer replays pinned bytes without rereading context");
+    assert.equal(plans.length, 2); assert.equal(w.ctx.state.entries().length, 1);
+    await assert.rejects(() => invoke({ ...input, context: [] }), { version: 1, code: "TASK_CONFLICT" });
+    await assert.rejects(() => invoke({ ...input, operationId: "stale-context-answer" }), { version: 1, code: "TASK_CONFLICT" });
+    assert.deepEqual(taskStore(w.home).read(r.taskId), saved);
+    return { status:r.status, original:r.original, requirements:r.requirements, mapping:r.mapping, sources:r.sources, text:r.draft.text };
+  };
+  assert.deepEqual(await run(true), await run(false));
+});
+
+test("partial answers retain context while unsafe, oversized or changed selections leave accepted state untouched", async () => {
+  let calls = 0;
+  const w = world({ prepare: async (_ctx, task) => {
+    calls++;
+    const output = draftFor(task), questions = [
+      { id:"q-r-1", text:"Which format should export use?", requirements:["r-1"] },
+      { id:"q-r-2", text:"Which existing helper should be reused?", requirements:["r-2"] },
+    ];
+    output.questions = questions.filter(q => !task.answers[q.id]);
+    output.mapping = output.mapping.map(m => {
+      const q = questions.find(q => q.requirements.includes(m.requirementId));
+      return !q ? m : task.answers[q.id] ? { ...m, resolvedBy:q.id } : { requirementId:m.requirementId, questionId:q.id };
+    });
+    return JSON.stringify(output);
+  } });
+  mkdirSync(join(w.checkout, "docs"));
+  mkdirSync(join(w.checkout,".config"));
+  writeFileSync(join(w.checkout,".env"),"fixture-secret");
+  writeFileSync(join(w.checkout,".config/secret.md"),"fixture-config-secret");
+  writeFileSync(join(w.home,"secret"),"fixture-outside-repository");
+  writeFileSync(join(w.checkout, "docs/one.md"), "a".repeat(140000));
+  writeFileSync(join(w.checkout, "docs/large.md"), "b".repeat(140000));
+  writeFileSync(join(w.checkout, "docs/two.md"), "Use the existing row formatter.");
+  writeFileSync(join(w.checkout, "docs/binary.md"), "binary\0content");
+  symlinkSync(join(w.checkout, "docs/two.md"), join(w.checkout, "docs/alias.md"));
+  const first = await w.service.prepare({ text: REQUEST });
+  const partialInput = { taskId:first.taskId, expectedRevision:first.revision, operationId:"partial-context", answers:{"q-r-1":"Use CSV."}, context:["docs/one.md"] };
+  const partial = await w.service.answer(partialInput);
+  assert.equal(partial.status, "needs-input"); assert.equal(partial.draft.current, false); assert.equal(calls, 1);
+  assert.deepEqual(partial.questions.map(q => q.id), ["q-r-2"]);
+  const store = taskStore(w.home), saved = store.read(first.taskId);
+  for (const context of [null, [1], [".env"], [".config/secret.md"], ["../secret"], ["docs/alias.md"], ["docs/binary.md"], ["docs/missing.md"], ["docs/large.md"]]) {
+    await assert.rejects(() => w.service.answer({ taskId:first.taskId, expectedRevision:partial.revision, operationId:"final-context", answers:{"q-r-2":"Reuse the formatter."}, context }), e => e.version === 1);
+    assert.deepEqual(store.read(first.taskId), saved); assert.equal(calls, 1);
+  }
+  writeFileSync(join(w.checkout, "docs/one.md"), "Changed accepted context.");
+  await assert.rejects(() => w.service.answer({ taskId:first.taskId, expectedRevision:partial.revision, operationId:"changed-context", answers:{"q-r-2":"Reuse the formatter."}, context:["docs/one.md"] }), { code:"TASK_CONFLICT", version:1 });
+  assert.deepEqual(store.read(first.taskId), saved);
+  assert.deepEqual(await w.service.answer(partialInput), partial, "duplicate partial reply does not reread changed files");
+  const complete = await w.service.answer({ taskId:first.taskId, expectedRevision:partial.revision, operationId:"final-context", answers:{"q-r-2":"Reuse the formatter."}, context:["docs/two.md"] });
+  assert.equal(complete.status, "ready"); assert.equal(complete.draft.current, true); assert.equal(calls, 2);
+  assert.equal(readFileSync(complete.artifacts.find(a => a.id === "source:docs/one.md").path,"utf8"), "a".repeat(140000));
+  assert.equal(readFileSync(complete.artifacts.find(a => a.id === "source:docs/two.md").path,"utf8"), "Use the existing row formatter.");
+  assert.deepEqual(w.ctx.state.entries(), []);
+  const legacy = world({ prepare:async (_ctx,task) => JSON.stringify(draftFor(task,{question:true})) });
+  const question = await legacy.service.prepare({text:REQUEST});
+  const reply = {taskId:question.taskId,expectedRevision:question.revision,operationId:"legacy-answer",answers:{"q-r-1":"Use CSV."}};
+  const answered = await legacy.service.answer(reply);
+  assert.equal(taskStore(legacy.home).read(question.taskId).operations[reply.operationId], contentDigest(JSON.stringify({answers:reply.answers,verifyCommands:[]})));
+  assert.deepEqual(await legacy.service.answer(reply), answered);
+});
+
+test("CLI refuses context on operations that cannot accept documents before calling the service", async () => {
+  let calls = 0;
+  const service = Object.fromEntries(["resume","validate","start","inspect","list"].map(name => [name, () => { calls++; }]));
+  for (const operation of Object.keys(service)) {
+    await assert.rejects(() => taskCommand({}, {args:[operation,"task-0123456789abcdef01234567"],values:{context:["docs/plan.md"]},service}), {code:"TASK_INPUT",version:1});
+  }
+  assert.equal(calls, 0);
+});
+
 test("invalid output is repaired at most three times and cannot remove explicit constraints", async () => {
   let calls = 0;
   const w = world({ prepare: async (_ctx, task, _store, failures) => {
@@ -423,23 +530,37 @@ test("preparation environments admit only selected provider settings and isolate
   };
   const excluded = [".npmrc", ".ssh/id_ed25519", ".aws/credentials", ".config/gh/hosts.yml", ".config/database/credentials", ".codex/history.jsonl", ".claude/projects/previous.jsonl", ".gemini/history/previous.json", ".local/share/opencode/storage/previous.json", ".config/goose/history.json"];
   for (const path of [...Object.values(profiles).flat(), ...excluded]) {
-    mkdirSync(dirname(join(operator, path)), { recursive: true }); writeFileSync(join(operator, path), `fixture:${path}`);
+    mkdirSync(dirname(join(operator, path)), { recursive: true }); writeFileSync(join(operator, path), `fixture:${path}`, { mode:0o600 });
   }
   const secrets = { AWS_SECRET_ACCESS_KEY: "aws-only", AWS_ACCESS_KEY_ID: "aws-only", NPM_TOKEN: "npm-only", DATABASE_URL: "database-only", PRIVATE_SERVICE_TOKEN: "private-only", GH_TOKEN: "github-only", SSH_AUTH_SOCK: "agent-only", NODE_OPTIONS: "startup-only", BASH_ENV: "startup-only", ENV: "startup-only", ZDOTDIR: "startup-only", LD_PRELOAD: "startup-only" };
   const source = { ...secrets, HOME: operator, PATH: process.env.PATH, LANG: "en_US.UTF-8", OPENAI_API_KEY: "openai-only", ANTHROPIC_API_KEY: "anthropic-only", GEMINI_API_KEY: "gemini-only", GOOSE_PROVIDER: "openai", GOOSE_MODEL: "configured-model", XDG_CONFIG_HOME: join(operator, ".config"), XDG_DATA_HOME: join(operator, ".local/share"), XDG_STATE_HOME: join(operator, ".local/state") };
   const expectedKeys = { codex: ["OPENAI_API_KEY"], claude: ["ANTHROPIC_API_KEY"], gemini: ["GEMINI_API_KEY"], opencode: ["OPENAI_API_KEY", "ANTHROPIC_API_KEY", "GEMINI_API_KEY"], goose: ["OPENAI_API_KEY", "ANTHROPIC_API_KEY"] };
   for (const harness of Object.keys(profiles)) {
-    const cwd = join(root, harness), env = preparationEnvironment(harness, cwd, {}, source);
+    const cwd = join(root, harness);
+    for (const path of profiles[harness]) {
+      const target = join(cwd,"home",path);
+      mkdirSync(dirname(target), {recursive:true}); symlinkSync(join(operator,path),target);
+    }
+    const env = preparationEnvironment(harness, cwd, {}, source);
     assert.equal(env.PATH, source.PATH); assert.equal(env.LANG, source.LANG); assert.equal(env.HOME, join(cwd, "home")); assert.notEqual(env.HOME, source.HOME);
     assert.equal(env.XDG_CONFIG_HOME, join(env.HOME, ".config")); assert.equal(env.TMPDIR, join(cwd, "tmp"));
     for (const key of Object.keys(secrets)) assert.ok(!(key in env), `${harness} inherited ${key}`);
     for (const key of ["OPENAI_API_KEY", "ANTHROPIC_API_KEY", "GEMINI_API_KEY"]) assert.equal(env[key], expectedKeys[harness].includes(key) ? source[key] : undefined, `${harness}: ${key}`);
-    for (const path of profiles[harness]) assert.equal(readFileSync(join(env.HOME, path), "utf8"), `fixture:${path}`);
+    for (const path of profiles[harness]) {
+      const target = join(env.HOME,path);
+      assert.equal(readFileSync(target,"utf8"), `fixture:${path}`);
+      assert.equal(lstatSync(target).isSymbolicLink(), false); assert.equal(statSync(target).mode & 0o777,0o600);
+      writeFileSync(target,"private preparation edit"); rmSync(target);
+      assert.equal(readFileSync(join(operator,path),"utf8"), `fixture:${path}`, "writes and deletion never reach native auth/config files");
+    }
     for (const path of excluded) assert.equal(existsSync(join(env.HOME, path)), false, `${harness} exposed ${path}`);
     for (const [other, paths] of Object.entries(profiles)) if (other !== harness) assert.equal(existsSync(join(env.HOME, paths[0])), false, `${harness} exposed ${other} profile`);
     // Rebuilding a private profile never changes the native settings or home.
     preparationEnvironment(harness, cwd, {}, source);
-    for (const path of profiles[harness]) assert.equal(readFileSync(join(operator, path), "utf8"), `fixture:${path}`);
+    for (const path of profiles[harness]) {
+      assert.equal(readFileSync(join(operator,path),"utf8"), `fixture:${path}`);
+      assert.equal(readFileSync(join(env.HOME,path),"utf8"), `fixture:${path}`);
+    }
     if (harness === "goose") { assert.equal(env.GOOSE_PROVIDER, source.GOOSE_PROVIDER); assert.equal(env.GOOSE_MODEL, source.GOOSE_MODEL); }
   }
 });
@@ -551,6 +672,36 @@ test("cloud provider credentials are available only in explicitly selected provi
   assert.ok(!("AWS_SECRET_ACCESS_KEY" in env)); assert.ok(!("CLAUDE_CODE_USE_BEDROCK" in env)); assert.equal(existsSync(join(env.HOME, ".aws")), false);
 });
 
+test("explicit provider auth and config file settings use private snapshots with the original contents and precedence", () => {
+  const root = tempHome(), operator = join(root,"operator-home"), native = join(root,"selected-auth");
+  mkdirSync(operator); mkdirSync(native);
+  const keys = ["GOOGLE_APPLICATION_CREDENTIALS","AWS_CONFIG_FILE","AWS_SHARED_CREDENTIALS_FILE","AWS_WEB_IDENTITY_TOKEN_FILE","OPENCODE_CONFIG"];
+  const files = Object.fromEntries(keys.map(key => [key,join(native,`${key}.json`)]));
+  for (const [key,path] of Object.entries(files)) writeFileSync(path,`fixture:${key}`,{mode:0o600});
+  const cases = [
+    ["gemini",{},[keys[0]]], ["claude",{CLAUDE_CODE_USE_VERTEX:"1"},[keys[0]]],
+    ["claude",{CLAUDE_CODE_USE_BEDROCK:"1"},keys.slice(1,4)], ["goose",{GOOSE_PROVIDER:"bedrock"},keys.slice(1,4)],
+    ["opencode",{},[keys[4]]], ["codex",{},[]],
+  ];
+  for (const [i,[harness,mode,selected]] of cases.entries()) {
+    const source = {HOME:operator,...files,...mode};
+    for (const turn of ["initial","repair"]) {
+      const env = preparationEnvironment(harness,join(root,`${i}-${turn}`),{},source);
+      for (const key of keys) {
+        if (!selected.includes(key)) { assert.equal(env[key],undefined); continue; }
+        assert.notEqual(env[key],files[key]); assert.ok(env[key].startsWith(env.HOME+"/"));
+        assert.equal(lstatSync(env[key]).isSymbolicLink(),false); assert.equal(statSync(env[key]).mode & 0o777,0o600);
+        assert.equal(readFileSync(env[key],"utf8"),`fixture:${key}`);
+        writeFileSync(env[key],"private credential/config edit"); rmSync(env[key]);
+        assert.equal(readFileSync(files[key],"utf8"),`fixture:${key}`);
+      }
+    }
+  }
+  for (const path of [join(root,"missing.json"),operator]) {
+    assert.throws(() => preparationEnvironment("gemini",join(root,`invalid-${path === operator}`),{}, {HOME:operator,GOOGLE_APPLICATION_CREDENTIALS:path}), e => e.code === "TASK_PREPARATION_ENV" && /readable regular file/.test(e.message));
+  }
+});
+
 test("Gemini Vertex preparation carries only ADC into its private profile and preserves explicit credentials", () => {
   const root = tempHome(), operator = join(root, "operator-home"), nativeConfig = join(root, "operator-config"), adc = "gcloud/application_default_credentials.json";
   mkdirSync(join(nativeConfig, "gcloud"), { recursive: true }); mkdirSync(operator);
@@ -562,15 +713,21 @@ test("Gemini Vertex preparation carries only ADC into its private profile and pr
     const env = preparationEnvironment("gemini", join(root, turn), {}, source);
     assert.equal(env.GOOGLE_GENAI_USE_VERTEXAI, "true"); assert.equal(env.GOOGLE_CLOUD_PROJECT, source.GOOGLE_CLOUD_PROJECT); assert.equal(env.GOOGLE_CLOUD_LOCATION, source.GOOGLE_CLOUD_LOCATION); assert.equal(env.GEMINI_MODEL, source.GEMINI_MODEL);
     assert.equal(readFileSync(join(env.XDG_CONFIG_HOME, adc), "utf8"), readFileSync(join(nativeConfig, adc), "utf8"));
-    assert.deepEqual(readdirSync(join(env.XDG_CONFIG_HOME, "gcloud")), ["application_default_credentials.json"]);
+    assert.equal(lstatSync(join(env.XDG_CONFIG_HOME,adc)).isSymbolicLink(),false);
+    const nativeAdc = readFileSync(join(nativeConfig,adc),"utf8");
+    writeFileSync(join(env.XDG_CONFIG_HOME,adc),"private ADC refresh"); rmSync(join(env.XDG_CONFIG_HOME,adc));
+    assert.equal(readFileSync(join(nativeConfig,adc),"utf8"),nativeAdc);
+    assert.deepEqual(readdirSync(join(env.XDG_CONFIG_HOME, "gcloud")), []);
     assert.ok(!("AWS_SECRET_ACCESS_KEY" in env)); assert.ok(!("NPM_TOKEN" in env)); assert.ok(!("GOOGLE_APPLICATION_CREDENTIALS" in env));
   }
   for (const flag of [undefined, "false", "1"]) {
     const env = preparationEnvironment("gemini", join(root, `off-${flag}`), {}, { ...source, GOOGLE_GENAI_USE_VERTEXAI: flag, GEMINI_API_KEY: "fixture-api-key" });
     assert.equal(existsSync(join(env.XDG_CONFIG_HOME, adc)), false); assert.equal(env.GEMINI_API_KEY, "fixture-api-key");
   }
-  const explicit = preparationEnvironment("gemini", join(root, "explicit"), {}, { ...source, GOOGLE_APPLICATION_CREDENTIALS: join(root, "selected-service-account.json") });
-  assert.equal(explicit.GOOGLE_APPLICATION_CREDENTIALS, join(root, "selected-service-account.json"));
+  const selected = join(root,"selected-service-account.json"); writeFileSync(selected,"selected-service-account");
+  const explicit = preparationEnvironment("gemini", join(root, "explicit"), {}, { ...source, GOOGLE_APPLICATION_CREDENTIALS:selected });
+  assert.notEqual(explicit.GOOGLE_APPLICATION_CREDENTIALS, selected);
+  assert.equal(readFileSync(explicit.GOOGLE_APPLICATION_CREDENTIALS,"utf8"), "selected-service-account");
   const claude = preparationEnvironment("claude", join(root, "claude"), {}, { ...source, CLAUDE_CODE_USE_VERTEX: "1" });
   assert.equal(readFileSync(join(claude.XDG_CONFIG_HOME, adc), "utf8"), readFileSync(join(nativeConfig, adc), "utf8"));
   assert.equal(existsSync(join(claude.XDG_CONFIG_HOME, "gcloud/credentials.db")), false);
@@ -595,6 +752,9 @@ test("native durable runner stores offline preparation logs, usage, runtime and 
   const w = world(), bin = join(w.home, "offline-codex.mjs");
   const operatorHome = join(w.home, "provider-home"), ghConfig = join(operatorHome, ".config/gh");
   mkdirSync(ghConfig, { recursive: true }); writeFileSync(join(ghConfig, "hosts.yml"), "github.com:\n  oauth_token: stored-fixture-only\n");
+  mkdirSync(join(operatorHome,".codex"));
+  const nativeProfile = {"config.toml":"configured-model-fixture","auth.json":"provider-auth-fixture"};
+  for (const [name,text] of Object.entries(nativeProfile)) writeFileSync(join(operatorHome,".codex",name),text,{mode:0o600});
   const overrides = { HOME: operatorHome, XDG_CONFIG_HOME: join(operatorHome, ".config"), GH_CONFIG_DIR: ghConfig, GH_TOKEN: "gh-fixture-only", GITHUB_TOKEN: "github-fixture-only", GH_ENTERPRISE_TOKEN: "ghe-fixture-only", GITHUB_ENTERPRISE_TOKEN: "enterprise-fixture-only", OPENAI_API_KEY: "provider-fixture-only", CODEX_HOME: join(operatorHome, ".codex"), SSH_AUTH_SOCK: "/fixture-only/agent.sock", SSH_ASKPASS: "/fixture-only/askpass", GIT_ASKPASS: "/fixture-only/askpass", GIT_CONFIG_PARAMETERS: "'credential.helper=fixture-only'", GIT_CONFIG_VALUE_99: "fixture-only", GIT_DIR: "/fixture-only/operator.git",
     AWS_ACCESS_KEY_ID: "aws-fixture-only", AWS_SECRET_ACCESS_KEY: "aws-secret-fixture-only", NPM_TOKEN: "npm-fixture-only", DATABASE_URL: "database-fixture-only", ANTHROPIC_API_KEY: "other-provider-fixture-only" };
   const previous = Object.fromEntries(Object.keys(overrides).map(key => [key, process.env[key]]));
@@ -619,7 +779,11 @@ else {
     gitGlobal: process.env.GIT_CONFIG_GLOBAL, gitNoSystem: process.env.GIT_CONFIG_NOSYSTEM, gitSsh: process.env.GIT_SSH_COMMAND, gitProtocols: process.env.GIT_ALLOW_PROTOCOL,
     ghConfig: process.env.GH_CONFIG_DIR, configError, home: process.env.HOME,
     providerKey: process.env.OPENAI_API_KEY, codexHome: process.env.CODEX_HOME, pwd: process.env.PWD,
+    configBytes: readFileSync(join(process.env.CODEX_HOME, 'config.toml'), 'utf8'),
+    authBytes: readFileSync(join(process.env.CODEX_HOME, 'auth.json'), 'utf8'),
   }));
+  writeFileSync(join(process.env.CODEX_HOME, 'config.toml'), 'private configuration edit');
+  writeFileSync(join(process.env.CODEX_HOME, 'auth.json'), 'private credential refresh');
   const data = JSON.parse(args.at(-1).split('INTAKE DATA (JSON):\\n').at(-1));
   console.log(JSON.stringify({ type: 'thread.started', thread_id: '22222222-2222-4222-8222-222222222222' }));
   console.log(JSON.stringify({ type: 'item.completed', item: { type: 'agent_message', text: JSON.stringify(draftFor(data)) } }));
@@ -642,6 +806,8 @@ else {
   assert.deepEqual(environment.unrelatedKeys, []);
   assert.deepEqual(environment.inheritedGitSshKeys, []); assert.equal(environment.gitGlobal, "/dev/null"); assert.equal(environment.gitNoSystem, "1"); assert.equal(environment.gitSsh, "false"); assert.equal(environment.gitProtocols, "");
   assert.equal(environment.home, join(argv.cwd, "home")); assert.equal(environment.providerKey, overrides.OPENAI_API_KEY); assert.equal(environment.codexHome, join(environment.home, ".codex")); assert.equal(environment.pwd, argv.cwd);
+  assert.equal(environment.configBytes,nativeProfile["config.toml"]); assert.equal(environment.authBytes,nativeProfile["auth.json"]);
+  for (const [name,text] of Object.entries(nativeProfile)) assert.equal(readFileSync(join(operatorHome,".codex",name),"utf8"),text);
   const baseline = makeRunner(join(w.home, "baseline-runs"));
   const job = await baseline.start("inherited-env", process.execPath, ["-e", "console.log(JSON.stringify({github:process.env.GH_TOKEN,config:process.env.GH_CONFIG_DIR,provider:process.env.OPENAI_API_KEY}))"], { cwd: w.home });
   t.after(async () => { baseline.kill(job.id); await baseline.waitForKill(job.id); });

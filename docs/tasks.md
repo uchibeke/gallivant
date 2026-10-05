@@ -24,17 +24,19 @@ Preparation receives these documents in its prompt and does not inherit global
 selected adapter's explicit provider authentication/settings allowlist, defined
 in `lib/harness.mjs`. Unrelated tokens, database URLs, other adapters' keys and
 shell startup overrides are excluded. Preparation has a private `HOME`, XDG roots
-and temporary directory. The selected adapter's regular native auth/config files
-are linked into that profile. Its configured resource directories and explicitly
-selected AWS profile directory are copied into private snapshots, so parent traversal and
-preparation writes cannot reach the native directory. Internal resource links are
+and temporary directory. The selected adapter's native auth/config files,
+configured resource directories and explicitly selected AWS profile directory
+are copied into private snapshots, so parent traversal and preparation writes
+cannot reach native files through those entries. Internal resource links are
 materialized; links outside the selected directory, cycles, broken links and
 special files stop preparation before launch and remove partial copies. Previous
 sessions and unrelated home-directory credentials are excluded. Shared AWS
 credentials require explicit Bedrock selection; Claude's explicit Vertex mode can also use
 native Google credentials. Gemini with `GOOGLE_GENAI_USE_VERTEXAI=true` carries
-only `gcloud/application_default_credentials.json` into its private config root;
-explicit `GOOGLE_APPLICATION_CREDENTIALS` paths keep their existing precedence.
+only `gcloud/application_default_credentials.json` into its private config root.
+Explicit `GOOGLE_APPLICATION_CREDENTIALS`, AWS auth/config file settings and
+`OPENCODE_CONFIG` also point to private copies, retaining the selected contents
+and authentication precedence. Refreshes and edits stay in the preparation turn.
 No model or permission flags are changed.
 
 `GH_CONFIG_DIR=/dev/null` disables stored GitHub CLI credentials. The existing Git
@@ -56,7 +58,8 @@ link, so reopening an intake does not lose access to the eventual result.
 gallivant task inspect task-0123456789abcdef01234567 --json
 gallivant task list --json
 gallivant task answer task-0123456789abcdef01234567 --revision 2 \
-  --request-id format-answer --answer 'q-r-1=Use CSV only; JSON is excluded.' --json
+  --request-id format-answer --answer 'q-r-1=Use CSV only; JSON is excluded.' \
+  --context docs/export-format.md --json
 gallivant task validate task-0123456789abcdef01234567 --revision 4 --json
 gallivant task start task-0123456789abcdef01234567 --revision 4 --run --json
 ```
@@ -64,7 +67,14 @@ gallivant task start task-0123456789abcdef01234567 --revision 4 --run --json
 Use the revision and question identifiers returned by your own result. Commands
 never wait for a terminal question. Missing or conflicting requirements return
 `needs-input`; each answer is attached to its existing task. Piped stdin must finish
-within five seconds. `--answer`, `--context` and `--verify` may repeat. For a stack
+within five seconds. `--answer`, `--context` and `--verify` may repeat. Context can
+be supplied during preparation or while answering questions. Answer-time files
+and their instructions use the same path checks and combined context size limit;
+their pinned bytes reach the resumed planner and generated source snapshots.
+Existing context remains pinned. Explicit reselection of changed accepted bytes
+returns a conflict. Duplicate answer identities replay without rereading files;
+changing their selected paths conflicts. Other CLI task operations reject
+`--context`. For a stack
 without discoverable test commands, answer the material question and supply the
 exact repository command using `--verify 'python -m unittest'`.
 
@@ -142,6 +152,7 @@ if (result.status === 'needs-input') {
     taskId: result.taskId, expectedRevision: result.revision,
     operationId: 'format-answer',
     answers: { [result.questions[0].id]: 'Use CSV only.' },
+    context: ['docs/export-format.md'],
   });
 }
 if (result.status === 'ready') {
