@@ -128,6 +128,11 @@ documents that exist only in the operator tree. Symlinks, escapes, globs, contro
 characters and secret/agent configuration paths are refused by intake. Existing
 hand-authored PRDs retain their source-manifest rules. Editing the original
 source after approval does not silently change the selected snapshot.
+Task source paths beginning or ending with a single or double quote are refused
+before planning or answer writes, because the existing frontmatter parser cannot
+preserve those boundary characters. Rename the file or select another path.
+Quotes inside a path remain supported. Generated and saved source manifests use
+the same task-specific guard; hand-authored source parsing is unchanged.
 Inferred Verify commands require their pinned authorizing manifests or instruction
 files in the generated `sources`. Repair may add these selected files; it cannot
 silently drop the dependency. The existing start path delivers their exact bytes
@@ -140,6 +145,11 @@ Matching text lockfiles also remain pinned and carried, so a fresh base receives
 the evidence used to select its manager. Automatically inferred instruction
 commands must name test, lint, check or typecheck actions; publishing, deployment,
 release targets, paid/live checks and composed shell commands are not candidates.
+Maven and .NET commands are not inferred from instructions because their project
+manifests do not yet have automatic snapshot support. Supply the repository's
+check with `--verify 'mvn test'` or `--verify 'dotnet test'` and explicitly select
+its supporting manifests with `--context`; those owner choices remain available
+during preparation and answers.
 Known manifest scripts and established manager selection take precedence over
 unrelated instruction snippets. The service records explicit owner commands
 separately from inferred candidates. Reopening an older record rebuilds inference

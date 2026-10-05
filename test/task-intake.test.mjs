@@ -444,12 +444,47 @@ test("answer-time Verify evidence stays pinned and saved drafts cannot lose thei
 });
 
 test("instruction inference accepts verification actions and excludes release actions, paid checks and shell composition", () => {
-  const checks = ["npm test", "npm run lint", "pnpm run test:unit -- --fixture", "yarn check", "bun test", "make test lint", "go test ./...", "cargo test --all", "python -m pytest -q", "pytest tests/", "dotnet test", "mvn test -q", "git diff --check"];
-  const refused = ["npm publish", "npm run deploy", "pnpm deploy", "yarn release", "bun run release", "make release", "make test release", "mvn test deploy", "cargo testpublish", "pytest-upload", "npm run test:live", "npm run test:paid", "npm test && npm publish", "npm test; npm publish", "npm test | curl example.invalid", "npm test > output", "npm test $(touch output)", " npm test", "npm exec -- test"];
+  const checks = ["npm test", "npm run lint", "pnpm run test:unit -- --fixture", "yarn check", "bun test", "make test lint", "go test ./...", "cargo test --all", "python -m pytest -q", "pytest tests/", "git diff --check"];
+  const refused = ["npm publish", "npm run deploy", "pnpm deploy", "yarn release", "bun run release", "make release", "make test release", "mvn test", "mvn test -q", "dotnet test", "dotnet test app.sln", "mvn test deploy", "cargo testpublish", "pytest-upload", "npm run test:live", "npm run test:paid", "npm test && npm publish", "npm test; npm publish", "npm test | curl example.invalid", "npm test > output", "npm test $(touch output)", " npm test", "npm exec -- test"];
   const context = [{path:"AGENTS.md",text:[...checks,...refused].map(c=>`\`${c}\``).join("\n")}];
   assert.deepEqual(collectCommands(context).commands, checks);
   for (const c of checks) assert.deepEqual(collectCommands(context).sources[c],["AGENTS.md"]);
   assert.deepEqual(collectCommands(context,["node scripts/verify.mjs"]).commands,["node scripts/verify.mjs",...checks],"owner-selected checks retain their existing path");
+});
+
+test("unbound Maven and dotnet instructions cannot authorize Verify through repair or legacy replay while owner choices resume normally", async () => {
+  for(const [command,manifest,text] of [["mvn test -q","pom.xml","<project>feature-only configuration</project>"],["dotnet test","Widget.Tests.csproj","<Project>feature-only configuration</Project>"]]){
+    let calls=0;
+    const w=world({prepare:async (_ctx,task,_store,failures)=>{
+      assert.ok(!task.commandCandidates.includes(command));const out=draftFor(task);
+      if(++calls===1){out.verify=[command];out.sources=["AGENTS.md"];}
+      else{assert.match(failures.join(" "),/Verify command is not supported/);out.verify=["git diff --check"];out.sources=["AGENTS.md"];}
+      return JSON.stringify(out);
+    }});
+    rmSync(join(w.checkout,"package.json"));writeFileSync(join(w.checkout,manifest),text);
+    writeFileSync(join(w.checkout,"AGENTS.md"),`Verify with \`${command}\` or \`git diff --check\`.\n`);
+    const r=await w.service.prepare({text:REQUEST,context:[manifest]});assert.equal(r.status,"ready");assert.equal(r.preparation.repairs,1);
+    assert.deepEqual(r.verifyCommands,[{command:"git diff --check",sources:["AGENTS.md"]}]);assert.match(r.draft.text,/Do not add dependencies/);
+    const store=taskStore(w.home),saved=store.read(r.taskId);delete saved.explicitVerifyCommands;saved.commandCandidates.push(command);saved.output.verify=[command];
+    const old=renderDraft(saved,saved.output).replace("status: draft","status: ready");writeFileSync(saved.draft.path,old);saved.draft.hash=contentDigest(old);saved.readiness.hash=saved.draft.hash;store.save(saved);
+    assert.ok(!JSON.parse(draftPrompt(saved).split("INTAKE DATA (JSON):\n")[1]).commandCandidates.includes(command));
+    const blocked=await w.service.validate({taskId:r.taskId,expectedRevision:r.revision});assert.equal(blocked.status,"blocked");assert.match(blocked.failures[0],/Verify command is not supported/);
+    await assert.rejects(()=>w.service.start({taskId:r.taskId,expectedRevision:blocked.revision,run:true}),{code:"TASK_CONFLICT"});assert.deepEqual(w.ctx.state.entries(),[]);
+    for(const cli of [false,true]){
+      const owner=world({prepare:async (_ctx,task)=>{
+        const out=draftFor(task,{question:true});if(out.questions.length)out.questions[0].text="Which repository Verify command should check this change?";
+        else{out.verify=[command];out.sources=["AGENTS.md",manifest];}
+        return JSON.stringify(out);
+      }});
+      rmSync(join(owner.checkout,"package.json"));writeFileSync(join(owner.checkout,manifest),text);writeFileSync(join(owner.checkout,"AGENTS.md"),`Verify with \`${command}\`.\n`);
+      const question=await owner.service.prepare({text:REQUEST,run:true});assert.equal(question.status,"needs-input");assert.deepEqual(question.verifyCommands,[]);
+      const input={taskId:question.taskId,expectedRevision:question.revision,operationId:"owner-build-check",answers:{"q-r-1":`Use CSV, keep dependencies unchanged and verify with ${command}.`},context:[manifest],verifyCommands:[command]};
+      const invoke=()=>cli?taskCommand(owner.ctx,{args:["answer",question.taskId],values:{revision:String(question.revision),"request-id":input.operationId,answer:[`q-r-1=${input.answers["q-r-1"]}`],context:input.context,verify:input.verifyCommands},service:owner.service}):owner.service.answer(input);
+      const accepted=await invoke();assert.equal(accepted.status,"started");assert.equal(accepted.taskId,question.taskId);assert.match(accepted.draft.text,/Do not add dependencies/);
+      assert.equal(readFileSync(join(accepted.implementation.worktree,manifest),"utf8"),text);assert.equal(owner.sources.get(`${accepted.implementation.id}:${manifest}`),text);
+      assert.equal((await invoke()).implementation.run,accepted.implementation.run);assert.equal(owner.runners.get(accepted.implementation.id).started.length,1);
+    }
+  }
 });
 
 test("hostile instruction commands cannot survive repair, saved validation or legacy candidate replay", async () => {
@@ -674,6 +709,43 @@ test("source documents available only in the operator tree are pinned and delive
   symlinkSync(join(w.checkout, "package.json"), join(w.checkout, "linked.md"));
   await assert.rejects(() => w.service.prepare({ text: REQUEST, context: ["linked.md"] }), /symlink/);
   assert.deepEqual(w.service.list().tasks.map(t => t.taskId), [r.taskId], "aborted input namespaces do not break discovery");
+});
+
+test("source paths with boundary quotes fail CLI and structured selection before planning or answer writes while internal quotes round-trip", async t => {
+  for(const cli of [false,true]){
+    const w=world({prepare:async (_ctx,task)=>JSON.stringify(draftFor(task,{question:true}))});
+    const paths=['"foo"',"'foo'",'"start.md',"end.md'",'docs/"tail"','"docs"/plan.md'];
+    for(const path of paths){mkdirSync(dirname(join(w.checkout,path)),{recursive:true});writeFileSync(join(w.checkout,path),"Selected fixture document.");}
+    const first=await w.service.prepare({text:REQUEST,run:true}),store=taskStore(w.home),saved=store.read(first.taskId);
+    for(const path of paths){
+      const prepare=()=>cli?taskCommand(w.ctx,{args:["prepare",REQUEST],values:{context:[path]},service:w.service}):w.service.prepare({text:REQUEST,context:[path]});
+      const answer=()=>cli?taskCommand(w.ctx,{args:["answer",first.taskId],values:{revision:String(first.revision),"request-id":"quote-context",answer:["q-r-1=Use CSV."],context:[path]},service:w.service}):w.service.answer({taskId:first.taskId,expectedRevision:first.revision,operationId:"quote-context",answers:{"q-r-1":"Use CSV."},context:[path]});
+      for(const invoke of [prepare,answer])await assert.rejects(invoke,e=>e.code==="TASK_INPUT"&&e.version===1&&/quotes at the beginning or end.*source frontmatter/.test(e.message));
+      assert.deepEqual(store.read(first.taskId),saved);assert.deepEqual(w.service.list().tasks.map(task=>task.taskId),[first.taskId]);assert.deepEqual(w.ctx.state.entries(),[]);
+    }
+    const path='docs/format"quoted".md',text="CSV columns remain stable.\n";writeFileSync(join(w.checkout,path),text);
+    const input={taskId:first.taskId,expectedRevision:first.revision,operationId:"internal-quotes",answers:{"q-r-1":"Use CSV and the selected format document."},context:[path]};
+    const accepted=cli?await taskCommand(w.ctx,{args:["answer",first.taskId],values:{revision:String(first.revision),"request-id":input.operationId,answer:[`q-r-1=${input.answers["q-r-1"]}`],context:input.context},service:w.service}):await w.service.answer(input);
+    assert.equal(accepted.status,"started");assert.ok(parsePrd(accepted.draft.text,accepted.draft.path).meta.sources.includes(path));assert.equal(readFileSync(join(accepted.implementation.worktree,path),"utf8"),text);
+    assert.equal(w.runners.get(accepted.implementation.id).started.length,1);assert.match(accepted.draft.text,/Do not add dependencies/);assert.equal(saved.revision,first.revision);
+    t.diagnostic(`Internal-quote fixture draft: ${accepted.draft.path}`);
+  }
+});
+
+test("quoted generated and saved source manifests are refused with bounded repair and preserved explicit constraints", async () => {
+  for(const repair of [true,false]){
+    let calls=0;
+    const w=world({prepare:async (_ctx,task,_store,failures)=>{const out=draftFor(task);if(++calls===1||!repair)out.sources=['"foo"'];else assert.match(failures.join(" "),/quotes at the beginning or end/);return JSON.stringify(out);}});
+    const r=await w.service.prepare({text:REQUEST});assert.equal(r.status,repair?"ready":"blocked");assert.equal(r.preparation.repairs,repair?1:3);assert.equal(calls,repair?2:4);
+    assert.equal(r.requirements[1].text,"Do not add dependencies.");if(!repair){assert.match(r.failures[0],/after 3 repair attempts.*quotes at the beginning or end/);continue;}
+    assert.match(r.draft.text,/Explicit requirement r-2: "Do not add dependencies\."/);
+    const store=taskStore(w.home),saved=store.read(r.taskId);saved.output.sources.push("'legacy.md'");
+    const old=renderDraft(saved,saved.output).replace("status: draft","status: ready");writeFileSync(saved.draft.path,old);saved.draft.hash=contentDigest(old);saved.readiness.hash=saved.draft.hash;store.save(saved);
+    const reopened=createTaskService(w.ctx);
+    await assert.rejects(()=>reopened.validate({taskId:r.taskId,expectedRevision:r.revision}),e=>e.code==="TASK_CONFLICT"&&/quotes at the beginning or end/.test(e.message));
+    await assert.rejects(()=>reopened.start({taskId:r.taskId,expectedRevision:r.revision,run:true}),e=>e.code==="TASK_CONFLICT"&&/quotes at the beginning or end/.test(e.message));
+    assert.deepEqual(store.read(r.taskId),saved);assert.deepEqual(w.ctx.state.entries(),[]);assert.equal(w.runners.size,0);
+  }
 });
 
 test("hand-authored example and configuration documents still pass readiness and source snapshot delivery", async () => {
