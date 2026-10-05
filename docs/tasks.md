@@ -32,6 +32,16 @@ lockfiles are outside the text context contract; supply a supported manifest
 setting or explicit check. Automatic lockfiles use the same path and combined
 byte limit as other selected files.
 Context is bounded to 256 KiB and requests to 32 KiB; choose fewer files if needed.
+The service also measures the smallest possible canonical brief using the checker's
+1,500-word limit and the actual JSON quoting rules. Owner fragments must appear in
+the mapping and executable criteria, with at least one story. If that minimum
+already exceeds the limit, `TASK_INPUT` asks for a smaller request before repository
+lookup or a preparation turn. The same check includes accumulated answers before
+reading new context or changing the accepted revision or answer-operation identity;
+a shorter corrected answer can reuse the refused operation identity. Raw whitespace
+word counts alone are insufficient because JSON quoting escapes tabs. Recovery
+settles any already-owned preparation turn and preserves usage before stopping
+oversized saved state; it launches no further planning or repair turn.
 An intake accepts at most 128 immutable requirement fragments across nonblank
 request and answer lines, matching its mapping capacity. Oversize requests stop
 before repository lookup or preparation. An answer that exceeds the remaining
@@ -192,7 +202,13 @@ contract structure, not semantic correctness or passing implementation tests.
 Review the assumptions and mapping. All nonblank request lines are immutable
 requirement fragments; their exact text is attached to mapped criteria or shown as
 unresolved. An explicit answer can clarify a previously questioned fragment; the
-mapping records which answer resolved it. Repairs cannot quietly omit a fragment.
+mapping records which answer resolved it. Saved question ownership determines the
+clarification even when the planner omits `resolvedBy`. All applicable answers
+remain quoted in accepted order, and later answers govern conflicts with earlier
+ones. Earlier answer fragments retain that precedence too, so they cannot become
+standalone demands for a superseded outcome. A follow-up question about an earlier
+answer fragment carries its proven original question ownership forward; unrelated
+requirements retain their original scope. Repairs cannot quietly omit a fragment.
 Every acceptance criterion must also appear in a requirement mapping; selected
 context alone cannot authorize additional implementation scope. Unmapped criteria
 trigger bounded repair, and saved drafts with them cannot validate or start.
