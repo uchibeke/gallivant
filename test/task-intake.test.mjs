@@ -13,6 +13,7 @@ import { check, parsePrd } from "../lib/prd.mjs";
 import { makeRunner } from "../lib/run.mjs";
 import { runEnv, RUN_GIT_CONFIG } from "../lib/git.mjs";
 import { preparationEnvironment } from "../lib/task_environment.mjs";
+import { renderDraft } from "../lib/task_contract.mjs";
 import { makeState } from "../lib/state.mjs";
 import { writeJsonAtomic } from "../lib/fs.mjs";
 import { contentDigest } from "../lib/start_contract.mjs";
@@ -221,6 +222,189 @@ test("invalid output is repaired at most three times and cannot remove explicit 
   assert.match(blocked.failures[0], /after 3 repair attempts/); assert.deepEqual(bad.ctx.state.entries(), []);
   const resumed = await bad.service.resume({ taskId: blocked.taskId, expectedRevision: blocked.revision });
   assert.equal(resumed.status, "blocked"); assert.equal(invalidCalls, 4);
+});
+
+test("questions own exactly their unresolved mappings and repairs cannot clarify an unrelated constraint", async () => {
+  let calls = 0;
+  const w = world({ prepare: async (_ctx, task, _store, failures) => {
+    const out = draftFor(task, { question: true }); calls++;
+    if (calls === 1) out.questions[0].requirements.push("r-2");
+    if (calls === 2) { assert.match(failures.join(" "), /question q-r-1 requirements must exactly match/); assert.deepEqual(task.questionHistory, {}); }
+    if (calls === 3) out.mapping.find(m => m.requirementId === "r-2").resolvedBy = "q-r-1";
+    if (calls === 4) assert.match(failures.join(" "), /only an explicit answer to a mapped question/);
+    assert.equal(task.requirements[1].text, "Do not add dependencies.");
+    return JSON.stringify(out);
+  } });
+  const first = await w.service.prepare({ text: REQUEST, run: true });
+  assert.equal(first.status, "needs-input"); assert.deepEqual(first.questions[0].requirements, ["r-1"]);
+  assert.deepEqual(taskStore(w.home).read(first.taskId).questionMappings, { "q-r-1": ["r-1"] });
+  const input = { taskId: first.taskId, expectedRevision: first.revision, operationId: "scoped-answer", answers: { "q-r-1": "Use CSV." } };
+  const answered = await w.service.answer(input);
+  assert.equal(answered.status, "started"); assert.equal(answered.preparation.repairs, 2); assert.equal(calls, 4);
+  assert.match(answered.draft.text, /Explicit requirement r-2: "Do not add dependencies\."/);
+  assert.equal(answered.mapping.find(m => m.requirementId === "r-2").resolvedBy, undefined);
+  assert.equal((await w.service.answer(input)).implementation.run, answered.implementation.run); assert.equal(calls, 4);
+  assert.equal(w.runners.get(answered.implementation.id).started.length, 1);
+});
+
+test("duplicate question requirements are refused while an exactly mapped group can be answered together", async () => {
+  const duplicate = world({ prepare: async (_ctx, task) => {
+    const out = draftFor(task, { question: true }); out.questions[0].requirements.push("r-1"); return JSON.stringify(out);
+  } });
+  const blocked = await duplicate.service.prepare({ text: REQUEST, run: true });
+  assert.equal(blocked.status, "blocked"); assert.equal(blocked.preparation.repairs, 3); assert.match(blocked.failures[0], /exactly match/);
+  assert.deepEqual(taskStore(duplicate.home).read(blocked.taskId).questionHistory, {}); assert.deepEqual(duplicate.ctx.state.entries(), []);
+  const group = world({ prepare: async (_ctx, task) => {
+    const out = draftFor(task, { question: true });
+    if (out.questions.length) {
+      out.questions[0].requirements = ["r-2", "r-1"];
+      out.mapping.forEach(m => { m.questionId = "q-r-1"; delete m.criteria; });
+    } else out.mapping.filter(m => /^r-/.test(m.requirementId)).forEach(m => { m.resolvedBy = "q-r-1"; });
+    return JSON.stringify(out);
+  } });
+  const first = await group.service.prepare({ text: REQUEST }); assert.equal(first.status, "needs-input");
+  const resolved = await group.service.answer({ taskId:first.taskId, expectedRevision:first.revision, operationId:"group-answer", answers:{"q-r-1":"Use CSV without changing dependencies."} });
+  assert.equal(resolved.status, "ready"); assert.equal(resolved.preparation.repairs, 0);
+  assert.deepEqual(resolved.mapping.filter(m => m.resolvedBy).map(m => m.requirementId), ["r-1", "r-2"]);
+});
+
+test("reopened question ownership is proven from saved mappings and inconsistent legacy claims cannot accept answers", async () => {
+  for (const invalid of [false, "claim", "duplicate"]) {
+    let calls = 0;
+    const w = world({ prepare: async (_ctx, task) => { calls++; return JSON.stringify(draftFor(task, { question: true })); } });
+    const first = await w.service.prepare({ text: REQUEST }), store = taskStore(w.home), record = store.read(first.taskId);
+    delete record.questionMappings;
+    if (invalid) { record.output.questions[0].requirements.push("r-2"); record.questionHistory["q-r-1"] = record.output.questions[0]; record.questions = record.output.questions; }
+    if (invalid === "duplicate") record.output.mapping[1] = { requirementId:"r-1", questionId:"q-r-1" };
+    store.save(record);
+    const input = { taskId:first.taskId, expectedRevision:first.revision, operationId:"legacy-mapping-answer", answers:{"q-r-1":"Use CSV."} };
+    if (invalid) {
+      await assert.rejects(() => w.service.answer(input), e => e.code === "TASK_CONFLICT" && /exactly match/.test(e.message));
+      assert.deepEqual(store.read(first.taskId), record); assert.equal(calls, 1); assert.deepEqual(w.ctx.state.entries(), []);
+    } else {
+      const answered = await w.service.answer(input); assert.equal(answered.status, "ready"); assert.deepEqual(store.read(first.taskId).questionMappings, { "q-r-1":["r-1"] });
+      const unproven = store.read(first.taskId); delete unproven.questionMappings; store.save(unproven);
+      const validation = await w.service.validate({ taskId:first.taskId, expectedRevision:answered.revision });
+      assert.equal(validation.status, "blocked"); assert.match(validation.failures[0], /saved question ownership is missing or inconsistent/);
+      assert.deepEqual(w.ctx.state.entries(), []);
+    }
+  }
+});
+
+test("legacy interrupted answers recover mapped ownership on duplicate reply and resume without broadening it", async () => {
+  for (const operation of ["answer", "resume"]) {
+    let calls = 0;
+    const prepare = async (_ctx, task) => { calls++; return JSON.stringify(draftFor(task, { question:true })); };
+    const w = world({prepare}), first = await w.service.prepare({text:REQUEST});
+    const store = taskStore(w.home), unresolved = store.read(first.taskId);
+    const input = {taskId:first.taskId,expectedRevision:first.revision,operationId:"interrupted-answer",answers:{"q-r-1":"Use CSV."}};
+    const answered = await w.service.answer(input); assert.equal(answered.status,"ready");
+    // The accepted answer/identity is durable, but the old unresolved output is
+    // the last planner result at a crash before its replacement was saved.
+    const pending = store.read(first.taskId);
+    pending.status="preparing"; pending.output=unresolved.output; pending.readiness=null; delete pending.questionMappings; store.save(pending);
+    const reopened = createTaskService(w.ctx,{prepare});
+    const recovered = operation === "answer" ? await reopened.answer(input) : await reopened.resume({taskId:first.taskId,expectedRevision:pending.revision});
+    assert.equal(recovered.status,"ready"); assert.equal(recovered.taskId,first.taskId); assert.equal(calls,3);
+    assert.deepEqual(store.read(first.taskId).questionMappings,{"q-r-1":["r-1"]});
+    assert.match(recovered.draft.text,/Explicit requirement r-2: "Do not add dependencies\."/);
+    assert.equal((await reopened.answer(input)).revision,recovered.revision); assert.equal(calls,3); assert.deepEqual(w.ctx.state.entries(),[]);
+  }
+});
+
+test("feature-only Verify scripts require their pinned manifest through repair and fresh-base dispatch", async t => {
+  let calls = 0;
+  const w = world({ prepare: async (_ctx, task, _store, failures) => {
+    const out = draftFor(task); out.verify = ["npm run test:local"]; out.sources = ["package.json"];
+    if (++calls === 1) out.sources = [];
+    else assert.match(failures.join(" "), /npm run test:local requires carried sources: package.json/);
+    return JSON.stringify(out);
+  } });
+  const manifest = JSON.stringify({ scripts: { "test:local": "node -e \"require('fs').writeFileSync('verified-local', 'ok')\"" } });
+  writeFileSync(join(w.checkout, "package.json"), manifest);
+  const create = w.ctx.git.create;
+  w.ctx.git.create = async input => {
+    assert.equal(input.base, "main"); const path = await create(input);
+    writeFileSync(join(path, "package.json"), JSON.stringify({ scripts: { test: "node --test" } }));
+    assert.equal(JSON.parse(readFileSync(join(path, "package.json"))).scripts["test:local"], undefined);
+    return path;
+  };
+  const prepared = await w.service.prepare({ text: REQUEST }); assert.equal(prepared.status, "ready"); assert.equal(prepared.preparation.repairs, 1);
+  assert.deepEqual(prepared.verifyCommands.find(c => c.command === "npm run test:local").sources, ["package.json"]);
+  assert.equal(existsSync(join(w.checkout, "verified-local")), false); assert.deepEqual(w.ctx.state.entries(), []);
+  writeFileSync(join(w.checkout, "package.json"), "Changed operator manifest after approval.");
+  const started = await w.service.start({ taskId:prepared.taskId, expectedRevision:prepared.revision, run:true });
+  assert.equal(started.status, "started"); assert.equal(readFileSync(join(started.implementation.worktree, "package.json"), "utf8"), manifest);
+  assert.equal(w.sources.get(`${started.implementation.id}:package.json`), manifest);
+  assert.equal(existsSync(join(started.implementation.worktree, "verified-local")), false);
+  execFileSync("npm", ["run", "test:local"], { cwd:started.implementation.worktree, stdio:"pipe" });
+  assert.equal(readFileSync(join(started.implementation.worktree, "verified-local"), "utf8"), "ok");
+  assert.equal(w.runners.get(started.implementation.id).started.length, 1); assert.equal(calls, 2);
+  t.diagnostic(`Verify-manifest fixture draft: ${started.draft.path}`);
+});
+
+test("inferred Verify provenance covers supported stacks and owner duplicates cannot bypass source carriage", async () => {
+  const cases = [
+    ...["npm", "pnpm", "yarn", "bun"].map(manager => ["package.json", JSON.stringify({ packageManager:`${manager}@1.0.0`,scripts:{"test:unit":"fixture-only"} }), `${manager} run test:unit`]),
+    ["pyproject.toml", "[tool.pytest.ini_options]\n", "python -m pytest"], ["Cargo.toml", '[package]\nname="fixture"\n', "cargo test"],
+    ["go.mod", "module fixture\n", "go test ./..."], ["Makefile", "test:\n\ttrue\n", "make test"],
+    ["docs/AGENTS.md", "Verify with `git diff --check`.\n", "git diff --check"],
+  ];
+  for (const [path, text, command] of cases) {
+    let calls = 0;
+    const w = world({ prepare: async (_ctx, task, _store, failures) => {
+      const out = draftFor(task); out.verify = [command];
+      if (++calls === 1) out.sources = [];
+      else { assert.match(failures.join(" "), /requires carried sources/); out.sources = [path]; }
+      return JSON.stringify(out);
+    } });
+    rmSync(join(w.checkout, "AGENTS.md")); rmSync(join(w.checkout, "package.json")); mkdirSync(dirname(join(w.checkout,path)), { recursive:true }); writeFileSync(join(w.checkout,path),text);
+    const prepared = await w.service.prepare({ text:REQUEST, context:[path], verifyCommands:[command] });
+    assert.equal(prepared.status,"ready"); assert.equal(prepared.preparation.repairs,1);
+    assert.deepEqual(prepared.verifyCommands.find(c=>c.command===command).sources,[path]);
+    assert.equal(readFileSync(prepared.artifacts.find(a=>a.id===`source:${path}`).path,"utf8"),text);
+    assert.deepEqual(w.ctx.state.entries(),[]);
+  }
+});
+
+test("instruction and owner Verify variants retain stack manifests even when canonical script spelling differs", async () => {
+  for (const explicit of [false,true]) {
+    let calls = 0;
+    const command="npm run test:local -- --fixture";
+    const w = world({prepare:async (_ctx,task,_store,failures)=>{
+      const out=draftFor(task); out.verify=[command]; out.sources=explicit?[]:["AGENTS.md"];
+      if (++calls>1) { assert.match(failures.join(" "),/requires carried sources: package.json/); out.sources.push("package.json"); }
+      return JSON.stringify(out);
+    }});
+    writeFileSync(join(w.checkout,"package.json"),JSON.stringify({scripts:{"test:local":"fixture-only"}}));
+    if (explicit) rmSync(join(w.checkout,"AGENTS.md"));
+    else writeFileSync(join(w.checkout,"AGENTS.md"),`Verify with \`${command}\`.\n`);
+    const r=await w.service.prepare({text:REQUEST,verifyCommands:explicit?[command]:[]});
+    assert.equal(r.status,"ready"); assert.equal(r.preparation.repairs,1);
+    assert.deepEqual(r.verifyCommands.find(c=>c.command===command).sources,explicit?["package.json"]:["AGENTS.md","package.json"]);
+    assert.ok(r.artifacts.some(a=>a.id==="source:package.json")); assert.deepEqual(w.ctx.state.entries(),[]);
+  }
+});
+
+test("answer-time Verify evidence stays pinned and saved drafts cannot lose their authorizing manifest", async () => {
+  const w = world({ prepare:async (_ctx,task) => JSON.stringify(draftFor(task,{question:true})) });
+  rmSync(join(w.checkout,"AGENTS.md")); rmSync(join(w.checkout,"package.json"));
+  const first = await w.service.prepare({text:REQUEST}); assert.equal(first.status,"needs-input");
+  const manifest = "[tool.pytest.ini_options]\naddopts = '-q'\n";
+  writeFileSync(join(w.checkout,"pyproject.toml"),manifest);
+  const answered = await taskCommand(w.ctx,{args:["answer",first.taskId],service:w.service,values:{revision:String(first.revision),"request-id":"verify-context-answer",answer:["q-r-1=Use CSV and the selected test configuration."],context:["pyproject.toml"]}});
+  assert.equal(answered.status,"ready"); assert.deepEqual(answered.verifyCommands,[{command:"python -m pytest",sources:["pyproject.toml"]}]);
+  assert.equal(readFileSync(answered.artifacts.find(a=>a.id==="source:pyproject.toml").path,"utf8"),manifest);
+  rmSync(join(w.checkout,"pyproject.toml"));
+  const store = taskStore(w.home), record = store.read(first.taskId);
+  // Simulate an older saved brief that omitted its command's authorizing file.
+  record.output.sources = [];
+  const missing = renderDraft(record,record.output).replace("status: draft","status: ready");
+  writeFileSync(record.draft.path,missing); record.draft.hash=contentDigest(missing); record.readiness.hash=record.draft.hash; store.save(record);
+  const validated = await w.service.validate({taskId:first.taskId,expectedRevision:answered.revision});
+  assert.equal(validated.status,"blocked"); assert.match(validated.failures[0],/python -m pytest requires carried sources: pyproject.toml/);
+  await assert.rejects(()=>w.service.start({taskId:first.taskId,expectedRevision:validated.revision,run:true}),{code:"TASK_CONFLICT"});
+  assert.deepEqual(w.ctx.state.entries(),[]);
 });
 
 test("literal placeholder tokens in requests and answers survive quoted mapping, repair, readiness and dispatch", async t => {

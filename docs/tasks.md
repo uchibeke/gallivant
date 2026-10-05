@@ -54,7 +54,8 @@ model launch and return an actionable failure; they are not validator repairs.
 The result includes contract `version: 1`, a durable `taskId`, a state `revision`,
 original input, requirements, answers, assumptions, requirement mapping, draft
 path/text/hash, source hashes, readiness evidence, preparation usage, artifacts and
-the next action. `inspect` and `list` read saved state without inference or remote
+the next action. `verifyCommands` lists candidate commands and their authorizing
+source paths. `inspect` and `list` read saved state without inference or remote
 polling. Implementation results also expose the existing registry's state and PR
 link, so reopening an intake does not lose access to the eventual result.
 
@@ -94,6 +95,12 @@ Review the assumptions and mapping. All nonblank request lines are immutable
 requirement fragments; their exact text is attached to mapped criteria or shown as
 unresolved. An explicit answer can clarify a previously questioned fragment; the
 mapping records which answer resolved it. Repairs cannot quietly omit a fragment.
+Each question's requirement IDs must exactly match its unresolved mappings, with
+no duplicate IDs. Saved ownership limits which fragments an answer can clarify.
+Reopening an older unanswered question proves ownership from its saved mappings;
+inconsistent claims or missing ownership for an already answered question stop
+instead of granting broader clarification. Inspect the saved evidence and prepare
+a new intake if that association cannot be recovered.
 Quoted fragments use reversible JSON Unicode escapes for literal placeholder
 tokens, so requests such as “remove the TODO” can pass readiness. The saved request
 and answers keep their original text; generated prose and hand-authored briefs
@@ -109,6 +116,14 @@ documents that exist only in the operator tree. Symlinks, escapes, globs, contro
 characters and secret/agent configuration paths are refused by intake. Existing
 hand-authored PRDs retain their source-manifest rules. Editing the original
 source after approval does not silently change the selected snapshot.
+Inferred Verify commands require their pinned authorizing manifests or instruction
+files in the generated `sources`. Repair may add these selected files; it cannot
+silently drop the dependency. The existing start path delivers their exact bytes
+to the fresh base checkout, including scripts present only in an operator's dirty
+or feature checkout. Commands explicitly supplied by the owner without inferred
+repository evidence remain explicit choices; a duplicate explicit command cannot
+bypass a known source dependency. Commands with extra arguments also carry their
+selected stack manifest. Saved drafts are checked against the same rule.
 
 At most three validator repairs occur, across the entire intake, and at most 16
 preparation turns including clarification turns. They share the configured
