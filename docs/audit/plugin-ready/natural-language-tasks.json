@@ -1,8 +1,8 @@
 {
   "version": 1,
   "task_id": "task-c93def694fe561146955c469",
-  "implementation_commit": "94a4fbb27d315a2dca946f80aaf3d666daf180c8",
-  "recorded_at": "2026-10-05T12:10:11.235Z",
+  "implementation_commit": "16b0e5b6043270cf277776834ca7f433bc84fd62",
+  "recorded_at": "2026-10-05T13:05:34.472Z",
   "versions": {
     "package": "0.1.0",
     "node": "v22.22.0",
@@ -13,30 +13,55 @@
     {
       "command": "npm test",
       "exit_code": 0,
-      "raw_log": "/private/tmp/natural-language-tasks-goose-maven-npm-test.log",
-      "tests": 836,
-      "passed": 836
+      "raw_log": "/private/tmp/natural-language-tasks-tools-npm-test-final.log",
+      "tests": 841,
+      "passed": 841
     },
     {
       "command": "npm run lint",
       "exit_code": 0,
-      "raw_log": "/private/tmp/natural-language-tasks-goose-maven-lint.log"
+      "raw_log": "/private/tmp/natural-language-tasks-tools-lint-final.log"
     },
     {
       "command": "npm run test:task-intake",
       "exit_code": 0,
-      "raw_log": "/private/tmp/natural-language-tasks-goose-maven-focused.log",
-      "tests": 92,
-      "passed": 92
+      "raw_log": "/private/tmp/natural-language-tasks-tools-intake-final.log",
+      "tests": 97,
+      "passed": 97
     },
     {
       "command": "git diff --check",
       "exit_code": 0,
-      "raw_log": "/private/tmp/natural-language-tasks-goose-maven-diff-check.log",
+      "raw_log": "/private/tmp/natural-language-tasks-tools-diff-check.log",
       "observed_output": "empty output"
     }
   ],
   "offline_cases": [
+    {
+      "test_name": "native preparation removes Claude tools and refuses unsupported adapters before probes on initial, answer and repair turns",
+      "outcome": "passed",
+      "evidence": "test/task-intake.test.mjs::native preparation removes Claude tools and refuses unsupported adapters before probes on initial, answer and repair turns"
+    },
+    {
+      "test_name": "tool-free Claude preparation and repair use the normal runner without implementation changes",
+      "outcome": "passed",
+      "evidence": "test/task-intake.test.mjs::tool-free Claude preparation and repair use the normal runner without implementation changes"
+    },
+    {
+      "test_name": "recovery stops owned legacy preparation and rejects completed, settled and rendered unsafe output",
+      "outcome": "passed",
+      "evidence": "test/task-intake.test.mjs::recovery stops owned legacy preparation and rejects completed, settled and rendered unsafe output"
+    },
+    {
+      "test_name": "Goose admits only effective provider authentication and removes shared secrets and keyring access",
+      "outcome": "passed",
+      "evidence": "test/task-intake.test.mjs::Goose admits only effective provider authentication and removes shared secrets and keyring access"
+    },
+    {
+      "test_name": "legacy preparation receipts do not interrupt an existing owned implementation or duplicate accepted answers",
+      "outcome": "passed",
+      "evidence": "test/task-intake.test.mjs::legacy preparation receipts do not interrupt an existing owned implementation or duplicate accepted answers"
+    },
     {
       "test_name": "clear request persists a stable original, repository, base, harness and canonical reviewable draft without implementation writes",
       "outcome": "passed",
@@ -522,7 +547,7 @@
     ]
   },
   "source_review": {
-    "implementation_revision": "94a4fbb27d315a2dca946f80aaf3d666daf180c8",
+    "implementation_revision": "16b0e5b6043270cf277776834ca7f433bc84fd62",
     "representative_output_inspected": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-OciO1z/tasks/task-a1a896015714afff3ae33dc4/drafts/revision-2/docs/prds/task-a1a896015714afff3ae33dc4.md",
     "boundaries_checked": [
       "CLI and structured clients",
@@ -584,7 +609,10 @@
       "Sibling adapter consumers in why and tick already preserve denial strings. Only the preparation consumer changes; shared adapter parsing, hand-authored briefs, runner settings, cloud credentials and model/provider/permission defaults remain unchanged.",
       "Goose provider selection uses only the detached config and string environment override. Current active_provider and legacy GOOSE_PROVIDER retain native precedence/model bytes; complex or ambiguous selectors stop before launch with an explicit override remedy. Existing selected AWS projection is reused; non-Bedrock selections and pre-launch failures remove stale private AWS files.",
       "The shared command collector pins every selected Maven POM and dotnet project/solution manifest for explicit checks. Prompt commandSources, repair, answer-time additions, inspect/reopen, saved validation and exact start reuse this dependency; instruction inference remains disabled for those two tool families.",
-      "CLI/structured initial and repair turns, answer identity replay, malformed native selection, same-turn profile rebuilding, source repair, later operator edits, stale base manifests, saved-source omission and duplicate-start single implementation ownership are covered without live provider calls."
+      "CLI/structured initial and repair turns, answer identity replay, malformed native selection, same-turn profile rebuilding, source repair, later operator edits, stale base manifests, saved-source omission and duplicate-start single implementation ownership are covered without live provider calls.",
+      "Preparation uses the shared buildRun helper with a separate tools-off Claude contract; unsupported adapters stop before probes, provider-profile copying and launch. Implementation buildRun argv/env remain unchanged.",
+      "Owned unsafe recovered children are stopped; completion usage and logs survive refusal. Settled/ready/question output without the recorded boundary cannot validate, answer, dispatch or replay as approved; existing accepted implementation ownership and answer replay are retained.",
+      "Goose resolves environment/current/legacy provider selection before admitting only that provider's authentication. Shared secrets/keyring and stale selected AWS/private-secret snapshots are excluded; missing/unsupported selectors and required shared storage fail with actionable errors."
     ],
     "regressions": [
       "preparation uses the existing runner in a separate workspace, records usage and reconciles a lost response",
@@ -666,7 +694,12 @@
       "saved explicit Maven and dotnet drafts cannot omit a pinned project manifest at validation or start",
       "Goose native provider selection honors current and legacy config, environment precedence and private AWS cleanup",
       "Goose native Bedrock config reaches initial and repair runners through CLI and structured preparation",
-      "ambiguous Goose native provider config stops before initial or repair launch with an explicit override remedy"
+      "ambiguous Goose native provider config stops before initial or repair launch with an explicit override remedy",
+      "test/task-intake.test.mjs::native preparation removes Claude tools and refuses unsupported adapters before probes on initial, answer and repair turns",
+      "test/task-intake.test.mjs::tool-free Claude preparation and repair use the normal runner without implementation changes",
+      "test/task-intake.test.mjs::recovery stops owned legacy preparation and rejects completed, settled and rendered unsafe output",
+      "test/task-intake.test.mjs::Goose admits only effective provider authentication and removes shared secrets and keyring access",
+      "test/task-intake.test.mjs::legacy preparation receipts do not interrupt an existing owned implementation or duplicate accepted answers"
     ],
     "literal_output_inspected": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-YT4kUE/tasks/task-9f538f3b60078088f631d887/drafts/revision-5/docs/prds/task-9f538f3b60078088f631d887.md",
     "answer_context_output_inspected": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-GyBbWY/tasks/task-d21c94c7a17012e1454c6854/drafts/revision-4/docs/prds/task-d21c94c7a17012e1454c6854.md",
@@ -703,7 +736,126 @@
         "sha256": "c295b7759e3fb4e9e88c4ff64720a0e9ccdb867d1c8d2991be98e9f5a61dd7fc",
         "checker_passed": true
       }
-    ]
+    ],
+    "preparation_boundary_output_inspected": {
+      "live": false,
+      "path": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-Stujoz/tasks/task-366b2b287522dea626b6d866/drafts/revision-3/docs/prds/task-366b2b287522dea626b6d866.md",
+      "record": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-Stujoz/preparation-boundary-fixture.json",
+      "checker": {
+        "ok": true,
+        "results": [
+          {
+            "id": "path",
+            "text": "lives under docs/prds/ with a lowercase-dash filename",
+            "ok": true,
+            "detail": "filename \"task-366b2b287522dea626b6d866.md\" must be lowercase letters, digits and dashes"
+          },
+          {
+            "id": "frontmatter",
+            "text": "frontmatter has status (draft|ready) and harness (claude|codex|gemini|opencode|goose)",
+            "ok": true,
+            "detail": "harness \"claude\" must be one of claude, codex, gemini, opencode, goose"
+          },
+          {
+            "id": "title",
+            "text": "one H1 title, 8 to 80 characters",
+            "ok": true,
+            "detail": "title is 29 characters"
+          },
+          {
+            "id": "problem",
+            "text": "## Problem: at least 40 words on what is wrong today and for whom",
+            "ok": true,
+            "detail": "53 words; say what is wrong today, for whom, and what changes when this ships"
+          },
+          {
+            "id": "stories",
+            "text": "## User stories: every bullet reads 'As a <who>, I want <what>, so that <why>'",
+            "ok": true,
+            "detail": "0 bullet(s) do not follow the form: \"undefined\""
+          },
+          {
+            "id": "criteria",
+            "text": "## Acceptance criteria: every bullet is Given / When / Then, at least one per story",
+            "ok": true,
+            "detail": "0 bullet(s) lack Given/When/Then: \"undefined\""
+          },
+          {
+            "id": "verify",
+            "text": "## Verify: at least one command the session must run green; no sudo, rm -rf or piped installers",
+            "ok": true,
+            "detail": "refusing: \"undefined\""
+          },
+          {
+            "id": "look",
+            "text": "## Where to look: files or directories to start from, or 'none'",
+            "ok": true,
+            "detail": "list files or directories to start from, or a single bullet: none"
+          },
+          {
+            "id": "scope",
+            "text": "## Out of scope: at least one bullet",
+            "ok": true,
+            "detail": "at least one bullet naming what this PRD will not do"
+          },
+          {
+            "id": "placeholders",
+            "text": "no TODO, TBD, FIXME, ???, lorem or <angle-bracket> placeholders anywhere",
+            "ok": true,
+            "detail": ""
+          },
+          {
+            "id": "size",
+            "text": "under 1,500 words; a PRD is one pull request, split anything bigger",
+            "ok": true,
+            "detail": "193 words"
+          },
+          {
+            "id": "sources",
+            "text": "every file in `sources` exists, is readable text, and is named inside the repository",
+            "ok": true,
+            "detail": ""
+          }
+        ]
+      },
+      "originalRequirements": [
+        "Add CSV export for the widget table.",
+        "Do not add dependencies."
+      ],
+      "boundaries": [
+        "claude-no-tools-v1",
+        "claude-no-tools-v1"
+      ],
+      "toolPrefixes": [
+        [
+          "--restricted",
+          "--tools",
+          "",
+          "--disallowedTools",
+          "*",
+          "--strict-mcp-config",
+          "--mcp-config",
+          "{\"mcpServers\":{}}",
+          "--disable-slash-commands"
+        ],
+        [
+          "--restricted",
+          "--tools",
+          "",
+          "--disallowedTools",
+          "*",
+          "--strict-mcp-config",
+          "--mcp-config",
+          "{\"mcpServers\":{}}",
+          "--disable-slash-commands"
+        ]
+      ],
+      "reviewed_against": [
+        "docs/prds/natural-language-tasks.md",
+        "docs/plans/plugin-ready-gallivant.md"
+      ],
+      "observed": "Both immutable requirements map to criteria. The canonical checker passed; initial and repaired argv remove built-ins/MCP tools and record the new boundary. This is a deterministic fixture, not installed-model evidence."
+    }
   },
   "live": {
     "status": "unverified",
@@ -719,9 +871,31 @@
         "command": "gh auth status",
         "observed": "Signed in to github.com as uchibeke",
         "proves_disposable_repo_authorization": false
+      },
+      {
+        "command": "\"/Users/uchi/.local/share/gallivant/codex/node_modules/.bin/codex\" exec --help",
+        "observed": "Native help describes read-only/workspace-write execution modes; no tools-off contract or successful containment was demonstrated.",
+        "proves_model_access": false
+      },
+      {
+        "command": "/usr/bin/sandbox-exec with a deny-default profile and a disposable Node containment probe",
+        "fixture_root": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/preparation-sandbox-probe-rnh2nn",
+        "observed": {
+          "status": null,
+          "stdout": "",
+          "stderr": "",
+          "outside_fixture_unchanged": true
+        },
+        "usable_isolation_evidence": false,
+        "model_calls": 0,
+        "repeated": false,
+        "affected_criteria": [
+          "ac-4"
+        ],
+        "remedy": "Provide a preparation adapter with an enforced read/write boundary or qualify installed native tools-off behavior under the existing provider, model and permissions. A host sandbox probe must produce successful containment evidence before host isolation can be attested."
       }
     ],
-    "host_plugin_browser_surface": "No required host/plugin/browser surface for this CLI and in-process milestone",
+    "host_plugin_browser_surface": "No plugin/browser surface is required for this CLI milestone; installed preparation enforcement remains unqualified.",
     "blockers": [
       {
         "observed": "No authorized disposable GitHub repository/environment supplied",
@@ -734,6 +908,10 @@
       {
         "observed": "Runtime model access not exercised; version/sign-in checks are not inference evidence",
         "remedy": "Supply configured credentials and actual model access, then exercise the authorized case without switching model/provider or weakening permissions"
+      },
+      {
+        "observed": "No usable native sandbox containment result or installed native tools-off behavior evidence",
+        "remedy": "Provide a preparation adapter with an enforced read/write boundary or qualify installed native tools-off behavior under the existing provider, model and permissions. A host sandbox probe must produce successful containment evidence before host isolation can be attested."
       }
     ],
     "original_request": null,
@@ -1048,6 +1226,36 @@
         "https://maven.apache.org/guides/introduction/introduction-to-the-pom.html",
         "https://learn.microsoft.com/en-us/dotnet/core/tools/dotnet-test-vstest"
       ]
+    },
+    {
+      "comment_id": 4183983820,
+      "files": [
+        "lib/harness.mjs",
+        "lib/task_prepare.mjs",
+        "lib/tasks.mjs",
+        "test/task-intake.test.mjs",
+        "docs/tasks.md"
+      ],
+      "evidence": "docs/audit/plugin-ready/natural-language-tasks.json preparation_boundary_case",
+      "observed": "Preparation disables Claude tools and refuses unsupported adapters before launch; unsafe recovered output cannot authorize readiness or dispatch. Legacy owned implementations reconcile without a new run. Native enforcement qualification remains false.",
+      "source_refs": [
+        "https://code.claude.com/docs/en/cli-reference"
+      ]
+    },
+    {
+      "comment_id": 4183983831,
+      "files": [
+        "lib/harness.mjs",
+        "lib/task_environment.mjs",
+        "test/task-intake.test.mjs",
+        "docs/tasks.md"
+      ],
+      "evidence": "docs/audit/plugin-ready/natural-language-tasks.json goose_selected_authentication_case",
+      "observed": "Effective-provider resolution precedes key admission; only selected settings/authentication are forwarded. Shared secret files/keyring access are excluded, legacy private secret aliases removed and provider switches retain no old provider keys.",
+      "source_refs": [
+        "https://github.com/aaif-goose/goose/blob/main/documentation/docs/guides/config-files.md",
+        "https://github.com/aaif-goose/goose/blob/main/documentation/docs/guides/environment-variables.md"
+      ]
     }
   ],
   "offline_credential_check": {
@@ -1332,48 +1540,54 @@
         {
           "command": "npm test",
           "exit_code": 0,
-          "raw_log": "/private/tmp/natural-language-tasks-goose-maven-npm-test.log",
-          "tests": 836,
-          "passed": 836
+          "raw_log": "/private/tmp/natural-language-tasks-tools-npm-test-final.log",
+          "tests": 841,
+          "passed": 841
         },
         {
           "command": "npm run lint",
           "exit_code": 0,
-          "raw_log": "/private/tmp/natural-language-tasks-goose-maven-lint.log"
+          "raw_log": "/private/tmp/natural-language-tasks-tools-lint-final.log"
         },
         {
           "command": "npm run test:task-intake",
           "exit_code": 0,
-          "raw_log": "/private/tmp/natural-language-tasks-goose-maven-focused.log",
-          "tests": 92,
-          "passed": 92
+          "raw_log": "/private/tmp/natural-language-tasks-tools-intake-final.log",
+          "tests": 97,
+          "passed": 97
         },
         {
           "command": "git diff --check",
           "exit_code": 0,
-          "raw_log": "/private/tmp/natural-language-tasks-goose-maven-diff-check.log",
+          "raw_log": "/private/tmp/natural-language-tasks-tools-diff-check.log",
           "observed_output": "empty output"
         }
       ],
       "initial_runs": [
         {
-          "command": "node --test --test-name-pattern='explicit Maven and dotnet|Goose native provider|Goose native Bedrock|ambiguous Goose native' test/task-intake.test.mjs",
+          "command": "focused boundary/auth regressions",
           "exit_code": 1,
-          "raw_log": "/private/tmp/natural-language-tasks-goose-maven-before.log",
-          "tests": 6,
-          "passed": 0,
-          "failed": 6,
-          "observed": "All six new regressions failed before the production fixes: missing native Bedrock authentication, stale private AWS files, unresolved ambiguous selectors and unbound selected project manifests."
+          "observed": "Workspace sandbox initially refused native process inspection (TASK_BUSY); the same offline checks passed through supported escalation. The final targeted log records 4 passes.",
+          "evidence": "Initial un-escalated focused test output: TASK_BUSY, cannot identify this task intake process; the final focused log separately records the approved rerun."
+        },
+        {
+          "command": "npm test / npm run test:task-intake",
+          "exit_code": 1,
+          "raw_logs": [
+            "/private/tmp/natural-language-tasks-tools-npm-test.log",
+            "/private/tmp/natural-language-tasks-tools-intake.log"
+          ],
+          "observed": "One old Foundry exclusion fixture used Goose without a provider selector. The fixture now explicitly selects OpenAI; all required suites pass."
         }
       ],
       "focused_regressions": {
-        "command": "node --test --test-name-pattern='explicit Maven and dotnet|Goose native provider|Goose native Bedrock|ambiguous Goose native|Bedrock|unbound Maven' test/task-intake.test.mjs",
+        "command": "node --test --test-name-pattern='native preparation removes|tool-free Claude|recovery stops owned|Goose admits only' test/task-intake.test.mjs",
         "exit_code": 0,
-        "raw_log": "/private/tmp/natural-language-tasks-goose-maven-targeted.log",
-        "tests": 10,
-        "passed": 10
+        "raw_log": "/private/tmp/natural-language-tasks-tools-targeted.log",
+        "tests": 4,
+        "passed": 4
       },
-      "observed": "Ten targeted/adjacent tests and all four required commands pass. Source and three fresh generated briefs were reviewed against G2 before publication. Supported escalation enabled existing offline process ownership checks only; no provider/model calls, live jobs or runtime permission/model/provider changes occurred.",
+      "observed": "Five new boundary/provider/ownership tests and all required commands pass. Source and fresh fixture output were reviewed against G2. Durable runner fixtures inject only disposable Node executables independently of native adapter support; they do not establish live isolation. Native sandbox probe had no usable child result and was not repeated. Supported escalation retained native offline process exclusion; no provider/model calls, automatic provider/model fallback or weakened implementation permissions occurred.",
       "model_calls": 0
     },
     "previous_batches": [
@@ -1746,6 +1960,55 @@
           "passed": 5
         },
         "observed": "Five focused tests passed after preserving adapter denial strings. All four required commands passed on the final reviewed source. Native process-ownership inspection used the supported escalation path; no actual model/provider calls or execution permission/default changes occurred.",
+        "model_calls": 0
+      },
+      {
+        "commands": [
+          {
+            "command": "npm test",
+            "exit_code": 0,
+            "raw_log": "/private/tmp/natural-language-tasks-goose-maven-npm-test.log",
+            "tests": 836,
+            "passed": 836
+          },
+          {
+            "command": "npm run lint",
+            "exit_code": 0,
+            "raw_log": "/private/tmp/natural-language-tasks-goose-maven-lint.log"
+          },
+          {
+            "command": "npm run test:task-intake",
+            "exit_code": 0,
+            "raw_log": "/private/tmp/natural-language-tasks-goose-maven-focused.log",
+            "tests": 92,
+            "passed": 92
+          },
+          {
+            "command": "git diff --check",
+            "exit_code": 0,
+            "raw_log": "/private/tmp/natural-language-tasks-goose-maven-diff-check.log",
+            "observed_output": "empty output"
+          }
+        ],
+        "initial_runs": [
+          {
+            "command": "node --test --test-name-pattern='explicit Maven and dotnet|Goose native provider|Goose native Bedrock|ambiguous Goose native' test/task-intake.test.mjs",
+            "exit_code": 1,
+            "raw_log": "/private/tmp/natural-language-tasks-goose-maven-before.log",
+            "tests": 6,
+            "passed": 0,
+            "failed": 6,
+            "observed": "All six new regressions failed before the production fixes: missing native Bedrock authentication, stale private AWS files, unresolved ambiguous selectors and unbound selected project manifests."
+          }
+        ],
+        "focused_regressions": {
+          "command": "node --test --test-name-pattern='explicit Maven and dotnet|Goose native provider|Goose native Bedrock|ambiguous Goose native|Bedrock|unbound Maven' test/task-intake.test.mjs",
+          "exit_code": 0,
+          "raw_log": "/private/tmp/natural-language-tasks-goose-maven-targeted.log",
+          "tests": 10,
+          "passed": 10
+        },
+        "observed": "Ten targeted/adjacent tests and all four required commands pass. Source and three fresh generated briefs were reviewed against G2 before publication. Supported escalation enabled existing offline process ownership checks only; no provider/model calls, live jobs or runtime permission/model/provider changes occurred.",
         "model_calls": 0
       }
     ]
@@ -2476,7 +2739,9 @@
       "test/task-intake.test.mjs::Goose native Bedrock config reaches initial and repair runners through CLI and structured preparation",
       "test/task-intake.test.mjs::ambiguous Goose native provider config stops before initial or repair launch with an explicit override remedy"
     ],
-    "observed": "Copied native active_provider Bedrock selection with no environment override reaches two isolated fixture runners, using only the selected AWS profile. Native model/config bytes and explicit requirements survive repair. Non-Bedrock/ambiguous selections remove earlier AWS snapshots; ambiguity stops initial/repair launch and blocked resume makes no new call."
+    "observed": "Copied native active_provider Bedrock selection with no environment override reaches two isolated fixture runners, using only the selected AWS profile. Native model/config bytes and explicit requirements survive repair. Non-Bedrock/ambiguous selections remove earlier AWS snapshots; ambiguity stops initial/repair launch and blocked resume makes no new call.",
+    "current_native_preparation_supported": false,
+    "superseded_native_qualification": "Prior results are offline Node runner fixtures only; native Goose preparation is now refused by the preparation boundary gate."
   },
   "explicit_project_manifest_case": {
     "provenance": "Deterministic CLI/structured planner and implementation runner fixtures; Maven/.NET executables were not invoked",
@@ -2520,5 +2785,67 @@
     ],
     "model_calls": 0,
     "observed": "Explicit checks bind selected root/module POMs and dotnet solution/project files, including argument-bearing commands and whitespace variants. Omission repairs once with constraints intact; CLI/structured answers replay pinned bytes after operator edits. Fresh-base delivery overwrites stale manifests; duplicate start creates one implementation run. Saved drafts missing authorizing files fail validation/start."
+  },
+  "preparation_boundary_case": {
+    "met": false,
+    "production_contract": "Claude restricted mode, empty built-in tools, wildcard tool denial, strict empty MCP and disabled skills/commands",
+    "unsupported_adapters": [
+      "codex",
+      "gemini",
+      "opencode",
+      "goose"
+    ],
+    "native_qualification": false,
+    "host_probe": {
+      "command": "/usr/bin/sandbox-exec with a deny-default profile and a disposable Node containment probe",
+      "fixture_root": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/preparation-sandbox-probe-rnh2nn",
+      "observed": {
+        "status": null,
+        "stdout": "",
+        "stderr": "",
+        "outside_fixture_unchanged": true
+      },
+      "usable_isolation_evidence": false,
+      "model_calls": 0,
+      "repeated": false,
+      "affected_criteria": [
+        "ac-4"
+      ],
+      "remedy": "Provide a preparation adapter with an enforced read/write boundary or qualify installed native tools-off behavior under the existing provider, model and permissions. A host sandbox probe must produce successful containment evidence before host isolation can be attested."
+    },
+    "host_probe_record": "/private/tmp/natural-language-tasks-tools-sandbox-probe.json",
+    "fixture": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-Stujoz/preparation-boundary-fixture.json",
+    "generated_draft": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-Stujoz/tasks/task-366b2b287522dea626b6d866/drafts/revision-3/docs/prds/task-366b2b287522dea626b6d866.md",
+    "regressions": [
+      "test/task-intake.test.mjs::native preparation removes Claude tools and refuses unsupported adapters before probes on initial, answer and repair turns",
+      "test/task-intake.test.mjs::tool-free Claude preparation and repair use the normal runner without implementation changes",
+      "test/task-intake.test.mjs::recovery stops owned legacy preparation and rejects completed, settled and rendered unsafe output",
+      "test/task-intake.test.mjs::Goose admits only effective provider authentication and removes shared secrets and keyring access",
+      "test/task-intake.test.mjs::legacy preparation receipts do not interrupt an existing owned implementation or duplicate accepted answers"
+    ],
+    "source_refs": [
+      "https://code.claude.com/docs/en/cli-reference"
+    ],
+    "remedy": "Provide a preparation adapter with an enforced read/write boundary or qualify installed native tools-off behavior under the existing provider, model and permissions. A host sandbox probe must produce successful containment evidence before host isolation can be attested."
+  },
+  "goose_selected_authentication_case": {
+    "live": false,
+    "selector_precedence": [
+      "GOOSE_PROVIDER",
+      "active_provider",
+      "legacy GOOSE_PROVIDER"
+    ],
+    "excluded": [
+      "credentials for other providers",
+      "shared secrets.yaml",
+      "native keyring",
+      "stale shared/AWS snapshots"
+    ],
+    "required_storage_remedy": "Export the selected provider's credential instead of carrying shared secret storage; an enforced preparation adapter is also required before native Goose preparation is available.",
+    "evidence": "test/task-intake.test.mjs::Goose admits only effective provider authentication and removes shared secrets and keyring access",
+    "source_refs": [
+      "https://github.com/aaif-goose/goose/blob/main/documentation/docs/guides/config-files.md",
+      "https://github.com/aaif-goose/goose/blob/main/documentation/docs/guides/environment-variables.md"
+    ]
   }
 }
