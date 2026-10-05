@@ -1,8 +1,8 @@
 {
   "version": 1,
   "task_id": "task-c93def694fe561146955c469",
-  "implementation_commit": "61f6556bfa88e06e885c7f48e848e4e56fa88b17",
-  "recorded_at": "2026-10-05T05:02:27.170237+00:00",
+  "implementation_commit": "112d69545e4b8653c83043be2ffc7a63880d2c9c",
+  "recorded_at": "2026-10-05T05:33:13.186937+00:00",
   "versions": {
     "package": "0.1.0",
     "node": "v22.22.0",
@@ -13,26 +13,26 @@
     {
       "command": "npm test",
       "exit_code": 0,
-      "raw_log": "/private/tmp/natural-language-tasks-prompt-npm-test.log",
-      "tests": 816,
-      "passed": 816
+      "raw_log": "/private/tmp/natural-language-tasks-whitespace-npm-test.log",
+      "tests": 819,
+      "passed": 819
     },
     {
       "command": "npm run lint",
       "exit_code": 0,
-      "raw_log": "/private/tmp/natural-language-tasks-prompt-lint.log"
+      "raw_log": "/private/tmp/natural-language-tasks-whitespace-lint.log"
     },
     {
       "command": "npm run test:task-intake",
       "exit_code": 0,
-      "raw_log": "/private/tmp/natural-language-tasks-prompt-focused.log",
-      "tests": 72,
-      "passed": 72
+      "raw_log": "/private/tmp/natural-language-tasks-whitespace-focused.log",
+      "tests": 75,
+      "passed": 75
     },
     {
       "command": "git diff --check",
       "exit_code": 0,
-      "raw_log": "/private/tmp/natural-language-tasks-prompt-diff-check.log",
+      "raw_log": "/private/tmp/natural-language-tasks-whitespace-diff-check.log",
       "observed_output": "empty output"
     }
   ],
@@ -191,6 +191,21 @@
       "test_name": "source paths with boundary quotes fail CLI and structured selection before planning or answer writes while internal quotes round-trip",
       "outcome": "passed",
       "evidence": "test/task-intake.test.mjs::source paths with boundary quotes fail CLI and structured selection before planning or answer writes while internal quotes round-trip"
+    },
+    {
+      "test_name": "raw boundary whitespace is refused before preparation or answers can select a trimmed alias while internal spaces retain exact delivery",
+      "outcome": "passed",
+      "evidence": "test/task-intake.test.mjs::raw boundary whitespace is refused before preparation or answers can select a trimmed alias while internal spaces retain exact delivery"
+    },
+    {
+      "test_name": "padded generated and saved source manifests cannot normalize aliases or drop constraints through bounded repair",
+      "outcome": "passed",
+      "evidence": "test/task-intake.test.mjs::padded generated and saved source manifests cannot normalize aliases or drop constraints through bounded repair"
+    },
+    {
+      "test_name": "legacy request and answer identities cannot replay boundary whitespace while shared source parsing retains its contract",
+      "outcome": "passed",
+      "evidence": "test/task-intake.test.mjs::legacy request and answer identities cannot replay boundary whitespace while shared source parsing retains its contract"
     },
     {
       "test_name": "quoted generated and saved source manifests are refused with bounded repair and preserved explicit constraints",
@@ -401,7 +416,7 @@
   "representative_fixture": {
     "provenance": "Deterministic offline fixture; not live-provider evidence",
     "original_request": "Add CSV export for the widget table.\nDo not add dependencies.",
-    "saved_draft": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-g9gc5A/tasks/task-a1a896015714afff3ae33dc4/drafts/revision-2/docs/prds/task-a1a896015714afff3ae33dc4.md",
+    "saved_draft": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-HQjOCp/tasks/task-a1a896015714afff3ae33dc4/drafts/revision-2/docs/prds/task-a1a896015714afff3ae33dc4.md",
     "sha256": "e0fcb9be67e1233f4ab02bfc1e95fc82160dff58fb02f2472c47a21fe945e6b1",
     "canonical_prd": "---\nstatus: ready\nharness: codex\nsources:\n  - AGENTS.md\n  - package.json\n---\n\n# Export widgets from the table\n\n## Problem\n\nFinance admins reconcile widget spending in spreadsheets every month. Today the widget table has no export action, so admins copy each visible row by hand and make transcription errors. A scoped export will preserve the selected records and their values while making the monthly reconciliation repeatable and reducing manual work for these users.\n\n## User stories\n\n- As a finance admin, I want to export widgets, so that I can reconcile spending.\n\n## Acceptance criteria\n\n- Given a table with three widgets, when Export is selected, then the requested file contains exactly three widget rows. Explicit requirement r-1: \"Add CSV export for the widget table.\"\n- Given the current package manifest, when CSV export is installed, then dependency declarations remain unchanged. Explicit requirement r-2: \"Do not add dependencies.\"\n\n## Verify\n\n- `npm test`\n- `npm run lint`\n\n## Where to look\n\n- src/export/\n\n## Out of scope\n\n- PDF export and unrelated table changes.\n\n## Assumptions\n\n- Export includes the currently visible rows.\n\n## Requirements mapping\n\n- r-1: \"Add CSV export for the widget table.\" → ac-1\n- r-2: \"Do not add dependencies.\" → ac-2\n",
     "readiness": {
@@ -422,8 +437,8 @@
     ]
   },
   "source_review": {
-    "implementation_revision": "61f6556bfa88e06e885c7f48e848e4e56fa88b17",
-    "representative_output_inspected": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-g9gc5A/tasks/task-a1a896015714afff3ae33dc4/drafts/revision-2/docs/prds/task-a1a896015714afff3ae33dc4.md",
+    "implementation_revision": "112d69545e4b8653c83043be2ffc7a63880d2c9c",
+    "representative_output_inspected": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-HQjOCp/tasks/task-a1a896015714afff3ae33dc4/drafts/revision-2/docs/prds/task-a1a896015714afff3ae33dc4.md",
     "boundaries_checked": [
       "CLI and structured clients",
       "request/answer revision writes",
@@ -465,7 +480,10 @@
       "Maven and .NET instruction commands lack automatic manifest snapshot support and are withheld by the shared collector at preparation, answers, prompt/result output and saved validation; unsupported generated Verify requires bounded repair and cached legacy inference cannot dispatch; explicit owner checks remain available through equivalent question answers with selected manifest delivery and one implementation",
       "Task-only source selection, answer-time context, generated parseDraft output and saved requestForTask/readiness/start reuse the boundary-quote guard before accepted writes or dispatch; actionable refusal avoids lossy frontmatter, bounded repair preserves dependency exclusions, internal quotes round-trip and deliver pinned bytes, and shared hand-authored source parsing is unchanged",
       "All preparation adapters pass the prompt as the final argument; the task-only guard measures buildRun output in UTF-8 after runtime preamble and JSON serialization, before native preflight, private profile writes and launch intent; large ordinary, escaped and multibyte selected context returns the same versioned stopped state to CLI and structured callers without truncating original requirements.",
-      "Automatic manifests/lockfiles, accepted answer fragments, previous model output and validator failures share the per-turn prompt bound. A repair or resumed fresh turn cannot submit oversized argv; duplicate inputs/answers and stopped resumes retain identity and accepted data without another call. Already owned completed and settled runs reconcile their output without a replacement launch. Shared implementation start/tick transport, environment and model/provider/permission defaults remain unchanged."
+      "Automatic manifests/lockfiles, accepted answer fragments, previous model output and validator failures share the per-turn prompt bound. A repair or resumed fresh turn cannot submit oversized argv; duplicate inputs/answers and stopped resumes retain identity and accepted data without another call. Already owned completed and settled runs reconcile their output without a replacement launch. Shared implementation start/tick transport, environment and model/provider/permission defaults remain unchanged.",
+      "Raw selected source strings are checked before the shared parser can trim them, including preparation identity replay and duplicate answers; CLI and structured calls return the same versioned actionable input failure without allocating another intake, rereading pinned files or modifying accepted state.",
+      "Task-only generated and saved source manifests reuse the same raw boundary-whitespace guard before rendering acceptance, readiness and dispatch. Repairs are bounded to three and retain dependency exclusions; a forged legacy output/hash cannot normalize a different file into accepted authority.",
+      "ASCII, tabs/newlines, nonbreaking/BOM/em-space and whitespace-only boundary paths are refused with and without a trimmed alias present. Internal filename/directory whitespace retains exact frontmatter identity, pinned bytes and fresh-base delivery; valid duplicate answers replay after native files disappear. Shared hand-authored source parsing is unchanged."
     ],
     "regressions": [
       "preparation uses the existing runner in a separate workspace, records usage and reconciles a lost response",
@@ -527,7 +545,10 @@
       "quoted generated and saved source manifests are refused with bounded repair and preserved explicit constraints",
       "oversized serialized preparation prompts stop before probes or launch across adapters and CLI callers",
       "automatic lockfiles, accumulated answers, repair output and legacy resumes share the serialized prompt bound",
-      "exact UTF-8 prompt boundary reaches the native offline runner and oversized legacy output replays without a new launch"
+      "exact UTF-8 prompt boundary reaches the native offline runner and oversized legacy output replays without a new launch",
+      "raw boundary whitespace is refused before preparation or answers can select a trimmed alias while internal spaces retain exact delivery",
+      "padded generated and saved source manifests cannot normalize aliases or drop constraints through bounded repair",
+      "legacy request and answer identities cannot replay boundary whitespace while shared source parsing retains its contract"
     ],
     "literal_output_inspected": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-YT4kUE/tasks/task-9f538f3b60078088f631d887/drafts/revision-5/docs/prds/task-9f538f3b60078088f631d887.md",
     "answer_context_output_inspected": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-GyBbWY/tasks/task-d21c94c7a17012e1454c6854/drafts/revision-4/docs/prds/task-d21c94c7a17012e1454c6854.md",
@@ -801,6 +822,17 @@
       ],
       "evidence": "test/task-intake.test.mjs::oversized serialized preparation prompts stop before probes or launch across adapters and CLI callers; test/task-intake.test.mjs::automatic lockfiles, accumulated answers, repair output and legacy resumes share the serialized prompt bound; test/task-intake.test.mjs::exact UTF-8 prompt boundary reaches the native offline runner and oversized legacy output replays without a new launch; docs/audit/plugin-ready/natural-language-tasks.json prompt_limit_case",
       "observed": "Bound the fully serialized preparation prompt to 120 KiB after the existing builder adds runtime instructions. UTF-8 bytes include JSON escaping, automatic context, accepted answers, prior output and validator feedback. Oversized turns stop before probe/profile/intent/spawn with actionable input guidance and retained requirements; no validator-repair truncation or duplicate call occurs. Native exact-boundary transport and already-owned output recovery pass offline; shared implementation adapter/runner behavior is unchanged."
+    },
+    {
+      "comment_id": 4180919067,
+      "files": [
+        "lib/task_contract.mjs",
+        "lib/tasks.mjs",
+        "test/task-intake.test.mjs",
+        "docs/tasks.md"
+      ],
+      "evidence": "test/task-intake.test.mjs::raw boundary whitespace is refused before preparation or answers can select a trimmed alias while internal spaces retain exact delivery; test/task-intake.test.mjs::padded generated and saved source manifests cannot normalize aliases or drop constraints through bounded repair; test/task-intake.test.mjs::legacy request and answer identities cannot replay boundary whitespace while shared source parsing retains its contract; docs/audit/plugin-ready/natural-language-tasks.json internal_space_case",
+      "observed": "Reject raw leading or trailing whitespace before source normalization and before request/answer identity replay. No trimmed alias can enter planning or delivery, including legacy signatures and generated/saved manifests. Refusal leaves saved requirements, revisions and native files untouched; repairs remain bounded and preserve explicit constraints. Internal spaces retain exact source identity and snapshot bytes, valid duplicate answers still need no filesystem reread, and shared hand-authored manifest parsing is unchanged."
     }
   ],
   "offline_credential_check": {
@@ -1069,37 +1101,47 @@
         {
           "command": "npm test",
           "exit_code": 0,
-          "raw_log": "/private/tmp/natural-language-tasks-prompt-npm-test.log",
-          "tests": 816,
-          "passed": 816
+          "raw_log": "/private/tmp/natural-language-tasks-whitespace-npm-test.log",
+          "tests": 819,
+          "passed": 819
         },
         {
           "command": "npm run lint",
           "exit_code": 0,
-          "raw_log": "/private/tmp/natural-language-tasks-prompt-lint.log"
+          "raw_log": "/private/tmp/natural-language-tasks-whitespace-lint.log"
         },
         {
           "command": "npm run test:task-intake",
           "exit_code": 0,
-          "raw_log": "/private/tmp/natural-language-tasks-prompt-focused.log",
-          "tests": 72,
-          "passed": 72
+          "raw_log": "/private/tmp/natural-language-tasks-whitespace-focused.log",
+          "tests": 75,
+          "passed": 75
         },
         {
           "command": "git diff --check",
           "exit_code": 0,
-          "raw_log": "/private/tmp/natural-language-tasks-prompt-diff-check.log",
+          "raw_log": "/private/tmp/natural-language-tasks-whitespace-diff-check.log",
           "observed_output": "empty output"
         }
       ],
       "focused_regressions": {
-        "command": "node --test --test-name-pattern='oversized serialized|automatic lockfiles, accumulated|exact UTF-8 prompt boundary' test/task-intake.test.mjs",
+        "command": "node --test --test-name-pattern='raw boundary whitespace|padded generated|legacy request and answer identities' test/task-intake.test.mjs",
         "exit_code": 0,
-        "raw_log": "/private/tmp/natural-language-tasks-prompt-regressions.log",
+        "raw_log": "/private/tmp/natural-language-tasks-whitespace-regressions-retry.log",
         "tests": 3,
         "passed": 3
       },
-      "observed": "New prompt-size regressions and all required offline suites passed without retries or provider/model calls. Supported escalation was used only for native offline process ownership checks; existing runtime and permission settings remain unchanged.",
+      "initial_runs": [
+        {
+          "command": "node --test --test-name-pattern='raw boundary whitespace|padded generated|legacy request and answer identities' test/task-intake.test.mjs",
+          "exit_code": 1,
+          "raw_log": "/private/tmp/natural-language-tasks-whitespace-regressions.log",
+          "tests": 3,
+          "passed": 1,
+          "failed": 2
+        }
+      ],
+      "observed": "The first targeted run found two incorrect call-count assertions in the new custom planner fixtures. Explicit fixture counters corrected those assertions; the three targeted regressions and all required suites then passed. Supported escalation was used only for existing native offline process ownership checks, with no provider/model calls or changes to runtime permissions.",
       "model_calls": 0
     },
     "previous_batches": [
@@ -1145,6 +1187,44 @@
           }
         ],
         "observed": "All required offline suites passed on the reviewed source revision without a retry or provider/model calls. Supported escalation was used only for native offline process ownership checks; existing runtime and permission settings remain unchanged.",
+        "model_calls": 0
+      },
+      {
+        "commands": [
+          {
+            "command": "npm test",
+            "exit_code": 0,
+            "raw_log": "/private/tmp/natural-language-tasks-prompt-npm-test.log",
+            "tests": 816,
+            "passed": 816
+          },
+          {
+            "command": "npm run lint",
+            "exit_code": 0,
+            "raw_log": "/private/tmp/natural-language-tasks-prompt-lint.log"
+          },
+          {
+            "command": "npm run test:task-intake",
+            "exit_code": 0,
+            "raw_log": "/private/tmp/natural-language-tasks-prompt-focused.log",
+            "tests": 72,
+            "passed": 72
+          },
+          {
+            "command": "git diff --check",
+            "exit_code": 0,
+            "raw_log": "/private/tmp/natural-language-tasks-prompt-diff-check.log",
+            "observed_output": "empty output"
+          }
+        ],
+        "focused_regressions": {
+          "command": "node --test --test-name-pattern='oversized serialized|automatic lockfiles, accumulated|exact UTF-8 prompt boundary' test/task-intake.test.mjs",
+          "exit_code": 0,
+          "raw_log": "/private/tmp/natural-language-tasks-prompt-regressions.log",
+          "tests": 3,
+          "passed": 3
+        },
+        "observed": "New prompt-size regressions and all required offline suites passed without retries or provider/model calls. Supported escalation was used only for native offline process ownership checks; existing runtime and permission settings remain unchanged.",
         "model_calls": 0
       }
     ]
@@ -1263,6 +1343,97 @@
     },
     "observed": "The complete multibyte prompt at exactly 122880 bytes arrived intact in the native offline child. One byte above the bound was refused before preflight or launch. Simulated legacy larger-intake completion and settled-output replay retained this one run and the original dependency exclusion.",
     "implementation_dispatch": null,
+    "review_outcome": null
+  },
+  "internal_space_case": {
+    "provenance": "Deterministic offline fixture; not live-provider evidence",
+    "evidence": "test/task-intake.test.mjs::raw boundary whitespace is refused before preparation or answers can select a trimmed alias while internal spaces retain exact delivery",
+    "saved_intake": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-2tHdJx/tasks/task-f0782956121d75d400c5d5df/intake.json",
+    "saved_draft": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-2tHdJx/tasks/task-f0782956121d75d400c5d5df/drafts/revision-4/docs/prds/task-f0782956121d75d400c5d5df.md",
+    "sha256": "a7c1676a0451a8a395a576c04511c03c65124cd8b8cf33999ab03d8b3f1f103a",
+    "canonical_prd": "---\nstatus: ready\nharness: codex\nsources:\n  - docs/local plan.md\n  - docs/ local /plan.md\n  - docs/non breaking.md\n  - AGENTS.md\n  - package.json\n---\n\n# Export widgets from the table\n\n## Problem\n\nFinance admins reconcile widget spending in spreadsheets every month. Today the widget table has no export action, so admins copy each visible row by hand and make transcription errors. A scoped export will preserve the selected records and their values while making the monthly reconciliation repeatable and reducing manual work for these users.\n\n## User stories\n\n- As a finance admin, I want to export widgets, so that I can reconcile spending.\n\n## Acceptance criteria\n\n- Given a table with three widgets, when Export is selected, then the requested file contains exactly three widget rows.\n- Given the current package manifest, when CSV export is installed, then dependency declarations remain unchanged. Explicit requirement r-2: \"Do not add dependencies.\"\n- Given a table with three widgets, when Export is selected, then the requested file contains exactly three widget rows. Explicit requirement a-q-r-1-1: \"Use CSV and the selected format documents.\"\n\n## Verify\n\n- `npm test`\n- `npm run lint`\n\n## Where to look\n\n- src/export/\n\n## Out of scope\n\n- PDF export and unrelated table changes.\n\n## Assumptions\n\n- Export includes the currently visible rows.\n\n## Requirements mapping\n\n- r-1: \"Add CSV export for the widget table.\" → ac-1; clarified by answer q-r-1\n- r-2: \"Do not add dependencies.\" → ac-2\n- a-q-r-1-1: \"Use CSV and the selected format documents.\" → ac-3\n",
+    "original_request": "Add CSV export for the widget table.\nDo not add dependencies.",
+    "answers": {
+      "q-r-1": "Use CSV and the selected format documents."
+    },
+    "requirements": [
+      {
+        "id": "r-1",
+        "text": "Add CSV export for the widget table."
+      },
+      {
+        "id": "r-2",
+        "text": "Do not add dependencies."
+      },
+      {
+        "id": "a-q-r-1-1",
+        "text": "Use CSV and the selected format documents."
+      }
+    ],
+    "mapping": [
+      {
+        "requirementId": "r-1",
+        "criteria": [
+          "ac-1"
+        ],
+        "resolvedBy": "q-r-1"
+      },
+      {
+        "requirementId": "r-2",
+        "criteria": [
+          "ac-2"
+        ]
+      },
+      {
+        "requirementId": "a-q-r-1-1",
+        "criteria": [
+          "ac-3"
+        ]
+      }
+    ],
+    "sources": [
+      {
+        "path": "docs/local plan.md",
+        "snapshot": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-2tHdJx/tasks/task-f0782956121d75d400c5d5df/drafts/revision-4/docs/local plan.md",
+        "delivered": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-2tHdJx/worktrees/acme/widget/task-f0782956121d75d400c5d5df/docs/local plan.md",
+        "sha256": "f7e63112e37e542aa422e1a0cd81171240cc90e6c2c971ad6df0bbad9a365d80",
+        "observed": "Exact frontmatter path and identical selected snapshot/delivery bytes; native source removed before a successful duplicate-answer replay."
+      },
+      {
+        "path": "docs/ local /plan.md",
+        "snapshot": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-2tHdJx/tasks/task-f0782956121d75d400c5d5df/drafts/revision-4/docs/ local /plan.md",
+        "delivered": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-2tHdJx/worktrees/acme/widget/task-f0782956121d75d400c5d5df/docs/ local /plan.md",
+        "sha256": "bcfb055fcc8f340927d987e82f01089220b9731713830a838d53d38bba919b30",
+        "observed": "Exact frontmatter path and identical selected snapshot/delivery bytes; native source removed before a successful duplicate-answer replay."
+      },
+      {
+        "path": "docs/non breaking.md",
+        "snapshot": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-2tHdJx/tasks/task-f0782956121d75d400c5d5df/drafts/revision-4/docs/non breaking.md",
+        "delivered": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-2tHdJx/worktrees/acme/widget/task-f0782956121d75d400c5d5df/docs/non breaking.md",
+        "sha256": "765d1c5e4be748da0900512fbc2d66a212f0ba33c154a28160f974c494d01193",
+        "observed": "Exact frontmatter path and identical selected snapshot/delivery bytes; native source removed before a successful duplicate-answer replay."
+      }
+    ],
+    "readiness": {
+      "allow": true,
+      "hash": "a7c1676a0451a8a395a576c04511c03c65124cd8b8cf33999ab03d8b3f1f103a",
+      "digest": "962874cd56a551a4c3c9b227014786db2aa4875763a1e771738b07004842646b",
+      "decisionId": null,
+      "report": "ok   path          lives under docs/prds/ with a lowercase-dash filename\nok   frontmatter   frontmatter has status (draft|ready) and harness (claude|codex|gemini|opencode|goose)\nok   title         one H1 title, 8 to 80 characters\nok   problem       ## Problem: at least 40 words on what is wrong today and for whom\nok   stories       ## User stories: every bullet reads 'As a <who>, I want <what>, so that <why>'\nok   criteria      ## Acceptance criteria: every bullet is Given / When / Then, at least one per story\nok   verify        ## Verify: at least one command the session must run green; no sudo, rm -rf or piped installers\nok   look          ## Where to look: files or directories to start from, or 'none'\nok   scope         ## Out of scope: at least one bullet\nok   placeholders  no TODO, TBD, FIXME, ???, lorem or <angle-bracket> placeholders anywhere\nok   size          under 1,500 words; a PRD is one pull request, split anything bigger\nok   sources       every file in `sources` exists, is readable text, and is named inside the repository\n\ntask-f0782956121d75d400c5d5df: ready to start.\nAPort decision (local): allow\nstatus set to ready. Commit the PRD when you commit the rest of your work.",
+      "revision": 5
+    },
+    "offline_status": "started",
+    "offline_dispatch": {
+      "id": "acme/widget/task-f0782956121d75d400c5d5df",
+      "worktree": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-2tHdJx/worktrees/acme/widget/task-f0782956121d75d400c5d5df",
+      "branch": "work/task-f0782956121d75d400c5d5df",
+      "base": "main",
+      "baseSource": "default",
+      "session": null,
+      "run": "1-start"
+    },
+    "dispatch_count": 1,
+    "dispatch_count_evidence": "test/task-intake.test.mjs::raw boundary whitespace is refused before preparation or answers can select a trimmed alias while internal spaces retain exact delivery",
     "review_outcome": null
   }
 }
