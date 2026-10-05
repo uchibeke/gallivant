@@ -172,6 +172,13 @@ Matching text lockfiles also remain pinned and carried, so a fresh base receives
 the evidence used to select its manager. Automatically inferred instruction
 commands must name test, lint, check or typecheck actions; publishing, deployment,
 release targets, paid/live checks and composed shell commands are not candidates.
+Instruction inference accepts canonical invocations without extra arguments:
+package-manager test/check scripts, named Make checks, `go test ./...`, `cargo test`,
+`python -m pytest` / `pytest`, and `git diff --check`. Runner flags, plugin loading,
+project overrides, output paths and even benign extra flags require explicit
+owner selection with `--verify`, including on an answer. Their supporting
+manifests still need to be selected and carried. Legacy cached candidates are
+rechecked before readiness and dispatch under the same restriction.
 Maven and .NET commands are not inferred from instructions because their project
 manifests do not yet have automatic snapshot support. Supply the repository's
 check with `--verify 'mvn test'` or `--verify 'dotnet test'` and explicitly select

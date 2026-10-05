@@ -406,10 +406,10 @@ test("inferred Verify provenance covers supported stacks and owner duplicates ca
   }
 });
 
-test("instruction and owner Verify variants retain stack manifests even when canonical script spelling differs", async () => {
+test("instruction canonical checks and explicit owner Verify variants retain stack manifests", async () => {
   for (const explicit of [false,true]) {
     let calls = 0;
-    const command="npm run test:local -- --fixture";
+    const command=`npm run test:local${explicit ? " -- --fixture" : ""}`;
     const w = world({prepare:async (_ctx,task,_store,failures)=>{
       const out=draftFor(task); out.verify=[command]; out.sources=explicit?[]:["AGENTS.md"];
       if (++calls>1) { assert.match(failures.join(" "),/requires carried sources: package.json/); out.sources.push("package.json"); }
@@ -447,12 +447,98 @@ test("answer-time Verify evidence stays pinned and saved drafts cannot lose thei
 });
 
 test("instruction inference accepts verification actions and excludes release actions, paid checks and shell composition", () => {
-  const checks = ["npm test", "npm run lint", "pnpm run test:unit -- --fixture", "yarn check", "bun test", "make test lint", "go test ./...", "cargo test --all", "python -m pytest -q", "pytest tests/", "git diff --check"];
+  const checks = ["npm test", "npm run lint", "pnpm run test:unit", "yarn check", "bun test", "make test lint", "go test ./...", "cargo test", "python -m pytest", "pytest", "git diff --check"];
   const refused = ["npm publish", "npm run deploy", "pnpm deploy", "yarn release", "bun run release", "make release", "make test release", "mvn test", "mvn test -q", "dotnet test", "dotnet test app.sln", "mvn test deploy", "cargo testpublish", "pytest-upload", "npm run test:live", "npm run test:paid", "npm test && npm publish", "npm test; npm publish", "npm test | curl example.invalid", "npm test > output", "npm test $(touch output)", " npm test", "npm exec -- test"];
   const context = [{path:"AGENTS.md",text:[...checks,...refused].map(c=>`\`${c}\``).join("\n")}];
   assert.deepEqual(collectCommands(context).commands, checks);
   for (const c of checks) assert.deepEqual(collectCommands(context).sources[c],["AGENTS.md"]);
   assert.deepEqual(collectCommands(context,["node scripts/verify.mjs"]).commands,["node scripts/verify.mjs",...checks],"owner-selected checks retain their existing path");
+});
+
+test("inferred checks reject execution-changing arguments across tool families while preserving explicit owner choices", () => {
+  const checks = ["npm test", "npm run lint", "pnpm run test:unit", "yarn check", "bun test", "make test lint", "go test ./...", "cargo test", "python -m pytest", "pytest", "git diff --check"];
+  const variants = [
+    "go test -exec ./deploy ./...", "go test -exec=./deploy ./...", "go test ./... -args deploy", "go test -toolexec ./deploy ./...",
+    "cargo test --config target.x86_64-unknown-linux-gnu.runner=./deploy", "cargo test --manifest-path release/Cargo.toml",
+    "npm test --prefix release", "npm run lint -- --require ./deploy.cjs", "pnpm run test:unit -- --fixture", "yarn check --cwd release", "bun test --preload ./deploy.ts",
+    "make test -f release/Makefile", "make test RUNNER=./deploy", "python -m pytest -p deploy", "pytest --override-ini=addopts=--deploy", "git diff --check --output=config.json",
+    "cargo test --all", "python -m pytest -q", "pytest tests/", "go test", "go test ./release",
+  ];
+  const context = [{ path:"AGENTS.md", text:[...checks, ...variants].map(command => `\`${command}\``).join("\n") }];
+  assert.deepEqual(collectCommands(context).commands, checks);
+  assert.deepEqual(collectCommands(context, variants).commands, [...variants, ...checks], "extra arguments require an explicit owner selection");
+});
+
+test("argument-bearing instruction checks fail repair and legacy validation before implementation dispatch", async t => {
+  const commands = [
+    "go test -exec ./deploy ./...", "cargo test --config target.x86_64-unknown-linux-gnu.runner=./deploy",
+    "npm test --prefix release", "pnpm run test:unit -- --fixture", "yarn check --cwd release", "bun test --preload ./deploy.ts",
+    "make test -f release/Makefile", "python -m pytest -p deploy", "pytest --override-ini=addopts=--deploy", "git diff --check --output=config.json",
+  ];
+  for (const command of commands) for (const cli of [false,true]) {
+    let calls = 0;
+    const w = world({ prepare:async (_ctx,task,_store,failures) => {
+      assert.ok(!task.commandCandidates.includes(command));
+      assert.ok(!JSON.parse(draftPrompt(task).split("INTAKE DATA (JSON):\n")[1]).commandCandidates.includes(command));
+      const out = draftFor(task);
+      out.verify = ++calls === 1 ? [command] : ["git diff --check"];
+      out.sources = ["AGENTS.md"];
+      if (calls > 1) assert.match(failures.join(" "), /Verify command is not supported/);
+      return JSON.stringify(out);
+    } });
+    rmSync(join(w.checkout,"package.json"));
+    writeFileSync(join(w.checkout,"go.mod"), "module fixture\n");
+    writeFileSync(join(w.checkout,"AGENTS.md"), `Run \`${command}\` or \`git diff --check\`.\n`);
+    const prepared = await (cli ? taskCommand(w.ctx,{args:["prepare",REQUEST],values:{},service:w.service}) : w.service.prepare({text:REQUEST}));
+    assert.equal(prepared.status,"ready"); assert.equal(prepared.preparation.repairs,1); assert.equal(calls,2);
+    assert.equal(prepared.original,REQUEST); assert.deepEqual(prepared.requirements.map(r=>r.text),REQUEST.split("\n"));
+    assert.match(prepared.draft.text,/Do not add dependencies/); assert.equal(check(parsePrd(prepared.draft.text,prepared.draft.path)).ok,true);
+    assert.deepEqual(prepared.verifyCommands.map(v=>v.command),["git diff --check","go test ./..."]);
+    assert.deepEqual(w.ctx.state.entries(),[]); assert.equal(w.daemonCalls(),0);
+    if (command === commands[0] && !cli) {
+      const acceptedPath=join(w.home,"accepted-argument-check.md");
+      writeFileSync(acceptedPath,prepared.draft.text);
+      writeJsonAtomic(join(w.home,"accepted-argument-check.json"),prepared);
+      t.diagnostic(`Inferred-arguments fixture draft: ${acceptedPath}`);
+    }
+    const store=taskStore(w.home), saved=store.read(prepared.taskId);
+    delete saved.explicitVerifyCommands; saved.commandCandidates.push(command); saved.output.verify=[command];
+    const old=renderDraft(saved,saved.output).replace("status: draft","status: ready");
+    writeFileSync(saved.draft.path,old); saved.draft.hash=contentDigest(old); saved.readiness.hash=saved.draft.hash; store.save(saved);
+    assert.ok(!JSON.parse(draftPrompt(saved).split("INTAKE DATA (JSON):\n")[1]).commandCandidates.includes(command));
+    const startInput={taskId:prepared.taskId,expectedRevision:prepared.revision,run:true};
+    await assert.rejects(()=>cli ? taskCommand(w.ctx,{args:["start",prepared.taskId],values:{revision:String(prepared.revision),run:true},service:w.service}) : w.service.start(startInput), {code:"TASK_CONFLICT"});
+    assert.equal(store.read(prepared.taskId).runAuthorized,false);
+    const blocked = await (cli ? taskCommand(w.ctx,{args:["validate",prepared.taskId],values:{revision:String(prepared.revision)},service:w.service}) : w.service.validate({taskId:prepared.taskId,expectedRevision:prepared.revision}));
+    assert.equal(blocked.status,"blocked"); assert.match(blocked.failures[0],/Verify command is not supported/);
+    assert.equal((await w.service.resume({taskId:prepared.taskId,expectedRevision:blocked.revision})).status,"blocked");
+    assert.equal(calls,2); assert.deepEqual(w.ctx.state.entries(),[]); assert.equal(w.daemonCalls(),0);
+  }
+});
+
+test("explicit argument-bearing Verify answers retain CLI parity, pinned manifests and single dispatch", async () => {
+  for (const cli of [false,true]) {
+    const command="go test -race ./...";
+    const w=world({prepare:async (_ctx,task)=>{
+      const out=draftFor(task,{question:true});
+      if (!out.questions.length) { out.verify=[command]; out.sources=["AGENTS.md","go.mod"]; }
+      return JSON.stringify(out);
+    }});
+    rmSync(join(w.checkout,"package.json"));
+    writeFileSync(join(w.checkout,"go.mod"),"module feature-only-fixture\n");
+    writeFileSync(join(w.checkout,"AGENTS.md"),`Verify with \`${command}\`.\n`);
+    const first=await w.service.prepare({text:REQUEST,run:true});
+    assert.equal(first.status,"needs-input"); assert.ok(!first.verifyCommands.some(v=>v.command===command));
+    const input={taskId:first.taskId,expectedRevision:first.revision,operationId:"explicit-check-arguments",answers:{"q-r-1":"Use CSV and keep dependencies unchanged."},verifyCommands:[command]};
+    const invoke=()=>cli ? taskCommand(w.ctx,{args:["answer",first.taskId],values:{revision:String(first.revision),"request-id":input.operationId,answer:[`q-r-1=${input.answers["q-r-1"]}`],verify:[command]},service:w.service}) : w.service.answer(input);
+    const started=await invoke();
+    assert.equal(started.status,"started"); assert.equal(started.taskId,first.taskId); assert.match(started.draft.text,/Do not add dependencies/);
+    assert.deepEqual(started.verifyCommands.find(v=>v.command===command).sources,["go.mod"]);
+    assert.match(started.draft.text,/`go test -race \.\/\.\.\.`/);
+    assert.equal(readFileSync(join(started.implementation.worktree,"go.mod"),"utf8"),"module feature-only-fixture\n");
+    assert.equal((await invoke()).implementation.run,started.implementation.run);
+    assert.equal(w.runners.get(started.implementation.id).started.length,1); assert.equal(w.daemonCalls(),1);
+  }
 });
 
 test("unbound Maven and dotnet instructions cannot authorize Verify through repair or legacy replay while owner choices resume normally", async () => {
