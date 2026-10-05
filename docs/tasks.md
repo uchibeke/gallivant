@@ -29,8 +29,9 @@ then an unambiguous `package-lock.json`, `npm-shrinkwrap.json`, `pnpm-lock.yaml`
 conflicting manager evidence is exposed in `commandIssues` for clarification;
 answer with an explicit `--verify` command or selected manager context. Binary
 lockfiles are outside the text context contract; supply a supported manifest
-setting or explicit check. Automatic lockfiles use the same path and combined
-byte limit as other selected files.
+setting or explicit check. Selecting a nested `package.json` also snapshots
+supported text lockfiles beside it. Automatic lockfiles use the same path and
+combined byte limit as other selected files, including at answer time.
 Context is bounded to 256 KiB and requests to 32 KiB; choose fewer files if needed.
 The service also measures the smallest possible canonical brief using the checker's
 1,500-word limit and the actual JSON quoting rules. Owner fragments must appear in
@@ -271,6 +272,15 @@ or feature checkout. Commands explicitly supplied by the owner without inferred
 repository evidence remain explicit choices; a duplicate explicit command cannot
 bypass a known source dependency. Commands with extra arguments also carry their
 selected stack manifest. Saved drafts are checked against the same rule.
+Explicit project overrides such as
+`--verify 'npm test --prefix packages/app' --context packages/app/package.json`
+carry every selected `package.json` and matching manager lockfile, including nested
+paths. This also covers flags before the action and pnpm, Yarn and Bun owner
+commands. Selecting a subproject does not infer argument-bearing commands or
+replace root package-manager evidence. The same tool-family rule binds selected
+Go, Cargo, Make and pytest manifests at any repository depth. It preserves the
+existing Maven/.NET behavior without interpreting arbitrary shell syntax.
+See the [npm prefix configuration](https://docs.npmjs.com/cli/v11/using-npm/config/).
 Matching text lockfiles also remain pinned and carried, so a fresh base receives
 the evidence used to select its manager. Automatically inferred instruction
 commands must name test, lint, check or typecheck actions; publishing, deployment,

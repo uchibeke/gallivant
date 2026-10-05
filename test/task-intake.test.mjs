@@ -1031,6 +1031,103 @@ test("inferred Verify provenance covers supported stacks and owner duplicates ca
   }
 });
 
+test("selected subproject manifests bind explicit tool invocations without inferring project overrides", () => {
+  const paths = ["package.json", "packages/app/package.json", "packages/shared/package.json", "package-lock.json", "packages/app/package-lock.json", "packages/app/npm-shrinkwrap.json", "packages/app/pnpm-lock.yaml", "packages/app/yarn.lock", "packages/app/bun.lock", "packages/app/package.json.backup", "packages/app/yarn.lock.backup", "modules/api/go.mod", "modules/lib/Cargo.toml", "packages/py/pyproject.toml", "packages/native/Makefile"];
+  const context = paths.map(path => ({ path, text: path === "package.json" ? JSON.stringify({ packageManager: "npm@10.0.0", scripts: { test: "fixture-only" } }) : "selected bytes" }));
+  const variants = ["npm test --prefix packages/app", "npm --prefix=packages/app test", "  npm\t--prefix packages/app test  ", "pnpm --dir packages/app test", "pnpm -C packages/app test", "yarn --cwd packages/app test", "bun --cwd packages/app test"];
+  context.push({ path: "AGENTS.md", text: variants.map(c => "`" + c + "`").join("\n") });
+  assert.deepEqual(collectCommands(context).commands, ["npm test"]);
+  for (const command of variants) {
+    const manager = command.trim().split(/\s+/)[0], locks = { npm: ["package-lock.json", "npm-shrinkwrap.json"], pnpm: ["pnpm-lock.yaml"], yarn: ["yarn.lock"], bun: ["bun.lock"] }[manager];
+    const expected = paths.filter(path => /(?:^|\/)package\.json$/.test(path) || locks.includes(path.split("/").at(-1)));
+    assert.deepEqual(new Set(collectCommands(context, [command]).sources[command]), new Set(expected));
+  }
+  for (const [command, path] of [["go -C modules/api test ./...", "modules/api/go.mod"], ["cargo test --manifest-path modules/lib/Cargo.toml", "modules/lib/Cargo.toml"], ["python -m pytest -c packages/py/pyproject.toml", "packages/py/pyproject.toml"], ["make -C packages/native test", "packages/native/Makefile"]]) assert.deepEqual(collectCommands(context, [command]).sources[command], [path]);
+  for (const command of ["npmtest", "node scripts/verify.mjs", "gomod", "cargotest", "maketest"]) assert.equal(collectCommands(context, [command]).sources[command], undefined);
+});
+
+test("CLI and structured subproject checks pin nested manifests and automatic lockfiles through answers repair and fresh-base dispatch", async t => {
+  for (const cli of [false, true]) for (const answer of [false, true]) for (const [manager, lock] of [["npm", "package-lock.json"], ["npm", "npm-shrinkwrap.json"], ["pnpm", "pnpm-lock.yaml"], ["yarn", "yarn.lock"], ["bun", "bun.lock"]]) {
+    const manifestPath = "packages/app/package.json", lockPath = "packages/app/" + lock;
+    const command = manager === "npm" ? "npm test --prefix packages/app" : manager === "pnpm" ? "pnpm -C packages/app test" : `${manager} --cwd packages/app test`;
+    let omitted = false, calls = 0;
+    const w = world({ prepare: async (_ctx, task, _store, failures) => {
+      calls++; const out = draftFor(task, { question: answer });
+      if (task.context.some(c => c.path === manifestPath)) {
+        out.verify = [command];
+        if (!omitted) { omitted = true; out.sources = ["package.json"]; }
+        else { assert.match(failures.join(" "), /requires carried sources/); out.sources = collectCommands(task.context, [command]).sources[command]; }
+      }
+      return JSON.stringify(out);
+    } });
+    rmSync(join(w.checkout, "AGENTS.md"));
+    const manifest = JSON.stringify({ packageManager: `${manager}@1.0.0`, scripts: { test: "node -e \"require('fs').writeFileSync('verified-subproject', 'ok')\"" } });
+    const lockText = manager === "npm" ? JSON.stringify({ name: "fixture", lockfileVersion: 3, packages: {} }) : `${manager} selected lock bytes\n`;
+    const select = () => { mkdirSync(join(w.checkout, "packages/app"), { recursive: true }); writeFileSync(join(w.checkout, manifestPath), manifest); writeFileSync(join(w.checkout, lockPath), lockText); };
+    if (!answer) select();
+    let r = await (cli ? taskCommand(w.ctx, { args: ["prepare", REQUEST], values: answer ? {} : { context: [manifestPath], verify: [command], "request-id": "subproject-prepare" }, service: w.service }) : w.service.prepare({ text: REQUEST, ...(answer ? {} : { context: [manifestPath], verifyCommands: [command], requestId: "subproject-prepare" }) }));
+    let replay;
+    if (answer) {
+      assert.equal(r.status, "needs-input"); select();
+      const input = { taskId: r.taskId, expectedRevision: r.revision, operationId: "subproject-answer", answers: { "q-r-1": "Use CSV with the selected subproject checks." }, context: [manifestPath], verifyCommands: [command] };
+      replay = () => cli ? taskCommand(w.ctx, { args: ["answer", input.taskId], values: { revision: String(input.expectedRevision), "request-id": input.operationId, answer: ["q-r-1=" + input.answers["q-r-1"]], context: input.context, verify: input.verifyCommands }, service: w.service }) : w.service.answer(input);
+      r = await replay();
+    }
+    assert.equal(r.status, "ready", r.failures.join("\n")); assert.equal(r.preparation.repairs, 1); assert.equal(calls, answer ? 3 : 2);
+    assert.deepEqual(new Set(r.verifyCommands.find(v => v.command === command).sources), new Set(["package.json", manifestPath, lockPath]));
+    assert.match(r.draft.text, /Explicit requirement r-2: "Do not add dependencies\."/); assert.equal(check(parsePrd(r.draft.text, r.draft.path)).ok, true);
+    assert.equal(existsSync(join(w.checkout, "packages/app/verified-subproject")), false); assert.deepEqual(w.ctx.state.entries(), []);
+    writeFileSync(join(w.checkout, manifestPath), "later operator manifest"); writeFileSync(join(w.checkout, lockPath), "later operator lock");
+    if (replay) assert.deepEqual(await replay(), r);
+    else assert.deepEqual(await w.service.prepare({ text: REQUEST, context: [manifestPath], verifyCommands: [command], requestId: "subproject-prepare" }), r);
+    const create = w.ctx.git.create;
+    w.ctx.git.create = async input => { const cwd = await create(input); if (answer) { mkdirSync(join(cwd, "packages/app"), { recursive: true }); writeFileSync(join(cwd, manifestPath), "stale base manifest"); writeFileSync(join(cwd, lockPath), "stale base lock"); } return cwd; };
+    const started = await w.service.start({ taskId: r.taskId, expectedRevision: r.revision, run: true });
+    assert.equal(started.status, "started"); assert.equal(readFileSync(join(started.implementation.worktree, manifestPath), "utf8"), manifest); assert.equal(readFileSync(join(started.implementation.worktree, lockPath), "utf8"), lockText);
+    assert.equal((await w.service.start({ taskId: r.taskId, expectedRevision: started.revision, run: true })).implementation.run, started.implementation.run); assert.equal(w.runners.get(started.implementation.id).started.length, 1);
+    if (!cli && !answer && lock === "package-lock.json") {
+      execFileSync("npm", ["test", "--prefix", "packages/app"], { cwd: started.implementation.worktree, stdio: "pipe" });
+      assert.equal(readFileSync(join(started.implementation.worktree, "packages/app/verified-subproject"), "utf8"), "ok");
+      const record = join(w.home, "subproject-check-fixture.json");
+      writeJsonAtomic(record, { live: false, model_calls: 0, result: started, calls, dispatches: 1, actual_check: { command, exit_code: 0, marker: "packages/app/verified-subproject", content: "ok" } });
+      t.diagnostic("Subproject check fixture: " + record); t.diagnostic("Subproject check draft: " + started.draft.path);
+    }
+  }
+});
+
+test("saved subproject checks cannot omit nested manifests or lockfiles even with a matching approval", async () => {
+  for (const cli of [false, true]) for (const missing of ["packages/app/package.json", "packages/app/package-lock.json"]) for (const operation of ["validate", "start", "resume"]) {
+    const command = "npm --prefix packages/app test", paths = ["packages/app/package.json", "packages/app/package-lock.json"];
+    const w = world({ prepare: async (_ctx, task) => { const out = draftFor(task); out.verify = [command]; out.sources = ["package.json", ...paths]; return JSON.stringify(out); } });
+    mkdirSync(join(w.checkout, "packages/app"), { recursive: true }); paths.forEach(path => writeFileSync(join(w.checkout, path), "selected bytes"));
+    const r = await w.service.prepare({ text: REQUEST, context: paths, verifyCommands: [command] }); assert.equal(r.status, "ready");
+    const store = taskStore(w.home), saved = store.read(r.taskId); saved.output.sources = saved.output.sources.filter(p => p !== missing);
+    const text = renderDraft(saved, saved.output).replace("status: draft", "status: ready"); writeFileSync(saved.draft.path, text); saved.draft.hash = contentDigest(text); saved.readiness.hash = saved.draft.hash;
+    saved.readiness.digest = captureStartInput({ ...parsePrd(text, saved.draft.path), checkout: saved.draft.root, relPath: `docs/prds/${saved.id}.md`, repo: saved.repo }, saved.base).digest;
+    saved.runAuthorized = true; store.save(saved);
+    const invoke = () => cli ? taskCommand(w.ctx, { args: [operation, saved.id], values: { revision: String(saved.revision), ...(operation === "start" ? { run: true } : {}) }, service: w.service }) : w.service[operation]({ taskId: saved.id, expectedRevision: saved.revision, ...(operation === "start" ? { run: true } : {}) });
+    if (operation === "validate") { const blocked = await invoke(); assert.equal(blocked.status, "blocked"); assert.match(blocked.failures[0], /requires carried sources/); }
+    else await assert.rejects(invoke, e => e.code === "TASK_CONFLICT" && /requires carried sources/.test(e.message));
+    assert.deepEqual(w.ctx.state.entries(), []); assert.equal(w.daemonCalls(), 0);
+  }
+});
+
+test("automatic nested lockfiles retain source safety and answer atomicity before planning", async () => {
+  for (const kind of ["symlink", "binary", "oversized"]) {
+    let calls = 0;
+    const w = world({ prepare: async (_ctx, task) => { calls++; return JSON.stringify(draftFor(task, { question: true })); } });
+    const r = await w.service.prepare({ text: REQUEST }), store = taskStore(w.home), before = store.read(r.taskId);
+    const manifestPath = "packages/app/package.json", lockPath = "packages/app/package-lock.json";
+    mkdirSync(join(w.checkout, "packages/app"), { recursive: true }); writeFileSync(join(w.checkout, manifestPath), "{}");
+    if (kind === "symlink") symlinkSync(join(w.checkout, manifestPath), join(w.checkout, lockPath));
+    else writeFileSync(join(w.checkout, lockPath), kind === "binary" ? "binary\0lock" : "x".repeat(256 * 1024));
+    await assert.rejects(() => w.service.answer({ taskId: r.taskId, expectedRevision: r.revision, operationId: "unsafe-subproject", answers: { "q-r-1": "Use CSV." }, context: [manifestPath], verifyCommands: ["npm test --prefix packages/app"] }), e => e.version === 1 && /symlink|must be text|exceeds/.test(e.message));
+    assert.deepEqual(store.read(r.taskId), before); assert.equal(calls, 1);
+    await assert.rejects(() => w.service.prepare({ text: REQUEST, context: [manifestPath], verifyCommands: ["npm test --prefix packages/app"] }), e => e.version === 1 && /symlink|must be text|exceeds/.test(e.message));
+    assert.equal(calls, 1); assert.deepEqual(w.ctx.state.entries(), []);
+  }
+});
+
 test("explicit Maven and dotnet checks bind every selected project manifest without enabling instruction inference", () => {
   const context = ["pom.xml", "modules/table/pom.xml", "app.sln", "app.slnx", "src/table.csproj", "src/model.fsproj", "src/ui.vbproj", "pom.xml.backup", "notes.csproj.txt"].map(path => ({ path, text: "selected project bytes" }));
   context.push({ path: "AGENTS.md", text: "Checks: `mvn test`, `dotnet test`." });
