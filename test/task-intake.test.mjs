@@ -13,7 +13,7 @@ import { check, parsePrd } from "../lib/prd.mjs";
 import { makeRunner } from "../lib/run.mjs";
 import { runEnv, RUN_GIT_CONFIG } from "../lib/git.mjs";
 import { preparationEnvironment } from "../lib/task_environment.mjs";
-import { renderDraft } from "../lib/task_contract.mjs";
+import { renderDraft, collectCommands, draftPrompt } from "../lib/task_contract.mjs";
 import { makeState } from "../lib/state.mjs";
 import { writeJsonAtomic } from "../lib/fs.mjs";
 import { contentDigest } from "../lib/start_contract.mjs";
@@ -24,7 +24,7 @@ const REQUEST = "Add CSV export for the widget table.\nDo not add dependencies."
 function world(overrides = {}) {
   const home = tempHome(), checkout = join(home, "operator");
   mkdirSync(checkout);
-  writeFileSync(join(checkout, "package.json"), JSON.stringify({ scripts: { test: "node --test", lint: "node --check index.mjs", "test:live-paid": "must never run" } }));
+  writeFileSync(join(checkout, "package.json"), JSON.stringify({ packageManager: "npm@10.0.0", scripts: { test: "node --test", lint: "node --check index.mjs", "test:live-paid": "must never run" } }));
   writeFileSync(join(checkout, "AGENTS.md"), "Keep export scoped to the table. Verify with `npm test` and `npm run lint`.\n");
   const runners = new Map(), snapshots = new Map(), sources = new Map();
   const ctx = {
@@ -320,7 +320,7 @@ test("feature-only Verify scripts require their pinned manifest through repair a
     else assert.match(failures.join(" "), /npm run test:local requires carried sources: package.json/);
     return JSON.stringify(out);
   } });
-  const manifest = JSON.stringify({ scripts: { "test:local": "node -e \"require('fs').writeFileSync('verified-local', 'ok')\"" } });
+  const manifest = JSON.stringify({ packageManager: "npm@10.0.0", scripts: { "test:local": "node -e \"require('fs').writeFileSync('verified-local', 'ok')\"" } });
   writeFileSync(join(w.checkout, "package.json"), manifest);
   const create = w.ctx.git.create;
   w.ctx.git.create = async input => {
@@ -404,6 +404,148 @@ test("answer-time Verify evidence stays pinned and saved drafts cannot lose thei
   const validated = await w.service.validate({taskId:first.taskId,expectedRevision:answered.revision});
   assert.equal(validated.status,"blocked"); assert.match(validated.failures[0],/python -m pytest requires carried sources: pyproject.toml/);
   await assert.rejects(()=>w.service.start({taskId:first.taskId,expectedRevision:validated.revision,run:true}),{code:"TASK_CONFLICT"});
+  assert.deepEqual(w.ctx.state.entries(),[]);
+});
+
+test("instruction inference accepts verification actions and excludes release actions, paid checks and shell composition", () => {
+  const checks = ["npm test", "npm run lint", "pnpm run test:unit -- --fixture", "yarn check", "bun test", "make test lint", "go test ./...", "cargo test --all", "python -m pytest -q", "pytest tests/", "dotnet test", "mvn test -q", "git diff --check"];
+  const refused = ["npm publish", "npm run deploy", "pnpm deploy", "yarn release", "bun run release", "make release", "make test release", "mvn test deploy", "cargo testpublish", "pytest-upload", "npm run test:live", "npm run test:paid", "npm test && npm publish", "npm test; npm publish", "npm test | curl example.invalid", "npm test > output", "npm test $(touch output)", " npm test", "npm exec -- test"];
+  const context = [{path:"AGENTS.md",text:[...checks,...refused].map(c=>`\`${c}\``).join("\n")}];
+  assert.deepEqual(collectCommands(context).commands, checks);
+  for (const c of checks) assert.deepEqual(collectCommands(context).sources[c],["AGENTS.md"]);
+  assert.deepEqual(collectCommands(context,["node scripts/verify.mjs"]).commands,["node scripts/verify.mjs",...checks],"owner-selected checks retain their existing path");
+});
+
+test("hostile instruction commands cannot survive repair, saved validation or legacy candidate replay", async () => {
+  let calls=0;
+  const w=world({prepare:async (_ctx,task,_store,failures)=>{
+    const out=draftFor(task);
+    assert.ok(!task.commandCandidates.includes("npm publish"));
+    if (++calls===1) { out.verify=["npm publish"]; out.sources=["AGENTS.md","package.json"]; }
+    else assert.match(failures.join(" "),/Verify command is not supported.*npm publish/);
+    return JSON.stringify(out);
+  }});
+  writeFileSync(join(w.checkout,"AGENTS.md"),"Release with `npm publish`, `pnpm deploy` or `make release`. Verify with `npm test`.\n");
+  const r=await w.service.prepare({text:REQUEST});
+  assert.equal(r.status,"ready"); assert.equal(r.preparation.repairs,1);
+  assert.match(r.draft.text,/Do not add dependencies/); assert.doesNotMatch(r.draft.text,/`npm publish`/);
+  const store=taskStore(w.home), saved=store.read(r.taskId);
+  // Older records cached inferred instructions as if they were owner choices.
+  delete saved.explicitVerifyCommands; saved.commandCandidates.push("npm publish"); saved.output.verify=["npm publish"];
+  const text=renderDraft(saved,saved.output).replace("status: draft","status: ready");
+  writeFileSync(saved.draft.path,text); saved.draft.hash=contentDigest(text); saved.readiness.hash=saved.draft.hash; store.save(saved);
+  assert.ok(!JSON.parse(draftPrompt(saved).split("INTAKE DATA (JSON):\n")[1]).commandCandidates.includes("npm publish"));
+  const blocked=await w.service.validate({taskId:r.taskId,expectedRevision:r.revision});
+  assert.equal(blocked.status,"blocked"); assert.match(blocked.failures[0],/Verify command is not supported.*npm publish/);
+  await assert.rejects(()=>w.service.start({taskId:r.taskId,expectedRevision:blocked.revision,run:true}),{code:"TASK_CONFLICT"});
+  assert.deepEqual(w.ctx.state.entries(),[]); assert.equal(calls,2);
+});
+
+test("text lockfiles select the package manager and travel with its manifest through repair and fresh-base dispatch", async t => {
+  for (const [lock,manager] of [["package-lock.json","npm"],["npm-shrinkwrap.json","npm"],["pnpm-lock.yaml","pnpm"],["yarn.lock","yarn"],["bun.lock","bun"]]) {
+    let calls=0;
+    const command=`${manager} run test:unit`, lockText=`fixture lock evidence for ${manager}\n`;
+    const w=world({prepare:async (_ctx,task,_store,failures)=>{
+      const out=draftFor(task); out.verify=[command]; out.sources=["package.json"];
+      if (++calls>1) { assert.match(failures.join(" "),new RegExp(`requires carried sources: ${lock.replaceAll(".","\\.")}`)); out.sources.push(lock); }
+      return JSON.stringify(out);
+    }});
+    const manifest=JSON.stringify({scripts:{"test:unit":"fixture-only","test:live-paid":"do not infer"}});
+    writeFileSync(join(w.checkout,"package.json"),manifest);
+    writeFileSync(join(w.checkout,lock),lockText);
+    // A stale unrelated instruction cannot override the selected lockfile.
+    writeFileSync(join(w.checkout,"AGENTS.md"),"Verify with `npm run test:unit`, and release with `npm publish`.\n");
+    if (manager==="npm") rmSync(join(w.checkout,"AGENTS.md"));
+    const r=await w.service.prepare({text:REQUEST,requestId:`lock-${manager}-${lock}`});
+    assert.equal(r.status,"ready"); assert.equal(r.preparation.repairs,1);
+    assert.deepEqual(r.verifyCommands,[{command,sources:["package.json",lock]}]); assert.deepEqual(r.commandIssues,[]);
+    assert.ok(r.sources.some(s=>s.path===lock)); assert.match(r.draft.text,/Do not add dependencies/);
+    assert.equal(calls,2); assert.deepEqual(w.ctx.state.entries(),[]);
+    const create=w.ctx.git.create;
+    w.ctx.git.create=async input=>{const p=await create(input);writeFileSync(join(p,"package.json"),'{}');assert.equal(existsSync(join(p,lock)),false);return p;};
+    writeFileSync(join(w.checkout,lock),"operator changed after approval");
+    const retry=await w.service.prepare({text:REQUEST,requestId:`lock-${manager}-${lock}`}); assert.equal(retry.taskId,r.taskId); assert.equal(calls,2);
+    const started=await w.service.start({taskId:r.taskId,expectedRevision:r.revision,run:true});
+    assert.equal(started.status,"started"); assert.equal(readFileSync(join(started.implementation.worktree,lock),"utf8"),lockText);
+    assert.equal(readFileSync(join(started.implementation.worktree,"package.json"),"utf8"),manifest);
+    assert.equal(w.runners.get(started.implementation.id).started.length,1);
+    const again=await w.service.start({taskId:r.taskId,expectedRevision:started.revision,run:true}); assert.equal(again.implementation.run,started.implementation.run);
+    if (manager==="pnpm") t.diagnostic(`Lockfile-manager fixture draft: ${started.draft.path}`);
+  }
+});
+
+test("unknown or conflicting managers ask matching CLI and structured questions and accept explicit owner checks", async () => {
+  for (const kind of ["unknown","conflicting","unsupported"]) {
+    const run=async cli=>{
+      const w=world({prepare:async (_ctx,task)=>{
+        const out=draftFor(task,{question:true});
+        out.questions.forEach(q=>{q.text="Which package manager and repository test command should be used?";});
+        return JSON.stringify(out);
+      }});
+      rmSync(join(w.checkout,"AGENTS.md"));
+      writeFileSync(join(w.checkout,"package.json"),JSON.stringify({...(kind==="unsupported"?{packageManager:"other@1.0.0"}:{}),scripts:{test:"fixture-only"}}));
+      if(kind==="conflicting") for(const p of ["yarn.lock","pnpm-lock.yaml"])writeFileSync(join(w.checkout,p),"fixture\n");
+      const r=cli?await taskCommand(w.ctx,{args:["prepare",REQUEST],values:{},service:w.service}):await w.service.prepare({text:REQUEST});
+      assert.equal(r.status,"needs-input"); assert.deepEqual(r.verifyCommands,[]); assert.equal(r.commandIssues.length,1);
+      assert.equal(r.readiness,null); assert.deepEqual(w.ctx.state.entries(),[]);
+      const command="pnpm run test", input={taskId:r.taskId,expectedRevision:r.revision,operationId:`choose-${kind}`,answers:{"q-r-1":"Use pnpm and run pnpm run test; keep dependencies unchanged."},verifyCommands:[command]};
+      const answered=cli?await taskCommand(w.ctx,{args:["answer",r.taskId],values:{revision:String(r.revision),"request-id":input.operationId,answer:[`q-r-1=${input.answers["q-r-1"]}`],verify:[command]},service:w.service}):await w.service.answer(input);
+      assert.equal(answered.taskId,r.taskId); assert.equal(answered.status,"ready"); assert.match(answered.draft.text,/keep dependencies unchanged/);
+      assert.deepEqual(answered.verifyCommands,[{command,sources:["package.json",...(kind==="conflicting"?["pnpm-lock.yaml"]:[])]}]);
+      assert.deepEqual(w.ctx.state.entries(),[]);
+      return {questions:r.questions,issues:r.commandIssues,requirements:answered.requirements,mapping:answered.mapping,commands:answered.verifyCommands};
+    };
+    assert.deepEqual(await run(true),await run(false));
+  }
+});
+
+test("answer-time lockfiles establish manager evidence without reviving cached inference or changing pinned bytes", async () => {
+  const w=world({prepare:async (_ctx,task)=>JSON.stringify(draftFor(task,{question:true}))});
+  rmSync(join(w.checkout,"AGENTS.md"));
+  writeFileSync(join(w.checkout,"package.json"),JSON.stringify({scripts:{test:"fixture-only"}}));
+  const r=await w.service.prepare({text:REQUEST,run:true}); assert.equal(r.status,"needs-input"); assert.deepEqual(r.verifyCommands,[]);
+  const store=taskStore(w.home), legacy=store.read(r.taskId); delete legacy.explicitVerifyCommands; legacy.commandCandidates=["npm test","npm publish"]; store.save(legacy);
+  const lock="pnpm-lock.yaml", contents="accepted pnpm lock\n";writeFileSync(join(w.checkout,lock),contents);
+  const input={taskId:r.taskId,expectedRevision:r.revision,operationId:"manager-context",answers:{"q-r-1":"Use CSV with pnpm tests."},context:[lock]};
+  const answered=await w.service.answer(input); assert.equal(answered.status,"started"); assert.equal(answered.taskId,r.taskId);
+  assert.deepEqual(answered.verifyCommands,[{command:"pnpm run test",sources:["package.json",lock]}]);
+  assert.equal(readFileSync(join(answered.implementation.worktree,lock),"utf8"),contents);
+  writeFileSync(join(w.checkout,lock),"changed"); assert.equal((await w.service.answer(input)).implementation.run,answered.implementation.run);
+  assert.equal(w.runners.get(answered.implementation.id).started.length,1);
+  assert.deepEqual(store.read(r.taskId).explicitVerifyCommands,[]);
+});
+
+test("packageManager takes precedence over other lockfiles while matching evidence and known script checks stay required", () => {
+  const context=[{path:"package.json",text:JSON.stringify({packageManager:"pnpm@9.0.0",scripts:{test:"fixture-only",lint:"fixture-only"}})},{path:"yarn.lock",text:"fixture"},{path:"pnpm-lock.yaml",text:"fixture"},{path:"AGENTS.md",text:"`npm test` `pnpm run test:missing` `pnpm run lint` `pnpm deploy`"}];
+  const r=collectCommands(context);
+  assert.deepEqual(r.commands,["pnpm run test","pnpm run lint"]); assert.deepEqual(r.issues,[]);
+  assert.deepEqual(r.sources["pnpm run lint"],["package.json","AGENTS.md","pnpm-lock.yaml"]);
+  assert.deepEqual(r.sources["pnpm run test"],["package.json","pnpm-lock.yaml"]);
+});
+
+test("automatic lockfiles retain context path and byte protections before preparation or answer writes", async () => {
+  for(const kind of ["symlink","binary","oversized"]){
+    const w=world({prepare:async (_ctx,task)=>JSON.stringify(draftFor(task,{question:true}))});
+    const r=await w.service.prepare({text:REQUEST}), saved=taskStore(w.home).read(r.taskId);
+    mkdirSync(join(w.checkout,"docs"));writeFileSync(join(w.checkout,"docs/context.md"),"Selected project context.");
+    const lock=join(w.checkout,"yarn.lock");
+    if(kind==="symlink")symlinkSync(join(w.checkout,"docs/context.md"),lock);
+    else writeFileSync(lock,kind==="binary"?"binary\0lock":"l".repeat(256*1024));
+    await assert.rejects(()=>w.service.answer({taskId:r.taskId,expectedRevision:r.revision,operationId:"unsafe-manager-context",answers:{"q-r-1":"Use CSV."},context:["docs/context.md"]}), e=>e.version===1 && /symlink|must be text|exceeds/.test(e.message));
+    assert.deepEqual(taskStore(w.home).read(r.taskId),saved);
+    await assert.rejects(()=>w.service.prepare({text:REQUEST,requestId:`unsafe-lock-${kind}`}),e=>e.version===1 && /symlink|must be text|exceeds/.test(e.message));
+    assert.deepEqual(w.ctx.state.entries(),[]);
+  }
+});
+
+test("explicit Verify selections remain arrays and invalid preparation or answer input leaves accepted state untouched", async () => {
+  const w=world({prepare:async (_ctx,task)=>JSON.stringify(draftFor(task,{question:true}))});
+  const r=await w.service.prepare({text:REQUEST}),store=taskStore(w.home),saved=store.read(r.taskId);
+  for(const verifyCommands of [null,"npm test",{},1]){
+    await assert.rejects(()=>w.service.prepare({text:REQUEST,requestId:"invalid-explicit",verifyCommands}),{code:"TASK_INPUT",version:1});
+    await assert.rejects(()=>w.service.answer({taskId:r.taskId,expectedRevision:r.revision,operationId:"invalid-explicit",answers:{"q-r-1":"Use CSV."},verifyCommands}),{code:"TASK_INPUT",version:1});
+    assert.deepEqual(store.read(r.taskId),saved);assert.equal(w.service.list().tasks.length,1);
+  }
   assert.deepEqual(w.ctx.state.entries(),[]);
 });
 

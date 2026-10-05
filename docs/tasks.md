@@ -17,7 +17,15 @@ The repository resolves from the checkout using the existing Git/GitHub helpers.
 usual explicit flag, repository configuration, then default branch. Harness
 selection uses the explicit flag or the first configured harness, as `new` does.
 Selected context consists of explicit repository files. Root `AGENTS.md`, common
-build manifests and instructions above selected files are included automatically.
+build manifests, supported text lockfiles and instructions above selected files
+are included automatically. Package-script inference uses `packageManager` first,
+then an unambiguous `package-lock.json`, `npm-shrinkwrap.json`, `pnpm-lock.yaml`,
+`yarn.lock` or `bun.lock`. It does not default to npm. Missing, unsupported or
+conflicting manager evidence is exposed in `commandIssues` for clarification;
+answer with an explicit `--verify` command or selected manager context. Binary
+lockfiles are outside the text context contract; supply a supported manifest
+setting or explicit check. Automatic lockfiles use the same path and combined
+byte limit as other selected files.
 Context is bounded to 256 KiB and requests to 32 KiB; choose fewer files if needed.
 Preparation receives these documents in its prompt and does not inherit global
 `context_paths` read grants. Its child environment admits process basics and the
@@ -55,7 +63,8 @@ The result includes contract `version: 1`, a durable `taskId`, a state `revision
 original input, requirements, answers, assumptions, requirement mapping, draft
 path/text/hash, source hashes, readiness evidence, preparation usage, artifacts and
 the next action. `verifyCommands` lists candidate commands and their authorizing
-source paths. `inspect` and `list` read saved state without inference or remote
+source paths, while `commandIssues` explains withheld package-script inference.
+`inspect` and `list` read saved state without inference or remote
 polling. Implementation results also expose the existing registry's state and PR
 link, so reopening an intake does not lose access to the eventual result.
 
@@ -124,6 +133,15 @@ or feature checkout. Commands explicitly supplied by the owner without inferred
 repository evidence remain explicit choices; a duplicate explicit command cannot
 bypass a known source dependency. Commands with extra arguments also carry their
 selected stack manifest. Saved drafts are checked against the same rule.
+Matching text lockfiles also remain pinned and carried, so a fresh base receives
+the evidence used to select its manager. Automatically inferred instruction
+commands must name test, lint, check or typecheck actions; publishing, deployment,
+release targets, paid/live checks and composed shell commands are not candidates.
+Known manifest scripts and established manager selection take precedence over
+unrelated instruction snippets. The service records explicit owner commands
+separately from inferred candidates. Reopening an older record rebuilds inference
+and rechecks saved drafts; a cached command alone does not prove owner selection.
+If an older explicit choice cannot be recovered, prepare a new intake with it.
 
 At most three validator repairs occur, across the entire intake, and at most 16
 preparation turns including clarification turns. They share the configured
