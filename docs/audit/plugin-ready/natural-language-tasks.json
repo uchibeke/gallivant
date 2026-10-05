@@ -1,8 +1,8 @@
 {
   "version": 1,
   "task_id": "task-c93def694fe561146955c469",
-  "implementation_commit": "015c78df129ac91c16d1d3043f67f39b5e4055f8",
-  "recorded_at": "2026-10-04T23:40:37.155Z",
+  "implementation_commit": "3b3b75e0879d555f7698b652b8b489d197514fea",
+  "recorded_at": "2026-10-05T00:12:18.904Z",
   "versions": {
     "package": "0.1.0",
     "node": "v22.22.0",
@@ -13,21 +13,21 @@
     {
       "command": "npm test",
       "exit_code": 0,
-      "tests": 767,
-      "passed": 767,
-      "raw_log": "/private/tmp/natural-language-tasks-ssh-npm-test.log"
+      "tests": 770,
+      "passed": 770,
+      "raw_log": "/private/tmp/natural-language-tasks-env-npm-test.log"
     },
     {
       "command": "npm run lint",
       "exit_code": 0,
-      "raw_log": "/private/tmp/natural-language-tasks-ssh-lint.log"
+      "raw_log": "/private/tmp/natural-language-tasks-env-lint.log"
     },
     {
       "command": "npm run test:task-intake",
       "exit_code": 0,
-      "tests": 25,
-      "passed": 25,
-      "raw_log": "/private/tmp/natural-language-tasks-ssh-focused.log"
+      "tests": 28,
+      "passed": 28,
+      "raw_log": "/private/tmp/natural-language-tasks-env-focused.log"
     },
     {
       "command": "git diff --check",
@@ -132,6 +132,21 @@
       "evidence": "test/task-intake.test.mjs::provider failure and exhausted runtime stop preparation without validator repairs or repeat calls"
     },
     {
+      "test_name": "preparation environments admit only selected provider settings and isolate native profiles for every adapter",
+      "outcome": "passed",
+      "evidence": "test/task-intake.test.mjs::preparation environments admit only selected provider settings and isolate native profiles for every adapter"
+    },
+    {
+      "test_name": "cloud provider credentials are available only in explicitly selected provider modes",
+      "outcome": "passed",
+      "evidence": "test/task-intake.test.mjs::cloud provider credentials are available only in explicitly selected provider modes"
+    },
+    {
+      "test_name": "unsafe native profile roots stop before launch intent and are not retried",
+      "outcome": "passed",
+      "evidence": "test/task-intake.test.mjs::unsafe native profile roots stop before launch intent and are not retried"
+    },
+    {
       "test_name": "native durable runner stores offline preparation logs, usage, runtime and isolated argv",
       "outcome": "passed",
       "evidence": "test/task-intake.test.mjs::native durable runner stores offline preparation logs, usage, runtime and isolated argv"
@@ -165,7 +180,7 @@
   "representative_fixture": {
     "provenance": "Deterministic offline fixture; not live-provider evidence",
     "original_request": "Add CSV export for the widget table.\nDo not add dependencies.",
-    "saved_draft": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-eR5iBh/tasks/task-a1a896015714afff3ae33dc4/drafts/revision-2/docs/prds/task-a1a896015714afff3ae33dc4.md",
+    "saved_draft": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-VKzHcH/tasks/task-a1a896015714afff3ae33dc4/drafts/revision-2/docs/prds/task-a1a896015714afff3ae33dc4.md",
     "sha256": "98e173fe650cfd860510eb69456d161fb3a21917b4e4ad27e5d4c46570ad8f66",
     "canonical_prd": "---\nstatus: ready\nharness: codex\n---\n\n# Export widgets from the table\n\n## Problem\n\nFinance admins reconcile widget spending in spreadsheets every month. Today the widget table has no export action, so admins copy each visible row by hand and make transcription errors. A scoped export will preserve the selected records and their values while making the monthly reconciliation repeatable and reducing manual work for these users.\n\n## User stories\n\n- As a finance admin, I want to export widgets, so that I can reconcile spending.\n\n## Acceptance criteria\n\n- Given a table with three widgets, when Export is selected, then the requested file contains exactly three widget rows. Explicit requirement r-1: \"Add CSV export for the widget table.\"\n- Given the current package manifest, when CSV export is installed, then dependency declarations remain unchanged. Explicit requirement r-2: \"Do not add dependencies.\"\n\n## Verify\n\n- `npm test`\n- `npm run lint`\n\n## Where to look\n\n- src/export/\n\n## Out of scope\n\n- PDF export and unrelated table changes.\n\n## Assumptions\n\n- Export includes the currently visible rows.\n\n## Requirements mapping\n\n- r-1: \"Add CSV export for the widget table.\" → ac-1\n- r-2: \"Do not add dependencies.\" → ac-2\n",
     "readiness": {
@@ -176,8 +191,8 @@
     "review_outcome": null
   },
   "source_review": {
-    "implementation_revision": "015c78df129ac91c16d1d3043f67f39b5e4055f8",
-    "representative_output_inspected": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-eR5iBh/tasks/task-a1a896015714afff3ae33dc4/drafts/revision-2/docs/prds/task-a1a896015714afff3ae33dc4.md",
+    "implementation_revision": "3b3b75e0879d555f7698b652b8b489d197514fea",
+    "representative_output_inspected": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-VKzHcH/tasks/task-a1a896015714afff3ae33dc4/drafts/revision-2/docs/prds/task-a1a896015714afff3ae33dc4.md",
     "boundaries_checked": [
       "CLI and structured clients",
       "request/answer revision writes",
@@ -191,7 +206,8 @@
       "preparation and repair context grants versus start/tick grants",
       "task selection, generated/saved sources and hand-authored source readiness/start",
       "Git/SSH inherited overrides, user/system configuration and transport authentication on initial/repair turns",
-      "credential-free shared runEnv versus unchanged start/resume credentials; provider HOME authentication; runner failure cleanup"
+      "selected adapter provider allowlists versus inherited AWS/npm/database and shell-startup secrets; private HOME/XDG/tmp with curated native auth/config/plugin resources; native child exclusion on initial and repair turns",
+      "native profile ancestor refusal before launch intent, stable stopped ownership and unchanged start/tick runner inheritance"
     ],
     "regressions": [
       "preparation uses the existing runner in a separate workspace, records usage and reconciles a lost response",
@@ -203,7 +219,10 @@
       "native durable runner stores offline preparation logs, usage, runtime and isolated argv",
       "preparation and repairs omit global context grants while implementation retains its harness behavior",
       "hand-authored example and configuration documents still pass readiness and source snapshot delivery",
-      "preparation and repairs refuse inherited Git helpers, askpass and SSH authentication without provider changes"
+      "preparation and repairs refuse inherited Git helpers, askpass and SSH authentication without provider changes",
+      "preparation environments admit only selected provider settings and isolate native profiles for every adapter",
+      "cloud provider credentials are available only in explicitly selected provider modes",
+      "unsafe native profile roots stop before launch intent and are not retried"
     ]
   },
   "live": {
@@ -255,7 +274,7 @@
         "lib/task_prepare.mjs"
       ],
       "evidence": "test/task-intake.test.mjs::native durable runner stores offline preparation logs, usage, runtime and isolated argv",
-      "observed": "All four GitHub token variables absent in the spawned child; GH_CONFIG_DIR=/dev/null; hosts.yml reads fail ENOTDIR; provider key/HOME/CODEX_HOME retained; default runner still inherits credentials"
+      "observed": "All four GitHub token variables absent in the spawned child; GH_CONFIG_DIR=/dev/null; hosts.yml reads fail ENOTDIR; provider key retained through a private HOME/CODEX_HOME profile; default runner still inherits credentials"
     },
     {
       "comment_id": 4179725010,
@@ -283,6 +302,16 @@
       ],
       "evidence": "test/task-intake.test.mjs::preparation and repairs refuse inherited Git helpers, askpass and SSH authentication without provider changes; native durable runner stores offline preparation logs, usage, runtime and isolated argv",
       "observed": "Native child has no inherited Git/SSH overrides, askpass programs or agent sockets; shared Git environment disables user/system configuration; credential fill returns exit 128 with no credentials; SSH/file transports return exit 128 before invoking offline spies; initial and repair turns preserve provider authentication and original constraints"
+    },
+    {
+      "comment_id": 4179822473,
+      "files": [
+        "lib/harness.mjs",
+        "lib/task_environment.mjs",
+        "lib/task_prepare.mjs"
+      ],
+      "evidence": "test/task-intake.test.mjs::preparation environments admit only selected provider settings and isolate native profiles for every adapter; native durable runner stores offline preparation logs, usage, runtime and isolated argv; preparation and repairs omit global context grants while implementation retains its harness behavior; unsafe native profile roots stop before launch intent and are not retried",
+      "observed": "Native child excludes AWS credentials, NPM_TOKEN, DATABASE_URL and an unrelated adapter key; every adapter uses process/provider allowlists and a private HOME/XDG/tmp profile with selected native settings/authentication and no other profiles or session history; initial and repair turns preserve selected provider keys and explicit requirements; invalid profile ancestors record zero attempts and cannot launch on resume; start/tick inheritance and model/permission flags unchanged"
     }
   ],
   "offline_credential_check": {
@@ -290,5 +319,28 @@
     "exit_code": 1,
     "token_returned": false,
     "model_calls": 0
-  }
+  },
+  "profile_references": [
+    {
+      "harness": "codex",
+      "source": "https://developers.openai.com/codex/auth/",
+      "settings": "https://developers.openai.com/codex/config-basic/"
+    },
+    {
+      "harness": "claude",
+      "source": "https://code.claude.com/docs/en/env-vars"
+    },
+    {
+      "harness": "gemini",
+      "source": "https://raw.githubusercontent.com/google-gemini/gemini-cli/v0.59.0/packages/core/src/config/storage.ts"
+    },
+    {
+      "harness": "opencode",
+      "source": "https://opencode.ai/docs/config/"
+    },
+    {
+      "harness": "goose",
+      "source": "https://raw.githubusercontent.com/block/goose/v1.50.1/crates/goose/src/config/base.rs"
+    }
+  ]
 }
