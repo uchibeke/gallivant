@@ -14,7 +14,7 @@ source mapping, execution authorization and stopping conditions.
 | --- | --- |
 | Identity, original input, answers, immutable revisions | `lib/tasks.mjs`, `lib/task_store.mjs`; clear request, conflict/duplicate reply and concurrent mutation tests |
 | Requirement preservation and canonical G2 PRD | `lib/task_contract.mjs`; literal request/answer round-trips, strict placeholder repair, unmapped constraints and wrong-stack Verify tests |
-| Isolated preparation and usage | `lib/task_prepare.mjs`, `lib/task_environment.mjs`, existing `lib/git.mjs` / `lib/run.mjs`; native child credential exclusion, selected adapter allowlists/private profiles, scoped Vertex ADC, initial/repair isolation, usage and allowance tests |
+| Isolated preparation and usage | `lib/task_prepare.mjs`, `lib/task_environment.mjs`, existing `lib/git.mjs` / `lib/run.mjs`; native child credential exclusion, selected adapter allowlists/private profiles, directory traversal and write isolation, internal resource link materialization, refused nested links and partial-copy cleanup, scoped Vertex ADC, initial/repair isolation, usage and allowance tests |
 | Actual readiness and exact start | existing `lib/commands/ready.mjs`, `lib/commands/start.mjs`, `lib/start_contract.mjs`; hosted denial fixture and exact revision tests |
 | Dispatch ownership and recovery | existing `lib/state.mjs` claims; lost preparation/ready acknowledgements and duplicate/uncertain dispatch tests |
 | Operator-only sources | `lib/task_contract.mjs` intake path policy and existing source snapshots; carried documents, saved-source refusal and modified snapshot tests |

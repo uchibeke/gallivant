@@ -24,10 +24,14 @@ Preparation receives these documents in its prompt and does not inherit global
 selected adapter's explicit provider authentication/settings allowlist, defined
 in `lib/harness.mjs`. Unrelated tokens, database URLs, other adapters' keys and
 shell startup overrides are excluded. Preparation has a private `HOME`, XDG roots
-and temporary directory. Only the selected adapter's native auth/config files and
-configured plugin/skill resources are linked into that profile; previous sessions
-and unrelated home-directory credentials are excluded. Shared AWS credentials
-require explicit Bedrock selection; Claude's explicit Vertex mode can also use
+and temporary directory. The selected adapter's regular native auth/config files
+are linked into that profile. Its configured resource directories and explicitly
+selected AWS profile directory are copied into private snapshots, so parent traversal and
+preparation writes cannot reach the native directory. Internal resource links are
+materialized; links outside the selected directory, cycles, broken links and
+special files stop preparation before launch and remove partial copies. Previous
+sessions and unrelated home-directory credentials are excluded. Shared AWS
+credentials require explicit Bedrock selection; Claude's explicit Vertex mode can also use
 native Google credentials. Gemini with `GOOGLE_GENAI_USE_VERTEXAI=true` carries
 only `gcloud/application_default_credentials.json` into its private config root;
 explicit `GOOGLE_APPLICATION_CREDENTIALS` paths keep their existing precedence.

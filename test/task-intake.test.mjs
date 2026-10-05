@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { join, dirname } from "node:path";
-import { mkdirSync, readFileSync, writeFileSync, existsSync, rmSync, symlinkSync, readdirSync } from "node:fs";
+import { mkdirSync, readFileSync, writeFileSync, existsSync, rmSync, symlinkSync, readdirSync, lstatSync, realpathSync, statSync } from "node:fs";
 import { spawnSync, execFileSync } from "node:child_process";
 import { PassThrough } from "node:stream";
 import { createTaskService } from "../lib/tasks.mjs";
@@ -441,6 +441,99 @@ test("preparation environments admit only selected provider settings and isolate
     preparationEnvironment(harness, cwd, {}, source);
     for (const path of profiles[harness]) assert.equal(readFileSync(join(operator, path), "utf8"), `fixture:${path}`);
     if (harness === "goose") { assert.equal(env.GOOSE_PROVIDER, source.GOOSE_PROVIDER); assert.equal(env.GOOSE_MODEL, source.GOOSE_MODEL); }
+  }
+});
+
+test("preparation snapshots provider directories across adapters without native parent traversal or writes", () => {
+  const root = tempHome(), operator = join(root, "operator-home");
+  mkdirSync(join(operator, ".ssh"), { recursive: true }); writeFileSync(join(operator, ".ssh/id_ed25519"), "fixture-private-key");
+  const cases = [
+    ["codex", ".codex/skills", {}], ["codex", ".codex/plugins", {}],
+    ["claude", ".claude/plugins", {}], ["gemini", ".gemini/extensions", {}],
+    ["opencode", ".config/opencode/node_modules", {}],
+    ["claude", ".aws", { CLAUDE_CODE_USE_BEDROCK: "1" }], ["goose", ".aws", { GOOSE_PROVIDER: "bedrock" }],
+  ];
+  for (const [, path] of cases) {
+    mkdirSync(join(operator, path), { recursive: true }); writeFileSync(join(operator, path, "resource"), "fixture-native-resource");
+  }
+  // Keep `..` unnormalized so the OS follows the directory link first. This
+  // reproduces the reported exposure using only a disposable fixture secret.
+  const legacy = join(root, "legacy-link"); symlinkSync(join(operator, ".codex/skills"), legacy);
+  assert.equal(readFileSync(`${legacy}/../../.ssh/id_ed25519`, "utf8"), "fixture-private-key");
+  for (const [i, [harness, path, mode]] of cases.entries()) {
+    const cwd = join(root, `turn-${i}`), target = join(cwd, "home", path), native = join(operator, path);
+    // Reopening a pre-fix turn replaces its unsafe alias without touching the
+    // native tree. Directory removal must unlink the alias, not follow it.
+    mkdirSync(dirname(target), { recursive: true }); symlinkSync(native, target);
+    const source = { HOME: operator, ...mode };
+    const env = preparationEnvironment(harness, cwd, {}, source);
+    assert.ok(lstatSync(target).isDirectory()); assert.equal(lstatSync(target).isSymbolicLink(), false);
+    assert.equal(realpathSync(target), realpathSync(join(env.HOME, path)));
+    assert.throws(() => readFileSync(`${target}/${"../".repeat(path.split("/").length)}.ssh/id_ed25519`), { code: "ENOENT" });
+    assert.equal(readFileSync(join(target, "resource"), "utf8"), "fixture-native-resource");
+    writeFileSync(join(target, "resource"), "fixture-preparation-change");
+    assert.equal(readFileSync(join(native, "resource"), "utf8"), "fixture-native-resource");
+    preparationEnvironment(harness, cwd, {}, source);
+    assert.equal(readFileSync(join(target, "resource"), "utf8"), "fixture-native-resource");
+    if (path === ".codex/plugins") {
+      rmSync(native, { recursive: true }); preparationEnvironment(harness, cwd, {}, source);
+      assert.equal(existsSync(target), false, "removed native resources do not leave stale snapshots");
+    }
+  }
+  assert.equal(readFileSync(join(operator, ".ssh/id_ed25519"), "utf8"), "fixture-private-key");
+});
+
+test("preparation materializes internal directory and executable links into detached resources", () => {
+  const root = tempHome(), operator = join(root, "operator-home"), resources = join(root, "selected-cache");
+  mkdirSync(join(operator, ".config/opencode"), { recursive: true }); mkdirSync(join(resources, "package/bin"), { recursive: true }); mkdirSync(join(resources, ".bin"));
+  writeFileSync(join(resources, "package/bin/command"), "fixture-executable", { mode: 0o755 });
+  symlinkSync("../package/bin/command", join(resources, ".bin/command"));
+  symlinkSync("package", join(resources, "alias"));
+  symlinkSync(resources, join(operator, ".config/opencode/node_modules"));
+  const env = preparationEnvironment("opencode", join(root, "turn"), {}, { HOME: operator });
+  const target = join(env.OPENCODE_CONFIG_DIR, "node_modules");
+  const inspect = path => {
+    const info = lstatSync(path); assert.equal(info.isSymbolicLink(), false, path);
+    if (info.isDirectory()) for (const name of readdirSync(path)) inspect(join(path, name));
+  };
+  inspect(target);
+  for (const path of ["package/bin/command", "alias/bin/command", ".bin/command"]) {
+    assert.equal(readFileSync(join(target, path), "utf8"), "fixture-executable");
+    assert.equal(statSync(join(target, path)).mode & 0o777, 0o755);
+  }
+  writeFileSync(join(target, "alias/bin/command"), "private-edit");
+  assert.equal(readFileSync(join(resources, "package/bin/command"), "utf8"), "fixture-executable");
+  assert.equal(readFileSync(join(target, "package/bin/command"), "utf8"), "fixture-executable");
+  assert.throws(() => preparationEnvironment("opencode", join(root, "turn"), {}, { HOME: operator, OPENCODE_CONFIG_DIR: env.OPENCODE_CONFIG_DIR }),
+    e => e.code === "TASK_PREPARATION_ENV" && /overlaps the private preparation home/.test(e.message));
+  assert.equal(readFileSync(join(target, "alias/bin/command"), "utf8"), "private-edit", "overlapping profile selection never removes its own source");
+});
+
+test("escaping, cyclic, broken and special provider resources stop before launch and clean partial snapshots", async () => {
+  for (const kind of ["file-escape", "directory-escape", "cycle", "broken", "special"]) {
+    const w = world(), resources = join(w.home, ".codex/plugins");
+    mkdirSync(resources, { recursive: true }); mkdirSync(join(w.home, ".ssh"));
+    writeFileSync(join(w.home, ".ssh/id_ed25519"), "fixture-private-key");
+    writeFileSync(join(resources, "a-safe"), "safe-resource");
+    const unsafe = join(resources, "z-unsafe");
+    if (kind === "file-escape") symlinkSync(join(w.home, ".ssh/id_ed25519"), unsafe);
+    else if (kind === "directory-escape") symlinkSync(join(w.home, ".ssh"), unsafe);
+    else if (kind === "cycle") symlinkSync(".", unsafe);
+    else if (kind === "broken") symlinkSync("missing", unsafe);
+    else execFileSync("mkfifo", [unsafe]);
+    const runner = fakeRunner({ now: Date.now }); w.ctx.runnerFor = () => runner;
+    const service = createTaskService(w.ctx), result = await service.prepare({ text: REQUEST });
+    assert.equal(result.status, "blocked", kind);
+    assert.match(result.failures[0], /provider resource.*(selected directory|cycle|cannot be resolved|special file)/, kind);
+    assert.equal(result.preparation.repairs, 0); assert.equal(result.preparation.attempts.length, 0);
+    assert.equal(runner.started.length, 0); assert.deepEqual(w.ctx.state.entries(), []);
+    const privateProfile = join(w.home, "tasks", result.taskId, "preparation/turn-1/home/.codex");
+    assert.equal(existsSync(join(privateProfile, "plugins")), false);
+    assert.equal(readdirSync(privateProfile).some(name => name.startsWith(".profile-copy-")), false);
+    await service.resume({ taskId: result.taskId, expectedRevision: result.revision });
+    assert.equal(runner.started.length, 0, "blocked resources are not retried on resume");
+    assert.equal(readFileSync(join(w.home, ".ssh/id_ed25519"), "utf8"), "fixture-private-key");
+    assert.equal(readFileSync(join(resources, "a-safe"), "utf8"), "safe-resource");
   }
 });
 
