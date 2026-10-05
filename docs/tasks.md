@@ -73,7 +73,25 @@ directory. Links inside a selected resource directory are materialized; links
 outside that directory, cycles, broken links and special files stop preparation
 before launch and remove partial copies. Previous
 sessions and unrelated home-directory credentials are excluded. AWS authentication
-requires Bedrock selection. For Goose, `GOOSE_PROVIDER` overrides the copied native
+requires Bedrock selection. Claude preparation resolves exactly one enabled
+`CLAUDE_CODE_USE_BEDROCK`, `CLAUDE_CODE_USE_VERTEX` or `CLAUDE_CODE_USE_FOUNDRY`
+flag before carrying authentication. The string values `1`, `true`, `yes` and `on`
+enable a mode, ignoring case; `0`, `false`, `no`, `off` and empty values disable it.
+With a cloud mode enabled, direct `ANTHROPIC_API_KEY`, `ANTHROPIC_AUTH_TOKEN`,
+`CLAUDE_CODE_OAUTH_TOKEN`, `.credentials.json` and `.claude.json` login state are
+excluded. With all modes disabled, direct authentication remains available.
+Rebuilding clears prior private Claude login and cloud authentication copies,
+including when mode selection fails. Native files retain their contents.
+Conflicting or unsupported flag values stop with `TASK_PREPARATION_ENV` before
+launch; keep the configured provider and export one unambiguous selection.
+Claude settings are strict JSON. Provider selectors or authentication variables
+in their `env` block also stop preparation because native settings can override
+the shell selection. Export those configured values and use a dedicated
+`CLAUDE_CONFIG_DIR` profile without such overrides; model and permission settings
+remain in the copied file. See the
+[Claude environment reference](https://code.claude.com/docs/en/env-vars) and
+[settings reference](https://code.claude.com/docs/en/settings).
+For Goose, `GOOSE_PROVIDER` overrides the copied native
 `config.yaml` selection; otherwise preparation reads `active_provider`, falling
 back to legacy `GOOSE_PROVIDER`. Plain or quoted provider names retain their
 selected model and configuration bytes. Complex or ambiguous YAML selectors stop

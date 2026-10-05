@@ -2252,7 +2252,7 @@ test("preparation environments admit only selected provider settings and isolate
   };
   const excluded = [".npmrc", ".ssh/id_ed25519", ".aws/credentials", ".config/gh/hosts.yml", ".config/database/credentials", ".codex/history.jsonl", ".claude/projects/previous.jsonl", ".gemini/history/previous.json", ".local/share/opencode/storage/previous.json", ".config/goose/history.json"];
   for (const path of [...Object.values(profiles).flat(), ...excluded]) {
-    mkdirSync(dirname(join(operator, path)), { recursive: true }); writeFileSync(join(operator, path), `fixture:${path}`, { mode:0o600 });
+    mkdirSync(dirname(join(operator, path)), { recursive: true }); writeFileSync(join(operator, path), path === ".claude/settings.json" ? "{}\n" : `fixture:${path}`, { mode:0o600 });
   }
   const secrets = { AWS_SECRET_ACCESS_KEY: "aws-only", AWS_ACCESS_KEY_ID: "aws-only", NPM_TOKEN: "npm-only", DATABASE_URL: "database-only", PRIVATE_SERVICE_TOKEN: "private-only", GH_TOKEN: "github-only", SSH_AUTH_SOCK: "agent-only", NODE_OPTIONS: "startup-only", BASH_ENV: "startup-only", ENV: "startup-only", ZDOTDIR: "startup-only", LD_PRELOAD: "startup-only" };
   const source = { ...secrets, HOME: operator, PATH: process.env.PATH, LANG: "en_US.UTF-8", OPENAI_API_KEY: "openai-only", ANTHROPIC_API_KEY: "anthropic-only", GEMINI_API_KEY: "gemini-only", GOOSE_PROVIDER: "openai", GOOSE_MODEL: "configured-model", XDG_CONFIG_HOME: join(operator, ".config"), XDG_DATA_HOME: join(operator, ".local/share"), XDG_STATE_HOME: join(operator, ".local/state") };
@@ -2270,18 +2270,18 @@ test("preparation environments admit only selected provider settings and isolate
     for (const key of ["OPENAI_API_KEY", "ANTHROPIC_API_KEY", "GEMINI_API_KEY"]) assert.equal(env[key], expectedKeys[harness].includes(key) ? source[key] : undefined, `${harness}: ${key}`);
     for (const path of profiles[harness]) {
       const target = join(env.HOME,path);
-      assert.equal(readFileSync(target,"utf8"), `fixture:${path}`);
+      assert.equal(readFileSync(target,"utf8"), path === ".claude/settings.json" ? "{}\n" : `fixture:${path}`);
       assert.equal(lstatSync(target).isSymbolicLink(), false); assert.equal(statSync(target).mode & 0o777,0o600);
       writeFileSync(target,"private preparation edit"); rmSync(target);
-      assert.equal(readFileSync(join(operator,path),"utf8"), `fixture:${path}`, "writes and deletion never reach native auth/config files");
+      assert.equal(readFileSync(join(operator,path),"utf8"), path === ".claude/settings.json" ? "{}\n" : `fixture:${path}`, "writes and deletion never reach native auth/config files");
     }
     for (const path of excluded) assert.equal(existsSync(join(env.HOME, path)), false, `${harness} exposed ${path}`);
     for (const [other, paths] of Object.entries(profiles)) if (other !== harness) assert.equal(existsSync(join(env.HOME, paths[0])), false, `${harness} exposed ${other} profile`);
     // Rebuilding a private profile never changes the native settings or home.
     preparationEnvironment(harness, cwd, {}, source);
     for (const path of profiles[harness]) {
-      assert.equal(readFileSync(join(operator,path),"utf8"), `fixture:${path}`);
-      assert.equal(readFileSync(join(env.HOME,path),"utf8"), `fixture:${path}`);
+      assert.equal(readFileSync(join(operator,path),"utf8"), path === ".claude/settings.json" ? "{}\n" : `fixture:${path}`);
+      assert.equal(readFileSync(join(env.HOME,path),"utf8"), path === ".claude/settings.json" ? "{}\n" : `fixture:${path}`);
     }
     if (harness === "goose") { assert.equal(env.GOOSE_PROVIDER, source.GOOSE_PROVIDER); assert.equal(env.GOOSE_MODEL, source.GOOSE_MODEL); }
   }
@@ -2448,6 +2448,135 @@ test("cloud provider credentials are available only in explicitly selected provi
   }
   const env = preparationEnvironment("codex", join(root, "codex"), {}, source);
   assert.ok(!("AWS_SECRET_ACCESS_KEY" in env)); assert.ok(!("CLAUDE_CODE_USE_BEDROCK" in env)); assert.equal(existsSync(join(env.HOME, ".aws")), false);
+});
+
+const claudeDirectCredentials = { ANTHROPIC_API_KEY: "unselected-api-fixture", ANTHROPIC_AUTH_TOKEN: "unselected-bearer-fixture", CLAUDE_CODE_OAUTH_TOKEN: "unselected-oauth-fixture" };
+const claudeCloudModes = [
+  ["BEDROCK", { AWS_ACCESS_KEY_ID: "selected-aws-id", AWS_SECRET_ACCESS_KEY: "selected-aws-secret", AWS_REGION: "selected-region" }],
+  ["VERTEX", { GOOGLE_CLOUD_PROJECT: "selected-project", GOOGLE_CLOUD_LOCATION: "selected-location" }],
+  ["FOUNDRY", { ANTHROPIC_FOUNDRY_RESOURCE: "selected-resource", ANTHROPIC_FOUNDRY_API_KEY: "selected-foundry-key" }],
+];
+
+function claudeLoginFixture(operator) {
+  const files = { ".claude/settings.json": '{"model":"selected-model","permissions":{"defaultMode":"default"}}\n', ".claude/.credentials.json": "unselected-login-fixture", ".claude.json": "unselected-account-fixture", ".config/gcloud/application_default_credentials.json": "selected-google-fixture" };
+  for (const [path, text] of Object.entries(files)) { mkdirSync(dirname(join(operator, path)), { recursive: true }); writeFileSync(join(operator, path), text, { mode: 0o600 }); }
+  return files;
+}
+
+test("Claude cloud preparation excludes direct credentials and login state while preserving selected authentication and mode cleanup", () => {
+  const root = tempHome(), operator = join(root, "operator"); const native = claudeLoginFixture(operator);
+  const ambient = { HOME: operator, ...claudeDirectCredentials, ...Object.assign({}, ...claudeCloudModes.map(([, settings]) => settings)), ANTHROPIC_MODEL: "selected-model" };
+  for (const [mode, settings] of claudeCloudModes) for (const flag of ["1", "true", "YES", "on"]) {
+    const cwd = join(root, mode + flag), source = { ...ambient, ["CLAUDE_CODE_USE_" + mode]: flag };
+    // A reused private turn starts with the direct account, then changes mode.
+    preparationEnvironment("claude", cwd, {}, ambient);
+    const env = preparationEnvironment("claude", cwd, {}, source);
+    for (const key of Object.keys(claudeDirectCredentials)) assert.equal(env[key], undefined, `${mode}: ${key}`);
+    for (const [key, value] of Object.entries(settings)) assert.equal(env[key], value);
+    assert.equal(env.ANTHROPIC_MODEL, source.ANTHROPIC_MODEL); assert.equal(env["CLAUDE_CODE_USE_" + mode], flag);
+    assert.equal(existsSync(join(env.HOME, ".claude/.credentials.json")), false); assert.equal(existsSync(join(env.HOME, ".claude.json")), false);
+    assert.equal(readFileSync(join(env.CLAUDE_CONFIG_DIR, "settings.json"), "utf8"), native[".claude/settings.json"]);
+    assert.equal(existsSync(join(env.HOME, ".aws")), mode === "BEDROCK");
+    assert.equal(existsSync(join(env.XDG_CONFIG_HOME, "gcloud/application_default_credentials.json")), mode === "VERTEX");
+    for (const [other, credentials] of claudeCloudModes) if (other !== mode) for (const key of Object.keys(credentials)) assert.equal(env[key], undefined);
+    const direct = preparationEnvironment("claude", cwd, {}, ambient);
+    for (const [key, value] of Object.entries(claudeDirectCredentials)) assert.equal(direct[key], value);
+    assert.equal(existsSync(join(direct.HOME, ".aws")), false); assert.equal(existsSync(join(direct.XDG_CONFIG_HOME, "gcloud/application_default_credentials.json")), false);
+    for (const path of [".claude/.credentials.json", ".claude.json"]) assert.equal(readFileSync(join(direct.HOME, path), "utf8"), native[path]);
+  }
+  for (const flag of [undefined, "", "0", "false", "NO", "off", 1, true, false, {}]) {
+    const env = preparationEnvironment("claude", join(root, "disabled-" + String(flag)), {}, { ...ambient, CLAUDE_CODE_USE_BEDROCK: flag, CLAUDE_CODE_USE_VERTEX: flag, CLAUDE_CODE_USE_FOUNDRY: flag });
+    for (const [key, value] of Object.entries(claudeDirectCredentials)) assert.equal(env[key], value);
+  }
+  for (const [path, text] of Object.entries(native)) assert.equal(readFileSync(join(operator, path), "utf8"), text);
+});
+
+test("Claude ambiguous modes and settings credential overrides refuse before copying auth and clean reused private state", () => {
+  const root = tempHome(), operator = join(root, "operator"); const native = claudeLoginFixture(operator), cwd = join(root, "turn");
+  const source = { HOME: operator, ...claudeDirectCredentials, ...claudeCloudModes[0][1] };
+  const forbidden = ["CLAUDE_CODE_USE_BEDROCK", "CLAUDE_CODE_USE_VERTEX", "CLAUDE_CODE_USE_FOUNDRY", ...Object.keys(claudeDirectCredentials), "AWS_SECRET_ACCESS_KEY", "GOOGLE_APPLICATION_CREDENTIALS", "ANTHROPIC_FOUNDRY_AUTH_TOKEN"];
+  for (const key of forbidden) {
+    preparationEnvironment("claude", cwd, {}, source);
+    const settings = JSON.stringify({ model: "selected-model", env: { [key]: "fixture-only" } }); writeFileSync(join(operator, ".claude/settings.json"), settings);
+    assert.throws(() => preparationEnvironment("claude", cwd, {}, { ...source, CLAUDE_CODE_USE_BEDROCK: "1" }), e => e.code === "TASK_PREPARATION_ENV" && /export.*dedicated Claude profile/.test(e.message));
+    for (const path of [".claude/.credentials.json", ".claude.json", ".claude/settings.json", ".aws", ".config/gcloud/application_default_credentials.json"]) assert.equal(existsSync(join(cwd, "home", path)), false);
+    assert.equal(readFileSync(join(operator, ".claude/settings.json"), "utf8"), settings); writeFileSync(join(operator, ".claude/settings.json"), native[".claude/settings.json"]);
+  }
+  for (const pair of [["BEDROCK", "VERTEX"], ["BEDROCK", "FOUNDRY"], ["VERTEX", "FOUNDRY"]]) {
+    preparationEnvironment("claude", cwd, {}, source);
+    assert.throws(() => preparationEnvironment("claude", cwd, {}, { ...source, ...Object.fromEntries(pair.map(mode => ["CLAUDE_CODE_USE_" + mode, "1"])) }), e => e.code === "TASK_PREPARATION_ENV" && /exactly one Claude cloud mode/.test(e.message));
+    assert.equal(existsSync(join(cwd, "home/.claude/.credentials.json")), false); assert.equal(existsSync(join(cwd, "home/.claude.json")), false);
+  }
+  // Remove a legacy private directory alias itself before any leaf cleanup.
+  // Deleting through its parent would delete the operator's login credentials.
+  const privateProfile = join(cwd, "home/.claude");
+  preparationEnvironment("claude", cwd, {}, source);
+  assert.throws(() => preparationEnvironment("claude", cwd, {}, { ...source, CLAUDE_CONFIG_DIR: privateProfile }), e => e.code === "TASK_PREPARATION_ENV" && /overlaps/.test(e.message));
+  assert.equal(readFileSync(join(privateProfile, ".credentials.json"), "utf8"), native[".claude/.credentials.json"]);
+  rmSync(privateProfile, { recursive: true });
+  symlinkSync(join(operator, ".claude"), privateProfile);
+  preparationEnvironment("claude", cwd, {}, { ...source, CLAUDE_CODE_USE_BEDROCK: "1" });
+  assert.equal(lstatSync(privateProfile).isSymbolicLink(), false);
+  for (const [path, text] of Object.entries(native)) assert.equal(readFileSync(join(operator, path), "utf8"), text);
+  // Unselected login aliases are never resolved or copied in cloud mode.
+  for (const path of [".claude/.credentials.json", ".claude.json"]) { rmSync(join(operator, path)); symlinkSync(join(root, "unrelated-missing-secret"), join(operator, path)); }
+  assert.doesNotThrow(() => preparationEnvironment("claude", cwd, {}, { ...source, CLAUDE_CODE_USE_BEDROCK: "1" }));
+  assert.throws(() => preparationEnvironment("claude", cwd, {}, source), e => e.code === "TASK_PREPARATION_ENV" && /symbolic link/.test(e.message));
+});
+
+test("Claude selected cloud authentication reaches CLI and structured initial answer and repair turns without direct account secrets", async t => {
+  for (const cli of [false, true]) for (const [mode, settings] of claudeCloudModes) {
+    const w = world(), native = claudeLoginFixture(w.home);
+    Object.assign(w.ctx.env, claudeDirectCredentials, Object.assign({}, ...claudeCloudModes.map(([, values]) => values)), { ["CLAUDE_CODE_USE_" + mode]: "1", ANTHROPIC_MODEL: "selected-model" });
+    w.ctx.config.harness.claude = { ...CONFIG.harness.claude, bin: harnessBin(w.home, "claude") };
+    const runner = fakeRunner({ now: Date.now }), launch = runner.start; let starts = 0;
+    runner.start = (...args) => {
+      starts++; const job = launch(...args), opts = args[3], data = JSON.parse(args[2].at(-1).split("INTAKE DATA (JSON):\n").at(-1));
+      assert.equal(opts.inheritEnv, false); for (const key of Object.keys(claudeDirectCredentials)) assert.equal(opts.env[key], undefined);
+      for (const [key, value] of Object.entries(settings)) assert.equal(opts.env[key], value);
+      for (const [other, credentials] of claudeCloudModes) if (other !== mode) for (const key of Object.keys(credentials)) assert.equal(opts.env[key], undefined);
+      assert.equal(existsSync(join(opts.env.HOME, ".claude/.credentials.json")), false); assert.equal(existsSync(join(opts.env.HOME, ".claude.json")), false);
+      assert.equal(opts.env.ANTHROPIC_MODEL, "selected-model"); assert.ok(args[2].includes("--tools")); assert.ok(args[2].includes(CONFIG.harness.claude.settings));
+      runner.finish(claudeResultLines({ text: starts === 2 ? "invalid-output" : JSON.stringify(draftFor(data, { question: starts === 1 })), cost: 0.01 }), { exit: 0 }); return job;
+    };
+    w.ctx.runnerFor = () => runner; const service = createTaskService(w.ctx);
+    const first = await (cli ? taskCommand(w.ctx, { args: ["prepare", REQUEST], values: { harness: "claude" }, service }) : service.prepare({ text: REQUEST, harness: "claude" }));
+    assert.equal(first.status, "needs-input", first.failures.join("\n"));
+    const input = { taskId: first.taskId, expectedRevision: first.revision, operationId: "cloud-answer", answers: { "q-r-1": "Use CSV." } };
+    const replay = () => cli ? taskCommand(w.ctx, { args: ["answer", input.taskId], values: { revision: String(input.expectedRevision), "request-id": input.operationId, answer: ["q-r-1=Use CSV."] }, service }) : service.answer(input);
+    const r = await replay(); assert.equal(r.status, "ready", r.failures.join("\n")); assert.equal(starts, 3); assert.equal(r.preparation.repairs, 1);
+    assert.equal(r.preparation.attempts.length, 3); assert.equal(r.preparation.attempts.reduce((n, a) => n + a.cost, 0), 0.03); assert.deepEqual(await replay(), r);
+    assert.equal((await service.resume({ taskId: r.taskId, expectedRevision: r.revision })).status, "ready"); assert.equal(starts, 3);
+    assert.match(r.draft.text, /Explicit requirement r-2: "Do not add dependencies\."/); assert.deepEqual(w.ctx.state.entries(), []); assert.equal(w.daemonCalls(), 0);
+    for (const [path, text] of Object.entries(native)) assert.equal(readFileSync(join(w.home, path), "utf8"), text);
+    if (!cli && mode === "FOUNDRY") {
+      const record = join(w.home, "claude-mode-fixture.json");
+      writeJsonAtomic(record, { live: false, model_calls: 0, result: r, launches: runner.started.map(run => ({ cwd: run.opts.cwd, env: run.opts.env, args: run.args.slice(0, -1) })), native_files: native });
+      t.diagnostic("Claude mode fixture: " + record); t.diagnostic("Claude mode draft: " + r.draft.path);
+    }
+  }
+});
+
+test("Claude authentication selection failures stop CLI and structured initial answer and repair preparation without retries", async () => {
+  for (const cli of [false, true]) for (const phase of ["initial", "answer", "repair"]) for (const kind of ["ambiguous", "settings"]) {
+    const w = world(); claudeLoginFixture(w.home); Object.assign(w.ctx.env, claudeDirectCredentials, claudeCloudModes[0][1], { CLAUDE_CODE_USE_BEDROCK: "1" });
+    w.ctx.config.harness.claude = { ...CONFIG.harness.claude, bin: harnessBin(w.home, "claude") };
+    const refuse = () => { if (kind === "ambiguous") w.ctx.env.CLAUDE_CODE_USE_VERTEX = "1"; else writeFileSync(join(w.home, ".claude/settings.json"), JSON.stringify({ env: { ANTHROPIC_API_KEY: "unselected-file-fixture" } })); };
+    const runner = fakeRunner({ now: Date.now }), launch = runner.start;
+    runner.start = (...args) => { const job = launch(...args), data = JSON.parse(args[2].at(-1).split("INTAKE DATA (JSON):\n").at(-1)); if (phase === "repair") refuse(); runner.finish(claudeResultLines({ text: phase === "repair" ? "invalid-output" : JSON.stringify(draftFor(data, { question: true })), cost: 0.01 })); return job; };
+    w.ctx.runnerFor = () => runner; const service = createTaskService(w.ctx);
+    if (phase === "initial") refuse();
+    let r = await (cli ? taskCommand(w.ctx, { args: ["prepare", REQUEST], values: { harness: "claude", run: true }, service }) : service.prepare({ text: REQUEST, harness: "claude", run: true }));
+    if (phase === "answer") { assert.equal(r.status, "needs-input"); refuse(); r = await (cli ? taskCommand(w.ctx, { args: ["answer", r.taskId], values: { revision: String(r.revision), "request-id": "refused-cloud-answer", answer: ["q-r-1=Use CSV."] }, service }) : service.answer({ taskId: r.taskId, expectedRevision: r.revision, operationId: "refused-cloud-answer", answers: { "q-r-1": "Use CSV." } })); }
+    assert.equal(r.status, "blocked"); assert.match(r.failures[0], /exactly one Claude cloud mode|export.*dedicated Claude profile/);
+    assert.equal(r.readiness, null); assert.equal(r.implementation, null); assert.equal(r.preparation.attempts.length, phase === "initial" ? 0 : 1); assert.equal(r.preparation.repairs, phase === "repair" ? 1 : 0);
+    assert.equal(runner.started.length, phase === "initial" ? 0 : 1); if (phase !== "initial") assert.equal(r.preparation.attempts[0].cost, 0.01);
+    const turn = join(w.home, "tasks", r.taskId, "preparation", `turn-${phase === "initial" ? 1 : 2}`, "home");
+    for (const path of [".claude/.credentials.json", ".claude.json", ".claude/settings.json", ".aws"]) assert.equal(existsSync(join(turn, path)), false);
+    const saved = taskStore(w.home).read(r.taskId); assert.equal(saved.errorCode, "TASK_PREPARATION_ENV");
+    assert.deepEqual(await service.resume({ taskId: r.taskId, expectedRevision: r.revision }), r); assert.deepEqual(taskStore(w.home).read(r.taskId), saved);
+    assert.deepEqual(w.ctx.state.entries(), []); assert.equal(w.daemonCalls(), 0); assert.equal(r.requirements[1].text, "Do not add dependencies.");
+  }
 });
 
 test("Foundry preparation forwards selected routing and authentication only for Claude's enabled mode", () => {
@@ -2738,7 +2867,7 @@ test("relative provider files and profile roots resolve from the caller director
   mkdirSync(join(caller, "credentials"));
   for (const [key, path] of Object.entries(files)) writeFileSync(join(caller, path), providerFile(key), { mode: 0o600 });
   const resources = {
-    "profiles/codex/auth.json": "codex-auth", "profiles/claude/.credentials.json": "claude-auth",
+    "profiles/codex/auth.json": "codex-auth", "profiles/claude/.credentials.json": "claude-auth", "profiles/claude/settings.json": "{}\n",
     "profiles/opencode/opencode.json": "opencode-config", "profiles/config/goose/config.yaml": "goose-config",
     "profiles/config/gcloud/application_default_credentials.json": "vertex-adc",
     "profiles/data/opencode/auth.json": "opencode-auth", "profiles/state/opencode/model.json": "opencode-model",
@@ -2746,7 +2875,8 @@ test("relative provider files and profile roots resolve from the caller director
   for (const [path, text] of Object.entries(resources)) { mkdirSync(dirname(join(caller, path)), { recursive: true }); writeFileSync(join(caller, path), text); }
   const cases = [
     ["codex", { CODEX_HOME: "profiles/codex" }, [], ".codex/auth.json", "codex-auth"],
-    ["claude", { CLAUDE_CONFIG_DIR: "profiles/claude", CLAUDE_CODE_USE_BEDROCK: "1" }, ["AWS_CONFIG_FILE", "AWS_SHARED_CREDENTIALS_FILE", "AWS_WEB_IDENTITY_TOKEN_FILE"], ".claude/.credentials.json", "claude-auth"],
+    ["claude", { CLAUDE_CONFIG_DIR: "profiles/claude" }, [], ".claude/.credentials.json", "claude-auth"],
+    ["claude", { CLAUDE_CONFIG_DIR: "profiles/claude", CLAUDE_CODE_USE_BEDROCK: "1" }, ["AWS_CONFIG_FILE", "AWS_SHARED_CREDENTIALS_FILE", "AWS_WEB_IDENTITY_TOKEN_FILE"], ".claude/settings.json", "{}\n"],
     ["claude", { CLAUDE_CODE_USE_VERTEX: "1" }, ["GOOGLE_APPLICATION_CREDENTIALS"], ".config/gcloud/application_default_credentials.json", "vertex-adc"],
     ["gemini", { GOOGLE_GENAI_USE_VERTEXAI: "true" }, ["GOOGLE_APPLICATION_CREDENTIALS"], ".config/gcloud/application_default_credentials.json", "vertex-adc"],
     ["opencode", { OPENCODE_CONFIG_DIR: "profiles/opencode" }, ["OPENCODE_CONFIG"], ".config/opencode/opencode.json", "opencode-config"],
