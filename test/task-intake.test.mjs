@@ -1475,6 +1475,65 @@ test("cloud provider credentials are available only in explicitly selected provi
   assert.ok(!("AWS_SECRET_ACCESS_KEY" in env)); assert.ok(!("CLAUDE_CODE_USE_BEDROCK" in env)); assert.equal(existsSync(join(env.HOME, ".aws")), false);
 });
 
+test("Foundry preparation forwards selected routing and authentication only for Claude's enabled mode", () => {
+  const root=tempHome(), operator=join(root,"operator-home"); mkdirSync(operator);
+  const foundry={ANTHROPIC_FOUNDRY_RESOURCE:"selected-resource",ANTHROPIC_FOUNDRY_BASE_URL:"https://selected-resource.invalid/anthropic",ANTHROPIC_FOUNDRY_API_KEY:"foundry-fixture-key",ANTHROPIC_FOUNDRY_AUTH_TOKEN:"foundry-fixture-token"};
+  const unrelated={AZURE_CLIENT_SECRET:"unrelated-azure",AWS_SECRET_ACCESS_KEY:"unrelated-aws",NPM_TOKEN:"unrelated-npm",DATABASE_URL:"unrelated-db",GH_TOKEN:"unrelated-github"};
+  const source={HOME:operator,...foundry,...unrelated,ANTHROPIC_MODEL:"selected-deployment",CLAUDE_CODE_SKIP_FOUNDRY_AUTH:"1"};
+  for(const flag of ["1","true","YES","on"]) for(const turn of ["initial","repair"]) {
+    const env=preparationEnvironment("claude",join(root,flag,turn),{}, {...source,CLAUDE_CODE_USE_FOUNDRY:flag});
+    for(const [key,value] of Object.entries(foundry))assert.equal(env[key],value);
+    assert.equal(env.CLAUDE_CODE_USE_FOUNDRY,flag);assert.equal(env.ANTHROPIC_MODEL,source.ANTHROPIC_MODEL);assert.equal(env.CLAUDE_CODE_SKIP_FOUNDRY_AUTH,"1");
+    assert.notEqual(env.HOME,operator);assert.equal(env.GH_CONFIG_DIR,"/dev/null");
+    for(const key of Object.keys(unrelated))assert.ok(!(key in env));
+  }
+  for(const flag of [undefined,"","0","false","NO","off",1,true,false,{}]) {
+    const env=preparationEnvironment("claude",join(root,`off-${flag}`),{}, {...source,CLAUDE_CODE_USE_FOUNDRY:flag});
+    for(const key of Object.keys(foundry))assert.ok(!(key in env));
+    if(typeof flag!=="string")assert.ok(!("CLAUDE_CODE_USE_FOUNDRY" in env));
+  }
+  for(const harness of ["codex","gemini","opencode","goose"]) {
+    const env=preparationEnvironment(harness,join(root,harness),{}, {...source,CLAUDE_CODE_USE_FOUNDRY:"1"});
+    assert.ok(!("CLAUDE_CODE_USE_FOUNDRY" in env));
+    for(const key of Object.keys(foundry))assert.ok(!(key in env));
+  }
+  for(const selected of [{ANTHROPIC_FOUNDRY_RESOURCE:foundry.ANTHROPIC_FOUNDRY_RESOURCE,ANTHROPIC_FOUNDRY_API_KEY:foundry.ANTHROPIC_FOUNDRY_API_KEY},{ANTHROPIC_FOUNDRY_BASE_URL:foundry.ANTHROPIC_FOUNDRY_BASE_URL,ANTHROPIC_FOUNDRY_AUTH_TOKEN:foundry.ANTHROPIC_FOUNDRY_AUTH_TOKEN}]) {
+    const env=preparationEnvironment("claude",join(root,`choice-${Object.keys(selected)[0]}`),{}, {HOME:operator,CLAUDE_CODE_USE_FOUNDRY:"1",...selected});
+    for(const key of Object.keys(foundry))assert.equal(env[key],selected[key]);
+  }
+});
+
+test("Foundry routing and credentials reach initial and repair runners through CLI and structured preparation", async t => {
+  for(const cli of [false,true]) for(const bearer of [false,true]) {
+    const w=world();
+    const settings={CLAUDE_CODE_USE_FOUNDRY:"1",ANTHROPIC_MODEL:"selected-foundry-deployment",...(bearer ? {ANTHROPIC_FOUNDRY_BASE_URL:"https://selected-resource.invalid/anthropic",ANTHROPIC_FOUNDRY_AUTH_TOKEN:"foundry-fixture-token"} : {ANTHROPIC_FOUNDRY_RESOURCE:"selected-resource",ANTHROPIC_FOUNDRY_API_KEY:"foundry-fixture-key"})};
+    const unrelated={AZURE_CLIENT_SECRET:"unrelated-azure",AWS_SECRET_ACCESS_KEY:"unrelated-aws",GH_TOKEN:"unrelated-github",NPM_TOKEN:"unrelated-npm",DATABASE_URL:"unrelated-db"};
+    Object.assign(w.ctx.env,settings,unrelated);
+    w.ctx.config.harness={claude:{...CONFIG.harness.claude,bin:harnessBin(w.home,"claude")}};
+    const native=join(w.home,".claude/settings.json");mkdirSync(dirname(native),{recursive:true});writeFileSync(native,"{}\n");
+    const runner=fakeRunner({now:Date.now}),launch=runner.start;let starts=0;
+    runner.start=async (name,cmd,args,opts)=>{
+      starts++;const job=launch(name,cmd,args,opts);
+      assert.equal(opts.inheritEnv,false);assert.equal(opts.cwd,join(w.home,"tasks",opts.cwd.split("/").at(-3),"preparation",`turn-${starts}`));
+      assert.equal(opts.env.HOME,join(opts.cwd,"home"));assert.equal(opts.env.CLAUDE_CONFIG_DIR,join(opts.env.HOME,".claude"));
+      for(const [key,value] of Object.entries(settings))assert.equal(opts.env[key],value);
+      for(const key of Object.keys(unrelated))assert.ok(!(key in opts.env));
+      assert.ok(args.includes("auto"));assert.ok(args.includes("--max-budget-usd"));assert.ok(args.includes(CONFIG.harness.claude.settings));assert.ok(!args.includes("--dangerously-skip-permissions"));
+      assert.equal(readFileSync(join(opts.env.CLAUDE_CONFIG_DIR,"settings.json"),"utf8"),"{}\n");
+      const task=taskStore(w.home).read(opts.cwd.split("/").at(-3));
+      runner.finish(claudeResultLines({text:starts===1?"invalid-output":JSON.stringify(draftFor(task))}),{exit:0});return job;
+    };
+    w.ctx.runnerFor=()=>runner;const service=createTaskService(w.ctx);
+    const result=await (cli ? taskCommand(w.ctx,{args:["prepare",REQUEST],values:{harness:"claude"},service}) : service.prepare({text:REQUEST,harness:"claude"}));
+    assert.equal(result.status,"ready");assert.equal(result.harness,"claude");assert.equal(result.original,REQUEST);assert.equal(starts,2);
+    assert.equal(result.preparation.repairs,1);assert.equal(result.preparation.attempts.length,2);assert.equal(result.readiness.allow,true);
+    assert.match(result.draft.text,/Explicit requirement r-2: "Do not add dependencies\."/);assert.equal(readFileSync(native,"utf8"),"{}\n");
+    assert.equal(result.implementation,null);assert.deepEqual(w.ctx.state.entries(),[]);assert.equal(w.daemonCalls(),0);
+    assert.equal((await service.resume({taskId:result.taskId,expectedRevision:result.revision})).status,"ready");assert.equal(starts,2);
+    if(!cli&&!bearer)t.diagnostic(`Foundry fixture draft: ${result.draft.path}`);
+  }
+});
+
 test("Bedrock snapshots only the selected AWS profile from ambient or explicit files and removes legacy shared secrets", () => {
   for (const harness of ["claude", "goose"]) for (const name of ["default", "dev"]) for (const explicit of [false, true]) for (const configOnly of [false, true]) {
     const root = tempHome(), operator = join(root, "operator"), caller = join(root, "caller"), cwd = join(root, "turn"), native = join(operator, ".aws");

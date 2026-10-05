@@ -37,7 +37,8 @@ automatically. Reopening an already launched turn reconciles that run as usual.
 Preparation receives these documents in its prompt and does not inherit global
 `context_paths` read grants. Its child environment admits process basics and the
 selected adapter's explicit provider authentication/settings allowlist, defined
-in `lib/harness.mjs`. Unrelated tokens, database URLs, other adapters' keys and
+in `lib/harness.mjs`, with cloud-mode additions in `lib/task_environment.mjs`.
+Unrelated tokens, database URLs, other adapters' keys and
 shell startup overrides are excluded. Preparation has a private `HOME`, XDG roots
 and temporary directory. The selected adapter's native auth/config files and
 configured resource directories are copied into private snapshots, so parent
@@ -67,6 +68,14 @@ a dedicated static profile through the AWS file settings. See the
 Claude's explicit Vertex mode can also use
 native Google credentials. Gemini with `GOOGLE_GENAI_USE_VERTEXAI=true` carries
 only `gcloud/application_default_credentials.json` into its private config root.
+Claude's enabled Foundry mode forwards only its configured
+`ANTHROPIC_FOUNDRY_RESOURCE`, `ANTHROPIC_FOUNDRY_BASE_URL`,
+`ANTHROPIC_FOUNDRY_API_KEY` and `ANTHROPIC_FOUNDRY_AUTH_TOKEN` values, retaining
+native endpoint/authentication precedence and the selected model. These values
+are excluded when Foundry is off or another adapter is selected. Azure CLI caches
+and unrelated Azure credentials remain excluded; supply an explicit Foundry key
+or bearer token if authentication otherwise needs those native files. See the
+[Claude Foundry settings](https://code.claude.com/docs/en/microsoft-foundry).
 Explicit `GOOGLE_APPLICATION_CREDENTIALS`, AWS web-identity token files and
 `OPENCODE_CONFIG` also point to private copies, retaining the selected contents
 and authentication precedence. Refreshes and edits stay in the preparation turn.
