@@ -9,7 +9,7 @@ export function draftFor(task, { question = false, conflict = false } = {}) {
   return {
     version: 1, title: "Export widgets from the table",
     problem: "Finance admins reconcile widget spending in spreadsheets every month. Today the widget table has no export action, so admins copy each visible row by hand and make transcription errors. A scoped export will preserve the selected records and their values while making the monthly reconciliation repeatable and reducing manual work for these users.",
-    stories: ["As a finance admin, I want to export widgets, so that I can reconcile spending."],
+    stories: [{ id: "us-1", text: "As a finance admin, I want to export widgets, so that I can reconcile spending.", requirements: [task.requirements[0].id] }],
     criteria: resolved.map((r, i) => ({ id: `ac-${i + 1}`, text: /dependencies/.test(r.text) ? "Given the current package manifest, when CSV export is installed, then dependency declarations remain unchanged." : "Given a table with three widgets, when Export is selected, then the requested file contains exactly three widget rows." })),
     mapping: task.requirements.map((r, i) => ({ requirementId: r.id, ...(unanswered && i === 0 ? { questionId: q.id } : { criteria: [`ac-${resolved.indexOf(r) + 1}`], ...(task.answers[q.id] && r.id === "r-1" ? { resolvedBy: q.id } : {}) }) })),
     questions: unanswered ? [q] : [], assumptions: ["Export includes the currently visible rows."],

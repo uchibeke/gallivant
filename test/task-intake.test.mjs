@@ -476,6 +476,157 @@ test("legacy unmapped criteria fail saved validation, start and authorized crash
   }
 });
 
+test("unlinked hostile stories are repaired before initial and answered CLI or structured dispatch", async t => {
+  for (const cli of [false, true]) for (const phase of ["initial", "answer"]) {
+    let turns = 0, failures;
+    const w = world({ prepare: async (_ctx, task, _store, problems) => {
+      const out = draftFor(task, { question: phase === "answer" }); turns++;
+      if (!out.questions.length && !problems.length) out.stories.push("As a release manager, I want deployment to production, so that the release is public.");
+      if (problems.length) { failures = problems; assert.match(problems.join(" "), /story.*requirements|stories.*requirements/i); }
+      return JSON.stringify(out);
+    } });
+    let r = await (cli ? taskCommand(w.ctx, { args: ["prepare", REQUEST], values: { run: true }, service: w.service }) : w.service.prepare({ text: REQUEST, run: true }));
+    if (phase === "answer") {
+      assert.equal(r.status, "needs-input");
+      r = await (cli ? taskCommand(w.ctx, { args: ["answer", r.taskId], values: { revision: String(r.revision), "request-id": "story-answer", answer: ["q-r-1=Use CSV only."] }, service: w.service }) : w.service.answer({ taskId: r.taskId, expectedRevision: r.revision, operationId: "story-answer", answers: { "q-r-1": "Use CSV only." } }));
+    }
+    assert.equal(r.status, "started"); assert.equal(r.preparation.repairs, 1); assert.ok(failures);
+    assert.equal(turns, phase === "initial" ? 2 : 3); assert.doesNotMatch(r.draft.text, /deployment to production/);
+    assert.match(r.draft.text, /Do not add dependencies/); assert.equal(w.runners.get(r.implementation.id).started.length, 1);
+    assert.equal(check(parsePrd(r.draft.text, r.draft.path)).ok, true);
+    assert.ok(r.stories.every(s => s.requirements.every(id => r.mapping.some(m => m.requirementId === id))));
+    if (!cli && phase === "answer") {
+      const evidence = join(w.home, "authorized-stories-fixture.json");
+      writeFileSync(evidence, JSON.stringify({ live: false, model_calls: 0, result: r, turns, failures }, null, 2) + "\n");
+      t.diagnostic("Authorized stories fixture record: " + evidence);
+      t.diagnostic("Authorized stories generated draft: " + r.draft.path);
+    }
+  }
+});
+
+test("unowned stories exhaust bounded repair and cannot validate or dispatch a matching saved approval", async () => {
+  const hostile = "As a release manager, I want deployment to production, so that the release is public.";
+  const bad = world({ prepare: async (_ctx, task) => { const out = draftFor(task); out.stories.push(hostile); return JSON.stringify(out); } });
+  const blocked = await bad.service.prepare({ text: REQUEST, run: true });
+  assert.equal(blocked.status, "blocked"); assert.equal(blocked.preparation.repairs, 3); assert.match(blocked.failures[0], /story.*requirements|stories.*requirements/i);
+  assert.equal(blocked.readiness, null); assert.deepEqual(bad.ctx.state.entries(), []); assert.equal(bad.daemonCalls(), 0);
+  for (const cli of [false, true]) for (const operation of ["validate", "start", "resume"]) {
+    const w = world(), first = await w.service.prepare({ text: REQUEST }), store = taskStore(w.home), saved = store.read(first.taskId);
+    saved.output.stories.push(hostile);
+    const text = first.draft.text.replace("\n\n## Acceptance criteria", "\n- " + hostile + "\n\n## Acceptance criteria");
+    writeFileSync(saved.draft.path, text); saved.draft.hash = contentDigest(text); saved.readiness.hash = saved.draft.hash;
+    saved.readiness.digest = captureStartInput({ ...parsePrd(text, saved.draft.path), checkout: saved.draft.root, relPath: "docs/prds/" + saved.id + ".md", repo: saved.repo }, saved.base).digest;
+    saved.runAuthorized = operation === "resume"; store.save(saved);
+    const invoke = () => cli ? taskCommand(w.ctx, { args: [operation, first.taskId], values: { revision: String(first.revision), ...(operation === "start" ? { run: true } : {}) }, service: w.service }) : w.service[operation]({ taskId: first.taskId, expectedRevision: first.revision, ...(operation === "start" ? { run: true } : {}) });
+    if (operation === "validate") { const r = await invoke(); assert.equal(r.status, "blocked"); assert.match(r.failures[0], /story.*requirements|stories.*requirements/i); }
+    else await assert.rejects(invoke, { code: "TASK_CONFLICT" });
+    assert.equal(w.calls(), 1); assert.deepEqual(w.ctx.state.entries(), []); assert.equal(w.daemonCalls(), 0);
+    assert.deepEqual(store.read(saved.id).requirements, saved.requirements); assert.equal(store.read(saved.id).runAuthorized, saved.runAuthorized);
+  }
+});
+
+test("story bindings accept owned groups and reject missing, duplicate or unknown requirement links", async () => {
+  for (const invalid of [null, "empty", "unknown", "duplicate", "id"]) {
+    let calls = 0;
+    const w = world({ prepare: async (_ctx, task) => {
+      const out = draftFor(task); calls++;
+      if (calls === 1) {
+        const story = { id: "us-1", text: "As a finance admin, I want CSV export without new dependencies, so that spending can be reconciled.", requirements: ["r-1", "r-2"] };
+        if (invalid === "empty") story.requirements = [];
+        if (invalid === "unknown") story.requirements = ["r-999"];
+        if (invalid === "duplicate") story.requirements = ["r-1", "r-1"];
+        if (invalid === "id") story.id = "us-9";
+        out.stories = [story];
+      }
+      return JSON.stringify(out);
+    } });
+    const r = await w.service.prepare({ text: REQUEST });
+    assert.equal(r.status, "ready"); assert.equal(r.preparation.repairs, invalid ? 1 : 0);
+    assert.equal(r.stories[0].id, "us-1"); assert.ok(r.stories[0].requirements.length);
+    assert.match(r.draft.text, /Authorized requirements: r-1/); assert.equal(check(parsePrd(r.draft.text, r.draft.path)).ok, true);
+    assert.deepEqual(w.ctx.state.entries(), []);
+  }
+});
+
+function capacityDraft(task, questionIds = []) {
+  const out = draftFor(task);
+  out.criteria = [{ id: "ac-1", text: "Given the accepted requirements, when the scoped change is installed, then each requested outcome holds." }];
+  out.questions = questionIds.filter(id => !task.answers[id]).map(id => ({ id, text: "Which requested outcome should apply?", requirements: [id.slice(2)] }));
+  out.mapping = task.requirements.map(r => {
+    const id = "q-" + r.id;
+    return { requirementId: r.id, ...(out.questions.some(q => q.id === id) ? { questionId: id } : { criteria: ["ac-1"], ...(task.answers[id] ? { resolvedBy: id } : {}) }) };
+  });
+  return out;
+}
+
+test("oversized requirement input is refused before repository lookup, snapshots or preparation", async () => {
+  for (const cli of [false, true]) {
+    const w = world(); let lookups = 0;
+    const toplevel = w.ctx.git.toplevel; w.ctx.git.toplevel = async (...args) => { lookups++; return toplevel(...args); };
+    const text = Array.from({ length: 129 }, (_, i) => "R" + (i + 1)).join("\n");
+    const invoke = () => cli ? taskCommand(w.ctx, { args: ["prepare", text], values: { run: true, "request-id": "too-many" }, service: w.service }) : w.service.prepare({ text, run: true, requestId: "too-many" });
+    await assert.rejects(invoke, e => e.code === "TASK_INPUT" && /129.*128/.test(e.message));
+    assert.equal(lookups, 0); assert.equal(w.calls(), 0); assert.deepEqual(w.service.list().tasks, []); assert.deepEqual(w.ctx.state.entries(), []);
+  }
+});
+
+test("requirement capacity includes answers atomically while exact-boundary input and idempotent replies remain accepted", async () => {
+  for (const cli of [false, true]) {
+    let calls = 0;
+    const w = world({ prepare: async (_ctx, task) => { calls++; return JSON.stringify(capacityDraft(task, ["q-r-1"])); } });
+    const first = await w.service.prepare({ text: Array.from({ length: 127 }, (_, i) => "R" + (i + 1)).join("\n") });
+    assert.equal(first.status, "needs-input");
+    const store = taskStore(w.home), before = store.read(first.taskId);
+    const invoke = (value, context = []) => cli ? taskCommand(w.ctx, { args: ["answer", first.taskId], values: { revision: String(first.revision), "request-id": "capacity-answer", answer: ["q-r-1=" + value], context }, service: w.service }) : w.service.answer({ taskId: first.taskId, expectedRevision: first.revision, operationId: "capacity-answer", answers: { "q-r-1": value }, context });
+    await assert.rejects(() => invoke("A1\nA2", ["missing.md"]), e => e.code === "TASK_INPUT" && /129.*128/.test(e.message));
+    assert.deepEqual(store.read(first.taskId), before); assert.equal(calls, 1);
+    const accepted = await invoke("A1"); assert.equal(accepted.status, "ready"); assert.equal(accepted.requirements.length, 128); assert.equal(calls, 2);
+    assert.deepEqual(await invoke("A1"), accepted); assert.equal(calls, 2); assert.deepEqual(w.ctx.state.entries(), []);
+    const exact = world({ prepare: async (_ctx, task) => JSON.stringify(capacityDraft(task)) });
+    const readyResult = await exact.service.prepare({ text: Array.from({ length: 128 }, (_, i) => "R" + (i + 1)).join("\r\n\n") });
+    assert.equal(readyResult.status, "ready"); assert.equal(readyResult.requirements.length, 128);
+  }
+});
+
+test("partial answers and legacy recovery cannot exceed mapping capacity or purchase repair turns", async () => {
+  const w = world({ prepare: async (_ctx, task) => JSON.stringify(capacityDraft(task, ["q-r-1", "q-r-2"])) });
+  const first = await w.service.prepare({ text: Array.from({ length: 127 }, (_, i) => "R" + (i + 1)).join("\n") });
+  const partial = await w.service.answer({ taskId: first.taskId, expectedRevision: first.revision, operationId: "partial", answers: { "q-r-1": "A1" } });
+  assert.equal(partial.status, "needs-input"); assert.equal(partial.requirements.length, 128);
+  const store = taskStore(w.home), before = store.read(first.taskId);
+  await assert.rejects(() => w.service.answer({ taskId: first.taskId, expectedRevision: partial.revision, operationId: "overflow", answers: { "q-r-2": "A2" } }), e => e.code === "TASK_INPUT" && /129.*128/.test(e.message));
+  assert.deepEqual(store.read(first.taskId), before);
+  const legacy = world(), prepared = await legacy.service.prepare({ text: REQUEST }), oldStore = taskStore(legacy.home), saved = oldStore.read(prepared.taskId);
+  saved.requirements = Array.from({ length: 129 }, (_, i) => ({ id: "r-" + (i + 1), text: "R" + (i + 1) }));
+  saved.status = "preparing"; oldStore.save(saved);
+  assert.throws(() => draftPrompt(saved), e => e.code === "TASK_INPUT" && /129.*128/.test(e.message));
+  const blocked = await legacy.service.resume({ taskId: saved.id, expectedRevision: saved.revision });
+  assert.equal(blocked.status, "blocked"); assert.match(blocked.failures[0], /129.*128/); assert.equal(blocked.readiness, null); assert.equal(legacy.calls(), 1);
+  assert.deepEqual(await legacy.service.resume({ taskId: saved.id, expectedRevision: blocked.revision }), blocked);
+  assert.deepEqual(oldStore.read(saved.id).requirements, saved.requirements); assert.deepEqual(legacy.ctx.state.entries(), []);
+});
+
+test("oversized legacy recovery settles owned preparation usage before refusal without another launch", async () => {
+  for (const phase of ["running", "completed", "settled"]) {
+    const w = world(), first = await w.service.prepare({ text: REQUEST }), store = taskStore(w.home), saved = store.read(first.taskId);
+    saved.harness = "claude"; saved.status = "preparing";
+    saved.requirements = Array.from({ length: 129 }, (_, i) => ({ id: "r-" + (i + 1), text: "R" + (i + 1) }));
+    const runner = fakeRunner({ now: Date.now }), job = runner.start("prepare-1", "offline-fixture", [], {});
+    const lines = claudeResultLines({ text: JSON.stringify(draftFor(saved)), cost: 0.37 });
+    saved.attempts = [{ name: "prepare-1", boundary: PREPARATION_BOUNDARY, run: job.id, startedAt: Date.now() - 10, deadline: Date.now() + 10000, settled: phase === "settled", consumed: false, ok: true, message: JSON.stringify(draftFor(saved)), cost: 0.37 }];
+    if (phase === "running") setTimeout(() => runner.finish(lines, { exit: 0 }), 20);
+    else runner.finish(lines, { exit: 0 });
+    w.ctx.runnerFor = () => runner; store.save(saved);
+    const service = createTaskService(w.ctx), blocked = await service.resume({ taskId: saved.id, expectedRevision: saved.revision });
+    assert.equal(blocked.status, "blocked"); assert.match(blocked.failures[0], /129.*128/);
+    assert.equal(blocked.readiness, null); assert.equal(blocked.preparation.repairs, 0);
+    assert.equal(blocked.preparation.attempts[0].settled, true); assert.equal(blocked.preparation.attempts[0].cost, 0.37);
+    assert.equal(runner.current().running, false); assert.equal(runner.started.length, 1);
+    assert.deepEqual(await service.resume({ taskId: saved.id, expectedRevision: blocked.revision }), blocked);
+    assert.deepEqual(store.read(saved.id).requirements, saved.requirements); assert.deepEqual(w.ctx.state.entries(), []);
+  }
+});
+
 test("requirement mappings allow multiple criteria and shared criteria when every criterion is owned", async () => {
   const w = world({ prepare: async (_ctx, task) => {
     const out = draftFor(task);
@@ -1015,7 +1166,7 @@ test("literal placeholder tokens in requests and answers survive quoted mapping,
     out.title = "Resolve documented source markers";
     out.problem = "Maintainers rely on source comments to understand outstanding work before making a change. Literal maintenance markers currently describe unresolved work or wording that needs replacement, leaving these readers unsure which behavior is intended. Resolving the requested markers while preserving the explicitly retained text and existing dependencies will make the repository guidance actionable without introducing unrelated feature changes.";
     out.questions.forEach(q => { q.text = "Which literal marker text should remain?"; });
-    out.stories = ["As a maintainer, I want outstanding source markers resolved, so that guidance is actionable."];
+    out.stories = [{ id: "us-1", text: "As a maintainer, I want outstanding source markers resolved, so that guidance is actionable.", requirements: [task.requirements[0].id] }];
     out.where = ["src/"]; out.exclusions = ["Unrelated features and package upgrades."]; out.assumptions = ["All referenced markers are in the selected repository."];
     out.criteria = task.requirements.filter(r => out.mapping.some(m => m.requirementId === r.id && m.criteria?.length)).map((r, i) => ({ id: `ac-${i + 1}`, text: /dependencies/.test(r.text) ? "Given the current manifest, when the markers are resolved, then dependencies remain unchanged." : "Given the documented source markers, when maintenance completes, then each requested marker has been resolved." }));
     if (calls === 2) out.assumptions = ["TODO: decide what to do later."];

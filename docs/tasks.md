@@ -32,6 +32,13 @@ lockfiles are outside the text context contract; supply a supported manifest
 setting or explicit check. Automatic lockfiles use the same path and combined
 byte limit as other selected files.
 Context is bounded to 256 KiB and requests to 32 KiB; choose fewer files if needed.
+An intake accepts at most 128 immutable requirement fragments across nonblank
+request and answer lines, matching its mapping capacity. Oversize requests stop
+before repository lookup or preparation. An answer that exceeds the remaining
+capacity is rejected before context reads or state changes; its operation ID and
+revision remain available for a corrected reply. Prepare a smaller intake if
+the remaining material questions cannot fit. Existing owned turns are reconciled
+with usage retained before oversized legacy state stops without a new turn.
 The complete serialized preparation prompt is also limited to 120 KiB, including
 JSON escaping, runtime instructions, saved answers, previous output and repair
 feedback. This portable limit is checked before a harness probe or launch on every
@@ -138,7 +145,9 @@ turn, readiness decision or implementation dispatch.
 The result includes contract `version: 1`, a durable `taskId`, a state `revision`,
 original input, requirements, answers, assumptions, requirement mapping, draft
 path/text/hash, source hashes, readiness evidence, preparation usage, artifacts and
-the next action. `verifyCommands` lists candidate commands and their authorizing
+the next action. `stories` contains sequential `us-N` IDs, story text and the
+authorized requirement IDs associated with each story. `verifyCommands` lists
+candidate commands and their authorizing
 source paths, while `commandIssues` explains withheld package-script inference.
 `inspect` and `list` read saved state without inference or remote
 polling. Implementation results also expose the existing registry's state and PR
@@ -187,6 +196,13 @@ mapping records which answer resolved it. Repairs cannot quietly omit a fragment
 Every acceptance criterion must also appear in a requirement mapping; selected
 context alone cannot authorize additional implementation scope. Unmapped criteria
 trigger bounded repair, and saved drafts with them cannot validate or start.
+Each planner story must include a nonempty, duplicate-free list of authorized
+requirement IDs. Those links appear in the generated brief and structured result.
+Unlinked stories, unknown IDs and older string-only stories trigger repair on new
+turns and fail saved validation or dispatch. Inspect an older brief and prepare a
+new intake to establish its story ownership; no authorization is inferred from
+untrusted context. The readiness checker validates these associations structurally;
+review their meaning with the assumptions and requirement mapping.
 Each question's requirement IDs must exactly match its unresolved mappings, with
 no duplicate IDs. Saved ownership limits which fragments an answer can clarify.
 Reopening an older unanswered question proves ownership from its saved mappings;

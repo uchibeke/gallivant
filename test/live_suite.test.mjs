@@ -33,6 +33,7 @@ function fixture(mode = "exit", harness = "opencode") {
   writeFileSync(bin, `#!${process.execPath}
 import { readFileSync, writeFileSync, appendFileSync } from 'node:fs';
 import { execFileSync, spawn, spawnSync } from 'node:child_process';
+import { writeJsonAtomic } from ${JSON.stringify(new URL("../lib/fs.mjs", import.meta.url).href)};
 const root = ${JSON.stringify(root)}, mode = ${JSON.stringify(mode)};
 const args = process.argv.slice(2);
 appendFileSync(root + '/calls.jsonl', JSON.stringify(args.slice(0, 2)) + '\\n');
@@ -104,7 +105,7 @@ if (mode === 'write-fail') {
 }
 process.on('SIGTERM', () => { if (mode === 'leader-exits') process.exit(0); });
 const child = spawn(process.execPath, ['-e', ${JSON.stringify(descendant)}], { stdio: ['ignore', 'pipe', 'ignore'] });
-child.stdout.once('data', () => writeFileSync(root + '/ready.json', JSON.stringify({ leader: process.pid, child: child.pid })));
+child.stdout.once('data', () => writeJsonAtomic(root + '/ready.json', { leader: process.pid, child: child.pid }));
 setInterval(() => {}, 1000);
 `, { mode: 0o700 });
   writeFileSync(join(root, ".gallivant", "config.json"), JSON.stringify({ harness: { [harness]: { bin } } }));
