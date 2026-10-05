@@ -180,6 +180,9 @@ Review the assumptions and mapping. All nonblank request lines are immutable
 requirement fragments; their exact text is attached to mapped criteria or shown as
 unresolved. An explicit answer can clarify a previously questioned fragment; the
 mapping records which answer resolved it. Repairs cannot quietly omit a fragment.
+Every acceptance criterion must also appear in a requirement mapping; selected
+context alone cannot authorize additional implementation scope. Unmapped criteria
+trigger bounded repair, and saved drafts with them cannot validate or start.
 Each question's requirement IDs must exactly match its unresolved mappings, with
 no duplicate IDs. Saved ownership limits which fragments an answer can clarify.
 Reopening an older unanswered question proves ownership from its saved mappings;
