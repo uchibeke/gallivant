@@ -1,8 +1,8 @@
 {
   "version": 1,
   "task_id": "task-c93def694fe561146955c469",
-  "implementation_commit": "ce6b3f7a1b0cf6be6d1ca8483582db42de0c7efe",
-  "recorded_at": "2026-10-05T14:07:01.135Z",
+  "implementation_commit": "c74f4e29924abc2ced835ad5c323db5efc916e72",
+  "recorded_at": "2026-10-05T14:40:18.079Z",
   "versions": {
     "package": "0.1.0",
     "node": "v22.22.0",
@@ -13,26 +13,26 @@
     {
       "command": "npm test",
       "exit_code": 0,
-      "raw_log": "/private/tmp/natural-language-tasks-mapping-npm-test.log",
-      "tests": 846,
-      "passed": 846
+      "raw_log": "/private/tmp/natural-language-tasks-replay-npm-test-retry.log",
+      "tests": 849,
+      "passed": 849
     },
     {
       "command": "npm run lint",
       "exit_code": 0,
-      "raw_log": "/private/tmp/natural-language-tasks-mapping-lint.log"
+      "raw_log": "/private/tmp/natural-language-tasks-replay-lint.log"
     },
     {
       "command": "npm run test:task-intake",
       "exit_code": 0,
-      "raw_log": "/private/tmp/natural-language-tasks-mapping-intake.log",
-      "tests": 102,
-      "passed": 102
+      "raw_log": "/private/tmp/natural-language-tasks-replay-intake.log",
+      "tests": 105,
+      "passed": 105
     },
     {
       "command": "git diff --check",
       "exit_code": 0,
-      "raw_log": "/private/tmp/natural-language-tasks-mapping-diff-check.log",
+      "raw_log": "/private/tmp/natural-language-tasks-replay-diff-check.log",
       "observed_output": "empty output"
     }
   ],
@@ -546,6 +546,21 @@
       "test_name": "requirement mappings allow multiple criteria and shared criteria when every criterion is owned",
       "outcome": "passed",
       "evidence": "test/task-intake.test.mjs::requirement mappings allow multiple criteria and shared criteria when every criterion is owned"
+    },
+    {
+      "test_name": "idempotent preparation and answer retries dispatch an authorized ready checkpoint once after restart",
+      "outcome": "passed",
+      "evidence": "test/task-intake.test.mjs::idempotent preparation and answer retries dispatch an authorized ready checkpoint once after restart"
+    },
+    {
+      "test_name": "idempotent ready retries preserve preparation-only authorization and accepted revisions",
+      "outcome": "passed",
+      "evidence": "test/task-intake.test.mjs::idempotent ready retries preserve preparation-only authorization and accepted revisions"
+    },
+    {
+      "test_name": "authorized ready retries enforce saved draft approval and uncertain dispatch ownership",
+      "outcome": "passed",
+      "evidence": "test/task-intake.test.mjs::authorized ready retries enforce saved draft approval and uncertain dispatch ownership"
     }
   ],
   "representative_fixture": {
@@ -572,7 +587,7 @@
     ]
   },
   "source_review": {
-    "implementation_revision": "ce6b3f7a1b0cf6be6d1ca8483582db42de0c7efe",
+    "implementation_revision": "c74f4e29924abc2ced835ad5c323db5efc916e72",
     "representative_output_inspected": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-OciO1z/tasks/task-a1a896015714afff3ae33dc4/drafts/revision-2/docs/prds/task-a1a896015714afff3ae33dc4.md",
     "boundaries_checked": [
       "CLI and structured clients",
@@ -639,7 +654,8 @@
       "Owned unsafe recovered children are stopped; completion usage and logs survive refusal. Settled/ready/question output without the recorded boundary cannot validate, answer, dispatch or replay as approved; existing accepted implementation ownership and answer replay are retained.",
       "Goose resolves environment/current/legacy provider selection before admitting only that provider's authentication. Shared secrets/keyring and stale selected AWS/private-secret snapshots are excluded; missing/unsupported selectors and required shared storage fail with actionable errors.",
       "Advertised text/stdin/README/structured preparation selections versus buildPreparationRun; configured-Claude prerequisite, unsupported-adapter refusal before profiles/probes/launch, no fallback and preserved hand-authored implementation selection",
-      "Both mapping directions in initial and answered planner output; parser reuse in saved validation, readiness acknowledgement, start authorization and preauthorized crash-resume dispatch; persistent repair failures, question fixtures, multi/shared mappings, immutable fragments and single-dispatch replay; hand-authored checker and existing execution defaults unchanged"
+      "Both mapping directions in initial and answered planner output; parser reuse in saved validation, readiness acknowledgement, start authorization and preauthorized crash-resume dispatch; persistent repair failures, question fixtures, multi/shared mappings, immutable fragments and single-dispatch replay; hand-authored checker and existing execution defaults unchanged",
+      "Both idempotent identity branches versus resume/initial validation and existing start; saved authorization only, request/answer signatures before replay, pinned draft/source/readiness hashes, unresolved or denied approval, pre-spawn intent/start claim, accepted ownership reconciliation, blocked replay, duplicate revision/run stability and normal daemon/no-daemon handling"
     ],
     "regressions": [
       "preparation uses the existing runner in a separate workspace, records usage and reconciles a lost response",
@@ -731,7 +747,10 @@
       "test/task-intake.test.mjs::unmapped hostile criteria are repaired before CLI and structured initial or answered dispatch",
       "test/task-intake.test.mjs::persistent unmapped criteria exhaust bounded repair without readiness or dispatch, including question drafts",
       "test/task-intake.test.mjs::legacy unmapped criteria fail saved validation, start and authorized crash recovery before dispatch",
-      "test/task-intake.test.mjs::requirement mappings allow multiple criteria and shared criteria when every criterion is owned"
+      "test/task-intake.test.mjs::requirement mappings allow multiple criteria and shared criteria when every criterion is owned",
+      "test/task-intake.test.mjs::idempotent preparation and answer retries dispatch an authorized ready checkpoint once after restart",
+      "test/task-intake.test.mjs::idempotent ready retries preserve preparation-only authorization and accepted revisions",
+      "test/task-intake.test.mjs::authorized ready retries enforce saved draft approval and uncertain dispatch ownership"
     ],
     "literal_output_inspected": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-YT4kUE/tasks/task-9f538f3b60078088f631d887/drafts/revision-5/docs/prds/task-9f538f3b60078088f631d887.md",
     "answer_context_output_inspected": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-GyBbWY/tasks/task-d21c94c7a17012e1454c6854/drafts/revision-4/docs/prds/task-d21c94c7a17012e1454c6854.md",
@@ -901,6 +920,15 @@
       "record": "/private/tmp/natural-language-tasks-mapping-output-review.json",
       "sha256": "9d7de04887940643858088209dd857a4826461ed8d83485b6eabdae9bd92ed51",
       "checker_passed": true
+    },
+    "ready_replay_output_inspected": {
+      "live": false,
+      "path": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-tSD5MC/tasks/task-a177851464f0304cd3fe2d52/drafts/revision-4/docs/prds/task-a177851464f0304cd3fe2d52.md",
+      "record": "/private/tmp/natural-language-tasks-replay-output-review.json",
+      "fixture_record": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-tSD5MC/ready-replay-fixture.json",
+      "sha256": "0b27949ff5fe58edc2ab4ef994ac6153460229a23e47271816d22d9ee75d574e",
+      "checker_passed": true,
+      "readiness_digest_matches": true
     }
   },
   "live": {
@@ -1324,6 +1352,16 @@
       ],
       "evidence": "docs/audit/plugin-ready/natural-language-tasks.json criteria_mapping_case",
       "observed": "Added reverse criterion coverage to shared parsing and planner instructions; generated and saved extras cannot enter readiness/dispatch. Four regressions cover hostile initial/answer scope, bounded refusal, exact saved legacy approval replay and accepted multi/shared mappings; related question fixtures retain only mapped criteria."
+    },
+    {
+      "comment_id": 4185074066,
+      "files": [
+        "lib/tasks.mjs",
+        "test/task-intake.test.mjs",
+        "docs/tasks.md"
+      ],
+      "evidence": "docs/audit/plugin-ready/natural-language-tasks.json ready_replay_case",
+      "observed": "Preparation-request and answer-operation replay now include ready tasks only when saved run authorization exists. Recovery reuses the existing start gate; three regressions capture the persisted readiness-to-dispatch crash window, single dispatch, no-daemon, preparation-only replay, changed snapshots/approvals and uncertain launch ownership."
     }
   ],
   "offline_credential_check": {
@@ -1608,48 +1646,66 @@
         {
           "command": "npm test",
           "exit_code": 0,
-          "raw_log": "/private/tmp/natural-language-tasks-mapping-npm-test.log",
-          "tests": 846,
-          "passed": 846
+          "raw_log": "/private/tmp/natural-language-tasks-replay-npm-test-retry.log",
+          "tests": 849,
+          "passed": 849
         },
         {
           "command": "npm run lint",
           "exit_code": 0,
-          "raw_log": "/private/tmp/natural-language-tasks-mapping-lint.log"
+          "raw_log": "/private/tmp/natural-language-tasks-replay-lint.log"
         },
         {
           "command": "npm run test:task-intake",
           "exit_code": 0,
-          "raw_log": "/private/tmp/natural-language-tasks-mapping-intake.log",
-          "tests": 102,
-          "passed": 102
+          "raw_log": "/private/tmp/natural-language-tasks-replay-intake.log",
+          "tests": 105,
+          "passed": 105
         },
         {
           "command": "git diff --check",
           "exit_code": 0,
-          "raw_log": "/private/tmp/natural-language-tasks-mapping-diff-check.log",
+          "raw_log": "/private/tmp/natural-language-tasks-replay-diff-check.log",
           "observed_output": "empty output"
         }
       ],
       "focused_regressions": {
-        "command": "node --test --test-name-pattern='unmapped hostile|persistent unmapped|legacy unmapped|requirement mappings allow|questions own exactly|duplicate question|CLI and structured preparation|partial answers retain|literal placeholder' test/task-intake.test.mjs",
+        "command": "node --test --test-name-pattern='idempotent preparation and answer retries|idempotent ready retries|authorized ready retries|run authorization dispatches|crash recovery reconciles|legacy preparation receipts|legacy unmapped criteria|prototype-sensitive operation IDs|legacy interrupted answers|partial clone failure|pre-clone snapshot failures|post-clone source conflicts' test/task-intake.test.mjs",
         "exit_code": 0,
-        "raw_log": "/private/tmp/natural-language-tasks-mapping-targeted.log",
+        "raw_log": "/private/tmp/natural-language-tasks-replay-targeted.log",
         "tests": 12,
         "passed": 12
       },
-      "initial_runs": [
+      "supporting_checks": [
         {
-          "command": "focused mapping regressions before the fix",
-          "exit_code": 1,
-          "raw_log": "/private/tmp/natural-language-tasks-mapping-red.log",
+          "command": "node --test --test-name-pattern='live signal and watchdog stops await the process-group fallback before metadata and exit' test/live_suite.test.mjs",
+          "exit_code": 0,
+          "raw_log": "/private/tmp/natural-language-tasks-replay-watchdog-isolated.log",
           "tests": 4,
-          "passed": 1,
-          "failed": 3,
-          "observed": "Unmapped scope reached dispatch, persistent extra scope started instead of blocking, and matching saved legacy output remained ready. The multi/shared mapping control passed."
+          "passed": 4
         }
       ],
-      "observed": "All required offline commands and 12 focused/adjacent tests pass. Reviewed shared parsing, repair, answer transitions, saved validation, readiness and exact dispatch/recovery boundaries against G2. Fresh answered-intake output removes unmapped deployment scope, preserves every original/answer requirement, passes the canonical checker and dispatches once. Existing native and G8 live qualification gaps remain unchanged; no provider/model calls or repeated blocked native checks occurred.",
+      "initial_runs": [
+        {
+          "command": "node --test --test-name-pattern='idempotent preparation and answer retries|idempotent ready retries|authorized ready retries' test/task-intake.test.mjs",
+          "exit_code": 1,
+          "raw_log": "/private/tmp/natural-language-tasks-replay-red.log",
+          "tests": 3,
+          "passed": 1,
+          "failed": 2,
+          "observed": "Authorized ready replay returned ready instead of dispatching. A changed saved draft also returned ready instead of reaching the exact approval gate. The preparation-only control passed."
+        },
+        {
+          "command": "npm test",
+          "exit_code": 1,
+          "raw_log": "/private/tmp/natural-language-tasks-replay-npm-test.log",
+          "tests": 849,
+          "passed": 847,
+          "failed": 2,
+          "observed": "The unchanged offline watchdog fixture read ready.json between file creation and completed JSON write: Unexpected end of JSON input. Its parent/subtest failed; the isolated check and subsequent full run passed without source changes."
+        }
+      ],
+      "observed": "Both retry paths recover the actual persisted authorized ready checkpoint through existing exact readiness and dispatch ownership gates. CLI and structured callers preserve preparation-only authorization, accepted source bytes and changed-input conflicts; one recovered implementation and normal daemon invocation are retained across duplicate replay. Full/intake/lint/diff commands and focused/adjacent checks pass. The initial watchdog JSON race is retained with an unchanged-base comparison and isolated pass. Native preparation enforcement and G8 live qualification remain unverified; no provider/model calls or repeated blocked native probes occurred.",
       "model_calls": 0
     },
     "previous_batches": [
@@ -2172,6 +2228,55 @@
           }
         ],
         "observed": "All required offline commands pass. Reviewed task examples, sibling README/stdin/structured entry points, adapter selection and refusal-before-launch behavior against the approved brief. The fresh Claude fixture preserves immutable requirements and passes the canonical checker. No provider/model calls, default changes, automatic fallback or repeated blocked native probes occurred. Native enforcement and G8 live evidence remain unverified.",
+        "model_calls": 0
+      },
+      {
+        "commands": [
+          {
+            "command": "npm test",
+            "exit_code": 0,
+            "raw_log": "/private/tmp/natural-language-tasks-mapping-npm-test.log",
+            "tests": 846,
+            "passed": 846
+          },
+          {
+            "command": "npm run lint",
+            "exit_code": 0,
+            "raw_log": "/private/tmp/natural-language-tasks-mapping-lint.log"
+          },
+          {
+            "command": "npm run test:task-intake",
+            "exit_code": 0,
+            "raw_log": "/private/tmp/natural-language-tasks-mapping-intake.log",
+            "tests": 102,
+            "passed": 102
+          },
+          {
+            "command": "git diff --check",
+            "exit_code": 0,
+            "raw_log": "/private/tmp/natural-language-tasks-mapping-diff-check.log",
+            "observed_output": "empty output"
+          }
+        ],
+        "focused_regressions": {
+          "command": "node --test --test-name-pattern='unmapped hostile|persistent unmapped|legacy unmapped|requirement mappings allow|questions own exactly|duplicate question|CLI and structured preparation|partial answers retain|literal placeholder' test/task-intake.test.mjs",
+          "exit_code": 0,
+          "raw_log": "/private/tmp/natural-language-tasks-mapping-targeted.log",
+          "tests": 12,
+          "passed": 12
+        },
+        "initial_runs": [
+          {
+            "command": "focused mapping regressions before the fix",
+            "exit_code": 1,
+            "raw_log": "/private/tmp/natural-language-tasks-mapping-red.log",
+            "tests": 4,
+            "passed": 1,
+            "failed": 3,
+            "observed": "Unmapped scope reached dispatch, persistent extra scope started instead of blocking, and matching saved legacy output remained ready. The multi/shared mapping control passed."
+          }
+        ],
+        "observed": "All required offline commands and 12 focused/adjacent tests pass. Reviewed shared parsing, repair, answer transitions, saved validation, readiness and exact dispatch/recovery boundaries against G2. Fresh answered-intake output removes unmapped deployment scope, preserves every original/answer requirement, passes the canonical checker and dispatches once. Existing native and G8 live qualification gaps remain unchanged; no provider/model calls or repeated blocked native checks occurred.",
         "model_calls": 0
       }
     ]
@@ -3260,5 +3365,168 @@
       }
     },
     "observed": "Every emitted criterion now needs a reference from an explicit requirement or answer mapping. The shared parser rejects extra criteria before publishing a new draft and rechecks saved output before readiness/dispatch. Persistent extras stop after three repairs with no readiness or implementation. Multi/shared mappings remain accepted; question fixtures omit unresolved criteria instead of creating unowned scope. Fixture dispatch is offline, not native/live qualification."
+  },
+  "ready_replay_case": {
+    "met": true,
+    "implementation_commit": "c74f4e29924abc2ced835ad5c323db5efc916e72",
+    "model_calls": 0,
+    "source_refs": [
+      "lib/tasks.mjs",
+      "docs/prds/natural-language-tasks.md",
+      "docs/plans/plugin-ready-gallivant.md"
+    ],
+    "regressions": [
+      "test/task-intake.test.mjs::idempotent preparation and answer retries dispatch an authorized ready checkpoint once after restart",
+      "test/task-intake.test.mjs::idempotent ready retries preserve preparation-only authorization and accepted revisions",
+      "test/task-intake.test.mjs::authorized ready retries enforce saved draft approval and uncertain dispatch ownership"
+    ],
+    "initial_failure": {
+      "command": "node --test --test-name-pattern='idempotent preparation and answer retries|idempotent ready retries|authorized ready retries' test/task-intake.test.mjs",
+      "exit_code": 1,
+      "raw_log": "/private/tmp/natural-language-tasks-replay-red.log",
+      "tests": 3,
+      "passed": 1,
+      "failed": 2,
+      "observed": "Authorized ready replay returned ready instead of dispatching. A changed saved draft also returned ready instead of reaching the exact approval gate. The preparation-only control passed."
+    },
+    "focused_regression": {
+      "command": "node --test --test-name-pattern='idempotent preparation and answer retries|idempotent ready retries|authorized ready retries|run authorization dispatches|crash recovery reconciles|legacy preparation receipts|legacy unmapped criteria|prototype-sensitive operation IDs|legacy interrupted answers|partial clone failure|pre-clone snapshot failures|post-clone source conflicts' test/task-intake.test.mjs",
+      "exit_code": 0,
+      "raw_log": "/private/tmp/natural-language-tasks-replay-targeted.log",
+      "tests": 12,
+      "passed": 12
+    },
+    "representative_output": {
+      "live": false,
+      "model_calls": 0,
+      "fixture_record": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-tSD5MC/ready-replay-fixture.json",
+      "path": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-tSD5MC/tasks/task-a177851464f0304cd3fe2d52/drafts/revision-4/docs/prds/task-a177851464f0304cd3fe2d52.md",
+      "sha256": "0b27949ff5fe58edc2ab4ef994ac6153460229a23e47271816d22d9ee75d574e",
+      "original_request": "Add CSV export for the widget table.\nDo not add dependencies.",
+      "requirements": [
+        {
+          "id": "r-1",
+          "text": "Add CSV export for the widget table."
+        },
+        {
+          "id": "r-2",
+          "text": "Do not add dependencies."
+        },
+        {
+          "id": "a-q-r-1-1",
+          "text": "Use CSV only."
+        }
+      ],
+      "mapping": [
+        {
+          "requirementId": "r-1",
+          "criteria": [
+            "ac-1"
+          ],
+          "resolvedBy": "q-r-1"
+        },
+        {
+          "requirementId": "r-2",
+          "criteria": [
+            "ac-2"
+          ]
+        },
+        {
+          "requirementId": "a-q-r-1-1",
+          "criteria": [
+            "ac-3"
+          ]
+        }
+      ],
+      "source_hashes": [
+        {
+          "path": "docs/export-plan.md",
+          "hash": "5f81431afc1e4e0c0b39580e3155c6edf8ee67ce33b8f19775afbbf1b3c8f448"
+        },
+        {
+          "path": "AGENTS.md",
+          "hash": "03c3e02659634826151da10c34ca31473b2ca7542d54de33cf169678555d7b34"
+        },
+        {
+          "path": "package.json",
+          "hash": "4f05b82adac690557b1bef490211ec333ff378ca9dbe8fc0a58624bddd3ae281"
+        }
+      ],
+      "readiness": {
+        "allow": true,
+        "hash": "0b27949ff5fe58edc2ab4ef994ac6153460229a23e47271816d22d9ee75d574e",
+        "digest": "6c13610d6f098bf3871f64c4ed9d3d06a5a6a5124d0a69c213057b25161fe0db",
+        "decisionId": null,
+        "report": "ok   path          lives under docs/prds/ with a lowercase-dash filename\nok   frontmatter   frontmatter has status (draft|ready) and harness (claude|codex|gemini|opencode|goose)\nok   title         one H1 title, 8 to 80 characters\nok   problem       ## Problem: at least 40 words on what is wrong today and for whom\nok   stories       ## User stories: every bullet reads 'As a <who>, I want <what>, so that <why>'\nok   criteria      ## Acceptance criteria: every bullet is Given / When / Then, at least one per story\nok   verify        ## Verify: at least one command the session must run green; no sudo, rm -rf or piped installers\nok   look          ## Where to look: files or directories to start from, or 'none'\nok   scope         ## Out of scope: at least one bullet\nok   placeholders  no TODO, TBD, FIXME, ???, lorem or <angle-bracket> placeholders anywhere\nok   size          under 1,500 words; a PRD is one pull request, split anything bigger\nok   sources       every file in `sources` exists, is readable text, and is named inside the repository\n\ntask-a177851464f0304cd3fe2d52: ready to start.\nAPort decision (local): allow\nstatus set to ready. Commit the PRD when you commit the rest of your work.",
+        "revision": 5
+      },
+      "checkpoint_status": "ready",
+      "run_authorized": true,
+      "dispatch_intent": null,
+      "final_status": "started",
+      "implementation": {
+        "id": "acme/widget/task-a177851464f0304cd3fe2d52",
+        "worktree": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-tSD5MC/worktrees/acme/widget/task-a177851464f0304cd3fe2d52",
+        "branch": "work/task-a177851464f0304cd3fe2d52",
+        "base": "main",
+        "baseSource": "default",
+        "session": null,
+        "run": "1-start",
+        "state": "running",
+        "pr": null,
+        "url": null
+      },
+      "duplicate_implementation": {
+        "id": "acme/widget/task-a177851464f0304cd3fe2d52",
+        "worktree": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-tSD5MC/worktrees/acme/widget/task-a177851464f0304cd3fe2d52",
+        "branch": "work/task-a177851464f0304cd3fe2d52",
+        "base": "main",
+        "baseSource": "default",
+        "session": null,
+        "run": "1-start",
+        "state": "running",
+        "pr": null,
+        "url": null
+      },
+      "counts": {
+        "plans": 2,
+        "decisions": 1,
+        "daemonCalls": 1
+      },
+      "checker_passed": true,
+      "readiness_digest_matches": true,
+      "reviewed_against": [
+        "docs/prds/natural-language-tasks.md",
+        "docs/plans/plugin-ready-gallivant.md"
+      ]
+    },
+    "verification_retry": {
+      "initial_failure": {
+        "command": "npm test",
+        "exit_code": 1,
+        "raw_log": "/private/tmp/natural-language-tasks-replay-npm-test.log",
+        "tests": 849,
+        "passed": 847,
+        "failed": 2,
+        "observed": "The unchanged offline watchdog fixture read ready.json between file creation and completed JSON write: Unexpected end of JSON input. Its parent/subtest failed; the isolated check and subsequent full run passed without source changes."
+      },
+      "unchanged_source": "test/live_suite.test.mjs",
+      "identical_to_batch_base": "e2e34aa00187d3504fa098ce1d6aaee211ab8e8c",
+      "isolated_check": {
+        "command": "node --test --test-name-pattern='live signal and watchdog stops await the process-group fallback before metadata and exit' test/live_suite.test.mjs",
+        "exit_code": 0,
+        "raw_log": "/private/tmp/natural-language-tasks-replay-watchdog-isolated.log",
+        "tests": 4,
+        "passed": 4
+      },
+      "successful_full_run": {
+        "command": "npm test",
+        "exit_code": 0,
+        "raw_log": "/private/tmp/natural-language-tasks-replay-npm-test-retry.log",
+        "tests": 849,
+        "passed": 849
+      }
+    },
+    "observed": "The recorded ready checkpoint retains original/answer requirements, source hashes, explicit execution authorization and the real readiness decision before any dispatch intent. Same-identity replay dispatches once without planner/readiness calls or another confirmation and delivers the accepted snapshot after operator edits. Preparation-only retries remain ready; denied/stale approval and unknown intent/claim cannot launch. This is offline fixture evidence and does not qualify installed adapters or live execution."
   }
 }
