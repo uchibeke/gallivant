@@ -35,9 +35,12 @@ shell startup overrides are excluded. Preparation has a private `HOME`, XDG root
 and temporary directory. The selected adapter's native auth/config files,
 configured resource directories and explicitly selected AWS profile directory
 are copied into private snapshots, so parent traversal and preparation writes
-cannot reach native files through those entries. Internal resource links are
-materialized; links outside the selected directory, cycles, broken links and
-special files stop preparation before launch and remove partial copies. Previous
+cannot reach native files through those entries. A selected entry itself must be
+a regular file or directory: even an internal or broken top-level symlink is
+refused before launch. Replace that entry with the intended provider file or
+directory. Links inside a selected resource directory are materialized; links
+outside that directory, cycles, broken links and special files stop preparation
+before launch and remove partial copies. Previous
 sessions and unrelated home-directory credentials are excluded. Shared AWS
 credentials require explicit Bedrock selection; Claude's explicit Vertex mode can also use
 native Google credentials. Gemini with `GOOGLE_GENAI_USE_VERTEXAI=true` carries
@@ -160,9 +163,13 @@ An over-budget saved-output replay cannot become a pass or another repair turn.
 Use `task resume <id> --revision <n>` to reconcile interrupted preparation or finish
 an already authorized, ready intake. Request identities deduplicate preparation;
 reusing one for different inputs conflicts. Answer operation identities deduplicate
-replies. Every mutation checks the expected state revision. Missing launch
-acknowledgements reconcile the recorded job; uncertain implementation acceptance
-retains its start claim/intent and requires inspection rather than another launch.
+replies. Every mutation checks the expected state revision.
+Answer operation IDs, including `__proto__`, are persisted as own dictionary keys
+and replay after restart; an unknown question ID is refused without dropping it
+from CLI input or changing the accepted state.
+Missing launch acknowledgements reconcile the recorded job; uncertain
+implementation acceptance retains its start claim/intent and requires inspection
+rather than another launch.
 For a known preflight failure before cloning (for example missing GitHub credentials),
 fix its cause and explicitly call `task start` with the saved current revision.
 Existing run authorization is retained. Once cloning is attempted, the shared

@@ -18,7 +18,7 @@ import { makeState } from "../lib/state.mjs";
 import { writeJsonAtomic } from "../lib/fs.mjs";
 import { contentDigest } from "../lib/start_contract.mjs";
 import { draftFor } from "./fixtures/task-intake.mjs";
-import { tempHome, CONFIG, GOOD_PRD, harnessBin, fakeCredential, fakeIdentity, silentLog, fakeRunner, makeClock, codexLines, claudeResultLines } from "./helpers.mjs";
+import { tempHome, CONFIG, GOOD_PRD, harnessBin, fakeCredential, fakeIdentity, silentLog, fakeRunner, makeClock, codexLines, claudeResultLines, geminiLines, opencodeLines, gooseLines } from "./helpers.mjs";
 
 const REQUEST = "Add CSV export for the widget table.\nDo not add dependencies.";
 function world(overrides = {}) {
@@ -95,6 +95,42 @@ test("conflicting constraints stay visible and answers resume the same identity,
   await assert.rejects(() => w.service.answer({ ...answer, answers: { "q-r-1": "Use JSON." } }), { code: "TASK_CONFLICT" });
 });
 
+test("prototype-sensitive operation IDs persist and replay through CLI, restart, interrupted preparation and dispatch", async () => {
+  for (const cli of [false,true]) for (const operationId of ["__proto__","constructor","hasOwnProperty","toString"]) for (const phase of ["ready","preparing","started"]) {
+    let calls=0;
+    const prepare=async (_ctx,task)=>{calls++;return JSON.stringify(draftFor(task,{question:true}));};
+    const w=world({prepare}),first=await w.service.prepare({text:REQUEST,run:phase==="started"});
+    const store=taskStore(w.home),unresolved=store.read(first.taskId);
+    const input={taskId:first.taskId,expectedRevision:first.revision,answers:{"q-r-1":"Use CSV."},operationId};
+    const invoke=(service,reply)=>cli?taskCommand(w.ctx,{args:["answer",reply.taskId],values:{revision:String(reply.expectedRevision),"request-id":reply.operationId,answer:Object.entries(reply.answers).map(([key,value])=>`${key}=${value}`)},service}):service.answer(reply);
+    const accepted=await invoke(w.service,input);assert.equal(accepted.status,phase==="started"?"started":"ready");
+    const saved=store.read(first.taskId);assert.equal(Object.hasOwn(saved.operations,operationId),true);
+    assert.deepEqual(Object.keys(saved.operations),[operationId]);assert.equal(Object.getPrototypeOf(saved.operations),Object.prototype);
+    assert.equal(saved.operations[operationId],contentDigest(JSON.stringify({answers:input.answers,verifyCommands:[]})));
+    if(phase==="preparing") {saved.status="preparing";saved.output=unresolved.output;saved.readiness=null;store.save(saved);}
+    w.ctx.state=makeState(w.home);
+    const reopened=createTaskService(w.ctx,{prepare,daemon:async()=>{throw Error("duplicate daemon launch");}}),replay=await invoke(reopened,input);
+    assert.equal(replay.taskId,first.taskId);assert.equal(replay.status,phase==="started"?"started":"ready");assert.equal(calls,phase==="preparing"?3:2);
+    assert.match(replay.draft.text,/Explicit requirement r-2: "Do not add dependencies\."/);
+    assert.equal(replay.requirements.filter(r=>r.id==="a-q-r-1-1").length,1);
+    assert.deepEqual(await invoke(reopened,input),replay);assert.equal(calls,phase==="preparing"?3:2);
+    await assert.rejects(()=>invoke(reopened,{...input,answers:{"q-r-1":"Use JSON."}}),{code:"TASK_CONFLICT",version:1});
+    await assert.rejects(()=>invoke(reopened,{...input,operationId:"another-operation"}),{code:"TASK_CONFLICT",version:1});
+    assert.equal(w.ctx.state.entries().length,phase==="started"?1:0);assert.equal(w.daemonCalls(),phase==="started"?1:0);
+    if(phase==="started")assert.equal(w.runners.get(replay.implementation.id).started.length,1);
+  }
+});
+
+test("CLI and structured answer dictionaries reject prototype-sensitive question keys without dropping owner input", async () => {
+  for(const cli of [false,true])for(const key of ["__proto__","constructor","hasOwnProperty"]){
+    const w=world({prepare:async (_ctx,task)=>JSON.stringify(draftFor(task,{question:true}))}),first=await w.service.prepare({text:REQUEST}),store=taskStore(w.home),saved=store.read(first.taskId);
+    const answers=Object.fromEntries([["q-r-1","Use CSV."],[key,"Unexpected answer."]]);
+    const invoke=()=>cli?taskCommand(w.ctx,{args:["answer",first.taskId],values:{revision:String(first.revision),"request-id":"invalid-answer-key",answer:Object.entries(answers).map(([k,v])=>`${k}=${v}`)},service:w.service}):w.service.answer({taskId:first.taskId,expectedRevision:first.revision,operationId:"invalid-answer-key",answers});
+    await assert.rejects(invoke,e=>e.code==="TASK_INPUT"&&e.version===1&&e.message===`unknown answer identifier ${key}`);
+    assert.deepEqual(store.read(first.taskId),saved);assert.deepEqual(w.ctx.state.entries(),[]);
+  }
+});
+
 test("CLI and structured answers pin additional context, carry instructions and sources, and dispatch once", async t => {
   const run = async cli => {
     const plans = [];
@@ -167,7 +203,7 @@ test("partial answers retain context while unsafe, oversized or changed selectio
   writeFileSync(join(w.checkout, "docs/binary.md"), "binary\0content");
   symlinkSync(join(w.checkout, "docs/two.md"), join(w.checkout, "docs/alias.md"));
   const first = await w.service.prepare({ text: REQUEST });
-  const partialInput = { taskId:first.taskId, expectedRevision:first.revision, operationId:"partial-context", answers:{"q-r-1":"Use CSV."}, context:["docs/one.md"] };
+  const partialInput = { taskId:first.taskId, expectedRevision:first.revision, operationId:"__proto__", answers:{"q-r-1":"Use CSV."}, context:["docs/one.md"] };
   const partial = await w.service.answer(partialInput);
   assert.equal(partial.status, "needs-input"); assert.equal(partial.draft.current, false); assert.equal(calls, 1);
   assert.deepEqual(partial.questions.map(q => q.id), ["q-r-2"]);
@@ -970,12 +1006,11 @@ test("preparation snapshots provider directories across adapters without native 
 });
 
 test("preparation materializes internal directory and executable links into detached resources", () => {
-  const root = tempHome(), operator = join(root, "operator-home"), resources = join(root, "selected-cache");
+  const root = tempHome(), operator = join(root, "operator-home"), resources = join(operator, ".config/opencode/node_modules");
   mkdirSync(join(operator, ".config/opencode"), { recursive: true }); mkdirSync(join(resources, "package/bin"), { recursive: true }); mkdirSync(join(resources, ".bin"));
   writeFileSync(join(resources, "package/bin/command"), "fixture-executable", { mode: 0o755 });
   symlinkSync("../package/bin/command", join(resources, ".bin/command"));
   symlinkSync("package", join(resources, "alias"));
-  symlinkSync(resources, join(operator, ".config/opencode/node_modules"));
   const env = preparationEnvironment("opencode", join(root, "turn"), {}, { HOME: operator });
   const target = join(env.OPENCODE_CONFIG_DIR, "node_modules");
   const inspect = path => {
@@ -993,6 +1028,62 @@ test("preparation materializes internal directory and executable links into deta
   assert.throws(() => preparationEnvironment("opencode", join(root, "turn"), {}, { HOME: operator, OPENCODE_CONFIG_DIR: env.OPENCODE_CONFIG_DIR }),
     e => e.code === "TASK_PREPARATION_ENV" && /overlaps the private preparation home/.test(e.message));
   assert.equal(readFileSync(join(target, "alias/bin/command"), "utf8"), "private-edit", "overlapping profile selection never removes its own source");
+});
+
+test("top-level allowlisted provider symlinks refuse unrelated credentials before launch across adapters", async () => {
+  const cases=[
+    ["codex",".codex/auth.json",false,{}], ["codex",".codex/plugins",true,{}],
+    ["claude",".claude/.credentials.json",false,{}], ["claude",".claude/plugins",true,{}], ["claude",".claude.json",false,{}],
+    ["gemini",".gemini/oauth_creds.json",false,{}], ["gemini",".gemini/extensions",true,{}],
+    ["opencode",".local/share/opencode/auth.json",false,{}], ["opencode",".config/opencode/node_modules",true,{}],
+    ["goose",".config/goose/secrets.yaml",false,{}],
+    ["claude",".aws",true,{CLAUDE_CODE_USE_BEDROCK:"1"}], ["goose",".aws",true,{GOOSE_PROVIDER:"bedrock"}],
+    ["claude",".config/gcloud/application_default_credentials.json",false,{CLAUDE_CODE_USE_VERTEX:"1"}],
+    ["gemini",".config/gcloud/application_default_credentials.json",false,{GOOGLE_GENAI_USE_VERTEXAI:"true"}],
+    ["codex",".codex/skills",true,{},"broken"], ["codex",".codex/config.toml",false,{},"internal"],
+  ];
+  for(const [harness,path,directory,mode,kind] of cases){
+    const w=world(),native=join(w.home,".ssh/id_ed25519");mkdirSync(dirname(native));writeFileSync(native,"fixture-private-key");
+    const selected=join(w.home,path);mkdirSync(dirname(selected),{recursive:true});
+    let destination=directory?dirname(native):native;
+    if(kind==="broken")destination=join(w.home,"missing-resource");
+    if(kind==="internal"){destination=join(dirname(selected),"unselected-history");writeFileSync(destination,"fixture-unselected-history");}
+    symlinkSync(destination,selected);
+    w.ctx.config.harness[harness]={bin:harnessBin(w.home,harness,{signInOutput:harness==="opencode"?"1 credential":null})};Object.assign(w.ctx.env,mode);
+    const runner=fakeRunner({now:Date.now});w.ctx.runnerFor=()=>runner;
+    const service=createTaskService(w.ctx),r=await service.prepare({text:REQUEST,harness});
+    assert.equal(r.status,"blocked",`${harness}:${path}`);assert.match(r.failures[0],/selected provider entry is a symbolic link; replace it with a regular file or directory/);
+    assert.equal(r.preparation.repairs,0);assert.equal(r.preparation.attempts.length,0);assert.equal(runner.started.length,0);
+    const home=join(w.home,"tasks",r.taskId,"preparation/turn-1/home");
+    assert.equal(existsSync(join(home,path)),false);assert.equal(existsSync(join(home,".ssh/id_ed25519")),false);
+    const entries=path=>readdirSync(path,{withFileTypes:true}).flatMap(e=>e.isDirectory()?[e.name,...entries(join(path,e.name))]:[e.name]);
+    assert.equal(entries(home).some(name=>name.startsWith(".profile-copy-")),false);
+    const saved=taskStore(w.home).read(r.taskId);assert.deepEqual(await service.resume({taskId:r.taskId,expectedRevision:r.revision}),r);
+    assert.deepEqual(taskStore(w.home).read(r.taskId),saved);assert.equal(runner.started.length,0);assert.deepEqual(w.ctx.state.entries(),[]);
+    assert.equal(readFileSync(native,"utf8"),"fixture-private-key");assert.equal(lstatSync(selected).isSymbolicLink(),true);
+  }
+});
+
+test("explicit provider file aliases refuse before initial or repair launch without changing native files", async () => {
+  const cases=[
+    ["gemini","GOOGLE_APPLICATION_CREDENTIALS",{}], ["claude","GOOGLE_APPLICATION_CREDENTIALS",{CLAUDE_CODE_USE_VERTEX:"1"}],
+    ["claude","AWS_CONFIG_FILE",{CLAUDE_CODE_USE_BEDROCK:"1"}], ["claude","AWS_SHARED_CREDENTIALS_FILE",{CLAUDE_CODE_USE_BEDROCK:"1"}],
+    ["goose","AWS_WEB_IDENTITY_TOKEN_FILE",{GOOSE_PROVIDER:"bedrock"}], ["opencode","OPENCODE_CONFIG",{}],
+  ];
+  for(const [harness,key,mode] of cases)for(const repair of [false,true]){
+    const w=world(),native=join(w.home,"native-auth.json"),alias=join(w.home,"selected-auth.json");writeFileSync(native,"provider-fixture");
+    if(!repair)symlinkSync(native,alias);else writeFileSync(alias,"provider-fixture");
+    w.ctx.config.harness[harness]={bin:harnessBin(w.home,harness,{signInOutput:harness==="opencode"?"1 credential":null})};Object.assign(w.ctx.env,mode,{[key]:alias});
+    const runner=fakeRunner({now:Date.now}),launch=runner.start;let starts=0;
+    const lines={claude:()=>claudeResultLines({text:"invalid-output"}),gemini:()=>geminiLines({text:"invalid-output"}),opencode:()=>opencodeLines({text:"invalid-output"}),goose:()=>gooseLines({chunks:["invalid-output"]})};
+    runner.start=async(...args)=>{starts++;const job=launch(...args);rmSync(alias);symlinkSync(native,alias);runner.finish(lines[harness](),{exit:0});return job;};
+    w.ctx.runnerFor=()=>runner;
+    const service=createTaskService(w.ctx),r=await service.prepare({text:REQUEST,harness});
+    assert.equal(r.status,"blocked");assert.match(r.failures[0],/selected provider entry is a symbolic link/);assert.equal(starts,repair?1:0);
+    assert.equal(r.preparation.attempts.length,repair?1:0);assert.equal(r.preparation.repairs,repair?1:0);
+    assert.equal(readFileSync(native,"utf8"),"provider-fixture");assert.equal(lstatSync(alias).isSymbolicLink(),true);
+    await service.resume({taskId:r.taskId,expectedRevision:r.revision});assert.equal(starts,repair?1:0);assert.deepEqual(w.ctx.state.entries(),[]);
+  }
 });
 
 test("escaping, cyclic, broken and special provider resources stop before launch and clean partial snapshots", async () => {
@@ -1219,7 +1310,7 @@ test("unsafe native profile roots stop before launch intent and are not retried"
   mkdirSync(join(w.home, ".codex")); symlinkSync(w.home, join(w.home, ".codex/plugins"));
   const runner = fakeRunner({ now: Date.now }); w.ctx.runnerFor = () => runner;
   const service = createTaskService(w.ctx), r = await service.prepare({ text: REQUEST });
-  assert.equal(r.status, "blocked"); assert.match(r.failures[0], /provider profile contains the operator home/);
+  assert.equal(r.status, "blocked"); assert.match(r.failures[0], /selected provider entry is a symbolic link/);
   assert.equal(r.preparation.attempts.length, 0); assert.equal(runner.started.length, 0); assert.deepEqual(w.ctx.state.entries(), []);
   await service.resume({ taskId: r.taskId, expectedRevision: r.revision }); assert.equal(runner.started.length, 0);
 });
