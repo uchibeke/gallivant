@@ -1,8 +1,8 @@
 {
   "version": 1,
   "task_id": "task-c93def694fe561146955c469",
-  "implementation_commit": "4e4a27d4c51c1b895161f75aeef41338363a80bc",
-  "recorded_at": "2026-10-05T04:16:41.303788+00:00",
+  "implementation_commit": "2ad391138679e7ff1fddca77199f30a2cd3abe03",
+  "recorded_at": "2026-10-05T04:43:29.652135+00:00",
   "versions": {
     "package": "0.1.0",
     "node": "v22.22.0",
@@ -13,25 +13,26 @@
     {
       "command": "npm test",
       "exit_code": 0,
-      "raw_log": "/private/tmp/natural-language-tasks-link-keys-npm-test.log",
-      "tests": 810,
-      "passed": 810
+      "raw_log": "/private/tmp/natural-language-tasks-manifest-paths-npm-test.log",
+      "tests": 813,
+      "passed": 813
     },
     {
       "command": "npm run lint",
       "exit_code": 0,
-      "raw_log": "/private/tmp/natural-language-tasks-link-keys-lint.log"
+      "raw_log": "/private/tmp/natural-language-tasks-manifest-paths-lint.log"
     },
     {
       "command": "npm run test:task-intake",
       "exit_code": 0,
-      "raw_log": "/private/tmp/natural-language-tasks-link-keys-final-focused.log",
-      "tests": 66,
-      "passed": 66
+      "raw_log": "/private/tmp/natural-language-tasks-manifest-paths-focused.log",
+      "tests": 69,
+      "passed": 69
     },
     {
       "command": "git diff --check",
       "exit_code": 0,
+      "raw_log": "/private/tmp/natural-language-tasks-manifest-paths-diff-check.log",
       "observed_output": "empty output"
     }
   ],
@@ -127,6 +128,11 @@
       "evidence": "test/task-intake.test.mjs::instruction inference accepts verification actions and excludes release actions, paid checks and shell composition"
     },
     {
+      "test_name": "unbound Maven and dotnet instructions cannot authorize Verify through repair or legacy replay while owner choices resume normally",
+      "outcome": "passed",
+      "evidence": "test/task-intake.test.mjs::unbound Maven and dotnet instructions cannot authorize Verify through repair or legacy replay while owner choices resume normally"
+    },
+    {
       "test_name": "hostile instruction commands cannot survive repair, saved validation or legacy candidate replay",
       "outcome": "passed",
       "evidence": "test/task-intake.test.mjs::hostile instruction commands cannot survive repair, saved validation or legacy candidate replay"
@@ -180,6 +186,16 @@
       "test_name": "source documents available only in the operator tree are pinned and delivered through existing start snapshots",
       "outcome": "passed",
       "evidence": "test/task-intake.test.mjs::source documents available only in the operator tree are pinned and delivered through existing start snapshots"
+    },
+    {
+      "test_name": "source paths with boundary quotes fail CLI and structured selection before planning or answer writes while internal quotes round-trip",
+      "outcome": "passed",
+      "evidence": "test/task-intake.test.mjs::source paths with boundary quotes fail CLI and structured selection before planning or answer writes while internal quotes round-trip"
+    },
+    {
+      "test_name": "quoted generated and saved source manifests are refused with bounded repair and preserved explicit constraints",
+      "outcome": "passed",
+      "evidence": "test/task-intake.test.mjs::quoted generated and saved source manifests are refused with bounded repair and preserved explicit constraints"
     },
     {
       "test_name": "hand-authored example and configuration documents still pass readiness and source snapshot delivery",
@@ -370,7 +386,7 @@
   "representative_fixture": {
     "provenance": "Deterministic offline fixture; not live-provider evidence",
     "original_request": "Add CSV export for the widget table.\nDo not add dependencies.",
-    "saved_draft": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-2hkTIS/tasks/task-a1a896015714afff3ae33dc4/drafts/revision-2/docs/prds/task-a1a896015714afff3ae33dc4.md",
+    "saved_draft": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-lOcLhP/tasks/task-a1a896015714afff3ae33dc4/drafts/revision-2/docs/prds/task-a1a896015714afff3ae33dc4.md",
     "sha256": "e0fcb9be67e1233f4ab02bfc1e95fc82160dff58fb02f2472c47a21fe945e6b1",
     "canonical_prd": "---\nstatus: ready\nharness: codex\nsources:\n  - AGENTS.md\n  - package.json\n---\n\n# Export widgets from the table\n\n## Problem\n\nFinance admins reconcile widget spending in spreadsheets every month. Today the widget table has no export action, so admins copy each visible row by hand and make transcription errors. A scoped export will preserve the selected records and their values while making the monthly reconciliation repeatable and reducing manual work for these users.\n\n## User stories\n\n- As a finance admin, I want to export widgets, so that I can reconcile spending.\n\n## Acceptance criteria\n\n- Given a table with three widgets, when Export is selected, then the requested file contains exactly three widget rows. Explicit requirement r-1: \"Add CSV export for the widget table.\"\n- Given the current package manifest, when CSV export is installed, then dependency declarations remain unchanged. Explicit requirement r-2: \"Do not add dependencies.\"\n\n## Verify\n\n- `npm test`\n- `npm run lint`\n\n## Where to look\n\n- src/export/\n\n## Out of scope\n\n- PDF export and unrelated table changes.\n\n## Assumptions\n\n- Export includes the currently visible rows.\n\n## Requirements mapping\n\n- r-1: \"Add CSV export for the widget table.\" → ac-1\n- r-2: \"Do not add dependencies.\" → ac-2\n",
     "readiness": {
@@ -391,8 +407,8 @@
     ]
   },
   "source_review": {
-    "implementation_revision": "4e4a27d4c51c1b895161f75aeef41338363a80bc",
-    "representative_output_inspected": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-2hkTIS/tasks/task-a1a896015714afff3ae33dc4/drafts/revision-2/docs/prds/task-a1a896015714afff3ae33dc4.md",
+    "implementation_revision": "2ad391138679e7ff1fddca77199f30a2cd3abe03",
+    "representative_output_inspected": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-lOcLhP/tasks/task-a1a896015714afff3ae33dc4/drafts/revision-2/docs/prds/task-a1a896015714afff3ae33dc4.md",
     "boundaries_checked": [
       "CLI and structured clients",
       "request/answer revision writes",
@@ -430,7 +446,9 @@
       "manual PRDs, queued chains and intake dispatch share the clone/spawn ownership boundary; state reload, duplicate retry, wrong-token writes, accepted snapshots and immutable native source files retain their existing guards",
       "selected native auth/config/resource entries, Bedrock directories, Vertex ADC and explicit provider files use lstat before realpath; top-level internal, escaping or broken aliases refuse before snapshot/launch intent, while safe nested links still materialize privately and refused resources retain native bytes without a retry",
       "computed operation IDs remain own JSON keys across CLI and structured answers, partial replies, reload, interrupted preparation and started dispatch; duplicate signatures replay without another accepted answer or implementation, changed signatures/stale writes conflict, and inherited object names never supply replay authority",
-      "CLI answer dictionaries have no prototype setters and pass all own keys to the shared question-ID validator; invalid prototype-sensitive question IDs cannot disappear beside a valid answer or change saved requirements; planner question IDs retain their existing q-identifier validation"
+      "CLI answer dictionaries have no prototype setters and pass all own keys to the shared question-ID validator; invalid prototype-sensitive question IDs cannot disappear beside a valid answer or change saved requirements; planner question IDs retain their existing q-identifier validation",
+      "Maven and .NET instruction commands lack automatic manifest snapshot support and are withheld by the shared collector at preparation, answers, prompt/result output and saved validation; unsupported generated Verify requires bounded repair and cached legacy inference cannot dispatch; explicit owner checks remain available through equivalent question answers with selected manifest delivery and one implementation",
+      "Task-only source selection, answer-time context, generated parseDraft output and saved requestForTask/readiness/start reuse the boundary-quote guard before accepted writes or dispatch; actionable refusal avoids lossy frontmatter, bounded repair preserves dependency exclusions, internal quotes round-trip and deliver pinned bytes, and shared hand-authored source parsing is unchanged"
     ],
     "regressions": [
       "preparation uses the existing runner in a separate workspace, records usage and reconciles a lost response",
@@ -486,12 +504,16 @@
       "prototype-sensitive operation IDs persist and replay through CLI, restart, interrupted preparation and dispatch",
       "CLI and structured answer dictionaries reject prototype-sensitive question keys without dropping owner input",
       "top-level allowlisted provider symlinks refuse unrelated credentials before launch across adapters",
-      "explicit provider file aliases refuse before initial or repair launch without changing native files"
+      "explicit provider file aliases refuse before initial or repair launch without changing native files",
+      "unbound Maven and dotnet instructions cannot authorize Verify through repair or legacy replay while owner choices resume normally",
+      "source paths with boundary quotes fail CLI and structured selection before planning or answer writes while internal quotes round-trip",
+      "quoted generated and saved source manifests are refused with bounded repair and preserved explicit constraints"
     ],
     "literal_output_inspected": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-YT4kUE/tasks/task-9f538f3b60078088f631d887/drafts/revision-5/docs/prds/task-9f538f3b60078088f631d887.md",
     "answer_context_output_inspected": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-GyBbWY/tasks/task-d21c94c7a17012e1454c6854/drafts/revision-4/docs/prds/task-d21c94c7a17012e1454c6854.md",
     "verify_manifest_output_inspected": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-PK2KPP/tasks/task-eb970c64db1557f5bdc92ccb/drafts/revision-3/docs/prds/task-eb970c64db1557f5bdc92ccb.md",
-    "manager_lockfile_output_inspected": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-hyhFL1/tasks/task-7c56a7de4581dfb788ef9b5a/drafts/revision-3/docs/prds/task-7c56a7de4581dfb788ef9b5a.md"
+    "manager_lockfile_output_inspected": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-hyhFL1/tasks/task-7c56a7de4581dfb788ef9b5a/drafts/revision-3/docs/prds/task-7c56a7de4581dfb788ef9b5a.md",
+    "internal_quote_output_inspected": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-x0mUfw/tasks/task-66f8212cd575a937f75c03bb/drafts/revision-4/docs/prds/task-66f8212cd575a937f75c03bb.md"
   },
   "live": {
     "status": "unverified",
@@ -723,6 +745,30 @@
       ],
       "evidence": "test/task-intake.test.mjs::prototype-sensitive operation IDs persist and replay through CLI, restart, interrupted preparation and dispatch; test/task-intake.test.mjs::CLI and structured answer dictionaries reject prototype-sensitive question keys without dropping owner input; test/task-intake.test.mjs::partial answers retain context while unsafe, oversized or changed selections leave accepted state untouched",
       "observed": "Valid operation IDs __proto__, constructor, hasOwnProperty and toString persist as own JSON data keys and replay after reload through equivalent CLI/structured calls, including interrupted preparation and one implementation dispatch. Partial __proto__ replies also replay accepted context without rereading native files. Changed same-ID answers and stale new operations conflict; invalid question keys reach shared validation without disappearing or changing saved requirements."
+    },
+    {
+      "comment_id": 4180737449,
+      "files": [
+        "lib/task_contract.mjs",
+        "test/task-intake.test.mjs",
+        "docs/tasks.md"
+      ],
+      "evidence": "test/task-intake.test.mjs::unbound Maven and dotnet instructions cannot authorize Verify through repair or legacy replay while owner choices resume normally",
+      "observed": "Stopped automatic Maven/.NET command inference until their project manifests have supported snapshot discovery. A planner-selected unsupported check repairs to a carried supported command; saved or legacy cached checks are refused before implementation. Explicit owner checks remain usable through CLI and structured clarification with operator-only selected manifest delivery, original dependency exclusions and duplicate-answer single dispatch.",
+      "source_refs": [
+        "https://maven.apache.org/guides/introduction/introduction-to-the-pom.html",
+        "https://learn.microsoft.com/en-us/dotnet/core/tools/dotnet-test-vstest"
+      ]
+    },
+    {
+      "comment_id": 4180737451,
+      "files": [
+        "lib/task_contract.mjs",
+        "test/task-intake.test.mjs",
+        "docs/tasks.md"
+      ],
+      "evidence": "test/task-intake.test.mjs::source paths with boundary quotes fail CLI and structured selection before planning or answer writes while internal quotes round-trip; test/task-intake.test.mjs::quoted generated and saved source manifests are refused with bounded repair and preserved explicit constraints; docs/audit/plugin-ready/natural-language-tasks.json internal_quote_case",
+      "observed": "Task-only source validation refuses leading/trailing single or double quotes with an actionable rename/select remedy before preparation or answer writes. The same guard rejects generated and saved source manifests, bounds repair to three turns and preserves explicit constraints. Internal quotes remain accepted and survive actual frontmatter parsing, readiness and pinned source delivery. Shared hand-authored PRD parsing is unchanged."
     }
   ],
   "offline_credential_check": {
@@ -987,17 +1033,122 @@
     "remedy_observed": "Required offline suites ran successfully using the supported require_escalated test path; existing native ownership checks, runtime flags and implementation permissions were unchanged",
     "model_calls": 0,
     "current_batch": {
-      "initial_runs": [
+      "commands": [
+        {
+          "command": "npm test",
+          "exit_code": 0,
+          "raw_log": "/private/tmp/natural-language-tasks-manifest-paths-npm-test.log",
+          "tests": 813,
+          "passed": 813
+        },
+        {
+          "command": "npm run lint",
+          "exit_code": 0,
+          "raw_log": "/private/tmp/natural-language-tasks-manifest-paths-lint.log"
+        },
         {
           "command": "npm run test:task-intake",
-          "exit_code": 1,
-          "tests": 66,
-          "passed": 64,
-          "raw_log": "/private/tmp/natural-language-tasks-link-keys-focused.log"
+          "exit_code": 0,
+          "raw_log": "/private/tmp/natural-language-tasks-manifest-paths-focused.log",
+          "tests": 69,
+          "passed": 69
+        },
+        {
+          "command": "git diff --check",
+          "exit_code": 0,
+          "raw_log": "/private/tmp/natural-language-tasks-manifest-paths-diff-check.log",
+          "observed_output": "empty output"
         }
       ],
-      "observed": "The two new cross-adapter cases initially stopped at the OpenCode stub sign-in check because its generic login status text did not match the existing credential-list contract. The fixture response was corrected to 1 credential; the complete required suites then passed. No native provider login or model call was attempted.",
+      "observed": "All required offline suites passed on the reviewed source revision without a retry or provider/model calls. Supported escalation was used only for native offline process ownership checks; existing runtime and permission settings remain unchanged.",
       "model_calls": 0
-    }
+    },
+    "previous_batches": [
+      {
+        "initial_runs": [
+          {
+            "command": "npm run test:task-intake",
+            "exit_code": 1,
+            "tests": 66,
+            "passed": 64,
+            "raw_log": "/private/tmp/natural-language-tasks-link-keys-focused.log"
+          }
+        ],
+        "observed": "The two new cross-adapter cases initially stopped at the OpenCode stub sign-in check because its generic login status text did not match the existing credential-list contract. The fixture response was corrected to 1 credential; the complete required suites then passed. No native provider login or model call was attempted.",
+        "model_calls": 0
+      }
+    ]
+  },
+  "internal_quote_case": {
+    "provenance": "Deterministic offline fixture; not live-provider evidence",
+    "evidence": "test/task-intake.test.mjs::source paths with boundary quotes fail CLI and structured selection before planning or answer writes while internal quotes round-trip",
+    "saved_draft": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-x0mUfw/tasks/task-66f8212cd575a937f75c03bb/drafts/revision-4/docs/prds/task-66f8212cd575a937f75c03bb.md",
+    "sha256": "cb1b336383b84c0ebdeec635230dcf4bc50d7af9ae63caa2a05ed3ec824bc67d",
+    "canonical_prd": "---\nstatus: ready\nharness: codex\nsources:\n  - docs/format\"quoted\".md\n  - AGENTS.md\n  - package.json\n---\n\n# Export widgets from the table\n\n## Problem\n\nFinance admins reconcile widget spending in spreadsheets every month. Today the widget table has no export action, so admins copy each visible row by hand and make transcription errors. A scoped export will preserve the selected records and their values while making the monthly reconciliation repeatable and reducing manual work for these users.\n\n## User stories\n\n- As a finance admin, I want to export widgets, so that I can reconcile spending.\n\n## Acceptance criteria\n\n- Given a table with three widgets, when Export is selected, then the requested file contains exactly three widget rows.\n- Given the current package manifest, when CSV export is installed, then dependency declarations remain unchanged. Explicit requirement r-2: \"Do not add dependencies.\"\n- Given a table with three widgets, when Export is selected, then the requested file contains exactly three widget rows. Explicit requirement a-q-r-1-1: \"Use CSV and the selected format document.\"\n\n## Verify\n\n- `npm test`\n- `npm run lint`\n\n## Where to look\n\n- src/export/\n\n## Out of scope\n\n- PDF export and unrelated table changes.\n\n## Assumptions\n\n- Export includes the currently visible rows.\n\n## Requirements mapping\n\n- r-1: \"Add CSV export for the widget table.\" → ac-1; clarified by answer q-r-1\n- r-2: \"Do not add dependencies.\" → ac-2\n- a-q-r-1-1: \"Use CSV and the selected format document.\" → ac-3\n",
+    "original_request": "Add CSV export for the widget table.\nDo not add dependencies.",
+    "answers": {
+      "q-r-1": "Use CSV and the selected format document."
+    },
+    "requirements": [
+      {
+        "id": "r-1",
+        "text": "Add CSV export for the widget table."
+      },
+      {
+        "id": "r-2",
+        "text": "Do not add dependencies."
+      },
+      {
+        "id": "a-q-r-1-1",
+        "text": "Use CSV and the selected format document."
+      }
+    ],
+    "mapping": [
+      {
+        "requirementId": "r-1",
+        "criteria": [
+          "ac-1"
+        ],
+        "resolvedBy": "q-r-1"
+      },
+      {
+        "requirementId": "r-2",
+        "criteria": [
+          "ac-2"
+        ]
+      },
+      {
+        "requirementId": "a-q-r-1-1",
+        "criteria": [
+          "ac-3"
+        ]
+      }
+    ],
+    "source": {
+      "path": "docs/format\"quoted\".md",
+      "snapshot": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-x0mUfw/tasks/task-66f8212cd575a937f75c03bb/drafts/revision-4/docs/format\"quoted\".md",
+      "delivered": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-x0mUfw/worktrees/acme/widget/task-66f8212cd575a937f75c03bb/docs/format\"quoted\".md",
+      "sha256": "55ec77800d832af8c4c7021818e2e9c55bd114d4040a8c93f7f3827402d69ab3",
+      "observed": "Exact source path survives frontmatter parsing; private snapshot and fresh-base delivery contain identical selected bytes."
+    },
+    "readiness": {
+      "allow": true,
+      "hash": "cb1b336383b84c0ebdeec635230dcf4bc50d7af9ae63caa2a05ed3ec824bc67d",
+      "digest": "ae8772cfa9368726f9d5ccee5abd66122fb9e376f0085ecc97d894b9e6e05cea",
+      "decisionId": null,
+      "report": "ok   path          lives under docs/prds/ with a lowercase-dash filename\nok   frontmatter   frontmatter has status (draft|ready) and harness (claude|codex|gemini|opencode|goose)\nok   title         one H1 title, 8 to 80 characters\nok   problem       ## Problem: at least 40 words on what is wrong today and for whom\nok   stories       ## User stories: every bullet reads 'As a <who>, I want <what>, so that <why>'\nok   criteria      ## Acceptance criteria: every bullet is Given / When / Then, at least one per story\nok   verify        ## Verify: at least one command the session must run green; no sudo, rm -rf or piped installers\nok   look          ## Where to look: files or directories to start from, or 'none'\nok   scope         ## Out of scope: at least one bullet\nok   placeholders  no TODO, TBD, FIXME, ???, lorem or <angle-bracket> placeholders anywhere\nok   size          under 1,500 words; a PRD is one pull request, split anything bigger\nok   sources       every file in `sources` exists, is readable text, and is named inside the repository\n\ntask-66f8212cd575a937f75c03bb: ready to start.\nAPort decision (local): allow\nstatus set to ready. Commit the PRD when you commit the rest of your work.",
+      "revision": 5
+    },
+    "offline_status": "started",
+    "offline_dispatch": {
+      "id": "acme/widget/task-66f8212cd575a937f75c03bb",
+      "worktree": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-x0mUfw/worktrees/acme/widget/task-66f8212cd575a937f75c03bb",
+      "branch": "work/task-66f8212cd575a937f75c03bb",
+      "base": "main",
+      "baseSource": "default",
+      "session": null,
+      "run": "1-start"
+    },
+    "review_outcome": null
   }
 }
