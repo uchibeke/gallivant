@@ -37,6 +37,23 @@ function offlineRunnerService(ctx) {
 const REQUEST = "Add CSV export for the widget table.\nDo not add dependencies.";
 const providerFile = key => key === "AWS_CONFIG_FILE" ? "[default]\nregion = fixture-region\n" : key === "AWS_SHARED_CREDENTIALS_FILE" ? "[default]\naws_access_key_id = provider-id\naws_secret_access_key = provider-secret\n" : `fixture:${key}`;
 
+test("documented CLI and structured preparation examples select an accepted adapter", () => {
+  const docs = readFileSync(new URL("../docs/tasks.md", import.meta.url), "utf8");
+  const readme = readFileSync(new URL("../README.md", import.meta.url), "utf8");
+  const cli = docs.match(/```sh\n([\s\S]*?)\n```/)[1].replace(/\\\n\s*/g, " ").split("\n");
+  assert.equal(cli.length, 2, "check both text and stdin preparation examples");
+  const examples = [...cli, readme.match(/`(gallivant task [^`]+)`/)[1]].map(command => ({
+    command, harness: command.match(/--harness\s+(\w+)/)?.[1],
+  }));
+  const structured = docs.match(/await tasks\.prepare\(\{([\s\S]*?)\n\}\);/)[1];
+  examples.push({ command: "tasks.prepare", harness: structured.match(/harness:\s*'([^']+)'/)?.[1] });
+  for (const { command, harness } of examples) {
+    assert.ok(harness, `${command} must explicitly select a configured preparation adapter`);
+    const spec = buildPreparationRun({ harness, config: CONFIG, mode: "start", session: "6f1c2d3e-1111-4111-8111-111111111111", prompt: "draft", cwd: "/tmp/fixture" });
+    assert.equal(spec.boundary, PREPARATION_BOUNDARY, command);
+  }
+});
+
 test("native preparation removes Claude tools and refuses unsupported adapters before probes on initial, answer and repair turns", async () => {
   for (const harness of ["codex", "gemini", "opencode", "goose"]) for (const phase of ["initial", "answer", "repair"]) for (const cli of [false,true]) {
     const w = world({prepare: async (_ctx,task) => JSON.stringify(draftFor(task,{question:phase==="answer"}))});

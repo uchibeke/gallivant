@@ -15,6 +15,9 @@ their identity using `--revision`, `--request-id` and repeated `--answer id=text
 `task inspect`, `list`, `resume`, `validate` and `start` expose the same versioned
 operations to CLI and in-process clients. Preparation uses inference but starts
 implementation only with explicit `--run` authorization and exact readiness.
+Currently preparation accepts only configured Claude with all tools disabled;
+select it with `--harness claude`. Other adapters return
+`TASK_PREPARATION_BOUNDARY` without an automatic fallback.
 See [task operations](tasks.md) for examples, source delivery and stopping rules.
 
 One line per repository in `repos` names the base branch its pull requests will target and where that answer came from,

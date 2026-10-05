@@ -1,15 +1,20 @@
 # Natural-language tasks
 
-`gallivant task` turns text into an isolated, reviewable PRD. It uses the configured
-harness, with its existing model and permission settings, for preparation. This
+`gallivant task` turns text into an isolated, reviewable PRD. Preparation uses the
+selected harness's configured model and provider settings. This
 can use inference even when you only prepare; it does not start implementation or
 open a pull request without execution authorization.
 
+The preparation examples require configured Claude and explicitly select it.
+Preparation currently accepts only Claude with all tools disabled; other adapters
+return `TASK_PREPARATION_BOUNDARY` without an automatic fallback. Installed native
+tools-off behavior remains unqualified, as detailed below.
+
 ```sh
 gallivant task "Add CSV export for the widget table. Do not add dependencies." \
-  --dir /path/to/checkout --repo owner/repo --base main --harness codex \
+  --dir /path/to/checkout --repo owner/repo --base main --harness claude \
   --context docs/export-plan.md --request-id export-2026-10 --json
-cat request.txt | gallivant task --stdin --dir /path/to/checkout --json
+cat request.txt | gallivant task --stdin --dir /path/to/checkout --harness claude --json
 ```
 
 The repository resolves from the checkout using the existing Git/GitHub helpers.
@@ -296,7 +301,7 @@ const tasks = createTaskService(makeContext());
 let result = await tasks.prepare({
   text: 'Export widgets to CSV. Do not add dependencies.',
   dir: '/path/to/checkout', repo: 'owner/repo', base: 'main',
-  harness: 'codex', context: ['docs/export-plan.md'],
+  harness: 'claude', context: ['docs/export-plan.md'],
   requestId: 'export-2026-10', run: false,
 });
 if (result.status === 'needs-input') {
