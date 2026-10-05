@@ -343,9 +343,17 @@ the exit and no end time exists, runner settlement time is a conservative bound.
 An over-budget saved-output replay cannot become a pass or another repair turn.
 
 Use `task resume <id> --revision <n>` to reconcile interrupted preparation or finish
-an already authorized, ready intake. Request identities deduplicate preparation;
-reusing one for different inputs conflicts. Answer operation identities deduplicate
-replies. Every mutation checks the expected state revision.
+an already authorized, ready intake.
+
+`task validate` returns `TASK_NOT_READY` while preparation is incomplete, even if
+an older question-bearing draft exists. It leaves the saved revision, accepted
+answers and owned run unchanged; resume preparation with the current revision
+before validating. Resume reconciles that run and retains its usage and deadline
+checks without purchasing a replacement turn.
+
+Request identities deduplicate preparation; reusing one for different inputs
+conflicts. Answer operation identities deduplicate replies. Every mutation checks
+the expected state revision.
 Answer operation IDs, including `__proto__`, are persisted as own dictionary keys
 and replay after restart; an unknown question ID is refused without dropping it
 from CLI input or changing the accepted state.

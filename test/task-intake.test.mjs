@@ -1871,6 +1871,121 @@ test("crash recovery reconciles accepted dispatch ownership and refuses uncertai
   assert.equal(stopped.status, "blocked"); assert.match(stopped.failures[0], /unknown/); assert.deepEqual(uncertain.ctx.state.entries(), []);
 });
 
+async function interruptedFinalAnswer(run = false) {
+  let checkpoint;
+  const w = world({ prepare: async (_ctx, task) => {
+    if (!Object.keys(task.answers).length) return JSON.stringify(draftFor(task, { question: true }));
+    checkpoint = structuredClone(task);
+    throw new Error("fixture exit after the final answer was saved");
+  } });
+  w.ctx.config.harness.claude = { bin: harnessBin(w.home, "claude") };
+  const first = await w.service.prepare({ text: REQUEST, harness: "claude", run });
+  const answer = { taskId: first.taskId, expectedRevision: first.revision, operationId: "interrupted-final-answer", answers: { "q-r-1": "Use CSV only." } };
+  await w.service.answer(answer);
+  const store = taskStore(w.home);
+  // A hard exit retains this persisted checkpoint, before the caught-error write.
+  store.save(checkpoint);
+  assert.equal(checkpoint.status, "preparing"); assert.deepEqual(checkpoint.questions, []);
+  assert.equal(checkpoint.readiness, null); assert.match(readFileSync(checkpoint.draft.path, "utf8"), /unresolved q-r-1/);
+  return { ...w, store, checkpoint, answer };
+}
+
+function interruptedPreparationRun(w, phase, { denied = false, late = false } = {}) {
+  const task = w.store.read(w.checkpoint.id), root = join(w.home, "interrupted-runs"), run = join(root, "owned-prepare"), began = Date.now();
+  mkdirSync(run, { recursive: true });
+  const message = JSON.stringify(draftFor(task));
+  const lines = denied ? preparationDenialLines({ message }) : claudeResultLines({ text: message, cost: 0.37 });
+  if (!denied) lines.push(JSON.stringify({ usage: { input_tokens: 12, output_tokens: 5 } }));
+  writeFileSync(join(root, "latest-run"), "owned-prepare");
+  writeFileSync(join(run, "job.log"), lines.join("\n") + "\n");
+  let running = phase === "running";
+  const job = { id: "owned-prepare", name: "prepare-1", pid: 123456789, bin: "offline-fixture", startedAt: began - 10, exit: running || phase === "lost-ack" ? null : 0, ...(running ? {} : { endedAt: began }) };
+  writeJsonAtomic(join(run, "job.json"), job);
+  const runner = makeRunner(root, { probe: () => running });
+  let starts = 0;
+  runner.start = () => { starts++; throw Error("owned preparation must not launch another turn"); };
+  const implementationRunner = w.ctx.runnerFor;
+  w.ctx.runnerFor = id => id.startsWith("intake/") ? runner : implementationRunner(id);
+  task.attempts = [{ name: job.name, boundary: PREPARATION_BOUNDARY, cwd: w.home, run: phase === "lost-ack" ? null : job.id, startedAt: job.startedAt, deadline: late ? began - 1 : began + 10000, settled: phase === "settled", consumed: false,
+    ...(phase === "settled" ? { ok: true, message, cost: 0.37, usage: [{ input_tokens: 12, output_tokens: 5 }], endedAt: began, elapsedMs: 10, log: join(run, "job.log") } : { cost: null, usage: null }) }];
+  w.store.save(task);
+  return { runner, starts: () => starts, finish: () => { running = false; writeJsonAtomic(join(run, "job.json"), { ...job, exit: 0, endedAt: Date.now() }); } };
+}
+
+test("CLI and structured validation refuse interrupted final-answer drafts while preserving owned preparation recovery", async t => {
+  for (const cli of [false, true]) for (const run of [false, true]) for (const phase of ["running", "completed", "settled", "lost-ack"]) {
+    const w = await interruptedFinalAnswer(run), owned = interruptedPreparationRun(w, phase), before = w.store.read(w.checkpoint.id), oldDraft = readFileSync(before.draft.path, "utf8");
+    let decisions = 0, daemonCalls = 0;
+    const service = createTaskService(w.ctx, { decideReady: async options => { decisions++; return ready(options); }, daemon: async () => { daemonCalls++; } });
+    const validate = revision => cli ? taskCommand(w.ctx, { args: ["validate", before.id], values: { revision: String(revision) }, service }) : service.validate({ taskId: before.id, expectedRevision: revision });
+    await assert.rejects(() => validate(before.revision - 1), { code: "TASK_CONFLICT", version: 1 });
+    for (let retry = 0; retry < 2; retry++) await assert.rejects(() => validate(before.revision), e => e.code === "TASK_NOT_READY" && e.version === 1 && /resume preparation/.test(e.message));
+    await assert.rejects(() => cli ? taskCommand(w.ctx, { args: ["start", before.id], values: { revision: String(before.revision), run: true }, service }) : service.start({ taskId: before.id, expectedRevision: before.revision, run: true }), { code: "TASK_NOT_READY", version: 1 });
+    assert.deepEqual(w.store.read(before.id), before); assert.equal(readFileSync(before.draft.path, "utf8"), oldDraft);
+    assert.equal(owned.runner.current().running, phase === "running"); assert.equal(owned.starts(), 0); assert.equal(decisions, 0);
+    assert.deepEqual(w.ctx.state.entries(), []); assert.equal(daemonCalls, 0);
+    owned.finish();
+    const recovered = phase === "lost-ack"
+      ? await (cli ? taskCommand(w.ctx, { args: ["answer", before.id], values: { revision: String(w.answer.expectedRevision), "request-id": w.answer.operationId, answer: ["q-r-1=Use CSV only."] }, service }) : service.answer(w.answer))
+      : await (cli ? taskCommand(w.ctx, { args: ["resume", before.id], values: { revision: String(before.revision) }, service }) : service.resume({ taskId: before.id, expectedRevision: before.revision }));
+    assert.equal(recovered.status, run ? "started" : "ready"); assert.equal(recovered.taskId, before.id);
+    assert.equal(recovered.draft.current, true); assert.notEqual(recovered.draft.path, before.draft.path);
+    assert.match(recovered.draft.text, /clarified by answer q-r-1/); assert.match(recovered.draft.text, /Use CSV only/); assert.match(recovered.draft.text, /Do not add dependencies/);
+    assert.equal(check(parsePrd(recovered.draft.text, recovered.draft.path)).ok, true);
+    assert.equal(recovered.preparation.attempts.length, 1); assert.equal(recovered.preparation.attempts[0].run, "owned-prepare");
+    assert.equal(recovered.preparation.attempts[0].settled, true); assert.equal(recovered.preparation.attempts[0].cost, 0.37);
+    assert.deepEqual(recovered.preparation.attempts[0].usage, [{ input_tokens: 12, output_tokens: 5 }]);
+    assert.equal(w.store.read(before.id).attempts[0].consumed, true); assert.equal(owned.runner.current().running, false);
+    assert.equal(owned.starts(), 0); assert.equal(decisions, 1); assert.equal(daemonCalls, run ? 1 : 0);
+    const replay = await service.answer(w.answer);
+    assert.deepEqual(replay, service.inspect({ taskId: before.id })); assert.equal(replay.revision, recovered.revision);
+    const validated = await service.validate({ taskId: before.id, expectedRevision: recovered.revision });
+    assert.equal(validated.status, recovered.status); assert.equal(decisions, 1); assert.equal(owned.starts(), 0);
+    assert.equal(w.ctx.state.entries().length, run ? 1 : 0);
+    if (run) assert.equal(w.runners.get(recovered.implementation.id).started.length, 1);
+    if (!cli && !run && phase === "completed") {
+      const evidence = join(w.home, "validate-recovery-fixture.json");
+      writeFileSync(evidence, JSON.stringify({ live: false, model_calls: 0, checkpoint: before, refusal: { code: "TASK_NOT_READY", version: 1, saved_state_unchanged: true }, recovered, replay, decisions, daemonCalls, new_preparation_launches: owned.starts() }, null, 2) + "\n");
+      t.diagnostic("Validation recovery fixture: " + evidence);
+      t.diagnostic("Validation recovery generated draft: " + recovered.draft.path);
+    }
+  }
+});
+
+test("preparing tasks without a draft refuse validation before readiness or recovery work and remain resumable", async () => {
+  for (const cli of [false, true]) {
+    let checkpoint, turns = 0;
+    const w = world({ prepare: async (_ctx, task) => { checkpoint = structuredClone(task); throw Error("fixture exit before the first turn"); } });
+    const first = await w.service.prepare({ text: REQUEST });
+    const store = taskStore(w.home); store.save(checkpoint);
+    const before = store.read(first.taskId), service = createTaskService(w.ctx, { prepare: async (_ctx, task) => { turns++; return JSON.stringify(draftFor(task)); } });
+    await assert.rejects(() => cli ? taskCommand(w.ctx, { args: ["validate", first.taskId], values: { revision: String(before.revision) }, service }) : service.validate({ taskId: first.taskId, expectedRevision: before.revision }), e => e.code === "TASK_NOT_READY" && e.version === 1 && /resume preparation/.test(e.message));
+    assert.deepEqual(store.read(first.taskId), before); assert.equal(turns, 0); assert.equal(before.draft, null);
+    const resumed = await service.resume({ taskId: first.taskId, expectedRevision: before.revision });
+    assert.equal(resumed.status, "ready"); assert.equal(turns, 1); assert.deepEqual(w.ctx.state.entries(), []);
+  }
+});
+
+test("validation refusal preserves interrupted preparation denial and deadline settlement without another turn", async () => {
+  for (const cli of [false, true]) for (const denied of [false, true]) {
+    const w = await interruptedFinalAnswer(true), owned = interruptedPreparationRun(w, "completed", { denied, late: !denied });
+    const before = w.store.read(w.checkpoint.id); let decisions = 0, daemonCalls = 0;
+    const service = createTaskService(w.ctx, { decideReady: async () => { decisions++; throw Error("failed preparation must not reach readiness"); }, daemon: async () => { daemonCalls++; } });
+    await assert.rejects(() => cli ? taskCommand(w.ctx, { args: ["validate", before.id], values: { revision: String(before.revision) }, service }) : service.validate({ taskId: before.id, expectedRevision: before.revision }), { code: "TASK_NOT_READY", version: 1 });
+    assert.deepEqual(w.store.read(before.id), before);
+    const blocked = await service.resume({ taskId: before.id, expectedRevision: before.revision });
+    assert.equal(blocked.status, "blocked"); assert.equal(blocked.readiness, null); assert.equal(blocked.preparation.repairs, 0);
+    assert.equal(blocked.preparation.attempts[0].settled, true); assert.equal(blocked.preparation.attempts[0].cost, 0.37);
+    assert.deepEqual(blocked.preparation.attempts[0].usage, [{ input_tokens: 12, output_tokens: 5 }]);
+    assert.equal(blocked.preparation.attempts[0].error, denied ? preparationDenialText : "preparation runtime allowance exhausted");
+    assert.match(blocked.failures[0], denied ? /fixture\.permission/ : /runtime allowance exhausted/);
+    assert.deepEqual((await service.answer(w.answer)).failures, blocked.failures);
+    assert.deepEqual(await service.resume({ taskId: before.id, expectedRevision: blocked.revision }), service.inspect({ taskId: before.id }));
+    assert.equal(owned.runner.current().running, false); assert.equal(owned.starts(), 0); assert.equal(decisions, 0); assert.equal(daemonCalls, 0);
+    assert.deepEqual(w.ctx.state.entries(), []); assert.deepEqual(blocked.requirements, before.requirements);
+  }
+});
+
 test("preparation uses the existing runner in a separate workspace, records usage and reconciles a lost response", async () => {
   const w = world();
   const runner = fakeRunner({ now: Date.now }), launch = runner.start;
