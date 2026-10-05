@@ -28,7 +28,10 @@ and temporary directory. Only the selected adapter's native auth/config files an
 configured plugin/skill resources are linked into that profile; previous sessions
 and unrelated home-directory credentials are excluded. Shared AWS credentials
 require explicit Bedrock selection; Claude's explicit Vertex mode can also use
-native Google credentials. No model or permission flags are changed.
+native Google credentials. Gemini with `GOOGLE_GENAI_USE_VERTEXAI=true` carries
+only `gcloud/application_default_credentials.json` into its private config root;
+explicit `GOOGLE_APPLICATION_CREDENTIALS` paths keep their existing precedence.
+No model or permission flags are changed.
 
 `GH_CONFIG_DIR=/dev/null` disables stored GitHub CLI credentials. The existing Git
 environment disables user/system configuration; inherited Git/SSH overrides,
@@ -73,6 +76,10 @@ Review the assumptions and mapping. All nonblank request lines are immutable
 requirement fragments; their exact text is attached to mapped criteria or shown as
 unresolved. An explicit answer can clarify a previously questioned fragment; the
 mapping records which answer resolved it. Repairs cannot quietly omit a fragment.
+Quoted fragments use reversible JSON Unicode escapes for literal placeholder
+tokens, so requests such as “remove the TODO” can pass readiness. The saved request
+and answers keep their original text; generated prose and hand-authored briefs
+still pass the same placeholder check.
 An older draft while partial answers are pending has `draft.current: false`.
 
 Preparation stays under `$GALLIVANT_HOME/tasks/<task-id>/`: private intake state,

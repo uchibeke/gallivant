@@ -116,6 +116,48 @@ test("invalid output is repaired at most three times and cannot remove explicit 
   assert.equal(resumed.status, "blocked"); assert.equal(invalidCalls, 4);
 });
 
+test("literal placeholder tokens in requests and answers survive quoted mapping, repair, readiness and dispatch", async t => {
+  const original = 'Remove the TODO, resolve FIXME, finalize TBD, replace <placeholder>, clarify ??????, and correct lorem ipsum.\nKeep the literal \\u0054ODO text and do not add dependencies.';
+  const answer = 'Use the literal "<your repo>" text; resolve FIXME without adding dependencies.';
+  let calls = 0;
+  const w = world({ prepare: async (_ctx, task, _store, failures) => {
+    const out = draftFor(task, { question: true }); calls++;
+    out.title = "Resolve documented source markers";
+    out.problem = "Maintainers rely on source comments to understand outstanding work before making a change. Literal maintenance markers currently describe unresolved work or wording that needs replacement, leaving these readers unsure which behavior is intended. Resolving the requested markers while preserving the explicitly retained text and existing dependencies will make the repository guidance actionable without introducing unrelated feature changes.";
+    out.questions.forEach(q => { q.text = "Which literal marker text should remain?"; });
+    out.stories = ["As a maintainer, I want outstanding source markers resolved, so that guidance is actionable."];
+    out.where = ["src/"]; out.exclusions = ["Unrelated features and package upgrades."]; out.assumptions = ["All referenced markers are in the selected repository."];
+    out.criteria = task.requirements.map((r, i) => ({ id: `ac-${i + 1}`, text: /dependencies/.test(r.text) ? "Given the current manifest, when the markers are resolved, then dependencies remain unchanged." : "Given the documented source markers, when maintenance completes, then each requested marker has been resolved." }));
+    if (calls === 2) out.assumptions = ["TODO: decide what to do later."];
+    if (calls === 3) assert.match(failures.join(" "), /placeholders: found "TODO"/);
+    assert.equal(task.original, original);
+    return JSON.stringify(out);
+  } });
+  const first = await w.service.prepare({ text: original });
+  assert.equal(first.status, "needs-input"); assert.equal(first.taskId, w.service.inspect({ taskId: first.taskId }).taskId);
+  const r = await w.service.answer({ taskId: first.taskId, expectedRevision: first.revision, operationId: "literal-answer", answers: { "q-r-1": answer } });
+  assert.equal(r.status, "ready", r.failures.join("\n")); assert.equal(r.original, original); assert.equal(r.answers["q-r-1"], answer);
+  assert.equal(r.preparation.repairs, 1); assert.equal(calls, 3);
+  for (const requirement of r.requirements) {
+    const mapping = r.draft.text.split("\n").find(line => line.startsWith(`- ${requirement.id}: `));
+    const quoted = mapping.slice(`- ${requirement.id}: `.length).split(" → ")[0];
+    assert.equal(JSON.parse(quoted), requirement.text, `mapping round-trips ${requirement.id}`);
+    const attachment = r.draft.text.split("\n").find(line => line.includes(` Explicit requirement ${requirement.id}: `));
+    if (attachment) assert.equal(JSON.parse(attachment.split(` Explicit requirement ${requirement.id}: `)[1]), requirement.text);
+  }
+  assert.equal(check(parsePrd(r.draft.text, r.draft.path)).ok, true);
+  assert.match(r.draft.text, /\\u0054ODO/); assert.match(r.draft.text, /\\u003cplaceholder>/);
+  t.diagnostic(`Literal-token fixture draft: ${r.draft.path}`);
+  const validated = await w.service.validate({ taskId: r.taskId, expectedRevision: r.revision });
+  const started = await w.service.start({ taskId: r.taskId, expectedRevision: validated.revision, run: true });
+  assert.equal(started.status, "started"); assert.equal(w.runners.get(started.implementation.id).started.length, 1);
+  // Generated prose and existing hand-authored briefs still obey the same rule.
+  const bad = world({ prepare: async (_ctx, task) => { const out = draftFor(task); out.assumptions = ["TODO: finish requirements."]; return JSON.stringify(out); } });
+  const blocked = await bad.service.prepare({ text: "Remove the TODO.", run: true });
+  assert.equal(blocked.status, "blocked"); assert.equal(blocked.preparation.repairs, 3); assert.match(blocked.failures[0], /placeholders/); assert.deepEqual(bad.ctx.state.entries(), []);
+  assert.equal(check(parsePrd(GOOD_PRD.replace("## Problem", "TODO\n\n## Problem"), "docs/prds/manual.md")).results.find(r => r.id === "placeholders").ok, false);
+});
+
 test("real checker failures are repaired, while a hosted readiness denial stays denied without dispatch or a fabricated pass", async () => {
   let calls = 0;
   const repair = world({ prepare: async (_ctx, task) => { const out = draftFor(task); if (++calls === 1) out.problem = "Too short."; return JSON.stringify(out); } });
@@ -414,6 +456,36 @@ test("cloud provider credentials are available only in explicitly selected provi
   }
   const env = preparationEnvironment("codex", join(root, "codex"), {}, source);
   assert.ok(!("AWS_SECRET_ACCESS_KEY" in env)); assert.ok(!("CLAUDE_CODE_USE_BEDROCK" in env)); assert.equal(existsSync(join(env.HOME, ".aws")), false);
+});
+
+test("Gemini Vertex preparation carries only ADC into its private profile and preserves explicit credentials", () => {
+  const root = tempHome(), operator = join(root, "operator-home"), nativeConfig = join(root, "operator-config"), adc = "gcloud/application_default_credentials.json";
+  mkdirSync(join(nativeConfig, "gcloud"), { recursive: true }); mkdirSync(operator);
+  writeFileSync(join(nativeConfig, adc), JSON.stringify({ type: "authorized_user", refresh_token: "fixture-only" }));
+  writeFileSync(join(nativeConfig, "gcloud/credentials.db"), "unrelated-fixture-only");
+  writeFileSync(join(nativeConfig, "gcloud/config_default"), "unrelated-fixture-only");
+  const source = { HOME: operator, XDG_CONFIG_HOME: nativeConfig, GOOGLE_GENAI_USE_VERTEXAI: "true", GOOGLE_CLOUD_PROJECT: "fixture-project", GOOGLE_CLOUD_LOCATION: "fixture-region", GEMINI_MODEL: "configured-model", AWS_SECRET_ACCESS_KEY: "unrelated", NPM_TOKEN: "unrelated" };
+  for (const turn of ["initial", "repair"]) {
+    const env = preparationEnvironment("gemini", join(root, turn), {}, source);
+    assert.equal(env.GOOGLE_GENAI_USE_VERTEXAI, "true"); assert.equal(env.GOOGLE_CLOUD_PROJECT, source.GOOGLE_CLOUD_PROJECT); assert.equal(env.GOOGLE_CLOUD_LOCATION, source.GOOGLE_CLOUD_LOCATION); assert.equal(env.GEMINI_MODEL, source.GEMINI_MODEL);
+    assert.equal(readFileSync(join(env.XDG_CONFIG_HOME, adc), "utf8"), readFileSync(join(nativeConfig, adc), "utf8"));
+    assert.deepEqual(readdirSync(join(env.XDG_CONFIG_HOME, "gcloud")), ["application_default_credentials.json"]);
+    assert.ok(!("AWS_SECRET_ACCESS_KEY" in env)); assert.ok(!("NPM_TOKEN" in env)); assert.ok(!("GOOGLE_APPLICATION_CREDENTIALS" in env));
+  }
+  for (const flag of [undefined, "false", "1"]) {
+    const env = preparationEnvironment("gemini", join(root, `off-${flag}`), {}, { ...source, GOOGLE_GENAI_USE_VERTEXAI: flag, GEMINI_API_KEY: "fixture-api-key" });
+    assert.equal(existsSync(join(env.XDG_CONFIG_HOME, adc)), false); assert.equal(env.GEMINI_API_KEY, "fixture-api-key");
+  }
+  const explicit = preparationEnvironment("gemini", join(root, "explicit"), {}, { ...source, GOOGLE_APPLICATION_CREDENTIALS: join(root, "selected-service-account.json") });
+  assert.equal(explicit.GOOGLE_APPLICATION_CREDENTIALS, join(root, "selected-service-account.json"));
+  const claude = preparationEnvironment("claude", join(root, "claude"), {}, { ...source, CLAUDE_CODE_USE_VERTEX: "1" });
+  assert.equal(readFileSync(join(claude.XDG_CONFIG_HOME, adc), "utf8"), readFileSync(join(nativeConfig, adc), "utf8"));
+  assert.equal(existsSync(join(claude.XDG_CONFIG_HOME, "gcloud/credentials.db")), false);
+  rmSync(join(nativeConfig, adc));
+  const missing = preparationEnvironment("gemini", join(root, "missing"), {}, source);
+  assert.equal(existsSync(join(missing.XDG_CONFIG_HOME, adc)), false, "missing ADC never fabricates authentication");
+  symlinkSync(operator, join(nativeConfig, adc));
+  assert.throws(() => preparationEnvironment("gemini", join(root, "unsafe"), {}, source), e => e.code === "TASK_PREPARATION_ENV");
 });
 
 test("unsafe native profile roots stop before launch intent and are not retried", async () => {
