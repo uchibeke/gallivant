@@ -2,7 +2,8 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { dirname, join } from "node:path";
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, writeFileSync, rmSync } from "node:fs";
+import { makeGit } from "../lib/git.mjs";
 import { queueChain, retryChain, cancelChain, tickChains, chainRows, renderChains } from "../lib/chains.mjs";
 import { makeState, STATES } from "../lib/state.mjs";
 import { start } from "../lib/commands/start.mjs";
@@ -427,6 +428,35 @@ test("failure after persisting the started entry reconciles its existing run ins
   assert.equal(w.clones.length, 1);
   assert.equal(w.starts(), 1);
   assert.equal(w.ctx.state.getChain("release").status, "active");
+});
+
+test("chain post-clone base refusal retains dispatch and start ownership across reload and retry", async () => {
+  const w=world({sources:true});await w.queue();
+  w.ctx.git.fileAt=async (_dir,_ref,path)=>{if(path==="docs/context.md")throw Error("Base source changed into a symlink");return null;};
+  await tickChains(w.ctx);
+  const chain=w.ctx.state.getChain("release"),claim=w.ctx.state.startClaim(FIRST);
+  assert.equal(chain.status,"stopped");assert.match(chain.reason,/Base source changed into a symlink/);assert.ok(chain.steps[0].dispatch);
+  assert.equal(claim.clone.worktree,join(w.home,"worktrees",FIRST));assert.equal(w.clones.length,1);assert.equal(w.starts(),0);
+  w.ctx.state=makeState(w.home);await assert.rejects(()=>retryChain(w.ctx,{name:"release"}),/start|claim|inspect/i);await tickChains(w.ctx);
+  assert.deepEqual(w.ctx.state.startClaim(FIRST),claim);assert.equal(w.clones.length,1);assert.equal(w.starts(),0);
+});
+
+test("chain known create refusal releases start and dispatch ownership for an explicit corrected retry", async () => {
+  const w = world(), path = join(w.home, "worktrees", FIRST); let clones = 0;
+  mkdirSync(join(path, ".git"), { recursive: true }); writeFileSync(join(path, "stale-evidence"), "retained operator files");
+  w.ctx.git.create = makeGit({ config: w.ctx.config, exec: async (cmd, args) => {
+    if (cmd === "gh") { clones++; mkdirSync(join(args[3], ".git"), { recursive: true }); }
+    return { stdout: "" };
+  } }).create;
+  await w.queue(); await tickChains(w.ctx);
+  const stopped = w.ctx.state.getChain("release");
+  assert.equal(stopped.status, "stopped"); assert.match(stopped.reason, /worktree already exists/);
+  assert.equal(stopped.steps[0].dispatch, null); assert.equal(w.ctx.state.startClaim(FIRST), null);
+  assert.equal(clones, 0); assert.equal(w.starts(), 0); assert.equal(readFileSync(join(path, "stale-evidence"), "utf8"), "retained operator files");
+  rmSync(path, { recursive: true }); w.ctx.state = makeState(w.home);
+  await retryChain(w.ctx, { name: "release" }); await tickChains(w.ctx); await tickChains(w.ctx);
+  assert.equal(w.ctx.state.getChain("release").status, "active"); assert.equal(clones, 1); assert.equal(w.starts(), 1);
+  assert.equal(w.ctx.state.startClaim(FIRST), null); assert.equal(w.ctx.state.get(FIRST).chain.name, "release");
 });
 
 test("transient GitHub failures retry without dispatch, eventually stop, and recover through explicit retry", async () => {

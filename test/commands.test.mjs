@@ -2,7 +2,8 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { join, relative, dirname } from "node:path";
-import { mkdirSync, readFileSync, writeFileSync, statSync, existsSync } from "node:fs";
+import { mkdirSync, readFileSync, writeFileSync, statSync, existsSync, rmSync } from "node:fs";
+import { makeGit } from "../lib/git.mjs";
 import { makeTick } from "../lib/tick.mjs";
 import { start } from "../lib/commands/start.mjs";
 import { register } from "../lib/commands/register.mjs";
@@ -84,6 +85,26 @@ test("start refuses when no credential can be resolved, so nothing is cloned, re
   assert.equal(w.snapshots.size, 0, "no snapshot was taken for a run that never happened");
 });
 
+test("hand-authored start releases a known stale-worktree refusal before cloning and retries after correction", async () => {
+  const w = startWorld(), id = "acme/widget/widget-export", runner = fakeRunner(makeClock()); let clones = 0;
+  mkdirSync(join(w.worktree, ".git")); writeFileSync(join(w.worktree, "stale-evidence"), "operator-owned checkout");
+  w.ctx.runnerFor = () => runner;
+  w.ctx.git.create = makeGit({ config: w.ctx.config, exec: async (cmd, args) => {
+    if (cmd === "gh") { clones++; mkdirSync(join(args[3], ".git"), { recursive: true }); }
+    return { stdout: "" };
+  } }).create;
+  await assert.rejects(() => start(w.ctx, { path: w.prdPath }), error => {
+    assert.match(error.message, /worktree already exists/); assert.equal(error.startUncertain, false); return true;
+  });
+  assert.equal(w.ctx.state.startClaim(id), null); assert.equal(clones, 0); assert.equal(runner.started.length, 0);
+  assert.equal(readFileSync(join(w.worktree, "stale-evidence"), "utf8"), "operator-owned checkout");
+  rmSync(w.worktree, { recursive: true }); w.ctx.state = makeState(w.home);
+  const result = await start(w.ctx, { path: w.prdPath });
+  assert.equal(result.id, id); assert.equal(clones, 1); assert.equal(runner.started.length, 1);
+  assert.equal(w.ctx.state.startClaim(id), null); assert.equal(w.ctx.state.get(id).last.run, result.run);
+  await assert.rejects(() => start(w.ctx, { path: w.prdPath }), /already exists/); assert.equal(clones, 1);
+});
+
 test("start puts the resolved credential in the run's environment and never in its argv", async () => {
   // Constraints 1 and 2: the token reaches the child through the environment, and `ps` (which shows argv to every
   // process on the machine) can never see it.
@@ -126,6 +147,17 @@ test("start awaits durable runner startup before registering the claimed run", a
   assert.equal(result.run, runner.current().id);
   assert.equal(w.ctx.state.get(id).last.run, result.run);
   assert.equal(w.ctx.state.startClaim(id), null);
+});
+
+test("hand-authored start retains clone ownership after a base PRD path conflict without spawning or recloning", async () => {
+  const w=startWorld(),id="acme/widget/widget-export",runner=fakeRunner(makeClock());let clones=0;
+  mkdirSync(join(w.worktree,"docs/prds/widget-export.md"),{recursive:true});w.ctx.runnerFor=()=>runner;
+  w.ctx.git.create=async()=>{clones++;return w.worktree;};
+  await assert.rejects(()=>start(w.ctx,{path:w.prdPath}),e=>e.startUncertain===true&&/not a regular repository file/.test(e.message));
+  const claim=w.ctx.state.startClaim(id);assert.equal(claim.clone.worktree,w.worktree);assert.equal(claim.clone.base,"main");
+  assert.equal(w.ctx.state.get(id),null);assert.equal(runner.started.length,0);
+  w.ctx.state=makeState(w.home);await assert.rejects(()=>start(w.ctx,{path:w.prdPath}),/unresolved start/);
+  assert.deepEqual(w.ctx.state.startClaim(id),claim);assert.equal(clones,1);assert.equal(runner.started.length,0);
 });
 
 test("a run completed before the first tick still has its earliest own comments checked", async t => {

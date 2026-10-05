@@ -8,6 +8,13 @@ It implements adapters for Claude Code, Codex, Gemini CLI, OpenCode and Goose, w
 
 Node 22, zero dependencies, `gh` for all GitHub access, ntfy for notifications. No GitHub App, no webhook server, no database.
 
+With Claude configured, you can also start from natural language:
+`gallivant task "Add CSV export without new dependencies" --harness claude`
+prepares an isolated, validated brief. Add `--run` to authorize
+implementation once material questions are resolved. [Task operations](docs/tasks.md)
+cover preparation adapter restrictions, stdin, resumable questions, structured
+exports and separate live qualification.
+
 ## Five-minute path
 
 ```bash

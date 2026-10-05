@@ -6,6 +6,20 @@ Handles: every command that takes one accepts `<repo>#<pr>` (short name or `owne
 
 The install checklist and the health probe, one line per check, each failure with the exact command or file that fixes it. With no config it prints a complete config built from this machine. `--send` posts a test notification. `--probe` runs a real Claude session in a temp directory and confirms a write inside is allowed and a write outside is denied. Exit code 1 while anything fails.
 
+## `gallivant task [prepare] "request" [--stdin] [--run] [--json]`
+
+Prepares an isolated canonical PRD through the shared task service. Accepts
+`--dir`, `--repo`, `--base`, `--harness`, repeated `--context` files and a retry-safe
+`--request-id`. Material unknowns return saved questions; `task answer` resumes
+their identity using `--revision`, `--request-id` and repeated `--answer id=text`.
+`task inspect`, `list`, `resume`, `validate` and `start` expose the same versioned
+operations to CLI and in-process clients. Preparation uses inference but starts
+implementation only with explicit `--run` authorization and exact readiness.
+Currently preparation accepts only configured Claude with all tools disabled;
+select it with `--harness claude`. Other adapters return
+`TASK_PREPARATION_BOUNDARY` without an automatic fallback.
+See [task operations](tasks.md) for examples, source delivery and stopping rules.
+
 One line per repository in `repos` names the base branch its pull requests will target and where that answer came from,
 so a repository whose work should go to `staging` while nothing is configured is visible before a session opens a pull
 request against `main`. A configured base that GitHub does not have is a failure here, with the fix. See [the base

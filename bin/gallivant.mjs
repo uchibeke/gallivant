@@ -16,12 +16,24 @@ import { hasConfig } from "../lib/config.mjs";
 import { resolveHandle } from "../lib/state.mjs";
 import { requestControl } from "../lib/control.mjs";
 import { queueChain, retryChain, cancelChain, renderChains } from "../lib/chains.mjs";
+import { taskCommand, renderTask } from "../lib/commands/task.mjs";
+import { TASK_VERSION } from "../lib/tasks.mjs";
 
 const HELP = `gallivant: write a PRD, mark it ready, go outside.
 
   gallivant doctor [--send] [--probe]   install checklist and health probe
   gallivant new <name> [--harness <name>] [--dir <repo>]
                                          write a starting PRD into docs/prds/ of the repo you are in
+  gallivant task [prepare] "<request>" [--stdin] [--dir <checkout>] [--repo <owner/repo>]
+                [--base <branch>] [--harness <name>] [--context <file>] [--request-id <id>] [--run] [--json]
+                                         prepare an isolated brief; --run authorizes its exact ready revision
+                                         Claude preparation disables tools; other adapters stop until isolated
+                                         preparation support exists. Hand-authored ready/start remains available
+  gallivant task answer <task-id> --revision <n> --request-id <answer-id> --answer <question-id=text>
+                                         resume saved questions; --answer and --context may repeat
+  gallivant task inspect <task-id> [--json] | task list [--json]
+  gallivant task resume|validate|start <task-id> --revision <n> [--run] [--no-daemon] [--json]
+                                         shared versioned operations; start needs prior or --run authorization
   gallivant ready <prd.md> [--check]     check the PRD against the contract; flip it to ready when it passes
   gallivant start <prd.md> [--no-daemon] [--base <branch>]
                                          start a session for a ready PRD, and bring the daemon up to watch it.
@@ -53,6 +65,9 @@ const OPTIONS = {
   "no-daemon": { type: "boolean" }, note: { type: "string" }, resnapshot: { type: "boolean" }, interrupt: { type: "boolean" },
   base: { type: "string" }, harness: { type: "string" }, session: { type: "string" }, worktree: { type: "string" }, dir: { type: "string" }, port: { type: "string" },
   cancel: { type: "boolean" }, retry: { type: "boolean" },
+  run: { type: "boolean" }, stdin: { type: "boolean" }, repo: { type: "string" }, revision: { type: "string" },
+  "request-id": { type: "string" }, context: { type: "string", multiple: true },
+  answer: { type: "string", multiple: true }, verify: { type: "string", multiple: true },
 };
 
 const portOf = v => {
@@ -79,6 +94,18 @@ async function main(argv) {
     return r.ok ? 0 : 1;
   }
 
+  if (cmd === "task") {
+    try {
+      const ctx = makeContext();
+      const r = await taskCommand(ctx, { args: positionals.slice(1), values });
+      console.log(values.json ? JSON.stringify(r, null, 2) : renderTask(r));
+      return r.status === "blocked" || r.daemonError ? 1 : 0;
+    } catch (e) {
+      if (!values.json) throw e;
+      console.log(JSON.stringify({ version: TASK_VERSION, error: { code: e.code || "TASK_FAILED", message: e.message } }));
+      return 1;
+    }
+  }
   const ctx = makeContext();
   if (cmd === "recheck" || cmd === "say") {
     if (!arg) throw new Error(`${cmd} needs a handle`);
