@@ -171,7 +171,11 @@ exact repository command using `--verify 'python -m unittest'`.
 `--run` on preparation persists execution authorization through questions and
 answers. Once the exact generated brief and source snapshot pass readiness, the
 service starts it once and brings up the normal daemon. No second confirmation is
-needed. Preparation without `--run` returns the draft and an explicit next action.
+needed. If the process exits after saving readiness but before dispatch, retrying
+the same preparation request or answer identity resumes that saved authorization
+through the exact approval and dispatch-ownership checks. A preparation-only
+retry still returns the draft without implementation.
+Preparation without `--run` returns the draft and an explicit next action.
 `--no-daemon` leaves monitoring to an explicitly started `gallivant up`.
 
 Readiness uses the existing PRD checker and readiness decision procedure. It proves

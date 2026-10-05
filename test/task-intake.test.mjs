@@ -1247,6 +1247,119 @@ test("run authorization dispatches once and stale or modified approved revisions
   assert.deepEqual(edit.ctx.state.entries(), []);
 });
 
+async function readyReplayFixture({ operation, cli, run = true, noDaemon = false }) {
+  let plans = 0, decisions = 0, daemonCalls = 0, checkpoint;
+  const w = world({
+    prepare: async (_ctx, task) => { plans++; return JSON.stringify(draftFor(task, { question: operation === "answer" })); },
+    decideReady: async opts => { decisions++; return ready(opts); },
+  });
+  mkdirSync(join(w.checkout, "docs"));
+  writeFileSync(join(w.checkout, "docs/export-plan.md"), "Export the visible widget rows only.\n");
+  const input = { text: REQUEST, context: ["docs/export-plan.md"], requestId: "ready-replay", run, noDaemon };
+  const prepare = (service, request = input) => cli ? taskCommand(w.ctx, {
+    args: ["prepare", request.text], values: { context: request.context, "request-id": request.requestId, run: request.run, "no-daemon": request.noDaemon }, service,
+  }) : service.prepare(request);
+  let reply;
+  const answer = (service, request = reply) => cli ? taskCommand(w.ctx, {
+    args: ["answer", request.taskId], values: { revision: String(request.expectedRevision), "request-id": request.operationId, answer: Object.entries(request.answers).map(([id, text]) => id + "=" + text), "no-daemon": noDaemon }, service,
+  }) : service.answer({ ...request, noDaemon });
+  const store = taskStore(w.home), get = w.ctx.state.get;
+  // Capture the actual durable record at start entry, after readiness was saved
+  // and before any dispatch intent, clone, ownership claim or runner exists.
+  w.ctx.state.get = id => {
+    const saved = store.list()[0];
+    if (run && !checkpoint && saved?.status === "ready" && saved.runAuthorized && !saved.dispatchIntent) {
+      checkpoint = saved;
+      throw new Error("fixture crash after readiness persisted");
+    }
+    return get(id);
+  };
+  let interrupted;
+  try {
+    interrupted = await prepare(w.service);
+    if (operation === "answer") {
+      assert.equal(interrupted.status, "needs-input");
+      reply = { taskId: interrupted.taskId, expectedRevision: interrupted.revision, operationId: "ready-answer", answers: { "q-r-1": "Use CSV only." } };
+      interrupted = await answer(w.service);
+    }
+  } finally { w.ctx.state.get = get; }
+  if (run) {
+    assert.equal(interrupted.status, "blocked");
+    assert.match(interrupted.failures[0], /fixture crash after readiness persisted/);
+    assert.equal(checkpoint.status, "ready"); assert.equal(checkpoint.readiness.allow, true);
+    assert.equal(checkpoint.dispatchIntent, null); assert.deepEqual(w.ctx.state.entries(), []);
+    // A hard exit would retain the checkpoint instead of the caught-error write.
+    store.save(checkpoint);
+  } else checkpoint = store.read(interrupted.taskId);
+  w.ctx.state = makeState(w.home);
+  const reopened = createTaskService(w.ctx, {
+    prepare: async () => { throw new Error("ready replay must not call the planner"); },
+    decideReady: async () => { throw new Error("ready replay must not repeat readiness"); },
+    daemon: async () => { daemonCalls++; },
+  });
+  return { ...w, store, checkpoint, input, reply, reopened, invoke: operation === "prepare" ? prepare : answer, counts: () => ({ plans, decisions, daemonCalls }) };
+}
+
+test("idempotent preparation and answer retries dispatch an authorized ready checkpoint once after restart", async t => {
+  for (const operation of ["prepare", "answer"]) for (const cli of [false, true]) for (const noDaemon of [false, true]) {
+    const w = await readyReplayFixture({ operation, cli, noDaemon });
+    const before = w.store.read(w.checkpoint.id), counts = w.counts();
+    const changed = operation === "prepare" ? { ...w.input, text: "Different requirements." } : { ...w.reply, answers: { "q-r-1": "Use JSON." } };
+    await assert.rejects(() => w.invoke(w.reopened, changed), { code: "TASK_CONFLICT" });
+    assert.deepEqual(w.store.read(before.id), before);
+    writeFileSync(join(w.checkout, "docs/export-plan.md"), "Changed after the accepted snapshot.\n");
+    const started = await w.invoke(w.reopened);
+    assert.equal(started.status, "started"); assert.equal(started.taskId, before.id);
+    assert.deepEqual(started.requirements, before.requirements); assert.deepEqual(started.readiness, before.readiness);
+    assert.equal(started.draft.hash, before.draft.hash); assert.equal(check(parsePrd(started.draft.text, started.draft.path)).ok, true);
+    assert.equal(w.sources.get(started.implementation.id + ":docs/export-plan.md"), before.context.find(c => c.path === "docs/export-plan.md").text);
+    const replay = await w.invoke(w.reopened);
+    assert.equal(replay.revision, started.revision); assert.equal(replay.implementation.run, started.implementation.run);
+    assert.equal(w.ctx.state.entries().length, 1); assert.equal(w.runners.get(started.implementation.id).started.length, 1);
+    assert.deepEqual(w.counts(), { ...counts, daemonCalls: noDaemon ? 0 : 1 });
+    assert.equal(w.store.read(before.id).runAuthorized, true);
+    if (operation === "answer" && !cli && !noDaemon) {
+      const evidence = join(w.home, "ready-replay-fixture.json");
+      writeFileSync(evidence, JSON.stringify({ live: false, model_calls: 0, operation, checkpoint: before, result: started, duplicate: replay, counts: w.counts() }, null, 2) + "\n");
+      t.diagnostic("Ready replay fixture record: " + evidence);
+      t.diagnostic("Ready replay generated draft: " + started.draft.path);
+    }
+  }
+});
+
+test("idempotent ready retries preserve preparation-only authorization and accepted revisions", async () => {
+  for (const operation of ["prepare", "answer"]) for (const cli of [false, true]) {
+    const w = await readyReplayFixture({ operation, cli, run: false }), before = w.store.read(w.checkpoint.id);
+    const expected = w.reopened.inspect({ taskId: before.id });
+    assert.deepEqual(await w.invoke(w.reopened), expected);
+    assert.deepEqual(w.store.read(before.id), before); assert.equal(before.runAuthorized, false);
+    assert.deepEqual(w.ctx.state.entries(), []); assert.equal(w.runners.size, 0); assert.equal(w.counts().daemonCalls, 0);
+    if (operation === "prepare") await assert.rejects(() => w.invoke(w.reopened, { ...w.input, run: true }), { code: "TASK_CONFLICT" });
+    else await assert.rejects(() => w.invoke(w.reopened, { ...w.reply, operationId: "new-stale-answer" }), { code: "TASK_CONFLICT" });
+    assert.deepEqual(w.store.read(before.id), before);
+  }
+});
+
+test("authorized ready retries enforce saved draft approval and uncertain dispatch ownership", async () => {
+  for (const operation of ["prepare", "answer"]) for (const cli of [false, true]) for (const failure of ["draft", "source", "approval", "digest", "intent", "claim"]) {
+    const w = await readyReplayFixture({ operation, cli }), task = w.store.read(w.checkpoint.id), id = "acme/widget/" + task.id;
+    if (failure === "draft") writeFileSync(task.draft.path, readFileSync(task.draft.path, "utf8").replace("Do not add dependencies.", "Add dependencies."));
+    if (failure === "source") writeFileSync(join(task.draft.root, "docs/export-plan.md"), "Changed pinned source.\n");
+    if (failure === "approval") task.readiness.allow = false;
+    if (failure === "digest") task.readiness.digest = "different-approved-revision";
+    if (failure === "intent") task.dispatchIntent = { id, digest: task.readiness.digest };
+    if (failure === "claim") w.ctx.state.claimStart(id, null, { id: task.id, digest: task.readiness.digest });
+    w.store.save(task);
+    if (["intent", "claim"].includes(failure)) {
+      const blocked = await w.invoke(w.reopened);
+      assert.equal(blocked.status, "blocked"); assert.match(blocked.failures[0], /unknown|unresolved start claim/);
+      assert.deepEqual(await w.invoke(w.reopened), blocked, "blocked retries cannot redispatch");
+    } else await assert.rejects(() => w.invoke(w.reopened), { code: ["draft", "source"].includes(failure) ? "TASK_CONFLICT" : "TASK_NOT_READY" });
+    assert.deepEqual(w.ctx.state.entries(), []); assert.equal(w.runners.size, 0); assert.equal(w.counts().daemonCalls, 0);
+    assert.deepEqual(w.store.read(task.id).requirements, task.requirements); assert.equal(w.store.read(task.id).runAuthorized, true);
+  }
+});
+
 test("crash recovery reconciles accepted dispatch ownership and refuses uncertain launch acceptance", async () => {
   const w = world(); const readyResult = await w.service.prepare({ text: REQUEST });
   const store = taskStore(w.home), before = store.read(readyResult.taskId);
