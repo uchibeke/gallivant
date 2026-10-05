@@ -13,7 +13,8 @@ import { check, parsePrd } from "../lib/prd.mjs";
 import { makeRunner } from "../lib/run.mjs";
 import { runEnv, RUN_GIT_CONFIG } from "../lib/git.mjs";
 import { preparationEnvironment } from "../lib/task_environment.mjs";
-import { renderDraft, collectCommands, draftPrompt } from "../lib/task_contract.mjs";
+import { renderDraft, collectCommands, draftPrompt, MAX_PREPARATION_PROMPT_BYTES } from "../lib/task_contract.mjs";
+import { buildRun } from "../lib/harness.mjs";
 import { makeState } from "../lib/state.mjs";
 import { writeJsonAtomic } from "../lib/fs.mjs";
 import { contentDigest } from "../lib/start_contract.mjs";
@@ -828,6 +829,115 @@ test("preparation uses the existing runner in a separate workspace, records usag
   savedOutput.status = "preparing"; savedOutput.attempts[0].consumed = false; store.save(savedOutput);
   const replayed = await service.resume({ taskId: r.taskId, expectedRevision: savedOutput.revision });
   assert.equal(replayed.status, "ready"); assert.equal(runner.started.length, 1);
+});
+
+test("oversized serialized preparation prompts stop before probes or launch across adapters and CLI callers", async () => {
+  const cases = ["x".repeat(140 * 1024), '"'.repeat(64 * 1024), "界".repeat(41 * 1024)];
+  for (const harness of ["claude", "codex", "gemini", "opencode", "goose"]) for (const cli of [false, true]) for (const text of cases) {
+    const w = world(), runner = fakeRunner({ now: Date.now });
+    w.ctx.config.harness = { [harness]: { bin: harnessBin(w.home, harness, { signInOutput: "1 credential" }) } };
+    // A pre-fix argv submission would fail immediately rather than hang this
+    // fixture while waiting for a planner that could never have been spawned.
+    runner.start = () => { throw Object.assign(new Error("spawn E2BIG"), { code: "E2BIG" }); };
+    w.ctx.runnerFor = () => runner;
+    writeFileSync(join(w.checkout, "selected.md"), text);
+    const service = createTaskService(w.ctx), input = { text: REQUEST, context: ["selected.md"], harness, requestId: "large-context", run: true };
+    const invoke = () => cli ? taskCommand(w.ctx, { args: ["prepare", REQUEST], values: { context: input.context, harness, "request-id": input.requestId, run: true }, service }) : service.prepare(input);
+    const r = await invoke(), record = taskStore(w.home).read(r.taskId);
+    assert.equal(r.version, 1); assert.equal(r.status, "blocked"); assert.equal(record.errorCode, "TASK_INPUT");
+    assert.match(r.failures[0], /serialized preparation prompt exceeds 122880 bytes; select fewer or smaller context files/);
+    assert.equal(record.context.find(c => c.path === "selected.md").text, text); assert.equal(r.original, REQUEST);
+    assert.deepEqual(r.requirements, [{ id: "r-1", text: "Add CSV export for the widget table." }, { id: "r-2", text: "Do not add dependencies." }]);
+    assert.deepEqual(r.preparation.attempts, []); assert.equal(r.preparation.repairs, 0); assert.equal(r.readiness, null);
+    assert.equal(existsSync(join(w.home, `${harness}-calls.jsonl`)), false); assert.equal(existsSync(join(w.home, "tasks", r.taskId, "preparation")), false);
+    assert.deepEqual(w.ctx.state.entries(), []); assert.equal(r.implementation, null);
+    assert.deepEqual(await invoke(), r); assert.deepEqual(await service.resume({ taskId: r.taskId, expectedRevision: r.revision }), r);
+  }
+});
+
+test("automatic lockfiles, accumulated answers, repair output and legacy resumes share the serialized prompt bound", async () => {
+  for (const mode of ["lockfile", "answer", "repair", "resume"]) for (const cli of [false, true]) {
+    const w = world(), runner = fakeRunner({ now: Date.now }), launch = runner.start;
+    runner.start = (...args) => {
+      assert.ok(Buffer.byteLength(args[2].at(-1)) <= MAX_PREPARATION_PROMPT_BYTES);
+      const job = launch(...args), data = JSON.parse(args[2].at(-1).split("INTAKE DATA (JSON):\n").at(-1));
+      const output = draftFor(data, { question: mode === "answer" });
+      if (mode === "repair") output.problem += " TODO " + "x".repeat(30 * 1024);
+      runner.finish(codexLines({ text: JSON.stringify(output) }), { exit: 0 });
+      return job;
+    };
+    w.ctx.runnerFor = () => runner;
+    const service = createTaskService(w.ctx), store = taskStore(w.home);
+    const context = mode === "lockfile" ? [] : ["selected.md"];
+    writeFileSync(join(w.checkout, mode === "lockfile" ? "package-lock.json" : "selected.md"), "x".repeat((mode === "lockfile" ? 140 : mode === "answer" ? 80 : 90) * 1024));
+    const r = mode === "resume" ? await w.service.prepare({ text: REQUEST, context }) : cli ? await taskCommand(w.ctx, { args: ["prepare", REQUEST], values: { context, run: true }, service }) : await service.prepare({ text: REQUEST, context, run: true });
+    let blocked = r;
+    if (mode === "answer") {
+      assert.equal(r.status, "needs-input");
+      const answer = "Use CSV. " + "a".repeat(31 * 1024), input = { taskId: r.taskId, expectedRevision: r.revision, operationId: "large-answer", answers: { "q-r-1": answer } };
+      blocked = cli ? await taskCommand(w.ctx, { args: ["answer", r.taskId], values: { revision: String(r.revision), "request-id": input.operationId, answer: [`q-r-1=${answer}`] }, service }) : await service.answer(input);
+      assert.equal(blocked.answers["q-r-1"], answer); assert.equal(blocked.requirements.at(-1).text, answer);
+      assert.deepEqual(await service.answer(input), blocked, "duplicate accepted answers do not submit another oversized turn");
+    }
+    if (mode === "resume") {
+      const record = store.read(r.taskId); record.status = "preparing"; record.output.problem += "x".repeat(30 * 1024); store.save(record);
+      blocked = cli ? await taskCommand(w.ctx, { args: ["resume", r.taskId], values: { revision: String(r.revision) }, service }) : await service.resume({ taskId: r.taskId, expectedRevision: r.revision });
+    }
+    assert.equal(blocked.status, "blocked"); assert.equal(store.read(r.taskId).errorCode, "TASK_INPUT"); assert.match(blocked.failures[0], /serialized preparation prompt exceeds.*saved requirements were retained/);
+    assert.equal(blocked.requirements.find(x => x.id === "r-2").text, "Do not add dependencies."); assert.equal(blocked.original, REQUEST);
+    assert.equal(blocked.preparation.attempts.length, ["answer", "repair"].includes(mode) ? 1 : 0); assert.equal(runner.started.length, ["answer", "repair"].includes(mode) ? 1 : 0);
+    assert.equal(blocked.preparation.repairs, mode === "repair" ? 1 : 0);
+    const probes = join(w.home, "codex-calls.jsonl"); assert.equal(existsSync(probes) ? readFileSync(probes, "utf8").trim().split("\n").length : 0, ["answer", "repair"].includes(mode) ? 2 : 0);
+    assert.deepEqual(w.ctx.state.entries(), []); assert.equal(blocked.implementation, null);
+    assert.deepEqual(await service.resume({ taskId: blocked.taskId, expectedRevision: blocked.revision }), blocked);
+  }
+});
+
+test("exact UTF-8 prompt boundary reaches the native offline runner and oversized legacy output replays without a new launch", async t => {
+  for (const extra of [0, 1]) {
+    const w = world(), store = taskStore(w.home), bin = join(w.home, "prompt-boundary.mjs");
+    const fixture = new URL("./fixtures/task-intake.mjs", import.meta.url).href;
+    writeFileSync(bin, `#!${process.execPath}
+import { draftFor } from ${JSON.stringify(fixture)};
+import { writeFileSync } from 'node:fs';
+const args = process.argv.slice(2);
+if (args[0] === '--version') console.log('0.160.0');
+else if (args[0] === 'login') console.log('offline fixture');
+else {
+  const prompt = args.at(-1), data = JSON.parse(prompt.split('INTAKE DATA (JSON):\\n').at(-1));
+  writeFileSync('prompt-bytes.json', JSON.stringify({ bytes: Buffer.byteLength(prompt), original: data.original, context: data.context, requirements: data.requirements }));
+  console.log(JSON.stringify({ type: 'thread.started', thread_id: '22222222-2222-4222-8222-222222222222' }));
+  console.log(JSON.stringify({ type: 'item.completed', item: { type: 'agent_message', text: JSON.stringify(draftFor(data)) } }));
+  console.log(JSON.stringify({ type: 'turn.completed', usage: { input_tokens: 120, output_tokens: 40 } }));
+}
+`, { mode: 0o755 });
+    w.ctx.config.harness.codex.bin = bin;
+    const initial = await w.service.prepare({ text: REQUEST }), record = store.read(initial.taskId);
+    record.status = "preparing"; record.output = null; record.draft = null; record.readiness = null;
+    const source = { path: "boundary.md", text: "", hash: contentDigest("") }; record.context.push(source);
+    const args = () => buildRun({ harness: "codex", config: w.ctx.config, mode: "start", session: null, prompt: draftPrompt(record), cwd: w.home }).args;
+    const room = MAX_PREPARATION_PROMPT_BYTES - Buffer.byteLength(args().at(-1));
+    source.text = "界".repeat(Math.floor(room / 3)) + "x".repeat(room % 3 + extra); source.hash = contentDigest(source.text); store.save(record);
+    assert.equal(Buffer.byteLength(args().at(-1)), MAX_PREPARATION_PROMPT_BYTES + extra);
+    const runner = makeRunner(join(w.home, "native-runs")); w.ctx.runnerFor = () => runner;
+    t.after(async () => { const job = runner.current(); if (job?.running) { runner.kill(job.id); await runner.waitForKill(job.id); } });
+    const service = createTaskService(w.ctx), r = await service.resume({ taskId: record.id, expectedRevision: record.revision });
+    if (extra) { assert.equal(r.status, "blocked"); assert.deepEqual(r.preparation.attempts, []); assert.equal(runner.current(), null); continue; }
+    assert.equal(r.status, "ready"); assert.equal(r.preparation.attempts.length, 1); assert.equal(r.preparation.repairs, 0);
+    const observed = JSON.parse(readFileSync(join(r.preparation.attempts[0].cwd, "prompt-bytes.json"), "utf8"));
+    assert.equal(observed.bytes, MAX_PREPARATION_PROMPT_BYTES); assert.equal(observed.original, REQUEST); assert.deepEqual(observed.requirements, record.requirements); assert.equal(observed.context.at(-1).text, source.text);
+    assert.match(r.draft.text, /Do not add dependencies/); assert.deepEqual(r.preparation.attempts[0].usage, [{ input_tokens: 120, output_tokens: 40 }]);
+    // Old coordinators could already have submitted a larger prompt. Recover
+    // owned completion and saved output, not a replacement planning call.
+    for (const settled of [false, true]) {
+      const saved = store.read(record.id); saved.status = "preparing"; saved.attempts[0].settled = settled; saved.attempts[0].consumed = false;
+      saved.context.at(-1).text += "x".repeat(20 * 1024); saved.context.at(-1).hash = contentDigest(saved.context.at(-1).text); store.save(saved);
+      const reopened = await service.resume({ taskId: saved.id, expectedRevision: saved.revision });
+      assert.equal(reopened.status, "ready"); assert.equal(reopened.preparation.attempts.length, 1); assert.equal(reopened.preparation.attempts[0].run, r.preparation.attempts[0].run); assert.equal(reopened.original, REQUEST);
+    }
+    assert.deepEqual(w.ctx.state.entries(), []);
+    t.diagnostic(`Prompt-boundary fixture draft: ${r.draft.path}`);
+  }
 });
 
 test("preparation and repairs omit global context grants while implementation retains its harness behavior", async () => {

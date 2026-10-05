@@ -27,6 +27,13 @@ lockfiles are outside the text context contract; supply a supported manifest
 setting or explicit check. Automatic lockfiles use the same path and combined
 byte limit as other selected files.
 Context is bounded to 256 KiB and requests to 32 KiB; choose fewer files if needed.
+The complete serialized preparation prompt is also limited to 120 KiB, including
+JSON escaping, runtime instructions, saved answers, previous output and repair
+feedback. This portable limit is checked before a harness probe or launch on every
+new turn. Oversize input stops with an actionable failure and keeps the saved
+requirements, without truncation, a launch intent or another model call. Prepare
+a smaller intake with fewer or smaller documents; blocked intakes do not retry
+automatically. Reopening an already launched turn reconciles that run as usual.
 Preparation receives these documents in its prompt and does not inherit global
 `context_paths` read grants. Its child environment admits process basics and the
 selected adapter's explicit provider authentication/settings allowlist, defined
