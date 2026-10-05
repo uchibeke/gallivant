@@ -1,8 +1,8 @@
 {
   "version": 1,
   "task_id": "task-c93def694fe561146955c469",
-  "implementation_commit": "c74f4e29924abc2ced835ad5c323db5efc916e72",
-  "recorded_at": "2026-10-05T14:40:18.079Z",
+  "implementation_commit": "c8ca3faecd6b1f1a98ae8540339a3ae22af7f7aa",
+  "recorded_at": "2026-10-05T15:27:36.234Z",
   "versions": {
     "package": "0.1.0",
     "node": "v22.22.0",
@@ -13,26 +13,26 @@
     {
       "command": "npm test",
       "exit_code": 0,
-      "raw_log": "/private/tmp/natural-language-tasks-replay-npm-test-retry.log",
-      "tests": 849,
-      "passed": 849
+      "raw_log": "/private/tmp/natural-language-tasks-stories-npm-test-retry.log",
+      "tests": 856,
+      "passed": 856
     },
     {
       "command": "npm run lint",
       "exit_code": 0,
-      "raw_log": "/private/tmp/natural-language-tasks-replay-lint.log"
+      "raw_log": "/private/tmp/natural-language-tasks-stories-lint.log"
     },
     {
       "command": "npm run test:task-intake",
       "exit_code": 0,
-      "raw_log": "/private/tmp/natural-language-tasks-replay-intake.log",
-      "tests": 105,
-      "passed": 105
+      "raw_log": "/private/tmp/natural-language-tasks-stories-intake.log",
+      "tests": 112,
+      "passed": 112
     },
     {
       "command": "git diff --check",
       "exit_code": 0,
-      "raw_log": "/private/tmp/natural-language-tasks-replay-diff-check.log",
+      "raw_log": "/private/tmp/natural-language-tasks-stories-diff-check.log",
       "observed_output": "empty output"
     }
   ],
@@ -561,6 +561,41 @@
       "test_name": "authorized ready retries enforce saved draft approval and uncertain dispatch ownership",
       "outcome": "passed",
       "evidence": "test/task-intake.test.mjs::authorized ready retries enforce saved draft approval and uncertain dispatch ownership"
+    },
+    {
+      "test_name": "unlinked hostile stories are repaired before initial and answered CLI or structured dispatch",
+      "outcome": "passed",
+      "evidence": "test/task-intake.test.mjs::unlinked hostile stories are repaired before initial and answered CLI or structured dispatch"
+    },
+    {
+      "test_name": "unowned stories exhaust bounded repair and cannot validate or dispatch a matching saved approval",
+      "outcome": "passed",
+      "evidence": "test/task-intake.test.mjs::unowned stories exhaust bounded repair and cannot validate or dispatch a matching saved approval"
+    },
+    {
+      "test_name": "story bindings accept owned groups and reject missing, duplicate or unknown requirement links",
+      "outcome": "passed",
+      "evidence": "test/task-intake.test.mjs::story bindings accept owned groups and reject missing, duplicate or unknown requirement links"
+    },
+    {
+      "test_name": "oversized requirement input is refused before repository lookup, snapshots or preparation",
+      "outcome": "passed",
+      "evidence": "test/task-intake.test.mjs::oversized requirement input is refused before repository lookup, snapshots or preparation"
+    },
+    {
+      "test_name": "requirement capacity includes answers atomically while exact-boundary input and idempotent replies remain accepted",
+      "outcome": "passed",
+      "evidence": "test/task-intake.test.mjs::requirement capacity includes answers atomically while exact-boundary input and idempotent replies remain accepted"
+    },
+    {
+      "test_name": "partial answers and legacy recovery cannot exceed mapping capacity or purchase repair turns",
+      "outcome": "passed",
+      "evidence": "test/task-intake.test.mjs::partial answers and legacy recovery cannot exceed mapping capacity or purchase repair turns"
+    },
+    {
+      "test_name": "oversized legacy recovery settles owned preparation usage before refusal without another launch",
+      "outcome": "passed",
+      "evidence": "test/task-intake.test.mjs::oversized legacy recovery settles owned preparation usage before refusal without another launch"
     }
   ],
   "representative_fixture": {
@@ -587,7 +622,7 @@
     ]
   },
   "source_review": {
-    "implementation_revision": "c74f4e29924abc2ced835ad5c323db5efc916e72",
+    "implementation_revision": "c8ca3faecd6b1f1a98ae8540339a3ae22af7f7aa",
     "representative_output_inspected": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-OciO1z/tasks/task-a1a896015714afff3ae33dc4/drafts/revision-2/docs/prds/task-a1a896015714afff3ae33dc4.md",
     "boundaries_checked": [
       "CLI and structured clients",
@@ -655,7 +690,10 @@
       "Goose resolves environment/current/legacy provider selection before admitting only that provider's authentication. Shared secrets/keyring and stale selected AWS/private-secret snapshots are excluded; missing/unsupported selectors and required shared storage fail with actionable errors.",
       "Advertised text/stdin/README/structured preparation selections versus buildPreparationRun; configured-Claude prerequisite, unsupported-adapter refusal before profiles/probes/launch, no fallback and preserved hand-authored implementation selection",
       "Both mapping directions in initial and answered planner output; parser reuse in saved validation, readiness acknowledgement, start authorization and preauthorized crash-resume dispatch; persistent repair failures, question fixtures, multi/shared mappings, immutable fragments and single-dispatch replay; hand-authored checker and existing execution defaults unchanged",
-      "Both idempotent identity branches versus resume/initial validation and existing start; saved authorization only, request/answer signatures before replay, pinned draft/source/readiness hashes, unresolved or denied approval, pre-spawn intent/start claim, accepted ownership reconciliation, blocked replay, duplicate revision/run stability and normal daemon/no-daemon handling"
+      "Both idempotent identity branches versus resume/initial validation and existing start; saved authorization only, request/answer signatures before replay, pinned draft/source/readiness hashes, unresolved or denied approval, pre-spawn intent/start claim, accepted ownership reconciliation, blocked replay, duplicate revision/run stability and normal daemon/no-daemon handling",
+      "Story-to-owner requirement links, stable IDs and canonical rendering versus initial/answered repair, saved validation/start and approved crash recovery; existing requirement-to-criterion/question coverage and hand-authored checker/start behavior",
+      "Shared requirement capacity versus text/CLI requests, combined/partial/idempotent answers, context reads, accepted revisions/operation IDs, prompt construction, mapping arrays and running/completed/settled native offline recovery; usage retained and no extra repair launch",
+      "Offline ready-file writer versus signal/watchdog existence/read barriers, crash injection, startup bookkeeping fault paths and cleanup PID reads; atomic publication reuses lib/fs.mjs without changing runtime, provider or permission defaults"
     ],
     "regressions": [
       "preparation uses the existing runner in a separate workspace, records usage and reconciles a lost response",
@@ -750,7 +788,14 @@
       "test/task-intake.test.mjs::requirement mappings allow multiple criteria and shared criteria when every criterion is owned",
       "test/task-intake.test.mjs::idempotent preparation and answer retries dispatch an authorized ready checkpoint once after restart",
       "test/task-intake.test.mjs::idempotent ready retries preserve preparation-only authorization and accepted revisions",
-      "test/task-intake.test.mjs::authorized ready retries enforce saved draft approval and uncertain dispatch ownership"
+      "test/task-intake.test.mjs::authorized ready retries enforce saved draft approval and uncertain dispatch ownership",
+      "test/task-intake.test.mjs::unlinked hostile stories are repaired before initial and answered CLI or structured dispatch",
+      "test/task-intake.test.mjs::unowned stories exhaust bounded repair and cannot validate or dispatch a matching saved approval",
+      "test/task-intake.test.mjs::story bindings accept owned groups and reject missing, duplicate or unknown requirement links",
+      "test/task-intake.test.mjs::oversized requirement input is refused before repository lookup, snapshots or preparation",
+      "test/task-intake.test.mjs::requirement capacity includes answers atomically while exact-boundary input and idempotent replies remain accepted",
+      "test/task-intake.test.mjs::partial answers and legacy recovery cannot exceed mapping capacity or purchase repair turns",
+      "test/task-intake.test.mjs::oversized legacy recovery settles owned preparation usage before refusal without another launch"
     ],
     "literal_output_inspected": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-YT4kUE/tasks/task-9f538f3b60078088f631d887/drafts/revision-5/docs/prds/task-9f538f3b60078088f631d887.md",
     "answer_context_output_inspected": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-GyBbWY/tasks/task-d21c94c7a17012e1454c6854/drafts/revision-4/docs/prds/task-d21c94c7a17012e1454c6854.md",
@@ -927,6 +972,15 @@
       "record": "/private/tmp/natural-language-tasks-replay-output-review.json",
       "fixture_record": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-tSD5MC/ready-replay-fixture.json",
       "sha256": "0b27949ff5fe58edc2ab4ef994ac6153460229a23e47271816d22d9ee75d574e",
+      "checker_passed": true,
+      "readiness_digest_matches": true
+    },
+    "story_capacity_output_inspected": {
+      "live": false,
+      "path": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-y1ir7Q/tasks/task-ab120c509419e2c54d61a7b3/drafts/revision-5/docs/prds/task-ab120c509419e2c54d61a7b3.md",
+      "record": "/private/tmp/natural-language-tasks-stories-output-review.json",
+      "fixture_record": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-y1ir7Q/authorized-stories-fixture.json",
+      "sha256": "9f413400c525ef46ac544c693340c6fab2a5bc463abfc40035f5db14c52e835f",
       "checker_passed": true,
       "readiness_digest_matches": true
     }
@@ -1362,6 +1416,29 @@
       ],
       "evidence": "docs/audit/plugin-ready/natural-language-tasks.json ready_replay_case",
       "observed": "Preparation-request and answer-operation replay now include ready tasks only when saved run authorization exists. Recovery reuses the existing start gate; three regressions capture the persisted readiness-to-dispatch crash window, single dispatch, no-daemon, preparation-only replay, changed snapshots/approvals and uncertain launch ownership."
+    },
+    {
+      "comment_id": 4185457604,
+      "files": [
+        "lib/task_contract.mjs",
+        "lib/tasks.mjs",
+        "test/fixtures/task-intake.mjs",
+        "test/task-intake.test.mjs",
+        "docs/tasks.md"
+      ],
+      "evidence": "docs/audit/plugin-ready/natural-language-tasks.json story_capacity_case",
+      "observed": "Require sequential story IDs and unique accepted requirement links; render/expose the links and reject unlinked generated or saved stories through shared parsing before readiness or new dispatch. Legacy string-only stories are not inferred as authorized."
+    },
+    {
+      "comment_id": 4185457622,
+      "files": [
+        "lib/task_contract.mjs",
+        "lib/tasks.mjs",
+        "test/task-intake.test.mjs",
+        "docs/tasks.md"
+      ],
+      "evidence": "docs/audit/plugin-ready/natural-language-tasks.json story_capacity_case",
+      "observed": "Use one 128-entry capacity for immutable fragments and mappings. Refuse oversized requests before repository resolution and overflowing answers before context/state writes. Legacy owned turns retain settlement/usage, then stop without purchasing repair turns."
     }
   ],
   "offline_credential_check": {
@@ -1646,66 +1723,66 @@
         {
           "command": "npm test",
           "exit_code": 0,
-          "raw_log": "/private/tmp/natural-language-tasks-replay-npm-test-retry.log",
-          "tests": 849,
-          "passed": 849
+          "raw_log": "/private/tmp/natural-language-tasks-stories-npm-test-retry.log",
+          "tests": 856,
+          "passed": 856
         },
         {
           "command": "npm run lint",
           "exit_code": 0,
-          "raw_log": "/private/tmp/natural-language-tasks-replay-lint.log"
+          "raw_log": "/private/tmp/natural-language-tasks-stories-lint.log"
         },
         {
           "command": "npm run test:task-intake",
           "exit_code": 0,
-          "raw_log": "/private/tmp/natural-language-tasks-replay-intake.log",
-          "tests": 105,
-          "passed": 105
+          "raw_log": "/private/tmp/natural-language-tasks-stories-intake.log",
+          "tests": 112,
+          "passed": 112
         },
         {
           "command": "git diff --check",
           "exit_code": 0,
-          "raw_log": "/private/tmp/natural-language-tasks-replay-diff-check.log",
+          "raw_log": "/private/tmp/natural-language-tasks-stories-diff-check.log",
           "observed_output": "empty output"
         }
       ],
       "focused_regressions": {
-        "command": "node --test --test-name-pattern='idempotent preparation and answer retries|idempotent ready retries|authorized ready retries|run authorization dispatches|crash recovery reconciles|legacy preparation receipts|legacy unmapped criteria|prototype-sensitive operation IDs|legacy interrupted answers|partial clone failure|pre-clone snapshot failures|post-clone source conflicts' test/task-intake.test.mjs",
+        "command": "node --test --test-name-pattern='unlinked hostile stories|unowned stories|story bindings|oversized requirement input|requirement capacity includes|partial answers and legacy recovery cannot|oversized legacy recovery|unmapped hostile|persistent unmapped|legacy unmapped|requirement mappings allow|idempotent preparation and answer retries|literal placeholder|CLI and structured preparation|partial answers retain|legacy interrupted answers' test/task-intake.test.mjs",
         "exit_code": 0,
-        "raw_log": "/private/tmp/natural-language-tasks-replay-targeted.log",
-        "tests": 12,
-        "passed": 12
+        "raw_log": "/private/tmp/natural-language-tasks-stories-targeted.log",
+        "tests": 19,
+        "passed": 19
       },
       "supporting_checks": [
         {
-          "command": "node --test --test-name-pattern='live signal and watchdog stops await the process-group fallback before metadata and exit' test/live_suite.test.mjs",
+          "command": "node --test --test-name-pattern='live signal and watchdog stops await' test/live_suite.test.mjs",
           "exit_code": 0,
-          "raw_log": "/private/tmp/natural-language-tasks-replay-watchdog-isolated.log",
-          "tests": 4,
-          "passed": 4
+          "raw_log": "/private/tmp/natural-language-tasks-stories-ready-publication.log",
+          "tests": 10,
+          "passed": 10
         }
       ],
       "initial_runs": [
         {
-          "command": "node --test --test-name-pattern='idempotent preparation and answer retries|idempotent ready retries|authorized ready retries' test/task-intake.test.mjs",
+          "command": "node --test --test-name-pattern='unlinked hostile stories|unowned stories|story bindings|oversized requirement input|requirement capacity includes|partial answers and legacy recovery cannot' test/task-intake.test.mjs",
           "exit_code": 1,
-          "raw_log": "/private/tmp/natural-language-tasks-replay-red.log",
-          "tests": 3,
-          "passed": 1,
-          "failed": 2,
-          "observed": "Authorized ready replay returned ready instead of dispatching. A changed saved draft also returned ready instead of reaching the exact approval gate. The preparation-only control passed."
+          "raw_log": "/private/tmp/natural-language-tasks-stories-red.log",
+          "tests": 6,
+          "passed": 0,
+          "failed": 6,
+          "observed": "Unlinked extra stories reached dispatch without repair. Oversized request/partial-answer state was accepted into preparation, and a combined overflowing answer reached missing-context file reads instead of capacity validation. The owned-story control required the new binding format."
         },
         {
           "command": "npm test",
           "exit_code": 1,
-          "raw_log": "/private/tmp/natural-language-tasks-replay-npm-test.log",
-          "tests": 849,
-          "passed": 847,
+          "raw_log": "/private/tmp/natural-language-tasks-stories-npm-test.log",
+          "tests": 856,
+          "passed": 854,
           "failed": 2,
-          "observed": "The unchanged offline watchdog fixture read ready.json between file creation and completed JSON write: Unexpected end of JSON input. Its parent/subtest failed; the isolated check and subsequent full run passed without source changes."
+          "observed": "The unchanged SIGINT ledger fixture observed ready.json before its JSON write completed, failing its subtest/parent with Unexpected end of JSON input. The shared fixture now uses the existing atomic JSON writer; all 10 signal/watchdog checks and the full rerun pass."
         }
       ],
-      "observed": "Both retry paths recover the actual persisted authorized ready checkpoint through existing exact readiness and dispatch ownership gates. CLI and structured callers preserve preparation-only authorization, accepted source bytes and changed-input conflicts; one recovered implementation and normal daemon invocation are retained across duplicate replay. Full/intake/lint/diff commands and focused/adjacent checks pass. The initial watchdog JSON race is retained with an unchanged-base comparison and isolated pass. Native preparation enforcement and G8 live qualification remain unverified; no provider/model calls or repeated blocked native probes occurred.",
+      "observed": "Story ownership is checked in shared parsing before repair/readiness or saved dispatch. CLI and structured results expose requirement links; fresh answered output retains every explicit fragment and one implementation run. The common 128-entry mapping capacity now bounds requests before repository lookup and accumulated answers before context/state mutation. Exact-boundary, partial/idempotent answer and owned-turn recovery checks pass without extra planning calls. The repeated ready-file JSON publication race was fixed only in the offline fixture using the existing atomic writer; native/provider settings are unchanged. Native preparation enforcement and G8 live evidence remain unverified.",
       "model_calls": 0
     },
     "previous_batches": [
@@ -2277,6 +2354,73 @@
           }
         ],
         "observed": "All required offline commands and 12 focused/adjacent tests pass. Reviewed shared parsing, repair, answer transitions, saved validation, readiness and exact dispatch/recovery boundaries against G2. Fresh answered-intake output removes unmapped deployment scope, preserves every original/answer requirement, passes the canonical checker and dispatches once. Existing native and G8 live qualification gaps remain unchanged; no provider/model calls or repeated blocked native checks occurred.",
+        "model_calls": 0
+      },
+      {
+        "commands": [
+          {
+            "command": "npm test",
+            "exit_code": 0,
+            "raw_log": "/private/tmp/natural-language-tasks-replay-npm-test-retry.log",
+            "tests": 849,
+            "passed": 849
+          },
+          {
+            "command": "npm run lint",
+            "exit_code": 0,
+            "raw_log": "/private/tmp/natural-language-tasks-replay-lint.log"
+          },
+          {
+            "command": "npm run test:task-intake",
+            "exit_code": 0,
+            "raw_log": "/private/tmp/natural-language-tasks-replay-intake.log",
+            "tests": 105,
+            "passed": 105
+          },
+          {
+            "command": "git diff --check",
+            "exit_code": 0,
+            "raw_log": "/private/tmp/natural-language-tasks-replay-diff-check.log",
+            "observed_output": "empty output"
+          }
+        ],
+        "focused_regressions": {
+          "command": "node --test --test-name-pattern='idempotent preparation and answer retries|idempotent ready retries|authorized ready retries|run authorization dispatches|crash recovery reconciles|legacy preparation receipts|legacy unmapped criteria|prototype-sensitive operation IDs|legacy interrupted answers|partial clone failure|pre-clone snapshot failures|post-clone source conflicts' test/task-intake.test.mjs",
+          "exit_code": 0,
+          "raw_log": "/private/tmp/natural-language-tasks-replay-targeted.log",
+          "tests": 12,
+          "passed": 12
+        },
+        "supporting_checks": [
+          {
+            "command": "node --test --test-name-pattern='live signal and watchdog stops await the process-group fallback before metadata and exit' test/live_suite.test.mjs",
+            "exit_code": 0,
+            "raw_log": "/private/tmp/natural-language-tasks-replay-watchdog-isolated.log",
+            "tests": 4,
+            "passed": 4
+          }
+        ],
+        "initial_runs": [
+          {
+            "command": "node --test --test-name-pattern='idempotent preparation and answer retries|idempotent ready retries|authorized ready retries' test/task-intake.test.mjs",
+            "exit_code": 1,
+            "raw_log": "/private/tmp/natural-language-tasks-replay-red.log",
+            "tests": 3,
+            "passed": 1,
+            "failed": 2,
+            "observed": "Authorized ready replay returned ready instead of dispatching. A changed saved draft also returned ready instead of reaching the exact approval gate. The preparation-only control passed."
+          },
+          {
+            "command": "npm test",
+            "exit_code": 1,
+            "raw_log": "/private/tmp/natural-language-tasks-replay-npm-test.log",
+            "tests": 849,
+            "passed": 847,
+            "failed": 2,
+            "observed": "The unchanged offline watchdog fixture read ready.json between file creation and completed JSON write: Unexpected end of JSON input. Its parent/subtest failed; the isolated check and subsequent full run passed without source changes."
+          }
+        ],
+        "observed": "Both retry paths recover the actual persisted authorized ready checkpoint through existing exact readiness and dispatch ownership gates. CLI and structured callers preserve preparation-only authorization, accepted source bytes and changed-input conflicts; one recovered implementation and normal daemon invocation are retained across duplicate replay. Full/intake/lint/diff commands and focused/adjacent checks pass. The initial watchdog JSON race is retained with an unchanged-base comparison and isolated pass. Native preparation enforcement and G8 live qualification remain unverified; no provider/model calls or repeated blocked native probes occurred.",
         "model_calls": 0
       }
     ]
@@ -3528,5 +3672,170 @@
       }
     },
     "observed": "The recorded ready checkpoint retains original/answer requirements, source hashes, explicit execution authorization and the real readiness decision before any dispatch intent. Same-identity replay dispatches once without planner/readiness calls or another confirmation and delivers the accepted snapshot after operator edits. Preparation-only retries remain ready; denied/stale approval and unknown intent/claim cannot launch. This is offline fixture evidence and does not qualify installed adapters or live execution."
+  },
+  "story_capacity_case": {
+    "met": true,
+    "implementation_commit": "c8ca3faecd6b1f1a98ae8540339a3ae22af7f7aa",
+    "model_calls": 0,
+    "source_refs": [
+      "lib/task_contract.mjs",
+      "lib/tasks.mjs",
+      "lib/task_prepare.mjs",
+      "lib/prompt.mjs",
+      "docs/prds/natural-language-tasks.md",
+      "docs/plans/plugin-ready-gallivant.md"
+    ],
+    "regressions": [
+      "test/task-intake.test.mjs::unlinked hostile stories are repaired before initial and answered CLI or structured dispatch",
+      "test/task-intake.test.mjs::unowned stories exhaust bounded repair and cannot validate or dispatch a matching saved approval",
+      "test/task-intake.test.mjs::story bindings accept owned groups and reject missing, duplicate or unknown requirement links",
+      "test/task-intake.test.mjs::oversized requirement input is refused before repository lookup, snapshots or preparation",
+      "test/task-intake.test.mjs::requirement capacity includes answers atomically while exact-boundary input and idempotent replies remain accepted",
+      "test/task-intake.test.mjs::partial answers and legacy recovery cannot exceed mapping capacity or purchase repair turns",
+      "test/task-intake.test.mjs::oversized legacy recovery settles owned preparation usage before refusal without another launch"
+    ],
+    "initial_failure": {
+      "command": "node --test --test-name-pattern='unlinked hostile stories|unowned stories|story bindings|oversized requirement input|requirement capacity includes|partial answers and legacy recovery cannot' test/task-intake.test.mjs",
+      "exit_code": 1,
+      "raw_log": "/private/tmp/natural-language-tasks-stories-red.log",
+      "tests": 6,
+      "passed": 0,
+      "failed": 6,
+      "observed": "Unlinked extra stories reached dispatch without repair. Oversized request/partial-answer state was accepted into preparation, and a combined overflowing answer reached missing-context file reads instead of capacity validation. The owned-story control required the new binding format."
+    },
+    "focused_regression": {
+      "command": "node --test --test-name-pattern='unlinked hostile stories|unowned stories|story bindings|oversized requirement input|requirement capacity includes|partial answers and legacy recovery cannot|oversized legacy recovery|unmapped hostile|persistent unmapped|legacy unmapped|requirement mappings allow|idempotent preparation and answer retries|literal placeholder|CLI and structured preparation|partial answers retain|legacy interrupted answers' test/task-intake.test.mjs",
+      "exit_code": 0,
+      "raw_log": "/private/tmp/natural-language-tasks-stories-targeted.log",
+      "tests": 19,
+      "passed": 19
+    },
+    "representative_output": {
+      "live": false,
+      "model_calls": 0,
+      "fixture_record": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-y1ir7Q/authorized-stories-fixture.json",
+      "path": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-y1ir7Q/tasks/task-ab120c509419e2c54d61a7b3/drafts/revision-5/docs/prds/task-ab120c509419e2c54d61a7b3.md",
+      "sha256": "9f413400c525ef46ac544c693340c6fab2a5bc463abfc40035f5db14c52e835f",
+      "original_request": "Add CSV export for the widget table.\nDo not add dependencies.",
+      "requirements": [
+        {
+          "id": "r-1",
+          "text": "Add CSV export for the widget table."
+        },
+        {
+          "id": "r-2",
+          "text": "Do not add dependencies."
+        },
+        {
+          "id": "a-q-r-1-1",
+          "text": "Use CSV only."
+        }
+      ],
+      "stories": [
+        {
+          "id": "us-1",
+          "text": "As a finance admin, I want to export widgets, so that I can reconcile spending.",
+          "requirements": [
+            "r-1"
+          ]
+        }
+      ],
+      "mapping": [
+        {
+          "requirementId": "r-1",
+          "criteria": [
+            "ac-1"
+          ],
+          "resolvedBy": "q-r-1"
+        },
+        {
+          "requirementId": "r-2",
+          "criteria": [
+            "ac-2"
+          ]
+        },
+        {
+          "requirementId": "a-q-r-1-1",
+          "criteria": [
+            "ac-3"
+          ]
+        }
+      ],
+      "readiness": {
+        "allow": true,
+        "hash": "9f413400c525ef46ac544c693340c6fab2a5bc463abfc40035f5db14c52e835f",
+        "digest": "25043427de2eaf37a6fdc7de0071306b7ec9cb14c1aabe4a397a12e299b7f408",
+        "decisionId": null,
+        "report": "ok   path          lives under docs/prds/ with a lowercase-dash filename\nok   frontmatter   frontmatter has status (draft|ready) and harness (claude|codex|gemini|opencode|goose)\nok   title         one H1 title, 8 to 80 characters\nok   problem       ## Problem: at least 40 words on what is wrong today and for whom\nok   stories       ## User stories: every bullet reads 'As a <who>, I want <what>, so that <why>'\nok   criteria      ## Acceptance criteria: every bullet is Given / When / Then, at least one per story\nok   verify        ## Verify: at least one command the session must run green; no sudo, rm -rf or piped installers\nok   look          ## Where to look: files or directories to start from, or 'none'\nok   scope         ## Out of scope: at least one bullet\nok   placeholders  no TODO, TBD, FIXME, ???, lorem or <angle-bracket> placeholders anywhere\nok   size          under 1,500 words; a PRD is one pull request, split anything bigger\nok   sources       every file in `sources` exists, is readable text, and is named inside the repository\n\ntask-ab120c509419e2c54d61a7b3: ready to start.\nAPort decision (local): allow\nstatus set to ready. Commit the PRD when you commit the rest of your work.",
+        "revision": 6
+      },
+      "implementation": {
+        "id": "acme/widget/task-ab120c509419e2c54d61a7b3",
+        "worktree": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-y1ir7Q/worktrees/acme/widget/task-ab120c509419e2c54d61a7b3",
+        "branch": "work/task-ab120c509419e2c54d61a7b3",
+        "base": "main",
+        "baseSource": "default",
+        "session": null,
+        "run": "1-start",
+        "state": "running",
+        "pr": null,
+        "url": null
+      },
+      "repairs": 1,
+      "planner_fixture_turns": 3,
+      "initial_failures": [
+        "stories require sequential us-N IDs, text and authorized requirements; unlinked legacy strings cannot authorize scope"
+      ],
+      "checker_passed": true,
+      "readiness_digest_matches": true,
+      "reviewed_against": [
+        "docs/prds/natural-language-tasks.md",
+        "docs/plans/plugin-ready-gallivant.md"
+      ]
+    },
+    "requirement_capacity": {
+      "maximum": 128,
+      "oversized_count": 129,
+      "rejected_request_before_repository_lookup": true,
+      "rejected_answer_before_context_or_state_write": true,
+      "exact_boundary_with_blank_lines_and_crlf": true,
+      "corrected_operation_identity_reusable": true,
+      "accepted_partial_answer_preserved": true,
+      "recovered_owned_turn_phases": [
+        "running",
+        "completed",
+        "settled"
+      ],
+      "usage_retained": true,
+      "new_planner_calls_for_overflow": 0
+    },
+    "verification_repair": {
+      "initial_failure": {
+        "command": "npm test",
+        "exit_code": 1,
+        "raw_log": "/private/tmp/natural-language-tasks-stories-npm-test.log",
+        "tests": 856,
+        "passed": 854,
+        "failed": 2,
+        "observed": "The unchanged SIGINT ledger fixture observed ready.json before its JSON write completed, failing its subtest/parent with Unexpected end of JSON input. The shared fixture now uses the existing atomic JSON writer; all 10 signal/watchdog checks and the full rerun pass."
+      },
+      "unchanged_fixture_at_failure": "test/live_suite.test.mjs at b64f91f30bcab48ba399fe3fac2f0e69e5427b75",
+      "fix": "test/live_suite.test.mjs::fixture publishes ready.json through lib/fs.mjs::writeJsonAtomic",
+      "supporting_checks": {
+        "command": "node --test --test-name-pattern='live signal and watchdog stops await' test/live_suite.test.mjs",
+        "exit_code": 0,
+        "raw_log": "/private/tmp/natural-language-tasks-stories-ready-publication.log",
+        "tests": 10,
+        "passed": 10
+      },
+      "successful_full_run": {
+        "command": "npm test",
+        "exit_code": 0,
+        "raw_log": "/private/tmp/natural-language-tasks-stories-npm-test-retry.log",
+        "tests": 856,
+        "passed": 856
+      }
+    },
+    "observed": "Every generated story now links to authorized requirement IDs whose mappings are validated through the existing criterion/question rules. Unlinked strings, missing/unknown/duplicate links and malformed story IDs cannot create new implementation scope. Generated and saved failures use the same bounded repair or exact start gate. Oversized fragments are rejected atomically before new inference; already-owned recovery records usage before refusal. Readiness remains structural evidence, and all model/implementation records here are offline fixtures, not native/live qualification."
   }
 }
