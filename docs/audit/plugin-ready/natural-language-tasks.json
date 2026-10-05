@@ -1,8 +1,8 @@
 {
   "version": 1,
   "task_id": "task-c93def694fe561146955c469",
-  "implementation_commit": "71c5ee534e6ab17cfddfbddbf901a32a4d270343",
-  "recorded_at": "2026-10-05T16:38:49.144Z",
+  "implementation_commit": "8b2691975db2e6b123eceb7355f1ddc3e0558092",
+  "recorded_at": "2026-10-05T17:30:57.291624Z",
   "versions": {
     "package": "0.1.0",
     "node": "v22.22.0",
@@ -13,26 +13,26 @@
     {
       "command": "npm test",
       "exit_code": 0,
-      "raw_log": "/private/tmp/natural-language-tasks-scope-npm-test-final.log",
-      "tests": 865,
-      "passed": 865
+      "raw_log": "/private/tmp/natural-language-tasks-clarification-npm-test.log",
+      "tests": 871,
+      "passed": 871
     },
     {
       "command": "npm run lint",
       "exit_code": 0,
-      "raw_log": "/private/tmp/natural-language-tasks-scope-lint-final.log"
+      "raw_log": "/private/tmp/natural-language-tasks-clarification-lint.log"
     },
     {
       "command": "npm run test:task-intake",
       "exit_code": 0,
-      "raw_log": "/private/tmp/natural-language-tasks-scope-intake.log",
-      "tests": 118,
-      "passed": 118
+      "raw_log": "/private/tmp/natural-language-tasks-clarification-intake.log",
+      "tests": 124,
+      "passed": 124
     },
     {
       "command": "git diff --check",
       "exit_code": 0,
-      "raw_log": "/private/tmp/natural-language-tasks-scope-diff-check-final.log",
+      "raw_log": "/private/tmp/natural-language-tasks-clarification-diff-check-final.log",
       "observed_output": "empty output"
     }
   ],
@@ -641,6 +641,36 @@
       "test_name": "falsely mapped saved scope cannot validate, start or recover with a matching approval",
       "outcome": "passed",
       "evidence": "test/task-intake.test.mjs::falsely mapped saved scope cannot validate, start or recover with a matching approval"
+    },
+    {
+      "test_name": "omitted clarification tags retain saved answer precedence through CLI and structured answers and repairs",
+      "outcome": "passed",
+      "evidence": "test/task-intake.test.mjs::omitted clarification tags retain saved answer precedence through CLI and structured answers and repairs"
+    },
+    {
+      "test_name": "successive question-owned answers remain in accepted order even when planner tags name only the first answer",
+      "outcome": "passed",
+      "evidence": "test/task-intake.test.mjs::successive question-owned answers remain in accepted order even when planner tags name only the first answer"
+    },
+    {
+      "test_name": "saved omitted clarifications cannot evade canonical validation or historical question ownership",
+      "outcome": "passed",
+      "evidence": "test/task-intake.test.mjs::saved omitted clarifications cannot evade canonical validation or historical question ownership"
+    },
+    {
+      "test_name": "impossible minimum brief footprints stop CLI and structured requests before repository lookup or planning",
+      "outcome": "passed",
+      "evidence": "test/task-intake.test.mjs::impossible minimum brief footprints stop CLI and structured requests before repository lookup or planning"
+    },
+    {
+      "test_name": "combined and partial answer footprints fail atomically before context reads and permit corrected operation replay",
+      "outcome": "passed",
+      "evidence": "test/task-intake.test.mjs::combined and partial answer footprints fail atomically before context reads and permit corrected operation replay"
+    },
+    {
+      "test_name": "impossible legacy brief footprints refuse new planning and settle owned usage before stopping",
+      "outcome": "passed",
+      "evidence": "test/task-intake.test.mjs::impossible legacy brief footprints refuse new planning and settle owned usage before stopping"
     }
   ],
   "representative_fixture": {
@@ -667,8 +697,8 @@
     ]
   },
   "source_review": {
-    "implementation_revision": "71c5ee534e6ab17cfddfbddbf901a32a4d270343",
-    "representative_output_inspected": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-Vt73zE/tasks/task-a0503d56f0c9910ddb9612b0/drafts/revision-4/docs/prds/task-a0503d56f0c9910ddb9612b0.md",
+    "implementation_revision": "8b2691975db2e6b123eceb7355f1ddc3e0558092",
+    "representative_output_inspected": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-nkjDDD/tasks/task-1b5c53614198be42f29f3074/drafts/revision-5/docs/prds/task-1b5c53614198be42f29f3074.md",
     "boundaries_checked": [
       "CLI and structured clients",
       "request/answer revision writes",
@@ -742,7 +772,10 @@
       "Creator preflight versus executor invocation: stale .git, parent conflicts, credential and identity resolution, partial clone/fetch/checkout errors; shared start release, intake/chain dispatch intents, pinned approvals, crash reload, blocked/explicit/duplicate retry, source delivery and possible spawn ownership; fromBranch and public remove keep their existing behavior",
       "Planner ID associations versus executable owner semantics: criteria and stories use only deterministic quotations of accepted owner input and validated answers, including shared criteria and owner-requested deployment; generated rationale/location/exclusion prose is explicitly advisory.",
       "Initial, answered and repaired CLI/structured output, direct rendering, saved canonical body, hash/readiness digest and new dispatch: rederive owner scope everywhere; matching forged legacy approvals fail and accepted implementation ownership still reconciles once.",
-      "Question-owned clarification preserves original context with answer precedence for conflicting parts, exact literal placeholder round trips, immutable requirement mapping, 128-fragment boundary and accepted 32 KiB input versus the existing 256 KiB output bound."
+      "Question-owned clarification preserves original context with answer precedence for conflicting parts, exact literal placeholder round trips, immutable requirement mapping, 128-fragment boundary and accepted 32 KiB input versus the existing 256 KiB output bound.",
+      "Saved question-owned answers cannot be omitted from executable stories/criteria or canonical mappings by a missing resolvedBy tag. Direct roots and earlier answer fragments retain later accepted clarification precedence, while unrelated original constraints remain unclarified. Invalid historical ownership and matching legacy unclarified approvals fail validation/start/resume; existing owned implementation dispatch still reconciles once.",
+      "Task capacity uses the shared 1500-word checker constant and actual JSON quoting/rendering, choosing the smallest authorized story and one shared criterion as a lower bound. Initial requests stop before repository lookup; accumulated and partial answers stop before new context reads or accepted revision/operation writes. Corrected operations remain reusable, escaped-tab controls fit, and existing count/byte/prompt bounds remain unchanged.",
+      "Preparation replay settles already-owned running/completed/settled usage before oversized legacy state blocks, clears stale readiness and refuses further turns. Unowned recovery, draftPrompt, parseDraft, direct rendering and saved readiness/dispatch reuse existing validation and ownership helpers. No hand-authored checker, provider/model/permission defaults or implementation transport changed."
     ],
     "regressions": [
       "preparation uses the existing runner in a separate workspace, records usage and reconciles a lost response",
@@ -853,7 +886,13 @@
       "test/task-intake.test.mjs::falsely mapped planner behavior cannot enter owner-derived criteria or stories on initial, answered or repaired dispatch",
       "test/task-intake.test.mjs::direct rendering derives shared criteria and stories from owner text rather than rejecting owner-authorized deployment",
       "test/task-intake.test.mjs::owner-derived scope survives saved validation at the accepted input byte boundary",
-      "test/task-intake.test.mjs::falsely mapped saved scope cannot validate, start or recover with a matching approval"
+      "test/task-intake.test.mjs::falsely mapped saved scope cannot validate, start or recover with a matching approval",
+      "test/task-intake.test.mjs::omitted clarification tags retain saved answer precedence through CLI and structured answers and repairs",
+      "test/task-intake.test.mjs::successive question-owned answers remain in accepted order even when planner tags name only the first answer",
+      "test/task-intake.test.mjs::saved omitted clarifications cannot evade canonical validation or historical question ownership",
+      "test/task-intake.test.mjs::impossible minimum brief footprints stop CLI and structured requests before repository lookup or planning",
+      "test/task-intake.test.mjs::combined and partial answer footprints fail atomically before context reads and permit corrected operation replay",
+      "test/task-intake.test.mjs::impossible legacy brief footprints refuse new planning and settle owned usage before stopping"
     ],
     "literal_output_inspected": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-YT4kUE/tasks/task-9f538f3b60078088f631d887/drafts/revision-5/docs/prds/task-9f538f3b60078088f631d887.md",
     "answer_context_output_inspected": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-GyBbWY/tasks/task-d21c94c7a17012e1454c6854/drafts/revision-4/docs/prds/task-d21c94c7a17012e1454c6854.md",
@@ -1052,7 +1091,8 @@
       "readiness_digest_matches": true,
       "delivered_bytes_match": true
     },
-    "owner_derived_scope_output_inspected": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-Vt73zE/tasks/task-a0503d56f0c9910ddb9612b0/drafts/revision-4/docs/prds/task-a0503d56f0c9910ddb9612b0.md"
+    "owner_derived_scope_output_inspected": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-Vt73zE/tasks/task-a0503d56f0c9910ddb9612b0/drafts/revision-4/docs/prds/task-a0503d56f0c9910ddb9612b0.md",
+    "clarification_capacity_output_inspected": "/private/tmp/natural-language-tasks-clarification-output-review.json"
   },
   "live": {
     "status": "unverified",
@@ -1532,6 +1572,28 @@
       ],
       "evidence": "docs/audit/plugin-ready/natural-language-tasks.json owner_derived_scope_case",
       "observed": "Executable stories and criteria now derive deterministically from immutable owner requirements and question-ownership-validated saved answers. Planner-written outcomes are discarded even when they carry valid IDs. Clarifications quote both original context and answer, with answer precedence for conflicts; they cannot override unrelated fragments. Direct rendering and saved validation use the same derivation, so matching legacy hashes/digests cannot authorize falsely mapped prose. Existing approved --run dispatch and owned implementation reconciliation retain their normal gates and never add a second confirmation or duplicate run. Whole-result bounds remain in force while quoted wrappers accept the original input byte boundary. Full, focused, lint and diff checks pass. No native/model/provider calls, repeated blocked probes, new permission defaults or hand-authored path changes occurred; native enforcement and live qualification remain unverified."
+    },
+    {
+      "comment_id": 4186578392,
+      "files": [
+        "lib/task_contract.mjs",
+        "test/task-intake.test.mjs",
+        "docs/tasks.md"
+      ],
+      "evidence": "docs/audit/plugin-ready/natural-language-tasks.json clarification_capacity_case",
+      "observed": "Saved question ownership, answer acceptance order and immutable answer-fragment provenance now determine clarification precedence independently of optional planner tags. New output, direct rendering and saved validation normalize the same scope; matching legacy hashes and approval digests cannot dispatch an unclarified original. Original text and unrelated constraints remain intact. The checker word limit and canonical renderer provide a lower bound before repository lookup or prospective answer context reads/state writes. Oversized legacy preparation settles owned usage before refusal without buying new planning or repair turns. All required offline commands and 20 focused checks pass; model calls are zero. Native preparation enforcement and G8 live qualification remain unverified, with prior failures and exact remedies preserved."
+    },
+    {
+      "comment_id": 4186578408,
+      "files": [
+        "lib/prd.mjs",
+        "lib/task_contract.mjs",
+        "lib/tasks.mjs",
+        "test/task-intake.test.mjs",
+        "docs/tasks.md"
+      ],
+      "evidence": "docs/audit/plugin-ready/natural-language-tasks.json clarification_capacity_case",
+      "observed": "Saved question ownership, answer acceptance order and immutable answer-fragment provenance now determine clarification precedence independently of optional planner tags. New output, direct rendering and saved validation normalize the same scope; matching legacy hashes and approval digests cannot dispatch an unclarified original. Original text and unrelated constraints remain intact. The checker word limit and canonical renderer provide a lower bound before repository lookup or prospective answer context reads/state writes. Oversized legacy preparation settles owned usage before refusal without buying new planning or repair turns. All required offline commands and 20 focused checks pass; model calls are zero. Native preparation enforcement and G8 live qualification remain unverified, with prior failures and exact remedies preserved."
     }
   ],
   "offline_credential_check": {
@@ -1816,90 +1878,57 @@
         {
           "command": "npm test",
           "exit_code": 0,
-          "raw_log": "/private/tmp/natural-language-tasks-scope-npm-test-final.log",
-          "tests": 865,
-          "passed": 865
+          "raw_log": "/private/tmp/natural-language-tasks-clarification-npm-test.log",
+          "tests": 871,
+          "passed": 871
         },
         {
           "command": "npm run lint",
           "exit_code": 0,
-          "raw_log": "/private/tmp/natural-language-tasks-scope-lint-final.log"
+          "raw_log": "/private/tmp/natural-language-tasks-clarification-lint.log"
         },
         {
           "command": "npm run test:task-intake",
           "exit_code": 0,
-          "raw_log": "/private/tmp/natural-language-tasks-scope-intake.log",
-          "tests": 118,
-          "passed": 118
+          "raw_log": "/private/tmp/natural-language-tasks-clarification-intake.log",
+          "tests": 124,
+          "passed": 124
         },
         {
           "command": "git diff --check",
           "exit_code": 0,
-          "raw_log": "/private/tmp/natural-language-tasks-scope-diff-check-final.log",
+          "raw_log": "/private/tmp/natural-language-tasks-clarification-diff-check-final.log",
           "observed_output": "empty output"
         }
       ],
       "focused_regressions": {
-        "command": "node --test --test-name-pattern='falsely mapped|direct rendering derives|scope survives saved validation|unmapped|stories|capacity|literal placeholder|conflict|hostile selected|real checker|idempotent' test/task-intake.test.mjs",
+        "command": "node --test --test-name-pattern='omitted clarification|successive question-owned|impossible minimum brief|combined and partial answer footprints|impossible legacy brief|question.*own|duplicate question|legacy interrupted|literal placeholder|capacity|owner-derived scope|falsely mapped|idempotent' test/task-intake.test.mjs",
         "exit_code": 0,
-        "raw_log": "/private/tmp/natural-language-tasks-scope-targeted-final-clarification.log",
+        "raw_log": "/private/tmp/natural-language-tasks-clarification-targeted-final.log",
         "tests": 20,
         "passed": 20
       },
       "initial_runs": [
         {
-          "command": "node --test --test-name-pattern='falsely mapped|direct rendering derives' test/task-intake.test.mjs",
+          "command": "node --test --test-name-pattern='omitted clarification|successive question-owned|impossible minimum brief|combined and partial answer footprints|impossible legacy brief' test/task-intake.test.mjs",
           "exit_code": 1,
-          "raw_log": "/private/tmp/natural-language-tasks-scope-red.log",
-          "tests": 3,
+          "raw_log": "/private/tmp/natural-language-tasks-clarification-red.log",
+          "tests": 6,
           "passed": 0,
-          "failed": 3,
-          "observed": "Falsely mapped behavior entered saved executable scope; direct rendering retained planner prose and a matching saved approval validated. All three regression tests failed on the prior implementation."
+          "failed": 6,
+          "observed": "On prior source, omitted tags lost saved answer precedence, successive answers lost the later answer, a matching unclarified approval validated, and infeasible requests/answers reached context reads. The initial legacy fixture exhausted repairs; its final request was tightened from 600 to 800 words because the canonical lower bound showed the original two-fragment request could fit a better organization."
         },
         {
-          "command": "node --test --test-name-pattern='falsely mapped|direct rendering derives|unmapped|stories|capacity|literal placeholder|conflict|hostile|repair|replay|idempotent' test/task-intake.test.mjs",
+          "command": "node --test --test-name-pattern='omitted clarification|successive question-owned|impossible minimum brief|combined and partial answer footprints|impossible legacy brief|question.*own|duplicate question|legacy interrupted|literal placeholder|capacity|owner-derived scope|falsely mapped|idempotent' test/task-intake.test.mjs",
           "exit_code": 1,
-          "raw_log": "/private/tmp/natural-language-tasks-scope-targeted.log",
-          "tests": 49,
-          "passed": 9,
-          "failed": 40,
-          "observed": "The initial deterministic story wrapper used As the task owner, which the existing As a/an checker refused. Wording was corrected to As a task owner; no checker rule was weakened."
-        },
-        {
-          "command": "node --test --test-name-pattern='scope survives saved validation' test/task-intake.test.mjs",
-          "exit_code": 1,
-          "raw_log": "/private/tmp/natural-language-tasks-scope-size-red.log",
-          "tests": 1,
-          "passed": 0,
-          "failed": 1,
-          "observed": "A request at the accepted byte boundary exceeded the story text limit after quoting. Story/criterion lines now use the existing whole-result bound; raw input and prompt limits remain unchanged."
-        },
-        {
-          "command": "npm test",
-          "exit_code": 0,
-          "raw_log": "/private/tmp/natural-language-tasks-scope-npm-test.log",
-          "tests": 865,
-          "passed": 865,
-          "observed": "This first full pass predates the final original-and-answer clarification wording. The full suite was rerun successfully on final source."
+          "raw_log": "/private/tmp/natural-language-tasks-clarification-targeted.log",
+          "tests": 20,
+          "passed": 16,
+          "failed": 4,
+          "observed": "Three assertions used world counters whose prepare hook was overridden; local counters now track those fixtures. The legacy two-fragment fixture remained feasible under the minimum-story organization, so its request was increased to 800 words. Successive-answer coverage was expanded to prior answer fragments and proven follow-up ownership."
         }
       ],
-      "supporting_checks": [
-        {
-          "command": "node --test --test-name-pattern='falsely mapped|direct rendering derives|unmapped|stories|capacity|literal placeholder|conflicting constraints|hostile selected|real checker' test/task-intake.test.mjs",
-          "exit_code": 0,
-          "raw_log": "/private/tmp/natural-language-tasks-scope-boundaries.log",
-          "tests": 14,
-          "passed": 14
-        },
-        {
-          "command": "node --test --test-name-pattern='falsely mapped|direct rendering derives|scope survives saved validation|unmapped|stories|capacity|literal placeholder|conflicting constraints|hostile selected|real checker|idempotent' test/task-intake.test.mjs",
-          "exit_code": 0,
-          "raw_log": "/private/tmp/natural-language-tasks-scope-targeted-final.log",
-          "tests": 17,
-          "passed": 17
-        }
-      ],
-      "observed": "Executable stories and criteria now derive deterministically from immutable owner requirements and question-ownership-validated saved answers. Planner-written outcomes are discarded even when they carry valid IDs. Clarifications quote both original context and answer, with answer precedence for conflicts; they cannot override unrelated fragments. Direct rendering and saved validation use the same derivation, so matching legacy hashes/digests cannot authorize falsely mapped prose. Existing approved --run dispatch and owned implementation reconciliation retain their normal gates and never add a second confirmation or duplicate run. Whole-result bounds remain in force while quoted wrappers accept the original input byte boundary. Full, focused, lint and diff checks pass. No native/model/provider calls, repeated blocked probes, new permission defaults or hand-authored path changes occurred; native enforcement and live qualification remain unverified.",
+      "observed": "Saved question ownership, answer acceptance order and immutable answer-fragment provenance now determine clarification precedence independently of optional planner tags. New output, direct rendering and saved validation normalize the same scope; matching legacy hashes and approval digests cannot dispatch an unclarified original. Original text and unrelated constraints remain intact. The checker word limit and canonical renderer provide a lower bound before repository lookup or prospective answer context reads/state writes. Oversized legacy preparation settles owned usage before refusal without buying new planning or repair turns. All required offline commands and 20 focused checks pass; model calls are zero. Native preparation enforcement and G8 live qualification remain unverified, with prior failures and exact remedies preserved.",
       "model_calls": 0
     },
     "previous_batches": [
@@ -2664,6 +2693,97 @@
           }
         ],
         "observed": "The creator marks cloneAttempted immediately before the executor call, after path checks and credential/identity environment resolution. Only explicit false classification releases the shared start claim and task/chain dispatch intent. Unknown/clone/fetch/checkout/source/spawn failures retain ownership; no automatic deletion or second launch was added. Explicit corrected retries retain saved authorization, requirements and source bytes and dispatch once. All required offline commands and focused checks pass. Native enforcement and G8 live qualification remain unverified; no model/provider calls or repeated blocked native probes occurred.",
+        "model_calls": 0
+      },
+      {
+        "commands": [
+          {
+            "command": "npm test",
+            "exit_code": 0,
+            "raw_log": "/private/tmp/natural-language-tasks-scope-npm-test-final.log",
+            "tests": 865,
+            "passed": 865
+          },
+          {
+            "command": "npm run lint",
+            "exit_code": 0,
+            "raw_log": "/private/tmp/natural-language-tasks-scope-lint-final.log"
+          },
+          {
+            "command": "npm run test:task-intake",
+            "exit_code": 0,
+            "raw_log": "/private/tmp/natural-language-tasks-scope-intake.log",
+            "tests": 118,
+            "passed": 118
+          },
+          {
+            "command": "git diff --check",
+            "exit_code": 0,
+            "raw_log": "/private/tmp/natural-language-tasks-scope-diff-check-final.log",
+            "observed_output": "empty output"
+          }
+        ],
+        "focused_regressions": {
+          "command": "node --test --test-name-pattern='falsely mapped|direct rendering derives|scope survives saved validation|unmapped|stories|capacity|literal placeholder|conflict|hostile selected|real checker|idempotent' test/task-intake.test.mjs",
+          "exit_code": 0,
+          "raw_log": "/private/tmp/natural-language-tasks-scope-targeted-final-clarification.log",
+          "tests": 20,
+          "passed": 20
+        },
+        "initial_runs": [
+          {
+            "command": "node --test --test-name-pattern='falsely mapped|direct rendering derives' test/task-intake.test.mjs",
+            "exit_code": 1,
+            "raw_log": "/private/tmp/natural-language-tasks-scope-red.log",
+            "tests": 3,
+            "passed": 0,
+            "failed": 3,
+            "observed": "Falsely mapped behavior entered saved executable scope; direct rendering retained planner prose and a matching saved approval validated. All three regression tests failed on the prior implementation."
+          },
+          {
+            "command": "node --test --test-name-pattern='falsely mapped|direct rendering derives|unmapped|stories|capacity|literal placeholder|conflict|hostile|repair|replay|idempotent' test/task-intake.test.mjs",
+            "exit_code": 1,
+            "raw_log": "/private/tmp/natural-language-tasks-scope-targeted.log",
+            "tests": 49,
+            "passed": 9,
+            "failed": 40,
+            "observed": "The initial deterministic story wrapper used As the task owner, which the existing As a/an checker refused. Wording was corrected to As a task owner; no checker rule was weakened."
+          },
+          {
+            "command": "node --test --test-name-pattern='scope survives saved validation' test/task-intake.test.mjs",
+            "exit_code": 1,
+            "raw_log": "/private/tmp/natural-language-tasks-scope-size-red.log",
+            "tests": 1,
+            "passed": 0,
+            "failed": 1,
+            "observed": "A request at the accepted byte boundary exceeded the story text limit after quoting. Story/criterion lines now use the existing whole-result bound; raw input and prompt limits remain unchanged."
+          },
+          {
+            "command": "npm test",
+            "exit_code": 0,
+            "raw_log": "/private/tmp/natural-language-tasks-scope-npm-test.log",
+            "tests": 865,
+            "passed": 865,
+            "observed": "This first full pass predates the final original-and-answer clarification wording. The full suite was rerun successfully on final source."
+          }
+        ],
+        "supporting_checks": [
+          {
+            "command": "node --test --test-name-pattern='falsely mapped|direct rendering derives|unmapped|stories|capacity|literal placeholder|conflicting constraints|hostile selected|real checker' test/task-intake.test.mjs",
+            "exit_code": 0,
+            "raw_log": "/private/tmp/natural-language-tasks-scope-boundaries.log",
+            "tests": 14,
+            "passed": 14
+          },
+          {
+            "command": "node --test --test-name-pattern='falsely mapped|direct rendering derives|scope survives saved validation|unmapped|stories|capacity|literal placeholder|conflicting constraints|hostile selected|real checker|idempotent' test/task-intake.test.mjs",
+            "exit_code": 0,
+            "raw_log": "/private/tmp/natural-language-tasks-scope-targeted-final.log",
+            "tests": 17,
+            "passed": 17
+          }
+        ],
+        "observed": "Executable stories and criteria now derive deterministically from immutable owner requirements and question-ownership-validated saved answers. Planner-written outcomes are discarded even when they carry valid IDs. Clarifications quote both original context and answer, with answer precedence for conflicts; they cannot override unrelated fragments. Direct rendering and saved validation use the same derivation, so matching legacy hashes/digests cannot authorize falsely mapped prose. Existing approved --run dispatch and owned implementation reconciliation retain their normal gates and never add a second confirmation or duplicate run. Whole-result bounds remain in force while quoted wrappers accept the original input byte boundary. Full, focused, lint and diff checks pass. No native/model/provider calls, repeated blocked probes, new permission defaults or hand-authored path changes occurred; native enforcement and live qualification remain unverified.",
         "model_calls": 0
       }
     ]
@@ -4413,5 +4533,182 @@
     },
     "observed": "Executable stories and criteria now derive deterministically from immutable owner requirements and question-ownership-validated saved answers. Planner-written outcomes are discarded even when they carry valid IDs. Clarifications quote both original context and answer, with answer precedence for conflicts; they cannot override unrelated fragments. Direct rendering and saved validation use the same derivation, so matching legacy hashes/digests cannot authorize falsely mapped prose. Existing approved --run dispatch and owned implementation reconciliation retain their normal gates and never add a second confirmation or duplicate run. Whole-result bounds remain in force while quoted wrappers accept the original input byte boundary. Full, focused, lint and diff checks pass. No native/model/provider calls, repeated blocked probes, new permission defaults or hand-authored path changes occurred; native enforcement and live qualification remain unverified.",
     "live_limitation": "Native preparation enforcement (ac-4) and G8 live qualification (ac-12) remain unverified. Existing observed failures and exact external remedies are preserved; no unchanged blocked capability was retried."
+  },
+  "clarification_capacity_case": {
+    "met": true,
+    "implementation_commit": "8b2691975db2e6b123eceb7355f1ddc3e0558092",
+    "review_id": 5417978046,
+    "comment_ids": [
+      4186578392,
+      4186578408
+    ],
+    "model_calls": 0,
+    "source_refs": [
+      "lib/prd.mjs",
+      "lib/task_contract.mjs",
+      "lib/tasks.mjs",
+      "lib/task_prepare.mjs",
+      "lib/start_contract.mjs",
+      "lib/commands/ready.mjs",
+      "lib/commands/start.mjs",
+      "test/task-intake.test.mjs",
+      "docs/tasks.md",
+      "docs/prds/natural-language-tasks.md",
+      "docs/plans/plugin-ready-gallivant.md"
+    ],
+    "regressions": [
+      "test/task-intake.test.mjs::omitted clarification tags retain saved answer precedence through CLI and structured answers and repairs",
+      "test/task-intake.test.mjs::successive question-owned answers remain in accepted order even when planner tags name only the first answer",
+      "test/task-intake.test.mjs::saved omitted clarifications cannot evade canonical validation or historical question ownership",
+      "test/task-intake.test.mjs::impossible minimum brief footprints stop CLI and structured requests before repository lookup or planning",
+      "test/task-intake.test.mjs::combined and partial answer footprints fail atomically before context reads and permit corrected operation replay",
+      "test/task-intake.test.mjs::impossible legacy brief footprints refuse new planning and settle owned usage before stopping"
+    ],
+    "initial_runs": [
+      {
+        "command": "node --test --test-name-pattern='omitted clarification|successive question-owned|impossible minimum brief|combined and partial answer footprints|impossible legacy brief' test/task-intake.test.mjs",
+        "exit_code": 1,
+        "raw_log": "/private/tmp/natural-language-tasks-clarification-red.log",
+        "tests": 6,
+        "passed": 0,
+        "failed": 6,
+        "observed": "On prior source, omitted tags lost saved answer precedence, successive answers lost the later answer, a matching unclarified approval validated, and infeasible requests/answers reached context reads. The initial legacy fixture exhausted repairs; its final request was tightened from 600 to 800 words because the canonical lower bound showed the original two-fragment request could fit a better organization."
+      },
+      {
+        "command": "node --test --test-name-pattern='omitted clarification|successive question-owned|impossible minimum brief|combined and partial answer footprints|impossible legacy brief|question.*own|duplicate question|legacy interrupted|literal placeholder|capacity|owner-derived scope|falsely mapped|idempotent' test/task-intake.test.mjs",
+        "exit_code": 1,
+        "raw_log": "/private/tmp/natural-language-tasks-clarification-targeted.log",
+        "tests": 20,
+        "passed": 16,
+        "failed": 4,
+        "observed": "Three assertions used world counters whose prepare hook was overridden; local counters now track those fixtures. The legacy two-fragment fixture remained feasible under the minimum-story organization, so its request was increased to 800 words. Successive-answer coverage was expanded to prior answer fragments and proven follow-up ownership."
+      }
+    ],
+    "focused_regression": {
+      "command": "node --test --test-name-pattern='omitted clarification|successive question-owned|impossible minimum brief|combined and partial answer footprints|impossible legacy brief|question.*own|duplicate question|legacy interrupted|literal placeholder|capacity|owner-derived scope|falsely mapped|idempotent' test/task-intake.test.mjs",
+      "exit_code": 0,
+      "raw_log": "/private/tmp/natural-language-tasks-clarification-targeted-final.log",
+      "tests": 20,
+      "passed": 20
+    },
+    "representative_output": {
+      "live": false,
+      "model_calls": 0,
+      "record": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-nkjDDD/saved-clarification-fixture.json",
+      "path": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-nkjDDD/tasks/task-1b5c53614198be42f29f3074/drafts/revision-5/docs/prds/task-1b5c53614198be42f29f3074.md",
+      "sha256": "de745d8dea8e98f71462f9dd35f30f73534ec5f6ece5a9d0affd173633e5c4fe",
+      "words": 310,
+      "original": "Add CSV export for the widget table.\nDo not add dependencies.",
+      "answers": {
+        "q-r-1": "Use JSON only; CSV is excluded."
+      },
+      "requirements": [
+        {
+          "id": "r-1",
+          "text": "Add CSV export for the widget table."
+        },
+        {
+          "id": "r-2",
+          "text": "Do not add dependencies."
+        },
+        {
+          "id": "a-q-r-1-1",
+          "text": "Use JSON only; CSV is excluded."
+        }
+      ],
+      "stories": [
+        {
+          "id": "us-1",
+          "requirements": [
+            "r-1"
+          ],
+          "text": "As a task owner, I want the quoted requirements fulfilled, so that the result matches my request. Owner clarified requirement r-1: \"Add CSV export for the widget table.\" Owner answer q-r-1: \"Use JSON only; CSV is excluded.\" The answer governs any conflict with that requirement."
+        }
+      ],
+      "mapping": [
+        {
+          "requirementId": "r-1",
+          "criteria": [
+            "ac-1"
+          ],
+          "resolvedBy": "q-r-1"
+        },
+        {
+          "requirementId": "r-2",
+          "criteria": [
+            "ac-2"
+          ]
+        },
+        {
+          "requirementId": "a-q-r-1-1",
+          "criteria": [
+            "ac-3"
+          ]
+        }
+      ],
+      "sources": [
+        {
+          "path": "AGENTS.md",
+          "sha256": "03c3e02659634826151da10c34ca31473b2ca7542d54de33cf169678555d7b34"
+        },
+        {
+          "path": "package.json",
+          "sha256": "4f05b82adac690557b1bef490211ec333ff378ca9dbe8fc0a58624bddd3ae281"
+        }
+      ],
+      "readiness": {
+        "allow": true,
+        "hash": "de745d8dea8e98f71462f9dd35f30f73534ec5f6ece5a9d0affd173633e5c4fe",
+        "digest": "a9559d316a141c5a42d190b4e873007a6f2d6cc722bdac9a1e355da25ae561d3",
+        "decisionId": null,
+        "report": "ok   path          lives under docs/prds/ with a lowercase-dash filename\nok   frontmatter   frontmatter has status (draft|ready) and harness (claude|codex|gemini|opencode|goose)\nok   title         one H1 title, 8 to 80 characters\nok   problem       ## Problem: at least 40 words on what is wrong today and for whom\nok   stories       ## User stories: every bullet reads 'As a <who>, I want <what>, so that <why>'\nok   criteria      ## Acceptance criteria: every bullet is Given / When / Then, at least one per story\nok   verify        ## Verify: at least one command the session must run green; no sudo, rm -rf or piped installers\nok   look          ## Where to look: files or directories to start from, or 'none'\nok   scope         ## Out of scope: at least one bullet\nok   placeholders  no TODO, TBD, FIXME, ???, lorem or <angle-bracket> placeholders anywhere\nok   size          under 1,500 words; a PRD is one pull request, split anything bigger\nok   sources       every file in `sources` exists, is readable text, and is named inside the repository\n\ntask-1b5c53614198be42f29f3074: ready to start.\nAPort decision (local): allow\nstatus set to ready. Commit the PRD when you commit the rest of your work.",
+        "revision": 6
+      },
+      "implementation": {
+        "id": "acme/widget/task-1b5c53614198be42f29f3074",
+        "worktree": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-nkjDDD/worktrees/acme/widget/task-1b5c53614198be42f29f3074",
+        "branch": "work/task-1b5c53614198be42f29f3074",
+        "base": "main",
+        "baseSource": "default",
+        "session": null,
+        "run": "1-start",
+        "state": "running",
+        "pr": null,
+        "url": null
+      },
+      "checker_passed": true,
+      "readiness_digest_matches": true,
+      "dispatches": 1,
+      "reviewed_against": [
+        "docs/prds/natural-language-tasks.md",
+        "docs/plans/plugin-ready-gallivant.md"
+      ],
+      "limitation": "Offline fixture; native enforcement and live qualification remain unverified.",
+      "delivered_bytes_match": true
+    },
+    "boundaries_checked": [
+      "Saved question-owned answers cannot be omitted from executable stories/criteria or canonical mappings by a missing resolvedBy tag. Direct roots and earlier answer fragments retain later accepted clarification precedence, while unrelated original constraints remain unclarified. Invalid historical ownership and matching legacy unclarified approvals fail validation/start/resume; existing owned implementation dispatch still reconciles once.",
+      "Task capacity uses the shared 1500-word checker constant and actual JSON quoting/rendering, choosing the smallest authorized story and one shared criterion as a lower bound. Initial requests stop before repository lookup; accumulated and partial answers stop before new context reads or accepted revision/operation writes. Corrected operations remain reusable, escaped-tab controls fit, and existing count/byte/prompt bounds remain unchanged.",
+      "Preparation replay settles already-owned running/completed/settled usage before oversized legacy state blocks, clears stale readiness and refuses further turns. Unowned recovery, draftPrompt, parseDraft, direct rendering and saved readiness/dispatch reuse existing validation and ownership helpers. No hand-authored checker, provider/model/permission defaults or implementation transport changed."
+    ],
+    "word_capacity": {
+      "shared_checker_limit": 1500,
+      "request_cases": [
+        600,
+        1501
+      ],
+      "legacy_request_words": 800,
+      "escaped_tabs_control_raw_words": 1501,
+      "recovery_phases": [
+        "unowned",
+        "running",
+        "completed",
+        "settled"
+      ],
+      "fixture_cost_preserved": 0.37,
+      "live_cost_usd": null
+    },
+    "observed": "Saved question ownership, answer acceptance order and immutable answer-fragment provenance now determine clarification precedence independently of optional planner tags. New output, direct rendering and saved validation normalize the same scope; matching legacy hashes and approval digests cannot dispatch an unclarified original. Original text and unrelated constraints remain intact. The checker word limit and canonical renderer provide a lower bound before repository lookup or prospective answer context reads/state writes. Oversized legacy preparation settles owned usage before refusal without buying new planning or repair turns. All required offline commands and 20 focused checks pass; model calls are zero. Native preparation enforcement and G8 live qualification remain unverified, with prior failures and exact remedies preserved.",
+    "live_limitation": "Native preparation enforcement (ac-4) and G8 live qualification (ac-12) remain unverified; existing external blockers were checked from recorded evidence and no unchanged blocked probe was repeated."
   }
 }
