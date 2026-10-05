@@ -12,6 +12,7 @@ import { taskCommand, readTaskStdin } from "../lib/commands/task.mjs";
 import { check, parsePrd } from "../lib/prd.mjs";
 import { makeRunner } from "../lib/run.mjs";
 import { runEnv, RUN_GIT_CONFIG } from "../lib/git.mjs";
+import { preparationEnvironment } from "../lib/task_environment.mjs";
 import { makeState } from "../lib/state.mjs";
 import { writeJsonAtomic } from "../lib/fs.mjs";
 import { contentDigest } from "../lib/start_contract.mjs";
@@ -26,7 +27,7 @@ function world(overrides = {}) {
   writeFileSync(join(checkout, "AGENTS.md"), "Keep export scoped to the table. Verify with `npm test` and `npm run lint`.\n");
   const runners = new Map(), snapshots = new Map(), sources = new Map();
   const ctx = {
-    home, config: { ...CONFIG, home, worktrees: join(home, "worktrees"), harness: { codex: { bin: harnessBin(home) } }, deliverable: { ...CONFIG.deliverable, evaluator: "local" } },
+    home, env: { PATH: process.env.PATH, HOME: home }, config: { ...CONFIG, home, worktrees: join(home, "worktrees"), harness: { codex: { bin: harnessBin(home) } }, deliverable: { ...CONFIG.deliverable, evaluator: "local" } },
     state: makeState(home), log: silentLog, credential: fakeCredential(), identity: fakeIdentity(),
     git: { toplevel: async () => checkout, create: async ({ prdId }) => { const p = join(home, "worktrees", "acme", "widget", prdId); mkdirSync(p, { recursive: true }); return p; } },
     gh: { repoInfo: async () => ({ nameWithOwner: "acme/widget", defaultBranch: "main" }), branchExists: async () => true, ensureLabels: async () => {} },
@@ -249,6 +250,7 @@ test("preparation uses the existing runner in a separate workspace, records usag
 test("preparation and repairs omit global context grants while implementation retains its harness behavior", async () => {
   for (const harness of ["claude", "codex"]) {
     const w = world(), extra = tempHome();
+    Object.assign(w.ctx.env, { OPENAI_API_KEY: "openai-fixture-only", ANTHROPIC_API_KEY: "anthropic-fixture-only", AWS_SECRET_ACCESS_KEY: "unrelated", NPM_TOKEN: "unrelated", DATABASE_URL: "unrelated" });
     w.ctx.config.context_paths = [extra];
     w.ctx.config.harness = { [harness]: { bin: harnessBin(w.home, harness), ...(harness === "claude" ? { settings: join(w.home, "claude/settings.json") } : {}) } };
     mkdirSync(join(w.checkout, "docs")); writeFileSync(join(w.checkout, "docs/selected.md"), "Only this selected document.");
@@ -266,6 +268,9 @@ test("preparation and repairs omit global context grants while implementation re
       assert.ok(!run.args.includes("--add-dir")); assert.ok(!run.args.includes(extra));
       assert.match(run.args.at(-1), /Only this selected document/);
       assert.equal(run.opts.inheritEnv, false); assert.equal(run.opts.env.GH_CONFIG_DIR, "/dev/null");
+      assert.equal(run.opts.env.HOME, join(run.opts.cwd, "home"));
+      for (const key of ["AWS_SECRET_ACCESS_KEY", "NPM_TOKEN", "DATABASE_URL"]) assert.ok(!(key in run.opts.env));
+      assert.equal(run.opts.env[harness === "codex" ? "OPENAI_API_KEY" : "ANTHROPIC_API_KEY"], harness === "codex" ? "openai-fixture-only" : "anthropic-fixture-only");
     }
     const dispatched = await service.start({ taskId: r.taskId, expectedRevision: r.revision, run: true });
     if (harness === "claude") {
@@ -365,14 +370,72 @@ test("provider failure and exhausted runtime stop preparation without validator 
   assert.equal(blocked.status, "blocked"); assert.match(blocked.failures[0], /runtime allowance exhausted/); assert.equal(pending.current().killed, true);
 });
 
+test("preparation environments admit only selected provider settings and isolate native profiles for every adapter", () => {
+  const root = tempHome(), operator = join(root, "operator-home");
+  const profiles = {
+    codex: [".codex/auth.json", ".codex/config.toml", ".codex/hooks.json", ".codex/skills/example/SKILL.md"],
+    claude: [".claude/.credentials.json", ".claude/settings.json", ".claude.json"],
+    gemini: [".gemini/oauth_creds.json", ".gemini/settings.json"],
+    opencode: [".config/opencode/opencode.json", ".local/share/opencode/auth.json", ".local/state/opencode/model.json"],
+    goose: [".config/goose/config.yaml", ".config/goose/secrets.yaml"],
+  };
+  const excluded = [".npmrc", ".ssh/id_ed25519", ".aws/credentials", ".config/gh/hosts.yml", ".config/database/credentials", ".codex/history.jsonl", ".claude/projects/previous.jsonl", ".gemini/history/previous.json", ".local/share/opencode/storage/previous.json", ".config/goose/history.json"];
+  for (const path of [...Object.values(profiles).flat(), ...excluded]) {
+    mkdirSync(dirname(join(operator, path)), { recursive: true }); writeFileSync(join(operator, path), `fixture:${path}`);
+  }
+  const secrets = { AWS_SECRET_ACCESS_KEY: "aws-only", AWS_ACCESS_KEY_ID: "aws-only", NPM_TOKEN: "npm-only", DATABASE_URL: "database-only", PRIVATE_SERVICE_TOKEN: "private-only", GH_TOKEN: "github-only", SSH_AUTH_SOCK: "agent-only", NODE_OPTIONS: "startup-only", BASH_ENV: "startup-only", ENV: "startup-only", ZDOTDIR: "startup-only", LD_PRELOAD: "startup-only" };
+  const source = { ...secrets, HOME: operator, PATH: process.env.PATH, LANG: "en_US.UTF-8", OPENAI_API_KEY: "openai-only", ANTHROPIC_API_KEY: "anthropic-only", GEMINI_API_KEY: "gemini-only", GOOSE_PROVIDER: "openai", GOOSE_MODEL: "configured-model", XDG_CONFIG_HOME: join(operator, ".config"), XDG_DATA_HOME: join(operator, ".local/share"), XDG_STATE_HOME: join(operator, ".local/state") };
+  const expectedKeys = { codex: ["OPENAI_API_KEY"], claude: ["ANTHROPIC_API_KEY"], gemini: ["GEMINI_API_KEY"], opencode: ["OPENAI_API_KEY", "ANTHROPIC_API_KEY", "GEMINI_API_KEY"], goose: ["OPENAI_API_KEY", "ANTHROPIC_API_KEY"] };
+  for (const harness of Object.keys(profiles)) {
+    const cwd = join(root, harness), env = preparationEnvironment(harness, cwd, {}, source);
+    assert.equal(env.PATH, source.PATH); assert.equal(env.LANG, source.LANG); assert.equal(env.HOME, join(cwd, "home")); assert.notEqual(env.HOME, source.HOME);
+    assert.equal(env.XDG_CONFIG_HOME, join(env.HOME, ".config")); assert.equal(env.TMPDIR, join(cwd, "tmp"));
+    for (const key of Object.keys(secrets)) assert.ok(!(key in env), `${harness} inherited ${key}`);
+    for (const key of ["OPENAI_API_KEY", "ANTHROPIC_API_KEY", "GEMINI_API_KEY"]) assert.equal(env[key], expectedKeys[harness].includes(key) ? source[key] : undefined, `${harness}: ${key}`);
+    for (const path of profiles[harness]) assert.equal(readFileSync(join(env.HOME, path), "utf8"), `fixture:${path}`);
+    for (const path of excluded) assert.equal(existsSync(join(env.HOME, path)), false, `${harness} exposed ${path}`);
+    for (const [other, paths] of Object.entries(profiles)) if (other !== harness) assert.equal(existsSync(join(env.HOME, paths[0])), false, `${harness} exposed ${other} profile`);
+    // Rebuilding a private profile never changes the native settings or home.
+    preparationEnvironment(harness, cwd, {}, source);
+    for (const path of profiles[harness]) assert.equal(readFileSync(join(operator, path), "utf8"), `fixture:${path}`);
+    if (harness === "goose") { assert.equal(env.GOOSE_PROVIDER, source.GOOSE_PROVIDER); assert.equal(env.GOOSE_MODEL, source.GOOSE_MODEL); }
+  }
+});
+
+test("cloud provider credentials are available only in explicitly selected provider modes", () => {
+  const root = tempHome(), operator = join(root, "operator-home");
+  mkdirSync(join(operator, ".aws"), { recursive: true }); writeFileSync(join(operator, ".aws/credentials"), "provider-fixture-only");
+  const source = { HOME: operator, AWS_ACCESS_KEY_ID: "provider-id", AWS_SECRET_ACCESS_KEY: "provider-secret", AWS_SESSION_TOKEN: "provider-token", NPM_TOKEN: "unrelated", DATABASE_URL: "unrelated", CLAUDE_CODE_USE_BEDROCK: "1", GOOSE_PROVIDER: "bedrock" };
+  for (const harness of ["claude", "goose"]) {
+    const env = preparationEnvironment(harness, join(root, harness), {}, source);
+    assert.equal(env.AWS_SECRET_ACCESS_KEY, source.AWS_SECRET_ACCESS_KEY); assert.equal(env.AWS_SESSION_TOKEN, source.AWS_SESSION_TOKEN);
+    assert.equal(readFileSync(join(env.HOME, ".aws/credentials"), "utf8"), "provider-fixture-only");
+    assert.ok(!("NPM_TOKEN" in env)); assert.ok(!("DATABASE_URL" in env));
+  }
+  const env = preparationEnvironment("codex", join(root, "codex"), {}, source);
+  assert.ok(!("AWS_SECRET_ACCESS_KEY" in env)); assert.ok(!("CLAUDE_CODE_USE_BEDROCK" in env)); assert.equal(existsSync(join(env.HOME, ".aws")), false);
+});
+
+test("unsafe native profile roots stop before launch intent and are not retried", async () => {
+  const w = world();
+  mkdirSync(join(w.home, ".codex")); symlinkSync(w.home, join(w.home, ".codex/plugins"));
+  const runner = fakeRunner({ now: Date.now }); w.ctx.runnerFor = () => runner;
+  const service = createTaskService(w.ctx), r = await service.prepare({ text: REQUEST });
+  assert.equal(r.status, "blocked"); assert.match(r.failures[0], /provider profile contains the operator home/);
+  assert.equal(r.preparation.attempts.length, 0); assert.equal(runner.started.length, 0); assert.deepEqual(w.ctx.state.entries(), []);
+  await service.resume({ taskId: r.taskId, expectedRevision: r.revision }); assert.equal(runner.started.length, 0);
+});
+
 test("native durable runner stores offline preparation logs, usage, runtime and isolated argv", async t => {
   const w = world(), bin = join(w.home, "offline-codex.mjs");
   const operatorHome = join(w.home, "provider-home"), ghConfig = join(operatorHome, ".config/gh");
   mkdirSync(ghConfig, { recursive: true }); writeFileSync(join(ghConfig, "hosts.yml"), "github.com:\n  oauth_token: stored-fixture-only\n");
-  const overrides = { HOME: operatorHome, XDG_CONFIG_HOME: join(operatorHome, ".config"), GH_CONFIG_DIR: ghConfig, GH_TOKEN: "gh-fixture-only", GITHUB_TOKEN: "github-fixture-only", GH_ENTERPRISE_TOKEN: "ghe-fixture-only", GITHUB_ENTERPRISE_TOKEN: "enterprise-fixture-only", OPENAI_API_KEY: "provider-fixture-only", CODEX_HOME: join(operatorHome, ".codex"), SSH_AUTH_SOCK: "/fixture-only/agent.sock", SSH_ASKPASS: "/fixture-only/askpass", GIT_ASKPASS: "/fixture-only/askpass", GIT_CONFIG_PARAMETERS: "'credential.helper=fixture-only'", GIT_CONFIG_VALUE_99: "fixture-only", GIT_DIR: "/fixture-only/operator.git" };
+  const overrides = { HOME: operatorHome, XDG_CONFIG_HOME: join(operatorHome, ".config"), GH_CONFIG_DIR: ghConfig, GH_TOKEN: "gh-fixture-only", GITHUB_TOKEN: "github-fixture-only", GH_ENTERPRISE_TOKEN: "ghe-fixture-only", GITHUB_ENTERPRISE_TOKEN: "enterprise-fixture-only", OPENAI_API_KEY: "provider-fixture-only", CODEX_HOME: join(operatorHome, ".codex"), SSH_AUTH_SOCK: "/fixture-only/agent.sock", SSH_ASKPASS: "/fixture-only/askpass", GIT_ASKPASS: "/fixture-only/askpass", GIT_CONFIG_PARAMETERS: "'credential.helper=fixture-only'", GIT_CONFIG_VALUE_99: "fixture-only", GIT_DIR: "/fixture-only/operator.git",
+    AWS_ACCESS_KEY_ID: "aws-fixture-only", AWS_SECRET_ACCESS_KEY: "aws-secret-fixture-only", NPM_TOKEN: "npm-fixture-only", DATABASE_URL: "database-fixture-only", ANTHROPIC_API_KEY: "other-provider-fixture-only" };
   const previous = Object.fromEntries(Object.keys(overrides).map(key => [key, process.env[key]]));
   t.after(() => { for (const [key, value] of Object.entries(previous)) { if (value === undefined) delete process.env[key]; else process.env[key] = value; } });
   Object.assign(process.env, overrides);
+  w.ctx.env = { ...process.env };
   const fixture = new URL("./fixtures/task-intake.mjs", import.meta.url).href;
   writeFileSync(bin, `#!${process.execPath}
 import { draftFor } from ${JSON.stringify(fixture)};
@@ -387,6 +450,7 @@ else {
   writeFileSync('environment.json', JSON.stringify({
     tokenKeysPresent: ['GH_TOKEN', 'GITHUB_TOKEN', 'GH_ENTERPRISE_TOKEN', 'GITHUB_ENTERPRISE_TOKEN'].filter(k => k in process.env),
     inheritedGitSshKeys: ['SSH_AUTH_SOCK', 'SSH_ASKPASS', 'GIT_ASKPASS', 'GIT_CONFIG_PARAMETERS', 'GIT_CONFIG_VALUE_99', 'GIT_DIR'].filter(k => k in process.env),
+    unrelatedKeys: ['AWS_ACCESS_KEY_ID', 'AWS_SECRET_ACCESS_KEY', 'NPM_TOKEN', 'DATABASE_URL', 'ANTHROPIC_API_KEY'].filter(k => k in process.env),
     gitGlobal: process.env.GIT_CONFIG_GLOBAL, gitNoSystem: process.env.GIT_CONFIG_NOSYSTEM, gitSsh: process.env.GIT_SSH_COMMAND, gitProtocols: process.env.GIT_ALLOW_PROTOCOL,
     ghConfig: process.env.GH_CONFIG_DIR, configError, home: process.env.HOME,
     providerKey: process.env.OPENAI_API_KEY, codexHome: process.env.CODEX_HOME, pwd: process.env.PWD,
@@ -410,8 +474,9 @@ else {
   assert.ok(!argv.args.includes("--model")); assert.ok(argv.args.includes('sandbox_mode="workspace-write"'));
   const environment = JSON.parse(readFileSync(join(argv.cwd, "environment.json"), "utf8"));
   assert.deepEqual(environment.tokenKeysPresent, []); assert.equal(environment.ghConfig, "/dev/null"); assert.equal(environment.configError, "ENOTDIR");
+  assert.deepEqual(environment.unrelatedKeys, []);
   assert.deepEqual(environment.inheritedGitSshKeys, []); assert.equal(environment.gitGlobal, "/dev/null"); assert.equal(environment.gitNoSystem, "1"); assert.equal(environment.gitSsh, "false"); assert.equal(environment.gitProtocols, "");
-  assert.equal(environment.home, operatorHome); assert.equal(environment.providerKey, overrides.OPENAI_API_KEY); assert.equal(environment.codexHome, overrides.CODEX_HOME); assert.equal(environment.pwd, argv.cwd);
+  assert.equal(environment.home, join(argv.cwd, "home")); assert.equal(environment.providerKey, overrides.OPENAI_API_KEY); assert.equal(environment.codexHome, join(environment.home, ".codex")); assert.equal(environment.pwd, argv.cwd);
   const baseline = makeRunner(join(w.home, "baseline-runs"));
   const job = await baseline.start("inherited-env", process.execPath, ["-e", "console.log(JSON.stringify({github:process.env.GH_TOKEN,config:process.env.GH_CONFIG_DIR,provider:process.env.OPENAI_API_KEY}))"], { cwd: w.home });
   t.after(async () => { baseline.kill(job.id); await baseline.waitForKill(job.id); });
@@ -440,10 +505,11 @@ test("preparation and repairs refuse inherited Git helpers, askpass and SSH auth
   const previous = Object.fromEntries(Object.keys(overrides).map(key => [key, process.env[key]]));
   t.after(() => { for (const [key, value] of Object.entries(previous)) { if (value === undefined) delete process.env[key]; else process.env[key] = value; } });
   Object.assign(process.env, overrides);
+  w.ctx.env = { ...process.env };
   const runner = fakeRunner({ now: Date.now }), launch = runner.start;
   runner.start = (...args) => {
     const job = launch(...args), { env, cwd, inheritEnv } = args[3];
-    assert.equal(inheritEnv, false); assert.equal(env.HOME, providerHome); assert.equal(env.OPENAI_API_KEY, overrides.OPENAI_API_KEY);
+    assert.equal(inheritEnv, false); assert.equal(env.HOME, join(cwd, "home")); assert.notEqual(env.HOME, providerHome); assert.equal(env.OPENAI_API_KEY, overrides.OPENAI_API_KEY);
     for (const key of Object.keys(overrides).filter(k => /^(GIT_|SSH_)/.test(k))) {
       if (!(key in runEnv()) && !["GIT_SSH_COMMAND", "GIT_ALLOW_PROTOCOL"].includes(key)) assert.ok(!(key in env), `inherited ${key}`);
     }

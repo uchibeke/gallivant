@@ -20,14 +20,23 @@ Selected context consists of explicit repository files. Root `AGENTS.md`, common
 build manifests and instructions above selected files are included automatically.
 Context is bounded to 256 KiB and requests to 32 KiB; choose fewer files if needed.
 Preparation receives these documents in its prompt and does not inherit global
-`context_paths` read grants. GitHub token variables are removed from its child
-environment and `GH_CONFIG_DIR=/dev/null` disables stored GitHub CLI credentials.
-Inherited Git/SSH overrides, askpass programs and agent sockets are removed.
-The existing Git environment disables user/system configuration. Terminal
-credential prompts and Git transports are disabled so provider-home settings
-cannot authenticate fetches or pushes. Provider authentication and harness
-settings remain available. Credential separation does not add an OS sandbox to
-a harness that has none.
+`context_paths` read grants. Its child environment admits process basics and the
+selected adapter's explicit provider authentication/settings allowlist, defined
+in `lib/harness.mjs`. Unrelated tokens, database URLs, other adapters' keys and
+shell startup overrides are excluded. Preparation has a private `HOME`, XDG roots
+and temporary directory. Only the selected adapter's native auth/config files and
+configured plugin/skill resources are linked into that profile; previous sessions
+and unrelated home-directory credentials are excluded. Shared AWS credentials
+require explicit Bedrock selection; Claude's explicit Vertex mode can also use
+native Google credentials. No model or permission flags are changed.
+
+`GH_CONFIG_DIR=/dev/null` disables stored GitHub CLI credentials. The existing Git
+environment disables user/system configuration; inherited Git/SSH overrides,
+askpass programs, agent sockets, terminal prompts and Git transports are disabled.
+Credential separation does not add an OS sandbox to a harness that has none.
+An unsupported provider environment variable is not forwarded implicitly: use
+the selected harness's native auth/config profile. Profile failures stop before a
+model launch and return an actionable failure; they are not validator repairs.
 
 The result includes contract `version: 1`, a durable `taskId`, a state `revision`,
 original input, requirements, answers, assumptions, requirement mapping, draft
