@@ -1,8 +1,8 @@
 {
   "version": 1,
   "task_id": "task-c93def694fe561146955c469",
-  "implementation_commit": "0e25abc76c246be4d0f713044d154055e70d6b50",
-  "recorded_at": "2026-10-05T01:50:02.079Z",
+  "implementation_commit": "60b2889b45410ffcd0bb6f89d4d75e9f746ec41b",
+  "recorded_at": "2026-10-05T02:17:59.804Z",
   "versions": {
     "package": "0.1.0",
     "node": "v22.22.0",
@@ -13,21 +13,21 @@
     {
       "command": "npm test",
       "exit_code": 0,
-      "tests": 779,
-      "passed": 779,
-      "raw_log": "/private/tmp/natural-language-tasks-files-answer-context-npm-test.log"
+      "tests": 783,
+      "passed": 783,
+      "raw_log": "/private/tmp/natural-language-tasks-relative-provider-npm-test.log"
     },
     {
       "command": "npm run lint",
       "exit_code": 0,
-      "raw_log": "/private/tmp/natural-language-tasks-files-answer-context-lint.log"
+      "raw_log": "/private/tmp/natural-language-tasks-relative-provider-lint.log"
     },
     {
       "command": "npm run test:task-intake",
       "exit_code": 0,
-      "tests": 37,
-      "passed": 37,
-      "raw_log": "/private/tmp/natural-language-tasks-files-answer-context-final-focused.log"
+      "tests": 41,
+      "passed": 41,
+      "raw_log": "/private/tmp/natural-language-tasks-relative-provider-final-focused.log"
     },
     {
       "command": "git diff --check",
@@ -182,6 +182,21 @@
       "evidence": "test/task-intake.test.mjs::explicit provider auth and config file settings use private snapshots with the original contents and precedence"
     },
     {
+      "test_name": "relative provider files and profile roots resolve from the caller directory across selected adapters",
+      "outcome": "passed",
+      "evidence": "test/task-intake.test.mjs::relative provider files and profile roots resolve from the caller directory across selected adapters"
+    },
+    {
+      "test_name": "caller directory is pinned before repository resolution and survives repairs, retry and resumed answers",
+      "outcome": "passed",
+      "evidence": "test/task-intake.test.mjs::caller directory is pinned before repository resolution and survives repairs, retry and resumed answers"
+    },
+    {
+      "test_name": "older intake records use their saved checkout for provider paths and missing files stop without launch or retry",
+      "outcome": "passed",
+      "evidence": "test/task-intake.test.mjs::older intake records use their saved checkout for provider paths and missing files stop without launch or retry"
+    },
+    {
       "test_name": "Gemini Vertex preparation carries only ADC into its private profile and preserves explicit credentials",
       "outcome": "passed",
       "evidence": "test/task-intake.test.mjs::Gemini Vertex preparation carries only ADC into its private profile and preserves explicit credentials"
@@ -195,6 +210,11 @@
       "test_name": "native durable runner stores offline preparation logs, usage, runtime and isolated argv",
       "outcome": "passed",
       "evidence": "test/task-intake.test.mjs::native durable runner stores offline preparation logs, usage, runtime and isolated argv"
+    },
+    {
+      "test_name": "native offline preparation reads relative provider credentials from the saved invocation directory on initial and repair turns",
+      "outcome": "passed",
+      "evidence": "test/task-intake.test.mjs::native offline preparation reads relative provider credentials from the saved invocation directory on initial and repair turns"
     },
     {
       "test_name": "preparation and repairs refuse inherited Git helpers, askpass and SSH authentication without provider changes",
@@ -225,7 +245,7 @@
   "representative_fixture": {
     "provenance": "Deterministic offline fixture; not live-provider evidence",
     "original_request": "Add CSV export for the widget table.\nDo not add dependencies.",
-    "saved_draft": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-tIWHT2/tasks/task-a1a896015714afff3ae33dc4/drafts/revision-2/docs/prds/task-a1a896015714afff3ae33dc4.md",
+    "saved_draft": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-ctShFO/tasks/task-a1a896015714afff3ae33dc4/drafts/revision-2/docs/prds/task-a1a896015714afff3ae33dc4.md",
     "sha256": "98e173fe650cfd860510eb69456d161fb3a21917b4e4ad27e5d4c46570ad8f66",
     "canonical_prd": "---\nstatus: ready\nharness: codex\n---\n\n# Export widgets from the table\n\n## Problem\n\nFinance admins reconcile widget spending in spreadsheets every month. Today the widget table has no export action, so admins copy each visible row by hand and make transcription errors. A scoped export will preserve the selected records and their values while making the monthly reconciliation repeatable and reducing manual work for these users.\n\n## User stories\n\n- As a finance admin, I want to export widgets, so that I can reconcile spending.\n\n## Acceptance criteria\n\n- Given a table with three widgets, when Export is selected, then the requested file contains exactly three widget rows. Explicit requirement r-1: \"Add CSV export for the widget table.\"\n- Given the current package manifest, when CSV export is installed, then dependency declarations remain unchanged. Explicit requirement r-2: \"Do not add dependencies.\"\n\n## Verify\n\n- `npm test`\n- `npm run lint`\n\n## Where to look\n\n- src/export/\n\n## Out of scope\n\n- PDF export and unrelated table changes.\n\n## Assumptions\n\n- Export includes the currently visible rows.\n\n## Requirements mapping\n\n- r-1: \"Add CSV export for the widget table.\" → ac-1\n- r-2: \"Do not add dependencies.\" → ac-2\n",
     "readiness": {
@@ -236,8 +256,8 @@
     "review_outcome": null
   },
   "source_review": {
-    "implementation_revision": "0e25abc76c246be4d0f713044d154055e70d6b50",
-    "representative_output_inspected": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-tIWHT2/tasks/task-a1a896015714afff3ae33dc4/drafts/revision-2/docs/prds/task-a1a896015714afff3ae33dc4.md",
+    "implementation_revision": "60b2889b45410ffcd0bb6f89d4d75e9f746ec41b",
+    "representative_output_inspected": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-ctShFO/tasks/task-a1a896015714afff3ae33dc4/drafts/revision-2/docs/prds/task-a1a896015714afff3ae33dc4.md",
     "boundaries_checked": [
       "CLI and structured clients",
       "request/answer revision writes",
@@ -260,7 +280,9 @@
       "internal package file/directory links materialized with executable bits; nested file/directory escapes, cycles, broken links and special files refuse before launch intent, clean temporary copies and remain stopped on resume",
       "native regular auth/config and ADC files, old file alias replacement, file permission preservation, native child writes and deletions, complete staged-copy publication and cleanup; initial/repair Google, AWS and OpenCode explicit file settings use private copies",
       "CLI answer context to shared selection: combined byte/path limits, automatic repository instructions, pinned earlier bytes and command candidates, partial question state, readiness and source snapshot delivery",
-      "answer operation signatures include selected paths while retaining existing no-context digests; duplicate replies replay without filesystem reads or a second dispatch; stale revisions, changed reselections and invalid context fail before accepted state writes; unsupported CLI context operations stop before service calls"
+      "answer operation signatures include selected paths while retaining existing no-context digests; duplicate replies replay without filesystem reads or a second dispatch; stale revisions, changed reselections and invalid context fail before accepted state writes; unsupported CLI context operations stop before service calls",
+      "relative provider files, HOME/XDG and selected profile roots use the invocation directory captured before asynchronous repository resolution; --dir remains repository selection, and accepted request/answer retries retain the saved origin without signature changes",
+      "fresh structured callers and CLI preparation share the saved provider path base through repairs and answered questions; older version-1 records use their saved checkout, and missing original files cannot fall back to a later caller or isolated turn, record a launch intent or retry"
     ],
     "regressions": [
       "preparation uses the existing runner in a separate workspace, records usage and reconciles a lost response",
@@ -284,10 +306,14 @@
       "explicit provider auth and config file settings use private snapshots with the original contents and precedence",
       "CLI and structured answers pin additional context, carry instructions and sources, and dispatch once",
       "partial answers retain context while unsafe, oversized or changed selections leave accepted state untouched",
-      "CLI refuses context on operations that cannot accept documents before calling the service"
+      "CLI refuses context on operations that cannot accept documents before calling the service",
+      "relative provider files and profile roots resolve from the caller directory across selected adapters",
+      "caller directory is pinned before repository resolution and survives repairs, retry and resumed answers",
+      "older intake records use their saved checkout for provider paths and missing files stop without launch or retry",
+      "native offline preparation reads relative provider credentials from the saved invocation directory on initial and repair turns"
     ],
-    "literal_output_inspected": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-wj8tyU/tasks/task-e5098b67b2ba65ecacbb75c8/drafts/revision-5/docs/prds/task-e5098b67b2ba65ecacbb75c8.md",
-    "answer_context_output_inspected": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-zWpN3S/tasks/task-529b6d3fa285471552c06cd1/drafts/revision-4/docs/prds/task-529b6d3fa285471552c06cd1.md"
+    "literal_output_inspected": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-acByWm/tasks/task-0a08b0cca23df43e734882e2/drafts/revision-5/docs/prds/task-0a08b0cca23df43e734882e2.md",
+    "answer_context_output_inspected": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-wfW5oC/tasks/task-b13af23c6960b4b56bc6161d/drafts/revision-4/docs/prds/task-b13af23c6960b4b56bc6161d.md"
   },
   "live": {
     "status": "unverified",
@@ -420,6 +446,17 @@
       ],
       "evidence": "test/task-intake.test.mjs::CLI and structured answers pin additional context, carry instructions and sources, and dispatch once; test/task-intake.test.mjs::partial answers retain context while unsafe, oversized or changed selections leave accepted state untouched; test/task-intake.test.mjs::CLI refuses context on operations that cannot accept documents before calling the service",
       "observed": "CLI and structured answers forward selected repository documents into the same resumable intake; the resumed planner receives new documents and instructions, the canonical brief carries pinned sources and a discovered Verify command, and the existing start path delivers source bytes once. Partial replies persist context without starting planning. Existing snapshots remain pinned; invalid types, real secret/config files, escapes, symlinks, binary/missing documents, combined oversized context and changed accepted bytes leave accepted state unchanged. Duplicate replies replay after file removal/change, changed operation selections and stale revisions conflict, and legacy no-context answer digests still replay. Other CLI task operations reject --context before service calls."
+    },
+    {
+      "comment_id": 4180229119,
+      "files": [
+        "lib/tasks.mjs",
+        "lib/task_prepare.mjs",
+        "lib/task_environment.mjs",
+        "test/task-intake.test.mjs"
+      ],
+      "evidence": "test/task-intake.test.mjs::relative provider files and profile roots resolve from the caller directory across selected adapters; test/task-intake.test.mjs::caller directory is pinned before repository resolution and survives repairs, retry and resumed answers; test/task-intake.test.mjs::older intake records use their saved checkout for provider paths and missing files stop without launch or retry; test/task-intake.test.mjs::native offline preparation reads relative provider credentials from the saved invocation directory on initial and repair turns",
+      "observed": "The initial CLI invocation directory is captured before repository resolution and persisted separately from --dir. Relative Google/AWS auth files, OpenCode config files and selected profile/XDG roots resolve against that saved origin before private copying. Repairs, request retries and answered questions reopened from another directory retain the first accepted origin; legacy records retain signatures and use their saved checkout. An offline native child reads the selected relative credential bytes on initial and repair turns and edits only private copies. A missing original file refuses before launch intent with zero repairs and no repeat on resume, even when decoy files exist in the later caller or draft directory. Existing absolute-file selection, isolation cleanup and implementation flags retain their behavior."
     }
   ],
   "offline_credential_check": {
@@ -456,7 +493,7 @@
   "literal_quote_case": {
     "provenance": "Deterministic offline fixture; not live-provider evidence",
     "evidence": "test/task-intake.test.mjs::literal placeholder tokens in requests and answers survive quoted mapping, repair, readiness and dispatch",
-    "saved_draft": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-wj8tyU/tasks/task-e5098b67b2ba65ecacbb75c8/drafts/revision-5/docs/prds/task-e5098b67b2ba65ecacbb75c8.md",
+    "saved_draft": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-acByWm/tasks/task-0a08b0cca23df43e734882e2/drafts/revision-5/docs/prds/task-0a08b0cca23df43e734882e2.md",
     "sha256": "e9d0c7f2ad605042802e8a532cdad07e6b8d875442fe39829e0f729e86bbb376",
     "original_request": "Remove the TODO, resolve FIXME, finalize TBD, replace <placeholder>, clarify ??????, and correct lorem ipsum.\nKeep the literal \\u0054ODO text and do not add dependencies.",
     "answers": {
@@ -503,7 +540,7 @@
   "answer_context_case": {
     "provenance": "Deterministic offline fixture; not live-provider evidence",
     "evidence": "test/task-intake.test.mjs::CLI and structured answers pin additional context, carry instructions and sources, and dispatch once",
-    "saved_draft": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-zWpN3S/tasks/task-529b6d3fa285471552c06cd1/drafts/revision-4/docs/prds/task-529b6d3fa285471552c06cd1.md",
+    "saved_draft": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-wfW5oC/tasks/task-b13af23c6960b4b56bc6161d/drafts/revision-4/docs/prds/task-b13af23c6960b4b56bc6161d.md",
     "sha256": "3c9f5378f3cc0f2f2908a4f95d21e909edc4be443c179ca751a50d6bccf9d596",
     "original_request": "Add CSV export for the widget table.\nDo not add dependencies.",
     "answers": {
