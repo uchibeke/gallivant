@@ -1,8 +1,8 @@
 {
   "version": 1,
   "task_id": "task-c93def694fe561146955c469",
-  "implementation_commit": "609595e8a1f3d1c042b72d95be18610401318a1f",
-  "recorded_at": "2026-10-05T15:53:14.518Z",
+  "implementation_commit": "71c5ee534e6ab17cfddfbddbf901a32a4d270343",
+  "recorded_at": "2026-10-05T16:38:49.144Z",
   "versions": {
     "package": "0.1.0",
     "node": "v22.22.0",
@@ -13,26 +13,26 @@
     {
       "command": "npm test",
       "exit_code": 0,
-      "raw_log": "/private/tmp/natural-language-tasks-create-npm-test.log",
-      "tests": 861,
-      "passed": 861
+      "raw_log": "/private/tmp/natural-language-tasks-scope-npm-test-final.log",
+      "tests": 865,
+      "passed": 865
     },
     {
       "command": "npm run lint",
       "exit_code": 0,
-      "raw_log": "/private/tmp/natural-language-tasks-create-lint.log"
+      "raw_log": "/private/tmp/natural-language-tasks-scope-lint-final.log"
     },
     {
       "command": "npm run test:task-intake",
       "exit_code": 0,
-      "raw_log": "/private/tmp/natural-language-tasks-create-intake.log",
-      "tests": 114,
-      "passed": 114
+      "raw_log": "/private/tmp/natural-language-tasks-scope-intake.log",
+      "tests": 118,
+      "passed": 118
     },
     {
       "command": "git diff --check",
       "exit_code": 0,
-      "raw_log": "/private/tmp/natural-language-tasks-create-diff-check.log",
+      "raw_log": "/private/tmp/natural-language-tasks-scope-diff-check-final.log",
       "observed_output": "empty output"
     }
   ],
@@ -621,6 +621,26 @@
       "test_name": "native create failures after executor invocation retain intake ownership even after the clone is removed",
       "outcome": "passed",
       "evidence": "test/task-intake.test.mjs::native create failures after executor invocation retain intake ownership even after the clone is removed"
+    },
+    {
+      "test_name": "falsely mapped planner behavior cannot enter owner-derived criteria or stories on initial, answered or repaired dispatch",
+      "outcome": "passed",
+      "evidence": "test/task-intake.test.mjs::falsely mapped planner behavior cannot enter owner-derived criteria or stories on initial, answered or repaired dispatch"
+    },
+    {
+      "test_name": "direct rendering derives shared criteria and stories from owner text rather than rejecting owner-authorized deployment",
+      "outcome": "passed",
+      "evidence": "test/task-intake.test.mjs::direct rendering derives shared criteria and stories from owner text rather than rejecting owner-authorized deployment"
+    },
+    {
+      "test_name": "owner-derived scope survives saved validation at the accepted input byte boundary",
+      "outcome": "passed",
+      "evidence": "test/task-intake.test.mjs::owner-derived scope survives saved validation at the accepted input byte boundary"
+    },
+    {
+      "test_name": "falsely mapped saved scope cannot validate, start or recover with a matching approval",
+      "outcome": "passed",
+      "evidence": "test/task-intake.test.mjs::falsely mapped saved scope cannot validate, start or recover with a matching approval"
     }
   ],
   "representative_fixture": {
@@ -647,8 +667,8 @@
     ]
   },
   "source_review": {
-    "implementation_revision": "609595e8a1f3d1c042b72d95be18610401318a1f",
-    "representative_output_inspected": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-OciO1z/tasks/task-a1a896015714afff3ae33dc4/drafts/revision-2/docs/prds/task-a1a896015714afff3ae33dc4.md",
+    "implementation_revision": "71c5ee534e6ab17cfddfbddbf901a32a4d270343",
+    "representative_output_inspected": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-Vt73zE/tasks/task-a0503d56f0c9910ddb9612b0/drafts/revision-4/docs/prds/task-a0503d56f0c9910ddb9612b0.md",
     "boundaries_checked": [
       "CLI and structured clients",
       "request/answer revision writes",
@@ -719,7 +739,10 @@
       "Story-to-owner requirement links, stable IDs and canonical rendering versus initial/answered repair, saved validation/start and approved crash recovery; existing requirement-to-criterion/question coverage and hand-authored checker/start behavior",
       "Shared requirement capacity versus text/CLI requests, combined/partial/idempotent answers, context reads, accepted revisions/operation IDs, prompt construction, mapping arrays and running/completed/settled native offline recovery; usage retained and no extra repair launch",
       "Offline ready-file writer versus signal/watchdog existence/read barriers, crash injection, startup bookkeeping fault paths and cleanup PID reads; atomic publication reuses lib/fs.mjs without changing runtime, provider or permission defaults",
-      "Creator preflight versus executor invocation: stale .git, parent conflicts, credential and identity resolution, partial clone/fetch/checkout errors; shared start release, intake/chain dispatch intents, pinned approvals, crash reload, blocked/explicit/duplicate retry, source delivery and possible spawn ownership; fromBranch and public remove keep their existing behavior"
+      "Creator preflight versus executor invocation: stale .git, parent conflicts, credential and identity resolution, partial clone/fetch/checkout errors; shared start release, intake/chain dispatch intents, pinned approvals, crash reload, blocked/explicit/duplicate retry, source delivery and possible spawn ownership; fromBranch and public remove keep their existing behavior",
+      "Planner ID associations versus executable owner semantics: criteria and stories use only deterministic quotations of accepted owner input and validated answers, including shared criteria and owner-requested deployment; generated rationale/location/exclusion prose is explicitly advisory.",
+      "Initial, answered and repaired CLI/structured output, direct rendering, saved canonical body, hash/readiness digest and new dispatch: rederive owner scope everywhere; matching forged legacy approvals fail and accepted implementation ownership still reconciles once.",
+      "Question-owned clarification preserves original context with answer precedence for conflicting parts, exact literal placeholder round trips, immutable requirement mapping, 128-fragment boundary and accepted 32 KiB input versus the existing 256 KiB output bound."
     ],
     "regressions": [
       "preparation uses the existing runner in a separate workspace, records usage and reconciles a lost response",
@@ -826,7 +849,11 @@
       "test/commands.test.mjs::hand-authored start releases a known stale-worktree refusal before cloning and retries after correction",
       "test/chains.test.mjs::chain known create refusal releases start and dispatch ownership for an explicit corrected retry",
       "test/task-intake.test.mjs::CLI and structured known create preflight refusals release ownership and retry the same approved intake once",
-      "test/task-intake.test.mjs::native create failures after executor invocation retain intake ownership even after the clone is removed"
+      "test/task-intake.test.mjs::native create failures after executor invocation retain intake ownership even after the clone is removed",
+      "test/task-intake.test.mjs::falsely mapped planner behavior cannot enter owner-derived criteria or stories on initial, answered or repaired dispatch",
+      "test/task-intake.test.mjs::direct rendering derives shared criteria and stories from owner text rather than rejecting owner-authorized deployment",
+      "test/task-intake.test.mjs::owner-derived scope survives saved validation at the accepted input byte boundary",
+      "test/task-intake.test.mjs::falsely mapped saved scope cannot validate, start or recover with a matching approval"
     ],
     "literal_output_inspected": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-YT4kUE/tasks/task-9f538f3b60078088f631d887/drafts/revision-5/docs/prds/task-9f538f3b60078088f631d887.md",
     "answer_context_output_inspected": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-GyBbWY/tasks/task-d21c94c7a17012e1454c6854/drafts/revision-4/docs/prds/task-d21c94c7a17012e1454c6854.md",
@@ -1024,7 +1051,8 @@
       "checker_passed": true,
       "readiness_digest_matches": true,
       "delivered_bytes_match": true
-    }
+    },
+    "owner_derived_scope_output_inspected": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-Vt73zE/tasks/task-a0503d56f0c9910ddb9612b0/drafts/revision-4/docs/prds/task-a0503d56f0c9910ddb9612b0.md"
   },
   "live": {
     "status": "unverified",
@@ -1494,6 +1522,16 @@
       ],
       "evidence": "docs/audit/plugin-ready/natural-language-tasks.json create_preflight_case",
       "observed": "Known create refusals before clone executor invocation now release ownership through existing start/task/chain gates. Partial or unknown clone outcomes remain reserved across cleanup/restart and cannot duplicate dispatch."
+    },
+    {
+      "comment_id": 4186167532,
+      "files": [
+        "lib/task_contract.mjs",
+        "test/task-intake.test.mjs",
+        "docs/tasks.md"
+      ],
+      "evidence": "docs/audit/plugin-ready/natural-language-tasks.json owner_derived_scope_case",
+      "observed": "Executable stories and criteria now derive deterministically from immutable owner requirements and question-ownership-validated saved answers. Planner-written outcomes are discarded even when they carry valid IDs. Clarifications quote both original context and answer, with answer precedence for conflicts; they cannot override unrelated fragments. Direct rendering and saved validation use the same derivation, so matching legacy hashes/digests cannot authorize falsely mapped prose. Existing approved --run dispatch and owned implementation reconciliation retain their normal gates and never add a second confirmation or duplicate run. Whole-result bounds remain in force while quoted wrappers accept the original input byte boundary. Full, focused, lint and diff checks pass. No native/model/provider calls, repeated blocked probes, new permission defaults or hand-authored path changes occurred; native enforcement and live qualification remain unverified."
     }
   ],
   "offline_credential_check": {
@@ -1778,58 +1816,90 @@
         {
           "command": "npm test",
           "exit_code": 0,
-          "raw_log": "/private/tmp/natural-language-tasks-create-npm-test.log",
-          "tests": 861,
-          "passed": 861
+          "raw_log": "/private/tmp/natural-language-tasks-scope-npm-test-final.log",
+          "tests": 865,
+          "passed": 865
         },
         {
           "command": "npm run lint",
           "exit_code": 0,
-          "raw_log": "/private/tmp/natural-language-tasks-create-lint.log"
+          "raw_log": "/private/tmp/natural-language-tasks-scope-lint-final.log"
         },
         {
           "command": "npm run test:task-intake",
           "exit_code": 0,
-          "raw_log": "/private/tmp/natural-language-tasks-create-intake.log",
-          "tests": 114,
-          "passed": 114
+          "raw_log": "/private/tmp/natural-language-tasks-scope-intake.log",
+          "tests": 118,
+          "passed": 118
         },
         {
           "command": "git diff --check",
           "exit_code": 0,
-          "raw_log": "/private/tmp/natural-language-tasks-create-diff-check.log",
+          "raw_log": "/private/tmp/natural-language-tasks-scope-diff-check-final.log",
           "observed_output": "empty output"
         }
       ],
       "focused_regressions": {
-        "command": "node --test --test-name-pattern='known create preflight refusals|native create failures after executor|hand-authored start releases a known|chain known create refusal|create classifies failures|post-clone|partial clone failure|pre-clone snapshot|known start preflight|ambiguous spawn failure|fresh and adopted clones|failure after persisting the started' test/task-intake.test.mjs test/commands.test.mjs test/chains.test.mjs test/units.test.mjs test/review.test.mjs",
+        "command": "node --test --test-name-pattern='falsely mapped|direct rendering derives|scope survives saved validation|unmapped|stories|capacity|literal placeholder|conflict|hostile selected|real checker|idempotent' test/task-intake.test.mjs",
         "exit_code": 0,
-        "raw_log": "/private/tmp/natural-language-tasks-create-targeted.log",
-        "tests": 13,
-        "passed": 13
+        "raw_log": "/private/tmp/natural-language-tasks-scope-targeted-final-clarification.log",
+        "tests": 20,
+        "passed": 20
       },
-      "supporting_checks": [],
       "initial_runs": [
         {
-          "command": "node --test --test-name-pattern='known create preflight refusals|native create failures after executor|hand-authored start releases a known|chain known create refusal|create classifies failures' test/task-intake.test.mjs test/commands.test.mjs test/chains.test.mjs test/units.test.mjs",
+          "command": "node --test --test-name-pattern='falsely mapped|direct rendering derives' test/task-intake.test.mjs",
           "exit_code": 1,
-          "raw_log": "/private/tmp/natural-language-tasks-create-red.log",
-          "tests": 5,
+          "raw_log": "/private/tmp/natural-language-tasks-scope-red.log",
+          "tests": 3,
           "passed": 0,
-          "failed": 5,
-          "observed": "The sandbox prevented process identity inspection for the intake exclusion lock, and the first chain fixture had only one path. The chain fixture was corrected to the existing two-path contract; the same offline command was rerun with supported process-inspection escalation."
+          "failed": 3,
+          "observed": "Falsely mapped behavior entered saved executable scope; direct rendering retained planner prose and a matching saved approval validated. All three regression tests failed on the prior implementation."
         },
         {
-          "command": "node --test --test-name-pattern='known create preflight refusals|native create failures after executor|hand-authored start releases a known|chain known create refusal|create classifies failures' test/task-intake.test.mjs test/commands.test.mjs test/chains.test.mjs test/units.test.mjs",
+          "command": "node --test --test-name-pattern='falsely mapped|direct rendering derives|unmapped|stories|capacity|literal placeholder|conflict|hostile|repair|replay|idempotent' test/task-intake.test.mjs",
           "exit_code": 1,
-          "raw_log": "/private/tmp/natural-language-tasks-create-red-authorized.log",
-          "tests": 5,
-          "passed": 1,
-          "failed": 4,
-          "observed": "Known stale-worktree refusals retained hand-authored, chain and intake ownership; create provided no pre-executor classification. Four regressions failed. The post-executor partial-clone ownership control passed."
+          "raw_log": "/private/tmp/natural-language-tasks-scope-targeted.log",
+          "tests": 49,
+          "passed": 9,
+          "failed": 40,
+          "observed": "The initial deterministic story wrapper used As the task owner, which the existing As a/an checker refused. Wording was corrected to As a task owner; no checker rule was weakened."
+        },
+        {
+          "command": "node --test --test-name-pattern='scope survives saved validation' test/task-intake.test.mjs",
+          "exit_code": 1,
+          "raw_log": "/private/tmp/natural-language-tasks-scope-size-red.log",
+          "tests": 1,
+          "passed": 0,
+          "failed": 1,
+          "observed": "A request at the accepted byte boundary exceeded the story text limit after quoting. Story/criterion lines now use the existing whole-result bound; raw input and prompt limits remain unchanged."
+        },
+        {
+          "command": "npm test",
+          "exit_code": 0,
+          "raw_log": "/private/tmp/natural-language-tasks-scope-npm-test.log",
+          "tests": 865,
+          "passed": 865,
+          "observed": "This first full pass predates the final original-and-answer clarification wording. The full suite was rerun successfully on final source."
         }
       ],
-      "observed": "The creator marks cloneAttempted immediately before the executor call, after path checks and credential/identity environment resolution. Only explicit false classification releases the shared start claim and task/chain dispatch intent. Unknown/clone/fetch/checkout/source/spawn failures retain ownership; no automatic deletion or second launch was added. Explicit corrected retries retain saved authorization, requirements and source bytes and dispatch once. All required offline commands and focused checks pass. Native enforcement and G8 live qualification remain unverified; no model/provider calls or repeated blocked native probes occurred.",
+      "supporting_checks": [
+        {
+          "command": "node --test --test-name-pattern='falsely mapped|direct rendering derives|unmapped|stories|capacity|literal placeholder|conflicting constraints|hostile selected|real checker' test/task-intake.test.mjs",
+          "exit_code": 0,
+          "raw_log": "/private/tmp/natural-language-tasks-scope-boundaries.log",
+          "tests": 14,
+          "passed": 14
+        },
+        {
+          "command": "node --test --test-name-pattern='falsely mapped|direct rendering derives|scope survives saved validation|unmapped|stories|capacity|literal placeholder|conflicting constraints|hostile selected|real checker|idempotent' test/task-intake.test.mjs",
+          "exit_code": 0,
+          "raw_log": "/private/tmp/natural-language-tasks-scope-targeted-final.log",
+          "tests": 17,
+          "passed": 17
+        }
+      ],
+      "observed": "Executable stories and criteria now derive deterministically from immutable owner requirements and question-ownership-validated saved answers. Planner-written outcomes are discarded even when they carry valid IDs. Clarifications quote both original context and answer, with answer precedence for conflicts; they cannot override unrelated fragments. Direct rendering and saved validation use the same derivation, so matching legacy hashes/digests cannot authorize falsely mapped prose. Existing approved --run dispatch and owned implementation reconciliation retain their normal gates and never add a second confirmation or duplicate run. Whole-result bounds remain in force while quoted wrappers accept the original input byte boundary. Full, focused, lint and diff checks pass. No native/model/provider calls, repeated blocked probes, new permission defaults or hand-authored path changes occurred; native enforcement and live qualification remain unverified.",
       "model_calls": 0
     },
     "previous_batches": [
@@ -2535,6 +2605,65 @@
           }
         ],
         "observed": "Story ownership is checked in shared parsing before repair/readiness or saved dispatch. CLI and structured results expose requirement links; fresh answered output retains every explicit fragment and one implementation run. The common 128-entry mapping capacity now bounds requests before repository lookup and accumulated answers before context/state mutation. Exact-boundary, partial/idempotent answer and owned-turn recovery checks pass without extra planning calls. The repeated ready-file JSON publication race was fixed only in the offline fixture using the existing atomic writer; native/provider settings are unchanged. Native preparation enforcement and G8 live evidence remain unverified.",
+        "model_calls": 0
+      },
+      {
+        "commands": [
+          {
+            "command": "npm test",
+            "exit_code": 0,
+            "raw_log": "/private/tmp/natural-language-tasks-create-npm-test.log",
+            "tests": 861,
+            "passed": 861
+          },
+          {
+            "command": "npm run lint",
+            "exit_code": 0,
+            "raw_log": "/private/tmp/natural-language-tasks-create-lint.log"
+          },
+          {
+            "command": "npm run test:task-intake",
+            "exit_code": 0,
+            "raw_log": "/private/tmp/natural-language-tasks-create-intake.log",
+            "tests": 114,
+            "passed": 114
+          },
+          {
+            "command": "git diff --check",
+            "exit_code": 0,
+            "raw_log": "/private/tmp/natural-language-tasks-create-diff-check.log",
+            "observed_output": "empty output"
+          }
+        ],
+        "focused_regressions": {
+          "command": "node --test --test-name-pattern='known create preflight refusals|native create failures after executor|hand-authored start releases a known|chain known create refusal|create classifies failures|post-clone|partial clone failure|pre-clone snapshot|known start preflight|ambiguous spawn failure|fresh and adopted clones|failure after persisting the started' test/task-intake.test.mjs test/commands.test.mjs test/chains.test.mjs test/units.test.mjs test/review.test.mjs",
+          "exit_code": 0,
+          "raw_log": "/private/tmp/natural-language-tasks-create-targeted.log",
+          "tests": 13,
+          "passed": 13
+        },
+        "supporting_checks": [],
+        "initial_runs": [
+          {
+            "command": "node --test --test-name-pattern='known create preflight refusals|native create failures after executor|hand-authored start releases a known|chain known create refusal|create classifies failures' test/task-intake.test.mjs test/commands.test.mjs test/chains.test.mjs test/units.test.mjs",
+            "exit_code": 1,
+            "raw_log": "/private/tmp/natural-language-tasks-create-red.log",
+            "tests": 5,
+            "passed": 0,
+            "failed": 5,
+            "observed": "The sandbox prevented process identity inspection for the intake exclusion lock, and the first chain fixture had only one path. The chain fixture was corrected to the existing two-path contract; the same offline command was rerun with supported process-inspection escalation."
+          },
+          {
+            "command": "node --test --test-name-pattern='known create preflight refusals|native create failures after executor|hand-authored start releases a known|chain known create refusal|create classifies failures' test/task-intake.test.mjs test/commands.test.mjs test/chains.test.mjs test/units.test.mjs",
+            "exit_code": 1,
+            "raw_log": "/private/tmp/natural-language-tasks-create-red-authorized.log",
+            "tests": 5,
+            "passed": 1,
+            "failed": 4,
+            "observed": "Known stale-worktree refusals retained hand-authored, chain and intake ownership; create provided no pre-executor classification. Four regressions failed. The post-executor partial-clone ownership control passed."
+          }
+        ],
+        "observed": "The creator marks cloneAttempted immediately before the executor call, after path checks and credential/identity environment resolution. Only explicit false classification releases the shared start claim and task/chain dispatch intent. Unknown/clone/fetch/checkout/source/spawn failures retain ownership; no automatic deletion or second launch was added. Explicit corrected retries retain saved authorization, requirements and source bytes and dispatch once. All required offline commands and focused checks pass. Native enforcement and G8 live qualification remain unverified; no model/provider calls or repeated blocked native probes occurred.",
         "model_calls": 0
       }
     ]
@@ -4093,5 +4222,196 @@
       "possible spawn"
     ],
     "observed": "The creator marks cloneAttempted immediately before the executor call, after path checks and credential/identity environment resolution. Only explicit false classification releases the shared start claim and task/chain dispatch intent. Unknown/clone/fetch/checkout/source/spawn failures retain ownership; no automatic deletion or second launch was added. Explicit corrected retries retain saved authorization, requirements and source bytes and dispatch once. All required offline commands and focused checks pass. Native enforcement and G8 live qualification remain unverified; no model/provider calls or repeated blocked native probes occurred."
+  },
+  "owner_derived_scope_case": {
+    "met": true,
+    "implementation_commit": "71c5ee534e6ab17cfddfbddbf901a32a4d270343",
+    "review_id": 5417475777,
+    "comment_id": 4186167532,
+    "model_calls": 0,
+    "source_refs": [
+      "lib/task_contract.mjs",
+      "lib/tasks.mjs",
+      "lib/prompt.mjs",
+      "lib/start_contract.mjs",
+      "lib/commands/ready.mjs",
+      "lib/commands/start.mjs",
+      "test/task-intake.test.mjs",
+      "docs/tasks.md",
+      "docs/prds/natural-language-tasks.md",
+      "docs/plans/plugin-ready-gallivant.md"
+    ],
+    "regressions": [
+      "test/task-intake.test.mjs::falsely mapped planner behavior cannot enter owner-derived criteria or stories on initial, answered or repaired dispatch",
+      "test/task-intake.test.mjs::direct rendering derives shared criteria and stories from owner text rather than rejecting owner-authorized deployment",
+      "test/task-intake.test.mjs::owner-derived scope survives saved validation at the accepted input byte boundary",
+      "test/task-intake.test.mjs::falsely mapped saved scope cannot validate, start or recover with a matching approval"
+    ],
+    "initial_runs": [
+      {
+        "command": "node --test --test-name-pattern='falsely mapped|direct rendering derives' test/task-intake.test.mjs",
+        "exit_code": 1,
+        "raw_log": "/private/tmp/natural-language-tasks-scope-red.log",
+        "tests": 3,
+        "passed": 0,
+        "failed": 3,
+        "observed": "Falsely mapped behavior entered saved executable scope; direct rendering retained planner prose and a matching saved approval validated. All three regression tests failed on the prior implementation."
+      },
+      {
+        "command": "node --test --test-name-pattern='falsely mapped|direct rendering derives|unmapped|stories|capacity|literal placeholder|conflict|hostile|repair|replay|idempotent' test/task-intake.test.mjs",
+        "exit_code": 1,
+        "raw_log": "/private/tmp/natural-language-tasks-scope-targeted.log",
+        "tests": 49,
+        "passed": 9,
+        "failed": 40,
+        "observed": "The initial deterministic story wrapper used As the task owner, which the existing As a/an checker refused. Wording was corrected to As a task owner; no checker rule was weakened."
+      },
+      {
+        "command": "node --test --test-name-pattern='scope survives saved validation' test/task-intake.test.mjs",
+        "exit_code": 1,
+        "raw_log": "/private/tmp/natural-language-tasks-scope-size-red.log",
+        "tests": 1,
+        "passed": 0,
+        "failed": 1,
+        "observed": "A request at the accepted byte boundary exceeded the story text limit after quoting. Story/criterion lines now use the existing whole-result bound; raw input and prompt limits remain unchanged."
+      },
+      {
+        "command": "npm test",
+        "exit_code": 0,
+        "raw_log": "/private/tmp/natural-language-tasks-scope-npm-test.log",
+        "tests": 865,
+        "passed": 865,
+        "observed": "This first full pass predates the final original-and-answer clarification wording. The full suite was rerun successfully on final source."
+      }
+    ],
+    "focused_regression": {
+      "command": "node --test --test-name-pattern='falsely mapped|direct rendering derives|scope survives saved validation|unmapped|stories|capacity|literal placeholder|conflict|hostile selected|real checker|idempotent' test/task-intake.test.mjs",
+      "exit_code": 0,
+      "raw_log": "/private/tmp/natural-language-tasks-scope-targeted-final-clarification.log",
+      "tests": 20,
+      "passed": 20
+    },
+    "representative_output": {
+      "live": false,
+      "model_calls": 0,
+      "record": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-Vt73zE/owner-derived-scope-fixture.json",
+      "path": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-Vt73zE/tasks/task-a0503d56f0c9910ddb9612b0/drafts/revision-4/docs/prds/task-a0503d56f0c9910ddb9612b0.md",
+      "sha256": "0f49c61454c087c730ba07ed75430cffa0f57eaead71aee133a4088499dad768",
+      "original": "Add CSV export for the widget table.\nDo not add dependencies.",
+      "answers": {
+        "q-r-1": "Use JSON only.\nDo not publish publicly."
+      },
+      "requirements": [
+        {
+          "id": "r-1",
+          "text": "Add CSV export for the widget table."
+        },
+        {
+          "id": "r-2",
+          "text": "Do not add dependencies."
+        },
+        {
+          "id": "a-q-r-1-1",
+          "text": "Use JSON only."
+        },
+        {
+          "id": "a-q-r-1-2",
+          "text": "Do not publish publicly."
+        }
+      ],
+      "stories": [
+        {
+          "id": "us-1",
+          "requirements": [
+            "r-1",
+            "r-2"
+          ],
+          "text": "As a task owner, I want the quoted requirements fulfilled, so that the result matches my request. Owner clarified requirement r-1: \"Add CSV export for the widget table.\" Owner answer q-r-1: \"Use JSON only.\\nDo not publish publicly.\" The answer governs any conflict with that requirement. Owner requirement r-2: \"Do not add dependencies.\""
+        }
+      ],
+      "criteria": [
+        {
+          "id": "ac-1",
+          "text": "Given the selected repository, when this task is implemented, then the following owner requirements hold. Explicit clarified requirement r-1: \"Add CSV export for the widget table.\" Explicit answer q-r-1: \"Use JSON only.\\nDo not publish publicly.\" The answer governs any conflict with that requirement."
+        },
+        {
+          "id": "ac-2",
+          "text": "Given the selected repository, when this task is implemented, then the following owner requirements hold. Explicit requirement r-2: \"Do not add dependencies.\""
+        },
+        {
+          "id": "ac-3",
+          "text": "Given the selected repository, when this task is implemented, then the following owner requirements hold. Explicit requirement a-q-r-1-1: \"Use JSON only.\""
+        },
+        {
+          "id": "ac-4",
+          "text": "Given the selected repository, when this task is implemented, then the following owner requirements hold. Explicit requirement a-q-r-1-2: \"Do not publish publicly.\""
+        },
+        {
+          "id": "ac-5",
+          "text": "Given the selected repository, when this task is implemented, then the following owner requirements hold. Explicit requirement r-2: \"Do not add dependencies.\""
+        }
+      ],
+      "mapping": [
+        {
+          "requirementId": "r-1",
+          "criteria": [
+            "ac-1"
+          ],
+          "resolvedBy": "q-r-1"
+        },
+        {
+          "requirementId": "r-2",
+          "criteria": [
+            "ac-2",
+            "ac-5"
+          ]
+        },
+        {
+          "requirementId": "a-q-r-1-1",
+          "criteria": [
+            "ac-3"
+          ]
+        },
+        {
+          "requirementId": "a-q-r-1-2",
+          "criteria": [
+            "ac-4"
+          ]
+        }
+      ],
+      "readiness": {
+        "allow": true,
+        "hash": "0f49c61454c087c730ba07ed75430cffa0f57eaead71aee133a4088499dad768",
+        "digest": "e1ad1500c7fea1cee7b7064a896e0f8b0fbd73b87bed26ea76a80a70ee6e1ac2",
+        "decisionId": null,
+        "report": "ok   path          lives under docs/prds/ with a lowercase-dash filename\nok   frontmatter   frontmatter has status (draft|ready) and harness (claude|codex|gemini|opencode|goose)\nok   title         one H1 title, 8 to 80 characters\nok   problem       ## Problem: at least 40 words on what is wrong today and for whom\nok   stories       ## User stories: every bullet reads 'As a <who>, I want <what>, so that <why>'\nok   criteria      ## Acceptance criteria: every bullet is Given / When / Then, at least one per story\nok   verify        ## Verify: at least one command the session must run green; no sudo, rm -rf or piped installers\nok   look          ## Where to look: files or directories to start from, or 'none'\nok   scope         ## Out of scope: at least one bullet\nok   placeholders  no TODO, TBD, FIXME, ???, lorem or <angle-bracket> placeholders anywhere\nok   size          under 1,500 words; a PRD is one pull request, split anything bigger\nok   sources       every file in `sources` exists, is readable text, and is named inside the repository\n\ntask-a0503d56f0c9910ddb9612b0: ready to start.\nAPort decision (local): allow\nstatus set to ready. Commit the PRD when you commit the rest of your work.",
+        "revision": 5
+      },
+      "implementation": {
+        "id": "acme/widget/task-a0503d56f0c9910ddb9612b0",
+        "worktree": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-Vt73zE/worktrees/acme/widget/task-a0503d56f0c9910ddb9612b0",
+        "branch": "work/task-a0503d56f0c9910ddb9612b0",
+        "base": "main",
+        "baseSource": "default",
+        "session": null,
+        "run": "1-start",
+        "state": "running",
+        "pr": null,
+        "url": null
+      },
+      "dispatches": 1,
+      "checker_passed": true,
+      "readiness_digest_matches": true,
+      "delivered_bytes_match": true,
+      "false_scope_removed": true,
+      "clarified_original_retained": true,
+      "reviewed_against": [
+        "docs/prds/natural-language-tasks.md",
+        "docs/plans/plugin-ready-gallivant.md"
+      ],
+      "limitation": "Deterministic owner quotations define executable scope; they do not prove semantic correctness or live native enforcement."
+    },
+    "observed": "Executable stories and criteria now derive deterministically from immutable owner requirements and question-ownership-validated saved answers. Planner-written outcomes are discarded even when they carry valid IDs. Clarifications quote both original context and answer, with answer precedence for conflicts; they cannot override unrelated fragments. Direct rendering and saved validation use the same derivation, so matching legacy hashes/digests cannot authorize falsely mapped prose. Existing approved --run dispatch and owned implementation reconciliation retain their normal gates and never add a second confirmation or duplicate run. Whole-result bounds remain in force while quoted wrappers accept the original input byte boundary. Full, focused, lint and diff checks pass. No native/model/provider calls, repeated blocked probes, new permission defaults or hand-authored path changes occurred; native enforcement and live qualification remain unverified.",
+    "live_limitation": "Native preparation enforcement (ac-4) and G8 live qualification (ac-12) remain unverified. Existing observed failures and exact external remedies are preserved; no unchanged blocked capability was retried."
   }
 }
