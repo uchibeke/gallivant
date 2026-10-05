@@ -1,8 +1,8 @@
 {
   "version": 1,
   "task_id": "task-c93def694fe561146955c469",
-  "implementation_commit": "687828d8e607cc03534fcd6f7010efcd82e045e4",
-  "recorded_at": "2026-10-05T11:30:59.462Z",
+  "implementation_commit": "94a4fbb27d315a2dca946f80aaf3d666daf180c8",
+  "recorded_at": "2026-10-05T12:10:11.235Z",
   "versions": {
     "package": "0.1.0",
     "node": "v22.22.0",
@@ -13,26 +13,26 @@
     {
       "command": "npm test",
       "exit_code": 0,
-      "raw_log": "/private/tmp/natural-language-tasks-denials-npm-test.log",
-      "tests": 830,
-      "passed": 830
+      "raw_log": "/private/tmp/natural-language-tasks-goose-maven-npm-test.log",
+      "tests": 836,
+      "passed": 836
     },
     {
       "command": "npm run lint",
       "exit_code": 0,
-      "raw_log": "/private/tmp/natural-language-tasks-denials-lint.log"
+      "raw_log": "/private/tmp/natural-language-tasks-goose-maven-lint.log"
     },
     {
       "command": "npm run test:task-intake",
       "exit_code": 0,
-      "raw_log": "/private/tmp/natural-language-tasks-denials-focused.log",
-      "tests": 86,
-      "passed": 86
+      "raw_log": "/private/tmp/natural-language-tasks-goose-maven-focused.log",
+      "tests": 92,
+      "passed": 92
     },
     {
       "command": "git diff --check",
       "exit_code": 0,
-      "raw_log": "/private/tmp/natural-language-tasks-denials-diff-check.log",
+      "raw_log": "/private/tmp/natural-language-tasks-goose-maven-diff-check.log",
       "observed_output": "empty output"
     }
   ],
@@ -111,6 +111,21 @@
       "test_name": "inferred Verify provenance covers supported stacks and owner duplicates cannot bypass source carriage",
       "outcome": "passed",
       "evidence": "test/task-intake.test.mjs::inferred Verify provenance covers supported stacks and owner duplicates cannot bypass source carriage"
+    },
+    {
+      "test_name": "explicit Maven and dotnet checks bind every selected project manifest without enabling instruction inference",
+      "outcome": "passed",
+      "evidence": "test/task-intake.test.mjs::explicit Maven and dotnet checks bind every selected project manifest without enabling instruction inference"
+    },
+    {
+      "test_name": "CLI and structured explicit Maven and dotnet checks pin manifests through prepare, answers, repair and fresh-base dispatch",
+      "outcome": "passed",
+      "evidence": "test/task-intake.test.mjs::CLI and structured explicit Maven and dotnet checks pin manifests through prepare, answers, repair and fresh-base dispatch"
+    },
+    {
+      "test_name": "saved explicit Maven and dotnet drafts cannot omit a pinned project manifest at validation or start",
+      "outcome": "passed",
+      "evidence": "test/task-intake.test.mjs::saved explicit Maven and dotnet drafts cannot omit a pinned project manifest at validation or start"
     },
     {
       "test_name": "instruction canonical checks and explicit owner Verify variants retain stack manifests",
@@ -368,6 +383,21 @@
       "evidence": "test/task-intake.test.mjs::Foundry routing and credentials reach initial and repair runners through CLI and structured preparation"
     },
     {
+      "test_name": "Goose native provider selection honors current and legacy config, environment precedence and private AWS cleanup",
+      "outcome": "passed",
+      "evidence": "test/task-intake.test.mjs::Goose native provider selection honors current and legacy config, environment precedence and private AWS cleanup"
+    },
+    {
+      "test_name": "Goose native Bedrock config reaches initial and repair runners through CLI and structured preparation",
+      "outcome": "passed",
+      "evidence": "test/task-intake.test.mjs::Goose native Bedrock config reaches initial and repair runners through CLI and structured preparation"
+    },
+    {
+      "test_name": "ambiguous Goose native provider config stops before initial or repair launch with an explicit override remedy",
+      "outcome": "passed",
+      "evidence": "test/task-intake.test.mjs::ambiguous Goose native provider config stops before initial or repair launch with an explicit override remedy"
+    },
+    {
       "test_name": "Bedrock snapshots only the selected AWS profile from ambient or explicit files and removes legacy shared secrets",
       "outcome": "passed",
       "evidence": "test/task-intake.test.mjs::Bedrock snapshots only the selected AWS profile from ambient or explicit files and removes legacy shared secrets"
@@ -471,7 +501,7 @@
   "representative_fixture": {
     "provenance": "Deterministic offline fixture; not live-provider evidence",
     "original_request": "Add CSV export for the widget table.\nDo not add dependencies.",
-    "saved_draft": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-0FaYlT/tasks/task-a1a896015714afff3ae33dc4/drafts/revision-2/docs/prds/task-a1a896015714afff3ae33dc4.md",
+    "saved_draft": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-OciO1z/tasks/task-a1a896015714afff3ae33dc4/drafts/revision-2/docs/prds/task-a1a896015714afff3ae33dc4.md",
     "sha256": "e0fcb9be67e1233f4ab02bfc1e95fc82160dff58fb02f2472c47a21fe945e6b1",
     "canonical_prd": "---\nstatus: ready\nharness: codex\nsources:\n  - AGENTS.md\n  - package.json\n---\n\n# Export widgets from the table\n\n## Problem\n\nFinance admins reconcile widget spending in spreadsheets every month. Today the widget table has no export action, so admins copy each visible row by hand and make transcription errors. A scoped export will preserve the selected records and their values while making the monthly reconciliation repeatable and reducing manual work for these users.\n\n## User stories\n\n- As a finance admin, I want to export widgets, so that I can reconcile spending.\n\n## Acceptance criteria\n\n- Given a table with three widgets, when Export is selected, then the requested file contains exactly three widget rows. Explicit requirement r-1: \"Add CSV export for the widget table.\"\n- Given the current package manifest, when CSV export is installed, then dependency declarations remain unchanged. Explicit requirement r-2: \"Do not add dependencies.\"\n\n## Verify\n\n- `npm test`\n- `npm run lint`\n\n## Where to look\n\n- src/export/\n\n## Out of scope\n\n- PDF export and unrelated table changes.\n\n## Assumptions\n\n- Export includes the currently visible rows.\n\n## Requirements mapping\n\n- r-1: \"Add CSV export for the widget table.\" → ac-1\n- r-2: \"Do not add dependencies.\" → ac-2\n",
     "readiness": {
@@ -492,8 +522,8 @@
     ]
   },
   "source_review": {
-    "implementation_revision": "687828d8e607cc03534fcd6f7010efcd82e045e4",
-    "representative_output_inspected": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-0FaYlT/tasks/task-a1a896015714afff3ae33dc4/drafts/revision-2/docs/prds/task-a1a896015714afff3ae33dc4.md",
+    "implementation_revision": "94a4fbb27d315a2dca946f80aaf3d666daf180c8",
+    "representative_output_inspected": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-OciO1z/tasks/task-a1a896015714afff3ae33dc4/drafts/revision-2/docs/prds/task-a1a896015714afff3ae33dc4.md",
     "boundaries_checked": [
       "CLI and structured clients",
       "request/answer revision writes",
@@ -551,7 +581,10 @@
       "CLI and structured preparation share Foundry routing/auth forwarding across initial and invalid-output repair turns; saved requirements, readiness hash, two recorded fixture attempts and resume without another launch are checked through the existing runner/readiness paths; implementation dispatch stays absent",
       "Adapter outcome denials are display strings, not tool objects. Preparation now saves the joined strings with provider errors before the blocked transition; native/inferred exit codes, usage, deadlines and implementation behavior retain their original meaning.",
       "Initial and validator-repair preparation through CLI/structured clients, native recovered exit 0 and inferred exit 0, settled failure replay and ordinary blocked resume share preserved refusal text and run-log guidance. Denied valid planner output cannot reach readiness, dispatch, another repair or an automatic planning retry.",
-      "Sibling adapter consumers in why and tick already preserve denial strings. Only the preparation consumer changes; shared adapter parsing, hand-authored briefs, runner settings, cloud credentials and model/provider/permission defaults remain unchanged."
+      "Sibling adapter consumers in why and tick already preserve denial strings. Only the preparation consumer changes; shared adapter parsing, hand-authored briefs, runner settings, cloud credentials and model/provider/permission defaults remain unchanged.",
+      "Goose provider selection uses only the detached config and string environment override. Current active_provider and legacy GOOSE_PROVIDER retain native precedence/model bytes; complex or ambiguous selectors stop before launch with an explicit override remedy. Existing selected AWS projection is reused; non-Bedrock selections and pre-launch failures remove stale private AWS files.",
+      "The shared command collector pins every selected Maven POM and dotnet project/solution manifest for explicit checks. Prompt commandSources, repair, answer-time additions, inspect/reopen, saved validation and exact start reuse this dependency; instruction inference remains disabled for those two tool families.",
+      "CLI/structured initial and repair turns, answer identity replay, malformed native selection, same-turn profile rebuilding, source repair, later operator edits, stale base manifests, saved-source omission and duplicate-start single implementation ownership are covered without live provider calls."
     ],
     "regressions": [
       "preparation uses the existing runner in a separate workspace, records usage and reconciles a lost response",
@@ -627,7 +660,13 @@
       "Foundry preparation forwards selected routing and authentication only for Claude's enabled mode",
       "Foundry routing and credentials reach initial and repair runners through CLI and structured preparation",
       "Claude preparation preserves denial text through CLI and structured initial and repair failures without retry or dispatch",
-      "recovered Claude preparation denials survive native settlement and settled replay without accepting output or another launch"
+      "recovered Claude preparation denials survive native settlement and settled replay without accepting output or another launch",
+      "explicit Maven and dotnet checks bind every selected project manifest without enabling instruction inference",
+      "CLI and structured explicit Maven and dotnet checks pin manifests through prepare, answers, repair and fresh-base dispatch",
+      "saved explicit Maven and dotnet drafts cannot omit a pinned project manifest at validation or start",
+      "Goose native provider selection honors current and legacy config, environment precedence and private AWS cleanup",
+      "Goose native Bedrock config reaches initial and repair runners through CLI and structured preparation",
+      "ambiguous Goose native provider config stops before initial or repair launch with an explicit override remedy"
     ],
     "literal_output_inspected": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-YT4kUE/tasks/task-9f538f3b60078088f631d887/drafts/revision-5/docs/prds/task-9f538f3b60078088f631d887.md",
     "answer_context_output_inspected": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-GyBbWY/tasks/task-d21c94c7a17012e1454c6854/drafts/revision-4/docs/prds/task-d21c94c7a17012e1454c6854.md",
@@ -644,6 +683,26 @@
     "denial_output_inspected": [
       "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-mMuT6u/recovered-runs/recovered-denial/job.log",
       "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-qMmPn8/recovered-runs/recovered-denial/job.log"
+    ],
+    "goose_maven_outputs_inspected": [
+      {
+        "label": "Representative fixture draft",
+        "path": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-OciO1z/tasks/task-a1a896015714afff3ae33dc4/drafts/revision-2/docs/prds/task-a1a896015714afff3ae33dc4.md",
+        "sha256": "e0fcb9be67e1233f4ab02bfc1e95fc82160dff58fb02f2472c47a21fe945e6b1",
+        "checker_passed": true
+      },
+      {
+        "label": "Explicit Maven fixture draft",
+        "path": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-RCEn0j/tasks/task-febff42b45a5ae561acbe8ec/drafts/revision-3/docs/prds/task-febff42b45a5ae561acbe8ec.md",
+        "sha256": "8417a13e797c7d1e4ac1d5dc862e79511dfd5ad832a90dabc35c8ca09c3d3fde",
+        "checker_passed": true
+      },
+      {
+        "label": "Native Goose Bedrock fixture draft",
+        "path": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-48QRS5/tasks/task-e97f5916c4b093faa5bf4ecc/drafts/revision-3/docs/prds/task-e97f5916c4b093faa5bf4ecc.md",
+        "sha256": "c295b7759e3fb4e9e88c4ff64720a0e9ccdb867d1c8d2991be98e9f5a61dd7fc",
+        "checker_passed": true
+      }
     ]
   },
   "live": {
@@ -962,6 +1021,33 @@
       ],
       "evidence": "test/task-intake.test.mjs::Claude preparation preserves denial text through CLI and structured initial and repair failures without retry or dispatch; test/task-intake.test.mjs::recovered Claude preparation denials survive native settlement and settled replay without accepting output or another launch; docs/audit/plugin-ready/natural-language-tasks.json preparation_denial_case",
       "observed": "Claude permission-denial strings and any recorded guardrail reasons persist alongside provider errors and usage even when the process exits zero. CLI rendering and structured results expose the same failure. Initial/repair refusal, native recovery and settled replay stop before readiness or implementation and do not purchase another planning turn."
+    },
+    {
+      "comment_id": 4183622770,
+      "files": [
+        "lib/task_environment.mjs",
+        "test/task-intake.test.mjs",
+        "docs/tasks.md"
+      ],
+      "evidence": "docs/audit/plugin-ready/natural-language-tasks.json goose_native_provider_case",
+      "observed": "Copied native active_provider Bedrock selection with no environment override reaches two isolated fixture runners, using only the selected AWS profile. Native model/config bytes and explicit requirements survive repair. Non-Bedrock/ambiguous selections remove earlier AWS snapshots; ambiguity stops initial/repair launch and blocked resume makes no new call.",
+      "source_refs": [
+        "https://github.com/aaif-goose/goose/blob/main/documentation/docs/guides/config-files.md"
+      ]
+    },
+    {
+      "comment_id": 4183622782,
+      "files": [
+        "lib/task_contract.mjs",
+        "test/task-intake.test.mjs",
+        "docs/tasks.md"
+      ],
+      "evidence": "docs/audit/plugin-ready/natural-language-tasks.json explicit_project_manifest_case",
+      "observed": "Explicit checks bind selected root/module POMs and dotnet solution/project files, including argument-bearing commands and whitespace variants. Omission repairs once with constraints intact; CLI/structured answers replay pinned bytes after operator edits. Fresh-base delivery overwrites stale manifests; duplicate start creates one implementation run. Saved drafts missing authorizing files fail validation/start.",
+      "source_refs": [
+        "https://maven.apache.org/guides/introduction/introduction-to-the-pom.html",
+        "https://learn.microsoft.com/en-us/dotnet/core/tools/dotnet-test-vstest"
+      ]
     }
   ],
   "offline_credential_check": {
@@ -1246,48 +1332,48 @@
         {
           "command": "npm test",
           "exit_code": 0,
-          "raw_log": "/private/tmp/natural-language-tasks-denials-npm-test.log",
-          "tests": 830,
-          "passed": 830
+          "raw_log": "/private/tmp/natural-language-tasks-goose-maven-npm-test.log",
+          "tests": 836,
+          "passed": 836
         },
         {
           "command": "npm run lint",
           "exit_code": 0,
-          "raw_log": "/private/tmp/natural-language-tasks-denials-lint.log"
+          "raw_log": "/private/tmp/natural-language-tasks-goose-maven-lint.log"
         },
         {
           "command": "npm run test:task-intake",
           "exit_code": 0,
-          "raw_log": "/private/tmp/natural-language-tasks-denials-focused.log",
-          "tests": 86,
-          "passed": 86
+          "raw_log": "/private/tmp/natural-language-tasks-goose-maven-focused.log",
+          "tests": 92,
+          "passed": 92
         },
         {
           "command": "git diff --check",
           "exit_code": 0,
-          "raw_log": "/private/tmp/natural-language-tasks-denials-diff-check.log",
+          "raw_log": "/private/tmp/natural-language-tasks-goose-maven-diff-check.log",
           "observed_output": "empty output"
         }
       ],
       "initial_runs": [
         {
-          "command": "node --test --test-name-pattern='Claude preparation.*denial' test/task-intake.test.mjs",
+          "command": "node --test --test-name-pattern='explicit Maven and dotnet|Goose native provider|Goose native Bedrock|ambiguous Goose native' test/task-intake.test.mjs",
           "exit_code": 1,
-          "raw_log": "/private/tmp/natural-language-tasks-denials-before.log",
-          "tests": 2,
+          "raw_log": "/private/tmp/natural-language-tasks-goose-maven-before.log",
+          "tests": 6,
           "passed": 0,
-          "failed": 2,
-          "observed": "Both new regressions reproduced null attempt.error for permission denials before the production change."
+          "failed": 6,
+          "observed": "All six new regressions failed before the production fixes: missing native Bedrock authentication, stale private AWS files, unresolved ambiguous selectors and unbound selected project manifests."
         }
       ],
       "focused_regressions": {
-        "command": "node --test --test-name-pattern='Claude preparation.*denial|provider failure and exhausted runtime|recovered completed preparation|settled preparation replay' test/task-intake.test.mjs",
+        "command": "node --test --test-name-pattern='explicit Maven and dotnet|Goose native provider|Goose native Bedrock|ambiguous Goose native|Bedrock|unbound Maven' test/task-intake.test.mjs",
         "exit_code": 0,
-        "raw_log": "/private/tmp/natural-language-tasks-denials-targeted.log",
-        "tests": 5,
-        "passed": 5
+        "raw_log": "/private/tmp/natural-language-tasks-goose-maven-targeted.log",
+        "tests": 10,
+        "passed": 10
       },
-      "observed": "Five focused tests passed after preserving adapter denial strings. All four required commands passed on the final reviewed source. Native process-ownership inspection used the supported escalation path; no actual model/provider calls or execution permission/default changes occurred.",
+      "observed": "Ten targeted/adjacent tests and all four required commands pass. Source and three fresh generated briefs were reviewed against G2 before publication. Supported escalation enabled existing offline process ownership checks only; no provider/model calls, live jobs or runtime permission/model/provider changes occurred.",
       "model_calls": 0
     },
     "previous_batches": [
@@ -1611,6 +1697,55 @@
           }
         ],
         "observed": "The Foundry regression failed before the fix; targeted and preliminary required suites then passed. Source review corrected the mode guard to use the filtered child environment and added non-string input coverage. All four required commands passed again on the final reviewed source. Supported escalation was used only for native offline process ownership and fixture checks; no provider/model calls, changed execution flags or weakened runtime permissions occurred.",
+        "model_calls": 0
+      },
+      {
+        "commands": [
+          {
+            "command": "npm test",
+            "exit_code": 0,
+            "raw_log": "/private/tmp/natural-language-tasks-denials-npm-test.log",
+            "tests": 830,
+            "passed": 830
+          },
+          {
+            "command": "npm run lint",
+            "exit_code": 0,
+            "raw_log": "/private/tmp/natural-language-tasks-denials-lint.log"
+          },
+          {
+            "command": "npm run test:task-intake",
+            "exit_code": 0,
+            "raw_log": "/private/tmp/natural-language-tasks-denials-focused.log",
+            "tests": 86,
+            "passed": 86
+          },
+          {
+            "command": "git diff --check",
+            "exit_code": 0,
+            "raw_log": "/private/tmp/natural-language-tasks-denials-diff-check.log",
+            "observed_output": "empty output"
+          }
+        ],
+        "initial_runs": [
+          {
+            "command": "node --test --test-name-pattern='Claude preparation.*denial' test/task-intake.test.mjs",
+            "exit_code": 1,
+            "raw_log": "/private/tmp/natural-language-tasks-denials-before.log",
+            "tests": 2,
+            "passed": 0,
+            "failed": 2,
+            "observed": "Both new regressions reproduced null attempt.error for permission denials before the production change."
+          }
+        ],
+        "focused_regressions": {
+          "command": "node --test --test-name-pattern='Claude preparation.*denial|provider failure and exhausted runtime|recovered completed preparation|settled preparation replay' test/task-intake.test.mjs",
+          "exit_code": 0,
+          "raw_log": "/private/tmp/natural-language-tasks-denials-targeted.log",
+          "tests": 5,
+          "passed": 5
+        },
+        "observed": "Five focused tests passed after preserving adapter denial strings. All four required commands passed on the final reviewed source. Native process-ownership inspection used the supported escalation path; no actual model/provider calls or execution permission/default changes occurred.",
         "model_calls": 0
       }
     ]
@@ -2287,5 +2422,103 @@
       "original constraints and reported usage retained; readiness and implementation absent"
     ],
     "model_calls": 0
+  },
+  "goose_native_provider_case": {
+    "provenance": "Deterministic native-profile fixtures through the existing preparation/runner/readiness paths; no installed Goose or live-authentication evidence",
+    "saved_intake": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-48QRS5/tasks/task-e97f5916c4b093faa5bf4ecc/intake.json",
+    "saved_draft": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-48QRS5/tasks/task-e97f5916c4b093faa5bf4ecc/drafts/revision-3/docs/prds/task-e97f5916c4b093faa5bf4ecc.md",
+    "draft_sha256": "c295b7759e3fb4e9e88c4ff64720a0e9ccdb867d1c8d2991be98e9f5a61dd7fc",
+    "original_request": "Add CSV export for the widget table.\nDo not add dependencies.",
+    "requirements": [
+      {
+        "id": "r-1",
+        "text": "Add CSV export for the widget table."
+      },
+      {
+        "id": "r-2",
+        "text": "Do not add dependencies."
+      }
+    ],
+    "readiness": {
+      "allow": true,
+      "hash": "c295b7759e3fb4e9e88c4ff64720a0e9ccdb867d1c8d2991be98e9f5a61dd7fc"
+    },
+    "attempts": [
+      {
+        "run": "1-prepare-1",
+        "settled": true,
+        "ok": true,
+        "cost": 0.0036,
+        "usage": [],
+        "private_config": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-48QRS5/tasks/task-e97f5916c4b093faa5bf4ecc/preparation/turn-1/home/.config/goose/config.yaml",
+        "config_sha256": "1b37491f538d99ad5e5fd89b25ad4339f7e5562efe23a196fa9f5fa149b3eb8f",
+        "private_credentials": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-48QRS5/tasks/task-e97f5916c4b093faa5bf4ecc/preparation/turn-1/home/.aws/credentials",
+        "credentials_mode": "600"
+      },
+      {
+        "run": "2-prepare-2",
+        "settled": true,
+        "ok": true,
+        "cost": 0.0036,
+        "usage": [],
+        "private_config": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-48QRS5/tasks/task-e97f5916c4b093faa5bf4ecc/preparation/turn-2/home/.config/goose/config.yaml",
+        "config_sha256": "1b37491f538d99ad5e5fd89b25ad4339f7e5562efe23a196fa9f5fa149b3eb8f",
+        "private_credentials": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-48QRS5/tasks/task-e97f5916c4b093faa5bf4ecc/preparation/turn-2/home/.aws/credentials",
+        "credentials_mode": "600"
+      }
+    ],
+    "repairs": 1,
+    "implementation_dispatch": null,
+    "provider_ids": [],
+    "model_calls": 0,
+    "evidence": [
+      "test/task-intake.test.mjs::Goose native provider selection honors current and legacy config, environment precedence and private AWS cleanup",
+      "test/task-intake.test.mjs::Goose native Bedrock config reaches initial and repair runners through CLI and structured preparation",
+      "test/task-intake.test.mjs::ambiguous Goose native provider config stops before initial or repair launch with an explicit override remedy"
+    ],
+    "observed": "Copied native active_provider Bedrock selection with no environment override reaches two isolated fixture runners, using only the selected AWS profile. Native model/config bytes and explicit requirements survive repair. Non-Bedrock/ambiguous selections remove earlier AWS snapshots; ambiguity stops initial/repair launch and blocked resume makes no new call."
+  },
+  "explicit_project_manifest_case": {
+    "provenance": "Deterministic CLI/structured planner and implementation runner fixtures; Maven/.NET executables were not invoked",
+    "saved_intake": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-RCEn0j/tasks/task-febff42b45a5ae561acbe8ec/intake.json",
+    "saved_draft": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-RCEn0j/tasks/task-febff42b45a5ae561acbe8ec/drafts/revision-3/docs/prds/task-febff42b45a5ae561acbe8ec.md",
+    "draft_sha256": "8417a13e797c7d1e4ac1d5dc862e79511dfd5ad832a90dabc35c8ca09c3d3fde",
+    "original_request": "Add CSV export for the widget table.\nDo not add dependencies.",
+    "verify": [
+      "mvn test"
+    ],
+    "carried_sources": [
+      {
+        "path": "pom.xml",
+        "sha256": "a46950aad626e6dd27647118f72200fc8336c3002a93e69e8d4dcb08a8fc590d",
+        "delivered": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-RCEn0j/worktrees/acme/widget/task-febff42b45a5ae561acbe8ec/pom.xml"
+      },
+      {
+        "path": "modules/table/pom.xml",
+        "sha256": "ecb8b0cd2e63ac673918a032b9bb069514319219f2f95b8a314c031134c6f288",
+        "delivered": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-RCEn0j/worktrees/acme/widget/task-febff42b45a5ae561acbe8ec/modules/table/pom.xml"
+      }
+    ],
+    "readiness": {
+      "allow": true,
+      "hash": "8417a13e797c7d1e4ac1d5dc862e79511dfd5ad832a90dabc35c8ca09c3d3fde"
+    },
+    "repairs": 1,
+    "implementation_dispatch": {
+      "id": "acme/widget/task-febff42b45a5ae561acbe8ec",
+      "run": "1-start",
+      "worktree": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-RCEn0j/worktrees/acme/widget/task-febff42b45a5ae561acbe8ec",
+      "branch": "work/task-febff42b45a5ae561acbe8ec",
+      "base": "main",
+      "baseSource": "default",
+      "session": null
+    },
+    "evidence": [
+      "test/task-intake.test.mjs::explicit Maven and dotnet checks bind every selected project manifest without enabling instruction inference",
+      "test/task-intake.test.mjs::CLI and structured explicit Maven and dotnet checks pin manifests through prepare, answers, repair and fresh-base dispatch",
+      "test/task-intake.test.mjs::saved explicit Maven and dotnet drafts cannot omit a pinned project manifest at validation or start"
+    ],
+    "model_calls": 0,
+    "observed": "Explicit checks bind selected root/module POMs and dotnet solution/project files, including argument-bearing commands and whitespace variants. Omission repairs once with constraints intact; CLI/structured answers replay pinned bytes after operator edits. Fresh-base delivery overwrites stale manifests; duplicate start creates one implementation run. Saved drafts missing authorizing files fail validation/start."
   }
 }
