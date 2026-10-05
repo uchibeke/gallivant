@@ -1,8 +1,8 @@
 {
   "version": 1,
   "task_id": "task-c93def694fe561146955c469",
-  "implementation_commit": "8b2691975db2e6b123eceb7355f1ddc3e0558092",
-  "recorded_at": "2026-10-05T17:30:57.291624Z",
+  "implementation_commit": "17eaf7c5a7b36eead37dbacde8d87a0875c848d5",
+  "recorded_at": "2026-10-05T18:07:02.611466Z",
   "versions": {
     "package": "0.1.0",
     "node": "v22.22.0",
@@ -13,26 +13,26 @@
     {
       "command": "npm test",
       "exit_code": 0,
-      "raw_log": "/private/tmp/natural-language-tasks-clarification-npm-test.log",
-      "tests": 871,
-      "passed": 871
+      "raw_log": "/private/tmp/natural-language-tasks-subprojects-npm-test.log",
+      "tests": 875,
+      "passed": 875
     },
     {
       "command": "npm run lint",
       "exit_code": 0,
-      "raw_log": "/private/tmp/natural-language-tasks-clarification-lint.log"
+      "raw_log": "/private/tmp/natural-language-tasks-subprojects-lint.log"
     },
     {
       "command": "npm run test:task-intake",
       "exit_code": 0,
-      "raw_log": "/private/tmp/natural-language-tasks-clarification-intake.log",
-      "tests": 124,
-      "passed": 124
+      "raw_log": "/private/tmp/natural-language-tasks-subprojects-intake.log",
+      "tests": 128,
+      "passed": 128
     },
     {
       "command": "git diff --check",
       "exit_code": 0,
-      "raw_log": "/private/tmp/natural-language-tasks-clarification-diff-check-final.log",
+      "raw_log": "/private/tmp/natural-language-tasks-subprojects-diff-check-final.log",
       "observed_output": "empty output"
     }
   ],
@@ -671,6 +671,26 @@
       "test_name": "impossible legacy brief footprints refuse new planning and settle owned usage before stopping",
       "outcome": "passed",
       "evidence": "test/task-intake.test.mjs::impossible legacy brief footprints refuse new planning and settle owned usage before stopping"
+    },
+    {
+      "test_name": "selected subproject manifests bind explicit tool invocations without inferring project overrides",
+      "outcome": "passed",
+      "evidence": "test/task-intake.test.mjs::selected subproject manifests bind explicit tool invocations without inferring project overrides"
+    },
+    {
+      "test_name": "CLI and structured subproject checks pin nested manifests and automatic lockfiles through answers repair and fresh-base dispatch",
+      "outcome": "passed",
+      "evidence": "test/task-intake.test.mjs::CLI and structured subproject checks pin nested manifests and automatic lockfiles through answers repair and fresh-base dispatch"
+    },
+    {
+      "test_name": "saved subproject checks cannot omit nested manifests or lockfiles even with a matching approval",
+      "outcome": "passed",
+      "evidence": "test/task-intake.test.mjs::saved subproject checks cannot omit nested manifests or lockfiles even with a matching approval"
+    },
+    {
+      "test_name": "automatic nested lockfiles retain source safety and answer atomicity before planning",
+      "outcome": "passed",
+      "evidence": "test/task-intake.test.mjs::automatic nested lockfiles retain source safety and answer atomicity before planning"
     }
   ],
   "representative_fixture": {
@@ -697,8 +717,8 @@
     ]
   },
   "source_review": {
-    "implementation_revision": "8b2691975db2e6b123eceb7355f1ddc3e0558092",
-    "representative_output_inspected": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-nkjDDD/tasks/task-1b5c53614198be42f29f3074/drafts/revision-5/docs/prds/task-1b5c53614198be42f29f3074.md",
+    "implementation_revision": "17eaf7c5a7b36eead37dbacde8d87a0875c848d5",
+    "representative_output_inspected": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-2ceUe2/tasks/task-8d1d022a6f9025672e9fbeac/drafts/revision-3/docs/prds/task-8d1d022a6f9025672e9fbeac.md",
     "boundaries_checked": [
       "CLI and structured clients",
       "request/answer revision writes",
@@ -775,7 +795,10 @@
       "Question-owned clarification preserves original context with answer precedence for conflicting parts, exact literal placeholder round trips, immutable requirement mapping, 128-fragment boundary and accepted 32 KiB input versus the existing 256 KiB output bound.",
       "Saved question-owned answers cannot be omitted from executable stories/criteria or canonical mappings by a missing resolvedBy tag. Direct roots and earlier answer fragments retain later accepted clarification precedence, while unrelated original constraints remain unclarified. Invalid historical ownership and matching legacy unclarified approvals fail validation/start/resume; existing owned implementation dispatch still reconciles once.",
       "Task capacity uses the shared 1500-word checker constant and actual JSON quoting/rendering, choosing the smallest authorized story and one shared criterion as a lower bound. Initial requests stop before repository lookup; accumulated and partial answers stop before new context reads or accepted revision/operation writes. Corrected operations remain reusable, escaped-tab controls fit, and existing count/byte/prompt bounds remain unchanged.",
-      "Preparation replay settles already-owned running/completed/settled usage before oversized legacy state blocks, clears stale readiness and refuses further turns. Unowned recovery, draftPrompt, parseDraft, direct rendering and saved readiness/dispatch reuse existing validation and ownership helpers. No hand-authored checker, provider/model/permission defaults or implementation transport changed."
+      "Preparation replay settles already-owned running/completed/settled usage before oversized legacy state blocks, clears stale readiness and refuses further turns. Unowned recovery, draftPrompt, parseDraft, direct rendering and saved readiness/dispatch reuse existing validation and ownership helpers. No hand-authored checker, provider/model/permission defaults or implementation transport changed.",
+      "Explicit owner commands retain their original bytes while the shared collector binds all selected exact-leaf manifests in the recognized tool family at any repository depth. JavaScript commands carry matching-manager text lockfiles; Go, Cargo, Make and pytest project overrides reuse the same rule, preserving Maven/.NET support and canonical inference restrictions. Lookalike commands and backup filenames do not acquire provenance.",
+      "Selected and pinned nested package.json files discover only colocated supported text lockfiles. Existing repository path, symlink, text and combined 256 KiB protections run before planning and before prospective answer writes. Root package-manager evidence, accepted snapshot bytes, operation replay and immutable owner constraints retain their existing behavior.",
+      "Draft prompts, parseDraft, structured commandSources and saved validate/start/resume share collectCommands. Omitted nested manifests or locks trigger bounded repair or refusal even with a forged matching saved approval; fresh-base dispatch carries accepted manifest/lock bytes despite later operator edits or stale base files, and duplicate dispatch remains single-owned."
     ],
     "regressions": [
       "preparation uses the existing runner in a separate workspace, records usage and reconciles a lost response",
@@ -892,7 +915,11 @@
       "test/task-intake.test.mjs::saved omitted clarifications cannot evade canonical validation or historical question ownership",
       "test/task-intake.test.mjs::impossible minimum brief footprints stop CLI and structured requests before repository lookup or planning",
       "test/task-intake.test.mjs::combined and partial answer footprints fail atomically before context reads and permit corrected operation replay",
-      "test/task-intake.test.mjs::impossible legacy brief footprints refuse new planning and settle owned usage before stopping"
+      "test/task-intake.test.mjs::impossible legacy brief footprints refuse new planning and settle owned usage before stopping",
+      "test/task-intake.test.mjs::selected subproject manifests bind explicit tool invocations without inferring project overrides",
+      "test/task-intake.test.mjs::CLI and structured subproject checks pin nested manifests and automatic lockfiles through answers repair and fresh-base dispatch",
+      "test/task-intake.test.mjs::saved subproject checks cannot omit nested manifests or lockfiles even with a matching approval",
+      "test/task-intake.test.mjs::automatic nested lockfiles retain source safety and answer atomicity before planning"
     ],
     "literal_output_inspected": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-YT4kUE/tasks/task-9f538f3b60078088f631d887/drafts/revision-5/docs/prds/task-9f538f3b60078088f631d887.md",
     "answer_context_output_inspected": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-GyBbWY/tasks/task-d21c94c7a17012e1454c6854/drafts/revision-4/docs/prds/task-d21c94c7a17012e1454c6854.md",
@@ -1092,7 +1119,8 @@
       "delivered_bytes_match": true
     },
     "owner_derived_scope_output_inspected": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-Vt73zE/tasks/task-a0503d56f0c9910ddb9612b0/drafts/revision-4/docs/prds/task-a0503d56f0c9910ddb9612b0.md",
-    "clarification_capacity_output_inspected": "/private/tmp/natural-language-tasks-clarification-output-review.json"
+    "clarification_capacity_output_inspected": "/private/tmp/natural-language-tasks-clarification-output-review.json",
+    "subproject_manifest_output_inspected": "/private/tmp/natural-language-tasks-subprojects-output-review.json"
   },
   "live": {
     "status": "unverified",
@@ -1594,6 +1622,17 @@
       ],
       "evidence": "docs/audit/plugin-ready/natural-language-tasks.json clarification_capacity_case",
       "observed": "Saved question ownership, answer acceptance order and immutable answer-fragment provenance now determine clarification precedence independently of optional planner tags. New output, direct rendering and saved validation normalize the same scope; matching legacy hashes and approval digests cannot dispatch an unclarified original. Original text and unrelated constraints remain intact. The checker word limit and canonical renderer provide a lower bound before repository lookup or prospective answer context reads/state writes. Oversized legacy preparation settles owned usage before refusal without buying new planning or repair turns. All required offline commands and 20 focused checks pass; model calls are zero. Native preparation enforcement and G8 live qualification remain unverified, with prior failures and exact remedies preserved."
+    },
+    {
+      "comment_id": 4187046055,
+      "files": [
+        "lib/task_contract.mjs",
+        "lib/tasks.mjs",
+        "test/task-intake.test.mjs",
+        "docs/tasks.md"
+      ],
+      "evidence": "docs/audit/plugin-ready/natural-language-tasks.json subproject_manifest_case",
+      "observed": "Explicit subproject checks now pin selected nested manifests and matching manager lockfiles through the shared command collector. Colocated JavaScript text locks enter the existing bounded, path-safe snapshot flow at preparation and answer time. CLI and structured repair, saved validation and fresh-base dispatch enforce the same rule, including sibling selected Go/Cargo/Make/pytest manifests without expanding automatic command inference. Four new regressions, 15 focused checks, 875 full-suite tests and 128 intake tests pass; lint and diff checks pass. A reviewed 233-word canonical fixture retains both owner constraints, exact readiness and delivered source bytes, then runs the explicit npm subproject check successfully in its disposable checkout. Model calls are zero; native enforcement and live qualification remain unverified."
     }
   ],
   "offline_credential_check": {
@@ -1878,57 +1917,48 @@
         {
           "command": "npm test",
           "exit_code": 0,
-          "raw_log": "/private/tmp/natural-language-tasks-clarification-npm-test.log",
-          "tests": 871,
-          "passed": 871
+          "raw_log": "/private/tmp/natural-language-tasks-subprojects-npm-test.log",
+          "tests": 875,
+          "passed": 875
         },
         {
           "command": "npm run lint",
           "exit_code": 0,
-          "raw_log": "/private/tmp/natural-language-tasks-clarification-lint.log"
+          "raw_log": "/private/tmp/natural-language-tasks-subprojects-lint.log"
         },
         {
           "command": "npm run test:task-intake",
           "exit_code": 0,
-          "raw_log": "/private/tmp/natural-language-tasks-clarification-intake.log",
-          "tests": 124,
-          "passed": 124
+          "raw_log": "/private/tmp/natural-language-tasks-subprojects-intake.log",
+          "tests": 128,
+          "passed": 128
         },
         {
           "command": "git diff --check",
           "exit_code": 0,
-          "raw_log": "/private/tmp/natural-language-tasks-clarification-diff-check-final.log",
+          "raw_log": "/private/tmp/natural-language-tasks-subprojects-diff-check-final.log",
           "observed_output": "empty output"
         }
       ],
       "focused_regressions": {
-        "command": "node --test --test-name-pattern='omitted clarification|successive question-owned|impossible minimum brief|combined and partial answer footprints|impossible legacy brief|question.*own|duplicate question|legacy interrupted|literal placeholder|capacity|owner-derived scope|falsely mapped|idempotent' test/task-intake.test.mjs",
+        "command": "node --test --test-name-pattern='selected subproject manifests|structured subproject checks|saved subproject checks|automatic nested lockfiles|Verify provenance|explicit Maven|explicit owner Verify|lockfiles|packageManager takes|explicit argument-bearing' test/task-intake.test.mjs",
         "exit_code": 0,
-        "raw_log": "/private/tmp/natural-language-tasks-clarification-targeted-final.log",
-        "tests": 20,
-        "passed": 20
+        "raw_log": "/private/tmp/natural-language-tasks-subprojects-targeted.log",
+        "tests": 15,
+        "passed": 15
       },
       "initial_runs": [
         {
-          "command": "node --test --test-name-pattern='omitted clarification|successive question-owned|impossible minimum brief|combined and partial answer footprints|impossible legacy brief' test/task-intake.test.mjs",
+          "command": "node --test --test-name-pattern='selected subproject manifests|structured subproject checks|saved subproject checks|automatic nested lockfiles' test/task-intake.test.mjs",
           "exit_code": 1,
-          "raw_log": "/private/tmp/natural-language-tasks-clarification-red.log",
-          "tests": 6,
+          "raw_log": "/private/tmp/natural-language-tasks-subprojects-red.log",
+          "tests": 4,
           "passed": 0,
-          "failed": 6,
-          "observed": "On prior source, omitted tags lost saved answer precedence, successive answers lost the later answer, a matching unclarified approval validated, and infeasible requests/answers reached context reads. The initial legacy fixture exhausted repairs; its final request was tightened from 600 to 800 words because the canonical lower bound showed the original two-fragment request could fit a better organization."
-        },
-        {
-          "command": "node --test --test-name-pattern='omitted clarification|successive question-owned|impossible minimum brief|combined and partial answer footprints|impossible legacy brief|question.*own|duplicate question|legacy interrupted|literal placeholder|capacity|owner-derived scope|falsely mapped|idempotent' test/task-intake.test.mjs",
-          "exit_code": 1,
-          "raw_log": "/private/tmp/natural-language-tasks-clarification-targeted.log",
-          "tests": 20,
-          "passed": 16,
           "failed": 4,
-          "observed": "Three assertions used world counters whose prepare hook was overridden; local counters now track those fixtures. The legacy two-fragment fixture remained feasible under the minimum-story organization, so its request was increased to 800 words. Successive-answer coverage was expanded to prior answer fragments and proven follow-up ownership."
+          "observed": "Prior source omitted nested JavaScript manifests and lockfiles, accepted an omitted-source saved brief with a matching approval, and allowed unsafe automatic nested lockfiles to go unread before planning."
         }
       ],
-      "observed": "Saved question ownership, answer acceptance order and immutable answer-fragment provenance now determine clarification precedence independently of optional planner tags. New output, direct rendering and saved validation normalize the same scope; matching legacy hashes and approval digests cannot dispatch an unclarified original. Original text and unrelated constraints remain intact. The checker word limit and canonical renderer provide a lower bound before repository lookup or prospective answer context reads/state writes. Oversized legacy preparation settles owned usage before refusal without buying new planning or repair turns. All required offline commands and 20 focused checks pass; model calls are zero. Native preparation enforcement and G8 live qualification remain unverified, with prior failures and exact remedies preserved.",
+      "observed": "Explicit subproject checks now pin selected nested manifests and matching manager lockfiles through the shared command collector. Colocated JavaScript text locks enter the existing bounded, path-safe snapshot flow at preparation and answer time. CLI and structured repair, saved validation and fresh-base dispatch enforce the same rule, including sibling selected Go/Cargo/Make/pytest manifests without expanding automatic command inference. Four new regressions, 15 focused checks, 875 full-suite tests and 128 intake tests pass; lint and diff checks pass. A reviewed 233-word canonical fixture retains both owner constraints, exact readiness and delivered source bytes, then runs the explicit npm subproject check successfully in its disposable checkout. Model calls are zero; native enforcement and live qualification remain unverified.",
       "model_calls": 0
     },
     "previous_batches": [
@@ -2784,6 +2814,64 @@
           }
         ],
         "observed": "Executable stories and criteria now derive deterministically from immutable owner requirements and question-ownership-validated saved answers. Planner-written outcomes are discarded even when they carry valid IDs. Clarifications quote both original context and answer, with answer precedence for conflicts; they cannot override unrelated fragments. Direct rendering and saved validation use the same derivation, so matching legacy hashes/digests cannot authorize falsely mapped prose. Existing approved --run dispatch and owned implementation reconciliation retain their normal gates and never add a second confirmation or duplicate run. Whole-result bounds remain in force while quoted wrappers accept the original input byte boundary. Full, focused, lint and diff checks pass. No native/model/provider calls, repeated blocked probes, new permission defaults or hand-authored path changes occurred; native enforcement and live qualification remain unverified.",
+        "model_calls": 0
+      },
+      {
+        "commands": [
+          {
+            "command": "npm test",
+            "exit_code": 0,
+            "raw_log": "/private/tmp/natural-language-tasks-clarification-npm-test.log",
+            "tests": 871,
+            "passed": 871
+          },
+          {
+            "command": "npm run lint",
+            "exit_code": 0,
+            "raw_log": "/private/tmp/natural-language-tasks-clarification-lint.log"
+          },
+          {
+            "command": "npm run test:task-intake",
+            "exit_code": 0,
+            "raw_log": "/private/tmp/natural-language-tasks-clarification-intake.log",
+            "tests": 124,
+            "passed": 124
+          },
+          {
+            "command": "git diff --check",
+            "exit_code": 0,
+            "raw_log": "/private/tmp/natural-language-tasks-clarification-diff-check-final.log",
+            "observed_output": "empty output"
+          }
+        ],
+        "focused_regressions": {
+          "command": "node --test --test-name-pattern='omitted clarification|successive question-owned|impossible minimum brief|combined and partial answer footprints|impossible legacy brief|question.*own|duplicate question|legacy interrupted|literal placeholder|capacity|owner-derived scope|falsely mapped|idempotent' test/task-intake.test.mjs",
+          "exit_code": 0,
+          "raw_log": "/private/tmp/natural-language-tasks-clarification-targeted-final.log",
+          "tests": 20,
+          "passed": 20
+        },
+        "initial_runs": [
+          {
+            "command": "node --test --test-name-pattern='omitted clarification|successive question-owned|impossible minimum brief|combined and partial answer footprints|impossible legacy brief' test/task-intake.test.mjs",
+            "exit_code": 1,
+            "raw_log": "/private/tmp/natural-language-tasks-clarification-red.log",
+            "tests": 6,
+            "passed": 0,
+            "failed": 6,
+            "observed": "On prior source, omitted tags lost saved answer precedence, successive answers lost the later answer, a matching unclarified approval validated, and infeasible requests/answers reached context reads. The initial legacy fixture exhausted repairs; its final request was tightened from 600 to 800 words because the canonical lower bound showed the original two-fragment request could fit a better organization."
+          },
+          {
+            "command": "node --test --test-name-pattern='omitted clarification|successive question-owned|impossible minimum brief|combined and partial answer footprints|impossible legacy brief|question.*own|duplicate question|legacy interrupted|literal placeholder|capacity|owner-derived scope|falsely mapped|idempotent' test/task-intake.test.mjs",
+            "exit_code": 1,
+            "raw_log": "/private/tmp/natural-language-tasks-clarification-targeted.log",
+            "tests": 20,
+            "passed": 16,
+            "failed": 4,
+            "observed": "Three assertions used world counters whose prepare hook was overridden; local counters now track those fixtures. The legacy two-fragment fixture remained feasible under the minimum-story organization, so its request was increased to 800 words. Successive-answer coverage was expanded to prior answer fragments and proven follow-up ownership."
+          }
+        ],
+        "observed": "Saved question ownership, answer acceptance order and immutable answer-fragment provenance now determine clarification precedence independently of optional planner tags. New output, direct rendering and saved validation normalize the same scope; matching legacy hashes and approval digests cannot dispatch an unclarified original. Original text and unrelated constraints remain intact. The checker word limit and canonical renderer provide a lower bound before repository lookup or prospective answer context reads/state writes. Oversized legacy preparation settles owned usage before refusal without buying new planning or repair turns. All required offline commands and 20 focused checks pass; model calls are zero. Native preparation enforcement and G8 live qualification remain unverified, with prior failures and exact remedies preserved.",
         "model_calls": 0
       }
     ]
@@ -4710,5 +4798,148 @@
     },
     "observed": "Saved question ownership, answer acceptance order and immutable answer-fragment provenance now determine clarification precedence independently of optional planner tags. New output, direct rendering and saved validation normalize the same scope; matching legacy hashes and approval digests cannot dispatch an unclarified original. Original text and unrelated constraints remain intact. The checker word limit and canonical renderer provide a lower bound before repository lookup or prospective answer context reads/state writes. Oversized legacy preparation settles owned usage before refusal without buying new planning or repair turns. All required offline commands and 20 focused checks pass; model calls are zero. Native preparation enforcement and G8 live qualification remain unverified, with prior failures and exact remedies preserved.",
     "live_limitation": "Native preparation enforcement (ac-4) and G8 live qualification (ac-12) remain unverified; existing external blockers were checked from recorded evidence and no unchanged blocked probe was repeated."
+  },
+  "subproject_manifest_case": {
+    "met": true,
+    "implementation_commit": "17eaf7c5a7b36eead37dbacde8d87a0875c848d5",
+    "review_id": 5418534588,
+    "comment_ids": [
+      4187046055
+    ],
+    "model_calls": 0,
+    "source_refs": [
+      "lib/task_contract.mjs",
+      "lib/tasks.mjs",
+      "lib/repository_files.mjs",
+      "lib/start_contract.mjs",
+      "lib/commands/start.mjs",
+      "test/task-intake.test.mjs",
+      "docs/tasks.md",
+      "docs/prds/natural-language-tasks.md",
+      "docs/plans/plugin-ready-gallivant.md"
+    ],
+    "primary_reference": "https://docs.npmjs.com/cli/v11/using-npm/config/",
+    "regressions": [
+      "test/task-intake.test.mjs::selected subproject manifests bind explicit tool invocations without inferring project overrides",
+      "test/task-intake.test.mjs::CLI and structured subproject checks pin nested manifests and automatic lockfiles through answers repair and fresh-base dispatch",
+      "test/task-intake.test.mjs::saved subproject checks cannot omit nested manifests or lockfiles even with a matching approval",
+      "test/task-intake.test.mjs::automatic nested lockfiles retain source safety and answer atomicity before planning"
+    ],
+    "initial_runs": [
+      {
+        "command": "node --test --test-name-pattern='selected subproject manifests|structured subproject checks|saved subproject checks|automatic nested lockfiles' test/task-intake.test.mjs",
+        "exit_code": 1,
+        "raw_log": "/private/tmp/natural-language-tasks-subprojects-red.log",
+        "tests": 4,
+        "passed": 0,
+        "failed": 4,
+        "observed": "Prior source omitted nested JavaScript manifests and lockfiles, accepted an omitted-source saved brief with a matching approval, and allowed unsafe automatic nested lockfiles to go unread before planning."
+      }
+    ],
+    "focused_regression": {
+      "command": "node --test --test-name-pattern='selected subproject manifests|structured subproject checks|saved subproject checks|automatic nested lockfiles|Verify provenance|explicit Maven|explicit owner Verify|lockfiles|packageManager takes|explicit argument-bearing' test/task-intake.test.mjs",
+      "exit_code": 0,
+      "raw_log": "/private/tmp/natural-language-tasks-subprojects-targeted.log",
+      "tests": 15,
+      "passed": 15
+    },
+    "representative_output": {
+      "live": false,
+      "model_calls": 0,
+      "record": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-2ceUe2/subproject-check-fixture.json",
+      "path": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-2ceUe2/tasks/task-8d1d022a6f9025672e9fbeac/drafts/revision-3/docs/prds/task-8d1d022a6f9025672e9fbeac.md",
+      "sha256": "d1d22ce4bb2194f48a1995d31293b5326ba3b5968d18fbc8c59425b5e116d8c2",
+      "words": 233,
+      "original": "Add CSV export for the widget table.\nDo not add dependencies.",
+      "requirements": [
+        {
+          "id": "r-1",
+          "text": "Add CSV export for the widget table."
+        },
+        {
+          "id": "r-2",
+          "text": "Do not add dependencies."
+        }
+      ],
+      "mapping": [
+        {
+          "requirementId": "r-1",
+          "criteria": [
+            "ac-1"
+          ]
+        },
+        {
+          "requirementId": "r-2",
+          "criteria": [
+            "ac-2"
+          ]
+        }
+      ],
+      "verify": [
+        "npm test --prefix packages/app"
+      ],
+      "command_sources": [
+        "packages/app/package.json",
+        "package.json",
+        "packages/app/package-lock.json"
+      ],
+      "sources": [
+        {
+          "path": "packages/app/package.json",
+          "sha256": "9d2db307a2be983f0f6144fbc32dd8cd28b78b652d5c177c229374a4669a8434"
+        },
+        {
+          "path": "package.json",
+          "sha256": "4f05b82adac690557b1bef490211ec333ff378ca9dbe8fc0a58624bddd3ae281"
+        },
+        {
+          "path": "packages/app/package-lock.json",
+          "sha256": "a54b932b13c90e33693f4dc7fb7656ed0d04df9dfd8038c362b66b57fd346f93"
+        }
+      ],
+      "readiness": {
+        "allow": true,
+        "hash": "d1d22ce4bb2194f48a1995d31293b5326ba3b5968d18fbc8c59425b5e116d8c2",
+        "digest": "48aaf1b58cb24f7ba36045f41c6157fad103795cefa486dd85cdd5cae41ba731",
+        "decisionId": null,
+        "report": "ok   path          lives under docs/prds/ with a lowercase-dash filename\nok   frontmatter   frontmatter has status (draft|ready) and harness (claude|codex|gemini|opencode|goose)\nok   title         one H1 title, 8 to 80 characters\nok   problem       ## Problem: at least 40 words on what is wrong today and for whom\nok   stories       ## User stories: every bullet reads 'As a <who>, I want <what>, so that <why>'\nok   criteria      ## Acceptance criteria: every bullet is Given / When / Then, at least one per story\nok   verify        ## Verify: at least one command the session must run green; no sudo, rm -rf or piped installers\nok   look          ## Where to look: files or directories to start from, or 'none'\nok   scope         ## Out of scope: at least one bullet\nok   placeholders  no TODO, TBD, FIXME, ???, lorem or <angle-bracket> placeholders anywhere\nok   size          under 1,500 words; a PRD is one pull request, split anything bigger\nok   sources       every file in `sources` exists, is readable text, and is named inside the repository\n\ntask-8d1d022a6f9025672e9fbeac: ready to start.\nAPort decision (local): allow\nstatus set to ready. Commit the PRD when you commit the rest of your work.",
+        "revision": 4
+      },
+      "implementation": {
+        "id": "acme/widget/task-8d1d022a6f9025672e9fbeac",
+        "worktree": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-2ceUe2/worktrees/acme/widget/task-8d1d022a6f9025672e9fbeac",
+        "branch": "work/task-8d1d022a6f9025672e9fbeac",
+        "base": "main",
+        "baseSource": "default",
+        "session": null,
+        "run": "1-start",
+        "state": "running",
+        "pr": null,
+        "url": null
+      },
+      "dispatches": 1,
+      "actual_check": {
+        "command": "npm test --prefix packages/app",
+        "exit_code": 0,
+        "marker": "packages/app/verified-subproject",
+        "content": "ok"
+      },
+      "checker_passed": true,
+      "canonical_validation_passed": true,
+      "readiness_digest_matches": true,
+      "delivered_bytes_match": true,
+      "reviewed_against": [
+        "docs/prds/natural-language-tasks.md",
+        "docs/plans/plugin-ready-gallivant.md"
+      ],
+      "limitation": "Offline generated/runner fixture with a real disposable npm check; no live provider or native preparation qualification."
+    },
+    "boundaries_checked": [
+      "Explicit owner commands retain their original bytes while the shared collector binds all selected exact-leaf manifests in the recognized tool family at any repository depth. JavaScript commands carry matching-manager text lockfiles; Go, Cargo, Make and pytest project overrides reuse the same rule, preserving Maven/.NET support and canonical inference restrictions. Lookalike commands and backup filenames do not acquire provenance.",
+      "Selected and pinned nested package.json files discover only colocated supported text lockfiles. Existing repository path, symlink, text and combined 256 KiB protections run before planning and before prospective answer writes. Root package-manager evidence, accepted snapshot bytes, operation replay and immutable owner constraints retain their existing behavior.",
+      "Draft prompts, parseDraft, structured commandSources and saved validate/start/resume share collectCommands. Omitted nested manifests or locks trigger bounded repair or refusal even with a forged matching saved approval; fresh-base dispatch carries accepted manifest/lock bytes despite later operator edits or stale base files, and duplicate dispatch remains single-owned."
+    ],
+    "observed": "Explicit subproject checks now pin selected nested manifests and matching manager lockfiles through the shared command collector. Colocated JavaScript text locks enter the existing bounded, path-safe snapshot flow at preparation and answer time. CLI and structured repair, saved validation and fresh-base dispatch enforce the same rule, including sibling selected Go/Cargo/Make/pytest manifests without expanding automatic command inference. Four new regressions, 15 focused checks, 875 full-suite tests and 128 intake tests pass; lint and diff checks pass. A reviewed 233-word canonical fixture retains both owner constraints, exact readiness and delivered source bytes, then runs the explicit npm subproject check successfully in its disposable checkout. Model calls are zero; native enforcement and live qualification remain unverified.",
+    "live_limitation": "Native preparation enforcement (ac-4) and G8 live qualification (ac-12) remain unverified; prior external failures and exact remedies are preserved and no unchanged blocked capability was retried."
   }
 }
