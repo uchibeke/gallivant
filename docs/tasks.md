@@ -92,12 +92,35 @@ Relative provider file and profile paths use the original invocation directory,
 saved as `callerCwd`, even when `--dir` selects another checkout. Repairs, retries
 and resumed answers keep that directory. Older version-1 intake records without
 it use their saved checkout; a missing selected file stops before launch.
-No model or permission flags are changed.
+Model and provider selections are preserved. Preparation uses a separate tool
+contract; implementation argv, permissions and defaults retain their behavior.
 
 `GH_CONFIG_DIR=/dev/null` disables stored GitHub CLI credentials. The existing Git
 environment disables user/system configuration; inherited Git/SSH overrides,
 askpass programs, agent sockets, terminal prompts and Git transports are disabled.
-Credential separation does not add an OS sandbox to a harness that has none.
+Credential separation does not add an OS sandbox. Preparation currently supports
+Claude with restricted mode, an empty built-in tool set, denial of every tool,
+an empty strict MCP configuration and disabled skills/commands. Selected context
+is already in the prompt, so planning needs no file, shell or network tools.
+Codex, Gemini, OpenCode and Goose preparation return
+`TASK_PREPARATION_BOUNDARY` before probes, profile copying or model launch because
+their current adapters have no established preparation read/write boundary or
+tool-free contract. There is no automatic harness, model or provider fallback.
+Use a hand-authored PRD with the existing `ready`/`start` path until an enforced
+preparation adapter is supported. Native tool-free behavior remains unqualified;
+offline argv fixtures cannot prove installed-provider execution.
+
+Attempts record their preparation boundary. Recovery stops an owned legacy
+tool-enabled child and preserves its usage/logs; completed, settled and previously
+rendered output without that boundary cannot authorize readiness or dispatch.
+Existing implementation runs continue through their original ownership path.
+
+Goose environment snapshots resolve `GOOSE_PROVIDER` first, then the native
+current/legacy selector. Only that provider's environment authentication/settings
+are admitted; Bedrock keeps the selected AWS projection. Shared `secrets.yaml`
+and keyring access are excluded, including old private snapshots. Export the
+selected provider's credential when it otherwise lives in shared secret storage;
+missing/unsupported selectors are refused instead of forwarding every provider.
 An unsupported provider environment variable is not forwarded implicitly: use
 the selected harness's native auth/config profile. Profile failures stop before a
 model launch and return an actionable failure; they are not validator repairs.

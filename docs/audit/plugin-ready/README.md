@@ -22,13 +22,24 @@ source mapping, execution authorization and stopping conditions.
 | CLI / structured parity and package safety | `lib/commands/task.mjs`, exports; operation parity and clean packed-package tests; initial/repair permission-denial text and usage persisted across CLI rendering, inspection, native recovery and settled replay without retry or dispatch |
 | Existing lifecycle and defaults | full existing offline suite; no harness/model/provider/permission defaults changed |
 
-The native Goose provider tests exercise copied current/legacy selectors and
+Native preparation now removes all Claude tools and refuses the four other
+adapters before probes or launch. Recovery rejects legacy tool-enabled output and
+stops owned legacy children. Goose environment tests prove selected-provider key
+admission and shared-secret/keyring exclusion. The native sandbox probe returned
+no child result (null status and empty stdout/stderr); no enforced host isolation
+or installed tool-free behavior is claimed. Criterion ac-4 remains false.
+Qualification requires an enforced read/write preparation adapter or verified
+native tools-off behavior under the existing provider, model and permissions.
+
+The offline Goose provider fixtures exercise copied current/legacy selectors and
 environment precedence, selected AWS credentials on initial/repair turns,
 non-Bedrock cleanup and ambiguous-selector refusal before launch. The explicit
 Maven/.NET tests pin root/module POMs and selected project/solution files through
 CLI and structured preparation/answers, bounded source repair, saved-draft
 validation and fresh-base single dispatch. These are offline fixtures, not live
-authentication or project-tool execution evidence.
+authentication or project-tool execution evidence. Durable runner tests inject
+disposable Node executables independently of the native adapter gate; they retain
+lifecycle coverage and cannot qualify a refused adapter.
 
 The observed native executable was
 `/Users/uchi/.local/share/gallivant/codex/node_modules/.bin/codex` at version

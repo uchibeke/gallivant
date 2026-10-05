@@ -27,6 +27,8 @@ const HELP = `gallivant: write a PRD, mark it ready, go outside.
   gallivant task [prepare] "<request>" [--stdin] [--dir <checkout>] [--repo <owner/repo>]
                 [--base <branch>] [--harness <name>] [--context <file>] [--request-id <id>] [--run] [--json]
                                          prepare an isolated brief; --run authorizes its exact ready revision
+                                         Claude preparation disables tools; other adapters stop until isolated
+                                         preparation support exists. Hand-authored ready/start remains available
   gallivant task answer <task-id> --revision <n> --request-id <answer-id> --answer <question-id=text>
                                          resume saved questions; --answer and --context may repeat
   gallivant task inspect <task-id> [--json] | task list [--json]
