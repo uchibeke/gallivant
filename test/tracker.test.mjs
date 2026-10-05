@@ -1971,7 +1971,10 @@ test("prepending history leaves the reader looking at the same line, and the cap
 
   // The cap. Push enough live lines to blow past MAX_LINES and check that the 40 loaded rows are still there: the
   // budget is MAX_LINES plus what was loaded, so a burst of live output cannot undo the click.
-  for (let i = 0; i < 2100; i++) p.es().onmessage({ data: JSON.stringify(`flood ${i}`) });
+  for (let i = 0; i < 2100; i++) {
+    p.es().onmessage({ data: JSON.stringify(`flood ${i}`) });
+    if (i % 200 === 199) p.flush();
+  }
   p.flush();
   assert.equal(p.pane.childElementCount, 2040, "the cap is MAX_LINES plus the rows the reader loaded");
   assert.ok(p.pane.children[0]._text.includes("older 1"), "the oldest row is still the history they asked for");
@@ -1980,4 +1983,21 @@ test("prepending history leaves the reader looking at the same line, and the cap
   // What went instead: the oldest LIVE rows, which is the only thing that can go. Trimming from the top would have
   // eaten the history first, which is what a growing budget on its own quietly did.
   assert.ok(!p.pane.children.some(c => c._text.includes("line 0")), "the oldest live rows are the ones that were dropped");
+});
+
+test("unpainted bursts and repeated history pages keep browser buffers bounded", async () => {
+  const w = world({ runs: { "2026-09-24T02-00-00-000-fix": { lines: ["one"], exit: 0, endedAt: 1 } }, latest: "2026-09-24T02-00-00-000-fix" });
+  let page = 0;
+  const p = await paneOf(w, { fetchJson: () => {
+    const current = page++;
+    return { lines: Array.from({ length: 400 }, (_, i) => `page ${current} row ${i}`), from: 5000 - page * 400, before: 4999 - page * 400 };
+  } });
+  for (let i = 0; i < 3000; i++) p.line(`burst ${i}`);
+  p.flush();
+  assert.equal(p.pane.childElementCount, 400); assert.match(p.els.earlierstate.textContent, /buffer full/);
+  assert.ok(p.pane.children.at(-1)._text.includes("burst 2999"));
+  p.es()._on.skipped({ data: "5000" });
+  for (let i = 0; i < 7; i++) await p.els.earlier._on.click();
+  assert.equal(p.pane.childElementCount, 2401);
+  assert.ok(p.pane.children[0]._text.includes("page 6"), "the newly requested older page survives the history cap");
 });

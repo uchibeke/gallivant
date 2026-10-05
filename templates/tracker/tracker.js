@@ -171,14 +171,10 @@ const pane = document.getElementById("log"), state = document.getElementById("lo
 // The most LIVE rows the pane keeps. Beyond this the oldest live rows are dropped; the complete log is on disk and the
 // "load earlier" control fetches any of it back.
 //
-// History the reader loaded is exempt from this, which is the decision worth saying out loud. The cap exists to bound
-// a DOM that an unbounded live stream would otherwise grow forever: nobody asked for the ten-thousandth line of a
-// running build, and dropping it costs the reader nothing because it is still on disk. History is the opposite case.
-// The reader pressed a button for it, and there is nothing to fetch it back from once it is gone but the same button
-// they just pressed, so trimming it would silently undo the click and the feature would read as broken. Raising the
-// cap for everyone instead would put the DOM cost of a long history onto every pane whether or not it asked. So the
-// budget grows by exactly what was loaded, and only the live tail is ever trimmed.
+// Explicitly loaded history has its own cap. Live rows never evict that window;
+// another page can replace older history without growing browser memory forever.
 const MAX_LINES = 2000;
+const MAX_HISTORY_LINES = 2000;
 if (pane) {
   // Auto-scroll follows the reader: the pane jumps to the bottom only when it was already at the bottom, so
   // scrolling up to read something does not yank you back down on the next line.
@@ -276,8 +272,11 @@ if (pane) {
     // disk, and the "load earlier" control above can fetch any of it back, so dropping the oldest rows loses nothing.
     trim();
   };
-  const push = line => { pending.push(line); if (!painting) { painting = true; requestAnimationFrame(paint); } };
-  const note = (text, cls) => { const el = document.createElement("div"); el.className = "ll " + cls; el.textContent = text; pane.append(el); };
+  const push = line => {
+    if (pending.length >= 400) { pending.shift(); tell("display buffer full; older events remain in paginated history"); }
+    pending.push(line); if (!painting) { painting = true; requestAnimationFrame(paint); }
+  };
+  const note = (text, cls) => { const el = document.createElement("div"); el.className = "ll " + cls; el.textContent = text; pane.append(el); trim(); };
   // A run from another tool has no registry entry and is addressed by its source label instead; one of Gallivant's
   // own is addressed by entry. The server validates whichever arrives.
   const q = new URLSearchParams({ run: pane.dataset.run });
@@ -327,6 +326,10 @@ if (pane) {
         // row count.
         loaded += t.content.childElementCount;
         pane.prepend(t.content);
+        // Keep the older page just requested; evict the newest history beside
+        // the live tail so another click can actually reach earlier output.
+        while (loaded > MAX_HISTORY_LINES && pane.children[loaded - 1]) { pane.children[loaded - 1].remove(); loaded--; }
+        trim();
       }
       pane.scrollTop = top + (pane.scrollHeight - before);
       oldest = got.from ?? oldest;
@@ -344,6 +347,8 @@ if (pane) {
   earlier?.addEventListener("click", loadEarlier);
 
   const es = new EventSource(url);
+  globalThis.addEventListener?.("pagehide", () => { es.close(); pending = []; }, { once: true });
+  es.addEventListener("gap", e => { note(JSON.parse(e.data), "skip"); tell("some history is unavailable; saved results are separate from logs"); });
   const say = text => { if (state) state.textContent = text; };
   es.addEventListener("skipped", e => {
     const n = Number(e.data);

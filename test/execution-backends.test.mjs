@@ -1,0 +1,513 @@
+import { test } from "node:test";
+import assert from "node:assert/strict";
+import { join } from "node:path";
+import { createHash } from "node:crypto";
+import { EventEmitter } from "node:events";
+import { mkdirSync, readFileSync, writeFileSync, rmSync, renameSync, symlinkSync, cpSync } from "node:fs";
+import { pathToFileURL } from "node:url";
+import { makeExecution, executionLive, assertExecutionDependency } from "../lib/execution.mjs";
+import { executionRegistry, adapters, buildRun } from "../lib/harness.mjs";
+import { makeProviderHealth } from "../lib/provider_health.mjs";
+import { makeRunner } from "../lib/run.mjs";
+import { journalFor } from "../lib/execution_journal.mjs";
+import { logWindow, LOG_LIMITS, appendProjection } from "../lib/run_log.mjs";
+import { streamRun, sliceRun } from "../lib/tracker/stream.mjs";
+import { writeJsonAtomic, readJson } from "../lib/fs.mjs";
+import { makeState, newEntry, STATES, idSlug } from "../lib/state.mjs";
+import { routes } from "../lib/commands/serve.mjs";
+import { makeTick } from "../lib/tick.mjs";
+import { reconcileExecutionResult } from "../lib/execution_result.mjs";
+import { resume } from "../lib/commands/resume.mjs";
+import { acquireProcessLock } from "../lib/daemon.mjs";
+import { tempHome, makeClock, CONFIG, T0, fakeGh, fakeNotify, silentLog, fakeGit, fakeCredential, fakeIdentity } from "./helpers.mjs";
+const allowance = { remainingUsd: 1, reservedUsd: 0.1 };
+const input = { operationId: "first", inputHead: "a".repeat(40), allowance };
+const sha = text => createHash("sha256").update(text).digest("hex");
+function remote(provider = "openai-agents", overrides = {}) {
+  const root = tempHome(), clock = makeClock(), calls = [], jobs = new Map();
+  let observation = null, seq = 0;
+  const transport = {
+    prepare: async () => ({ environment: "sandbox" }),
+    submit: async req => {
+      calls.push(["submit", req]);
+      const accepted = jobs.get(req.idempotencyKey) || { providerJobId: `job-${++seq}`, sessionId: `session-${seq}`, turnId: `turn-${seq}` };
+      jobs.set(req.idempotencyKey, accepted);
+      observation = { ...accepted, state: "running", observedAt: clock.now(), events: [] };
+      return accepted;
+    },
+    continue: async req => { calls.push(["continue", req]); return { providerJobId: `job-${++seq}`, sessionId: req.sessionId, turnId: `turn-${seq}` }; },
+    lookup: async req => { calls.push(["lookup", req]); const job = jobs.get(req.intent.idempotencyKey); return job ? { ...job, state: "running", observedAt: clock.now() } : null; },
+    inspect: async req => { calls.push(["inspect", req]); return observation; },
+    collect: async req => { calls.push(["collect", req]); return { ...req, signal: undefined, outcome: { finished: true, ok: true, denials: [], cost: null, lastMessage: "saved result" } }; },
+    cancel: async req => { calls.push(["cancel", req]); return { confirmed: true }; },
+    ...overrides,
+  };
+  const capabilities = { ...executionRegistry[provider], available: true, environments: ["sandbox"], policy: ["workspace-write"], continuation: "native-session", preparation: "tool-free-fixture", controls: { cancel: true, interrupt: false } };
+  const options = { root, taskId: "acme/widget/remote", provider, account: "test", transport, capabilities, clock, jitter: () => 0 };
+  return { root, clock, calls, transport, capabilities, service: makeExecution(options), reopen: () => makeExecution(options), observe: patch => { observation = { ...observation, ...patch }; }, jobs };
+}
+
+test("predecessor service is required and remote selections remain unavailable", () => {
+  assert.throws(() => assertExecutionDependency(null), { code: "EXECUTION_DEPENDENCY" });
+  assertExecutionDependency(() => {});
+  assert.equal(executionRegistry["openai-agents"].available, false);
+  assert.equal(executionRegistry["codex-cloud"].available, false);
+  for (const name of Object.keys(adapters)) assert.equal(executionRegistry[name].adapter, adapters[name]);
+  const spec = buildRun({ harness: "codex", config: CONFIG, mode: "start", prompt: "offline", cwd: tempHome() });
+  assert.equal(spec.cmd, CONFIG.harness.codex.bin);
+  assert.ok(spec.args.includes('sandbox_mode="workspace-write"'));
+});
+
+test("missing predecessor module stops context startup with a dependency remedy", async () => {
+  const dir = tempHome(); cpSync(new URL("../lib", import.meta.url), join(dir, "lib"), { recursive: true });
+  rmSync(join(dir, "lib", "tasks.mjs"));
+  await assert.rejects(import(pathToFileURL(join(dir, "lib", "context.mjs"))), error => error.code === "EXECUTION_DEPENDENCY" && /merge.*predecessor/.test(error.message));
+});
+
+for (const provider of ["openai-agents", "codex-cloud"]) {
+  test(`${provider} fixture: no executable/PID, exact owned continuation and restart result retrieval`, async () => {
+    const f = remote(provider), prepared = await f.service.prepare({ environment: "sandbox" });
+    assert.deepEqual(prepared, { environment: "sandbox" });
+    const job = await f.service.submit(input);
+    assert.equal(job.pid, undefined); assert.equal(job.bin, undefined);
+    assert.equal(job.execution.acceptance, "accepted");
+    assert.equal(f.reopen().inspect().id, job.id);
+    f.observe({ state: "succeeded", events: [{ eventId: "delta-2", sequence: 2, type: "output", data: "second", timestamp: 2 }, { eventId: "delta-1", sequence: 1, type: "output", data: "first", timestamp: 1 }], cursor: "page-2" });
+    await f.reopen().reconcile({ force: true });
+    assert.equal(f.service.current().execution.providerState, "retrieving-results");
+    await f.service.collect();
+    assert.equal(f.reopen().current().running, false);
+    rmSync(join(f.service.dirOf(job.id), "job.log"));
+    assert.equal((await f.reopen().collect()).outcome.lastMessage, "saved result");
+    await assert.rejects(f.service.continue({ ...input, operationId: "wrong", sessionId: "another-provider-session" }), { code: "EXECUTION_CONTINUATION" });
+    const next = await f.service.continue({ ...input, operationId: "correction", sessionId: job.execution.sessionId });
+    assert.equal(next.execution.sessionId, job.execution.sessionId);
+    assert.equal(f.calls.filter(x => x[0] === "continue").length, 1);
+  });
+  test(`${provider} fixture: lost reply persists intent and reconciles without duplicate paid dispatch`, async () => {
+    const f = remote(provider), submit = f.transport.submit;
+    f.transport.submit = async req => { await submit(req); throw new Error("reply lost"); };
+    await assert.rejects(f.service.submit(input), /reply lost/);
+    assert.equal(f.reopen().current().execution.acceptance, "unknown");
+    await assert.rejects(f.reopen().submit(input), { code: "EXECUTION_UNKNOWN" });
+    await f.reopen().reconcile({ force: true });
+    assert.equal(f.reopen().current().execution.acceptance, "accepted");
+    const recovered = await f.reopen().submit(input);
+    assert.equal(recovered.execution.providerJobId, "job-1");
+    assert.equal(f.calls.filter(x => x[0] === "submit").length, 1);
+    await assert.rejects(f.service.submit({ ...input, inputHead: "b".repeat(40) }), { code: "EXECUTION_CONFLICT" });
+  });
+}
+
+test("unknown acceptance without lookup stays visible through startup and periodic reconciliation", async () => {
+  const f = remote("codex-cloud", { submit: async () => { throw new Error("connection lost"); }, lookup: undefined });
+  await assert.rejects(f.service.submit(input));
+  await f.reopen().reconcile({ force: true });
+  const state = f.reopen().inspect().execution;
+  assert.equal(state.providerState, "status-unknown"); assert.match(state.recoveryAction, /manually/);
+  assert.equal(state.costUsd, null);
+  await assert.rejects(f.service.submit({ ...input, operationId: "new" }), { code: "BUSY" });
+});
+
+test("concurrent dispatch and cancellation share durable task ownership", async () => {
+  const f = remote(); let accept;
+  const original = f.transport.submit;
+  f.transport.submit = req => new Promise(resolve => { accept = () => original(req).then(resolve); });
+  const pending = f.service.submit(input);
+  await new Promise(resolve => setImmediate(resolve));
+  await assert.rejects(f.reopen().submit(input), /already running/);
+  await assert.rejects(f.reopen().cancel(), /already running/);
+  accept(); await pending;
+  await f.service.cancel();
+  await assert.rejects(f.service.submit({ ...input, operationId: "after-stop" }), { code: "EXECUTION_STOPPED" });
+});
+
+test("deadline fences late submission acknowledgement without retries", async () => {
+  let reply;
+  const f = remote("openai-agents", { submit: () => new Promise(resolve => { reply = resolve; }) });
+  const short = makeExecution({ root: f.root, taskId: "acme/widget/remote", provider: "openai-agents", account: "test", transport: f.transport, capabilities: f.capabilities, clock: f.clock, limits: { deadlineMs: 10 } });
+  await assert.rejects(short.submit(input), { code: "EXECUTION_DEADLINE" });
+  reply({ providerJobId: "late-job" }); await new Promise(resolve => setImmediate(resolve));
+  assert.equal(short.inspect().execution.acceptance, "unknown");
+  await assert.rejects(short.submit(input), { code: "EXECUTION_UNKNOWN" });
+});
+
+test("stale observations, wrong root turns and silence cannot settle remote work", async () => {
+  const f = remote(); await f.service.submit(input); await f.service.reconcile({ force: true });
+  const observed = f.service.current().execution.observedAt;
+  f.observe({ observedAt: observed - 1, state: "succeeded" });
+  await f.service.reconcile({ force: true });
+  assert.equal(f.service.current().execution.providerState, "status-unknown");
+  assert.equal(f.service.current().running, true);
+  f.observe({ observedAt: observed + 1, turnId: "subagent-turn", state: "succeeded" });
+  await f.service.reconcile({ force: true });
+  assert.equal(f.service.current().execution.recoveryAction, "EXECUTION_OWNERSHIP");
+  const calls = f.calls.length;
+  for (let i = 0; i < 20; i++) f.reopen().inspect();
+  assert.equal(f.calls.length, calls);
+  assert.ok(executionLive(f.service.current()));
+});
+
+test("missing results remain retrieving, event gaps are explicit and recovered events deduplicate", async () => {
+  const f = remote("openai-agents", { collect: async () => null });
+  const job = await f.service.submit(input);
+  f.observe({ state: "succeeded", events: [{ eventId: "ev-1", type: "output", data: "hello" }], cursor: "c1", gap: "missed intermediate deltas" });
+  await f.service.reconcile({ force: true }); await f.reopen().reconcile({ force: true });
+  await assert.rejects(f.service.collect(), { code: "EXECUTION_RESULT" });
+  assert.equal(f.service.current().running, true);
+  const events = readFileSync(join(f.service.dirOf(job.id), "events.jsonl"), "utf8").trim().split("\n").map(JSON.parse);
+  assert.equal(events.length, 2); assert.equal(events[1].type, "gap");
+});
+
+test("unsupported cancel stops dispatch, leaves confirmation unknown and quarantines late results", async () => {
+  const f = remote("codex-cloud"); f.capabilities.controls.cancel = false;
+  await f.service.submit(input);
+  assert.deepEqual(await f.service.cancel("timeout"), { confirmed: false, unsupported: true });
+  assert.equal(f.service.current().execution.providerState, "cancellation-requested");
+  assert.equal(f.calls.some(x => x[0] === "cancel"), false);
+  f.observe({ state: "succeeded" }); await f.service.reconcile({ force: true });
+  assert.equal(f.service.current().execution.quarantined, true);
+  await assert.rejects(f.service.collect(), { code: "EXECUTION_QUARANTINED" });
+  await assert.rejects(f.service.submit({ ...input, operationId: "late" }), { code: "EXECUTION_STOPPED" });
+});
+
+test("mandatory policy, unsupported model and unknown allowance fail before dispatch", async () => {
+  for (const [patch, code] of [[{ mandatoryPolicy: ["unavailable-hook"] }, "EXECUTION_POLICY"], [{ model: "unconfigured-model" }, "EXECUTION_INPUT"], [{ allowance: { reservedUsd: null, remainingUsd: 1 } }, "EXECUTION_ALLOWANCE"], [{ allowance: { reservedUsd: 0, remainingUsd: 0 } }, "EXECUTION_ALLOWANCE"], [{ allowance: undefined }, "EXECUTION_ALLOWANCE"]]) {
+    const f = remote(); await assert.rejects(f.service.submit({ ...input, ...patch }), { code });
+    assert.equal(f.calls.length, 0);
+  }
+  const f = remote(); await f.service.submit({ ...input, allowance: { remainingUsd: 0.1, reservedUsd: 0.1 } });
+  f.observe({ state: "succeeded" }); await f.service.reconcile({ force: true }); await f.service.collect();
+  await assert.rejects(f.service.continue({ ...input, operationId: "extra", sessionId: "session-1" }), { code: "EXECUTION_ALLOWANCE" });
+});
+
+test("scoped health deadlines/backoff permit another account and review to advance", async () => {
+  const home = tempHome(), clock = makeClock(), reached = [], counts = {};
+  const health = makeProviderHealth({ home, clock, limits: { deadlineMs: 10 }, jitter: () => 0, probe: async (provider, account) => {
+    counts[account] = (counts[account] || 0) + 1;
+    if (account === "slow") return new Promise(() => {});
+    reached.push(account); return { ok: true, detail: "account ready" };
+  } });
+  const progress = health.refresh([["codex", "slow"], ["codex", "healthy"]]);
+  reached.push("GitHub review"); await progress;
+  assert.deepEqual([...reached].sort(), ["GitHub review", "healthy"]);
+  assert.equal(health.get("codex", "slow").ok, false); assert.equal(health.get("codex", "healthy").ok, true);
+  await health.refresh([["codex", "slow"]]); assert.equal(counts.slow, 1);
+  assert.ok(health.get("codex", "slow").nextAttemptAt > clock.now());
+});
+
+test("normalized journal preserves provenance, provider ordering, redaction and replay IDs", () => {
+  const dir = tempHome(), options = { taskId: "task", runId: "run", provider: "fixture", secrets: ["custom-private-value"] };
+  const append = ev => journalFor(dir, options).append(ev);
+  const a = append({ eventId: "event-2", sequence: 2, type: "tool-summary", providerJobId: "p1", turnId: "t1", data: "custom-private-value Bearer private-access-token" });
+  const b = append({ eventId: "event-1", sequence: 1, type: "usage", data: { costUsd: null, api_key: "secret-value" } });
+  assert.equal(a.sequence, 1); assert.equal(b.sequence, 2);
+  assert.deepEqual(append({ eventId: "event-2", providerJobId: "p1", turnId: "t1", data: "replayed" }), a);
+  const text = readFileSync(join(dir, "events.jsonl"), "utf8") + readFileSync(join(dir, "job.log"), "utf8");
+  assert.doesNotMatch(text, /custom-private-value|private-access-token|secret-value/);
+  assert.match(text, /"version":1/); assert.match(text, /"provenance":"provider"/);
+});
+
+function largeLog() {
+  const dir = tempHome(), lines = 50_000, chunks = [], index = Buffer.alloc(lines * 8); let offset = 0;
+  for (let i = 0; i < lines; i++) { const text = `event ${i} ${"x".repeat(240)}\n`; index.writeBigUInt64LE(BigInt(offset), i * 8); offset += Buffer.byteLength(text); chunks.push(text); }
+  writeFileSync(join(dir, "job.log"), chunks.join("")); writeFileSync(join(dir, "job.idx"), index);
+  writeJsonAtomic(join(dir, "job.json"), { id: "large", exit: 0 });
+  return { dir, lines, offset };
+}
+
+test("large indexed tails/history/reconnect use bounded bytes and stable IDs", () => {
+  const f = largeLog(), meter = { bytesRead: 0 };
+  const tail = logWindow(f.dir, { meter });
+  assert.equal(tail.lines.length, 400); assert.equal(tail.ids[0], f.lines - 399);
+  assert.ok(meter.bytesRead <= LOG_LIMITS.windowBytes + 3208);
+  const historyMeter = { bytesRead: 0 }, older = sliceRun(f.dir, { end: tail.from, meter: historyMeter });
+  assert.equal(older.to, tail.from - 1); assert.ok(historyMeter.bytesRead <= LOG_LIMITS.windowBytes + 3208);
+  const replay = logWindow(f.dir, { after: tail.ids.at(-2) });
+  assert.deepEqual(replay.ids, [f.lines]);
+  rmSync(join(f.dir, "job.idx"));
+  const legacyMeter = { bytesRead: 0 }, legacy = logWindow(f.dir, { meter: legacyMeter });
+  assert.ok(legacyMeter.bytesRead <= LOG_LIMITS.windowBytes); assert.match(legacy.gap, /byte positions/);
+  assert.deepEqual(logWindow(f.dir, { after: legacy.ids.at(-2) }).ids, [legacy.ids.at(-1)]);
+});
+
+class Subscriber extends EventEmitter {
+  constructor(slow = false) { super(); this.slow = slow; this.frames = []; this.req = { headers: {} }; }
+  writeHead() {} setTimeout() {} end() { this.ended = true; this.emit("close"); }
+  write(frame) { this.frames.push(frame); return !this.slow; }
+}
+
+test("slow/disconnected SSE readers bound buffers, stop reads and permit unrelated controls", async () => {
+  const f = largeLog(), meter = { bytesRead: 0 }, res = new Subscriber(true);
+  const subscriber = streamRun(res, f.dir, { isRunning: () => true, meter, pollMs: 100_000, beatMs: 100_000 });
+  assert.equal(subscriber.blocked(), true); assert.ok(subscriber.bufferedBytes() <= LOG_LIMITS.bufferedBytes);
+  const before = meter.bytesRead;
+  const other = remote(); await other.service.submit(input); await other.service.cancel();
+  assert.equal(meter.bytesRead, before);
+  res.emit("close"); assert.equal(subscriber.bufferedBytes(), 0); assert.equal(res.listenerCount("drain"), 0);
+});
+
+test("rotation yields an explicit gap without renumbering replay IDs", () => {
+  const dir = tempHome(); appendProjection(dir, "one"); appendProjection(dir, "two");
+  writeJsonAtomic(join(dir, "job.json"), { id: "rotated", exit: null });
+  const res = new Subscriber(true); res.req.headers["last-event-id"] = "2";
+  const stream = streamRun(res, dir, { isRunning: () => true, pollMs: 100_000, beatMs: 100_000 });
+  renameSync(join(dir, "job.log"), join(dir, "job.log.1")); writeFileSync(join(dir, "job.log"), "new\n");
+  res.slow = false; res.emit("drain");
+  assert.ok(res.frames.some(frame => frame.includes("event: gap"))); stream.close();
+});
+
+test("legacy registry identities/chains/active local jobs survive and unknown versions refuse", () => {
+  const home = tempHome(), entry = newEntry({ repo: "acme/widget", harness: "codex", session: "22222222-2222-4222-8222-222222222222", branch: "work/legacy", pr: 9, worktree: tempHome(), nowIso: T0, state: STATES.prOpen });
+  const legacy = { version: 1, entries: { "acme/widget/legacy": entry }, chains: { queue: { snapshots: ["unchanged"] } } };
+  writeJsonAtomic(join(home, "state.json"), legacy);
+  assert.deepEqual(makeState(home).load(), JSON.parse(JSON.stringify(legacy)));
+  const root = tempHome(), dir = join(root, "legacy-run"); mkdirSync(dir);
+  writeJsonAtomic(join(dir, "job.json"), { id: "legacy-run", pid: 11, bin: "codex", exit: null }); writeFileSync(join(root, "latest-run"), "legacy-run");
+  const runner = makeRunner(root, { probe: () => true });
+  const boundary = makeExecution({ root, taskId: "acme/widget/legacy", provider: "codex", runner });
+  assert.equal(boundary.current().id, "legacy-run"); assert.equal(boundary.current().running, true);
+  writeJsonAtomic(join(home, "state.json"), { ...legacy, version: 99 });
+  assert.throws(() => makeState(home).load(), { code: "STATE_VERSION" });
+  const f = remote(); writeJsonAtomic(join(f.root, "execution.json"), { version: 99 });
+  assert.throws(() => f.service.inspect(), { code: "EXECUTION_VERSION" });
+});
+
+test("local Codex fixture uses existing adapter, journals output and survives launcher exit", async () => {
+  const root = tempHome(), cwd = tempHome();
+  const runner = makeRunner(root, { probe: () => false });
+  const service = makeExecution({ root, taskId: "acme/widget/local", provider: "codex", runner });
+  const lines = [{ type: "thread.started", thread_id: "22222222-2222-4222-8222-222222222222" }, { type: "item.completed", item: { type: "agent_message", text: "result local-private-secret" } }, { type: "turn.completed" }];
+  const code = `process.stdout.write(${JSON.stringify(lines.map(JSON.stringify).join("\n") + "\n")})`;
+  const job = await service.start("fixture", process.execPath, ["-e", code], { cwd, env: { TEST_API_KEY: "local-private-secret" }, execution: { operationId: "fixture" } });
+  while (runner.read(job.id).exit === null) await new Promise(resolve => setImmediate(resolve));
+  await service.reconcile(); service.settle(job.id, () => 0);
+  assert.equal(service.outcome(job.id).ok, true);
+  assert.doesNotMatch(readFileSync(join(service.dirOf(job.id), "job.log"), "utf8"), /local-private-secret/);
+  assert.equal(service.sessionFrom(job.id), "22222222-2222-4222-8222-222222222222");
+  rmSync(join(service.dirOf(job.id), "provider.log"));
+  assert.equal(service.outcome(job.id).ok, true);
+});
+
+function resultFixture() {
+  const dir = tempHome(), worktree = tempHome(), id = "acme/widget/result", revision = "a".repeat(40), runId = "result-run";
+  writeFileSync(join(worktree, "a.txt"), "before");
+  const entry = { ...newEntry({ repo: "acme/widget", harness: "codex", session: "22222222-2222-4222-8222-222222222222", branch: "work/result", base: "main", worktree, nowIso: T0, state: STATES.running }), execution: { runId, providerJobId: "j1", turnId: "t1", inputHead: revision } };
+  const result = { taskId: id, runId, providerJobId: "j1", turnId: "t1", inputHead: revision, repo: entry.repo, branch: entry.branch, files: [{ path: "a.txt", beforeHash: sha("before"), afterHash: sha("after"), text: "after" }], pr: { title: "Apply result", body: "Verified execution artifacts." } };
+  const calls = [], git = { head: async () => revision, currentBranch: async () => entry.branch, originOf: async () => "https://github.com/acme/widget.git", commitResult: async () => calls.push("commit"), pushResult: async () => calls.push("push") };
+  const gh = { publishResultPr: async () => { calls.push("PR"); return { number: 1, url: "https://example.test/pr/1" }; } };
+  const ctx = { git, gh, readPrd: () => "# Brief\n\n## Verify\n\n- `printf verified`\n" };
+  const verify = async () => { calls.push("verify"); return { stdout: "verified", stderr: "" }; };
+  return { id, entry, result, dir, ctx, verify, calls };
+}
+
+test("result publication validates ownership/paths/input head and records real verification", async () => {
+  const f = resultFixture();
+  const done = await reconcileExecutionResult(f.ctx, f);
+  assert.equal(readFileSync(join(f.entry.worktree, "a.txt"), "utf8"), "after");
+  assert.deepEqual(f.calls, ["commit", "verify", "push", "PR"]);
+  assert.equal(done.evidence[0].source, "coordinator-executed"); assert.equal(done.evidence[0].head, f.result.inputHead);
+  await reconcileExecutionResult(f.ctx, f);
+  assert.equal(readFileSync(join(f.entry.worktree, "a.txt"), "utf8"), "after");
+  for (const mutate of [r => { r.branch = "main"; }, r => { r.inputHead = "b".repeat(40); }, r => { r.files[0].path = "../outside"; }, r => { r.files[0].afterHash = "truncated"; }]) {
+    const bad = resultFixture(); mutate(bad.result);
+    await assert.rejects(reconcileExecutionResult(bad.ctx, bad));
+    assert.equal(readFileSync(join(bad.entry.worktree, "a.txt"), "utf8"), "before"); assert.deepEqual(bad.calls, []);
+  }
+  const linked = resultFixture(); symlinkSync(tempHome(), join(linked.entry.worktree, "link")); linked.result.files[0].path = "link/file";
+  await assert.rejects(reconcileExecutionResult(linked.ctx, linked), /symlink/);
+});
+
+test("failed verification prevents GitHub publication and leaves exact evidence", async () => {
+  const f = resultFixture(); f.verify = async () => { throw Object.assign(new Error("failed"), { code: 2, stderr: "test failure" }); };
+  await assert.rejects(reconcileExecutionResult(f.ctx, f), /verification failed/);
+  assert.deepEqual(f.calls, ["commit"]);
+  const observed = readJson(join(f.dir, "verification.json"));
+  assert.equal(observed.evidence[0].exit, 2); assert.equal(observed.head, f.result.inputHead);
+});
+
+test("journal restart repairs a crash between checkpoint and append with an explicit stable gap", () => {
+  const dir = tempHome(), eventId = "lost-event", provider = "fixture";
+  const key = sha(JSON.stringify([provider, null, null, eventId]));
+  writeJsonAtomic(join(dir, "journal.json"), { version: 1, sequence: 1, pending: { hash: key, eventId, timestamp: 1, offset: 0 } });
+  const journal = journalFor(dir, { taskId: "task", runId: "run", provider });
+  assert.deepEqual(journal.append({ eventId, type: "output", data: "replay" }), { sequence: 1, eventId });
+  const records = readFileSync(join(dir, "events.jsonl"), "utf8").trim().split("\n").map(JSON.parse);
+  assert.equal(records.length, 1); assert.equal(records[0].type, "gap");
+  assert.equal(logWindow(dir).ids[0], 1);
+  const next = journal.append({ eventId: "after", type: "output", data: "continued" });
+  assert.equal(next.sequence, 2);
+});
+
+test("projection retention preserves replay numbers and reports removed history", () => {
+  const dir = tempHome(), journal = journalFor(dir, { taskId: "t", runId: "r", provider: "p" });
+  journal.append({ eventId: "one", data: "one" }); journal.append({ eventId: "two", data: "two" });
+  rmSync(join(dir, "job.log")); rmSync(join(dir, "job.idx"));
+  journal.append({ eventId: "three", data: "three" });
+  const window = logWindow(dir);
+  assert.deepEqual(window.ids, [3]); assert.match(window.gap, /window|interrupted|rotation|retention/);
+  assert.equal(journal.append({ eventId: "one", data: "replay" }).sequence, 1);
+});
+
+test("coordinator startup and scoped slow progress leave an unrelated GitHub task advancing", async () => {
+  const f = remote(), home = tempHome(), state = makeState(home);
+  const service = makeExecution({ root: f.root, taskId: "acme/widget/remote", provider: "openai-agents", account: "test", transport: f.transport, capabilities: f.capabilities, clock: f.clock, limits: { deadlineMs: 10 } });
+  const run = await service.submit(input);
+  f.transport.inspect = () => new Promise(() => {});
+  state.put("acme/widget/remote", { ...newEntry({ repo: "acme/widget", harness: "openai-agents", branch: "work/remote", state: STATES.running, nowIso: T0 }), last: { run: run.id, exit: null } });
+  state.put("acme/widget/review", newEntry({ repo: "acme/widget", harness: "codex", branch: "work/review", pr: 2, state: STATES.prOpen, nowIso: T0 }));
+  let reviewReached;
+  const reviewing = new Promise(resolve => { reviewReached = resolve; });
+  const gh = fakeGh({ pr: { state: "MERGED" } });
+  gh.prView = async () => { reviewReached(); return { state: "MERGED" }; };
+  const ctx = { home, config: CONFIG, clock: f.clock, state, gh, ownLogin: "me", git: fakeGit(), log: silentLog, notify: fakeNotify(), readPrd: () => null, runnerFor: () => ({ current: () => null }), executionFor: id => id.endsWith("/remote") ? service : { current: () => null } };
+  const tick = makeTick(ctx).tick(); await reviewing; await tick;
+  assert.equal(state.get("acme/widget/review").state, STATES.done);
+  assert.equal(state.get("acme/widget/remote").execution.providerState, "status-unknown");
+});
+
+test("owned already-applied results reconcile after a lost commit acknowledgement", async () => {
+  const f = resultFixture(); writeFileSync(join(f.entry.worktree, "a.txt"), "after");
+  f.ctx.git.head = async () => "b".repeat(40); f.ctx.git.resultHeadMatches = async () => true;
+  await reconcileExecutionResult(f.ctx, f);
+  assert.equal(readJson(join(f.dir, "verification.json")).head, "b".repeat(40));
+  const bad = resultFixture(); writeFileSync(join(bad.entry.worktree, "a.txt"), "after");
+  bad.ctx.git.head = async () => "b".repeat(40); bad.ctx.git.resultHeadMatches = async () => false;
+  await assert.rejects(reconcileExecutionResult(bad.ctx, bad), /input head changed/);
+});
+
+test("verification evidence records an actual approved command, independent of provider claims", async () => {
+  const f = resultFixture(); delete f.verify;
+  const result = await reconcileExecutionResult(f.ctx, f);
+  assert.equal(result.evidence[0].output, "verified"); assert.equal(result.evidence[0].exit, 0);
+});
+
+test("cancellation during verification fences publication and retains verification evidence", async () => {
+  const f = resultFixture(); let stopped = false;
+  f.ctx.state = { get: () => ({ ...f.entry, dispatch_stopped: stopped ? "cancellation-requested" : null }) };
+  f.verify = async () => { f.calls.push("verify"); stopped = true; return { stdout: "verified" }; };
+  await assert.rejects(reconcileExecutionResult(f.ctx, f), /concurrent stop/);
+  assert.deepEqual(f.calls, ["commit", "verify"]); assert.equal(readJson(join(f.dir, "verification.json")).evidence[0].exit, 0);
+});
+
+test("slow remote result collection cannot occupy the GitHub review lane", async () => {
+  const f = remote(), home = tempHome(), state = makeState(home), id = "acme/widget/remote";
+  const service = makeExecution({ root: f.root, taskId: id, provider: "openai-agents", account: "test", transport: f.transport, capabilities: f.capabilities, clock: f.clock, limits: { deadlineMs: 20 } });
+  const run = await service.submit(input); f.observe({ state: "succeeded" }); await service.reconcile({ force: true });
+  f.transport.collect = () => new Promise(() => {});
+  state.put(id, { ...newEntry({ repo: "acme/widget", harness: "openai-agents", branch: "work/remote", state: STATES.running, nowIso: T0 }), last: { run: run.id, exit: null } });
+  state.put("acme/widget/review", newEntry({ repo: "acme/widget", harness: "codex", branch: "work/review", pr: 2, state: STATES.prOpen, nowIso: T0 }));
+  let reviewReached; const reviewing = new Promise(resolve => { reviewReached = resolve; });
+  const gh = fakeGh(); gh.prView = async () => { reviewReached(); return { state: "MERGED" }; };
+  const ctx = { home, config: { ...CONFIG, execution: { concurrency: 1 } }, clock: f.clock, state, gh, ownLogin: "me", git: fakeGit(), log: silentLog, notify: fakeNotify(), readPrd: () => null, executionFor: key => key === id ? service : { current: () => null } };
+  const tick = makeTick(ctx).tick(); await reviewing; await tick;
+  assert.equal(state.get("acme/widget/review").state, STATES.done); assert.equal(service.current().execution.collected, false);
+});
+
+test("prototype-sensitive operation IDs and provider result fields cannot replace owned identities", async () => {
+  const f = remote();
+  const job = await f.service.submit({ ...input, operationId: "__proto__" });
+  assert.equal((await f.reopen().submit({ ...input, operationId: "__proto__" })).id, job.id);
+  assert.equal(f.calls.filter(x => x[0] === "submit").length, 1);
+  f.observe({ state: "succeeded" }); await f.service.reconcile({ force: true });
+  const collect = f.transport.collect;
+  f.transport.collect = async req => ({ ...await collect(req), version: 99, taskId: "forged", runId: "forged" });
+  const result = await f.service.collect();
+  assert.equal(result.version, 1); assert.equal(result.taskId, "acme/widget/remote"); assert.equal(result.runId, job.id);
+});
+
+test("accepted correction recovers workflow ownership after a lost registry acknowledgement", async () => {
+  const f = remote(), home = tempHome(), state = makeState(home), id = "acme/widget/remote";
+  const cursor = { since: T0, dispatched: ["feedback-1"], fixed_sha: input.inputHead };
+  const run = await f.service.submit({ ...input, operationId: "old-run:0:fix", workflow: { state: STATES.running, cursor, lastEvent: "fixed feedback-1" } });
+  state.put(id, { ...newEntry({ repo: "acme/widget", harness: "openai-agents", branch: "work/remote", state: STATES.running, nowIso: T0 }), last: { run: "old-run", exit: 0 } });
+  const ctx = { home, config: CONFIG, clock: f.clock, state, gh: fakeGh(), ownLogin: "me", git: fakeGit(), log: silentLog, notify: fakeNotify(), readPrd: () => null, executionFor: () => f.service };
+  await makeTick(ctx).tick();
+  assert.equal(state.get(id).last.run, run.id); assert.deepEqual(state.get(id).cursor, cursor);
+  await makeTick(ctx).tick();
+  assert.equal(f.calls.filter(x => x[0] === "submit").length, 1);
+});
+
+test("saved result route survives log retention, rejects traversal and never polls a provider", async () => {
+  const home = tempHome(), id = "acme/widget/remote", root = join(home, "runs", idSlug(id)), f = remote();
+  const service = makeExecution({ root, taskId: id, provider: "openai-agents", account: "test", transport: f.transport, capabilities: f.capabilities, clock: f.clock });
+  const job = await service.submit(input); f.observe({ state: "succeeded" }); await service.reconcile({ force: true }); await service.collect();
+  rmSync(join(service.dirOf(job.id), "job.log"), { force: true });
+  const state = makeState(home); state.put(id, newEntry({ repo: "acme/widget", harness: "openai-agents", branch: "work/remote", state: STATES.running, nowIso: T0 }));
+  const ctx = { home, state, executionFor: () => service }, before = f.calls.length;
+  const response = { writeHead(code) { this.code = code; }, end(body) { this.body = body; } };
+  routes["GET /api/run/result"](ctx, {}, response, new URL(`http://localhost/api/run/result?id=${id}&run=${job.id}`));
+  assert.equal(response.code, 200); assert.equal(JSON.parse(response.body).outcome.ok, true);
+  routes["GET /api/run/result"](ctx, {}, response, new URL(`http://localhost/api/run/result?id=${id}&run=..%2foutside`));
+  assert.equal(response.code, 404); assert.equal(f.calls.length, before);
+});
+
+test("encoded control characters cannot amplify a log window beyond its byte budget", () => {
+  const dir = tempHome();
+  for (let i = 0; i < 100; i++) appendProjection(dir, "\u0001".repeat(1500));
+  const window = logWindow(dir);
+  assert.ok(Buffer.byteLength(JSON.stringify(window.lines)) <= LOG_LIMITS.windowBytes);
+  assert.ok(window.lines.length < 100); assert.match(window.gap, /window/);
+});
+
+test("confirmed local cancellation quarantines late output and expired diagnostics are removed", async () => {
+  const root = tempHome(), clock = makeClock(), runner = makeRunner(root, { clock, probe: () => false, processes: () => [] });
+  const service = makeExecution({ root, taskId: "local-cancel", provider: "codex", runner, clock });
+  const job = await service.start("fixture", process.execPath, ["-e", 'process.stdout.write("{\\"type\\":\\"turn.completed\\"}\\n")'], { cwd: tempHome(), execution: { operationId: "cancel" } });
+  while (runner.read(job.id).exit === null) await new Promise(resolve => setImmediate(resolve));
+  await service.cancel(); await service.reconcile();
+  assert.equal(service.current().execution.quarantined, true);
+  await assert.rejects(service.collect(), { code: "EXECUTION_QUARANTINED" });
+  const dir = service.dirOf(job.id); writeJsonAtomic(join(dir, "result.json"), { outcome: { ok: false } });
+  clock.advance(24 * 60 + 1); runner.observe();
+  assert.throws(() => readFileSync(join(dir, "provider.log")), { code: "ENOENT" });
+});
+
+test("every local adapter retains recorded sessions across legacy upgrade and missing echoed IDs", async () => {
+  for (const provider of Object.keys(adapters)) {
+    const root = tempHome(), session = provider === "goose" ? "work-owned-session" : "22222222-2222-4222-8222-222222222222";
+    let current = { id: "legacy-run", exit: 0, running: false, name: "legacy", bin: provider };
+    const runner = { current: () => current, lines: () => [], annotate() {},
+      start: async (name, cmd, args, options) => current = { id: options.runId, name, exit: 0, running: false, bin: cmd },
+      settle: () => current };
+    const service = makeExecution({ root, taskId: `local/${provider}`, provider, runner, legacySessionId: session });
+    await assert.rejects(service.continue({ operationId: "foreign", sessionId: "another-session" }), { code: "EXECUTION_CONTINUATION" });
+    const input = { operationId: "upgrade", sessionId: session, spec: { cmd: provider, args: [], options: {} } };
+    const upgraded = await service.continue(input); service.settle(upgraded.id, () => 1);
+    assert.equal(service.sessionFrom(upgraded.id), session);
+    const next = await service.continue({ ...input, operationId: "next" });
+    assert.equal(next.execution.sessionId, session);
+    const initial = makeExecution({ root: tempHome(), taskId: `new/${provider}`, provider, runner: { ...runner, current: () => null } });
+    const first = await initial.submit({ operationId: "first", recordedSessionId: session, spec: input.spec });
+    assert.equal(first.execution.sessionId, session);
+  }
+});
+
+test("shared resume uses remote capabilities and owned sessions without a fake CLI", async () => {
+  const f = remote(), home = tempHome(), state = makeState(home), id = "acme/widget/remote", worktree = tempHome();
+  const run = await f.service.submit(input); f.observe({ state: "succeeded" }); await f.service.reconcile({ force: true }); await f.service.collect();
+  state.put(id, { ...newEntry({ repo: "acme/widget", harness: "openai-agents", session: run.execution.sessionId, branch: "work/remote", worktree, state: STATES.needsHuman, nowIso: T0 }), execution: f.service.current().execution, last: { run: run.id, exit: 0 } });
+  const ctx = { home, config: CONFIG, state, clock: f.clock, gh: fakeGh(), git: fakeGit(), credential: fakeCredential(), identity: fakeIdentity(), log: silentLog, notify: fakeNotify(), executionFor: () => f.service, readPrd: () => null };
+  const resumed = await resume(ctx, { handle: id });
+  assert.equal(resumed.attach, null); assert.equal(resumed.session, run.execution.sessionId);
+  assert.equal(f.calls.filter(x => x[0] === "continue").length, 1); assert.equal(f.service.current().bin, undefined);
+});
+
+test("local settlement shares the cancellation/reconciliation lock before mutating output", () => {
+  const root = tempHome(); let mutated = false;
+  const service = makeExecution({ root, taskId: "local/lock", provider: "codex", runner: { settle: () => { mutated = true; } } });
+  const lock = acquireProcessLock(join(root, "execution.lock"), "execution");
+  try { assert.throws(() => service.settle("owned-run", () => 0), /already running/); assert.equal(mutated, false); }
+  finally { lock.release(); }
+});
+
+test("reported usage above a reservation exhausts allowance without double charging replay", async () => {
+  const f = remote(); await f.service.submit(input);
+  f.observe({ state: "succeeded", costUsd: 1.1 });
+  await f.service.reconcile({ force: true });
+  assert.equal(f.service.state().allowance.chargedUsd, 1.1);
+  await f.service.reconcile({ force: true }); await f.service.collect();
+  assert.equal(f.reopen().state().allowance.chargedUsd, 1.1);
+  await assert.rejects(f.reopen().continue({ ...input, operationId: "over-budget", sessionId: "session-1" }), { code: "EXECUTION_ALLOWANCE" });
+  assert.equal(f.calls.filter(x => x[0] === "continue").length, 0);
+});

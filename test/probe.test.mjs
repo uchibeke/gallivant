@@ -31,23 +31,22 @@ test("supported harnesses pass only when signed in, and authentication failures 
   }
 });
 
-test("daemon rejects old Codex before entering a dispatch tick and records an actionable failed probe", async () => {
+test("daemon fences an old Codex account while GitHub review continues", async () => {
   const home = tempHome();
   const state = makeState(home);
   state.put("acme/widget/probe", newEntry({ repo: "acme/widget", pr: 1, branch: "gallivant/probe", worktree: "/tmp/unused-probe", harness: "codex", state: STATES.prOpen, nowIso: T0 }));
-  const before = state.entries();
   let runsRead = 0;
   const notify = fakeNotify();
   await up({
     home, state, config: { ...CONFIG, repos: [], harness: { codex: { bin: harnessBin(home, "codex", { version: "0.155.1" }) } } },
-    gh: fakeGh(), log: silentLog, notify,
-    runnerFor: () => { runsRead++; throw new Error("dispatch must not be reached"); },
+    gh: fakeGh({ pr: { state: "MERGED" } }), log: silentLog, notify,
+    runnerFor: () => { runsRead++; return { current: () => null, start: () => { throw new Error("dispatch must not be reached"); } }; },
   }, { once: true });
   const health = JSON.parse(readFileSync(join(home, "daemon.json"), "utf8"));
   assert.equal(health.probes.codex.ok, false);
   assert.match(health.probes.codex.detail, /0\.155\.1 is older than 0\.158\.0/);
   assert.match(health.probes.codex.fix, /install codex/);
-  assert.equal(runsRead, 0);
-  assert.deepEqual(state.entries(), before);
+  assert.ok(runsRead > 0);
+  assert.equal(state.get("acme/widget/probe").state, STATES.done);
   assert.ok(notify.sent.some(n => JSON.stringify(n).includes("install codex")));
 });
