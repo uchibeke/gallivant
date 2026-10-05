@@ -140,6 +140,11 @@ before planning or answer writes, because the existing frontmatter parser cannot
 preserve those boundary characters. Rename the file or select another path.
 Quotes inside a path remain supported. Generated and saved source manifests use
 the same task-specific guard; hand-authored source parsing is unchanged.
+Task source paths with leading or trailing whitespace are also refused before
+the shared parser can trim them into a different filename. Raw selections are
+checked before request or answer identity replay, without rereading accepted
+files. Rename the file or select a different path. Internal spaces, including
+spaces inside directory names, retain their exact identity and selected bytes.
 Inferred Verify commands require their pinned authorizing manifests or instruction
 files in the generated `sources`. Repair may add these selected files; it cannot
 silently drop the dependency. The existing start path delivers their exact bytes

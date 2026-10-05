@@ -15,6 +15,7 @@ import { runEnv, RUN_GIT_CONFIG } from "../lib/git.mjs";
 import { preparationEnvironment } from "../lib/task_environment.mjs";
 import { renderDraft, collectCommands, draftPrompt, MAX_PREPARATION_PROMPT_BYTES } from "../lib/task_contract.mjs";
 import { buildRun } from "../lib/harness.mjs";
+import { parseSourcesMeta } from "../lib/config.mjs";
 import { makeState } from "../lib/state.mjs";
 import { writeJsonAtomic } from "../lib/fs.mjs";
 import { contentDigest } from "../lib/start_contract.mjs";
@@ -730,6 +731,82 @@ test("source paths with boundary quotes fail CLI and structured selection before
     assert.equal(accepted.status,"started");assert.ok(parsePrd(accepted.draft.text,accepted.draft.path).meta.sources.includes(path));assert.equal(readFileSync(join(accepted.implementation.worktree,path),"utf8"),text);
     assert.equal(w.runners.get(accepted.implementation.id).started.length,1);assert.match(accepted.draft.text,/Do not add dependencies/);assert.equal(saved.revision,first.revision);
     t.diagnostic(`Internal-quote fixture draft: ${accepted.draft.path}`);
+  }
+});
+
+test("raw boundary whitespace is refused before preparation or answers can select a trimmed alias while internal spaces retain exact delivery", async t => {
+  const paths = [" lead.md", "tail.md ", " both.md ", "\u00a0nbsp.md", "bom.md\ufeff", "\tstart.md", "end.md\n", "docs/\u2003end.md\u2003", "   "];
+  for (const cli of [false, true]) for (const alias of [false, true]) {
+    let calls = 0;
+    const w = world({ prepare: async (_ctx, task) => { calls++; return JSON.stringify(draftFor(task, { question: true })); } });
+    for (const path of paths) {
+      mkdirSync(dirname(join(w.checkout, path)), { recursive: true }); writeFileSync(join(w.checkout, path), "Owner-selected whitespace filename.\n");
+      if (alias && path.trim()) writeFileSync(join(w.checkout, path.trim()), "Different trimmed alias; never select this text.\n");
+    }
+    const first = await w.service.prepare({ text: REQUEST, run: true }), store = taskStore(w.home), saved = store.read(first.taskId);
+    for (const path of paths) {
+      const prepare = () => cli ? taskCommand(w.ctx, { args: ["prepare", REQUEST], values: { context: [path] }, service: w.service }) : w.service.prepare({ text: REQUEST, context: [path] });
+      const answer = () => cli ? taskCommand(w.ctx, { args: ["answer", first.taskId], values: { revision: String(first.revision), "request-id": "space-answer", answer: ["q-r-1=Use CSV."], context: [path] }, service: w.service }) : w.service.answer({ taskId: first.taskId, expectedRevision: first.revision, operationId: "space-answer", answers: { "q-r-1": "Use CSV." }, context: [path] });
+      for (const invoke of [prepare, answer]) await assert.rejects(invoke, e => e.code === "TASK_INPUT" && e.version === 1 && /has leading or trailing whitespace; rename it or select a different path/.test(e.message));
+      assert.deepEqual(store.read(first.taskId), saved); assert.equal(calls, 1); assert.deepEqual(w.service.list().tasks.map(x => x.taskId), [first.taskId]); assert.deepEqual(w.ctx.state.entries(), []);
+      assert.equal(readFileSync(join(w.checkout, path), "utf8"), "Owner-selected whitespace filename.\n");
+      if (alias && path.trim()) assert.equal(readFileSync(join(w.checkout, path.trim()), "utf8"), "Different trimmed alias; never select this text.\n");
+    }
+    const files = ["docs/local plan.md", "docs/ local /plan.md", "docs/non\u00a0breaking.md"];
+    for (const path of files) { mkdirSync(dirname(join(w.checkout, path)), { recursive: true }); writeFileSync(join(w.checkout, path), `CSV columns from ${path}.\n`); }
+    const input = { taskId: first.taskId, expectedRevision: first.revision, operationId: "internal-space-answer", answers: { "q-r-1": "Use CSV and the selected format documents." }, context: files };
+    const invoke = () => cli ? taskCommand(w.ctx, { args: ["answer", first.taskId], values: { revision: String(first.revision), "request-id": input.operationId, answer: [`q-r-1=${input.answers["q-r-1"]}`], context: files }, service: w.service }) : w.service.answer(input);
+    const accepted = await invoke(); assert.equal(accepted.status, "started"); assert.equal(accepted.taskId, first.taskId); assert.match(accepted.draft.text, /Do not add dependencies/);
+    for (const path of files) {
+      assert.ok(parsePrd(accepted.draft.text, accepted.draft.path).meta.sources.includes(path));
+      assert.equal(readFileSync(join(accepted.implementation.worktree, path), "utf8"), `CSV columns from ${path}.\n`);
+      rmSync(join(w.checkout, path));
+    }
+    assert.equal((await invoke()).implementation.run, accepted.implementation.run); assert.equal(calls, 2); assert.equal(w.runners.get(accepted.implementation.id).started.length, 1);
+    t.diagnostic(`Internal-space fixture draft: ${accepted.draft.path}`);
+  }
+});
+
+test("padded generated and saved source manifests cannot normalize aliases or drop constraints through bounded repair", async () => {
+  for (const path of [" docs/details.md", "docs/details.md ", "docs/details.md\u00a0", "   "]) for (const repair of [false, true]) {
+    let calls = 0;
+    const w = world({ prepare: async (_ctx, task, _store, failures) => {
+      const out = draftFor(task); if (++calls === 1 || !repair) out.sources.push(path); else assert.match(failures.join(" "), /leading or trailing whitespace/);
+      return JSON.stringify(out);
+    } });
+    mkdirSync(join(w.checkout, "docs")); writeFileSync(join(w.checkout, "docs/details.md"), "Selected CSV format contract.\n");
+    const r = await w.service.prepare({ text: REQUEST, context: ["docs/details.md"] });
+    assert.equal(r.status, repair ? "ready" : "blocked"); assert.equal(r.preparation.repairs, repair ? 1 : 3); assert.equal(calls, repair ? 2 : 4);
+    assert.equal(r.requirements[1].text, "Do not add dependencies."); assert.deepEqual(w.ctx.state.entries(), []);
+    if (!repair) { assert.match(r.failures[0], /after 3 repair attempts.*leading or trailing whitespace/); continue; }
+    assert.match(r.draft.text, /Explicit requirement r-2: "Do not add dependencies\."/);
+    const store = taskStore(w.home), saved = store.read(r.taskId); saved.output.sources.push(path);
+    const old = renderDraft(saved, saved.output).replace("status: draft", "status: ready"); writeFileSync(saved.draft.path, old); saved.draft.hash = contentDigest(old); saved.readiness.hash = saved.draft.hash; store.save(saved);
+    const reopened = createTaskService(w.ctx);
+    for (const operation of ["validate", "start"]) await assert.rejects(() => reopened[operation]({ taskId: r.taskId, expectedRevision: r.revision, run: true }), e => e.code === "TASK_CONFLICT" && /leading or trailing whitespace/.test(e.message));
+    assert.deepEqual(store.read(r.taskId), saved); assert.equal(w.runners.size, 0); assert.equal(readFileSync(join(w.checkout, "docs/details.md"), "utf8"), "Selected CSV format contract.\n");
+  }
+});
+
+test("legacy request and answer identities cannot replay boundary whitespace while shared source parsing retains its contract", async () => {
+  for (const cli of [false, true]) for (const path of [" docs/legacy.md", "docs/legacy.md ", "\u00a0docs/legacy.md\ufeff"]) {
+    let calls = 0;
+    const normal = "docs/legacy.md", w = world({ prepare: async (_ctx, task) => { calls++; return JSON.stringify(draftFor(task, { question: true })); } });
+    mkdirSync(join(w.checkout, "docs")); writeFileSync(join(w.checkout, normal), "Previously selected legacy bytes.\n");
+    const first = await w.service.prepare({ text: REQUEST, context: [normal], requestId: "legacy-whitespace" });
+    const answer = { taskId: first.taskId, expectedRevision: first.revision, operationId: "legacy-space-answer", answers: { "q-r-1": "Use CSV." }, context: [normal] };
+    await w.service.answer(answer);
+    const store = taskStore(w.home), saved = store.read(first.taskId);
+    // Pre-fix records persisted raw request/answer signatures beside trimmed
+    // context. Even matching replay signatures must not bypass raw validation.
+    saved.signature = contentDigest(JSON.stringify({ text: REQUEST, checkout: w.checkout, base: "main", harness: "codex", context: [path], verifyCommands: [], run: false }));
+    saved.operations[answer.operationId] = contentDigest(JSON.stringify({ answers: answer.answers, verifyCommands: [], context: [path] })); store.save(saved);
+    rmSync(join(w.checkout, normal));
+    const prepare = () => cli ? taskCommand(w.ctx, { args: ["prepare", REQUEST], values: { context: [path], "request-id": "legacy-whitespace" }, service: w.service }) : w.service.prepare({ text: REQUEST, context: [path], requestId: "legacy-whitespace" });
+    const replay = () => cli ? taskCommand(w.ctx, { args: ["answer", first.taskId], values: { revision: String(first.revision), "request-id": answer.operationId, answer: ["q-r-1=Use CSV."], context: [path] }, service: w.service }) : w.service.answer({ ...answer, context: [path] });
+    for (const invoke of [prepare, replay]) await assert.rejects(invoke, e => e.code === "TASK_INPUT" && e.version === 1 && /leading or trailing whitespace/.test(e.message));
+    assert.deepEqual(store.read(first.taskId), saved); assert.equal(calls, 2); assert.deepEqual(w.ctx.state.entries(), []);
+    assert.deepEqual(parseSourcesMeta([path]), { paths: [normal], problems: [] }, "hand-authored source manifests keep their existing whitespace formatting contract");
   }
 });
 
