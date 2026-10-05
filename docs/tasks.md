@@ -50,7 +50,16 @@ directory. Links inside a selected resource directory are materialized; links
 outside that directory, cycles, broken links and special files stop preparation
 before launch and remove partial copies. Previous
 sessions and unrelated home-directory credentials are excluded. AWS authentication
-requires explicit Bedrock selection. Preparation projects only `AWS_PROFILE`
+requires Bedrock selection. For Goose, `GOOSE_PROVIDER` overrides the copied native
+`config.yaml` selection; otherwise preparation reads `active_provider`, falling
+back to legacy `GOOSE_PROVIDER`. Plain or quoted provider names retain their
+selected model and configuration bytes. Complex or ambiguous YAML selectors stop
+before launch with guidance to set `GOOSE_PROVIDER` explicitly to the native
+provider; preparation never guesses or switches providers. Rebuilding a private
+turn removes earlier AWS snapshots even when the new selection is another
+provider or cannot be resolved. See the
+[Goose configuration reference](https://github.com/aaif-goose/goose/blob/main/documentation/docs/guides/config-files.md).
+Preparation projects only `AWS_PROFILE`
 (or `default`) from the shared config and credentials files, including files
 selected through `AWS_CONFIG_FILE` and `AWS_SHARED_CREDENTIALS_FILE`. Other
 profiles, comments, caches and unrelated files are excluded. Complete selected
@@ -197,7 +206,14 @@ Maven and .NET commands are not inferred from instructions because their project
 manifests do not yet have automatic snapshot support. Supply the repository's
 check with `--verify 'mvn test'` or `--verify 'dotnet test'` and explicitly select
 its supporting manifests with `--context`; those owner choices remain available
-during preparation and answers.
+during preparation and answers. Explicit Maven commands must carry every selected
+`pom.xml`, including parent and module POMs. Explicit `dotnet test` commands must
+carry selected `.sln`, `.slnx`, `.csproj`, `.fsproj` and `.vbproj` files. The same
+provenance rule applies to answers, repairs and saved-draft validation before
+start, so a fresh base receives the selected manifest bytes. Checks without
+selected project files remain explicit owner choices. See the
+[Maven POM documentation](https://maven.apache.org/guides/introduction/introduction-to-the-pom.html)
+and [.NET test command reference](https://learn.microsoft.com/en-us/dotnet/core/tools/dotnet-test-vstest).
 Known manifest scripts and established manager selection take precedence over
 unrelated instruction snippets. The service records explicit owner commands
 separately from inferred candidates. Reopening an older record rebuilds inference

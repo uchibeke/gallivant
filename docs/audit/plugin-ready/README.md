@@ -22,6 +22,14 @@ source mapping, execution authorization and stopping conditions.
 | CLI / structured parity and package safety | `lib/commands/task.mjs`, exports; operation parity and clean packed-package tests; initial/repair permission-denial text and usage persisted across CLI rendering, inspection, native recovery and settled replay without retry or dispatch |
 | Existing lifecycle and defaults | full existing offline suite; no harness/model/provider/permission defaults changed |
 
+The native Goose provider tests exercise copied current/legacy selectors and
+environment precedence, selected AWS credentials on initial/repair turns,
+non-Bedrock cleanup and ambiguous-selector refusal before launch. The explicit
+Maven/.NET tests pin root/module POMs and selected project/solution files through
+CLI and structured preparation/answers, bounded source repair, saved-draft
+validation and fresh-base single dispatch. These are offline fixtures, not live
+authentication or project-tool execution evidence.
+
 The observed native executable was
 `/Users/uchi/.local/share/gallivant/codex/node_modules/.bin/codex` at version
 `0.160.0`. GitHub CLI reported a signed-in operator. Those checks do not prove

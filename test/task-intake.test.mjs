@@ -406,6 +406,76 @@ test("inferred Verify provenance covers supported stacks and owner duplicates ca
   }
 });
 
+test("explicit Maven and dotnet checks bind every selected project manifest without enabling instruction inference", () => {
+  const context = ["pom.xml", "modules/table/pom.xml", "app.sln", "app.slnx", "src/table.csproj", "src/model.fsproj", "src/ui.vbproj", "pom.xml.backup", "notes.csproj.txt"].map(path => ({ path, text: "selected project bytes" }));
+  context.push({ path: "AGENTS.md", text: "Checks: `mvn test`, `dotnet test`." });
+  assert.deepEqual(collectCommands(context).commands, []);
+  for (const command of ["mvn test", "mvn -f modules/table/pom.xml test -q", "  mvn\ttest  "]) assert.deepEqual(collectCommands(context, [command]).sources[command], ["pom.xml", "modules/table/pom.xml"]);
+  for (const command of ["dotnet test", "dotnet test src/table.csproj --no-restore", "  dotnet   test  "]) assert.deepEqual(collectCommands(context, [command]).sources[command], ["app.sln", "app.slnx", "src/table.csproj", "src/model.fsproj", "src/ui.vbproj"]);
+  for (const command of ["mvntest", "dotnet testing", "node verify.mjs"]) assert.equal(collectCommands(context, [command]).sources[command], undefined);
+  assert.deepEqual(collectCommands([], ["mvn test", "dotnet test"]).sources, {});
+});
+
+test("CLI and structured explicit Maven and dotnet checks pin manifests through prepare, answers, repair and fresh-base dispatch", async t => {
+  for (const cli of [false, true]) for (const answer of [false, true]) for (const command of ["mvn test", "dotnet test"]) {
+    const paths = command.startsWith("mvn") ? ["pom.xml", "modules/table/pom.xml"] : ["app.sln", "src/table.csproj"];
+    let omitted = false, calls = 0;
+    const w = world({ prepare: async (_ctx, task, _store, failures) => {
+      calls++; const out = draftFor(task, { question: answer });
+      if (task.context.some(c => c.path === paths[0])) {
+        out.verify = [command];
+        if (!omitted) { omitted = true; out.sources = []; }
+        else { assert.match(failures.join(" "), /requires carried sources/); out.sources = paths; }
+      }
+      return JSON.stringify(out);
+    } });
+    rmSync(join(w.checkout, "AGENTS.md")); rmSync(join(w.checkout, "package.json"));
+    const manifests = paths.map(path => `<project>${path}: feature-only configuration</project>\n`);
+    const select = () => paths.forEach((path, i) => { mkdirSync(dirname(join(w.checkout, path)), { recursive: true }); writeFileSync(join(w.checkout, path), manifests[i]); });
+    if (!answer) select();
+    const service = w.service;
+    let r = await (cli ? taskCommand(w.ctx, { args: ["prepare", REQUEST], values: answer ? {} : { context: paths, verify: [command] }, service }) : service.prepare({ text: REQUEST, ...(answer ? {} : { context: paths, verifyCommands: [command] }) }));
+    let replay;
+    if (answer) {
+      assert.equal(r.status, "needs-input"); select();
+      const opts = { taskId: r.taskId, expectedRevision: r.revision, answers: { "q-r-1": "Use CSV with the selected project checks." }, operationId: "project-answer", context: paths, verifyCommands: [command] };
+      replay = () => cli ? taskCommand(w.ctx, { args: ["answer", opts.taskId], values: { revision: String(opts.expectedRevision), "request-id": opts.operationId, answer: ["q-r-1=Use CSV with the selected project checks."], context: paths, verify: [command] }, service }) : service.answer(opts);
+      r = await replay();
+    }
+    assert.equal(r.status, "ready"); assert.equal(r.preparation.repairs, 1); assert.equal(calls, answer ? 3 : 2);
+    assert.deepEqual(r.verifyCommands.find(v => v.command === command).sources, paths);
+    assert.match(r.draft.text, /Explicit requirement r-2: "Do not add dependencies\."/); assert.equal(check(parsePrd(r.draft.text, r.draft.path)).ok, true);
+    assert.deepEqual(w.ctx.state.entries(), []); assert.equal(w.daemonCalls(), 0);
+    // Operator edits and stale base manifests cannot replace the accepted bytes.
+    paths.forEach(path => writeFileSync(join(w.checkout, path), "later operator edit"));
+    if (replay) assert.deepEqual(await replay(), r);
+    const create = w.ctx.git.create;
+    w.ctx.git.create = async opts => { const cwd = await create(opts); paths.forEach(path => { mkdirSync(dirname(join(cwd, path)), { recursive: true }); writeFileSync(join(cwd, path), "stale base manifest"); }); return cwd; };
+    const started = await service.start({ taskId: r.taskId, expectedRevision: r.revision, run: true });
+    assert.equal(started.status, "started"); paths.forEach((path, i) => assert.equal(readFileSync(join(started.implementation.worktree, path), "utf8"), manifests[i]));
+    assert.equal(w.daemonCalls(), 1);
+    assert.equal((await service.start({ taskId: r.taskId, expectedRevision: started.revision, run: true })).implementation.run, started.implementation.run);
+    assert.equal(w.runners.get(started.implementation.id).started.length, 1);
+    if (!cli && !answer && command === "mvn test") t.diagnostic(`Explicit Maven fixture draft: ${r.draft.path}`);
+  }
+});
+
+test("saved explicit Maven and dotnet drafts cannot omit a pinned project manifest at validation or start", async () => {
+  for (const command of ["mvn test", "dotnet test"]) for (const operation of ["validate", "start"]) {
+    const path = command.startsWith("mvn") ? "pom.xml" : "app.csproj";
+    const w = world(); writeFileSync(join(w.checkout, path), "selected manifest");
+    const r = await w.service.prepare({ text: REQUEST, context: [path], verifyCommands: [command] });
+    assert.equal(r.status, "ready");
+    const store = taskStore(w.home), record = store.read(r.taskId);
+    record.output.verify = [command]; record.output.sources = [];
+    const missing = renderDraft(record, record.output).replace("status: draft", "status: ready");
+    writeFileSync(record.draft.path, missing); record.draft.hash = contentDigest(missing); record.readiness.hash = record.draft.hash; store.save(record);
+    if (operation === "start") await assert.rejects(() => w.service.start({ taskId: r.taskId, expectedRevision: r.revision, run: true }), { code: "TASK_CONFLICT" });
+    else { const result = await w.service.validate({ taskId: r.taskId, expectedRevision: r.revision }); assert.equal(result.status, "blocked"); assert.match(result.failures[0], /requires carried sources/); }
+    assert.deepEqual(w.ctx.state.entries(), []); assert.equal(w.daemonCalls(), 0);
+  }
+});
+
 test("instruction canonical checks and explicit owner Verify variants retain stack manifests", async () => {
   for (const explicit of [false,true]) {
     let calls = 0;
@@ -1601,6 +1671,91 @@ test("Foundry routing and credentials reach initial and repair runners through C
     assert.equal(result.implementation,null);assert.deepEqual(w.ctx.state.entries(),[]);assert.equal(w.daemonCalls(),0);
     assert.equal((await service.resume({taskId:result.taskId,expectedRevision:result.revision})).status,"ready");assert.equal(starts,2);
     if(!cli&&!bearer)t.diagnostic(`Foundry fixture draft: ${result.draft.path}`);
+  }
+});
+
+test("Goose native provider selection honors current and legacy config, environment precedence and private AWS cleanup", () => {
+  const cases = [
+    ["active_provider: bedrock\nproviders:\n  bedrock:\n    model: selected-model\n", {}, true],
+    ["---\n'active_provider': 'bedrock' # selected\nGOOSE_PROVIDER: openai\n", {}, true],
+    ['"active_provider" : "bedrock"\n', {}, true],
+    ["GOOSE_PROVIDER: bedrock\nGOOSE_MODEL: selected-model\n", {}, true],
+    ["active_provider: openai\nGOOSE_PROVIDER: bedrock\n", {}, false],
+    ["active_provider: bedrock\n", { GOOSE_PROVIDER: "openai" }, false],
+    ["active_provider: openai\n", { GOOSE_PROVIDER: "bedrock" }, true],
+    ["providers:\n  bedrock:\n    enabled: true\nactive_provider: openai\n", { GOOSE_PROVIDER: { toString: () => "bedrock" } }, false],
+  ];
+  for (const [text, override, bedrock] of cases) for (const direct of [false, true]) {
+    const root = tempHome(), operator = join(root, "operator"), config = join(root, "native-config"), cwd = join(root, "turn");
+    mkdirSync(join(config, "goose"), { recursive: true }); mkdirSync(join(operator, ".aws"), { recursive: true });
+    writeFileSync(join(config, "goose/config.yaml"), text);
+    const credentials = "[dev]\naws_access_key_id = selected-id\naws_secret_access_key = selected-secret\n[other]\naws_secret_access_key = unrelated-secret\n";
+    writeFileSync(join(operator, ".aws/credentials"), credentials); writeFileSync(join(operator, ".aws/config"), "[profile dev]\nregion = selected-region\n");
+    const source = { HOME: operator, XDG_CONFIG_HOME: "native-config", AWS_PROFILE: "dev", ...(direct ? { AWS_ACCESS_KEY_ID: "direct-id", AWS_SECRET_ACCESS_KEY: "direct-secret", AWS_REGION: "direct-region" } : {}), ...override };
+    const old = join(cwd, "home/.provider-files/AWS_SHARED_CREDENTIALS_FILE"); mkdirSync(old, { recursive: true }); writeFileSync(join(old, "old"), "old-shared-secret");
+    const env = preparationEnvironment("goose", cwd, {}, source, root);
+    assert.equal(env.GOOSE_PROVIDER, typeof override.GOOSE_PROVIDER === "string" ? override.GOOSE_PROVIDER : undefined, "native provider selection must not become a new environment override");
+    assert.equal(readFileSync(join(env.XDG_CONFIG_HOME, "goose/config.yaml"), "utf8"), text);
+    assert.equal(existsSync(old), false); assert.equal(existsSync(join(env.HOME, ".aws")), bedrock);
+    if (bedrock) {
+      assert.equal(env.AWS_PROFILE, "dev"); assert.equal(env.AWS_SECRET_ACCESS_KEY, direct ? "direct-secret" : undefined);
+      assert.equal(readFileSync(env.AWS_SHARED_CREDENTIALS_FILE, "utf8"), `[dev]\naws_access_key_id = ${direct ? "direct-id" : "selected-id"}\naws_secret_access_key = ${direct ? "direct-secret" : "selected-secret"}\n`);
+    } else for (const key of ["AWS_PROFILE", "AWS_SECRET_ACCESS_KEY", "AWS_CONFIG_FILE", "AWS_SHARED_CREDENTIALS_FILE"]) assert.equal(env[key], undefined);
+    // A replay before launch may rebuild the same private directory with a new
+    // native provider. Neither an old selected profile nor aliases may survive.
+    writeFileSync(join(config, "goose/config.yaml"), "active_provider: openai\n"); delete source.GOOSE_PROVIDER;
+    const switched = preparationEnvironment("goose", cwd, {}, source, root);
+    assert.equal(existsSync(join(switched.HOME, ".aws")), false); assert.equal(switched.AWS_PROFILE, undefined);
+    assert.equal(readFileSync(join(operator, ".aws/credentials"), "utf8"), credentials);
+  }
+});
+
+test("Goose native Bedrock config reaches initial and repair runners through CLI and structured preparation", async t => {
+  for (const cli of [false, true]) {
+    const w = world(), config = join(w.home, ".config/goose/config.yaml"); mkdirSync(dirname(config), { recursive: true }); mkdirSync(join(w.home, ".aws"));
+    const text = "active_provider: bedrock\nproviders:\n  bedrock:\n    model: selected-bedrock-model\n";
+    writeFileSync(config, text); writeFileSync(join(w.home, ".aws/config"), "[profile dev]\nregion = selected-region\n");
+    writeFileSync(join(w.home, ".aws/credentials"), "[dev]\naws_access_key_id = selected-id\naws_secret_access_key = selected-secret\n[other]\naws_secret_access_key = unrelated-secret\n");
+    w.ctx.env.AWS_PROFILE = "dev"; w.ctx.env.NPM_TOKEN = "unrelated-npm";
+    w.ctx.config.harness.goose = { bin: harnessBin(w.home, "goose") };
+    const runner = fakeRunner({ now: Date.now }), launch = runner.start; let starts = 0;
+    runner.start = async (name, cmd, args, opts) => {
+      starts++; const job = launch(name, cmd, args, opts);
+      assert.equal(opts.inheritEnv, false); assert.equal(opts.env.GOOSE_PROVIDER, undefined); assert.equal(opts.env.NPM_TOKEN, undefined);
+      assert.equal(readFileSync(join(opts.env.XDG_CONFIG_HOME, "goose/config.yaml"), "utf8"), text);
+      assert.equal(readFileSync(opts.env.AWS_SHARED_CREDENTIALS_FILE, "utf8"), "[dev]\naws_access_key_id = selected-id\naws_secret_access_key = selected-secret\n");
+      const task = taskStore(w.home).read(opts.cwd.split("/").at(-3));
+      runner.finish(gooseLines({ chunks: [starts === 1 ? "invalid-output" : JSON.stringify(draftFor(task))] }), { exit: 0 }); return job;
+    };
+    w.ctx.runnerFor = () => runner; const service = createTaskService(w.ctx);
+    const result = await (cli ? taskCommand(w.ctx, { args: ["prepare", REQUEST], values: { harness: "goose" }, service }) : service.prepare({ text: REQUEST, harness: "goose" }));
+    assert.equal(result.status, "ready"); assert.equal(result.preparation.repairs, 1); assert.equal(result.preparation.attempts.length, 2); assert.equal(starts, 2);
+    assert.equal(result.readiness.allow, true); assert.match(result.draft.text, /Explicit requirement r-2: "Do not add dependencies\."/);
+    assert.deepEqual(w.ctx.state.entries(), []); assert.equal(result.implementation, null); assert.equal(w.daemonCalls(), 0); assert.equal(readFileSync(config, "utf8"), text);
+    assert.deepEqual(await service.resume({ taskId: result.taskId, expectedRevision: result.revision }), result); assert.equal(starts, 2);
+    if (!cli) t.diagnostic(`Native Goose Bedrock fixture draft: ${result.draft.path}`);
+  }
+});
+
+test("ambiguous Goose native provider config stops before initial or repair launch with an explicit override remedy", async () => {
+  const invalid = ["active_provider: &chosen bedrock\n", "active_provider: bedrock\nactive_provider: openai\n", "active_provider: |\n  bedrock\n", "{active_provider: bedrock}\n", "<<: *shared\nactive_provider: openai\n"];
+  for (const text of invalid) {
+    const root = tempHome(), operator = join(root, "operator"), config = join(operator, ".config/goose/config.yaml"), cwd = join(root, "turn"); mkdirSync(dirname(config), { recursive: true }); writeFileSync(config, text);
+    mkdirSync(join(cwd, "home/.aws"), { recursive: true }); writeFileSync(join(cwd, "home/.aws/credentials"), "stale-secret");
+    assert.throws(() => preparationEnvironment("goose", cwd, {}, { HOME: operator }), e => e.code === "TASK_PREPARATION_ENV" && /set GOOSE_PROVIDER explicitly/.test(e.message));
+    assert.equal(existsSync(join(cwd, "home/.aws")), false); assert.equal(readFileSync(config, "utf8"), text);
+    const env = preparationEnvironment("goose", cwd, {}, { HOME: operator, GOOSE_PROVIDER: "openai" }); assert.equal(env.GOOSE_PROVIDER, "openai"); assert.equal(env.AWS_PROFILE, undefined);
+  }
+  for (const cli of [false, true]) for (const repair of [false, true]) {
+    const w = world(), config = join(w.home, ".config/goose/config.yaml"); mkdirSync(dirname(config), { recursive: true }); writeFileSync(config, repair ? "active_provider: openai\n" : invalid[0]);
+    w.ctx.config.harness.goose = { bin: harnessBin(w.home, "goose") };
+    const runner = fakeRunner({ now: Date.now }), launch = runner.start; let starts = 0;
+    runner.start = async (...args) => { starts++; const job = launch(...args); writeFileSync(config, invalid[0]); runner.finish(gooseLines({ chunks: ["invalid-output"] }), { exit: 0 }); return job; };
+    w.ctx.runnerFor = () => runner; const service = createTaskService(w.ctx);
+    const r = await (cli ? taskCommand(w.ctx, { args: ["prepare", REQUEST], values: { harness: "goose" }, service }) : service.prepare({ text: REQUEST, harness: "goose" }));
+    assert.equal(r.status, "blocked"); assert.match(r.failures[0], /set GOOSE_PROVIDER explicitly/); assert.equal(starts, repair ? 1 : 0); assert.equal(r.preparation.attempts.length, starts);
+    assert.equal(r.readiness, null); assert.equal(r.requirements[1].text, "Do not add dependencies."); assert.deepEqual(w.ctx.state.entries(), []);
+    assert.deepEqual(await service.resume({ taskId: r.taskId, expectedRevision: r.revision }), r); assert.equal(starts, repair ? 1 : 0);
   }
 });
 
