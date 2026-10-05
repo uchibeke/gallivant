@@ -11,7 +11,7 @@ import { start } from "../lib/commands/start.mjs";
 import { taskCommand, readTaskStdin, renderTask } from "../lib/commands/task.mjs";
 import { check, parsePrd } from "../lib/prd.mjs";
 import { makeRunner } from "../lib/run.mjs";
-import { runEnv, RUN_GIT_CONFIG } from "../lib/git.mjs";
+import { runEnv, RUN_GIT_CONFIG, makeGit } from "../lib/git.mjs";
 import { prepareTurn } from "../lib/task_prepare.mjs";
 import { preparationEnvironment } from "../lib/task_environment.mjs";
 import { renderDraft, collectCommands, draftPrompt, MAX_PREPARATION_PROMPT_BYTES } from "../lib/task_contract.mjs";
@@ -2783,6 +2783,70 @@ test("pre-clone snapshot failures release clean start ownership and can retry th
   w.ctx.writeSource=write;const started=await w.service.start({taskId:failed.taskId,expectedRevision:failed.revision});
   assert.equal(started.status,"started");assert.equal(clones,1);assert.equal(w.runners.get(id).started.length,1);
   assert.equal((await w.service.start({taskId:started.taskId,expectedRevision:started.revision})).implementation.run,started.implementation.run);assert.equal(clones,1);
+});
+
+test("CLI and structured known create preflight refusals release ownership and retry the same approved intake once", async t => {
+  for (const cli of [false, true]) for (const failure of ["stale", "parent", "credential", "identity"]) {
+    const w = world(); let envFailure = failure === "credential" || failure === "identity", clones = 0;
+    const input = { text: REQUEST, requestId: "create-preflight", context: ["AGENTS.md"] };
+    const readyResult = await w.service.prepare(input), id = `acme/widget/${readyResult.taskId}`;
+    const path = join(w.home, "worktrees", id), store = taskStore(w.home);
+    if (failure === "stale") { mkdirSync(join(path, ".git"), { recursive: true }); writeFileSync(join(path, "operator-file"), "stale checkout evidence"); }
+    if (failure === "parent") { mkdirSync(join(w.home, "worktrees")); writeFileSync(join(w.home, "worktrees/acme"), "parent conflict evidence"); }
+    const native = makeGit({ config: w.ctx.config,
+      credential: async () => { if (failure === "credential" && envFailure) throw Error("Clone credential resolution unavailable"); return null; },
+      identity: async () => { if (failure === "identity" && envFailure) throw Error("Clone identity resolution unavailable"); return null; },
+      exec: async (cmd, args) => { if (cmd === "gh") { clones++; mkdirSync(join(args[3], ".git"), { recursive: true }); } return { stdout: "" }; },
+    });
+    w.ctx.git.create = native.create;
+    const invoke = (service, r, run = false) => cli ? taskCommand(w.ctx, { args: ["start", r.taskId], values: { revision: String(r.revision), ...(run ? { run: true } : {}) }, service }) : service.start({ taskId: r.taskId, expectedRevision: r.revision, ...(run ? { run: true } : {}) });
+    const failed = await invoke(w.service, readyResult, true);
+    assert.equal(failed.status, "blocked"); assert.match(failed.failures[0], failure === "stale" ? /worktree already exists/ : failure === "parent" ? /EEXIST|ENOTDIR/ : /resolution unavailable/);
+    assert.doesNotMatch(failed.failures[0], /ownership.*retained/); assert.equal(failed.dispatchRecovery, null);
+    assert.equal(w.ctx.state.startClaim(id), null); assert.equal(store.read(failed.taskId).dispatchIntent, null);
+    assert.equal(store.read(failed.taskId).runAuthorized, true); assert.equal(failed.readiness.digest, readyResult.readiness.digest);
+    assert.equal(failed.draft.text, readyResult.draft.text); assert.deepEqual(failed.requirements, readyResult.requirements);
+    assert.equal(w.snapshots.get(id), readyResult.draft.text); assert.equal(w.sources.get(`${id}:AGENTS.md`), readFileSync(join(w.checkout, "AGENTS.md"), "utf8"));
+    assert.equal(clones, 0); assert.equal(w.runners.size, 0); assert.equal(w.daemonCalls(), 0);
+    if (failure === "stale") { assert.equal(readFileSync(join(path, "operator-file"), "utf8"), "stale checkout evidence"); rmSync(path, { recursive: true }); }
+    if (failure === "parent") { assert.equal(readFileSync(join(w.home, "worktrees/acme"), "utf8"), "parent conflict evidence"); rmSync(join(w.home, "worktrees/acme")); }
+    envFailure = false; w.ctx.state = makeState(w.home);
+    let daemonCalls = 0;
+    const reopened = createTaskService(w.ctx, { prepare: () => { throw Error("Retry must not plan again"); }, daemon: async () => { daemonCalls++; } });
+    assert.deepEqual(await reopened.prepare(input), failed, "replaying preparation does not automatically retry a blocked start");
+    const started = await invoke(reopened, failed);
+    assert.equal(started.status, "started"); assert.equal(started.taskId, readyResult.taskId); assert.equal(started.readiness.digest, readyResult.readiness.digest);
+    assert.equal(clones, 1); assert.equal(w.runners.get(id).started.length, 1); assert.equal(daemonCalls, 1);
+    assert.equal(readFileSync(join(path, "AGENTS.md"), "utf8"), readFileSync(join(w.checkout, "AGENTS.md"), "utf8"));
+    assert.equal((await invoke(reopened, started)).implementation.run, started.implementation.run); assert.equal(clones, 1); assert.equal(w.runners.get(id).started.length, 1);
+    if (!cli && failure === "stale") {
+      const evidence = join(w.home, "create-preflight-fixture.json");
+      writeJsonAtomic(evidence, { live: false, model_calls: 0, original: REQUEST, ready: readyResult, failed, started, clone_calls: clones, implementation_calls: w.runners.get(id).started.length });
+      t.diagnostic(`Known create refusal fixture: ${evidence}`);
+    }
+  }
+});
+
+test("native create failures after executor invocation retain intake ownership even after the clone is removed", async () => {
+  for (const phase of ["clone", "fetch", "checkout"]) {
+    const w = world(), readyResult = await w.service.prepare({ text: REQUEST });
+    const id = `acme/widget/${readyResult.taskId}`, path = join(w.home, "worktrees", id); let clones = 0;
+    w.ctx.git.create = makeGit({ config: w.ctx.config, exec: async (cmd, args) => {
+      if (cmd === "gh") { clones++; mkdirSync(join(path, ".git"), { recursive: true }); writeFileSync(join(path, "partial-evidence"), "owned clone"); }
+      if ((phase === "clone" && cmd === "gh") || args[0] === phase) throw Error(`Lost ${phase} acknowledgement`);
+      return { stdout: "" };
+    } }).create;
+    const failed = await w.service.start({ taskId: readyResult.taskId, expectedRevision: readyResult.revision, run: true });
+    const claim = w.ctx.state.startClaim(id);
+    assert.equal(failed.status, "blocked"); assert.match(failed.failures[0], /ownership.*retained/);
+    assert.equal(claim.clone.worktree, path); assert.equal(taskStore(w.home).read(failed.taskId).dispatchIntent.digest, readyResult.readiness.digest);
+    assert.equal(clones, 1); assert.equal(w.runners.size, 0); assert.equal(readFileSync(join(path, "partial-evidence"), "utf8"), "owned clone");
+    rmSync(path, { recursive: true }); w.ctx.state = makeState(w.home);
+    const reopened = createTaskService(w.ctx);
+    const retry = await reopened.start({ taskId: failed.taskId, expectedRevision: failed.revision });
+    assert.equal(retry.status, "blocked"); assert.match(retry.failures[0], /unresolved start claim/);
+    assert.deepEqual(w.ctx.state.startClaim(id), claim); assert.equal(clones, 1); assert.equal(w.runners.size, 0);
+  }
 });
 
 test("intake preserves base precedence without persisting a resolved default as an explicit override", async () => {

@@ -512,6 +512,30 @@ test("fromBranch reuses an existing checkout only when origin is exactly the rep
   assert.deepEqual(same.ran.at(-1), ["git", "checkout", "gallivant/export"]);
 });
 
+test("create classifies failures before executor invocation separately from possible partial clones", async () => {
+  for (const phase of ["stale", "parent", "credential", "identity", "clone", "fetch", "checkout"]) {
+    const root = tempHome(), config = { worktrees: join(root, "worktrees") }, path = join(config.worktrees, "acme/widget/export"), calls = [];
+    if (phase === "stale") mkdirSync(join(path, ".git"), { recursive: true });
+    if (phase === "parent") { mkdirSync(config.worktrees); writeFileSync(join(config.worktrees, "acme"), "parent is a file"); }
+    const git = makeGit({ config,
+      credential: async () => { if (phase === "credential") throw Error("Credential resolver failed"); return null; },
+      identity: async () => { if (phase === "identity") throw Error("Identity resolver failed"); return null; },
+      exec: async (cmd, args) => {
+        calls.push([cmd, ...args]);
+        if (cmd === "gh") mkdirSync(join(path, ".git"), { recursive: true });
+        if ((cmd === "gh" && phase === "clone") || args[0] === phase) throw Error(`${phase} executor failed`);
+        return { stdout: "" };
+      },
+    });
+    const attempted = ["clone", "fetch", "checkout"].includes(phase);
+    await assert.rejects(() => git.create({ nameWithOwner: "acme/widget", prdId: "export", base: "main" }), error => {
+      assert.equal(error.cloneAttempted, attempted, phase); return true;
+    });
+    assert.equal(calls.some(([cmd]) => cmd === "gh"), attempted, phase);
+    if (!attempted) assert.deepEqual(calls, [], "no executor was invoked");
+  }
+});
+
 test("the cursor carries the keys handled at its own second, and drops them the moment it moves", () => {
   const base = { since: "2026-09-24T02:00:05.000Z", dispatched: ["review:1"], fixed_sha: "a1b2c3d", checks_sha: "a1b2c3d" };
   // Same second, spelled differently: the list is kept and added to, never duplicated.

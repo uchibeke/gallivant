@@ -295,9 +295,14 @@ from CLI input or changing the accepted state.
 Missing launch acknowledgements reconcile the recorded job; uncertain
 implementation acceptance retains its start claim/intent and requires inspection
 rather than another launch.
-For a known preflight failure before cloning (for example missing GitHub credentials),
+For a known preflight failure before cloning (for example missing GitHub credentials,
+a stale worktree refused before the clone command, a parent-path conflict, or clone
+environment resolution failure),
 fix its cause and explicitly call `task start` with the saved current revision.
-Existing run authorization is retained. Once cloning is attempted, the shared
+The shared start claim and intake dispatch intent are released only when the
+creator confirms that no clone executor was invoked. Stale operator files are
+preserved for inspection; the refusal never deletes them. Existing run authorization,
+requirements and approved snapshots are retained. Once cloning is attempted, the shared
 start claim records the planned worktree, branch and base and survives clone,
 source-delivery or later pre-spawn failures. `dispatchRecovery` exposes that clone
 in structured results and CLI output points to it. Inspect the retained clone,
