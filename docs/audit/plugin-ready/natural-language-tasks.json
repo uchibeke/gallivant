@@ -1,8 +1,8 @@
 {
   "version": 1,
   "task_id": "task-c93def694fe561146955c469",
-  "implementation_commit": "5bb20ad67108558399b8ec2b6a5b2d3c322fcbf8",
-  "recorded_at": "2026-10-05T18:44:50.384704Z",
+  "implementation_commit": "5829bc9e6729f364027ec7f01a804362cd6bd7b9",
+  "recorded_at": "2026-10-05T19:11:48.775889Z",
   "versions": {
     "package": "0.1.0",
     "node": "v22.22.0",
@@ -13,26 +13,26 @@
     {
       "command": "npm test",
       "exit_code": 0,
-      "raw_log": "/private/tmp/natural-language-tasks-claude-mode-npm-test-final.log",
-      "tests": 879,
-      "passed": 879
+      "raw_log": "/private/tmp/natural-language-tasks-validate-recovery-npm-test.log",
+      "tests": 882,
+      "passed": 882
     },
     {
       "command": "npm run lint",
       "exit_code": 0,
-      "raw_log": "/private/tmp/natural-language-tasks-claude-mode-lint-final.log"
+      "raw_log": "/private/tmp/natural-language-tasks-validate-recovery-lint.log"
     },
     {
       "command": "npm run test:task-intake",
       "exit_code": 0,
-      "raw_log": "/private/tmp/natural-language-tasks-claude-mode-intake.log",
-      "tests": 132,
-      "passed": 132
+      "raw_log": "/private/tmp/natural-language-tasks-validate-recovery-intake.log",
+      "tests": 135,
+      "passed": 135
     },
     {
       "command": "git diff --check",
       "exit_code": 0,
-      "raw_log": "/private/tmp/natural-language-tasks-claude-mode-diff-check-final.log",
+      "raw_log": "/private/tmp/natural-language-tasks-validate-recovery-diff-check.log",
       "observed_output": "empty output"
     }
   ],
@@ -711,6 +711,21 @@
       "test_name": "Claude authentication selection failures stop CLI and structured initial answer and repair preparation without retries",
       "outcome": "passed",
       "evidence": "test/task-intake.test.mjs::Claude authentication selection failures stop CLI and structured initial answer and repair preparation without retries"
+    },
+    {
+      "test_name": "CLI and structured validation refuse interrupted final-answer drafts while preserving owned preparation recovery",
+      "outcome": "passed",
+      "evidence": "test/task-intake.test.mjs::CLI and structured validation refuse interrupted final-answer drafts while preserving owned preparation recovery"
+    },
+    {
+      "test_name": "preparing tasks without a draft refuse validation before readiness or recovery work and remain resumable",
+      "outcome": "passed",
+      "evidence": "test/task-intake.test.mjs::preparing tasks without a draft refuse validation before readiness or recovery work and remain resumable"
+    },
+    {
+      "test_name": "validation refusal preserves interrupted preparation denial and deadline settlement without another turn",
+      "outcome": "passed",
+      "evidence": "test/task-intake.test.mjs::validation refusal preserves interrupted preparation denial and deadline settlement without another turn"
     }
   ],
   "representative_fixture": {
@@ -737,8 +752,8 @@
     ]
   },
   "source_review": {
-    "implementation_revision": "5bb20ad67108558399b8ec2b6a5b2d3c322fcbf8",
-    "representative_output_inspected": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-X2nH2Z/tasks/task-cee14c6977d7cc9ac257e300/drafts/revision-5/docs/prds/task-cee14c6977d7cc9ac257e300.md",
+    "implementation_revision": "5829bc9e6729f364027ec7f01a804362cd6bd7b9",
+    "representative_output_inspected": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-gvZAL3/tasks/task-908bcecf49a1dcdd925b57dc/drafts/revision-4/docs/prds/task-908bcecf49a1dcdd925b57dc.md",
     "boundaries_checked": [
       "CLI and structured clients",
       "request/answer revision writes",
@@ -822,7 +837,10 @@
       "Claude mode selection precedes credential forwarding and profile copying. Exactly one documented enabled cloud flag admits only its existing AWS/Google/Foundry authentication; direct tokens and both login files are absent in cloud modes, while disabled cloud flags preserve direct authentication and configured model/permission bytes. Multiple or unknown selectors refuse without a provider fallback.",
       "The generic adapter allowlist no longer includes direct Claude credentials. The shared preparation environment admits those keys only for direct mode, validates native settings as JSON, and refuses provider/authentication env overrides with an export/dedicated-profile remedy. Existing selectedResource, carry, AWS profile and ADC helpers retain path and private-copy checks; no ordinary implementation environment or model/provider/permission default changed.",
       "Rebuilding removes old private Claude login and cloud credential copies before mode/settings refusal. Entire legacy private directory aliases are removed as entries, preserving native files; selected native/private overlap is checked before cleanup. Unselected login aliases are never read in cloud mode, while direct selected login aliases still refuse.",
-      "CLI and structured initial preparation, answers and repair share the same environment and refusal path. Readiness/canonical output retain owner constraints and exact source hashes; successful answer replay launches no extra turn. Refusals persist TASK_PREPARATION_ENV, retain owned usage and accepted requirements, create no launch intent for the refused turn, and neither repair/retry automatically nor dispatch implementation even with saved run authorization."
+      "CLI and structured initial preparation, answers and repair share the same environment and refusal path. Readiness/canonical output retain owner constraints and exact source hashes; successful answer replay launches no extra turn. Refusals persist TASK_PREPARATION_ENV, retain owned usage and accepted requirements, create no launch intent for the refused turn, and neither repair/retry automatically nor dispatch implementation even with saved run authorization.",
+      "Public validate checks the expected revision and preparing state before savedDraft, canonical validation or readiness. TASK_NOT_READY gives the same versioned resume-first error through CLI and structured callers. Refusal preserves the accepted answers, operation identity, task revision, older draft and owned preparation state; it neither marks the intake blocked nor launches recovery or dispatch.",
+      "Initial preparation, answer replay and resume already use prepareInternal. The final-answer checkpoint and running/completed/settled/lost-ack turns remain owned by prepareTurn and the existing durable runner. Explicit resume or duplicate-answer recovery settles and consumes the existing output, retains recorded usage and obtains one exact readiness decision. Premature start remains refused, and saved run authorization dispatches once through the ordinary start/daemon path.",
+      "Refusal before the first draft leaves the intake resumable. Stale revisions remain conflicts. Owned denied and late output settle with cost, usage and log evidence before blocking; they cannot repair, relaunch, create a readiness pass or dispatch even with saved run authorization. Duplicate blocked replies and resumes preserve the failure. Normal ready/started validation and hand-authored checker/start behavior remain unchanged."
     ],
     "regressions": [
       "preparation uses the existing runner in a separate workspace, records usage and reconciles a lost response",
@@ -947,7 +965,10 @@
       "test/task-intake.test.mjs::Claude cloud preparation excludes direct credentials and login state while preserving selected authentication and mode cleanup",
       "test/task-intake.test.mjs::Claude ambiguous modes and settings credential overrides refuse before copying auth and clean reused private state",
       "test/task-intake.test.mjs::Claude selected cloud authentication reaches CLI and structured initial answer and repair turns without direct account secrets",
-      "test/task-intake.test.mjs::Claude authentication selection failures stop CLI and structured initial answer and repair preparation without retries"
+      "test/task-intake.test.mjs::Claude authentication selection failures stop CLI and structured initial answer and repair preparation without retries",
+      "test/task-intake.test.mjs::CLI and structured validation refuse interrupted final-answer drafts while preserving owned preparation recovery",
+      "test/task-intake.test.mjs::preparing tasks without a draft refuse validation before readiness or recovery work and remain resumable",
+      "test/task-intake.test.mjs::validation refusal preserves interrupted preparation denial and deadline settlement without another turn"
     ],
     "literal_output_inspected": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-YT4kUE/tasks/task-9f538f3b60078088f631d887/drafts/revision-5/docs/prds/task-9f538f3b60078088f631d887.md",
     "answer_context_output_inspected": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-GyBbWY/tasks/task-d21c94c7a17012e1454c6854/drafts/revision-4/docs/prds/task-d21c94c7a17012e1454c6854.md",
@@ -1149,7 +1170,8 @@
     "owner_derived_scope_output_inspected": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-Vt73zE/tasks/task-a0503d56f0c9910ddb9612b0/drafts/revision-4/docs/prds/task-a0503d56f0c9910ddb9612b0.md",
     "clarification_capacity_output_inspected": "/private/tmp/natural-language-tasks-clarification-output-review.json",
     "subproject_manifest_output_inspected": "/private/tmp/natural-language-tasks-subprojects-output-review.json",
-    "claude_selected_mode_output_inspected": "/private/tmp/natural-language-tasks-claude-mode-output-review-profile-final.json"
+    "claude_selected_mode_output_inspected": "/private/tmp/natural-language-tasks-claude-mode-output-review-profile-final.json",
+    "validation_recovery_output_inspected": "/private/tmp/natural-language-tasks-validate-recovery-output-review.json"
   },
   "live": {
     "status": "unverified",
@@ -1673,6 +1695,16 @@
       ],
       "evidence": "docs/audit/plugin-ready/natural-language-tasks.json claude_selected_mode_case",
       "observed": "Claude preparation now scopes direct tokens and login snapshots to direct mode. Bedrock, Vertex and Foundry retain only their selected authentication with model/permission settings preserved. Ambiguous mode flags and native settings authentication overrides stop before model launch with actionable guidance. Private login/cloud material is cleared on rebuild, legacy aliases are removed without deleting native files, and profile overlap is rejected before cleanup. Four regressions, 13 final focused checks, 879 final full-suite tests and 132 intake tests pass; lint and whitespace checks pass. The reviewed 305-word brief preserves the original request, saved answer and dependency constraint, exact readiness and three scoped offline preparation turns with recorded synthetic usage and no implementation dispatch. Model calls are zero. Native enforcement and live qualification remain unverified."
+    },
+    {
+      "comment_id": 4187649334,
+      "files": [
+        "lib/tasks.mjs",
+        "test/task-intake.test.mjs",
+        "docs/tasks.md"
+      ],
+      "evidence": "docs/audit/plugin-ready/natural-language-tasks.json validation_recovery_case",
+      "observed": "Validation now refuses preparing tasks before inspecting a stale or absent draft and returns TASK_NOT_READY with an explicit resume-first remedy. The accepted final answer, revision, operation identity and owned run remain unchanged. CLI and structured recovery settle running, completed, settled and lost-ack turns without another preparation launch; saved run authorization dispatches once. Denials and deadlines retain their existing settlement evidence and refusal behavior. Three new regressions, 16 focused checks, 882 full-suite tests and 135 intake tests pass; lint and whitespace checks pass. The reviewed 309-word recovered brief retains the original request, CSV-only clarification and dependency constraint, exact readiness, recorded synthetic usage and no unauthorized implementation. Model calls are zero; native enforcement and live qualification remain unverified."
     }
   ],
   "offline_credential_check": {
@@ -1957,72 +1989,56 @@
         {
           "command": "npm test",
           "exit_code": 0,
-          "raw_log": "/private/tmp/natural-language-tasks-claude-mode-npm-test-final.log",
-          "tests": 879,
-          "passed": 879
+          "raw_log": "/private/tmp/natural-language-tasks-validate-recovery-npm-test.log",
+          "tests": 882,
+          "passed": 882
         },
         {
           "command": "npm run lint",
           "exit_code": 0,
-          "raw_log": "/private/tmp/natural-language-tasks-claude-mode-lint-final.log"
+          "raw_log": "/private/tmp/natural-language-tasks-validate-recovery-lint.log"
         },
         {
           "command": "npm run test:task-intake",
           "exit_code": 0,
-          "raw_log": "/private/tmp/natural-language-tasks-claude-mode-intake.log",
-          "tests": 132,
-          "passed": 132
+          "raw_log": "/private/tmp/natural-language-tasks-validate-recovery-intake.log",
+          "tests": 135,
+          "passed": 135
         },
         {
           "command": "git diff --check",
           "exit_code": 0,
-          "raw_log": "/private/tmp/natural-language-tasks-claude-mode-diff-check-final.log",
+          "raw_log": "/private/tmp/natural-language-tasks-validate-recovery-diff-check.log",
           "observed_output": "empty output"
         }
       ],
       "focused_regressions": {
-        "command": "node --test --test-name-pattern='Claude cloud preparation|Claude ambiguous modes|Claude selected cloud authentication|Claude authentication selection failures|Foundry|cloud provider|preparation environments admit|relative provider files|Gemini Vertex|Bedrock snapshots|direct Bedrock|Bedrock preparation' test/task-intake.test.mjs",
+        "command": "node --test --test-name-pattern='validation refuse interrupted|without a draft refuse validation|validation refusal preserves interrupted|legacy interrupted answers|idempotent preparation and answer retries|idempotent ready retries|authorized ready retries|preparation uses the existing runner|recovered Claude preparation denials|recovered completed preparation|settled preparation replay|real checker failures|CLI and structured preparation' test/task-intake.test.mjs",
         "exit_code": 0,
-        "raw_log": "/private/tmp/natural-language-tasks-claude-mode-targeted-profile-final.log",
-        "tests": 13,
-        "passed": 13
+        "raw_log": "/private/tmp/natural-language-tasks-validate-recovery-targeted.log",
+        "tests": 16,
+        "passed": 16
       },
       "initial_runs": [
         {
-          "command": "node --test --test-name-pattern='Claude cloud preparation|Claude ambiguous modes|Claude selected cloud authentication' test/task-intake.test.mjs",
+          "command": "node --test --test-name-pattern='validation refuse interrupted|without a draft refuse validation|validation refusal preserves interrupted' test/task-intake.test.mjs",
           "exit_code": 1,
-          "raw_log": "/private/tmp/natural-language-tasks-claude-mode-red.log",
+          "raw_log": "/private/tmp/natural-language-tasks-validate-recovery-red.log",
           "tests": 3,
           "passed": 0,
           "failed": 3,
-          "observed": "Prior source exposed direct Claude credentials in cloud modes, accepted settings authentication overrides, and blocked the preparation fixture when its child asserted that unrelated direct credentials must be absent."
+          "observed": "Prior validation returned a blocked result after checking the stale final-answer draft instead of refusing incomplete preparation; the absent-draft error did not direct callers to resume. All three new regressions failed before the guard was added."
         },
         {
-          "command": "node --test --test-name-pattern='Claude cloud preparation|Claude ambiguous modes|Claude selected cloud authentication|Claude authentication selection failures|Foundry|cloud provider|preparation environments admit|relative provider files|Gemini Vertex|Bedrock snapshots|direct Bedrock|Bedrock preparation' test/task-intake.test.mjs",
+          "command": "node --test --test-name-pattern='validation refuse interrupted|without a draft refuse validation|validation refusal preserves interrupted' test/task-intake.test.mjs",
           "exit_code": 0,
-          "raw_log": "/private/tmp/natural-language-tasks-claude-mode-targeted.log",
-          "tests": 13,
-          "passed": 13,
-          "observed": "First focused pass preceded the final legacy directory-alias cleanup and native/private overlap guard."
-        },
-        {
-          "command": "node --test --test-name-pattern='Claude cloud preparation|Claude ambiguous modes|Claude selected cloud authentication|Claude authentication selection failures|Foundry|cloud provider|preparation environments admit|relative provider files|Gemini Vertex|Bedrock snapshots|direct Bedrock|Bedrock preparation' test/task-intake.test.mjs",
-          "exit_code": 0,
-          "raw_log": "/private/tmp/natural-language-tasks-claude-mode-targeted-final.log",
-          "tests": 13,
-          "passed": 13,
-          "observed": "Legacy alias cleanup passed; native/private overlap was then checked before cleanup and final suites were rerun."
-        },
-        {
-          "command": "npm test",
-          "exit_code": 0,
-          "raw_log": "/private/tmp/natural-language-tasks-claude-mode-npm-test.log",
-          "tests": 879,
-          "passed": 879,
-          "observed": "Full pass preceded the pre-cleanup native/private overlap guard. Final full, focused and intake checks use the final source."
+          "raw_log": "/private/tmp/natural-language-tasks-validate-recovery-targeted-initial.log",
+          "tests": 3,
+          "passed": 3,
+          "observed": "First guard pass preceded the added premature-start and duplicate-answer recovery checks. The final focused and mandatory suites cover them."
         }
       ],
-      "observed": "Claude preparation now scopes direct tokens and login snapshots to direct mode. Bedrock, Vertex and Foundry retain only their selected authentication with model/permission settings preserved. Ambiguous mode flags and native settings authentication overrides stop before model launch with actionable guidance. Private login/cloud material is cleared on rebuild, legacy aliases are removed without deleting native files, and profile overlap is rejected before cleanup. Four regressions, 13 final focused checks, 879 final full-suite tests and 132 intake tests pass; lint and whitespace checks pass. The reviewed 305-word brief preserves the original request, saved answer and dependency constraint, exact readiness and three scoped offline preparation turns with recorded synthetic usage and no implementation dispatch. Model calls are zero. Native enforcement and live qualification remain unverified.",
+      "observed": "Validation now refuses preparing tasks before inspecting a stale or absent draft and returns TASK_NOT_READY with an explicit resume-first remedy. The accepted final answer, revision, operation identity and owned run remain unchanged. CLI and structured recovery settle running, completed, settled and lost-ack turns without another preparation launch; saved run authorization dispatches once. Denials and deadlines retain their existing settlement evidence and refusal behavior. Three new regressions, 16 focused checks, 882 full-suite tests and 135 intake tests pass; lint and whitespace checks pass. The reviewed 309-word recovered brief retains the original request, CSV-only clarification and dependency constraint, exact readiness, recorded synthetic usage and no unauthorized implementation. Model calls are zero; native enforcement and live qualification remain unverified.",
       "model_calls": 0
     },
     "previous_batches": [
@@ -2985,6 +3001,79 @@
           }
         ],
         "observed": "Explicit subproject checks now pin selected nested manifests and matching manager lockfiles through the shared command collector. Colocated JavaScript text locks enter the existing bounded, path-safe snapshot flow at preparation and answer time. CLI and structured repair, saved validation and fresh-base dispatch enforce the same rule, including sibling selected Go/Cargo/Make/pytest manifests without expanding automatic command inference. Four new regressions, 15 focused checks, 875 full-suite tests and 128 intake tests pass; lint and diff checks pass. A reviewed 233-word canonical fixture retains both owner constraints, exact readiness and delivered source bytes, then runs the explicit npm subproject check successfully in its disposable checkout. Model calls are zero; native enforcement and live qualification remain unverified.",
+        "model_calls": 0
+      },
+      {
+        "commands": [
+          {
+            "command": "npm test",
+            "exit_code": 0,
+            "raw_log": "/private/tmp/natural-language-tasks-claude-mode-npm-test-final.log",
+            "tests": 879,
+            "passed": 879
+          },
+          {
+            "command": "npm run lint",
+            "exit_code": 0,
+            "raw_log": "/private/tmp/natural-language-tasks-claude-mode-lint-final.log"
+          },
+          {
+            "command": "npm run test:task-intake",
+            "exit_code": 0,
+            "raw_log": "/private/tmp/natural-language-tasks-claude-mode-intake.log",
+            "tests": 132,
+            "passed": 132
+          },
+          {
+            "command": "git diff --check",
+            "exit_code": 0,
+            "raw_log": "/private/tmp/natural-language-tasks-claude-mode-diff-check-final.log",
+            "observed_output": "empty output"
+          }
+        ],
+        "focused_regressions": {
+          "command": "node --test --test-name-pattern='Claude cloud preparation|Claude ambiguous modes|Claude selected cloud authentication|Claude authentication selection failures|Foundry|cloud provider|preparation environments admit|relative provider files|Gemini Vertex|Bedrock snapshots|direct Bedrock|Bedrock preparation' test/task-intake.test.mjs",
+          "exit_code": 0,
+          "raw_log": "/private/tmp/natural-language-tasks-claude-mode-targeted-profile-final.log",
+          "tests": 13,
+          "passed": 13
+        },
+        "initial_runs": [
+          {
+            "command": "node --test --test-name-pattern='Claude cloud preparation|Claude ambiguous modes|Claude selected cloud authentication' test/task-intake.test.mjs",
+            "exit_code": 1,
+            "raw_log": "/private/tmp/natural-language-tasks-claude-mode-red.log",
+            "tests": 3,
+            "passed": 0,
+            "failed": 3,
+            "observed": "Prior source exposed direct Claude credentials in cloud modes, accepted settings authentication overrides, and blocked the preparation fixture when its child asserted that unrelated direct credentials must be absent."
+          },
+          {
+            "command": "node --test --test-name-pattern='Claude cloud preparation|Claude ambiguous modes|Claude selected cloud authentication|Claude authentication selection failures|Foundry|cloud provider|preparation environments admit|relative provider files|Gemini Vertex|Bedrock snapshots|direct Bedrock|Bedrock preparation' test/task-intake.test.mjs",
+            "exit_code": 0,
+            "raw_log": "/private/tmp/natural-language-tasks-claude-mode-targeted.log",
+            "tests": 13,
+            "passed": 13,
+            "observed": "First focused pass preceded the final legacy directory-alias cleanup and native/private overlap guard."
+          },
+          {
+            "command": "node --test --test-name-pattern='Claude cloud preparation|Claude ambiguous modes|Claude selected cloud authentication|Claude authentication selection failures|Foundry|cloud provider|preparation environments admit|relative provider files|Gemini Vertex|Bedrock snapshots|direct Bedrock|Bedrock preparation' test/task-intake.test.mjs",
+            "exit_code": 0,
+            "raw_log": "/private/tmp/natural-language-tasks-claude-mode-targeted-final.log",
+            "tests": 13,
+            "passed": 13,
+            "observed": "Legacy alias cleanup passed; native/private overlap was then checked before cleanup and final suites were rerun."
+          },
+          {
+            "command": "npm test",
+            "exit_code": 0,
+            "raw_log": "/private/tmp/natural-language-tasks-claude-mode-npm-test.log",
+            "tests": 879,
+            "passed": 879,
+            "observed": "Full pass preceded the pre-cleanup native/private overlap guard. Final full, focused and intake checks use the final source."
+          }
+        ],
+        "observed": "Claude preparation now scopes direct tokens and login snapshots to direct mode. Bedrock, Vertex and Foundry retain only their selected authentication with model/permission settings preserved. Ambiguous mode flags and native settings authentication overrides stop before model launch with actionable guidance. Private login/cloud material is cleared on rebuild, legacy aliases are removed without deleting native files, and profile overlap is rejected before cleanup. Four regressions, 13 final focused checks, 879 final full-suite tests and 132 intake tests pass; lint and whitespace checks pass. The reviewed 305-word brief preserves the original request, saved answer and dependency constraint, exact readiness and three scoped offline preparation turns with recorded synthetic usage and no implementation dispatch. Model calls are zero. Native enforcement and live qualification remain unverified.",
         "model_calls": 0
       }
     ]
@@ -5260,5 +5349,182 @@
     ],
     "observed": "Claude preparation now scopes direct tokens and login snapshots to direct mode. Bedrock, Vertex and Foundry retain only their selected authentication with model/permission settings preserved. Ambiguous mode flags and native settings authentication overrides stop before model launch with actionable guidance. Private login/cloud material is cleared on rebuild, legacy aliases are removed without deleting native files, and profile overlap is rejected before cleanup. Four regressions, 13 final focused checks, 879 final full-suite tests and 132 intake tests pass; lint and whitespace checks pass. The reviewed 305-word brief preserves the original request, saved answer and dependency constraint, exact readiness and three scoped offline preparation turns with recorded synthetic usage and no implementation dispatch. Model calls are zero. Native enforcement and live qualification remain unverified.",
     "live_limitation": "Native preparation enforcement (ac-4) and G8 live qualification (ac-12) remain unverified; prior external failures and exact remedies are preserved and no unchanged blocked capability was retried."
+  },
+  "validation_recovery_case": {
+    "met": true,
+    "implementation_commit": "5829bc9e6729f364027ec7f01a804362cd6bd7b9",
+    "review_id": 5419239646,
+    "comment_ids": [
+      4187649334
+    ],
+    "model_calls": 0,
+    "source_refs": [
+      "lib/tasks.mjs",
+      "lib/commands/task.mjs",
+      "lib/task_prepare.mjs",
+      "lib/task_store.mjs",
+      "lib/run.mjs",
+      "test/task-intake.test.mjs",
+      "docs/tasks.md",
+      "docs/prds/natural-language-tasks.md",
+      "docs/plans/plugin-ready-gallivant.md"
+    ],
+    "regressions": [
+      "test/task-intake.test.mjs::CLI and structured validation refuse interrupted final-answer drafts while preserving owned preparation recovery",
+      "test/task-intake.test.mjs::preparing tasks without a draft refuse validation before readiness or recovery work and remain resumable",
+      "test/task-intake.test.mjs::validation refusal preserves interrupted preparation denial and deadline settlement without another turn"
+    ],
+    "initial_runs": [
+      {
+        "command": "node --test --test-name-pattern='validation refuse interrupted|without a draft refuse validation|validation refusal preserves interrupted' test/task-intake.test.mjs",
+        "exit_code": 1,
+        "raw_log": "/private/tmp/natural-language-tasks-validate-recovery-red.log",
+        "tests": 3,
+        "passed": 0,
+        "failed": 3,
+        "observed": "Prior validation returned a blocked result after checking the stale final-answer draft instead of refusing incomplete preparation; the absent-draft error did not direct callers to resume. All three new regressions failed before the guard was added."
+      },
+      {
+        "command": "node --test --test-name-pattern='validation refuse interrupted|without a draft refuse validation|validation refusal preserves interrupted' test/task-intake.test.mjs",
+        "exit_code": 0,
+        "raw_log": "/private/tmp/natural-language-tasks-validate-recovery-targeted-initial.log",
+        "tests": 3,
+        "passed": 3,
+        "observed": "First guard pass preceded the added premature-start and duplicate-answer recovery checks. The final focused and mandatory suites cover them."
+      }
+    ],
+    "focused_regression": {
+      "command": "node --test --test-name-pattern='validation refuse interrupted|without a draft refuse validation|validation refusal preserves interrupted|legacy interrupted answers|idempotent preparation and answer retries|idempotent ready retries|authorized ready retries|preparation uses the existing runner|recovered Claude preparation denials|recovered completed preparation|settled preparation replay|real checker failures|CLI and structured preparation' test/task-intake.test.mjs",
+      "exit_code": 0,
+      "raw_log": "/private/tmp/natural-language-tasks-validate-recovery-targeted.log",
+      "tests": 16,
+      "passed": 16
+    },
+    "output_review_command_log": "/private/tmp/natural-language-tasks-validate-recovery-output-review.log",
+    "representative_output": {
+      "live": false,
+      "model_calls": 0,
+      "record": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-gvZAL3/validate-recovery-fixture.json",
+      "path": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-gvZAL3/tasks/task-908bcecf49a1dcdd925b57dc/drafts/revision-4/docs/prds/task-908bcecf49a1dcdd925b57dc.md",
+      "previous_draft": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-gvZAL3/tasks/task-908bcecf49a1dcdd925b57dc/drafts/revision-2/docs/prds/task-908bcecf49a1dcdd925b57dc.md",
+      "words": 309,
+      "sha256": "abeb02f749fc47bc8b29b0bae4848aef3ed68dbf45d0f18a4ffd966896653f20",
+      "original": "Add CSV export for the widget table.\nDo not add dependencies.",
+      "requirements": [
+        {
+          "id": "r-1",
+          "text": "Add CSV export for the widget table."
+        },
+        {
+          "id": "r-2",
+          "text": "Do not add dependencies."
+        },
+        {
+          "id": "a-q-r-1-1",
+          "text": "Use CSV only."
+        }
+      ],
+      "answers": {
+        "q-r-1": "Use CSV only."
+      },
+      "mapping": [
+        {
+          "requirementId": "r-1",
+          "criteria": [
+            "ac-1"
+          ],
+          "resolvedBy": "q-r-1"
+        },
+        {
+          "requirementId": "r-2",
+          "criteria": [
+            "ac-2"
+          ]
+        },
+        {
+          "requirementId": "a-q-r-1-1",
+          "criteria": [
+            "ac-3"
+          ]
+        }
+      ],
+      "sources": [
+        {
+          "path": "AGENTS.md",
+          "hash": "03c3e02659634826151da10c34ca31473b2ca7542d54de33cf169678555d7b34"
+        },
+        {
+          "path": "package.json",
+          "hash": "4f05b82adac690557b1bef490211ec333ff378ca9dbe8fc0a58624bddd3ae281"
+        }
+      ],
+      "readiness": {
+        "allow": true,
+        "hash": "abeb02f749fc47bc8b29b0bae4848aef3ed68dbf45d0f18a4ffd966896653f20",
+        "digest": "464d8916fb736c014d9a89c776c9f97f9cb3e04ce586e08e6ba97f6dfa8d5a55",
+        "decisionId": null,
+        "report": "ok   path          lives under docs/prds/ with a lowercase-dash filename\nok   frontmatter   frontmatter has status (draft|ready) and harness (claude|codex|gemini|opencode|goose)\nok   title         one H1 title, 8 to 80 characters\nok   problem       ## Problem: at least 40 words on what is wrong today and for whom\nok   stories       ## User stories: every bullet reads 'As a <who>, I want <what>, so that <why>'\nok   criteria      ## Acceptance criteria: every bullet is Given / When / Then, at least one per story\nok   verify        ## Verify: at least one command the session must run green; no sudo, rm -rf or piped installers\nok   look          ## Where to look: files or directories to start from, or 'none'\nok   scope         ## Out of scope: at least one bullet\nok   placeholders  no TODO, TBD, FIXME, ???, lorem or <angle-bracket> placeholders anywhere\nok   size          under 1,500 words; a PRD is one pull request, split anything bigger\nok   sources       every file in `sources` exists, is readable text, and is named inside the repository\n\ntask-908bcecf49a1dcdd925b57dc: ready to start.\nAPort decision (local): allow\nstatus set to ready. Commit the PRD when you commit the rest of your work.",
+        "revision": 5
+      },
+      "implementation": null,
+      "refusal": {
+        "code": "TASK_NOT_READY",
+        "version": 1,
+        "saved_state_unchanged": true
+      },
+      "preparation": {
+        "repairs": 0,
+        "attempts": [
+          {
+            "name": "prepare-1",
+            "boundary": "claude-no-tools-v1",
+            "cwd": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-gvZAL3",
+            "run": "owned-prepare",
+            "startedAt": 1791227200686,
+            "deadline": 1791227210696,
+            "settled": true,
+            "consumed": true,
+            "cost": 0.37,
+            "usage": [
+              {
+                "input_tokens": 12,
+                "output_tokens": 5
+              }
+            ],
+            "endedAt": 1791227200803,
+            "completionInferred": false,
+            "elapsedMs": 117,
+            "session": "6f1c2d3e-1111-4111-8111-111111111111",
+            "log": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-gvZAL3/interrupted-runs/owned-prepare/job.log",
+            "ok": true,
+            "error": null
+          }
+        ],
+        "allowance": {
+          "budgetUsd": 5,
+          "runtimeMs": 1800000
+        }
+      },
+      "checker_passed": true,
+      "canonical_validation_passed": true,
+      "readiness_digest_matches": true,
+      "accepted_state_preserved": true,
+      "owned_output_consumed": true,
+      "new_preparation_launches": 0,
+      "decisions": 1,
+      "daemon_calls": 0,
+      "reviewed_against": [
+        "docs/prds/natural-language-tasks.md",
+        "docs/plans/plugin-ready-gallivant.md"
+      ],
+      "limitation": "Deterministic persisted runner artifacts and liveness fixtures; no live model call, actual provider child or installed native enforcement qualification."
+    },
+    "boundaries_checked": [
+      "Public validate checks the expected revision and preparing state before savedDraft, canonical validation or readiness. TASK_NOT_READY gives the same versioned resume-first error through CLI and structured callers. Refusal preserves the accepted answers, operation identity, task revision, older draft and owned preparation state; it neither marks the intake blocked nor launches recovery or dispatch.",
+      "Initial preparation, answer replay and resume already use prepareInternal. The final-answer checkpoint and running/completed/settled/lost-ack turns remain owned by prepareTurn and the existing durable runner. Explicit resume or duplicate-answer recovery settles and consumes the existing output, retains recorded usage and obtains one exact readiness decision. Premature start remains refused, and saved run authorization dispatches once through the ordinary start/daemon path.",
+      "Refusal before the first draft leaves the intake resumable. Stale revisions remain conflicts. Owned denied and late output settle with cost, usage and log evidence before blocking; they cannot repair, relaunch, create a readiness pass or dispatch even with saved run authorization. Duplicate blocked replies and resumes preserve the failure. Normal ready/started validation and hand-authored checker/start behavior remain unchanged."
+    ],
+    "observed": "Validation now refuses preparing tasks before inspecting a stale or absent draft and returns TASK_NOT_READY with an explicit resume-first remedy. The accepted final answer, revision, operation identity and owned run remain unchanged. CLI and structured recovery settle running, completed, settled and lost-ack turns without another preparation launch; saved run authorization dispatches once. Denials and deadlines retain their existing settlement evidence and refusal behavior. Three new regressions, 16 focused checks, 882 full-suite tests and 135 intake tests pass; lint and whitespace checks pass. The reviewed 309-word recovered brief retains the original request, CSV-only clarification and dependency constraint, exact readiness, recorded synthetic usage and no unauthorized implementation. Model calls are zero; native enforcement and live qualification remain unverified.",
+    "live_limitation": "Native preparation enforcement (ac-4) and G8 live qualification (ac-12) remain unverified. Prior external failures and exact remedies are preserved; no unchanged blocked capability or live model call was retried."
   }
 }
