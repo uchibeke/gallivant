@@ -37,6 +37,10 @@ only `gcloud/application_default_credentials.json` into its private config root.
 Explicit `GOOGLE_APPLICATION_CREDENTIALS`, AWS auth/config file settings and
 `OPENCODE_CONFIG` also point to private copies, retaining the selected contents
 and authentication precedence. Refreshes and edits stay in the preparation turn.
+Relative provider file and profile paths use the original invocation directory,
+saved as `callerCwd`, even when `--dir` selects another checkout. Repairs, retries
+and resumed answers keep that directory. Older version-1 intake records without
+it use their saved checkout; a missing selected file stops before launch.
 No model or permission flags are changed.
 
 `GH_CONFIG_DIR=/dev/null` disables stored GitHub CLI credentials. The existing Git

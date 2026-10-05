@@ -702,6 +702,117 @@ test("explicit provider auth and config file settings use private snapshots with
   }
 });
 
+test("relative provider files and profile roots resolve from the caller directory across selected adapters", () => {
+  const root = tempHome(), caller = join(root, "caller"), operator = join(caller, "operator-home");
+  mkdirSync(operator, { recursive: true });
+  const files = Object.fromEntries(["GOOGLE_APPLICATION_CREDENTIALS", "AWS_CONFIG_FILE", "AWS_SHARED_CREDENTIALS_FILE", "AWS_WEB_IDENTITY_TOKEN_FILE", "OPENCODE_CONFIG"].map(key => [key, `credentials/${key}.json`]));
+  mkdirSync(join(caller, "credentials"));
+  for (const [key, path] of Object.entries(files)) writeFileSync(join(caller, path), `fixture:${key}`, { mode: 0o600 });
+  const resources = {
+    "profiles/codex/auth.json": "codex-auth", "profiles/claude/.credentials.json": "claude-auth",
+    "profiles/opencode/opencode.json": "opencode-config", "profiles/config/goose/config.yaml": "goose-config",
+    "profiles/config/gcloud/application_default_credentials.json": "vertex-adc",
+    "profiles/data/opencode/auth.json": "opencode-auth", "profiles/state/opencode/model.json": "opencode-model",
+  };
+  for (const [path, text] of Object.entries(resources)) { mkdirSync(dirname(join(caller, path)), { recursive: true }); writeFileSync(join(caller, path), text); }
+  const cases = [
+    ["codex", { CODEX_HOME: "profiles/codex" }, [], ".codex/auth.json", "codex-auth"],
+    ["claude", { CLAUDE_CONFIG_DIR: "profiles/claude", CLAUDE_CODE_USE_BEDROCK: "1" }, ["AWS_CONFIG_FILE", "AWS_SHARED_CREDENTIALS_FILE", "AWS_WEB_IDENTITY_TOKEN_FILE"], ".claude/.credentials.json", "claude-auth"],
+    ["claude", { CLAUDE_CODE_USE_VERTEX: "1" }, ["GOOGLE_APPLICATION_CREDENTIALS"], ".config/gcloud/application_default_credentials.json", "vertex-adc"],
+    ["gemini", { GOOGLE_GENAI_USE_VERTEXAI: "true" }, ["GOOGLE_APPLICATION_CREDENTIALS"], ".config/gcloud/application_default_credentials.json", "vertex-adc"],
+    ["opencode", { OPENCODE_CONFIG_DIR: "profiles/opencode" }, ["OPENCODE_CONFIG"], ".config/opencode/opencode.json", "opencode-config"],
+    ["goose", { GOOSE_PROVIDER: "bedrock" }, ["AWS_CONFIG_FILE", "AWS_SHARED_CREDENTIALS_FILE", "AWS_WEB_IDENTITY_TOKEN_FILE"], ".config/goose/config.yaml", "goose-config"],
+  ];
+  for (const [i, [harness, settings, selected, profile, bytes]] of cases.entries()) {
+    const source = { HOME: "operator-home", XDG_CONFIG_HOME: "profiles/config", XDG_DATA_HOME: "profiles/data", XDG_STATE_HOME: "profiles/state", ...files, ...settings };
+    for (const turn of ["initial", "repair"]) {
+      const cwd = join(root, `turn-${i}-${turn}`), env = preparationEnvironment(harness, cwd, {}, source, caller);
+      assert.equal(readFileSync(join(env.HOME, profile), "utf8"), bytes);
+      for (const key of Object.keys(files)) {
+        if (!selected.includes(key)) { assert.equal(env[key], undefined); continue; }
+        assert.ok(env[key].startsWith(env.HOME + "/")); assert.equal(lstatSync(env[key]).isSymbolicLink(), false);
+        assert.equal(readFileSync(env[key], "utf8"), `fixture:${key}`); assert.equal(statSync(env[key]).mode & 0o777, 0o600);
+        writeFileSync(env[key], "private edit"); assert.equal(readFileSync(join(caller, files[key]), "utf8"), `fixture:${key}`);
+      }
+      if (harness === "opencode") {
+        assert.equal(readFileSync(join(env.XDG_DATA_HOME, "opencode/auth.json"), "utf8"), "opencode-auth");
+        assert.equal(readFileSync(join(env.XDG_STATE_HOME, "opencode/model.json"), "utf8"), "opencode-model");
+      }
+    }
+  }
+  const cwd = join(root, "wrong-base"); mkdirSync(join(cwd, "credentials"), { recursive: true });
+  writeFileSync(join(cwd, "credentials/missing.json"), "draft decoy");
+  assert.throws(() => preparationEnvironment("gemini", cwd, {}, { HOME: operator, GOOGLE_APPLICATION_CREDENTIALS: "credentials/missing.json" }, caller),
+    e => e.code === "TASK_PREPARATION_ENV" && /readable regular file/.test(e.message));
+});
+
+test("caller directory is pinned before repository resolution and survives repairs, retry and resumed answers", async t => {
+  const w = world(), caller = join(w.home, "invocation"), later = join(w.home, "later"), previous = process.cwd();
+  t.after(() => process.chdir(previous));
+  for (const path of [caller, later, w.checkout]) {
+    mkdirSync(join(path, "credentials"), { recursive: true }); writeFileSync(join(path, "credentials/service-account.json"), path === caller ? "selected fixture" : "decoy");
+  }
+  process.chdir(caller); const origin = process.cwd();
+  w.ctx.env.GOOGLE_APPLICATION_CREDENTIALS = "credentials/service-account.json";
+  w.ctx.config.harness = { gemini: { bin: harnessBin(w.home, "gemini") } };
+  let resolutions = 0;
+  w.ctx.git.toplevel = async dir => { assert.equal(dir, w.checkout); if (!resolutions++) process.chdir(later); return w.checkout; };
+  const runner = fakeRunner({ now: Date.now }), launch = runner.start;
+  runner.start = (...args) => {
+    const job = launch(...args), data = JSON.parse(args[2].at(-1).split("INTAKE DATA (JSON):\n").at(-1));
+    assert.equal(readFileSync(args[3].env.GOOGLE_APPLICATION_CREDENTIALS, "utf8"), "selected fixture");
+    const text = runner.started.length === 1 || runner.started.length === 3 ? "invalid JSON" : JSON.stringify(draftFor(data, { question: true }));
+    runner.finish([JSON.stringify({ type: "message", role: "assistant", content: text }), JSON.stringify({ type: "result", status: "success" })], { exit: 0 });
+    return job;
+  };
+  w.ctx.runnerFor = () => runner;
+  const request = { text: REQUEST, dir: w.checkout, requestId: "pinned-provider-origin" };
+  const service = createTaskService(w.ctx), first = await taskCommand(w.ctx, { args: ["prepare", REQUEST], values: { dir: w.checkout, "request-id": request.requestId }, service });
+  assert.equal(first.status, "needs-input"); assert.equal(first.callerCwd, origin); assert.equal(first.checkout, w.checkout);
+  assert.equal(taskStore(w.home).read(first.taskId).callerCwd, origin); assert.equal(runner.started.length, 2);
+  assert.equal((await createTaskService(w.ctx).prepare(request)).callerCwd, origin); assert.equal(runner.started.length, 2);
+  const answer = { taskId: first.taskId, expectedRevision: first.revision, answers: { "q-r-1": "Use CSV." }, operationId: "provider-answer" };
+  const reopened = createTaskService(w.ctx), resolved = await reopened.answer(answer);
+  assert.equal(resolved.taskId, first.taskId); assert.equal(resolved.status, "ready"); assert.equal(resolved.callerCwd, origin);
+  assert.equal(runner.started.length, 4); assert.equal(resolved.preparation.repairs, 2);
+  assert.equal((await reopened.answer(answer)).callerCwd, origin); assert.equal(runner.started.length, 4);
+  assert.equal((await createTaskService(w.ctx).resume({ taskId: resolved.taskId, expectedRevision: resolved.revision })).callerCwd, origin);
+  assert.equal(runner.started.length, 4); assert.deepEqual(w.ctx.state.entries(), []);
+});
+
+test("older intake records use their saved checkout for provider paths and missing files stop without launch or retry", async t => {
+  const previous = process.cwd(); t.after(() => process.chdir(previous));
+  for (const missing of [false, true]) {
+    const w = world({ prepare: async (_ctx, task) => JSON.stringify(draftFor(task, { question: true })) });
+    const later = join(w.home, "later"); mkdirSync(join(later, "credentials"), { recursive: true });
+    writeFileSync(join(later, "credentials/service-account.json"), "resume decoy");
+    if (!missing) { mkdirSync(join(w.checkout, "credentials")); writeFileSync(join(w.checkout, "credentials/service-account.json"), "legacy selected fixture"); }
+    w.ctx.config.harness = { gemini: { bin: harnessBin(w.home, "gemini") } };
+    const request = { text: REQUEST, dir: w.checkout, requestId: "legacy-provider-origin" };
+    const first = await w.service.prepare(request);
+    const store = taskStore(w.home), task = store.read(first.taskId); delete task.callerCwd; store.save(task);
+    w.ctx.env.GOOGLE_APPLICATION_CREDENTIALS = "credentials/service-account.json";
+    process.chdir(later);
+    const runner = fakeRunner({ now: Date.now }), launch = runner.start;
+    runner.start = (...args) => {
+      const job = launch(...args), data = JSON.parse(args[2].at(-1).split("INTAKE DATA (JSON):\n").at(-1));
+      assert.equal(readFileSync(args[3].env.GOOGLE_APPLICATION_CREDENTIALS, "utf8"), "legacy selected fixture");
+      runner.finish([JSON.stringify({ type: "message", role: "assistant", content: JSON.stringify(draftFor(data)) }), JSON.stringify({ type: "result", status: "success" })], { exit: 0 });
+      return job;
+    };
+    w.ctx.runnerFor = () => runner;
+    const service = createTaskService(w.ctx);
+    assert.equal((await service.prepare(request)).taskId, first.taskId); assert.equal(runner.started.length, 0);
+    const answered = await service.answer({ taskId: first.taskId, expectedRevision: first.revision, answers: { "q-r-1": "Use CSV." }, operationId: "legacy-answer" });
+    assert.equal(answered.callerCwd, w.checkout); assert.equal(store.read(first.taskId).callerCwd, w.checkout);
+    assert.equal(answered.status, missing ? "blocked" : "ready"); assert.equal(runner.started.length, missing ? 0 : 1);
+    assert.equal(answered.preparation.repairs, 0);
+    if (missing) { assert.match(answered.failures[0], /GOOGLE_APPLICATION_CREDENTIALS.*readable regular file/); assert.deepEqual(answered.preparation.attempts, []); }
+    assert.equal((await service.resume({ taskId: first.taskId, expectedRevision: answered.revision })).status, answered.status);
+    assert.equal(runner.started.length, missing ? 0 : 1);
+  }
+});
+
 test("Gemini Vertex preparation carries only ADC into its private profile and preserves explicit credentials", () => {
   const root = tempHome(), operator = join(root, "operator-home"), nativeConfig = join(root, "operator-config"), adc = "gcloud/application_default_credentials.json";
   mkdirSync(join(nativeConfig, "gcloud"), { recursive: true }); mkdirSync(operator);
@@ -815,6 +926,43 @@ else {
   while (baseline.current().running) { assert.ok(Date.now() < deadline, "baseline child failed to settle"); await new Promise(resolve => setTimeout(resolve, 40)); }
   assert.deepEqual(JSON.parse(baseline.lines(job.id).join("\n")), { github: overrides.GH_TOKEN, config: ghConfig, provider: overrides.OPENAI_API_KEY });
   assert.deepEqual(w.ctx.state.entries(), []);
+});
+
+test("native offline preparation reads relative provider credentials from the saved invocation directory on initial and repair turns", async t => {
+  const w = world(), caller = join(w.home, "invocation"), later = join(w.home, "later"), bin = join(w.home, "offline-gemini.mjs"), previous = process.cwd();
+  t.after(() => process.chdir(previous));
+  mkdirSync(join(caller, "credentials"), { recursive: true }); mkdirSync(later);
+  const credentials = join(caller, "credentials/service-account.json"); writeFileSync(credentials, "selected fixture ADC", { mode: 0o600 });
+  process.chdir(caller); const origin = process.cwd();
+  w.ctx.env.GOOGLE_APPLICATION_CREDENTIALS = "credentials/service-account.json";
+  w.ctx.git.toplevel = async () => { process.chdir(later); return w.checkout; };
+  const fixture = new URL("./fixtures/task-intake.mjs", import.meta.url).href;
+  writeFileSync(bin, `#!${process.execPath}
+import { draftFor } from ${JSON.stringify(fixture)};
+import { readFileSync, writeFileSync } from 'node:fs';
+const args = process.argv.slice(2);
+if (args[0] === '--version') console.log('0.59.0');
+else {
+  const path = process.env.GOOGLE_APPLICATION_CREDENTIALS;
+  writeFileSync('provider-file.json', JSON.stringify({ path, home: process.env.HOME, bytes: readFileSync(path, 'utf8'), cwd: process.cwd() }));
+  writeFileSync(path, 'private credential refresh');
+  const data = JSON.parse(args.at(-1).split('INTAKE DATA (JSON):\\n').at(-1));
+  console.log(JSON.stringify({ type: 'message', role: 'assistant', content: process.cwd().endsWith('/turn-1') ? 'invalid JSON' : JSON.stringify(draftFor(data)) }));
+  console.log(JSON.stringify({ type: 'result', status: 'success' }));
+}
+`, { mode: 0o755 });
+  w.ctx.config.harness = { gemini: { bin } };
+  const runners = new Map();
+  w.ctx.runnerFor = id => { if (!runners.has(id)) runners.set(id, makeRunner(join(w.home, "runs", id.replaceAll("/", "__")))); return runners.get(id); };
+  const r = await createTaskService(w.ctx).prepare({ text: REQUEST, dir: w.checkout });
+  assert.equal(r.status, "ready"); assert.equal(r.callerCwd, origin); assert.equal(r.preparation.repairs, 1); assert.equal(r.preparation.attempts.length, 2);
+  for (const attempt of r.preparation.attempts) {
+    const observed = JSON.parse(readFileSync(join(attempt.cwd, "provider-file.json"), "utf8"));
+    assert.equal(observed.bytes, "selected fixture ADC"); assert.equal(observed.cwd, realpathSync(attempt.cwd));
+    assert.ok(observed.path.startsWith(observed.home + "/")); assert.equal(lstatSync(observed.path).isSymbolicLink(), false);
+    assert.equal(readFileSync(observed.path, "utf8"), "private credential refresh"); assert.ok(existsSync(attempt.log));
+  }
+  assert.equal(readFileSync(credentials, "utf8"), "selected fixture ADC"); assert.deepEqual(w.ctx.state.entries(), []);
 });
 
 test("preparation and repairs refuse inherited Git helpers, askpass and SSH authentication without provider changes", async t => {
