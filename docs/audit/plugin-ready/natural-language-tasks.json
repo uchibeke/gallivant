@@ -1,8 +1,8 @@
 {
   "version": 1,
   "task_id": "task-c93def694fe561146955c469",
-  "implementation_commit": "a35e5b61093b491040165037c2fc8d8809dd9df0",
-  "recorded_at": "2026-10-05T13:34:46.956Z",
+  "implementation_commit": "ce6b3f7a1b0cf6be6d1ca8483582db42de0c7efe",
+  "recorded_at": "2026-10-05T14:07:01.135Z",
   "versions": {
     "package": "0.1.0",
     "node": "v22.22.0",
@@ -13,26 +13,26 @@
     {
       "command": "npm test",
       "exit_code": 0,
-      "raw_log": "/private/tmp/natural-language-tasks-examples-npm-test.log",
-      "tests": 842,
-      "passed": 842
+      "raw_log": "/private/tmp/natural-language-tasks-mapping-npm-test.log",
+      "tests": 846,
+      "passed": 846
     },
     {
       "command": "npm run lint",
       "exit_code": 0,
-      "raw_log": "/private/tmp/natural-language-tasks-examples-lint.log"
+      "raw_log": "/private/tmp/natural-language-tasks-mapping-lint.log"
     },
     {
       "command": "npm run test:task-intake",
       "exit_code": 0,
-      "raw_log": "/private/tmp/natural-language-tasks-examples-intake.log",
-      "tests": 98,
-      "passed": 98
+      "raw_log": "/private/tmp/natural-language-tasks-mapping-intake.log",
+      "tests": 102,
+      "passed": 102
     },
     {
       "command": "git diff --check",
       "exit_code": 0,
-      "raw_log": "/private/tmp/natural-language-tasks-examples-diff-check.log",
+      "raw_log": "/private/tmp/natural-language-tasks-mapping-diff-check.log",
       "observed_output": "empty output"
     }
   ],
@@ -526,6 +526,26 @@
       "test_name": "documented CLI and structured preparation examples select an accepted adapter",
       "outcome": "passed",
       "evidence": "test/task-intake.test.mjs::documented CLI and structured preparation examples select an accepted adapter"
+    },
+    {
+      "test_name": "unmapped hostile criteria are repaired before CLI and structured initial or answered dispatch",
+      "outcome": "passed",
+      "evidence": "test/task-intake.test.mjs::unmapped hostile criteria are repaired before CLI and structured initial or answered dispatch"
+    },
+    {
+      "test_name": "persistent unmapped criteria exhaust bounded repair without readiness or dispatch, including question drafts",
+      "outcome": "passed",
+      "evidence": "test/task-intake.test.mjs::persistent unmapped criteria exhaust bounded repair without readiness or dispatch, including question drafts"
+    },
+    {
+      "test_name": "legacy unmapped criteria fail saved validation, start and authorized crash recovery before dispatch",
+      "outcome": "passed",
+      "evidence": "test/task-intake.test.mjs::legacy unmapped criteria fail saved validation, start and authorized crash recovery before dispatch"
+    },
+    {
+      "test_name": "requirement mappings allow multiple criteria and shared criteria when every criterion is owned",
+      "outcome": "passed",
+      "evidence": "test/task-intake.test.mjs::requirement mappings allow multiple criteria and shared criteria when every criterion is owned"
     }
   ],
   "representative_fixture": {
@@ -552,7 +572,7 @@
     ]
   },
   "source_review": {
-    "implementation_revision": "a35e5b61093b491040165037c2fc8d8809dd9df0",
+    "implementation_revision": "ce6b3f7a1b0cf6be6d1ca8483582db42de0c7efe",
     "representative_output_inspected": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-OciO1z/tasks/task-a1a896015714afff3ae33dc4/drafts/revision-2/docs/prds/task-a1a896015714afff3ae33dc4.md",
     "boundaries_checked": [
       "CLI and structured clients",
@@ -618,7 +638,8 @@
       "Preparation uses the shared buildRun helper with a separate tools-off Claude contract; unsupported adapters stop before probes, provider-profile copying and launch. Implementation buildRun argv/env remain unchanged.",
       "Owned unsafe recovered children are stopped; completion usage and logs survive refusal. Settled/ready/question output without the recorded boundary cannot validate, answer, dispatch or replay as approved; existing accepted implementation ownership and answer replay are retained.",
       "Goose resolves environment/current/legacy provider selection before admitting only that provider's authentication. Shared secrets/keyring and stale selected AWS/private-secret snapshots are excluded; missing/unsupported selectors and required shared storage fail with actionable errors.",
-      "Advertised text/stdin/README/structured preparation selections versus buildPreparationRun; configured-Claude prerequisite, unsupported-adapter refusal before profiles/probes/launch, no fallback and preserved hand-authored implementation selection"
+      "Advertised text/stdin/README/structured preparation selections versus buildPreparationRun; configured-Claude prerequisite, unsupported-adapter refusal before profiles/probes/launch, no fallback and preserved hand-authored implementation selection",
+      "Both mapping directions in initial and answered planner output; parser reuse in saved validation, readiness acknowledgement, start authorization and preauthorized crash-resume dispatch; persistent repair failures, question fixtures, multi/shared mappings, immutable fragments and single-dispatch replay; hand-authored checker and existing execution defaults unchanged"
     ],
     "regressions": [
       "preparation uses the existing runner in a separate workspace, records usage and reconciles a lost response",
@@ -706,7 +727,11 @@
       "test/task-intake.test.mjs::recovery stops owned legacy preparation and rejects completed, settled and rendered unsafe output",
       "test/task-intake.test.mjs::Goose admits only effective provider authentication and removes shared secrets and keyring access",
       "test/task-intake.test.mjs::legacy preparation receipts do not interrupt an existing owned implementation or duplicate accepted answers",
-      "test/task-intake.test.mjs::documented CLI and structured preparation examples select an accepted adapter"
+      "test/task-intake.test.mjs::documented CLI and structured preparation examples select an accepted adapter",
+      "test/task-intake.test.mjs::unmapped hostile criteria are repaired before CLI and structured initial or answered dispatch",
+      "test/task-intake.test.mjs::persistent unmapped criteria exhaust bounded repair without readiness or dispatch, including question drafts",
+      "test/task-intake.test.mjs::legacy unmapped criteria fail saved validation, start and authorized crash recovery before dispatch",
+      "test/task-intake.test.mjs::requirement mappings allow multiple criteria and shared criteria when every criterion is owned"
     ],
     "literal_output_inspected": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-YT4kUE/tasks/task-9f538f3b60078088f631d887/drafts/revision-5/docs/prds/task-9f538f3b60078088f631d887.md",
     "answer_context_output_inspected": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-GyBbWY/tasks/task-d21c94c7a17012e1454c6854/drafts/revision-4/docs/prds/task-d21c94c7a17012e1454c6854.md",
@@ -868,6 +893,13 @@
       "path": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-IrXFMx/tasks/task-77c62c381a7a2bf821e032e4/drafts/revision-3/docs/prds/task-77c62c381a7a2bf821e032e4.md",
       "record": "/private/tmp/natural-language-tasks-examples-output-review.json",
       "sha256": "b8e47d3e6bd7658bb6d92fbfe8b3e46494c1cee1ca459891ec38b10a856d16f5",
+      "checker_passed": true
+    },
+    "criteria_mapping_output_inspected": {
+      "live": false,
+      "path": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-whO3H5/tasks/task-80a73e7dd75a3dd700ca31a8/drafts/revision-5/docs/prds/task-80a73e7dd75a3dd700ca31a8.md",
+      "record": "/private/tmp/natural-language-tasks-mapping-output-review.json",
+      "sha256": "9d7de04887940643858088209dd857a4826461ed8d83485b6eabdae9bd92ed51",
       "checker_passed": true
     }
   },
@@ -1281,6 +1313,17 @@
       ],
       "evidence": "docs/audit/plugin-ready/natural-language-tasks.json supported_task_examples_case",
       "observed": "Changed runnable preparation examples from refused Codex/default selection to explicitly configured Claude; the documentation regression now passes the same production adapter gate. Installed native enforcement and live prerequisites remain unqualified."
+    },
+    {
+      "comment_id": 4184754337,
+      "files": [
+        "lib/task_contract.mjs",
+        "test/task-intake.test.mjs",
+        "test/fixtures/task-intake.mjs",
+        "docs/tasks.md"
+      ],
+      "evidence": "docs/audit/plugin-ready/natural-language-tasks.json criteria_mapping_case",
+      "observed": "Added reverse criterion coverage to shared parsing and planner instructions; generated and saved extras cannot enter readiness/dispatch. Four regressions cover hostile initial/answer scope, bounded refusal, exact saved legacy approval replay and accepted multi/shared mappings; related question fixtures retain only mapped criteria."
     }
   ],
   "offline_credential_check": {
@@ -1565,45 +1608,48 @@
         {
           "command": "npm test",
           "exit_code": 0,
-          "raw_log": "/private/tmp/natural-language-tasks-examples-npm-test.log",
-          "tests": 842,
-          "passed": 842
+          "raw_log": "/private/tmp/natural-language-tasks-mapping-npm-test.log",
+          "tests": 846,
+          "passed": 846
         },
         {
           "command": "npm run lint",
           "exit_code": 0,
-          "raw_log": "/private/tmp/natural-language-tasks-examples-lint.log"
+          "raw_log": "/private/tmp/natural-language-tasks-mapping-lint.log"
         },
         {
           "command": "npm run test:task-intake",
           "exit_code": 0,
-          "raw_log": "/private/tmp/natural-language-tasks-examples-intake.log",
-          "tests": 98,
-          "passed": 98
+          "raw_log": "/private/tmp/natural-language-tasks-mapping-intake.log",
+          "tests": 102,
+          "passed": 102
         },
         {
           "command": "git diff --check",
           "exit_code": 0,
-          "raw_log": "/private/tmp/natural-language-tasks-examples-diff-check.log",
+          "raw_log": "/private/tmp/natural-language-tasks-mapping-diff-check.log",
           "observed_output": "empty output"
         }
       ],
       "focused_regressions": {
-        "command": "node --test --test-name-pattern='documented CLI and structured preparation examples' test/task-intake.test.mjs",
+        "command": "node --test --test-name-pattern='unmapped hostile|persistent unmapped|legacy unmapped|requirement mappings allow|questions own exactly|duplicate question|CLI and structured preparation|partial answers retain|literal placeholder' test/task-intake.test.mjs",
         "exit_code": 0,
-        "raw_log": "/private/tmp/natural-language-tasks-examples-targeted.log",
-        "tests": 1,
-        "passed": 1
+        "raw_log": "/private/tmp/natural-language-tasks-mapping-targeted.log",
+        "tests": 12,
+        "passed": 12
       },
       "initial_runs": [
         {
-          "command": "node --test --test-name-pattern='documented CLI and structured preparation examples' test/task-intake.test.mjs",
+          "command": "focused mapping regressions before the fix",
           "exit_code": 1,
-          "raw_log": "/private/tmp/natural-language-tasks-examples-red.log",
-          "observed": "The documentation regression reproduced TASK_PREPARATION_BOUNDARY from the original Codex example before the documentation fix."
+          "raw_log": "/private/tmp/natural-language-tasks-mapping-red.log",
+          "tests": 4,
+          "passed": 1,
+          "failed": 3,
+          "observed": "Unmapped scope reached dispatch, persistent extra scope started instead of blocking, and matching saved legacy output remained ready. The multi/shared mapping control passed."
         }
       ],
-      "observed": "All required offline commands pass. Reviewed task examples, sibling README/stdin/structured entry points, adapter selection and refusal-before-launch behavior against the approved brief. The fresh Claude fixture preserves immutable requirements and passes the canonical checker. No provider/model calls, default changes, automatic fallback or repeated blocked native probes occurred. Native enforcement and G8 live evidence remain unverified.",
+      "observed": "All required offline commands and 12 focused/adjacent tests pass. Reviewed shared parsing, repair, answer transitions, saved validation, readiness and exact dispatch/recovery boundaries against G2. Fresh answered-intake output removes unmapped deployment scope, preserves every original/answer requirement, passes the canonical checker and dispatches once. Existing native and G8 live qualification gaps remain unchanged; no provider/model calls or repeated blocked native checks occurred.",
       "model_calls": 0
     },
     "previous_batches": [
@@ -2080,6 +2126,52 @@
           "passed": 4
         },
         "observed": "Five new boundary/provider/ownership tests and all required commands pass. Source and fresh fixture output were reviewed against G2. Durable runner fixtures inject only disposable Node executables independently of native adapter support; they do not establish live isolation. Native sandbox probe had no usable child result and was not repeated. Supported escalation retained native offline process exclusion; no provider/model calls, automatic provider/model fallback or weakened implementation permissions occurred.",
+        "model_calls": 0
+      },
+      {
+        "commands": [
+          {
+            "command": "npm test",
+            "exit_code": 0,
+            "raw_log": "/private/tmp/natural-language-tasks-examples-npm-test.log",
+            "tests": 842,
+            "passed": 842
+          },
+          {
+            "command": "npm run lint",
+            "exit_code": 0,
+            "raw_log": "/private/tmp/natural-language-tasks-examples-lint.log"
+          },
+          {
+            "command": "npm run test:task-intake",
+            "exit_code": 0,
+            "raw_log": "/private/tmp/natural-language-tasks-examples-intake.log",
+            "tests": 98,
+            "passed": 98
+          },
+          {
+            "command": "git diff --check",
+            "exit_code": 0,
+            "raw_log": "/private/tmp/natural-language-tasks-examples-diff-check.log",
+            "observed_output": "empty output"
+          }
+        ],
+        "focused_regressions": {
+          "command": "node --test --test-name-pattern='documented CLI and structured preparation examples' test/task-intake.test.mjs",
+          "exit_code": 0,
+          "raw_log": "/private/tmp/natural-language-tasks-examples-targeted.log",
+          "tests": 1,
+          "passed": 1
+        },
+        "initial_runs": [
+          {
+            "command": "node --test --test-name-pattern='documented CLI and structured preparation examples' test/task-intake.test.mjs",
+            "exit_code": 1,
+            "raw_log": "/private/tmp/natural-language-tasks-examples-red.log",
+            "observed": "The documentation regression reproduced TASK_PREPARATION_BOUNDARY from the original Codex example before the documentation fix."
+          }
+        ],
+        "observed": "All required offline commands pass. Reviewed task examples, sibling README/stdin/structured entry points, adapter selection and refusal-before-launch behavior against the approved brief. The fresh Claude fixture preserves immutable requirements and passes the canonical checker. No provider/model calls, default changes, automatic fallback or repeated blocked native probes occurred. Native enforcement and G8 live evidence remain unverified.",
         "model_calls": 0
       }
     ]
@@ -3057,5 +3149,116 @@
       "observed": "Fresh deterministic Claude fixture preserves both explicit requirements, manifests, canonical sections and readiness output. Initial and repair argv retain the tools-off boundary. This is not installed-model, isolation or live execution qualification."
     },
     "observed": "Advertised preparation examples explicitly select configured Claude and pass the production preparation-builder gate. Documentation keeps unsupported-adapter refusal, no fallback and installed native qualification limits explicit. The regression reads the actual published examples; its former Codex selection reproduced the refusal before the fix."
+  },
+  "criteria_mapping_case": {
+    "met": true,
+    "implementation_commit": "ce6b3f7a1b0cf6be6d1ca8483582db42de0c7efe",
+    "model_calls": 0,
+    "source_refs": [
+      "lib/task_contract.mjs::parseDraft",
+      "lib/task_contract.mjs::validateDraft",
+      "lib/tasks.mjs::prepareInternal",
+      "lib/tasks.mjs::validateInternal",
+      "lib/tasks.mjs::startInternal"
+    ],
+    "regressions": [
+      "test/task-intake.test.mjs::unmapped hostile criteria are repaired before CLI and structured initial or answered dispatch",
+      "test/task-intake.test.mjs::persistent unmapped criteria exhaust bounded repair without readiness or dispatch, including question drafts",
+      "test/task-intake.test.mjs::legacy unmapped criteria fail saved validation, start and authorized crash recovery before dispatch",
+      "test/task-intake.test.mjs::requirement mappings allow multiple criteria and shared criteria when every criterion is owned"
+    ],
+    "initial_failure": {
+      "exit_code": 1,
+      "raw_log": "/private/tmp/natural-language-tasks-mapping-red.log",
+      "tests": 4,
+      "passed": 1,
+      "failed": 3
+    },
+    "focused_regression": {
+      "command": "node --test --test-name-pattern='unmapped hostile|persistent unmapped|legacy unmapped|requirement mappings allow|questions own exactly|duplicate question|CLI and structured preparation|partial answers retain|literal placeholder' test/task-intake.test.mjs",
+      "exit_code": 0,
+      "raw_log": "/private/tmp/natural-language-tasks-mapping-targeted.log",
+      "tests": 12,
+      "passed": 12
+    },
+    "representative_output": {
+      "live": false,
+      "path": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-whO3H5/tasks/task-80a73e7dd75a3dd700ca31a8/drafts/revision-5/docs/prds/task-80a73e7dd75a3dd700ca31a8.md",
+      "record": "/private/tmp/natural-language-tasks-mapping-output-review.json",
+      "sha256": "9d7de04887940643858088209dd857a4826461ed8d83485b6eabdae9bd92ed51",
+      "checker_passed": true,
+      "original": "Add CSV export for the widget table.\nDo not add dependencies.",
+      "requirements": [
+        {
+          "id": "r-1",
+          "text": "Add CSV export for the widget table."
+        },
+        {
+          "id": "r-2",
+          "text": "Do not add dependencies."
+        },
+        {
+          "id": "a-q-r-1-1",
+          "text": "Use CSV only."
+        }
+      ],
+      "mapping": [
+        {
+          "requirementId": "r-1",
+          "criteria": [
+            "ac-1"
+          ],
+          "resolvedBy": "q-r-1"
+        },
+        {
+          "requirementId": "r-2",
+          "criteria": [
+            "ac-2"
+          ]
+        },
+        {
+          "requirementId": "a-q-r-1-1",
+          "criteria": [
+            "ac-3"
+          ]
+        }
+      ],
+      "criteria": [
+        {
+          "id": "ac-1",
+          "text": "Given a table with three widgets, when Export is selected, then the requested file contains exactly three widget rows."
+        },
+        {
+          "id": "ac-2",
+          "text": "Given the current package manifest, when CSV export is installed, then dependency declarations remain unchanged."
+        },
+        {
+          "id": "ac-3",
+          "text": "Given a table with three widgets, when Export is selected, then the requested file contains exactly three widget rows."
+        }
+      ],
+      "repairs": 1,
+      "readiness": {
+        "allow": true,
+        "hash": "9d7de04887940643858088209dd857a4826461ed8d83485b6eabdae9bd92ed51",
+        "digest": "68a400c5d055ec83f47df2419a38aabee96cc2b5f68934cb85259dc50759823b",
+        "decisionId": null,
+        "report": "ok   path          lives under docs/prds/ with a lowercase-dash filename\nok   frontmatter   frontmatter has status (draft|ready) and harness (claude|codex|gemini|opencode|goose)\nok   title         one H1 title, 8 to 80 characters\nok   problem       ## Problem: at least 40 words on what is wrong today and for whom\nok   stories       ## User stories: every bullet reads 'As a <who>, I want <what>, so that <why>'\nok   criteria      ## Acceptance criteria: every bullet is Given / When / Then, at least one per story\nok   verify        ## Verify: at least one command the session must run green; no sudo, rm -rf or piped installers\nok   look          ## Where to look: files or directories to start from, or 'none'\nok   scope         ## Out of scope: at least one bullet\nok   placeholders  no TODO, TBD, FIXME, ???, lorem or <angle-bracket> placeholders anywhere\nok   size          under 1,500 words; a PRD is one pull request, split anything bigger\nok   sources       every file in `sources` exists, is readable text, and is named inside the repository\n\ntask-80a73e7dd75a3dd700ca31a8: ready to start.\nAPort decision (local): allow\nstatus set to ready. Commit the PRD when you commit the rest of your work.",
+        "revision": 6
+      },
+      "implementation": {
+        "id": "acme/widget/task-80a73e7dd75a3dd700ca31a8",
+        "worktree": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-whO3H5/worktrees/acme/widget/task-80a73e7dd75a3dd700ca31a8",
+        "branch": "work/task-80a73e7dd75a3dd700ca31a8",
+        "base": "main",
+        "baseSource": "default",
+        "session": null,
+        "run": "1-start",
+        "state": "running",
+        "pr": null,
+        "url": null
+      }
+    },
+    "observed": "Every emitted criterion now needs a reference from an explicit requirement or answer mapping. The shared parser rejects extra criteria before publishing a new draft and rechecks saved output before readiness/dispatch. Persistent extras stop after three repairs with no readiness or implementation. Multi/shared mappings remain accepted; question fixtures omit unresolved criteria instead of creating unowned scope. Fixture dispatch is offline, not native/live qualification."
   }
 }
