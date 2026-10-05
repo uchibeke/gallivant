@@ -1,0 +1,317 @@
+{
+  "version": 1,
+  "task_id": "task-df42674c6251c85b0edef13f",
+  "scope": "offline execution, polling and log foundation",
+  "implementation_commit": "7caa7372c40a9ec546c12ae974cc5c0854b26f0a",
+  "base_revision": "7df07ac08f382b2274df26ef2b58b8c390e5bb68",
+  "recorded_at": "2026-10-05T23:44:12.528334+00:00",
+  "versions": {
+    "package": "0.1.0",
+    "node": "22.22.0",
+    "npm": "10.9.4",
+    "execution": 1,
+    "journal": 1,
+    "registry": 1,
+    "projection_index": 2
+  },
+  "commands": [
+    {
+      "command": "npm test",
+      "exit": 0,
+      "tests": 921,
+      "passed": 921,
+      "raw_log": "/tmp/execution-foundation-tests.txt",
+      "sha256": "1296195b3652e49d8481fc319212a635831153843529416b33be959e92a94387"
+    },
+    {
+      "command": "npm run test:execution-backends",
+      "exit": 0,
+      "tests": 132,
+      "passed": 132,
+      "raw_log": "/tmp/execution-backends.txt",
+      "sha256": "810cf6ec32235fbcb681940e1c58e0cf5a0ce87e623e5600f411a4aa4227873a"
+    },
+    {
+      "command": "npm run lint",
+      "exit": 0,
+      "raw_log": "/tmp/execution-lint.txt",
+      "sha256": "8c7790de3f018fb4580f18ac70e1b355a0f76f522dd73acbdaa63632feffcecc"
+    },
+    {
+      "command": "git diff --check",
+      "exit": 0,
+      "evidence": "empty output before implementation commit and after evidence generation"
+    }
+  ],
+  "cases": [
+    {
+      "criterion_id": "ac-1",
+      "outcome": "passed",
+      "test_names": [
+        "missing predecessor module stops context startup with a dependency remedy"
+      ],
+      "evidence": [
+        "lib/context.mjs",
+        "lib/tasks.mjs"
+      ],
+      "test_files": [
+        "test/execution-backends.test.mjs"
+      ]
+    },
+    {
+      "criterion_id": "ac-2",
+      "outcome": "passed",
+      "test_names": [
+        "predecessor service is required and remote selections remain unavailable",
+        "shared resume uses remote capabilities and owned sessions without a fake CLI"
+      ],
+      "evidence": [
+        "lib/harness.mjs",
+        "lib/execution.mjs"
+      ],
+      "test_files": [
+        "test/execution-backends.test.mjs"
+      ]
+    },
+    {
+      "criterion_id": "ac-3",
+      "outcome": "passed",
+      "test_names": [
+        "lost reply persists intent and reconciles without duplicate paid dispatch",
+        "accepted correction recovers workflow ownership after a lost registry acknowledgement",
+        "prototype-sensitive operation IDs and provider result fields cannot replace owned identities"
+      ],
+      "evidence": [
+        "lib/execution.mjs",
+        "lib/tick.mjs"
+      ],
+      "test_files": [
+        "test/execution-backends.test.mjs"
+      ]
+    },
+    {
+      "criterion_id": "ac-4",
+      "outcome": "passed",
+      "test_names": [
+        "scoped health deadlines/backoff permit another account and review to advance",
+        "coordinator startup and scoped slow progress leave an unrelated GitHub task advancing",
+        "slow remote result collection cannot occupy the GitHub review lane"
+      ],
+      "evidence": [
+        "lib/provider_health.mjs",
+        "lib/commands/up.mjs",
+        "lib/tick.mjs"
+      ],
+      "test_files": [
+        "test/execution-backends.test.mjs"
+      ]
+    },
+    {
+      "criterion_id": "ac-5",
+      "outcome": "passed",
+      "test_names": [
+        "stale observations, wrong root turns and silence cannot settle remote work",
+        "unknown acceptance without lookup stays visible through startup and periodic reconciliation",
+        "missing results remain retrieving, event gaps are explicit and recovered events deduplicate"
+      ],
+      "evidence": [
+        "lib/execution.mjs",
+        "lib/commands/status.mjs"
+      ],
+      "test_files": [
+        "test/execution-backends.test.mjs"
+      ]
+    },
+    {
+      "criterion_id": "ac-6",
+      "outcome": "passed",
+      "test_names": [
+        "normalized journal preserves provenance, provider ordering, redaction and replay IDs",
+        "journal restart repairs a crash between checkpoint and append with an explicit stable gap",
+        "local Codex fixture uses existing adapter, journals output and survives launcher exit"
+      ],
+      "evidence": [
+        "lib/execution_journal.mjs",
+        "lib/run.mjs"
+      ],
+      "test_files": [
+        "test/execution-backends.test.mjs"
+      ]
+    },
+    {
+      "criterion_id": "ac-7",
+      "outcome": "passed",
+      "test_names": [
+        "large indexed tails/history/reconnect use bounded bytes and stable IDs",
+        "slow/disconnected SSE readers bound buffers, stop reads and permit unrelated controls",
+        "saved result route survives log retention, rejects traversal and never polls a provider",
+        "unpainted bursts and repeated history pages keep browser buffers bounded"
+      ],
+      "evidence": [
+        "lib/run_log.mjs",
+        "lib/tracker/stream.mjs",
+        "templates/tracker/tracker.js",
+        "lib/commands/serve.mjs"
+      ],
+      "test_files": [
+        "test/execution-backends.test.mjs",
+        "test/tracker.test.mjs"
+      ]
+    },
+    {
+      "criterion_id": "ac-8",
+      "outcome": "passed",
+      "test_names": [
+        "concurrent dispatch and cancellation share durable task ownership",
+        "unsupported cancel stops dispatch, leaves confirmation unknown and quarantines late results",
+        "reported usage above a reservation exhausts allowance without double charging replay",
+        "local settlement shares the cancellation/reconciliation lock before mutating output",
+        "confirmed local cancellation quarantines late output and expired diagnostics are removed"
+      ],
+      "evidence": [
+        "lib/control.mjs",
+        "lib/execution.mjs"
+      ],
+      "test_files": [
+        "test/execution-backends.test.mjs"
+      ]
+    },
+    {
+      "criterion_id": "ac-9",
+      "outcome": "passed",
+      "test_names": [
+        "result publication validates ownership/paths/input head and records real verification",
+        "owned already-applied results reconcile after a lost commit acknowledgement",
+        "verification evidence records an actual approved command, independent of provider claims",
+        "cancellation during verification fences publication and retains verification evidence"
+      ],
+      "evidence": [
+        "lib/execution_result.mjs",
+        "lib/git.mjs",
+        "lib/gh.mjs",
+        "test/review.test.mjs",
+        "test/public_output.test.mjs"
+      ],
+      "test_files": [
+        "test/execution-backends.test.mjs"
+      ]
+    },
+    {
+      "criterion_id": "ac-10",
+      "outcome": "passed",
+      "test_names": [
+        "legacy registry identities/chains/active local jobs survive and unknown versions refuse",
+        "every local adapter retains recorded sessions across legacy upgrade and missing echoed IDs"
+      ],
+      "evidence": [
+        "lib/state.mjs",
+        "lib/execution.mjs",
+        "docs/execution.md"
+      ],
+      "test_files": [
+        "test/execution-backends.test.mjs"
+      ]
+    },
+    {
+      "criterion_id": "ac-11",
+      "outcome": "passed",
+      "test_names": [
+        "openai-agents fixture: no executable/PID, exact owned continuation and restart result retrieval",
+        "codex-cloud fixture: no executable/PID, exact owned continuation and restart result retrieval",
+        "local Codex fixture uses existing adapter, journals output and survives launcher exit"
+      ],
+      "evidence": [
+        "package.json",
+        "test/execution-backends.test.mjs",
+        "test/loop.test.mjs",
+        "test/recovery.test.mjs",
+        "test/review.test.mjs"
+      ],
+      "test_files": [
+        "test/execution-backends.test.mjs"
+      ]
+    },
+    {
+      "criterion_id": "ac-12",
+      "outcome": "passed",
+      "test_names": [
+        "predecessor service is required and remote selections remain unavailable"
+      ],
+      "evidence": [
+        "docs/execution.md",
+        "docs/audit/plugin-ready/execution-checklist.md",
+        "docs/audit/plugin-ready/execution-foundation.json"
+      ],
+      "test_files": [
+        "test/execution-backends.test.mjs"
+      ]
+    }
+  ],
+  "limits": {
+    "transport_deadline_ms": 2000,
+    "progress_ms": 10000,
+    "max_backoff_ms": 300000,
+    "concurrency_per_lane": 4,
+    "event_page_bytes": 65536,
+    "events_per_page": 100,
+    "log_window_data_bytes": 262144,
+    "log_window_index_bytes": 3208,
+    "log_window_lines": 400,
+    "sse_pending_bytes": 327680,
+    "sse_heartbeat_ms": 20000,
+    "browser_pending_lines": 400,
+    "browser_live_rows": 2000,
+    "browser_history_rows": 2000
+  },
+  "fixtures": {
+    "provider_job_id_example": "job-1",
+    "session_id_example": "session-1",
+    "root_turn_id_example": "turn-1",
+    "identities_are": "offline fixture identities, not live run evidence",
+    "remote_cost_example": null,
+    "live_paid_calls": 0,
+    "providers": [
+      "local Codex-shaped output through the existing adapter",
+      "API-shaped test-only transport",
+      "Cloud-shaped test-only transport"
+    ]
+  },
+  "package_manifest": {
+    "command": "npm pack --dry-run --json",
+    "exit": 0,
+    "files": 78,
+    "execution_exports": [
+      "lib/execution.mjs",
+      "lib/execution_result.mjs"
+    ],
+    "documentation": "docs/execution.md",
+    "raw_log": "/tmp/execution-package.json"
+  },
+  "artifact_hashes": {
+    "lib/execution.mjs": "83d001d86f8bd9a74bcefd967d36c52f261894915a86d63c361782726097d40d",
+    "lib/execution_journal.mjs": "22443bb7e6781456eea72b581dd9d76c0a8a62f7c31a8fa6b82010095f7d9ea0",
+    "lib/execution_result.mjs": "e13694a501774b5055d7751716f35c249063c4e4212249c06ff8d91892b22529",
+    "lib/run_log.mjs": "7d0b28731be434c6764ea400e4fe9d95ea0cc81179c9ead80d140d23153abcdb",
+    "docs/prds/hosted-codex-harnesses.md": "5d21326d44207c5cfd281561b40e873328607d94bbe40c8a8f0456b73ab65f63"
+  },
+  "external_qualification": {
+    "foundation_required_live_surfaces": [],
+    "openai-agents": "unavailable: transport is a subsequent milestone",
+    "codex-cloud": "unavailable: transport is a subsequent milestone",
+    "installed_plugin": "not attempted; outside this foundation",
+    "model_access": "not exercised or certified",
+    "browser_capture": "not required for this foundation",
+    "remedy_for_later_live_evidence": "Implement the required transports; use operator credentials and demonstrated model access, an authorized disposable repository/environment, and a bounded reservation in the aggregate campaign ledger. Installed-host qualification also requires the deployed endpoint, installed plugin, actual host and capture surface. Existing intake blockers remain in its unchanged audit."
+  },
+  "verification_environment": {
+    "offline_process_tests": "approved native process inspection of owned disposable children; no execution policy, model or provider default weakened",
+    "initial_sandbox_failure": "Node process inspection returned EPERM; authorized escalation restored the existing ownership checks",
+    "package_manifest_initial_failure": "npm cache write outside the worktree returned EPERM; approved escalation permitted the normal dry-run cache access"
+  },
+  "release_status": {
+    "implementation_review": "regular PR requested; no merge authorized",
+    "live_qualified": false,
+    "submission_ready": false,
+    "published": false
+  }
+}
