@@ -8,7 +8,7 @@ import { createTaskService } from "../lib/tasks.mjs";
 import { taskStore } from "../lib/task_store.mjs";
 import { ready } from "../lib/commands/ready.mjs";
 import { start } from "../lib/commands/start.mjs";
-import { taskCommand, readTaskStdin } from "../lib/commands/task.mjs";
+import { taskCommand, readTaskStdin, renderTask } from "../lib/commands/task.mjs";
 import { check, parsePrd } from "../lib/prd.mjs";
 import { makeRunner } from "../lib/run.mjs";
 import { runEnv, RUN_GIT_CONFIG } from "../lib/git.mjs";
@@ -18,7 +18,7 @@ import { makeState } from "../lib/state.mjs";
 import { writeJsonAtomic } from "../lib/fs.mjs";
 import { contentDigest } from "../lib/start_contract.mjs";
 import { draftFor } from "./fixtures/task-intake.mjs";
-import { tempHome, CONFIG, GOOD_PRD, harnessBin, fakeCredential, fakeIdentity, silentLog, fakeRunner, makeClock, codexLines } from "./helpers.mjs";
+import { tempHome, CONFIG, GOOD_PRD, harnessBin, fakeCredential, fakeIdentity, silentLog, fakeRunner, makeClock, codexLines, claudeResultLines } from "./helpers.mjs";
 
 const REQUEST = "Add CSV export for the widget table.\nDo not add dependencies.";
 function world(overrides = {}) {
@@ -845,6 +845,45 @@ test("provider failure and exhausted runtime stop preparation without validator 
   assert.equal(blocked.status, "blocked"); assert.match(blocked.failures[0], /runtime allowance exhausted/); assert.equal(pending.current().killed, true);
 });
 
+test("recovered completed preparation enforces its persisted deadline while preserving recorded usage and timely output", async t => {
+  let wall=20_000;t.mock.method(Date,"now",()=>wall);
+  for(const c of [{name:"late",endedAt:10_051},{name:"timely",endedAt:10_049},{name:"boundary",endedAt:10_050},{name:"unknown-late",endedAt:null},{name:"unknown-timely",endedAt:null,wall:10_049},{name:"cost-late",endedAt:10_051,harness:"claude"}]){
+    wall=c.wall||20_000;
+    const w=world(), first=await w.service.prepare({text:REQUEST}),store=taskStore(w.home),record=store.read(first.taskId);
+    record.status="preparing";record.draft=null;record.output=null;record.readiness=null;record.allowance.runtimeMs=50;record.harness=c.harness||"codex";
+    record.attempts=[{name:"prepare-1",run:"recovered-prepare",cwd:w.home,startedAt:10_000,deadline:10_050,settled:false,cost:null,usage:null}];store.save(record);
+    const root=join(w.home,"recovered-runs"),run=join(root,"recovered-prepare");mkdirSync(run,{recursive:true});
+    const message=JSON.stringify(draftFor(record));
+    const lines=c.harness?claudeResultLines({text:message,cost:0.37}):codexLines({text:message});
+    if(!c.harness)lines[2]=JSON.stringify({type:"turn.completed",usage:{input_tokens:120,output_tokens:40}});
+    writeFileSync(join(root,"latest-run"),"recovered-prepare");writeFileSync(join(run,"job.log"),lines.join("\n")+"\n");
+    writeJsonAtomic(join(run,"job.json"),{id:"recovered-prepare",name:"prepare-1",pid:123456789,bin:"offline-fixture",startedAt:10_000,exit:c.endedAt===null?null:0,...(c.endedAt===null?{}:{endedAt:c.endedAt})});
+    const runner=makeRunner(root,{clock:{now:()=>wall},probe:()=>false});let starts=0;
+    runner.start=()=>{starts++;throw Error("unexpected preparation launch");};w.ctx.runnerFor=()=>runner;
+    const service=createTaskService(w.ctx),r=await service.resume({taskId:first.taskId,expectedRevision:first.revision});
+    const late=(c.endedAt??wall)>10_050,attempt=r.preparation.attempts[0];
+    assert.equal(r.status,late?"blocked":"ready",c.name);assert.equal(attempt.endedAt,c.endedAt??wall);assert.equal(attempt.elapsedMs,(c.endedAt??wall)-10_000);
+    assert.equal(attempt.completionInferred,c.endedAt===null);assert.equal(attempt.cost,c.harness?0.37:null);
+    assert.deepEqual(attempt.usage,c.harness?[]:[{input_tokens:120,output_tokens:40}]);assert.equal(attempt.log,join(run,"job.log"));
+    if(late){assert.equal(store.read(r.taskId).errorCode,"TASK_ALLOWANCE");assert.equal(attempt.ok,false);assert.equal(r.draft,null);assert.equal(r.readiness,null);assert.equal(r.preparation.repairs,0);assert.match(r.failures[0],/runtime allowance exhausted/);}
+    else {assert.equal(attempt.ok,true);assert.match(r.draft.text,/Do not add dependencies/);}
+    assert.equal((await service.resume({taskId:r.taskId,expectedRevision:r.revision})).status,r.status);assert.equal(starts,0);assert.deepEqual(w.ctx.state.entries(),[]);assert.equal(w.daemonCalls(),0);
+  }
+});
+
+test("settled preparation replay refuses old over-budget output without another run or validation repair", async () => {
+  for(const legacy of [false,true]){
+    const w=world(),first=await w.service.prepare({text:REQUEST}),store=taskStore(w.home),record=store.read(first.taskId);
+    record.status="preparing";record.draft=null;record.output=null;record.readiness=null;
+    record.attempts=[{name:"prepare-1",run:"recovered-prepare",startedAt:10_000,deadline:10_050,elapsedMs:51,...(legacy?{}:{endedAt:10_051}),settled:true,consumed:false,ok:true,message:JSON.stringify(draftFor(record)),usage:[{input_tokens:120}],cost:0.1}];store.save(record);
+    let runnerReads=0;w.ctx.runnerFor=()=>{runnerReads++;return {start:()=>{throw Error("must not launch");}};};
+    const service=createTaskService(w.ctx),r=await service.resume({taskId:first.taskId,expectedRevision:first.revision});
+    assert.equal(r.status,"blocked");assert.equal(r.draft,null);assert.equal(r.readiness,null);assert.equal(r.preparation.repairs,0);
+    const saved=store.read(r.taskId);assert.equal(saved.errorCode,"TASK_ALLOWANCE");assert.equal(saved.attempts[0].ok,false);assert.equal(saved.attempts[0].cost,0.1);assert.deepEqual(saved.attempts[0].usage,[{input_tokens:120}]);
+    assert.equal((await service.resume({taskId:r.taskId,expectedRevision:r.revision})).status,"blocked");assert.equal(runnerReads,1);assert.deepEqual(w.ctx.state.entries(),[]);
+  }
+});
+
 test("preparation environments admit only selected provider settings and isolate native profiles for every adapter", () => {
   const root = tempHome(), operator = join(root, "operator-home");
   const profiles = {
@@ -1374,6 +1413,56 @@ test("known start preflight failures can recover after fixing the cause; attempt
   const stopped = await uncertain.service.prepare({ text: REQUEST, run: true });
   assert.equal(stopped.status, "blocked"); assert.ok(uncertain.ctx.state.startClaim(`acme/widget/${stopped.taskId}`));
   assert.ok(taskStore(uncertain.home).read(stopped.taskId).dispatchIntent);
+});
+
+test("post-clone source conflicts retain snapshots and recovery ownership after correction, restart and duplicate start", async () => {
+  for(const kind of ["directory","symlink","brief-directory"]){
+    const w=world();mkdirSync(join(w.checkout,"docs"));writeFileSync(join(w.checkout,"docs/context.md"),"Pinned operator source.\n");
+    const readyResult=await w.service.prepare({text:REQUEST,context:["docs/context.md"]});
+    const native=join(w.home,"native-document");writeFileSync(native,"Native content must remain unchanged.\n");
+    const create=w.ctx.git.create;let clones=0,conflict;
+    w.ctx.git.create=async input=>{
+      clones++;const p=await create(input);conflict=join(p,kind==="brief-directory"?`docs/prds/${readyResult.taskId}.md`:"docs/context.md");mkdirSync(dirname(conflict),{recursive:true});
+      if(kind==="symlink")symlinkSync(native,conflict);else mkdirSync(conflict);
+      return p;
+    };
+    const failed=await w.service.start({taskId:readyResult.taskId,expectedRevision:readyResult.revision,run:true});
+    const id=`acme/widget/${readyResult.taskId}`,claim=w.ctx.state.startClaim(id),store=taskStore(w.home);
+    assert.equal(failed.status,"blocked");assert.match(failed.failures[0],/symlink|not a regular repository file/);
+    assert.ok(store.read(failed.taskId).dispatchIntent);assert.equal(claim.task.digest,readyResult.readiness.digest);
+    assert.equal(claim.clone.worktree,join(w.home,"worktrees","acme","widget",readyResult.taskId));assert.equal(claim.clone.base,"main");
+    assert.deepEqual(failed.dispatchRecovery,claim.clone);assert.match(renderTask(failed),/Dispatch recovery: inspect the clone/);
+    assert.equal(w.snapshots.get(id),readyResult.draft.text);assert.equal(w.sources.get(`${id}:docs/context.md`),"Pinned operator source.\n");
+    assert.equal(readFileSync(native,"utf8"),"Native content must remain unchanged.\n");assert.equal(w.runners.size,0);assert.equal(w.daemonCalls(),0);
+    // Correcting the path does not authorize forgetting or recreating an owned clone.
+    rmSync(conflict,{recursive:true});w.ctx.state=makeState(w.home);const reopened=createTaskService(w.ctx);
+    const retry=await reopened.start({taskId:failed.taskId,expectedRevision:failed.revision});
+    assert.equal(retry.status,"blocked");assert.match(retry.failures[0],/unresolved start claim.*clone at/);assert.equal(clones,1);
+    assert.deepEqual(w.ctx.state.startClaim(id),claim);assert.deepEqual(retry.dispatchRecovery,claim.clone);
+    const resumed=await reopened.resume({taskId:retry.taskId,expectedRevision:retry.revision});assert.equal(resumed.status,"blocked");assert.equal(clones,1);
+    const duplicate=await reopened.start({taskId:retry.taskId,expectedRevision:retry.revision});assert.equal(duplicate.status,"blocked");assert.equal(clones,1);
+    assert.equal(w.ctx.state.get(id),null);assert.equal(w.runners.size,0);assert.match(duplicate.draft.text,/Do not add dependencies/);
+  }
+});
+
+test("a partial clone failure retains its claim and intake intent before any runner can be spawned", async () => {
+  const w=world();let clones=0,path;
+  w.ctx.git.create=async ({prdId})=>{clones++;path=join(w.home,"worktrees","acme","widget",prdId);mkdirSync(path,{recursive:true});writeFileSync(join(path,"partial-clone"),"retained evidence");throw Error("Clone connection lost after creating the directory");};
+  const r=await w.service.prepare({text:REQUEST,run:true}),id=`acme/widget/${r.taskId}`;
+  assert.equal(r.status,"blocked");assert.equal(r.dispatchRecovery.worktree,path);assert.ok(w.ctx.state.startClaim(id));assert.ok(taskStore(w.home).read(r.taskId).dispatchIntent);
+  w.ctx.state=makeState(w.home);const reopened=createTaskService(w.ctx);
+  assert.equal((await reopened.start({taskId:r.taskId,expectedRevision:r.revision})).status,"blocked");assert.equal(clones,1);
+  assert.equal(readFileSync(join(path,"partial-clone"),"utf8"),"retained evidence");assert.equal(w.runners.size,0);assert.deepEqual(w.ctx.state.entries(),[]);
+});
+
+test("pre-clone snapshot failures release clean start ownership and can retry the approved intake once", async () => {
+  const w=world(),write=w.ctx.writeSource,create=w.ctx.git.create;let clones=0;
+  w.ctx.git.create=async input=>{clones++;return create(input);};w.ctx.writeSource=()=>{throw Error("Snapshot storage unavailable");};
+  const failed=await w.service.prepare({text:REQUEST,run:true}),id=`acme/widget/${failed.taskId}`;
+  assert.equal(failed.status,"blocked");assert.equal(clones,0);assert.equal(failed.dispatchRecovery,null);assert.equal(w.ctx.state.startClaim(id),null);assert.equal(taskStore(w.home).read(failed.taskId).dispatchIntent,null);
+  w.ctx.writeSource=write;const started=await w.service.start({taskId:failed.taskId,expectedRevision:failed.revision});
+  assert.equal(started.status,"started");assert.equal(clones,1);assert.equal(w.runners.get(id).started.length,1);
+  assert.equal((await w.service.start({taskId:started.taskId,expectedRevision:started.revision})).implementation.run,started.implementation.run);assert.equal(clones,1);
 });
 
 test("intake preserves base precedence without persisting a resolved default as an explicit override", async () => {

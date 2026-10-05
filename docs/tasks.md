@@ -151,6 +151,11 @@ harnesses that support it, while others have turn/runtime bounds and cannot prom
 a hard dollar cap. A provider error, tool denial, exhausted allowance, unresolved
 dispatch or readiness denial stops visibly. A blocked intake is not automatically
 retried or assigned to a different provider.
+Recovered completion must also fit its persisted deadline. A known completion
+before the deadline remains usable even if reopened later; a completion after it
+is refused with its usage and log evidence retained. If the coordinator missed
+the exit and no end time exists, runner settlement time is a conservative bound.
+An over-budget saved-output replay cannot become a pass or another repair turn.
 
 Use `task resume <id> --revision <n>` to reconcile interrupted preparation or finish
 an already authorized, ready intake. Request identities deduplicate preparation;
@@ -158,10 +163,16 @@ reusing one for different inputs conflicts. Answer operation identities deduplic
 replies. Every mutation checks the expected state revision. Missing launch
 acknowledgements reconcile the recorded job; uncertain implementation acceptance
 retains its start claim/intent and requires inspection rather than another launch.
-For a known preflight failure before spawn (for example missing GitHub credentials),
+For a known preflight failure before cloning (for example missing GitHub credentials),
 fix its cause and explicitly call `task start` with the saved current revision.
-Existing run authorization is retained; uncertainty after an attempted spawn is
-never cleared this way.
+Existing run authorization is retained. Once cloning is attempted, the shared
+start claim records the planned worktree, branch and base and survives clone,
+source-delivery or later pre-spawn failures. `dispatchRecovery` exposes that clone
+in structured results and CLI output points to it. Inspect the retained clone,
+snapshots, claim and any runner job before recovery; ordinary retry never clears
+that ownership, deletes the checkout or attempts another clone. A possible spawn
+is also never cleared this way. Hand-authored starts and chains share the same
+ownership boundary.
 After implementation starts, use the existing `status`, `why`, tracker controls and
 `resume --resnapshot` flow for accepted contract changes. The daemon stops at its
 usual human-review and configured limit boundaries; it never merges automatically.

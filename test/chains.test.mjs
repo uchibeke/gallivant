@@ -429,6 +429,17 @@ test("failure after persisting the started entry reconciles its existing run ins
   assert.equal(w.ctx.state.getChain("release").status, "active");
 });
 
+test("chain post-clone base refusal retains dispatch and start ownership across reload and retry", async () => {
+  const w=world({sources:true});await w.queue();
+  w.ctx.git.fileAt=async (_dir,_ref,path)=>{if(path==="docs/context.md")throw Error("Base source changed into a symlink");return null;};
+  await tickChains(w.ctx);
+  const chain=w.ctx.state.getChain("release"),claim=w.ctx.state.startClaim(FIRST);
+  assert.equal(chain.status,"stopped");assert.match(chain.reason,/Base source changed into a symlink/);assert.ok(chain.steps[0].dispatch);
+  assert.equal(claim.clone.worktree,join(w.home,"worktrees",FIRST));assert.equal(w.clones.length,1);assert.equal(w.starts(),0);
+  w.ctx.state=makeState(w.home);await assert.rejects(()=>retryChain(w.ctx,{name:"release"}),/start|claim|inspect/i);await tickChains(w.ctx);
+  assert.deepEqual(w.ctx.state.startClaim(FIRST),claim);assert.equal(w.clones.length,1);assert.equal(w.starts(),0);
+});
+
 test("transient GitHub failures retry without dispatch, eventually stop, and recover through explicit retry", async () => {
   const w = world();
   await w.queue();

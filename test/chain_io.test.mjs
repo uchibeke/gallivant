@@ -75,9 +75,14 @@ test("durable start claims exclude another start and registration; only their ow
   assert.throws(() => b.put(id, {}), /reserved/);
   b.releaseStart(id, "wrong-token");
   assert.equal(b.startClaim(id).token, claim.token);
+  assert.throws(() => b.markStartClone(id,"wrong-token",{worktree:"/wrong"}),/claim changed before clone/);
+  a.markStartClone(id,claim.token,{worktree:join(home,"owned-clone"),base:"main",branch:"work/task"});
+  assert.equal(b.startClaim(id).clone.worktree,join(home,"owned-clone"));
+  assert.equal(b.startClaim(id).token,claim.token);
   assert.throws(() => b.putStarted(id, {}, "wrong-token"), /claim changed/);
   a.putStarted(id, { repo: "acme/widget" }, claim.token);
   assert.equal(b.startClaim(id), null);
   assert.equal(b.get(id).start_token, claim.token);
+  assert.throws(() => a.markStartClone(id,claim.token,{worktree:"/wrong"}),/claim changed before clone/);
   assert.throws(() => b.claimStart(id), /already exists/);
 });

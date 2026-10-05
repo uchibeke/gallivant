@@ -128,6 +128,17 @@ test("start awaits durable runner startup before registering the claimed run", a
   assert.equal(w.ctx.state.startClaim(id), null);
 });
 
+test("hand-authored start retains clone ownership after a base PRD path conflict without spawning or recloning", async () => {
+  const w=startWorld(),id="acme/widget/widget-export",runner=fakeRunner(makeClock());let clones=0;
+  mkdirSync(join(w.worktree,"docs/prds/widget-export.md"),{recursive:true});w.ctx.runnerFor=()=>runner;
+  w.ctx.git.create=async()=>{clones++;return w.worktree;};
+  await assert.rejects(()=>start(w.ctx,{path:w.prdPath}),e=>e.startUncertain===true&&/not a regular repository file/.test(e.message));
+  const claim=w.ctx.state.startClaim(id);assert.equal(claim.clone.worktree,w.worktree);assert.equal(claim.clone.base,"main");
+  assert.equal(w.ctx.state.get(id),null);assert.equal(runner.started.length,0);
+  w.ctx.state=makeState(w.home);await assert.rejects(()=>start(w.ctx,{path:w.prdPath}),/unresolved start/);
+  assert.deepEqual(w.ctx.state.startClaim(id),claim);assert.equal(clones,1);assert.equal(runner.started.length,0);
+});
+
 test("a run completed before the first tick still has its earliest own comments checked", async t => {
   let wall = Date.parse("2026-10-03T12:00:00.750Z");
   t.mock.method(Date, "now", () => wall);
