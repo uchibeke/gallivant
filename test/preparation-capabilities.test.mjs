@@ -55,5 +55,5 @@ test("preparation's minimum version does not raise the existing implementation m
   const dir = tempHome(), bin = harnessBin(dir, "codex", { version: "0.158.0" });
   const config = { ...CONFIG, harness: { codex: { bin } } };
   assert.equal((await checkVersion("codex", config)).ok, true);
-  assert.equal((await checkVersion("codex", config, preparationCapability("codex").minimumVersion)).ok, false);
+  assert.equal((await checkVersion("codex", config, { minimumVersion: preparationCapability("codex").minimumVersion })).ok, false);
 });

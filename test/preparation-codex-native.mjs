@@ -16,6 +16,7 @@ const root = mkdtempSync(join(tmpdir(), "gallivant-native-preparation-"));
 const cwd = join(root, "draft"), home = join(cwd, "home"), configHome = join(home, ".codex");
 mkdirSync(cwd); mkdirSync(configHome, { recursive: true });
 const marker = join(root, "unexpected-tool-execution");
+const insideMarker = join(cwd, "unexpected-implementation");
 const observations = [];
 let requests = [], responseIndex = 0;
 const server = createServer(async (request, response) => {
@@ -25,8 +26,8 @@ const server = createServer(async (request, response) => {
   // A hostile/incorrect provider response must not be able to invoke a tool
   // omitted from the advertised registry. Both shell and inherited MCP are tried.
   const n = responseIndex++;
-  const item = n === 2
-    ? { id: "patch_2", type: "custom_tool_call", call_id: "call_patch", name: "apply_patch", input: `*** Begin Patch\n*** Add File: ${marker}\n+unexpected write\n*** End Patch\n` }
+  const item = n === 2 || n === 3
+    ? { id: `patch_${n}`, type: "custom_tool_call", call_id: `call_patch_${n}`, name: "apply_patch", input: `*** Begin Patch\n*** Add File: ${n === 2 ? marker : insideMarker}\n+unexpected write\n*** End Patch\n` }
     : n < 2
     ? { id: `fc_${n}`, type: "function_call", call_id: `call_${n}`, name: n === 0 ? "exec_command" : "mcp__fixture__write", arguments: JSON.stringify({ cmd: `touch ${marker}` }) }
     : { id: "msg_fixture", type: "message", role: "assistant", content: [{ type: "output_text", text: "prepared", annotations: [] }] };
@@ -48,6 +49,8 @@ try {
     assert.ok(catalog.models.some(m => m.slug === model), `missing real metadata for ${model}`);
     writeFileSync(join(configHome, "config.toml"), [
       `model=${JSON.stringify(model)}`, 'model_provider="preparation_fixture"',
+      'sandbox_mode="workspace-write"', '[sandbox_workspace_write]', 'network_access=true',
+      '[permissions.gallivant_preparation.filesystem]', '":root"="write"',
       '[model_providers.preparation_fixture]', 'name="preparation_fixture"', `base_url=${JSON.stringify(url)}`,
       'wire_api="responses"', 'requires_openai_auth=false', 'supports_websockets=false',
       '[mcp_servers.fixture]', `command=${JSON.stringify(process.execPath)}`,
@@ -63,14 +66,15 @@ try {
     const code = await new Promise((resolve, reject) => { child.once("error", reject); child.once("exit", resolve); }); clearTimeout(timeout);
     assert.equal(code, 0, stderr);
     assert.equal(existsSync(marker), false, "disabled tools executed");
-    assert.equal(requests.length, 4, "hostile shell, MCP and patch replies were processed before completion");
+    assert.equal(existsSync(insideMarker), false, "preparation modified its workspace");
+    assert.equal(requests.length, 5, "hostile shell, MCP and inside/outside patch replies were processed before completion");
     for (const request of requests) {
       assert.equal(request.model, model, "adapter changed the selected model");
       assert.ok((request.tools ?? []).every(t => ["request_user_input", "apply_patch"].includes(t.name)), "preparation exposed an unrestricted tool");
     }
     const outcome = adapterFor("codex").outcome(output.trim().split("\n"));
     assert.equal(outcome.ok, true, output); assert.equal(outcome.lastMessage, "prepared");
-    observations.push({ model, requests: requests.length, tools: (requests[0].tools ?? []).map(t => t.name), hostileToolCallsRejected: 3, output: outcome.lastMessage });
+    observations.push({ model, requests: requests.length, tools: (requests[0].tools ?? []).map(t => t.name), hostileToolCallsRejected: 4, output: outcome.lastMessage });
   }
   console.log(JSON.stringify({ nativeVersion: spawnSync(bin, ["--version"], { encoding: "utf8", env }).stdout.trim(), provider: "loopback fixture; no inference", observations }, null, 2));
 } finally { server.closeAllConnections(); server.close(); rmSync(root, { recursive: true, force: true }); }

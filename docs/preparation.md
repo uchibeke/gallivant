@@ -32,8 +32,9 @@ node test/preparation-codex-native.mjs /absolute/path/to/codex \
   /path/to/models_cache.json gpt-6.1-sol gpt-6-astra gpt-5.5
 ```
 
-On 2026-10-05, Codex 0.160.0 processed all three model catalogs. Each completed
-after rejecting forced shell, inherited MCP and file-patch calls. Sol and Astra
+On 2026-10-06, Codex 0.160.0 processed all three model catalogs. Each completed
+after rejecting forced shell, inherited MCP and file-patch calls both inside and
+outside the preparation workspace, despite inherited writable settings. Sol and Astra
 exposed no tools; GPT-5.5 exposed request_user_input and apply_patch, with writes
 denied. This proves native CLI/configuration behavior with a fixture provider,
 not live provider eligibility or a completed APort/ChatGPT workflow.
@@ -42,3 +43,10 @@ Official configuration references:
 [permissions](https://learn.chatgpt.com/docs/permissions),
 [configuration](https://learn.chatgpt.com/docs/config-file/config-reference).
 Re-run native qualification when upgrading the CLI or adding tool capabilities.
+
+APort's connected execution continuation is
+[`aporthq/agent-passport#417`](https://github.com/aporthq/agent-passport/pull/417),
+with job identity `aporthq/agent-passport/aport-task-delivery-workflow-integration`.
+M6 should reuse that single continuation after the actual M5 portable package
+is available. The merged APort foundation still lacks workflow integration;
+this preparation adapter does not change that deployment state.
