@@ -411,6 +411,16 @@ checkouts: distinct files with ambiguous case/Unicode spellings require separate
 results. A single accepted path keeps its casing and original artifact bytes;
 application, commit paths and lost-acknowledgement reconciliation use the same
 canonical Git-relative paths. The private provider manifest remains unchanged.
+Each target component is also compared with tracked HEAD and index paths before
+content reads or mutation. A single artifact cannot introduce a case/Unicode
+alias of an existing file or parent directory, including a directory with a
+different child filename or a file/directory collision. Exact tracked spelling
+remains valid for edits and deletions. The same check runs before publication
+recovery; pushed results validate their complete tracked tree. Published receipt
+replay remains read-only. Missing or incomplete metadata blocks publication.
+Git path reads use NUL separators, preserving spaces and newlines, with a
+2-second deadline and 1 MiB output cap per HEAD/index query. Ownership checks on
+staged and changed paths reuse that bounded reader without trimming filenames.
 Applied content and input ancestry reconcile lost commit
 acknowledgements. Only existing Git/GitHub helpers commit, push and reconcile one
 regular PR. Approved immutable PRD Verify commands run in the owned checkout

@@ -19,7 +19,7 @@ import { makeTick } from "../lib/tick.mjs";
 import { reconcileExecutionResult } from "../lib/execution_result.mjs";
 import { resume } from "../lib/commands/resume.mjs";
 import { acquireProcessLock } from "../lib/daemon.mjs";
-import { makeGit } from "../lib/git.mjs";
+import { makeGit, GIT_PATH_LIMITS } from "../lib/git.mjs";
 import { execFileAsync } from "../lib/gh.mjs";
 import { requestControl, applyControl } from "../lib/control.mjs";
 import { tempHome, makeClock, CONFIG, T0, fakeGh, fakeNotify, silentLog, fakeGit, fakeCredential, fakeIdentity, fakeRunner, prFixture, comment, harnessBin, GOOD_PRD, codexLines } from "./helpers.mjs";
@@ -954,7 +954,7 @@ function resultFixture() {
   writeFileSync(join(worktree, "a.txt"), "before");
   const entry = { ...newEntry({ repo: "acme/widget", harness: "codex", session: "22222222-2222-4222-8222-222222222222", branch: "work/result", base: "main", worktree, nowIso: T0, state: STATES.running }), execution: { runId, providerJobId: "j1", turnId: "t1", inputHead: revision } };
   const result = { taskId: id, runId, providerJobId: "j1", turnId: "t1", inputHead: revision, repo: entry.repo, branch: entry.branch, files: [{ path: "a.txt", beforeHash: sha("before"), afterHash: sha("after"), text: "after" }], pr: { title: "Apply result", body: "Verified execution artifacts." } };
-  const calls = [], git = { head: async () => revision, dirty: async () => ({ modified: 0, untracked: 0 }), currentBranch: async () => entry.branch, originOf: async () => "https://github.com/acme/widget.git", commitResult: async () => calls.push("commit"), pushResult: async () => calls.push("push") };
+  const calls = [], git = { head: async () => revision, trackedPaths: async () => ["a.txt"], dirty: async () => ({ modified: 0, untracked: 0 }), currentBranch: async () => entry.branch, originOf: async () => "https://github.com/acme/widget.git", commitResult: async () => calls.push("commit"), pushResult: async () => calls.push("push") };
   const gh = { publishResultPr: async () => { calls.push("PR"); return { number: 1, url: "https://example.test/pr/1" }; } };
   const ctx = { git, gh, readPrd: () => "# Brief\n\n## Verify\n\n- `printf verified`\n" };
   const verify = async () => { calls.push("verify"); return { stdout: "verified", stderr: "" }; };
@@ -1111,6 +1111,118 @@ test("one mixed-case artifact preserves its path and bytes through native Git pu
   const files = await execFileAsync("git", ["ls-tree", "--name-only", "-r", "HEAD"], { cwd: f.entry.worktree });
   assert.match(files.stdout, /Src\/Auth\.js/); assert.equal(readJson(join(f.dir, "result-application.json")).phase, "published");
   assert.deepEqual(f.calls, ["commit", "verify", "push", "PR"]);
+});
+
+test("single artifacts reject aliases of native tracked files and parent directories before content validation or mutation", async t => {
+  const observations = [];
+  for (const [tracked, target] of [["src/File.js", "src/file.js"], ["Src/old.js", "src/new.js"], ["café/old.js", "cafe\u0301/new.js"], ["Σ/old.js", "ς/new.js"], ["Straße/old.js", "STRASSE/new.js"], [" File.js", " file.js"]]) {
+    const f = await nativeResultFixture();
+    if (tracked.includes("/")) mkdirSync(join(f.entry.worktree, tracked.split("/")[0]));
+    writeFileSync(join(f.entry.worktree, tracked), "existing tracked bytes");
+    await f.ctx.git.commitResult(f.entry.worktree, [tracked]); f.calls.length = 0;
+    const head = await f.ctx.git.head(f.entry.worktree); f.result.inputHead = head; f.entry.execution.inputHead = head;
+    f.result.files = [{ path: target, beforeHash: null, afterHash: "must-not-read-content", text: "new artifact" }];
+    const manifest = structuredClone(f.result), files = await f.ctx.git.trackedPaths(f.entry.worktree);
+    await assert.rejects(reconcileExecutionResult(f.ctx, f), /aliases an existing repository path/);
+    assert.equal(await f.ctx.git.head(f.entry.worktree), head);
+    assert.deepEqual(await f.ctx.git.dirty(f.entry.worktree, { strict: true }), { modified: 0, untracked: 0 });
+    assert.equal(readFileSync(join(f.entry.worktree, tracked), "utf8"), "existing tracked bytes");
+    assert.deepEqual(f.result, manifest); assert.deepEqual(f.calls, []);
+    assert.equal(existsSync(join(f.dir, "result-application.json")), false);
+    observations.push({ tracked, target, head, worktree: f.entry.worktree, resultDir: f.dir, trackedPaths: files,
+      filesystemAlias: existsSync(join(f.entry.worktree, target)), mutation: false, publicationCalls: [...f.calls], manifestPreserved: true });
+  }
+  const dir = tempHome(), path = join(dir, "tracked-alias-evidence.json");
+  writeJsonAtomic(path, { kind: "Offline manifests with native Git index/HEAD and filesystem observations", observations });
+  t.diagnostic(`tracked alias evidence: ${path}`);
+});
+
+test("tracked alias checks include staged additions and HEAD paths removed from the index", async () => {
+  for (const source of ["index", "HEAD"]) {
+    const f = await nativeResultFixture(), tracked = "Src/owned.js", target = "src/new.js";
+    mkdirSync(join(f.entry.worktree, "Src")); writeFileSync(join(f.entry.worktree, tracked), "owned bytes");
+    if (source === "HEAD") {
+      await f.ctx.git.commitResult(f.entry.worktree, [tracked]);
+      const head = await f.ctx.git.head(f.entry.worktree); f.result.inputHead = head; f.entry.execution.inputHead = head;
+      await execFileAsync("git", ["rm", "--cached", "--", tracked], { cwd: f.entry.worktree });
+    } else await execFileAsync("git", ["add", "--", tracked], { cwd: f.entry.worktree });
+    f.calls.length = 0;
+    const dirty = await f.ctx.git.dirty(f.entry.worktree, { strict: true });
+    const index = (await execFileAsync("git", ["ls-files", "-z"], { cwd: f.entry.worktree })).stdout;
+    assert.ok((await f.ctx.git.trackedPaths(f.entry.worktree)).includes(tracked));
+    f.result.files = [{ path: target, beforeHash: null, afterHash: sha("new"), text: "new" }];
+    await assert.rejects(reconcileExecutionResult(f.ctx, f), /aliases an existing repository path/);
+    assert.deepEqual(await f.ctx.git.dirty(f.entry.worktree, { strict: true }), dirty);
+    assert.equal((await execFileAsync("git", ["ls-files", "-z"], { cwd: f.entry.worktree })).stdout, index);
+    assert.equal(readFileSync(join(f.entry.worktree, tracked), "utf8"), "owned bytes");
+    assert.equal(existsSync(join(f.entry.worktree, target)), false); assert.deepEqual(f.calls, []);
+  }
+});
+
+test("portable targets reject parent and file-directory aliases while accepting exact tracked spelling", async () => {
+  for (const [tracked, target] of [["Src", "src/new.js"], ["Src/old.js", "src"]]) {
+    const f = resultFixture(); f.ctx.git.trackedPaths = async () => [tracked];
+    f.result.files = [{ path: target, beforeHash: null, afterHash: "invalid", text: "new" }];
+    await assert.rejects(reconcileExecutionResult(f.ctx, f), /aliases an existing repository path/);
+    assert.deepEqual(f.calls, []); assert.equal(existsSync(join(f.dir, "result-application.json")), false);
+  }
+  const parents = resultFixture();
+  parents.result.files = ["Src/a.js", "src/b.js"].map(path => ({ path, beforeHash: null, afterHash: "invalid", text: "new" }));
+  await assert.rejects(reconcileExecutionResult(parents.ctx, parents), /aliases an existing repository path/);
+  assert.deepEqual(parents.calls, []); assert.equal(existsSync(join(parents.entry.worktree, "Src")), false);
+  for (const deletion of [false, true]) {
+    const f = await nativeResultFixture(), path = "Src/Auth.js";
+    mkdirSync(join(f.entry.worktree, "Src")); writeFileSync(join(f.entry.worktree, path), "before");
+    await f.ctx.git.commitResult(f.entry.worktree, [path]); f.calls.length = 0;
+    const head = await f.ctx.git.head(f.entry.worktree); f.result.inputHead = head; f.entry.execution.inputHead = head;
+    const text = deletion ? null : "after";
+    f.result.files = [{ path: ".//Src/Auth.js", beforeHash: sha("before"), afterHash: deletion ? null : sha(text), text }];
+    await reconcileExecutionResult(f.ctx, f); await reconcileExecutionResult(f.ctx, f);
+    assert.deepEqual(f.calls, ["commit", "verify", "push", "PR"]);
+    assert.equal(existsSync(join(f.entry.worktree, path)), !deletion);
+    if (!deletion) assert.equal(readFileSync(join(f.entry.worktree, path), "utf8"), text);
+    assert.equal(f.result.files[0].path, ".//Src/Auth.js");
+  }
+});
+
+test("pushed and verified recovery reject tracked aliases without verification or publication replay", async () => {
+  const pushed = resultFixture(); pushed.result.files = []; pushed.result.pushedHead = pushed.result.inputHead;
+  pushed.ctx.gh.refSha = async () => pushed.result.pushedHead; pushed.ctx.gh.containsCommit = async () => true;
+  pushed.ctx.git.trackedPaths = async () => ["Src/a.js", "src/b.js"];
+  await assert.rejects(reconcileExecutionResult(pushed.ctx, pushed), /aliases an existing repository path/);
+  assert.deepEqual(pushed.calls, []); assert.equal(existsSync(join(pushed.dir, "result-application.json")), false);
+  const f = resultFixture(); f.ctx.git.pushResult = async () => { f.calls.push("push"); throw new Error("push reply lost"); };
+  await assert.rejects(reconcileExecutionResult(f.ctx, f), /push reply lost/);
+  const evidence = readFileSync(join(f.dir, "verification.json"), "utf8"), checkpoint = readFileSync(join(f.dir, "result-application.json"), "utf8");
+  f.calls.length = 0; f.ctx.git.trackedPaths = async () => ["a.txt", "A.TXT"];
+  await assert.rejects(reconcileExecutionResult(f.ctx, f), /aliases an existing repository path/);
+  assert.deepEqual(f.calls, []); assert.equal(readFileSync(join(f.dir, "verification.json"), "utf8"), evidence);
+  assert.equal(readFileSync(join(f.dir, "result-application.json"), "utf8"), checkpoint);
+});
+
+test("Git path readers preserve whitespace and NUL ordering with bounded complete metadata", async () => {
+  const f = await nativeResultFixture(), path = " file\nname.txt", head = await f.ctx.git.head(f.entry.worktree);
+  writeFileSync(join(f.entry.worktree, path), "owned whitespace path");
+  await f.ctx.git.commitResult(f.entry.worktree, [path]);
+  assert.ok((await f.ctx.git.trackedPaths(f.entry.worktree)).includes(path));
+  assert.equal(await f.ctx.git.resultHeadMatches(f.entry.worktree, head, [path]), true);
+  assert.equal(await f.ctx.git.resultHeadMatches(f.entry.worktree, head, [path.trim()]), false);
+  for (const stdout of ["missing delimiter", "x".repeat(GIT_PATH_LIMITS.bytes + 1), null]) {
+    const calls = [], git = makeGit({ config: CONFIG, exec: async (_cmd, args, options) => { calls.push({ args, timeout: options.timeout, maxBuffer: options.maxBuffer }); return { stdout: args[0] === "merge-base" ? "" : stdout }; } });
+    await assert.rejects(git.trackedPaths(f.entry.worktree), /incomplete or oversized Git path metadata/);
+    assert.equal(calls.length, 2); assert.ok(calls.every(call => call.timeout === 2000 && call.maxBuffer === 1_048_576));
+    await assert.rejects(git.commitResult(f.entry.worktree, [path]), /incomplete or oversized Git path metadata/);
+    await assert.rejects(git.resultHeadMatches(f.entry.worktree, head, [path]), /incomplete or oversized Git path metadata/);
+  }
+});
+
+test("missing or failing tracked path metadata stops result application before files, checkpoints or publication", async () => {
+  for (const trackedPaths of [undefined, async () => { throw new Error("Git path probe failed"); }, async () => null, async () => ["../outside"]]) {
+    const f = resultFixture(); f.ctx.git.trackedPaths = trackedPaths;
+    await assert.rejects(reconcileExecutionResult(f.ctx, f), /repository paths|Git path metadata/);
+    assert.equal(readFileSync(join(f.entry.worktree, "a.txt"), "utf8"), "before");
+    assert.deepEqual(f.calls, []); assert.equal(existsSync(join(f.dir, "result-application.json")), false);
+  }
 });
 
 test("canonical artifact targets survive native commit acknowledgement loss without changing the private manifest", async () => {
