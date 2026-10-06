@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { join } from "node:path";
 import { createHash } from "node:crypto";
 import { EventEmitter } from "node:events";
-import { mkdirSync, readFileSync, writeFileSync, rmSync, renameSync, symlinkSync, cpSync, statSync, lstatSync, existsSync } from "node:fs";
+import { mkdirSync, readFileSync, writeFileSync, rmSync, renameSync, symlinkSync, cpSync, statSync, lstatSync, existsSync, chmodSync } from "node:fs";
 import { pathToFileURL } from "node:url";
 import { makeExecution, executionLive, assertExecutionDependency } from "../lib/execution.mjs";
 import { redact } from "../lib/execution_io.mjs";
@@ -647,6 +647,68 @@ test("cancelling settled local outcomes preserves success, failure, cost and ses
   }
 });
 
+test("cancellation collects owned completed local jobs before the first reconciliation or settlement", async () => {
+  for (const provider of ["codex", "claude"]) for (const ok of [true, false]) for (const reconciled of [true, false]) for (const cancelSupported of [true, false]) {
+    const f = localTimeoutFixture({ provider }), options = { capabilities: { ...executionRegistry[provider], controls: { cancel: cancelSupported } } }, service = f.open(options);
+    const job = await service.submit({ operationId: "finished", name: "finished", allowance, spec: { cmd: "offline-cli-fixture", args: [], options: {} } });
+    const lines = provider === "codex" ? codexLines({ ok }) : claudeResultLines({ ok, cost: 0.4 });
+    f.runner.finish(lines, { exit: ok ? 0 : 23 }); f.runner.annotate(job.id, { endedAt: f.clock.now() });
+    if (reconciled) await service.reconcile();
+    assert.equal(service.state().current.execution.collected, false); assert.equal(existsSync(join(f.root, job.id, "result.json")), false);
+    assert.deepEqual(await service.cancel(), { confirmed: true });
+    const after = service.state(), resultPath = join(f.root, job.id, "result.json"), result = readFileSync(resultPath, "utf8");
+    assert.equal(after.current.exit, ok ? 0 : 23); assert.equal(after.current.endedAt, f.clock.now());
+    assert.equal(after.current.execution.providerState, ok ? "succeeded" : "failed"); assert.equal(after.current.execution.collected, true);
+    assert.equal(after.current.execution.quarantined, undefined); assert.equal(after.current.execution.sessionId, adapters[provider].sessionFrom(lines));
+    assert.equal(after.current.execution.costUsd, provider === "claude" ? 0.4 : null); assert.equal(after.stopped, "operator-cancelled");
+    assert.equal(Object.keys(after.operations).length, 1); assert.equal(after.operations.finished.costUsd, provider === "claude" ? 0.4 : null);
+    assert.equal(service.outcome(job.id).ok, ok); assert.deepEqual(f.stops, []);
+    const restarted = f.open(options); f.clock.advance(1000); await restarted.reconcile(); await restarted.cancel();
+    assert.equal(restarted.state().current.exit, ok ? 0 : 23); assert.equal(readFileSync(resultPath, "utf8"), result);
+    assert.equal(restarted.state().current.execution.providerState, after.current.execution.providerState); assert.deepEqual(f.stops, []);
+    await assert.rejects(restarted.continue({ operationId: "next", sessionId: f.session, spec: {} }), { code: "EXECUTION_STOPPED" });
+    assert.equal(f.runner.started.length, 1);
+  }
+});
+
+test("completed local cancellation collection failures retain a recoverable snapshot and dispatch fence", async () => {
+  for (const recovery of ["reconcile", "cancel"]) {
+    const f = localTimeoutFixture({ provider: "claude" }), service = f.open();
+    const job = await service.submit({ operationId: "finished", name: "finished", spec: { cmd: "offline-cli-fixture", args: [], options: {} } });
+    f.runner.finish(claudeResultLines({ ok: false, cost: 0.4 }), { exit: 23 }); f.runner.annotate(job.id, { endedAt: f.clock.now() });
+    const path = join(f.root, job.id, "result.json"); mkdirSync(path);
+    await assert.rejects(service.cancel());
+    const before = service.state(); assert.equal(before.stopped, "operator-cancelled"); assert.equal(before.current.exit, 23);
+    assert.equal(before.current.execution.providerState, "retrieving-results"); assert.equal(before.current.execution.collected, false);
+    assert.deepEqual(f.stops, []); await assert.rejects(service.submit({ operationId: "overlap", spec: {} }), { code: "EXECUTION_STOPPED" });
+    rmSync(path, { recursive: true }); const reopened = f.open(); await reopened[recovery]();
+    assert.equal(reopened.state().current.execution.providerState, "failed"); assert.equal(reopened.state().current.execution.collected, true);
+    assert.equal(reopened.state().current.execution.quarantined, undefined); assert.equal(reopened.state().current.exit, 23);
+    assert.equal(reopened.state().current.endedAt, before.current.endedAt); assert.equal(reopened.outcome(job.id).cost, 0.4);
+    assert.equal(reopened.sessionFrom(job.id), adapters.claude.sessionFrom(claudeResultLines({ ok: false, cost: 0.4 }))); assert.deepEqual(f.stops, []); assert.equal(f.runner.started.length, 1);
+  }
+});
+
+test("completed local evidence needs an exact job and exit while active stop output remains quarantined", async () => {
+  for (const mode of ["missing", "foreign", "unknown-exit", "active-stop"]) {
+    const f = localTimeoutFixture(), service = f.open();
+    const job = await service.submit({ operationId: "owned", name: "owned", spec: { cmd: "offline-cli-fixture", args: [], options: {} } });
+    if (mode === "active-stop") { await service.cancel(); f.setDescendants(false); f.runner.started[0].lines = codexLines(); await service.reconcile(); }
+    else {
+      f.runner.finish(codexLines(), { exit: mode === "unknown-exit" ? null : 0 });
+      const current = f.runner.current;
+      if (mode === "missing") f.runner.current = () => null;
+      if (mode === "foreign") f.runner.current = () => ({ ...current(), id: "different-job" });
+      await service.cancel();
+    }
+    assert.equal(existsSync(join(f.root, job.id, "result.json")), false);
+    assert.notEqual(service.state().current.execution.providerState, "succeeded");
+    assert.equal(service.state().stopped, "operator-cancelled");
+    if (mode === "active-stop") { assert.equal(service.current().exit, 137); assert.equal(service.current().execution.quarantined, true); }
+    await assert.rejects(service.continue({ operationId: "next", spec: {} }), { code: "EXECUTION_STOPPED" });
+  }
+});
+
 test("completed legacy local jobs keep their files and identity when future dispatch is cancelled", async () => {
   for (const exit of [0, 23]) {
     const f = legacyCancellationFixture(); f.setMembers([]);
@@ -691,29 +753,33 @@ test("operator cancellation leaves settled local registry evidence unchanged thr
 
 test("native completed local roots retain exact exits and results after cancel and log retention", async t => {
   const observations = [];
-  for (const exit of [0, 23]) {
+  for (const exit of [0, 23]) for (const collectedBeforeCancel of [true, false]) {
     const root = tempHome(), cwd = tempHome(), taskId = "acme/widget/native-settled", runner = makeRunner(root);
     const service = makeExecution({ root, taskId, provider: "codex", runner });
     const output = codexLines({ ok: exit === 0 }).join("\n")+"\n";
     const job = await service.start("native-settled", process.execPath, ["-e", `process.stdout.write(${JSON.stringify(output)});process.exit(${exit})`], { cwd, execution: { operationId: "settled" } });
     while (runner.read(job.id).exit === null) await new Promise(resolve => setImmediate(resolve));
-    await service.reconcile(); service.settle(job.id);
-    const before = service.state(), resultPath = join(root, job.id, "result.json"), resultBytes = readFileSync(resultPath, "utf8"), rawJob = readFileSync(join(root, job.id, "job.json"), "utf8");
+    if (collectedBeforeCancel) { await service.reconcile(); service.settle(job.id); }
+    const original = runner.current(), before = service.state(), resultPath = join(root, job.id, "result.json"), rawJob = readFileSync(join(root, job.id, "job.json"), "utf8");
+    assert.equal(before.current.execution.collected, collectedBeforeCancel);
     runner.kill = () => assert.fail("completed local run must not be signalled");
     assert.deepEqual(await service.cancel(), { confirmed: true });
-    assert.equal(readFileSync(join(root, job.id, "job.json"), "utf8"), rawJob);
+    const resultBytes = readFileSync(resultPath, "utf8");
+    const cancelledSnapshot = service.state();
+    if (collectedBeforeCancel) assert.equal(readFileSync(join(root, job.id, "job.json"), "utf8"), rawJob);
     const reopenedRunner = makeRunner(root), reopened = makeExecution({ root, taskId, provider: "codex", runner: reopenedRunner });
     reopenedRunner.kill = () => assert.fail("restart must not signal a completed local run");
     await reopened.reconcile(); assert.deepEqual(await reopened.cancel(), { confirmed: true });
     rmSync(join(root, job.id, "provider.log")); rmSync(join(root, job.id, "job.log"));
     await reopened.reconcile(); const after = reopened.state();
-    assert.equal(after.current.exit, exit); assert.equal(after.current.endedAt, before.current.endedAt);
+    assert.equal(after.current.exit, exit); assert.equal(after.current.endedAt, original.endedAt);
     assert.equal(after.current.execution.providerState, exit === 0 ? "succeeded" : "failed");
-    assert.equal(after.current.execution.sessionId, before.current.execution.sessionId); assert.equal(after.current.execution.quarantined, undefined);
-    assert.deepEqual(after.operations, before.operations); assert.equal(readFileSync(resultPath, "utf8"), resultBytes);
+    assert.equal(after.current.execution.sessionId, "22222222-2222-4222-8222-222222222222"); assert.equal(after.current.execution.quarantined, undefined);
+    assert.deepEqual(after.operations, cancelledSnapshot.operations); assert.equal(after.operations.settled.idempotencyKey, before.operations.settled.idempotencyKey);
+    assert.equal(readFileSync(resultPath, "utf8"), resultBytes);
     assert.equal(reopened.outcome(job.id).ok, exit === 0); assert.equal(reopened.outcome(job.id).cost, null);
-    await assert.rejects(reopened.continue({ operationId: "next-turn", sessionId: before.current.execution.sessionId, spec: {} }), { code: "EXECUTION_STOPPED" });
-    observations.push({ taskId, runId: job.id, exit, endedAt: after.current.endedAt, providerState: after.current.execution.providerState,
+    await assert.rejects(reopened.continue({ operationId: "next-turn", sessionId: after.current.execution.sessionId, spec: {} }), { code: "EXECUTION_STOPPED" });
+    observations.push({ taskId, runId: job.id, exit, collectedBeforeCancel, endedAt: after.current.endedAt, providerState: after.current.execution.providerState,
       session: after.current.execution.sessionId, stopped: after.stopped, outcome: reopened.outcome(job.id),
       files: { execution: join(root, "execution.json"), job: join(root, job.id, "job.json"), result: resultPath } });
   }
@@ -1098,7 +1164,7 @@ function resultFixture() {
   writeFileSync(join(worktree, "a.txt"), "before");
   const entry = { ...newEntry({ repo: "acme/widget", harness: "codex", session: "22222222-2222-4222-8222-222222222222", branch: "work/result", base: "main", worktree, nowIso: T0, state: STATES.running }), execution: { runId, providerJobId: "j1", turnId: "t1", inputHead: revision } };
   const result = { taskId: id, runId, providerJobId: "j1", turnId: "t1", inputHead: revision, repo: entry.repo, branch: entry.branch, files: [{ path: "a.txt", beforeHash: sha("before"), afterHash: sha("after"), text: "after" }], pr: { title: "Apply result", body: "Verified execution artifacts." } };
-  const calls = [], git = { head: async () => revision, trackedPaths: async () => ["a.txt"], dirty: async () => ({ modified: 0, untracked: 0 }), currentBranch: async () => entry.branch, originOf: async () => "https://github.com/acme/widget.git", commitResult: async () => calls.push("commit"), pushResult: async () => calls.push("push") };
+  const calls = [], git = { head: async () => revision, trackedPaths: async () => ["a.txt"], resultModesMatch: async () => true, dirty: async () => ({ modified: 0, untracked: 0 }), currentBranch: async () => entry.branch, originOf: async () => "https://github.com/acme/widget.git", commitResult: async () => calls.push("commit"), pushResult: async () => calls.push("push") };
   const gh = { publishResultPr: async () => { calls.push("PR"); return { number: 1, url: "https://example.test/pr/1" }; } };
   const ctx = { git, gh, readPrd: () => "# Brief\n\n## Verify\n\n- `printf verified`\n" };
   const verify = async () => { calls.push("verify"); return { stdout: "verified", stderr: "" }; };
@@ -1523,6 +1589,90 @@ async function nativeResultFixture() {
   return { ...f, verify: async (...args) => { f.calls.push("verify"); return execFileAsync(...args); } };
 }
 
+test("text artifacts reject filesystem, staged and committed mode changes before content mutation", async t => {
+  const observations = [];
+  for (const executable of [false, true]) for (const source of ["filesystem", "index", "HEAD"]) for (const operation of ["edit", "already-present", "delete"]) {
+    const f = await nativeResultFixture(), path = join(f.entry.worktree, "a.txt"), originalMode = executable ? 0o755 : 0o644;
+    chmodSync(path, originalMode); await f.ctx.git.commitResult(f.entry.worktree, ["a.txt"]);
+    const inputHead = await f.ctx.git.head(f.entry.worktree); f.result.inputHead = inputHead; f.entry.execution.inputHead = inputHead;
+    const text = operation === "delete" ? null : operation === "already-present" ? "before" : "after";
+    f.result.files[0] = { ...f.result.files[0], text, afterHash: text === null ? null : sha(text) };
+    const changedMode = executable ? 0o644 : 0o755;
+    if (source === "index") await execFileAsync("git", ["update-index", executable ? "--chmod=-x" : "--chmod=+x", "--", "a.txt"], { cwd: f.entry.worktree });
+    else {
+      chmodSync(path, changedMode);
+      if (source === "HEAD") await f.ctx.git.commitResult(f.entry.worktree, ["a.txt"]);
+    }
+    f.calls.length = 0;
+    const head = await f.ctx.git.head(f.entry.worktree), index = (await execFileAsync("git", ["ls-files", "--stage", "-z"], { cwd: f.entry.worktree })).stdout;
+    const fileMode = statSync(path).mode, manifest = structuredClone(f.result);
+    await assert.rejects(reconcileExecutionResult(f.ctx, f), /artifact target mode differs/);
+    assert.equal(readFileSync(path, "utf8"), "before"); assert.equal(statSync(path).mode, fileMode);
+    assert.equal(await f.ctx.git.head(f.entry.worktree), head);
+    assert.equal((await execFileAsync("git", ["ls-files", "--stage", "-z"], { cwd: f.entry.worktree })).stdout, index);
+    assert.deepEqual(f.result, manifest); assert.deepEqual(f.calls, []);
+    assert.equal(existsSync(join(f.dir, "result-application.json")), false);
+    observations.push({ source, operation, inputMode: executable ? "100755" : "100644", inputHead, head, unchanged: true,
+      filesystemMode: fileMode & 0o777, index, worktree: f.entry.worktree, resultDir: f.dir });
+  }
+  const path = join(tempHome(), "artifact-mode-evidence.json"); writeJsonAtomic(path, { observations }); t.diagnostic(`artifact mode evidence: ${path}`);
+});
+
+test("text artifacts preserve executable inputs, regular creations and deletion modes through native recovery", async () => {
+  for (const operation of ["edit", "delete", "create"]) {
+    const f = await nativeResultFixture(), path = operation === "create" ? " name\twith\nnewline.mjs" : "a.txt";
+    if (operation !== "create") { chmodSync(join(f.entry.worktree, path), 0o755); await f.ctx.git.commitResult(f.entry.worktree, [path]); }
+    const head = await f.ctx.git.head(f.entry.worktree); f.result.inputHead = head; f.entry.execution.inputHead = head; f.calls.length = 0;
+    f.result.files = [{ path, beforeHash: operation === "create" ? null : sha("before"), afterHash: operation === "delete" ? null : sha("after"), text: operation === "delete" ? null : "after" }];
+    const commit = f.ctx.git.commitResult; let lost = true;
+    f.ctx.git.commitResult = async (...args) => { await commit(...args); if (lost) { lost = false; throw new Error("lost artifact commit reply"); } };
+    await assert.rejects(reconcileExecutionResult(f.ctx, f), /lost artifact commit reply/);
+    const appliedHead = await f.ctx.git.head(f.entry.worktree);
+    await reconcileExecutionResult(f.ctx, f); await reconcileExecutionResult(f.ctx, f);
+    assert.equal(await f.ctx.git.head(f.entry.worktree), appliedHead);
+    if (operation === "delete") assert.equal(existsSync(join(f.entry.worktree, path)), false);
+    else {
+      assert.equal(readFileSync(join(f.entry.worktree, path), "utf8"), "after");
+      assert.equal(statSync(join(f.entry.worktree, path)).mode & 0o100, operation === "edit" ? 0o100 : 0);
+    }
+    assert.deepEqual(await f.ctx.git.dirty(f.entry.worktree, { strict: true }), { modified: 0, untracked: 0 });
+    assert.equal(readJson(join(f.dir, "result-application.json")).phase, "published");
+    assert.deepEqual(f.calls, ["commit", "commit", "verify", "push", "PR"]);
+  }
+});
+
+test("new and verified text artifacts reject unrepresented modes without verification or publication replay", async () => {
+  const created = await nativeResultFixture(), path = "new.txt";
+  writeFileSync(join(created.entry.worktree, path), "after"); chmodSync(join(created.entry.worktree, path), 0o755);
+  created.result.files = [{ path, beforeHash: null, afterHash: sha("after"), text: "after" }];
+  await assert.rejects(reconcileExecutionResult(created.ctx, created), /artifact target mode differs/);
+  assert.deepEqual(created.calls, []); assert.equal(statSync(join(created.entry.worktree, path)).mode & 0o100, 0o100);
+  const f = await nativeResultFixture(); let offline = true;
+  f.ctx.git.pushResult = async () => { f.calls.push("push"); if (offline) throw new Error("publication unavailable"); };
+  await assert.rejects(reconcileExecutionResult(f.ctx, f), /publication unavailable/);
+  assert.equal(readJson(join(f.dir, "result-application.json")).phase, "verified");
+  chmodSync(join(f.entry.worktree, "a.txt"), 0o755); f.calls.length = 0; offline = false;
+  await assert.rejects(reconcileExecutionResult(f.ctx, f), /artifact target mode differs/);
+  assert.deepEqual(f.calls, []); assert.equal(readJson(join(f.dir, "verification.json")).evidence.length, 1);
+});
+
+test("artifact mode metadata fails closed on unavailable, malformed, truncated and oversized Git reads", async () => {
+  for (const resultModesMatch of [undefined, async () => null, async () => { throw new Error("Git mode metadata unavailable"); }]) {
+    const f = resultFixture(); f.ctx.git.resultModesMatch = resultModesMatch;
+    await assert.rejects(reconcileExecutionResult(f.ctx, f), /artifact (mode metadata unavailable|target mode differs)/);
+    assert.deepEqual(f.calls, []); assert.equal(readFileSync(join(f.entry.worktree, "a.txt"), "utf8"), "before");
+  }
+  for (const stdout of ["100644 partial", "invalid\0", "x".repeat(GIT_PATH_LIMITS.bytes + 1), null]) {
+    const f = resultFixture(), calls = [];
+    const git = makeGit({ config: CONFIG, exec: async (cmd, args, options) => {
+      assert.equal(cmd, "git"); assert.equal(options.timeout, GIT_PATH_LIMITS.timeoutMs); assert.equal(options.maxBuffer, GIT_PATH_LIMITS.bytes);
+      calls.push(args); return { stdout };
+    } });
+    await assert.rejects(git.resultModesMatch(f.entry.worktree, f.result.inputHead, ["a.txt"]), /Git (path|mode) metadata/);
+    assert.equal(calls.length, 3);
+  }
+});
+
 for (const mutation of ["tracked", "staged", "untracked"]) test(`verification ${mutation} writes block publication at the unchanged native Git head`, async () => {
   const f = await nativeResultFixture();
   const command = mutation === "untracked" ? "printf created > generated.txt" : `printf dirty > b.txt${mutation === "staged" ? " && git add -- b.txt" : ""}`;
@@ -1793,11 +1943,11 @@ test("encoded control characters cannot amplify a log window beyond its byte bud
 });
 
 test("confirmed local cancellation quarantines late output and expired diagnostics are removed", async () => {
-  const root = tempHome(), clock = makeClock(), runner = makeRunner(root, { clock, probe: () => false, processes: () => [] });
+  const root = tempHome(), clock = makeClock(), runner = makeRunner(root, { clock });
   const service = makeExecution({ root, taskId: "local-cancel", provider: "codex", runner, clock });
-  const job = await service.start("fixture", process.execPath, ["-e", 'process.stdout.write("{\\"type\\":\\"turn.completed\\"}\\n")'], { cwd: tempHome(), execution: { operationId: "cancel" } });
-  while (runner.read(job.id).exit === null) await new Promise(resolve => setImmediate(resolve));
-  await service.cancel(); await service.reconcile();
+  const job = await service.start("fixture", process.execPath, ["-e", 'process.stdout.write("{\\"type\\":\\"turn.completed\\"}\\n");setInterval(()=>{},1000)'], { cwd: tempHome(), execution: { operationId: "cancel" } });
+  assert.equal(runner.read(job.id).exit, null);
+  await service.cancel(); await runner.waitForKill(job.id); await service.reconcile();
   assert.equal(service.current().execution.quarantined, true);
   await assert.rejects(service.collect(), { code: "EXECUTION_QUARANTINED" });
   const dir = service.dirOf(job.id); writeJsonAtomic(join(dir, "result.json"), { outcome: { ok: false } });

@@ -366,6 +366,13 @@ capability is unavailable. Restart reconciliation preserves the same historical
 outcome. Completed pre-boundary local jobs also retain their original files and
 identity without an invented stop/adoption record. Active local stops still
 require exact process-tree confirmation and quarantine their late results.
+If an owned local job has already exited before collection, cancellation saves
+its exact exit/end-time snapshot and the future-dispatch fence, then uses the
+same local settlement helper to retain its outcome, usage and session. A failed
+cache write remains in `retrieving-results`; restart reconciliation or a repeated
+cancel completes that saved snapshot. This requires the matching job, an actual
+recorded exit and no prior active stop. Uncertain exits and output arriving after
+an active stop retain the existing cancellation/quarantine path.
 Remote cancellation never equates stopping a submission client with stopping its
 job. The additive `execution.cancellation` record stores status (`pending`,
 `acknowledged`, `confirmed`, `unsupported` or `terminal`), request reason/time,
@@ -433,6 +440,15 @@ replay remains read-only. Missing or incomplete metadata blocks publication.
 Git path reads use NUL separators, preserving spaces and newlines, with a
 2-second deadline and 1 MiB output cap per HEAD/index query. Ownership checks on
 staged and changed paths reuse that bounded reader without trimming filenames.
+Text-only manifests preserve each target's input Git mode (`100644` or `100755`);
+new files use `100644`. Before reading payloads or applying changes, the shared
+Git helper compares input, current HEAD and index modes with the actual regular
+file's owner executable bit. Uncommitted, staged and already-committed mode
+changes cannot be adopted into a text result, even when its content hash matches.
+Missing, malformed or incomplete mode metadata refuses publication; tree/index
+records reuse the NUL reader's 2-second and 1 MiB limits. The same guard covers
+lost commit replies and verified-result replay. Exact-mode edits/deletions and
+regular creations remain recoverable; pushed revisions describe their own modes.
 Applied content and input ancestry reconcile lost commit
 acknowledgements. Only existing Git/GitHub helpers commit, push and reconcile one
 regular PR. Approved immutable PRD Verify commands run in the owned checkout
