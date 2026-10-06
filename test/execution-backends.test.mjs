@@ -202,6 +202,49 @@ test("stale observations, wrong root turns and silence cannot settle remote work
   assert.ok(executionLive(f.service.current()));
 });
 
+test("future observations cannot poison inspection or lost-acknowledgement recovery", async t => {
+  const evidence = [];
+  for (const provider of ["openai-agents", "codex-cloud"]) for (const method of ["inspect", "lookup"]) {
+    const f = remote(provider), submit = f.transport.submit, lookup = f.transport.lookup;
+    let patch = {};
+    if (method === "lookup") {
+      f.transport.submit = async req => { await submit(req); throw new Error("lost launch reply"); };
+      f.transport.lookup = async req => ({ ...await lookup(req), ...patch });
+      await assert.rejects(f.service.submit(input), /lost launch reply/);
+    } else { await f.service.submit(input); await f.service.reconcile({ force: true }); }
+    const initial = f.service.state(), job = initial.current, before = job.execution;
+    const rejected = [];
+    for (const observedAt of [f.clock.now() + 1, f.clock.now() * 1000, Number.MAX_SAFE_INTEGER]) for (const state of ["running", "waiting-for-input", "succeeded"]) {
+      patch = { observedAt, state, costUsd: 99, cursor: "future-page", events: [{ eventId: "future-event", type: "output", data: "must not enter history" }] };
+      if (method === "inspect") f.observe(patch);
+      await f.reopen().reconcile({ force: true });
+      const saved = f.service.state(), ex = saved.current.execution;
+      assert.equal(ex.recoveryAction, "EXECUTION_PROTOCOL"); assert.equal(ex.providerState, "status-unknown");
+      for (const key of ["observedAt", "reconciledAt", "terminalState", "terminalObservedAt", "completedAt", "cursor", "costUsd", "acceptance", "providerJobId", "sessionId", "turnId"])
+        assert.deepEqual(ex[key], before[key], `${method}: future ${key} is not adopted`);
+      assert.equal(ex.collected, false); assert.deepEqual(saved.allowance, initial.allowance);
+      assert.equal(ex.nextAttemptAt > f.clock.now(), true);
+      const calls = f.calls.length; f.reopen().inspect(); await f.reopen().reconcile(); assert.equal(f.calls.length, calls);
+      assert.equal(readJson(join(f.service.dirOf(job.id), "result.json")), null);
+      assert.equal(existsSync(join(f.service.dirOf(job.id), "events.jsonl")), false);
+      assert.equal(f.calls.filter(c => c[0] === "submit").length, 1);
+      rejected.push({ observedAt, state, observedBefore: before.observedAt, observedAfter: ex.observedAt, nextAttemptAt: ex.nextAttemptAt });
+    }
+    const unrelated = remote(provider); await unrelated.service.submit(input); await unrelated.service.reconcile({ force: true });
+    assert.equal(unrelated.service.current().execution.providerState, "running");
+    patch = { state: "succeeded", observedAt: f.clock.now(), costUsd: null, cursor: "current-page", events: [] };
+    if (method === "inspect") f.observe(patch);
+    const recovered = f.reopen(); await recovered.reconcile({ force: true }); await recovered.collect();
+    assert.equal(recovered.current().running, false); assert.equal(recovered.current().execution.observedAt, f.clock.now());
+    assert.equal(recovered.current().execution.providerState, "succeeded"); assert.equal(recovered.current().execution.costUsd, null);
+    assert.equal(f.calls.filter(c => c[0] === "submit").length, 1);
+    evidence.push({ provider, method, runId: job.id, coordinatorAt: f.clock.now(), rejected, fixtureSubmits: 1,
+      files: { execution: join(f.root, "execution.json"), job: join(f.service.dirOf(job.id), "job.json"), result: join(f.service.dirOf(job.id), "result.json") } });
+  }
+  const report = join(tempHome(), "observation-clock-evidence.json"); writeJsonAtomic(report, { cases: evidence });
+  t.diagnostic(`observation clock evidence: ${report}`);
+});
+
 const CURSOR_BYTES = EXECUTION_CURSOR_BYTES;
 test("inspection and acceptance lookup reject invalid cursors before journaling or adopting progress", async t => {
   const circular = {}; circular.self = circular;
@@ -2565,6 +2608,125 @@ test("cancellation during verification fences publication and retains verificati
   await assert.rejects(reconcileExecutionResult(f.ctx, f), /concurrent stop/);
   assert.deepEqual(f.calls, ["commit", "verify"]); assert.equal(readJson(join(f.dir, "verification.json")).evidence[0].exit, 0);
   assert.ok(privateHome); assert.equal(existsSync(privateHome), false);
+});
+
+function publicationControlContext(f) {
+  const state = makeState(f.ctx.home); state.put(f.id, { ...f.entry, last: { run: f.job.id, exit: 0 } });
+  Object.assign(f.ctx, { state, clock: f.provider.clock, log: silentLog });
+  return state;
+}
+
+test("publication and cancellation have one ordering across push, PR writes and another process", async t => {
+  const evidence = [];
+  for (const stage of ["before", "push", "PR", "process"]) {
+    const f = await collectedArtifactFixture(), result = await f.collect(), state = publicationControlContext(f);
+    const request = () => requestControl(f.ctx, { handle: f.id, action: "cancel" });
+    let attempts = 0;
+    const duringPublication = async () => {
+      attempts++; const registry = readFileSync(state.file, "utf8"), execution = readFileSync(join(f.service.root, "execution.json"), "utf8");
+      if (stage === "process") {
+        const code = `import {makeState} from ${JSON.stringify(new URL("../lib/state.mjs", import.meta.url).href)};
+import {makeExecution} from ${JSON.stringify(new URL("../lib/execution.mjs", import.meta.url).href)};
+import {requestControl} from ${JSON.stringify(new URL("../lib/control.mjs", import.meta.url).href)};
+const ctx={home:${JSON.stringify(f.ctx.home)},state:makeState(${JSON.stringify(f.ctx.home)}),clock:Date,log:{info(){}},
+executionFor:()=>makeExecution({root:${JSON.stringify(f.service.root)},taskId:${JSON.stringify(f.id)},provider:"openai-agents",account:"test",transport:{}})};
+try{requestControl(ctx,{handle:${JSON.stringify(f.id)},action:"cancel"});process.stdout.write(JSON.stringify({queued:true}));}
+catch(error){process.stdout.write(JSON.stringify({code:error.code,message:error.message}));}`;
+        const child = JSON.parse((await execFileAsync(process.execPath, ["--input-type=module", "-e", code], { timeout: 5000, maxBuffer: 4096 })).stdout);
+        assert.equal(child.code, "EXECUTION_PUBLICATION_BUSY"); assert.match(child.message, /retry.*cancel/i);
+      } else assert.throws(request, error => error.code === "EXECUTION_PUBLICATION_BUSY" && /retry.*cancel/i.test(error.message));
+      assert.equal(readFileSync(state.file, "utf8"), registry); assert.equal(readFileSync(join(f.service.root, "execution.json"), "utf8"), execution);
+      await assert.rejects(f.reopen().cancel(), /already running|lock recovery/);
+      await assert.rejects(f.reopen().continue({ ...input, operationId: "overlap", sessionId: f.job.execution.sessionId }), /already running|lock recovery/);
+      await assert.rejects(reconcileExecutionResult(f.ctx, { ...f, result }), { code: "EXECUTION_PUBLICATION_BUSY" });
+      // Entry-scoped exclusion leaves another task's operator control available.
+      const otherId = "acme/widget/unrelated-publication", otherRoot = join(f.ctx.home, "runs", idSlug(otherId));
+      state.put(otherId, { ...newEntry({ repo: "acme/widget", harness: "openai-agents", nowIso: T0, state: STATES.running }) });
+      const ctx = { ...f.ctx, executionFor: id => id === f.id ? f.reopen() : makeExecution({ root: otherRoot, taskId: otherId, provider: "openai-agents", account: "test", transport: f.provider.transport, capabilities: f.provider.capabilities }) };
+      requestControl(ctx, { handle: otherId, action: "cancel" });
+      assert.equal(state.get(otherId).dispatch_stopped, "cancellation-requested");
+      assert.equal(state.get(f.id).dispatch_stopped, undefined); assert.equal(f.provider.calls.filter(c => c[0] === "continue").length, 0);
+    };
+    f.verify = async () => { f.calls.push("verify"); if (stage === "before") request(); return { stdout: "verified" }; };
+    f.ctx.git.pushResult = async () => { f.calls.push("push"); if (["push", "process"].includes(stage)) await duringPublication(); };
+    f.ctx.gh.publishResultPr = async () => { f.calls.push("PR"); if (stage === "PR") await duringPublication(); return { number: 1, url: "https://example.test/pr/1" }; };
+    if (stage === "before") {
+      await assert.rejects(reconcileExecutionResult(f.ctx, { ...f, result }), /concurrent stop/);
+      assert.deepEqual(f.calls, ["commit", "verify"]); assert.equal(state.get(f.id).dispatch_stopped, "cancellation-requested");
+    } else {
+      const published = await reconcileExecutionResult(f.ctx, { ...f, result });
+      assert.deepEqual(f.calls, ["commit", "verify", "push", "PR"]); assert.equal(attempts, 1);
+      assert.equal(readJson(join(f.dir, "result-application.json")).phase, "published");
+      state.update(f.id, { pr: published.pr.number, url: published.pr.url });
+      request(); await cancelControl(f.ctx, f.id);
+      assert.equal(state.get(f.id).reason, "cancelled"); assert.equal(f.reopen().current().execution.providerState, "succeeded");
+      assert.equal(f.provider.calls.filter(c => c[0] === "cancel").length, 0);
+    }
+    for (const file of ["publication.lock", "execution.lock"]) assert.equal(existsSync(join(f.service.root, file)), false);
+    evidence.push({ stage, attempts, publicationCalls: f.calls, reason: state.get(f.id).reason, stopped: state.get(f.id).dispatch_stopped,
+      files: { registry: state.file, execution: join(f.service.root, "execution.json"), application: join(f.dir, "result-application.json"), verification: join(f.dir, "verification.json") } });
+  }
+  const report = join(tempHome(), "publication-order-evidence.json"); writeJsonAtomic(report, { cases: evidence });
+  t.diagnostic(`publication order evidence: ${report}`);
+});
+
+test("publication exclusions release after I/O failures and still allow cancellation during inspection", async t => {
+  const evidence = [];
+  for (const failure of ["push", "PR", "checkpoint", "execution-lock"]) {
+    const f = await collectedArtifactFixture(), result = await f.collect(), state = publicationControlContext(f);
+    const checkpoint = join(f.dir, "result-application.json"); let previous;
+    f.ctx.git.pushResult = async () => { f.calls.push("push"); if (failure === "push") throw new Error("push acknowledgement lost"); };
+    f.ctx.gh.publishResultPr = async () => {
+      f.calls.push("PR");
+      if (failure === "PR") throw new Error("PR acknowledgement lost");
+      if (failure === "checkpoint") { previous = readFileSync(checkpoint, "utf8"); rmSync(checkpoint); mkdirSync(checkpoint); }
+      return { number: 1, url: "https://example.test/pr/1" };
+    };
+    const held = failure === "execution-lock" ? acquireProcessLock(join(f.service.root, "execution.lock"), "execution") : null;
+    try { await assert.rejects(reconcileExecutionResult(f.ctx, { ...f, result })); }
+    finally { held?.release(); }
+    if (failure === "checkpoint") { rmSync(checkpoint, { recursive: true }); writeFileSync(checkpoint, previous); }
+    for (const file of ["publication.lock", "execution.lock"]) assert.equal(existsSync(join(f.service.root, file)), false);
+    const calls = [...f.calls]; requestControl(f.ctx, { handle: f.id, action: "cancel" });
+    const registry = readFileSync(state.file, "utf8");
+    assert.throws(() => requestControl(f.ctx, { handle: f.id, action: "cancel" }), /already queued/);
+    assert.equal(readFileSync(state.file, "utf8"), registry); assert.equal(existsSync(join(f.service.root, "publication.lock")), false);
+    await assert.rejects(reconcileExecutionResult(f.ctx, { ...f, result }), /concurrent stop/);
+    assert.deepEqual(f.calls, calls); assert.equal(state.get(f.id).dispatch_stopped, "cancellation-requested");
+    evidence.push({ failure, publicationCalls: calls, checkpoint: readJson(checkpoint).phase, locksReleased: true,
+      files: { registry: state.file, application: checkpoint, execution: join(f.service.root, "execution.json") } });
+  }
+  // Progress owns execution.lock, but a stop request must still persist promptly.
+  const f = await collectedArtifactFixture(), state = publicationControlContext(f), inspect = f.provider.transport.inspect;
+  f.provider.transport.inspect = async req => { requestControl(f.ctx, { handle: f.id, action: "cancel" }); return inspect(req); };
+  await f.service.reconcile({ force: true });
+  assert.equal(state.get(f.id).dispatch_stopped, "cancellation-requested");
+  assert.equal(state.get(f.id).control.status, "queued"); assert.equal(f.provider.calls.filter(c => c[0] === "submit").length, 1);
+  assert.equal(existsSync(join(f.service.root, "publication.lock")), false);
+  const report = join(tempHome(), "publication-cleanup-evidence.json"); writeJsonAtomic(report, { cases: evidence, inspectionCancellationQueued: true });
+  t.diagnostic(`publication cleanup evidence: ${report}`);
+});
+
+test("publication refuses private cancellation and superseding roots without relying on registry fences", async t => {
+  const evidence = [];
+  for (const change of ["cancel", "continue"]) {
+    const f = await collectedArtifactFixture(), result = await f.collect(), state = publicationControlContext(f);
+    const bytes = readFileSync(join(f.dir, "result.json"), "utf8");
+    f.verify = async () => {
+      f.calls.push("verify");
+      if (change === "cancel") await f.reopen().cancel();
+      else await f.reopen().continue({ ...input, operationId: "replacement", sessionId: f.job.execution.sessionId });
+      return { stdout: "verified" };
+    };
+    await assert.rejects(reconcileExecutionResult(f.ctx, { ...f, result }), change === "cancel" ? /concurrent stop/ : /publication root changed/);
+    assert.deepEqual(f.calls, ["commit", "verify"]); assert.equal(state.get(f.id).dispatch_stopped, undefined);
+    assert.equal(readFileSync(join(f.dir, "result.json"), "utf8"), bytes);
+    for (const file of ["publication.lock", "execution.lock"]) assert.equal(existsSync(join(f.service.root, file)), false);
+    evidence.push({ change, publicationCalls: f.calls, runBefore: f.job.id, runAfter: f.reopen().current().id, privateStop: f.reopen().state().stopped,
+      files: { registry: state.file, execution: join(f.service.root, "execution.json"), result: join(f.dir, "result.json"), verification: join(f.dir, "verification.json") } });
+  }
+  const report = join(tempHome(), "publication-root-evidence.json"); writeJsonAtomic(report, { cases: evidence });
+  t.diagnostic(`publication root evidence: ${report}`);
 });
 
 test("slow remote result collection cannot occupy the GitHub review lane", async () => {

@@ -1,0 +1,648 @@
+{
+  "version": 1,
+  "task_id": "task-df42674c6251c85b0edef13f",
+  "source_parent": "90bc5ea173fedd9bd305e32f9e367ececea608d4",
+  "observed_at": "2026-10-06T12:16:56.443690+00:00",
+  "review": {
+    "id": 5427893147,
+    "inline_comment_ids": [
+      4194890751,
+      4194890757
+    ]
+  },
+  "commands": [
+    {
+      "command": "npm test",
+      "exit": 0,
+      "raw_log": "/tmp/execution-publication-clock-final-tests.txt",
+      "sha256": "e83e9ddc53c85f5be7242f5cbf9582a73251a7a0e677c8fc749218cb0238cfa4",
+      "tests": 1076,
+      "passed": 1076,
+      "failed": 0
+    },
+    {
+      "command": "npm run lint",
+      "exit": 0,
+      "raw_log": "/tmp/execution-publication-clock-final-lint.txt",
+      "sha256": "8c7790de3f018fb4580f18ac70e1b355a0f76f522dd73acbdaa63632feffcecc"
+    },
+    {
+      "command": "npm run test:execution-backends",
+      "exit": 0,
+      "raw_log": "/tmp/execution-publication-clock-final-backends.txt",
+      "sha256": "7215b015ea57a0da4999c15eb97e36b4735e064a06c89e9e2ad10f6eb8fff99b",
+      "tests": 374,
+      "passed": 374,
+      "failed": 0
+    },
+    {
+      "command": "git diff --check",
+      "exit": 0,
+      "raw_log": "/tmp/execution-publication-clock-final-diff.txt",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    }
+  ],
+  "regression_reproduction": {
+    "command": "node --test --test-name-pattern='future observations cannot poison|publication and cancellation have|publication exclusions release' test/execution-backends.test.mjs",
+    "exit": 1,
+    "raw_log": "/tmp/execution-publication-clock-red.txt",
+    "sha256": "e9af076012adbf22d10f1a65221208bde8c38bfdd4d3b4b071ae5a44c6767432",
+    "tests": 3,
+    "passed": 0,
+    "failed": 3,
+    "expected_failure": true
+  },
+  "focused_checks": [
+    {
+      "command": "node --test --test-name-pattern='future observations cannot poison|publication and cancellation have|publication exclusions release|publication refuses private|cancellation during verification|interrupted verification blocks|opaque remote identities survive|stale observations, wrong root' test/execution-backends.test.mjs",
+      "exit": 0,
+      "raw_log": "/tmp/execution-publication-clock-focus.txt",
+      "sha256": "10d6bc4604591b33bfd3ab82763107774ca6dfa6011c78333c9188d4f58cf621",
+      "tests": 8,
+      "passed": 8,
+      "failed": 0
+    }
+  ],
+  "artifact_hashes": {
+    "lib/execution.mjs": "5e525fda1665320d4250003a349cf0566c781fa01e62ce39820b27f2f33449e4",
+    "lib/execution_result.mjs": "ceb98afa1c7eb203604b2a793b5b879bf35abf47950884ad862e62bc4d8b39e8",
+    "lib/control.mjs": "a956a36afa2b7ceaa5687a02977e1f709e95108f2a0b0c89e40f73bbca1d6b32",
+    "test/execution-backends.test.mjs": "6663c57b0c7d4d4ea6b7fcd9814280231debdb7aa08166eddb5d6018338a45ef",
+    "docs/execution.md": "d69d13e14dad6d1a7f6d7ed4b2583bdf62632096e0d3ffcf3f4eb608d71ec6fb"
+  },
+  "source_and_output_review": [
+    {
+      "rule": "An observation cannot replace the owned progress checkpoint with a timestamp beyond the reconciliation clock or adopt state, cost, events or recovered ownership from that invalid observation.",
+      "files": [
+        "lib/execution.mjs",
+        "lib/execution_io.mjs",
+        "lib/execution_journal.mjs",
+        "lib/task_prepare.mjs",
+        "docs/execution.md"
+      ],
+      "boundaries_checked": [
+        "Inspection and lost-acknowledgement lookup use the same finite start/last-observation lower bound and coordinator-clock upper bound before journal append or identity, cursor, cost and terminal-state adoption.",
+        "The upper bound is clock.now() after bounded transport I/O; no future skew allowance is accepted. One-millisecond future values, magnified units and Number.MAX_SAFE_INTEGER fail with scoped EXECUTION_PROTOCOL backoff.",
+        "Invalid observations retain the accepted timestamp or unresolved null, current job/root/session, cursor, cost and allowance; no future events or results are written. Cached/UI reads do not call a provider, and normal progress respects backoff.",
+        "Correctly dated authoritative completion recovers the same owned root after restart for both reserved provider fixtures, including lost launch replies, with one initial fixture submission. An unrelated task can still advance.",
+        "Remote preparation shares this boundary; completion-time and terminal-outcome validation remain independent. Event timestamps are diagnostic provenance and never establish task liveness. Older poisoned timestamps require authoritative checkpoint recovery without erasing ownership or paid intent."
+      ],
+      "regressions": [
+        "future observations cannot poison inspection or lost-acknowledgement recovery",
+        "stale observations, wrong root turns and silence cannot settle remote work"
+      ]
+    },
+    {
+      "rule": "An accepted cancellation fence and final branch/PR publication must have a shared order; a check before asynchronous external I/O cannot provide that order alone.",
+      "files": [
+        "lib/execution_result.mjs",
+        "lib/control.mjs",
+        "lib/execution.mjs",
+        "lib/daemon.mjs",
+        "lib/tick.mjs",
+        "lib/git.mjs",
+        "lib/commands/serve.mjs",
+        "docs/execution.md"
+      ],
+      "boundaries_checked": [
+        "The existing native process-identity helper owns an entry-scoped publication.lock. RequestControl holds it through cancellation validation and registry fence persistence; final publication acquires it before the existing execution.lock.",
+        "Both publication locks remain held through stop/current-root validation, branch push, post-push clean-head checks, the canonical PR writer and durable published checkpoint. Direct boundary cancellation and continuation cannot mutate execution during these writes.",
+        "A cancellation accepted before publication prevents push/PR writes. Once publication has entered its critical section, same-process and a separate native Node process receive EXECUTION_PUBLICATION_BUSY with an explicit retry-cancellation message, preserving registry and private execution bytes; no stop is falsely acknowledged.",
+        "Provider inspection holds only execution.lock, so cancellation can still queue during bounded progress I/O. The publication lock is separate from the global registry lock, and other entries remain controllable during the critical section.",
+        "Stop checks now include private execution fences, and final publication rejects a superseding root even if the registry has not yet projected that change. Accepted stops during verification still quarantine publication while retaining verification diagnostics and cleanup.",
+        "Finally blocks release locks after success, push/PR acknowledgement failures, checkpoint-write failure, execution-lock contention and rejected duplicate cancellation validation. Existing process-identity recovery handles dead owners; a live owner is never expired solely by age.",
+        "Lost external-write acknowledgements retain the existing verified/application recovery evidence; no new PR writer, Git transport, paid dispatch loop, merge authority or provider availability is introduced. Ordering tests use fake Git/PR transports and fixture verification output, while the cross-process lock contention is native."
+      ],
+      "regressions": [
+        "publication and cancellation have one ordering across push, PR writes and another process",
+        "publication exclusions release after I/O failures and still allow cancellation during inspection",
+        "publication refuses private cancellation and superseding roots without relying on registry fences",
+        "cancellation during verification fences publication and retains verification evidence",
+        "interrupted verification blocks replay while lost publication replies reuse verified evidence"
+      ]
+    }
+  ],
+  "representative_output": {
+    "evidence_kind": "Offline provider-shaped timestamp/recovery fixtures, fake Git/PR publication races, native Node process exclusion and recorded failure cleanup; no live provider/model or installed-plugin qualification.",
+    "reports": [
+      {
+        "label": "observation clock",
+        "report_path": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-rZKVh3/observation-clock-evidence.json",
+        "report_sha256": "01efadfc35a72b473b56a7b1d6e538bc0d26daa72a27e8d4ce8ecd3967657859",
+        "cases": 4,
+        "observations": [
+          {
+            "provider": "openai-agents",
+            "method": "inspect",
+            "runId": "run-152dc7c9-795c-4beb-9c37-c0d063ca6d50",
+            "coordinatorAt": 1790215200000,
+            "rejected": [
+              {
+                "observedAt": 1790215200001,
+                "state": "running",
+                "observedBefore": 1790215200000,
+                "observedAfter": 1790215200000,
+                "nextAttemptAt": 1790215220000
+              },
+              {
+                "observedAt": 1790215200001,
+                "state": "waiting-for-input",
+                "observedBefore": 1790215200000,
+                "observedAfter": 1790215200000,
+                "nextAttemptAt": 1790215240000
+              },
+              {
+                "observedAt": 1790215200001,
+                "state": "succeeded",
+                "observedBefore": 1790215200000,
+                "observedAfter": 1790215200000,
+                "nextAttemptAt": 1790215280000
+              },
+              {
+                "observedAt": 1790215200000000,
+                "state": "running",
+                "observedBefore": 1790215200000,
+                "observedAfter": 1790215200000,
+                "nextAttemptAt": 1790215360000
+              },
+              {
+                "observedAt": 1790215200000000,
+                "state": "waiting-for-input",
+                "observedBefore": 1790215200000,
+                "observedAfter": 1790215200000,
+                "nextAttemptAt": 1790215500000
+              },
+              {
+                "observedAt": 1790215200000000,
+                "state": "succeeded",
+                "observedBefore": 1790215200000,
+                "observedAfter": 1790215200000,
+                "nextAttemptAt": 1790215500000
+              },
+              {
+                "observedAt": 9007199254740991,
+                "state": "running",
+                "observedBefore": 1790215200000,
+                "observedAfter": 1790215200000,
+                "nextAttemptAt": 1790215500000
+              },
+              {
+                "observedAt": 9007199254740991,
+                "state": "waiting-for-input",
+                "observedBefore": 1790215200000,
+                "observedAfter": 1790215200000,
+                "nextAttemptAt": 1790215500000
+              },
+              {
+                "observedAt": 9007199254740991,
+                "state": "succeeded",
+                "observedBefore": 1790215200000,
+                "observedAfter": 1790215200000,
+                "nextAttemptAt": 1790215500000
+              }
+            ],
+            "fixtureSubmits": 1,
+            "files": {
+              "execution": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-4cAvEc/execution.json",
+              "job": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-4cAvEc/run-152dc7c9-795c-4beb-9c37-c0d063ca6d50/job.json",
+              "result": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-4cAvEc/run-152dc7c9-795c-4beb-9c37-c0d063ca6d50/result.json"
+            }
+          },
+          {
+            "provider": "openai-agents",
+            "method": "lookup",
+            "runId": "run-341b0d18-399f-480b-8da4-ca24549446f0",
+            "coordinatorAt": 1790215200000,
+            "rejected": [
+              {
+                "observedAt": 1790215200001,
+                "state": "running",
+                "observedBefore": null,
+                "observedAfter": null,
+                "nextAttemptAt": 1790215220000
+              },
+              {
+                "observedAt": 1790215200001,
+                "state": "waiting-for-input",
+                "observedBefore": null,
+                "observedAfter": null,
+                "nextAttemptAt": 1790215240000
+              },
+              {
+                "observedAt": 1790215200001,
+                "state": "succeeded",
+                "observedBefore": null,
+                "observedAfter": null,
+                "nextAttemptAt": 1790215280000
+              },
+              {
+                "observedAt": 1790215200000000,
+                "state": "running",
+                "observedBefore": null,
+                "observedAfter": null,
+                "nextAttemptAt": 1790215360000
+              },
+              {
+                "observedAt": 1790215200000000,
+                "state": "waiting-for-input",
+                "observedBefore": null,
+                "observedAfter": null,
+                "nextAttemptAt": 1790215500000
+              },
+              {
+                "observedAt": 1790215200000000,
+                "state": "succeeded",
+                "observedBefore": null,
+                "observedAfter": null,
+                "nextAttemptAt": 1790215500000
+              },
+              {
+                "observedAt": 9007199254740991,
+                "state": "running",
+                "observedBefore": null,
+                "observedAfter": null,
+                "nextAttemptAt": 1790215500000
+              },
+              {
+                "observedAt": 9007199254740991,
+                "state": "waiting-for-input",
+                "observedBefore": null,
+                "observedAfter": null,
+                "nextAttemptAt": 1790215500000
+              },
+              {
+                "observedAt": 9007199254740991,
+                "state": "succeeded",
+                "observedBefore": null,
+                "observedAfter": null,
+                "nextAttemptAt": 1790215500000
+              }
+            ],
+            "fixtureSubmits": 1,
+            "files": {
+              "execution": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-IeaZ5e/execution.json",
+              "job": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-IeaZ5e/run-341b0d18-399f-480b-8da4-ca24549446f0/job.json",
+              "result": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-IeaZ5e/run-341b0d18-399f-480b-8da4-ca24549446f0/result.json"
+            }
+          },
+          {
+            "provider": "codex-cloud",
+            "method": "inspect",
+            "runId": "run-6554e69a-c885-4885-b7b4-e359c33823da",
+            "coordinatorAt": 1790215200000,
+            "rejected": [
+              {
+                "observedAt": 1790215200001,
+                "state": "running",
+                "observedBefore": 1790215200000,
+                "observedAfter": 1790215200000,
+                "nextAttemptAt": 1790215220000
+              },
+              {
+                "observedAt": 1790215200001,
+                "state": "waiting-for-input",
+                "observedBefore": 1790215200000,
+                "observedAfter": 1790215200000,
+                "nextAttemptAt": 1790215240000
+              },
+              {
+                "observedAt": 1790215200001,
+                "state": "succeeded",
+                "observedBefore": 1790215200000,
+                "observedAfter": 1790215200000,
+                "nextAttemptAt": 1790215280000
+              },
+              {
+                "observedAt": 1790215200000000,
+                "state": "running",
+                "observedBefore": 1790215200000,
+                "observedAfter": 1790215200000,
+                "nextAttemptAt": 1790215360000
+              },
+              {
+                "observedAt": 1790215200000000,
+                "state": "waiting-for-input",
+                "observedBefore": 1790215200000,
+                "observedAfter": 1790215200000,
+                "nextAttemptAt": 1790215500000
+              },
+              {
+                "observedAt": 1790215200000000,
+                "state": "succeeded",
+                "observedBefore": 1790215200000,
+                "observedAfter": 1790215200000,
+                "nextAttemptAt": 1790215500000
+              },
+              {
+                "observedAt": 9007199254740991,
+                "state": "running",
+                "observedBefore": 1790215200000,
+                "observedAfter": 1790215200000,
+                "nextAttemptAt": 1790215500000
+              },
+              {
+                "observedAt": 9007199254740991,
+                "state": "waiting-for-input",
+                "observedBefore": 1790215200000,
+                "observedAfter": 1790215200000,
+                "nextAttemptAt": 1790215500000
+              },
+              {
+                "observedAt": 9007199254740991,
+                "state": "succeeded",
+                "observedBefore": 1790215200000,
+                "observedAfter": 1790215200000,
+                "nextAttemptAt": 1790215500000
+              }
+            ],
+            "fixtureSubmits": 1,
+            "files": {
+              "execution": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-Gkahmm/execution.json",
+              "job": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-Gkahmm/run-6554e69a-c885-4885-b7b4-e359c33823da/job.json",
+              "result": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-Gkahmm/run-6554e69a-c885-4885-b7b4-e359c33823da/result.json"
+            }
+          },
+          {
+            "provider": "codex-cloud",
+            "method": "lookup",
+            "runId": "run-ed0b107f-90a5-4f73-b1e6-a9857d456abd",
+            "coordinatorAt": 1790215200000,
+            "rejected": [
+              {
+                "observedAt": 1790215200001,
+                "state": "running",
+                "observedBefore": null,
+                "observedAfter": null,
+                "nextAttemptAt": 1790215220000
+              },
+              {
+                "observedAt": 1790215200001,
+                "state": "waiting-for-input",
+                "observedBefore": null,
+                "observedAfter": null,
+                "nextAttemptAt": 1790215240000
+              },
+              {
+                "observedAt": 1790215200001,
+                "state": "succeeded",
+                "observedBefore": null,
+                "observedAfter": null,
+                "nextAttemptAt": 1790215280000
+              },
+              {
+                "observedAt": 1790215200000000,
+                "state": "running",
+                "observedBefore": null,
+                "observedAfter": null,
+                "nextAttemptAt": 1790215360000
+              },
+              {
+                "observedAt": 1790215200000000,
+                "state": "waiting-for-input",
+                "observedBefore": null,
+                "observedAfter": null,
+                "nextAttemptAt": 1790215500000
+              },
+              {
+                "observedAt": 1790215200000000,
+                "state": "succeeded",
+                "observedBefore": null,
+                "observedAfter": null,
+                "nextAttemptAt": 1790215500000
+              },
+              {
+                "observedAt": 9007199254740991,
+                "state": "running",
+                "observedBefore": null,
+                "observedAfter": null,
+                "nextAttemptAt": 1790215500000
+              },
+              {
+                "observedAt": 9007199254740991,
+                "state": "waiting-for-input",
+                "observedBefore": null,
+                "observedAfter": null,
+                "nextAttemptAt": 1790215500000
+              },
+              {
+                "observedAt": 9007199254740991,
+                "state": "succeeded",
+                "observedBefore": null,
+                "observedAfter": null,
+                "nextAttemptAt": 1790215500000
+              }
+            ],
+            "fixtureSubmits": 1,
+            "files": {
+              "execution": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-CjEi5f/execution.json",
+              "job": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-CjEi5f/run-ed0b107f-90a5-4f73-b1e6-a9857d456abd/job.json",
+              "result": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-CjEi5f/run-ed0b107f-90a5-4f73-b1e6-a9857d456abd/result.json"
+            }
+          }
+        ],
+        "rejected_future_observations": 36
+      },
+      {
+        "label": "publication order",
+        "report_path": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-i1sfdw/publication-order-evidence.json",
+        "report_sha256": "0d51c547a0ff802429c06eb18286b453354f29488e79e5729140c711998fcb5c",
+        "cases": 4,
+        "observations": [
+          {
+            "stage": "before",
+            "attempts": 0,
+            "publicationCalls": [
+              "commit",
+              "verify"
+            ],
+            "reason": null,
+            "stopped": "cancellation-requested",
+            "files": {
+              "registry": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-fPLe0J/state.json",
+              "execution": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-fPLe0J/runs/acme__widget__result/execution.json",
+              "application": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-fPLe0J/runs/acme__widget__result/run-72202847-e817-408f-8886-ec91ed4504b8/result-application.json",
+              "verification": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-fPLe0J/runs/acme__widget__result/run-72202847-e817-408f-8886-ec91ed4504b8/verification.json"
+            }
+          },
+          {
+            "stage": "push",
+            "attempts": 1,
+            "publicationCalls": [
+              "commit",
+              "verify",
+              "push",
+              "PR"
+            ],
+            "reason": "cancelled",
+            "stopped": "cancellation-requested",
+            "files": {
+              "registry": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-i89bww/state.json",
+              "execution": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-i89bww/runs/acme__widget__result/execution.json",
+              "application": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-i89bww/runs/acme__widget__result/run-f77adcb1-f1f8-4bcb-965a-791a8df28c0f/result-application.json",
+              "verification": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-i89bww/runs/acme__widget__result/run-f77adcb1-f1f8-4bcb-965a-791a8df28c0f/verification.json"
+            }
+          },
+          {
+            "stage": "PR",
+            "attempts": 1,
+            "publicationCalls": [
+              "commit",
+              "verify",
+              "push",
+              "PR"
+            ],
+            "reason": "cancelled",
+            "stopped": "cancellation-requested",
+            "files": {
+              "registry": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-jz8MSx/state.json",
+              "execution": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-jz8MSx/runs/acme__widget__result/execution.json",
+              "application": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-jz8MSx/runs/acme__widget__result/run-4b47852d-dd14-4d92-b783-90179c310ff9/result-application.json",
+              "verification": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-jz8MSx/runs/acme__widget__result/run-4b47852d-dd14-4d92-b783-90179c310ff9/verification.json"
+            }
+          },
+          {
+            "stage": "process",
+            "attempts": 1,
+            "publicationCalls": [
+              "commit",
+              "verify",
+              "push",
+              "PR"
+            ],
+            "reason": "cancelled",
+            "stopped": "cancellation-requested",
+            "files": {
+              "registry": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-rl5VsB/state.json",
+              "execution": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-rl5VsB/runs/acme__widget__result/execution.json",
+              "application": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-rl5VsB/runs/acme__widget__result/run-394c8dfe-5846-4a47-88a2-8fbd8316e9b5/result-application.json",
+              "verification": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-rl5VsB/runs/acme__widget__result/run-394c8dfe-5846-4a47-88a2-8fbd8316e9b5/verification.json"
+            }
+          }
+        ]
+      },
+      {
+        "label": "publication cleanup",
+        "report_path": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-0S8NjR/publication-cleanup-evidence.json",
+        "report_sha256": "fbf6e7d919ba9fd8dc2f25ffc7361781ed5e9df3f465a745d3320101d7028f5c",
+        "cases": 4,
+        "observations": [
+          {
+            "failure": "push",
+            "publicationCalls": [
+              "commit",
+              "verify",
+              "push"
+            ],
+            "checkpoint": "verified",
+            "locksReleased": true,
+            "files": {
+              "registry": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-ylvRz8/state.json",
+              "application": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-ylvRz8/runs/acme__widget__result/run-4b11e8e8-733e-4273-a8d3-49b8faba1d38/result-application.json",
+              "execution": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-ylvRz8/runs/acme__widget__result/execution.json"
+            }
+          },
+          {
+            "failure": "PR",
+            "publicationCalls": [
+              "commit",
+              "verify",
+              "push",
+              "PR"
+            ],
+            "checkpoint": "verified",
+            "locksReleased": true,
+            "files": {
+              "registry": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-beuA8P/state.json",
+              "application": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-beuA8P/runs/acme__widget__result/run-0b767ccb-198e-4534-b67e-81a6d0ed7d6f/result-application.json",
+              "execution": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-beuA8P/runs/acme__widget__result/execution.json"
+            }
+          },
+          {
+            "failure": "checkpoint",
+            "publicationCalls": [
+              "commit",
+              "verify",
+              "push",
+              "PR"
+            ],
+            "checkpoint": "verified",
+            "locksReleased": true,
+            "files": {
+              "registry": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-EoleER/state.json",
+              "application": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-EoleER/runs/acme__widget__result/run-2f787bca-8f6b-451a-86c9-f6ae78f6ceb0/result-application.json",
+              "execution": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-EoleER/runs/acme__widget__result/execution.json"
+            }
+          },
+          {
+            "failure": "execution-lock",
+            "publicationCalls": [
+              "commit",
+              "verify"
+            ],
+            "checkpoint": "verified",
+            "locksReleased": true,
+            "files": {
+              "registry": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-qG3Y7m/state.json",
+              "application": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-qG3Y7m/runs/acme__widget__result/run-4f693c9a-c138-46a3-a69e-21c0bb048c07/result-application.json",
+              "execution": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-qG3Y7m/runs/acme__widget__result/execution.json"
+            }
+          }
+        ],
+        "inspection_cancellation_queued": true
+      },
+      {
+        "label": "publication root",
+        "report_path": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-n7XZHK/publication-root-evidence.json",
+        "report_sha256": "9580223e5a2d4e2fb33eed3875374e9dad7751ae2a06f9c6178ed976418a9e2d",
+        "cases": 2,
+        "observations": [
+          {
+            "change": "cancel",
+            "publicationCalls": [
+              "commit",
+              "verify"
+            ],
+            "runBefore": "run-204475e9-4803-47f1-b036-7eb9b74c3161",
+            "runAfter": "run-204475e9-4803-47f1-b036-7eb9b74c3161",
+            "privateStop": "operator-cancelled",
+            "files": {
+              "registry": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-PSoHZe/state.json",
+              "execution": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-PSoHZe/runs/acme__widget__result/execution.json",
+              "result": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-PSoHZe/runs/acme__widget__result/run-204475e9-4803-47f1-b036-7eb9b74c3161/result.json",
+              "verification": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-PSoHZe/runs/acme__widget__result/run-204475e9-4803-47f1-b036-7eb9b74c3161/verification.json"
+            }
+          },
+          {
+            "change": "continue",
+            "publicationCalls": [
+              "commit",
+              "verify"
+            ],
+            "runBefore": "run-014e9513-524d-4e63-9366-deac87053536",
+            "runAfter": "run-0da2204f-0b36-44cd-acfb-e86a9a9a1c73",
+            "privateStop": null,
+            "files": {
+              "registry": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-QdkKGz/state.json",
+              "execution": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-QdkKGz/runs/acme__widget__result/execution.json",
+              "result": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-QdkKGz/runs/acme__widget__result/run-014e9513-524d-4e63-9366-deac87053536/result.json",
+              "verification": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-QdkKGz/runs/acme__widget__result/run-014e9513-524d-4e63-9366-deac87053536/verification.json"
+            }
+          }
+        ]
+      }
+    ]
+  },
+  "external_qualification": {
+    "mandatory_live_prerequisites": [],
+    "live_paid_calls": 0,
+    "native_codex_preparation_qualified": false,
+    "remote_provider_available": {
+      "openai-agents": false,
+      "codex-cloud": false
+    },
+    "installed_plugin_qualified": false,
+    "model_access_exercised": false,
+    "browser_capture_required": false,
+    "remedy": "Complete the independent native preparation adapter and its limited-authority evidence before registry integration. Later production transports require implemented adapters, credentials, demonstrated model access and authorized bounded live evidence; preserve model/provider defaults and sandbox permissions."
+  }
+}

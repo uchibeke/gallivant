@@ -126,6 +126,16 @@ Hashes must be real SHA-256 values, and input heads real exact revisions. Result
 collection supplies canonical version/task/run identities even if a transport
 returns conflicting fields. Missing, oversized, mismatched or incomplete results
 remain unresolved; provider success alone does not mean workflow readiness.
+`observedAt` is a finite UTC epoch millisecond value between the owned run's
+start/last accepted observation and the coordinator clock at reconciliation.
+There is no allowance for future clock skew. Inspection and lost-reply lookup
+reject future observations before adopting ownership, cost, events or terminal
+state, retain the last valid checkpoint, and use scoped protocol backoff.
+Correct the transport's clock/units and reconcile the same owned job/key; no
+replacement dispatch is needed. Older checkpoints already containing future
+timestamps require restoring the last authoritative observation evidence while
+preserving task/run ownership, intents and allowance records.
+
 Private result ownership (`taskId`, `runId`, `providerJobId`, `sessionId`, `turnId`,
 `inputHead`, `repo`, `branch`, `pushedHead`) retains exact protocol values through
 redaction, collection and replay, even when an opaque ID resembles a credential
@@ -405,8 +415,22 @@ verification evidence after log retention, without exposing raw diagnostics.
 
 ## Controls, costs and publication
 
-`cancel` queues a protected operator control and immediately fences dispatch. The
-coordinator records cancellation requested before calling a supported transport,
+`cancel` queues a protected operator control and immediately fences dispatch.
+
+The final publication step and cancellation queueing share an entry-scoped
+`publication.lock` using the existing process-identity lock helper. Publication
+takes this lock before `execution.lock`, rechecks registry and private stop/root
+ownership, and holds both through branch push, PR write and the published
+checkpoint. An accepted cancellation precedes and prevents these writes. Once
+publication has started, cancellation returns `EXECUTION_PUBLICATION_BUSY` with
+a retry message and saves no request/fence; retry after publication completes.
+Direct cancellation/continuation also cannot enter its execution lock. Provider
+inspection holds only `execution.lock`, so operator cancellation can still queue
+while progress I/O runs. Other entries remain independent. Both locks release
+after success, failed I/O/checkpoint writes or contention; dead process owners
+use existing identity-checked recovery, never elapsed-time expiry of a live lock.
+
+The coordinator records cancellation requested before calling a supported transport,
 then distinguishes authoritative confirmation from unsupported/unconfirmed
 cancellation. Native local cancellation retains verified process-tree cleanup;
 active runs carried across an upgrade are adopted with their exact local run and
