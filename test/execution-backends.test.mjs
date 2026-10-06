@@ -6,7 +6,7 @@ import { EventEmitter } from "node:events";
 import { mkdirSync, readFileSync, writeFileSync, rmSync, renameSync, symlinkSync, cpSync, statSync, lstatSync, existsSync, chmodSync, realpathSync } from "node:fs";
 import { pathToFileURL } from "node:url";
 import { makeExecution, executionLive, assertExecutionDependency } from "../lib/execution.mjs";
-import { redact } from "../lib/execution_io.mjs";
+import { redact, EXECUTION_CURSOR_BYTES } from "../lib/execution_io.mjs";
 import { executionRegistry, adapters, buildRun } from "../lib/harness.mjs";
 import { makeProviderHealth } from "../lib/provider_health.mjs";
 import { makeRunner, LOCAL_OUTPUT_LIMITS } from "../lib/run.mjs";
@@ -200,6 +200,99 @@ test("stale observations, wrong root turns and silence cannot settle remote work
   for (let i = 0; i < 20; i++) f.reopen().inspect();
   assert.equal(f.calls.length, calls);
   assert.ok(executionLive(f.service.current()));
+});
+
+const CURSOR_BYTES = EXECUTION_CURSOR_BYTES;
+test("inspection and acceptance lookup reject invalid cursors before journaling or adopting progress", async t => {
+  const circular = {}; circular.self = circular;
+  let serializedObjects = 0;
+  const invalid = { object: {}, array: [], circular, bigint: 1n, function: () => {}, symbol: Symbol("cursor"),
+    nan: NaN, infinity: Infinity, oversized: "x".repeat(CURSOR_BYTES), unicode: "é".repeat(CURSOR_BYTES / 2),
+    escaped: "\\".repeat(CURSOR_BYTES / 2), customJSON: { toJSON() { serializedObjects++; return "hidden-object"; } } };
+  const evidence = [];
+  for (const provider of ["openai-agents", "codex-cloud"]) for (const mode of ["inspect", "lookup"]) {
+    const f = remote(provider), submit = f.transport.submit;
+    if (mode === "lookup") f.transport.submit = async req => { await submit(req); throw new Error("reply lost"); };
+    if (mode === "lookup") await assert.rejects(f.service.submit(input)); else await f.service.submit(input);
+    if (mode === "inspect") { f.observe({ cursor: "previous-page" }); await f.service.reconcile({ force: true }); }
+    const before = f.service.current(), dir = f.service.dirOf(before.id), stateFile = join(f.root, "execution.json");
+    const journalFile = join(dir, "events.jsonl"), journalBefore = existsSync(journalFile) ? readFileSync(journalFile, "utf8") : null;
+    const baseBytes = statSync(stateFile).size;
+    for (const [kind, cursor] of Object.entries(invalid)) {
+      const observation = { providerJobId: "job-1", sessionId: "session-1", turnId: "turn-1", state: "succeeded", observedAt: f.clock.now(),
+        cursor, costUsd: 99, events: [{ eventId: `rejected-${kind}`, type: "output", data: "must not be published" }], gap: "must not be journaled" };
+      if (mode === "lookup") f.transport.lookup = async req => { f.calls.push(["lookup", req]); return observation; };
+      else f.observe(observation);
+      await f.reopen().reconcile({ force: true });
+      const ex = f.reopen().current().execution;
+      assert.equal(ex.recoveryAction, "EXECUTION_PROTOCOL"); assert.equal(ex.providerState, "status-unknown");
+      for (const key of ["acceptance", "providerJobId", "sessionId", "turnId", "cursor", "observedAt", "costUsd"]) assert.equal(ex[key], before.execution[key], key);
+      assert.equal(ex.collected, false); assert.equal(ex.terminalState, before.execution.terminalState); assert.ok(ex.nextAttemptAt > f.clock.now());
+      assert.equal(existsSync(journalFile) ? readFileSync(journalFile, "utf8") : null, journalBefore);
+      assert.ok(statSync(stateFile).size < baseBytes + 1024); assert.ok(statSync(join(dir, "job.json")).size < baseBytes + 1024);
+      const calls = f.calls.length; f.reopen().inspect(); assert.equal(f.calls.length, calls);
+      await assert.rejects(f.reopen().submit({ ...input, operationId: "replacement" }), { code: "BUSY" });
+      if (mode === "lookup") await assert.rejects(f.reopen().submit(input), { code: "EXECUTION_UNKNOWN" });
+    }
+    assert.equal(f.calls.filter(c => c[0] === "submit").length, 1);
+    if (mode === "inspect") assert.ok(f.calls.filter(c => c[0] === "inspect").every(c => c[1].cursor === null || c[1].cursor === "previous-page"));
+    const restored = { providerJobId: "job-1", sessionId: "session-1", turnId: "turn-1", state: "running", observedAt: f.clock.now(), cursor: "recovered-page", costUsd: null, events: [], gap: null };
+    if (mode === "lookup") f.transport.lookup = async req => { f.calls.push(["lookup", req]); return restored; }; else f.observe(restored);
+    await f.reopen().reconcile({ force: true });
+    assert.equal(f.service.current().execution.acceptance, "accepted"); assert.equal(f.service.current().execution.cursor, "recovered-page");
+    assert.equal(f.service.current().execution.recoveryAction, null);
+    evidence.push({ provider, mode, rejected: Object.keys(invalid), runId: before.id, baseBytes, finalBytes: statSync(stateFile).size,
+      paidDispatches: f.calls.filter(c => c[0] === "submit").length, files: { execution: stateFile, job: join(dir, "job.json") } });
+  }
+  assert.equal(serializedObjects, 0);
+  const report = join(tempHome(), "cursor-rejection-evidence.json"); writeJsonAtomic(report, { cases: evidence }); t.diagnostic(`cursor rejection evidence: ${report}`);
+});
+
+test("bounded JSON scalar cursors survive restart and long-cursor gap replay without growing identities", async t => {
+  const values = { short: "page-2", empty: "", number: 3, false: false, true: true, maximumNumber: Number.MAX_VALUE,
+    asciiBoundary: "x".repeat(CURSOR_BYTES - 2), unicodeBoundary: "é".repeat((CURSOR_BYTES - 2) / 2),
+    hashLookalike: sha(JSON.stringify(["x".repeat(CURSOR_BYTES - 2)])),
+    escapedBoundary: "\\".repeat((CURSOR_BYTES - 2) / 2), omitted: undefined, nullable: null };
+  const evidence = [];
+  for (const provider of ["openai-agents", "codex-cloud"]) {
+    const f = remote(provider), job = await f.service.submit(input), dir = f.service.dirOf(job.id);
+    let retained = null;
+    for (const [kind, cursor] of Object.entries(values)) {
+      const previousCount = existsSync(join(dir, "events.jsonl")) ? readFileSync(join(dir, "events.jsonl"), "utf8").trim().split("\n").length : 0;
+      f.observe({ cursor, state: "running", events: [{ eventId: `accepted-${kind}`, type: "output", data: kind }], gap: "explicit provider history gap" });
+      await f.reopen().reconcile({ force: true }); retained = cursor ?? retained;
+      assert.equal(f.reopen().current().execution.cursor, retained);
+      const records = readFileSync(join(dir, "events.jsonl"), "utf8"), count = records.trim().split("\n").length;
+      assert.equal(count, previousCount + 2); // A token cannot mimic a hashed gap and suppress its own gap.
+      await f.reopen().reconcile({ force: true });
+      assert.equal(f.calls.at(-1)[1].cursor, retained);
+      assert.equal(readFileSync(join(dir, "events.jsonl"), "utf8"), records);
+      assert.equal(f.service.current().execution.recoveryAction, null);
+      assert.ok(records.trim().split("\n").map(JSON.parse).every(e => e.eventId.length <= 512));
+      assert.ok(records.includes('"eventId":"gap-page-2"'));
+      assert.ok(statSync(join(f.root, "execution.json")).size < 16_384);
+      evidence.push({ provider, kind, serializedBytes: cursor == null ? null : Buffer.byteLength(JSON.stringify(cursor)), events: count, runId: job.id,
+        files: { execution: join(f.root, "execution.json"), job: join(dir, "job.json"), events: join(dir, "events.jsonl"), log: join(dir, "job.log") } });
+    }
+    assert.equal(f.calls.filter(c => c[0] === "submit").length, 1);
+  }
+  const report = join(tempHome(), "cursor-replay-evidence.json"); writeJsonAtomic(report, { cases: evidence }); t.diagnostic(`cursor replay evidence: ${report}`);
+});
+
+test("invalid persisted cursors refuse inspection and redispatch with a checkpoint recovery remedy", async () => {
+  for (const location of ["current", "acknowledgement"]) for (const cursor of [{ page: 1 }, "x".repeat(CURSOR_BYTES), "\\".repeat(CURSOR_BYTES / 2)]) {
+    const f = remote(), job = await f.service.submit(input); f.observe({ cursor: "known-page" }); await f.service.reconcile({ force: true });
+    const stateFile = join(f.root, "execution.json"), original = readFileSync(stateFile, "utf8"), raw = JSON.parse(original);
+    (location === "current" ? raw.current : raw.operations.first.job).execution.cursor = cursor; writeJsonAtomic(stateFile, raw);
+    const corrupted = readFileSync(stateFile, "utf8"), projected = readFileSync(join(f.service.dirOf(job.id), "job.json"), "utf8"), calls = f.calls.length;
+    const check = error => error.code === "EXECUTION_PROTOCOL" && /persisted.*cursor.*preserve.*restore.*do not redispatch/.test(error.message);
+    assert.throws(() => f.reopen().inspect(), check); await assert.rejects(f.reopen().reconcile({ force: true }), check);
+    await assert.rejects(f.reopen().continue({ ...input, operationId: "new", sessionId: job.execution.sessionId }), check);
+    assert.equal(f.calls.length, calls); assert.equal(readFileSync(stateFile, "utf8"), corrupted);
+    assert.equal(readFileSync(join(f.service.dirOf(job.id), "job.json"), "utf8"), projected);
+    writeFileSync(stateFile, original); await f.reopen().reconcile({ force: true });
+    assert.equal(f.service.current().execution.cursor, "known-page"); assert.equal(f.calls.filter(c => c[0] === "submit").length, 1);
+  }
 });
 
 test("missing results remain retrieving, event gaps are explicit and recovered events deduplicate", async () => {

@@ -59,6 +59,24 @@ The public boundary's `inspect()` is deliberately a cached read. Its coordinator
 inspection, UI status/history/results or SSE never probes providers, submits work,
 or starts an independent provider loop.
 
+Inspection and acceptance lookup cursors are bounded JSON scalars: strings,
+finite numbers or booleans, at most 4096 bytes of serialized UTF-8 JSON, including
+quotes and escapes. Omitted/null cursors retain the recorded token. The fixed
+`EXECUTION_CURSOR_BYTES` limit applies before journaling, ownership/progress
+adoption and persistence, independently of the event-page limit. Invalid tokens
+leave prior progress/cursor and journals intact and enter scoped protocol backoff;
+the next inspection sends only the last validated token. Long valid cursors use
+a stable hashed gap ID when the legacy `gap-<cursor>` ID would exceed 512 characters;
+short gap IDs and replay identity remain compatible.
+Hashed IDs use the distinct `gap:` prefix, so a short token resembling a digest
+cannot collide with a long token's gap ID.
+
+Restart checks the current cursor and saved acknowledgement cursors before any
+transport call or state rewrite. An invalid pre-upgrade checkpoint raises
+`EXECUTION_PROTOCOL` with an explicit remedy: preserve the run files, restore the
+exact bounded cursor from the owned provider checkpoint, then restart. Do not
+delete the intent, reset the cursor to skip history or redispatch the task.
+
 For intake, `makeExecution.prepare()` returns an issued `receipt` and either the
 native `{cmd, args, options}` spec or a remote environment grant. The receipt
 contains version 1, provider/account, authority/boundary, task ID and an input
