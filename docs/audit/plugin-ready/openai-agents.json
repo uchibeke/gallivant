@@ -2,38 +2,38 @@
   "version": 1,
   "task_id": "task-cf82d9f43ca0da3c5bb29b67",
   "scope": "managed Agents REST implementation, provider-shaped offline lifecycle verification and native macOS verification readiness/enforcement; live qualification remains unverified",
-  "recorded_at": "2026-10-06T17:24:50.771Z",
+  "recorded_at": "2026-10-06T18:12:13.799Z",
   "base_revision": "401f5cb2e68382a28b6f35f5ca4e9cbcc9ea84fb",
   "branch": "work/openai-agents-harness",
   "source_files": {
     "README.md": "6c9a9e9e79f7a9bd9157464ea2602f6ecde0b2878422e5c8dbea64a98d5f2ab8",
     "docs/audit/plugin-ready/README.md": "7f24289695807c9bd9d880e54e287c3bcfa1a3324543ca87eee68b1e24a9e8f7",
-    "docs/audit/plugin-ready/openai-agents-checklist.md": "0b647bb8ca559de6418517f942d1aefc2dad338269967c4a208ab9d19ebecc42",
-    "docs/execution.md": "9073540f1e36379f53cc7c4fa2afc4659791410d268bc1933d615dee01cdba2e",
-    "docs/openai-agents.md": "45f496d062a9dc600fb4feeb148cfa451fc1f3e191ea732dbd839ed6f0ff891f",
+    "docs/audit/plugin-ready/openai-agents-checklist.md": "5ad9710a34a7f84e5878b43e7b86aa9eec70f9a100857041b588269484486fb9",
+    "docs/execution.md": "b6fe4aec28eb2dd68885ba9ef28f08563aff0d41da623f5e239cab5a156af09b",
+    "docs/openai-agents.md": "783347fa77bfc06c99d4d68d8b1c6bab55c15e0dd95fc4d325f8a37486785e3e",
     "docs/prds/openai-agents-harness.md": "b6d3ceeb20426248b5cf0d8527beaf93a6a69c09003cfc07d3a86fe8fa8b053a",
     "lib/block.mjs": "bd644a1564d6d3dcf3edad1ad1f931fa5f3e4246a041f20acbbb04c88c07c665",
     "lib/commands/doctor.mjs": "6a1c916f1a3626ba7656123792adf9ba3fdbd963cb64a3641437e337e4f18997",
-    "lib/commands/start.mjs": "5b5d1f3c9c71126bd9ed0f7f7772a727f8dd1e3c7f50615c70ed4d5f22353796",
+    "lib/commands/start.mjs": "b9cf65f560a0ae0113b839cb52f9d91a5b9aa0f1189e6d488c0ce6685d8b7859",
     "lib/config.mjs": "4cdd522fb24463d01023eb1650b5123ff0675ce6c7bbee4731020e2b1b0e9174",
     "lib/context.mjs": "8d086cc3dacaf68de5f84c11b1ac498d60d6b3b420b61214b5e631587e5b6119",
-    "lib/execution.mjs": "3cdf895bfeb50f3f8119f5784eae65dab0d4eff1ba6eeb2a9c231ee8ddbc02d8",
+    "lib/execution.mjs": "71445213d03a2d8454d788abafe739a24e2f7b8aa2efda10c24052efeb11ec58",
     "lib/harness.mjs": "50640ba71ec7b03f2690ce07ab5d1731034d6d710a833c425d7e354337c6c9b5",
-    "lib/openai_agents.mjs": "4713a224a7156a296881baa70b933573a16f3f8d1c702ec1454d6114a08d3d1c",
+    "lib/openai_agents.mjs": "7444f0bc6a038083b990b4f0a735d4989194e87dc326a3a703b89c773d0ac8ea",
     "lib/openai_agents_config.mjs": "7d9db1b55e3c0f71ada076811eb11baf9cfb0becdfed10f6a86ec6ecbfa69dc7",
     "lib/openai_agents_http.mjs": "bf09e30be66d2e22c240194a6e2658c6c9ba3f027a697a4e3db25a5d18f43b05",
     "lib/openai_agents_input.mjs": "a2978393dc2dfe348c97962d0a6a9356184e54a7fe426847b9195186fa8d0c68",
     "lib/openai_agents_sources.mjs": "afeb732805764635189bc6fe5523ca95564174c4fc08fc159d3118d5f668aeb1",
     "lib/probe.mjs": "bbacb430ed3ec7e3ab4b26fe01568d396d5d2257513264412c1c7e7ccb59383a",
-    "lib/tick.mjs": "53b69eac574948db952eaf17bbbcff19a5446059ffa046380367037140afa6c7",
+    "lib/tick.mjs": "899b73444ed1d56a97187480411352baf2c2de1d45a57709a2c53ac2ca146db9",
     "package.json": "cc440ea2539b8d40772db637b1f6593584c66818f810c4a45719c7c563ff003a",
-    "test/execution-backends.test.mjs": "21bfd87b1bf0fda0af5adbd43061d84db9cc4ea2f014e82bb0c7881a85d5c16a",
+    "test/execution-backends.test.mjs": "d1af68ac877c852819e48550ae3b8577c6049f4a0e76b86469a7b2f774a059a2",
     "test/openai-agents-live.mjs": "0f556440264766e17a369e6eaa6b71658833b93c18971b1ef1326d65452a20d2",
-    "test/openai-agents.test.mjs": "21d32e17978884a0a09fa95a411a399eb075255d102d3669222d710f34c64617",
+    "test/openai-agents.test.mjs": "fb1a395208f5aa5a45e49dc48636e15c30adf073e96cb3a4fed5ff7ab8e89a41",
     "test/units.test.mjs": "ae8ab863aa48e3e44557e8f20c00bb8440682325ec099eb34a81f339cbb42b9f",
     "lib/execution_result.mjs": "b13f5169e3fa541f5cc1f8c4e87e401436849a5864ea514231246847c71c2f41",
-    "lib/verification_sandbox.mjs": "3eaa247b5f9f4dda5def32d1f4e852661316b479ce3559b30ac31f32edea399d",
-    "lib/execution_io.mjs": "b6024cdac19f53d3a2e4f13ab250ecb707bb78d1729e7fb53dab38c2c70c7145",
+    "lib/verification_sandbox.mjs": "afb289b9641bee6e95102f9c899fd99274bfe07f6f0b4db21e0002e1dc309a7d",
+    "lib/execution_io.mjs": "80d2fce25ad27c1c9b19239568e19c5087d610f894cac817e1b9cf000c80f62e",
     "lib/commands/resume.mjs": "d419275a301d5c5b37b856af28de201cdad1a3c70ca336bd1b2d6b01ef65bd5d",
     "lib/gh.mjs": "fc1fe24b0a72372160722f563637a8e556bd2622b410d7bedfb232a345ef455e",
     "docs/tasks.md": "4483b3c3a44117240e3ca10a5e55941578e7c3b2b20775a57af6743603a9bb34",
@@ -64,10 +64,10 @@
     {
       "command": "npm test",
       "exit": 0,
-      "raw_log": "/tmp/agents-base-test-verified.log",
-      "sha256": "1c1bcb63af925913059e7e89ee438a514784ad9ae4d231ff0fdfeb66fae7ff67",
-      "tests": 1135,
-      "pass": 1135,
+      "raw_log": "/tmp/agents-dispatch-test-final.log",
+      "sha256": "e13407143cecf5df88c2bf065695f95429d71b34b82bcfa8e3d8543f3c0841fd",
+      "tests": 1145,
+      "pass": 1145,
       "fail": 0,
       "cancelled": 0,
       "skipped": 0
@@ -75,16 +75,16 @@
     {
       "command": "npm run lint",
       "exit": 0,
-      "raw_log": "/tmp/agents-base-lint-verified.log",
+      "raw_log": "/tmp/agents-dispatch-lint-final.log",
       "sha256": "8c7790de3f018fb4580f18ac70e1b355a0f76f522dd73acbdaa63632feffcecc"
     },
     {
       "command": "npm run test:execution-backends",
       "exit": 0,
-      "raw_log": "/tmp/agents-base-backends-verified.log",
-      "sha256": "142c0682d10d9215da5a2c6c6bfc3307068bd609c023f33c290ba2a4e38b36eb",
-      "tests": 390,
-      "pass": 390,
+      "raw_log": "/tmp/agents-dispatch-backends-final.log",
+      "sha256": "ff1a7f2a5a66607c55d055ce1f1421c8d3bd06ed51ba3f4a09d349bc94465463",
+      "tests": 396,
+      "pass": 396,
       "fail": 0,
       "cancelled": 0,
       "skipped": 0
@@ -92,10 +92,10 @@
     {
       "command": "npm run test:openai-agents",
       "exit": 0,
-      "raw_log": "/tmp/agents-base-openai-verified.log",
-      "sha256": "484655dc52434a6defe82a31b31ab0768ccc6154e8626e03179a23c1ca7e67b3",
-      "tests": 40,
-      "pass": 40,
+      "raw_log": "/tmp/agents-dispatch-openai-final.log",
+      "sha256": "52c38cfc74a32306010bab8f9af5432420d5a9b1dc6b04870d971ebfe6c4544f",
+      "tests": 44,
+      "pass": 44,
       "fail": 0,
       "cancelled": 0,
       "skipped": 0
@@ -103,7 +103,7 @@
     {
       "command": "git diff --check",
       "exit": 0,
-      "raw_log": "/tmp/agents-base-diff-verified.log",
+      "raw_log": "/tmp/agents-dispatch-diff-final.log",
       "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
     }
   ],
@@ -145,7 +145,8 @@
         "unsupported host blocks managed start before cloning, snapshots or provider access",
         "managed resume API refusal preserves checkout, accepted brief and sources, registry and session before mutation",
         "native verification supports Git checks with immutable current-revision metadata in normal and linked checkouts",
-        "verification process helper preserves binary Git objects and binary failure diagnostics"
+        "verification process helper preserves binary Git objects and binary failure diagnostics",
+        "npm entry point supports custom Node prefixes without granting their bin directory"
       ]
     },
     {
@@ -162,7 +163,16 @@
         "source snapshot preserves binary blobs, exact revision and verified carried files",
         "initial launch reply loss remains registered for coordinator restart without a second implementation",
         "hosted snapshots refuse unfinished tracked, staged, deleted, renamed and untracked files without uploading them",
-        "managed dirty resume refuses before merge, reopen, registry mutation or corrective dispatch"
+        "managed dirty resume refuses before merge, reopen, registry mutation or corrective dispatch",
+        "openai-agents fixture: proven pre-send refusal restores the prior root and allowance without ambiguity",
+        "codex-cloud fixture: proven pre-send refusal restores the prior root and allowance without ambiguity",
+        "an unmarked submission failure cannot release an intent merely because its error code names readiness",
+        "cancellation retry after a proven pre-send refusal still fences the restored task",
+        "a proven unsent review correction stops actionably without moving feedback or the prior root",
+        "managed pre-send host refusal releases intent and reservation across restart: continue=false",
+        "managed pre-send host refusal releases intent and reservation across restart: continue=true",
+        "malformed pre-send sources release only the unsubmitted intent without purchasing or stranding work",
+        "initial launch pre-send refusal remains registered for safe coordinator recovery"
       ]
     },
     {
@@ -184,7 +194,16 @@
         "ambiguous answer recovery refuses changed actions, missing proof, foreign roots and stopped sessions without resending",
         "answer ambiguity requires a safe transport recovery method and preserves ownership, key and stop fences",
         "hosted snapshots refuse unfinished tracked, staged, deleted, renamed and untracked files without uploading them",
-        "managed dirty resume refuses before merge, reopen, registry mutation or corrective dispatch"
+        "managed dirty resume refuses before merge, reopen, registry mutation or corrective dispatch",
+        "openai-agents fixture: proven pre-send refusal restores the prior root and allowance without ambiguity",
+        "codex-cloud fixture: proven pre-send refusal restores the prior root and allowance without ambiguity",
+        "an unmarked submission failure cannot release an intent merely because its error code names readiness",
+        "cancellation retry after a proven pre-send refusal still fences the restored task",
+        "a proven unsent review correction stops actionably without moving feedback or the prior root",
+        "managed pre-send host refusal releases intent and reservation across restart: continue=false",
+        "managed pre-send host refusal releases intent and reservation across restart: continue=true",
+        "malformed pre-send sources release only the unsubmitted intent without purchasing or stranding work",
+        "initial launch pre-send refusal remains registered for safe coordinator recovery"
       ]
     },
     {
@@ -243,7 +262,16 @@
         "answer ambiguity requires a safe transport recovery method and preserves ownership, key and stop fences",
         "managed resume API refusal preserves checkout, accepted brief and sources, registry and session before mutation",
         "hosted snapshots refuse unfinished tracked, staged, deleted, renamed and untracked files without uploading them",
-        "managed dirty resume refuses before merge, reopen, registry mutation or corrective dispatch"
+        "managed dirty resume refuses before merge, reopen, registry mutation or corrective dispatch",
+        "openai-agents fixture: proven pre-send refusal restores the prior root and allowance without ambiguity",
+        "codex-cloud fixture: proven pre-send refusal restores the prior root and allowance without ambiguity",
+        "an unmarked submission failure cannot release an intent merely because its error code names readiness",
+        "cancellation retry after a proven pre-send refusal still fences the restored task",
+        "a proven unsent review correction stops actionably without moving feedback or the prior root",
+        "managed pre-send host refusal releases intent and reservation across restart: continue=false",
+        "managed pre-send host refusal releases intent and reservation across restart: continue=true",
+        "malformed pre-send sources release only the unsubmitted intent without purchasing or stranding work",
+        "initial launch pre-send refusal remains registered for safe coordinator recovery"
       ]
     },
     {
@@ -270,7 +298,8 @@
         "a stop during sandbox preparation prevents Verify dispatch and removes the private profile",
         "unsupported host refuses preparation, direct dispatch and manual continuation while artifact recovery remains available",
         "native verification supports Git checks with immutable current-revision metadata in normal and linked checkouts",
-        "verification process helper preserves binary Git objects and binary failure diagnostics"
+        "verification process helper preserves binary Git objects and binary failure diagnostics",
+        "npm entry point supports custom Node prefixes without granting their bin directory"
       ]
     },
     {
@@ -299,7 +328,16 @@
         "managed dirty resume refuses before merge, reopen, registry mutation or corrective dispatch",
         "a receipt-only run dispatches reviews arriving during the run exactly once",
         "receipt-only settlement preserves feedback while owing its own recoverable round marker",
-        "receipt announcement retries recognize GitHub timestamps in the run-start second"
+        "receipt announcement retries recognize GitHub timestamps in the run-start second",
+        "openai-agents fixture: proven pre-send refusal restores the prior root and allowance without ambiguity",
+        "codex-cloud fixture: proven pre-send refusal restores the prior root and allowance without ambiguity",
+        "an unmarked submission failure cannot release an intent merely because its error code names readiness",
+        "cancellation retry after a proven pre-send refusal still fences the restored task",
+        "a proven unsent review correction stops actionably without moving feedback or the prior root",
+        "managed pre-send host refusal releases intent and reservation across restart: continue=false",
+        "managed pre-send host refusal releases intent and reservation across restart: continue=true",
+        "malformed pre-send sources release only the unsubmitted intent without purchasing or stranding work",
+        "initial launch pre-send refusal remains registered for safe coordinator recovery"
       ]
     },
     {
@@ -317,7 +355,16 @@
         "unknown cost stays null until a valid zero and cancellation retains known spend",
         "phase-bounded coordinator settlement cannot enter review dispatch or queued resume",
         "ambiguous answer recovery refuses changed actions, missing proof, foreign roots and stopped sessions without resending",
-        "answer ambiguity requires a safe transport recovery method and preserves ownership, key and stop fences"
+        "answer ambiguity requires a safe transport recovery method and preserves ownership, key and stop fences",
+        "openai-agents fixture: proven pre-send refusal restores the prior root and allowance without ambiguity",
+        "codex-cloud fixture: proven pre-send refusal restores the prior root and allowance without ambiguity",
+        "an unmarked submission failure cannot release an intent merely because its error code names readiness",
+        "cancellation retry after a proven pre-send refusal still fences the restored task",
+        "a proven unsent review correction stops actionably without moving feedback or the prior root",
+        "managed pre-send host refusal releases intent and reservation across restart: continue=false",
+        "managed pre-send host refusal releases intent and reservation across restart: continue=true",
+        "malformed pre-send sources release only the unsubmitted intent without purchasing or stranding work",
+        "initial launch pre-send refusal remains registered for safe coordinator recovery"
       ]
     },
     {
@@ -353,7 +400,17 @@
         "native verification supports Git checks with immutable current-revision metadata in normal and linked checkouts",
         "verification process helper preserves binary Git objects and binary failure diagnostics",
         "hosted snapshots refuse unfinished tracked, staged, deleted, renamed and untracked files without uploading them",
-        "managed dirty resume refuses before merge, reopen, registry mutation or corrective dispatch"
+        "managed dirty resume refuses before merge, reopen, registry mutation or corrective dispatch",
+        "npm entry point supports custom Node prefixes without granting their bin directory",
+        "openai-agents fixture: proven pre-send refusal restores the prior root and allowance without ambiguity",
+        "codex-cloud fixture: proven pre-send refusal restores the prior root and allowance without ambiguity",
+        "an unmarked submission failure cannot release an intent merely because its error code names readiness",
+        "cancellation retry after a proven pre-send refusal still fences the restored task",
+        "a proven unsent review correction stops actionably without moving feedback or the prior root",
+        "managed pre-send host refusal releases intent and reservation across restart: continue=false",
+        "managed pre-send host refusal releases intent and reservation across restart: continue=true",
+        "malformed pre-send sources release only the unsubmitted intent without purchasing or stranding work",
+        "initial launch pre-send refusal remains registered for safe coordinator recovery"
       ]
     },
     {
@@ -411,7 +468,17 @@
         "preparation capabilities expose policy data and validate the selected provider/account/version",
         "codex fixture preparation shares drafting, clarification, repair and deterministic readiness without CLI/PID",
         "gemini fixture preparation shares drafting, clarification, repair and deterministic readiness without CLI/PID",
-        "saved readiness, answer, start and recovery reject receipts borrowed from another selected provider"
+        "saved readiness, answer, start and recovery reject receipts borrowed from another selected provider",
+        "npm entry point supports custom Node prefixes without granting their bin directory",
+        "openai-agents fixture: proven pre-send refusal restores the prior root and allowance without ambiguity",
+        "codex-cloud fixture: proven pre-send refusal restores the prior root and allowance without ambiguity",
+        "an unmarked submission failure cannot release an intent merely because its error code names readiness",
+        "cancellation retry after a proven pre-send refusal still fences the restored task",
+        "a proven unsent review correction stops actionably without moving feedback or the prior root",
+        "managed pre-send host refusal releases intent and reservation across restart: continue=false",
+        "managed pre-send host refusal releases intent and reservation across restart: continue=true",
+        "malformed pre-send sources release only the unsubmitted intent without purchasing or stranding work",
+        "initial launch pre-send refusal remains registered for safe coordinator recovery"
       ]
     },
     {
@@ -433,7 +500,9 @@
         "docs/execution.md",
         "docs/audit/plugin-ready/openai-agents-checklist.md"
       ],
-      "test_names": []
+      "test_names": [
+        "npm entry point supports custom Node prefixes without granting their bin directory"
+      ]
     }
   ],
   "representative_generated_output": {
@@ -442,12 +511,12 @@
     "sha256": "16c09feca47099fa1005141c07af146326f38055bb27fd37f2da8966198533af"
   },
   "package_verification": {
-    "raw_record": "/tmp/agents-base-package-verification.json",
-    "sha256": "91d7534fe194118b9f30800fe94dc3bf052d0c7838ed122d1598e4c692511a58",
-    "integrity": "sha512-YBkC1A8HNKJLYjFhj89BeyrNeD4rdYnZIBefmn05ybTbivwcIAtl75TOE+TTBiuPdKKyNk+JaFWwiE69NmyBIw==",
+    "raw_record": "/tmp/agents-dispatch-package-verification.json",
+    "sha256": "655a8ac302d09d1210cb9b75c100bbe2e68ab0255c0744cc136f37a0a14f356b",
+    "integrity": "sha512-mSnJdVc/nKMF1f4eM8vSWaXq+AhEkpDCZWmxEsu7RgVbWlJ7DIh6WACz3R5Shg8haesN8hQQvnpTyAaEEaSFwg==",
     "files": 86,
-    "bytes": 429944,
-    "unpacked_bytes": 1310653,
+    "bytes": 431225,
+    "unpacked_bytes": 1314785,
     "result": "twelve adapter/coordinator/execution/sandbox/readiness/source/process/command modules imported from the unpacked local package with matching source and operator/intake/handoff document hashes; scripts ignored; zero provider calls"
   },
   "live": {
@@ -771,6 +840,52 @@
           "label": "unpacked source and operator/intake/handoff documents match this checkout",
           "path": "/tmp/agents-base-package-verification.json",
           "sha256": "91d7534fe194118b9f30800fe94dc3bf052d0c7838ed122d1598e4c692511a58"
+        }
+      ]
+    },
+    {
+      "rule": "Make approved npm verification usable without expanding host grants, and distinguish proven local non-dispatch from uncertain provider acceptance",
+      "checked": [
+        "lib/verification_sandbox.mjs verificationSandboxSpec/verificationRuntimeMounts/PROBE: fixed read-only Node/npm grants, symlink to CLI module for custom Linux prefix, preserve system-bin launcher, no broader Node bin directory; selected executable launcher is opened inside readiness and actual npm execution is covered by the native regression",
+        "lib/execution_result.mjs publication/readiness and lib/probe.mjs: shared native boundary still applies to artifacts, branch transport and doctor; filesystem/network/Git protections and temporary profile cleanup retained",
+        "lib/openai_agents.mjs dispatch submit/continue: mark only local config/source/owned-session/run-ID/host refusals before operation save or any provider request; existing operation and provider requests remain ambiguous after lost replies",
+        "lib/execution.mjs dispatch/read/reconcile/cancel: restore prior root, operations and allowance only on trusted pre-send marker, remove only new unsubmitted projection, bound private code-only refusal history to twenty; preserve stop ownership and lost-reply intent",
+        "lib/commands/start.mjs and lib/tick.mjs startRun/dispatch: initial/review refusals stop actionably with no false live run; retain feedback cursor, same session/PR and iteration count; manual resume retains existing API/native preflight",
+        "test/execution-backends.test.mjs and test/openai-agents.test.mjs: actual native custom-prefix npm execution, denied unrelated bin files, same-root/allowance restore, restart/retry, bounded history, cancellation lock protocol, malformed sources, start/review states and unmarked error fence",
+        "representative npm and provider-shaped refusal output reviewed; Linux mount plan is offline and native enforcement is macOS, with Linux/provider-live qualification still unverified"
+      ],
+      "regression": [
+        "npm entry point supports custom Node prefixes without granting their bin directory",
+        "openai-agents fixture: proven pre-send refusal restores the prior root and allowance without ambiguity",
+        "codex-cloud fixture: proven pre-send refusal restores the prior root and allowance without ambiguity",
+        "an unmarked submission failure cannot release an intent merely because its error code names readiness",
+        "cancellation retry after a proven pre-send refusal still fences the restored task",
+        "a proven unsent review correction stops actionably without moving feedback or the prior root",
+        "managed pre-send host refusal releases intent and reservation across restart: continue=false",
+        "managed pre-send host refusal releases intent and reservation across restart: continue=true",
+        "malformed pre-send sources release only the unsubmitted intent without purchasing or stranding work",
+        "initial launch pre-send refusal remains registered for safe coordinator recovery"
+      ],
+      "representative_output": [
+        {
+          "label": "offline Linux mount plan and actual native custom-prefix npm execution",
+          "path": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-O1nWZa/npm-prefix-evidence.json",
+          "sha256": "66441a1a5a26ee6ac49477d75c61f9de4aba45bf03371348d0c994087a7300fb"
+        },
+        {
+          "label": "provider-shaped offline lifecycle with native host preflight",
+          "path": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/agents-offline-oQCXNO/pre-send-refusal-evidence.json",
+          "sha256": "41173c409a37f9afe44231d3b387200c70ec8695a6a133163cfe3a5a68f9ed58"
+        },
+        {
+          "label": "provider-shaped offline lifecycle with native host preflight",
+          "path": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/agents-offline-cdZsGl/pre-send-refusal-evidence.json",
+          "sha256": "244eb13617b56417795391243fa690a91319dbc9314642c54721035f3c177f9a"
+        },
+        {
+          "label": "native macOS preflight before implementation; unchanged live configuration gap; zero provider calls",
+          "path": "/tmp/agents-dispatch-preflight.json",
+          "sha256": "fe8e344cb77219b8b146f45437a0514f90a066a48fa85b71084c28ed33d0e3b2"
         }
       ]
     }
@@ -1111,6 +1226,93 @@
     "paid_calls": 0,
     "native_codex_calls": 0,
     "other_repository_writes": 0,
+    "live_prerequisites": "unchanged; original failed preflight and exact external remedy preserved in live"
+  },
+  "runtime_dispatch_followup": {
+    "review_id": 5432352899,
+    "reviewed_commit": "d8bdcfa5f83a237e5b9021d9d80b15114e14cf48",
+    "inline_comment_ids": [
+      4198542616,
+      4198542626
+    ],
+    "status": "addressed",
+    "rule": "Make approved npm verification usable without expanding host grants, and distinguish proven local non-dispatch from uncertain provider acceptance",
+    "evidence_kind": "actual native macOS custom-prefix npm verification, offline Linux mount plan, and provider-shaped shared lifecycle fixtures; native Linux and live inference remain unverified",
+    "tests": [
+      "npm entry point supports custom Node prefixes without granting their bin directory",
+      "openai-agents fixture: proven pre-send refusal restores the prior root and allowance without ambiguity",
+      "codex-cloud fixture: proven pre-send refusal restores the prior root and allowance without ambiguity",
+      "an unmarked submission failure cannot release an intent merely because its error code names readiness",
+      "cancellation retry after a proven pre-send refusal still fences the restored task",
+      "a proven unsent review correction stops actionably without moving feedback or the prior root",
+      "managed pre-send host refusal releases intent and reservation across restart: continue=false",
+      "managed pre-send host refusal releases intent and reservation across restart: continue=true",
+      "malformed pre-send sources release only the unsubmitted intent without purchasing or stranding work",
+      "initial launch pre-send refusal remains registered for safe coordinator recovery"
+    ],
+    "regression_logs": [
+      {
+        "path": "/tmp/agents-dispatch-backends-final.log",
+        "sha256": "ff1a7f2a5a66607c55d055ce1f1421c8d3bd06ed51ba3f4a09d349bc94465463"
+      },
+      {
+        "path": "/tmp/agents-dispatch-openai-final.log",
+        "sha256": "52c38cfc74a32306010bab8f9af5432420d5a9b1dc6b04870d971ebfe6c4544f"
+      }
+    ],
+    "representative_output": [
+      {
+        "label": "offline Linux mount plan and actual native custom-prefix npm execution",
+        "path": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-O1nWZa/npm-prefix-evidence.json",
+        "sha256": "66441a1a5a26ee6ac49477d75c61f9de4aba45bf03371348d0c994087a7300fb"
+      },
+      {
+        "label": "provider-shaped offline lifecycle with native host preflight",
+        "path": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/agents-offline-oQCXNO/pre-send-refusal-evidence.json",
+        "sha256": "41173c409a37f9afe44231d3b387200c70ec8695a6a133163cfe3a5a68f9ed58"
+      },
+      {
+        "label": "provider-shaped offline lifecycle with native host preflight",
+        "path": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/agents-offline-cdZsGl/pre-send-refusal-evidence.json",
+        "sha256": "244eb13617b56417795391243fa690a91319dbc9314642c54721035f3c177f9a"
+      },
+      {
+        "label": "native macOS preflight before implementation; unchanged live configuration gap; zero provider calls",
+        "path": "/tmp/agents-dispatch-preflight.json",
+        "sha256": "fe8e344cb77219b8b146f45437a0514f90a066a48fa85b71084c28ed33d0e3b2"
+      }
+    ],
+    "earlier_attempts": {
+      "attempts": [
+        {
+          "command": "npm test",
+          "exit": 1,
+          "failures": [
+            "malformed pre-send sources release only the unsubmitted intent without purchasing or stranding work",
+            "real REST adapter: implementation, artifact pagination, restart and same-session correction",
+            "lost /agents/sessions reply stays fenced and never duplicates dispatch",
+            "deterministic artifact rejection survives coordinator restart and permits same-session correction"
+          ],
+          "code": "EXECUTION_DEADLINE",
+          "raw_log": "/tmp/agents-dispatch-test-verified.log",
+          "sha256": "e9ac6bdacea1c8601df32647945f3e53cc0d687c43c545c8bdb48dca78bbc765"
+        },
+        {
+          "command": "npm run test:openai-agents",
+          "exit": 1,
+          "failures": [
+            "subagent completion, closed stream and idle session never settle a running root",
+            "reconnect restores paginated items, discards reordered deltas after done and labels gaps",
+            "authorized required action answer targets exact existing turn and rejects arbitrary tools"
+          ],
+          "code": "EXECUTION_DEADLINE",
+          "raw_log": "/tmp/agents-dispatch-openai-verified.log",
+          "sha256": "4e35574f7afe1b4e59e7e685a2e264ceeb85ce47480db0012f4bfcac325e5bbc"
+        }
+      ],
+      "remedy": "repeated npm process startup in each readiness probe exceeded existing transport deadlines under concurrent suites; changed readiness to open and check the selected executable launcher inside the OS boundary, retained actual native npm execution in the regression, then reran every required check; deadlines, allowance and permissions unchanged"
+    },
+    "paid_calls": 0,
     "live_prerequisites": "unchanged; original failed preflight and exact external remedy preserved in live"
   }
 }

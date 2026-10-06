@@ -22,6 +22,8 @@ installed-host qualification records remain independent.
 - [x] Probe native verification enforcement before remote readiness, checkout mutation and paid implementation/corrective dispatch; preserve recovery and clean temporary profiles.
 - [x] Recover explicit answer retries through the owned pending call or saved output, and refuse resumed task mutation when full API readiness fails.
 - [x] Permit native Git Verify commands through immutable current-revision metadata, and refuse ordinary dirty hosted sources before resume or dispatch.
+- [x] Provide the custom-prefix npm entry point in Linux runtime mounts, probe npm before dispatch, and verify actual native npm execution without broad bin access.
+- [x] Release only proven local pre-send refusals, restoring prior roots and allowance across restart while preserving lost-reply fences and actionable start/review states.
 - [x] Document installation, supported REST beta/Node versions, setup, polling, continuation, artifacts and verification.
 - [x] Reconcile the approved base's receipt cursor fixes, selected-provider preparation contract and single M5/M6 connected execution successor.
 - [ ] Integrate the separately reviewed restricted Codex preparation capability through the selected base after PR #10 merges; no adapter copy or provider-name gate.

@@ -195,10 +195,19 @@ nullable `observedAt`, `reconciledAt`, `nextAttemptAt`, failures, cursor, nullab
 cost, collected/quarantined flags, controls and saved workflow ownership. Saved
 workflow cursors recover a correction accepted before registry acknowledgement.
 A repeated operation with identical input reuses its acknowledgement; changed
-input conflicts. Unknown acceptance never authorizes another dispatch. Startup
+input conflicts. A trusted transport can mark a local refusal with
+`dispatchNotSentError` only before persisting its transport operation and before
+every provider request. The shared boundary then restores the prior root and
+allowance, removes the unsubmitted projection, and retains the latest twenty
+private `dispatchRefusals` (operation/run IDs, timestamp and code). Initial start
+and review dispatch stop with `dispatch-refused`; repair the prerequisites and
+explicitly resume. The same authorized operation can also be retried through the
+shared service across restart. This release does not apply to provider setup
+requests, lost replies, unmarked errors or an unproven deadline.
+Unknown acceptance never authorizes another dispatch. Startup
 and periodic lookup reconcile it; without authoritative lookup an operator must
-inspect the recorded key and restore exact ownership. Never delete that intent to
-force a retry. Remote submission/continuation acknowledgements and every lookup
+inspect the recorded key and restore exact ownership. Never manually delete an
+acceptance-unknown intent to force a retry. Remote submission/continuation acknowledgements and every lookup
 or observation require nonempty string job and root-turn IDs. A job-only reply
 keeps its reservation and unresolved intent. Incomplete older remote records
 must recover the root through the intent lookup; job-level inspection or cached

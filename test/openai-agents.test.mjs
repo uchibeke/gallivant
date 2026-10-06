@@ -169,6 +169,46 @@ test("configuration refuses unavailable policy, missing billing selectors and pr
   assert.equal(validateAgentsConfig(config), config);
   for (const patch of [{ model: null }, { organization: null }, { environment: "none" }, { container_size: "auto" }, { allowance: null }, { mandatory_policy: ["auto-review"] }, { context_paths: ["/private"] }]) assert.throws(() => validateAgentsConfig({ ...config, ...patch }));
 });
+
+for (const continuing of [false, true]) test(`managed pre-send host refusal releases intent and reservation across restart: continue=${continuing}`, async t => {
+  const f = fixture();
+  let prior = null;
+  if (continuing) {
+    const job = await f.service().submit(input); f.finish(); f.artifact(job);
+    await f.service().reconcile({ force: true }); await f.service().collect();
+    prior = f.service().current();
+  }
+  const request = continuing ? { ...input, operationId: "correction", sessionId: prior.execution.sessionId } : input;
+  const send = service => continuing ? service.continue(request) : service.submit(request);
+  await f.service().prepare(request); // Readiness passed, then the host became unavailable.
+  const before = f.service().state(), provider = readFileSync(join(f.root, "agents.json"), "utf8"), calls = f.calls.length;
+  await unsupportedHost(async () => await assert.rejects(send(f.service()), { code: "EXECUTION_VERIFICATION_SANDBOX", dispatchNotSent: true }));
+  const reopened = f.service(), after = reopened.state(), refusal = after.dispatchRefusals.at(-1);
+  const { dispatchRefusals: _refusals, ...unchanged } = after;
+  assert.deepEqual(unchanged, before); assert.equal(refusal.operationId, request.operationId);
+  assert.equal(existsSync(reopened.dirOf(refusal.runId)), false); assert.equal(reopened.current()?.running ?? false, false);
+  assert.equal(readFileSync(join(f.root, "agents.json"), "utf8"), provider); assert.equal(f.calls.length, calls);
+  const providerCallsWhileRefused = f.calls.length - calls;
+  await reopened.reconcile({ force: true }); assert.equal(f.calls.length, calls);
+  if (prior) { assert.equal(reopened.current().id, prior.id); assert.equal(reopened.current().execution.sessionId, prior.execution.sessionId); }
+  const accepted = await send(f.service());
+  assert.equal(accepted.execution.acceptance, "accepted");
+  assert.equal(f.sessions.size, 1); assert.equal(f.turns.size, continuing ? 2 : 1);
+  if (prior) assert.equal(accepted.execution.sessionId, prior.execution.sessionId);
+  assert.equal(f.service().state().allowance.reservedUsd, (continuing ? 2 : 1) * config.allowance.reservedUsd);
+  const path = join(f.root, "pre-send-refusal-evidence.json");
+  writeFileSync(path, JSON.stringify({ kind: "provider-shaped offline lifecycle with native host preflight", continuing, refusal, providerCallsWhileRefused, priorRun: prior?.id ?? null, acceptedRun: accepted.id, sessionId: accepted.execution.sessionId, turnId: accepted.execution.turnId, sessions: f.sessions.size, turns: f.turns.size, paid_calls: 0 }, null, 2));
+  t.diagnostic(`pre-send refusal evidence: ${path}`);
+});
+
+test("malformed pre-send sources release only the unsubmitted intent without purchasing or stranding work", async () => {
+  const f = fixture(), bad = { ...input, sources: { ...sources, hash: "wrong" } };
+  await assert.rejects(f.service().submit(bad), { code: "AGENTS_SOURCE", dispatchNotSent: true });
+  assert.equal(f.calls.length, 0); assert.equal(f.service().current(), null);
+  assert.equal(f.service().state().operations.implementation, undefined); assert.equal(f.service().state().allowance, undefined);
+  assert.equal(existsSync(join(f.root, "agents.json")), false);
+  const job = await f.service().submit(input); assert.equal(job.execution.acceptance, "accepted"); assert.equal(f.sessions.size, 1);
+});
 test("read-only account probe records exact selectors without claiming inference or hard caps", async () => {
   const f = fixture(), access = await checkAgentsAccess(config, { http: f.http }); assert.equal(access.ok, true); assert.equal(access.effective.model, config.model); assert.equal(access.effective.cost.hardCap, false); assert.match(access.detail, /unverified/); assert.equal(f.calls.some(c => c.method === "POST"), false);
 });
@@ -525,7 +565,7 @@ test("managed artifacts reach the single PR writer with actual file and current-
   await reconcileExecutionResult(ctx, { id: "acme/widget/task", entry, result, dir: f.service().dirOf(job.id) }); assert.equal(calls.length, 4);
 });
 
-test("initial launch reply loss remains registered for coordinator restart without a second implementation", async () => {
+for (const fault of ["reply-loss", "pre-send-refusal"]) test(fault === "reply-loss" ? "initial launch reply loss remains registered for coordinator restart without a second implementation" : "initial launch pre-send refusal remains registered for safe coordinator recovery", async () => {
   const f = fixture(), originalFetch = globalThis.fetch, originalKey = process.env.OPENAI_API_KEY;
   const operator = join(f.root, "operator"), worktree = join(f.root, "worktrees/acme/widget/task");
   mkdirSync(join(operator, "docs/prds"), { recursive: true }); mkdirSync(worktree, { recursive: true });
@@ -535,9 +575,24 @@ test("initial launch reply loss remains registered for coordinator restart witho
   const ctx = { home: f.root, ownLogin: "me", config: { ...CONFIG, home: f.root, worktrees: join(f.root, "worktrees"), harness: { "openai-agents": config } }, state, log: silentLog, notify: fakeNotify(), identity: fakeIdentity(), credential: fakeCredential(), clock: f.clock,
     git: { toplevel: async () => operator, create: async () => worktree, head: async () => git(["rev-parse", "HEAD"]).trim(), exists: () => true },
     gh: { repoInfo: async () => ({ nameWithOwner: "acme/widget", defaultBranch: "main" }), branchExists: async () => true, ensureLabels: async () => {}, ownPrByHead: async () => null },
-    executionFor: f.service, writePrd: (key, value) => snapshots.set(key, value), readPrd: key => snapshots.get(key) };
+    executionFor: () => {
+      const service = f.service();
+      if (fault === "pre-send-refusal") { const submit = service.submit; service.submit = request => unsupportedHost(() => submit(request)); }
+      return service;
+    }, writePrd: (key, value) => snapshots.set(key, value), readPrd: key => snapshots.get(key) };
   globalThis.fetch = f.fetcher; process.env.OPENAI_API_KEY = "offline-test-key";
   try {
+    if (fault === "pre-send-refusal") {
+      await assert.rejects(start(ctx, { path: prdPath }), { dispatchNotSent: true });
+      const refused = makeState(f.root).get("acme/widget/task");
+      assert.equal(refused.state, STATES.needsHuman); assert.equal(refused.reason, "dispatch-refused");
+      assert.equal(refused.last.run, null); assert.match(refused.last.event, /before any provider request/);
+      assert.equal(f.service().current(), null); assert.equal(f.service().state().allowance, undefined);
+      assert.equal(f.sessions.size, 0); assert.equal(f.turns.size, 0);
+      await makeTick({ ...ctx, state: makeState(f.root) }).tickEntry("acme/widget/task", refused);
+      assert.equal(f.service().current(), null); assert.equal(f.sessions.size, 0);
+      return;
+    }
     f.lose("/agents/sessions/sess-1/events"); await assert.rejects(start(ctx, { path: prdPath }), /lost reply/);
     const pending = makeState(f.root).get("acme/widget/task"); assert.ok(pending); assert.equal(pending.reason, "dispatch-intent"); assert.equal(pending.execution.acceptance, "unknown"); assert.ok(pending.last.run);
     // A process crash can occur before the launcher copies the job into registry

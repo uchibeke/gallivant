@@ -1,13 +1,13 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { join } from "node:path";
+import { join, dirname } from "node:path";
 import { createHash } from "node:crypto";
 import { EventEmitter } from "node:events";
 import { createServer } from "node:net";
 import { mkdirSync, readFileSync, writeFileSync, rmSync, renameSync, symlinkSync, cpSync, statSync, lstatSync, existsSync, chmodSync, realpathSync } from "node:fs";
 import { pathToFileURL } from "node:url";
 import { makeExecution, executionLive, assertExecutionDependency } from "../lib/execution.mjs";
-import { redact, redactResultMetadata, collectionValidationError, EXECUTION_CURSOR_BYTES } from "../lib/execution_io.mjs";
+import { redact, redactResultMetadata, collectionValidationError, dispatchNotSentError, EXECUTION_CURSOR_BYTES } from "../lib/execution_io.mjs";
 import { executionRegistry, adapters, buildRun } from "../lib/harness.mjs";
 import { makeProviderHealth } from "../lib/provider_health.mjs";
 import { makeRunner, LOCAL_OUTPUT_LIMITS } from "../lib/run.mjs";
@@ -19,7 +19,7 @@ import { makeState, newEntry, STATES, idSlug } from "../lib/state.mjs";
 import { routes } from "../lib/commands/serve.mjs";
 import { makeTick } from "../lib/tick.mjs";
 import { reconcileExecutionResult, verificationEnvironment, checkVerificationSandbox } from "../lib/execution_result.mjs";
-import { prepareVerificationSandbox, verificationSandboxSpec, validVerificationSandbox } from "../lib/verification_sandbox.mjs";
+import { prepareVerificationSandbox, verificationSandboxSpec, verificationRuntimeMounts, validVerificationSandbox } from "../lib/verification_sandbox.mjs";
 import { resume } from "../lib/commands/resume.mjs";
 import { acquireProcessLock } from "../lib/daemon.mjs";
 import { makeGit, GIT_PATH_LIMITS } from "../lib/git.mjs";
@@ -52,6 +52,66 @@ function remote(provider = "openai-agents", overrides = {}) {
   const options = { root, taskId: "acme/widget/remote", provider, account: "test", transport, capabilities, clock, jitter: () => 0 };
   return { root, clock, calls, transport, capabilities, service: makeExecution(options), reopen: () => makeExecution(options), observe: patch => { observation = { ...observation, ...patch }; }, jobs };
 }
+
+for (const provider of ["openai-agents", "codex-cloud"]) test(`${provider} fixture: proven pre-send refusal restores the prior root and allowance without ambiguity`, async () => {
+  const f = remote(provider), job = await f.service.submit(input);
+  f.observe({ state: "succeeded", costUsd: 0.2 }); await f.service.reconcile({ force: true }); await f.service.collect();
+  const before = f.reopen().state(), request = { ...input, operationId: "repair", sessionId: job.execution.sessionId };
+  const resume = f.transport.continue;
+  f.transport.continue = async () => { throw dispatchNotSentError(Object.assign(new Error("Bearer private-preflight-value"), { code: "EXECUTION_VERIFICATION_SANDBOX" })); };
+  for (let n = 0; n < 22; n++) await assert.rejects(f.reopen().continue(request), { dispatchNotSent: true });
+  const after = f.reopen().state(), { dispatchRefusals, ...unchanged } = after;
+  assert.deepEqual(unchanged, before); assert.equal(dispatchRefusals.length, 20);
+  assert.doesNotMatch(JSON.stringify(after), /private-preflight-value/);
+  for (const refusal of dispatchRefusals) assert.equal(existsSync(f.service.dirOf(refusal.runId)), false);
+  assert.equal(f.reopen().current().running, false); assert.equal(f.reopen().current().id, job.id);
+  f.transport.continue = resume;
+  const accepted = await f.reopen().continue(request);
+  assert.equal(accepted.execution.sessionId, job.execution.sessionId); assert.equal(f.calls.filter(c => c[0] === "continue").length, 1);
+  assert.equal(f.reopen().state().allowance.reservedUsd, 0.2);
+});
+
+test("an unmarked submission failure cannot release an intent merely because its error code names readiness", async () => {
+  const f = remote("openai-agents", { submit: async req => { f.jobs.set(req.idempotencyKey, { providerJobId: "paid-job", turnId: "paid-root", sessionId: "paid-session" }); throw Object.assign(new Error("reply lost"), { code: "EXECUTION_VERIFICATION_SANDBOX" }); } });
+  await assert.rejects(f.service.submit(input), { code: "EXECUTION_VERIFICATION_SANDBOX" });
+  assert.equal(f.reopen().current().execution.acceptance, "unknown"); assert.equal(f.reopen().state().allowance.reservedUsd, 0.1);
+  assert.equal(f.reopen().state().dispatchRefusals, undefined);
+  await assert.rejects(f.reopen().submit(input), { code: "EXECUTION_UNKNOWN" });
+  await f.reopen().reconcile({ force: true }); assert.equal(f.reopen().current().execution.providerJobId, "paid-job");
+});
+
+test("cancellation retry after a proven pre-send refusal still fences the restored task", async () => {
+  let reject;
+  const f = remote("openai-agents", { submit: () => new Promise((_, fail) => { reject = fail; }) });
+  const pending = f.service.submit(input); await new Promise(resolve => setImmediate(resolve));
+  await assert.rejects(f.reopen().cancel({ reason: "cancelled" }), /execution already running/);
+  reject(dispatchNotSentError(Object.assign(new Error("local host unavailable"), { code: "EXECUTION_VERIFICATION_SANDBOX" })));
+  await assert.rejects(pending, { dispatchNotSent: true }); await f.reopen().cancel({ reason: "cancelled" });
+  assert.equal(f.reopen().current(), null); assert.ok(f.reopen().state().stopped);
+  assert.equal(f.reopen().state().allowance, undefined);
+  await assert.rejects(f.reopen().submit(input), { code: "EXECUTION_STOPPED" }); assert.equal(f.calls.length, 0);
+});
+
+test("a proven unsent review correction stops actionably without moving feedback or the prior root", async () => {
+  const f = remote(), first = await f.service.submit(input);
+  f.observe({ state: "succeeded" }); await f.service.reconcile({ force: true }); await f.service.collect();
+  f.transport.continue = async () => { throw dispatchNotSentError(Object.assign(new Error("local host unavailable"), { code: "EXECUTION_VERIFICATION_SANDBOX" })); };
+  const id = "acme/widget/remote", state = makeState(f.root);
+  state.put(id, { ...newEntry({ repo: "acme/widget", branch: "work/widget", harness: "openai-agents", session: first.execution.sessionId, worktree: tempHome(), pr: 7, state: STATES.prOpen, nowIso: T0 }),
+    execution: f.service.current().execution, last: { at: T0, run: first.id, exit: 0 }, pr: 7 });
+  const cursor = structuredClone(state.get(id).cursor);
+  const gh = fakeGh({ comments: [comment({ id: 55, by: "me", at: T0, body: "/fix Apply this authorized review correction" })] });
+  const tick = makeTick({ home: f.root, config: CONFIG, state, ownLogin: "me", log: silentLog, clock: f.clock, notify: fakeNotify(), gh, git: fakeGit(),
+    credential: fakeCredential(), identity: fakeIdentity(), executionFor: f.reopen, readPrd: () => GOOD_PRD,
+    executionInputFor: async (_id, _entry, request) => ({ ...input, ...request, environment: "sandbox" }) });
+  await tick.tickEntry(id, state.get(id));
+  assert.equal(state.get(id).state, STATES.needsHuman); assert.equal(state.get(id).reason, "dispatch-refused");
+  assert.deepEqual(state.get(id).cursor, cursor); assert.equal(state.get(id).iteration, 0);
+  assert.equal(state.get(id).last.run, first.id); assert.equal(state.get(id).last.exit, 0);
+  assert.equal(f.reopen().current().id, first.id); assert.equal(f.reopen().current().running, false);
+  const refusals = f.reopen().state().dispatchRefusals.length;
+  await tick.tickEntry(id, state.get(id)); assert.equal(f.reopen().state().dispatchRefusals.length, refusals);
+});
 
 // Shared lifecycle fixtures still exercise the real native/API readiness gate;
 // only the provider's read responses and private credential are offline.
@@ -2418,6 +2478,30 @@ console.log('git-checks-passed');\n`;
   }
   const path = join(tempHome(), "git-verification-evidence.json"); writeJsonAtomic(path, { kind: "native Git verification with provider-controlled result fixtures", observations });
   t.diagnostic(`native Git verification evidence: ${path}`);
+});
+
+test("npm entry point supports custom Node prefixes without granting their bin directory", async t => {
+  const prefix = tempHome(), worktree = tempHome(), home = tempHome(), bin = join(prefix, "bin"), node = join(bin, "node");
+  mkdirSync(bin); cpSync(process.execPath, node);
+  const installedNpm = realpathSync(join(dirname(dirname(process.execPath)), "lib/node_modules/npm"));
+  mkdirSync(join(prefix, "lib/node_modules"), { recursive: true });
+  symlinkSync(installedNpm, join(prefix, "lib/node_modules/npm"));
+  const npmLauncher = join(bin, "npm"), npmCli = realpathSync(join(installedNpm, "bin/npm-cli.js"));
+  const mounts = verificationRuntimeMounts({ runtime: ["/bin", "/usr/bin"], extra: [node, installedNpm], npmLauncher, npmCli });
+  assert.deepEqual(mounts.slice(-3), ["--symlink", npmCli, npmLauncher]);
+  assert.ok(mounts.includes(installedNpm)); assert.ok(!mounts.includes(bin));
+  assert.equal(existsSync(npmLauncher), false); symlinkSync(mounts.at(-2), mounts.at(-1));
+  const system = verificationRuntimeMounts({ runtime: ["/usr/bin"], extra: [], npmLauncher: "/usr/bin/npm", npmCli });
+  assert.ok(!system.includes("--symlink"), "a mounted system bin retains its existing launcher");
+  writeFileSync(join(bin, "operator-private"), "must-stay-hidden");
+  writeFileSync(join(worktree, "package.json"), JSON.stringify({ scripts: { test: "node verify.cjs" } }));
+  writeFileSync(join(worktree, "verify.cjs"), `const assert=require('node:assert/strict'),fs=require('node:fs'); assert.throws(()=>fs.readFileSync(${JSON.stringify(join(bin, "operator-private"))}),e=>['EPERM','EACCES','ENOENT'].includes(e.code)); console.log('prefix-npm-tests-passed');`);
+  const spec = await prepareVerificationSandbox({ worktree, home, env: verificationEnvironment(home), node });
+  const result = await execFileAsync(spec.cmd, [...spec.args, "/bin/sh", "-c", "npm test"], { cwd: worktree, env: spec.env });
+  assert.match(result.stdout, /prefix-npm-tests-passed/); assert.equal(validVerificationSandbox(spec.evidence), true);
+  const path = join(tempHome(), "npm-prefix-evidence.json");
+  writeJsonAtomic(path, { kind: "offline Linux mount plan and actual native custom-prefix npm execution", linuxMounts: mounts, native: spec.evidence, command: "npm test", exit: 0, output: result.stdout, broaderBinRead: "denied", provider_calls: 0 });
+  t.diagnostic(`npm prefix evidence: ${path}`);
 });
 
 test("unavailable or unproven verification sandbox blocks once, preserves results and cleans its profile", async () => {

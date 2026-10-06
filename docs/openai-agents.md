@@ -219,7 +219,12 @@ Node 22+ runtime with npm and use macOS with `/usr/bin/sandbox-exec` plus
 Tools used by `/usr/bin/git`, or Linux with `/usr/bin/bwrap`
 and enabled unprivileged user/PID/network namespaces. System tools, the running
 Node binary and its npm package are readable; only the checkout and a private
-temporary profile are writable. Git Verify commands receive a separate read-only
+temporary profile are writable. For a custom Node prefix, Linux supplies the
+normal `npm` entry point as a link to its read-only CLI module; it does not grant
+the broader bin directory. Readiness opens the selected prefix's executable npm
+launcher inside the boundary, so a missing or unreadable entry point fails before
+hosted work. The native custom-prefix regression executes `npm test` through it.
+Git Verify commands receive a separate read-only
 `GIT_DIR` with the exact current commit, its tree/blob objects and a reconstructed
 index. `git diff --check`, status and current-HEAD reads work in normal and linked
 checkouts; coordinator Git config, hooks, remotes, reflogs, alternate stores and
@@ -238,6 +243,13 @@ read access. Start refuses unsupported hosts before cloning or saving task
 snapshots. Review dispatch and
 manual resume recheck before recreating or merging the checkout, and the managed
 transport checks again before sending a new implementation or correction.
+If that final local check refuses before any provider request, the shared boundary
+releases the unsubmitted intent and reservation, preserves the prior root/session
+and records a bounded private `dispatchRefusals` entry. Start/review dispatch stops
+with `dispatch-refused`; repair host/input prerequisites and explicitly resume,
+or retry the identical authorized operation through the shared service. No new
+session was launched by the refusal. Once a transport operation or provider
+request exists, lost replies remain acceptance-unknown and cannot use this release.
 Manual resume runs the full native/API readiness check before accepting an
 edited brief or carried sources or reopening the entry. Expired credentials,
 revoked project/model visibility and unsupported hosts leave those saved inputs
