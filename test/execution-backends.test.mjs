@@ -2316,6 +2316,15 @@ async function nativeResultFixture() {
   return { ...f, verify: async (...args) => { f.calls.push("verify"); return execFileAsync(...args); } };
 }
 
+test("verification process helper preserves binary Git objects and binary failure diagnostics", async () => {
+  const args = ["-e", "process.stdout.write(Buffer.from([0,128,255])); process.stderr.write('binary stderr');"];
+  const result = await execFileAsync(process.execPath, args, { encoding: "buffer" });
+  assert.deepEqual(result.stdout, Buffer.from([0, 128, 255])); assert.ok(Buffer.isBuffer(result.stderr));
+  await assert.rejects(execFileAsync(process.execPath, ["-e", args[1] + "process.exit(7);"], { encoding: "buffer" }), error => {
+    assert.equal(error.code, 7); assert.deepEqual(error.stdout, result.stdout); assert.ok(Buffer.isBuffer(error.stderr)); assert.match(error.message, /binary stderr/); return true;
+  });
+});
+
 test("host-file exfiltration in artifact and pushed-branch Verify scripts is denied before publication", async t => {
   const observations = [];
   for (const transport of ["artifacts", "pushed-branch"]) {
@@ -2354,7 +2363,7 @@ test("native verification permits npm and checkout tools while denying child, sy
   try {
     const text = `const fs=require('node:fs'),assert=require('node:assert/strict'),cp=require('node:child_process'),net=require('node:net');
 const outside=${JSON.stringify(outside)},journal=${JSON.stringify(join(f.dir, "result-application.json"))};
-const denied=fn=>assert.throws(fn,e=>['EPERM','EACCES','ENOENT'].includes(e.code));
+const denied=fn=>assert.throws(fn,e=>['EPERM','EACCES','ENOENT','EROFS'].includes(e.code));
 denied(()=>fs.readFileSync(outside)); denied(()=>fs.writeFileSync(outside,'changed')); denied(()=>fs.readFileSync(journal));
 denied(()=>fs.readFileSync('.git/config')); denied(()=>fs.writeFileSync('.git/config','changed'));
 fs.symlinkSync(outside,'escape-link'); try{denied(()=>fs.readFileSync('escape-link'));}finally{fs.unlinkSync('escape-link');}
@@ -2374,6 +2383,43 @@ socket.on('error',e=>{assert.ok(['EPERM','EACCES','ENETUNREACH','EHOSTUNREACH','
   } finally { await new Promise(resolve => server.close(resolve)); }
 });
 
+test("native verification supports Git checks with immutable current-revision metadata in normal and linked checkouts", async t => {
+  const observations = [];
+  for (const linked of [false, true]) {
+    const f = await nativeResultFixture(), original = f.entry.worktree;
+    if (linked) {
+      const path = join(tempHome(), "linked");
+      await execFileAsync("git", ["worktree", "add", "-b", "work/linked", path, "HEAD"], { cwd: original });
+      f.entry.worktree = path; f.entry.branch = f.result.branch = "work/linked";
+    }
+    const previous = f.result.inputHead;
+    const script = `const fs=require('node:fs'),assert=require('node:assert/strict'),cp=require('node:child_process');
+const dir=process.env.GIT_DIR,denied=fn=>assert.throws(fn,e=>['EPERM','EACCES','ENOENT','EROFS','EBUSY'].includes(e.code));
+assert.ok(dir); assert.match(cp.execFileSync('git',['rev-parse','HEAD'],{encoding:'utf8'}),/^[a-f0-9]{40}\\n$/);
+cp.execFileSync('git',['diff','--check']); assert.equal(cp.execFileSync('git',['status','--porcelain'],{encoding:'utf8'}),'');
+assert.doesNotMatch(fs.readFileSync(dir+'/config','utf8'),/origin|credential|include|fsmonitor/);
+for(const path of ['config','index','HEAD'])denied(()=>fs.writeFileSync(dir+'/'+path,'changed'));
+denied(()=>fs.renameSync(dir,process.env.HOME+'/replaced-git'));
+for(const path of ['hooks','logs','packed-refs','objects/info/alternates'])assert.equal(fs.existsSync(dir+'/'+path),false);
+assert.notEqual(cp.spawnSync('git',['cat-file','-e',${JSON.stringify(previous)}]).status,0);
+console.log('git-checks-passed');\n`;
+    f.result.files = [{ path: "verify.cjs", beforeHash: null, afterHash: sha(script), text: script }];
+    f.ctx.readPrd = () => "# Brief\n\n## Verify\n\n- `git diff --check`\n- `git status --porcelain`\n- `node verify.cjs`\n";
+    let gitView; const verify = f.verify; f.verify = (...args) => { gitView = args[2].env.GIT_DIR; return verify(...args); };
+    t.diagnostic(`native Git case evidence: ${join(f.dir, "verification.json")}`);
+    const done = await reconcileExecutionResult(f.ctx, f);
+    assert.ok(done.evidence.every(e => e.exit === 0 && e.head === done.head && validVerificationSandbox(e.sandbox)));
+    assert.match(done.evidence[2].output, /git-checks-passed/);
+    assert.equal(await f.ctx.git.head(f.entry.worktree), done.head);
+    assert.deepEqual(await f.ctx.git.dirty(f.entry.worktree, { strict: true }), { modified: 0, untracked: 0 });
+    assert.deepEqual(f.calls, ["commit", "verify", "verify", "verify", "push", "PR"]);
+    assert.equal(existsSync(gitView), false);
+    observations.push({ linked, head: done.head, evidence: join(f.dir, "verification.json"), originalMetadataHidden: true, gitViewImmutable: true, gitViewRemoved: true });
+  }
+  const path = join(tempHome(), "git-verification-evidence.json"); writeJsonAtomic(path, { kind: "native Git verification with provider-controlled result fixtures", observations });
+  t.diagnostic(`native Git verification evidence: ${path}`);
+});
+
 test("unavailable or unproven verification sandbox blocks once, preserves results and cleans its profile", async () => {
   for (const failure of ["unavailable", "unproven"]) {
     const f = resultFixture(); let probes = 0, privateHome;
@@ -2387,6 +2433,8 @@ test("unavailable or unproven verification sandbox blocks once, preserves result
   const worktree = tempHome(), home = tempHome(), env = verificationEnvironment(home);
   assert.throws(() => verificationSandboxSpec({ worktree, home, env, platform: "unsupported" }), { code: "EXECUTION_VERIFICATION_SANDBOX" });
   assert.throws(() => verificationSandboxSpec({ worktree, home: worktree, env }), { code: "EXECUTION_VERIFICATION_SANDBOX" });
+  await assert.rejects(prepareVerificationSandbox({ worktree, home: worktree, env }), { code: "EXECUTION_VERIFICATION_SANDBOX" });
+  assert.equal(existsSync(join(worktree, "verification-git")), false);
 });
 
 test("an earlier Verify command cannot replace the sandbox policy for a later command", async t => {

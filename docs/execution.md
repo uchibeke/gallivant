@@ -581,8 +581,18 @@ Success/failure evidence records the sandbox driver and enforcement probe.
 Recovered `verified` checkpoints lacking this provenance block before push;
 completed commands are never silently replayed. Empty Verify lists still record
 no test claim. The profile and probe files are removed on every exit.
+Git checks use an immutable temporary `GIT_DIR` containing only the exact current
+commit/tree/blob objects and a reconstructed index; the real Git directory or
+linked-worktree pointer stays hidden. Config, hooks, remotes, reflogs, alternate
+stores and ancestor history are not copied. The shared process helper preserves
+binary Git object bytes, and the same native read-only policy protects the view
+on macOS and Linux. macOS Git additionally requires its fixed installed Command
+Line Tools runtime. The view has bounded object count, bytes and preparation time
+and is removed on success, refusal, command failure and stop.
 Remote readiness also exercises this enforcement in disposable directories with
-the same empty verification environment. Doctor and initial start check before
+the same empty verification environment and a trusted empty Git commit; actual
+Git reads and denied index writes prove that the runtime and read-only metadata
+boundary work before cloning. Doctor and initial start check before
 API access or cloning; manual resume and review dispatch check before checkout
 recreation or base merging, and the managed transport checks before new provider
 dispatch. Failed/unproven/aborted probes refuse with
@@ -593,8 +603,12 @@ artifact collection and cancellation remain available after host refusal. The
 publication-time probe still verifies the actual applied checkout and descendants.
 Manual resume uses full native/API readiness before recreation, merging,
 resnapshot acceptance or reopening state. API refusal preserves the existing
-brief/source snapshots and session/PR along with the checkout. An unanswered
-operator request uses the same durable signature/key on explicit retry: the
+brief/source snapshots and session/PR along with the checkout.
+Hosted resume additionally refuses ordinary unfinished repository files before
+merge or reopening; commit those intended edits on the owned branch and resume
+the same session. Source preparation repeats this check for all dispatch paths,
+allowing only approved brief/carried-source overlays with verified saved bytes.
+An unanswered operator request uses the same durable signature/key on explicit retry: the
 shared boundary calls optional `recoverResponse`, leaving transports without a
 safe recovery method ambiguous. The managed adapter verifies the current owned
 pending `ask_operator` call before replay, or confirms matching successful saved

@@ -21,6 +21,7 @@ installed-host qualification records remain independent.
 - [x] Sandbox shared artifact/branch-result Verify commands with native filesystem/network enforcement, immutable policy and checked recovery provenance.
 - [x] Probe native verification enforcement before remote readiness, checkout mutation and paid implementation/corrective dispatch; preserve recovery and clean temporary profiles.
 - [x] Recover explicit answer retries through the owned pending call or saved output, and refuse resumed task mutation when full API readiness fails.
+- [x] Permit native Git Verify commands through immutable current-revision metadata, and refuse ordinary dirty hosted sources before resume or dispatch.
 - [x] Document installation, supported REST beta/Node versions, setup, polling, continuation, artifacts and verification.
 - [ ] Qualify one real implementation and forced CI/trusted-review correction with the same session/PR across restart (ac-13).
 - [ ] Qualify the installed host/plugin, browser/capture surface and final release in the later release milestone.

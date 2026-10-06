@@ -2,15 +2,15 @@
   "version": 1,
   "task_id": "task-cf82d9f43ca0da3c5bb29b67",
   "scope": "managed Agents REST implementation, provider-shaped offline lifecycle verification and native macOS verification readiness/enforcement; live qualification remains unverified",
-  "recorded_at": "2026-10-06T16:40:16.833Z",
+  "recorded_at": "2026-10-06T17:10:08.493Z",
   "base_revision": "7936830977bcb4615de418b9dd5c4d655501297b",
   "branch": "work/openai-agents-harness",
   "source_files": {
     "README.md": "6c9a9e9e79f7a9bd9157464ea2602f6ecde0b2878422e5c8dbea64a98d5f2ab8",
     "docs/audit/plugin-ready/README.md": "7f24289695807c9bd9d880e54e287c3bcfa1a3324543ca87eee68b1e24a9e8f7",
-    "docs/audit/plugin-ready/openai-agents-checklist.md": "c79aedac3562a4aa3c2d2bc179025b8e8af48cb3023f238383d4c18f20a4a4fe",
-    "docs/execution.md": "eba75e0354dcd604eda04096d43f3c5eb477a0aa4e73fe391681a24d15201c9f",
-    "docs/openai-agents.md": "4de3d40bebaccb0b72c5f42a438dcb8210cf17ab91a16121eaf57aaeae92b544",
+    "docs/audit/plugin-ready/openai-agents-checklist.md": "5569fd1b828d47b81bd5cff775fecccf14a3984604b26ad6a2ff9ba3ace0e751",
+    "docs/execution.md": "ce133dd1e2c4fb3514d96fefbb44b60a8e7f8c4727332d5606895eaab5971d5c",
+    "docs/openai-agents.md": "79fb90a8e0b684730957b2104f0aecdcb12b027c61f27f0f6bdb99b6cea1e085",
     "docs/prds/openai-agents-harness.md": "b6d3ceeb20426248b5cf0d8527beaf93a6a69c09003cfc07d3a86fe8fa8b053a",
     "lib/block.mjs": "bd644a1564d6d3dcf3edad1ad1f931fa5f3e4246a041f20acbbb04c88c07c665",
     "lib/commands/doctor.mjs": "6a1c916f1a3626ba7656123792adf9ba3fdbd963cb64a3641437e337e4f18997",
@@ -23,18 +23,19 @@
     "lib/openai_agents_config.mjs": "7d9db1b55e3c0f71ada076811eb11baf9cfb0becdfed10f6a86ec6ecbfa69dc7",
     "lib/openai_agents_http.mjs": "bf09e30be66d2e22c240194a6e2658c6c9ba3f027a697a4e3db25a5d18f43b05",
     "lib/openai_agents_input.mjs": "a2978393dc2dfe348c97962d0a6a9356184e54a7fe426847b9195186fa8d0c68",
-    "lib/openai_agents_sources.mjs": "c3b76d499c72ed5c65bde47e5784cb198130842eff88cc06a924efd6721b3d5b",
+    "lib/openai_agents_sources.mjs": "afeb732805764635189bc6fe5523ca95564174c4fc08fc159d3118d5f668aeb1",
     "lib/probe.mjs": "bbacb430ed3ec7e3ab4b26fe01568d396d5d2257513264412c1c7e7ccb59383a",
     "lib/tick.mjs": "aed02c1ba7c995463db00824176f28c2fa9bd8ebf20794ecc98802ba9fa34c04",
     "package.json": "cc440ea2539b8d40772db637b1f6593584c66818f810c4a45719c7c563ff003a",
-    "test/execution-backends.test.mjs": "e5f909dc005353ca3717b205c8a3ba86a1ef83319ec6354fef7ff199294e6368",
+    "test/execution-backends.test.mjs": "21bfd87b1bf0fda0af5adbd43061d84db9cc4ea2f014e82bb0c7881a85d5c16a",
     "test/openai-agents-live.mjs": "0f556440264766e17a369e6eaa6b71658833b93c18971b1ef1326d65452a20d2",
-    "test/openai-agents.test.mjs": "332216cbc6c5775079d338218f4c40135bc00c5ea4ef5b1a60e1696154a6987e",
+    "test/openai-agents.test.mjs": "21d32e17978884a0a09fa95a411a399eb075255d102d3669222d710f34c64617",
     "test/units.test.mjs": "ae8ab863aa48e3e44557e8f20c00bb8440682325ec099eb34a81f339cbb42b9f",
     "lib/execution_result.mjs": "b13f5169e3fa541f5cc1f8c4e87e401436849a5864ea514231246847c71c2f41",
-    "lib/verification_sandbox.mjs": "826a0ffa7116107a45ab6664bc84d0c88df8986332598b3722c78c8a7cd55ca4",
+    "lib/verification_sandbox.mjs": "3eaa247b5f9f4dda5def32d1f4e852661316b479ce3559b30ac31f32edea399d",
     "lib/execution_io.mjs": "b6024cdac19f53d3a2e4f13ab250ecb707bb78d1729e7fb53dab38c2c70c7145",
-    "lib/commands/resume.mjs": "84ec6e93c4d2488a57b0ab8fb8fc2fa9d9cdbba302ef52ac0cddc1ed2a2c4184"
+    "lib/commands/resume.mjs": "d419275a301d5c5b37b856af28de201cdad1a3c70ca336bd1b2d6b01ef65bd5d",
+    "lib/gh.mjs": "fc1fe24b0a72372160722f563637a8e556bd2622b410d7bedfb232a345ef455e"
   },
   "frozen_inputs": {
     "docs/plans/plugin-ready-gallivant.md": "3081d47d8161043f9c32b6184f07ee8d4ca513822341c41a138bdf28f7459fc2",
@@ -54,10 +55,10 @@
     {
       "command": "npm test",
       "exit": 0,
-      "raw_log": "/tmp/agents-answer-test-verified.log",
-      "sha256": "e8619e381a68a86ecca37cf24c6fc2a58c4c65eb642e7beea4c33d74f21bfa53",
-      "tests": 1128,
-      "pass": 1128,
+      "raw_log": "/tmp/agents-git-test-verified.log",
+      "sha256": "a0ad7199b3ff2e237c9c1fb7e5d6be3d6fafdb7cb424e2e60232369b77b8648d",
+      "tests": 1132,
+      "pass": 1132,
       "fail": 0,
       "cancelled": 0,
       "skipped": 0
@@ -65,16 +66,16 @@
     {
       "command": "npm run lint",
       "exit": 0,
-      "raw_log": "/tmp/agents-answer-lint-final.log",
+      "raw_log": "/tmp/agents-git-lint-verified.log",
       "sha256": "8c7790de3f018fb4580f18ac70e1b355a0f76f522dd73acbdaa63632feffcecc"
     },
     {
       "command": "npm run test:execution-backends",
       "exit": 0,
-      "raw_log": "/tmp/agents-answer-backends-verified.log",
-      "sha256": "2d7e80c4342239d280bc0426b2259f9adaef91dcbd4357b57604fb82b3e90f75",
-      "tests": 388,
-      "pass": 388,
+      "raw_log": "/tmp/agents-git-backends-verified.log",
+      "sha256": "72031878f9e670ab9de142cbbaaad16be672bf1b684f238f1791958885b02758",
+      "tests": 390,
+      "pass": 390,
       "fail": 0,
       "cancelled": 0,
       "skipped": 0
@@ -82,10 +83,10 @@
     {
       "command": "npm run test:openai-agents",
       "exit": 0,
-      "raw_log": "/tmp/agents-answer-openai-verified.log",
-      "sha256": "aae2c2d73ed63c19743104f205636f3e21224c7c1a91d537a0ecdefeed3e0f76",
-      "tests": 38,
-      "pass": 38,
+      "raw_log": "/tmp/agents-git-openai-verified.log",
+      "sha256": "0d13429d3a42afcfd16fb092943f8e835c061853d3805a189cd1f1a3e606b449",
+      "tests": 40,
+      "pass": 40,
       "fail": 0,
       "cancelled": 0,
       "skipped": 0
@@ -93,7 +94,7 @@
     {
       "command": "git diff --check",
       "exit": 0,
-      "raw_log": "/tmp/agents-answer-diff-verified.log",
+      "raw_log": "/tmp/agents-git-diff-verified.log",
       "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
     }
   ],
@@ -129,7 +130,9 @@
         "read-only account probe records exact selectors without claiming inference or hard caps",
         "managed readiness proves native isolation before API reads and doctor reports unsupported hosts",
         "unsupported host blocks managed start before cloning, snapshots or provider access",
-        "managed resume API refusal preserves checkout, accepted brief and sources, registry and session before mutation"
+        "managed resume API refusal preserves checkout, accepted brief and sources, registry and session before mutation",
+        "native verification supports Git checks with immutable current-revision metadata in normal and linked checkouts",
+        "verification process helper preserves binary Git objects and binary failure diagnostics"
       ]
     },
     {
@@ -144,7 +147,9 @@
       "test_names": [
         "real REST adapter: implementation, artifact pagination, restart and same-session correction",
         "source snapshot preserves binary blobs, exact revision and verified carried files",
-        "initial launch reply loss remains registered for coordinator restart without a second implementation"
+        "initial launch reply loss remains registered for coordinator restart without a second implementation",
+        "hosted snapshots refuse unfinished tracked, staged, deleted, renamed and untracked files without uploading them",
+        "managed dirty resume refuses before merge, reopen, registry mutation or corrective dispatch"
       ]
     },
     {
@@ -164,7 +169,9 @@
         "operator answer lost-after recovers the same call and key across restart",
         "operator answer cleanup recovers the same call and key across restart",
         "ambiguous answer recovery refuses changed actions, missing proof, foreign roots and stopped sessions without resending",
-        "answer ambiguity requires a safe transport recovery method and preserves ownership, key and stop fences"
+        "answer ambiguity requires a safe transport recovery method and preserves ownership, key and stop fences",
+        "hosted snapshots refuse unfinished tracked, staged, deleted, renamed and untracked files without uploading them",
+        "managed dirty resume refuses before merge, reopen, registry mutation or corrective dispatch"
       ]
     },
     {
@@ -221,7 +228,9 @@
         "operator answer cleanup recovers the same call and key across restart",
         "ambiguous answer recovery refuses changed actions, missing proof, foreign roots and stopped sessions without resending",
         "answer ambiguity requires a safe transport recovery method and preserves ownership, key and stop fences",
-        "managed resume API refusal preserves checkout, accepted brief and sources, registry and session before mutation"
+        "managed resume API refusal preserves checkout, accepted brief and sources, registry and session before mutation",
+        "hosted snapshots refuse unfinished tracked, staged, deleted, renamed and untracked files without uploading them",
+        "managed dirty resume refuses before merge, reopen, registry mutation or corrective dispatch"
       ]
     },
     {
@@ -246,7 +255,9 @@
         "an earlier Verify command cannot replace the sandbox policy for a later command",
         "verification recovery rejects legacy unsandboxed evidence without replaying or pushing",
         "a stop during sandbox preparation prevents Verify dispatch and removes the private profile",
-        "unsupported host refuses preparation, direct dispatch and manual continuation while artifact recovery remains available"
+        "unsupported host refuses preparation, direct dispatch and manual continuation while artifact recovery remains available",
+        "native verification supports Git checks with immutable current-revision metadata in normal and linked checkouts",
+        "verification process helper preserves binary Git objects and binary failure diagnostics"
       ]
     },
     {
@@ -270,7 +281,9 @@
         "deterministic artifact rejection survives coordinator restart and permits same-session correction",
         "unsupported host refuses preparation, direct dispatch and manual continuation while artifact recovery remains available",
         "remote host refusal precedes checkout mutation and paid correction while unrelated PR review settles",
-        "managed resume API refusal preserves checkout, accepted brief and sources, registry and session before mutation"
+        "managed resume API refusal preserves checkout, accepted brief and sources, registry and session before mutation",
+        "hosted snapshots refuse unfinished tracked, staged, deleted, renamed and untracked files without uploading them",
+        "managed dirty resume refuses before merge, reopen, registry mutation or corrective dispatch"
       ]
     },
     {
@@ -320,7 +333,11 @@
         "remote host refusal precedes checkout mutation and paid correction while unrelated PR review settles",
         "ambiguous answer recovery refuses changed actions, missing proof, foreign roots and stopped sessions without resending",
         "answer ambiguity requires a safe transport recovery method and preserves ownership, key and stop fences",
-        "managed resume API refusal preserves checkout, accepted brief and sources, registry and session before mutation"
+        "managed resume API refusal preserves checkout, accepted brief and sources, registry and session before mutation",
+        "native verification supports Git checks with immutable current-revision metadata in normal and linked checkouts",
+        "verification process helper preserves binary Git objects and binary failure diagnostics",
+        "hosted snapshots refuse unfinished tracked, staged, deleted, renamed and untracked files without uploading them",
+        "managed dirty resume refuses before merge, reopen, registry mutation or corrective dispatch"
       ]
     },
     {
@@ -367,7 +384,11 @@
         "operator answer cleanup recovers the same call and key across restart",
         "ambiguous answer recovery refuses changed actions, missing proof, foreign roots and stopped sessions without resending",
         "answer ambiguity requires a safe transport recovery method and preserves ownership, key and stop fences",
-        "managed resume API refusal preserves checkout, accepted brief and sources, registry and session before mutation"
+        "managed resume API refusal preserves checkout, accepted brief and sources, registry and session before mutation",
+        "native verification supports Git checks with immutable current-revision metadata in normal and linked checkouts",
+        "verification process helper preserves binary Git objects and binary failure diagnostics",
+        "hosted snapshots refuse unfinished tracked, staged, deleted, renamed and untracked files without uploading them",
+        "managed dirty resume refuses before merge, reopen, registry mutation or corrective dispatch"
       ]
     },
     {
@@ -398,13 +419,13 @@
     "sha256": "16c09feca47099fa1005141c07af146326f38055bb27fd37f2da8966198533af"
   },
   "package_verification": {
-    "raw_record": "/tmp/agents-answer-package-verification-verified.json",
-    "sha256": "87bca9226f8ba055004e2071cf5cd4b6e570d6b189bf0712a3129fd8f6ee71ab",
-    "integrity": "sha512-FYSXB9FSjLw6xNXxprslA8yN0lTwtGGvcfT1GPSrRjm/0jZtGRwnAJbpMtsuXP+zDCeE8Uxw0bcw3CUHPBz2Eg==",
+    "raw_record": "/tmp/agents-git-package-verification.json",
+    "sha256": "4d8940fe1e63fed0ea01e1292e31bda584fc269b845cc6ecfe5e7a96338fa640",
+    "integrity": "sha512-NU3ovXuOeynEnP/+bSEg+c2zHnxpv6ssl5huM7MwX04TNhwFBXOZ9q9suLqlHjMSzS9ZavuH8zztqGPHuUribA==",
     "files": 86,
-    "bytes": 425539,
-    "unpacked_bytes": 1297896,
-    "result": "ten adapter/coordinator/execution/sandbox/readiness/command modules imported from the unpacked local package with matching source/document hashes; no provider call"
+    "bytes": 428237,
+    "unpacked_bytes": 1306049,
+    "result": "twelve adapter/coordinator/execution/sandbox/readiness/source/process/command modules imported from the unpacked local package with matching source and document hashes; scripts ignored; zero provider calls"
   },
   "live": {
     "version": 1,
@@ -647,6 +668,50 @@
           "sha256": "8a4ff6af0a95c618c52199f773a984e506b59a845f5c3af4c2b9639c1831e120"
         }
       ]
+    },
+    {
+      "rule": "Git Verify commands need immutable current-revision metadata without coordinator secrets; a hosted source must not silently omit preserved unfinished edits",
+      "checked": [
+        "lib/verification_sandbox.mjs: containment and driver validation before metadata, exact commit/tree/blob hashes, no history/config/hooks/remotes/alternates copied, bounded objects/bytes/time, readonly macOS/Linux view and native Git probe",
+        "lib/execution_result.mjs: same sandbox for artifacts and branch transport, immutable policy, current-head checks, blocked failures, stop fences and profile cleanup",
+        "lib/gh.mjs execFileAsync and sibling callers: utf8 default retained, explicit binary stdout/stderr supported, bounded failure diagnostics",
+        "lib/openai_agents_sources.mjs and openai_agents_input.mjs: same dirty/source check for initial/review/manual dispatch; only verified brief/source overlays exempt; HEAD/status rechecked before snapshot",
+        "lib/commands/resume.mjs and queued control resume: refuse ordinary dirty files before merge, reopen, snapshot/registry writes or paid continuation; preserve original session/PR",
+        "native normal and linked checkouts, metadata mutation/rename/history refusal, cleanup, existing host-file/child/network guards; tracked/staged/deleted/renamed/untracked/symlink/mode source refusal"
+      ],
+      "regression": [
+        "native verification supports Git checks with immutable current-revision metadata in normal and linked checkouts",
+        "verification process helper preserves binary Git objects and binary failure diagnostics",
+        "hosted snapshots refuse unfinished tracked, staged, deleted, renamed and untracked files without uploading them",
+        "managed dirty resume refuses before merge, reopen, registry mutation or corrective dispatch"
+      ],
+      "representative_output": [
+        {
+          "label": "native macOS Git case, linked=false",
+          "path": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-TyGNZt/verification.json",
+          "sha256": "16e97b4f604670565b12d0d995452ec4051675bb20083c1270ba361ac445b5c9"
+        },
+        {
+          "label": "native macOS Git case, linked=true",
+          "path": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-8Y7sLS/verification.json",
+          "sha256": "1341277a185b915a676d1eadf12083a515300b52f1c9ae1699ee0460f4b36460"
+        },
+        {
+          "label": "native Git verification with provider-controlled result fixtures",
+          "path": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-DGWEwB/git-verification-evidence.json",
+          "sha256": "ad151273b1f53ca944054e8d618280cc94f0f8e5bf0654f7ba7b1e577d9db9cf"
+        },
+        {
+          "label": "native Git source refusal with no provider calls",
+          "path": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/agents-dirty-evidence-mmuWtQ/dirty-source-evidence.json",
+          "sha256": "bc5f77f9d88481a508302ed0300c24102e562e4831499a6bd37e0a47e0cb6e2c"
+        },
+        {
+          "label": "native macOS preflight; Git read and denied-write probe; zero provider calls",
+          "path": "/tmp/agents-git-readiness-final.json",
+          "sha256": "d452181bba3234168a0afef32f49114e7a7b355e3e1ea92a5fed76583522a129"
+        }
+      ]
     }
   ],
   "security_followup": {
@@ -868,5 +933,52 @@
     "paid_calls": 0,
     "automatic_answer_replay": false,
     "live_prerequisites": "unchanged; original preflight and external remedy preserved in live"
+  },
+  "git_source_followup": {
+    "review_id": 5431786732,
+    "reviewed_commit": "5b11412aae99bc1705d013bcf3b1d2be49db90cf",
+    "inline_comment_ids": [
+      4198067149,
+      4198067160
+    ],
+    "status": "addressed",
+    "rule": "Git Verify commands need immutable current-revision metadata without coordinator secrets; a hosted source must not silently omit preserved unfinished edits",
+    "evidence_kind": "native macOS Git/runtime enforcement and provider-shaped offline lifecycle fixtures; Linux native and provider-live qualification remain unverified",
+    "tests": [
+      "native verification supports Git checks with immutable current-revision metadata in normal and linked checkouts",
+      "verification process helper preserves binary Git objects and binary failure diagnostics",
+      "hosted snapshots refuse unfinished tracked, staged, deleted, renamed and untracked files without uploading them",
+      "managed dirty resume refuses before merge, reopen, registry mutation or corrective dispatch"
+    ],
+    "representative_output": [
+      {
+        "label": "native macOS Git case, linked=false",
+        "path": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-TyGNZt/verification.json",
+        "sha256": "16e97b4f604670565b12d0d995452ec4051675bb20083c1270ba361ac445b5c9"
+      },
+      {
+        "label": "native macOS Git case, linked=true",
+        "path": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-8Y7sLS/verification.json",
+        "sha256": "1341277a185b915a676d1eadf12083a515300b52f1c9ae1699ee0460f4b36460"
+      },
+      {
+        "label": "native Git verification with provider-controlled result fixtures",
+        "path": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-DGWEwB/git-verification-evidence.json",
+        "sha256": "ad151273b1f53ca944054e8d618280cc94f0f8e5bf0654f7ba7b1e577d9db9cf"
+      },
+      {
+        "label": "native Git source refusal with no provider calls",
+        "path": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/agents-dirty-evidence-mmuWtQ/dirty-source-evidence.json",
+        "sha256": "bc5f77f9d88481a508302ed0300c24102e562e4831499a6bd37e0a47e0cb6e2c"
+      },
+      {
+        "label": "native macOS preflight; Git read and denied-write probe; zero provider calls",
+        "path": "/tmp/agents-git-readiness-final.json",
+        "sha256": "d452181bba3234168a0afef32f49114e7a7b355e3e1ea92a5fed76583522a129"
+      }
+    ],
+    "paid_calls": 0,
+    "dirty_policy": "explicit refusal; commit intended edits on the owned branch before same-session resume; approved brief/source overlays remain supported",
+    "live_prerequisites": "unchanged; original failed preflight and external remedy preserved in live"
   }
 }

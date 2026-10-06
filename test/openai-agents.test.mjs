@@ -438,6 +438,56 @@ test("source snapshot preserves binary blobs, exact revision and verified carrie
   await assert.rejects(prepareAgentsSources({ worktree: dir, inputHead: revision, repo: "acme/widget", branch: "work/source", base: "main", overlays: [{ path: "brief.md", text: "tampered" }] }), { code: "AGENTS_SOURCE" });
   rmSync(dir, { recursive: true, force: true });
 });
+test("hosted snapshots refuse unfinished tracked, staged, deleted, renamed and untracked files without uploading them", async t => {
+  const observations = [];
+  for (const mode of ["modified", "staged", "deleted", "renamed", "untracked", "symlink", "mode"]) {
+    const dir = mkdtempSync(join(tmpdir(), "agents-dirty-"));
+    const git = args => execFileSync("git", args, { cwd: dir, encoding: "utf8" });
+    git(["init", "-q", "-b", input.branch]); writeFileSync(join(dir, "answer.txt"), initial);
+    git(["add", "."]); git(["-c", "user.name=Fixture", "-c", "user.email=fixture@example.com", "commit", "-qm", "Input"]);
+    const revision = git(["rev-parse", "HEAD"]).trim();
+    if (["modified", "staged"].includes(mode)) writeFileSync(join(dir, "answer.txt"), "unfinished-private-value\n");
+    if (mode === "staged") git(["add", "answer.txt"]);
+    if (mode === "deleted") unlinkSync(join(dir, "answer.txt"));
+    if (mode === "renamed") git(["mv", "answer.txt", "renamed.txt"]);
+    if (mode === "untracked") writeFileSync(join(dir, "pending.txt"), "unfinished-private-value\n");
+    if (mode === "symlink") symlinkSync("answer.txt", join(dir, "pending-link"));
+    if (mode === "mode") chmodSync(join(dir, "answer.txt"), 0o755);
+    const status = git(["status", "--porcelain=v1", "-z", "--untracked-files=all"]), index = readFileSync(join(dir, ".git/index"));
+    await assert.rejects(prepareAgentsSources({ worktree: dir, inputHead: revision, repo: input.repo, branch: input.branch, base: "main" }), error => {
+      assert.equal(error.code, "AGENTS_DIRTY_SOURCE"); assert.doesNotMatch(error.message, /unfinished-private-value|pending\.txt/); return true;
+    });
+    assert.equal(git(["status", "--porcelain=v1", "-z", "--untracked-files=all"]), status); assert.deepEqual(readFileSync(join(dir, ".git/index")), index);
+    assert.equal(git(["rev-parse", "HEAD"]).trim(), revision);
+    observations.push({ mode, head: revision, checkoutPreserved: true, snapshotProduced: false, provider_calls: 0 });
+    rmSync(dir, { recursive: true, force: true });
+  }
+  const path = join(mkdtempSync(join(tmpdir(), "agents-dirty-evidence-")), "dirty-source-evidence.json");
+  writeFileSync(path, JSON.stringify({ kind: "native Git source refusal with no provider calls", observations }, null, 2)); t.diagnostic(`dirty source evidence: ${path}`);
+});
+test("managed dirty resume refuses before merge, reopen, registry mutation or corrective dispatch", async t => {
+  const f = fixture(), job = await f.service().submit(input); f.finish(); f.artifact(job); await f.service().reconcile({ force: true }); await f.service().collect();
+  const worktree = join(f.root, "checkout"), state = makeState(f.root), taskId = "acme/widget/task"; mkdirSync(worktree);
+  const git = args => execFileSync("git", args, { cwd: worktree, encoding: "utf8" });
+  git(["init", "-q", "-b", input.branch]); writeFileSync(join(worktree, "answer.txt"), initial); git(["add", "."]);
+  git(["-c", "user.name=Fixture", "-c", "user.email=fixture@example.com", "commit", "-qm", "Input"]);
+  writeFileSync(join(worktree, "pending.txt"), "unfinished\n");
+  state.put(taskId, { ...newEntry({ harness: "openai-agents", repo: input.repo, branch: input.branch, worktree, pr: 42,
+    session: job.execution.sessionId, state: STATES.needsHuman, nowIso: new Date(f.clock.now()).toISOString() }),
+    base: "main", execution: f.service().current().execution, last: { run: job.id, exit: 0 } });
+  const keyFile = join(f.root, "fixture-api-key"); writeFileSync(keyFile, "offline-test-key", { mode: 0o600 });
+  const mutations = [], realGit = makeGit({ config: CONFIG });
+  const ctx = { home: f.root, state, config: { ...CONFIG, harness: { "openai-agents": { ...config, api_key_file: keyFile } } },
+    clock: f.clock, ownLogin: "me", git: { ...fakeGit(), exists: () => true, dirty: realGit.dirty, mergeBase: async () => mutations.push("merge") },
+    gh: { ...fakeGh(), reopenPr: async () => mutations.push("reopen") }, log: silentLog, notify: fakeNotify(), executionFor: f.service, readPrd: () => null };
+  const registry = readFileSync(join(f.root, "state.json")), execution = readFileSync(join(f.root, "execution.json")), adapter = readFileSync(join(f.root, "agents.json"));
+  const before = f.calls.length, mock = t.mock.method(globalThis, "fetch", f.fetcher);
+  try { await assert.rejects(resume(ctx, { handle: taskId }), { code: "AGENTS_DIRTY_SOURCE" }); } finally { mock.mock.restore(); }
+  assert.deepEqual(mutations, []); assert.deepEqual(readFileSync(join(f.root, "state.json")), registry);
+  assert.deepEqual(readFileSync(join(f.root, "execution.json")), execution); assert.deepEqual(readFileSync(join(f.root, "agents.json")), adapter);
+  assert.equal(readFileSync(join(worktree, "pending.txt"), "utf8"), "unfinished\n");
+  assert.ok(f.calls.slice(before).every(c => c.method === "GET")); assert.equal(f.sessions.size, 1); assert.equal(f.turns.size, 1);
+});
 test("sandbox publisher delivers unchanged carried files, receipt repairs and rejects symlinks and mode changes", async () => {
   const dir = mkdtempSync(join(tmpdir(), "agents-output-")); mkdirSync(join(dir, "workspace"));
   const helper = AGENTS_WORKSPACE_HELPER.replaceAll("/workspace", join(dir, "workspace")); writeFileSync(join(dir, "helper.py"), helper);

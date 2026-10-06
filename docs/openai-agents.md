@@ -80,6 +80,14 @@ input head and saved brief/source snapshots. The remote repository contains that
 verified revision's files and modes, plus carried files, rather than Git history;
 its sandbox-local initial commit is a snapshot commit. Publication always checks
 the original input head on the coordinator.
+Hosted resume refuses ordinary modified, staged, deleted, renamed or untracked
+files with `AGENTS_DIRTY_SOURCE` before merge, task reopening or paid dispatch.
+Commit the intended unfinished edits on the owned task branch, then resume the
+same session. Only the approved brief and declared carried-source overlays may
+remain uncommitted; their bytes must match the accepted snapshots. Initial and
+review dispatch use the same source check, and preparation rechecks both status
+and HEAD before accepting the portable snapshot. No unfinished file is discarded
+or silently uploaded.
 The task CLI (`gallivant task 'Implement the approved request' --harness openai-agents`)
 reports missing preparation support. Follow the [existing intake workflow](tasks.md)
 with a qualified preparation backend, and approve a ready PRD for the explicit
@@ -196,17 +204,27 @@ and local persistence failures remain unresolved and retryable after repair.
 The coordinator executes every nonempty Verify list in an OS sandbox, including
 scripts changed by hosted results and their child processes. Install a dedicated
 Node 22+ runtime with npm and use macOS with `/usr/bin/sandbox-exec` plus
-`/System/Library/Sandbox/Profiles/dyld-support.sb`, or Linux with `/usr/bin/bwrap`
+`/System/Library/Sandbox/Profiles/dyld-support.sb` and the installed Command Line
+Tools used by `/usr/bin/git`, or Linux with `/usr/bin/bwrap`
 and enabled unprivileged user/PID/network namespaces. System tools, the running
-Node binary and its npm package are readable; only the checkout and an empty
-temporary profile are writable. Git metadata, coordinator journals, private
-host files and host network access remain inaccessible. Arbitrary inherited PATH
-entries are removed; provision dependencies in the checkout before Verify runs.
+Node binary and its npm package are readable; only the checkout and a private
+temporary profile are writable. Git Verify commands receive a separate read-only
+`GIT_DIR` with the exact current commit, its tree/blob objects and a reconstructed
+index. `git diff --check`, status and current-HEAD reads work in normal and linked
+checkouts; coordinator Git config, hooks, remotes, reflogs, alternate stores and
+ancestor history remain absent. The view is bounded to 10,000 objects/16 MiB and
+20 seconds, and removed with the temporary profile on every exit. Commands that
+require other refs or history must use another approved check. Coordinator
+journals, private host files and host network access remain inaccessible.
+Arbitrary inherited PATH entries are removed; provision dependencies in the
+checkout before Verify runs.
 Network-dependent tests and unsupported tools fail rather than widen access.
 
 Doctor's `openai-agents readiness` check exercises that native enforcement in
-disposable directories before checking API read access. Start refuses an
-unsupported host before cloning or saving task snapshots. Review dispatch and
+disposable directories, including actual Git reads and denied index writes
+against a trusted empty commit before a checkout exists, before checking API
+read access. Start refuses unsupported hosts before cloning or saving task
+snapshots. Review dispatch and
 manual resume recheck before recreating or merging the checkout, and the managed
 transport checks again before sending a new implementation or correction.
 Manual resume runs the full native/API readiness check before accepting an
