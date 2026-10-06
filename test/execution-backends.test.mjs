@@ -22,8 +22,8 @@ import { resume } from "../lib/commands/resume.mjs";
 import { acquireProcessLock } from "../lib/daemon.mjs";
 import { makeGit, GIT_PATH_LIMITS } from "../lib/git.mjs";
 import { execFileAsync } from "../lib/gh.mjs";
-import { requestControl, applyControl } from "../lib/control.mjs";
-import { tempHome, makeClock, CONFIG, T0, fakeGh, fakeNotify, silentLog, fakeGit, fakeCredential, fakeIdentity, fakeRunner, prFixture, comment, harnessBin, GOOD_PRD, codexLines } from "./helpers.mjs";
+import { requestControl, applyControl, cancelControl } from "../lib/control.mjs";
+import { tempHome, makeClock, CONFIG, T0, fakeGh, fakeNotify, silentLog, fakeGit, fakeCredential, fakeIdentity, fakeRunner, prFixture, comment, harnessBin, GOOD_PRD, codexLines, claudeResultLines } from "./helpers.mjs";
 const allowance = { remainingUsd: 1, reservedUsd: 0.1 };
 const input = { operationId: "first", inputHead: "a".repeat(40), allowance };
 const sha = text => createHash("sha256").update(text).digest("hex");
@@ -583,7 +583,7 @@ test("local cancellation and reconciliation cannot confirm a missing or differen
   }
 });
 
-function localTimeoutFixture({ immediate = false } = {}) {
+function localTimeoutFixture({ immediate = false, provider = "codex" } = {}) {
   const home = tempHome(), root = join(home, "runs"), clock = makeClock(), id = "acme/widget/local-timeout";
   const session = "22222222-2222-4222-8222-222222222222", runner = fakeRunner(clock), stops = [];
   let descendants = true, inspectable = true;
@@ -613,9 +613,113 @@ function localTimeoutFixture({ immediate = false } = {}) {
     persist();
   };
   runner.annotate = (runId, patch) => { const job = runner.started.find(r => r.id === runId); if (job) Object.assign(job, patch); persist(); };
-  const open = () => makeExecution({ root, taskId: id, provider: "codex", runner, clock, legacySessionId: session });
+  const open = (options = {}) => makeExecution({ root, taskId: id, provider, runner, clock, legacySessionId: session, ...options });
   return { home, root, clock, id, session, runner, stops, open, setDescendants: value => { descendants = value; }, setInspectable: value => { inspectable = value; } };
 }
+
+test("cancelling settled local outcomes preserves success, failure, cost and session across restart", async () => {
+  for (const provider of ["codex", "claude"]) for (const ok of [true, false]) for (const cancelSupported of [true, false]) {
+    const f = localTimeoutFixture({ provider }), options = { capabilities: { ...executionRegistry[provider], controls: { cancel: cancelSupported } } }, service = f.open(options);
+    const job = await service.submit({ operationId: "settled", name: "settled", allowance, spec: { cmd: "offline-cli-fixture", args: [], options: {} } });
+    const lines = provider === "codex" ? codexLines({ ok }) : claudeResultLines({ ok, cost: 0.4 });
+    f.runner.finish(lines, { exit: ok ? 0 : 23 }); f.runner.annotate(job.id, { endedAt: f.clock.now() });
+    await service.reconcile(); service.settle(job.id);
+    const before = service.state(), result = readFileSync(join(f.root, job.id, "result.json"), "utf8"), rawJob = readFileSync(join(f.root, job.id, "job.json"), "utf8");
+    assert.equal(before.current.execution.providerState, ok ? "succeeded" : "failed");
+    assert.equal(before.current.execution.collected, true); assert.equal(before.current.exit, ok ? 0 : 23);
+    assert.deepEqual(await service.cancel(), { confirmed: true });
+    assert.deepEqual(service.state(), { ...before, stopped: "operator-cancelled" });
+    assert.equal(readFileSync(join(f.root, job.id, "job.json"), "utf8"), rawJob); assert.deepEqual(f.stops, []);
+    const restarted = f.open(options); f.clock.advance(1000);
+    for (let i = 0; i < 2; i++) { await restarted.reconcile(); assert.deepEqual(await restarted.cancel("timeout"), { confirmed: true }); }
+    const after = restarted.state();
+    assert.equal(after.stopped, "operator-cancelled"); assert.equal(after.current.execution.providerState, before.current.execution.providerState);
+    assert.equal(after.current.execution.collected, true); assert.equal(after.current.execution.quarantined, undefined);
+    assert.equal(after.current.exit, before.current.exit); assert.equal(after.current.endedAt, before.current.endedAt);
+    assert.equal(after.current.execution.sessionId, before.current.execution.sessionId); assert.equal(after.current.execution.costUsd, before.current.execution.costUsd);
+    assert.equal(restarted.outcome(job.id).ok, ok); assert.equal(restarted.outcome(job.id).cost, provider === "claude" ? 0.4 : null);
+    assert.equal(readFileSync(join(f.root, job.id, "result.json"), "utf8"), result); assert.deepEqual(after.operations, before.operations);
+    assert.deepEqual(after.allowance, before.allowance); assert.deepEqual(f.stops, []);
+    await assert.rejects(restarted.collect(), { code: "EXECUTION_QUARANTINED" });
+    await assert.rejects(restarted.submit({ operationId: "next-run", spec: {} }), { code: "EXECUTION_STOPPED" });
+    await assert.rejects(restarted.continue({ operationId: "next-turn", sessionId: before.current.execution.sessionId, spec: {} }), { code: "EXECUTION_STOPPED" });
+    assert.equal(f.runner.started.length, 1);
+  }
+});
+
+test("completed legacy local jobs keep their files and identity when future dispatch is cancelled", async () => {
+  for (const exit of [0, 23]) {
+    const f = legacyCancellationFixture(); f.setMembers([]);
+    const path = join(f.root, f.id, "job.json"), job = readJson(path);
+    writeJsonAtomic(path, { ...job, exit, endedAt: f.clock.now() });
+    writeFileSync(join(f.root, f.id, "job.log"), codexLines({ ok: exit === 0 }).join("\n")+"\n");
+    const original = readFileSync(path, "utf8"), service = f.open({ cancel: false });
+    assert.deepEqual(await service.cancel(), { confirmed: true });
+    f.clock.advance(1000); await f.open().reconcile();
+    assert.equal(service.state().current, null); assert.deepEqual(service.state().operations, {});
+    assert.equal(service.state().stopped, "operator-cancelled"); assert.equal(service.current().id, f.id);
+    assert.equal(service.current().exit, exit); assert.equal(service.sessionFrom(f.id), f.session);
+    assert.equal(readFileSync(path, "utf8"), original); assert.deepEqual(f.signals, []);
+    await assert.rejects(f.open().submit({ ...input, spec: {} }), { code: "EXECUTION_STOPPED" });
+  }
+});
+
+test("operator cancellation leaves settled local registry evidence unchanged through coordinator ticks", async t => {
+  const observations = [];
+  for (const ok of [true, false]) {
+    const f = localTimeoutFixture(), service = f.open(), state = makeState(f.home);
+    const job = await service.submit({ operationId: "settled", name: "settled", spec: { cmd: "offline-cli-fixture", args: [], options: {} } });
+    f.runner.finish(codexLines({ ok }), { exit: ok ? 0 : 23 }); f.runner.annotate(job.id, { endedAt: f.clock.now() });
+    await service.reconcile(); service.settle(job.id);
+    const outcome = service.outcome(job.id), last = { run: job.id, exit: ok ? 0 : 23, at: T0, event: "settled implementation", cost: outcome.cost, denials: outcome.denials };
+    state.put(f.id, { ...newEntry({ repo: "acme/widget", harness: "codex", session: service.sessionFrom(job.id), branch: "work/settled", state: STATES.needsHuman, nowIso: T0 }), last });
+    const ctx = { home: f.home, state, clock: f.clock, config: CONFIG, executionFor: () => f.open(), gh: fakeGh(), git: fakeGit(),
+      notify: fakeNotify(), log: silentLog, ownLogin: "me", readPrd: () => null, credential: fakeCredential(), identity: fakeIdentity() };
+    requestControl(ctx, { handle: f.id, action: "cancel" }); await cancelControl(ctx, f.id);
+    const tick = makeTick(ctx); await tick.tick(); f.clock.advance(1000); await tick.tick();
+    const entry = state.get(f.id);
+    assert.deepEqual(entry.last, last); assert.equal(entry.execution.providerState, ok ? "succeeded" : "failed");
+    assert.equal(entry.dispatch_stopped, "cancellation-requested"); assert.equal(entry.reason, "cancelled");
+    assert.equal(entry.control.status, "applied"); assert.deepEqual(f.stops, []); assert.equal(f.runner.started.length, 1);
+    await assert.rejects(resume(ctx, { handle: f.id }), /dispatch stopped/);
+    observations.push({ taskId: f.id, runId: job.id, exit: last.exit, providerState: entry.execution.providerState, last: entry.last,
+      stopped: service.state().stopped, session: entry.session, files: { registry: state.file, execution: join(f.root, "execution.json"), job: join(f.root, job.id, "job.json"), result: join(f.root, job.id, "result.json") } });
+  }
+  const path = join(tempHome(), "settled-control-evidence.json"); writeJsonAtomic(path, { observations });
+  t.diagnostic(`settled control evidence: ${path}`);
+});
+
+test("native completed local roots retain exact exits and results after cancel and log retention", async t => {
+  const observations = [];
+  for (const exit of [0, 23]) {
+    const root = tempHome(), cwd = tempHome(), taskId = "acme/widget/native-settled", runner = makeRunner(root);
+    const service = makeExecution({ root, taskId, provider: "codex", runner });
+    const output = codexLines({ ok: exit === 0 }).join("\n")+"\n";
+    const job = await service.start("native-settled", process.execPath, ["-e", `process.stdout.write(${JSON.stringify(output)});process.exit(${exit})`], { cwd, execution: { operationId: "settled" } });
+    while (runner.read(job.id).exit === null) await new Promise(resolve => setImmediate(resolve));
+    await service.reconcile(); service.settle(job.id);
+    const before = service.state(), resultPath = join(root, job.id, "result.json"), resultBytes = readFileSync(resultPath, "utf8"), rawJob = readFileSync(join(root, job.id, "job.json"), "utf8");
+    runner.kill = () => assert.fail("completed local run must not be signalled");
+    assert.deepEqual(await service.cancel(), { confirmed: true });
+    assert.equal(readFileSync(join(root, job.id, "job.json"), "utf8"), rawJob);
+    const reopenedRunner = makeRunner(root), reopened = makeExecution({ root, taskId, provider: "codex", runner: reopenedRunner });
+    reopenedRunner.kill = () => assert.fail("restart must not signal a completed local run");
+    await reopened.reconcile(); assert.deepEqual(await reopened.cancel(), { confirmed: true });
+    rmSync(join(root, job.id, "provider.log")); rmSync(join(root, job.id, "job.log"));
+    await reopened.reconcile(); const after = reopened.state();
+    assert.equal(after.current.exit, exit); assert.equal(after.current.endedAt, before.current.endedAt);
+    assert.equal(after.current.execution.providerState, exit === 0 ? "succeeded" : "failed");
+    assert.equal(after.current.execution.sessionId, before.current.execution.sessionId); assert.equal(after.current.execution.quarantined, undefined);
+    assert.deepEqual(after.operations, before.operations); assert.equal(readFileSync(resultPath, "utf8"), resultBytes);
+    assert.equal(reopened.outcome(job.id).ok, exit === 0); assert.equal(reopened.outcome(job.id).cost, null);
+    await assert.rejects(reopened.continue({ operationId: "next-turn", sessionId: before.current.execution.sessionId, spec: {} }), { code: "EXECUTION_STOPPED" });
+    observations.push({ taskId, runId: job.id, exit, endedAt: after.current.endedAt, providerState: after.current.execution.providerState,
+      session: after.current.execution.sessionId, stopped: after.stopped, outcome: reopened.outcome(job.id),
+      files: { execution: join(root, "execution.json"), job: join(root, job.id, "job.json"), result: resultPath } });
+  }
+  const path = join(tempHome(), "settled-native-evidence.json"); writeJsonAtomic(path, { observations });
+  t.diagnostic(`settled native evidence: ${path}`);
+});
 
 test("local timeout recovery preserves stranded work and explicitly resumes one owned session after shutdown", async t => {
   const evidence = [];

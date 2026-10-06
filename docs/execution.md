@@ -359,6 +359,13 @@ session identity before cancellation. This stop-only record has `legacy: true`,
 remains requested while owned descendants survive or inspection is unavailable;
 restart reconciliation confirms only the same observed run and quarantines its
 late output. A kill request alone never confirms cessation.
+Cancelling after a local run has been collected preserves its success/failure,
+exit, end time, result, usage and session; only future dispatch is fenced. No
+process stop is requested for that completed run, including when cancellation
+capability is unavailable. Restart reconciliation preserves the same historical
+outcome. Completed pre-boundary local jobs also retain their original files and
+identity without an invented stop/adoption record. Active local stops still
+require exact process-tree confirmation and quarantine their late results.
 Remote cancellation never equates stopping a submission client with stopping its
 job. The additive `execution.cancellation` record stores status (`pending`,
 `acknowledged`, `confirmed`, `unsupported` or `terminal`), request reason/time,

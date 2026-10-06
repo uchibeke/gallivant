@@ -1,0 +1,283 @@
+{
+  "version": 1,
+  "task_id": "task-df42674c6251c85b0edef13f",
+  "scope": "offline preservation of settled local outcomes under task cancellation review correction",
+  "recorded_at": "2026-10-06T07:30:00.604825+00:00",
+  "source_parent_revision": "476184c819a1a5376be28d6a335af94b4b18b1ae",
+  "review_comment_ids": [
+    4192544307
+  ],
+  "prior_evidence": [
+    "docs/audit/plugin-ready/execution-foundation.json",
+    "docs/audit/plugin-ready/execution-cancellation.json",
+    "docs/audit/plugin-ready/execution-local-timeout.json",
+    "docs/audit/plugin-ready/execution-overlap-redaction.json"
+  ],
+  "commands": [
+    {
+      "command": "npm test",
+      "exit": 0,
+      "raw_log": "/tmp/execution-settled-stop-tests.txt",
+      "sha256": "175c26deb01d64d52e98ce83877bbc61ac9b34c8b7f2ab27e8ec232f1f32fcb8",
+      "tests": 1033,
+      "passed": 1033
+    },
+    {
+      "command": "npm run lint",
+      "exit": 0,
+      "raw_log": "/tmp/execution-settled-stop-lint.txt",
+      "sha256": "8c7790de3f018fb4580f18ac70e1b355a0f76f522dd73acbdaa63632feffcecc"
+    },
+    {
+      "command": "npm run test:execution-backends",
+      "exit": 0,
+      "raw_log": "/tmp/execution-settled-stop-backends.txt",
+      "sha256": "489ef5b09aa75419a8c6a8a862027382399aa6b540fb11cf1dcee6e10fdecedd",
+      "tests": 333,
+      "passed": 333
+    },
+    {
+      "command": "git diff --check",
+      "exit": 0,
+      "raw_log": "/tmp/execution-settled-stop-diff.txt",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    }
+  ],
+  "artifact_hashes": {
+    "lib/execution.mjs": "38264b74938446a4781b2fe8e55acbfda64b2c709611fe992f486dd84b58b2cd",
+    "test/execution-backends.test.mjs": "36a330e7cc08acd3e7c5d42432ba745214c8b791301c0f888184e8e56fa83c74",
+    "docs/execution.md": "7012d2e08d6c231e750da09e14d47b733fa0dd53a2844ded4fc142002cec9bea",
+    "lib/control.mjs": "785cfb383374710f7445797e36d9c4ed4ba222eb877d915588fe846530b2797d",
+    "lib/tick.mjs": "ac964fed49b7b9c254e75c7e57befe396f7ff6c680cd43e6831e3b9015a2e04a",
+    "lib/run.mjs": "647616b5a470bcbbcc060206844dd75f2f31c70f62140bd487cfa7d36c41673a"
+  },
+  "focused_checks": [
+    {
+      "command": "node --test --test-name-pattern='settled local|completed legacy|native completed|legacy cancellation|local cancellation|local timeout|remote and preparation timeout|released local timeout|a stop after collected terminal' test/execution-backends.test.mjs",
+      "exit": 0,
+      "raw_log": "/tmp/execution-settled-stop-focus.txt",
+      "sha256": "576deb3c2f899ef1852f47a22b93f143dce60607ff9c42bedab9a88d683161b3",
+      "tests": 14,
+      "passed": 14
+    }
+  ],
+  "source_and_output_review": [
+    {
+      "rule": "A task cancellation fences future dispatch without rewriting an already collected local run; live writers still require exact shutdown confirmation and quarantine.",
+      "files": [
+        "lib/execution.mjs",
+        "lib/run.mjs",
+        "lib/control.mjs",
+        "lib/tick.mjs",
+        "lib/commands/resume.mjs",
+        "lib/task_prepare.mjs",
+        "docs/execution.md"
+      ],
+      "boundaries_checked": [
+        "collected local success/failure is preserved before process control and capability rejection",
+        "restart reconciliation cannot reclassify a completed local root as cancelled or exit 137",
+        "immediate cancel preserves the job file; later observations may advance liveness timestamps without changing historical exit, end time, session or cost",
+        "Codex-shaped and Claude-shaped offline fixtures retain saved result bytes, operation metadata and allowance through repeated cancel and restart",
+        "completed legacy jobs retain files and session without a synthetic stop/adoption record or submission intent",
+        "operator control and coordinator ticks preserve registry last-run evidence and prevent corrective resume after task cancellation",
+        "native Node fixture processes retain exact exits 0 and 23 and cached outcomes after diagnostic and public log removal",
+        "future submit, continuation and result collection remain fenced; read-only outcome still exposes the exact historical result",
+        "active legacy/local cancellation, uncertain process ownership, detached-tool shutdown and unsupported controls retain existing confirmation rules",
+        "local implementation timeout release, permanent preparation/remote stop fences and collected remote result quarantine retain their existing behavior",
+        "provider/model defaults, sandbox permissions, preparation authority and state schema are unchanged"
+      ],
+      "regressions": [
+        "cancelling settled local outcomes preserves success, failure, cost and session across restart",
+        "completed legacy local jobs keep their files and identity when future dispatch is cancelled",
+        "operator cancellation leaves settled local registry evidence unchanged through coordinator ticks",
+        "native completed local roots retain exact exits and results after cancel and log retention"
+      ],
+      "case_matrix": {
+        "local_provider_fixtures": [
+          "codex",
+          "claude"
+        ],
+        "outcomes": [
+          "succeeded",
+          "failed"
+        ],
+        "cancel_capability": [
+          true,
+          false
+        ],
+        "completed_legacy_exits": [
+          0,
+          23
+        ],
+        "native_node_exits": [
+          0,
+          23
+        ]
+      }
+    }
+  ],
+  "representative_output": {
+    "evidence_kind": "Generated offline CLI-shaped fixtures plus native Node process, persisted execution, registry, job and result observations; no actual model calls or installed-host qualification.",
+    "reports": [
+      {
+        "label": "control",
+        "report_path": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-ojNON2/settled-control-evidence.json",
+        "report_sha256": "81c36c7730030d20983305ea7394b49ae025781efc73c017cdee845fc140c124",
+        "observations": [
+          {
+            "taskId": "acme/widget/local-timeout",
+            "runId": "run-8da3bded-73bb-4eb9-9974-92de816c3735",
+            "exit": 0,
+            "providerState": "succeeded",
+            "last": {
+              "run": "run-8da3bded-73bb-4eb9-9974-92de816c3735",
+              "exit": 0,
+              "at": "2026-09-24T02:00:00.000Z",
+              "event": "settled implementation",
+              "cost": null,
+              "denials": []
+            },
+            "stopped": "operator-cancelled",
+            "session": "22222222-2222-4222-8222-222222222222",
+            "files": {
+              "registry": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-Hbbhbr/state.json",
+              "execution": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-Hbbhbr/runs/execution.json",
+              "job": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-Hbbhbr/runs/run-8da3bded-73bb-4eb9-9974-92de816c3735/job.json",
+              "result": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-Hbbhbr/runs/run-8da3bded-73bb-4eb9-9974-92de816c3735/result.json"
+            },
+            "collected": true,
+            "quarantined": false,
+            "costUsd": null,
+            "endedAt": 1790215200000,
+            "control_status": "applied",
+            "dispatch_stopped": "cancellation-requested",
+            "reason": "cancelled",
+            "files_sha256": {
+              "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-Hbbhbr/state.json": "2e521d080e41d5816ac3866029f2d817df6d00c78c691da62dc9d6cfbc764de0",
+              "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-Hbbhbr/runs/execution.json": "2db00f128ce139d7c0341875b2462688cb01335e6448535fbcda41fba88f8645",
+              "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-Hbbhbr/runs/run-8da3bded-73bb-4eb9-9974-92de816c3735/job.json": "1879ed058feab8cbafb5b7c622380981ca0afddf7691d45213963e0b01810b65",
+              "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-Hbbhbr/runs/run-8da3bded-73bb-4eb9-9974-92de816c3735/result.json": "bfe17051738f3037f15598bdd96eb9f614b2a6fa8cf4b34d732e0bea8bf99f32"
+            }
+          },
+          {
+            "taskId": "acme/widget/local-timeout",
+            "runId": "run-1ef1d3c0-767b-4e65-93ae-3d750e09bce6",
+            "exit": 23,
+            "providerState": "failed",
+            "last": {
+              "run": "run-1ef1d3c0-767b-4e65-93ae-3d750e09bce6",
+              "exit": 23,
+              "at": "2026-09-24T02:00:00.000Z",
+              "event": "settled implementation",
+              "cost": null,
+              "denials": []
+            },
+            "stopped": "operator-cancelled",
+            "session": "22222222-2222-4222-8222-222222222222",
+            "files": {
+              "registry": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-or6GjD/state.json",
+              "execution": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-or6GjD/runs/execution.json",
+              "job": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-or6GjD/runs/run-1ef1d3c0-767b-4e65-93ae-3d750e09bce6/job.json",
+              "result": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-or6GjD/runs/run-1ef1d3c0-767b-4e65-93ae-3d750e09bce6/result.json"
+            },
+            "collected": true,
+            "quarantined": false,
+            "costUsd": null,
+            "endedAt": 1790215200000,
+            "control_status": "applied",
+            "dispatch_stopped": "cancellation-requested",
+            "reason": "cancelled",
+            "files_sha256": {
+              "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-or6GjD/state.json": "8fb9084d7f0393e1f038834b91229fd12aa6522984f76e0a5578b8c5581d9f64",
+              "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-or6GjD/runs/execution.json": "ed20394d658fc6b570200e9cdb3c6a57eeb15e2838c845f5c6310f301d9d2004",
+              "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-or6GjD/runs/run-1ef1d3c0-767b-4e65-93ae-3d750e09bce6/job.json": "0c4effdbcda740f063b195349c204037c9d1f65eb23bff60fab5237a536a168f",
+              "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-or6GjD/runs/run-1ef1d3c0-767b-4e65-93ae-3d750e09bce6/result.json": "06b08f5cb6dfb591279afd78c0001d665980a75f55b327ed2c34495cbf81c992"
+            }
+          }
+        ]
+      },
+      {
+        "label": "native",
+        "report_path": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-6aPa6c/settled-native-evidence.json",
+        "report_sha256": "9ec331edf7ffe60f0258fb3838a6a7dabed9c34327ec7a1e79ec40ae602d3efb",
+        "observations": [
+          {
+            "taskId": "acme/widget/native-settled",
+            "runId": "run-a8dd9f0c-50a8-441d-bb60-8753e727d941",
+            "exit": 0,
+            "endedAt": 1791271465922,
+            "providerState": "succeeded",
+            "session": "22222222-2222-4222-8222-222222222222",
+            "stopped": "operator-cancelled",
+            "outcome": {
+              "ok": true,
+              "finished": true,
+              "lastMessage": "Done.",
+              "denials": [],
+              "cost": null,
+              "error": null
+            },
+            "files": {
+              "execution": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-q4EBXM/execution.json",
+              "job": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-q4EBXM/run-a8dd9f0c-50a8-441d-bb60-8753e727d941/job.json",
+              "result": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-q4EBXM/run-a8dd9f0c-50a8-441d-bb60-8753e727d941/result.json"
+            },
+            "collected": true,
+            "quarantined": false,
+            "costUsd": null,
+            "provider_and_public_logs_removed": true,
+            "files_sha256": {
+              "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-q4EBXM/execution.json": "513b3776f68035cf00088b755b118a5adec4825f819335baeb5b0eb12cafd3de",
+              "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-q4EBXM/run-a8dd9f0c-50a8-441d-bb60-8753e727d941/job.json": "3983a6174dc454243bf4667f49eb66564c8c9ac415ee5f6030883327bd4eac4c",
+              "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-q4EBXM/run-a8dd9f0c-50a8-441d-bb60-8753e727d941/result.json": "46f383fc197922266f86f9d89b606f3af72490bc4de9a70b8b06096a4100722d"
+            }
+          },
+          {
+            "taskId": "acme/widget/native-settled",
+            "runId": "run-9e3b56b8-fba5-4d33-81ec-d0ac7c9f2761",
+            "exit": 23,
+            "endedAt": 1791271467126,
+            "providerState": "failed",
+            "session": "22222222-2222-4222-8222-222222222222",
+            "stopped": "operator-cancelled",
+            "outcome": {
+              "ok": false,
+              "finished": true,
+              "lastMessage": "Done.",
+              "denials": [],
+              "cost": null,
+              "error": "boom"
+            },
+            "files": {
+              "execution": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-1tQlC4/execution.json",
+              "job": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-1tQlC4/run-9e3b56b8-fba5-4d33-81ec-d0ac7c9f2761/job.json",
+              "result": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-1tQlC4/run-9e3b56b8-fba5-4d33-81ec-d0ac7c9f2761/result.json"
+            },
+            "collected": true,
+            "quarantined": false,
+            "costUsd": null,
+            "provider_and_public_logs_removed": true,
+            "files_sha256": {
+              "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-1tQlC4/execution.json": "f7c4bcb7a58c9e22639677a15819804ba905affd11d9643443490195fdcd82b2",
+              "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-1tQlC4/run-9e3b56b8-fba5-4d33-81ec-d0ac7c9f2761/job.json": "a7126e6b5b1da11c37541fc8b9ab24f91913cc3f62b23769cb2ac885674e937e",
+              "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-1tQlC4/run-9e3b56b8-fba5-4d33-81ec-d0ac7c9f2761/result.json": "45639b35f796c2e6e6f6c37c3024f26a9af1f927112e83f67f06e4f933787324"
+            }
+          }
+        ]
+      }
+    ]
+  },
+  "external_qualification": {
+    "mandatory_live_prerequisites": [],
+    "live_paid_calls": 0,
+    "native_codex_preparation_qualified": false,
+    "remote_provider_available": {
+      "openai-agents": false,
+      "codex-cloud": false
+    },
+    "installed_plugin_qualified": false,
+    "model_access_exercised": false,
+    "browser_capture_required": false,
+    "remedy": "Complete the independent native preparation adapter and its limited-authority evidence before registry integration. Later production transports require implemented adapters, credentials, demonstrated model access and authorized bounded live evidence; preserve model/provider defaults and sandbox permissions."
+  }
+}
