@@ -216,7 +216,13 @@ verification evidence after log retention, without exposing raw diagnostics.
 coordinator records cancellation requested before calling a supported transport,
 then distinguishes authoritative confirmation from unsupported/unconfirmed
 cancellation. Native local cancellation retains verified process-tree cleanup;
-remote cancellation never equates stopping a submission client with stopping its
+active runs carried across an upgrade are adopted with their exact local run and
+session identity before cancellation. This stop-only record has `legacy: true`,
+`operationId: null`, unknown cost and no invented submission intent. Cancellation
+remains requested while owned descendants survive or inspection is unavailable;
+restart reconciliation confirms only the same observed run and quarantines its
+late output. A kill request alone never confirms cessation.
+Remote cancellation never equates stopping a submission client with stopping its
 job. Interrupted continuity requires native capability and exact session ownership.
 Cancelled/timed-out work cannot overlap a replacement; late results are
 quarantined. A requested deadline abort leaves unknown acceptance unresolved.

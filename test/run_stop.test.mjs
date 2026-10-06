@@ -4,6 +4,7 @@ import { existsSync, mkdirSync, writeFileSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
 import { makeRunner, runProcesses } from "../lib/run.mjs";
+import { makeExecution } from "../lib/execution.mjs";
 import { tempHome } from "./helpers.mjs";
 
 async function until(check, timeout = 10_000) {
@@ -14,7 +15,7 @@ async function until(check, timeout = 10_000) {
   }
 }
 
-for (const detached of [false, true]) test(`cancelled runs wait for tool subprocesses (detached=${detached})`, async t => {
+for (const detached of [false, true]) test(`legacy boundary cancellation waits for tool subprocesses (detached=${detached})`, async t => {
   const home = tempHome(), marker = join(home, "child-ready");
   const child = `require('node:fs').writeFileSync(${JSON.stringify(marker)}, String(process.pid)); process.on('SIGTERM', () => {}); setInterval(() => {}, 1000);`;
   const parent = `require('node:child_process').spawn(process.execPath, ['-e', ${JSON.stringify(child)}], {stdio: 'ignore', detached: ${detached}}); setInterval(() => {}, 1000);`;
@@ -26,12 +27,20 @@ for (const detached of [false, true]) test(`cancelled runs wait for tool subproc
     }
   });
   await until(() => existsSync(marker));
-  assert.equal(runner.kill(job.id), true);
+  const boundary = makeExecution({ root: runner.root, taskId: "legacy-stop", provider: "codex", runner });
+  assert.equal(boundary.state().current, null);
+  assert.deepEqual(await boundary.cancel(), { confirmed: false });
   await delay(100); // The leader exits; its child deliberately ignores TERM.
   assert.equal(runner.current().running, true);
+  assert.equal(boundary.current().execution.providerState, "cancellation-requested");
   await assert.rejects(() => runner.start("overlap", process.execPath, ["-e", ""], { cwd: home }), /run in progress/);
   await runner.waitForKill(job.id);
   await until(() => !runner.current().running);
+  const restarted = makeExecution({ root: runner.root, taskId: "legacy-stop", provider: "codex", runner: makeRunner(runner.root) });
+  await restarted.reconcile();
+  assert.equal(restarted.current().id, job.id);
+  assert.equal(restarted.current().execution.providerState, "cancelled");
+  assert.equal(restarted.current().execution.quarantined, true);
   assert.equal(runner.read(job.id).exit, 137);
 });
 

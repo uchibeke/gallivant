@@ -273,6 +273,91 @@ test("legacy registry identities/chains/active local jobs survive and unknown ve
   assert.throws(() => f.service.inspect(), { code: "EXECUTION_VERSION" });
 });
 
+function legacyCancellationFixture() {
+  const root = tempHome(), clock = makeClock(), id = "legacy-active", signals = [];
+  const session = "22222222-2222-4222-8222-222222222222";
+  mkdirSync(join(root, id));
+  writeJsonAtomic(join(root, id, "job.json"), { id, pid: 123456789, bin: "codex", name: "legacy", startedAt: clock.now(), exit: null });
+  writeFileSync(join(root, "latest-run"), id);
+  let members = [{ pid: 123456789, group: 123456789, started: "leader" }, { pid: 123456790, group: 123456790, started: "tool" }];
+  const open = (controls = {}) => {
+    const runner = makeRunner(root, { clock, probe: () => true, processes: () => members, signal: (pid, sig) => signals.push([pid, sig]) });
+    return makeExecution({ root, taskId: "legacy-task", provider: "codex", runner, clock, legacySessionId: session,
+      capabilities: { ...executionRegistry.codex, controls: { cancel: true, ...controls } } });
+  };
+  return { root, id, clock, session, signals, open, setMembers: value => { members = value; } };
+}
+
+test("legacy cancellation stops the owned process tree, survives restart and quarantines late output", async () => {
+  const f = legacyCancellationFixture(), service = f.open();
+  assert.equal(service.state().current, null);
+  assert.deepEqual(await service.cancel(), { confirmed: false });
+  assert.deepEqual(f.signals, [[-123456790, "SIGTERM"], [-123456789, "SIGTERM"]]);
+  const saved = service.state();
+  assert.equal(saved.current.id, f.id);
+  assert.equal(saved.current.execution.runId, f.id);
+  assert.equal(saved.current.execution.providerJobId, f.id);
+  assert.equal(saved.current.execution.sessionId, f.session);
+  assert.equal(saved.current.execution.costUsd, null);
+  assert.equal(saved.current.execution.operationId, null);
+  assert.equal(Object.hasOwn(saved.current, "running"), false);
+  assert.deepEqual(saved.operations, {});
+  assert.equal(saved.current.execution.providerState, "cancellation-requested");
+  const restarted = f.open();
+  await restarted.reconcile();
+  assert.equal(restarted.current().running, true);
+  assert.equal(restarted.current().execution.providerState, "cancellation-requested");
+  await assert.rejects(restarted.submit({ ...input, spec: {} }), { code: "EXECUTION_STOPPED" });
+  f.clock.advance(1); // Recovery uses the existing owned process-tree fallback.
+  assert.deepEqual(await restarted.cancel(), { confirmed: false });
+  assert.deepEqual(f.signals.slice(-2), [[-123456790, "SIGKILL"], [-123456789, "SIGKILL"]]);
+  f.setMembers([]);
+  await restarted.reconcile();
+  assert.equal(restarted.current().execution.providerState, "cancelled");
+  assert.equal(restarted.current().execution.quarantined, true);
+  assert.equal(restarted.current().running, false);
+  assert.equal(restarted.state().current.exit, 137);
+  assert.equal(restarted.state().current.killed, true);
+  assert.equal(Object.hasOwn(restarted.state().current, "running"), false);
+  writeFileSync(join(f.root, f.id, "job.log"), '{"type":"turn.completed"}\n');
+  await assert.rejects(restarted.collect(), { code: "EXECUTION_QUARANTINED" });
+  assert.equal(readJson(join(f.root, f.id, "result.json")), null);
+  assert.equal(readJson(join(f.root, f.id, "job.json")).execution.providerState, "cancelled");
+});
+
+test("legacy cancellation keeps inspection failures and unsupported stops unconfirmed", async () => {
+  const f = legacyCancellationFixture(), service = f.open();
+  f.setMembers(null);
+  await assert.rejects(service.cancel("timeout"), { code: "RUN_STOP_UNVERIFIED" });
+  assert.equal(service.state().stopped, "timeout");
+  assert.equal(service.current().execution.providerState, "cancellation-requested");
+  await service.reconcile();
+  assert.equal(service.current().execution.providerState, "cancellation-requested");
+  assert.deepEqual(f.signals, []);
+  await assert.rejects(f.open().submit({ ...input, spec: {} }), { code: "EXECUTION_STOPPED" });
+  const unsupported = legacyCancellationFixture(), boundary = unsupported.open({ cancel: false });
+  assert.deepEqual(await boundary.cancel(), { confirmed: false, unsupported: true });
+  assert.equal(boundary.current().running, true);
+  await boundary.reconcile();
+  assert.equal(boundary.current().execution.providerState, "cancellation-requested");
+  assert.deepEqual(unsupported.signals, []);
+});
+
+test("local cancellation and reconciliation cannot confirm a missing or different run", async () => {
+  for (const pointer of ["missing-run", "other-run"]) {
+    const f = legacyCancellationFixture(), service = f.open();
+    await service.cancel();
+    mkdirSync(join(f.root, "other-run"));
+    writeJsonAtomic(join(f.root, "other-run", "job.json"), { id: "other-run", exit: 0 });
+    writeFileSync(join(f.root, "latest-run"), pointer);
+    await service.reconcile();
+    assert.equal(service.current().execution.providerState, "cancellation-requested");
+    assert.equal(service.current().execution.reconciledAt, null);
+    assert.deepEqual(await service.cancel(), { confirmed: false });
+    assert.equal(service.current().execution.quarantined, undefined);
+  }
+});
+
 test("local Codex fixture uses existing adapter, journals output and survives launcher exit", async () => {
   const root = tempHome(), cwd = tempHome();
   const runner = makeRunner(root, { probe: () => false });
