@@ -1,0 +1,415 @@
+{
+  "version": 1,
+  "task_id": "task-df42674c6251c85b0edef13f",
+  "source_parent": "287ebb291381c732817bf2488877ea9c207e019c",
+  "review": {
+    "id": 5426249270,
+    "inline_comment_ids": [
+      4193541525,
+      4193541532
+    ]
+  },
+  "commands": [
+    {
+      "command": "npm test",
+      "exit": 0,
+      "raw_log": "/tmp/execution-stop-validation-final-tests.txt",
+      "sha256": "f08ff67f47c67816db933384c69e3d438bd3bcb01fcd1c752dfc5caaa93912a5",
+      "tests": 1056,
+      "passed": 1056,
+      "failed": 0
+    },
+    {
+      "command": "npm run lint",
+      "exit": 0,
+      "raw_log": "/tmp/execution-stop-validation-final-lint.txt",
+      "sha256": "8c7790de3f018fb4580f18ac70e1b355a0f76f522dd73acbdaa63632feffcecc"
+    },
+    {
+      "command": "npm run test:execution-backends",
+      "exit": 0,
+      "raw_log": "/tmp/execution-stop-validation-final-backends.txt",
+      "sha256": "0f8996d467f2c0f7dcbf2857b790221aa3984d496aa5e967247fac29bab857ef",
+      "tests": 354,
+      "passed": 354,
+      "failed": 0
+    },
+    {
+      "command": "git diff --check",
+      "exit": 0,
+      "raw_log": "/tmp/execution-stop-validation-final-diff.txt",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    }
+  ],
+  "artifact_hashes": {
+    "docs/execution.md": "06c1df11b336bc50c0173407cc5dad8a92b6614f636edcd60deb0df1cb66ffc9",
+    "lib/control.mjs": "7fd30e126ae500a2a1226672936863abec99b4862d3d0a6a6fdd5c46b15c5b36",
+    "lib/execution.mjs": "dd1e28d6a42d034ae2ea6739b6e9b29802393ea6832965eed8010a7935aefae2",
+    "lib/execution_result.mjs": "e010c6b928f3aebf5493db34a53bbe7d9f850454fbdaa148dcf8acdf46888293",
+    "lib/tick.mjs": "a8520df1b0689237c1193fecfe1bdcfb9458aba0cf4f93dbaa887f734d335ca8",
+    "test/execution-backends.test.mjs": "2cb917603a88c1d0cf9e58c50e25a0a70b9a36f6912a77c5a9ef0c5c33736aef"
+  },
+  "focused_checks": [
+    {
+      "command": "node --test with scoped ownership, cancellation, publication and recovery patterns (33 tests)",
+      "exit": 0,
+      "raw_log": "/tmp/execution-stop-validation-verified-focus.txt",
+      "sha256": "cbe31005f89947d4057c1618f01c325fdc713a945fb463e08a32653225db58f5",
+      "tests": 33,
+      "passed": 33,
+      "failed": 0
+    },
+    {
+      "command": "node --test with final stop, rejection, unavailable I/O, checkpoint, artifact and control patterns (7 tests)",
+      "exit": 0,
+      "raw_log": "/tmp/execution-stop-validation-final-focus.txt",
+      "sha256": "b76291b87142289823391ebfae01b4c8d9e50236509deffbd2a5170aac368280",
+      "tests": 7,
+      "passed": 7,
+      "failed": 0
+    }
+  ],
+  "regression_failures": [
+    {
+      "stage": "Before fixes, exact lost-acceptance cancellation and deterministic publication regressions reproduced both defects.",
+      "expected_failure": true,
+      "raw_log": "/tmp/execution-stop-validation-red-confirmed.txt",
+      "sha256": "b893a2f3c3fbb9e0a5320c8e01610480a3c2523455207835775b24e4b6d8c42e",
+      "tests": 2,
+      "passed": 0,
+      "failed": 2
+    },
+    {
+      "stage": "The first broad verification exposed one older artifact fixture that retried a rejected manifest in the same run. It now isolates valid publication and asserts the rejected run remains blocked.",
+      "expected_failure": false,
+      "raw_log": "/tmp/execution-stop-validation-backends.txt",
+      "sha256": "c83026c8e560295743fa2223fa6d6a3d1c8c4fc8268b0edd5cc5cefc254b4b30",
+      "tests": 354,
+      "passed": 353,
+      "failed": 1
+    }
+  ],
+  "source_and_output_review": [
+    {
+      "rule": "A persisted stop follows exact recovered local ownership; a lost acknowledgement cannot leave an owned process unsignalled or authorize another dispatch.",
+      "files": [
+        "lib/execution.mjs",
+        "lib/run.mjs",
+        "lib/control.mjs",
+        "lib/tick.mjs",
+        "lib/task_prepare.mjs",
+        "docs/execution.md"
+      ],
+      "boundaries_checked": [
+        "Reconciliation matches the run ID before adopting local acceptance and persists that ownership before invoking the existing requestRunCancellation helper.",
+        "Supported pending stops initiate even when job.killed is absent. Existing killed runs retain the five-second killAfter fallback and validated process identities across restart.",
+        "Mismatched current runs, unsupported controls and unavailable process inspection do not signal; inspection failure remains visibly pending with RUN_STOP_UNVERIFIED.",
+        "Read-only current/inspect never signals or dispatches. Reconciliation performs one launch/operation and preserves confirmation, late-result quarantine and exact cancelled/137 evidence.",
+        "Operator stops remain fenced. Only confirmed local implementation timeout releases its temporary fence; preparation and remote controls keep their existing rules. Native cleanup stops only the test-owned process."
+      ],
+      "regressions": [
+        "lost local launch acknowledgement recovers an existing stop before shutdown and cannot redispatch",
+        "coordinator reconciliation resumes an owned local kill fallback after restart without another control",
+        "local timeout fences survive failed inspection, changed ownership and concurrent operator cancellation"
+      ]
+    },
+    {
+      "rule": "Permanently rejected publication inputs settle once through the canonical needs-human lane; collection and unavailable I/O remain pending, and only explicit correction starts another turn.",
+      "files": [
+        "lib/execution_result.mjs",
+        "lib/repository_files.mjs",
+        "lib/tick.mjs",
+        "lib/control.mjs",
+        "lib/commands/resume.mjs",
+        "lib/git.mjs",
+        "lib/gh.mjs",
+        "docs/execution.md"
+      ],
+      "boundaries_checked": [
+        "Repository/branch/input ownership, malformed manifests, unsafe paths, aliases, hashes, modes, authoritative outcomes and public text use existing validators before mutation.",
+        "Deterministic EXECUTION_RESULT publication validation writes reason result-validation and phase blocked, preserving prior fingerprint, paths, applied head and real evidence. Replay checks the blocked checkpoint before validation or application.",
+        "Collection protocol errors, unavailable/malformed tracked metadata, unavailable mode metadata and ordinary coded filesystem/Git errors do not create a deterministic validation block. Transient fixture failures recover without another submission.",
+        "The tick settles only after a durable blocked checkpoint, retaining the provider exit, nullable cost, denials and session. Missing checkpoint durability leaves the entry unresolved.",
+        "Repeated progress/review polling and restart preserve one cached result and one needs-human notification, with no publication or automatic continuation; unrelated review reaches done.",
+        "Queued and fresh PR rechecks stay refused. Safe operator messages name result-application.json, result.json and any verification.json; explicit same-session resume creates one new owned root and retains rejected bytes.",
+        "Concurrent cancellation stays quarantined and cannot become a corrective publication block. Verification failure/interruption, strict clean-tree checks, credential-free POSIX execution, saved evidence and Git/PR cleanup remain canonical.",
+        "Valid authentication artifacts still preserve exact bytes and publish with real command evidence. Invalid fixture hashes now remain blocked instead of being modified and replayed in place."
+      ],
+      "regressions": [
+        "deterministic publication rejection settles once and permits an explicit corrective continuation",
+        "collection and unavailable publication I/O remain pending and recover without another dispatch",
+        "a rejected result cannot settle until its blocked checkpoint is durable",
+        "collected authentication source preserves exact artifact bytes through restart and publication",
+        "failed remote verification survives polls and restart, settles workflow and permits explicit correction",
+        "pushed and verified recovery reject tracked aliases without verification or publication"
+      ]
+    }
+  ],
+  "representative_output": {
+    "evidence_kind": "Native owned Node processes and deterministic remote/Git fixtures; no paid model call, installed plugin, browser/capture or production transport qualification.",
+    "reports": [
+      {
+        "label": "recovered local stop",
+        "report_path": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-DXK4AB/recovered-local-stop-evidence.json",
+        "report_sha256": "9c42138498203d327f50f2cfdec5f4c9c7849cda1c0c4a714cff345335a557bf",
+        "observations": [
+          {
+            "reason": "operator-cancelled",
+            "launches": 1,
+            "runId": "run-e4993572-7642-4f97-a805-54bbebf101bf",
+            "execution": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-0uvS40/execution.json",
+            "job": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-0uvS40/run-e4993572-7642-4f97-a805-54bbebf101bf/job.json",
+            "killAfter": 1790215205000,
+            "execution_sha256": "9a75ac8a8b2bad627c3698289dca8bfffa39c4547c45e3d91fe63e63a3225643",
+            "job_sha256": "4aba50e49c0a5577473031a643791aa569f2a36d892a3bc89ca762a43080d08d",
+            "accepted_operations": 1,
+            "provider_state": "cancelled",
+            "collected": true,
+            "quarantined": true,
+            "exit": 137,
+            "dispatch_stop": "operator-cancelled"
+          },
+          {
+            "reason": "timeout",
+            "launches": 1,
+            "runId": "run-b2235a2c-3bca-4891-abd1-0bbf58cce954",
+            "execution": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-qbarKv/execution.json",
+            "job": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-qbarKv/run-b2235a2c-3bca-4891-abd1-0bbf58cce954/job.json",
+            "killAfter": 1790215205000,
+            "execution_sha256": "d2849fa4b9772d21c714bc1437112b388e640ddb5f9c9391561cc369f87391ee",
+            "job_sha256": "eba54f46aa47dd1d0a86c5349ea24354a5de45d7594368c85071bf4b0d51c7a6",
+            "accepted_operations": 1,
+            "provider_state": "cancelled",
+            "collected": true,
+            "quarantined": true,
+            "exit": 137,
+            "dispatch_stop": null
+          }
+        ]
+      },
+      {
+        "label": "publication rejection",
+        "report_path": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-5quXU3/publication-rejection-evidence.json",
+        "report_sha256": "cefe7b88b852ca0e5cc71d4538cdffe5f53d2ae758fa774be2eeee32fd4fd6c9",
+        "observations": [
+          {
+            "kind": "repository",
+            "checkpoint": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-KuOYaU/runs/acme__widget__result/run-44830ce0-9165-4815-a7ac-1624d9305511/result-application.json",
+            "result": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-KuOYaU/runs/acme__widget__result/run-44830ce0-9165-4815-a7ac-1624d9305511/result.json",
+            "registry": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-KuOYaU/state.json",
+            "initialRun": "run-44830ce0-9165-4815-a7ac-1624d9305511",
+            "settled": {
+              "state": "needs-human",
+              "reason": "result-verification",
+              "exit": 0,
+              "cost": null,
+              "session": "session-1"
+            },
+            "unrelatedState": "done",
+            "correctiveRun": "run-fd3868b6-c6a1-4d93-8d07-ba3f86251c5a",
+            "notifications": 1,
+            "collections": 1,
+            "continuations": 1,
+            "publicationCalls": [],
+            "checkpoint_sha256": "20d780e5d60d94d3e11ee3013bb430a4d0ee266936ed1cbc6b6426ebc98fba74",
+            "result_sha256": "d0901f60be9b4fc5a49f3cd6cbaac0971e940f0d0a67acadce5ea08d770c44e4",
+            "registry_sha256": "04b2c3e5eb28b506ce788e3c296b3bf8def4791b74a226f9e0d8cc911c94d9bf",
+            "checkpoint_phase": "blocked",
+            "checkpoint_reason": "result-validation",
+            "fingerprint": "27250588e360b9a92806f697e7313e112f361376d4ee54f70b15c46b26a55b5d",
+            "private_result_cost": null,
+            "corrective_root": "turn-2",
+            "corrective_control": "applied"
+          },
+          {
+            "kind": "branch",
+            "checkpoint": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-S9H1pH/runs/acme__widget__result/run-41e5fa1b-f6c7-4da5-ae0d-786fb49a1769/result-application.json",
+            "result": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-S9H1pH/runs/acme__widget__result/run-41e5fa1b-f6c7-4da5-ae0d-786fb49a1769/result.json",
+            "registry": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-S9H1pH/state.json",
+            "initialRun": "run-41e5fa1b-f6c7-4da5-ae0d-786fb49a1769",
+            "settled": {
+              "state": "needs-human",
+              "reason": "result-verification",
+              "exit": 0,
+              "cost": null,
+              "session": "session-1"
+            },
+            "unrelatedState": "done",
+            "correctiveRun": "run-3ea3ffe3-ad00-4603-983a-053a281aa978",
+            "notifications": 1,
+            "collections": 1,
+            "continuations": 1,
+            "publicationCalls": [],
+            "checkpoint_sha256": "aee7633114706be653174fce7e6b612ba4d50ed5e85da450741ca39b6a323b39",
+            "result_sha256": "9fb6df72129b495abd610f164635b20ff9db10fe365577239733f64f464e5fe4",
+            "registry_sha256": "bb3c448e58f051e7c8902abb691c2f960df1c9ed0f22989f32a4ebe21cb6a908",
+            "checkpoint_phase": "blocked",
+            "checkpoint_reason": "result-validation",
+            "fingerprint": "840bae7edd6e11c5d3d058337259ec972e1bc239b2d75098f4318862abf82c7f",
+            "private_result_cost": null,
+            "corrective_root": "turn-2",
+            "corrective_control": "applied"
+          },
+          {
+            "kind": "path",
+            "checkpoint": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-TuGhR7/runs/acme__widget__result/run-90ad4e27-40be-4a54-8a7c-427f2276df59/result-application.json",
+            "result": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-TuGhR7/runs/acme__widget__result/run-90ad4e27-40be-4a54-8a7c-427f2276df59/result.json",
+            "registry": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-TuGhR7/state.json",
+            "initialRun": "run-90ad4e27-40be-4a54-8a7c-427f2276df59",
+            "settled": {
+              "state": "needs-human",
+              "reason": "result-verification",
+              "exit": 0,
+              "cost": null,
+              "session": "session-1"
+            },
+            "unrelatedState": "done",
+            "correctiveRun": "run-39d79e5d-ca43-4f64-b712-579b5cc0bfd0",
+            "notifications": 1,
+            "collections": 1,
+            "continuations": 1,
+            "publicationCalls": [],
+            "checkpoint_sha256": "b85d3bae61b9bc4518d4793d11fbf811be6b7f6f0e69bfc4a3da03663188de60",
+            "result_sha256": "938dda8874bf7d58f62151c5aa4d05c0b2900c13fa16b99fb209ea36506bdf11",
+            "registry_sha256": "9c9e118cf5f10eb8b10db7b3f73ccef2d3607826fb8938333db1bf47368383cb",
+            "checkpoint_phase": "blocked",
+            "checkpoint_reason": "result-validation",
+            "fingerprint": "bddd3a2438fe8126c3b997871fef8db681d18da6b5948551622496135e3f2a0b",
+            "private_result_cost": null,
+            "corrective_root": "turn-2",
+            "corrective_control": "applied"
+          },
+          {
+            "kind": "hash",
+            "checkpoint": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-QNk2tj/runs/acme__widget__result/run-4ada17e9-77ce-4075-b88c-908daad353a5/result-application.json",
+            "result": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-QNk2tj/runs/acme__widget__result/run-4ada17e9-77ce-4075-b88c-908daad353a5/result.json",
+            "registry": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-QNk2tj/state.json",
+            "initialRun": "run-4ada17e9-77ce-4075-b88c-908daad353a5",
+            "settled": {
+              "state": "needs-human",
+              "reason": "result-verification",
+              "exit": 0,
+              "cost": null,
+              "session": "session-1"
+            },
+            "unrelatedState": "done",
+            "correctiveRun": "run-bd47422f-25ee-4202-ad2c-cd990dd27e2c",
+            "notifications": 1,
+            "collections": 1,
+            "continuations": 1,
+            "publicationCalls": [],
+            "checkpoint_sha256": "a9c44ddafe4555d7992ca93cb13361af9a827bfc5c71c779453222b5c1acf5eb",
+            "result_sha256": "9a8ad9da346bbf9b1b11b4d2bec5f81d58f2b408d96f6767f3a526bd18a9407b",
+            "registry_sha256": "27537e0fb247f34f94a64f9c9d2d90702ecf63adc131188b8cf2eddb2a827cca",
+            "checkpoint_phase": "blocked",
+            "checkpoint_reason": "result-validation",
+            "fingerprint": "878dae995ae80509dc1ab2eea70353c66ef8d2cf36b482a73b422e7f23eca106",
+            "private_result_cost": null,
+            "corrective_root": "turn-2",
+            "corrective_control": "applied"
+          },
+          {
+            "kind": "alias",
+            "checkpoint": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-mZs9a3/runs/acme__widget__result/run-9a70f4d9-5c9f-43b3-b6de-619ab9d3ee8a/result-application.json",
+            "result": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-mZs9a3/runs/acme__widget__result/run-9a70f4d9-5c9f-43b3-b6de-619ab9d3ee8a/result.json",
+            "registry": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-mZs9a3/state.json",
+            "initialRun": "run-9a70f4d9-5c9f-43b3-b6de-619ab9d3ee8a",
+            "settled": {
+              "state": "needs-human",
+              "reason": "result-verification",
+              "exit": 0,
+              "cost": null,
+              "session": "session-1"
+            },
+            "unrelatedState": "done",
+            "correctiveRun": "run-712ca85f-af52-4c09-882e-1e16b724dd19",
+            "notifications": 1,
+            "collections": 1,
+            "continuations": 1,
+            "publicationCalls": [],
+            "checkpoint_sha256": "1fbacfe073e3e58bb013d925958972ca5e565a88eb825895e9938ea317440c45",
+            "result_sha256": "1780b8d014bc5758e2586448d2841085b98d9f6b03bb51ac154f87b2832272fc",
+            "registry_sha256": "662d7f280b76dd78b643b807a70f5ffdba0eed75ef509b219134d78e41fc4102",
+            "checkpoint_phase": "blocked",
+            "checkpoint_reason": "result-validation",
+            "fingerprint": "6aded5a0636b42611ae24fcc12cc5f442ab8e79fc73e3d1e010d17a9b93a0c7d",
+            "private_result_cost": null,
+            "corrective_root": "turn-2",
+            "corrective_control": "applied"
+          },
+          {
+            "kind": "mode",
+            "checkpoint": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-sHpBqp/runs/acme__widget__result/run-135792c3-7efe-4907-80ff-e4ab2f8ef4b2/result-application.json",
+            "result": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-sHpBqp/runs/acme__widget__result/run-135792c3-7efe-4907-80ff-e4ab2f8ef4b2/result.json",
+            "registry": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-sHpBqp/state.json",
+            "initialRun": "run-135792c3-7efe-4907-80ff-e4ab2f8ef4b2",
+            "settled": {
+              "state": "needs-human",
+              "reason": "result-verification",
+              "exit": 0,
+              "cost": null,
+              "session": "session-1"
+            },
+            "unrelatedState": "done",
+            "correctiveRun": "run-146cc48e-a22c-41c3-a9b4-b526465de44a",
+            "notifications": 1,
+            "collections": 1,
+            "continuations": 1,
+            "publicationCalls": [],
+            "checkpoint_sha256": "94fa66b23ddf5fc1fb269359969a1ca70f690d2eb0007eb3b39db16529e95237",
+            "result_sha256": "e96b0838221a7f9c1517235a328fba9614db0686d6880d5e38c67295f9a374dc",
+            "registry_sha256": "8d5290fdd6a3cb1d93ffe67390ce3324980a42ec87da5f88f18bf833147e655c",
+            "checkpoint_phase": "blocked",
+            "checkpoint_reason": "result-validation",
+            "fingerprint": "5e90703393bec4eecc416360e6d4f6a9f3fed250be842007fd5fe3f3ccf7ce47",
+            "private_result_cost": null,
+            "corrective_root": "turn-2",
+            "corrective_control": "applied"
+          },
+          {
+            "kind": "publicText",
+            "checkpoint": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-MPQ49s/runs/acme__widget__result/run-bbef0b67-e856-434d-a1ca-d57d61e1287f/result-application.json",
+            "result": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-MPQ49s/runs/acme__widget__result/run-bbef0b67-e856-434d-a1ca-d57d61e1287f/result.json",
+            "registry": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-MPQ49s/state.json",
+            "initialRun": "run-bbef0b67-e856-434d-a1ca-d57d61e1287f",
+            "settled": {
+              "state": "needs-human",
+              "reason": "result-verification",
+              "exit": 0,
+              "cost": null,
+              "session": "session-1"
+            },
+            "unrelatedState": "done",
+            "correctiveRun": "run-641f7779-20cf-49d1-ade2-9105b7a75704",
+            "notifications": 1,
+            "collections": 1,
+            "continuations": 1,
+            "publicationCalls": [],
+            "checkpoint_sha256": "e6f0dee843652fce86b85a2db4832b8e4bc628b2fed2e9494fb3547a2deac5d2",
+            "result_sha256": "5bdbebd9cead7b25b9d4a8fb79c789f795e493e9d31b84b2327c61f1c0a21008",
+            "registry_sha256": "2c5bb9caa5ba20da2b3f17bab310e74d4d5c8b1083d475fcb511d9e4fd07e18c",
+            "checkpoint_phase": "blocked",
+            "checkpoint_reason": "result-validation",
+            "fingerprint": "5152daa769fbed00cb7ae7b169c34d60a9b7f4a6dfb3b55194056f3635d4f6af",
+            "private_result_cost": null,
+            "corrective_root": "turn-2",
+            "corrective_control": "applied"
+          }
+        ]
+      }
+    ]
+  },
+  "external_qualification": {
+    "mandatory_live_prerequisites": [],
+    "live_paid_calls": 0,
+    "native_codex_preparation_qualified": false,
+    "remote_provider_available": {
+      "openai-agents": false,
+      "codex-cloud": false
+    },
+    "installed_plugin_qualified": false,
+    "model_access_exercised": false,
+    "browser_capture_required": false,
+    "remedy": "Complete the independent native preparation adapter and its limited-authority evidence before registry integration. Later production transports require implemented adapters, credentials, demonstrated model access and authorized bounded live evidence; preserve model/provider defaults and sandbox permissions."
+  }
+}

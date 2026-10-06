@@ -22,7 +22,7 @@ import { resume } from "../lib/commands/resume.mjs";
 import { acquireProcessLock } from "../lib/daemon.mjs";
 import { makeGit, GIT_PATH_LIMITS } from "../lib/git.mjs";
 import { execFileAsync } from "../lib/gh.mjs";
-import { requestControl, applyControl, cancelControl } from "../lib/control.mjs";
+import { requestControl, applyControl, cancelControl, controlFailure } from "../lib/control.mjs";
 import { tempHome, makeClock, CONFIG, T0, fakeGh, fakeNotify, silentLog, fakeGit, fakeCredential, fakeIdentity, fakeRunner, prFixture, comment, harnessBin, GOOD_PRD, codexLines, claudeResultLines } from "./helpers.mjs";
 const allowance = { remainingUsd: 1, reservedUsd: 0.1 };
 const input = { operationId: "first", inputHead: "a".repeat(40), allowance };
@@ -598,6 +598,48 @@ test("legacy cancellation stops the owned process tree, survives restart and qua
   await assert.rejects(restarted.collect(), { code: "EXECUTION_QUARANTINED" });
   assert.equal(readJson(join(f.root, f.id, "result.json")), null);
   assert.equal(readJson(join(f.root, f.id, "job.json")).execution.providerState, "cancelled");
+});
+
+test("lost local launch acknowledgement recovers an existing stop before shutdown and cannot redispatch", async t => {
+  const observations = [];
+  for (const reason of ["operator-cancelled", "timeout"]) {
+    const root = tempHome(), clock = makeClock(), marker = join(root, "ready");
+    const runner = makeRunner(root, { clock }), start = runner.start;
+    let starts = 0;
+    runner.start = async (...args) => { starts++; await start(...args); throw new Error("local launch reply lost"); };
+    const open = () => makeExecution({ root, taskId: "lost-local-stop", provider: "codex", runner: makeRunner(root, { clock }), clock });
+    const service = makeExecution({ root, taskId: "lost-local-stop", provider: "codex", runner, clock });
+    const request = { ...input, kind: "implementation", spec: { cmd: process.execPath, args: ["-e", `process.on('SIGTERM',()=>{}); require('node:fs').writeFileSync(${JSON.stringify(marker)},'ready'); setInterval(()=>{},1000);`], options: { cwd: root } } };
+    let job;
+    t.after(async () => { if (job) { const cleanup = makeRunner(root, { clock: { now: () => clock.now() + 6000 } }); cleanup.kill(job.id); await cleanup.waitForKill(job.id); } });
+    await assert.rejects(service.submit(request), /local launch reply lost/); job = runner.current();
+    for (let i = 0; i < 250 && !existsSync(marker); i++) await new Promise(resolve => setTimeout(resolve, 20));
+    assert.ok(existsSync(marker)); assert.equal(service.current().execution.acceptance, "unknown");
+    assert.equal((await open().cancel(reason)).confirmed, false); assert.equal(runner.current().killed, undefined);
+    mkdirSync(join(root, "other-run")); writeJsonAtomic(join(root, "other-run", "job.json"), { ...job, id: "other-run" });
+    writeFileSync(join(root, "latest-run"), "other-run"); await open().reconcile();
+    assert.equal(open().state().current.execution.acceptance, "unknown"); assert.equal(runner.read(job.id).killed, undefined);
+    writeFileSync(join(root, "latest-run"), job.id);
+    const unsupported = makeExecution({ root, taskId: "lost-local-stop", provider: "codex", runner: makeRunner(root, { clock }), clock,
+      capabilities: { ...executionRegistry.codex, controls: { cancel: false } } });
+    await unsupported.reconcile(); assert.equal(unsupported.current().execution.acceptance, "accepted"); assert.equal(runner.current().killed, undefined);
+    const unavailable = makeExecution({ root, taskId: "lost-local-stop", provider: "codex", runner: makeRunner(root, { clock, processes: () => null }), clock });
+    await unavailable.reconcile(); assert.equal(unavailable.current().execution.recoveryAction, "RUN_STOP_UNVERIFIED"); assert.equal(runner.current().killed, undefined);
+    await open().reconcile();
+    assert.equal(open().current().execution.acceptance, "accepted"); assert.equal(runner.current().killed, true);
+    const persisted = open().state(), stop = runner.current();
+    assert.equal(persisted.stopped, reason); assert.equal(persisted.current.execution.providerState, "cancellation-requested");
+    assert.equal(persisted.operations.first.acceptance, "accepted"); assert.equal(persisted.current.id, job.id);
+    assert.equal(starts, 1); assert.equal(Object.keys(persisted.operations).length, 1);
+    clock.advance(1); await open().reconcile();
+    for (let i = 0; i < 250 && runner.current().running; i++) await new Promise(resolve => setTimeout(resolve, 20));
+    assert.equal(runner.current().running, false); await open().reconcile();
+    assert.equal(open().current().execution.providerState, "cancelled"); assert.equal(open().current().exit, 137);
+    assert.equal(runner.current().killAfter, stop.killAfter); assert.equal(open().state().stopped, reason === "timeout" ? null : reason);
+    await assert.rejects(open().collect(), { code: "EXECUTION_QUARANTINED" });
+    observations.push({ reason, launches: starts, runId: job.id, execution: join(root, "execution.json"), job: join(root, job.id, "job.json"), killAfter: stop.killAfter });
+  }
+  const path = join(tempHome(), "recovered-local-stop-evidence.json"); writeJsonAtomic(path, { observations }); t.diagnostic(`recovered local stop evidence: ${path}`);
 });
 
 test("coordinator reconciliation resumes an owned local kill fallback after restart without another control", async t => {
@@ -1269,8 +1311,12 @@ test("collected authentication source preserves exact artifact bytes through res
   assert.deepEqual(replay.files, original);
   assert.equal(f.provider.calls.filter(c => c[0] === "collect").length, 1);
   f.ctx.readPrd = () => "# Brief\n\n## Verify\n\n- `node --check auth.mjs`\n";
-  const invalid = structuredClone(replay); invalid.files[0].text += "changed";
-  await assert.rejects(reconcileExecutionResult(f.ctx, { ...f, result: invalid }), /artifact content hash differs/);
+  const invalid = resultFixture(); invalid.result.files = structuredClone(replay.files); invalid.result.files[0].text += "changed";
+  await assert.rejects(reconcileExecutionResult(invalid.ctx, invalid), /artifact content hash differs/);
+  assert.equal(readJson(join(invalid.dir, "result-application.json")).reason, "result-validation");
+  invalid.result.files[0].text = text;
+  await assert.rejects(reconcileExecutionResult(invalid.ctx, invalid), { code: "EXECUTION_RESULT_BLOCKED" });
+  assert.deepEqual(invalid.calls, []);
   assert.deepEqual(f.calls, []);
   const done = await reconcileExecutionResult(f.ctx, { ...f, result: replay, verify: undefined });
   assert.deepEqual(readFileSync(join(f.entry.worktree, "auth.mjs")), Buffer.from(text));
@@ -1389,7 +1435,7 @@ test("artifact aliases reject duplicate canonical targets before content validat
       await assert.rejects(reconcileExecutionResult(f.ctx, f), /duplicate canonical result file/);
       assert.equal(readFileSync(join(f.entry.worktree, first), "utf8"), "before");
       assert.deepEqual(f.result.files, original); assert.deepEqual(f.calls, []);
-      assert.throws(() => readFileSync(join(f.dir, "result-application.json")), { code: "ENOENT" });
+      assert.equal(readJson(join(f.dir, "result-application.json")).reason, "result-validation");
     }
   }
   // Validate every target before reading even the first artifact's content hash.
@@ -1417,7 +1463,7 @@ test("case and Unicode artifact aliases reject one portable target before readin
       if (operation === "create") assert.equal(existsSync(join(f.entry.worktree, first)), false);
       else assert.equal(readFileSync(join(f.entry.worktree, first), "utf8"), "before");
       assert.deepEqual(f.result.files, original); assert.deepEqual(f.calls, []);
-      assert.equal(existsSync(join(f.dir, "result-application.json")), false);
+      assert.equal(readJson(join(f.dir, "result-application.json")).reason, "result-validation");
       observations.push({ paths: [first, alias], operation, filesystemAlias, mutation: false });
     }
   }
@@ -1451,7 +1497,7 @@ test("single artifacts reject aliases of native tracked files and parent directo
     assert.deepEqual(await f.ctx.git.dirty(f.entry.worktree, { strict: true }), { modified: 0, untracked: 0 });
     assert.equal(readFileSync(join(f.entry.worktree, tracked), "utf8"), "existing tracked bytes");
     assert.deepEqual(f.result, manifest); assert.deepEqual(f.calls, []);
-    assert.equal(existsSync(join(f.dir, "result-application.json")), false);
+    assert.equal(readJson(join(f.dir, "result-application.json")).reason, "result-validation");
     observations.push({ tracked, target, head, worktree: f.entry.worktree, resultDir: f.dir, trackedPaths: files,
       filesystemAlias: existsSync(join(f.entry.worktree, target)), mutation: false, publicationCalls: [...f.calls], manifestPreserved: true });
   }
@@ -1487,7 +1533,7 @@ test("portable targets reject parent and file-directory aliases while accepting 
     const f = resultFixture(); f.ctx.git.trackedPaths = async () => [tracked];
     f.result.files = [{ path: target, beforeHash: null, afterHash: "invalid", text: "new" }];
     await assert.rejects(reconcileExecutionResult(f.ctx, f), /aliases an existing repository path/);
-    assert.deepEqual(f.calls, []); assert.equal(existsSync(join(f.dir, "result-application.json")), false);
+    assert.deepEqual(f.calls, []); assert.equal(readJson(join(f.dir, "result-application.json")).reason, "result-validation");
   }
   const parents = resultFixture();
   parents.result.files = ["Src/a.js", "src/b.js"].map(path => ({ path, beforeHash: null, afterHash: "invalid", text: "new" }));
@@ -1513,14 +1559,16 @@ test("pushed and verified recovery reject tracked aliases without verification o
   pushed.ctx.gh.refSha = async () => pushed.result.pushedHead; pushed.ctx.gh.containsCommit = async () => true;
   pushed.ctx.git.trackedPaths = async () => ["Src/a.js", "src/b.js"];
   await assert.rejects(reconcileExecutionResult(pushed.ctx, pushed), /aliases an existing repository path/);
-  assert.deepEqual(pushed.calls, []); assert.equal(existsSync(join(pushed.dir, "result-application.json")), false);
+  assert.deepEqual(pushed.calls, []); assert.equal(readJson(join(pushed.dir, "result-application.json")).reason, "result-validation");
   const f = resultFixture(); f.ctx.git.pushResult = async () => { f.calls.push("push"); throw new Error("push reply lost"); };
   await assert.rejects(reconcileExecutionResult(f.ctx, f), /push reply lost/);
   const evidence = readFileSync(join(f.dir, "verification.json"), "utf8"), checkpoint = readFileSync(join(f.dir, "result-application.json"), "utf8");
   f.calls.length = 0; f.ctx.git.trackedPaths = async () => ["a.txt", "A.TXT"];
   await assert.rejects(reconcileExecutionResult(f.ctx, f), /aliases an existing repository path/);
   assert.deepEqual(f.calls, []); assert.equal(readFileSync(join(f.dir, "verification.json"), "utf8"), evidence);
-  assert.equal(readFileSync(join(f.dir, "result-application.json"), "utf8"), checkpoint);
+  const blocked = readJson(join(f.dir, "result-application.json"));
+  assert.equal(blocked.reason, "result-validation"); assert.equal(blocked.phase, "blocked");
+  for (const [key, value] of Object.entries(JSON.parse(checkpoint))) if (key !== "phase") assert.deepEqual(blocked[key], value);
 });
 
 test("Git path readers preserve whitespace and NUL ordering with bounded complete metadata", async () => {
@@ -1634,7 +1682,7 @@ test("failed remote verification survives polls and restart, settles workflow an
   assert.throws(() => requestControl(restarted, { handle: f.id, action: "recheck" }), /already queued/);
   await applyControl(restarted, f.id);
   assert.equal(restarted.state.get(f.id).control.status, "failed");
-  assert.match(restarted.state.get(f.id).control.message, /cannot retry verification/);
+  assert.match(restarted.state.get(f.id).control.message, /cannot retry publication/);
   assert.throws(() => requestControl(restarted, { handle: f.id, action: "recheck" }), { code: "EXECUTION_RESULT_BLOCKED" });
   requestControl(restarted, { handle: f.id, action: "resume" });
   await makeTick(restarted).tickEntry(f.id, restarted.state.get(f.id));
@@ -1644,6 +1692,84 @@ test("failed remote verification survives polls and restart, settles workflow an
   assert.notEqual(restarted.state.get(f.id).last.run, f.job.id);
   assert.equal(readFileSync(attempts, "utf8"), "x");
   assert.equal(readJson(join(f.dir, "result-application.json")).phase, "blocked");
+});
+
+test("deterministic publication rejection settles once and permits an explicit corrective continuation", async t => {
+  const cases = {
+    repository: f => { f.result.repo = "foreign/repository"; }, branch: f => { f.result.branch = "main"; },
+    path: f => { f.result.files[0].path = "../outside"; }, hash: f => { f.result.files[0].afterHash = "invalid"; },
+    alias: f => { f.result.files.push({ ...f.result.files[0], path: "./a.txt" }); },
+    mode: f => { f.ctx.git.resultModesMatch = async () => false; },
+    publicText: f => { f.result.pr.title = "Gallivant result"; },
+  }, observations = [];
+  for (const [kind, mutate] of Object.entries(cases)) {
+    const f = await collectedArtifactFixture(); mutate(f);
+    const state = makeState(f.ctx.home), notify = fakeNotify(), gh = fakeGh({ pr: { state: "MERGED" } }), reviewId = "acme/widget/review";
+    state.put(f.id, { ...f.entry, last: { run: f.job.id, exit: null } });
+    state.put(reviewId, newEntry({ repo: "acme/widget", harness: "codex", branch: "work/review", pr: 2, state: STATES.prOpen, nowIso: T0 }));
+    const ctx = { ...f.ctx, state, clock: f.provider.clock, config: CONFIG, git: { ...fakeGit(), ...f.ctx.git }, gh, ownLogin: "me", log: silentLog, notify,
+      credential: fakeCredential(), identity: fakeIdentity(), executionFor: id => id === f.id ? f.reopen() : { current: () => null } };
+    f.provider.observe({ state: "succeeded" }); await makeTick(ctx).tick();
+    const checkpoint = readJson(join(f.dir, "result-application.json")), result = readFileSync(join(f.dir, "result.json"), "utf8"), settled = state.get(f.id);
+    assert.equal(checkpoint?.phase, "blocked", kind); assert.equal(checkpoint.reason, "result-validation");
+    assert.equal(state.get(f.id).state, STATES.needsHuman); assert.equal(state.get(f.id).reason, "result-verification");
+    assert.equal(state.get(f.id).last.exit, 0); assert.equal(state.get(f.id).session, f.job.execution.sessionId);
+    assert.equal(state.get(reviewId).state, STATES.done); assert.deepEqual(f.calls, []); assert.equal(existsSync(join(f.dir, "verification.json")), false);
+    const restarted = { ...ctx, state: makeState(ctx.home) };
+    for (let poll = 0; poll < 3; poll++) { await makeTick(restarted).tick(); await makeTick(restarted).tickEntry(f.id, restarted.state.get(f.id)); }
+    assert.deepEqual(readJson(join(f.dir, "result-application.json")), checkpoint); assert.equal(readFileSync(join(f.dir, "result.json"), "utf8"), result);
+    assert.deepEqual(f.calls, []); assert.equal(readFileSync(join(f.entry.worktree, "a.txt"), "utf8"), "before");
+    assert.equal(f.provider.calls.filter(call => call[0] === "collect").length, 1); assert.equal(f.provider.calls.filter(call => call[0] === "submit").length, 1);
+    assert.equal(notify.sent.filter(call => call[0] === "needs").length, 1);
+    restarted.state.update(f.id, { pr: 1 });
+    assert.throws(() => requestControl(restarted, { handle: f.id, action: "recheck" }), error => {
+      assert.equal(error.code, "EXECUTION_RESULT_BLOCKED");
+      assert.match(controlFailure(error), /Inspect result-application\.json, result\.json and any verification\.json/);
+      assert.match(controlFailure(error), /explicitly resume.*cannot retry publication/); return true;
+    });
+    gh.data.pr.state = "OPEN";
+    requestControl(restarted, { handle: f.id, action: "resume" }); await makeTick(restarted).tickEntry(f.id, restarted.state.get(f.id));
+    assert.equal(restarted.state.get(f.id).control.status, "applied"); assert.equal(f.provider.calls.filter(call => call[0] === "continue").length, 1);
+    assert.equal(f.reopen().current().execution.sessionId, f.job.execution.sessionId); assert.notEqual(restarted.state.get(f.id).last.run, f.job.id);
+    assert.deepEqual(readJson(join(f.dir, "result-application.json")), checkpoint); assert.equal(readFileSync(join(f.dir, "result.json"), "utf8"), result);
+    observations.push({ kind, checkpoint: join(f.dir, "result-application.json"), result: join(f.dir, "result.json"), registry: join(ctx.home, "state.json"), initialRun: f.job.id,
+      settled: { state: settled.state, reason: settled.reason, exit: settled.last.exit, cost: settled.last.cost, session: settled.session }, unrelatedState: state.get(reviewId).state,
+      correctiveRun: restarted.state.get(f.id).last.run, notifications: 1, collections: 1, continuations: 1, publicationCalls: f.calls });
+  }
+  const path = join(tempHome(), "publication-rejection-evidence.json"); writeJsonAtomic(path, { observations }); t.diagnostic(`publication rejection evidence: ${path}`);
+});
+
+test("collection and unavailable publication I/O remain pending and recover without another dispatch", async () => {
+  for (const operation of ["collect", "paths", "modes", "head"]) {
+    const f = await collectedArtifactFixture(), state = makeState(f.ctx.home), gh = { ...fakeGh(), ...f.ctx.gh }, notify = fakeNotify();
+    state.put(f.id, { ...f.entry, last: { run: f.job.id, exit: null } });
+    const ctx = { ...f.ctx, state, clock: f.provider.clock, config: CONFIG, git: { ...fakeGit(), ...f.ctx.git }, gh, ownLogin: "me", log: silentLog, notify, executionFor: () => f.reopen() };
+    const owner = operation === "collect" ? f.provider.transport : ctx.git;
+    const key = { collect: "collect", paths: "trackedPaths", modes: "resultModesMatch", head: "head" }[operation], original = owner[key];
+    owner[key] = async () => { throw Object.assign(new Error("temporary I/O failure"), { code: operation === "collect" ? "EXECUTION_RESULT" : "EIO" }); };
+    f.provider.observe({ state: "succeeded" }); await makeTick(ctx).tickEntry(f.id, state.get(f.id));
+    assert.equal(readJson(join(f.dir, "result-application.json")), null); assert.equal(state.get(f.id).last.exit, null);
+    assert.equal(state.get(f.id).state, STATES.running); assert.deepEqual(f.calls, []); assert.equal(notify.sent.length, 0);
+    owner[key] = original; await makeTick(ctx).tickEntry(f.id, state.get(f.id));
+    assert.equal(readJson(join(f.dir, "result-application.json")).phase, "published"); assert.equal(state.get(f.id).last.exit, 0);
+    assert.equal(f.provider.calls.filter(call => call[0] === "submit").length, 1); assert.equal(f.provider.calls.filter(call => call[0] === "continue").length, 0);
+    assert.deepEqual(f.calls, ["commit", "push", "PR"]);
+  }
+});
+
+test("a rejected result cannot settle until its blocked checkpoint is durable", async () => {
+  const f = await collectedArtifactFixture(), state = makeState(f.ctx.home), gh = fakeGh(), notify = fakeNotify();
+  f.result.files[0].afterHash = "invalid";
+  state.put(f.id, { ...f.entry, last: { run: f.job.id, exit: null } });
+  const ctx = { ...f.ctx, state, clock: f.provider.clock, config: CONFIG, git: { ...fakeGit(), ...f.ctx.git }, gh, ownLogin: "me", log: silentLog, notify, executionFor: () => f.reopen() };
+  f.provider.observe({ state: "succeeded" }); await f.collect();
+  const checkpoint = join(f.dir, "result-application.json"); mkdirSync(checkpoint);
+  await makeTick(ctx).tickEntry(f.id, state.get(f.id));
+  assert.equal(state.get(f.id).state, STATES.running); assert.equal(state.get(f.id).last.exit, null); assert.equal(notify.sent.length, 0);
+  assert.deepEqual(f.calls, []); assert.ok(lstatSync(checkpoint).isDirectory());
+  rmSync(checkpoint, { recursive: true }); await makeTick(ctx).tickEntry(f.id, state.get(f.id));
+  assert.equal(readJson(checkpoint).reason, "result-validation"); assert.equal(state.get(f.id).state, STATES.needsHuman);
+  assert.equal(state.get(f.id).last.exit, 0); assert.equal(f.provider.calls.filter(call => call[0] === "collect").length, 1);
 });
 
 async function nativeResultFixture() {
@@ -1790,7 +1916,7 @@ test("text artifacts reject filesystem, staged and committed mode changes before
     assert.equal(await f.ctx.git.head(f.entry.worktree), head);
     assert.equal((await execFileAsync("git", ["ls-files", "--stage", "-z"], { cwd: f.entry.worktree })).stdout, index);
     assert.deepEqual(f.result, manifest); assert.deepEqual(f.calls, []);
-    assert.equal(existsSync(join(f.dir, "result-application.json")), false);
+    assert.equal(readJson(join(f.dir, "result-application.json")).reason, "result-validation");
     observations.push({ source, operation, inputMode: executable ? "100755" : "100644", inputHead, head, unchanged: true,
       filesystemMode: fileMode & 0o777, index, worktree: f.entry.worktree, resultDir: f.dir });
   }
@@ -2491,7 +2617,7 @@ test("shared publication rejects terminal outcome contradictions before verifica
     f.result.outcome = { finished: true, ok: terminalState !== "succeeded" };
     await assert.rejects(reconcileExecutionResult(f.ctx, f), /contradicts the authoritative terminal root/);
     assert.deepEqual(f.calls, []); assert.equal(readFileSync(join(f.entry.worktree, "a.txt"), "utf8"), "before");
-    assert.equal(readJson(join(f.dir, "result-application.json")), null);
+    assert.equal(readJson(join(f.dir, "result-application.json")).reason, "result-validation");
   }
 });
 

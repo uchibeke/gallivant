@@ -370,6 +370,10 @@ Coordinator reconciliation also resumes the runner's persisted `killAfter`
 fallback when its original timer owner exited. The existing process-identity
 checks still refuse reused PIDs or unavailable inspection, and the same owned
 run remains cancellation-requested until its descendants are confirmed stopped.
+If a launch reply was lost, reconciliation first records exact local acceptance
+and then initiates any already-requested supported stop, even when no kill was
+previously started. Unsupported stops and mismatched jobs remain fenced; failed
+process inspection remains pending for later coordinator reconciliation.
 Read-only status/history access never signals a process.
 Cancelling after a local run has been collected preserves its success/failure,
 exit, end time, result, usage and session; only future dispatch is fenced. No
@@ -480,6 +484,15 @@ This environment separation adds no OS sandbox; configured host restrictions
 still apply. The canonical tick continues to own readiness, trusted feedback,
 freshness, receipts, conflicts, rounds and human merge boundaries. No automatic
 merge is added.
+
+Permanent publication validation failures also persist a `blocked` checkpoint
+with reason `result-validation`, retaining any previous fingerprint, applied head
+and evidence. Invalid repository/branch ownership, paths, modes, hashes or public
+text cannot be applied or retried on each poll. The canonical needs-human lane
+settles the provider's actual exit, cost and session, and an explicit same-session
+resume starts correction without clearing the rejected result. Missing collection
+results, unavailable Git metadata and ordinary I/O failures remain unresolved and
+retryable. A failed checkpoint write cannot claim durable blocking or settlement.
 
 Verification requires the recorded applied commit and a clean Git index/worktree,
 including untracked files. The existing strict Git status helper checks both
