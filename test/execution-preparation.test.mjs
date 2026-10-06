@@ -78,7 +78,7 @@ test("remote preparation rejects foreign authority, changed input and cancellati
   assert.equal(service.current(), null);
 });
 
-function fixture(provider, { question = false, repair = false, pending = false, lostReply = false, missing = false, lookupAvailable = true, unconfirmedCancel = false, failed = false } = {}) {
+function fixture(provider, { question = false, repair = false, pending = false, lostReply = false, missing = false, lookupAvailable = true, unconfirmedCancel = false, failed = false, observationCost } = {}) {
   const home = tempHome(), checkout = join(home, "checkout"); mkdirSync(checkout);
   writeFileSync(join(checkout, "package.json"), JSON.stringify({ packageManager: "npm@10", scripts: { test: "node --test", lint: "node --check index.mjs" } }));
   const preparation = { version: 1, boundary: `${provider}-fixture-text-v1`, authority: "text-only", environment: "sandbox" };
@@ -101,7 +101,7 @@ function fixture(provider, { question = false, repair = false, pending = false, 
       lastMessage: current.message, ...(failed ? { error: "provider preparation failed" } : {}) }, ...(failed ? { usage: { inputTokens: 17, api_key: "private" } } : {}) }; },
     cancel: async () => { calls.push("cancel"); return { confirmed: !unconfirmedCancel }; },
   };
-  const observe = job => job && ({ providerJobId: job.providerJobId, turnId: job.turnId, sessionId: job.sessionId, state: pending ? "running" : failed ? "failed" : "succeeded", observedAt: Date.now(), events: [] });
+  const observe = job => job && ({ providerJobId: job.providerJobId, turnId: job.turnId, sessionId: job.sessionId, state: pending ? "running" : failed ? "failed" : "succeeded", costUsd: observationCost, observedAt: Date.now(), events: [] });
   const options = id => ({ root: join(home, "runs", id.split("/").at(-1)), taskId: id, provider, account, transport, capabilities, limits: { progressMs: 0 } });
   const ctx = {
     home, log: silentLog, config: { ...CONFIG, harness: { [provider]: { account } }, deliverable: { ...CONFIG.deliverable, evaluator: "local" } }, state: makeState(home),
@@ -112,7 +112,7 @@ function fixture(provider, { question = false, repair = false, pending = false, 
   };
   let dispatches = 0;
   const reopen = () => createTaskService(ctx, { dispatch: async () => { dispatches++; throw Error("fixture must not dispatch implementation"); } });
-  return { ctx, calls, jobs, home, service: reopen(), reopen, dispatches: () => dispatches, complete: () => { pending = false; lookupAvailable = true; }, results: () => { missing = false; } };
+  return { ctx, calls, jobs, home, service: reopen(), reopen, dispatches: () => dispatches, complete: () => { pending = false; lookupAvailable = true; }, results: () => { missing = false; }, reportCost: cost => { observationCost = cost; } };
 }
 
 // Use existing accepted PRD selections with test-only remote capabilities. The
@@ -226,4 +226,17 @@ test("failed preparation retrieves diagnostics and usage before blocking readine
   r = await f.reopen().resume({ taskId: r.taskId, expectedRevision: r.revision });
   assert.equal(r.status, "blocked"); assert.deepEqual(f.calls, before);
   assert.equal(f.calls.filter(c => c === "submit").length, 1); assert.equal(f.dispatches(), 0);
+});
+
+test("preparation settlement retains known cost across lower observations and null result usage", async () => {
+  const f = fixture("codex", { missing: true, observationCost: 0.6 });
+  let r = await f.service.prepare({ text: "Add CSV export.", harness: "codex", requestId: "preparation-cost" });
+  assert.equal(r.status, "preparing"); assert.equal(r.preparation.attempts[0].execution.costUsd, 0.6);
+  f.reportCost(0.2); r = await f.reopen().resume({ taskId: r.taskId, expectedRevision: r.revision });
+  assert.equal(r.status, "preparing"); assert.equal(r.preparation.attempts[0].execution.costUsd, 0.6);
+  f.reportCost(null); f.results(); r = await f.reopen().resume({ taskId: r.taskId, expectedRevision: r.revision });
+  assert.equal(r.status, "ready"); assert.equal(r.preparation.attempts[0].cost, 0.6);
+  assert.equal(r.preparation.attempts[0].execution.costUsd, 0.6);
+  const calls = [...f.calls]; assert.equal(f.reopen().inspect({ taskId: r.taskId }).preparation.attempts[0].cost, 0.6);
+  assert.deepEqual(f.calls, calls); assert.equal(f.calls.filter(c => c === "submit").length, 1); assert.equal(f.dispatches(), 0);
 });

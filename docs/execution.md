@@ -285,6 +285,13 @@ Remote dispatch requires a positive reservation and positive finite remaining
 allowance. Reservations accumulate durably, including unknown usage; they are not
 released on missing cost. Accounting charges the greater of each reservation and
 its reported usage, preserves higher prior usage and deduplicates repeated reads.
+Execution metadata and settlement outcomes retain the maximum finite nonnegative
+cost reported for the exact run. Missing, invalid or lower observations and
+collected estimates cannot erase known spend. Private results preserve the
+provider's reported cost; `outcome(runId)` and the tracker result projection
+combine it with that run's durable operation cost, including after restart or
+when a subsequent turn is active. These reads never poll a provider.
+Older regressed projections recover known cost from their owned operation.
 Unknown cost remains null and is never reported as zero.
 An exhausted allowance refuses further dispatch. Future providers must enforce
 any mandatory hard cap in their declared capability; this boundary does not

@@ -1209,3 +1209,106 @@ test("a stop after collected terminal results quarantines both success and failu
     await assert.rejects(f.reopen().collect(), { code: "EXECUTION_QUARANTINED" });
   }
 });
+
+for (const provider of ["openai-agents", "codex-cloud"]) {
+  test(`${provider} fixture: cumulative cost survives omitted and lower observations, cached results and continuation`, async () => {
+    for (const ok of [true, false]) for (const cost of [null, 0.2, 0.8]) {
+      const f = remote(provider), job = await f.service.submit(input);
+      f.observe({ costUsd: 0.6 }); await f.service.reconcile({ force: true });
+      for (const costUsd of [undefined, null, 0.2, -1, "0.9", Infinity]) {
+        f.clock.advance(1); f.observe({ costUsd }); await f.reopen().reconcile({ force: true });
+        assert.equal(f.service.current().execution.costUsd, 0.6);
+        assert.equal(f.service.outcome(job.id).cost, 0.6);
+        assert.equal(f.service.state().allowance.chargedUsd, 0.6);
+        assert.equal(readJson(join(f.service.dirOf(job.id), "job.json")).execution.costUsd, 0.6);
+      }
+      f.observe({ state: ok ? "succeeded" : "failed", costUsd: null }); await f.service.reconcile({ force: true });
+      const before = f.service.state(), collect = f.transport.collect;
+      f.transport.collect = async req => ({ ...await collect(req), outcome: { finished: true, ok, cost, denials: [] } });
+      const result = await f.service.collect(), known = Math.max(0.6, cost ?? 0);
+      assert.equal(result.outcome.cost, cost); // Preserve provider-reported metadata in the private result.
+      assert.equal(f.service.current().execution.costUsd, known); assert.equal(f.service.outcome(job.id).cost, known);
+      const bytes = readFileSync(join(f.service.dirOf(job.id), "result.json"), "utf8");
+      // Recover an older regressed projection and a lost collection acknowledgement.
+      before.current.execution.costUsd = null;
+      writeJsonAtomic(join(f.root, "execution.json"), before);
+      assert.equal(f.reopen().inspect().execution.costUsd, 0.6);
+      await f.reopen().collect(); await f.reopen().collect();
+      assert.equal(f.service.outcome(job.id).cost, known); assert.equal(f.service.current().execution.costUsd, known);
+      assert.equal(f.service.state().operations.first.costUsd, known); assert.equal(f.service.state().allowance.chargedUsd, known);
+      assert.equal(readFileSync(join(f.service.dirOf(job.id), "result.json"), "utf8"), bytes);
+      const next = await f.service.continue({ ...input, operationId: "next", sessionId: "session-1" });
+      assert.equal(next.execution.costUsd, null); assert.equal(f.service.outcome(next.id).cost, null);
+      assert.equal(f.service.outcome(job.id).cost, known); assert.equal(f.service.outcome("unowned-run").cost, null);
+      assert.equal(f.calls.filter(c => c[0] === "collect").length, 1); assert.equal(f.calls.filter(c => c[0] === "continue").length, 1);
+    }
+  });
+}
+
+test("unknown cost stays null until a valid zero and cancellation retains known spend", async () => {
+  const unknown = remote(), job = await unknown.service.submit(input);
+  for (const costUsd of [undefined, null, -1, "0.5", NaN, Infinity]) {
+    unknown.observe({ costUsd }); await unknown.service.reconcile({ force: true });
+    assert.equal(unknown.service.current().execution.costUsd, null); assert.equal(unknown.service.outcome(job.id).cost, null);
+  }
+  unknown.observe({ costUsd: 0 }); await unknown.service.reconcile({ force: true });
+  assert.equal(unknown.service.outcome(job.id).cost, 0); assert.equal(unknown.service.state().operations.first.costUsd, 0);
+  for (const confirmedByInspect of [true, false]) {
+    const f = remote(), run = await f.service.submit(input);
+    f.observe({ costUsd: 0.4 }); await f.service.reconcile({ force: true });
+    if (confirmedByInspect) { f.observe({ state: "cancelled", costUsd: null }); await f.service.reconcile({ force: true }); }
+    else await f.service.cancel();
+    assert.equal(f.reopen().current().execution.costUsd, 0.4); assert.equal(f.reopen().outcome(run.id).cost, 0.4);
+    assert.equal(f.service.state().allowance.chargedUsd, 0.4);
+  }
+});
+
+test("canonical settlement preserves inspection cost when success or failure results omit usage", async () => {
+  for (const ok of [true, false]) {
+    const f = remote(), job = await f.service.submit(input), home = tempHome(), state = makeState(home), id = "acme/widget/remote", gh = fakeGh();
+    f.observe({ costUsd: 0.55 }); await f.service.reconcile({ force: true });
+    const entry = newEntry({ repo: "acme/widget", harness: "openai-agents", branch: "work/remote", pr: 1, state: STATES.fixing, nowIso: T0 });
+    state.put(id, { ...entry, cursor: { ...entry.cursor, fixed_sha: gh.data.pr.headRefOid }, last: { run: job.id, exit: null } });
+    f.observe({ state: ok ? "succeeded" : "failed", costUsd: null });
+    const collect = f.transport.collect;
+    f.transport.collect = async req => ({ ...await collect(req), outcome: { finished: true, ok, cost: null, denials: [], ...(ok ? {} : { error: "provider failed" }) } });
+    const ctx = { home, config: CONFIG, clock: f.clock, state, gh, ownLogin: "me", git: fakeGit(), log: silentLog, notify: fakeNotify(), executionFor: () => f.reopen(), readPrd: () => null };
+    await makeTick(ctx).tickEntry(id, state.get(id));
+    assert.equal(state.get(id).execution.costUsd, 0.55); assert.equal(state.get(id).last.cost, 0.55);
+    assert.equal(state.get(id).last.exit, ok ? 0 : 1);
+    await makeTick(ctx).tickEntry(id, state.get(id));
+    assert.equal(state.get(id).last.cost, 0.55); assert.equal(f.calls.filter(c => c[0] === "collect").length, 1);
+  }
+});
+
+test("local settlement and replay retain the owned operation cost without inventing unknown spend", async () => {
+  const root = tempHome(); let job = null;
+  const runner = { current: () => job, lines: () => ['{"type":"turn.completed"}'], annotate() {},
+    start: async (name, _cmd, _args, options) => job = { id: options.runId, name, exit: 0, running: false }, settle: () => job };
+  const service = makeExecution({ root, taskId: "local/cost", provider: "codex", runner });
+  const run = await service.submit({ ...input, spec: { cmd: "fixture", args: [], options: {} } });
+  assert.equal(service.outcome(run.id).cost, null);
+  const before = service.state(); before.operations.first.costUsd = 0.45; before.current.execution.costUsd = null;
+  writeJsonAtomic(join(root, "execution.json"), before);
+  service.settle(run.id, () => 0); service.settle(run.id, () => 0);
+  assert.equal(service.current().execution.costUsd, 0.45); assert.equal(service.outcome(run.id).cost, 0.45);
+  assert.equal(service.state().allowance.chargedUsd, 0.45);
+  await service.collect(); assert.equal(service.outcome(run.id).cost, 0.45);
+});
+
+test("result route reports the owned cumulative cost without polling or rewriting private estimates", async () => {
+  const f = remote(), home = tempHome(), id = "acme/widget/remote", root = join(home, "runs", idSlug(id));
+  const service = makeExecution({ root, taskId: id, provider: "openai-agents", account: "test", transport: f.transport, capabilities: f.capabilities, clock: f.clock });
+  const job = await service.submit(input); f.observe({ costUsd: 0.6 }); await service.reconcile({ force: true });
+  f.observe({ state: "succeeded", costUsd: null }); await service.reconcile({ force: true }); await service.collect();
+  await service.continue({ ...input, operationId: "next", sessionId: "session-1" });
+  const state = makeState(home); state.put(id, newEntry({ repo: "acme/widget", harness: "openai-agents", branch: "work/remote", state: STATES.running, nowIso: T0 }));
+  const response = { writeHead(code) { this.code = code; }, end(body) { this.body = body; } }, before = f.calls.length;
+  const bytes = readFileSync(join(service.dirOf(job.id), "result.json"), "utf8");
+  for (let i = 0; i < 3; i++) {
+    routes["GET /api/run/result"]({ home, state, executionFor: () => service }, {}, response, new URL(`http://localhost/api/run/result?id=${id}&run=${job.id}`));
+    assert.equal(response.code, 200); assert.equal(JSON.parse(response.body).outcome.cost, 0.6);
+  }
+  assert.equal(service.result(job.id).outcome.cost, null); assert.equal(service.current().execution.costUsd, null);
+  assert.equal(readFileSync(join(service.dirOf(job.id), "result.json"), "utf8"), bytes); assert.equal(f.calls.length, before);
+});
