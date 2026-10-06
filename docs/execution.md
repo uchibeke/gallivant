@@ -208,6 +208,15 @@ Foreign job/session/root-turn observations refuse reconciliation. Unavailable
 status carries timestamps, retry time and recovery action rather than fabricated
 liveness. Terminal collected results survive log removal.
 
+Local settlement, collection, cached replay and session reads apply the same
+session ownership rule before adopting an identity. A reported ID must match
+the preassigned or previously discovered session; omitted IDs retain it. An
+anonymous first turn may establish a nonempty string ID. Legacy runs use their
+recorded registry session, and submission acknowledgements retain preassigned
+identities across restart. A mismatch raises `EXECUTION_RESULT`, rejects result
+adoption and prevents continuation into the foreign session. Restore
+the exact owned stream/cache evidence before retrying; never transplant sessions.
+
 ## Scheduling and limits
 
 Configuration may override the integer `execution` limits validated by
@@ -410,7 +419,13 @@ that cancellation key idempotent. An acknowledged unconfirmed stop is inspected
 until cancellation is authoritative, without resending every tick. Unsupported
 stops never call the transport. Natural completion still quarantines the output
 and records `terminal`, without claiming cancellation. Applied control receipts
-are updated when the matching run's later reconciliation confirms cancellation.
+are updated when the matching run's later reconciliation confirms cancellation
+or observes natural completion. `cancel()` returns `{confirmed: false,
+terminal: true}` for an already ended remote root, distinguishing it from an
+unconfirmed live stop. The operator task is stopped with reason `cancelled` and
+a receipt stating that provider execution had already completed; its historical
+provider success/failure, exit, completion time and collected result remain
+unchanged. Existing pending receipts are repaired only for their matching run.
 No read-only client drives this recovery. Interrupted continuity requires native
 capability and exact session ownership.
 Cancelled/timed-out work cannot overlap a replacement; late results are

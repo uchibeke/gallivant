@@ -1,0 +1,504 @@
+{
+  "version": 1,
+  "task_id": "task-df42674c6251c85b0edef13f",
+  "source_parent": "71bf4dfe570b1ed14d494de1b5a49d2c1dec1db0",
+  "review": {
+    "id": 5427103531,
+    "inline_comment_ids": [
+      4194245434,
+      4194245445
+    ]
+  },
+  "commands": [
+    {
+      "command": "npm test",
+      "exit": 0,
+      "raw_log": "/tmp/execution-session-terminal-tests.txt",
+      "sha256": "a607169491120f2f693cf44cc718f603b117cc5189a7d54164e3f204ee4e80ed",
+      "tests": 1066,
+      "passed": 1066,
+      "failed": 0
+    },
+    {
+      "command": "npm run lint",
+      "exit": 0,
+      "raw_log": "/tmp/execution-session-terminal-lint.txt",
+      "sha256": "8c7790de3f018fb4580f18ac70e1b355a0f76f522dd73acbdaa63632feffcecc"
+    },
+    {
+      "command": "npm run test:execution-backends",
+      "exit": 0,
+      "raw_log": "/tmp/execution-session-terminal-backends.txt",
+      "sha256": "36049a4b221a3886a199b3286f6fb1de7196df7c3aa7a4124bdc751db679a602",
+      "tests": 364,
+      "passed": 364,
+      "failed": 0
+    },
+    {
+      "command": "git diff --check",
+      "exit": 0,
+      "raw_log": "/tmp/execution-session-terminal-diff-check.txt",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    }
+  ],
+  "artifact_hashes": {
+    "lib/execution.mjs": "d18bad86a7e904d1dcf792154544330f6ba67320c3959111835e2a476a146a35",
+    "lib/control.mjs": "ee0ab1bccbdb90a91e14ad0f7f2f53c60a05e8de548b9277bae2817d5b911e5e",
+    "lib/tick.mjs": "13e9b35e284ea7175363cf9a1ca510e88358b0b22e800cc08bae848a82f484fd",
+    "lib/task_prepare.mjs": "f0f27738e208f174aa89dba3a6f70f382cf7e03abe541df5d1854aed4adb9492",
+    "test/execution-backends.test.mjs": "e43949f21149f293f2bea3fc9e508dce14d0419dd656b9def5ee5e2221b2c417",
+    "docs/execution.md": "775b503b49655ec9127f52df307c32baa2431e1f01e0fbb134c941a4516ee775"
+  },
+  "focused_checks": [
+    {
+      "command": "node --test --test-name-pattern='local settlement, collection|local session ownership rejects|legacy local session readers|remote terminal cancellation controls|terminal control reconciliation ignores|natural completion after a pending stop|contradictory terminal inspection|stop during failed result|stop after collected terminal' test/execution-backends.test.mjs",
+      "exit": 0,
+      "raw_log": "/tmp/execution-session-terminal-focused.txt",
+      "sha256": "5f09732c33173bb7db5f693f1ce90f708f8cd7810799dcc65952df8ce4a8acb3",
+      "tests": 9,
+      "passed": 9,
+      "failed": 0
+    }
+  ],
+  "regression_reproduction": {
+    "command": "node --test --test-name-pattern='local settlement, collection|local session ownership rejects|legacy local session readers|remote terminal cancellation controls|terminal control reconciliation ignores' test/execution-backends.test.mjs",
+    "exit": 1,
+    "raw_log": "/tmp/execution-session-terminal-red.txt",
+    "sha256": "535add86ea4fa8b9740e815108a110682d98ae9dae632ce3a917b938024ca825",
+    "tests": 5,
+    "passed": 1,
+    "failed": 4,
+    "expected_failure": true
+  },
+  "source_and_output_review": [
+    {
+      "rule": "Reported local sessions may establish an anonymous first session but cannot replace a preassigned or previously discovered owned identity before caching, replay or native continuation.",
+      "files": [
+        "lib/execution.mjs",
+        "lib/execution_io.mjs",
+        "lib/control.mjs",
+        "lib/task_prepare.mjs",
+        "lib/tick.mjs",
+        "lib/commands/resume.mjs"
+      ],
+      "boundaries_checked": [
+        "Local settlement validates the adapter session using ownsProviderSession before writing result.json or adopting session/cost/outcome metadata.",
+        "Fresh collection and saved-cache replay validate local session ownership. Omitted IDs retain the owned session; malformed or foreign reported IDs raise EXECUTION_RESULT without a new cache or dispatch.",
+        "Read-only sessionFrom validates both cached and parsed local identities. Legacy continuation uses the recorded registry session; acknowledgement snapshots anchor preassigned sessions even after pre-fix current/cache corruption.",
+        "Local control interrupt and task preparation use the boundary session reader when available, preserving legacy raw-runner fallbacks.",
+        "Claude and Gemini preassigned sessions and continued Codex/OpenCode sessions reject foreign IDs. Goose emits no session ID and keeps its preassigned identity. Initial anonymous Codex/OpenCode runs may discover their session normally.",
+        "Settlement, collection, cancellation-before-collection, replay and restart retain ownership and deny a foreign continuation; restoring exact owned evidence permits collection without a replacement dispatch.",
+        "Remote session ownership, acceptance recovery, operation idempotency, result artifact validation and private log retention retain their existing contracts."
+      ],
+      "regressions": [
+        "local settlement, collection and cached replay reject foreign sessions before adopting results",
+        "local session ownership rejects malformed IDs and retains omitted IDs or first discovered sessions",
+        "legacy local session readers cannot redirect continuation away from the recorded registry session"
+      ]
+    },
+    {
+      "rule": "A stopped task and its provider run are separate facts: natural terminal completion ends cancellation waiting without claiming a provider stop or rewriting a collected outcome.",
+      "files": [
+        "lib/execution.mjs",
+        "lib/control.mjs",
+        "lib/tick.mjs",
+        "lib/task_prepare.mjs",
+        "docs/execution.md"
+      ],
+      "boundaries_checked": [
+        "Already collected remote success/failure returns confirmed:false, terminal:true, keeps the future-dispatch fence and quarantine, and performs no transport cancellation.",
+        "Cancellation no longer replaces the recorded exit of an already collected terminal result. Success/failure, completion time, session, known cost and cached result survive restart and registry settlement.",
+        "Operator cancellation and remote timeout share cancellationStatus. Confirmed provider cancellation, already-ended work and unconfirmed live stops retain distinct truthful receipts.",
+        "Periodic/startup reconciliation repairs applied pending receipts after natural completion, only for the exact recorded stop_run or legacy last.run. An unrelated terminal root cannot satisfy the request.",
+        "A pending cancellation that naturally ends is quarantined without collection or publication. Existing preparation recovery already accepts confirmed or terminal cancellation metadata.",
+        "Unsupported/unknown-acceptance stops, pending/retried cancellation keys and local timeout recovery remain unchanged; no replacement paid work or independent read-only polling is introduced."
+      ],
+      "regressions": [
+        "remote terminal cancellation controls finish without claiming a provider stop and preserve collected outcomes",
+        "terminal control reconciliation ignores an unrelated completed root",
+        "natural completion after a pending stop quarantines results without claiming cancellation",
+        "cancellation after a contradictory terminal inspection quarantines the known completed root without a stop call",
+        "a stop during failed result retrieval quarantines the completed root without a cancellation call",
+        "a stop after collected terminal results quarantines both success and failure caches"
+      ]
+    }
+  ],
+  "representative_output": {
+    "evidence_kind": "Deterministic local adapter streams/cache replay and fake remote transport controls; offline fixtures do not qualify live model access or installed plugins.",
+    "reports": [
+      {
+        "label": "local-session",
+        "report_path": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-ilLAGD/local-owned-session-evidence.json",
+        "report_sha256": "86c80b39eb4ea3565048dd8b82d41958dccc0829b986ee7745d4b3a44547ae90",
+        "cases": 16,
+        "observations": [
+          {
+            "provider": "claude",
+            "path": "settle",
+            "runId": "run-8cc2bf08-888a-418a-9509-527392742463",
+            "owned": "22222222-2222-4222-8222-222222222222",
+            "stopped": null,
+            "starts": 1
+          },
+          {
+            "provider": "claude",
+            "path": "collect",
+            "runId": "run-733d6fbc-66d4-4cc4-aeb7-a42c96f6c5d9",
+            "owned": "22222222-2222-4222-8222-222222222222",
+            "stopped": null,
+            "starts": 1
+          },
+          {
+            "provider": "claude",
+            "path": "cancel",
+            "runId": "run-1439aa6e-b65f-43b9-a8d3-305501927020",
+            "owned": "22222222-2222-4222-8222-222222222222",
+            "stopped": "operator-cancelled",
+            "starts": 1
+          },
+          {
+            "provider": "claude",
+            "path": "cache",
+            "runId": "run-77aca372-2913-4cc3-a7b7-bf560d0a24bc",
+            "owned": "22222222-2222-4222-8222-222222222222",
+            "stopped": null,
+            "starts": 1
+          },
+          {
+            "provider": "gemini",
+            "path": "settle",
+            "runId": "run-c400698e-cf71-4c14-bc38-3b54543e1271",
+            "owned": "22222222-2222-4222-8222-222222222222",
+            "stopped": null,
+            "starts": 1
+          },
+          {
+            "provider": "gemini",
+            "path": "collect",
+            "runId": "run-f0086486-adc4-4cfb-8ca6-9f6a14e8faaf",
+            "owned": "22222222-2222-4222-8222-222222222222",
+            "stopped": null,
+            "starts": 1
+          },
+          {
+            "provider": "gemini",
+            "path": "cancel",
+            "runId": "run-7d233f83-103a-4cd7-b3e2-28a07b2caeaf",
+            "owned": "22222222-2222-4222-8222-222222222222",
+            "stopped": "operator-cancelled",
+            "starts": 1
+          },
+          {
+            "provider": "gemini",
+            "path": "cache",
+            "runId": "run-5ebd0f0a-4556-447e-b13e-501e8045a1a3",
+            "owned": "22222222-2222-4222-8222-222222222222",
+            "stopped": null,
+            "starts": 1
+          },
+          {
+            "provider": "codex",
+            "path": "settle",
+            "runId": "run-599bed74-7b33-4589-a53c-613910caab87",
+            "owned": "22222222-2222-4222-8222-222222222222",
+            "stopped": null,
+            "starts": 1
+          },
+          {
+            "provider": "codex",
+            "path": "collect",
+            "runId": "run-4470aea4-1702-4b29-9594-d7cdea43c261",
+            "owned": "22222222-2222-4222-8222-222222222222",
+            "stopped": null,
+            "starts": 1
+          },
+          {
+            "provider": "codex",
+            "path": "cancel",
+            "runId": "run-5be2fb2d-aebe-4dd1-8625-300c3cde1ce3",
+            "owned": "22222222-2222-4222-8222-222222222222",
+            "stopped": "operator-cancelled",
+            "starts": 1
+          },
+          {
+            "provider": "codex",
+            "path": "cache",
+            "runId": "run-78613ca7-bb07-40a2-8fca-7668fd5ade20",
+            "owned": "22222222-2222-4222-8222-222222222222",
+            "stopped": null,
+            "starts": 1
+          },
+          {
+            "provider": "opencode",
+            "path": "settle",
+            "runId": "run-e4c22726-6b5c-46f9-a434-b12c05048310",
+            "owned": "ses_ownedsession",
+            "stopped": null,
+            "starts": 1
+          },
+          {
+            "provider": "opencode",
+            "path": "collect",
+            "runId": "run-70a5310d-3c73-4c93-ad9d-0e61794a71d0",
+            "owned": "ses_ownedsession",
+            "stopped": null,
+            "starts": 1
+          },
+          {
+            "provider": "opencode",
+            "path": "cancel",
+            "runId": "run-dcbff8d2-8860-409d-ac1d-042668f6ffc4",
+            "owned": "ses_ownedsession",
+            "stopped": "operator-cancelled",
+            "starts": 1
+          },
+          {
+            "provider": "opencode",
+            "path": "cache",
+            "runId": "run-5792fae8-e7cc-435b-82b3-f1ce5712adef",
+            "owned": "ses_ownedsession",
+            "stopped": null,
+            "starts": 1
+          }
+        ],
+        "file_pointers": [
+          {
+            "execution": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-3s5hm7/runs/execution.json",
+            "result": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-3s5hm7/runs/run-8cc2bf08-888a-418a-9509-527392742463/result.json"
+          },
+          {
+            "execution": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-JEtqvG/runs/execution.json",
+            "result": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-JEtqvG/runs/run-733d6fbc-66d4-4cc4-aeb7-a42c96f6c5d9/result.json"
+          },
+          {
+            "execution": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-i3ajoG/runs/execution.json",
+            "result": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-i3ajoG/runs/run-1439aa6e-b65f-43b9-a8d3-305501927020/result.json"
+          },
+          {
+            "execution": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-U3kodz/runs/execution.json",
+            "result": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-U3kodz/runs/run-77aca372-2913-4cc3-a7b7-bf560d0a24bc/result.json"
+          },
+          {
+            "execution": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-4Ga2Un/runs/execution.json",
+            "result": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-4Ga2Un/runs/run-c400698e-cf71-4c14-bc38-3b54543e1271/result.json"
+          },
+          {
+            "execution": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-AlyTHj/runs/execution.json",
+            "result": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-AlyTHj/runs/run-f0086486-adc4-4cfb-8ca6-9f6a14e8faaf/result.json"
+          },
+          {
+            "execution": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-fpy2Bx/runs/execution.json",
+            "result": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-fpy2Bx/runs/run-7d233f83-103a-4cd7-b3e2-28a07b2caeaf/result.json"
+          },
+          {
+            "execution": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-28NYSX/runs/execution.json",
+            "result": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-28NYSX/runs/run-5ebd0f0a-4556-447e-b13e-501e8045a1a3/result.json"
+          },
+          {
+            "execution": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-jXn1iD/runs/execution.json",
+            "result": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-jXn1iD/runs/run-599bed74-7b33-4589-a53c-613910caab87/result.json"
+          },
+          {
+            "execution": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-nljMFR/runs/execution.json",
+            "result": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-nljMFR/runs/run-4470aea4-1702-4b29-9594-d7cdea43c261/result.json"
+          },
+          {
+            "execution": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-fXQo8A/runs/execution.json",
+            "result": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-fXQo8A/runs/run-5be2fb2d-aebe-4dd1-8625-300c3cde1ce3/result.json"
+          },
+          {
+            "execution": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-0AkSoH/runs/execution.json",
+            "result": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-0AkSoH/runs/run-78613ca7-bb07-40a2-8fca-7668fd5ade20/result.json"
+          },
+          {
+            "execution": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-ELoDZX/runs/execution.json",
+            "result": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-ELoDZX/runs/run-e4c22726-6b5c-46f9-a434-b12c05048310/result.json"
+          },
+          {
+            "execution": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-3E15oi/runs/execution.json",
+            "result": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-3E15oi/runs/run-70a5310d-3c73-4c93-ad9d-0e61794a71d0/result.json"
+          },
+          {
+            "execution": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-yQWsH4/runs/execution.json",
+            "result": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-yQWsH4/runs/run-dcbff8d2-8860-409d-ac1d-042668f6ffc4/result.json"
+          },
+          {
+            "execution": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-x8gP5a/runs/execution.json",
+            "result": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-x8gP5a/runs/run-5792fae8-e7cc-435b-82b3-f1ce5712adef/result.json"
+          }
+        ]
+      },
+      {
+        "label": "terminal-control",
+        "report_path": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-LT5pPS/terminal-control-evidence.json",
+        "report_sha256": "a084342f218eff15e88ceef4855ab2812283d8e457d94ae775eaa940a6d0eaa7",
+        "cases": 8,
+        "observations": [
+          {
+            "provider": "openai-agents",
+            "ok": true,
+            "timing": "collected",
+            "runId": "run-f4b5d468-9411-4c44-ab81-495c112abc38",
+            "reason": "cancelled",
+            "message": "Further dispatch stopped; provider execution had already completed.",
+            "exit": 0,
+            "state": "succeeded",
+            "cancellation": "terminal",
+            "session": "session-1",
+            "cost": 0.4,
+            "stops": 0
+          },
+          {
+            "provider": "openai-agents",
+            "ok": true,
+            "timing": "pending",
+            "runId": "run-d60b1312-7b45-4ade-93f9-5a7d061052c7",
+            "reason": "cancelled",
+            "message": "Further dispatch stopped; provider execution had already completed.",
+            "exit": 1,
+            "state": "succeeded",
+            "cancellation": "terminal",
+            "session": "session-1",
+            "cost": 0.4,
+            "stops": 1
+          },
+          {
+            "provider": "openai-agents",
+            "ok": false,
+            "timing": "collected",
+            "runId": "run-0cde29eb-8b41-4b37-baf5-5888a388db78",
+            "reason": "cancelled",
+            "message": "Further dispatch stopped; provider execution had already completed.",
+            "exit": 1,
+            "state": "failed",
+            "cancellation": "terminal",
+            "session": "session-1",
+            "cost": 0.4,
+            "stops": 0
+          },
+          {
+            "provider": "openai-agents",
+            "ok": false,
+            "timing": "pending",
+            "runId": "run-cd116692-99be-4adf-9595-2dce60178cfa",
+            "reason": "cancelled",
+            "message": "Further dispatch stopped; provider execution had already completed.",
+            "exit": 1,
+            "state": "failed",
+            "cancellation": "terminal",
+            "session": "session-1",
+            "cost": 0.4,
+            "stops": 1
+          },
+          {
+            "provider": "codex-cloud",
+            "ok": true,
+            "timing": "collected",
+            "runId": "run-07f88ed2-6f49-4cf5-88f8-8cde222fc065",
+            "reason": "cancelled",
+            "message": "Further dispatch stopped; provider execution had already completed.",
+            "exit": 0,
+            "state": "succeeded",
+            "cancellation": "terminal",
+            "session": "session-1",
+            "cost": 0.4,
+            "stops": 0
+          },
+          {
+            "provider": "codex-cloud",
+            "ok": true,
+            "timing": "pending",
+            "runId": "run-c680dcd8-10d6-4573-86e9-5b4ecfe69d92",
+            "reason": "cancelled",
+            "message": "Further dispatch stopped; provider execution had already completed.",
+            "exit": 1,
+            "state": "succeeded",
+            "cancellation": "terminal",
+            "session": "session-1",
+            "cost": 0.4,
+            "stops": 1
+          },
+          {
+            "provider": "codex-cloud",
+            "ok": false,
+            "timing": "collected",
+            "runId": "run-34602f57-fa20-4bbc-83f4-78e841c8ac68",
+            "reason": "cancelled",
+            "message": "Further dispatch stopped; provider execution had already completed.",
+            "exit": 1,
+            "state": "failed",
+            "cancellation": "terminal",
+            "session": "session-1",
+            "cost": 0.4,
+            "stops": 0
+          },
+          {
+            "provider": "codex-cloud",
+            "ok": false,
+            "timing": "pending",
+            "runId": "run-76455134-a1c5-4b95-b574-cb2169601732",
+            "reason": "cancelled",
+            "message": "Further dispatch stopped; provider execution had already completed.",
+            "exit": 1,
+            "state": "failed",
+            "cancellation": "terminal",
+            "session": "session-1",
+            "cost": 0.4,
+            "stops": 1
+          }
+        ],
+        "file_pointers": [
+          {
+            "execution": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-W14dJn/execution.json",
+            "registry": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-6VXX7m/state.json",
+            "result": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-W14dJn/run-f4b5d468-9411-4c44-ab81-495c112abc38/result.json"
+          },
+          {
+            "execution": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-AkD7jo/execution.json",
+            "registry": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-5nqNQP/state.json"
+          },
+          {
+            "execution": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-jp1Uce/execution.json",
+            "registry": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-MaSnZW/state.json",
+            "result": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-jp1Uce/run-0cde29eb-8b41-4b37-baf5-5888a388db78/result.json"
+          },
+          {
+            "execution": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-EICDgr/execution.json",
+            "registry": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-JnTeNA/state.json"
+          },
+          {
+            "execution": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-KBFr1D/execution.json",
+            "registry": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-Cx99Av/state.json",
+            "result": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-KBFr1D/run-07f88ed2-6f49-4cf5-88f8-8cde222fc065/result.json"
+          },
+          {
+            "execution": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-lAZ7Er/execution.json",
+            "registry": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-kvLyG8/state.json"
+          },
+          {
+            "execution": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-tkaW4m/execution.json",
+            "registry": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-UxCbP2/state.json",
+            "result": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-tkaW4m/run-34602f57-fa20-4bbc-83f4-78e841c8ac68/result.json"
+          },
+          {
+            "execution": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-PY1kTB/execution.json",
+            "registry": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-2GPLVS/state.json"
+          }
+        ]
+      }
+    ]
+  },
+  "external_qualification": {
+    "mandatory_live_prerequisites": [],
+    "live_paid_calls": 0,
+    "native_codex_preparation_qualified": false,
+    "remote_provider_available": {
+      "openai-agents": false,
+      "codex-cloud": false
+    },
+    "installed_plugin_qualified": false,
+    "model_access_exercised": false,
+    "browser_capture_required": false,
+    "remedy": "Complete the independent native preparation adapter and its limited-authority evidence before registry integration. Later production transports require implemented adapters, credentials, demonstrated model access and authorized bounded live evidence; preserve model/provider defaults and sandbox permissions."
+  }
+}

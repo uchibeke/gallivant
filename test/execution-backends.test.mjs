@@ -23,7 +23,7 @@ import { acquireProcessLock } from "../lib/daemon.mjs";
 import { makeGit, GIT_PATH_LIMITS } from "../lib/git.mjs";
 import { execFileAsync } from "../lib/gh.mjs";
 import { requestControl, applyControl, cancelControl, controlFailure } from "../lib/control.mjs";
-import { tempHome, makeClock, CONFIG, T0, fakeGh, fakeNotify, silentLog, fakeGit, fakeCredential, fakeIdentity, fakeRunner, prFixture, comment, harnessBin, GOOD_PRD, codexLines, claudeResultLines } from "./helpers.mjs";
+import { tempHome, makeClock, CONFIG, T0, fakeGh, fakeNotify, silentLog, fakeGit, fakeCredential, fakeIdentity, fakeRunner, prFixture, comment, harnessBin, GOOD_PRD, codexLines, claudeResultLines, geminiLines, opencodeLines, gooseLines } from "./helpers.mjs";
 const allowance = { remainingUsd: 1, reservedUsd: 0.1 };
 const input = { operationId: "first", inputHead: "a".repeat(40), allowance };
 const sha = text => createHash("sha256").update(text).digest("hex");
@@ -728,6 +728,89 @@ function localTimeoutFixture({ immediate = false, provider = "codex" } = {}) {
   const open = (options = {}) => makeExecution({ root, taskId: id, provider, runner, clock, legacySessionId: session, ...options });
   return { home, root, clock, id, session, runner, stops, open, setDescendants: value => { descendants = value; }, setInspectable: value => { inspectable = value; } };
 }
+
+const localSessionLines = (provider, session) => provider === "claude"
+  ? claudeResultLines().map(line => { const event = JSON.parse(line); if (event.type === "system") event.session_id = session; return JSON.stringify(event); })
+  : provider === "gemini" ? geminiLines({ session }) : provider === "opencode" ? opencodeLines({ session })
+    : provider === "goose" ? gooseLines() : codexLines({ thread: session });
+
+test("local settlement, collection and cached replay reject foreign sessions before adopting results", async t => {
+  const evidence = [];
+  for (const provider of ["claude", "gemini", "codex", "opencode"]) for (const path of ["settle", "collect", "cancel", "cache"]) {
+    const f = localTimeoutFixture({ provider }), owned = provider === "opencode" ? "ses_ownedsession" : f.session;
+    const service = f.open(), job = await service.submit({ operationId: "owned", recordedSessionId: owned, spec: { cmd: "offline-cli-fixture", args: [], options: {} } });
+    f.runner.finish(localSessionLines(provider, path === "cache" ? owned : "foreign-session"), { exit: 0 });
+    await service.reconcile();
+    const resultFile = join(f.root, job.id, "result.json");
+    if (path === "cache") writeJsonAtomic(resultFile, { taskId: f.id, runId: job.id, sessionId: "foreign-session", outcome: { finished: true, ok: true, cost: null, lastMessage: "foreign cached result" } });
+    const cached = path === "cache" ? readFileSync(resultFile, "utf8") : null;
+    assert.throws(() => service.sessionFrom(job.id), { code: "EXECUTION_RESULT" });
+    if (path === "settle") assert.throws(() => service.settle(job.id), { code: "EXECUTION_RESULT" });
+    else await assert.rejects(service[path === "cache" ? "collect" : path](), { code: "EXECUTION_RESULT" });
+    assert.equal(service.state().current.execution.sessionId, owned);
+    assert.equal(service.state().current.execution.collected, false);
+    assert.equal(path === "cache" ? readFileSync(resultFile, "utf8") : existsSync(resultFile), path === "cache" ? cached : false);
+    assert.deepEqual(f.stops, []);
+    await assert.rejects(service.continue({ operationId: "foreign-next", sessionId: "foreign-session", spec: {} }), { code: path === "cancel" ? "EXECUTION_STOPPED" : "BUSY" });
+    assert.equal(f.runner.started.length, 1);
+    const restarted = f.open();
+    f.runner.started[0].lines = localSessionLines(provider, owned);
+    if (path === "cache") writeJsonAtomic(resultFile, { ...readJson(resultFile), sessionId: owned });
+    if (path === "cancel") await restarted.reconcile();
+    else if (path === "settle") restarted.settle(job.id);
+    else await restarted.collect();
+    assert.equal(restarted.sessionFrom(job.id), owned);
+    assert.equal(restarted.state().current.execution.collected, true);
+    assert.equal(readJson(resultFile).sessionId, owned);
+    evidence.push({ provider, path, runId: job.id, owned, stopped: restarted.state().stopped, resultSession: readJson(resultFile).sessionId, starts: f.runner.started.length, files: { execution: join(f.root, "execution.json"), result: resultFile } });
+  }
+  const report = join(tempHome(), "local-owned-session-evidence.json"); writeJsonAtomic(report, { kind: "Deterministic local adapter stream and cache ownership fixtures", cases: evidence });
+  t.diagnostic(`local owned session evidence: ${report}`);
+});
+
+test("local session ownership rejects malformed IDs and retains omitted IDs or first discovered sessions", async () => {
+  for (const provider of Object.keys(adapters)) for (const reported of [null, "", 42]) {
+    const f = localTimeoutFixture({ provider }), owned = provider === "goose" ? "work-owned-session" : provider === "opencode" ? "ses_ownedsession" : f.session;
+    const service = f.open(), job = await service.submit({ operationId: "owned", recordedSessionId: owned, spec: { cmd: "offline-cli-fixture", args: [], options: {} } });
+    f.runner.finish(localSessionLines(provider, reported), { exit: 0 }); await service.reconcile();
+    if (adapters[provider].sessionFrom(localSessionLines(provider, reported)) != null) {
+      assert.throws(() => service.settle(job.id), { code: "EXECUTION_RESULT" });
+      assert.equal(existsSync(join(f.root, job.id, "result.json")), false);
+    } else {
+      service.settle(job.id); assert.equal(service.sessionFrom(job.id), owned);
+      assert.equal(readJson(join(f.root, job.id, "result.json")).sessionId, owned);
+    }
+    assert.equal(service.state().current.execution.sessionId, owned);
+  }
+  for (const provider of ["codex", "opencode"]) {
+    const f = localTimeoutFixture({ provider }), service = f.open(), session = provider === "opencode" ? "ses_discovered" : f.session;
+    const job = await service.submit({ operationId: "first", spec: { cmd: "offline-cli-fixture", args: [], options: {} } });
+    f.runner.finish(localSessionLines(provider, session), { exit: 0 }); await service.reconcile(); service.settle(job.id);
+    assert.equal(service.sessionFrom(job.id), session);
+    const next = await service.continue({ operationId: "next", sessionId: session, spec: { cmd: "offline-cli-fixture", args: [], options: {} } });
+    assert.equal(next.execution.sessionId, session); assert.equal(f.runner.started.length, 2);
+  }
+});
+
+test("legacy local session readers cannot redirect continuation away from the recorded registry session", async () => {
+  const f = localTimeoutFixture({ provider: "claude" });
+  f.runner.start("legacy", "offline-cli-fixture", [], {}); f.runner.finish(localSessionLines("claude", "foreign-session"), { exit: 0 });
+  assert.throws(() => f.open().sessionFrom(f.runner.current().id), { code: "EXECUTION_RESULT" });
+  await assert.rejects(f.open().continue({ operationId: "foreign", sessionId: "foreign-session", spec: {} }), { code: "EXECUTION_RESULT" });
+  assert.deepEqual(f.open().state().operations, {}); assert.equal(f.runner.started.length, 1);
+  // Pre-fix settlement may already have replaced current/cache identity.
+  // The persisted acknowledgement still owns the original session.
+  const upgraded = localTimeoutFixture({ provider: "claude" }), service = upgraded.open();
+  const job = await service.submit({ operationId: "owned", recordedSessionId: upgraded.session, spec: { cmd: "offline-cli-fixture", args: [], options: {} } });
+  upgraded.runner.finish(localSessionLines("claude", upgraded.session), { exit: 0 }); await service.reconcile(); service.settle(job.id);
+  const stateFile = join(upgraded.root, "execution.json"), cachedFile = join(upgraded.root, job.id, "result.json"), state = readJson(stateFile);
+  state.current.execution.sessionId = "foreign-session"; writeJsonAtomic(stateFile, state);
+  writeJsonAtomic(cachedFile, { ...readJson(cachedFile), sessionId: "foreign-session" });
+  assert.throws(() => upgraded.open().sessionFrom(job.id), { code: "EXECUTION_RESULT" });
+  await assert.rejects(upgraded.open().collect(), { code: "EXECUTION_RESULT" });
+  await assert.rejects(upgraded.open().continue({ operationId: "foreign", sessionId: "foreign-session", spec: {} }), { code: "EXECUTION_RESULT" });
+  assert.equal(upgraded.runner.started.length, 1);
+});
 
 test("cancelling settled local outcomes preserves success, failure, cost and session across restart", async () => {
   for (const provider of ["codex", "claude"]) for (const ok of [true, false]) for (const cancelSupported of [true, false]) {
@@ -2501,6 +2584,62 @@ test("pending cancellation refuses incomplete lookup ownership and never calls a
   }
 });
 
+test("remote terminal cancellation controls finish without claiming a provider stop and preserve collected outcomes", async t => {
+  const evidence = [];
+  for (const provider of ["openai-agents", "codex-cloud"]) for (const ok of [true, false]) for (const timing of ["collected", "pending"]) {
+    const f = remote(provider), job = await f.service.submit(input), home = tempHome(), state = makeState(home), id = "acme/widget/remote";
+    f.transport.collect = async req => ({ ...req, signal: undefined, outcome: { finished: true, ok, cost: 0.4, lastMessage: "owned terminal result" } });
+    if (timing === "collected") { f.observe({ state: ok ? "succeeded" : "failed", costUsd: 0.4 }); await f.service.reconcile({ force: true }); await f.service.collect(); }
+    const before = f.service.state().current, resultFile = join(f.root, job.id, "result.json"), cached = timing === "collected" ? readFileSync(resultFile, "utf8") : null;
+    state.put(id, { ...newEntry({ repo: "acme/widget", harness: provider, session: job.execution.sessionId, branch: "work/remote", state: STATES.needsHuman, nowIso: T0 }), last: { run: job.id, exit: before.exit, cost: before.execution.costUsd } });
+    const ctx = { home, state, config: CONFIG, clock: f.clock, gh: fakeGh(), git: fakeGit(), log: silentLog, notify: fakeNotify(), ownLogin: "me", readPrd: () => null, executionFor: () => f.reopen() };
+    if (timing === "pending") f.transport.cancel = async req => { f.calls.push(["cancel", req]); return { confirmed: false }; };
+    requestControl(ctx, { handle: id, action: "cancel" }); await cancelControl(ctx, id);
+    if (timing === "pending") {
+      assert.equal(state.get(id).reason, "cancellation-requested");
+      f.observe({ state: ok ? "succeeded" : "failed", costUsd: 0.4 });
+    } else {
+      assert.equal(state.get(id).reason, "cancelled");
+      assert.match(state.get(id).control.message, /already completed/);
+    }
+    const reopened = { ...ctx, state: makeState(home) };
+    await makeTick(reopened).tickEntry(id, reopened.state.get(id));
+    let entry = reopened.state.get(id), current = f.reopen().current();
+    assert.equal(entry.reason, "cancelled"); assert.match(entry.control.message, /already completed/);
+    assert.doesNotMatch(entry.control.message, /unconfirmed|may continue|confirmed/i);
+    assert.equal(entry.control.status, "applied"); assert.equal(entry.dispatch_stopped, "cancellation-requested");
+    assert.equal(current.execution.providerState, ok ? "succeeded" : "failed");
+    assert.equal(current.execution.cancellation.status, "terminal"); assert.equal(current.execution.quarantined, true);
+    assert.equal(current.execution.sessionId, job.execution.sessionId); assert.equal(current.execution.costUsd, 0.4);
+    if (timing === "collected") {
+      assert.equal(current.exit, before.exit); assert.equal(current.endedAt, before.endedAt);
+      assert.equal(entry.last.exit, before.exit); assert.equal(readFileSync(resultFile, "utf8"), cached);
+    }
+    assert.deepEqual(await f.reopen().cancel(), { confirmed: false, terminal: true });
+    const calls = f.calls.length;
+    // Repair an applied pre-fix control after a restart, using exact stopped-root ownership.
+    reopened.state.update(id, { reason: "cancellation-requested", control: { ...entry.control, message: "Remote execution may continue." } });
+    await makeTick(reopened).tickEntry(id, reopened.state.get(id));
+    entry = reopened.state.get(id); current = f.reopen().current();
+    assert.equal(entry.reason, "cancelled"); assert.match(entry.control.message, /already completed/); assert.equal(f.calls.length, calls);
+    assert.equal(f.calls.filter(c => c[0] === "cancel").length, timing === "pending" ? 1 : 0);
+    await assert.rejects(f.reopen().collect(), { code: "EXECUTION_QUARANTINED" });
+    await assert.rejects(f.reopen().continue({ ...input, operationId: "after-stop", sessionId: job.execution.sessionId }), { code: "EXECUTION_STOPPED" });
+    evidence.push({ provider, ok, timing, runId: job.id, reason: entry.reason, message: entry.control.message, exit: current.exit, state: current.execution.providerState, cancellation: current.execution.cancellation.status, session: current.execution.sessionId, cost: current.execution.costUsd, stops: f.calls.filter(c => c[0] === "cancel").length, files: { execution: join(f.root, "execution.json"), registry: state.file, ...(cached ? { result: resultFile } : {}) } });
+  }
+  const report = join(tempHome(), "terminal-control-evidence.json"); writeJsonAtomic(report, { kind: "Deterministic remote terminal controls and restart fixtures", cases: evidence });
+  t.diagnostic(`terminal control evidence: ${report}`);
+});
+
+test("terminal control reconciliation ignores an unrelated completed root", async () => {
+  const f = remote(), job = await f.service.submit(input), home = tempHome(), state = makeState(home), id = "acme/widget/remote";
+  f.observe({ state: "succeeded" }); await f.service.reconcile({ force: true }); await f.service.collect(); await f.service.cancel();
+  state.put(id, { ...newEntry({ repo: "acme/widget", harness: "openai-agents", state: STATES.needsHuman, nowIso: T0 }), reason: "cancellation-requested", dispatch_stopped: "cancellation-requested", last: { run: job.id, exit: 0 }, control: { id: "foreign-stop", action: "cancel", status: "applied", stop_run: "another-root", message: "Awaiting its exact root." } });
+  const ctx = { home, state, config: CONFIG, clock: f.clock, gh: fakeGh(), git: fakeGit(), log: silentLog, notify: fakeNotify(), ownLogin: "me", readPrd: () => null, executionFor: () => f.reopen() };
+  await makeTick(ctx).tickEntry(id, state.get(id));
+  assert.equal(state.get(id).reason, "cancellation-requested"); assert.equal(state.get(id).control.message, "Awaiting its exact root.");
+});
+
 test("natural completion after a pending stop quarantines results without claiming cancellation", async () => {
   const f = remote(), submit = f.transport.submit;
   f.transport.submit = async req => { await submit(req); throw new Error("reply lost"); };
@@ -2511,7 +2650,7 @@ test("natural completion after a pending stop quarantines results without claimi
   assert.equal(f.service.current().execution.providerState, "succeeded");
   assert.equal(f.service.current().execution.cancellation.status, "terminal");
   assert.equal(f.service.current().execution.quarantined, true);
-  assert.deepEqual(await f.service.cancel(), { confirmed: false });
+  assert.deepEqual(await f.service.cancel(), { confirmed: false, terminal: true });
   assert.equal(f.calls.some(c => c[0] === "cancel"), false);
   await assert.rejects(f.service.collect(), { code: "EXECUTION_QUARANTINED" });
 });
@@ -2737,7 +2876,7 @@ test("cancellation after a contradictory terminal inspection quarantines the kno
     f.observe({ state: terminalState }); await f.service.reconcile({ force: true });
     f.observe({ state: terminalState === "succeeded" ? "failed" : "succeeded" }); await f.service.reconcile({ force: true });
     assert.equal(f.service.current().execution.providerState, "status-unknown");
-    assert.deepEqual(await f.reopen().cancel(), { confirmed: false });
+    assert.deepEqual(await f.reopen().cancel(), { confirmed: false, terminal: true });
     assert.equal(f.service.current().execution.providerState, terminalState);
     assert.equal(f.service.current().execution.quarantined, true);
     assert.equal(f.service.current().execution.cancellation.status, "terminal");
@@ -2762,7 +2901,7 @@ test("older prematurely collected failures re-enter result retrieval without ano
 
 test("a stop during failed result retrieval quarantines the completed root without a cancellation call", async () => {
   const f = remote(); await f.service.submit(input); f.observe({ state: "failed" }); await f.service.reconcile({ force: true });
-  assert.deepEqual(await f.service.cancel(), { confirmed: false });
+  assert.deepEqual(await f.service.cancel(), { confirmed: false, terminal: true });
   assert.equal(f.service.current().execution.providerState, "failed"); assert.equal(f.service.current().execution.quarantined, true);
   assert.equal(f.service.current().execution.cancellation.status, "terminal");
   assert.equal(f.calls.some(c => c[0] === "cancel"), false);
@@ -2795,7 +2934,7 @@ test("a stop after collected terminal results quarantines both success and failu
     const f = remote(), collect = f.transport.collect;
     await f.service.submit(input); f.observe({ state }); await f.service.reconcile({ force: true });
     f.transport.collect = async req => ({ ...await collect(req), outcome: { finished: true, ok: state === "succeeded", cost: null } });
-    await f.service.collect(); assert.deepEqual(await f.service.cancel(), { confirmed: false });
+    await f.service.collect(); assert.deepEqual(await f.service.cancel(), { confirmed: false, terminal: true });
     assert.equal(f.service.current().execution.quarantined, true); assert.equal(f.service.current().execution.providerState, state);
     assert.equal(f.calls.some(c => c[0] === "cancel"), false);
     await assert.rejects(f.reopen().collect(), { code: "EXECUTION_QUARANTINED" });
