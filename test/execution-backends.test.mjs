@@ -19,6 +19,9 @@ import { makeTick } from "../lib/tick.mjs";
 import { reconcileExecutionResult } from "../lib/execution_result.mjs";
 import { resume } from "../lib/commands/resume.mjs";
 import { acquireProcessLock } from "../lib/daemon.mjs";
+import { makeGit } from "../lib/git.mjs";
+import { execFileAsync } from "../lib/gh.mjs";
+import { requestControl, applyControl } from "../lib/control.mjs";
 import { tempHome, makeClock, CONFIG, T0, fakeGh, fakeNotify, silentLog, fakeGit, fakeCredential, fakeIdentity } from "./helpers.mjs";
 const allowance = { remainingUsd: 1, reservedUsd: 0.1 };
 const input = { operationId: "first", inputHead: "a".repeat(40), allowance };
@@ -379,7 +382,7 @@ function resultFixture() {
   writeFileSync(join(worktree, "a.txt"), "before");
   const entry = { ...newEntry({ repo: "acme/widget", harness: "codex", session: "22222222-2222-4222-8222-222222222222", branch: "work/result", base: "main", worktree, nowIso: T0, state: STATES.running }), execution: { runId, providerJobId: "j1", turnId: "t1", inputHead: revision } };
   const result = { taskId: id, runId, providerJobId: "j1", turnId: "t1", inputHead: revision, repo: entry.repo, branch: entry.branch, files: [{ path: "a.txt", beforeHash: sha("before"), afterHash: sha("after"), text: "after" }], pr: { title: "Apply result", body: "Verified execution artifacts." } };
-  const calls = [], git = { head: async () => revision, currentBranch: async () => entry.branch, originOf: async () => "https://github.com/acme/widget.git", commitResult: async () => calls.push("commit"), pushResult: async () => calls.push("push") };
+  const calls = [], git = { head: async () => revision, dirty: async () => ({ modified: 0, untracked: 0 }), currentBranch: async () => entry.branch, originOf: async () => "https://github.com/acme/widget.git", commitResult: async () => calls.push("commit"), pushResult: async () => calls.push("push") };
   const gh = { publishResultPr: async () => { calls.push("PR"); return { number: 1, url: "https://example.test/pr/1" }; } };
   const ctx = { git, gh, readPrd: () => "# Brief\n\n## Verify\n\n- `printf verified`\n" };
   const verify = async () => { calls.push("verify"); return { stdout: "verified", stderr: "" }; };
@@ -479,11 +482,164 @@ test("result publication validates ownership/paths/input head and records real v
 });
 
 test("failed verification prevents GitHub publication and leaves exact evidence", async () => {
-  const f = resultFixture(); f.verify = async () => { throw Object.assign(new Error("failed"), { code: 2, stderr: "test failure" }); };
+  const f = resultFixture(); let attempts = 0;
+  f.verify = async () => { attempts++; throw Object.assign(new Error("failed"), { code: 2, stderr: "test failure" }); };
   await assert.rejects(reconcileExecutionResult(f.ctx, f), /verification failed/);
   assert.deepEqual(f.calls, ["commit"]);
   const observed = readJson(join(f.dir, "verification.json"));
   assert.equal(observed.evidence[0].exit, 2); assert.equal(observed.head, f.result.inputHead);
+  const checkpoint = readJson(join(f.dir, "result-application.json"));
+  assert.equal(checkpoint.phase, "blocked"); assert.equal(checkpoint.reason, "verification-failed");
+  for (let poll = 0; poll < 3; poll++) await assert.rejects(reconcileExecutionResult(f.ctx, f), { code: "EXECUTION_RESULT_BLOCKED" });
+  assert.equal(attempts, 1); assert.deepEqual(f.calls, ["commit"]);
+  assert.deepEqual(readJson(join(f.dir, "verification.json")), observed);
+  assert.deepEqual(readJson(join(f.dir, "result-application.json")), checkpoint);
+});
+
+test("interrupted verification blocks replay while lost publication replies reuse verified evidence", async () => {
+  const interrupted = resultFixture();
+  writeJsonAtomic(join(interrupted.dir, "result-application.json"), { fingerprint: sha(JSON.stringify(interrupted.result)), phase: "verifying", appliedHead: interrupted.result.inputHead });
+  writeJsonAtomic(join(interrupted.dir, "verification.json"), { version: 1, head: interrupted.result.inputHead, evidence: [] });
+  await assert.rejects(reconcileExecutionResult(interrupted.ctx, interrupted), { code: "EXECUTION_RESULT_BLOCKED" });
+  assert.equal(readJson(join(interrupted.dir, "result-application.json")).reason, "verification-interrupted");
+  assert.deepEqual(interrupted.calls, []);
+
+  const f = resultFixture(); let pushes = 0;
+  f.ctx.git.pushResult = async () => { f.calls.push("push"); if (++pushes === 1) throw new Error("reply lost"); };
+  await assert.rejects(reconcileExecutionResult(f.ctx, f), /reply lost/);
+  assert.equal(readJson(join(f.dir, "result-application.json")).phase, "verified");
+  const evidence = readJson(join(f.dir, "verification.json"));
+  await reconcileExecutionResult(f.ctx, f); await reconcileExecutionResult(f.ctx, f);
+  assert.deepEqual(f.calls, ["commit", "verify", "push", "push", "PR"]);
+  assert.deepEqual(readJson(join(f.dir, "verification.json")), evidence);
+});
+
+test("failed remote verification survives polls and restart, settles workflow and permits explicit correction", async () => {
+  const f = await collectedArtifactFixture(), state = makeState(f.ctx.home), attempts = join(f.dir, "verify-attempts.txt");
+  f.ctx.readPrd = () => `# Brief\n\n## Verify\n\n- \`node -e 'require("fs").appendFileSync(${JSON.stringify(attempts)}, "x"); process.exit(2)'\`\n`;
+  state.put(f.id, { ...f.entry, last: { run: f.job.id, exit: null }, execution: f.service.current().execution });
+  const reviewId = "acme/widget/review";
+  state.put(reviewId, newEntry({ repo: "acme/widget", harness: "codex", branch: "work/review", pr: 2, state: STATES.prOpen, nowIso: T0 }));
+  const gh = fakeGh({ pr: { state: "MERGED" } }), notify = fakeNotify();
+  const ctx = { ...f.ctx, state, config: CONFIG, clock: f.provider.clock, git: { ...fakeGit(), ...f.ctx.git }, gh,
+    ownLogin: "me", log: silentLog, notify, credential: fakeCredential(), identity: fakeIdentity(),
+    executionFor: id => id === f.id ? f.reopen() : { current: () => null } };
+  f.provider.observe({ state: "succeeded" });
+  const tick = makeTick(ctx);
+  await tick.tick(); await tick.tick();
+  const restarted = { ...ctx, state: makeState(ctx.home) };
+  await makeTick(restarted).tick(); await makeTick(restarted).tickEntry(f.id, restarted.state.get(f.id));
+  const stopped = restarted.state.get(f.id);
+  assert.equal(readFileSync(attempts, "utf8"), "x");
+  assert.equal(stopped.state, STATES.needsHuman); assert.equal(stopped.reason, "result-verification");
+  assert.equal(stopped.last.exit, 0); // Provider succeeded; publication verification did not.
+  assert.equal(stopped.execution.providerState, "succeeded"); assert.equal(stopped.last.cost, null);
+  assert.equal(stopped.session, f.job.execution.sessionId); assert.equal(restarted.state.get(reviewId).state, STATES.done);
+  assert.equal(notify.sent.filter(x => x[0] === "needs").length, 1);
+  assert.equal(f.provider.calls.filter(c => c[0] === "submit").length, 1);
+  assert.equal(f.provider.calls.filter(c => c[0] === "continue").length, 0);
+  assert.equal(f.provider.calls.filter(c => c[0] === "collect").length, 1);
+  assert.deepEqual(f.calls, ["commit"]);
+
+  // An already-queued PR recheck cannot clear the publication stop either.
+  restarted.state.update(f.id, { pr: 1, control: { id: "recheck-before-failure", action: "recheck", status: "queued" } });
+  gh.data.pr.state = "OPEN";
+  assert.throws(() => requestControl(restarted, { handle: f.id, action: "recheck" }), /already queued/);
+  await applyControl(restarted, f.id);
+  assert.equal(restarted.state.get(f.id).control.status, "failed");
+  assert.match(restarted.state.get(f.id).control.message, /cannot retry verification/);
+  assert.throws(() => requestControl(restarted, { handle: f.id, action: "recheck" }), { code: "EXECUTION_RESULT_BLOCKED" });
+  requestControl(restarted, { handle: f.id, action: "resume" });
+  await makeTick(restarted).tickEntry(f.id, restarted.state.get(f.id));
+  assert.equal(restarted.state.get(f.id).control.status, "applied");
+  assert.equal(f.provider.calls.filter(c => c[0] === "continue").length, 1);
+  assert.equal(f.reopen().current().execution.sessionId, stopped.session);
+  assert.notEqual(restarted.state.get(f.id).last.run, f.job.id);
+  assert.equal(readFileSync(attempts, "utf8"), "x");
+  assert.equal(readJson(join(f.dir, "result-application.json")).phase, "blocked");
+});
+
+async function nativeResultFixture() {
+  const f = resultFixture(), worktree = f.entry.worktree;
+  const nativeExec = (cmd, args, options) => execFileAsync(cmd, args, { ...options, env: { ...options.env, GIT_CONFIG_NOSYSTEM: "1", GIT_CONFIG_GLOBAL: "/dev/null" } });
+  const git = makeGit({ config: CONFIG, exec: nativeExec, identity: fakeIdentity() });
+  await nativeExec("git", ["init", "-b", f.entry.branch], { cwd: worktree, env: process.env });
+  await nativeExec("git", ["remote", "add", "origin", "https://github.com/acme/widget.git"], { cwd: worktree, env: process.env });
+  writeFileSync(join(worktree, "b.txt"), "unchanged");
+  await git.commitResult(worktree, ["a.txt", "b.txt"]);
+  const head = await git.head(worktree); f.result.inputHead = head; f.entry.execution.inputHead = head;
+  f.ctx.git = { ...git, commitResult: async (...args) => { f.calls.push("commit"); return git.commitResult(...args); }, pushResult: async () => f.calls.push("push") };
+  return { ...f, verify: async (...args) => { f.calls.push("verify"); return execFileAsync(...args); } };
+}
+
+for (const mutation of ["tracked", "staged", "untracked"]) test(`verification ${mutation} writes block publication at the unchanged native Git head`, async () => {
+  const f = await nativeResultFixture();
+  const command = mutation === "untracked" ? "printf created > generated.txt" : `printf dirty > b.txt${mutation === "staged" ? " && git add -- b.txt" : ""}`;
+  f.ctx.readPrd = () => `# Brief\n\n## Verify\n\n- \`${command}\`\n- \`printf must-not-run\`\n`;
+  await assert.rejects(reconcileExecutionResult(f.ctx, f), { code: "EXECUTION_RESULT_BLOCKED" });
+  const checkpoint = readJson(join(f.dir, "result-application.json")), evidence = readJson(join(f.dir, "verification.json"));
+  assert.equal(checkpoint.phase, "blocked"); assert.equal(checkpoint.reason, "verification-dirty");
+  assert.equal(await f.ctx.git.head(f.entry.worktree), checkpoint.appliedHead);
+  assert.equal(evidence.evidence.length, 1); assert.equal(evidence.evidence[0].exit, 0);
+  assert.deepEqual(f.calls, ["commit", "verify"]);
+  assert.deepEqual(await f.ctx.git.dirty(f.entry.worktree, { strict: true }), mutation === "untracked" ? { modified: 0, untracked: 1 } : { modified: 1, untracked: 0 });
+  assert.equal(readFileSync(join(f.entry.worktree, mutation === "untracked" ? "generated.txt" : "b.txt"), "utf8"), mutation === "untracked" ? "created" : "dirty");
+  await assert.rejects(reconcileExecutionResult(f.ctx, f), { code: "EXECUTION_RESULT_BLOCKED" });
+  assert.deepEqual(f.calls, ["commit", "verify"]);
+});
+
+test("pre-existing dirty files and unavailable status fail closed even with an empty Verify list", async () => {
+  const f = await nativeResultFixture(); writeFileSync(join(f.entry.worktree, "b.txt"), "operator edits");
+  f.ctx.readPrd = () => "# Brief\n";
+  await assert.rejects(reconcileExecutionResult(f.ctx, f), { code: "EXECUTION_RESULT_BLOCKED" });
+  assert.equal(readFileSync(join(f.entry.worktree, "b.txt"), "utf8"), "operator edits");
+  assert.deepEqual(f.calls, ["commit"]); assert.equal(readJson(join(f.dir, "result-application.json")).reason, "verification-dirty");
+  for (const status of [undefined, null, new Error("status failed")]) {
+    const bad = resultFixture(); bad.ctx.readPrd = () => "# Brief\n";
+    bad.ctx.git.dirty = async (_dir, options) => { assert.equal(options.strict, true); if (status instanceof Error) throw status; return status; };
+    await assert.rejects(reconcileExecutionResult(bad.ctx, bad), { code: "EXECUTION_RESULT_BLOCKED" });
+    assert.deepEqual(bad.calls, ["commit"]);
+    assert.equal(readJson(join(bad.dir, "result-application.json")).reason, "verification-state-unavailable");
+  }
+});
+
+test("verification-created commits are retained and blocked instead of publishing stale evidence", async () => {
+  const f = await nativeResultFixture();
+  f.ctx.readPrd = () => '# Brief\n\n## Verify\n\n- `printf changed > b.txt && git add -- b.txt && git -c user.name=Verifier -c user.email=verifier@example.test commit -m "Verification change"`\n';
+  await assert.rejects(reconcileExecutionResult(f.ctx, f), { code: "EXECUTION_RESULT_BLOCKED" });
+  const checkpoint = readJson(join(f.dir, "result-application.json"));
+  assert.equal(checkpoint.reason, "verification-head-changed");
+  assert.notEqual(await f.ctx.git.head(f.entry.worktree), checkpoint.appliedHead);
+  assert.deepEqual(await f.ctx.git.dirty(f.entry.worktree, { strict: true }), { modified: 0, untracked: 0 });
+  assert.equal(readJson(join(f.dir, "verification.json")).evidence[0].exit, 0);
+  assert.deepEqual(f.calls, ["commit", "verify"]);
+});
+
+test("pushed results and post-push publication use the same clean-checkout boundary", async () => {
+  const pushed = resultFixture(); delete pushed.result.files; pushed.result.pushedHead = pushed.result.inputHead;
+  pushed.ctx.gh.refSha = async () => pushed.result.pushedHead; pushed.ctx.gh.containsCommit = async () => true;
+  pushed.ctx.git.dirty = async () => ({ modified: 0, untracked: 1 });
+  await assert.rejects(reconcileExecutionResult(pushed.ctx, pushed), { code: "EXECUTION_RESULT_BLOCKED" });
+  assert.deepEqual(pushed.calls, []);
+  const f = resultFixture(); let dirty = false;
+  f.ctx.git.pushResult = async () => { f.calls.push("push"); dirty = true; };
+  f.ctx.git.dirty = async () => ({ modified: dirty ? 1 : 0, untracked: 0 });
+  await assert.rejects(reconcileExecutionResult(f.ctx, f), { code: "EXECUTION_RESULT_BLOCKED" });
+  assert.deepEqual(f.calls, ["commit", "verify", "push"]);
+  assert.equal(readJson(join(f.dir, "result-application.json")).reason, "verification-dirty");
+});
+
+test("verified publication recovery rejects changed heads, dirty trees and missing evidence without command replay", async () => {
+  for (const change of ["head", "dirty", "evidence"]) {
+    const f = resultFixture(); f.ctx.git.pushResult = async () => { throw new Error("push unavailable"); };
+    await assert.rejects(reconcileExecutionResult(f.ctx, f), /push unavailable/);
+    if (change === "head") f.ctx.git.head = async () => "b".repeat(40);
+    if (change === "dirty") f.ctx.git.dirty = async () => ({ modified: 1, untracked: 0 });
+    if (change === "evidence") rmSync(join(f.dir, "verification.json"));
+    await assert.rejects(reconcileExecutionResult(f.ctx, f), { code: "EXECUTION_RESULT_BLOCKED" });
+    assert.deepEqual(f.calls, ["commit", "verify"]);
+    assert.equal(readJson(join(f.dir, "result-application.json")).phase, "blocked");
+  }
 });
 
 test("journal restart repairs a crash between checkpoint and append with an explicit stable gap", () => {

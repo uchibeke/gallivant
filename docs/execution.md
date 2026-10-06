@@ -255,6 +255,29 @@ bounds). Provider assertions are not verification evidence. The canonical tick
 continues to own readiness, trusted feedback, freshness, receipts, conflicts,
 rounds and human merge boundaries. No automatic merge is added.
 
+Verification requires the recorded applied commit and a clean Git index/worktree,
+including untracked files. The existing strict Git status helper checks both
+before commands, after each successful command and before PR publication; a
+status failure blocks publication. Ignored build outputs remain subject to the
+repository's own ignore rules. No verification-created edits are silently
+committed, discarded or represented as part of the verified revision.
+
+The application checkpoint advances through `applying`, `verifying`, `verified`
+and `published`. A failed command, changed revision, dirty checkout or unavailable
+status/evidence becomes `blocked`, with its reason and `blockedAt` timestamp.
+Each completed command persists real evidence, including a failing exit or an
+unknown exit on a transport error. A restart that finds `verifying` records
+`verification-interrupted`: commands may have run and cannot be replayed safely.
+The coordinator settles the provider run separately and enters `needs-human`
+with reason `result-verification`; provider success and unknown cost stay truthful.
+Polling, read-only projections and PR recheck cannot retry blocked verification.
+Inspect the private checkpoint, evidence and retained checkout, then explicitly
+resume the same session (or send a correction) to authorize a new corrective run.
+The old run's blocked evidence remains intact. A push/PR acknowledgement failure
+after `verified` retries only publication, requiring the same clean revision and
+complete successful evidence for the approved command list. A published replay
+returns the saved PR without executing commands again.
+
 ## Upgrade and rollback
 
 1. Stop the coordinator and preserve its private home, registry, queued chain
@@ -263,7 +286,9 @@ rounds and human merge boundaries. No automatic merge is added.
 2. Install the compatible package and restart one coordinator. Legacy version 1
    registry entries/local runs stay readable without changing task/PR/session IDs.
    Startup reconciles recorded runs before paid dispatch. Review the status and
-   recovery action for every unresolved acceptance.
+   recovery action for every unresolved acceptance. A pre-upgrade `verifying`
+   checkpoint stops as interrupted; inspect its preserved evidence and explicitly
+   resume for correction instead of deleting it to rerun verification.
 3. Back up the entire matching state before rollback. Older packages can retain
    legacy local registry/job files, but must not operate active remote metadata or
    new private-output runs they do not understand. Restore the matching package
