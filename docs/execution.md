@@ -175,7 +175,7 @@ Each new run retains compatible `job.json`/`job.log` plus:
 | `journal.json`, `event-keys/` | Durable append checkpoint and hashed exact provider/job/turn/event replay keys; interrupted append becomes an explicit gap |
 | `job.idx`, `log-meta.json` | Fixed-width 8-byte offsets, version 2 offset-plus-one encoding, stable sequence numbers and retained first sequence; zero entries denote gaps |
 | `local-output.json` | Raw local ingestion byte cursor, bounded page and pending marker |
-| `result.json` | Collected result and outcome independent of retained logs |
+| `result.json` | Mode 0600 private collected result, original artifact manifest/payloads, redacted outcome and `artifacts` summary; independent of retained logs |
 | `result-application.json`, `verification.json` | Artifact application/publication checkpoint and actual approved verification observations |
 
 Provider-order numbers survive out-of-order arrival; ingestion order remains
@@ -183,8 +183,17 @@ monotonic. Replay keys survive restart and projection retention. Rotation,
 truncation, missing indexes, oversized records and unrecoverable interrupted
 history produce explicit gaps rather than renumbering replay IDs or inventing
 output. Redaction occurs before journals, public projections and saved evidence,
-using recognized credentials and supplied resolved secret values. Artifact hashes
-still have to match after sanitization; modified/truncated content cannot publish.
+using recognized credentials and supplied resolved secret values. Artifact paths,
+hashes and text retain the provider's exact bytes in the private result; diagnostic
+redaction never rewrites publication input. The coordinator still checks original
+hashes and ownership before application. Modified/truncated content cannot publish.
+The additive version 1 `artifacts` field is a redacted path/hash summary generated
+by collection, overriding any provider-supplied summary. Tracker result responses
+use this summary for artifacts and application paths, and never include file text.
+Legacy results without the summary retain their already-redacted projection.
+Verification output also uses the execution boundary's supplied-secret redaction.
+Previously modified cached artifacts remain invalid; restore exact artifacts for
+the recorded provider job/root turn before publication, without redispatching.
 
 Private local diagnostics use `provider.log` and `sensitive-redactions.json`
 (mode 0600 in the private run tree). They are excluded from routes/projections.

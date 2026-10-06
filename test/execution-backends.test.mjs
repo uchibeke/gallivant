@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { join } from "node:path";
 import { createHash } from "node:crypto";
 import { EventEmitter } from "node:events";
-import { mkdirSync, readFileSync, writeFileSync, rmSync, renameSync, symlinkSync, cpSync } from "node:fs";
+import { mkdirSync, readFileSync, writeFileSync, rmSync, renameSync, symlinkSync, cpSync, statSync } from "node:fs";
 import { pathToFileURL } from "node:url";
 import { makeExecution, executionLive, assertExecutionDependency } from "../lib/execution.mjs";
 import { executionRegistry, adapters, buildRun } from "../lib/harness.mjs";
@@ -386,6 +386,81 @@ function resultFixture() {
   return { id, entry, result, dir, ctx, verify, calls };
 }
 
+async function collectedArtifactFixture(secrets = []) {
+  const f = resultFixture(), provider = remote(), home = tempHome(), root = join(home, "runs", idSlug(f.id));
+  const options = { root, taskId: f.id, provider: "openai-agents", account: "test", transport: provider.transport, capabilities: provider.capabilities, clock: provider.clock, secrets };
+  const reopen = () => makeExecution(options), service = reopen(), job = await service.submit(input);
+  f.entry.harness = "openai-agents"; f.entry.session = job.execution.sessionId; f.entry.execution = job.execution;
+  Object.assign(f.result, { runId: job.id, providerJobId: job.execution.providerJobId, sessionId: job.execution.sessionId, turnId: job.execution.turnId,
+    outcome: { finished: true, ok: true, cost: null, denials: [] } });
+  provider.transport.collect = async () => { provider.calls.push(["collect"]); return f.result; };
+  Object.assign(f.ctx, { home, executionFor: reopen });
+  f.dir = service.dirOf(job.id);
+  return { ...f, service, reopen, provider, job, collect: async () => {
+    provider.observe({ state: "succeeded" }); await service.reconcile({ force: true }); return service.collect();
+  } };
+}
+
+test("collected authentication source preserves exact artifact bytes through restart and publication", async () => {
+  const f = await collectedArtifactFixture();
+  const text = 'const token = process.env.API_TOKEN;\r\nconst password = process.env.PASSWORD;\r\nexport const auth = { token, password, label: "café 🔑", example: "Bearer placeholder" };\r\n';
+  f.result.files = [{ path: "auth.mjs", beforeHash: null, afterHash: sha(text), text }];
+  const original = structuredClone(f.result.files), collected = await f.collect();
+  assert.deepEqual(collected.files, original);
+  assert.equal(collected.files[0].afterHash, sha(collected.files[0].text));
+  assert.equal(statSync(join(f.dir, "result.json")).mode & 0o777, 0o600);
+  f.result.files[0].text = "mutated provider reply";
+  const replay = await f.reopen().collect();
+  assert.deepEqual(replay.files, original);
+  assert.equal(f.provider.calls.filter(c => c[0] === "collect").length, 1);
+  f.ctx.readPrd = () => "# Brief\n\n## Verify\n\n- `node --check auth.mjs`\n";
+  const invalid = structuredClone(replay); invalid.files[0].text += "changed";
+  await assert.rejects(reconcileExecutionResult(f.ctx, { ...f, result: invalid }), /artifact content hash differs/);
+  assert.deepEqual(f.calls, []);
+  const done = await reconcileExecutionResult(f.ctx, { ...f, result: replay, verify: undefined });
+  assert.deepEqual(readFileSync(join(f.entry.worktree, "auth.mjs")), Buffer.from(text));
+  assert.deepEqual(f.calls, ["commit", "push", "PR"]);
+  assert.equal(done.evidence[0].exit, 0); assert.equal(done.evidence[0].source, "coordinator-executed");
+});
+
+test("private artifact payloads and paths stay out of result projections and verification diagnostics", async () => {
+  for (const failing of [false, true]) {
+    const secret = "resolved-artifact-private-value", f = await collectedArtifactFixture([secret]);
+    const text = `export const sample = "${secret}";\n`, path = `${secret}/obsolete.txt`;
+    mkdirSync(join(f.entry.worktree, secret)); writeFileSync(join(f.entry.worktree, path), "obsolete");
+    f.result.files = [{ path: "auth.mjs", beforeHash: null, afterHash: sha(text), text }, { path, beforeHash: sha("obsolete"), afterHash: null, text: null }];
+    f.result.artifacts = [{ path: "forged provider summary", text: secret }];
+    f.result.outcome.lastMessage = secret; f.result.lines = [secret]; f.result.usage = { token: secret };
+    const original = structuredClone(f.result.files), result = await f.collect();
+    assert.deepEqual(result.files, original);
+    assert.equal(result.outcome.lastMessage, "[redacted]");
+    assert.deepEqual(result.lines, ["[redacted]"]); assert.equal(result.usage.token, "[redacted]");
+    assert.deepEqual(result.artifacts, [{ path: "auth.mjs", hash: sha(text) }, { path: "[redacted]/obsolete.txt", hash: null }]);
+    f.ctx.readPrd = () => failing ? '# Brief\n\n## Verify\n\n- `node -e "process.stdout.write(require(\'node:fs\').readFileSync(\'auth.mjs\')); process.exit(2)"`\n'
+      : "# Brief\n\n## Verify\n\n- `cat auth.mjs`\n";
+    if (failing) await assert.rejects(reconcileExecutionResult(f.ctx, { ...f, result, verify: undefined }), /verification failed/);
+    else await reconcileExecutionResult(f.ctx, { ...f, result, verify: undefined });
+    assert.deepEqual(readFileSync(join(f.entry.worktree, "auth.mjs")), Buffer.from(text));
+    assert.throws(() => readFileSync(join(f.entry.worktree, path)), { code: "ENOENT" });
+    const verification = readJson(join(f.dir, "verification.json"));
+    assert.equal(verification.evidence[0].exit, failing ? 2 : 0);
+    assert.doesNotMatch(JSON.stringify(verification), new RegExp(secret));
+    assert.equal(f.calls.includes("PR"), !failing);
+    // A crash during application leaves exact private paths in this checkpoint.
+    writeJsonAtomic(join(f.dir, "result-application.json"), { phase: "applying", paths: original.map(file => file.path) });
+    const state = makeState(f.ctx.home); state.put(f.id, f.entry);
+    const before = f.provider.calls.length, response = { writeHead(code) { this.code = code; }, end(body) { this.body = body; } };
+    routes["GET /api/run/result"]({ ...f.ctx, state }, {}, response, new URL(`http://localhost/api/run/result?id=${f.id}&run=${f.job.id}`));
+    assert.equal(response.code, 200); assert.doesNotMatch(response.body, new RegExp(secret));
+    const view = JSON.parse(response.body);
+    assert.deepEqual(view.artifacts, result.artifacts);
+    assert.deepEqual(view.publication.paths, ["auth.mjs", "[redacted]/obsolete.txt"]);
+    assert.equal(Object.hasOwn(view, "files"), false);
+    assert.equal(f.provider.calls.length, before);
+    writeJsonAtomic(join(f.dir, "result-public-fixture.json"), view);
+  }
+});
+
 test("result publication validates ownership/paths/input head and records real verification", async () => {
   const f = resultFixture();
   const done = await reconcileExecutionResult(f.ctx, f);
@@ -523,6 +598,14 @@ test("saved result route survives log retention, rejects traversal and never pol
   const response = { writeHead(code) { this.code = code; }, end(body) { this.body = body; } };
   routes["GET /api/run/result"](ctx, {}, response, new URL(`http://localhost/api/run/result?id=${id}&run=${job.id}`));
   assert.equal(response.code, 200); assert.equal(JSON.parse(response.body).outcome.ok, true);
+  // Version 1 caches from before the separate summary remain readable.
+  const legacy = service.result(job.id); delete legacy.artifacts;
+  legacy.files = Array.from({ length: 110 }, (_, i) => ({ path: `legacy-${i}.txt`, afterHash: sha(String(i)), text: "private payload" }));
+  writeJsonAtomic(join(service.dirOf(job.id), "result.json"), legacy);
+  routes["GET /api/run/result"](ctx, {}, response, new URL(`http://localhost/api/run/result?id=${id}&run=${job.id}`));
+  assert.equal(JSON.parse(response.body).artifacts.length, 100);
+  assert.deepEqual(JSON.parse(response.body).artifacts[0], { path: "legacy-0.txt", hash: sha("0") });
+  assert.doesNotMatch(response.body, /private payload/);
   routes["GET /api/run/result"](ctx, {}, response, new URL(`http://localhost/api/run/result?id=${id}&run=..%2foutside`));
   assert.equal(response.code, 404); assert.equal(f.calls.length, before);
 });
