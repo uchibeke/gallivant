@@ -481,6 +481,50 @@ test("result publication validates ownership/paths/input head and records real v
   await assert.rejects(reconcileExecutionResult(linked.ctx, linked), /symlink/);
 });
 
+test("artifact aliases reject duplicate canonical targets before content validation or mutation", async () => {
+  for (const [first, alias] of [["a.txt", "./a.txt"], ["a.txt", ".//a.txt"], ["nested/a.txt", "nested//./a.txt"]]) {
+    for (const deletion of [false, true]) {
+      const f = resultFixture();
+      if (first.startsWith("nested/")) { mkdirSync(join(f.entry.worktree, "nested")); writeFileSync(join(f.entry.worktree, first), "before"); }
+      f.result.files = [
+        { path: first, beforeHash: sha("before"), afterHash: "invalid-content-hash", text: "first payload" },
+        { path: alias, beforeHash: sha("before"), afterHash: deletion ? null : sha("last payload"), text: deletion ? null : "last payload" },
+      ];
+      const original = structuredClone(f.result.files);
+      await assert.rejects(reconcileExecutionResult(f.ctx, f), /duplicate canonical result file/);
+      assert.equal(readFileSync(join(f.entry.worktree, first), "utf8"), "before");
+      assert.deepEqual(f.result.files, original); assert.deepEqual(f.calls, []);
+      assert.throws(() => readFileSync(join(f.dir, "result-application.json")), { code: "ENOENT" });
+    }
+  }
+  // Validate every target before reading even the first artifact's content hash.
+  const unsafe = resultFixture(); unsafe.result.files[0].afterHash = "invalid-content-hash";
+  unsafe.result.files.push({ ...unsafe.result.files[0], path: ".//.git/config" });
+  await assert.rejects(reconcileExecutionResult(unsafe.ctx, unsafe), /unsafe repository path/);
+  assert.equal(readFileSync(join(unsafe.entry.worktree, "a.txt"), "utf8"), "before");
+  assert.deepEqual(unsafe.calls, []);
+});
+
+test("canonical artifact targets survive native commit acknowledgement loss without changing the private manifest", async () => {
+  const f = await nativeResultFixture(), originalPath = ".//a.txt", commitPaths = [], recoveryPaths = [];
+  f.result.files[0].path = originalPath;
+  const commit = f.ctx.git.commitResult, matches = f.ctx.git.resultHeadMatches; let lost = true;
+  f.ctx.git.commitResult = async (dir, paths) => {
+    commitPaths.push(paths); await commit(dir, paths);
+    if (lost) { lost = false; throw new Error("commit acknowledgement lost"); }
+  };
+  f.ctx.git.resultHeadMatches = async (dir, head, paths) => { recoveryPaths.push(paths); return matches(dir, head, paths); };
+  await assert.rejects(reconcileExecutionResult(f.ctx, f), /acknowledgement lost/);
+  assert.deepEqual(readJson(join(f.dir, "result-application.json")).paths, ["a.txt"]);
+  await reconcileExecutionResult(f.ctx, f);
+  assert.deepEqual(commitPaths, [["a.txt"], ["a.txt"]]); assert.deepEqual(recoveryPaths, [["a.txt"]]);
+  assert.equal(f.result.files[0].path, originalPath);
+  assert.equal(sha(readFileSync(join(f.entry.worktree, "a.txt"))), f.result.files[0].afterHash);
+  assert.deepEqual(await f.ctx.git.dirty(f.entry.worktree, { strict: true }), { modified: 0, untracked: 0 });
+  assert.equal(readJson(join(f.dir, "result-application.json")).phase, "published");
+  assert.deepEqual(f.calls, ["commit", "commit", "verify", "push", "PR"]);
+});
+
 test("failed verification prevents GitHub publication and leaves exact evidence", async () => {
   const f = resultFixture(); let attempts = 0;
   f.verify = async () => { attempts++; throw Object.assign(new Error("failed"), { code: 2, stderr: "test failure" }); };
@@ -648,11 +692,78 @@ test("journal restart repairs a crash between checkpoint and append with an expl
   writeJsonAtomic(join(dir, "journal.json"), { version: 1, sequence: 1, pending: { hash: key, eventId, timestamp: 1, offset: 0 } });
   const journal = journalFor(dir, { taskId: "task", runId: "run", provider });
   assert.deepEqual(journal.append({ eventId, type: "output", data: "replay" }), { sequence: 1, eventId });
-  const records = readFileSync(join(dir, "events.jsonl"), "utf8").trim().split("\n").map(JSON.parse);
+  const records = readFileSync(join(dir, "events.jsonl"), "utf8").split("\n").slice(0, -1).map(JSON.parse);
   assert.equal(records.length, 1); assert.equal(records[0].type, "gap");
   assert.equal(logWindow(dir).ids[0], 1);
   const next = journal.append({ eventId: "after", type: "output", data: "continued" });
   assert.equal(next.sequence, 2);
+});
+
+test("journal recovery truncates partial tails, preserves a large prefix and replays one stable gap", () => {
+  for (const tail of ['{"version":1', 'invalid JSON\npartial', '{"sequence":999}\n', '{"data":"' + "x".repeat(LOG_LIMITS.lineBytes * 2)]) {
+    const dir = tempHome(), options = { taskId: "task", runId: "run", provider: "fixture", secrets: ["private-fixture-value"] };
+    const journal = journalFor(dir, options);
+    for (let i = 1; i <= 9; i++) journal.append({ eventId: `prefix-${i}`, type: "output", data: "x".repeat(32_768) });
+    const events = join(dir, "events.jsonl"), prefix = readFileSync(events);
+    assert.ok(prefix.length > LOG_LIMITS.windowBytes);
+    const eventId = "lost-event", providerJobId = "p1", turnId = "t1", sequence = 10;
+    const key = sha(JSON.stringify([options.provider, providerJobId, turnId, eventId]));
+    const pending = { hash: key, eventId, timestamp: 1, offset: prefix.length };
+    writeFileSync(events, Buffer.concat([prefix, Buffer.from(tail)]));
+    writeJsonAtomic(join(dir, "journal.json"), { version: 1, sequence, pending });
+    const recovered = journalFor(dir, options), text = readFileSync(events, "utf8");
+    const records = text.split("\n").slice(0, -1).map(JSON.parse);
+    assert.deepEqual(Buffer.from(text).subarray(0, prefix.length), prefix);
+    assert.deepEqual(records.map(r => r.sequence), Array.from({ length: 10 }, (_, i) => i + 1));
+    assert.equal(records.at(-1).type, "gap"); assert.equal(records.at(-1).eventId, eventId);
+    assert.equal(records.at(-1).taskId, options.taskId); assert.equal(records.at(-1).runId, options.runId);
+    assert.equal(records.at(-1).provenance, "coordinator"); assert.equal(records.at(-1).timestamp, 1);
+    assert.deepEqual(recovered.append({ eventId, providerJobId, turnId, data: "private-fixture-value" }), { sequence, eventId });
+    assert.equal(readFileSync(events, "utf8"), text);
+    assert.equal(logWindow(dir).ids.at(-1), sequence);
+    // Crash after replacing the tail but before clearing its checkpoint.
+    writeJsonAtomic(join(dir, "journal.json"), { version: 1, sequence, pending });
+    const restart = journalFor(dir, options);
+    assert.equal(readFileSync(events, "utf8"), text); assert.equal(logWindow(dir).ids.at(-1), sequence);
+    assert.equal(restart.append({ eventId: "next", type: "output", data: "private-fixture-value continued" }).sequence, sequence + 1);
+    const final = readFileSync(events, "utf8");
+    assert.equal(final.split("\n").slice(0, -1).map(JSON.parse).length, 11);
+    assert.doesNotMatch(final + readFileSync(join(dir, "job.log"), "utf8"), /private-fixture-value/);
+  }
+});
+
+test("journal recovery retains complete pending records and repairs their missing newline", () => {
+  for (const delimiter of ["", "\n"]) {
+    const dir = tempHome(), options = { taskId: "task", runId: "run", provider: "fixture" };
+    const journal = journalFor(dir, options); journal.append({ eventId: "first", type: "output", data: "first" });
+    const events = join(dir, "events.jsonl"), prefix = readFileSync(events);
+    const record = { version: 1, ...options, sequence: 2, eventId: "pending", timestamp: 1, provenance: "provider", type: "output", data: "fully written" };
+    const key = sha(JSON.stringify([options.provider, null, null, record.eventId]));
+    writeFileSync(events, Buffer.concat([prefix, Buffer.from(JSON.stringify(record) + delimiter)]));
+    writeJsonAtomic(join(dir, "journal.json"), { version: 1, sequence: 2, pending: { hash: key, eventId: record.eventId, timestamp: 1, offset: prefix.length } });
+    const recovered = journalFor(dir, options);
+    assert.deepEqual(recovered.append({ eventId: "pending", data: "replay" }), { sequence: 2, eventId: "pending" });
+    assert.equal(recovered.append({ eventId: "after", type: "output", data: "after" }).sequence, 3);
+    const text = readFileSync(events, "utf8"), records = text.split("\n").slice(0, -1).map(JSON.parse);
+    assert.equal(records.length, 3); assert.deepEqual(records[1], record);
+    assert.deepEqual(Buffer.from(text).subarray(0, prefix.length), prefix);
+    journalFor(dir, options); assert.equal(readFileSync(events, "utf8"), text);
+    assert.deepEqual(logWindow(dir).ids, [1, 2, 3]);
+  }
+});
+
+test("journal recovery preserves a truncated acknowledged prefix and requires its matching backup", () => {
+  const dir = tempHome(), options = { taskId: "task", runId: "run", provider: "fixture" };
+  const journal = journalFor(dir, options); journal.append({ eventId: "first", type: "output", data: "first" });
+  const events = join(dir, "events.jsonl"), offset = statSync(events).size;
+  const key = sha(JSON.stringify([options.provider, null, null, "pending"]));
+  const checkpoint = { version: 1, sequence: 2, pending: { hash: key, eventId: "pending", timestamp: 1, offset } };
+  const partial = '{"version":1'; writeFileSync(events, partial);
+  writeJsonAtomic(join(dir, "journal.json"), checkpoint);
+  assert.throws(() => journalFor(dir, options), /acknowledged journal prefix is truncated.*restore a matching journal backup/);
+  assert.equal(readFileSync(events, "utf8"), partial);
+  assert.deepEqual(readJson(join(dir, "journal.json")), checkpoint);
+  assert.throws(() => readFileSync(join(dir, "event-keys", key)), { code: "ENOENT" });
 });
 
 test("projection retention preserves replay numbers and reports removed history", () => {

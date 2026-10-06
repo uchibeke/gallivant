@@ -1,0 +1,187 @@
+{
+  "version": 1,
+  "task_id": "task-df42674c6251c85b0edef13f",
+  "scope": "offline artifact path and interrupted journal append review corrections",
+  "recorded_at": "2026-10-06T02:04:23.661755+00:00",
+  "source_parent_revision": "88ff77562a52d511bee28822cd9dc004cc541132",
+  "review_comment_ids": [
+    4190743757,
+    4190743761
+  ],
+  "prior_evidence": [
+    "docs/audit/plugin-ready/execution-foundation.json",
+    "docs/audit/plugin-ready/execution-preparation.json",
+    "docs/audit/plugin-ready/execution-cancellation.json",
+    "docs/audit/plugin-ready/execution-artifacts.json",
+    "docs/audit/plugin-ready/execution-verification.json"
+  ],
+  "commands": [
+    {
+      "command": "npm test",
+      "exit": 0,
+      "raw_log": "/tmp/execution-path-journal-tests.txt",
+      "sha256": "1bb62bceb5780dc5c55ae09c5017caa6e4da98f02a63295d66904c61cab8ddbf",
+      "tests": 953,
+      "passed": 953
+    },
+    {
+      "command": "npm run lint",
+      "exit": 0,
+      "raw_log": "/tmp/execution-path-journal-lint.txt",
+      "sha256": "8c7790de3f018fb4580f18ac70e1b355a0f76f522dd73acbdaa63632feffcecc"
+    },
+    {
+      "command": "npm run test:execution-backends",
+      "exit": 0,
+      "raw_log": "/tmp/execution-path-journal-backends.txt",
+      "sha256": "79f16bfc25c023dca5918e781fd84f6204a8497d3a938f664e28b3f9cafeb810",
+      "tests": 164,
+      "passed": 164
+    },
+    {
+      "command": "git diff --check",
+      "exit": 0,
+      "evidence": "Empty output on final source/docs; repeated after evidence generation and staging."
+    }
+  ],
+  "artifact_hashes": {
+    "lib/repository_files.mjs": "0db4a93b6bcd09877ca206d11aea65c74278e8fa38947e2fa982cf88d53a7a0a",
+    "lib/execution_result.mjs": "59e1983b36569693e9a08cc9b5a931d1497a88d67f449880c23d7dfc362951c8",
+    "lib/execution_journal.mjs": "ae4773b26f024f8d53ce57d2aba2172454b75680bf0f6934f1b77c455eec12f2",
+    "test/execution-backends.test.mjs": "c69e8cfb8d1f8b0c6e48b850621bb0f86f1c6a6f1c11b7b9ff0255d380e75fbd",
+    "docs/execution.md": "fd13f6f3b568e73e141d578efb65fb85983e1b2bd5f17a446c3d50b8adc6bf32"
+  },
+  "source_and_output_review": [
+    {
+      "rule": "Equivalent repository-relative artifact spellings must identify one canonical target, and duplicate targets must fail before content validation or mutation.",
+      "files": [
+        "lib/repository_files.mjs",
+        "lib/execution_result.mjs",
+        "lib/git.mjs",
+        "lib/execution_io.mjs",
+        "lib/commands/serve.mjs"
+      ],
+      "boundaries_checked": [
+        "shared containment and symlink validation",
+        "complete manifest path pass",
+        "dot segments and repeated separators",
+        "write/delete collision",
+        "unsafe .git target before content read",
+        "canonical application paths",
+        "commitResult paths",
+        "lost commit acknowledgement ancestry reconciliation",
+        "immutable private provider manifest and fingerprint",
+        "redacted public summary",
+        "existing atomic write/delete and failure paths"
+      ],
+      "regressions": [
+        "artifact aliases reject duplicate canonical targets before content validation or mutation",
+        "canonical artifact targets survive native commit acknowledgement loss without changing the private manifest",
+        "result publication validates ownership/paths/input head and records real verification",
+        "collected authentication source preserves exact artifact bytes through restart and publication"
+      ],
+      "observed": "Duplicate lexical aliases fail with unchanged files and no commit, verification or publication. Native commit acknowledgement recovery receives a.txt consistently for checkpoint, commit and ancestry checks while the private manifest keeps .//a.txt and the original hash."
+    },
+    {
+      "rule": "Interrupted append recovery must leave parseable JSONL, preserve the acknowledged prefix, and retain stable gap/event/replay identities without leaking partial bytes.",
+      "files": [
+        "lib/execution_journal.mjs",
+        "lib/run.mjs",
+        "lib/execution.mjs",
+        "lib/run_log.mjs"
+      ],
+      "boundaries_checked": [
+        "bounded saved-offset read",
+        "missing event append",
+        "partial JSON tail",
+        "invalid multiline tail",
+        "wrong sequence record",
+        "oversized partial tail",
+        "truncate before durable gap append",
+        "valid complete record",
+        "missing newline repair",
+        "event key persistence",
+        "projection recovery",
+        "crash after gap replacement before checkpoint clear",
+        "restart and duplicate replay",
+        "redacted later append",
+        "truncated acknowledged prefix refusal"
+      ],
+      "regressions": [
+        "journal restart repairs a crash between checkpoint and append with an explicit stable gap",
+        "journal recovery truncates partial tails, preserves a large prefix and replays one stable gap",
+        "journal recovery retains complete pending records and repairs their missing newline",
+        "journal recovery preserves a truncated acknowledged prefix and requires its matching backup",
+        "normalized journal preserves provenance, provider ordering, redaction and replay IDs"
+      ],
+      "observed": "All lines parse without trimming away blank lines. A 296901-byte acknowledged prefix remains byte-for-byte intact; recovery requests one 65537-byte read at its saved offset and observes the 12-byte partial tail. The replacement gap retains sequence 10 and event identity; replay appends nothing and the next event is sequence 11. A shortened acknowledged prefix is preserved with an actionable restore remedy."
+    }
+  ],
+  "representative_output": {
+    "root": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/execution-path-journal-RDSLrr",
+    "journal": {
+      "path": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/execution-path-journal-RDSLrr/journal/events.jsonl",
+      "prefixBytes": 296901,
+      "prefixPreserved": true,
+      "records": 11,
+      "repairSequence": 10,
+      "repairEventId": "pending",
+      "repairType": "gap",
+      "boundedReads": [
+        {
+          "requested": 65537,
+          "offset": 296901,
+          "bytesRead": 12
+        }
+      ],
+      "replayAppended": false,
+      "publicLastSequence": 11,
+      "checkpoint": {
+        "version": 1,
+        "sequence": 11
+      },
+      "secretPresent": false,
+      "sha256": "085f22cde0c84fd1c6c1ec9f35347dd31ea06efb1fb2a26cc48e536d063d62e2"
+    },
+    "artifact": {
+      "path": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/execution-path-journal-RDSLrr/worktree/a.txt",
+      "privateSpellings": [
+        "a.txt",
+        ".//a.txt"
+      ],
+      "error": "duplicate canonical result file",
+      "mutationCalls": 0,
+      "content": "before",
+      "applicationCheckpointPresent": false,
+      "sha256": "6db7d803e74f1ffa7d8f5adc0bf95b3e15bf4c8373fffadf546227cc6c6742cb"
+    },
+    "evidenceKind": "Offline generated fixture inspection; no live provider qualification."
+  },
+  "focused_checks": [
+    {
+      "raw_log": "/tmp/execution-path-journal-focus.txt",
+      "sha256": "1c2a7e46200f7acc45f5dcd18ff526bcd2ad0a438d463d8d06759b65cc49e6fc",
+      "tests": 7,
+      "passed": 7
+    },
+    {
+      "raw_log": "/tmp/execution-path-journal-focus-final.txt",
+      "sha256": "1a4dad322c4c61b3e37162672c1bc019597d5968a2947daf82feae49337b1a82",
+      "tests": 8,
+      "passed": 8
+    }
+  ],
+  "external_qualification": {
+    "mandatory_live_prerequisites": [],
+    "live_paid_calls": 0,
+    "native_codex_preparation_qualified": false,
+    "remote_provider_available": {
+      "openai-agents": false,
+      "codex-cloud": false
+    },
+    "installed_plugin_qualified": false,
+    "model_access_exercised": false,
+    "browser_capture_required": false,
+    "remedy": "Complete the independent native preparation adapter and its limited-authority evidence before registry integration. Later production transports require implemented adapters, credentials, demonstrated model access and authorized bounded live evidence; preserve model/provider defaults and sandbox permissions."
+  }
+}

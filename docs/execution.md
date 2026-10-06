@@ -195,6 +195,16 @@ Verification output also uses the execution boundary's supplied-secret redaction
 Previously modified cached artifacts remain invalid; restore exact artifacts for
 the recorded provider job/root turn before publication, without redispatching.
 
+Journal append recovery reads at most 65,537 bytes at the saved pending offset.
+An invalid or partial pending record is removed by truncating to that offset
+before a complete gap record replaces it. Previously acknowledged bytes remain
+intact. A complete pending record with a missing newline receives its delimiter
+before another event can append. Recovery and subsequent replay preserve the
+original sequence/event ID and do not append a second replacement gap. If an
+existing journal is shorter than the acknowledged offset, recovery refuses and
+preserves it: restore its matching backup before replay instead of extending
+the file with zero bytes or claiming a damaged prefix was repaired.
+
 Private local diagnostics use `provider.log` and `sensitive-redactions.json`
 (mode 0600 in the private run tree). They are excluded from routes/projections.
 The redaction metadata records a 24-hour expiry; coordinator observation removes
@@ -247,7 +257,12 @@ advertise billing enforcement a transport cannot provide.
 
 Shared result publication validates task/run/root-turn/input-head ownership,
 repository origin, task branch/base, paths/symlinks and artifact content/base
-hashes before mutation. Applied content and input ancestry reconcile lost commit
+hashes before mutation. Every artifact target is canonicalized with the shared
+repository containment/symlink validator before any content is read. Equivalent
+spellings (`a.txt`, `./a.txt`, repeated separators) cannot name duplicate targets;
+application, commit paths and lost-acknowledgement reconciliation use the same
+canonical Git-relative paths. The private provider manifest remains unchanged.
+Applied content and input ancestry reconcile lost commit
 acknowledgements. Only existing Git/GitHub helpers commit, push and reconcile one
 regular PR. Approved immutable PRD Verify commands run in the owned checkout
 with real exit/output/timestamp/revision evidence (120-second, 256 KiB command
