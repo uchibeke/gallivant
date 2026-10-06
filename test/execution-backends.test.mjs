@@ -1093,6 +1093,7 @@ function localOutputFixture({ root = tempHome(), clock = makeClock(), id = "old-
   mkdirSync(dir, { recursive: true });
   writeJsonAtomic(join(dir, "job.json"), { id, pid: null, exit: 0, startedAt: clock.now(), endedAt: clock.now(), privateOutput: { taskId, runId: id, provider: "codex" } });
   writeJsonAtomic(join(dir, "sensitive-redactions.json"), { expiresAt: clock.now() + 86_400_000, secrets: [secret] });
+  writeFileSync(join(dir, "job.log"), "");
   writeFileSync(join(dir, "provider.log"), text);
   writeFileSync(join(root, "latest-run"), id);
   const openRunner = () => makeRunner(root, { clock, probe: () => false });
@@ -1100,6 +1101,73 @@ function localOutputFixture({ root = tempHome(), clock = makeClock(), id = "old-
   return { root, dir, taskId, id, clock, secret, openRunner, open };
 }
 const outputEvents = dir => readFileSync(join(dir, "events.jsonl"), "utf8").trim().split("\n").map(JSON.parse);
+
+test("drained and empty local runs remain queued for private retention cleanup across successors and restart", async t => {
+  const evidence = [];
+  for (const mode of ["drained", "empty", "result-delayed"]) {
+    const f = localOutputFixture({ text: mode === "empty" ? "" : "completed queued-private-value\n" }), runner = f.openRunner();
+    runner.observe();
+    const cursor = readJson(join(f.dir, "local-output.json"));
+    assert.equal(cursor.pending, false);
+    const resultFile = join(f.dir, "result.json"), result = { sessionId: "retained-session", outcome: { finished: true, ok: true, lastMessage: "retained outcome", cost: null } };
+    if (mode !== "result-delayed") writeJsonAtomic(resultFile, result);
+    const jobBytes = readFileSync(join(f.dir, "job.json"), "utf8"), logBytes = readFileSync(join(f.dir, "job.log"), "utf8");
+    const next = await runner.start("successor", process.execPath, ["-e", 'process.stdout.write("successor progress\\n")'], { cwd: tempHome(), runId: "next-run", privateOutput: { taskId: f.taskId, runId: "next-run", provider: "codex" } });
+    while (runner.read(next.id).exit === null) await new Promise(resolve => setImmediate(resolve));
+    const queueFile = join(f.root, "local-output-queue.json");
+    assert.deepEqual(readJson(queueFile), { version: 1, runs: [f.id] });
+    const readonly = f.open(); readonly.current(); readonly.inspect(); logWindow(f.dir);
+    assert.deepEqual(readJson(join(f.dir, "local-output.json")), cursor);
+    const meters = [f.openRunner().observe()];
+    assert.deepEqual(readJson(queueFile).runs, [f.id]);
+    assert.equal(outputEvents(join(f.root, next.id))[0].data, "successor progress");
+    for (const name of ["provider.log", "sensitive-redactions.json"]) assert.equal(existsSync(join(f.dir, name)), true);
+    f.clock.advance(24 * 60 + 1);
+    if (mode === "result-delayed") {
+      meters.push(f.openRunner().observe());
+      assert.deepEqual(readJson(queueFile).runs, [f.id]);
+      for (const name of ["provider.log", "sensitive-redactions.json"]) assert.equal(existsSync(join(f.dir, name)), true);
+      writeJsonAtomic(resultFile, result);
+    }
+    meters.push(f.openRunner().observe());
+    assert.deepEqual(readJson(queueFile).runs, []);
+    for (const name of ["provider.log", "sensitive-redactions.json"]) assert.equal(existsSync(join(f.dir, name)), false);
+    assert.equal(readFileSync(join(f.dir, "job.json"), "utf8"), jobBytes);
+    assert.equal(readFileSync(join(f.dir, "job.log"), "utf8"), logBytes);
+    assert.deepEqual(readJson(resultFile), result);
+    assert.deepEqual(f.open().outcome(f.id), result.outcome);
+    assert.equal(readFileSync(join(f.root, "latest-run"), "utf8"), next.id);
+    for (const meter of meters) {
+      assert.ok((meter.pages || 0) <= LOCAL_OUTPUT_LIMITS.pages);
+      assert.ok((meter.bytesRead || 0) <= LOCAL_OUTPUT_LIMITS.bytes * LOCAL_OUTPUT_LIMITS.pages);
+      assert.ok((meter.maxBufferBytes || 0) <= LOCAL_OUTPUT_LIMITS.bytes);
+    }
+    assert.doesNotMatch(logBytes, /queued-private-value/);
+    f.openRunner().observe(); assert.equal(readFileSync(join(f.dir, "job.log"), "utf8"), logBytes);
+    evidence.push({ mode, runId: f.id, successor: next.id, cursor, meters, queue: readJson(queueFile), result: readJson(resultFile), files: { root: f.root, result: resultFile, job: join(f.dir, "job.json"), log: join(f.dir, "job.log"), queue: queueFile }, privateFilesRemoved: true });
+  }
+  const report = join(tempHome(), "local-retention-evidence.json");
+  writeJsonAtomic(report, { kind: "Offline native Node successors and controlled-clock retention fixtures", cases: evidence });
+  t.diagnostic(`local retention evidence: ${report}`);
+});
+
+test("private local cleanup retries removal failures without dropping its durable queue entry", () => {
+  const f = localOutputFixture({ text: "completed output\n" }), runner = f.openRunner(), file = join(f.dir, "provider.log");
+  runner.observe(); runner.prepareStart();
+  localOutputFixture({ root: f.root, clock: f.clock, id: "next-run", text: "unrelated progress\n" });
+  writeJsonAtomic(join(f.dir, "result.json"), { outcome: { finished: true, ok: true, lastMessage: "retained outcome", cost: null } });
+  rmSync(file); mkdirSync(file); // A replaced diagnostic path cannot be removed as a file.
+  f.clock.advance(24 * 60 + 1);
+  assert.throws(() => f.openRunner().observe(), { code: "ERR_FS_EISDIR" });
+  assert.deepEqual(readJson(join(f.root, "local-output-queue.json")).runs, [f.id]);
+  assert.equal(existsSync(join(f.dir, "sensitive-redactions.json")), true);
+  rmSync(file, { recursive: true });
+  f.openRunner().observe();
+  assert.deepEqual(readJson(join(f.root, "local-output-queue.json")).runs, []);
+  assert.equal(existsSync(join(f.dir, "sensitive-redactions.json")), false);
+  assert.equal(f.open().outcome(f.id).lastMessage, "retained outcome");
+  assert.equal(outputEvents(join(f.root, "next-run"))[0].data, "unrelated progress");
+});
 
 test("completed local output survives a successor, restart and cursor replay with exact paginated history", async t => {
   const root = tempHome(), cwd = tempHome(), clock = makeClock(), taskId = "acme/widget/output", secret = "queued-private-value";
@@ -1130,7 +1198,7 @@ test("completed local output survives a successor, restart and cursor replay wit
   writeJsonAtomic(join(oldDir, "local-output.json"), checkpoint);
   await open(openRunner()).reconcile(); assert.equal(outputEvents(oldDir).length, 200);
   await open(openRunner()).reconcile();
-  assert.deepEqual(readJson(queueFile), { version: 1, runs: [] });
+  assert.deepEqual(readJson(queueFile), { version: 1, runs: [old.id] });
   const events = outputEvents(oldDir), expected = [...lines, `final old tail ${secret}`];
   assert.equal(events.length, expected.length);
   let offset = 0;
@@ -1148,8 +1216,11 @@ test("completed local output survives a successor, restart and cursor replay wit
   assert.deepEqual(ids, events.map(event => event.sequence));
   assert.doesNotMatch(readFileSync(join(oldDir, "job.log"), "utf8") + JSON.stringify(events), new RegExp(secret));
   const outcome = reopened.outcome(old.id);
-  clock.advance(24 * 60 + 1); writeFileSync(join(root, "latest-run"), old.id); reopenedRunner.observe();
-  assert.equal(existsSync(join(oldDir, "provider.log")), false); assert.deepEqual(reopened.outcome(old.id), outcome);
+  clock.advance(24 * 60 + 1); reopenedRunner.observe();
+  assert.deepEqual(readJson(queueFile), { version: 1, runs: [] });
+  assert.equal(readFileSync(join(root, "latest-run"), "utf8"), next.id);
+  assert.equal(existsSync(join(oldDir, "provider.log")), false); assert.equal(existsSync(join(oldDir, "sensitive-redactions.json")), false);
+  assert.deepEqual(reopened.outcome(old.id), outcome); assert.deepEqual(outputEvents(oldDir), events);
   writeJsonAtomic(join(root, "local-output-evidence.json"), { kind: "Offline local CLI output fixture", oldRun: old.id, nextRun: next.id, events: events.length, ids, queue: readJson(queueFile), result: outcome, files: { journal: join(oldDir, "events.jsonl"), log: join(oldDir, "job.log"), result: join(oldDir, "result.json") } });
   t.diagnostic(`local output evidence: ${join(root, "local-output-evidence.json")}`);
 });
@@ -1194,10 +1265,14 @@ test("queued local output has explicit stable gaps for expiry, missing diagnosti
     await f.open().reconcile();
     const events = outputEvents(f.dir), gap = events.at(-1);
     assert.equal(events.length, 101); assert.equal(gap.type, "gap"); assert.match(gap.data, new RegExp(reason));
-    assert.deepEqual(readJson(join(f.root, "local-output-queue.json")).runs, []);
+    assert.deepEqual(readJson(join(f.root, "local-output-queue.json")).runs, reason === "diagnostic retention expired" ? [] : [f.id]);
     assert.doesNotMatch(JSON.stringify(events) + readFileSync(join(f.dir, "job.log"), "utf8"), /queued-private-value/);
     await f.open().reconcile(); assert.deepEqual(outputEvents(f.dir), events);
     assert.equal(f.open().outcome(f.id).lastMessage, "durable result");
+    f.clock.advance(24 * 60 + 1); await f.open().reconcile();
+    assert.deepEqual(readJson(join(f.root, "local-output-queue.json")).runs, []);
+    assert.equal(existsSync(join(f.dir, "provider.log")), false); assert.equal(existsSync(join(f.dir, "sensitive-redactions.json")), false);
+    assert.deepEqual(outputEvents(f.dir), events);
   }
 });
 
@@ -1227,11 +1302,11 @@ test("oversized local records discard every suffix across queued restart, replay
     if (mode === "legacy") { const { discarding: _discarding, ...old } = first; writeJsonAtomic(cursor, old); }
     runner.prepareStart(); localOutputFixture({ root: f.root, clock: f.clock, id: "next-run", text: "unrelated current progress\n" });
     const meters = [];
-    for (let page = 0; page < 5 && readJson(join(f.root, "local-output-queue.json")).runs.length; page++) {
+    for (let page = 0; page < 5 && readJson(cursor).pending; page++) {
       meters.push(f.openRunner().observe());
       if (page === 0) writeJsonAtomic(cursor, mode === "legacy" ? { offset: first.offset, pending: true } : first);
     }
-    assert.deepEqual(readJson(join(f.root, "local-output-queue.json")).runs, []);
+    assert.deepEqual(readJson(join(f.root, "local-output-queue.json")).runs, [f.id]);
     assert.equal(readJson(cursor).discarding, false); assert.equal(readJson(cursor).offset, Buffer.byteLength(text));
     for (const meter of meters) { assert.ok(meter.bytesRead <= LOCAL_OUTPUT_LIMITS.bytes * 2); assert.ok(meter.maxBufferBytes <= LOCAL_OUTPUT_LIMITS.bytes); assert.ok(meter.pages <= 2); }
     const events = outputEvents(f.dir);

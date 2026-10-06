@@ -258,7 +258,7 @@ Each new run retains compatible `job.json`/`job.log` plus:
 | `journal.json`, `event-keys/` | Durable append checkpoint and hashed exact provider/job/turn/event replay keys; interrupted append becomes an explicit gap |
 | `job.idx`, `log-meta.json` | Fixed-width 8-byte offsets, version 2 offset-plus-one encoding, stable sequence numbers and retained first sequence; zero entries denote gaps |
 | `local-output.json` | Raw local ingestion byte cursor, bounded page, pending marker and persistent `discarding` state |
-| `local-output-queue.json` (task run root) | Version 1 ordered unfinished local run IDs; persisted before replacing `latest-run` |
+| `local-output-queue.json` (task run root) | Version 1 ordered local run IDs awaiting projection or private-file cleanup; persisted before replacing `latest-run` |
 | `result.json` | Mode 0600 private collected result, original artifact manifest/payloads, redacted outcome and `artifacts` summary; independent of retained logs |
 | `result-application.json`, `verification.json` | Artifact application/publication checkpoint and actual approved verification observations |
 
@@ -295,14 +295,17 @@ preserves it: restore its matching backup before replay instead of extending
 the file with zero bytes or claiming a damaged prefix was repaired.
 
 Completed local output may outlive its current-run pointer. Before a successor
-can save an execution intent or start, the runner preserves the old unfinished
-cursor in `local-output-queue.json`. Coordinator reconciliation drains one
-queued run page and one current-run page, each at most 100 records and 262,144
+can save an execution intent or start, the runner preserves the old run in
+`local-output-queue.json` while output is pending or either private diagnostic
+file remains, including drained and empty logs. Coordinator reconciliation drains
+one queued run page and one current-run page, each at most 100 records and 262,144
 raw bytes (200 records and 524,288 bytes per observation; maximum single buffer
-262,144 bytes). Pending runs rotate through the queue; journal byte-position
-identities and atomic checkpoints make restart/replay duplicate-free. The queue
-is drained even when legacy execution metadata has no current record. Public
-status, tail and history reads do not ingest diagnostics or mutate this queue.
+262,144 bytes). Runs awaiting projection or cleanup rotate through the queue;
+drained runs check expiry without reading diagnostic bytes or rewriting journals.
+Journal byte-position identities and atomic checkpoints make restart/replay
+duplicate-free. The queue is serviced even when legacy execution metadata has
+no current record. Public status, tail and history reads do not ingest diagnostics
+or mutate this queue.
 Results settle independently of this backlog, so a large old log cannot postpone
 unrelated execution or GitHub review. Unsupported queue versions, invalid cursors
 and queue persistence errors preserve diagnostics and refuse a new paid intent;
@@ -321,13 +324,20 @@ or replay with the checkpoint/backup remedy.
 Private local diagnostics use `provider.log` and `sensitive-redactions.json`
 (mode 0600 in the private run tree). They are excluded from routes/projections.
 The redaction metadata records a 24-hour expiry; coordinator observation removes
-expired diagnostics once a durable result exists. If queued bytes expire before
-projection, or diagnostics/redaction metadata are missing or truncated, the
-coordinator appends a stable explicit gap before removing the queue item; it
-never projects raw output without its redaction metadata. For older drained runs,
-retention maintenance must remove these two private files at expiry after
-checking `result.json`; never remove the result/application evidence. Legacy raw
-local files keep their existing runner semantics.
+expired diagnostics once a durable result exists, retaining the queue item until
+both private files have been removed. Removal failures preserve the item for a
+later coordinator retry. If redaction metadata is missing, the owned job's start
+time supplies the 24-hour expiry; missing metadata never authorizes raw projection.
+If queued bytes expire before projection, or diagnostics/redaction metadata are
+missing or truncated, the coordinator appends a stable explicit gap and retains
+any remaining private files for expiry cleanup. Results, job outcomes, session
+identity and public history
+survive this cleanup, and read-only routes cannot trigger it. The version 1 queue
+format remains compatible. Runs already omitted from the queue by an older
+package require explicit retention maintenance: after checking expiry and a
+durable `result.json`, remove only `provider.log` and `sensitive-redactions.json`.
+Never remove result/application evidence or change `latest-run` for cleanup.
+Legacy raw local files keep their existing runner semantics.
 
 Public tail/history reads are capped at 400 lines, 256 KiB data plus at most
 3,208 index bytes, 64 KiB per encoded line. JSON escaping is included in response
