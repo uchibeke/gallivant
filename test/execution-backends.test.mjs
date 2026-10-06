@@ -53,6 +53,40 @@ function remote(provider = "openai-agents", overrides = {}) {
   return { root, clock, calls, transport, capabilities, service: makeExecution(options), reopen: () => makeExecution(options), observe: patch => { observation = { ...observation, ...patch }; }, jobs };
 }
 
+test("invalid provider retry delays preserve finite reconciliation, health and cancellation schedules across restart", async t => {
+  const observations = [];
+  for (const retryAfterMs of [NaN, Infinity, -Infinity, "120000", -20_000]) {
+    const error = Object.assign(new Error("provider throttled"), { code: "THROTTLED", retryAfterMs });
+    let inspections = 0, cancellations = 0, probes = 0;
+    const f = remote("openai-agents", { inspect: async () => { inspections++; throw error; } });
+    const job = await f.service.submit(input), started = f.clock.now();
+    await f.service.reconcile();
+    assert.equal(f.reopen().current().execution.nextAttemptAt, started + 20_000);
+    f.clock.advance(19_999 / 60_000); await f.reopen().reconcile(); assert.equal(inspections, 1);
+    f.clock.advance(1 / 60_000); await f.reopen().reconcile(); assert.equal(inspections, 2);
+    assert.equal(f.reopen().current().id, job.id); assert.equal(f.calls.filter(v => v[0] === "submit").length, 1);
+
+    const home = tempHome(), clock = makeClock(), options = { home, clock, jitter: () => 0, probe: async () => { probes++; throw error; } };
+    await makeProviderHealth(options).refresh([["openai-agents", "test"]]);
+    assert.equal(makeProviderHealth(options).get("openai-agents", "test").nextAttemptAt, clock.now() + 20_000);
+    clock.advance(19_999 / 60_000); await makeProviderHealth(options).refresh([["openai-agents", "test"]]); assert.equal(probes, 1);
+    clock.advance(1 / 60_000); await makeProviderHealth(options).refresh([["openai-agents", "test"]]); assert.equal(probes, 2);
+
+    const stopped = remote("openai-agents", { cancel: async () => { cancellations++; throw error; } });
+    const cancelledJob = await stopped.service.submit(input);
+    await assert.rejects(stopped.service.cancel(), { code: "THROTTLED" });
+    const cancellation = stopped.reopen().state().current.execution.cancellation;
+    assert.equal(cancellation.nextAttemptAt, stopped.clock.now() + 20_000);
+    stopped.clock.advance(19_999 / 60_000); await stopped.reopen().reconcile(); assert.equal(cancellations, 1);
+    stopped.clock.advance(1 / 60_000); await stopped.reopen().reconcile(); assert.equal(cancellations, 2);
+    assert.equal(stopped.reopen().current().id, cancelledJob.id); assert.ok(stopped.reopen().state().stopped);
+    await assert.rejects(stopped.reopen().continue({ ...input, operationId: "forbidden" }), { code: "EXECUTION_STOPPED" });
+    observations.push({ invalidDelay: String(retryAfterMs), reconciliation: f.reopen().current().execution.nextAttemptAt, health: makeProviderHealth(options).get("openai-agents", "test").nextAttemptAt, cancellation: stopped.reopen().state().current.execution.cancellation.nextAttemptAt, inspections, probes, cancellations });
+  }
+  const path = join(tempHome(), "retry-boundary-evidence.json"); writeJsonAtomic(path, { kind: "offline shared retry lifecycle; no provider calls", observations });
+  t.diagnostic(`shared retry boundary evidence: ${path}`);
+});
+
 for (const provider of ["openai-agents", "codex-cloud"]) test(`${provider} fixture: proven pre-send refusal restores the prior root and allowance without ambiguity`, async () => {
   const f = remote(provider), job = await f.service.submit(input);
   f.observe({ state: "succeeded", costUsd: 0.2 }); await f.service.reconcile({ force: true }); await f.service.collect();

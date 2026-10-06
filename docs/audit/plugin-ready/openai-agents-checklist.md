@@ -25,6 +25,7 @@ installed-host qualification records remain independent.
 - [x] Provide the custom-prefix npm entry point in Linux runtime mounts, probe npm before dispatch, and verify actual native npm execution without broad bin access.
 - [x] Release only proven local pre-send refusals, restoring prior roots and allowance across restart while preserving lost-reply fences and actionable start/review states.
 - [x] Register initial preparation failures before source delivery and recover proven unsubmitted launches through shared CLI/control/tracker resume, with exact operation ownership and lost-reply/stop fences.
+- [x] Preserve finite bounded HTTP-date/delta retry deadlines across execution, account-health and cancellation restart; accept exact SHA-1/SHA-256 source object IDs with matching tree widths.
 - [x] Document installation, supported REST beta/Node versions, setup, polling, continuation, artifacts and verification.
 - [x] Reconcile the approved base's receipt cursor fixes, selected-provider preparation contract and single M5/M6 connected execution successor.
 - [ ] Integrate the separately reviewed restricted Codex preparation capability through the selected base after PR #10 merges; no adapter copy or provider-name gate.

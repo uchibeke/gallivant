@@ -84,6 +84,9 @@ input head and saved brief/source snapshots. The remote repository contains that
 verified revision's files and modes, plus carried files, rather than Git history;
 its sandbox-local initial commit is a snapshot commit. Publication always checks
 the original input head on the coordinator.
+Source snapshots accept Git SHA-1 and SHA-256 repositories: the exact HEAD must
+contain 40 or 64 hexadecimal characters, and every tree blob uses that same
+repository object-ID width. File-content hashes remain SHA-256 in both formats.
 Hosted resume refuses ordinary modified, staged, deleted, renamed or untracked
 files with `AGENTS_DIRTY_SOURCE` before merge, task reopening or paid dispatch.
 Commit the intended unfinished edits on the owned task branch, then resume the
@@ -155,6 +158,13 @@ persisted before launch acknowledgement. Lost replies reconcile the saved key an
 pre-send turn set; unknown acceptance never starts another paid implementation.
 Creation without a recoverable root remains explicitly ambiguous and needs an
 operator to inspect the saved session. Do not delete state to force a retry.
+
+`Retry-After` accepts non-negative seconds or an HTTP date, with delays bounded
+by the existing five-minute retry limit. Past dates and malformed headers use
+normal exponential backoff; invalid transport delays cannot erase a saved retry
+deadline. Restart preserves that deadline before another poll or cancellation
+attempt. The supported header forms follow
+[HTTP Semantics](https://www.rfc-editor.org/rfc/rfc9110.html#section-10.2.3).
 Three consecutive reconciliation or unresolved launch attempts open a circuit;
 creation recovered before any input send requires explicit inspection. Failed sessions stop
 reconnecting. Repair credentials/throttling/configuration and explicitly authorize

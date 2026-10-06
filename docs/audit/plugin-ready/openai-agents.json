@@ -2,15 +2,15 @@
   "version": 1,
   "task_id": "task-cf82d9f43ca0da3c5bb29b67",
   "scope": "managed Agents REST implementation, provider-shaped offline lifecycle verification and native macOS verification readiness/enforcement; live qualification remains unverified",
-  "recorded_at": "2026-10-06T18:41:05.917Z",
+  "recorded_at": "2026-10-06T19:12:27.343Z",
   "base_revision": "401f5cb2e68382a28b6f35f5ca4e9cbcc9ea84fb",
   "branch": "work/openai-agents-harness",
   "source_files": {
     "README.md": "6c9a9e9e79f7a9bd9157464ea2602f6ecde0b2878422e5c8dbea64a98d5f2ab8",
     "docs/audit/plugin-ready/README.md": "7f24289695807c9bd9d880e54e287c3bcfa1a3324543ca87eee68b1e24a9e8f7",
-    "docs/audit/plugin-ready/openai-agents-checklist.md": "5111cc85d95dcf8a96fef9761cfe4e4465f106bc9a288efa1cbe1fa3d6a1ed4d",
+    "docs/audit/plugin-ready/openai-agents-checklist.md": "6f2c23bd4fff91f9a925adaeea218dc9d0298443b591606629b02de030248980",
     "docs/execution.md": "37bcfff160999741a77475ae9f32d42d46919e7d9f7d37dde9ef491a9547956e",
-    "docs/openai-agents.md": "94947952dadae48c1d2a70ff7772fc2e004bb29080bb63ebc3f029cbf384aa90",
+    "docs/openai-agents.md": "38f162e4d4918bdab372be804e1a06a6a9582493c941f07799f97324f4637db2",
     "docs/prds/openai-agents-harness.md": "b6d3ceeb20426248b5cf0d8527beaf93a6a69c09003cfc07d3a86fe8fa8b053a",
     "lib/block.mjs": "bd644a1564d6d3dcf3edad1ad1f931fa5f3e4246a041f20acbbb04c88c07c665",
     "lib/commands/doctor.mjs": "6a1c916f1a3626ba7656123792adf9ba3fdbd963cb64a3641437e337e4f18997",
@@ -19,21 +19,21 @@
     "lib/context.mjs": "8d086cc3dacaf68de5f84c11b1ac498d60d6b3b420b61214b5e631587e5b6119",
     "lib/execution.mjs": "6a43518f89d1ad1e8c0303e51c486dd6ddc25cba2c8c4b2e816d10826e1f4322",
     "lib/harness.mjs": "50640ba71ec7b03f2690ce07ab5d1731034d6d710a833c425d7e354337c6c9b5",
-    "lib/openai_agents.mjs": "7444f0bc6a038083b990b4f0a735d4989194e87dc326a3a703b89c773d0ac8ea",
+    "lib/openai_agents.mjs": "cfe7bd53a8c89d30eea142b623c5cbcc5d234e4a96e2a71cfe4e000d67343363",
     "lib/openai_agents_config.mjs": "7d9db1b55e3c0f71ada076811eb11baf9cfb0becdfed10f6a86ec6ecbfa69dc7",
-    "lib/openai_agents_http.mjs": "bf09e30be66d2e22c240194a6e2658c6c9ba3f027a697a4e3db25a5d18f43b05",
+    "lib/openai_agents_http.mjs": "addca807057cd4b999cc6d67324de798c00fd455c962df23b135fed4b90f7206",
     "lib/openai_agents_input.mjs": "a2978393dc2dfe348c97962d0a6a9356184e54a7fe426847b9195186fa8d0c68",
-    "lib/openai_agents_sources.mjs": "afeb732805764635189bc6fe5523ca95564174c4fc08fc159d3118d5f668aeb1",
+    "lib/openai_agents_sources.mjs": "9d61867d9f86901b084f37d4da6c344df24a0ff71b7ab0537273aad4b18f1132",
     "lib/probe.mjs": "bbacb430ed3ec7e3ab4b26fe01568d396d5d2257513264412c1c7e7ccb59383a",
     "lib/tick.mjs": "6781d3b6131ff2f5c3f29889d4ab3889ea18da1486576b7b3434232447f89dd3",
     "package.json": "cc440ea2539b8d40772db637b1f6593584c66818f810c4a45719c7c563ff003a",
-    "test/execution-backends.test.mjs": "d1af68ac877c852819e48550ae3b8577c6049f4a0e76b86469a7b2f774a059a2",
+    "test/execution-backends.test.mjs": "0e812ca352904e9de84e3499054d09223955d3b159ebda007b55fe8ab4b8fbdc",
     "test/openai-agents-live.mjs": "0f556440264766e17a369e6eaa6b71658833b93c18971b1ef1326d65452a20d2",
-    "test/openai-agents.test.mjs": "3b494956e2aa73374e5b18828b707be954824434e871da38e9f256c025203d53",
+    "test/openai-agents.test.mjs": "8b2b68a25b96bd3a138ab0b4d5321acb7298da56b8b77323cb76f58590a54121",
     "test/units.test.mjs": "ae8ab863aa48e3e44557e8f20c00bb8440682325ec099eb34a81f339cbb42b9f",
     "lib/execution_result.mjs": "b13f5169e3fa541f5cc1f8c4e87e401436849a5864ea514231246847c71c2f41",
     "lib/verification_sandbox.mjs": "afb289b9641bee6e95102f9c899fd99274bfe07f6f0b4db21e0002e1dc309a7d",
-    "lib/execution_io.mjs": "80d2fce25ad27c1c9b19239568e19c5087d610f894cac817e1b9cf000c80f62e",
+    "lib/execution_io.mjs": "5e38e1a02b88cc46bcddbe66f3414a764bb23c1f0f3ab648ab77b971af2730a9",
     "lib/commands/resume.mjs": "768a4aebb28960f5976fe7b239bba1e0b9b8ea4dab5a68c79ddf7da2a73e20bd",
     "lib/gh.mjs": "fc1fe24b0a72372160722f563637a8e556bd2622b410d7bedfb232a345ef455e",
     "docs/tasks.md": "4483b3c3a44117240e3ca10a5e55941578e7c3b2b20775a57af6743603a9bb34",
@@ -47,7 +47,8 @@
     "test/tick.test.mjs": "2e6b2e5766ed7d7dcc8003568964dad5e1de86bd9d7e8657e07054704db9a73d",
     "lib/control.mjs": "d37258c2c53aaed1e47ce74d06f80737efa15c12137605d0a125a10a5995534d",
     "lib/commands/serve.mjs": "c53a41d97c614ca09d7411973522b7ca4e9adf4e0bb608c61c4ed405a547135e",
-    "lib/tracker/pages.mjs": "ceb768dd4e78931749ffd78918d37fb8a82805907d219e0bfe80c1478654d9e7"
+    "lib/tracker/pages.mjs": "ceb768dd4e78931749ffd78918d37fb8a82805907d219e0bfe80c1478654d9e7",
+    "lib/provider_health.mjs": "1250697922c7eb08f2d0c874286cbc49f13ae85c734ae3fb0eeb1d4b17ec0f41"
   },
   "frozen_inputs": {
     "docs/plans/plugin-ready-gallivant.md": "3081d47d8161043f9c32b6184f07ee8d4ca513822341c41a138bdf28f7459fc2",
@@ -67,10 +68,10 @@
     {
       "command": "npm test",
       "exit": 0,
-      "raw_log": "/tmp/agents-start-test-verified.log",
-      "sha256": "245ccec4ec159db1f8f0c603fa4cf9a3cfdb91666d262b1201326dbe6c447280",
-      "tests": 1154,
-      "pass": 1154,
+      "raw_log": "/tmp/agents-retry-source-test-final.log",
+      "sha256": "befd8da5c82245d5cbe31adfb575d5f3e8840f0f3c2ab11777ae8406b780810f",
+      "tests": 1161,
+      "pass": 1161,
       "fail": 0,
       "cancelled": 0,
       "skipped": 0
@@ -78,16 +79,16 @@
     {
       "command": "npm run lint",
       "exit": 0,
-      "raw_log": "/tmp/agents-start-lint-verified.log",
+      "raw_log": "/tmp/agents-retry-source-lint-final.log",
       "sha256": "8c7790de3f018fb4580f18ac70e1b355a0f76f522dd73acbdaa63632feffcecc"
     },
     {
       "command": "npm run test:execution-backends",
       "exit": 0,
-      "raw_log": "/tmp/agents-start-backends-verified.log",
-      "sha256": "f2bafd7265775baccd86030b428dff533148f29cc0d9ca341a9667554d9123ad",
-      "tests": 396,
-      "pass": 396,
+      "raw_log": "/tmp/agents-retry-source-backends-final.log",
+      "sha256": "a47002fcdbd673a21d7b5547c9c67b084a45f20a75b11dbf85ef6662d100b29e",
+      "tests": 397,
+      "pass": 397,
       "fail": 0,
       "cancelled": 0,
       "skipped": 0
@@ -95,10 +96,10 @@
     {
       "command": "npm run test:openai-agents",
       "exit": 0,
-      "raw_log": "/tmp/agents-start-openai-verified.log",
-      "sha256": "df13f33e24fcc24e859411425fbedfad4205aae7153d7cc41318b12888a31ead",
-      "tests": 53,
-      "pass": 53,
+      "raw_log": "/tmp/agents-retry-source-openai-final.log",
+      "sha256": "ebf2dcaaa4d2549bb413a3bf1b968998a04d27fe085f8767df34382c0c4fcec0",
+      "tests": 59,
+      "pass": 59,
       "fail": 0,
       "cancelled": 0,
       "skipped": 0
@@ -106,7 +107,7 @@
     {
       "command": "git diff --check",
       "exit": 0,
-      "raw_log": "/tmp/agents-start-diff-verified.log",
+      "raw_log": "/tmp/agents-retry-source-diff-final.log",
       "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
     }
   ],
@@ -151,7 +152,13 @@
         "native verification supports Git checks with immutable current-revision metadata in normal and linked checkouts",
         "verification process helper preserves binary Git objects and binary failure diagnostics",
         "npm entry point supports custom Node prefixes without granting their bin directory",
-        "unsubmitted initial resume preserves registry and inputs on readiness failure and refuses cancellation or unresolved intents"
+        "unsubmitted initial resume preserves registry and inputs on readiness failure and refuses cancellation or unresolved intents",
+        "invalid provider retry delays preserve finite reconciliation, health and cancellation schedules across restart",
+        "Retry-After seconds and HTTP dates remain finite and bounded",
+        "Agents readiness carries HTTP-date throttling into shared account health after restart",
+        "throttled http-date retry survives restart and defers coordinator polling",
+        "throttled malformed retry survives restart and defers coordinator polling",
+        "throttled capped retry survives restart and defers coordinator polling"
       ]
     },
     {
@@ -182,7 +189,8 @@
         "failed initial portable preparation is registered and resumes the preserved checkout after repair: submodule",
         "failed initial portable preparation is registered and resumes the preserved checkout after repair: size",
         "failed initial portable preparation is registered and resumes the preserved checkout after repair: head-race",
-        "initial brief delivery failure stays registered and restores missing approved bytes after repair"
+        "initial brief delivery failure stays registered and restores missing approved bytes after repair",
+        "SHA-256 source snapshot reaches hosted dispatch and immutable result recovery"
       ]
     },
     {
@@ -244,7 +252,13 @@
       "test_names": [
         "reconnect restores paginated items, discards reordered deltas after done and labels gaps",
         "unresolved root identity has a three-attempt recovery circuit without resending",
-        "operator answer lost-after recovers the same call and key across restart"
+        "operator answer lost-after recovers the same call and key across restart",
+        "invalid provider retry delays preserve finite reconciliation, health and cancellation schedules across restart",
+        "Retry-After seconds and HTTP dates remain finite and bounded",
+        "Agents readiness carries HTTP-date throttling into shared account health after restart",
+        "throttled http-date retry survives restart and defers coordinator polling",
+        "throttled malformed retry survives restart and defers coordinator polling",
+        "throttled capped retry survives restart and defers coordinator polling"
       ]
     },
     {
@@ -292,7 +306,13 @@
         "failed initial portable preparation is registered and resumes the preserved checkout after repair: head-race",
         "initial brief delivery failure stays registered and restores missing approved bytes after repair",
         "unsubmitted initial resume preserves registry and inputs on readiness failure and refuses cancellation or unresolved intents",
-        "initial retry reply loss reconciles the original operation through coordinator restart without another session"
+        "initial retry reply loss reconciles the original operation through coordinator restart without another session",
+        "invalid provider retry delays preserve finite reconciliation, health and cancellation schedules across restart",
+        "Retry-After seconds and HTTP dates remain finite and bounded",
+        "Agents readiness carries HTTP-date throttling into shared account health after restart",
+        "throttled http-date retry survives restart and defers coordinator polling",
+        "throttled malformed retry survives restart and defers coordinator polling",
+        "throttled capped retry survives restart and defers coordinator polling"
       ]
     },
     {
@@ -320,7 +340,9 @@
         "unsupported host refuses preparation, direct dispatch and manual continuation while artifact recovery remains available",
         "native verification supports Git checks with immutable current-revision metadata in normal and linked checkouts",
         "verification process helper preserves binary Git objects and binary failure diagnostics",
-        "npm entry point supports custom Node prefixes without granting their bin directory"
+        "npm entry point supports custom Node prefixes without granting their bin directory",
+        "source snapshot preserves binary blobs, exact revision and verified carried files",
+        "SHA-256 source snapshot reaches hosted dispatch and immutable result recovery"
       ]
     },
     {
@@ -390,7 +412,13 @@
         "malformed pre-send sources release only the unsubmitted intent without purchasing or stranding work",
         "initial launch pre-send refusal remains registered for safe coordinator recovery",
         "unsubmitted initial resume preserves registry and inputs on readiness failure and refuses cancellation or unresolved intents",
-        "initial retry reply loss reconciles the original operation through coordinator restart without another session"
+        "initial retry reply loss reconciles the original operation through coordinator restart without another session",
+        "invalid provider retry delays preserve finite reconciliation, health and cancellation schedules across restart",
+        "Retry-After seconds and HTTP dates remain finite and bounded",
+        "Agents readiness carries HTTP-date throttling into shared account health after restart",
+        "throttled http-date retry survives restart and defers coordinator polling",
+        "throttled malformed retry survives restart and defers coordinator polling",
+        "throttled capped retry survives restart and defers coordinator polling"
       ]
     },
     {
@@ -440,7 +468,9 @@
         "failed initial portable preparation is registered and resumes the preserved checkout after repair: symlink",
         "failed initial portable preparation is registered and resumes the preserved checkout after repair: submodule",
         "initial brief delivery failure stays registered and restores missing approved bytes after repair",
-        "unsubmitted initial resume preserves registry and inputs on readiness failure and refuses cancellation or unresolved intents"
+        "unsubmitted initial resume preserves registry and inputs on readiness failure and refuses cancellation or unresolved intents",
+        "source snapshot preserves binary blobs, exact revision and verified carried files",
+        "SHA-256 source snapshot reaches hosted dispatch and immutable result recovery"
       ]
     },
     {
@@ -517,7 +547,15 @@
         "failed initial portable preparation is registered and resumes the preserved checkout after repair: head-race",
         "initial brief delivery failure stays registered and restores missing approved bytes after repair",
         "unsubmitted initial resume preserves registry and inputs on readiness failure and refuses cancellation or unresolved intents",
-        "initial retry reply loss reconciles the original operation through coordinator restart without another session"
+        "initial retry reply loss reconciles the original operation through coordinator restart without another session",
+        "invalid provider retry delays preserve finite reconciliation, health and cancellation schedules across restart",
+        "Retry-After seconds and HTTP dates remain finite and bounded",
+        "Agents readiness carries HTTP-date throttling into shared account health after restart",
+        "throttled http-date retry survives restart and defers coordinator polling",
+        "throttled malformed retry survives restart and defers coordinator polling",
+        "throttled capped retry survives restart and defers coordinator polling",
+        "source snapshot preserves binary blobs, exact revision and verified carried files",
+        "SHA-256 source snapshot reaches hosted dispatch and immutable result recovery"
       ]
     },
     {
@@ -551,13 +589,13 @@
     "sha256": "16c09feca47099fa1005141c07af146326f38055bb27fd37f2da8966198533af"
   },
   "package_verification": {
-    "raw_record": "/tmp/agents-start-package-verification.json",
-    "sha256": "caf4ef7231a41b9b7f532d4ae7562fd0001098ff6f3c859066c91cb8860e82cb",
-    "integrity": "sha512-cf7XT8bVh8nWogCMYO+yap5SgeEP5vSh9+skDB4m1h3xKqcvpAm4xebrXW/gpT1JGxddQEp/UPzlCkTT5PkS0g==",
+    "raw_record": "/tmp/agents-retry-source-package-verification.json",
+    "sha256": "94d7623d2b3b41f22919d973a9e8e723ffab8428c72b3d192bc35884285765eb",
+    "integrity": "sha512-jBtSSx4/TVn3Akpk7Vd6eglwTjWO+VIeiB9iQdFBQF/CITXT+HF6GqDD/u96Rk4cE0yGtiLNujILHVzI5EUNeQ==",
     "files": 86,
-    "bytes": 433224,
-    "unpacked_bytes": 1322120,
-    "result": "sixteen adapter/coordinator/execution/sandbox/readiness/source/start/resume/control/tracker modules imported from the unpacked local package with matching source and operator/intake/handoff document hashes; scripts ignored; zero provider calls"
+    "bytes": 433879,
+    "unpacked_bytes": 1323755,
+    "result": "seventeen HTTP/adapter/coordinator/execution/sandbox/readiness/source/start/resume/control/tracker modules imported from the unpacked local package with matching source and operator/intake/handoff document hashes; scripts ignored; zero provider calls"
   },
   "live": {
     "version": 1,
@@ -989,6 +1027,76 @@
           "label": "native macOS preflight before this review batch; unchanged absent live inputs; zero provider calls",
           "path": "/tmp/agents-start-preflight.json",
           "sha256": "2cbc617f658e4a9c2eff7bca0915b501e808fe5a10a23a1ab7756cddfbb64954"
+        }
+      ]
+    },
+    {
+      "rule": "Every retry schedule must retain a finite bounded deadline through transport, persistence and coordinator restart",
+      "checked": [
+        "lib/openai_agents_http.mjs: delta-seconds, IMF/RFC850/asctime GMT parsing, invalid/past/overflow fallback, private body cancellation and shared clock",
+        "lib/execution_io.mjs: finite retry-delay boundary reused by reconciliation, provider health and cancellation",
+        "lib/openai_agents.mjs: readiness delay propagation, transport clock and bounded recovery circuit",
+        "lib/provider_health.mjs: saved failure deadlines, due checks and restart",
+        "lib/execution.mjs: reconciliation and cancellation deadlines, ownership and stop fences"
+      ],
+      "regression": [
+        "invalid provider retry delays preserve finite reconciliation, health and cancellation schedules across restart",
+        "Retry-After seconds and HTTP dates remain finite and bounded",
+        "Agents readiness carries HTTP-date throttling into shared account health after restart",
+        "throttled http-date retry survives restart and defers coordinator polling",
+        "throttled malformed retry survives restart and defers coordinator polling",
+        "throttled capped retry survives restart and defers coordinator polling"
+      ],
+      "representative_output": [
+        {
+          "label": "shared retry boundary evidence",
+          "path": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-dW35el/retry-boundary-evidence.json",
+          "sha256": "ba14dad83f1ffb3912ea3affae0cfda4358110f8c03dc923f17eb1d976a76768"
+        },
+        {
+          "label": "readiness retry evidence",
+          "path": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/agents-offline-fxoTi6/provider-health.json",
+          "sha256": "16a7096d1b7a81b917397a7c0ca405d9bd14123718faa2bbd033c71aa518987f"
+        },
+        {
+          "label": "retry scheduling evidence",
+          "path": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/agents-offline-xqHvZr/retry-evidence.json",
+          "sha256": "039b99c78bb507fd6821293b5a604934a7100216cb36cb28f8251c2cabaf34b1"
+        },
+        {
+          "label": "retry scheduling evidence",
+          "path": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/agents-offline-QZzJBj/retry-evidence.json",
+          "sha256": "3d4a540d036b7dd42da4370a24218cd38011554b1aafa92b932c229cbc42edf4"
+        },
+        {
+          "label": "retry scheduling evidence",
+          "path": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/agents-offline-I4n3n1/retry-evidence.json",
+          "sha256": "c5c423524c31d24c7dd800be897fec1341e655d63f0edc5a0f54005349cf0b75"
+        },
+        {
+          "label": "native macOS preflight; four live inputs still absent; zero provider calls",
+          "path": "/tmp/agents-retry-source-preflight.json",
+          "sha256": "121235eb8fdbcf3ee4026dc9226d7a5597d25786ca17cb1596ca6623e41dd8f7"
+        }
+      ]
+    },
+    {
+      "rule": "Portable snapshots must preserve the exact repository revision and use its Git object format consistently without widening path, size or hash authority",
+      "checked": [
+        "lib/openai_agents_sources.mjs: exact 40/64-character HEAD, matching tree blob width, repeated HEAD/status checks, binary blobs and approved overlays",
+        "lib/openai_agents_input.mjs and lib/openai_agents.mjs: exact snapshot hash/input identity before dispatch; immutable paginated result and test head validation",
+        "lib/execution_result.mjs, lib/git.mjs and lib/verification_sandbox.mjs: owned head checks and SHA-256-compatible publication/verification boundaries already in scope",
+        "native SHA-1/SHA-256 repositories; unsupported and mixed widths refused before blob reads; generated uploaded manifest and recovered artifact files/test records reviewed"
+      ],
+      "regression": [
+        "source snapshot preserves binary blobs, exact revision and verified carried files",
+        "SHA-256 source snapshot reaches hosted dispatch and immutable result recovery"
+      ],
+      "representative_output": [
+        {
+          "label": "SHA-256 source evidence",
+          "path": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/agents-offline-t8i0Qn/sha256-source-evidence.json",
+          "sha256": "1b484650a37aa236be9261be544bc714acc4c211962ce4516dd93eb271427246"
         }
       ]
     }
@@ -1487,5 +1595,145 @@
     ],
     "paid_calls": 0,
     "live_prerequisites": "unchanged; original failed live preflight and exact external remedy preserved in live"
+  },
+  "retry_source_followup": {
+    "review": 5433219577,
+    "reviewed_commit": "ab5287773261b37ee595c411eec87e44c2e39f53",
+    "inline_comments": [
+      4199277386,
+      4199277394
+    ],
+    "kind": "native Git and provider-shaped offline lifecycle fixtures; live inference remains unverified",
+    "test_names": [
+      "invalid provider retry delays preserve finite reconciliation, health and cancellation schedules across restart",
+      "Retry-After seconds and HTTP dates remain finite and bounded",
+      "Agents readiness carries HTTP-date throttling into shared account health after restart",
+      "throttled http-date retry survives restart and defers coordinator polling",
+      "throttled malformed retry survives restart and defers coordinator polling",
+      "throttled capped retry survives restart and defers coordinator polling",
+      "source snapshot preserves binary blobs, exact revision and verified carried files",
+      "SHA-256 source snapshot reaches hosted dispatch and immutable result recovery"
+    ],
+    "focused": {
+      "command": "focused retry/source regressions",
+      "exit": 0,
+      "raw_log": "/tmp/agents-retry-source-focused-final.log",
+      "sha256": "b624dca745d4ccf6ae6c1fc01526fab2dec4ea1149f00d44fb2bba4364c069ae",
+      "tests": 8,
+      "pass": 8,
+      "fail": 0,
+      "cancelled": 0,
+      "skipped": 0
+    },
+    "initial_failure": {
+      "command": "initial focused retry/source regressions",
+      "exit": 1,
+      "raw_log": "/tmp/agents-retry-source-focused.log",
+      "sha256": "7d8ddf9d7a11dc3ea297c886af18daff3c9805baf510f6ad802253d6d81b43c3",
+      "tests": 7,
+      "pass": 6,
+      "fail": 1,
+      "reason": "obsolete asctime HTTP date used local timezone; corrected to GMT before final verification"
+    },
+    "previous_verify": [
+      {
+        "command": "npm test",
+        "exit": 0,
+        "raw_log": "/tmp/agents-start-test-verified.log",
+        "sha256": "245ccec4ec159db1f8f0c603fa4cf9a3cfdb91666d262b1201326dbe6c447280",
+        "tests": 1154,
+        "pass": 1154,
+        "fail": 0,
+        "cancelled": 0,
+        "skipped": 0
+      },
+      {
+        "command": "npm run lint",
+        "exit": 0,
+        "raw_log": "/tmp/agents-start-lint-verified.log",
+        "sha256": "8c7790de3f018fb4580f18ac70e1b355a0f76f522dd73acbdaa63632feffcecc"
+      },
+      {
+        "command": "npm run test:execution-backends",
+        "exit": 0,
+        "raw_log": "/tmp/agents-start-backends-verified.log",
+        "sha256": "f2bafd7265775baccd86030b428dff533148f29cc0d9ca341a9667554d9123ad",
+        "tests": 396,
+        "pass": 396,
+        "fail": 0,
+        "cancelled": 0,
+        "skipped": 0
+      },
+      {
+        "command": "npm run test:openai-agents",
+        "exit": 0,
+        "raw_log": "/tmp/agents-start-openai-verified.log",
+        "sha256": "df13f33e24fcc24e859411425fbedfad4205aae7153d7cc41318b12888a31ead",
+        "tests": 53,
+        "pass": 53,
+        "fail": 0,
+        "cancelled": 0,
+        "skipped": 0
+      },
+      {
+        "command": "git diff --check",
+        "exit": 0,
+        "raw_log": "/tmp/agents-start-diff-verified.log",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      }
+    ],
+    "earlier_candidate": {
+      "command": "npm test before final readiness propagation",
+      "exit": 0,
+      "raw_log": "/tmp/agents-retry-source-test.log",
+      "sha256": "e5db26525d09de8c1bc56440ecdf62029dc6200a2f45898d1af9fb8a4f7c5a47",
+      "tests": 1160,
+      "pass": 1160,
+      "fail": 0,
+      "cancelled": 0,
+      "skipped": 0
+    },
+    "representative_generated_output": [
+      {
+        "label": "shared retry boundary evidence",
+        "path": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-dW35el/retry-boundary-evidence.json",
+        "sha256": "ba14dad83f1ffb3912ea3affae0cfda4358110f8c03dc923f17eb1d976a76768"
+      },
+      {
+        "label": "readiness retry evidence",
+        "path": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/agents-offline-fxoTi6/provider-health.json",
+        "sha256": "16a7096d1b7a81b917397a7c0ca405d9bd14123718faa2bbd033c71aa518987f"
+      },
+      {
+        "label": "retry scheduling evidence",
+        "path": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/agents-offline-xqHvZr/retry-evidence.json",
+        "sha256": "039b99c78bb507fd6821293b5a604934a7100216cb36cb28f8251c2cabaf34b1"
+      },
+      {
+        "label": "retry scheduling evidence",
+        "path": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/agents-offline-QZzJBj/retry-evidence.json",
+        "sha256": "3d4a540d036b7dd42da4370a24218cd38011554b1aafa92b932c229cbc42edf4"
+      },
+      {
+        "label": "retry scheduling evidence",
+        "path": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/agents-offline-I4n3n1/retry-evidence.json",
+        "sha256": "c5c423524c31d24c7dd800be897fec1341e655d63f0edc5a0f54005349cf0b75"
+      },
+      {
+        "label": "SHA-256 source evidence",
+        "path": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/agents-offline-t8i0Qn/sha256-source-evidence.json",
+        "sha256": "1b484650a37aa236be9261be544bc714acc4c211962ce4516dd93eb271427246"
+      },
+      {
+        "label": "native macOS preflight; four live inputs still absent; zero provider calls",
+        "path": "/tmp/agents-retry-source-preflight.json",
+        "sha256": "121235eb8fdbcf3ee4026dc9226d7a5597d25786ca17cb1596ca6623e41dd8f7"
+      }
+    ],
+    "paid_calls": 0,
+    "official_references": [
+      "https://www.rfc-editor.org/rfc/rfc9110.html#section-10.2.3",
+      "https://git-scm.com/docs/git-rev-parse#Documentation/git-rev-parse.txt---show-object-formatstorageinputoutput"
+    ]
   }
 }
