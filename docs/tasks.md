@@ -5,10 +5,14 @@ selected harness's configured model and provider settings. This
 can use inference even when you only prepare; it does not start implementation or
 open a pull request without execution authorization.
 
-The preparation examples require configured Claude and explicitly select it.
-Preparation currently accepts only Claude with all tools disabled; other adapters
-return `TASK_PREPARATION_BOUNDARY` without an automatic fallback. Installed native
-tools-off behavior remains unqualified, as detailed below.
+Preparation uses a capability on the selected harness adapter, through the same
+runner as implementation. The examples select Claude; `--harness codex` uses Codex
+0.160.0 or newer. Claude removes its tools. Codex removes external and execution
+tools and uses a filesystem profile that grants no project or credential access
+to any remaining tool. Only the bounded context in the prompt is available.
+Model/provider defaults remain selected. Other adapters return
+`TASK_PREPARATION_BOUNDARY` until their preparation capability is implemented;
+there is no automatic fallback. See [qualification](preparation.md).
 
 ```sh
 gallivant task "Add CSV export for the widget table. Do not add dependencies." \
@@ -143,13 +147,15 @@ Credential separation does not add an OS sandbox. Preparation currently supports
 Claude with restricted mode, an empty built-in tool set, denial of every tool,
 an empty strict MCP configuration and disabled skills/commands. Selected context
 is already in the prompt, so planning needs no file, shell or network tools.
-Codex, Gemini, OpenCode and Goose preparation return
+Codex uses the restricted native capability described in [preparation](preparation.md).
+Gemini, OpenCode and Goose preparation return
 `TASK_PREPARATION_BOUNDARY` before probes, profile copying or model launch because
 their current adapters have no established preparation read/write boundary or
 tool-free contract. There is no automatic harness, model or provider fallback.
 Use a hand-authored PRD with the existing `ready`/`start` path until an enforced
-preparation adapter is supported. Native tool-free behavior remains unqualified;
-offline argv fixtures cannot prove installed-provider execution.
+preparation adapter is supported. Native Codex boundary qualification uses an
+installed CLI against a local provider fixture; live inference and installed
+ChatGPT workflow qualification remain separate checks.
 
 Attempts record their preparation boundary. Recovery stops an owned legacy
 tool-enabled child and preserves its usage/logs; completed, settled and previously

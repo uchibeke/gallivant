@@ -58,7 +58,7 @@ test("documented CLI and structured preparation examples select an accepted adap
 });
 
 test("native preparation removes Claude tools and refuses unsupported adapters before probes on initial, answer and repair turns", async () => {
-  for (const harness of ["codex", "gemini", "opencode", "goose"]) for (const phase of ["initial", "answer", "repair"]) for (const cli of [false,true]) {
+  for (const harness of ["gemini", "opencode", "goose"]) for (const phase of ["initial", "answer", "repair"]) for (const cli of [false,true]) {
     const w = world({prepare: async (_ctx,task) => JSON.stringify(draftFor(task,{question:phase==="answer"}))});
     w.ctx.config.harness[harness] = {bin:harnessBin(w.home,harness)};
     const runner=fakeRunner({now:Date.now}); w.ctx.runnerFor=()=>runner;
@@ -99,6 +99,27 @@ test("tool-free Claude preparation and repair use the normal runner without impl
   const evidence=join(w.home,"preparation-boundary-fixture.json");
   writeFileSync(evidence,JSON.stringify({live:false,draft:r.draft.path,attempts:r.preparation.attempts,argv:runner.started.map(run=>run.args)},null,2)+"\n");
   t.diagnostic("Tool-free argv fixture record: "+evidence);
+});
+
+test("Codex capability prepares and repairs through the same task service without dispatch", async () => {
+  const w = world(); w.ctx.config.harness.codex = { bin: harnessBin(w.home, "codex", { version: "0.160.0" }) };
+  const runner = fakeRunner({ now: Date.now }), launch = runner.start;
+  runner.start = (...args) => {
+    const job = launch(...args), argv = args[2];
+    assert.ok(argv.includes('default_permissions="gallivant_preparation"'));
+    assert.ok(argv.includes('features.plugins=false'));
+    const data = JSON.parse(argv.at(-1).split("INTAKE DATA (JSON):\n").at(-1));
+    runner.finish(codexLines({ text: runner.started.length === 1 ? "invalid JSON" : JSON.stringify(draftFor(data)) }), { exit: 0 });
+    return job;
+  };
+  w.ctx.runnerFor = () => runner;
+  const service = createTaskService(w.ctx), result = await service.prepare({ text: REQUEST, harness: "codex" });
+  assert.equal(result.status, "ready"); assert.equal(result.preparation.repairs, 1);
+  assert.ok(result.preparation.attempts.every(a => a.boundary === "codex-draft-sandbox-v1"));
+  assert.match(result.draft.text, /Do not add dependencies/);
+  assert.deepEqual(w.ctx.state.entries(), []); assert.equal(w.daemonCalls(), 0);
+  assert.deepEqual(await service.resume({ taskId: result.taskId, expectedRevision: result.revision }), result);
+  assert.equal(runner.started.length, 2, "recovery must not launch a third inference turn");
 });
 
 test("recovery stops owned legacy preparation and rejects completed, settled and rendered unsafe output", async () => {

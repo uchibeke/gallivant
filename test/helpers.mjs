@@ -21,6 +21,7 @@ if (args[0] === '--version') {
   console.log(${JSON.stringify(version)});
   process.exit(${versionExit});
 }
+if (args[0] === 'mcp' && args[1] === 'list') { console.log('[]'); process.exit(0); }
 console.log(${JSON.stringify(signInOutput ?? (harness === "claude" ? JSON.stringify({ loggedIn: signedIn }) : "login status"))});
 process.exit(${signedIn ? 0 : 1});
 `;

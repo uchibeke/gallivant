@@ -1,6 +1,6 @@
 # Architecture
 
-One actor, one file of rules, everything else is plumbing. About 1,500 lines of plain ESM with no dependencies.
+One actor, one file of rules, everything else is plumbing. Plain ESM; one bundled TOML parser handles isolated Codex configuration without inventing another config parser.
 
 ```
 bin/gallivant.mjs        CLI: parse args, build the context, call one command
