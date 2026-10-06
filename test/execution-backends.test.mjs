@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { join } from "node:path";
 import { createHash } from "node:crypto";
 import { EventEmitter } from "node:events";
-import { mkdirSync, readFileSync, writeFileSync, rmSync, renameSync, symlinkSync, cpSync, statSync, lstatSync, existsSync, chmodSync } from "node:fs";
+import { mkdirSync, readFileSync, writeFileSync, rmSync, renameSync, symlinkSync, cpSync, statSync, lstatSync, existsSync, chmodSync, realpathSync } from "node:fs";
 import { pathToFileURL } from "node:url";
 import { makeExecution, executionLive, assertExecutionDependency } from "../lib/execution.mjs";
 import { redact } from "../lib/execution_io.mjs";
@@ -1588,6 +1588,71 @@ async function nativeResultFixture() {
   f.ctx.git = { ...git, commitResult: async (...args) => { f.calls.push("commit"); return git.commitResult(...args); }, pushResult: async () => f.calls.push("push") };
   return { ...f, verify: async (...args) => { f.calls.push("verify"); return execFileAsync(...args); } };
 }
+
+function posixVerification(f, commands, startup, marker) {
+  const invocations = [];
+  f.ctx.readPrd = () => `# Brief\n\n## Verify\n\n${commands.map(command => `- \`${command}\``).join("\n")}\n`;
+  f.verify = async (shell, args, options) => {
+    assert.equal(shell, "/bin/sh");
+    assert.deepEqual(args, ["-c", commands[invocations.length]]);
+    assert.deepEqual(options, { cwd: f.entry.worktree, timeout: 120_000, maxBuffer: 262_144 });
+    invocations.push({ shell, args, ...options }); f.calls.push("verify");
+    return execFileAsync(shell, args, { ...options, env: { ...process.env, ENV: startup, BASH_ENV: startup, POSIX_STARTUP_MARKER: marker } });
+  };
+  return invocations;
+}
+
+test("approved verification uses a fixed non-login POSIX shell with missing or invalid SHELL", async t => {
+  const inheritedShell = process.env.SHELL, observations = [];
+  try {
+    for (const shellSetting of [null, "/unavailable/operator-shell"]) {
+      if (shellSetting === null) delete process.env.SHELL; else process.env.SHELL = shellSetting;
+      const f = await nativeResultFixture(), startup = join(f.dir, "operator-startup.sh"), marker = join(f.dir, "startup-ran");
+      writeFileSync(startup, 'printf startup > "$POSIX_STARTUP_MARKER"; exit 91\n');
+      const commands = ["printf verified", `value='quoted value ; literal $'; printf '%s\\n' "$value" | tr '[:lower:]' '[:upper:]'; printf '%s' "$PWD"`];
+      const invocations = posixVerification(f, commands, startup, marker);
+      const done = await reconcileExecutionResult(f.ctx, f);
+      assert.deepEqual(done.evidence.map(item => item.output), ["verified", `QUOTED VALUE ; LITERAL $\n${realpathSync(f.entry.worktree)}`]);
+      assert.deepEqual(done.evidence.map(item => item.command), commands);
+      assert.ok(done.evidence.every(item => item.exit === 0 && item.source === "coordinator-executed" && item.head === done.head));
+      assert.equal(existsSync(marker), false); assert.equal(invocations.length, 2);
+      assert.deepEqual(await f.ctx.git.dirty(f.entry.worktree, { strict: true }), { modified: 0, untracked: 0 });
+      assert.deepEqual(f.calls, ["commit", "verify", "verify", "push", "PR"]);
+      const evidence = readJson(join(f.dir, "verification.json"));
+      await reconcileExecutionResult(f.ctx, f);
+      assert.equal(invocations.length, 2); assert.deepEqual(readJson(join(f.dir, "verification.json")), evidence);
+      assert.equal(readJson(join(f.dir, "result-application.json")).phase, "published");
+      observations.push({ shellSetting, invocations, startupExecuted: false, verification: join(f.dir, "verification.json"), checkpoint: join(f.dir, "result-application.json") });
+    }
+  } finally {
+    if (inheritedShell === undefined) delete process.env.SHELL; else process.env.SHELL = inheritedShell;
+  }
+  const path = join(tempHome(), "posix-verification-success.json"); writeJsonAtomic(path, { observations }); t.diagnostic(`POSIX verification success evidence: ${path}`);
+});
+
+test("non-login POSIX verification failures keep bounded evidence and do not replay", async t => {
+  const inheritedShell = process.env.SHELL, f = await nativeResultFixture();
+  const startup = join(f.dir, "operator-startup.sh"), marker = join(f.dir, "startup-ran");
+  writeFileSync(startup, 'printf startup > "$POSIX_STARTUP_MARKER"; exit 91\n');
+  const commands = ["printf failed-command >&2; exit 23", "printf must-not-run"], invocations = posixVerification(f, commands, startup, marker);
+  try {
+    delete process.env.SHELL;
+    await assert.rejects(reconcileExecutionResult(f.ctx, f), { code: "EXECUTION_RESULT_BLOCKED" });
+    const evidence = readJson(join(f.dir, "verification.json")), checkpoint = readJson(join(f.dir, "result-application.json"));
+    assert.equal(evidence.evidence.length, 1); assert.equal(evidence.evidence[0].exit, 23);
+    assert.equal(evidence.evidence[0].output, "failed-command"); assert.equal(evidence.evidence[0].command, commands[0]);
+    assert.equal(evidence.evidence[0].head, checkpoint.appliedHead); assert.equal(evidence.evidence[0].source, "coordinator-executed");
+    assert.equal(checkpoint.phase, "blocked"); assert.equal(checkpoint.reason, "verification-failed");
+    for (let poll = 0; poll < 3; poll++) await assert.rejects(reconcileExecutionResult(f.ctx, f), { code: "EXECUTION_RESULT_BLOCKED" });
+    assert.equal(invocations.length, 1); assert.equal(existsSync(marker), false); assert.deepEqual(f.calls, ["commit", "verify"]);
+    assert.deepEqual(readJson(join(f.dir, "verification.json")), evidence); assert.deepEqual(readJson(join(f.dir, "result-application.json")), checkpoint);
+  } finally {
+    if (inheritedShell === undefined) delete process.env.SHELL; else process.env.SHELL = inheritedShell;
+  }
+  const path = join(tempHome(), "posix-verification-failure.json");
+  writeJsonAtomic(path, { invocations, startupExecuted: false, verification: join(f.dir, "verification.json"), checkpoint: join(f.dir, "result-application.json") });
+  t.diagnostic(`POSIX verification failure evidence: ${path}`);
+});
 
 test("text artifacts reject filesystem, staged and committed mode changes before content mutation", async t => {
   const observations = [];

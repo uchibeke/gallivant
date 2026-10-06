@@ -1,0 +1,292 @@
+{
+  "version": 1,
+  "task_id": "task-df42674c6251c85b0edef13f",
+  "source_parent": "56c23d0afef1d1fac0af7587d318cf0a9abaa31b",
+  "review": {
+    "id": 5425570908,
+    "inline_comment_ids": [
+      4192997849
+    ]
+  },
+  "commands": [
+    {
+      "command": "npm test",
+      "exit": 0,
+      "raw_log": "/tmp/execution-posix-shell-tests.txt",
+      "sha256": "7319e570ed48697b8055e807fdffcd14fb9cce1a882f375be07318150903143e",
+      "tests": 1042,
+      "passed": 1042
+    },
+    {
+      "command": "npm run lint",
+      "exit": 0,
+      "raw_log": "/tmp/execution-posix-shell-lint.txt",
+      "sha256": "8c7790de3f018fb4580f18ac70e1b355a0f76f522dd73acbdaa63632feffcecc"
+    },
+    {
+      "command": "npm run test:execution-backends",
+      "exit": 0,
+      "raw_log": "/tmp/execution-posix-shell-backends.txt",
+      "sha256": "ee2c76e3d4c7d17df91bab4c1d42073d3a3a0d3bfe73c49d6caff3e85c7fe591",
+      "tests": 342,
+      "passed": 342
+    },
+    {
+      "command": "git diff --check",
+      "exit": 0,
+      "raw_log": "/tmp/execution-posix-shell-diff.txt",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    }
+  ],
+  "artifact_hashes": {
+    "lib/execution_result.mjs": "932c3529c298b775030287b4f85a014d0e7efd74bc600741902de6a48e192f76",
+    "test/execution-backends.test.mjs": "2765405d72e24fa88bd4b55f548905edb158034778aa46c71c3bec957947e085",
+    "docs/execution.md": "ae51787cadcfc76bea1122504bd9c5610e33cd2d0209314e0d01e3c915adf7be"
+  },
+  "focused_checks": [
+    {
+      "raw_log": "/tmp/execution-posix-shell-final-focus.txt",
+      "sha256": "a81b118f5a6e5a554b1a722bbdec529fc7097ecd591d94d8de6ca76b83b1de94",
+      "exit": 0,
+      "tests": 18,
+      "passed": 18,
+      "failed": 0
+    }
+  ],
+  "initial_checks": [
+    {
+      "raw_log": "/tmp/execution-posix-shell-red.txt",
+      "sha256": "09611fb1ab3848e8eae3427e60ffe0c71f30fea3301a6ce5182e23cba9be5a7f",
+      "exit": 1,
+      "tests": 2,
+      "passed": 0,
+      "failed": 2,
+      "observation": "Both new regressions rejected the previous operator-selected login-shell invocation."
+    },
+    {
+      "raw_log": "/tmp/execution-posix-shell-focus.txt",
+      "sha256": "8123321ca3643be2fec058399ad7ae9d69afaf7e63fcda75fd5d6329ba60e090",
+      "exit": 1,
+      "tests": 18,
+      "passed": 17,
+      "failed": 1,
+      "correction": "Resolve the native checkout path in the expected PWD output because macOS maps /var to /private/var; no additional production change."
+    }
+  ],
+  "source_and_output_review": [
+    {
+      "rule": "Approved immutable Verify commands execute through a fixed non-login POSIX shell without operator startup configuration, preserving bounded execution and real revision-bound evidence.",
+      "files": [
+        "lib/execution_result.mjs",
+        "lib/gh.mjs",
+        "lib/prd.mjs",
+        "lib/tick.mjs",
+        "lib/config.mjs",
+        "docs/execution.md"
+      ],
+      "boundaries_checked": [
+        "The sole coordinator Verify launcher uses /bin/sh -c with the approved command text; absent and invalid SHELL cannot select another executable.",
+        "The existing execFileAsync helper retains UTF-8 output, actual exit/error handling, the owned cwd, 120-second timeout and 256 KiB bound.",
+        "Native quoted assignments, literal metacharacters, pipelines and PWD output use the exact approved commands. Injected ENV/BASH_ENV startup scripts are not executed.",
+        "Failure evidence retains exit 23 and a blocked verification-failed checkpoint; three later reconciliations cannot replay commands or publish. Successful published replay cannot repeat verification.",
+        "Existing focused regressions retain redaction, dirty/staged/untracked checkout rejection, head freshness, cancellation and lost publication-reply behavior.",
+        "Canonical tick settlement and corrective resume remain responsible for previously blocked verification; old evidence is not cleared to retry.",
+        "Configuration uses a separate zsh login lookup to discover executable PATH; it does not execute approved Verify commands and is unchanged.",
+        "No schema, task lifecycle, harness adapter, model/provider default, execution consent, limited preparation authority or sandbox permission changed."
+      ],
+      "regressions": [
+        "approved verification uses a fixed non-login POSIX shell with missing or invalid SHELL",
+        "non-login POSIX verification failures keep bounded evidence and do not replay"
+      ]
+    }
+  ],
+  "representative_output": {
+    "evidence_kind": "Native POSIX processes and isolated Git trees with offline publication fixtures. No actual model, installed-plugin or production transport qualification is claimed.",
+    "reports": [
+      {
+        "label": "success",
+        "report_path": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-RLBiWY/posix-verification-success.json",
+        "report_sha256": "59d72987a47607e97a9c3d902bfe1ecad5e1c7a170ec6064f0d3e33b0465ae57",
+        "observations": [
+          {
+            "shellSetting": null,
+            "invocations": [
+              {
+                "shell": "/bin/sh",
+                "args": [
+                  "-c",
+                  "printf verified"
+                ],
+                "cwd": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-WdGKAA",
+                "timeout": 120000,
+                "maxBuffer": 262144
+              },
+              {
+                "shell": "/bin/sh",
+                "args": [
+                  "-c",
+                  "value='quoted value ; literal $'; printf '%s\\n' \"$value\" | tr '[:lower:]' '[:upper:]'; printf '%s' \"$PWD\""
+                ],
+                "cwd": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-WdGKAA",
+                "timeout": 120000,
+                "maxBuffer": 262144
+              }
+            ],
+            "startupExecuted": false,
+            "verification": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-ljFOlU/verification.json",
+            "checkpoint": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-ljFOlU/result-application.json",
+            "evidence": [
+              {
+                "command": "printf verified",
+                "head": "43285889d321235705089bc6b3bee07d1ff5d63e",
+                "startedAt": "2026-10-06T08:20:58.792Z",
+                "finishedAt": "2026-10-06T08:20:58.796Z",
+                "exit": 0,
+                "source": "coordinator-executed",
+                "output": "verified"
+              },
+              {
+                "command": "value='quoted value ; literal $'; printf '%s\\n' \"$value\" | tr '[:lower:]' '[:upper:]'; printf '%s' \"$PWD\"",
+                "head": "43285889d321235705089bc6b3bee07d1ff5d63e",
+                "startedAt": "2026-10-06T08:20:58.849Z",
+                "finishedAt": "2026-10-06T08:20:58.862Z",
+                "exit": 0,
+                "source": "coordinator-executed",
+                "output": "QUOTED VALUE ; LITERAL $\n/private/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-WdGKAA"
+              }
+            ],
+            "application": {
+              "fingerprint": "346c25772e5fd662d47508c39600c27ab904e1ccbecaa34dcfde5e0e4657ef8f",
+              "phase": "published",
+              "appliedHead": "43285889d321235705089bc6b3bee07d1ff5d63e",
+              "pr": 1,
+              "url": "https://example.test/pr/1"
+            },
+            "files_sha256": {
+              "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-ljFOlU/verification.json": "798c74d3a9031e0711934276e1bac0f3eb765ce909d6070ce46381036aac86e6",
+              "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-ljFOlU/result-application.json": "91189f73feac13e4569c70f7330f9e357aa7cb68d19d2e9d7ccbcdfaf74bc85a"
+            }
+          },
+          {
+            "shellSetting": "/unavailable/operator-shell",
+            "invocations": [
+              {
+                "shell": "/bin/sh",
+                "args": [
+                  "-c",
+                  "printf verified"
+                ],
+                "cwd": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-wC7HRI",
+                "timeout": 120000,
+                "maxBuffer": 262144
+              },
+              {
+                "shell": "/bin/sh",
+                "args": [
+                  "-c",
+                  "value='quoted value ; literal $'; printf '%s\\n' \"$value\" | tr '[:lower:]' '[:upper:]'; printf '%s' \"$PWD\""
+                ],
+                "cwd": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-wC7HRI",
+                "timeout": 120000,
+                "maxBuffer": 262144
+              }
+            ],
+            "startupExecuted": false,
+            "verification": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-eNCf3F/verification.json",
+            "checkpoint": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-eNCf3F/result-application.json",
+            "evidence": [
+              {
+                "command": "printf verified",
+                "head": "e1875ba6cc5dc5e11f3d4426a81d8d86060aa079",
+                "startedAt": "2026-10-06T08:20:59.590Z",
+                "finishedAt": "2026-10-06T08:20:59.595Z",
+                "exit": 0,
+                "source": "coordinator-executed",
+                "output": "verified"
+              },
+              {
+                "command": "value='quoted value ; literal $'; printf '%s\\n' \"$value\" | tr '[:lower:]' '[:upper:]'; printf '%s' \"$PWD\"",
+                "head": "e1875ba6cc5dc5e11f3d4426a81d8d86060aa079",
+                "startedAt": "2026-10-06T08:20:59.688Z",
+                "finishedAt": "2026-10-06T08:20:59.706Z",
+                "exit": 0,
+                "source": "coordinator-executed",
+                "output": "QUOTED VALUE ; LITERAL $\n/private/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-wC7HRI"
+              }
+            ],
+            "application": {
+              "fingerprint": "20017b42514435c88e616ebd0be007f076b8c854619e56d94cdf9d88900484e2",
+              "phase": "published",
+              "appliedHead": "e1875ba6cc5dc5e11f3d4426a81d8d86060aa079",
+              "pr": 1,
+              "url": "https://example.test/pr/1"
+            },
+            "files_sha256": {
+              "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-eNCf3F/verification.json": "1adc190827db5b2b909e741e306849dad268bfbba2ce09e930e5f86c27bb01b7",
+              "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-eNCf3F/result-application.json": "a35bda9c087030acac43ae331035f135a126ec3ff9440e166fb55fb75da6f49b"
+            }
+          }
+        ]
+      },
+      {
+        "label": "failure",
+        "report_path": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-4JUG2p/posix-verification-failure.json",
+        "report_sha256": "05e4fefec15c09cac9cda675ef762f5089bf12cb64afd3f80daabfdd71770376",
+        "observations": [
+          {
+            "invocations": [
+              {
+                "shell": "/bin/sh",
+                "args": [
+                  "-c",
+                  "printf failed-command >&2; exit 23"
+                ],
+                "cwd": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-MiA47L",
+                "timeout": 120000,
+                "maxBuffer": 262144
+              }
+            ],
+            "startupExecuted": false,
+            "verification": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-ezvcss/verification.json",
+            "checkpoint": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-ezvcss/result-application.json",
+            "evidence": [
+              {
+                "command": "printf failed-command >&2; exit 23",
+                "head": "b3129b50f8aef2b84b795f1776240de572bcf26c",
+                "startedAt": "2026-10-06T08:21:00.741Z",
+                "finishedAt": "2026-10-06T08:21:00.746Z",
+                "exit": 23,
+                "source": "coordinator-executed",
+                "output": "failed-command"
+              }
+            ],
+            "application": {
+              "fingerprint": "98bcdff950522f14e1df5a309af9c17ca3b5af55d6c972f5bca8a5dbe9e9727a",
+              "phase": "blocked",
+              "appliedHead": "b3129b50f8aef2b84b795f1776240de572bcf26c",
+              "reason": "verification-failed",
+              "blockedAt": "2026-10-06T08:21:00.752Z"
+            },
+            "files_sha256": {
+              "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-ezvcss/verification.json": "d62cb2144da5e053c9dcc826895fdb027b2d5e576aaa098e407d889c9c92fc69",
+              "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-ezvcss/result-application.json": "6076a3094f44f1b9ac9fc6ea917da931f2637a0e1a900e60ad9e310545dfbc8d"
+            }
+          }
+        ]
+      }
+    ]
+  },
+  "external_qualification": {
+    "mandatory_live_prerequisites": [],
+    "live_paid_calls": 0,
+    "native_codex_preparation_qualified": false,
+    "remote_provider_available": {
+      "openai-agents": false,
+      "codex-cloud": false
+    },
+    "installed_plugin_qualified": false,
+    "model_access_exercised": false,
+    "browser_capture_required": false,
+    "remedy": "Complete the independent native preparation adapter and its limited-authority evidence before registry integration. Later production transports require implemented adapters, credentials, demonstrated model access and authorized bounded live evidence; preserve model/provider defaults and sandbox permissions."
+  }
+}

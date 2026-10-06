@@ -453,8 +453,12 @@ Applied content and input ancestry reconcile lost commit
 acknowledgements. Only existing Git/GitHub helpers commit, push and reconcile one
 regular PR. Approved immutable PRD Verify commands run in the owned checkout
 with real exit/output/timestamp/revision evidence (120-second, 256 KiB command
-bounds). Provider assertions are not verification evidence. The canonical tick
-continues to own readiness, trusted feedback, freshness, receipts, conflicts,
+bounds). They use a fixed non-login POSIX shell (`/bin/sh -c`), preserving the
+approved command text without selecting the operator's `SHELL` or sourcing login
+startup files. Verify commands must use POSIX shell syntax and explicitly invoke
+any other interpreter they need. Provider assertions are not verification
+evidence. The canonical tick continues to own readiness, trusted feedback,
+freshness, receipts, conflicts,
 rounds and human merge boundaries. No automatic merge is added.
 
 Verification requires the recorded applied commit and a clean Git index/worktree,
