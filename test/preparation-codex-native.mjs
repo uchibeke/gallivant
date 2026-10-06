@@ -17,6 +17,7 @@ const cwd = join(root, "draft"), home = join(cwd, "home"), configHome = join(hom
 mkdirSync(cwd); mkdirSync(configHome, { recursive: true });
 const marker = join(root, "unexpected-tool-execution");
 const insideMarker = join(cwd, "unexpected-implementation");
+const notifyMarker = join(root, "unexpected-notification");
 const observations = [];
 let requests = [], responseIndex = 0;
 const server = createServer(async (request, response) => {
@@ -49,6 +50,7 @@ try {
     assert.ok(catalog.models.some(m => m.slug === model), `missing real metadata for ${model}`);
     writeFileSync(join(configHome, "config.toml"), [
       `model=${JSON.stringify(model)}`, 'model_provider="preparation_fixture"',
+      `notify=${JSON.stringify([process.execPath, "-e", `require('node:fs').writeFileSync(${JSON.stringify(notifyMarker)},process.argv.at(-1))`])}`,
       'sandbox_mode="workspace-write"', '[sandbox_workspace_write]', 'network_access=true',
       '[permissions.gallivant_preparation.filesystem]', '":root"="write"',
       '[model_providers.preparation_fixture]', 'name="preparation_fixture"', `base_url=${JSON.stringify(url)}`,
@@ -67,6 +69,7 @@ try {
     assert.equal(code, 0, stderr);
     assert.equal(existsSync(marker), false, "disabled tools executed");
     assert.equal(existsSync(insideMarker), false, "preparation modified its workspace");
+    assert.equal(existsSync(notifyMarker), false, "legacy notify received the intake prompt outside the sandbox");
     assert.equal(requests.length, 5, "hostile shell, MCP and inside/outside patch replies were processed before completion");
     for (const request of requests) {
       assert.equal(request.model, model, "adapter changed the selected model");
@@ -74,7 +77,20 @@ try {
     }
     const outcome = adapterFor("codex").outcome(output.trim().split("\n"));
     assert.equal(outcome.ok, true, output); assert.equal(outcome.lastMessage, "prepared");
-    observations.push({ model, requests: requests.length, tools: (requests[0].tools ?? []).map(t => t.name), hostileToolCallsRejected: 4, output: outcome.lastMessage });
+    observations.push({ model, requests: requests.length, tools: (requests[0].tools ?? []).map(t => t.name), hostileToolCallsRejected: 4, notifierDisabled: true, output: outcome.lastMessage });
   }
-  console.log(JSON.stringify({ nativeVersion: spawnSync(bin, ["--version"], { encoding: "utf8", env }).stdout.trim(), provider: "loopback fixture; no inference", observations }, null, 2));
+  const refusedOverrides = [];
+  for (const override of ['sandbox_mode="workspace-write"', 'features.shell_tool=true', 'permissions.gallivant_preparation.filesystem.":root"="write"', `notify=${JSON.stringify([process.execPath, "-e", "process.exit(1)"])}`]) {
+    let spec = buildPreparationRun({ harness: "codex", config: { harness: { codex: { bin } }, max_budget_usd: 0 }, mode: "start", session: null, prompt: "This must never reach the provider", cwd });
+    // Inject a conflicting effective value without changing system/MDM policy.
+    // The unit fixture separately exercises merged administrator-layer results.
+    spec = { ...spec, args: [...spec.args.slice(0, -1), "-c", override, spec.args.at(-1)] };
+    const before = requests.length;
+    await assert.rejects(spec.configure(spec, { cwd, env }), e => e.code === "TASK_PREPARATION_BOUNDARY");
+    assert.equal(requests.length, before, "configuration inspection sent a model request");
+    refusedOverrides.push(override.split("=")[0]);
+  }
+  await new Promise(resolve => setTimeout(resolve, 250));
+  assert.equal(existsSync(notifyMarker), false, "legacy notifier ran asynchronously");
+  console.log(JSON.stringify({ nativeVersion: spawnSync(bin, ["--version"], { encoding: "utf8", env }).stdout.trim(), provider: "loopback fixture; no inference", observations, refusedOverrides }, null, 2));
 } finally { server.closeAllConnections(); server.close(); rmSync(root, { recursive: true, force: true }); }

@@ -1,10 +1,22 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { writeFileSync, readFileSync } from "node:fs";
+import { writeFileSync, readFileSync, existsSync } from "node:fs";
 import { join } from "node:path";
 import { adapters, buildRun, buildPreparationRun, isPreparationReceipt, preparationCapability, capabilitiesFor } from "../lib/harness.mjs";
 import { checkVersion } from "../lib/probe.mjs";
 import { CONFIG, tempHome, harnessBin } from "./helpers.mjs";
+import { restrictedCodexConfig } from "./codex-config-fixture.mjs";
+
+function codexFixture(dir, { config = restrictedCodexConfig(), servers = [{ name: "z-last" }, { name: "a_first" }], probeSource = null } = {}) {
+  const bin = join(dir, "codex-fixture.mjs");
+  writeFileSync(bin, `#!${process.execPath}
+if (process.argv[2] === 'mcp') console.log(${JSON.stringify(JSON.stringify(servers))});
+else if (process.argv[2] === 'app-server') {
+  ${probeSource ?? `const { serveCodexConfig } = await import(${JSON.stringify(new URL("./codex-config-fixture.mjs", import.meta.url).href)}); serveCodexConfig(${JSON.stringify(config)});`}
+} else { (await import('node:fs')).writeFileSync(${JSON.stringify(join(dir, "unexpected-turn"))}, 'draft started'); }
+`, { mode: 0o755 });
+  return { ...buildPreparationRun(options("codex")), cmd: bin };
+}
 
 const options = harness => ({ harness, config: CONFIG, mode: "start", session: "6f1c2d3e-1111-4111-8111-111111111111", prompt: "draft", cwd: "/tmp/fixture" });
 test("preparation is an adapter capability; ordinary implementation argv stays unchanged", () => {
@@ -28,18 +40,66 @@ test("preparation is an adapter capability; ordinary implementation argv stays u
 });
 
 test("Codex preparation removes native tools and disables every inherited MCP server", async () => {
-  const dir = tempHome(), bin = join(dir, "codex-fixture.mjs");
-  writeFileSync(bin, `#!${process.execPath}\nconsole.log(JSON.stringify([{name:'z-last'},{name:'a_first'}]));\n`, { mode: 0o755 });
-  let spec = buildPreparationRun(options("codex")); spec.cmd = bin;
-  writeFileSync(join(dir, "config.toml"), 'model="selected-model"\nmodel_provider="selected-provider"\nsandbox_mode="workspace-write"\n[sandbox_workspace_write]\nnetwork_access=true\n');
+  const dir = tempHome(), spec = codexFixture(dir);
+  writeFileSync(join(dir, "config.toml"), 'model="selected-model"\nmodel_provider="selected-provider"\nnotify=["private-command", "private-argument"]\nsandbox_mode="workspace-write"\n[sandbox_workspace_write]\nnetwork_access=true\n');
   const final = await spec.configure(spec, { cwd: dir, env: { PATH: process.env.PATH, CODEX_HOME: dir } });
   for (const flag of ['approval_policy="never"', 'default_permissions="gallivant_preparation"', 'web_search="disabled"', 'features.shell_tool=false', 'features.apps=false', 'features.plugins=false', 'features.hooks=false', 'features.computer_use=false', 'features.multi_agent=false', 'features.image_generation=false', 'features.view_image=false', 'features.goals=false', 'features.code_mode_host=false', 'mcp_servers.a_first.enabled=false', 'mcp_servers.z-last.enabled=false']) assert.ok(final.args.includes(flag), flag);
   assert.equal(final.args.at(-1), spec.args.at(-1));
+  assert.ok(final.args.includes("notify=[]"));
   assert.ok(!final.args.includes("-m"), "the configured model remains selected");
   assert.ok(!final.args.some(a => a.startsWith("model_provider=")), "the configured provider remains selected");
   assert.ok(!final.args.some(a => /^sandbox_mode=|^sandbox_workspace_write\./.test(a)));
   const profile = readFileSync(join(dir, "config.toml"), "utf8");
-  assert.match(profile, /selected-model/); assert.match(profile, /selected-provider/); assert.doesNotMatch(profile, /sandbox_mode|sandbox_workspace_write/);
+  assert.match(profile, /selected-model/); assert.match(profile, /selected-provider/); assert.doesNotMatch(profile, /sandbox_mode|sandbox_workspace_write|notify|private-command/);
+});
+
+test("managed effective settings cannot override the preparation boundary", async t => {
+  const mutations = {
+    "writable legacy sandbox": c => { c.sandbox_mode = "workspace-write"; },
+    "broad read-only legacy sandbox": c => { c.sandbox_mode = "read-only"; },
+    "legacy workspace settings": c => { c.sandbox_workspace_write = {}; },
+    "different permission profile": c => { c.default_permissions = "workspace"; },
+    "inherited permission grants": c => { c.permissions.gallivant_preparation.extends = "workspace"; },
+    "workspace grants": c => { c.permissions.gallivant_preparation.workspace_roots = ["/private"]; },
+    "additional file grant": c => { c.permissions.gallivant_preparation.filesystem[":root"] = "write"; },
+    "network enabled": c => { c.permissions.gallivant_preparation.network.enabled = true; },
+    "MCP enabled": c => { c.mcp_servers = { managed: { enabled: true } }; },
+    "MCP enabled by default": c => { c.mcp_servers = { managed: { command: "private-command" } }; },
+    "tools re-enabled": c => { c.features.shell_tool = true; },
+    "hooks re-enabled": c => { c.features.hooks = true; },
+    "notifier restored": c => { c.notify = ["private-command", "secret-credential"]; },
+    "named config profile": c => { c.profile = "implementation"; },
+    "incomplete protocol result": c => { delete c.features; },
+  };
+  for (const [name, mutate] of Object.entries(mutations)) await t.test(name, async () => {
+    const dir = tempHome(), config = restrictedCodexConfig(); mutate(config);
+    const policy = 'model="managed-model"\n# preserved administrator policy\n';
+    writeFileSync(join(dir, "managed_config.toml"), policy);
+    const spec = codexFixture(dir, { config });
+    await assert.rejects(spec.configure(spec, { cwd: dir, env: { CODEX_HOME: dir } }), e => e.code === "TASK_PREPARATION_BOUNDARY" && !/private-command|secret-credential/.test(e.message));
+    assert.equal(readFileSync(join(dir, "managed_config.toml"), "utf8"), policy);
+    assert.equal(existsSync(join(dir, "unexpected-turn")), false);
+  });
+});
+
+test("compatible managed provider settings remain usable; invalid inspection fails closed", async () => {
+  const dir = tempHome(), config = { ...restrictedCodexConfig(), model: "managed-model", model_provider: "managed-provider", mcp_servers: { managed: { enabled: false } } };
+  const spec = codexFixture(dir, { config });
+  await spec.configure(spec, { cwd: dir, env: { CODEX_HOME: dir } });
+  for (const probeSource of ["console.log('secret-credential')", "process.exit(1)", "console.log(JSON.stringify({id:1,error:{message:'secret-credential'}}))", "console.log('x'.repeat(1_048_577))"]) {
+    const bad = codexFixture(dir, { probeSource });
+    await assert.rejects(bad.configure(bad, { cwd: dir, env: { CODEX_HOME: dir } }), e => e.code === "TASK_PREPARATION_BOUNDARY" && !e.message.includes("secret-credential"));
+  }
+});
+
+test("effective configuration inspection honors cancellation without issuing a turn", async () => {
+  const dir = tempHome(), spec = codexFixture(dir, { probeSource: "setInterval(() => {}, 1000)" });
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 250);
+  try {
+    await assert.rejects(spec.configure(spec, { cwd: dir, env: { CODEX_HOME: dir }, signal: controller.signal }), e => e.code === "TASK_PREPARATION_BOUNDARY" || e.name === "AbortError");
+    assert.equal(existsSync(join(dir, "unexpected-turn")), false);
+  } finally { clearTimeout(timer); }
 });
 
 test("ambiguous or malformed MCP discovery refuses preparation without leaking its output", async () => {

@@ -20,8 +20,15 @@ credential filesystem grants. Selected source text is supplied in the prompt.
 
 The task-private config snapshot is parsed with bundled smol-toml. Model and
 provider settings are retained; legacy sandbox settings are removed because they
-override permission profiles. Native operator files and managed requirements are
-unchanged. Unsupported named config profiles and ambiguous MCP server names stop
+override permission profiles. Legacy `notify` commands are removed from the private
+snapshot and disabled explicitly; turning off hooks alone does not disable them.
+Before any drafting turn, a bounded native `config/read` probe verifies the merged
+settings, including system and MDM overrides. It starts no model turn, sends no
+intake text and discards configuration diagnostics. Conflicting sandbox, tool,
+notification, MCP or permission settings fail closed before a preparation receipt
+is returned. Managed policy is never rewritten to obtain a pass.
+Native operator files and managed requirements are unchanged.
+Unsupported named config profiles and ambiguous MCP server names stop
 before drafting with an actionable error. Implementation argv is unchanged.
 
 Run the ordinary suite with `npm ci && npm test`. To verify the installed Codex
@@ -36,7 +43,10 @@ On 2026-10-06, Codex 0.160.0 processed all three model catalogs. Each completed
 after rejecting forced shell, inherited MCP and file-patch calls both inside and
 outside the preparation workspace, despite inherited writable settings. Sol and Astra
 exposed no tools; GPT-5.5 exposed request_user_input and apply_patch, with writes
-denied. This proves native CLI/configuration behavior with a fixture provider,
+denied. Inherited notification commands stayed disabled; conflicting effective
+settings were refused before any model request. Managed precedence is covered
+by protocol regression fixtures without editing the machine's administrator policy.
+This proves native CLI/configuration behavior with a fixture provider,
 not live provider eligibility or a completed APort/ChatGPT workflow.
 
 Official configuration references:
