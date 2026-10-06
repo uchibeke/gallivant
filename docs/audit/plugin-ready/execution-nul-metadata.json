@@ -1,0 +1,321 @@
+{
+  "version": 1,
+  "task_id": "task-df42674c6251c85b0edef13f",
+  "source_parent": "2b65bc2fa19bf5e182296d8a2ee634dbcc0212c5",
+  "review": {
+    "id": 5426574254,
+    "inline_comment_ids": [
+      4193810414
+    ]
+  },
+  "commands": [
+    {
+      "command": "npm test",
+      "exit": 0,
+      "raw_log": "/tmp/execution-nul-tests.txt",
+      "sha256": "eeecb0a1ebf0c2b944c14091d78357507bd64361b7a816543da4b7d796d953af",
+      "tests": 1059,
+      "passed": 1059,
+      "failed": 0
+    },
+    {
+      "command": "npm run lint",
+      "exit": 0,
+      "raw_log": "/tmp/execution-nul-lint.txt",
+      "sha256": "8c7790de3f018fb4580f18ac70e1b355a0f76f522dd73acbdaa63632feffcecc"
+    },
+    {
+      "command": "npm run test:execution-backends",
+      "exit": 0,
+      "raw_log": "/tmp/execution-nul-backends.txt",
+      "sha256": "42e2faa0a326453be78b38e6593f920a71f4b5d6bc00f21d9ca61735f2614994",
+      "tests": 357,
+      "passed": 357,
+      "failed": 0
+    },
+    {
+      "command": "git diff --check",
+      "exit": 0,
+      "raw_log": "/tmp/execution-nul-diff.txt",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    }
+  ],
+  "artifact_hashes": {
+    "docs/execution.md": "0a31f45eb93317003756acba66e0d959a4f27518a1b9605d7689b1dfec61296e",
+    "lib/execution_result.mjs": "dbd435831492a206c020f91a249eb1199e407cbfb894abfc41a4d5d51a2120fd",
+    "lib/gh.mjs": "e7a1343a1bb2ddf7b670104d4a579c8af580516522755b5dae9fd3b24a81eea4",
+    "lib/public_output.mjs": "108f886c9fdc7fd46ba72fd67d7d9efc8780d033a2a6cc1b27bdff0a3ab4d296",
+    "test/execution-backends.test.mjs": "fed546d9bba6233fdcc5caed02e3c43f5da913b14bc4dc5e79fea83f0a6fec3c",
+    "test/public_format.test.mjs": "8527034b44adcbd179ee4d5fbca97059fba5f8ccfb39be4cfa0a7d4a2b9547d0",
+    "test/public_output.test.mjs": "da070db14bb84fa288c381a243ce85d23142a488ffcb8fd226c1453ab9e98626"
+  },
+  "focused_checks": [
+    {
+      "command": "node --test --test-name-pattern='NUL|publication rejection|public text|GitHub metadata migration|ordinary daemon GitHub|collection and unavailable publication|blocked checkpoint is durable|verified publication' test/execution-backends.test.mjs test/public_format.test.mjs test/public_output.test.mjs",
+      "exit": 0,
+      "raw_log": "/tmp/execution-nul-focus.txt",
+      "sha256": "a133d904bd2e67097fe536283d96a71437fe1277ef6daabef94c820bb64c90f3",
+      "tests": 12,
+      "passed": 12,
+      "failed": 0
+    }
+  ],
+  "regression_reproduction": {
+    "command": "node --test --test-name-pattern='NUL|deterministic publication rejection' test/execution-backends.test.mjs test/public_format.test.mjs test/public_output.test.mjs",
+    "exit": 1,
+    "expected_failure": true,
+    "raw_log": "/tmp/execution-nul-red.txt",
+    "sha256": "a15d9634663eed80473b70bdf6eba809acfe7c371fa4126b1f208acd3254d358",
+    "tests": 5,
+    "passed": 1,
+    "failed": 4
+  },
+  "source_and_output_review": [
+    {
+      "rule": "PR metadata must be representable as GitHub CLI arguments before artifact application; rejected text is preserved privately and cannot trigger repeated publication.",
+      "files": [
+        "lib/execution_result.mjs",
+        "lib/public_output.mjs",
+        "lib/block.mjs",
+        "lib/gh.mjs",
+        "lib/tick.mjs",
+        "lib/control.mjs",
+        "lib/commands/resume.mjs",
+        "docs/execution.md"
+      ],
+      "boundaries_checked": [
+        "The existing typed publication validator checks title and raw body for NUL before normalization, head/tracked-path/mode reads, applying artifacts, verification, push or PR publication.",
+        "Raw-body validation also rejects NUL in a replaceable recovery block, preventing normalization from silently repairing an invalid provider payload.",
+        "Artifact, pushed-head and legacy verified paths persist reason result-validation and phase blocked before writes. Verified checkpoints retain fingerprint, applied head, paths and original evidence bytes.",
+        "The existing coordinator settles the actual provider exit and nullable cost once, preserves private result bytes across restart, refuses recheck and permits one explicit continuation in the same session.",
+        "Unrelated review reaches done while the rejected root remains blocked. Collection and unavailable Git metadata retain their existing retryable behavior.",
+        "Shared NUL validation protects create/edit result publication, direct title/body/comment writes, labels and recovery-only migration. Ordinary writes invoke no subprocess for rejected input; recovery migration performs only its necessary fresh read.",
+        "Recovery-only migration still preserves legacy prose and opaque identity without enforcing the separate branding rule; both raw and normalized bodies are checked for NUL.",
+        "Errors and public violation lists identify the field without echoing rejected text. Quotes, literal backslash-zero sequences, Unicode, CRLF and multiline text remain byte-for-byte unchanged.",
+        "Native execFile argument validation produces ERR_INVALID_ARG_VALUE for a NUL argument before spawning. The production boundary now classifies the same input as deterministic publication rejection instead of retrying that subprocess error.",
+        "No model/provider defaults, credentials, execution permissions, paid-call scope, transport availability or human merge boundaries were changed."
+      ],
+      "regressions": [
+        "NUL PR metadata blocks before artifact application and preserves verified recovery evidence",
+        "deterministic publication rejection settles once and permits an explicit corrective continuation (nulTitle, nulBody and nulRecoveryBody)",
+        "GitHub writers reject NUL metadata before writes, including recovery-only migration",
+        "public text rejects NUL bytes without exposing or rewriting metadata",
+        "GitHub metadata migration reads the current body and preserves prose, and mismatched identity writes nothing",
+        "collection and unavailable publication I/O remain pending and recover without another dispatch",
+        "a rejected result cannot settle until its blocked checkpoint is durable"
+      ]
+    }
+  ],
+  "representative_output": {
+    "evidence_kind": "Native Node argument validation and deterministic remote/Git publication fixtures. Retained legacy verification evidence is fixture data; no new Verify command runs for rejected metadata and no live provider qualification is claimed.",
+    "reports": [
+      {
+        "label": "early-metadata-rejection",
+        "report_path": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-ijgxiG/nul-publication-evidence.json",
+        "report_sha256": "af2172c9f496aadb3a682104833f0df3d4f438cec79926e4a4403c9c9deb4e91",
+        "native_argument_error": "ERR_INVALID_ARG_VALUE",
+        "observations": [
+          {
+            "phase": "artifacts",
+            "field": "title",
+            "checkpoint": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-ygKToN/result-application.json",
+            "evidence": null,
+            "appliedHead": null,
+            "metadataReads": 0,
+            "publicationCalls": [],
+            "checkpoint_sha256": "9dbd526c0031085dfabeb7dbfcc2eb93acbb39512e81e17bd48705b7cfb0e80e",
+            "checkpoint_phase": "blocked",
+            "checkpoint_reason": "result-validation",
+            "fingerprint": "ca81fa3953cf201d25bf08425b1482a1044fda6366a5288f3b2b23965a4ec526"
+          },
+          {
+            "phase": "artifacts",
+            "field": "body",
+            "checkpoint": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-O13ba6/result-application.json",
+            "evidence": null,
+            "appliedHead": null,
+            "metadataReads": 0,
+            "publicationCalls": [],
+            "checkpoint_sha256": "a9156c8ba62d33481a7a8496eb4502b1167ca99af88cad3aa0ca7b8a20b18709",
+            "checkpoint_phase": "blocked",
+            "checkpoint_reason": "result-validation",
+            "fingerprint": "755d335cbc0e330b3c237dc6c5cddb9717c38356489ad4561506199ba04cfde0"
+          },
+          {
+            "phase": "pushed",
+            "field": "title",
+            "checkpoint": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-TPdXQJ/result-application.json",
+            "evidence": null,
+            "appliedHead": null,
+            "metadataReads": 0,
+            "publicationCalls": [],
+            "checkpoint_sha256": "072cea71a8c979844710699cbafa95438384ed5c0ce46360fcb0739b9efa5317",
+            "checkpoint_phase": "blocked",
+            "checkpoint_reason": "result-validation",
+            "fingerprint": "4f57eb0c37fc1cd68cde6055ef279a6fa2a47dffda267c091584ca690c5c0762"
+          },
+          {
+            "phase": "pushed",
+            "field": "body",
+            "checkpoint": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-JTdV5F/result-application.json",
+            "evidence": null,
+            "appliedHead": null,
+            "metadataReads": 0,
+            "publicationCalls": [],
+            "checkpoint_sha256": "a31c680eae767c180bcf60675a2eddca83e824e609f66c69b420c219259fb47f",
+            "checkpoint_phase": "blocked",
+            "checkpoint_reason": "result-validation",
+            "fingerprint": "263cd04d2172c47ee4362065db768ebf5d5ec7e567bc7e6a4597539d332b17c3"
+          },
+          {
+            "phase": "verified",
+            "field": "title",
+            "checkpoint": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-we3xSg/result-application.json",
+            "evidence": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-we3xSg/verification.json",
+            "appliedHead": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "metadataReads": 0,
+            "publicationCalls": [],
+            "checkpoint_sha256": "9a507dd5a6565f4d0eaffede42f8fadb9195617f4ddbba50209fd51f3cbc6c1f",
+            "checkpoint_phase": "blocked",
+            "checkpoint_reason": "result-validation",
+            "fingerprint": "ca81fa3953cf201d25bf08425b1482a1044fda6366a5288f3b2b23965a4ec526",
+            "evidence_sha256": "00d31b27b603e66e99fb2ee9f58dd28ac87e93536d9958b22cc0aed5516fed9b",
+            "retained_paths": [
+              "a.txt"
+            ],
+            "verification_kind": "Pre-existing deterministic fixture evidence; no command executed for rejected metadata."
+          },
+          {
+            "phase": "verified",
+            "field": "body",
+            "checkpoint": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-1x57c5/result-application.json",
+            "evidence": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-1x57c5/verification.json",
+            "appliedHead": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "metadataReads": 0,
+            "publicationCalls": [],
+            "checkpoint_sha256": "ab470fff1fb69e59f0a3ac2d490af16840a24fed979d76b67a0f0db87bda2c3d",
+            "checkpoint_phase": "blocked",
+            "checkpoint_reason": "result-validation",
+            "fingerprint": "755d335cbc0e330b3c237dc6c5cddb9717c38356489ad4561506199ba04cfde0",
+            "evidence_sha256": "00d31b27b603e66e99fb2ee9f58dd28ac87e93536d9958b22cc0aed5516fed9b",
+            "retained_paths": [
+              "a.txt"
+            ],
+            "verification_kind": "Pre-existing deterministic fixture evidence; no command executed for rejected metadata."
+          }
+        ]
+      },
+      {
+        "label": "durable-correction",
+        "report_path": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-lAthTH/publication-rejection-evidence.json",
+        "report_sha256": "c3039694e3e78bf16cedd487c73f3acf8a0b3007b032a52b67849d6bec6c223a",
+        "total_rejection_cases": 10,
+        "observations": [
+          {
+            "kind": "nulTitle",
+            "checkpoint": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-wyxvzq/runs/acme__widget__result/run-8b1cacd6-c23d-4829-9611-c2dbd5ced8a7/result-application.json",
+            "result": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-wyxvzq/runs/acme__widget__result/run-8b1cacd6-c23d-4829-9611-c2dbd5ced8a7/result.json",
+            "registry": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-wyxvzq/state.json",
+            "initialRun": "run-8b1cacd6-c23d-4829-9611-c2dbd5ced8a7",
+            "settled": {
+              "state": "needs-human",
+              "reason": "result-verification",
+              "exit": 0,
+              "cost": null,
+              "session": "session-1"
+            },
+            "unrelatedState": "done",
+            "correctiveRun": "run-defa81aa-b5c4-44eb-a16e-45010911af15",
+            "notifications": 1,
+            "collections": 1,
+            "continuations": 1,
+            "publicationCalls": [],
+            "checkpoint_sha256": "776969f2f3caf3b3764d6edf2485f4f926ce575633820d3b3f5dc3c27ac55aa6",
+            "result_sha256": "9ef2a10976d0feaf6ab8eeb2cd4546d391cfbb8fd2d89610b23fd2dd1bb9f652",
+            "registry_sha256": "a4a5be0a84d38a0df3a3481672bd8653db910bda7e37ca160e3a82b43a64edbe",
+            "checkpoint_phase": "blocked",
+            "checkpoint_reason": "result-validation",
+            "fingerprint": "6d978eb64116026583b790c5d9fb482eea856d627825e8409c749296680b4e2f",
+            "private_metadata_has_nul": true,
+            "private_result_cost": null,
+            "corrective_root": "turn-2",
+            "corrective_control": "applied"
+          },
+          {
+            "kind": "nulBody",
+            "checkpoint": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-J4OBNd/runs/acme__widget__result/run-88b3434c-1030-4f1c-830d-66ddfd4dc7d8/result-application.json",
+            "result": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-J4OBNd/runs/acme__widget__result/run-88b3434c-1030-4f1c-830d-66ddfd4dc7d8/result.json",
+            "registry": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-J4OBNd/state.json",
+            "initialRun": "run-88b3434c-1030-4f1c-830d-66ddfd4dc7d8",
+            "settled": {
+              "state": "needs-human",
+              "reason": "result-verification",
+              "exit": 0,
+              "cost": null,
+              "session": "session-1"
+            },
+            "unrelatedState": "done",
+            "correctiveRun": "run-cee1a95d-22ca-41fb-b0fd-3c124c162455",
+            "notifications": 1,
+            "collections": 1,
+            "continuations": 1,
+            "publicationCalls": [],
+            "checkpoint_sha256": "3c3a31f450ec469b048a5ec1ce23eecfbbbc3fd76a9bc3af8dd10b80c98b2e3f",
+            "result_sha256": "d1370ff8698e814a65807a941c56601e603f3e5bd64d30f2b684a002160e9eb6",
+            "registry_sha256": "01f24cde1d525645a24042caf127d0c1f9f7fb679ed07fa0f91b0d3f6e023fd9",
+            "checkpoint_phase": "blocked",
+            "checkpoint_reason": "result-validation",
+            "fingerprint": "12816b8639d7351b5a115d6e67ef846acacb04ade5878dae09a4e0f79002ac37",
+            "private_metadata_has_nul": true,
+            "private_result_cost": null,
+            "corrective_root": "turn-2",
+            "corrective_control": "applied"
+          },
+          {
+            "kind": "nulRecoveryBody",
+            "checkpoint": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-F3wSTy/runs/acme__widget__result/run-8444ee01-119e-409e-b5bc-9ebeb91ddff9/result-application.json",
+            "result": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-F3wSTy/runs/acme__widget__result/run-8444ee01-119e-409e-b5bc-9ebeb91ddff9/result.json",
+            "registry": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-F3wSTy/state.json",
+            "initialRun": "run-8444ee01-119e-409e-b5bc-9ebeb91ddff9",
+            "settled": {
+              "state": "needs-human",
+              "reason": "result-verification",
+              "exit": 0,
+              "cost": null,
+              "session": "session-1"
+            },
+            "unrelatedState": "done",
+            "correctiveRun": "run-51ccd404-a343-4012-8d92-7a38b965757d",
+            "notifications": 1,
+            "collections": 1,
+            "continuations": 1,
+            "publicationCalls": [],
+            "checkpoint_sha256": "9767f035c871a6da469d6994d4587b992d7053971d2863c8308883ccd0f50d06",
+            "result_sha256": "b044ee467669d9ac26a0f99817a9833459366b9eb9ff9b00ad07717fa7eeb4da",
+            "registry_sha256": "4d3105eb0fb2f3cc720105d4c96c45a63d13aea79e6a96e075761766576d0925",
+            "checkpoint_phase": "blocked",
+            "checkpoint_reason": "result-validation",
+            "fingerprint": "0938ffd70e7743de9be300322613a25f2d68359a2d1b6bee391fff0d2a64b2b8",
+            "private_metadata_has_nul": true,
+            "private_result_cost": null,
+            "corrective_root": "turn-2",
+            "corrective_control": "applied"
+          }
+        ]
+      }
+    ]
+  },
+  "external_qualification": {
+    "mandatory_live_prerequisites": [],
+    "live_paid_calls": 0,
+    "native_codex_preparation_qualified": false,
+    "remote_provider_available": {
+      "openai-agents": false,
+      "codex-cloud": false
+    },
+    "installed_plugin_qualified": false,
+    "model_access_exercised": false,
+    "browser_capture_required": false,
+    "remedy": "Complete the independent native preparation adapter and its limited-authority evidence before registry integration. Later production transports require implemented adapters, credentials, demonstrated model access and authorized bounded live evidence; preserve model/provider defaults and sandbox permissions."
+  }
+}

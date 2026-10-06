@@ -488,7 +488,11 @@ merge is added.
 Permanent publication validation failures also persist a `blocked` checkpoint
 with reason `result-validation`, retaining any previous fingerprint, applied head
 and evidence. Invalid repository/branch ownership, paths, modes, hashes or public
-text cannot be applied or retried on each poll. The canonical needs-human lane
+text cannot be applied or retried on each poll. The publication boundary rejects
+NUL bytes in raw PR titles and bodies before normalization or artifact application,
+including pushed and previously verified results. Shared GitHub writers and
+recovery-only metadata migration use the same NUL validation without rewriting
+payloads or exposing rejected text in errors. The canonical needs-human lane
 settles the provider's actual exit, cost and session, and an explicit same-session
 resume starts correction without clearing the rejected result. Missing collection
 results, unavailable Git metadata and ordinary I/O failures remain unresolved and

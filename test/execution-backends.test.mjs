@@ -1701,6 +1701,9 @@ test("deterministic publication rejection settles once and permits an explicit c
     alias: f => { f.result.files.push({ ...f.result.files[0], path: "./a.txt" }); },
     mode: f => { f.ctx.git.resultModesMatch = async () => false; },
     publicText: f => { f.result.pr.title = "Gallivant result"; },
+    nulTitle: f => { f.result.pr.title += "\0private"; },
+    nulBody: f => { f.result.pr.body += "\0private"; },
+    nulRecoveryBody: f => { f.result.pr.body += "\n<!-- work-session\nignored\0payload\n-->\n"; },
   }, observations = [];
   for (const [kind, mutate] of Object.entries(cases)) {
     const f = await collectedArtifactFixture(); mutate(f);
@@ -1737,6 +1740,38 @@ test("deterministic publication rejection settles once and permits an explicit c
       correctiveRun: restarted.state.get(f.id).last.run, notifications: 1, collections: 1, continuations: 1, publicationCalls: f.calls });
   }
   const path = join(tempHome(), "publication-rejection-evidence.json"); writeJsonAtomic(path, { observations }); t.diagnostic(`publication rejection evidence: ${path}`);
+});
+
+test("NUL PR metadata blocks before artifact application and preserves verified recovery evidence", async t => {
+  await assert.rejects(execFileAsync(process.execPath, ["-e", "process.exit(0)", "metadata\0private"]), { code: "ERR_INVALID_ARG_VALUE" });
+  const observations = [];
+  for (const phase of ["artifacts", "pushed", "verified"]) for (const field of ["title", "body"]) {
+    const f = resultFixture(), checkpoint = join(f.dir, "result-application.json"), evidenceFile = join(f.dir, "verification.json");
+    f.result.pr[field] += "\0private";
+    if (phase === "pushed") { delete f.result.files; f.result.pushedHead = f.result.inputHead; }
+    if (phase === "verified") {
+      writeFileSync(join(f.entry.worktree, "a.txt"), "after");
+      writeJsonAtomic(checkpoint, { phase: "verified", fingerprint: sha(JSON.stringify(f.result)), appliedHead: f.result.inputHead, paths: ["a.txt"] });
+      writeJsonAtomic(evidenceFile, { head: f.result.inputHead, evidence: [{ command: "printf verified", source: "coordinator-executed", head: f.result.inputHead, exit: 0, output: "prior fixture evidence" }] });
+    }
+    let metadataReads = 0;
+    f.ctx.git.head = f.ctx.git.trackedPaths = f.ctx.git.resultModesMatch = async () => { metadataReads++; throw new Error("must validate metadata first"); };
+    const before = existsSync(evidenceFile) ? readFileSync(evidenceFile, "utf8") : null;
+    await assert.rejects(reconcileExecutionResult(f.ctx, f), error => {
+      assert.equal(error.code, "EXECUTION_RESULT"); assert.equal(error.publicationValidation, true);
+      assert.match(error.message, new RegExp("PR " + field + " contains NUL bytes")); assert.doesNotMatch(error.message, /private/); return true;
+    });
+    const blocked = readJson(checkpoint);
+    assert.equal(blocked.phase, "blocked"); assert.equal(blocked.reason, "result-validation");
+    assert.equal(blocked.fingerprint, sha(JSON.stringify(f.result))); assert.equal(metadataReads, 0); assert.deepEqual(f.calls, []);
+    assert.equal(readFileSync(join(f.entry.worktree, "a.txt"), "utf8"), phase === "verified" ? "after" : "before");
+    if (before !== null) { assert.equal(readFileSync(evidenceFile, "utf8"), before); assert.equal(blocked.appliedHead, f.result.inputHead); assert.deepEqual(blocked.paths, ["a.txt"]); }
+    else assert.equal(existsSync(evidenceFile), false);
+    await assert.rejects(reconcileExecutionResult(f.ctx, f), { code: "EXECUTION_RESULT_BLOCKED" });
+    assert.deepEqual(readJson(checkpoint), blocked); assert.deepEqual(f.calls, []);
+    observations.push({ phase, field, checkpoint, evidence: before === null ? null : evidenceFile, appliedHead: blocked.appliedHead ?? null, metadataReads, publicationCalls: f.calls });
+  }
+  const path = join(tempHome(), "nul-publication-evidence.json"); writeJsonAtomic(path, { nativeArgumentError: "ERR_INVALID_ARG_VALUE", observations }); t.diagnostic(`NUL publication evidence: ${path}`);
 });
 
 test("collection and unavailable publication I/O remain pending and recover without another dispatch", async () => {
