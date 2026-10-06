@@ -1,0 +1,1010 @@
+{
+  "version": 1,
+  "task_id": "task-df42674c6251c85b0edef13f",
+  "scope": "offline preparation deadline, durable stop and whole-record discard review corrections",
+  "recorded_at": "2026-10-06T05:10:28.965349+00:00",
+  "source_parent_revision": "d868dfdceb7d5de80c46f2ad064f89fd1235d938",
+  "review_comment_ids": [
+    4191640870,
+    4191640875,
+    4191640879
+  ],
+  "prior_evidence": [
+    "docs/audit/plugin-ready/execution-preparation.json",
+    "docs/audit/plugin-ready/execution-controls-turns.json",
+    "docs/audit/plugin-ready/execution-alias-output.json"
+  ],
+  "commands": [
+    {
+      "command": "npm test",
+      "exit": 0,
+      "raw_log": "/tmp/execution-deadline-discard-tests.txt",
+      "sha256": "832c53e4347c22fa19d600e1acbb49a2070b919c7a38d39e778801b6b2ab6647",
+      "tests": 1008,
+      "passed": 1008
+    },
+    {
+      "command": "npm run lint",
+      "exit": 0,
+      "raw_log": "/tmp/execution-deadline-discard-lint.txt",
+      "sha256": "8c7790de3f018fb4580f18ac70e1b355a0f76f522dd73acbdaa63632feffcecc"
+    },
+    {
+      "command": "npm run test:execution-backends",
+      "exit": 0,
+      "raw_log": "/tmp/execution-deadline-discard-backends.txt",
+      "sha256": "42d7b8bcd8b320cd30f891e6c2ad44955c0b00e66d60b05ae7b9f1ba9d493bd7",
+      "tests": 308,
+      "passed": 308
+    },
+    {
+      "command": "git diff --check",
+      "exit": 0,
+      "raw_log": "/tmp/execution-deadline-discard-diff.txt",
+      "evidence": "Empty output on final source/docs; repeated after evidence generation and staging."
+    }
+  ],
+  "artifact_hashes": {
+    "lib/execution.mjs": "d9be14a83d8f98a2cc3dac590bb679f8ebacd241e3ddc4b773454050a0884f2e",
+    "lib/task_prepare.mjs": "c6a898365b96eb4b4614680be85831856ccff122ea103e3468f7abd4d6e7f45f",
+    "lib/tasks.mjs": "37b24281af6e49067eb4a525fe418bcbf3d0b6134057526b190fe6162f5e4bbb",
+    "lib/run.mjs": "647616b5a470bcbbcc060206844dd75f2f31c70f62140bd487cfa7d36c41673a",
+    "test/execution-preparation.test.mjs": "70ae6e2ba2c69aa784e4d2523347c928b9df141618589cc358b7dc5a62e979e3",
+    "test/execution-backends.test.mjs": "00a87b0b4b45cb14c6a4f794a9d7c7e834a55d08019a4f5f87cb82908800f304",
+    "docs/execution.md": "c3cd074926ebc50d90cd0db38e2444d40856349033775f10d26f01791d1bf680"
+  },
+  "source_and_output_review": [
+    {
+      "rule": "Runtime allowance uses authoritative owned completion rather than operator resume or durable retrieval time; result collection precedes terminal settlement.",
+      "files": [
+        "lib/execution.mjs",
+        "lib/task_prepare.mjs",
+        "lib/tasks.mjs",
+        "lib/tick.mjs"
+      ],
+      "boundaries_checked": [
+        "exact job/root/input ownership before accepting observation or result timestamps",
+        "nullable completion timestamp and conservative first terminal observation upper bound",
+        "pre-start, nonterminal, invalid, conflicting and tampered cached completion values cannot authorize readiness",
+        "terminal success and failure with missing results stay pending after a deadline",
+        "late results preserve usage and cost but cannot authorize readiness or another turn",
+        "cached collection replays original completion after restart and older metadata",
+        "local process completion remains compatible; coordinator retrieval time stays separate"
+      ],
+      "regressions": [
+        "remote preparation uses owned completion time before a late resume, including missing results and inferred bounds",
+        "invalid or conflicting remote completion timestamps cannot authorize preparation readiness or rewrite cached results"
+      ]
+    },
+    {
+      "rule": "An unconfirmed preparation stop remains reconcilable while dispatch stays fenced; cancellation requested is distinct from confirmed or natural terminal completion.",
+      "files": [
+        "lib/task_prepare.mjs",
+        "lib/tasks.mjs",
+        "lib/execution.mjs",
+        "lib/control.mjs",
+        "lib/commands/task.mjs"
+      ],
+      "boundaries_checked": [
+        "attempt stop intent persisted before control I/O",
+        "pending and lost acknowledgements retain preparing state and explicit owned cancellation next action",
+        "existing boundary cadence, exact identity and cancellation idempotency key handle retries",
+        "unknown acceptance resolves ownership before the provider stop",
+        "unsupported cancellation permits only reconciliation or externally confirmed terminal completion",
+        "unsafe boundary stop cannot qualify output",
+        "older blocked timeouts permit explicit control-only resume while other blocked refusals remain inert",
+        "inspect/list remain read-only with no provider loop",
+        "confirmed or terminal stops settle blocked, quarantine late output and prevent new dispatch"
+      ],
+      "regressions": [
+        "timed-out intake stop remains resumable across acknowledgement loss, unknown ownership, unsupported cancel and legacy blocking"
+      ]
+    },
+    {
+      "rule": "Reject an entire oversized raw local record without projecting a later suffix; stable gaps and bounded replay survive restart and retention.",
+      "files": [
+        "lib/run.mjs",
+        "lib/execution.mjs",
+        "lib/execution_journal.mjs",
+        "lib/tracker/stream.mjs",
+        "lib/tracker/runs.mjs"
+      ],
+      "boundaries_checked": [
+        "persistent discard-through-newline across bounded current and queued pages",
+        "active EOF retains discard state until delimiter or confirmed process exit",
+        "final unterminated oversized record is discarded through EOF",
+        "one-byte legacy cursor lookbehind fits inside each raw read budget",
+        "restart and cursor acknowledgement loss retain stable event identities without duplicate history",
+        "next valid Unicode record and unrelated current output remain observable",
+        "invalid discard metadata refuses dispatch before paid intent and preserves diagnostic state",
+        "private suffixes never enter journal/public log",
+        "expiry emits one stable gap while cached results remain intact",
+        "read/buffer/record limits are asserted without wall-clock thresholds"
+      ],
+      "regressions": [
+        "oversized local records discard every suffix across queued restart, replay and legacy cursors with bounded reads",
+        "an active oversized local record stays discarded at EOF until its newline arrives",
+        "oversized discard retention emits a stable history gap while keeping the completed result",
+        "incompatible local projection state prevents paid intent and preserves ownership and allowance"
+      ]
+    }
+  ],
+  "representative_output": [
+    {
+      "case": "preparation completion",
+      "evidence": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-PaTQlF/preparation-completion-evidence.json",
+      "sha256": "4d6f1c8e9781ad2bf09b90d815067c7e85b60b9b27f1250995ee286a8ffa8846",
+      "kind": "Offline owned preparation completion fixtures",
+      "cases": [
+        {
+          "mode": "inspection",
+          "taskId": "task-af11a74d636c5d521cbba18f",
+          "status": "ready",
+          "endedAt": 10300,
+          "elapsedMs": 300,
+          "inferred": false,
+          "calls": [
+            "prepare",
+            "submit",
+            "inspect",
+            "inspect",
+            "collect",
+            "inspect",
+            "collect"
+          ],
+          "files": {
+            "intake": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-iulkYd/tasks/task-af11a74d636c5d521cbba18f/intake.json",
+            "result": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-iulkYd/runs/task-af11a74d636c5d521cbba18f/run-f9c45b58-c2ed-43a8-a5cb-0b7280092b6a/result.json"
+          },
+          "execution": {
+            "runId": "run-f9c45b58-c2ed-43a8-a5cb-0b7280092b6a",
+            "providerJobId": "job-1",
+            "sessionId": "session-1",
+            "turnId": "turn-1",
+            "providerState": "succeeded",
+            "completedAt": 10300,
+            "terminalObservedAt": 10400,
+            "costUsd": null,
+            "collected": true
+          },
+          "file_hashes": {
+            "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-iulkYd/tasks/task-af11a74d636c5d521cbba18f/intake.json": "6a4fa80f546ebd7affaada44472773e7782d6e6023645258b04d293d05df90ea",
+            "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-iulkYd/runs/task-af11a74d636c5d521cbba18f/run-f9c45b58-c2ed-43a8-a5cb-0b7280092b6a/result.json": "73df95f57ddd774f9c5ec33ec3e75c6ed443934adcdf39eaea781274c1e6a162"
+          }
+        },
+        {
+          "mode": "result",
+          "taskId": "task-e828458bd65c2bf3860071d4",
+          "status": "ready",
+          "endedAt": 10300,
+          "elapsedMs": 300,
+          "inferred": false,
+          "calls": [
+            "prepare",
+            "submit",
+            "inspect",
+            "inspect",
+            "collect",
+            "inspect",
+            "collect"
+          ],
+          "files": {
+            "intake": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-IDStsF/tasks/task-e828458bd65c2bf3860071d4/intake.json",
+            "result": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-IDStsF/runs/task-e828458bd65c2bf3860071d4/run-40e2df3d-6110-43d0-a1e7-d1c79c0f00bc/result.json"
+          },
+          "execution": {
+            "runId": "run-40e2df3d-6110-43d0-a1e7-d1c79c0f00bc",
+            "providerJobId": "job-1",
+            "sessionId": "session-1",
+            "turnId": "turn-1",
+            "providerState": "succeeded",
+            "completedAt": 10300,
+            "terminalObservedAt": 20000,
+            "costUsd": null,
+            "collected": true
+          },
+          "file_hashes": {
+            "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-IDStsF/tasks/task-e828458bd65c2bf3860071d4/intake.json": "1dbf5234e9ed0fde06a78d867108e1928cf2ef13aaf3573b113dbee7a13ba23c",
+            "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-IDStsF/runs/task-e828458bd65c2bf3860071d4/run-40e2df3d-6110-43d0-a1e7-d1c79c0f00bc/result.json": "684e41bf643c572af79dba4ab1f43ec1486b6402f2cc4d2ed88ae50805093d74"
+          }
+        },
+        {
+          "mode": "observed-bound",
+          "taskId": "task-8478e80dac2e3f2b5706e8b6",
+          "status": "ready",
+          "endedAt": 10400,
+          "elapsedMs": 400,
+          "inferred": true,
+          "calls": [
+            "prepare",
+            "submit",
+            "inspect",
+            "inspect",
+            "collect",
+            "inspect",
+            "collect"
+          ],
+          "files": {
+            "intake": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-YOwrRu/tasks/task-8478e80dac2e3f2b5706e8b6/intake.json",
+            "result": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-YOwrRu/runs/task-8478e80dac2e3f2b5706e8b6/run-749c8d75-828f-485a-a169-81f743f55466/result.json"
+          },
+          "execution": {
+            "runId": "run-749c8d75-828f-485a-a169-81f743f55466",
+            "providerJobId": "job-1",
+            "sessionId": "session-1",
+            "turnId": "turn-1",
+            "providerState": "succeeded",
+            "completedAt": null,
+            "terminalObservedAt": 10400,
+            "costUsd": null,
+            "collected": true
+          },
+          "file_hashes": {
+            "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-YOwrRu/tasks/task-8478e80dac2e3f2b5706e8b6/intake.json": "548b62ab00cc1b1209859548a3ff9e4d7ca05f4967ba5754767456ed910060e0",
+            "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-YOwrRu/runs/task-8478e80dac2e3f2b5706e8b6/run-749c8d75-828f-485a-a169-81f743f55466/result.json": "2fbe0b0149f7ed6fd83c97ef905b73f3fe76da6a955e5548a9e5d1fe8e5c5244"
+          }
+        },
+        {
+          "mode": "late",
+          "taskId": "task-638ba68b8552616f5fe50a69",
+          "status": "blocked",
+          "endedAt": 10800,
+          "elapsedMs": 800,
+          "inferred": false,
+          "calls": [
+            "prepare",
+            "submit",
+            "inspect",
+            "inspect",
+            "collect",
+            "inspect",
+            "collect"
+          ],
+          "files": {
+            "intake": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-PIEhfa/tasks/task-638ba68b8552616f5fe50a69/intake.json",
+            "result": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-PIEhfa/runs/task-638ba68b8552616f5fe50a69/run-f382d9d4-9c22-48e9-ad77-08ac3040e34d/result.json"
+          },
+          "execution": {
+            "runId": "run-f382d9d4-9c22-48e9-ad77-08ac3040e34d",
+            "providerJobId": "job-1",
+            "sessionId": "session-1",
+            "turnId": "turn-1",
+            "providerState": "succeeded",
+            "completedAt": 10800,
+            "terminalObservedAt": 20000,
+            "costUsd": null,
+            "collected": true
+          },
+          "file_hashes": {
+            "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-PIEhfa/tasks/task-638ba68b8552616f5fe50a69/intake.json": "74569f7598618f2731e7ae1fe49f9975a3ee27f26db61afdc231e1424b9f03b1",
+            "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-PIEhfa/runs/task-638ba68b8552616f5fe50a69/run-f382d9d4-9c22-48e9-ad77-08ac3040e34d/result.json": "d5a9ebeb06a2787eb7d08aa66d251b0daa06c157b4ba4ef4864c7ef77cd9ded9"
+          }
+        },
+        {
+          "mode": "unknown",
+          "taskId": "task-1a14e115538876b5bbe45c4f",
+          "status": "blocked",
+          "endedAt": 20000,
+          "elapsedMs": 10000,
+          "inferred": true,
+          "calls": [
+            "prepare",
+            "submit",
+            "inspect",
+            "inspect",
+            "collect",
+            "inspect",
+            "collect"
+          ],
+          "files": {
+            "intake": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-I61yKB/tasks/task-1a14e115538876b5bbe45c4f/intake.json",
+            "result": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-I61yKB/runs/task-1a14e115538876b5bbe45c4f/run-8b2d7a75-0801-4a17-91e6-464de42a242b/result.json"
+          },
+          "execution": {
+            "runId": "run-8b2d7a75-0801-4a17-91e6-464de42a242b",
+            "providerJobId": "job-1",
+            "sessionId": "session-1",
+            "turnId": "turn-1",
+            "providerState": "succeeded",
+            "completedAt": null,
+            "terminalObservedAt": 20000,
+            "costUsd": null,
+            "collected": true
+          },
+          "file_hashes": {
+            "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-I61yKB/tasks/task-1a14e115538876b5bbe45c4f/intake.json": "8a711a1ff192aae056a3e49dd3a9ae74ca71c154e052910f0073800dd7d91652",
+            "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-I61yKB/runs/task-1a14e115538876b5bbe45c4f/run-8b2d7a75-0801-4a17-91e6-464de42a242b/result.json": "75ddd6eccc4e38e6f7fa53a95b3a675895bd05bac6a1c37227e9489108d14837"
+          }
+        },
+        {
+          "mode": "deadline",
+          "taskId": "task-f7b162055db2eec340981496",
+          "status": "ready",
+          "endedAt": 10500,
+          "elapsedMs": 500,
+          "inferred": false,
+          "calls": [
+            "prepare",
+            "submit",
+            "inspect",
+            "inspect",
+            "collect",
+            "inspect",
+            "collect"
+          ],
+          "files": {
+            "intake": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-Az5JIi/tasks/task-f7b162055db2eec340981496/intake.json",
+            "result": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-Az5JIi/runs/task-f7b162055db2eec340981496/run-e2cddc86-bfc9-486f-8c01-edc008c8da03/result.json"
+          },
+          "execution": {
+            "runId": "run-e2cddc86-bfc9-486f-8c01-edc008c8da03",
+            "providerJobId": "job-1",
+            "sessionId": "session-1",
+            "turnId": "turn-1",
+            "providerState": "succeeded",
+            "completedAt": 10500,
+            "terminalObservedAt": 20000,
+            "costUsd": null,
+            "collected": true
+          },
+          "file_hashes": {
+            "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-Az5JIi/tasks/task-f7b162055db2eec340981496/intake.json": "ad5a08c7ef078bce68331e52b09d8517550d2f7fdd769cf4264c9a0de1487ce0",
+            "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-Az5JIi/runs/task-f7b162055db2eec340981496/run-e2cddc86-bfc9-486f-8c01-edc008c8da03/result.json": "2a929557d8ca56b8425c17359532e18b91e0f7d5520cc4b06071d9af4e2b5744"
+          }
+        },
+        {
+          "mode": "failed",
+          "taskId": "task-4beb19356bd21a9f6ce8bb01",
+          "status": "blocked",
+          "endedAt": 10300,
+          "elapsedMs": 300,
+          "inferred": false,
+          "calls": [
+            "prepare",
+            "submit",
+            "inspect",
+            "inspect",
+            "collect",
+            "inspect",
+            "collect"
+          ],
+          "files": {
+            "intake": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-2tagnM/tasks/task-4beb19356bd21a9f6ce8bb01/intake.json",
+            "result": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-2tagnM/runs/task-4beb19356bd21a9f6ce8bb01/run-eeacf461-9ca7-4db6-980e-3d9241436e89/result.json"
+          },
+          "execution": {
+            "runId": "run-eeacf461-9ca7-4db6-980e-3d9241436e89",
+            "providerJobId": "job-1",
+            "sessionId": "session-1",
+            "turnId": "turn-1",
+            "providerState": "failed",
+            "completedAt": 10300,
+            "terminalObservedAt": 10400,
+            "costUsd": 0.2,
+            "collected": true
+          },
+          "file_hashes": {
+            "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-2tagnM/tasks/task-4beb19356bd21a9f6ce8bb01/intake.json": "c8e418a00cc5a43ac4f99ba356ce044ba115c7b1f52752e00ac416bdb8e18591",
+            "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-2tagnM/runs/task-4beb19356bd21a9f6ce8bb01/run-eeacf461-9ca7-4db6-980e-3d9241436e89/result.json": "b750c57a219666ffe168fbe55e8af4cdd7bbcb42f40d12d5876462bf66b19733"
+          }
+        },
+        {
+          "mode": "cached",
+          "taskId": "task-68272e8d7dfe43a8f17e8c9c",
+          "status": "ready",
+          "endedAt": 10300,
+          "elapsedMs": 300,
+          "inferred": false,
+          "calls": [
+            "prepare",
+            "submit",
+            "inspect",
+            "inspect",
+            "collect",
+            "collect"
+          ],
+          "files": {
+            "intake": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-YJ5eGk/tasks/task-68272e8d7dfe43a8f17e8c9c/intake.json",
+            "result": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-YJ5eGk/runs/task-68272e8d7dfe43a8f17e8c9c/run-d7ec76ab-bc63-4b82-bf00-4900aa378af2/result.json"
+          },
+          "execution": {
+            "runId": "run-d7ec76ab-bc63-4b82-bf00-4900aa378af2",
+            "providerJobId": "job-1",
+            "sessionId": "session-1",
+            "turnId": "turn-1",
+            "providerState": "succeeded",
+            "completedAt": 10300,
+            "terminalObservedAt": null,
+            "costUsd": null,
+            "collected": true
+          },
+          "file_hashes": {
+            "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-YJ5eGk/tasks/task-68272e8d7dfe43a8f17e8c9c/intake.json": "1cabd2f30cfdf8ad37e3c801c9362adcc3d34c1c5521b3be325b5a9d32b42033",
+            "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-YJ5eGk/runs/task-68272e8d7dfe43a8f17e8c9c/run-d7ec76ab-bc63-4b82-bf00-4900aa378af2/result.json": "3a9cdb42fdfe4431b83a2f523dc7227a009bea75f0749735e8bcda7157d0d8d0"
+          }
+        }
+      ]
+    },
+    {
+      "case": "preparation stop",
+      "evidence": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-Gvtwf3/preparation-stop-evidence.json",
+      "sha256": "5d00ab6e6e63b486a56dc83514a3ca841a563bcf82f8097eb93f8c3f605f72fa",
+      "kind": "Offline resumable owned preparation stop fixtures",
+      "cases": [
+        {
+          "mode": "acknowledged",
+          "status": "blocked",
+          "cancellation": {
+            "reason": "preparation-timeout",
+            "requestedAt": 11000,
+            "status": "confirmed",
+            "confirmedAt": 20000
+          },
+          "calls": [
+            "prepare",
+            "submit",
+            "inspect",
+            "inspect",
+            "cancel",
+            "inspect"
+          ],
+          "requests": [
+            {
+              "key": "56d5c2b4e7b72bc220932e3264a3d0db87a6a085f7bf696a75aa90095dfdd172",
+              "job": "job-1",
+              "turn": "turn-1"
+            }
+          ],
+          "files": {
+            "intake": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-UVFxvc/tasks/task-32dbcd6b89eddff2414b4293/intake.json",
+            "execution": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-UVFxvc/runs/task-32dbcd6b89eddff2414b4293/execution.json"
+          },
+          "execution": {
+            "runId": "run-c7a2c7e5-fbcd-459a-8943-4ab5fba225db",
+            "providerJobId": "job-1",
+            "turnId": "turn-1",
+            "providerState": "cancelled",
+            "quarantined": true,
+            "costUsd": null,
+            "cancellation": {
+              "status": "confirmed",
+              "reason": "preparation-timeout",
+              "requestedAt": 11000,
+              "idempotencyKey": "56d5c2b4e7b72bc220932e3264a3d0db87a6a085f7bf696a75aa90095dfdd172",
+              "attempts": 1,
+              "failures": 0,
+              "nextAttemptAt": 11000,
+              "lastAttemptAt": 11000,
+              "confirmedAt": 20000
+            }
+          },
+          "file_hashes": {
+            "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-UVFxvc/tasks/task-32dbcd6b89eddff2414b4293/intake.json": "3b277102e6798dc78050807cdf51772d7f9ee7c5e0c6e9d2f34d95ac56d74030",
+            "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-UVFxvc/runs/task-32dbcd6b89eddff2414b4293/execution.json": "165568a424172bf6b3b6251fb585f3f5b70c7cfccf014e3cebcfbbf3153585f2"
+          }
+        },
+        {
+          "mode": "lost-reply",
+          "status": "blocked",
+          "cancellation": {
+            "reason": "preparation-timeout",
+            "requestedAt": 11000,
+            "status": "confirmed",
+            "confirmedAt": 12000
+          },
+          "calls": [
+            "prepare",
+            "submit",
+            "inspect",
+            "inspect",
+            "cancel",
+            "inspect",
+            "cancel"
+          ],
+          "requests": [
+            {
+              "key": "49385193007ad6f6babceeeffb3492c83adbe610a9eee80ae26b9b69ccb9db41",
+              "job": "job-1",
+              "turn": "turn-1"
+            },
+            {
+              "key": "49385193007ad6f6babceeeffb3492c83adbe610a9eee80ae26b9b69ccb9db41",
+              "job": "job-1",
+              "turn": "turn-1"
+            }
+          ],
+          "files": {
+            "intake": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-JMVVZU/tasks/task-0d87fd58b53375c6380cdbb4/intake.json",
+            "execution": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-JMVVZU/runs/task-0d87fd58b53375c6380cdbb4/execution.json"
+          },
+          "execution": {
+            "runId": "run-ca257619-8bfe-4a62-a5b4-0da7959f1397",
+            "providerJobId": "job-1",
+            "turnId": "turn-1",
+            "providerState": "cancelled",
+            "quarantined": true,
+            "costUsd": null,
+            "cancellation": {
+              "status": "confirmed",
+              "reason": "preparation-timeout",
+              "requestedAt": 11000,
+              "idempotencyKey": "49385193007ad6f6babceeeffb3492c83adbe610a9eee80ae26b9b69ccb9db41",
+              "attempts": 2,
+              "failures": 1,
+              "nextAttemptAt": 12000,
+              "lastAttemptAt": 12000,
+              "confirmedAt": 12000
+            }
+          },
+          "file_hashes": {
+            "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-JMVVZU/tasks/task-0d87fd58b53375c6380cdbb4/intake.json": "ac3d6d6f78144576c1db2f1adb4f0d868a1f3abda49a7b76a154bad878b1040d",
+            "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-JMVVZU/runs/task-0d87fd58b53375c6380cdbb4/execution.json": "8075eb9fdf4d782a8f6c02d772b84a0ec35deb28bf1ccd6cd646d8f1ebd0bdab"
+          }
+        },
+        {
+          "mode": "unknown-owner",
+          "status": "blocked",
+          "cancellation": {
+            "reason": "preparation-timeout",
+            "requestedAt": 11000,
+            "status": "confirmed",
+            "confirmedAt": 20500
+          },
+          "calls": [
+            "prepare",
+            "submit",
+            "lookup",
+            "lookup",
+            "lookup",
+            "cancel",
+            "inspect"
+          ],
+          "requests": [
+            {
+              "key": "26f01cf59e3a4ced16652c78c0a94865f8796b08c3dca241d9ab5a2085c28305",
+              "job": "job-1",
+              "turn": "turn-1"
+            }
+          ],
+          "files": {
+            "intake": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-JQc5VS/tasks/task-b4e53fd2a345ca0f97b834a9/intake.json",
+            "execution": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-JQc5VS/runs/task-b4e53fd2a345ca0f97b834a9/execution.json"
+          },
+          "execution": {
+            "runId": "run-088a5f35-f587-4b2b-ae45-f48bd36348ce",
+            "providerJobId": "job-1",
+            "turnId": "turn-1",
+            "providerState": "cancelled",
+            "quarantined": true,
+            "costUsd": null,
+            "cancellation": {
+              "status": "confirmed",
+              "reason": "preparation-timeout",
+              "requestedAt": 11000,
+              "idempotencyKey": "26f01cf59e3a4ced16652c78c0a94865f8796b08c3dca241d9ab5a2085c28305",
+              "attempts": 1,
+              "failures": 0,
+              "nextAttemptAt": 11000,
+              "lastAttemptAt": 20000,
+              "confirmedAt": 20500
+            }
+          },
+          "file_hashes": {
+            "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-JQc5VS/tasks/task-b4e53fd2a345ca0f97b834a9/intake.json": "c9b5d770af77f6d3d004fcf7a9efafe71424a38e98387a547bf9fd8068662d0d",
+            "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-JQc5VS/runs/task-b4e53fd2a345ca0f97b834a9/execution.json": "697dc9ca8f90271bc7cd84f7451956a0102cb32e04c2a9f943d156afaf37e4cb"
+          }
+        },
+        {
+          "mode": "unsupported",
+          "status": "blocked",
+          "cancellation": {
+            "reason": "preparation-timeout",
+            "requestedAt": 11000,
+            "status": "terminal",
+            "confirmedAt": 20000
+          },
+          "calls": [
+            "prepare",
+            "submit",
+            "inspect",
+            "inspect",
+            "inspect"
+          ],
+          "requests": [],
+          "files": {
+            "intake": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-0zVNFK/tasks/task-ad5782187cc26c0a98462f2e/intake.json",
+            "execution": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-0zVNFK/runs/task-ad5782187cc26c0a98462f2e/execution.json"
+          },
+          "execution": {
+            "runId": "run-d4bffbcc-c3fd-48a7-9974-328b667ea104",
+            "providerJobId": "job-1",
+            "turnId": "turn-1",
+            "providerState": "succeeded",
+            "quarantined": true,
+            "costUsd": null,
+            "cancellation": {
+              "status": "terminal",
+              "reason": "preparation-timeout",
+              "requestedAt": 11000,
+              "idempotencyKey": "b94e5c2f4847996c0e54a1098c7d77d78b3f9a56fa49d124548a01c28d8069aa",
+              "attempts": 0,
+              "failures": 0,
+              "nextAttemptAt": 11000
+            }
+          },
+          "file_hashes": {
+            "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-0zVNFK/tasks/task-ad5782187cc26c0a98462f2e/intake.json": "4b903e9156ac1ae5942ecd0579167e2845ad07b3869855e5d94ca43cfe96a726",
+            "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-0zVNFK/runs/task-ad5782187cc26c0a98462f2e/execution.json": "a37cf55a2179d2da4d49b420dd6fbb7b417e33e0998c36d956c9957e9b07e269"
+          }
+        },
+        {
+          "mode": "legacy-blocked",
+          "status": "blocked",
+          "cancellation": {
+            "reason": "preparation-timeout",
+            "requestedAt": 20000,
+            "status": "confirmed",
+            "confirmedAt": 20000
+          },
+          "calls": [
+            "prepare",
+            "submit",
+            "inspect",
+            "inspect",
+            "cancel",
+            "inspect"
+          ],
+          "requests": [
+            {
+              "key": "3a9f42a4e84a2caf8b897ad80e4371773e211ff9d45661e2abe29b82fb256851",
+              "job": "job-1",
+              "turn": "turn-1"
+            }
+          ],
+          "files": {
+            "intake": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-mBFzhx/tasks/task-a5a01c2add3fec8bb341426d/intake.json",
+            "execution": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-mBFzhx/runs/task-a5a01c2add3fec8bb341426d/execution.json"
+          },
+          "execution": {
+            "runId": "run-a99cdd00-f9bc-4593-8eab-06fe77ebf81a",
+            "providerJobId": "job-1",
+            "turnId": "turn-1",
+            "providerState": "cancelled",
+            "quarantined": true,
+            "costUsd": null,
+            "cancellation": {
+              "status": "confirmed",
+              "reason": "preparation-timeout",
+              "requestedAt": 11000,
+              "idempotencyKey": "3a9f42a4e84a2caf8b897ad80e4371773e211ff9d45661e2abe29b82fb256851",
+              "attempts": 1,
+              "failures": 0,
+              "nextAttemptAt": 11000,
+              "lastAttemptAt": 11000,
+              "confirmedAt": 20000
+            }
+          },
+          "file_hashes": {
+            "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-mBFzhx/tasks/task-a5a01c2add3fec8bb341426d/intake.json": "17c5e8acab16f128768884bd16b2fe40a8b34bd9a5220d93c4d4fbdd8d62e1c2",
+            "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-mBFzhx/runs/task-a5a01c2add3fec8bb341426d/execution.json": "e9f2e45d3954bcf30816e3c30b71b86765d4c5697a9523222d7c7d0b84f12f38"
+          }
+        },
+        {
+          "mode": "unsafe",
+          "status": "blocked",
+          "cancellation": {
+            "reason": "unsafe-preparation",
+            "requestedAt": 11000,
+            "status": "confirmed",
+            "confirmedAt": 20000
+          },
+          "calls": [
+            "prepare",
+            "submit",
+            "inspect",
+            "inspect",
+            "cancel",
+            "inspect"
+          ],
+          "requests": [
+            {
+              "key": "03940269aa6143020aaaacb7b11b4fb3ea0bd5c1d4be9919c32fe405c512c9b9",
+              "job": "job-1",
+              "turn": "turn-1"
+            }
+          ],
+          "files": {
+            "intake": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-4mnjSz/tasks/task-6e6ca99da3e11e3f77111a2e/intake.json",
+            "execution": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-4mnjSz/runs/task-6e6ca99da3e11e3f77111a2e/execution.json"
+          },
+          "execution": {
+            "runId": "run-2d42c6de-bf90-465d-b0c1-77e65379ae1f",
+            "providerJobId": "job-1",
+            "turnId": "turn-1",
+            "providerState": "cancelled",
+            "quarantined": true,
+            "costUsd": null,
+            "cancellation": {
+              "status": "confirmed",
+              "reason": "unsafe-preparation",
+              "requestedAt": 11000,
+              "idempotencyKey": "03940269aa6143020aaaacb7b11b4fb3ea0bd5c1d4be9919c32fe405c512c9b9",
+              "attempts": 1,
+              "failures": 0,
+              "nextAttemptAt": 11000,
+              "lastAttemptAt": 11000,
+              "confirmedAt": 20000
+            }
+          },
+          "file_hashes": {
+            "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-4mnjSz/tasks/task-6e6ca99da3e11e3f77111a2e/intake.json": "e566014ce8d45afed4432309eb54803033f85a2fd5cfe41d1747bb453a162c59",
+            "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-4mnjSz/runs/task-6e6ca99da3e11e3f77111a2e/execution.json": "b3d6e732b4606acb71b90ea9f8ff9082498631d9cad67c9e118fb419cbabce26"
+          }
+        }
+      ]
+    },
+    {
+      "case": "local discard",
+      "evidence": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-wVg5bV/local-discard-evidence.json",
+      "sha256": "221a90132c3e27884526889d6b111d309a73679515a0dfcb3776f3801c451597",
+      "kind": "Offline bounded oversized-record fixtures",
+      "cases": [
+        {
+          "mode": "newline",
+          "bytes": 524383,
+          "first": {
+            "offset": 262160,
+            "pending": true,
+            "discarding": true
+          },
+          "final": {
+            "offset": 524383,
+            "pending": false,
+            "discarding": false
+          },
+          "meters": [
+            {
+              "pages": 2,
+              "bytesRead": 262171,
+              "maxBufferBytes": 262144,
+              "records": 1
+            },
+            {
+              "pages": 2,
+              "bytesRead": 262144,
+              "maxBufferBytes": 262144,
+              "records": 0
+            },
+            {
+              "pages": 2,
+              "bytesRead": 79,
+              "maxBufferBytes": 79,
+              "records": 1
+            }
+          ],
+          "events": [
+            {
+              "eventId": "byte-0",
+              "type": "output",
+              "timestamp": 1790215200000,
+              "provenance": "local-cli",
+              "data": "before oversized",
+              "providerSequence": null,
+              "version": 1,
+              "taskId": "acme/widget/output",
+              "runId": "old-run",
+              "provider": "codex",
+              "sequence": 1
+            },
+            {
+              "eventId": "byte-17",
+              "type": "gap",
+              "data": "oversized local record omitted",
+              "timestamp": 1790215200000,
+              "providerSequence": null,
+              "version": 1,
+              "taskId": "acme/widget/output",
+              "runId": "old-run",
+              "provider": "codex",
+              "sequence": 2,
+              "provenance": "provider"
+            },
+            {
+              "eventId": "byte-524361",
+              "type": "output",
+              "timestamp": 1790215200000,
+              "provenance": "local-cli",
+              "data": "after oversized caf\u00e9",
+              "providerSequence": null,
+              "version": 1,
+              "taskId": "acme/widget/output",
+              "runId": "old-run",
+              "provider": "codex",
+              "sequence": 3
+            }
+          ],
+          "files": {
+            "checkpoint": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-SPnPwO/old-run/local-output.json",
+            "journal": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-SPnPwO/old-run/events.jsonl",
+            "log": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-SPnPwO/old-run/job.log"
+          },
+          "file_hashes": {
+            "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-SPnPwO/old-run/local-output.json": "58346b4a0d835f116990156d4dbc186316068ff39be13ba104267eda2cf6ab01",
+            "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-SPnPwO/old-run/events.jsonl": "8b1964dda4a8d22dbb6f51b24326c6eacc7024025ba8989ba4fbed740f600cf4",
+            "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-SPnPwO/old-run/job.log": "7ba9e3886fb6609895374631188ec122dbc4fbccdf500a4d22cf00aa832de396"
+          }
+        },
+        {
+          "mode": "unterminated",
+          "bytes": 524360,
+          "first": {
+            "offset": 262160,
+            "pending": true,
+            "discarding": true
+          },
+          "final": {
+            "offset": 524360,
+            "pending": false,
+            "discarding": false
+          },
+          "meters": [
+            {
+              "pages": 2,
+              "bytesRead": 262171,
+              "maxBufferBytes": 262144,
+              "records": 1
+            },
+            {
+              "pages": 2,
+              "bytesRead": 262144,
+              "maxBufferBytes": 262144,
+              "records": 0
+            },
+            {
+              "pages": 2,
+              "bytesRead": 56,
+              "maxBufferBytes": 56,
+              "records": 0
+            }
+          ],
+          "events": [
+            {
+              "eventId": "byte-0",
+              "type": "output",
+              "timestamp": 1790215200000,
+              "provenance": "local-cli",
+              "data": "before oversized",
+              "providerSequence": null,
+              "version": 1,
+              "taskId": "acme/widget/output",
+              "runId": "old-run",
+              "provider": "codex",
+              "sequence": 1
+            },
+            {
+              "eventId": "byte-17",
+              "type": "gap",
+              "data": "oversized local record omitted",
+              "timestamp": 1790215200000,
+              "providerSequence": null,
+              "version": 1,
+              "taskId": "acme/widget/output",
+              "runId": "old-run",
+              "provider": "codex",
+              "sequence": 2,
+              "provenance": "provider"
+            }
+          ],
+          "files": {
+            "checkpoint": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-RWSDIR/old-run/local-output.json",
+            "journal": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-RWSDIR/old-run/events.jsonl",
+            "log": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-RWSDIR/old-run/job.log"
+          },
+          "file_hashes": {
+            "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-RWSDIR/old-run/local-output.json": "8f92b673931feca5aa2646833dec0f42de1464b3c5fc21a5a18abb8fb96c3e02",
+            "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-RWSDIR/old-run/events.jsonl": "ed6f025013835567803fa834d52644bac0a062094b9bdc7e248104f193e42682",
+            "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-RWSDIR/old-run/job.log": "f522b10a5b51b7e0d9bb70ba67a040012abeb5441874a05694c09176746c9df9"
+          }
+        },
+        {
+          "mode": "legacy",
+          "bytes": 524383,
+          "first": {
+            "offset": 262160,
+            "pending": true,
+            "discarding": true
+          },
+          "final": {
+            "offset": 524383,
+            "pending": false,
+            "discarding": false
+          },
+          "meters": [
+            {
+              "pages": 2,
+              "bytesRead": 262171,
+              "maxBufferBytes": 262143,
+              "records": 1
+            },
+            {
+              "pages": 2,
+              "bytesRead": 262144,
+              "maxBufferBytes": 262143,
+              "records": 0
+            },
+            {
+              "pages": 2,
+              "bytesRead": 80,
+              "maxBufferBytes": 80,
+              "records": 1
+            }
+          ],
+          "events": [
+            {
+              "eventId": "byte-0",
+              "type": "output",
+              "timestamp": 1790215200000,
+              "provenance": "local-cli",
+              "data": "before oversized",
+              "providerSequence": null,
+              "version": 1,
+              "taskId": "acme/widget/output",
+              "runId": "old-run",
+              "provider": "codex",
+              "sequence": 1
+            },
+            {
+              "eventId": "byte-17",
+              "type": "gap",
+              "data": "oversized local record omitted",
+              "timestamp": 1790215200000,
+              "providerSequence": null,
+              "version": 1,
+              "taskId": "acme/widget/output",
+              "runId": "old-run",
+              "provider": "codex",
+              "sequence": 2,
+              "provenance": "provider"
+            },
+            {
+              "eventId": "byte-524361",
+              "type": "output",
+              "timestamp": 1790215200000,
+              "provenance": "local-cli",
+              "data": "after oversized caf\u00e9",
+              "providerSequence": null,
+              "version": 1,
+              "taskId": "acme/widget/output",
+              "runId": "old-run",
+              "provider": "codex",
+              "sequence": 3
+            }
+          ],
+          "files": {
+            "checkpoint": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-lC8ywn/old-run/local-output.json",
+            "journal": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-lC8ywn/old-run/events.jsonl",
+            "log": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-lC8ywn/old-run/job.log"
+          },
+          "file_hashes": {
+            "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-lC8ywn/old-run/local-output.json": "58346b4a0d835f116990156d4dbc186316068ff39be13ba104267eda2cf6ab01",
+            "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-lC8ywn/old-run/events.jsonl": "8b1964dda4a8d22dbb6f51b24326c6eacc7024025ba8989ba4fbed740f600cf4",
+            "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-lC8ywn/old-run/job.log": "7ba9e3886fb6609895374631188ec122dbc4fbccdf500a4d22cf00aa832de396"
+          }
+        }
+      ]
+    }
+  ],
+  "external_qualification": {
+    "mandatory_live_prerequisites": [],
+    "live_paid_calls": 0,
+    "native_codex_preparation_qualified": false,
+    "remote_provider_available": {
+      "openai-agents": false,
+      "codex-cloud": false
+    },
+    "installed_plugin_qualified": false,
+    "model_access_exercised": false,
+    "browser_capture_required": false,
+    "remedy": "Complete the independent native preparation adapter and its limited-authority evidence before registry integration. Later production transports require implemented adapters, credentials, demonstrated model access and authorized bounded live evidence; preserve model/provider defaults and sandbox permissions."
+  }
+}

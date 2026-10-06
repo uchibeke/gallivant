@@ -673,17 +673,73 @@ test("queued local output has explicit stable gaps for expiry, missing diagnosti
 });
 
 test("incompatible local projection state prevents paid intent and preserves ownership and allowance", async () => {
-  for (const corruption of ["version", "cursor", "queue-write"]) {
+  for (const corruption of ["version", "cursor", "discard-state", "queue-write"]) {
     const f = localOutputFixture({ text: "old output\n" }), queue = join(f.root, "local-output-queue.json");
     if (corruption === "version") writeJsonAtomic(queue, { version: 2, runs: [f.id] });
     if (corruption === "cursor") writeJsonAtomic(join(f.dir, "local-output.json"), { offset: -1 });
+    if (corruption === "discard-state") writeJsonAtomic(join(f.dir, "local-output.json"), { offset: 0, discarding: "false" });
     if (corruption === "queue-write") mkdirSync(`${queue}.${process.pid}.tmp`);
-    await assert.rejects(f.open().submit({ ...input, spec: { cmd: process.execPath, args: ["-e", "process.exit(0)"], options: { cwd: tempHome() } } }), corruption === "version" ? /unsupported local output queue.*preserve.*restore/ : corruption === "cursor" ? /invalid local output cursor.*restore/ : { code: "EISDIR" });
+    await assert.rejects(f.open().submit({ ...input, spec: { cmd: process.execPath, args: ["-e", "process.exit(0)"], options: { cwd: tempHome() } } }), corruption === "version" ? /unsupported local output queue.*preserve.*restore/ : ["cursor", "discard-state"].includes(corruption) ? /invalid local output cursor.*restore/ : { code: "EISDIR" });
     assert.deepEqual(f.open().state().operations, {}); assert.equal(f.open().state().allowance, undefined);
     assert.equal(readFileSync(join(f.root, "latest-run"), "utf8"), f.id);
     if (corruption === "version") assert.deepEqual(readJson(queue), { version: 2, runs: [f.id] });
     if (corruption === "cursor") assert.deepEqual(readJson(join(f.dir, "local-output.json")), { offset: -1 });
   }
+});
+
+test("oversized local records discard every suffix across queued restart, replay and legacy cursors with bounded reads", async t => {
+  const evidence = [];
+  for (const mode of ["newline", "unterminated", "legacy"]) {
+    const prefix = "before oversized\n", rejected = "x".repeat(LOCAL_OUTPUT_LIMITS.bytes * 2 + 19) + "rejected suffix queued-private-value";
+    const text = prefix + rejected + (mode === "unterminated" ? "" : "\nafter oversized café\n");
+    const f = localOutputFixture({ text }), runner = f.openRunner(), cursor = join(f.dir, "local-output.json");
+    runner.observe(); runner.observe();
+    const first = readJson(cursor); assert.equal(first.discarding, true); assert.equal(outputEvents(f.dir).length, 2);
+    if (mode === "legacy") { const { discarding: _discarding, ...old } = first; writeJsonAtomic(cursor, old); }
+    runner.prepareStart(); localOutputFixture({ root: f.root, clock: f.clock, id: "next-run", text: "unrelated current progress\n" });
+    const meters = [];
+    for (let page = 0; page < 5 && readJson(join(f.root, "local-output-queue.json")).runs.length; page++) {
+      meters.push(f.openRunner().observe());
+      if (page === 0) writeJsonAtomic(cursor, mode === "legacy" ? { offset: first.offset, pending: true } : first);
+    }
+    assert.deepEqual(readJson(join(f.root, "local-output-queue.json")).runs, []);
+    assert.equal(readJson(cursor).discarding, false); assert.equal(readJson(cursor).offset, Buffer.byteLength(text));
+    for (const meter of meters) { assert.ok(meter.bytesRead <= LOCAL_OUTPUT_LIMITS.bytes * 2); assert.ok(meter.maxBufferBytes <= LOCAL_OUTPUT_LIMITS.bytes); assert.ok(meter.pages <= 2); }
+    const events = outputEvents(f.dir);
+    assert.deepEqual(events.map(e => e.type), mode === "unterminated" ? ["output", "gap"] : ["output", "gap", "output"]);
+    assert.equal(events[1].eventId, `byte-${Buffer.byteLength(prefix)}`); assert.equal(events[1].data, "oversized local record omitted");
+    if (mode !== "unterminated") { assert.equal(events[2].data, "after oversized café"); assert.equal(events[2].eventId, `byte-${Buffer.byteLength(prefix + rejected + "\n")}`); }
+    const projection = logWindow(f.dir); assert.deepEqual(projection.ids, events.map(e => e.sequence));
+    assert.doesNotMatch(JSON.stringify(events) + projection.lines.join("\n"), /rejected suffix|queued-private-value|xxx/);
+    assert.equal(outputEvents(join(f.root, "next-run"))[0].data, "unrelated current progress");
+    evidence.push({ mode, bytes: Buffer.byteLength(text), first, final: readJson(cursor), meters, events, files: { checkpoint: cursor, journal: join(f.dir, "events.jsonl"), log: join(f.dir, "job.log") } });
+  }
+  const file = join(tempHome(), "local-discard-evidence.json"); writeJsonAtomic(file, { kind: "Offline bounded oversized-record fixtures", cases: evidence });
+  t.diagnostic(`local discard evidence: ${file}`);
+});
+
+test("an active oversized local record stays discarded at EOF until its newline arrives", () => {
+  const f = localOutputFixture({ text: "x".repeat(LOCAL_OUTPUT_LIMITS.bytes) }), file = join(f.dir, "provider.log"), cursor = join(f.dir, "local-output.json");
+  const job = readJson(join(f.dir, "job.json")); writeJsonAtomic(join(f.dir, "job.json"), { ...job, exit: null, pid: 1234, bin: "offline-fixture" });
+  const open = () => makeRunner(f.root, { clock: f.clock, probe: () => true });
+  open().observe(); assert.equal(readJson(cursor).discarding, true);
+  open().observe(); assert.equal(readJson(cursor).pending, true); assert.equal(outputEvents(f.dir).length, 1);
+  writeFileSync(file, "still rejected private-tail", { flag: "a" }); open().observe();
+  assert.equal(readJson(cursor).discarding, true); assert.equal(outputEvents(f.dir).length, 1);
+  writeFileSync(file, "\nvalid current progress\n", { flag: "a" }); open().observe();
+  assert.equal(readJson(cursor).discarding, false); assert.equal(outputEvents(f.dir)[1].data, "valid current progress");
+  assert.doesNotMatch(readFileSync(join(f.dir, "job.log"), "utf8"), /rejected|private-tail|xxx/);
+});
+
+test("oversized discard retention emits a stable history gap while keeping the completed result", () => {
+  const f = localOutputFixture({ text: "x".repeat(LOCAL_OUTPUT_LIMITS.bytes * 2) + "rejected suffix\n" }), runner = f.openRunner();
+  runner.observe(); assert.equal(readJson(join(f.dir, "local-output.json")).discarding, true);
+  runner.prepareStart(); localOutputFixture({ root: f.root, clock: f.clock, id: "next-run", text: "next progress\n" });
+  writeJsonAtomic(join(f.dir, "result.json"), { outcome: { finished: true, ok: true, lastMessage: "retained result", cost: null } });
+  f.clock.advance(24 * 60 + 1); f.openRunner().observe();
+  const events = outputEvents(f.dir); assert.equal(events.length, 2); assert.ok(events.every(e => e.type === "gap")); assert.match(events[1].data, /retention expired/);
+  assert.equal(existsSync(join(f.dir, "provider.log")), false); assert.equal(f.open().outcome(f.id).lastMessage, "retained result");
+  f.openRunner().observe(); assert.deepEqual(outputEvents(f.dir), events);
 });
 
 function resultFixture() {

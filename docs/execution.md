@@ -48,9 +48,9 @@ its persisted cadence; read-only clients never call a transport.
 | --- | --- |
 | `prepare` | Preparation kind, prompt, authorized limited environment and allowance; confirmed boundary and bounded environment grant, without paid submit |
 | `submit` | Task/provider/account, canonical run ID, operation ID, idempotency key, prompt/input head, mandatory policy, allowance; exact provider job, session and root turn IDs |
-| `inspect` | Exact owned job/session/turn, event cursor; authoritative state, observation time, bounded event page, next cursor, explicit gap and nullable cost |
+| `inspect` | Exact owned job/session/turn, event cursor; authoritative state, observation time, optional nullable `completedAt`, bounded event page, next cursor, explicit gap and nullable cost |
 | `continue` | Same dispatch contract plus this provider's recorded native session; exact new owned job/root turn acknowledgement |
-| `collect` | Exact job/session/turn/input head; finished boolean outcome, nullable cost, saved result and optional artifact manifest or verified pushed revision |
+| `collect` | Exact job/session/turn/input head; finished boolean outcome, nullable cost, optional nullable `completedAt`, saved result and optional artifact manifest or verified pushed revision |
 | `cancel` | Task/provider/account/run, exact owned job/session/root turn, durable cancellation idempotency key and AbortSignal; boolean `confirmed`, true only after authoritative remote cancellation |
 | optional `lookup` | Persisted intent/idempotency key after lost acknowledgement; authoritative exact job observation, or unresolved null |
 
@@ -109,6 +109,33 @@ collection supplies canonical version/task/run identities even if a transport
 returns conflicting fields. Missing, oversized, mismatched or incomplete results
 remain unresolved; provider success alone does not mean workflow readiness.
 
+`completedAt` is the exact owned root's completion time in UTC epoch milliseconds,
+not submission-client exit or collection time. An inspection may supply it only
+for a terminal state, between the recorded start and its authoritative observation.
+A collected result may supply it between start and collection, no later than the
+first terminal observation; it must agree with any recorded exact completion.
+Invalid, conflicting or foreign timestamps cannot qualify output. Missing/null
+timestamps remain compatible: the first terminal observation provides an inferred
+upper bound, or collection time is the conservative bound for an older result.
+Remote `job.json` retains compatible `endedAt` plus `completionInferred`; exact
+completion and `terminalObservedAt` survive restart in execution metadata. Local
+process completion and identities retain their existing semantics.
+
+Preparation retrieves terminal results before applying runtime allowance, even
+when task resume occurs after the deadline. It compares this owned completion
+time (or conservative bound) with the saved inclusive deadline. Timely output is
+eligible for deterministic validation; late/unknown-late output preserves result,
+usage and cost evidence but cannot authorize readiness or another repair. Missing
+or invalid results stay pending without cancelling an already completed root.
+A timeout/unsafe-boundary stop of active or unresolved work persists its intent
+in the task attempt before control I/O. Unconfirmed, failed or unsupported stops
+keep the intake `preparing`, with an explicit cancellation next action and no new
+dispatch. Call `task resume` with the current revision to reconcile that owned
+stop through the boundary's persisted cadence until cancellation or terminal
+completion is confirmed, then the task becomes `blocked` and output is quarantined.
+Older blocked timeouts with a pending owned stop permit this same control-only
+resume. Other blocked refusals remain inert; inspect/list never poll providers.
+
 ## Durable state and reconciliation
 
 `execution.json` version 1 records task/provider/account ownership, current run,
@@ -153,9 +180,9 @@ Stale reads, missing events, launcher exit, a cached response or silence cannot
 complete a remote turn. Both success and failure enter retrieval until an exact
 finished result is saved; `terminalState` retains the authoritative root outcome
 while workflow settlement waits. Failure diagnostics, denials, usage and recovered
-session identity survive collection and cached-result replay. `collectedAt` binds
-completion bookkeeping to the durable result, so restart does not lose cost,
-session or completion time. Older failure records claiming collection without a
+session identity survive collection and cached-result replay. `collectedAt` records
+durable retrieval separately from owned completion/observation timestamps, so
+restart does not lose cost, session or completion time. Older failure records claiming collection without a
 result re-enter retrieval without redispatch. Failed artifacts remain private;
 only a successful collected outcome can enter the shared publication path. A
 stop during terminal result retrieval or after collection quarantines the result
@@ -213,7 +240,7 @@ Each new run retains compatible `job.json`/`job.log` plus:
 | `events.jsonl` | Version 1 redacted normalized records: task/run/provider, event ID, ingestion sequence, provider sequence, provenance and timestamp |
 | `journal.json`, `event-keys/` | Durable append checkpoint and hashed exact provider/job/turn/event replay keys; interrupted append becomes an explicit gap |
 | `job.idx`, `log-meta.json` | Fixed-width 8-byte offsets, version 2 offset-plus-one encoding, stable sequence numbers and retained first sequence; zero entries denote gaps |
-| `local-output.json` | Raw local ingestion byte cursor, bounded page and pending marker |
+| `local-output.json` | Raw local ingestion byte cursor, bounded page, pending marker and persistent `discarding` state |
 | `local-output-queue.json` (task run root) | Version 1 ordered unfinished local run IDs; persisted before replacing `latest-run` |
 | `result.json` | Mode 0600 private collected result, original artifact manifest/payloads, redacted outcome and `artifacts` summary; independent of retained logs |
 | `result-application.json`, `verification.json` | Artifact application/publication checkpoint and actual approved verification observations |
@@ -258,6 +285,16 @@ Results settle independently of this backlog, so a large old log cannot postpone
 unrelated execution or GitHub review. Unsupported queue versions, invalid cursors
 and queue persistence errors preserve diagnostics and refuse a new paid intent;
 restore the matching compatible package/checkpoint before dispatch or replay.
+
+An oversized raw local record emits one stable gap at its starting byte ID.
+`discarding: true` then consumes bounded pages through that record's newline;
+no suffix can enter normalized history or the public projection. At an active
+EOF the flag remains pending until a delimiter or confirmed local exit. A final
+unterminated oversized record is discarded through EOF. Restart, queue rotation
+and cursor acknowledgement replay retain this state. Older mid-record cursors
+are recognized with a one-byte lookbehind inside the same per-page read budget
+and discard the remaining continuation. Invalid discard state refuses dispatch
+or replay with the checkpoint/backup remedy.
 
 Private local diagnostics use `provider.log` and `sensitive-redactions.json`
 (mode 0600 in the private run tree). They are excluded from routes/projections.
