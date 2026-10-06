@@ -22,7 +22,7 @@ import { acquireProcessLock } from "../lib/daemon.mjs";
 import { makeGit } from "../lib/git.mjs";
 import { execFileAsync } from "../lib/gh.mjs";
 import { requestControl, applyControl } from "../lib/control.mjs";
-import { tempHome, makeClock, CONFIG, T0, fakeGh, fakeNotify, silentLog, fakeGit, fakeCredential, fakeIdentity } from "./helpers.mjs";
+import { tempHome, makeClock, CONFIG, T0, fakeGh, fakeNotify, silentLog, fakeGit, fakeCredential, fakeIdentity, fakeRunner, prFixture, comment } from "./helpers.mjs";
 const allowance = { remainingUsd: 1, reservedUsd: 0.1 };
 const input = { operationId: "first", inputHead: "a".repeat(40), allowance };
 const sha = text => createHash("sha256").update(text).digest("hex");
@@ -197,6 +197,188 @@ test("scoped health deadlines/backoff permit another account and review to advan
   assert.equal(health.get("codex", "slow").ok, false); assert.equal(health.get("codex", "healthy").ok, true);
   await health.refresh([["codex", "slow"]]); assert.equal(counts.slow, 1);
   assert.ok(health.get("codex", "slow").nextAttemptAt > clock.now());
+});
+
+test("due and queued provider health fences survive read-only access and restart without blocking fresh accounts", async () => {
+  const home = tempHome(), clock = makeClock(), calls = [], replies = new Map();
+  let delayed = false;
+  const options = { home, clock, limits: { progressMs: 10_000, deadlineMs: 1000, concurrency: 1 }, jitter: () => 0,
+    probe: async (provider, account) => {
+      calls.push([provider, account]);
+      return delayed ? new Promise(resolve => replies.set(account, resolve)) : { ok: true, detail: "fixture account ready" };
+    } };
+  const health = makeProviderHealth(options);
+  await health.refresh([["codex", "expired"], ["codex", "queued"]]);
+  clock.advance(5000 / 60_000);
+  await health.refresh([["codex", "fresh"], ["codex-cloud", "fresh"]]);
+  clock.advance(4999 / 60_000); assert.equal(health.get("codex", "expired").ok, true);
+  clock.advance(1 / 60_000);
+  const original = readFileSync(join(home, "provider-health.json"), "utf8"), before = calls.length;
+  for (let i = 0; i < 20; i++) {
+    assert.equal(health.get("codex", "expired").ok, false);
+    assert.equal(makeProviderHealth(options).get("codex", "queued").ok, false);
+  }
+  assert.equal(calls.length, before, "read-only access never starts provider work");
+  assert.equal(readFileSync(join(home, "provider-health.json"), "utf8"), original, "the last observation is preserved");
+  delayed = true;
+  const refreshing = health.refresh([["codex", "expired"], ["codex", "queued"]]);
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(replies.has("expired"), true); assert.equal(replies.has("queued"), false);
+  assert.equal(health.get("codex", "expired").ok, false); assert.equal(health.get("codex", "queued").ok, false);
+  assert.equal(health.get("codex", "fresh").ok, true); assert.equal(health.get("codex-cloud", "fresh").ok, true);
+  await health.refresh([["codex", "expired"], ["codex", "queued"]]); assert.equal(calls.length, before + 1, "in-flight and queued refreshes are not duplicated");
+  replies.get("expired")({ ok: false, detail: "fixture login expired", fix: "restore fixture account" });
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(replies.has("queued"), true); assert.equal(health.get("codex", "queued").ok, false);
+  replies.get("queued")({ ok: true, detail: "fixture account ready" }); await refreshing;
+  const failure = makeProviderHealth(options).get("codex", "expired");
+  assert.equal(failure.ok, false); assert.equal(failure.failures, 1); assert.equal(failure.fix, "restore fixture account");
+  assert.equal(failure.nextAttemptAt, clock.now() + 20_000);
+  assert.equal(makeProviderHealth(options).get("codex", "queued").ok, true);
+  delayed = false;
+  await health.refresh([["codex", "expired"]]); assert.equal(calls.length, before + 2, "failure backoff fences retry");
+  clock.advance(20_000 / 60_000); await health.refresh([["codex", "expired"]]);
+  assert.equal(makeProviderHealth(options).get("codex", "expired").ok, true);
+});
+
+test("provider health persistence failures release scoped waiters and preserve incompatible state", async () => {
+  for (const failure of ["write", "version"]) {
+    const home = tempHome(), file = join(home, "provider-health.json"), clock = makeClock();
+    let finish, delayed = false, calls = 0;
+    const health = makeProviderHealth({ home, clock, limits: { concurrency: 1 }, probe: async () => {
+      calls++; return delayed ? new Promise(resolve => { finish = resolve; }) : { ok: true };
+    } });
+    await health.refresh([["codex", "first"], ["codex", "queued"]]);
+    clock.advance(10_000 / 60_000); delayed = true;
+    const refreshing = health.refresh([["codex", "first"], ["codex", "queued"]]);
+    const rejected = assert.rejects(refreshing, failure === "version" ? /unsupported provider health version.*restore/ : { code: "EISDIR" });
+    const waiters = [health.whenRefreshed("codex", "first"), health.whenRefreshed("codex", "queued")];
+    await new Promise(resolve => setImmediate(resolve));
+    if (failure === "version") writeJsonAtomic(file, { version: 2, scopes: {}, evidence: "preserve this incompatible fixture" });
+    else { rmSync(file); mkdirSync(file); }
+    finish({ ok: true }); await new Promise(resolve => setImmediate(resolve));
+    finish({ ok: true }); await rejected; await Promise.all(waiters);
+    assert.equal(calls, 4, "a failed write does not leave another queued scope hanging");
+    assert.equal(health.whenRefreshed("codex", "first"), null); assert.equal(health.whenRefreshed("codex", "queued"), null);
+    if (failure === "version") {
+      assert.deepEqual(readJson(file), { version: 2, scopes: {}, evidence: "preserve this incompatible fixture" });
+      assert.throws(() => health.get("codex", "first"), /unsupported provider health version.*restore/);
+    } else assert.equal(health.get("codex", "first").ok, false);
+  }
+});
+
+for (const reply of ["failure", "success", "cancel", "ownership-change", "timeout"]) test(`a due provider refresh fences dispatch while unrelated execution and GitHub review advance: ${reply}`, async t => {
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  const f = remote(), home = tempHome(), state = makeState(home), local = fakeRunner(f.clock), gh = fakeGh();
+  let delay = false, finish, progress = 0, signal;
+  const health = makeProviderHealth({ home, clock: f.clock, limits: { progressMs: 10_000, deadlineMs: 1000 }, jitter: () => 0,
+    probe: async (_provider, _account, abort) => { signal = abort; return delay ? new Promise(resolve => { finish = resolve; }) : { ok: true, detail: "fixture account ready" }; } });
+  await health.refresh([["openai-agents", "test"]]);
+  f.clock.advance(5000 / 60_000); await health.refresh([["codex", "operator"]]);
+  for (const [name, harness, pr] of [["remote", "openai-agents", 1], ["local", "codex", 2], ["review", "codex", 3]]) {
+    state.put(`acme/widget/${name}`, { ...newEntry({ repo: "acme/widget", harness, pr, branch: `work/${pr}`, base: "main", worktree: tempHome(), state: STATES.ready, nowIso: T0 }), cursor: { since: T0, fixed_sha: "a1b2c3d" }, ...(name === "remote" ? { execution: { version: 1, allowance } } : {}) });
+  }
+  gh.prView = async (_repo, pr) => prFixture({ number: pr, headRefName: `work/${pr}`, ...(pr === 3 ? { state: "MERGED" } : {}) });
+  gh.data.comments = [comment({ id: 99, by: "me", at: new Date(f.clock.now()).toISOString(), body: "@gallivant fix the header" })];
+  local.reconcile = async () => { progress++; };
+  const config = { ...CONFIG, harness: { ...CONFIG.harness, "openai-agents": { account: "test" } } };
+  const ctx = { home, config, clock: f.clock, state, gh, ownLogin: "me", git: fakeGit(), log: silentLog, notify: fakeNotify(), readPrd: () => null,
+    credential: fakeCredential(), identity: fakeIdentity(), providerHealth: health, executionFor: id => id.endsWith("/remote") ? f.service : local };
+  f.clock.advance(5000 / 60_000); delay = true;
+  const tick = makeTick(ctx);
+  // Even the former daemon ordering must reject due cached health immediately.
+  const ticking = tick.tick(), refreshing = health.refresh([["openai-agents", "test"]]);
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(typeof finish, "function"); assert.equal(health.get("openai-agents", "test").ok, false);
+  assert.equal(f.calls.length, 0, "expired cache cannot prepare or dispatch a paid remote turn");
+  assert.equal(Object.keys(f.service.state().operations).length, 0);
+  assert.equal(local.started.length, 1, "fresh provider dispatch continues before the slow probe replies");
+  assert.equal(state.get("acme/widget/review").state, STATES.done); assert.ok(progress >= 2);
+  const beforeReply = { remoteCalls: f.calls.length, localRuns: local.started.length, progress, reviewed: state.get("acme/widget/review").state,
+    fencedHealth: health.get("openai-agents", "test"), freshHealth: health.get("codex", "operator") };
+  if (reply === "cancel") state.update("acme/widget/remote", { dispatch_stopped: "cancellation-requested" });
+  if (reply === "ownership-change") state.update("acme/widget/remote", { last: { run: "another-owned-run" } });
+  if (reply === "timeout") t.mock.timers.tick(1000);
+  else finish(reply === "failure" ? { ok: false, detail: "fixture login expired", fix: "restore fixture account" } : { ok: true, detail: "fixture account ready" });
+  await refreshing; const results = await ticking;
+  assert.ok(results.every(result => result.ok));
+  if (reply === "success") {
+    assert.equal(f.calls.filter(c => c[0] === "submit").length, 1, "fresh health releases one dispatch in the same tick");
+    assert.equal(state.get("acme/widget/remote").last.run, f.service.current().id);
+  } else {
+    assert.equal(f.calls.length, 0); assert.equal(Object.keys(f.service.state().operations).length, 0);
+    assert.equal(state.get("acme/widget/remote").last?.run, reply === "ownership-change" ? "another-owned-run" : undefined);
+    assert.equal(state.get("acme/widget/remote").cursor.since, T0);
+  }
+  assert.equal(health.get("openai-agents", "test").ok, !["failure", "timeout"].includes(reply));
+  assert.equal(health.whenRefreshed("openai-agents", "test"), null, "scope waiters are cleaned up");
+  if (reply === "timeout") {
+    assert.equal(signal.aborted, true);
+    finish({ ok: true, detail: "late fixture reply" }); await new Promise(resolve => setImmediate(resolve));
+    assert.equal(health.get("openai-agents", "test").detail, "EXECUTION_DEADLINE");
+  }
+  // Read-only access and another progress tick do not repeat dispatch or review.
+  const calls = f.calls.filter(c => c[0] === "submit").length;
+  health.get("openai-agents", "test"); await tick.tick();
+  assert.equal(f.calls.filter(c => c[0] === "submit").length, calls); assert.equal(local.started.length, 1);
+  const evidence = join(home, "dispatch-health-evidence.json");
+  writeJsonAtomic(evidence, { kind: "Offline provider health fixture; no live qualification", reply, beforeReply, afterReply: health.get("openai-agents", "test"),
+    paidDispatches: calls, operations: Object.keys(f.service.state().operations), waiterCleared: health.whenRefreshed("openai-agents", "test") === null,
+    files: { health: join(home, "provider-health.json"), state: join(home, "state.json") } });
+  t.diagnostic(`dispatch health evidence: ${evidence}`);
+});
+
+test("pending provider health leaves every GitHub review worker available to unrelated entries", async () => {
+  const home = tempHome(), clock = makeClock(), state = makeState(home), gh = fakeGh();
+  let delayed = false, finish, progress = 0, reads = 0;
+  const health = makeProviderHealth({ home, clock, probe: async () => delayed ? new Promise(resolve => { finish = resolve; }) : { ok: true } });
+  await health.refresh([["codex", "operator"]]); clock.advance(10_000 / 60_000); delayed = true;
+  for (let pr = 1; pr <= 9; pr++) state.put(`acme/widget/task-${pr}`, { ...newEntry({ repo: "acme/widget", harness: "codex", pr, branch: `work/${pr}`, worktree: tempHome(), state: STATES.ready, nowIso: T0 }), cursor: { since: T0, fixed_sha: "a1b2c3d" } });
+  gh.prView = async (_repo, pr) => { reads++; return prFixture({ number: pr, headRefName: `work/${pr}`, ...(pr === 9 ? { state: "MERGED" } : {}) }); };
+  gh.data.comments = [comment({ id: 99, by: "me", at: new Date(clock.now()).toISOString(), body: "@gallivant fix the header" })];
+  const execution = { current: () => null, reconcile: async () => { progress++; }, start: () => { throw new Error("unhealthy provider must never dispatch"); } };
+  const ctx = { home, clock, state, gh, config: CONFIG, ownLogin: "me", git: fakeGit(), log: silentLog, notify: fakeNotify(), readPrd: () => null,
+    credential: fakeCredential(), identity: fakeIdentity(), providerHealth: health, executionFor: () => execution };
+  const refreshing = health.refresh([["codex", "operator"]]), ticking = makeTick(ctx).tick();
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(state.get("acme/widget/task-9").state, STATES.done, "eight pending dispatches cannot consume four review workers");
+  assert.equal(reads, 9); assert.equal(progress, 9);
+  finish({ ok: false, detail: "fixture login expired" }); await refreshing;
+  assert.ok((await ticking).every(result => result.ok));
+  for (let pr = 1; pr < 9; pr++) assert.equal(state.get(`acme/widget/task-${pr}`).cursor.since, T0);
+});
+
+test("shared start and resume recheck provider health after asynchronous preparation before paid dispatch", async () => {
+  for (const provider of ["codex", "openai-agents"]) for (const mode of ["start", "resume"]) for (const phase of provider === "codex" ? ["checkout", "credential", "identity", "head"] : ["checkout", "credential", "identity", "head", "prepare"]) {
+    const f = remote(), home = tempHome(), state = makeState(home), local = fakeRunner(f.clock), account = "test", id = "acme/widget/remote";
+    const health = makeProviderHealth({ home, clock: f.clock, jitter: () => 0, probe: async () => ({ ok: true, detail: "fixture account ready" }) });
+    await health.refresh([[provider, account]]);
+    let session = mode === "resume" ? "22222222-2222-4222-8222-222222222222" : null;
+    if (provider !== "codex" && mode === "resume") {
+      await f.service.submit(input); f.observe({ state: "succeeded" }); await f.service.reconcile({ force: true }); await f.service.collect();
+      session = f.service.current().execution.sessionId; f.calls.length = 0;
+    }
+    const entry = newEntry({ repo: "acme/widget", harness: provider, session, base: "main", branch: "work/health", worktree: tempHome(), state: STATES.running, nowIso: T0 });
+    entry.execution = { version: 1, allowance }; state.put(id, entry);
+    let expire = true, prepared = 0;
+    const lapse = point => { if (expire && point === phase) { f.clock.advance(10_000 / 60_000); expire = false; } };
+    const credential = async () => { lapse("credential"); return fakeCredential()(); };
+    const git = { ...fakeGit(), ensureHttpsRemote: async () => { lapse("checkout"); }, head: async () => { lapse("head"); return input.inputHead; } };
+    const identity = async () => { lapse("identity"); return fakeIdentity()(); };
+    f.transport.prepare = async () => { prepared++; lapse("prepare"); return { environment: "sandbox" }; };
+    const ctx = { home, state, clock: f.clock, config: { ...CONFIG, harness: { ...CONFIG.harness, [provider]: { ...CONFIG.harness[provider], account } } },
+      gh: fakeGh(), ownLogin: "me", git, log: silentLog, notify: fakeNotify(), readPrd: () => null, credential, identity, providerHealth: health,
+      executionFor: () => provider === "codex" ? local : f.service };
+    const tick = makeTick(ctx), attempts = Object.keys(f.service.state().operations).length;
+    await assert.rejects(tick.startRun(id, entry, { name: mode, prompt: "fixture" }), { code: "PROVIDER_UNAVAILABLE" });
+    assert.equal(local.started.length, 0); assert.equal(f.calls.length, 0);
+    assert.equal(Object.keys(f.service.state().operations).length, attempts, `${provider}/${mode}/${phase} creates no intent or reservation`);
+    assert.equal(prepared, phase === "prepare" ? 1 : 0);
+    await health.refresh([[provider, account]]);
+    await tick.startRun(id, entry, { name: mode, prompt: "fixture" });
+    assert.equal(provider === "codex" ? local.started.length : f.calls.filter(c => ["submit", "continue"].includes(c[0])).length, 1);
+    if (provider !== "codex") assert.equal(f.calls[0][0], mode === "resume" ? "continue" : "submit");
+  }
 });
 
 test("normalized journal preserves provenance, provider ordering, redaction and replay IDs", () => {

@@ -172,11 +172,24 @@ health deadlines are 2 seconds, progress cadence 10 seconds, maximum exponential
 backoff 5 minutes with jitter/Retry-After, concurrency 4, event pages 100 records
 and 64 KiB. Native standalone CLI version/sign-in probes keep their compatible
 20-second subprocess bound; coordinator probes additionally receive the shorter
-abort deadline. Health is persisted per provider **and account**, and stale
-success stops new work only for its scope.
+abort deadline. Health is persisted per provider **and account**. A success stops
+authorizing dispatch at its saved `nextAttemptAt`, before the due refresh starts
+and while it waits for a probe worker or reply. Read-only health checks enforce
+that deadline across restart without probing or changing the saved observation.
+Fresh scopes remain independent; failed checks retain their backoff and remedy.
+The shared fix/resume path rechecks health after checkout, credentials, input-head
+and remote preparation, immediately before submit/continue or local launch. A
+failure at that boundary leaves feedback and run ownership available for retry
+on the existing coordinator schedule, without a submission intent or paid call.
 
 One coordinator tick has separate bounded progress and GitHub review worker
-lanes. Provider checks run alongside them. Progress polling is independent of
+lanes. Provider checks run alongside them and register due scopes before the
+tick. Dispatches waiting on health leave the review workers free. A bounded
+dispatch lane joins only those already scheduled scoped probes, then retries
+once after the observation is persisted. It uses the same dispatch function,
+rechecks registry ownership and stop fences, and never starts probes itself.
+A successful refresh can release work in that tick; failures preserve the
+feedback cursor for the next review interval. Progress polling is independent of
 `poll_seconds`, which still schedules entry review and chain merge/ancestry reads.
 Each tick instance checks chains immediately on boot, then at most once per
 review interval; failed chain checks consume retries only on that schedule.
