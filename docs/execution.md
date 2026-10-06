@@ -580,6 +580,16 @@ Success/failure evidence records the sandbox driver and enforcement probe.
 Recovered `verified` checkpoints lacking this provenance block before push;
 completed commands are never silently replayed. Empty Verify lists still record
 no test claim. The profile and probe files are removed on every exit.
+Remote readiness also exercises this enforcement in disposable directories with
+the same empty verification environment. Doctor and initial start check before
+API access or cloning; manual resume and review dispatch check before checkout
+recreation or base merging, and the managed transport checks before new provider
+dispatch. Failed/unproven/aborted probes refuse with
+`EXECUTION_VERIFICATION_SANDBOX` and the existing OS/runtime remedy. No repository
+code runs, and temporary profiles are removed on every path. Preparation and
+provider-health records retain the successful probe evidence. Read-only progress,
+artifact collection and cancellation remain available after host refusal. The
+publication-time probe still verifies the actual applied checkout and descendants.
 The canonical tick continues to own readiness, trusted feedback,
 freshness, receipts, conflicts, rounds and human merge boundaries. No automatic
 merge is added.

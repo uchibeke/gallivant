@@ -17,6 +17,9 @@ import { makeTick } from "../lib/tick.mjs";
 import { makeGit } from "../lib/git.mjs";
 import { CONFIG, GOOD_PRD, fakeCredential, fakeIdentity, fakeNotify, fakeGit, fakeGh, silentLog } from "./helpers.mjs";
 import { requestControl } from "../lib/control.mjs";
+import { resume } from "../lib/commands/resume.mjs";
+import { doctor } from "../lib/commands/doctor.mjs";
+import { checkHarness } from "../lib/probe.mjs";
 import { reconcileExecutionResult } from "../lib/execution_result.mjs";
 import { readJson } from "../lib/fs.mjs";
 const config = { account: "fixture", organization: "org-fixture", project: "proj-fixture", model: "fixture-model", environment: "openai_hosted", container_size: "small", network: { access: "disabled" }, allowance: { remainingUsd: 2, reservedUsd: 0.1 } };
@@ -79,6 +82,77 @@ function fixture() {
   };
   return { root, clock, calls, sessions, turns, http, fetcher, transport, service, finish, artifact, syncArtifactSize: () => { artifactPages[1].data[0].size_bytes = Buffer.byteLength(content()); }, setArtifactBytes: v => { artifactBytes = v; }, setEvents: v => { events = v; }, setItems: v => { items = v; }, setEnvironment: v => { fixtureEnvironment = v; }, fail: v => { failure = v; }, failAt: (route, status) => { failure = { route, status }; }, lose: v => { lost = v; }, getResult: () => result };
 }
+async function unsupportedHost(fn) {
+  const descriptor = Object.getOwnPropertyDescriptor(process, "platform");
+  Object.defineProperty(process, "platform", { ...descriptor, value: "unsupported-fixture" });
+  try { return await fn(); } finally { Object.defineProperty(process, "platform", descriptor); }
+}
+test("managed readiness proves native isolation before API reads and doctor reports unsupported hosts", async t => {
+  const f = fixture(), selected = { harness: { "openai-agents": config } }, before = structuredClone(selected);
+  const ready = await checkHarness("openai-agents", selected, { http: f.http });
+  assert.equal(ready.ok, true); assert.equal(ready.verificationSandbox.probe, "passed");
+  assert.equal(ready.verificationSandbox.network, "disabled"); assert.match(ready.detail, /inference.*unverified/);
+  const calls = f.calls.length;
+  const home = join(f.root, "doctor"); mkdirSync(home);
+  writeFileSync(join(home, "config.json"), JSON.stringify({ ...CONFIG, home, notify: null, repos: [],
+    worktrees: join(f.root, "planned-worktrees"), harness: selected.harness }), { mode: 0o600 });
+  const denied = await unsupportedHost(async () => {
+    const result = await checkHarness("openai-agents", selected, { http: f.http });
+    assert.equal(result.ok, false); assert.equal(result.detail, "EXECUTION_VERIFICATION_SANDBOX");
+    assert.match(result.fix, /sandbox-exec.*bwrap.*namespaces/);
+    const report = await doctor({ home, env: {}, resolve: async () => ({ token: null, why: "offline credential fixture" }),
+      harnessCheck: (provider, value) => checkHarness(provider, value, { http: f.http }) });
+    const row = report.find(check => check.name === "openai-agents readiness");
+    assert.equal(row.ok, false); assert.equal(row.detail, result.detail); assert.equal(row.fix, result.fix);
+    return row;
+  });
+  assert.equal(f.calls.length, calls); assert.deepEqual(selected, before);
+  assert.equal(existsSync(join(f.root, "planned-worktrees")), false);
+  const report = join(f.root, "native-readiness-evidence.json");
+  writeFileSync(report, JSON.stringify({ kind: "Native host enforcement plus provider-shaped offline API reads", native: ready.verificationSandbox,
+    unsupported_platform_fixture: denied, provider_reads_before_refusal: calls, provider_reads_after_refusal: f.calls.length, paid_calls: 0 }, null, 2));
+  t.diagnostic(`native readiness evidence: ${report}`);
+});
+test("unsupported host blocks managed start before cloning, snapshots or provider access", async () => {
+  const f = fixture(), operator = join(f.root, "operator"); mkdirSync(join(operator, "docs/prds"), { recursive: true });
+  const path = join(operator, "docs/prds/task.md"); writeFileSync(path, GOOD_PRD.replace("harness: codex", "harness: openai-agents"));
+  const state = makeState(f.root), mutations = [];
+  const ctx = { home: f.root, state, config: { ...CONFIG, home: f.root, worktrees: join(f.root, "worktrees"), harness: { "openai-agents": config } },
+    log: silentLog, notify: fakeNotify(), credential: fakeCredential(), identity: fakeIdentity(), clock: f.clock, executionFor: f.service,
+    git: { toplevel: async () => operator, create: async () => { mutations.push("clone"); assert.fail("host refusal must precede clone"); } },
+    gh: { repoInfo: async () => ({ nameWithOwner: input.repo, defaultBranch: "main" }), branchExists: async () => true },
+    writePrd: () => mutations.push("snapshot"), readPrd: () => null };
+  await unsupportedHost(async () => await assert.rejects(start(ctx, { path }), /EXECUTION_VERIFICATION_SANDBOX/));
+  assert.deepEqual(mutations, []); assert.deepEqual(state.entries(), []); assert.equal(f.calls.length, 0);
+  assert.equal(existsSync(join(f.root, "worktrees")), false); assert.equal(f.service().current(), null);
+});
+test("unsupported host refuses preparation, direct dispatch and manual continuation while artifact recovery remains available", async () => {
+  const f = fixture();
+  await unsupportedHost(async () => {
+    await assert.rejects(f.service().prepare(input), { code: "EXECUTION_VERIFICATION_SANDBOX" });
+    await assert.rejects(f.transport().submit({ ...input, runId: "refused", idempotencyKey: "refused" }), { code: "EXECUTION_VERIFICATION_SANDBOX" });
+  });
+  assert.equal(f.calls.length, 0); assert.equal(existsSync(join(f.root, "agents.json")), false);
+  const job = await f.service().submit(input); f.finish(); f.artifact(job);
+  await unsupportedHost(async () => { await f.service().reconcile({ force: true }); assert.equal((await f.service().collect()).files[0].text, changed); });
+  const state = makeState(f.root), taskId = "acme/widget/task", worktree = join(f.root, "checkout");
+  state.put(taskId, { ...newEntry({ repo: input.repo, branch: input.branch, worktree, harness: "openai-agents", session: job.execution.sessionId,
+    pr: 42, state: STATES.needsHuman, nowIso: new Date(f.clock.now()).toISOString() }), execution: f.service().current().execution,
+    last: { run: job.id, exit: 0, cost: null } });
+  const registry = readFileSync(join(f.root, "state.json"), "utf8"), agents = readFileSync(join(f.root, "agents.json"), "utf8"), calls = f.calls.length;
+  const ctx = { home: f.root, state, config: { ...CONFIG, harness: { "openai-agents": config } }, ownLogin: "me", clock: f.clock,
+    git: { exists: () => false, fromBranch: async () => assert.fail("host refusal must precede checkout recreation") },
+    gh: fakeGh(), log: silentLog, notify: fakeNotify(), executionFor: f.service, readPrd: () => null };
+  await unsupportedHost(async () => {
+    await assert.rejects(resume(ctx, { handle: taskId }), { code: "EXECUTION_VERIFICATION_SANDBOX" });
+    await assert.rejects(f.transport().continue({ ...input, runId: "refused-correction", idempotencyKey: "refused-correction",
+      sessionId: job.execution.sessionId }), { code: "EXECUTION_VERIFICATION_SANDBOX" });
+  });
+  assert.equal(f.calls.length, calls); assert.equal(readFileSync(join(f.root, "agents.json"), "utf8"), agents);
+  assert.equal(readFileSync(join(f.root, "state.json"), "utf8"), registry); assert.equal(f.service().current().id, job.id);
+  assert.equal(f.service().current().execution.sessionId, job.execution.sessionId); assert.equal(f.service().outcome(job.id).cost, null);
+  assert.equal(existsSync(worktree), false); assert.equal(f.sessions.size, 1);
+});
 test("configuration refuses unavailable policy, missing billing selectors and private context", () => {
   assert.equal(validateAgentsConfig(config), config);
   for (const patch of [{ model: null }, { organization: null }, { environment: "none" }, { container_size: "auto" }, { allowance: null }, { mandatory_policy: ["auto-review"] }, { context_paths: ["/private"] }]) assert.throws(() => validateAgentsConfig({ ...config, ...patch }));

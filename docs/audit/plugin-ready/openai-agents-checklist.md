@@ -19,6 +19,7 @@ installed-host qualification records remain independent.
 - [x] Reject mandatory local policy and private context that hosted execution cannot enforce.
 - [x] Verify provider-shaped offline fixtures, actual generated sandbox output and shared publication behavior.
 - [x] Sandbox shared artifact/branch-result Verify commands with native filesystem/network enforcement, immutable policy and checked recovery provenance.
+- [x] Probe native verification enforcement before remote readiness, checkout mutation and paid implementation/corrective dispatch; preserve recovery and clean temporary profiles.
 - [x] Document installation, supported REST beta/Node versions, setup, polling, continuation, artifacts and verification.
 - [ ] Qualify one real implementation and forced CI/trusted-review correction with the same session/PR across restart (ac-13).
 - [ ] Qualify the installed host/plugin, browser/capture surface and final release in the later release milestone.

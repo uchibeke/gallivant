@@ -1,39 +1,40 @@
 {
   "version": 1,
   "task_id": "task-cf82d9f43ca0da3c5bb29b67",
-  "scope": "managed Agents REST implementation and provider-shaped offline lifecycle verification; live qualification remains unverified",
-  "recorded_at": "2026-10-06T15:21:25.743Z",
+  "scope": "managed Agents REST implementation, provider-shaped offline lifecycle verification and native macOS verification readiness/enforcement; live qualification remains unverified",
+  "recorded_at": "2026-10-06T15:51:56.482Z",
   "base_revision": "7936830977bcb4615de418b9dd5c4d655501297b",
   "branch": "work/openai-agents-harness",
   "source_files": {
     "README.md": "6c9a9e9e79f7a9bd9157464ea2602f6ecde0b2878422e5c8dbea64a98d5f2ab8",
     "docs/audit/plugin-ready/README.md": "7f24289695807c9bd9d880e54e287c3bcfa1a3324543ca87eee68b1e24a9e8f7",
-    "docs/audit/plugin-ready/openai-agents-checklist.md": "ac0602cdf9996d6439c692cd764a967927dcb68a1df2a2ab2526297ff07015c5",
-    "docs/execution.md": "e6e9ccedcf38300dd68f968da094e61dd33c554dfb5df3e63c0553ff2babfbe4",
-    "docs/openai-agents.md": "9ce2e8b086efe8f6f60c4f57b1a3b4da094392a6b0b95bd223c63431606574c0",
+    "docs/audit/plugin-ready/openai-agents-checklist.md": "e79f886b1fd3f2cd360e25ac0315009f396fba01e25e2c24a4a6eae459d600f0",
+    "docs/execution.md": "b8508efc35cb94b737b4a93ea9f2b9d9ae9b7a308966a433932113f8152dde74",
+    "docs/openai-agents.md": "91ed90f110dd86fb364911d834a3a1f71ed3505da85b1cfc31e5af0f45638f51",
     "docs/prds/openai-agents-harness.md": "b6d3ceeb20426248b5cf0d8527beaf93a6a69c09003cfc07d3a86fe8fa8b053a",
     "lib/block.mjs": "bd644a1564d6d3dcf3edad1ad1f931fa5f3e4246a041f20acbbb04c88c07c665",
-    "lib/commands/doctor.mjs": "f360b366e6a20a29479925d2bb28d1fd9e38f1d97d09c764fbe2d033a1c8d23a",
+    "lib/commands/doctor.mjs": "6a1c916f1a3626ba7656123792adf9ba3fdbd963cb64a3641437e337e4f18997",
     "lib/commands/start.mjs": "5b5d1f3c9c71126bd9ed0f7f7772a727f8dd1e3c7f50615c70ed4d5f22353796",
     "lib/config.mjs": "4cdd522fb24463d01023eb1650b5123ff0675ce6c7bbee4731020e2b1b0e9174",
     "lib/context.mjs": "8d086cc3dacaf68de5f84c11b1ac498d60d6b3b420b61214b5e631587e5b6119",
     "lib/execution.mjs": "a51da2e35dd82592780375758a0ea65f166dcdc643b37f8b9563706cf4b5e74d",
     "lib/harness.mjs": "50640ba71ec7b03f2690ce07ab5d1731034d6d710a833c425d7e354337c6c9b5",
-    "lib/openai_agents.mjs": "e704dbc580b5c8b3dab1c93f7d647bf5de1755e821f17424f6c4d6d79dec6a6e",
+    "lib/openai_agents.mjs": "d53ef68ccd9f3ea466ce9f22495c2b648e2b030955a49d5c5d504026b64ac2a5",
     "lib/openai_agents_config.mjs": "7d9db1b55e3c0f71ada076811eb11baf9cfb0becdfed10f6a86ec6ecbfa69dc7",
     "lib/openai_agents_http.mjs": "bf09e30be66d2e22c240194a6e2658c6c9ba3f027a697a4e3db25a5d18f43b05",
     "lib/openai_agents_input.mjs": "a2978393dc2dfe348c97962d0a6a9356184e54a7fe426847b9195186fa8d0c68",
     "lib/openai_agents_sources.mjs": "c3b76d499c72ed5c65bde47e5784cb198130842eff88cc06a924efd6721b3d5b",
-    "lib/probe.mjs": "9e70d8dbffd842dea3b46f76efe10a18a5d5a30570c722d17774b4f09c8adf0a",
-    "lib/tick.mjs": "526295af455a9e303d1e1b290250c08117683a7add0d8b1939f6bfeb40e66fa0",
+    "lib/probe.mjs": "bbacb430ed3ec7e3ab4b26fe01568d396d5d2257513264412c1c7e7ccb59383a",
+    "lib/tick.mjs": "aed02c1ba7c995463db00824176f28c2fa9bd8ebf20794ecc98802ba9fa34c04",
     "package.json": "cc440ea2539b8d40772db637b1f6593584c66818f810c4a45719c7c563ff003a",
-    "test/execution-backends.test.mjs": "ae2a9b8c3c4735f4861585325bba1e8a3b9e9775948fa0f281dc91fc8ead9729",
+    "test/execution-backends.test.mjs": "97b44d914de6fbcef50f6c23b5c37101ee90d959e57cbf9aff416330e8f9f4e4",
     "test/openai-agents-live.mjs": "0f556440264766e17a369e6eaa6b71658833b93c18971b1ef1326d65452a20d2",
-    "test/openai-agents.test.mjs": "c2a883013679fe20c91cb6d59f79f8a807a775a1db13bb978f420e7405a246b7",
+    "test/openai-agents.test.mjs": "8670b506afc0971bca08e2c5198c20a600036bea1ace20c900d04fcfca13b201",
     "test/units.test.mjs": "ae8ab863aa48e3e44557e8f20c00bb8440682325ec099eb34a81f339cbb42b9f",
-    "lib/execution_result.mjs": "f1ce8a8abc7682a106612cd6746d46c950a5da29014fe3753623d3d1bcaeec46",
-    "lib/verification_sandbox.mjs": "a45365a22f2a67c416948e31fc4a03d3f60f493b1ae475061a932c6f89b9cc6d",
-    "lib/execution_io.mjs": "b6024cdac19f53d3a2e4f13ab250ecb707bb78d1729e7fb53dab38c2c70c7145"
+    "lib/execution_result.mjs": "b13f5169e3fa541f5cc1f8c4e87e401436849a5864ea514231246847c71c2f41",
+    "lib/verification_sandbox.mjs": "826a0ffa7116107a45ab6664bc84d0c88df8986332598b3722c78c8a7cd55ca4",
+    "lib/execution_io.mjs": "b6024cdac19f53d3a2e4f13ab250ecb707bb78d1729e7fb53dab38c2c70c7145",
+    "lib/commands/resume.mjs": "d8d8490c12669976814ccca9b7011e00bae73b7d379fd6f127fa08317d34fecf"
   },
   "frozen_inputs": {
     "docs/plans/plugin-ready-gallivant.md": "3081d47d8161043f9c32b6184f07ee8d4ca513822341c41a138bdf28f7459fc2",
@@ -53,10 +54,10 @@
     {
       "command": "npm test",
       "exit": 0,
-      "raw_log": "/tmp/agents-collection-test.log",
-      "sha256": "c2cabaa9cf5773aade6472660cf348c41eaf108e5e8f3277f3377db42a2495b1",
-      "tests": 1116,
-      "pass": 1116,
+      "raw_log": "/tmp/agents-readiness-test.log",
+      "sha256": "62f9ba29df1880f1b562489b89b27475a69f92f23731ee941d1bbf680bd3e4a9",
+      "tests": 1121,
+      "pass": 1121,
       "fail": 0,
       "cancelled": 0,
       "skipped": 0
@@ -64,16 +65,16 @@
     {
       "command": "npm run lint",
       "exit": 0,
-      "raw_log": "/tmp/agents-collection-lint.log",
+      "raw_log": "/tmp/agents-readiness-lint.log",
       "sha256": "8c7790de3f018fb4580f18ac70e1b355a0f76f522dd73acbdaa63632feffcecc"
     },
     {
       "command": "npm run test:execution-backends",
       "exit": 0,
-      "raw_log": "/tmp/agents-collection-backends.log",
-      "sha256": "ba889b0c2d20b0a532e4fda788d6684afa133ccf16658ac93471c46abaaeac95",
-      "tests": 385,
-      "pass": 385,
+      "raw_log": "/tmp/agents-readiness-backends.log",
+      "sha256": "1a52a2f8b89a8dce74c11b2f528c746c4268f1ca054333e0f44e707b66ab877b",
+      "tests": 387,
+      "pass": 387,
       "fail": 0,
       "cancelled": 0,
       "skipped": 0
@@ -81,10 +82,10 @@
     {
       "command": "npm run test:openai-agents",
       "exit": 0,
-      "raw_log": "/tmp/agents-collection-openai.log",
-      "sha256": "06cd9d3cc7e2ab175f8cd5a191f9c15bef4cb41e7a6de15b4acffd62ec0b38bd",
-      "tests": 29,
-      "pass": 29,
+      "raw_log": "/tmp/agents-readiness-openai.log",
+      "sha256": "beb469eb46cf80510cfd1befee312eda06bc8d31d8b8c157c568731efd97e224",
+      "tests": 32,
+      "pass": 32,
       "fail": 0,
       "cancelled": 0,
       "skipped": 0
@@ -92,7 +93,7 @@
     {
       "command": "git diff --check",
       "exit": 0,
-      "raw_log": "/tmp/agents-collection-diff.log",
+      "raw_log": "/tmp/agents-readiness-diff.log",
       "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
     }
   ],
@@ -119,11 +120,15 @@
       "files": [
         "lib/openai_agents_config.mjs",
         "lib/openai_agents.mjs",
-        "lib/probe.mjs"
+        "lib/probe.mjs",
+        "lib/execution_result.mjs",
+        "lib/verification_sandbox.mjs"
       ],
       "test_names": [
         "configuration refuses unavailable policy, missing billing selectors and private context",
-        "read-only account probe records exact selectors without claiming inference or hard caps"
+        "read-only account probe records exact selectors without claiming inference or hard caps",
+        "managed readiness proves native isolation before API reads and doctor reports unsupported hosts",
+        "unsupported host blocks managed start before cloning, snapshots or provider access"
       ]
     },
     {
@@ -189,7 +194,9 @@
       "files": [
         "lib/openai_agents.mjs",
         "lib/execution.mjs",
-        "lib/tick.mjs"
+        "lib/tick.mjs",
+        "lib/execution_result.mjs",
+        "lib/verification_sandbox.mjs"
       ],
       "test_names": [
         "failed session opens no endless reconnect loop across restart",
@@ -197,7 +204,9 @@
         "HTTP 401 preserves work and bounded retries with actionable private-safe errors",
         "HTTP 429 preserves work and bounded retries with actionable private-safe errors",
         "expired filesystem still permits immutable artifact recovery but refuses continuation",
-        "deterministic artifact rejection survives coordinator restart and permits same-session correction"
+        "deterministic artifact rejection survives coordinator restart and permits same-session correction",
+        "unsupported host refuses preparation, direct dispatch and manual continuation while artifact recovery remains available",
+        "remote host refusal precedes checkout mutation and paid correction while unrelated PR review settles"
       ]
     },
     {
@@ -221,7 +230,8 @@
         "unavailable or unproven verification sandbox blocks once, preserves results and cleans its profile",
         "an earlier Verify command cannot replace the sandbox policy for a later command",
         "verification recovery rejects legacy unsandboxed evidence without replaying or pushing",
-        "a stop during sandbox preparation prevents Verify dispatch and removes the private profile"
+        "a stop during sandbox preparation prevents Verify dispatch and removes the private profile",
+        "unsupported host refuses preparation, direct dispatch and manual continuation while artifact recovery remains available"
       ]
     },
     {
@@ -233,14 +243,18 @@
         "lib/commands/resume.mjs",
         "lib/control.mjs",
         "lib/deliverable.mjs",
-        "lib/execution.mjs"
+        "lib/execution.mjs",
+        "lib/execution_result.mjs",
+        "lib/verification_sandbox.mjs"
       ],
       "test_names": [
         "shared resume uses remote capabilities and owned sessions without a fake CLI",
         "real REST adapter: implementation, artifact pagination, restart and same-session correction",
         "sandbox publisher delivers unchanged carried files, receipt repairs and rejects symlinks and mode changes",
         "phase-bounded coordinator settlement cannot enter review dispatch or queued resume",
-        "deterministic artifact rejection survives coordinator restart and permits same-session correction"
+        "deterministic artifact rejection survives coordinator restart and permits same-session correction",
+        "unsupported host refuses preparation, direct dispatch and manual continuation while artifact recovery remains available",
+        "remote host refusal precedes checkout mutation and paid correction while unrelated PR review settles"
       ]
     },
     {
@@ -280,7 +294,12 @@
         "unavailable or unproven verification sandbox blocks once, preserves results and cleans its profile",
         "an earlier Verify command cannot replace the sandbox policy for a later command",
         "verification recovery rejects legacy unsandboxed evidence without replaying or pushing",
-        "a stop during sandbox preparation prevents Verify dispatch and removes the private profile"
+        "a stop during sandbox preparation prevents Verify dispatch and removes the private profile",
+        "managed readiness proves native isolation before API reads and doctor reports unsupported hosts",
+        "unsupported host blocks managed start before cloning, snapshots or provider access",
+        "unsupported host refuses preparation, direct dispatch and manual continuation while artifact recovery remains available",
+        "readiness enforcement rejects failed, unproven and aborted probes and always removes scratch profiles",
+        "remote host refusal precedes checkout mutation and paid correction while unrelated PR review settles"
       ]
     },
     {
@@ -315,7 +334,12 @@
         "openai-agents fixture: rejected collection recovers checkpoint-first crash and preserves succeeded root",
         "openai-agents fixture: rejected collection recovers checkpoint-first crash and preserves failed root",
         "codex-cloud fixture: rejected collection recovers checkpoint-first crash and preserves succeeded root",
-        "codex-cloud fixture: rejected collection recovers checkpoint-first crash and preserves failed root"
+        "codex-cloud fixture: rejected collection recovers checkpoint-first crash and preserves failed root",
+        "managed readiness proves native isolation before API reads and doctor reports unsupported hosts",
+        "unsupported host blocks managed start before cloning, snapshots or provider access",
+        "unsupported host refuses preparation, direct dispatch and manual continuation while artifact recovery remains available",
+        "readiness enforcement rejects failed, unproven and aborted probes and always removes scratch profiles",
+        "remote host refusal precedes checkout mutation and paid correction while unrelated PR review settles"
       ]
     },
     {
@@ -346,12 +370,13 @@
     "sha256": "16c09feca47099fa1005141c07af146326f38055bb27fd37f2da8966198533af"
   },
   "package_verification": {
-    "raw_record": "/tmp/agents-collection-package-verification.json",
-    "sha256": "3af1308b412e25fe2efd325bb6dd183ca6a22e6add6647a1afabd99a29a41a1d",
-    "integrity": "sha512-4Dr5sGeuO6p9A7GN+g29ixF3q3tWkQm4MFrBzbXD1hJsfV/DUU78MCj1NictpdDIV68pIiacpmJxRFakNxmAeg==",
+    "raw_record": "/tmp/agents-readiness-package-verification.json",
+    "sha256": "61e7c36341c9955514f51ce99720fb745766baad3aa6437aa21e6645fce63599",
+    "integrity": "sha512-F6fjnzSHqr1Re1K4Iw8feXa3LRCvh4L8/boZNEw40HuWsb35rm41DP9AUMubESYP+XwRv+VP84gy/DZAmTJ2Bg==",
     "files": 86,
-    "bytes": 423121,
-    "result": "adapter/context/execution/result/io/coordinator/sandbox modules imported from the unpacked local package with matching changed source hashes; no provider call"
+    "bytes": 424342,
+    "unpacked_bytes": 1293327,
+    "result": "adapter/context/execution/result/io/coordinator/sandbox/readiness/doctor/resume modules imported from the unpacked local package with matching source hashes; no provider call"
   },
   "live": {
     "version": 1,
@@ -509,6 +534,38 @@
           "sha256": "d700a9c3ce780d107104c4fee0da7fd6b1f471477d5fec0620fa848771da01bb"
         }
       ]
+    },
+    {
+      "rule": "Mandatory verification host capability must be enforced before paid remote dispatch or checkout mutation",
+      "checked": [
+        "lib/probe.mjs checkHarness and commands/doctor.mjs: native enforcement before API readiness",
+        "lib/commands/start.mjs existing requireHarness before clone and task snapshots",
+        "lib/commands/resume.mjs before checkout recreation, base merging and resnapshot",
+        "lib/tick.mjs dispatch/startRun before checkout mutation and new review round; actionable needs-human state",
+        "lib/openai_agents.mjs prepare/direct submit/continue before provider intent or paid I/O; accepted replay remains idempotent",
+        "lib/execution_result.mjs disposable empty verification environment, proof validation, abort and cleanup",
+        "lib/verification_sandbox.mjs native five-second enforcement with cancellation signal",
+        "read-only inspect/collect/cancel recovery remains available; final publication retains actual-worktree enforcement"
+      ],
+      "regression": [
+        "managed readiness proves native isolation before API reads and doctor reports unsupported hosts",
+        "unsupported host blocks managed start before cloning, snapshots or provider access",
+        "unsupported host refuses preparation, direct dispatch and manual continuation while artifact recovery remains available",
+        "readiness enforcement rejects failed, unproven and aborted probes and always removes scratch profiles",
+        "remote host refusal precedes checkout mutation and paid correction while unrelated PR review settles"
+      ],
+      "representative_output": [
+        {
+          "label": "native macOS sandbox enforcement preflight before implementation; no provider calls",
+          "path": "/tmp/agents-readiness-native-preflight.json",
+          "sha256": "c0c861b0bba5f028ddf8e644515fe40761ebe53e303b8d26442cde014f5e82bc"
+        },
+        {
+          "label": "native macOS readiness with provider-shaped offline read access and unsupported-host refusal",
+          "path": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/agents-offline-8P4nYp/native-readiness-evidence.json",
+          "sha256": "363dfbca76bb5bdd2ca82265eeccd237a56cd2be0151428ad5a104be56824b84"
+        }
+      ]
     }
   ],
   "security_followup": {
@@ -638,6 +695,42 @@
       "inference_access": "unverified",
       "host_plugin_capture": "not required for this REST milestone; installed-host release gate remains separate",
       "remedy": "Supply the private configured live home and scoped project API key with Agents read/write plus inference access, authorized model/container/network, approved tiny disposable repository and PRD, and priced remaining aggregate USD 10 campaign ledger. Authorize implementation, reconcile observed cost, then force a current-head CI/trusted-review finding and authorize the same-session correction."
+    }
+  },
+  "verification_readiness_followup": {
+    "review_id": 5430886396,
+    "inline_comment_id": 4197307944,
+    "reviewed_commit": "68b5ee9a970f62de842a00b0c41b58f8855a7312",
+    "status": "addressed",
+    "rule": "Mandatory verification host capability must be enforced before paid remote dispatch or checkout mutation",
+    "evidence_kind": "native macOS enforcement plus provider-shaped offline lifecycle fixtures; Linux native and live provider qualification remain unverified",
+    "tests": [
+      "managed readiness proves native isolation before API reads and doctor reports unsupported hosts",
+      "unsupported host blocks managed start before cloning, snapshots or provider access",
+      "unsupported host refuses preparation, direct dispatch and manual continuation while artifact recovery remains available",
+      "readiness enforcement rejects failed, unproven and aborted probes and always removes scratch profiles",
+      "remote host refusal precedes checkout mutation and paid correction while unrelated PR review settles"
+    ],
+    "representative_output": [
+      {
+        "label": "native macOS sandbox enforcement preflight before implementation; no provider calls",
+        "path": "/tmp/agents-readiness-native-preflight.json",
+        "sha256": "c0c861b0bba5f028ddf8e644515fe40761ebe53e303b8d26442cde014f5e82bc"
+      },
+      {
+        "label": "native macOS readiness with provider-shaped offline read access and unsupported-host refusal",
+        "path": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/agents-offline-8P4nYp/native-readiness-evidence.json",
+        "sha256": "363dfbca76bb5bdd2ca82265eeccd237a56cd2be0151428ad5a104be56824b84"
+      }
+    ],
+    "paid_calls": 0,
+    "live_prerequisites": "unchanged; original live preflight and external remedy preserved in live",
+    "supported_host_probe": {
+      "version": 1,
+      "driver": "sandbox-exec",
+      "filesystem": "checkout-and-runtime",
+      "network": "disabled",
+      "probe": "passed"
     }
   }
 }

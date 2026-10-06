@@ -194,6 +194,18 @@ host files and host network access remain inaccessible. Arbitrary inherited PATH
 entries are removed; provision dependencies in the checkout before Verify runs.
 Network-dependent tests and unsupported tools fail rather than widen access.
 
+Doctor's `openai-agents readiness` check exercises that native enforcement in
+disposable directories before checking API read access. Start refuses an
+unsupported host before cloning or saving task snapshots. Review dispatch and
+manual resume recheck before recreating or merging the checkout, and the managed
+transport checks again before sending a new implementation or correction.
+Provider health and preparation records retain the native enforcement evidence;
+they still label model inference and hosted setup as unverified until dispatch.
+Repair the named OS/runtime requirement and explicitly resume the existing task.
+Sandbox failure does not stop read-only progress, cancellation or saved artifact
+recovery, and creates no automatic replacement session. Scratch profiles are
+removed after successful, failed and aborted readiness checks.
+
 A five-second native enforcement probe runs before any repository code. Failure
 blocks publication once with `verification-sandbox-unavailable`; inspect
 `result-application.json` and `verification.json`, repair the host sandbox/runtime,

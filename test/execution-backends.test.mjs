@@ -18,7 +18,7 @@ import { writeJsonAtomic, readJson } from "../lib/fs.mjs";
 import { makeState, newEntry, STATES, idSlug } from "../lib/state.mjs";
 import { routes } from "../lib/commands/serve.mjs";
 import { makeTick } from "../lib/tick.mjs";
-import { reconcileExecutionResult, verificationEnvironment } from "../lib/execution_result.mjs";
+import { reconcileExecutionResult, verificationEnvironment, checkVerificationSandbox } from "../lib/execution_result.mjs";
 import { prepareVerificationSandbox, verificationSandboxSpec, validVerificationSandbox } from "../lib/verification_sandbox.mjs";
 import { resume } from "../lib/commands/resume.mjs";
 import { acquireProcessLock } from "../lib/daemon.mjs";
@@ -100,6 +100,49 @@ test("unmarked collection errors and foreign rejection checkpoints cannot settle
     taskId: "acme/widget/remote", runId: job.id, providerJobId: job.execution.providerJobId, sessionId: "foreign", turnId: job.execution.turnId, inputHead: input.inputHead });
   assert.equal(f.reopen().current().running, true);
   await assert.rejects(f.service.continue({ ...input, operationId: "duplicate", sessionId: job.execution.sessionId }), { code: "BUSY" });
+});
+
+test("readiness enforcement rejects failed, unproven and aborted probes and always removes scratch profiles", async () => {
+  for (const mode of ["failure", "unproven", "aborted"]) {
+    const abort = new AbortController(), paths = [];
+    const result = await checkVerificationSandbox({ signal: abort.signal, sandbox: async options => {
+      paths.push(options.worktree, options.home);
+      assert.equal(options.signal, abort.signal); assert.equal(options.env.HOME, options.home);
+      assert.equal(options.env.GH_TOKEN, undefined); assert.equal(options.env.OPENAI_API_KEY, undefined);
+      if (mode === "failure") throw new Error("private-probe-error");
+      if (mode === "aborted") abort.abort();
+      return { evidence: mode === "unproven" ? { driver: "sandbox-exec", probe: "claimed" } :
+        { version: 1, driver: "sandbox-exec", filesystem: "checkout-and-runtime", network: "disabled", probe: "passed" } };
+    } });
+    assert.equal(result.ok, false); assert.equal(result.detail, "EXECUTION_VERIFICATION_SANDBOX");
+    assert.match(result.fix, /bwrap.*namespaces/); assert.doesNotMatch(JSON.stringify(result), /private-probe-error/);
+    for (const path of paths) assert.equal(existsSync(path), false);
+  }
+});
+
+test("remote host refusal precedes checkout mutation and paid correction while unrelated PR review settles", async () => {
+  const f = remote(), home = tempHome(), state = makeState(home), notify = fakeNotify(), gh = fakeGh(), changes = [];
+  const id = "acme/widget/remote", entry = newEntry({ repo: "acme/widget", harness: "openai-agents", session: "owned-session",
+    branch: "work/remote", worktree: join(home, "missing-checkout"), pr: 1, base: "main", state: STATES.prOpen, nowIso: T0 });
+  entry.last = { run: "saved-run", exit: 0, cost: null }; state.put(id, entry);
+  state.put("acme/widget/review", newEntry({ repo: "acme/widget", harness: "codex", branch: "work/review", pr: 2, state: STATES.prOpen, nowIso: T0 }));
+  gh.prView = async (_repo, pr) => pr === 2 ? prFixture({ state: "MERGED" }) : gh.data.pr;
+  gh.data.comments = [comment({ id: 99, by: "me", at: new Date(f.clock.now()).toISOString(), body: "@gallivant fix the header" })];
+  const ctx = { home, state, config: CONFIG, clock: f.clock, gh, ownLogin: "me", log: silentLog, notify,
+    readPrd: () => null, credential: fakeCredential(), identity: fakeIdentity(),
+    git: { ...fakeGit(), exists: () => false, fromBranch: async () => changes.push("recreate"), mergeBase: async () => changes.push("merge"),
+      ensureHttpsRemote: async () => changes.push("remote") }, executionFor: task => task === id ? f.service : fakeRunner(f.clock) };
+  const descriptor = Object.getOwnPropertyDescriptor(process, "platform");
+  Object.defineProperty(process, "platform", { ...descriptor, value: "unsupported-fixture" });
+  try {
+    await assert.rejects(makeTick(ctx).startRun(id, entry, { name: "resume", prompt: "authorized correction" }), { code: "EXECUTION_VERIFICATION_SANDBOX" });
+    await makeTick(ctx).tick(); await makeTick(ctx).tick();
+    assert.equal(state.get(id).state, STATES.needsHuman); assert.equal(state.get(id).reason, "verification-sandbox-unavailable");
+    assert.equal(state.get(id).session, entry.session); assert.equal(state.get(id).pr, 1); assert.equal(state.get(id).last.run, "saved-run");
+    assert.equal(state.get(id).last.cost, null); assert.equal(state.get("acme/widget/review").state, STATES.done);
+    assert.deepEqual(changes, []); assert.equal(f.calls.length, 0); assert.equal(Object.keys(f.service.state().operations).length, 0);
+    assert.equal(notify.sent.filter(c => c[0] === "needs").length, 1);
+  } finally { Object.defineProperty(process, "platform", descriptor); }
 });
 
 test("missing predecessor module stops context startup with a dependency remedy", async () => {
