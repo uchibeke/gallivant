@@ -29,7 +29,7 @@ const input = { operationId: "implementation", prompt: "Implement the approved b
 function fixture() {
   const root = mkdtempSync(join(tmpdir(), "agents-offline-")), calls = [], sessions = new Map(), turns = new Map();
   const clock = { now: () => 1_800_000_000_000 };
-  let serial = 0, lost = null, events = [], items = [], artifactPages = [], result = null, artifactBytes = null, failure = null;
+  let serial = 0, lost = null, events = [], items = [], artifactPages = [], result = null, artifactBytes = null, failure = null, answerFault = null;
   const content = () => artifactBytes ?? JSON.stringify(result);
   const page = data => ({ data, has_more: false, last_id: data.at(-1)?.id ?? null });
   const fetcher = async (url, options) => {
@@ -37,6 +37,12 @@ function fixture() {
     const body = options.body ? JSON.parse(options.body) : null;
     calls.push({ route, method: options.method, body, key: options.headers["Idempotency-Key"] });
     assert.equal(options.headers["OpenAI-Beta"], "agents=v1"); assert.equal(options.headers["OpenAI-Project"], config.project);
+    const fault = body?.events?.[0]?.type.endsWith(".tool_result") ? answerFault : null;
+    if (fault) answerFault = null;
+    if (fault?.phase === "before") {
+      if (fault.timeout) await new Promise((_, reject) => options.signal.addEventListener("abort", () => reject(new Error("answer aborted before acceptance")), { once: true }));
+      throw new Error("answer delivery lost before acceptance");
+    }
     if (failure && (typeof failure === "number" || failure.route === route)) { const status = typeof failure === "number" ? failure : failure.status; failure = null; return new Response("private provider error secret", { status, headers: { "retry-after": "2" } }); }
     let value;
     if (route === `/models/${config.model}`) value = { id: config.model };
@@ -54,10 +60,15 @@ function fixture() {
         if (event.type.endsWith(".message")) {
           const turn = { id: `turn-${turns.size + 1}`, session_id: sessionId, subagent_id: null, status: "in_progress", completed_at: null, usage: null }; turns.set(turn.id, turn); session.status = "running";
         } else if (event.type.endsWith(".cancel")) { const turn = [...turns.values()].findLast(t => t.session_id === sessionId); turn.status = "cancelled"; }
-        else if (event.type.endsWith(".tool_result")) session.required_actions = [];
+        else if (event.type.endsWith(".tool_result")) {
+          const action = session.required_actions.find(a => a.call_id === event.call_id && a.turn_id === event.turn_id);
+          items = [{ id: "question-item", type: "function_call", turn_id: event.turn_id, call_id: event.call_id, name: action.name, arguments: action.arguments, status: "completed" },
+            { id: "answer-item", type: "function_call_output", turn_id: event.turn_id, call_id: event.call_id, status: "completed", error: null, output: event.output }];
+          session.required_actions = [];
+        }
         value = null;
       } else if (route.endsWith("/turns")) value = page([...turns.values()].filter(t => t.session_id === sessionId));
-      else if (route.includes("/turns/")) value = turns.get(route.split("/").at(-1));
+      else if (route.includes("/turns/") && !route.endsWith("/items")) value = turns.get(route.split("/").at(-1));
       else if (route.endsWith("/items")) value = items.length ? { data: [items[search.get("after") ? 1 : 0]], has_more: !search.get("after") && items.length > 1, last_id: search.get("after") ? items[1].id : items[0].id } : page([]);
       else if (route.endsWith("/artifacts")) value = artifactPages[search.get("after") ? 1 : 0] || page([]);
       else if (route.endsWith("/content")) {
@@ -67,20 +78,21 @@ function fixture() {
       else if (options.method === "DELETE") { sessions.delete(sessionId); value = null; }
       else value = session;
     }
+    if (fault?.phase === "after") throw new Error("answer reply lost after acceptance");
     if (lost === route) { lost = null; throw new Error("lost reply"); }
     return new Response(value === null ? null : JSON.stringify(value), { status: value === null ? 202 : 200 });
   };
   let fixtureEnvironment = "connected";
   const http = agentsHttp({ credential: () => "offline-test-key", organization: config.organization, project: config.project, fetcher });
   const transport = () => makeAgentsTransport({ root, taskId: "acme/widget/task", account: config.account, config, http, clock });
-  const service = () => makeExecution({ root, taskId: "acme/widget/task", account: config.account, provider: "openai-agents", transport: transport(), capabilities: { ...capabilitiesFor("openai-agents"), models: [config.model] }, clock, jitter: () => 0 });
+  const service = (limits = {}) => makeExecution({ root, taskId: "acme/widget/task", account: config.account, provider: "openai-agents", transport: transport(), capabilities: { ...capabilitiesFor("openai-agents"), models: [config.model] }, clock, limits, jitter: () => 0 });
   const finish = (status = "completed") => { const turn = [...turns.values()].at(-1); turn.status = status; turn.completed_at = clock.now() / 1000; sessions.get(turn.session_id).status = "idle"; return turn; };
   const artifact = job => {
     artifactBytes = null;
     result = { version: 1, inputHead: head, repo: input.repo, branch: input.branch, files: [{ path: "answer.txt", beforeHash: contentHash(initial), afterHash: contentHash(changed), text: changed }], pr: { title: "Implement answer", body: "Actual result" }, tests: [{ command: "node --test", exit: 0, inputHead: head, output: "passed" }] };
     artifactPages = [{ data: [{ id: "unrelated", turn_id: "other", path: "/workspace/outputs/old.json" }], has_more: true, last_id: "unrelated" }, { data: [{ id: "artifact-1", session_id: job.execution.sessionId, environment_id: job.execution.environment, turn_id: job.execution.turnId, path: "/workspace/outputs/result.json", size_bytes: Buffer.byteLength(JSON.stringify(result)) }], has_more: false }];
   };
-  return { root, clock, calls, sessions, turns, http, fetcher, transport, service, finish, artifact, syncArtifactSize: () => { artifactPages[1].data[0].size_bytes = Buffer.byteLength(content()); }, setArtifactBytes: v => { artifactBytes = v; }, setEvents: v => { events = v; }, setItems: v => { items = v; }, setEnvironment: v => { fixtureEnvironment = v; }, fail: v => { failure = v; }, failAt: (route, status) => { failure = { route, status }; }, lose: v => { lost = v; }, getResult: () => result };
+  return { root, clock, calls, sessions, turns, http, fetcher, transport, service, finish, artifact, syncArtifactSize: () => { artifactPages[1].data[0].size_bytes = Buffer.byteLength(content()); }, setArtifactBytes: v => { artifactBytes = v; }, setEvents: v => { events = v; }, setItems: v => { items = v; }, setEnvironment: v => { fixtureEnvironment = v; }, fail: v => { failure = v; }, failAt: (route, status) => { failure = { route, status }; }, lose: v => { lost = v; }, loseAnswer: v => { answerFault = v; }, getResult: () => result };
 }
 async function unsupportedHost(fn) {
   const descriptor = Object.getOwnPropertyDescriptor(process, "platform");
@@ -144,7 +156,7 @@ test("unsupported host refuses preparation, direct dispatch and manual continuat
     git: { exists: () => false, fromBranch: async () => assert.fail("host refusal must precede checkout recreation") },
     gh: fakeGh(), log: silentLog, notify: fakeNotify(), executionFor: f.service, readPrd: () => null };
   await unsupportedHost(async () => {
-    await assert.rejects(resume(ctx, { handle: taskId }), { code: "EXECUTION_VERIFICATION_SANDBOX" });
+    await assert.rejects(resume(ctx, { handle: taskId }), /EXECUTION_VERIFICATION_SANDBOX/);
     await assert.rejects(f.transport().continue({ ...input, runId: "refused-correction", idempotencyKey: "refused-correction",
       sessionId: job.execution.sessionId }), { code: "EXECUTION_VERIFICATION_SANDBOX" });
   });
@@ -219,6 +231,90 @@ test("authorized required action answer targets exact existing turn and rejects 
   assert.deepEqual(await f.service().respond(answer), { accepted: true }); assert.equal(f.calls.filter(c => c.body?.events?.[0]?.type.endsWith(".tool_result")).length, 1);
   session.required_actions = [{ type: "function_call", name: "run_shell", turn_id: ex.turnId, call_id: "evil" }]; await assert.rejects(f.service().respond({ ...answer, operationId: "evil", callId: "evil" }), { code: "EXECUTION_ACTION" });
 });
+for (const mode of ["lost-before", "timeout-before", "lost-after", "cleanup"]) test(`operator answer ${mode} recovers the same call and key across restart`, async t => {
+  const f = fixture(), job = await f.service().submit(input), ex = job.execution, session = f.sessions.get(ex.sessionId);
+  session.required_actions = [{ type: "function_call", name: "ask_operator", arguments: { question: "Which value?" }, turn_id: ex.turnId, call_id: "call-1" }];
+  f.turns.get(ex.turnId).status = "waiting"; await f.service().reconcile({ force: true });
+  const answer = { operationId: "saved-answer", sessionId: ex.sessionId, turnId: ex.turnId, callId: "call-1", answer: "Use 42", authorized: true };
+  if (mode === "cleanup") {
+    const subscribe = f.http.subscribe;
+    let failed = false;
+    f.http.subscribe = async (...args) => { const stream = await subscribe(...args), close = stream.close;
+      stream.close = async () => { await close(); if (!failed) { failed = true; throw new Error("stream cleanup reply lost"); } }; return stream; };
+  } else f.loseAnswer({ phase: mode.endsWith("before") ? "before" : "after", timeout: mode === "timeout-before" });
+  await assert.rejects(f.service(mode === "timeout-before" ? { deadlineMs: 30 } : {}).respond(answer), mode === "timeout-before" ? { code: "EXECUTION_DEADLINE" } : undefined);
+  assert.equal(Object.values(f.service().state().answers)[0].accepted, false);
+  const before = f.calls.length;
+  await assert.rejects(f.service().respond({ ...answer, answer: "Use another value" }), { code: "EXECUTION_CONFLICT" });
+  await assert.rejects(f.service().respond({ ...answer, authorized: false }), { code: "EXECUTION_ACTION" });
+  assert.equal(f.calls.length, before);
+  assert.deepEqual(await f.service().respond(answer), { accepted: true });
+  const posts = f.calls.filter(c => c.body?.events?.[0]?.type.endsWith(".tool_result"));
+  assert.equal(posts.length, mode.endsWith("before") ? 2 : 1); assert.equal(new Set(posts.map(c => c.key)).size, 1);
+  assert.equal(f.sessions.size, 1); assert.equal(f.turns.size, 1); assert.equal(f.service().current().id, job.id);
+  assert.equal(f.service().current().execution.sessionId, ex.sessionId); assert.equal(f.service().current().execution.turnId, ex.turnId);
+  const recoveredCalls = f.calls.length; assert.deepEqual(await f.service().respond(answer), { accepted: true }); assert.equal(f.calls.length, recoveredCalls);
+  if (mode === "lost-after") assert.equal(f.calls.filter(c => c.route.endsWith(`/turns/${ex.turnId}/items`)).length, 2, "recover both authoritative item pages");
+  f.finish(); f.artifact(job); await f.service().reconcile({ force: true }); await f.service().reconcile({ force: true });
+  assert.equal((await f.service().collect()).files[0].text, changed); assert.equal(f.service().outcome(job.id).ok, true);
+  const evidence = join(f.root, "answer-recovery-evidence.json");
+  writeFileSync(evidence, JSON.stringify({ kind: "provider-shaped offline answer recovery", mode, runId: job.id, sessionId: ex.sessionId,
+    turnId: ex.turnId, callId: answer.callId, posts: posts.length, idempotencyKeys: [...new Set(posts.map(c => c.key))], sessions: f.sessions.size,
+    rootTurns: f.turns.size, accepted: Object.values(f.service().state().answers)[0].accepted, result: f.service().outcome(job.id), paid_calls: 0 }, null, 2));
+  t.diagnostic(`answer recovery evidence: ${evidence}`);
+});
+test("ambiguous answer recovery refuses changed actions, missing proof, foreign roots and stopped sessions without resending", async () => {
+  for (const mode of ["tool", "terminal", "missing", "foreign", "wrong-output", "stop"]) {
+    const f = fixture(), job = await f.service().submit(input), ex = job.execution, session = f.sessions.get(ex.sessionId);
+    const action = { type: "function_call", name: "ask_operator", arguments: {}, turn_id: ex.turnId, call_id: "call-1" };
+    session.required_actions = [action]; f.turns.get(ex.turnId).status = "waiting";
+    const answer = { operationId: "answer", sessionId: ex.sessionId, turnId: ex.turnId, callId: action.call_id, answer: "Use 42", authorized: true };
+    f.loseAnswer({ phase: "before" }); await assert.rejects(f.service().respond(answer));
+    if (mode === "tool") action.name = "run_shell";
+    if (mode === "terminal") f.turns.get(ex.turnId).status = "completed";
+    if (["missing", "foreign", "wrong-output"].includes(mode)) session.required_actions = [];
+    if (["foreign", "wrong-output"].includes(mode)) f.setItems([
+      { id: "call", type: "function_call", turn_id: mode === "foreign" ? "foreign" : ex.turnId, call_id: action.call_id, name: "ask_operator", status: "completed" },
+      { id: "output", type: "function_call_output", turn_id: ex.turnId, call_id: action.call_id, output: "different", status: "completed", error: null }]);
+    if (mode === "stop") await f.service().cancel();
+    const posts = f.calls.filter(c => c.body?.events?.[0]?.type.endsWith(".tool_result")).length;
+    await assert.rejects(f.service().respond(answer), { code: ({ tool: "EXECUTION_ACTION", terminal: "EXECUTION_ACTION", missing: "EXECUTION_UNKNOWN", foreign: "AGENTS_PROTOCOL", "wrong-output": "EXECUTION_CONFLICT", stop: "EXECUTION_STOPPED" })[mode] });
+    assert.equal(f.calls.filter(c => c.body?.events?.[0]?.type.endsWith(".tool_result")).length, posts);
+    assert.equal(Object.values(f.service().state().answers)[0].accepted, false); assert.equal(f.sessions.size, 1); assert.equal(f.turns.size, 1);
+  }
+});
+test("managed resume API refusal preserves checkout, accepted brief and sources, registry and session before mutation", async t => {
+  const observed = [];
+  for (const mode of ["key-expired", "project-revoked", "model-revoked"]) {
+    const f = fixture(), job = await f.service().submit(input), operator = join(f.root, "operator"), worktree = join(f.root, "missing-checkout");
+    f.finish(); f.artifact(job); await f.service().reconcile({ force: true }); await f.service().collect();
+    mkdirSync(join(operator, "docs/prds"), { recursive: true });
+    const brief = GOOD_PRD.replace("harness: codex", "harness: openai-agents").replace("status: draft", "status: ready").replace("harness: openai-agents", "harness: openai-agents\nsources:\n  - context.md");
+    const revised = brief.replace("then a CSV with three rows downloads.", "then a CSV with three rows and headers downloads.");
+    assert.notEqual(revised, brief); writeFileSync(join(operator, "docs/prds/task.md"), revised); writeFileSync(join(operator, "context.md"), "revised context\n");
+    const state = makeState(f.root), id = "acme/widget/task", mutations = [];
+    state.put(id, { ...newEntry({ repo: input.repo, branch: input.branch, harness: "openai-agents", session: job.execution.sessionId,
+      worktree, pr: 42, base: "main", state: STATES.needsHuman, nowIso: new Date(f.clock.now()).toISOString() }),
+      checkout: operator, prd: "docs/prds/task.md", sources: ["context.md"], execution: f.service().current().execution, last: { run: job.id, exit: 0, cost: null } });
+    const keyFile = join(f.root, "fixture-api-key"); writeFileSync(keyFile, "offline-test-key", { mode: 0o600 });
+    const ctx = { home: f.root, state, config: { ...CONFIG, harness: { "openai-agents": { ...config, api_key_file: keyFile } } }, ownLogin: "me", clock: f.clock,
+      git: { ...fakeGit(), exists: () => { mutations.push("checkout"); return false; }, fromBranch: async () => mutations.push("clone"), mergeBase: async () => mutations.push("merge") },
+      gh: fakeGh(), log: silentLog, notify: fakeNotify(), executionFor: f.service, readPrd: () => brief, readSource: () => "previous context\n",
+      writePrd: () => mutations.push("brief"), writeSource: () => mutations.push("source") };
+    const registry = readFileSync(join(f.root, "state.json"), "utf8"), execution = readFileSync(join(f.root, "execution.json"), "utf8"), agents = readFileSync(join(f.root, "agents.json"), "utf8");
+    f.failAt(mode === "project-revoked" ? "/agents/sessions" : `/models/${config.model}`, mode === "key-expired" ? 401 : mode === "project-revoked" ? 403 : 404);
+    const calls = f.calls.length, mock = t.mock.method(globalThis, "fetch", f.fetcher);
+    try { await assert.rejects(resume(ctx, { handle: id, resnapshot: true }), /AGENTS_(?:AUTH|HTTP)/); } finally { mock.mock.restore(); }
+    assert.deepEqual(mutations, []); assert.equal(readFileSync(join(f.root, "state.json"), "utf8"), registry);
+    assert.equal(readFileSync(join(f.root, "execution.json"), "utf8"), execution); assert.equal(readFileSync(join(f.root, "agents.json"), "utf8"), agents);
+    assert.equal(existsSync(worktree), false); assert.equal(f.sessions.size, 1); assert.equal(f.turns.size, 1); assert.equal(f.service().current().execution.sessionId, job.execution.sessionId);
+    const reads = f.calls.slice(calls); assert.deepEqual(reads.map(c => c.route), mode === "project-revoked" ? [`/models/${config.model}`, "/agents/sessions"] : [`/models/${config.model}`]);
+    assert.ok(reads.every(c => c.method === "GET"));
+    observed.push({ mode, sessionId: job.execution.sessionId, reads: reads.map(c => ({route:c.route,method:c.method})), mutations, registry_preserved: true, snapshots_preserved: true, paid_calls: 0 });
+  }
+  const evidence = join(mkdtempSync(join(tmpdir(), "agents-resume-refusal-")), "resume-readiness-evidence.json");
+  writeFileSync(evidence, JSON.stringify({ kind: "provider-shaped offline readiness refusal", cases: observed }, null, 2)); t.diagnostic(`resume readiness evidence: ${evidence}`);
+});
 test("cancellation uses active turn cancellation, fences dispatch and quarantines late artifacts", async () => {
   const f = fixture(), job = await f.service().submit(input); assert.deepEqual(await f.service().cancel(), { confirmed: true }); assert.equal(f.sessions.size, 1); assert.equal(f.calls.some(c => c.method === "DELETE"), false);
   await assert.rejects(f.service().continue({ ...input, operationId: "paid-fix", sessionId: job.execution.sessionId }), { code: "EXECUTION_STOPPED" }); await assert.rejects(f.service().collect(), { code: "EXECUTION_QUARANTINED" }); assert.equal(f.service().current().execution.costUsd, null);
@@ -249,13 +345,14 @@ test("deterministic artifact rejection survives coordinator restart and permits 
   }, observations = [];
   for (const [kind, mutate] of Object.entries(mutations)) {
     const f = fixture(), taskId = "acme/widget/task", job = await f.service().submit(input);
+    const keyFile = join(f.root, "fixture-api-key"); writeFileSync(keyFile, "offline-test-key", { mode: 0o600 });
     f.finish(); f.artifact(job); mutate(f); f.syncArtifactSize();
     const state = makeState(f.root), notify = fakeNotify(), gh = fakeGh({ pr: { state: "OPEN" } });
     const worktree = join(f.root, "checkout"); mkdirSync(worktree); writeFileSync(join(worktree, "answer.txt"), initial);
     state.put(taskId, { ...newEntry({ harness: "openai-agents", repo: input.repo, branch: input.branch, worktree,
       state: STATES.prOpen, nowIso: new Date(f.clock.now()).toISOString() }), base: "main", pr: 42,
       session: job.execution.sessionId, execution: job.execution, last: { run: job.id, exit: null } });
-    const ctx = { home: f.root, state, config: { ...CONFIG, harness: { ...CONFIG.harness, "openai-agents": config } },
+    const ctx = { home: f.root, state, config: { ...CONFIG, harness: { ...CONFIG.harness, "openai-agents": { ...config, api_key_file: keyFile } } },
       clock: f.clock, git: { ...fakeGit(), head: async () => head }, gh, ownLogin: "me", log: silentLog, notify,
       credential: fakeCredential(), identity: fakeIdentity(), executionFor: f.service, readPrd: () => null,
       executionInputFor: async (_id, _entry, round) => ({ ...input, ...round }) };
@@ -283,7 +380,9 @@ test("deterministic artifact rejection survives coordinator restart and permits 
     assert.equal(readFileSync(join(worktree, "answer.txt"), "utf8"), initial); assert.equal(notify.sent.filter(x => x[0] === "needs").length, 1);
     assert.throws(() => requestControl(restarted, { handle: taskId, action: "recheck" }), { code: "EXECUTION_RESULT_BLOCKED" });
     f.setEnvironment("connected");
-    requestControl(restarted, { handle: taskId, action: "resume" }); await makeTick(restarted).tickEntry(taskId, restarted.state.get(taskId));
+    const probe = t.mock.method(globalThis, "fetch", f.fetcher);
+    try { requestControl(restarted, { handle: taskId, action: "resume" }); await makeTick(restarted).tickEntry(taskId, restarted.state.get(taskId)); }
+    finally { probe.mock.restore(); }
     const correction = f.service().current();
     assert.equal(restarted.state.get(taskId).control.status, "applied"); assert.equal(restarted.state.get(taskId).pr, 42);
     assert.equal(correction.execution.sessionId, job.execution.sessionId); assert.notEqual(correction.execution.turnId, job.execution.turnId);

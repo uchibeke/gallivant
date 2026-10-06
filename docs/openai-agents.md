@@ -99,9 +99,19 @@ await execution.respond({
 Only the pending `ask_operator` function is supported. The caller must authorize
 the answer and use the current task/session/turn/call identities. Arbitrary
 function requests and browser approvals are refused. Answers use the documented
-idempotency header and never create another implementation turn. A lost answer
-reply remains visibly ambiguous; inspect the required actions before explicit
-operator recovery. This structured interface is available to existing clients;
+idempotency header and never create another implementation turn. After a timeout
+or lost answer reply, explicitly repeat `execution.respond` with the identical
+authorized input and operation ID. The adapter subscribes before retrieving the
+owned session/root and resends the saved answer/key only while that exact
+`ask_operator` call remains pending. If it is no longer pending, paginated root
+items must contain the matching function call and successful, identical output
+before acceptance is recorded; missing or conflicting proof stays ambiguous
+without sending input. A saved acknowledgement survives stream cleanup or a
+coordinator checkpoint failure. Changed answer bytes, arbitrary tools, foreign
+roots/accounts and stopped sessions are refused. This follows the documented
+[function recovery](https://developers.openai.com/api/docs/guides/agents-api/tools/functions)
+and [submission retry](https://developers.openai.com/api/docs/guides/agents-api/sessions)
+boundaries. This structured interface is available to existing clients;
 there is no terminal question waiter or arbitrary shell executor.
 
 ## Progress, recovery and controls
@@ -199,6 +209,11 @@ disposable directories before checking API read access. Start refuses an
 unsupported host before cloning or saving task snapshots. Review dispatch and
 manual resume recheck before recreating or merging the checkout, and the managed
 transport checks again before sending a new implementation or correction.
+Manual resume runs the full native/API readiness check before accepting an
+edited brief or carried sources or reopening the entry. Expired credentials,
+revoked project/model visibility and unsupported hosts leave those saved inputs
+and task/session ownership unchanged. API read readiness still does not attest
+to inference or hosted setup access.
 Provider health and preparation records retain the native enforcement evidence;
 they still label model inference and hosted setup as unverified until dispatch.
 Repair the named OS/runtime requirement and explicitly resume the existing task.

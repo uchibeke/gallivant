@@ -53,6 +53,7 @@ its persisted cadence; read-only clients never call a transport.
 | `collect` | Exact job/session/turn/input head; finished boolean outcome, nullable cost, optional nullable `completedAt`, saved result and optional artifact manifest or verified pushed revision |
 | `cancel` | Task/provider/account/run, exact owned job/session/root turn, durable cancellation idempotency key and AbortSignal; boolean `confirmed`, true only after authoritative remote cancellation |
 | optional `lookup` | Persisted intent/idempotency key after lost acknowledgement; authoritative exact job observation, or unresolved null |
+| optional `recoverResponse` | Explicit retry of the identical authorized answer and stable key; reconcile the owned pending call or saved output before replay/acceptance |
 
 The public boundary's `inspect()` is deliberately a cached read. Its coordinator
 `reconcile()` invokes transport inspection/lookup. Reading CLI status, task
@@ -590,6 +591,14 @@ code runs, and temporary profiles are removed on every path. Preparation and
 provider-health records retain the successful probe evidence. Read-only progress,
 artifact collection and cancellation remain available after host refusal. The
 publication-time probe still verifies the actual applied checkout and descendants.
+Manual resume uses full native/API readiness before recreation, merging,
+resnapshot acceptance or reopening state. API refusal preserves the existing
+brief/source snapshots and session/PR along with the checkout. An unanswered
+operator request uses the same durable signature/key on explicit retry: the
+shared boundary calls optional `recoverResponse`, leaving transports without a
+safe recovery method ambiguous. The managed adapter verifies the current owned
+pending `ask_operator` call before replay, or confirms matching successful saved
+output across bounded pages; an absent action alone never proves acceptance.
 The canonical tick continues to own readiness, trusted feedback,
 freshness, receipts, conflicts, rounds and human merge boundaries. No automatic
 merge is added.

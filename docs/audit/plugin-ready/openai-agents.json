@@ -2,24 +2,24 @@
   "version": 1,
   "task_id": "task-cf82d9f43ca0da3c5bb29b67",
   "scope": "managed Agents REST implementation, provider-shaped offline lifecycle verification and native macOS verification readiness/enforcement; live qualification remains unverified",
-  "recorded_at": "2026-10-06T15:51:56.482Z",
+  "recorded_at": "2026-10-06T16:40:16.833Z",
   "base_revision": "7936830977bcb4615de418b9dd5c4d655501297b",
   "branch": "work/openai-agents-harness",
   "source_files": {
     "README.md": "6c9a9e9e79f7a9bd9157464ea2602f6ecde0b2878422e5c8dbea64a98d5f2ab8",
     "docs/audit/plugin-ready/README.md": "7f24289695807c9bd9d880e54e287c3bcfa1a3324543ca87eee68b1e24a9e8f7",
-    "docs/audit/plugin-ready/openai-agents-checklist.md": "e79f886b1fd3f2cd360e25ac0315009f396fba01e25e2c24a4a6eae459d600f0",
-    "docs/execution.md": "b8508efc35cb94b737b4a93ea9f2b9d9ae9b7a308966a433932113f8152dde74",
-    "docs/openai-agents.md": "91ed90f110dd86fb364911d834a3a1f71ed3505da85b1cfc31e5af0f45638f51",
+    "docs/audit/plugin-ready/openai-agents-checklist.md": "c79aedac3562a4aa3c2d2bc179025b8e8af48cb3023f238383d4c18f20a4a4fe",
+    "docs/execution.md": "eba75e0354dcd604eda04096d43f3c5eb477a0aa4e73fe391681a24d15201c9f",
+    "docs/openai-agents.md": "4de3d40bebaccb0b72c5f42a438dcb8210cf17ab91a16121eaf57aaeae92b544",
     "docs/prds/openai-agents-harness.md": "b6d3ceeb20426248b5cf0d8527beaf93a6a69c09003cfc07d3a86fe8fa8b053a",
     "lib/block.mjs": "bd644a1564d6d3dcf3edad1ad1f931fa5f3e4246a041f20acbbb04c88c07c665",
     "lib/commands/doctor.mjs": "6a1c916f1a3626ba7656123792adf9ba3fdbd963cb64a3641437e337e4f18997",
     "lib/commands/start.mjs": "5b5d1f3c9c71126bd9ed0f7f7772a727f8dd1e3c7f50615c70ed4d5f22353796",
     "lib/config.mjs": "4cdd522fb24463d01023eb1650b5123ff0675ce6c7bbee4731020e2b1b0e9174",
     "lib/context.mjs": "8d086cc3dacaf68de5f84c11b1ac498d60d6b3b420b61214b5e631587e5b6119",
-    "lib/execution.mjs": "a51da2e35dd82592780375758a0ea65f166dcdc643b37f8b9563706cf4b5e74d",
+    "lib/execution.mjs": "3cdf895bfeb50f3f8119f5784eae65dab0d4eff1ba6eeb2a9c231ee8ddbc02d8",
     "lib/harness.mjs": "50640ba71ec7b03f2690ce07ab5d1731034d6d710a833c425d7e354337c6c9b5",
-    "lib/openai_agents.mjs": "d53ef68ccd9f3ea466ce9f22495c2b648e2b030955a49d5c5d504026b64ac2a5",
+    "lib/openai_agents.mjs": "4713a224a7156a296881baa70b933573a16f3f8d1c702ec1454d6114a08d3d1c",
     "lib/openai_agents_config.mjs": "7d9db1b55e3c0f71ada076811eb11baf9cfb0becdfed10f6a86ec6ecbfa69dc7",
     "lib/openai_agents_http.mjs": "bf09e30be66d2e22c240194a6e2658c6c9ba3f027a697a4e3db25a5d18f43b05",
     "lib/openai_agents_input.mjs": "a2978393dc2dfe348c97962d0a6a9356184e54a7fe426847b9195186fa8d0c68",
@@ -27,14 +27,14 @@
     "lib/probe.mjs": "bbacb430ed3ec7e3ab4b26fe01568d396d5d2257513264412c1c7e7ccb59383a",
     "lib/tick.mjs": "aed02c1ba7c995463db00824176f28c2fa9bd8ebf20794ecc98802ba9fa34c04",
     "package.json": "cc440ea2539b8d40772db637b1f6593584c66818f810c4a45719c7c563ff003a",
-    "test/execution-backends.test.mjs": "97b44d914de6fbcef50f6c23b5c37101ee90d959e57cbf9aff416330e8f9f4e4",
+    "test/execution-backends.test.mjs": "e5f909dc005353ca3717b205c8a3ba86a1ef83319ec6354fef7ff199294e6368",
     "test/openai-agents-live.mjs": "0f556440264766e17a369e6eaa6b71658833b93c18971b1ef1326d65452a20d2",
-    "test/openai-agents.test.mjs": "8670b506afc0971bca08e2c5198c20a600036bea1ace20c900d04fcfca13b201",
+    "test/openai-agents.test.mjs": "332216cbc6c5775079d338218f4c40135bc00c5ea4ef5b1a60e1696154a6987e",
     "test/units.test.mjs": "ae8ab863aa48e3e44557e8f20c00bb8440682325ec099eb34a81f339cbb42b9f",
     "lib/execution_result.mjs": "b13f5169e3fa541f5cc1f8c4e87e401436849a5864ea514231246847c71c2f41",
     "lib/verification_sandbox.mjs": "826a0ffa7116107a45ab6664bc84d0c88df8986332598b3722c78c8a7cd55ca4",
     "lib/execution_io.mjs": "b6024cdac19f53d3a2e4f13ab250ecb707bb78d1729e7fb53dab38c2c70c7145",
-    "lib/commands/resume.mjs": "d8d8490c12669976814ccca9b7011e00bae73b7d379fd6f127fa08317d34fecf"
+    "lib/commands/resume.mjs": "84ec6e93c4d2488a57b0ab8fb8fc2fa9d9cdbba302ef52ac0cddc1ed2a2c4184"
   },
   "frozen_inputs": {
     "docs/plans/plugin-ready-gallivant.md": "3081d47d8161043f9c32b6184f07ee8d4ca513822341c41a138bdf28f7459fc2",
@@ -54,10 +54,10 @@
     {
       "command": "npm test",
       "exit": 0,
-      "raw_log": "/tmp/agents-readiness-test.log",
-      "sha256": "62f9ba29df1880f1b562489b89b27475a69f92f23731ee941d1bbf680bd3e4a9",
-      "tests": 1121,
-      "pass": 1121,
+      "raw_log": "/tmp/agents-answer-test-verified.log",
+      "sha256": "e8619e381a68a86ecca37cf24c6fc2a58c4c65eb642e7beea4c33d74f21bfa53",
+      "tests": 1128,
+      "pass": 1128,
       "fail": 0,
       "cancelled": 0,
       "skipped": 0
@@ -65,16 +65,16 @@
     {
       "command": "npm run lint",
       "exit": 0,
-      "raw_log": "/tmp/agents-readiness-lint.log",
+      "raw_log": "/tmp/agents-answer-lint-final.log",
       "sha256": "8c7790de3f018fb4580f18ac70e1b355a0f76f522dd73acbdaa63632feffcecc"
     },
     {
       "command": "npm run test:execution-backends",
       "exit": 0,
-      "raw_log": "/tmp/agents-readiness-backends.log",
-      "sha256": "1a52a2f8b89a8dce74c11b2f528c746c4268f1ca054333e0f44e707b66ab877b",
-      "tests": 387,
-      "pass": 387,
+      "raw_log": "/tmp/agents-answer-backends-verified.log",
+      "sha256": "2d7e80c4342239d280bc0426b2259f9adaef91dcbd4357b57604fb82b3e90f75",
+      "tests": 388,
+      "pass": 388,
       "fail": 0,
       "cancelled": 0,
       "skipped": 0
@@ -82,10 +82,10 @@
     {
       "command": "npm run test:openai-agents",
       "exit": 0,
-      "raw_log": "/tmp/agents-readiness-openai.log",
-      "sha256": "beb469eb46cf80510cfd1befee312eda06bc8d31d8b8c157c568731efd97e224",
-      "tests": 32,
-      "pass": 32,
+      "raw_log": "/tmp/agents-answer-openai-verified.log",
+      "sha256": "aae2c2d73ed63c19743104f205636f3e21224c7c1a91d537a0ecdefeed3e0f76",
+      "tests": 38,
+      "pass": 38,
       "fail": 0,
       "cancelled": 0,
       "skipped": 0
@@ -93,7 +93,7 @@
     {
       "command": "git diff --check",
       "exit": 0,
-      "raw_log": "/tmp/agents-readiness-diff.log",
+      "raw_log": "/tmp/agents-answer-diff-verified.log",
       "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
     }
   ],
@@ -128,7 +128,8 @@
         "configuration refuses unavailable policy, missing billing selectors and private context",
         "read-only account probe records exact selectors without claiming inference or hard caps",
         "managed readiness proves native isolation before API reads and doctor reports unsupported hosts",
-        "unsupported host blocks managed start before cloning, snapshots or provider access"
+        "unsupported host blocks managed start before cloning, snapshots or provider access",
+        "managed resume API refusal preserves checkout, accepted brief and sources, registry and session before mutation"
       ]
     },
     {
@@ -157,7 +158,13 @@
       ],
       "test_names": [
         "authorized required action answer targets exact existing turn and rejects arbitrary tools",
-        "real REST adapter: implementation, artifact pagination, restart and same-session correction"
+        "real REST adapter: implementation, artifact pagination, restart and same-session correction",
+        "operator answer lost-before recovers the same call and key across restart",
+        "operator answer timeout-before recovers the same call and key across restart",
+        "operator answer lost-after recovers the same call and key across restart",
+        "operator answer cleanup recovers the same call and key across restart",
+        "ambiguous answer recovery refuses changed actions, missing proof, foreign roots and stopped sessions without resending",
+        "answer ambiguity requires a safe transport recovery method and preserves ownership, key and stop fences"
       ]
     },
     {
@@ -184,7 +191,8 @@
       ],
       "test_names": [
         "reconnect restores paginated items, discards reordered deltas after done and labels gaps",
-        "unresolved root identity has a three-attempt recovery circuit without resending"
+        "unresolved root identity has a three-attempt recovery circuit without resending",
+        "operator answer lost-after recovers the same call and key across restart"
       ]
     },
     {
@@ -206,7 +214,14 @@
         "expired filesystem still permits immutable artifact recovery but refuses continuation",
         "deterministic artifact rejection survives coordinator restart and permits same-session correction",
         "unsupported host refuses preparation, direct dispatch and manual continuation while artifact recovery remains available",
-        "remote host refusal precedes checkout mutation and paid correction while unrelated PR review settles"
+        "remote host refusal precedes checkout mutation and paid correction while unrelated PR review settles",
+        "operator answer lost-before recovers the same call and key across restart",
+        "operator answer timeout-before recovers the same call and key across restart",
+        "operator answer lost-after recovers the same call and key across restart",
+        "operator answer cleanup recovers the same call and key across restart",
+        "ambiguous answer recovery refuses changed actions, missing proof, foreign roots and stopped sessions without resending",
+        "answer ambiguity requires a safe transport recovery method and preserves ownership, key and stop fences",
+        "managed resume API refusal preserves checkout, accepted brief and sources, registry and session before mutation"
       ]
     },
     {
@@ -254,7 +269,8 @@
         "phase-bounded coordinator settlement cannot enter review dispatch or queued resume",
         "deterministic artifact rejection survives coordinator restart and permits same-session correction",
         "unsupported host refuses preparation, direct dispatch and manual continuation while artifact recovery remains available",
-        "remote host refusal precedes checkout mutation and paid correction while unrelated PR review settles"
+        "remote host refusal precedes checkout mutation and paid correction while unrelated PR review settles",
+        "managed resume API refusal preserves checkout, accepted brief and sources, registry and session before mutation"
       ]
     },
     {
@@ -270,7 +286,9 @@
         "remote and preparation timeout fences remain permanent after authoritative shutdown",
         "reported usage above a reservation exhausts allowance without double charging replay",
         "unknown cost stays null until a valid zero and cancellation retains known spend",
-        "phase-bounded coordinator settlement cannot enter review dispatch or queued resume"
+        "phase-bounded coordinator settlement cannot enter review dispatch or queued resume",
+        "ambiguous answer recovery refuses changed actions, missing proof, foreign roots and stopped sessions without resending",
+        "answer ambiguity requires a safe transport recovery method and preserves ownership, key and stop fences"
       ]
     },
     {
@@ -299,7 +317,10 @@
         "unsupported host blocks managed start before cloning, snapshots or provider access",
         "unsupported host refuses preparation, direct dispatch and manual continuation while artifact recovery remains available",
         "readiness enforcement rejects failed, unproven and aborted probes and always removes scratch profiles",
-        "remote host refusal precedes checkout mutation and paid correction while unrelated PR review settles"
+        "remote host refusal precedes checkout mutation and paid correction while unrelated PR review settles",
+        "ambiguous answer recovery refuses changed actions, missing proof, foreign roots and stopped sessions without resending",
+        "answer ambiguity requires a safe transport recovery method and preserves ownership, key and stop fences",
+        "managed resume API refusal preserves checkout, accepted brief and sources, registry and session before mutation"
       ]
     },
     {
@@ -339,7 +360,14 @@
         "unsupported host blocks managed start before cloning, snapshots or provider access",
         "unsupported host refuses preparation, direct dispatch and manual continuation while artifact recovery remains available",
         "readiness enforcement rejects failed, unproven and aborted probes and always removes scratch profiles",
-        "remote host refusal precedes checkout mutation and paid correction while unrelated PR review settles"
+        "remote host refusal precedes checkout mutation and paid correction while unrelated PR review settles",
+        "operator answer lost-before recovers the same call and key across restart",
+        "operator answer timeout-before recovers the same call and key across restart",
+        "operator answer lost-after recovers the same call and key across restart",
+        "operator answer cleanup recovers the same call and key across restart",
+        "ambiguous answer recovery refuses changed actions, missing proof, foreign roots and stopped sessions without resending",
+        "answer ambiguity requires a safe transport recovery method and preserves ownership, key and stop fences",
+        "managed resume API refusal preserves checkout, accepted brief and sources, registry and session before mutation"
       ]
     },
     {
@@ -370,13 +398,13 @@
     "sha256": "16c09feca47099fa1005141c07af146326f38055bb27fd37f2da8966198533af"
   },
   "package_verification": {
-    "raw_record": "/tmp/agents-readiness-package-verification.json",
-    "sha256": "61e7c36341c9955514f51ce99720fb745766baad3aa6437aa21e6645fce63599",
-    "integrity": "sha512-F6fjnzSHqr1Re1K4Iw8feXa3LRCvh4L8/boZNEw40HuWsb35rm41DP9AUMubESYP+XwRv+VP84gy/DZAmTJ2Bg==",
+    "raw_record": "/tmp/agents-answer-package-verification-verified.json",
+    "sha256": "87bca9226f8ba055004e2071cf5cd4b6e570d6b189bf0712a3129fd8f6ee71ab",
+    "integrity": "sha512-FYSXB9FSjLw6xNXxprslA8yN0lTwtGGvcfT1GPSrRjm/0jZtGRwnAJbpMtsuXP+zDCeE8Uxw0bcw3CUHPBz2Eg==",
     "files": 86,
-    "bytes": 424342,
-    "unpacked_bytes": 1293327,
-    "result": "adapter/context/execution/result/io/coordinator/sandbox/readiness/doctor/resume modules imported from the unpacked local package with matching source hashes; no provider call"
+    "bytes": 425539,
+    "unpacked_bytes": 1297896,
+    "result": "ten adapter/coordinator/execution/sandbox/readiness/command modules imported from the unpacked local package with matching source/document hashes; no provider call"
   },
   "live": {
     "version": 1,
@@ -566,6 +594,59 @@
           "sha256": "363dfbca76bb5bdd2ca82265eeccd237a56cd2be0151428ad5a104be56824b84"
         }
       ]
+    },
+    {
+      "rule": "Recover explicit ambiguous answers without changing logical input or tool authority; full remote readiness must precede resumed task mutations",
+      "checked": [
+        "lib/execution.mjs respond: process lock, owned task/account/session/root, authorization, durable signature/key, cache, safe optional recovery method and stop fence",
+        "lib/openai_agents.mjs respond/recoverResponse: shared ownership and pending ask_operator validation, subscribe-before-snapshot/send, root status, identical key replay, bounded paginated matching output, acknowledgement before stream cleanup",
+        "lib/openai_agents.mjs lookup/inspect/collect/cancel: root outcome and cost remain authoritative; answer acceptance creates no new session or turn",
+        "lib/commands/resume.mjs: full requireHarness before checkout recreation, merge, snapshot acceptance, reopen or dispatch",
+        "lib/probe.mjs checkHarness/requireHarness and commands/start.mjs/doctor.mjs: existing native/config/account/model/environment readiness boundary reused",
+        "lib/control.mjs queued resume and tick.mjs startRun/dispatch: same session/PR with existing correction, failure and iteration rules",
+        "test fixtures: pending versus accepted delivery loss, deadline, cleanup, history pagination, changed input/tool/root, missing proof, account isolation, cancellation, failed Verify and artifact rejection correction"
+      ],
+      "regression": [
+        "operator answer lost-before recovers the same call and key across restart",
+        "operator answer timeout-before recovers the same call and key across restart",
+        "operator answer lost-after recovers the same call and key across restart",
+        "operator answer cleanup recovers the same call and key across restart",
+        "ambiguous answer recovery refuses changed actions, missing proof, foreign roots and stopped sessions without resending",
+        "answer ambiguity requires a safe transport recovery method and preserves ownership, key and stop fences",
+        "managed resume API refusal preserves checkout, accepted brief and sources, registry and session before mutation"
+      ],
+      "representative_output": [
+        {
+          "label": "provider-shaped offline answer recovery: lost-before",
+          "path": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/agents-offline-daIuO0/answer-recovery-evidence.json",
+          "sha256": "0f236aad581dbc354fef191db4cb8e90d751413717aed7cf23f4d9cc0784bc37"
+        },
+        {
+          "label": "provider-shaped offline answer recovery: timeout-before",
+          "path": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/agents-offline-iHGa8i/answer-recovery-evidence.json",
+          "sha256": "3f361276c88e5acf4304c538023cd2edbd2caf952a7672ad2f1c0f05d815c918"
+        },
+        {
+          "label": "provider-shaped offline answer recovery: lost-after",
+          "path": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/agents-offline-Qt9OP3/answer-recovery-evidence.json",
+          "sha256": "a733607fa1e231ed5ea5330c7ad259c84aeb558e92890c96d38a1aeed895ae46"
+        },
+        {
+          "label": "provider-shaped offline answer recovery: cleanup",
+          "path": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/agents-offline-BDVaiZ/answer-recovery-evidence.json",
+          "sha256": "fbd8dabdfa11e2bc6d3f36e51c77a908866c40f264c0a16ee62b16c5b41dc03f"
+        },
+        {
+          "label": "provider-shaped offline readiness refusal",
+          "path": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/agents-resume-refusal-PNOiJi/resume-readiness-evidence.json",
+          "sha256": "a3373d086b04090f46256abf932567f7027bf4349a82dce76f0743cfcfc94395"
+        },
+        {
+          "label": "native macOS sandbox readiness preflight; no provider calls",
+          "path": "/tmp/agents-answer-preflight.json",
+          "sha256": "8a4ff6af0a95c618c52199f773a984e506b59a845f5c3af4c2b9639c1831e120"
+        }
+      ]
     }
   ],
   "security_followup": {
@@ -732,5 +813,60 @@
       "network": "disabled",
       "probe": "passed"
     }
+  },
+  "answer_resume_followup": {
+    "review_id": 5431337456,
+    "reviewed_commit": "804742711910643dfb532959f299fa652260d39c",
+    "inline_comment_ids": [
+      4197685000,
+      4197685012
+    ],
+    "status": "addressed",
+    "rule": "Recover explicit ambiguous answers without changing logical input or tool authority; full remote readiness must precede resumed task mutations",
+    "evidence_kind": "provider-shaped offline lifecycle fixtures with native macOS readiness enforcement; provider-live and Linux native qualification remain unverified",
+    "tests": [
+      "operator answer lost-before recovers the same call and key across restart",
+      "operator answer timeout-before recovers the same call and key across restart",
+      "operator answer lost-after recovers the same call and key across restart",
+      "operator answer cleanup recovers the same call and key across restart",
+      "ambiguous answer recovery refuses changed actions, missing proof, foreign roots and stopped sessions without resending",
+      "answer ambiguity requires a safe transport recovery method and preserves ownership, key and stop fences",
+      "managed resume API refusal preserves checkout, accepted brief and sources, registry and session before mutation"
+    ],
+    "representative_output": [
+      {
+        "label": "provider-shaped offline answer recovery: lost-before",
+        "path": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/agents-offline-daIuO0/answer-recovery-evidence.json",
+        "sha256": "0f236aad581dbc354fef191db4cb8e90d751413717aed7cf23f4d9cc0784bc37"
+      },
+      {
+        "label": "provider-shaped offline answer recovery: timeout-before",
+        "path": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/agents-offline-iHGa8i/answer-recovery-evidence.json",
+        "sha256": "3f361276c88e5acf4304c538023cd2edbd2caf952a7672ad2f1c0f05d815c918"
+      },
+      {
+        "label": "provider-shaped offline answer recovery: lost-after",
+        "path": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/agents-offline-Qt9OP3/answer-recovery-evidence.json",
+        "sha256": "a733607fa1e231ed5ea5330c7ad259c84aeb558e92890c96d38a1aeed895ae46"
+      },
+      {
+        "label": "provider-shaped offline answer recovery: cleanup",
+        "path": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/agents-offline-BDVaiZ/answer-recovery-evidence.json",
+        "sha256": "fbd8dabdfa11e2bc6d3f36e51c77a908866c40f264c0a16ee62b16c5b41dc03f"
+      },
+      {
+        "label": "provider-shaped offline readiness refusal",
+        "path": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/agents-resume-refusal-PNOiJi/resume-readiness-evidence.json",
+        "sha256": "a3373d086b04090f46256abf932567f7027bf4349a82dce76f0743cfcfc94395"
+      },
+      {
+        "label": "native macOS sandbox readiness preflight; no provider calls",
+        "path": "/tmp/agents-answer-preflight.json",
+        "sha256": "8a4ff6af0a95c618c52199f773a984e506b59a845f5c3af4c2b9639c1831e120"
+      }
+    ],
+    "paid_calls": 0,
+    "automatic_answer_replay": false,
+    "live_prerequisites": "unchanged; original preflight and external remedy preserved in live"
   }
 }

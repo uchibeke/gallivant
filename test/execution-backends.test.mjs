@@ -53,6 +53,22 @@ function remote(provider = "openai-agents", overrides = {}) {
   return { root, clock, calls, transport, capabilities, service: makeExecution(options), reopen: () => makeExecution(options), observe: patch => { observation = { ...observation, ...patch }; }, jobs };
 }
 
+// Shared lifecycle fixtures still exercise the real native/API readiness gate;
+// only the provider's read responses and private credential are offline.
+function remoteReadinessFixture(t, ctx) {
+  const keyFile = join(ctx.home, "readiness-api-key"); writeFileSync(keyFile, "offline-readiness-key", { mode: 0o600 });
+  const selected = { account: "test", organization: "org-fixture", project: "proj-fixture", model: "fixture-model", api_key_file: keyFile,
+    environment: "openai_hosted", container_size: "small", network: { access: "disabled" }, allowance };
+  ctx.config = { ...ctx.config, harness: { ...ctx.config.harness, "openai-agents": selected } };
+  return t.mock.method(globalThis, "fetch", async (url, options) => {
+    assert.equal(options.method, "GET"); assert.equal(options.headers.Authorization, "Bearer offline-readiness-key");
+    assert.equal(options.headers["OpenAI-Project"], selected.project);
+    const route = new URL(url).pathname;
+    assert.ok([`/v1/models/${selected.model}`, "/v1/agents/sessions"].includes(route));
+    return new Response(JSON.stringify(route.includes("/models/") ? { id: selected.model } : { data: [], has_more: false }));
+  });
+}
+
 test("predecessor service is required and managed API is available while Cloud remains reserved", () => {
   assert.throws(() => assertExecutionDependency(null), { code: "EXECUTION_DEPENDENCY" });
   assertExecutionDependency(() => {});
@@ -2124,7 +2140,7 @@ test("interrupted verification blocks replay while lost publication replies reus
   assert.deepEqual(readJson(join(f.dir, "verification.json")), evidence);
 });
 
-test("failed remote verification survives polls and restart, settles workflow and permits explicit correction", async () => {
+test("failed remote verification survives polls and restart, settles workflow and permits explicit correction", async t => {
   const f = await collectedArtifactFixture(), state = makeState(f.ctx.home), attempts = join(f.entry.worktree, "verify-attempts.txt");
   f.ctx.readPrd = () => `# Brief\n\n## Verify\n\n- \`node -e 'require("fs").appendFileSync(${JSON.stringify(attempts)}, "x"); process.exit(2)'\`\n`;
   state.put(f.id, { ...f.entry, last: { run: f.job.id, exit: null }, execution: f.service.current().execution });
@@ -2160,7 +2176,9 @@ test("failed remote verification survives polls and restart, settles workflow an
   assert.match(restarted.state.get(f.id).control.message, /cannot retry publication/);
   assert.throws(() => requestControl(restarted, { handle: f.id, action: "recheck" }), { code: "EXECUTION_RESULT_BLOCKED" });
   requestControl(restarted, { handle: f.id, action: "resume" });
-  await makeTick(restarted).tickEntry(f.id, restarted.state.get(f.id));
+  const probe = remoteReadinessFixture(t, restarted);
+  try { await makeTick(restarted).tickEntry(f.id, restarted.state.get(f.id)); } finally { probe.mock.restore(); }
+  assert.equal(probe.mock.callCount(), 2);
   assert.equal(restarted.state.get(f.id).control.status, "applied");
   assert.equal(f.provider.calls.filter(c => c[0] === "continue").length, 1);
   assert.equal(f.reopen().current().execution.sessionId, stopped.session);
@@ -2206,7 +2224,10 @@ test("deterministic publication rejection settles once and permits an explicit c
       assert.match(controlFailure(error), /explicitly resume.*cannot retry publication/); return true;
     });
     gh.data.pr.state = "OPEN";
-    requestControl(restarted, { handle: f.id, action: "resume" }); await makeTick(restarted).tickEntry(f.id, restarted.state.get(f.id));
+    requestControl(restarted, { handle: f.id, action: "resume" });
+    const probe = remoteReadinessFixture(t, restarted);
+    try { await makeTick(restarted).tickEntry(f.id, restarted.state.get(f.id)); } finally { probe.mock.restore(); }
+    assert.equal(probe.mock.callCount(), 2);
     assert.equal(restarted.state.get(f.id).control.status, "applied"); assert.equal(f.provider.calls.filter(call => call[0] === "continue").length, 1);
     assert.equal(f.reopen().current().execution.sessionId, f.job.execution.sessionId); assert.notEqual(restarted.state.get(f.id).last.run, f.job.id);
     assert.deepEqual(readJson(join(f.dir, "result-application.json")), checkpoint); assert.equal(readFileSync(join(f.dir, "result.json"), "utf8"), result);
@@ -3019,12 +3040,34 @@ test("every local adapter retains recorded sessions across legacy upgrade and mi
   }
 });
 
-test("shared resume uses remote capabilities and owned sessions without a fake CLI", async () => {
+test("answer ambiguity requires a safe transport recovery method and preserves ownership, key and stop fences", async () => {
+  const f = remote(), sent = [], recovered = [];
+  f.transport.respond = async req => { sent.push(req); throw new Error("answer reply lost"); };
+  const job = await f.service.submit(input), ex = job.execution;
+  const answer = { operationId: "answer", authorized: true, sessionId: ex.sessionId, turnId: ex.turnId, callId: "call-1", answer: "approved" };
+  await assert.rejects(f.service.respond(answer));
+  await assert.rejects(f.reopen().respond(answer), { code: "EXECUTION_UNKNOWN" });
+  assert.equal(sent.length, 1); assert.equal(Object.values(f.reopen().state().answers)[0].accepted, false);
+  const foreign = makeExecution({ root: f.root, taskId: "acme/widget/remote", provider: "openai-agents", account: "foreign", transport: f.transport, capabilities: f.capabilities });
+  await assert.rejects(foreign.respond(answer), { code: "EXECUTION_OWNERSHIP" });
+  f.transport.recoverResponse = async req => { recovered.push(req); return { accepted: true }; };
+  await assert.rejects(f.reopen().respond({ ...answer, answer: "different" }), { code: "EXECUTION_CONFLICT" });
+  assert.deepEqual(await f.reopen().respond(answer), { accepted: true }); assert.equal(recovered.length, 1);
+  assert.equal(recovered[0].idempotencyKey, sent[0].idempotencyKey); assert.equal(recovered[0].providerJobId, ex.providerJobId);
+  assert.equal(recovered[0].account, "test"); assert.equal(f.reopen().current().id, job.id);
+  assert.equal(f.calls.filter(c => ["submit", "continue"].includes(c[0])).length, 1);
+  await f.reopen().cancel(); await assert.rejects(f.reopen().respond(answer), { code: "EXECUTION_STOPPED" }); assert.equal(recovered.length, 1);
+});
+
+test("shared resume uses remote capabilities and owned sessions without a fake CLI", async t => {
   const f = remote(), home = tempHome(), state = makeState(home), id = "acme/widget/remote", worktree = tempHome();
   const run = await f.service.submit(input); f.observe({ state: "succeeded" }); await f.service.reconcile({ force: true }); await f.service.collect();
   state.put(id, { ...newEntry({ repo: "acme/widget", harness: "openai-agents", session: run.execution.sessionId, branch: "work/remote", worktree, state: STATES.needsHuman, nowIso: T0 }), execution: f.service.current().execution, last: { run: run.id, exit: 0 } });
   const ctx = { home, config: CONFIG, state, clock: f.clock, gh: fakeGh(), git: fakeGit(), credential: fakeCredential(), identity: fakeIdentity(), log: silentLog, notify: fakeNotify(), executionFor: () => f.service, readPrd: () => null };
-  const resumed = await resume(ctx, { handle: id });
+  const probe = remoteReadinessFixture(t, ctx);
+  let resumed;
+  try { resumed = await resume(ctx, { handle: id }); } finally { probe.mock.restore(); }
+  assert.equal(probe.mock.callCount(), 2);
   assert.equal(resumed.attach, null); assert.equal(resumed.session, run.execution.sessionId);
   assert.equal(f.calls.filter(x => x[0] === "continue").length, 1); assert.equal(f.service.current().bin, undefined);
 });
