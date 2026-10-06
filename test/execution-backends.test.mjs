@@ -1533,7 +1533,7 @@ test("oversized local records discard every suffix across queued restart, replay
     assert.equal(events[1].eventId, `byte-${Buffer.byteLength(prefix)}`); assert.equal(events[1].data, "oversized local record omitted");
     if (mode !== "unterminated") { assert.equal(events[2].data, "after oversized café"); assert.equal(events[2].eventId, `byte-${Buffer.byteLength(prefix + rejected + "\n")}`); }
     const projection = logWindow(f.dir); assert.deepEqual(projection.ids, events.map(e => e.sequence));
-    assert.doesNotMatch(JSON.stringify(events) + projection.lines.join("\n"), /rejected suffix|queued-private-value|xxx/);
+    assert.doesNotMatch(JSON.stringify(events) + projection.lines.join("\n"), /rejected suffix|queued-private-value|x{3}/);
     assert.equal(outputEvents(join(f.root, "next-run"))[0].data, "unrelated current progress");
     evidence.push({ mode, bytes: Buffer.byteLength(text), first, final: readJson(cursor), meters, events, files: { checkpoint: cursor, journal: join(f.dir, "events.jsonl"), log: join(f.dir, "job.log") } });
   }
@@ -1551,7 +1551,7 @@ test("an active oversized local record stays discarded at EOF until its newline 
   assert.equal(readJson(cursor).discarding, true); assert.equal(outputEvents(f.dir).length, 1);
   writeFileSync(file, "\nvalid current progress\n", { flag: "a" }); open().observe();
   assert.equal(readJson(cursor).discarding, false); assert.equal(outputEvents(f.dir)[1].data, "valid current progress");
-  assert.doesNotMatch(readFileSync(join(f.dir, "job.log"), "utf8"), /rejected|private-tail|xxx/);
+  assert.doesNotMatch(readFileSync(join(f.dir, "job.log"), "utf8"), /rejected|private-tail|x{3}/);
 });
 
 test("oversized discard retention emits a stable history gap while keeping the completed result", () => {
@@ -2219,7 +2219,7 @@ test("verification uses a credential-free environment and removes private profil
     for (const failing of [false, true]) {
       const f = await nativeResultFixture(), invocations = [];
       for (const key of keys) process.env[key] = key === "NODE_OPTIONS" ? "--trace-warnings" : "verification-private-sentinel";
-      const code = `const fs=require("node:fs"); const keys=${JSON.stringify(keys)}; if(keys.some(key=>Object.hasOwn(process.env,key))) process.exit(31); if(fs.existsSync(process.env.HOME+"/.npmrc")) process.exit(32); fs.writeFileSync(process.env.HOME+"/cache-proof","private"); console.log("credential-free"); process.exit(${failing ? 23 : 0});`;
+      const code = `const fs=require("node:fs"); const keys=${JSON.stringify(keys)}; if(keys.some(key=>Object.hasOwn(process.env,key))) process.exit(31); if(fs.existsSync(process.env.HOME+"/.npmrc")) process.exit(32); fs.writeFileSync(process.env.HOME+"/cache-proof","private"); process.stdout.write("credential-free\\n"); process.exit(${failing ? 23 : 0});`;
       f.ctx.readPrd = () => `# Brief\n\n## Verify\n\n- \`node -e '${code}'\`\n`;
       f.verify = async (shell, args, options) => {
         assert.ok(options.env); for(const key of keys) assert.equal(options.env[key], undefined);

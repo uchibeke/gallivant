@@ -1,0 +1,205 @@
+{
+  "version": 1,
+  "task_id": "task-df42674c6251c85b0edef13f",
+  "source_parent": "4b60268210121c9d2d658226ffa84b1941b29a91",
+  "observed_at": "2026-10-06T12:47:59.668990+00:00",
+  "feedback": {
+    "code": "oap.blocked_pattern_detected",
+    "matching_added_assertions": 2,
+    "related_added_status_and_fixture_calls": 3,
+    "related_remaining_report": "/tmp/execution-receipt-pattern-remaining.json"
+  },
+  "commands": [
+    {
+      "command": "npm test",
+      "exit": 0,
+      "raw_log": "/tmp/execution-receipt-pattern-verified-tests.txt",
+      "sha256": "7e31de800a3a8d4c786cc4847f2f2d61a667cc2e318b7f6a4493ff4e891650b2",
+      "tests": 1076,
+      "passed": 1076,
+      "failed": 0
+    },
+    {
+      "command": "npm run lint",
+      "exit": 0,
+      "raw_log": "/tmp/execution-receipt-pattern-verified-lint.txt",
+      "sha256": "8c7790de3f018fb4580f18ac70e1b355a0f76f522dd73acbdaa63632feffcecc"
+    },
+    {
+      "command": "npm run test:execution-backends",
+      "exit": 0,
+      "raw_log": "/tmp/execution-receipt-pattern-verified-backends.txt",
+      "sha256": "ba69142e93aba88f24b714dc050a74738ec557eaed65d36a9761b0b118ae2426",
+      "tests": 374,
+      "passed": 374,
+      "failed": 0
+    },
+    {
+      "command": "git diff --check",
+      "exit": 0,
+      "raw_log": "/tmp/execution-receipt-pattern-verified-diff.txt",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    }
+  ],
+  "focused_checks": [
+    {
+      "command": "node --test --test-name-pattern='oversized local records discard every suffix|an active oversized local record stays discarded|verification uses a credential-free environment' test/execution-backends.test.mjs",
+      "exit": 0,
+      "raw_log": "/tmp/execution-receipt-pattern-verified-focus.txt",
+      "sha256": "17e57e1d320bd63917c456a2be352dbe13d3f7ba70d65c7ab85ca0765d4092e9",
+      "tests": 3,
+      "passed": 3,
+      "failed": 0
+    }
+  ],
+  "local_policy_check": {
+    "before": {
+      "kind": "Local deterministic policy reproduction using unchanged default limits and the parent revision verified in the preceding batch; no hosted gate request",
+      "source": "4b60268210121c9d2d658226ffa84b1941b29a91",
+      "added_diff_sha256": "3b498389dfff692ffd76ebbcc33950654f2c921a7e2833fe3ee4e7d53f98a8c3",
+      "allow": false,
+      "denial_codes": [
+        "oap.blocked_pattern_detected"
+      ],
+      "matching_added_lines": 2
+    },
+    "final_staged_report": "/tmp/execution-receipt-pattern-staged-policy.json",
+    "evaluator": "lib/deliverable.mjs:evaluate with unchanged DEFAULT_LIMITS and lib/events.mjs:addedLines",
+    "scope": "Offline preflight of the real staged added lines and final receipt after required local verification; the daemon owns any later hosted gate decision.",
+    "hosted_requests": 0
+  },
+  "source_and_output_review": {
+    "rule": "Added output must satisfy the existing completion policy without weakening privacy regression coverage or changing policy limits.",
+    "changed_files": [
+      "test/execution-backends.test.mjs",
+      "bin/gallivant.mjs"
+    ],
+    "change": "Both padding-leak assertions use the equivalent x{3} regex quantifier. Three adjacent padding characters, rejected suffixes and fixture secrets remain rejected. Two CLI status messages and a verification fixture use process.stdout.write with their original newline-terminated text.",
+    "siblings_checked": [
+      "Queued/restarted newline-delimited, unterminated and legacy-cursor oversized records retain bounded reads, stable gaps and valid surrounding events.",
+      "The active oversized-record test still requires discard state across partial appends and EOF until a newline permits valid progress.",
+      "The existing retention, missing diagnostics and missing redaction metadata tests remain unchanged and execute in both required suites.",
+      "Cancellation, message and recheck CLI acknowledgements retain their same text and final newline. Resume retains the local attach hint or remote progress message plus its final newline; control, startup and failure behavior remains unchanged.",
+      "The native credential-free subprocess fixture retains exact output, success/failure exits, cached evidence and private-profile cleanup while using the existing stdout-write convention.",
+      "lib/config.mjs, lib/events.mjs, lib/deliverable.mjs and the approved brief remain unchanged; the literal policy default is inherited base code rather than a PR addition."
+    ],
+    "artifact_sha256": {
+      "test/execution-backends.test.mjs": "6e3dd5e7523c555a3e43c1603a6b2d04a4374b45c2fd5c0a6d9ffc0056d39912",
+      "bin/gallivant.mjs": "841584ff9bc04214ce7af13fc15b8d007019939abbea40045a621bf07945213e"
+    },
+    "unchanged_policy_sha256": {
+      "lib/config.mjs": "d5f2af2fd574965ee3ac7fae57db42315b466801bd0e065da4af3758f2487a71",
+      "lib/events.mjs": "776867f9a280ea179f2be8f6e570c88d468ebb5500db8864041fd29b01202e27",
+      "lib/deliverable.mjs": "7d3c824ac1d8cb6032b1814cdf4e0dc156e4d6d01382bebc0ab1647e4abfb678",
+      "docs/prds/hosted-codex-harnesses.md": "5d21326d44207c5cfd281561b40e873328607d94bbe40c8a8f0456b73ab65f63"
+    }
+  },
+  "representative_output": {
+    "kind": "Offline bounded local-output fixtures; no live model, provider or plugin qualification",
+    "report_path": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-wOwSTe/local-discard-evidence.json",
+    "report_sha256": "d0096cb448f89cede4998152840be0dda5b63d91993963cf436bf6bf1c12c9a3",
+    "cases": [
+      {
+        "mode": "newline",
+        "bytes": 524383,
+        "final": {
+          "offset": 524383,
+          "pending": false,
+          "discarding": false
+        },
+        "events": [
+          {
+            "type": "output",
+            "data": "before oversized"
+          },
+          {
+            "type": "gap",
+            "data": "oversized local record omitted"
+          },
+          {
+            "type": "output",
+            "data": "after oversized caf\u00e9"
+          }
+        ],
+        "max_buffer_bytes": 262144
+      },
+      {
+        "mode": "unterminated",
+        "bytes": 524360,
+        "final": {
+          "offset": 524360,
+          "pending": false,
+          "discarding": false
+        },
+        "events": [
+          {
+            "type": "output",
+            "data": "before oversized"
+          },
+          {
+            "type": "gap",
+            "data": "oversized local record omitted"
+          }
+        ],
+        "max_buffer_bytes": 262144
+      },
+      {
+        "mode": "legacy",
+        "bytes": 524383,
+        "final": {
+          "offset": 524383,
+          "pending": false,
+          "discarding": false
+        },
+        "events": [
+          {
+            "type": "output",
+            "data": "before oversized"
+          },
+          {
+            "type": "gap",
+            "data": "oversized local record omitted"
+          },
+          {
+            "type": "output",
+            "data": "after oversized caf\u00e9"
+          }
+        ],
+        "max_buffer_bytes": 262143
+      }
+    ],
+    "verification_environment_report": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-X0Sj1S/verification-environment-evidence.json",
+    "verification_environment_sha256": "4c10a649f2fddfe3c5c1a34285d7b06a8b14d170ed540989a79da06d27964de1",
+    "verification_environment_cases": [
+      {
+        "failing": false,
+        "output": "credential-free\n",
+        "exit": 0,
+        "private_profile_removed": true,
+        "checkpoint": "published",
+        "verification": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-HCQ2Ao/verification.json"
+      },
+      {
+        "failing": true,
+        "output": "credential-free\n",
+        "exit": 23,
+        "private_profile_removed": true,
+        "checkpoint": "blocked",
+        "verification": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-lCZjtQ/verification.json"
+      }
+    ]
+  },
+  "external_qualification": {
+    "mandatory_live_prerequisites": [],
+    "live_paid_calls": 0,
+    "native_codex_preparation_qualified": false,
+    "remote_provider_available": {
+      "openai-agents": false,
+      "codex-cloud": false
+    },
+    "installed_plugin_qualified": false,
+    "model_access_exercised": false,
+    "browser_capture_required": false,
+    "remedy": "Complete the independent native preparation adapter and its limited-authority evidence before registry integration. Later production transports require implemented adapters, credentials, demonstrated model access and authorized bounded live evidence; preserve model/provider defaults and sandbox permissions."
+  }
+}

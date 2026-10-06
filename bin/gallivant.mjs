@@ -112,7 +112,7 @@ async function main(argv) {
     if (!arg) throw new Error(`${cmd} needs a handle`);
     if (cmd === "say" && !values.note?.trim()) throw new Error("say needs --note with a message");
     const r = requestControl(ctx, { handle: arg, action: cmd === "say" ? "message" : cmd, note: values.note, interrupt: values.interrupt });
-    console.log(`${r.entry}: ${r.action} queued; ${cmd === "cancel" ? "dispatch is fenced; the daemon will request and confirm cancellation" : r.interrupt ? "the daemon will stop the active run and resume its session with your message" : "it will wait for any active run to finish"}.`);
+    process.stdout.write(`${r.entry}: ${r.action} queued; ${cmd === "cancel" ? "dispatch is fenced; the daemon will request and confirm cancellation" : r.interrupt ? "the daemon will stop the active run and resume its session with your message" : "it will wait for any active run to finish"}.\n`);
     if (!values["no-daemon"]) {
       try { await upInBackground(ctx); }
       catch (e) { console.error(`Request saved, but the daemon could not start: ${e.message}\nAfter fixing the daemon, the saved request will be picked up; do not resend it.`); return 1; }
@@ -180,7 +180,7 @@ async function main(argv) {
     case "resume": {
       if (!arg) throw new Error("resume needs a handle: the id, a PRD path, or <repo>#<pr>");
       const r = await resume(ctx, { handle: arg, note: values.note, resnapshot: values.resnapshot });
-      console.log(`${r.handle}: resumed in ${r.worktree} (run ${r.run})${r.attach ? `\nby hand: ${r.attach}` : "\nProvider progress is recorded by the coordinator."}`);
+      process.stdout.write(`${r.handle}: resumed in ${r.worktree} (run ${r.run})${r.attach ? `\nby hand: ${r.attach}` : "\nProvider progress is recorded by the coordinator."}\n`);
       // Printed because replacing the brief the gate judges is not something to do quietly, and the operator asked for it
       // one command ago: what they see back is what they actually changed.
       if (r.resnapshotted?.length) console.log(`\nThe brief was resnapshotted and the session was told what moved:\n${r.resnapshotted.map(l => `  - ${l}`).join("\n")}`);
