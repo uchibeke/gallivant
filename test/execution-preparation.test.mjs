@@ -214,6 +214,26 @@ test("preparation usage projections redact resolved secrets as well as credentia
   assert.ok(!JSON.stringify(r).includes("opaque-fixture-credential")); assert.ok(!JSON.stringify(r).includes("private-value"));
 });
 
+test("preparation usage hides overlapping resolved credentials in either supplied order", async () => {
+  const short = "opaque-preparation", long = `${short}-hidden-suffix`;
+  for (const secrets of [[short, long], [long, short]]) {
+    const f = fixture("claude"), runner = fakeRunner(Date), launch = runner.start;
+    f.ctx.config.harness.claude = { ...CONFIG.harness.claude, bin: harnessBin(f.home, "claude") };
+    f.ctx.env = { HOME: f.home, PATH: process.env.PATH }; f.ctx.capabilitiesFor = capabilitiesFor;
+    f.ctx.executionFor = (id, provider) => makeExecution({ root: join(f.home, "local-runs"), taskId: id, provider, runner, secrets });
+    runner.start = (...args) => {
+      const job = launch(...args), data = JSON.parse(args[2].at(-1).split("INTAKE DATA (JSON):\n").at(-1));
+      const lines = claudeResultLines({ text: JSON.stringify(draftFor(data)) });
+      lines.push(JSON.stringify({ usage: { detail: `${long} / ${short}`, input_tokens: 7 } }));
+      runner.finish(lines, { exit: 0 }); return job;
+    };
+    const result = await f.service.prepare({ text: "Add CSV export.", harness: "claude" });
+    assert.equal(result.status, "ready", JSON.stringify(result.failures));
+    assert.deepEqual(result.preparation.attempts[0].usage, [{ detail: "[redacted] / [redacted]", input_tokens: 7 }]);
+    assert.doesNotMatch(JSON.stringify(result), /opaque-preparation|hidden-suffix/);
+  }
+});
+
 test("failed preparation retrieves diagnostics and usage before blocking readiness, including restart with missing results", async () => {
   const f = fixture("codex", { failed: true, missing: true });
   let r = await f.service.prepare({ text: "Add CSV export.", harness: "codex", requestId: "failed-preparation" });

@@ -6,6 +6,7 @@ import { EventEmitter } from "node:events";
 import { mkdirSync, readFileSync, writeFileSync, rmSync, renameSync, symlinkSync, cpSync, statSync, lstatSync, existsSync } from "node:fs";
 import { pathToFileURL } from "node:url";
 import { makeExecution, executionLive, assertExecutionDependency } from "../lib/execution.mjs";
+import { redact } from "../lib/execution_io.mjs";
 import { executionRegistry, adapters, buildRun } from "../lib/harness.mjs";
 import { makeProviderHealth } from "../lib/provider_health.mjs";
 import { makeRunner, LOCAL_OUTPUT_LIMITS } from "../lib/run.mjs";
@@ -391,6 +392,45 @@ test("normalized journal preserves provenance, provider ordering, redaction and 
   const text = readFileSync(join(dir, "events.jsonl"), "utf8") + readFileSync(join(dir, "job.log"), "utf8");
   assert.doesNotMatch(text, /custom-private-value|private-access-token|secret-value/);
   assert.match(text, /"version":1/); assert.match(text, /"provenance":"provider"/);
+});
+
+test("overlapping resolved secrets redact complete values in either order without changing input", () => {
+  for (const [short, long] of [["prefix", "prefix-suffix"], ["suffix", "prefix-suffix"], ["middle", "start-middle-end"], ["a.b$[]", "a.b$[]-tail"], ["clé", "clé🔑-tail"]]) {
+    for (const values of [[short, long], [long, short]]) {
+      const secrets = Object.freeze([...values, short, "", null, 7]);
+      const value = { messages: [`value <${long}>`, { detail: `${short} / ${long}`, token: "credential-shaped" }], count: 2, missing: null };
+      const original = structuredClone(value);
+      assert.deepEqual(redact(value, secrets), { messages: ["value <[redacted]>", { detail: "[redacted] / [redacted]", token: "[redacted]" }], count: 2, missing: null });
+      assert.deepEqual(value, original); assert.deepEqual(secrets, [...values, short, "", null, 7]);
+    }
+  }
+  const recognized = `ghp_${"a".repeat(16)}`;
+  assert.equal(redact(`Bearer opaque-access ${recognized} token=opaque-key`), "Bearer [redacted] [redacted] token=[redacted]");
+});
+
+test("overlapping secrets stay redacted in journal replay and local tracker history after restart", async t => {
+  const short = "opaque-overlap", long = `${short}-hidden-suffix`, output = `message <${long}> / ${short}`, expected = "message <[redacted]> / [redacted]", observations = [];
+  for (const secrets of [[short, long], [long, short]]) {
+    const dir = tempHome(), options = { taskId: "task", runId: "run", provider: "fixture", secrets };
+    const event = { eventId: "overlap-event", sequence: 1, type: "output", data: output };
+    journalFor(dir, options).append(event); journalFor(dir, options).append(event);
+    assert.equal(outputEvents(dir).length, 1); assert.equal(outputEvents(dir)[0].data, expected);
+    assert.deepEqual(logWindow(dir).lines, [expected]);
+    const local = localOutputFixture({ text: `${output}\n` });
+    writeJsonAtomic(join(local.dir, "sensitive-redactions.json"), { expiresAt: local.clock.now() + 86_400_000, secrets });
+    local.openRunner().observe(); local.openRunner().observe();
+    assert.equal(outputEvents(local.dir).length, 1); assert.equal(outputEvents(local.dir)[0].data, expected);
+    assert.deepEqual(sliceRun(local.dir, { end: 2 }).lines, [expected]);
+    assert.deepEqual(logWindow(local.dir, { after: 1 }).lines, []);
+    const res = new Subscriber(); streamRun(res, local.dir, { isRunning: () => false });
+    assert.ok(res.frames.some(frame => frame.includes(expected))); assert.equal(res.ended, true);
+    assert.equal(res.listenerCount("drain"), 0);
+    assert.doesNotMatch(res.frames.join(""), /opaque-overlap|hidden-suffix/);
+    assert.equal(readFileSync(join(local.dir, "provider.log"), "utf8"), `${output}\n`, "private diagnostics keep original bytes");
+    observations.push({ journal: dir, local: local.dir, expected, journalRecords: outputEvents(dir).length, localRecords: outputEvents(local.dir).length, replayIds: logWindow(local.dir).ids, sseClosed: res.ended });
+  }
+  const path = join(tempHome(), "overlap-journal-evidence.json"); writeJsonAtomic(path, { observations });
+  t.diagnostic(`overlap journal evidence: ${path}`);
 });
 
 function largeLog() {
@@ -1034,6 +1074,49 @@ test("private artifact payloads and paths stay out of result projections and ver
     assert.equal(f.provider.calls.length, before);
     writeJsonAtomic(join(f.dir, "result-public-fixture.json"), view);
   }
+});
+
+test("overlapping collection and environment secrets remain private through verification, tracker and restart", async t => {
+  const short = "opaque-collect-overlap", long = `${short}-hidden-suffix`, envKey = "EXECUTION_OVERLAP_TEST_TOKEN", savedEnv = process.env[envKey], observations = [];
+  try {
+    for (const failing of [false, true]) for (const envSecret of [short, long]) {
+      process.env[envKey] = envSecret;
+      const f = await collectedArtifactFixture([short, long]), output = `<${long}> / ${short}`, expected = "<[redacted]> / [redacted]";
+      const text = `export const sample = "${long}";\n`, path = `${long}.mjs`;
+      f.result.files = [{ path, beforeHash: null, afterHash: sha(text), text }];
+      f.result.outcome.lastMessage = output; f.result.lines = [output]; f.result.usage = { detail: output };
+      const original = structuredClone(f.result.files), result = await f.collect();
+      assert.deepEqual(result.files, original); assert.equal(result.files[0].afterHash, sha(text));
+      assert.equal(result.outcome.lastMessage, expected); assert.deepEqual(result.lines, [expected]);
+      assert.deepEqual(result.usage, { detail: expected }); assert.equal(result.artifacts[0].path, "[redacted].mjs");
+      assert.deepEqual(await f.reopen().collect(), result); assert.equal(f.provider.calls.filter(c => c[0] === "collect").length, 1);
+      const verify = async () => { f.calls.push("verify"); if (failing) throw Object.assign(new Error("synthetic Verify failure"), { code: 2, stdout: output }); return { stdout: output, stderr: "" }; };
+      if (failing) await assert.rejects(reconcileExecutionResult(f.ctx, { ...f, result, verify }), /verification failed/);
+      else await reconcileExecutionResult(f.ctx, { ...f, result, verify });
+      const verification = readJson(join(f.dir, "verification.json"));
+      assert.equal(verification.evidence[0].output, expected); assert.equal(verification.evidence[0].exit, failing ? 2 : 0);
+      assert.equal(readFileSync(join(f.entry.worktree, path), "utf8"), text);
+      assert.deepEqual(f.reopen().outcome(f.job.id).lastMessage, expected);
+      const state = makeState(f.ctx.home); state.put(f.id, f.entry);
+      const before = f.provider.calls.length, response = { writeHead(code) { this.code = code; }, end(body) { this.body = body; } };
+      routes["GET /api/run/result"]({ ...f.ctx, state }, {}, response, new URL(`http://localhost/api/run/result?id=${f.id}&run=${f.job.id}`));
+      assert.equal(response.code, 200); assert.doesNotMatch(response.body, /opaque-collect-overlap|hidden-suffix/);
+      const view = JSON.parse(response.body); assert.equal(view.verification.evidence[0].output, expected);
+      assert.deepEqual(view.artifacts, result.artifacts); assert.equal(Object.hasOwn(view, "files"), false);
+      assert.equal(f.provider.calls.length, before); assert.equal(f.calls.includes("PR"), !failing);
+      const viewPath = join(f.dir, "overlap-public-result.json"); writeJsonAtomic(viewPath, view);
+      observations.push({ dir: f.dir, artifact: join(f.entry.worktree, path), publicResult: viewPath, expected, exit: verification.evidence[0].exit, published: !failing, collectCalls: 1 });
+    }
+    // The fallback with no execution boundary must also sort environment values.
+    const f = resultFixture(), secondKey = "EXECUTION_OVERLAP_TEST_API_TOKEN", savedSecond = process.env[secondKey];
+    try {
+      process.env[envKey] = short; process.env[secondKey] = long;
+      await reconcileExecutionResult(f.ctx, { ...f, verify: async () => ({ stdout: `<${long}> / ${short}` }) });
+      assert.equal(readJson(join(f.dir, "verification.json")).evidence[0].output, "<[redacted]> / [redacted]");
+    } finally { if (savedSecond === undefined) delete process.env[secondKey]; else process.env[secondKey] = savedSecond; }
+  } finally { if (savedEnv === undefined) delete process.env[envKey]; else process.env[envKey] = savedEnv; }
+  const path = join(tempHome(), "overlap-result-evidence.json"); writeJsonAtomic(path, { observations });
+  t.diagnostic(`overlap result evidence: ${path}`);
 });
 
 test("result publication validates ownership/paths/input head and records real verification", async () => {

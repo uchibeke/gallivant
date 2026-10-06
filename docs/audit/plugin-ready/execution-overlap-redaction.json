@@ -1,0 +1,241 @@
+{
+  "version": 1,
+  "task_id": "task-df42674c6251c85b0edef13f",
+  "scope": "offline overlapping resolved-secret redaction review correction",
+  "recorded_at": "2026-10-06T07:09:26.146813+00:00",
+  "source_parent_revision": "02f32098770c7fc2e2f479fc629dc0c7c1305795",
+  "review_comment_ids": [
+    4192371521
+  ],
+  "prior_evidence": [
+    "docs/audit/plugin-ready/execution-foundation.json",
+    "docs/audit/plugin-ready/execution-artifacts.json",
+    "docs/audit/plugin-ready/execution-tracked-aliases.json"
+  ],
+  "commands": [
+    {
+      "command": "npm test",
+      "exit": 0,
+      "raw_log": "/tmp/execution-overlap-final-tests.txt",
+      "sha256": "82bdb660228615ca906433607a000150a0f853b2c11b3b78e6c08806684bf107",
+      "tests": 1029,
+      "passed": 1029
+    },
+    {
+      "command": "npm run lint",
+      "exit": 0,
+      "raw_log": "/tmp/execution-overlap-final-lint.txt",
+      "sha256": "8c7790de3f018fb4580f18ac70e1b355a0f76f522dd73acbdaa63632feffcecc"
+    },
+    {
+      "command": "npm run test:execution-backends",
+      "exit": 0,
+      "raw_log": "/tmp/execution-overlap-final-backends.txt",
+      "sha256": "a2a794b6653960a599190259e81701f16a35f575ce73904d911795625b12c7ad",
+      "tests": 329,
+      "passed": 329
+    },
+    {
+      "command": "git diff --check",
+      "exit": 0,
+      "raw_log": "/tmp/execution-overlap-final-diff.txt",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    }
+  ],
+  "initial_verification": {
+    "command": "npm test",
+    "exit": 1,
+    "raw_log": "/tmp/execution-overlap-tests.txt",
+    "sha256": "d4089facdf17fe1185cbb6800702bbe1c98efd64306ccf1b39e3a6c4b9558928",
+    "tests": 1029,
+    "passed": 1028,
+    "failed": 1,
+    "regression": "no fixture, config or template in the tree carries anything token-shaped",
+    "correction": "Construct the synthetic recognized credential at runtime rather than committing token-shaped fixture text; preserve the credential scanner."
+  },
+  "artifact_hashes": {
+    "lib/execution_io.mjs": "f4373eede53073be881d642a427892878dec400fadd59d34ebb9af4f1a52668a",
+    "lib/execution.mjs": "e3ae49a558b98964e8ff6ccdddede4ed4ed802e188f226ced01baae958cb44a3",
+    "lib/execution_result.mjs": "73a20ff906a2fc14dd099ef1b61a928298cf69382e976ab54d02895897c21ea2",
+    "test/execution-backends.test.mjs": "cdd57f845cfea0fff04d274cd6860a557572984c7c3563255f6183cc70fd2801",
+    "test/execution-preparation.test.mjs": "363d4d89fb29b22ef5dfbdfb3889e583ef6b92eab8e4d498b0ec9ef1059c08e4",
+    "docs/execution.md": "165959ebe02134e86e5008e55aa275ea95e286221b60515f92793916403bae3d"
+  },
+  "focused_checks": [
+    {
+      "raw_log": "/tmp/execution-overlap-final-focus.txt",
+      "sha256": "e43a68c03d5af3a387becf477f615949f2316f58f8f651d7918950129a3268a7",
+      "tests": 12,
+      "passed": 12
+    }
+  ],
+  "source_and_output_review": [
+    {
+      "rule": "Redact complete supplied credentials before journal, public projection or verification evidence persistence; private publication artifact bytes retain their provider hashes.",
+      "files": [
+        "lib/execution_io.mjs",
+        "lib/execution.mjs",
+        "lib/execution_result.mjs",
+        "lib/execution_journal.mjs",
+        "lib/run.mjs",
+        "lib/run_log.mjs",
+        "lib/task_prepare.mjs",
+        "lib/commands/serve.mjs",
+        "lib/tracker/stream.mjs"
+      ],
+      "boundaries_checked": [
+        "longest-first literal values without mutating caller arrays or nested input",
+        "prefix, suffix, internal substring, Unicode and regexp-literal values in either order",
+        "empty, duplicate and non-string entries preserve existing filtering semantics",
+        "recognized bearer/credential values and credential-shaped keys remain redacted",
+        "journals, saved local redaction lists, replay, paginated history and terminal SSE cleanup",
+        "merge coordinator environment, boundary and saved run secret lists before verification redaction",
+        "success and failed Verify evidence, fallback without an execution boundary, and environment cleanup",
+        "collection/cache replay, outcome, usage, artifact summaries and read-only tracker result route",
+        "private artifact payloads and content hashes remain intact through publication",
+        "preparation usage uses the same selected execution sanitizer with unchanged limited authority",
+        "provider/model defaults, process policy, ownership and lifecycle schema remain unchanged"
+      ],
+      "regressions": [
+        "overlapping resolved secrets redact complete values in either order without changing input",
+        "overlapping secrets stay redacted in journal replay and local tracker history after restart",
+        "overlapping collection and environment secrets remain private through verification, tracker and restart",
+        "preparation usage hides overlapping resolved credentials in either supplied order"
+      ]
+    }
+  ],
+  "representative_output": {
+    "evidence_kind": "Generated offline synthetic credential fixtures with native persisted journals, projections, result and evidence files; no live provider or installed-host qualification.",
+    "reports": [
+      {
+        "label": "journal",
+        "report_path": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-Z26bG0/overlap-journal-evidence.json",
+        "report_sha256": "93f21faee039bc8fb9986355f038219490c8bc37569897a1ead08d9453b26310",
+        "observations": [
+          {
+            "journal": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-N2f8dx",
+            "local": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-bpC4uo/old-run",
+            "expected": "message <[redacted]> / [redacted]",
+            "journalRecords": 1,
+            "localRecords": 1,
+            "replayIds": [
+              1
+            ],
+            "sseClosed": true,
+            "files_sha256": {
+              "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-N2f8dx/events.jsonl": "7ef00333cf659613277a23974f23d30e0043cbbc36c11172eb00d3399fdf7466",
+              "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-N2f8dx/job.log": "80ba0023c29d69f8e6a1798b55681392bedde2d36fd05768952a1f4463009f43",
+              "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-N2f8dx/job.idx": "7c9fa136d4413fa6173637e883b6998d32e1d675f88cddff9dcbcf331820f4b8",
+              "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-bpC4uo/old-run/events.jsonl": "25af5cfe1b73869bb35ee09cd7d76fa549465728fc140a4c7af8e873f893912c",
+              "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-bpC4uo/old-run/job.log": "80ba0023c29d69f8e6a1798b55681392bedde2d36fd05768952a1f4463009f43",
+              "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-bpC4uo/old-run/job.idx": "7c9fa136d4413fa6173637e883b6998d32e1d675f88cddff9dcbcf331820f4b8"
+            }
+          },
+          {
+            "journal": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-eGNoNd",
+            "local": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-dC9Xlw/old-run",
+            "expected": "message <[redacted]> / [redacted]",
+            "journalRecords": 1,
+            "localRecords": 1,
+            "replayIds": [
+              1
+            ],
+            "sseClosed": true,
+            "files_sha256": {
+              "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-eGNoNd/events.jsonl": "e35dbf41aa5940aafa43346abc8b4928033cb0228cdbfc500914c4704d66fbc2",
+              "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-eGNoNd/job.log": "80ba0023c29d69f8e6a1798b55681392bedde2d36fd05768952a1f4463009f43",
+              "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-eGNoNd/job.idx": "7c9fa136d4413fa6173637e883b6998d32e1d675f88cddff9dcbcf331820f4b8",
+              "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-dC9Xlw/old-run/events.jsonl": "25af5cfe1b73869bb35ee09cd7d76fa549465728fc140a4c7af8e873f893912c",
+              "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-dC9Xlw/old-run/job.log": "80ba0023c29d69f8e6a1798b55681392bedde2d36fd05768952a1f4463009f43",
+              "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-dC9Xlw/old-run/job.idx": "7c9fa136d4413fa6173637e883b6998d32e1d675f88cddff9dcbcf331820f4b8"
+            }
+          }
+        ]
+      },
+      {
+        "label": "result",
+        "report_path": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-Pq4tNv/overlap-result-evidence.json",
+        "report_sha256": "84ff3b8dd8eacf69523ab508f0467a02a02f304ce06f146c4ebe649935230a21",
+        "observations": [
+          {
+            "dir": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-XD38yT/runs/acme__widget__result/run-265ef805-694e-4b70-8c76-09d410086d0d",
+            "artifact": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-M3jwgb/opaque-collect-overlap-hidden-suffix.mjs",
+            "publicResult": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-XD38yT/runs/acme__widget__result/run-265ef805-694e-4b70-8c76-09d410086d0d/overlap-public-result.json",
+            "expected": "<[redacted]> / [redacted]",
+            "exit": 0,
+            "published": true,
+            "collectCalls": 1,
+            "files_sha256": {
+              "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-XD38yT/runs/acme__widget__result/run-265ef805-694e-4b70-8c76-09d410086d0d/result.json": "bd59655e156ea264f09c15533e03d7fe65a640fdb50ef56e1387cc85a98dc5de",
+              "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-XD38yT/runs/acme__widget__result/run-265ef805-694e-4b70-8c76-09d410086d0d/verification.json": "e5d71e7c9a47426b6bd140d353b470ff2f14706f198f53c3433d25c6e637537a",
+              "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-XD38yT/runs/acme__widget__result/run-265ef805-694e-4b70-8c76-09d410086d0d/result-application.json": "f8c5c41e4ac9d55c3e9b62b69000e43da4dab60d3aac16c4caf3f808bc2c2fc9",
+              "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-XD38yT/runs/acme__widget__result/run-265ef805-694e-4b70-8c76-09d410086d0d/overlap-public-result.json": "572e7fab022316c6bfea89c52543f62e835bb1fa585e520afa9c8ea6be12e8fa",
+              "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-M3jwgb/opaque-collect-overlap-hidden-suffix.mjs": "fd4fad150bbe42e071610fbe3e586d51059a173f1f3c71e54c00d1cdc37815f2"
+            }
+          },
+          {
+            "dir": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-tzLqJH/runs/acme__widget__result/run-251206a5-a5b0-43d7-af41-fd875afbe633",
+            "artifact": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-6Pylat/opaque-collect-overlap-hidden-suffix.mjs",
+            "publicResult": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-tzLqJH/runs/acme__widget__result/run-251206a5-a5b0-43d7-af41-fd875afbe633/overlap-public-result.json",
+            "expected": "<[redacted]> / [redacted]",
+            "exit": 0,
+            "published": true,
+            "collectCalls": 1,
+            "files_sha256": {
+              "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-tzLqJH/runs/acme__widget__result/run-251206a5-a5b0-43d7-af41-fd875afbe633/result.json": "1198f0d97493d3feea508e3bb74a2ed916088850d3dcba4308b6186c04cbeea2",
+              "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-tzLqJH/runs/acme__widget__result/run-251206a5-a5b0-43d7-af41-fd875afbe633/verification.json": "1cec6ef20e6a08d56712339c98bf5a9b56d10af284b8d510ef7d06712d320336",
+              "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-tzLqJH/runs/acme__widget__result/run-251206a5-a5b0-43d7-af41-fd875afbe633/result-application.json": "b1d4be289d1e50b67adea8d04914807cc35509d779f812521fbae7f568572ed6",
+              "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-tzLqJH/runs/acme__widget__result/run-251206a5-a5b0-43d7-af41-fd875afbe633/overlap-public-result.json": "3cd5f55a58bc4431b584853e7bbc12397729cc228368224828262cb33819ac61",
+              "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-6Pylat/opaque-collect-overlap-hidden-suffix.mjs": "fd4fad150bbe42e071610fbe3e586d51059a173f1f3c71e54c00d1cdc37815f2"
+            }
+          },
+          {
+            "dir": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-pzZC9u/runs/acme__widget__result/run-8cc532b4-e188-4f82-90e3-3024599e30d6",
+            "artifact": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-O7NVzh/opaque-collect-overlap-hidden-suffix.mjs",
+            "publicResult": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-pzZC9u/runs/acme__widget__result/run-8cc532b4-e188-4f82-90e3-3024599e30d6/overlap-public-result.json",
+            "expected": "<[redacted]> / [redacted]",
+            "exit": 2,
+            "published": false,
+            "collectCalls": 1,
+            "files_sha256": {
+              "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-pzZC9u/runs/acme__widget__result/run-8cc532b4-e188-4f82-90e3-3024599e30d6/result.json": "f2152da3e693c4fc3dedd34dc17fbbd7de4e4c9d644963643019cd29f10443a3",
+              "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-pzZC9u/runs/acme__widget__result/run-8cc532b4-e188-4f82-90e3-3024599e30d6/verification.json": "189a9e7349fc29d23803b204ffbf835f4911bab497cbf14448bb977aa51ac02a",
+              "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-pzZC9u/runs/acme__widget__result/run-8cc532b4-e188-4f82-90e3-3024599e30d6/result-application.json": "6551c729b20316e084aee0a97d6290a0d5b7a52798b559fd4b03a9b2434461d5",
+              "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-pzZC9u/runs/acme__widget__result/run-8cc532b4-e188-4f82-90e3-3024599e30d6/overlap-public-result.json": "56941a77f99ab444e5aac33b503de42ec6196d04985b47bd052ee32c924960f2",
+              "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-O7NVzh/opaque-collect-overlap-hidden-suffix.mjs": "fd4fad150bbe42e071610fbe3e586d51059a173f1f3c71e54c00d1cdc37815f2"
+            }
+          },
+          {
+            "dir": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-H8QnNd/runs/acme__widget__result/run-9a868c71-6189-4474-bd6e-3f0bae5d5c1d",
+            "artifact": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-CbRfdd/opaque-collect-overlap-hidden-suffix.mjs",
+            "publicResult": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-H8QnNd/runs/acme__widget__result/run-9a868c71-6189-4474-bd6e-3f0bae5d5c1d/overlap-public-result.json",
+            "expected": "<[redacted]> / [redacted]",
+            "exit": 2,
+            "published": false,
+            "collectCalls": 1,
+            "files_sha256": {
+              "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-H8QnNd/runs/acme__widget__result/run-9a868c71-6189-4474-bd6e-3f0bae5d5c1d/result.json": "e78fc2366ff3da5052c33dac5b0a25757befd323a723ccfe5922f9ab72911b5e",
+              "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-H8QnNd/runs/acme__widget__result/run-9a868c71-6189-4474-bd6e-3f0bae5d5c1d/verification.json": "ee34cdca858541b0a41dd0180e9dafd2c2b55dc29eac78b92d1718ffeb1be9c8",
+              "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-H8QnNd/runs/acme__widget__result/run-9a868c71-6189-4474-bd6e-3f0bae5d5c1d/result-application.json": "fdd4b684a3665e9afeda5ae8674dea2307e4f47868ffd96c08c49760cdf9b1fe",
+              "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-H8QnNd/runs/acme__widget__result/run-9a868c71-6189-4474-bd6e-3f0bae5d5c1d/overlap-public-result.json": "dd67bbfc08efceff657dac7bd1e229066be2c749a1ee09b41cf587f0967a2d15",
+              "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-CbRfdd/opaque-collect-overlap-hidden-suffix.mjs": "fd4fad150bbe42e071610fbe3e586d51059a173f1f3c71e54c00d1cdc37815f2"
+            }
+          }
+        ]
+      }
+    ]
+  },
+  "external_qualification": {
+    "mandatory_live_prerequisites": [],
+    "live_paid_calls": 0,
+    "native_codex_preparation_qualified": false,
+    "remote_provider_available": {
+      "openai-agents": false,
+      "codex-cloud": false
+    },
+    "installed_plugin_qualified": false,
+    "model_access_exercised": false,
+    "browser_capture_required": false,
+    "remedy": "Complete the independent native preparation adapter and its limited-authority evidence before registry integration. Later production transports require implemented adapters, credentials, demonstrated model access and authorized bounded live evidence; preserve model/provider defaults and sandbox permissions."
+  }
+}

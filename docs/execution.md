@@ -262,9 +262,14 @@ monotonic. Replay keys survive restart and projection retention. Rotation,
 truncation, missing indexes, oversized records and unrecoverable interrupted
 history produce explicit gaps rather than renumbering replay IDs or inventing
 output. Redaction occurs before journals, public projections and saved evidence,
-using recognized credentials and supplied resolved secret values. Artifact paths,
-hashes and text retain the provider's exact bytes in the private result; diagnostic
-redaction never rewrites publication input. The coordinator still checks original
+using recognized credentials and supplied resolved secret values.
+Overlapping supplied values are replaced longest first without changing the
+caller's secret list, so environment order cannot expose a credential suffix.
+Verification merges coordinator environment and execution/run secrets in one
+redaction pass via `sanitize(value, runId, extraSecrets = [])`; existing callers
+can omit the extra list.
+Artifact paths, hashes and text retain the provider's exact bytes in the private
+result. Diagnostic redaction never rewrites publication input. The coordinator still checks original
 hashes and ownership before application. Modified/truncated content cannot publish.
 The additive version 1 `artifacts` field is a redacted path/hash summary generated
 by collection, overriding any provider-supplied summary. Tracker result responses
