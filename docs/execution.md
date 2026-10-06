@@ -359,6 +359,18 @@ capability and exact session ownership.
 Cancelled/timed-out work cannot overlap a replacement; late results are
 quarantined. A requested deadline abort leaves unknown acceptance unresolved.
 
+A local implementation `timeout` fences dispatch while its owned process tree
+is stopping. Cancellation or restart reconciliation releases only this timeout
+fence after the exact matching local run is confirmed non-live; missing/different
+runs, surviving descendants and unreadable process state keep it fenced. The
+timed-out run remains collected and quarantined, so late success or a saved
+result cannot rewrite settlement or qualify publication. The canonical timeout
+stop and stranded-work diagnostics remain on the entry; explicit `resume` can
+then continue the same session in its existing branch/worktree. This also repairs
+older local timeout fences on reconciliation. Operator cancellation, preparation
+allowance stops and remote timeout fences remain in force. A later timeout retry
+cannot replace an operator or preparation stop with a recoverable timeout.
+
 Remote dispatch requires a positive reservation and positive finite remaining
 allowance. Reservations accumulate durably, including unknown usage; they are not
 released on missing cost. Accounting charges the greater of each reservation and

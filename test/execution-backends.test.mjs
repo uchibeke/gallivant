@@ -22,7 +22,7 @@ import { acquireProcessLock } from "../lib/daemon.mjs";
 import { makeGit } from "../lib/git.mjs";
 import { execFileAsync } from "../lib/gh.mjs";
 import { requestControl, applyControl } from "../lib/control.mjs";
-import { tempHome, makeClock, CONFIG, T0, fakeGh, fakeNotify, silentLog, fakeGit, fakeCredential, fakeIdentity, fakeRunner, prFixture, comment } from "./helpers.mjs";
+import { tempHome, makeClock, CONFIG, T0, fakeGh, fakeNotify, silentLog, fakeGit, fakeCredential, fakeIdentity, fakeRunner, prFixture, comment, harnessBin, GOOD_PRD, codexLines } from "./helpers.mjs";
 const allowance = { remainingUsd: 1, reservedUsd: 0.1 };
 const input = { operationId: "first", inputHead: "a".repeat(40), allowance };
 const sha = text => createHash("sha256").update(text).digest("hex");
@@ -541,6 +541,213 @@ test("local cancellation and reconciliation cannot confirm a missing or differen
     assert.deepEqual(await service.cancel(), { confirmed: false });
     assert.equal(service.current().execution.quarantined, undefined);
   }
+});
+
+function localTimeoutFixture({ immediate = false } = {}) {
+  const home = tempHome(), root = join(home, "runs"), clock = makeClock(), id = "acme/widget/local-timeout";
+  const session = "22222222-2222-4222-8222-222222222222", runner = fakeRunner(clock), stops = [];
+  let descendants = true, inspectable = true;
+  const current = runner.current, start = runner.start, kill = runner.kill;
+  const persist = () => {
+    const job = current();
+    if (!job) return;
+    const { running: _running, lines: _lines, ...record } = job;
+    mkdirSync(join(root, job.id), { recursive: true });
+    writeJsonAtomic(join(root, job.id, "job.json"), record);
+    writeFileSync(join(root, "latest-run"), job.id);
+  };
+  runner.current = () => {
+    const job = current();
+    return job?.killed ? { ...job, running: !inspectable || descendants } : job;
+  };
+  runner.start = (name, cmd, args, options) => {
+    assert.equal(runner.current()?.running || false, false, "no local writer overlap");
+    start(name, cmd, args, options);
+    runner.started.at(-1).id = options.runId || current().id;
+    persist(); return current();
+  };
+  runner.kill = runId => {
+    if (!inspectable) throw Object.assign(new Error("process inspection unavailable"), { code: "RUN_STOP_UNVERIFIED" });
+    stops.push(runId); kill(runId);
+    if (immediate) descendants = false;
+    persist();
+  };
+  runner.annotate = (runId, patch) => { const job = runner.started.find(r => r.id === runId); if (job) Object.assign(job, patch); persist(); };
+  const open = () => makeExecution({ root, taskId: id, provider: "codex", runner, clock, legacySessionId: session });
+  return { home, root, clock, id, session, runner, stops, open, setDescendants: value => { descendants = value; }, setInspectable: value => { inspectable = value; } };
+}
+
+test("local timeout recovery preserves stranded work and explicitly resumes one owned session after shutdown", async t => {
+  const evidence = [];
+  for (const mode of ["owned", "legacy", "immediate", "restart"]) {
+    const f = localTimeoutFixture({ immediate: mode === "immediate" }), execution = f.open(), state = makeState(f.home), wt = join(f.home, "wt");
+    mkdirSync(wt); writeFileSync(join(wt, "partial.txt"), "unfinished implementation\n");
+    writeFileSync(join(wt, "carried.txt"), "owner instructions\n");
+    const spec = { cmd: "offline-cli-fixture", args: [], options: { cwd: wt } };
+    const run = mode === "legacy" ? f.runner.start("implementation", spec.cmd, spec.args, spec.options)
+      : await execution.submit({ operationId: "implementation", name: "implementation", sessionId: f.session, spec });
+    state.put(f.id, { ...newEntry({ repo: "acme/widget", harness: "codex", session: f.session, branch: "work/local-timeout", worktree: wt, state: STATES.running, nowIso: T0 }), last: { run: run.id, exit: null } });
+    const git = fakeGit(); let merges = 0;
+    git.dirty = async () => ({ modified: 1, untracked: 1 }); git.unpushed = async () => [{ sha: "unpublished-commit", subject: "Preserved implementation" }];
+    git.mergeBase = async () => { merges++; assert.fail("stranded changes cannot be merged over"); };
+    const ctx = { home: f.home, config: { ...CONFIG, run_timeout_minutes: 1, harness: { ...CONFIG.harness, codex: { bin: harnessBin(f.home, "codex") } } },
+      state, clock: f.clock, gh: fakeGh(), notify: fakeNotify(), git, credential: fakeCredential(), identity: fakeIdentity(), log: silentLog, ownLogin: "me",
+      readPrd: () => GOOD_PRD, executionFor: () => f.open() };
+    f.clock.advance(2);
+    // Reproduce the already-persisted timeout fence left by the earlier package.
+    if (mode === "restart") {
+      await execution.cancel("timeout");
+      state.update(f.id, { state: STATES.needsHuman, reason: "timeout", last: { run: run.id, exit: 137 }, timeout: { limit: 1, source: "config", ran_minutes: 2, unpushed: 1, modified: 1, untracked: 1 } });
+    } else await makeTick(ctx).tickEntry(f.id, state.get(f.id));
+    const stopped = f.open(), entry = state.get(f.id);
+    assert.equal(entry.state, STATES.needsHuman); assert.equal(entry.reason, "timeout");
+    assert.deepEqual([entry.timeout.unpushed, entry.timeout.modified, entry.timeout.untracked], [1, 1, 1]);
+    assert.equal(f.runner.started.length, 1);
+    if (mode !== "immediate") {
+      assert.equal(stopped.state().stopped, "timeout");
+      await assert.rejects(resume(ctx, { handle: f.id }), /already has a run in flight/);
+      await assert.rejects(stopped.continue({ operationId: "overlap", sessionId: f.session, spec }), { code: "EXECUTION_STOPPED" });
+      f.setDescendants(false); await makeTick(ctx).tickEntry(f.id, state.get(f.id));
+    }
+    const ready = f.open();
+    assert.equal(ready.state().stopped, null); assert.equal(ready.current().running, false);
+    assert.equal(ready.current().execution.providerState, "cancelled"); assert.equal(ready.current().execution.quarantined, true);
+    assert.equal(state.get(f.id).reason, "timeout"); assert.equal(state.get(f.id).last.exit, 137);
+    const before = ready.state(), oldDir = ready.dirOf(run.id);
+    // A late success and an older result cache cannot erase the timed-out outcome.
+    f.runner.started[0].lines.push(...codexLines());
+    writeJsonAtomic(join(oldDir, "result.json"), { outcome: { finished: true, ok: true, cost: null }, sessionId: f.session });
+    const saved = readFileSync(join(oldDir, "result.json"), "utf8");
+    await assert.rejects(ready.collect(), { code: "EXECUTION_QUARANTINED" });
+    ready.settle(run.id, () => 0); await ready.reconcile();
+    assert.equal(ready.current().execution.providerState, "cancelled"); assert.equal(ready.current().exit, 137);
+    assert.equal(readFileSync(join(oldDir, "result.json"), "utf8"), saved);
+    const resumed = await resume(ctx, { handle: f.id, note: "Preserve the partial changes and unpushed commit." });
+    assert.equal(resumed.session, f.session); assert.notEqual(resumed.run, run.id); assert.equal(f.runner.started.length, 2);
+    const next = f.runner.started[1];
+    assert.equal(next.opts.cwd, wt); assert.ok(next.args.includes(f.session));
+    assert.ok(next.args.includes('sandbox_mode="workspace-write"'));
+    assert.match(next.args.at(-1), /1 modified and 1 untracked/); assert.match(next.args.at(-1), /1 commit on this branch is already made and NOT yet pushed/);
+    assert.match(next.args.at(-1), /unpublished-commit Preserved implementation/);
+    assert.equal(merges, 0); assert.equal(state.get(f.id).branch, "work/local-timeout");
+    assert.equal(readFileSync(join(wt, "partial.txt"), "utf8"), "unfinished implementation\n");
+    assert.equal(readFileSync(join(wt, "carried.txt"), "utf8"), "owner instructions\n");
+    assert.equal(state.get(f.id).timeout, null); assert.equal(state.get(f.id).last.run, resumed.run);
+    const after = f.open().state(); assert.equal(after.stopped, null); assert.equal(after.current.execution.sessionId, f.session);
+    if (mode !== "legacy") assert.equal(Object.keys(before.operations).length, 1);
+    else assert.deepEqual(before.operations, {});
+    assert.equal(Object.keys(after.operations).length, mode === "legacy" ? 1 : 2);
+    evidence.push({ mode, taskId: f.id, oldRun: run.id, resumedRun: resumed.run, session: resumed.session, timeout: entry.timeout,
+      stopped: before.stopped, quarantine: before.current.execution.quarantined, oldCost: before.current.execution.costUsd, resumedState: state.get(f.id).state,
+      starts: f.runner.started.length, stops: f.stops, files: { execution: join(f.root, "execution.json"), registry: state.file, oldJob: join(oldDir, "job.json"), oldResult: join(oldDir, "result.json"), partial: join(wt, "partial.txt"), carried: join(wt, "carried.txt") } });
+  }
+  const file = join(tempHome(), "local-timeout-evidence.json"); writeJsonAtomic(file, { kind: "Offline local lifecycle and same-session resume fixtures", cases: evidence });
+  t.diagnostic(`local timeout evidence: ${file}`);
+});
+
+test("local timeout fences survive failed inspection, changed ownership and concurrent operator cancellation", async () => {
+  for (const mode of ["unreadable", "missing", "different", "operator"]) {
+    const f = legacyCancellationFixture(), service = f.open();
+    if (mode === "unreadable") f.setMembers(null);
+    if (mode === "unreadable") await assert.rejects(service.cancel("timeout"), { code: "RUN_STOP_UNVERIFIED" });
+    else await service.cancel("timeout");
+    if (mode === "operator") { await service.cancel(); await service.cancel("timeout"); }
+    if (mode === "missing" || mode === "different") {
+      if (mode === "different") { mkdirSync(join(f.root, "other")); writeJsonAtomic(join(f.root, "other", "job.json"), { id: "other", exit: 0 }); }
+      writeFileSync(join(f.root, "latest-run"), mode === "different" ? "other" : "missing");
+    }
+    if (mode === "operator") f.setMembers([]);
+    const before = service.state(), restarted = f.open();
+    for (let i = 0; i < 3; i++) restarted.inspect();
+    assert.deepEqual(restarted.state(), before, "read-only clients cannot clear a timeout fence");
+    await restarted.reconcile();
+    assert.equal(restarted.state().stopped, mode === "operator" ? "operator-cancelled" : "timeout");
+    await assert.rejects(restarted.continue({ ...input, operationId: "after-timeout", sessionId: f.session, spec: {} }), { code: "EXECUTION_STOPPED" });
+    if (mode === "operator") {
+      assert.equal(restarted.current().execution.quarantined, true);
+      await restarted.cancel("timeout"); assert.equal(restarted.state().stopped, "operator-cancelled");
+    }
+    else assert.equal(restarted.current().execution.providerState, "cancellation-requested");
+  }
+});
+
+test("remote and preparation timeout fences remain permanent after authoritative shutdown", async () => {
+  const remoteFixture = remote(); await remoteFixture.service.submit(input); await remoteFixture.service.cancel("timeout");
+  await remoteFixture.reopen().reconcile({ force: true });
+  assert.equal(remoteFixture.service.state().stopped, "timeout");
+  await assert.rejects(remoteFixture.service.continue({ ...input, operationId: "resume", sessionId: "session-1" }), { code: "EXECUTION_STOPPED" });
+  for (const reason of ["preparation-timeout", "unsafe-preparation", "timeout"]) {
+    const f = legacyCancellationFixture(), service = f.open();
+    await service.cancel(reason);
+    const state = service.state(); state.current.execution.kind = "intake";
+    writeJsonAtomic(join(f.root, "execution.json"), state);
+    await service.cancel("timeout");
+    f.setMembers([]); await f.open().reconcile();
+    assert.equal(service.state().stopped, reason); assert.equal(service.current().execution.quarantined, true);
+    await assert.rejects(service.collect(), { code: "EXECUTION_QUARANTINED" });
+    await assert.rejects(service.submit({ ...input, operationId: "new-preparation", spec: {} }), { code: "EXECUTION_STOPPED" });
+  }
+});
+
+test("released local timeout quarantine preserves cancelled settlement when raw exit evidence is missing", async () => {
+  const f = legacyCancellationFixture(), service = f.open();
+  await service.cancel("timeout"); f.setMembers([]); await service.reconcile();
+  assert.equal(service.state().stopped, null); assert.equal(service.current().exit, 137);
+  const file = join(f.root, f.id, "job.json"), before = service.state().current;
+  writeJsonAtomic(file, { ...readJson(file), exit: null });
+  writeFileSync(join(f.root, f.id, "job.log"), codexLines().join("\n"));
+  const raw = readFileSync(file, "utf8"); let inferred = 0;
+  assert.equal(f.open().settle(f.id, () => { inferred++; return 0; }).exit, 137);
+  assert.equal(inferred, 0); assert.equal(readFileSync(file, "utf8"), raw);
+  await f.open().reconcile();
+  const after = f.open();
+  assert.equal(after.current().exit, 137); assert.equal(after.current().endedAt, before.endedAt);
+  assert.equal(after.current().execution.providerState, "cancelled"); assert.equal(after.current().execution.quarantined, true);
+  assert.equal(after.state().stopped, null); assert.equal(after.state().current.exit, 137);
+  assert.equal(readJson(join(f.root, f.id, "result.json")), null);
+  await assert.rejects(after.collect(), { code: "EXECUTION_QUARANTINED" });
+});
+
+test("native local timeout waits for detached tools before releasing the same-session continuation fence", async t => {
+  const root = tempHome(), cwd = tempHome(), marker = join(cwd, "tool-ready"), session = "22222222-2222-4222-8222-222222222222";
+  const child = `require('node:fs').writeFileSync(${JSON.stringify(marker)}, String(process.pid)); process.on('SIGTERM', () => {}); setInterval(() => {}, 1000);`;
+  const parent = `require('node:child_process').spawn(process.execPath, ['-e', ${JSON.stringify(child)}], {stdio: 'ignore', detached: true}); process.stdout.write(${JSON.stringify(codexLines({ thread: session }).slice(0, 1).join("\n") + "\n")}); setInterval(() => {}, 1000);`;
+  const runner = makeRunner(root), taskId = "acme/widget/native-timeout";
+  const open = () => makeExecution({ root, taskId, provider: "codex", runner: makeRunner(root) });
+  const execution = makeExecution({ root, taskId, provider: "codex", runner });
+  const old = await execution.submit({ operationId: "implementation", name: "implementation", sessionId: session, spec: { cmd: process.execPath, args: ["-e", parent], options: { cwd } } });
+  t.after(() => {
+    for (const pid of [old.pid, existsSync(marker) ? Number(readFileSync(marker, "utf8")) : 0].filter(Boolean)) {
+      try { process.kill(pid, "SIGKILL"); } catch { /* owned fixture already gone */ }
+    }
+  });
+  const until = async check => {
+    const end = Date.now() + 10_000;
+    while (!check()) { assert.ok(Date.now() < end, "owned native fixture did not reach the expected state"); await new Promise(resolve => setTimeout(resolve, 40)); }
+  };
+  await until(() => existsSync(marker));
+  assert.deepEqual(await execution.cancel("timeout"), { confirmed: false });
+  await new Promise(resolve => setTimeout(resolve, 100));
+  const restarted = open(); await restarted.reconcile();
+  assert.equal(restarted.state().stopped, "timeout"); assert.equal(restarted.current().running, true);
+  assert.equal(restarted.current().execution.providerState, "cancellation-requested");
+  const spec = { cmd: process.execPath, args: ["-e", `process.stdout.write(${JSON.stringify(codexLines({ thread: session }).join("\n") + "\n")})`], options: { cwd } };
+  await assert.rejects(restarted.continue({ operationId: "overlap", sessionId: session, spec }), { code: "EXECUTION_STOPPED" });
+  await runner.waitForKill(old.id); await until(() => !runner.current().running);
+  await restarted.reconcile();
+  const stopped = restarted.state();
+  assert.equal(stopped.stopped, null); assert.equal(stopped.current.execution.quarantined, true);
+  assert.equal(stopped.current.exit, 137); assert.equal(stopped.current.execution.costUsd, null);
+  await assert.rejects(restarted.collect(), { code: "EXECUTION_QUARANTINED" });
+  const next = await restarted.continue({ operationId: "resume", name: "resume", sessionId: session, spec });
+  assert.notEqual(next.id, old.id); assert.equal(next.execution.sessionId, session);
+  await until(() => restarted.read(next.id).exit !== null); await restarted.reconcile(); restarted.settle(next.id, () => 0);
+  assert.equal(restarted.outcome(next.id).ok, true); assert.equal(restarted.sessionFrom(next.id), session);
+  const file = join(cwd, "local-timeout-native-evidence.json");
+  writeJsonAtomic(file, { kind: "Native offline Node CLI/process-tree fixture with Codex-shaped events", taskId, oldRun: old.id, resumedRun: next.id,
+    session, stopped: stopped.stopped, quarantine: stopped.current.execution.quarantined, oldExit: stopped.current.exit, oldCost: stopped.current.execution.costUsd,
+    resumedOutcome: restarted.outcome(next.id), files: { execution: join(root, "execution.json"), oldJob: join(root, old.id, "job.json"), nextJob: join(root, next.id, "job.json"), result: join(root, next.id, "result.json") } });
+  t.diagnostic(`local timeout native evidence: ${file}`);
 });
 
 test("local Codex fixture uses existing adapter, journals output and survives launcher exit", async () => {
