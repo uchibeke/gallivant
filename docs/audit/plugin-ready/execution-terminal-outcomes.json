@@ -1,0 +1,295 @@
+{
+  "version": 1,
+  "task_id": "task-df42674c6251c85b0edef13f",
+  "scope": "offline authoritative terminal outcome review correction",
+  "recorded_at": "2026-10-06T06:07:26.043696+00:00",
+  "source_parent_revision": "7032c0b75c0691baf21e338d3d5a650c832d0f45",
+  "review_comment_ids": [
+    4191978072
+  ],
+  "prior_evidence": [
+    "docs/audit/plugin-ready/execution-foundation.json",
+    "docs/audit/plugin-ready/execution-failure.json",
+    "docs/audit/plugin-ready/execution-preparation.json",
+    "docs/audit/plugin-ready/execution-local-timeout.json"
+  ],
+  "commands": [
+    {
+      "command": "npm test",
+      "exit": 0,
+      "raw_log": "/tmp/execution-terminal-final-tests.txt",
+      "sha256": "7a3dd7272cffceeee83764f57756a8dd8e1a01c597258f65418c3dc3404e1164",
+      "tests": 1019,
+      "passed": 1019
+    },
+    {
+      "command": "npm run lint",
+      "exit": 0,
+      "raw_log": "/tmp/execution-terminal-final-lint.txt",
+      "sha256": "8c7790de3f018fb4580f18ac70e1b355a0f76f522dd73acbdaa63632feffcecc"
+    },
+    {
+      "command": "npm run test:execution-backends",
+      "exit": 0,
+      "raw_log": "/tmp/execution-terminal-final-backends.txt",
+      "sha256": "08d0ad5f62d7cfb49b6fdaf5e8bf5d6697c28a59e4e71313994c3f2f42f64314",
+      "tests": 319,
+      "passed": 319
+    },
+    {
+      "command": "git diff --check",
+      "exit": 0,
+      "raw_log": "/tmp/execution-terminal-final-diff.txt",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    }
+  ],
+  "artifact_hashes": {
+    "lib/execution.mjs": "fcb2954f847f31cb42dbb80de58924e2839a11132ef49258030878b11c3a4f36",
+    "lib/execution_io.mjs": "54eebd0495fa391293848428cff2d288570c93fadfce58e3a063ea660dc7431b",
+    "lib/execution_result.mjs": "eaa2ea2990f47f6d276e5fde3905a8f51147a2ef0654216a432468a3413e21ff",
+    "test/execution-backends.test.mjs": "2611974994fe99891d5955c6de126a24a23c55d6cfea2dbcdaa463437017b7c9",
+    "test/execution-preparation.test.mjs": "474c8eb65a1ae27a05c49d67033cd415ba18d6544a4af26b138d3141ae13e9f9",
+    "docs/execution.md": "dc8024bb324aceb2b29c2884f32c799642349683efc8d4e7af9364d885d36b38"
+  },
+  "focused_checks": [
+    {
+      "raw_log": "/tmp/execution-terminal-final-focus.txt",
+      "sha256": "77fcdbe2a2478b9b5710c67a41cb74aee722ee1655b190ced6042c6c9282792a",
+      "tests": 7,
+      "passed": 7
+    }
+  ],
+  "source_and_output_review": [
+    {
+      "rule": "An authoritative terminal root outcome cannot be replaced by a contradictory collected result, cache or later observation.",
+      "files": [
+        "lib/execution.mjs",
+        "lib/execution_io.mjs",
+        "lib/execution_result.mjs",
+        "lib/tick.mjs",
+        "lib/task_prepare.mjs"
+      ],
+      "boundaries_checked": [
+        "exact job/root/head/session ownership before outcome validation",
+        "fresh and cached result validation before private writes and application",
+        "matching failure diagnostics and success results",
+        "protocol error before event journaling or terminal replacement",
+        "unknown status, unchanged reservation and known spend",
+        "restart repair of pre-fix contradictory collected state with present and missing caches",
+        "unqualified legacy root observations cannot fence exact lookup recovery or qualify a cache",
+        "no continuation while results are unresolved",
+        "canonical polling with no settlement, files, verification, Git or PR operations",
+        "direct publication boundary and compatible legacy terminal observations",
+        "preparation remains pending without readiness, repairs or implementation dispatch",
+        "cancellation after a protocol error quarantines the already terminal root without provider stop I/O",
+        "local adapters and process controls unchanged",
+        "private caches and evidence are preserved"
+      ],
+      "regressions": [
+        "openai-agents fixture: contradictory terminal results stay unresolved through cache replay, polling and restart",
+        "codex-cloud fixture: contradictory terminal results stay unresolved through cache replay, polling and restart",
+        "pre-fix contradictory collected outcomes re-enter retrieval without trusting the cache or redispatching",
+        "incomplete legacy remote ownership cannot settle, reuse an acknowledgement or collect cached results",
+        "shared publication rejects terminal outcome contradictions before verification or file and GitHub mutation",
+        "cancellation after a contradictory terminal inspection quarantines the known completed root without a stop call",
+        "contradictory preparation results retain the authoritative outcome without readiness, repair or implementation dispatch"
+      ]
+    }
+  ],
+  "representative_output": {
+    "evidence_kind": "Generated offline provider fixtures; no live provider or model qualification.",
+    "raw_log": "/tmp/execution-terminal-final-backends.txt",
+    "tested_cases": 8,
+    "cases": [
+      {
+        "provider": "openai-agents",
+        "observed_terminal_state": "succeeded",
+        "result_source": "saved-cache",
+        "rejected_outcome_ok": false,
+        "pending": {
+          "runId": "run-2582c544-b11c-4efb-acf6-c395d175590f",
+          "providerJobId": "job-1",
+          "turnId": "turn-1",
+          "providerState": "retrieving-results",
+          "terminalState": "succeeded",
+          "collected": false,
+          "exit": null,
+          "known_cost_usd": 0.25
+        },
+        "correction": {
+          "providerState": "succeeded",
+          "collected": true,
+          "exit": 0,
+          "outcome_ok": true,
+          "known_cost_usd": 0.25,
+          "charged_usd": 0.25
+        },
+        "publication_calls": [],
+        "rejected_cache_preserved": true,
+        "artifacts": {
+          "statePath": {
+            "path": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-UgsaOr/execution.json",
+            "sha256": "6979c8403dac9b636feaa9c6d228b16ea3278988d3de3ef1d47d14dd9ab85f0a"
+          },
+          "jobPath": {
+            "path": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-UgsaOr/run-2582c544-b11c-4efb-acf6-c395d175590f/job.json",
+            "sha256": "e52f099a0ad7571b27a3e1ee14a9e0dfd75a679b255f920247955ac9fff9009d"
+          },
+          "resultPath": {
+            "path": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-UgsaOr/run-2582c544-b11c-4efb-acf6-c395d175590f/result.json",
+            "sha256": "7cbbf4ff266fd9045a5710fcff045a54970d965dc06fec65fd07acf18b76dc14"
+          },
+          "registryPath": {
+            "path": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-ZTxgRD/state.json",
+            "sha256": "297fde6f7e899649a66e9c1de6c7e5651d75c238600ce0a856ba68a4863569c6"
+          }
+        }
+      },
+      {
+        "provider": "openai-agents",
+        "observed_terminal_state": "failed",
+        "result_source": "transport",
+        "rejected_outcome_ok": true,
+        "pending": {
+          "runId": "run-0452667b-06f9-4505-88a8-4101fff0f921",
+          "providerJobId": "job-1",
+          "turnId": "turn-1",
+          "providerState": "retrieving-results",
+          "terminalState": "failed",
+          "collected": false,
+          "exit": null,
+          "known_cost_usd": 0.25
+        },
+        "correction": {
+          "providerState": "failed",
+          "collected": true,
+          "exit": 1,
+          "outcome_ok": false,
+          "known_cost_usd": 0.25,
+          "charged_usd": 0.25
+        },
+        "publication_calls": [],
+        "rejected_cache_preserved": true,
+        "artifacts": {
+          "statePath": {
+            "path": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-omyymr/execution.json",
+            "sha256": "f518e7bf6378239a694b3ead06fb7917685bece9cc409fd6984a691a55b0e502"
+          },
+          "jobPath": {
+            "path": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-omyymr/run-0452667b-06f9-4505-88a8-4101fff0f921/job.json",
+            "sha256": "c38b67b779720079cf9958781943fd37e2aceb1d78e01ab6bd45c9e9776ad261"
+          },
+          "resultPath": {
+            "path": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-omyymr/run-0452667b-06f9-4505-88a8-4101fff0f921/result.json",
+            "sha256": "deb43ddf60a52d61015f4c8463a9db4097d730d35ea95e1c1ae4eb967bd113e6"
+          },
+          "registryPath": {
+            "path": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-jQoqKm/state.json",
+            "sha256": "1d3e8a1c69f592b42c1650f355d366effbb4a35c93c270d472c1879aa5404ae4"
+          }
+        }
+      },
+      {
+        "provider": "codex-cloud",
+        "observed_terminal_state": "succeeded",
+        "result_source": "saved-cache",
+        "rejected_outcome_ok": false,
+        "pending": {
+          "runId": "run-7ab411ac-7767-4ebd-b520-a20a5b573ff5",
+          "providerJobId": "job-1",
+          "turnId": "turn-1",
+          "providerState": "retrieving-results",
+          "terminalState": "succeeded",
+          "collected": false,
+          "exit": null,
+          "known_cost_usd": 0.25
+        },
+        "correction": {
+          "providerState": "succeeded",
+          "collected": true,
+          "exit": 0,
+          "outcome_ok": true,
+          "known_cost_usd": 0.25,
+          "charged_usd": 0.25
+        },
+        "publication_calls": [],
+        "rejected_cache_preserved": true,
+        "artifacts": {
+          "statePath": {
+            "path": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-hyzJb6/execution.json",
+            "sha256": "39fa0e77a68f98ebb7734460d6a715faf2b83a43d384148b4f6dee13265b4d35"
+          },
+          "jobPath": {
+            "path": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-hyzJb6/run-7ab411ac-7767-4ebd-b520-a20a5b573ff5/job.json",
+            "sha256": "211716656ac42a777532d7273ee24b98cdc6848b2059531ce388da104630a638"
+          },
+          "resultPath": {
+            "path": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-hyzJb6/run-7ab411ac-7767-4ebd-b520-a20a5b573ff5/result.json",
+            "sha256": "6b8b30b3a86ac0db2feb88ebef7b6ad86d9cfd49aa2fe54a0548a22a3d486556"
+          },
+          "registryPath": {
+            "path": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-Na6wjG/state.json",
+            "sha256": "c2ecf197570f703a9e1dc8399e9eef44932c91eb3210ce21038a3644b16a5e31"
+          }
+        }
+      },
+      {
+        "provider": "codex-cloud",
+        "observed_terminal_state": "failed",
+        "result_source": "transport",
+        "rejected_outcome_ok": true,
+        "pending": {
+          "runId": "run-3c7aac55-4c8e-4484-84ef-0974226274e3",
+          "providerJobId": "job-1",
+          "turnId": "turn-1",
+          "providerState": "retrieving-results",
+          "terminalState": "failed",
+          "collected": false,
+          "exit": null,
+          "known_cost_usd": 0.25
+        },
+        "correction": {
+          "providerState": "failed",
+          "collected": true,
+          "exit": 1,
+          "outcome_ok": false,
+          "known_cost_usd": 0.25,
+          "charged_usd": 0.25
+        },
+        "publication_calls": [],
+        "rejected_cache_preserved": true,
+        "artifacts": {
+          "statePath": {
+            "path": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-k7yAKN/execution.json",
+            "sha256": "4cb44884252284dd68b38f6aaa6120dd4473575a6c9e128db4b923e4c852d6a6"
+          },
+          "jobPath": {
+            "path": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-k7yAKN/run-3c7aac55-4c8e-4484-84ef-0974226274e3/job.json",
+            "sha256": "ee23e7ddd6be71aaa6ab55adcef05a1270695dccc079161aec52f55039a9d4cc"
+          },
+          "resultPath": {
+            "path": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-k7yAKN/run-3c7aac55-4c8e-4484-84ef-0974226274e3/result.json",
+            "sha256": "4d451df889ee3eee850e9a1d0b57413344ae1c5d929da3080794a4d9e2f56445"
+          },
+          "registryPath": {
+            "path": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-hC54UB/state.json",
+            "sha256": "ec6b5eef3ad73d4e10735d3ee5c56b8cb8a5ca7eadf8b06f880387642ba2467f"
+          }
+        }
+      }
+    ]
+  },
+  "external_qualification": {
+    "mandatory_live_prerequisites": [],
+    "live_paid_calls": 0,
+    "native_codex_preparation_qualified": false,
+    "remote_provider_available": {
+      "openai-agents": false,
+      "codex-cloud": false
+    },
+    "installed_plugin_qualified": false,
+    "model_access_exercised": false,
+    "browser_capture_required": false,
+    "remedy": "Complete the independent native preparation adapter and its limited-authority evidence before registry integration. Later production transports require implemented adapters, credentials, demonstrated model access and authorized bounded live evidence; preserve model/provider defaults and sandbox permissions."
+  }
+}

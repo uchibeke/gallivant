@@ -171,14 +171,10 @@ const pane = document.getElementById("log"), state = document.getElementById("lo
 // The most LIVE rows the pane keeps. Beyond this the oldest live rows are dropped; the complete log is on disk and the
 // "load earlier" control fetches any of it back.
 //
-// History the reader loaded is exempt from this, which is the decision worth saying out loud. The cap exists to bound
-// a DOM that an unbounded live stream would otherwise grow forever: nobody asked for the ten-thousandth line of a
-// running build, and dropping it costs the reader nothing because it is still on disk. History is the opposite case.
-// The reader pressed a button for it, and there is nothing to fetch it back from once it is gone but the same button
-// they just pressed, so trimming it would silently undo the click and the feature would read as broken. Raising the
-// cap for everyone instead would put the DOM cost of a long history onto every pane whether or not it asked. So the
-// budget grows by exactly what was loaded, and only the live tail is ever trimmed.
+// Explicitly loaded history has its own cap. Live rows never evict that window;
+// another page can replace older history without growing browser memory forever.
 const MAX_LINES = 2000;
+const MAX_HISTORY_LINES = 2000;
 if (pane) {
   // Auto-scroll follows the reader: the pane jumps to the bottom only when it was already at the bottom, so
   // scrolling up to read something does not yank you back down on the next line.
@@ -186,12 +182,26 @@ if (pane) {
   // Lines arrive in bursts: a reconnect delivers hundreds at once, and a busy harness writes faster than the screen
   // refreshes. Appending per line stalled the main thread badly enough that the browser dropped the stream and
   // retried, which replayed the burst, which stalled it again. Buffer and paint once per frame instead.
-  let pending = [], painting = false, closed = false;
+  let pending = [], painting = false, closed = false, disconnected = false;
   // Reaching back: `oldest` is the id of the oldest line the pane holds (what the history route takes as
   // `?before=`), `loaded` is how many rows the reader explicitly loaded, which the cap exempts, and `busy`
   // keeps two presses of the button from fetching the same window twice. Declared with the rest of the pane's
   // state because `trim` reads `loaded` and runs from `paint`.
-  let oldest = null, loaded = 0, busy = false;
+  let oldest = null, loaded = 0, busy = false, historyRequest = null;
+  // Coalesce missing display ranges into two IDs, rather than an unbounded queue.
+  // This cursor can recover a burst between rows already painted on the page.
+  let recoveryBefore = null, recoveryFloor = null;
+  const replayId = value => Number.isSafeInteger(Number(value)) && Number(value) > 0 ? Number(value) : null;
+  const eventHtml = (row, id, index) => {
+    const html = renderParsed(row, { harness });
+    return id === null ? html : html.replace(/^(<div class="[^"]*")/, '$1 data-replay="' + id + '" data-replay-row="' + index + '"');
+  };
+  const rememberDropped = (id, before) => {
+    if (id === null || before === null) return;
+    recoveryFloor = Math.min(recoveryFloor ?? id, id);
+    recoveryBefore = Math.max(recoveryBefore ?? before, before);
+    offer(recoveryBefore - 1);
+  };
   // Which harness wrote this log, so the right stream reader is used on each line. The server knows it from the
   // registry and publishes it on the pane; an unknown or absent value means every line renders as itself.
   const harness = pane.dataset.harness || "";
@@ -217,6 +227,8 @@ if (pane) {
       // Only when the pane holds nothing but history, which the budget makes impossible: it always leaves MAX_LINES of
       // room above `loaded`. Belt and braces, because an unbounded loop here would hang the tab.
       if (!victim) return;
+      const id = replayId(victim.dataset.replay);
+      rememberDropped(id, id === null ? null : id + 1);
       victim.remove();
     }
   };
@@ -259,16 +271,16 @@ if (pane) {
     // The markup is appended to the pane itself rather than inside a wrapper div. The cap below counts the pane's
     // children, and a wrapper per frame made one paint of three hundred lines count as a single child, so the cap
     // never fired and the DOM grew without bound on a long run.
-    const rows = pending.flatMap(line => renderRows(line, { harness }));
+    const rows = pending.flatMap(event => renderRows(event.line, { harness }).map((row, index) => ({ row, id: event.id, index })));
     pending = [];
-    const html = rows.filter(r => r.kind !== "beat").map(r => renderParsed(r, { harness })).join("");
+    const html = rows.filter(r => r.row.kind !== "beat").map(r => eventHtml(r.row, r.id, r.index)).join("");
     if (html) { const t = document.createElement("template"); t.innerHTML = html; pane.append(t.content); }
     // A heartbeat whose row is not on the pane (trimmed by the cap, or the pane opened after the call started) still
     // deserves to be said: a Bash step alive for four minutes with nothing on screen is the complaint this answers.
-    const orphans = rows.filter(r => r.kind === "beat" && !beat(r));
+    const orphans = rows.filter(r => r.row.kind === "beat" && !beat(r.row));
     if (orphans.length) {
       const t = document.createElement("template");
-      t.innerHTML = orphans.map(r => renderParsed(r, { harness })).join("");
+      t.innerHTML = orphans.map(r => eventHtml(r.row, r.id, r.index)).join("");
       pane.append(t.content);
     }
     if (stick) pane.scrollTop = pane.scrollHeight;
@@ -276,8 +288,16 @@ if (pane) {
     // disk, and the "load earlier" control above can fetch any of it back, so dropping the oldest rows loses nothing.
     trim();
   };
-  const push = line => { pending.push(line); if (!painting) { painting = true; requestAnimationFrame(paint); } };
-  const note = (text, cls) => { const el = document.createElement("div"); el.className = "ll " + cls; el.textContent = text; pane.append(el); };
+  const push = (line, id) => {
+    if (oldest === null && id !== null) oldest = id;
+    if (pending.length >= 400) {
+      const dropped = pending.shift();
+      rememberDropped(dropped.id, pending[0]?.id ?? id);
+      tell("display buffer full; older events remain in paginated history");
+    }
+    pending.push({ line, id }); if (!painting) { painting = true; requestAnimationFrame(paint); }
+  };
+  const note = (text, cls) => { const el = document.createElement("div"); el.className = "ll " + cls; el.textContent = text; pane.append(el); trim(); };
   // A run from another tool has no registry entry and is addressed by its source label instead; one of Gallivant's
   // own is addressed by entry. The server validates whichever arrives.
   const q = new URLSearchParams({ run: pane.dataset.run });
@@ -306,18 +326,27 @@ if (pane) {
    * anything else touches the pane, because a later reflow would make the difference wrong.
    */
   const loadEarlier = async () => {
-    if (busy || oldest === null || oldest <= 1) return;
+    if (disconnected || busy || (recoveryBefore ?? oldest ?? 0) <= 1) return;
+    const recovering = recoveryBefore !== null, cursor = recoveryBefore ?? oldest;
     busy = true;
+    historyRequest = new AbortController();
     if (earlier) earlier.disabled = true;
     tell("loading");
     try {
       const h = new URLSearchParams(q);
-      h.set("before", String(oldest));
-      const r = await fetch(BASE + "/api/run/history?" + h.toString(), { headers: { accept: "application/json" } });
+      h.set("before", String(recovering ? cursor : oldest));
+      const r = await fetch(BASE + "/api/run/history?" + h.toString(), { headers: { accept: "application/json" }, signal: historyRequest.signal });
       if (!r.ok) throw new Error("history " + r.status);
       const got = await r.json();
+      if (disconnected) return;
       const lines = Array.isArray(got.lines) ? got.lines : [];
-      const html = lines.flatMap(line => renderRows(line, { harness })).map(row => renderParsed(row, { harness })).join("");
+      const present = new Set([...pane.children].filter(row => replayId(row.dataset.replay) !== null).map(row => `${row.dataset.replay}:${row.dataset.replayRow ?? 0}`));
+      const queued = new Set(pending.map(event => event.id).filter(id => id !== null));
+      const html = lines.flatMap((line, i) => {
+        const id = replayId(got.ids?.[i] ?? (Number.isSafeInteger(got.from) ? got.from + i : null));
+        if (id !== null && queued.has(id)) return [];
+        return renderRows(line, { harness }).flatMap((row, index) => id !== null && present.has(`${id}:${index}`) ? [] : eventHtml(row, id, index));
+      }).join("");
       const before = pane.scrollHeight, top = pane.scrollTop;
       if (html) {
         const t = document.createElement("template");
@@ -325,33 +354,57 @@ if (pane) {
         // How many rows this actually added, counted from the template rather than from `lines`: one event can be
         // several rows and a clean tool result is none, so the line count is not the row count and the cap needs the
         // row count.
-        loaded += t.content.childElementCount;
-        pane.prepend(t.content);
+        if (recovering) {
+          // A gap may lie between painted rows. Merge by stable replay ID,
+          // keeping the existing tool rows and heartbeat state intact.
+          for (const row of [...t.content.children]) {
+            const id = replayId(row.dataset.replay);
+            const index = Number(row.dataset.replayRow ?? 0);
+            const next = [...pane.children].find(el => replayId(el.dataset.replay) > id || (replayId(el.dataset.replay) === id && Number(el.dataset.replayRow ?? 0) > index));
+            pane.insertBefore(row, next ?? null);
+          }
+          const firstLive = [...pane.children].findIndex(row => (replayId(row.dataset.replay) ?? 0) >= cursor);
+          loaded = Math.max(loaded, firstLive < 0 ? pane.childElementCount : firstLive);
+        } else {
+          loaded += t.content.childElementCount;
+          pane.prepend(t.content);
+        }
+        // Keep the older page just requested; evict the newest history beside
+        // the live tail so another click can actually reach earlier output.
+        while (loaded > MAX_HISTORY_LINES && pane.children[loaded - 1]) { pane.children[loaded - 1].remove(); loaded--; }
+        trim();
       }
       pane.scrollTop = top + (pane.scrollHeight - before);
-      oldest = got.from ?? oldest;
-      offer(got.before ?? 0);
-      if ((got.before ?? 0) <= 0) tell("this is the first line of the run");
+      if (Number.isSafeInteger(got.from) && got.from > 0) oldest = Math.min(oldest ?? got.from, got.from);
+      if (recovering && recoveryBefore === cursor) {
+        if ((got.from ?? cursor) <= recoveryFloor || (got.before ?? 0) <= 0) recoveryBefore = recoveryFloor = null;
+        else recoveryBefore = got.from;
+      }
+      offer(recoveryBefore !== null ? recoveryBefore - 1 : Math.min(got.before ?? 0, (oldest ?? 1) - 1));
+      if (got.gap) { note(got.gap, "skip"); tell("some history is unavailable; saved results are separate from logs"); }
+      else if (recoveryBefore === null && (got.before ?? 0) <= 0) tell("this is the first line of the run");
     } catch {
       // The pane is the only place a reader sees this, so it says what happened rather than going quiet. The button
       // stays available: a failed fetch is worth retrying and nothing was consumed.
       tell("could not load earlier lines");
     } finally {
-      busy = false;
-      if (earlier) earlier.disabled = oldest === null || oldest <= 1;
+      busy = false; historyRequest = null;
+      if (earlier) earlier.disabled = (recoveryBefore ?? oldest ?? 0) <= 1;
     }
   };
   earlier?.addEventListener("click", loadEarlier);
 
   const es = new EventSource(url);
+  globalThis.addEventListener?.("pagehide", () => { disconnected = closed = true; es.close(); pending = []; historyRequest?.abort(); }, { once: true });
+  es.addEventListener("gap", e => { note(JSON.parse(e.data), "skip"); tell("some history is unavailable; saved results are separate from logs"); });
   const say = text => { if (state) state.textContent = text; };
   es.addEventListener("skipped", e => {
     const n = Number(e.data);
     if (!Number.isFinite(n) || n <= 0) return;
     note(n + ' earlier lines not shown; "load earlier lines" above fetches them, and the whole log is in the run folder', "skip");
     // The tail starts at line n+1, so the oldest line the pane holds is n+1 and the window before it starts at n.
-    oldest = n + 1;
-    offer(n);
+    oldest ??= n + 1;
+    offer(recoveryBefore !== null ? recoveryBefore - 1 : n);
   });
   es.onmessage = e => {
     const text = JSON.parse(e.data);
@@ -369,7 +422,7 @@ if (pane) {
       say(text === "[no run]" ? "no run on disk" : text === "[exit 0]" ? "finished" : text.slice(1, -1));
       return;
     }
-    push(text);
+    if (!closed) push(text, replayId(e.lastEventId));
   };
   es.onopen = () => say("live");
   // readyState 2 is closed, which is the normal end of a finished run and not a failure to report.

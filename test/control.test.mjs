@@ -2,7 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { mkdirSync } from "node:fs";
 import { join } from "node:path";
-import { requestControl, applyControl, interruptControl, lastMessage, controlFailure } from "../lib/control.mjs";
+import { requestControl, applyControl, cancelControl, interruptControl, lastMessage, controlFailure } from "../lib/control.mjs";
 import { makeState } from "../lib/state.mjs";
 import { makeTick } from "../lib/tick.mjs";
 import { NEEDS_LABEL } from "../lib/gh.mjs";
@@ -20,6 +20,24 @@ function world(over = {}) {
     credential: fakeCredential(), identity: fakeIdentity(), readPrd: () => GOOD_PRD, ownLogin: "me" };
   return { ctx, state, id, home, runner, gh, tick: makeTick(ctx) };
 }
+
+test("legacy control cancellation verifies cessation instead of trusting the kill return", async () => {
+  for (const remaining of ["running", "missing", "different", "stopped"]) {
+    const w = world(), run = w.runner.start("legacy", "codex", [], {});
+    const current = w.runner.current;
+    w.runner.kill = id => {
+      assert.equal(id, run.id);
+      w.runner.current = () => remaining === "missing" ? null : remaining === "different" ? { id: "another", running: false }
+        : { ...current(), running: remaining === "running" };
+      return true;
+    };
+    requestControl(w.ctx, { handle: w.id, action: "cancel" });
+    assert.equal(await cancelControl(w.ctx, w.id), true);
+    assert.equal(w.state.get(w.id).dispatch_stopped, "cancellation-requested");
+    assert.equal(w.state.get(w.id).reason, remaining === "stopped" ? "cancelled" : "cancellation-requested");
+    assert.equal(w.state.get(w.id).control.message === "Cancellation confirmed.", remaining === "stopped");
+  }
+});
 
 test("requests survive a new context, refuse duplicates, and never silently truncate", () => {
   const w = world();

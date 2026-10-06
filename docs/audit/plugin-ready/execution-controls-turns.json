@@ -1,0 +1,243 @@
+{
+  "version": 1,
+  "task_id": "task-df42674c6251c85b0edef13f",
+  "scope": "offline pending cancellation, exact root ownership and display history review corrections",
+  "recorded_at": "2026-10-06T02:41:44.782394+00:00",
+  "source_parent_revision": "3dba080f8169a3cc9ab0774c62ac22b6b4c3b9e5",
+  "review_comment_ids": [
+    4190870822,
+    4190870826,
+    4190870831
+  ],
+  "prior_evidence": [
+    "docs/audit/plugin-ready/execution-foundation.json",
+    "docs/audit/plugin-ready/execution-preparation.json",
+    "docs/audit/plugin-ready/execution-cancellation.json",
+    "docs/audit/plugin-ready/execution-artifacts.json",
+    "docs/audit/plugin-ready/execution-verification.json",
+    "docs/audit/plugin-ready/execution-paths-journal.json"
+  ],
+  "commands": [
+    {
+      "command": "npm test",
+      "exit": 0,
+      "raw_log": "/tmp/execution-controls-turns-verify-tests.txt",
+      "sha256": "fcfcc59ba1af14c29ac8158254d3a4c1752e23b0aa9d77e98e73e3c6ea8cfeb9",
+      "tests": 967,
+      "passed": 967
+    },
+    {
+      "command": "npm run lint",
+      "exit": 0,
+      "raw_log": "/tmp/execution-controls-turns-verify-lint.txt",
+      "sha256": "8c7790de3f018fb4580f18ac70e1b355a0f76f522dd73acbdaa63632feffcecc"
+    },
+    {
+      "command": "npm run test:execution-backends",
+      "exit": 0,
+      "raw_log": "/tmp/execution-controls-turns-verify-backends.txt",
+      "sha256": "920eee6dc307f19795577dd10fcf5195d8a5d79fb2f017ed00d3b00ed8e41863",
+      "tests": 238,
+      "passed": 238
+    },
+    {
+      "command": "git diff --check",
+      "exit": 0,
+      "evidence": "Empty output on final source/docs; repeated after evidence generation and staging."
+    }
+  ],
+  "artifact_hashes": {
+    "lib/execution.mjs": "ae702ea37df2b07b4d08917b7b96f60b1ade7f9398b56e17da1b3c0b02f27c7b",
+    "lib/control.mjs": "785cfb383374710f7445797e36d9c4ed4ba222eb877d915588fe846530b2797d",
+    "lib/tick.mjs": "a8d49f3da857be6937b4261d613e6a5c6d9b7c032da9f2a84c49dc66128f2a60",
+    "templates/tracker/tracker.js": "1131a0d45b60ebbd638fbcc8e95f84d8cb798c32523aeb1ffe3ad0c4592ff02e",
+    "test/execution-backends.test.mjs": "a3890f4bf56c7131871173bfbddb1231a4f6874d944c6c7dd160668bbfdb3fdf",
+    "test/tracker.test.mjs": "eef211cdf68f2d9acf10f9c86e6b370eb75d659ddf19f1b94e8cc711620924c9",
+    "package.json": "bfa52de98cf6f540c3cd5de741d497c6d4bd2e9d21f8ef10c879f51c70d217ec",
+    "docs/execution.md": "d457e4afe3a48eea4dff114c37eef70b3724103c6218e737ab41d3e653e453a2"
+  },
+  "focused_checks": [
+    {
+      "raw_log": "/tmp/execution-controls-turns-regressions-final.txt",
+      "sha256": "528fbbc0223f9045c11985268f4fe24a5fca959163af9fc58e89762f37368f28",
+      "tests": 14,
+      "passed": 14
+    }
+  ],
+  "source_and_output_review": [
+    {
+      "rule": "Stop intent must survive unknown acceptance and be sent only after exact owned job/root lookup, with bounded I/O and stable retry identity.",
+      "files": [
+        "lib/execution.mjs",
+        "lib/control.mjs",
+        "lib/tick.mjs",
+        "lib/task_prepare.mjs",
+        "lib/execution_preparation.mjs",
+        "lib/provider_health.mjs"
+      ],
+      "boundaries_checked": [
+        "intent persistence before stop I/O",
+        "lookup acknowledgement saved before cancel",
+        "applied control and matching stop_run",
+        "startup and periodic coordinator recovery",
+        "same-key retries and backoff",
+        "acknowledged unconfirmed cancellation",
+        "malformed acknowledgement",
+        "unsupported stop",
+        "naturally terminal quarantine",
+        "local legacy process-tree confirmation",
+        "dispatch and continuation fences",
+        "allowance reservation and nullable cost",
+        "read-only inspection does not reach transport"
+      ],
+      "regressions": [
+        "openai-agents fixture: applied cancellation survives unknown submission and cancels recovered ownership once",
+        "codex-cloud fixture: applied cancellation survives unknown submission and cancels recovered ownership once",
+        "cancellation retries lost replies with one durable key and bounded restart backoff",
+        "pending cancellation refuses incomplete lookup ownership and never calls an unsupported stop",
+        "natural completion after a pending stop quarantines results without claiming cancellation",
+        "unacknowledged cancellation remains pending and older stopped records recover the same stop intent"
+      ]
+    },
+    {
+      "rule": "Remote acknowledgements, observations, result caches and public job liveness require the exact owned job/root turn; CLI identities remain compatible.",
+      "files": [
+        "lib/execution.mjs",
+        "lib/harness.mjs",
+        "lib/commands/status.mjs",
+        "lib/commands/serve.mjs",
+        "lib/tracker/runs.mjs",
+        "lib/task_prepare.mjs"
+      ],
+      "boundaries_checked": [
+        "submit and continue",
+        "duplicate operation acknowledgement",
+        "job-only and malformed identities",
+        "durable unknown acceptance and reservation",
+        "lookup and mismatched observations",
+        "unfinished result collection",
+        "private result cache ownership",
+        "incomplete older remote records",
+        "raw job projection liveness through canonical registry or recorded transport",
+        "CLI adapter compatibility"
+      ],
+      "regressions": [
+        "remote dispatch and continuation require exact job and root-turn acknowledgements",
+        "incomplete legacy remote ownership cannot settle, reuse an acknowledgement or collect cached results",
+        "stale observations, wrong root turns and silence cannot settle remote work"
+      ]
+    },
+    {
+      "rule": "Display backpressure preserves stable replay IDs and manual pagination without an independent provider loop, while all buffers and cleanup stay bounded.",
+      "files": [
+        "templates/tracker/tracker.js",
+        "lib/tracker/stream.mjs",
+        "lib/run_log.mjs",
+        "lib/commands/serve.mjs",
+        "test/tracker.test.mjs",
+        "package.json"
+      ],
+      "boundaries_checked": [
+        "400-event unpainted buffer",
+        "no initial skipped frame",
+        "separate coalesced gap and older-history cursors",
+        "replay-ID merge with painted and pending rows",
+        "oldest-page preservation",
+        "sparse legacy byte IDs",
+        "2,000 live and 2,000 loaded rows",
+        "DOM eviction",
+        "failed history fetch",
+        "burst during fetch",
+        "finished SSE permits history",
+        "page exit aborts request",
+        "late frames and responses discarded",
+        "explicit unrecoverable retention gaps",
+        "existing history routes, heartbeat and server backpressure"
+      ],
+      "regressions": [
+        "dropped SSE bursts expose exact paginated history without an initial skipped frame",
+        "burst recovery merges stable IDs between painted rows and preserves older history pagination",
+        "history failures and a burst during a fetch retain recovery cursors and bounded display state",
+        "live DOM eviction preserves replay history even after the oldest page was loaded",
+        "burst history uses sparse legacy byte IDs and discards a disconnected history response",
+        "unrecoverable burst history reports a retention gap instead of claiming the first line"
+      ]
+    }
+  ],
+  "representative_output": {
+    "evidenceKind": "Offline generated transport fixture inspection; no live provider qualification.",
+    "root": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/execution-controls-turns-fhFhVd",
+    "statePath": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/execution-controls-turns-fhFhVd/execution.json",
+    "jobPath": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/execution-controls-turns-fhFhVd/run-6983de0f-26a2-425d-aa65-c30a7751c692/job.json",
+    "runId": "run-6983de0f-26a2-425d-aa65-c30a7751c692",
+    "pending": {
+      "acceptance": "unknown",
+      "providerState": "cancellation-requested",
+      "cancellation": {
+        "status": "pending",
+        "reason": "operator-cancelled",
+        "requestedAt": 10000,
+        "idempotencyKey": "a3c2800a93734e4b4faab30bb56ed687dc94ee8d35e6fa2398910e23faa7712c",
+        "attempts": 0,
+        "failures": 0,
+        "nextAttemptAt": 10000
+      }
+    },
+    "final": {
+      "acceptance": "accepted",
+      "providerJobId": "fixture-job",
+      "turnId": "fixture-root",
+      "providerState": "cancelled",
+      "cancellation": {
+        "status": "confirmed",
+        "reason": "operator-cancelled",
+        "requestedAt": 10000,
+        "idempotencyKey": "a3c2800a93734e4b4faab30bb56ed687dc94ee8d35e6fa2398910e23faa7712c",
+        "attempts": 1,
+        "failures": 0,
+        "nextAttemptAt": 10000,
+        "lastAttemptAt": 20000,
+        "confirmedAt": 20000
+      },
+      "costUsd": null,
+      "quarantined": true,
+      "exit": 137
+    },
+    "allowance": {
+      "totalUsd": 1,
+      "reservedUsd": 0.1,
+      "chargedUsd": 0.1
+    },
+    "readOnlyProviderCalls": 0,
+    "calls": [
+      {
+        "method": "submit",
+        "key": "3edcfdc7ec982be34548f7457902856b43c64f5eb2f911a58339bbc5d2e1b4bc"
+      },
+      {
+        "method": "lookup",
+        "key": "3edcfdc7ec982be34548f7457902856b43c64f5eb2f911a58339bbc5d2e1b4bc"
+      },
+      {
+        "method": "cancel",
+        "key": "a3c2800a93734e4b4faab30bb56ed687dc94ee8d35e6fa2398910e23faa7712c",
+        "job": "fixture-job",
+        "turn": "fixture-root",
+        "account": "fixture"
+      }
+    ]
+  },
+  "external_qualification": {
+    "mandatory_live_prerequisites": [],
+    "live_paid_calls": 0,
+    "native_codex_preparation_qualified": false,
+    "remote_provider_available": {
+      "openai-agents": false,
+      "codex-cloud": false
+    },
+    "installed_plugin_qualified": false,
+    "model_access_exercised": false,
+    "browser_capture_required": false,
+    "remedy": "Complete the independent native preparation adapter and its limited-authority evidence before registry integration. Later production transports require implemented adapters, credentials, demonstrated model access and authorized bounded live evidence; preserve model/provider defaults and sandbox permissions."
+  }
+}

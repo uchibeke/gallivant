@@ -1,0 +1,342 @@
+{
+  "version": 1,
+  "task_id": "task-df42674c6251c85b0edef13f",
+  "source_parent": "a1137383018f7b95642a16058920046d0fd7222d",
+  "review": {
+    "id": 5426883220,
+    "inline_comment_ids": [
+      4194062013
+    ]
+  },
+  "commands": [
+    {
+      "command": "npm test",
+      "exit": 0,
+      "raw_log": "/tmp/execution-retention-tests.txt",
+      "sha256": "23ca5d03fed4d1648b2be82623bc0f95551ffc788e59c986ce5dc5b234fc2328",
+      "tests": 1061,
+      "passed": 1061,
+      "failed": 0
+    },
+    {
+      "command": "npm run lint",
+      "exit": 0,
+      "raw_log": "/tmp/execution-retention-lint.txt",
+      "sha256": "8c7790de3f018fb4580f18ac70e1b355a0f76f522dd73acbdaa63632feffcecc"
+    },
+    {
+      "command": "npm run test:execution-backends",
+      "exit": 0,
+      "raw_log": "/tmp/execution-retention-backends.txt",
+      "sha256": "aef84642df4e2c569fa17506a4819d7d37459a9c36268bcd3bb55010d706306a",
+      "tests": 359,
+      "passed": 359,
+      "failed": 0
+    },
+    {
+      "command": "git diff --check",
+      "exit": 0,
+      "raw_log": "/tmp/execution-retention-diff.txt",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    }
+  ],
+  "artifact_hashes": {
+    "lib/run.mjs": "3682818ab95bf3b27c262449aa521be094caee9c8f133e94740923ebafb91315",
+    "test/execution-backends.test.mjs": "008ae4eca43a31f7c70235aefba809e59f063008e4954efddc40d257458cdd27",
+    "docs/execution.md": "6714d406fa202a6ff70a05ca7df3bf2ee829bce10b70bac94fe5df7bac153634"
+  },
+  "focused_checks": [
+    {
+      "command": "node --test --test-name-pattern='local output|local runs remain|private local cleanup|local projection|oversized.*(local|discard)' test/execution-backends.test.mjs",
+      "exit": 0,
+      "raw_log": "/tmp/execution-retention-focus.txt",
+      "sha256": "5b9d8a948f264ffa91a46645d54e8d8e60c51cb0178fd9e73cd7ff71d4a11c24",
+      "tests": 9,
+      "passed": 9,
+      "failed": 0
+    }
+  ],
+  "regression_reproduction": {
+    "command": "node --test --test-name-pattern='drained and empty local|private local cleanup retries' test/execution-backends.test.mjs",
+    "exit": 1,
+    "raw_log": "/tmp/execution-retention-red.txt",
+    "sha256": "1be94a5bb6986a26cf0c20d13a4191e302b1b1190c8f7db75f985ed7d0039b5f",
+    "tests": 2,
+    "passed": 0,
+    "failed": 2,
+    "expected_failure": true
+  },
+  "source_and_output_review": [
+    {
+      "rule": "Private diagnostic retention remains durable after projection finishes or latest-run changes; deletion requires an expired owned run and a durable result, and cannot erase result or public history.",
+      "files": [
+        "lib/run.mjs",
+        "lib/execution.mjs",
+        "lib/tick.mjs",
+        "lib/run_log.mjs",
+        "test/execution-backends.test.mjs",
+        "docs/execution.md"
+      ],
+      "boundaries_checked": [
+        "prepareStart persists completed private runs before successor pointer replacement; the shared execution caller still invokes it before paid intent or allowance accounting.",
+        "The existing version 1 queue retains drained and empty private runs and backlog runs that finish projection, rotating one old run alongside the current run.",
+        "Drained cursors skip diagnostic file reads and journal writes. Bounded page, record and buffer limits remain unchanged; unrelated progress and GitHub review still advance.",
+        "Read-only current/status/tail/history calls do not ingest raw diagnostics, mutate the queue or perform expiry cleanup.",
+        "Expiry removes only provider.log and sensitive-redactions.json once result.json exists. A delayed result preserves both files and queue eligibility even after expiry.",
+        "A deletion failure leaves its durable queue item for coordinator retry. Partial cleanup and already missing files remain safe through force removal of files, without recursive deletion.",
+        "Missing or truncated diagnostics and missing redaction metadata emit stable gaps and retain any remaining private file for cleanup. Missing metadata uses the owned job start for its 24-hour expiry and cannot authorize raw projection.",
+        "Results, session, recorded job exit, public log bytes, replay IDs and latest-run remain intact across cleanup and restart.",
+        "Invalid cursors, unsupported queue versions and queue write failures still prevent a new paid intent without changing ownership or allowance.",
+        "The compatible version 1 queue does not rediscover directories an older package already omitted; documented explicit maintenance checks expiry and cached results and removes only the two private files.",
+        "No transport availability, model/provider defaults, credentials, paid-call scope, execution permissions or human merge boundary changed."
+      ],
+      "regressions": [
+        "drained and empty local runs remain queued for private retention cleanup across successors and restart",
+        "private local cleanup retries removal failures without dropping its durable queue entry",
+        "completed local output survives a successor, restart and cursor replay with exact paginated history",
+        "large queued local output uses bounded round-robin pages while unrelated jobs and review advance",
+        "queued local output has explicit stable gaps for expiry, missing diagnostics and missing redaction metadata",
+        "incompatible local projection state prevents paid intent and preserves ownership and allowance",
+        "oversized local records discard every suffix across queued restart, replay and legacy cursors with bounded reads"
+      ]
+    }
+  ],
+  "representative_output": {
+    "evidence_kind": "Offline native Node successor processes, controlled-clock retention and deterministic coordinator fixtures; no live model or installed-plugin qualification.",
+    "reports": [
+      {
+        "label": "private-cleanup",
+        "report_path": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-zLnHqv/local-retention-evidence.json",
+        "report_sha256": "b4b6f8101ebe67ea777f53de608936b63b82b2dce937ad54c5ab2a8d22b2b972",
+        "observations": [
+          {
+            "mode": "drained",
+            "runId": "old-run",
+            "successor": "next-run",
+            "cursor": {
+              "offset": 31,
+              "pending": false,
+              "discarding": false
+            },
+            "meters": [
+              {
+                "pages": 1,
+                "bytesRead": 19,
+                "maxBufferBytes": 19,
+                "records": 1
+              },
+              {}
+            ],
+            "queue": {
+              "version": 1,
+              "runs": []
+            },
+            "result": {
+              "sessionId": "retained-session",
+              "outcome": {
+                "finished": true,
+                "ok": true,
+                "lastMessage": "retained outcome",
+                "cost": null
+              }
+            },
+            "job_exit": 0,
+            "private_files_removed": true,
+            "public_log": "completed [redacted]\n",
+            "files": {
+              "root": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-C04597",
+              "result": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-C04597/old-run/result.json",
+              "job": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-C04597/old-run/job.json",
+              "log": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-C04597/old-run/job.log",
+              "queue": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-C04597/local-output-queue.json"
+            },
+            "retained_file_hashes": {
+              "result": "75655f2e9107c00f12559b584e596ac35c0404722eac9a7cf7c1fe01331e24f9",
+              "job": "42ae75cae94ae55414b8e95370ec81a0ff355cfad22d10a0b983d37ec7fa4306",
+              "log": "ac610b59adb90f19eb9341d234b029bb32eddb8ff7a777afde51709040fe2087",
+              "queue": "d181f5f88d012650439ffd0d8e9fcab426e2230a18f0a536ba14135688cd78b0"
+            }
+          },
+          {
+            "mode": "empty",
+            "runId": "old-run",
+            "successor": "next-run",
+            "cursor": {
+              "offset": 0,
+              "pending": false,
+              "discarding": false
+            },
+            "meters": [
+              {
+                "pages": 1,
+                "bytesRead": 19,
+                "maxBufferBytes": 19,
+                "records": 1
+              },
+              {}
+            ],
+            "queue": {
+              "version": 1,
+              "runs": []
+            },
+            "result": {
+              "sessionId": "retained-session",
+              "outcome": {
+                "finished": true,
+                "ok": true,
+                "lastMessage": "retained outcome",
+                "cost": null
+              }
+            },
+            "job_exit": 0,
+            "private_files_removed": true,
+            "public_log": "",
+            "files": {
+              "root": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-ccNx6f",
+              "result": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-ccNx6f/old-run/result.json",
+              "job": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-ccNx6f/old-run/job.json",
+              "log": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-ccNx6f/old-run/job.log",
+              "queue": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-ccNx6f/local-output-queue.json"
+            },
+            "retained_file_hashes": {
+              "result": "75655f2e9107c00f12559b584e596ac35c0404722eac9a7cf7c1fe01331e24f9",
+              "job": "42ae75cae94ae55414b8e95370ec81a0ff355cfad22d10a0b983d37ec7fa4306",
+              "log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+              "queue": "d181f5f88d012650439ffd0d8e9fcab426e2230a18f0a536ba14135688cd78b0"
+            }
+          },
+          {
+            "mode": "result-delayed",
+            "runId": "old-run",
+            "successor": "next-run",
+            "cursor": {
+              "offset": 31,
+              "pending": false,
+              "discarding": false
+            },
+            "meters": [
+              {
+                "pages": 1,
+                "bytesRead": 19,
+                "maxBufferBytes": 19,
+                "records": 1
+              },
+              {},
+              {}
+            ],
+            "queue": {
+              "version": 1,
+              "runs": []
+            },
+            "result": {
+              "sessionId": "retained-session",
+              "outcome": {
+                "finished": true,
+                "ok": true,
+                "lastMessage": "retained outcome",
+                "cost": null
+              }
+            },
+            "job_exit": 0,
+            "private_files_removed": true,
+            "public_log": "completed [redacted]\n",
+            "files": {
+              "root": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-hIdOO9",
+              "result": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-hIdOO9/old-run/result.json",
+              "job": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-hIdOO9/old-run/job.json",
+              "log": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-hIdOO9/old-run/job.log",
+              "queue": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-hIdOO9/local-output-queue.json"
+            },
+            "retained_file_hashes": {
+              "result": "75655f2e9107c00f12559b584e596ac35c0404722eac9a7cf7c1fe01331e24f9",
+              "job": "42ae75cae94ae55414b8e95370ec81a0ff355cfad22d10a0b983d37ec7fa4306",
+              "log": "ac610b59adb90f19eb9341d234b029bb32eddb8ff7a777afde51709040fe2087",
+              "queue": "d181f5f88d012650439ffd0d8e9fcab426e2230a18f0a536ba14135688cd78b0"
+            }
+          }
+        ]
+      },
+      {
+        "label": "backlog-replay",
+        "report_path": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-FQhSaj/local-output-evidence.json",
+        "report_sha256": "8040f592d66add857be8ac154b67eaad6e4fd6c24da57fbb8b3d963e01555411",
+        "oldRun": "run-1fee0168-f6a5-45df-931e-116bfd9d2b32",
+        "nextRun": "run-f62b8c6e-9257-4606-99f8-7e84fa8fe548",
+        "events": 244,
+        "queue": {
+          "version": 1,
+          "runs": []
+        },
+        "result": {
+          "ok": true,
+          "finished": true,
+          "lastMessage": "saved old result",
+          "denials": [],
+          "cost": null,
+          "error": null
+        },
+        "files": {
+          "journal": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-FQhSaj/run-1fee0168-f6a5-45df-931e-116bfd9d2b32/events.jsonl",
+          "log": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-FQhSaj/run-1fee0168-f6a5-45df-931e-116bfd9d2b32/job.log",
+          "result": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-FQhSaj/run-1fee0168-f6a5-45df-931e-116bfd9d2b32/result.json"
+        },
+        "replay_sequence": {
+          "count": 244,
+          "first": 1,
+          "last": 244,
+          "contiguous": true
+        },
+        "private_files_removed_after_backlog_drained": true,
+        "retained_file_hashes": {
+          "journal": "660c5e9da906fb47b68a365557ce85185a1f4898039fe4f505013c6c29eba80d",
+          "log": "ff03dda3e1763afdc33f28cc5172161d716b6066563c3830229be23c13a2f67a",
+          "result": "c624ed37f4df54c299ef2d6c5d762f8559608b9909218bd67de89f32b3bacfb9"
+        }
+      },
+      {
+        "label": "bounded-fairness",
+        "report_path": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-7xcYKA/local-output-bounds-evidence.json",
+        "report_sha256": "e90b0a76073c1727c1cba01d5f08bba7fa1c940be9436f05ea991f45cee482ba",
+        "rawBytes": 8064890,
+        "limits": {
+          "records": 100,
+          "bytes": 262144,
+          "pages": 2
+        },
+        "meter": {
+          "pages": 2,
+          "bytesRead": 262161,
+          "maxBufferBytes": 262144,
+          "records": 66
+        },
+        "unrelatedProgress": 2,
+        "reviewState": "done",
+        "queue": {
+          "version": 1,
+          "runs": [
+            "old-run",
+            "second-old"
+          ]
+        },
+        "files": {
+          "checkpoint": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-7xcYKA/old-run/local-output.json",
+          "journal": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-7xcYKA/old-run/events.jsonl",
+          "queue": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-7xcYKA/local-output-queue.json"
+        }
+      }
+    ]
+  },
+  "external_qualification": {
+    "mandatory_live_prerequisites": [],
+    "live_paid_calls": 0,
+    "native_codex_preparation_qualified": false,
+    "remote_provider_available": {
+      "openai-agents": false,
+      "codex-cloud": false
+    },
+    "installed_plugin_qualified": false,
+    "model_access_exercised": false,
+    "browser_capture_required": false,
+    "remedy": "Complete the independent native preparation adapter and its limited-authority evidence before registry integration. Later production transports require implemented adapters, credentials, demonstrated model access and authorized bounded live evidence; preserve model/provider defaults and sandbox permissions."
+  }
+}

@@ -1,0 +1,446 @@
+{
+  "version": 1,
+  "task_id": "task-df42674c6251c85b0edef13f",
+  "source_parent": "cafea07b299a454cf3771a6fbce8cd84da18641b",
+  "review": {
+    "id": 5427344602,
+    "inline_comment_ids": [
+      4194446187
+    ]
+  },
+  "commands": [
+    {
+      "command": "npm test",
+      "exit": 0,
+      "raw_log": "/tmp/execution-cursor-final-tests.txt",
+      "sha256": "55c251ebc234ee6f396509836a79622a983cca2873e3a372494f8ec428c0c849",
+      "tests": 1069,
+      "passed": 1069,
+      "failed": 0
+    },
+    {
+      "command": "npm run lint",
+      "exit": 0,
+      "raw_log": "/tmp/execution-cursor-final-lint.txt",
+      "sha256": "8c7790de3f018fb4580f18ac70e1b355a0f76f522dd73acbdaa63632feffcecc"
+    },
+    {
+      "command": "npm run test:execution-backends",
+      "exit": 0,
+      "raw_log": "/tmp/execution-cursor-final-backends.txt",
+      "sha256": "9b50c13b4f55631cd971abe1eb992cddca08c51df6ad48d09d25cdf8cc046195",
+      "tests": 367,
+      "passed": 367,
+      "failed": 0
+    },
+    {
+      "command": "git diff --check",
+      "exit": 0,
+      "raw_log": "/tmp/execution-cursor-final-diff.txt",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    }
+  ],
+  "artifact_hashes": {
+    "lib/execution.mjs": "a84db6ce2f03c9df8a53067971a8d3bd7fafe56e9e43e75e75031748b1ca3df6",
+    "lib/execution_io.mjs": "b792850cacc88bf8b060d418c29be21e87d6743063e4fe594a52dc485fe79b35",
+    "test/execution-backends.test.mjs": "acf2746ea5b0755e962f9c4f513e18cf7bd65d1c82ba0d3c1bc1e6a286c0d598",
+    "docs/execution.md": "ad8db3c90a40641c5e277dc3870fc88d5fe2729ed53f04a29e5bcd1d6bf41ccf"
+  },
+  "regression_reproduction": {
+    "command": "node --test --test-name-pattern='inspection and acceptance lookup reject invalid cursors|bounded JSON scalar cursors|invalid persisted cursors' test/execution-backends.test.mjs",
+    "exit": 1,
+    "raw_log": "/tmp/execution-cursor-red.txt",
+    "sha256": "8352aede6479311b25ebac304b9b82ccdeee1ab94f6ac3463eda19a06166c726",
+    "tests": 3,
+    "passed": 0,
+    "failed": 3,
+    "expected_failure": true
+  },
+  "related_regression_reproduction": {
+    "command": "node --test --test-name-pattern='bounded JSON scalar cursors' test/execution-backends.test.mjs",
+    "exit": 1,
+    "raw_log": "/tmp/execution-cursor-gap-red.txt",
+    "sha256": "0929369d870b34266ad9a074b16915c1740e43b4d0ae89c285f7336c9c201a61",
+    "tests": 1,
+    "passed": 0,
+    "failed": 1,
+    "expected_failure": true
+  },
+  "focused_checks": [
+    {
+      "command": "node --test --test-name-pattern='inspection and acceptance lookup reject invalid cursors|bounded JSON scalar cursors|invalid persisted cursors|missing results remain retrieving|lost reply persists intent|stale observations, wrong root' test/execution-backends.test.mjs",
+      "exit": 0,
+      "raw_log": "/tmp/execution-cursor-focus.txt",
+      "sha256": "be58034060d1b794540cdde3ab767ea5a920f2161d31a20818f5ee49184305c8",
+      "tests": 7,
+      "passed": 7,
+      "failed": 0
+    }
+  ],
+  "source_and_output_review": [
+    {
+      "rule": "Provider paging tokens must remain bounded serializable scalar metadata at observation, journal identity, persisted acknowledgement and later inspection boundaries; malformed progress cannot adopt ownership, charge usage or settle work.",
+      "files": [
+        "lib/execution.mjs",
+        "lib/execution_io.mjs",
+        "lib/execution_journal.mjs",
+        "lib/tick.mjs",
+        "lib/config.mjs",
+        "test/execution-backends.test.mjs",
+        "docs/execution.md"
+      ],
+      "boundaries_checked": [
+        "Inspection and acceptance lookup share assertExecutionCursor before journaling or progress/identity/cost adoption. The fixed exported limit is 4096 serialized UTF-8 JSON bytes, including quotes and escapes.",
+        "Null/omitted tokens retain the existing cursor. Strings, finite numbers and booleans remain valid bounded scalars; objects, arrays, cycles, BigInt, functions, symbols, nonfinite numbers and oversized strings are rejected without invoking custom toJSON.",
+        "Reconciliation rejects malformed terminal observations as scoped EXECUTION_PROTOCOL backoff while preserving previous cursor, observation time, acceptance, ownership, cost and journal bytes. No independent read-only polling or replacement paid dispatch occurs.",
+        "Subsequent inspection sends only a previously validated token. Lost-acknowledgement lookup remains unresolved until a valid owned observation reconciles the original key; no second submit is issued.",
+        "The current cursor and every recorded acknowledgement cursor are validated on remote state reads before transport calls or rewrites. Invalid pre-upgrade state is preserved with an explicit exact-checkpoint recovery remedy; resetting tokens, deleting intents or redispatching is not a migration.",
+        "Long valid cursor gap identities use the existing digest helper only when the legacy gap ID exceeds the journal 512-character bound. Hashed IDs use the distinct gap: prefix so short digest lookalike tokens cannot suppress a different gap. Short IDs remain unchanged; restart replay retains stable event IDs and ordered sequences without duplicate appends.",
+        "Execution and job projections remain bounded by the cursor contract; no event-page, log-retention, provider-availability, model/provider-default, credential, policy or human-merge boundary is relaxed."
+      ],
+      "regressions": [
+        "inspection and acceptance lookup reject invalid cursors before journaling or adopting progress",
+        "bounded JSON scalar cursors survive restart and long-cursor gap replay without growing identities",
+        "invalid persisted cursors refuse inspection and redispatch with a checkpoint recovery remedy",
+        "missing results remain retrieving, event gaps are explicit and recovered events deduplicate"
+      ]
+    }
+  ],
+  "representative_output": {
+    "evidence_kind": "Deterministic provider-shaped inspection/lookup, scalar boundary, journal replay and restart fixtures; no live model or installed-plugin qualification.",
+    "reports": [
+      {
+        "label": "rejected-tokens",
+        "report_path": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-Na8wMR/cursor-rejection-evidence.json",
+        "report_sha256": "711a5b56ad41bc5c7abccc3e0f1ff4d4eaf98700b95f55d5a8c7b37cdfb7d113",
+        "cases": 4,
+        "observations": [
+          {
+            "provider": "openai-agents",
+            "mode": "inspect",
+            "rejected": [
+              "object",
+              "array",
+              "circular",
+              "bigint",
+              "function",
+              "symbol",
+              "nan",
+              "infinity",
+              "oversized",
+              "unicode",
+              "escaped",
+              "customJSON"
+            ],
+            "runId": "run-2993c1dc-08b4-433b-a97b-eefb2c44479c",
+            "baseBytes": 3305,
+            "finalBytes": 3307,
+            "paidDispatches": 1,
+            "files": {
+              "execution": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-5vZOvH/execution.json",
+              "job": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-5vZOvH/run-2993c1dc-08b4-433b-a97b-eefb2c44479c/job.json"
+            }
+          },
+          {
+            "provider": "openai-agents",
+            "mode": "lookup",
+            "rejected": [
+              "object",
+              "array",
+              "circular",
+              "bigint",
+              "function",
+              "symbol",
+              "nan",
+              "infinity",
+              "oversized",
+              "unicode",
+              "escaped",
+              "customJSON"
+            ],
+            "runId": "run-8b48458d-8ee3-4e2c-ab44-084cfe9e1b72",
+            "baseBytes": 1871,
+            "finalBytes": 3499,
+            "paidDispatches": 1,
+            "files": {
+              "execution": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-IWng3Y/execution.json",
+              "job": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-IWng3Y/run-8b48458d-8ee3-4e2c-ab44-084cfe9e1b72/job.json"
+            }
+          },
+          {
+            "provider": "codex-cloud",
+            "mode": "inspect",
+            "rejected": [
+              "object",
+              "array",
+              "circular",
+              "bigint",
+              "function",
+              "symbol",
+              "nan",
+              "infinity",
+              "oversized",
+              "unicode",
+              "escaped",
+              "customJSON"
+            ],
+            "runId": "run-fca9bab2-7305-4afc-a676-f919ac247e13",
+            "baseBytes": 3299,
+            "finalBytes": 3301,
+            "paidDispatches": 1,
+            "files": {
+              "execution": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-pxch2V/execution.json",
+              "job": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-pxch2V/run-fca9bab2-7305-4afc-a676-f919ac247e13/job.json"
+            }
+          },
+          {
+            "provider": "codex-cloud",
+            "mode": "lookup",
+            "rejected": [
+              "object",
+              "array",
+              "circular",
+              "bigint",
+              "function",
+              "symbol",
+              "nan",
+              "infinity",
+              "oversized",
+              "unicode",
+              "escaped",
+              "customJSON"
+            ],
+            "runId": "run-69c81dfa-ba26-420d-96d6-d898176b4b1c",
+            "baseBytes": 1867,
+            "finalBytes": 3493,
+            "paidDispatches": 1,
+            "files": {
+              "execution": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-b7H9c7/execution.json",
+              "job": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-b7H9c7/run-69c81dfa-ba26-420d-96d6-d898176b4b1c/job.json"
+            }
+          }
+        ],
+        "rejected_cases": 48
+      },
+      {
+        "label": "bounded-replay",
+        "report_path": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-rrdFWv/cursor-replay-evidence.json",
+        "report_sha256": "8ebf73b130e3f0b90f77827dd68b7e9a800d36615a87b03b9f576cb4b42982dc",
+        "cases": 24,
+        "observations": [
+          {
+            "provider": "openai-agents",
+            "kind": "short",
+            "serializedBytes": 8,
+            "events": 2,
+            "runId": "run-09350d59-df1f-43fc-bc15-bc140dd0fb5b"
+          },
+          {
+            "provider": "openai-agents",
+            "kind": "empty",
+            "serializedBytes": 2,
+            "events": 4,
+            "runId": "run-09350d59-df1f-43fc-bc15-bc140dd0fb5b"
+          },
+          {
+            "provider": "openai-agents",
+            "kind": "number",
+            "serializedBytes": 1,
+            "events": 6,
+            "runId": "run-09350d59-df1f-43fc-bc15-bc140dd0fb5b"
+          },
+          {
+            "provider": "openai-agents",
+            "kind": "false",
+            "serializedBytes": 5,
+            "events": 8,
+            "runId": "run-09350d59-df1f-43fc-bc15-bc140dd0fb5b"
+          },
+          {
+            "provider": "openai-agents",
+            "kind": "true",
+            "serializedBytes": 4,
+            "events": 10,
+            "runId": "run-09350d59-df1f-43fc-bc15-bc140dd0fb5b"
+          },
+          {
+            "provider": "openai-agents",
+            "kind": "maximumNumber",
+            "serializedBytes": 23,
+            "events": 12,
+            "runId": "run-09350d59-df1f-43fc-bc15-bc140dd0fb5b"
+          },
+          {
+            "provider": "openai-agents",
+            "kind": "asciiBoundary",
+            "serializedBytes": 4096,
+            "events": 14,
+            "runId": "run-09350d59-df1f-43fc-bc15-bc140dd0fb5b"
+          },
+          {
+            "provider": "openai-agents",
+            "kind": "unicodeBoundary",
+            "serializedBytes": 4096,
+            "events": 16,
+            "runId": "run-09350d59-df1f-43fc-bc15-bc140dd0fb5b"
+          },
+          {
+            "provider": "openai-agents",
+            "kind": "hashLookalike",
+            "serializedBytes": 66,
+            "events": 18,
+            "runId": "run-09350d59-df1f-43fc-bc15-bc140dd0fb5b"
+          },
+          {
+            "provider": "openai-agents",
+            "kind": "escapedBoundary",
+            "serializedBytes": 4096,
+            "events": 20,
+            "runId": "run-09350d59-df1f-43fc-bc15-bc140dd0fb5b"
+          },
+          {
+            "provider": "openai-agents",
+            "kind": "omitted",
+            "serializedBytes": null,
+            "events": 22,
+            "runId": "run-09350d59-df1f-43fc-bc15-bc140dd0fb5b"
+          },
+          {
+            "provider": "openai-agents",
+            "kind": "nullable",
+            "serializedBytes": null,
+            "events": 24,
+            "runId": "run-09350d59-df1f-43fc-bc15-bc140dd0fb5b"
+          },
+          {
+            "provider": "codex-cloud",
+            "kind": "short",
+            "serializedBytes": 8,
+            "events": 2,
+            "runId": "run-75e968dd-f50f-4398-b4de-7575ae1aa0d2"
+          },
+          {
+            "provider": "codex-cloud",
+            "kind": "empty",
+            "serializedBytes": 2,
+            "events": 4,
+            "runId": "run-75e968dd-f50f-4398-b4de-7575ae1aa0d2"
+          },
+          {
+            "provider": "codex-cloud",
+            "kind": "number",
+            "serializedBytes": 1,
+            "events": 6,
+            "runId": "run-75e968dd-f50f-4398-b4de-7575ae1aa0d2"
+          },
+          {
+            "provider": "codex-cloud",
+            "kind": "false",
+            "serializedBytes": 5,
+            "events": 8,
+            "runId": "run-75e968dd-f50f-4398-b4de-7575ae1aa0d2"
+          },
+          {
+            "provider": "codex-cloud",
+            "kind": "true",
+            "serializedBytes": 4,
+            "events": 10,
+            "runId": "run-75e968dd-f50f-4398-b4de-7575ae1aa0d2"
+          },
+          {
+            "provider": "codex-cloud",
+            "kind": "maximumNumber",
+            "serializedBytes": 23,
+            "events": 12,
+            "runId": "run-75e968dd-f50f-4398-b4de-7575ae1aa0d2"
+          },
+          {
+            "provider": "codex-cloud",
+            "kind": "asciiBoundary",
+            "serializedBytes": 4096,
+            "events": 14,
+            "runId": "run-75e968dd-f50f-4398-b4de-7575ae1aa0d2"
+          },
+          {
+            "provider": "codex-cloud",
+            "kind": "unicodeBoundary",
+            "serializedBytes": 4096,
+            "events": 16,
+            "runId": "run-75e968dd-f50f-4398-b4de-7575ae1aa0d2"
+          },
+          {
+            "provider": "codex-cloud",
+            "kind": "hashLookalike",
+            "serializedBytes": 66,
+            "events": 18,
+            "runId": "run-75e968dd-f50f-4398-b4de-7575ae1aa0d2"
+          },
+          {
+            "provider": "codex-cloud",
+            "kind": "escapedBoundary",
+            "serializedBytes": 4096,
+            "events": 20,
+            "runId": "run-75e968dd-f50f-4398-b4de-7575ae1aa0d2"
+          },
+          {
+            "provider": "codex-cloud",
+            "kind": "omitted",
+            "serializedBytes": null,
+            "events": 22,
+            "runId": "run-75e968dd-f50f-4398-b4de-7575ae1aa0d2"
+          },
+          {
+            "provider": "codex-cloud",
+            "kind": "nullable",
+            "serializedBytes": null,
+            "events": 24,
+            "runId": "run-75e968dd-f50f-4398-b4de-7575ae1aa0d2"
+          }
+        ],
+        "final_files": [
+          {
+            "run_id": "run-09350d59-df1f-43fc-bc15-bc140dd0fb5b",
+            "files": {
+              "execution": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-asJ2YO/execution.json",
+              "job": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-asJ2YO/run-09350d59-df1f-43fc-bc15-bc140dd0fb5b/job.json",
+              "events": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-asJ2YO/run-09350d59-df1f-43fc-bc15-bc140dd0fb5b/events.jsonl",
+              "log": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-asJ2YO/run-09350d59-df1f-43fc-bc15-bc140dd0fb5b/job.log"
+            },
+            "event_count": 24,
+            "maximum_event_id_characters": 68,
+            "state_bytes": 11467,
+            "events_sha256": "9e23c03c259313bbbcfa89cbae3bc8c9c3c2592daa2fe5f6ba9da87ea761baf0",
+            "projection_sha256": "e3a0c9c587b94974dddfde6a077d0023c07dca8c9d4a9361acc08855b0f30d9d"
+          },
+          {
+            "run_id": "run-75e968dd-f50f-4398-b4de-7575ae1aa0d2",
+            "files": {
+              "execution": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-2kyWr9/execution.json",
+              "job": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-2kyWr9/run-75e968dd-f50f-4398-b4de-7575ae1aa0d2/job.json",
+              "events": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-2kyWr9/run-75e968dd-f50f-4398-b4de-7575ae1aa0d2/events.jsonl",
+              "log": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-2kyWr9/run-75e968dd-f50f-4398-b4de-7575ae1aa0d2/job.log"
+            },
+            "event_count": 24,
+            "maximum_event_id_characters": 68,
+            "state_bytes": 11461,
+            "events_sha256": "493285e0c6d6c178d1394888e6d544e023de21f30bb11d83aa75302294308dd9",
+            "projection_sha256": "e3a0c9c587b94974dddfde6a077d0023c07dca8c9d4a9361acc08855b0f30d9d"
+          }
+        ]
+      }
+    ]
+  },
+  "external_qualification": {
+    "mandatory_live_prerequisites": [],
+    "live_paid_calls": 0,
+    "native_codex_preparation_qualified": false,
+    "remote_provider_available": {
+      "openai-agents": false,
+      "codex-cloud": false
+    },
+    "installed_plugin_qualified": false,
+    "model_access_exercised": false,
+    "browser_capture_required": false,
+    "remedy": "Complete the independent native preparation adapter and its limited-authority evidence before registry integration. Later production transports require implemented adapters, credentials, demonstrated model access and authorized bounded live evidence; preserve model/provider defaults and sandbox permissions."
+  }
+}

@@ -1,0 +1,174 @@
+{
+  "version": 1,
+  "task_id": "task-df42674c6251c85b0edef13f",
+  "scope": "offline cumulative provider cost preservation review correction",
+  "recorded_at": "2026-10-06T03:23:48.355301+00:00",
+  "source_parent_revision": "952f4187533a4c16445e0389c5b9861796179012",
+  "review_comment_ids": [
+    4191191097
+  ],
+  "prior_evidence": [
+    "docs/audit/plugin-ready/execution-failure.json"
+  ],
+  "commands": [
+    {
+      "command": "npm test",
+      "exit": 0,
+      "raw_log": "/tmp/execution-cost-tests.txt",
+      "sha256": "cb370047637c1334c3f0b6f5ffd1e3fe620acade87586a3d39cc8488caaca0c8",
+      "tests": 983,
+      "passed": 983
+    },
+    {
+      "command": "npm run lint",
+      "exit": 0,
+      "raw_log": "/tmp/execution-cost-lint.txt",
+      "sha256": "8c7790de3f018fb4580f18ac70e1b355a0f76f522dd73acbdaa63632feffcecc"
+    },
+    {
+      "command": "npm run test:execution-backends",
+      "exit": 0,
+      "raw_log": "/tmp/execution-cost-backends.txt",
+      "sha256": "855137a0d019b4e48a50460c2508da2640da6855a2bae84256cd616f66a4eb2f",
+      "tests": 254,
+      "passed": 254
+    },
+    {
+      "command": "git diff --check",
+      "exit": 0,
+      "evidence": "Empty output on final source/docs, repeated after evidence generation and staging."
+    }
+  ],
+  "artifact_hashes": {
+    "lib/execution.mjs": "c41a55373be74ebd9d443b645f7a62d13c64c13ccf570e61d5a2e2096bcd9322",
+    "lib/commands/serve.mjs": "7ad668d3cc0616514d9c3d5742d28f091983ea886dfd7abe0dad182ad08e82be",
+    "test/execution-backends.test.mjs": "60a0604c064c7c365af2169875cbf1b0b2bf0c4a5b7037d8efa12816ef3f509d",
+    "test/execution-preparation.test.mjs": "6b03c41ba0bf1cc647296b4c1053e3a071b1a0480fd922a459a7fc8d562dfe34",
+    "docs/execution.md": "19d89cde32996232c01d49711956d087aa7ae39b533a344894e58330dd30630b"
+  },
+  "source_and_output_review": [
+    {
+      "rule": "Known finite nonnegative spend is monotonic within an exact owned run; unknown cost is null and reservations are not actual usage.",
+      "files": [
+        "lib/execution.mjs",
+        "lib/tick.mjs",
+        "lib/task_prepare.mjs",
+        "lib/control.mjs",
+        "lib/commands/why.mjs"
+      ],
+      "boundaries_checked": [
+        "missing, lower, invalid, zero and higher reports",
+        "success/failure inspection and collection",
+        "owned operation recovery for older projections",
+        "collection acknowledgement loss and cache replay",
+        "cancellation and exhausted allowance",
+        "local settlement",
+        "canonical workflow and preparation settlement",
+        "historical run isolation after continuation"
+      ],
+      "regressions": [
+        "cumulative cost survives omitted and lower observations, cached results and continuation (both provider fixtures)",
+        "unknown cost stays null until a valid zero and cancellation retains known spend",
+        "canonical settlement preserves inspection cost when success or failure results omit usage",
+        "local settlement and replay retain the owned operation cost without inventing unknown spend",
+        "preparation settlement retains known cost across lower observations and null result usage"
+      ]
+    },
+    {
+      "rule": "Public cost projections use the canonical owned outcome without transport I/O, dispatch or mutation of private provider estimates.",
+      "files": [
+        "lib/commands/serve.mjs",
+        "lib/tracker/runs.mjs",
+        "lib/execution.mjs"
+      ],
+      "boundaries_checked": [
+        "validated entry/run path resolution",
+        "private result and artifact payload preservation",
+        "flat/legacy result fallback compatibility",
+        "public redaction",
+        "read-only historical result access",
+        "no independent polling loop"
+      ],
+      "regressions": [
+        "result route reports the owned cumulative cost without polling or rewriting private estimates"
+      ]
+    }
+  ],
+  "representative_output": {
+    "kind": "Offline generated transport fixture; no live provider qualification",
+    "home": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/execution-cost-MDy1fw",
+    "root": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/execution-cost-MDy1fw/runs/acme__widget__remote",
+    "runId": "run-01c7c1fc-2543-4f49-8849-e02af3d51beb",
+    "nextRunId": "run-56347c93-19f9-4f33-bb41-7b6e8bc5ed5f",
+    "observations": [
+      {
+        "reported": 0.6,
+        "costUsd": 0.6,
+        "state": "running"
+      },
+      {
+        "reported": null,
+        "costUsd": 0.6,
+        "state": "running"
+      },
+      {
+        "reported": 0.2,
+        "costUsd": 0.6,
+        "state": "running"
+      },
+      {
+        "reported": null,
+        "costUsd": 0.6,
+        "state": "retrieving-results"
+      }
+    ],
+    "completed": {
+      "state": "failed",
+      "costUsd": 0.6,
+      "exit": 1
+    },
+    "privateReportedCost": null,
+    "publicCost": 0.6,
+    "nextCost": null,
+    "allowance": {
+      "totalUsd": 1,
+      "reservedUsd": 0.2,
+      "chargedUsd": 0.6
+    },
+    "replayProviderCalls": 0,
+    "pollingProviderCalls": 0,
+    "privateBytesUnchanged": true,
+    "calls": [
+      "submit",
+      "inspect",
+      "inspect",
+      "inspect",
+      "inspect",
+      "collect",
+      "continue"
+    ],
+    "paths": {
+      "state": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/execution-cost-MDy1fw/runs/acme__widget__remote/execution.json",
+      "completedJob": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/execution-cost-MDy1fw/runs/acme__widget__remote/run-01c7c1fc-2543-4f49-8849-e02af3d51beb/job.json",
+      "result": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/execution-cost-MDy1fw/runs/acme__widget__remote/run-01c7c1fc-2543-4f49-8849-e02af3d51beb/result.json"
+    },
+    "file_hashes": {
+      "state": "783e18539a923ec3422951d19fed30adb7ea1cb141f043bc3e3ede4791717aa1",
+      "completedJob": "2cfaceba495f3d4ab50115bbe873587b6c6d680fe087d1c7547bef95cb3a1906",
+      "result": "9f010160019e007a6a6b74e3cdd7d211768e5157601128e4b27fbac61ede7305"
+    }
+  },
+  "external_qualification": {
+    "mandatory_live_prerequisites": [],
+    "live_paid_calls": 0,
+    "native_codex_preparation_qualified": false,
+    "remote_provider_available": {
+      "openai-agents": false,
+      "codex-cloud": false
+    },
+    "installed_plugin_qualified": false,
+    "model_access_exercised": false,
+    "browser_capture_required": false,
+    "remedy": "Complete the independent native preparation adapter and its limited-authority evidence before registry integration. Later production transports require implemented adapters, credentials, demonstrated model access and authorized bounded live evidence; preserve model/provider defaults and sandbox permissions."
+  }
+}

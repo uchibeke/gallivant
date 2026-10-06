@@ -15,7 +15,7 @@ import { runEnv, RUN_GIT_CONFIG, makeGit } from "../lib/git.mjs";
 import { prepareTurn } from "../lib/task_prepare.mjs";
 import { preparationEnvironment } from "../lib/task_environment.mjs";
 import { parseDraft, renderDraft, collectCommands, draftPrompt, MAX_INPUT_BYTES, MAX_PREPARATION_PROMPT_BYTES } from "../lib/task_contract.mjs";
-import { buildRun, buildPreparationRun, PREPARATION_BOUNDARY } from "../lib/harness.mjs";
+import { buildRun, buildPreparationRun, PREPARATION_BOUNDARY, capabilitiesFor } from "../lib/harness.mjs";
 import { parseSourcesMeta } from "../lib/config.mjs";
 import { makeState } from "../lib/state.mjs";
 import { writeJsonAtomic } from "../lib/fs.mjs";
@@ -26,6 +26,9 @@ import { tempHome, CONFIG, GOOD_PRD, harnessBin, fakeCredential, fakeIdentity, s
 // Exercise durable runner/environment logic using disposable Node executables,
 // independently of native tool contracts. These fixtures prove no live support.
 function offlineRunnerService(ctx) {
+  // Trusted fixture code supplies a contract for disposable executables only.
+  // Native/configured adapters remain unqualified in the production registry.
+  ctx.capabilitiesFor = name => ({ ...capabilitiesFor(name), preparation: { version: 1, boundary: PREPARATION_BOUNDARY, authority: "text-only" } });
   return createTaskService(ctx, { prepare: (ctx, task, store, failures) => prepareTurn(ctx, task, store, failures, options => {
     const spec = buildRun(options);
     assert.ok(spec.cmd.startsWith(ctx.home + "/"), "offline fixtures cannot launch an installed harness");

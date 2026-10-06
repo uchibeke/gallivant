@@ -4,7 +4,10 @@ import { existsSync, mkdirSync, writeFileSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
 import { makeRunner, runProcesses } from "../lib/run.mjs";
+import { makeExecution } from "../lib/execution.mjs";
 import { tempHome } from "./helpers.mjs";
+import { execFileAsync } from "../lib/gh.mjs";
+import { readJson, writeJsonAtomic } from "../lib/fs.mjs";
 
 async function until(check, timeout = 10_000) {
   const end = Date.now() + timeout;
@@ -14,7 +17,7 @@ async function until(check, timeout = 10_000) {
   }
 }
 
-for (const detached of [false, true]) test(`cancelled runs wait for tool subprocesses (detached=${detached})`, async t => {
+for (const detached of [false, true]) test(`legacy boundary cancellation waits for tool subprocesses (detached=${detached})`, async t => {
   const home = tempHome(), marker = join(home, "child-ready");
   const child = `require('node:fs').writeFileSync(${JSON.stringify(marker)}, String(process.pid)); process.on('SIGTERM', () => {}); setInterval(() => {}, 1000);`;
   const parent = `require('node:child_process').spawn(process.execPath, ['-e', ${JSON.stringify(child)}], {stdio: 'ignore', detached: ${detached}}); setInterval(() => {}, 1000);`;
@@ -26,13 +29,44 @@ for (const detached of [false, true]) test(`cancelled runs wait for tool subproc
     }
   });
   await until(() => existsSync(marker));
-  assert.equal(runner.kill(job.id), true);
+  const boundary = makeExecution({ root: runner.root, taskId: "legacy-stop", provider: "codex", runner });
+  assert.equal(boundary.state().current, null);
+  assert.deepEqual(await boundary.cancel(), { confirmed: false });
   await delay(100); // The leader exits; its child deliberately ignores TERM.
   assert.equal(runner.current().running, true);
+  assert.equal(boundary.current().execution.providerState, "cancellation-requested");
   await assert.rejects(() => runner.start("overlap", process.execPath, ["-e", ""], { cwd: home }), /run in progress/);
   await runner.waitForKill(job.id);
   await until(() => !runner.current().running);
+  const restarted = makeExecution({ root: runner.root, taskId: "legacy-stop", provider: "codex", runner: makeRunner(runner.root) });
+  await restarted.reconcile();
+  assert.equal(restarted.current().id, job.id);
+  assert.equal(restarted.current().execution.providerState, "cancelled");
+  assert.equal(restarted.current().execution.quarantined, true);
   assert.equal(runner.read(job.id).exit, 137);
+});
+
+for (const detached of [false, true]) test(`restarted coordinator recovers a lost kill timer for native tools (detached=${detached})`, async t => {
+  const home = tempHome(), root = join(home, "runs"), marker = join(home, "child-ready");
+  const child = `process.on('SIGTERM', () => {}); require('node:fs').writeFileSync(${JSON.stringify(marker)}, String(process.pid)); setInterval(() => {}, 1000);`;
+  const parent = `require('node:child_process').spawn(process.execPath, ['-e', ${JSON.stringify(child)}], {stdio:'ignore', detached:${detached}}); setInterval(() => {}, 1000);`;
+  const runner = makeRunner(root), job = await runner.start("stop-restart", process.execPath, ["-e", parent], { cwd: home });
+  const clock = { now: () => Date.now() + 6000 }, reopenedRunner = makeRunner(root, { clock });
+  t.after(() => { try { reopenedRunner.kill(job.id); } catch { /* unverified identities are never signalled */ } });
+  await until(() => existsSync(marker));
+  const script = `import {makeRunner} from ${JSON.stringify(new URL('../lib/run.mjs', import.meta.url).href)}; import {makeExecution} from ${JSON.stringify(new URL('../lib/execution.mjs', import.meta.url).href)}; const runner=makeRunner(${JSON.stringify(root)}); await makeExecution({root:runner.root,taskId:"native-restart-stop",provider:"codex",runner}).cancel(); process.exit(0);`;
+  await execFileAsync(process.execPath, ["--input-type=module", "-e", script], { timeout: 10_000, maxBuffer: 65_536 });
+  const stopped = readJson(join(root, job.id, "job.json"));
+  assert.equal(stopped.killed, true); assert.ok(Number.isFinite(stopped.killAfter));
+  assert.equal(reopenedRunner.current().running, true);
+  const service = makeExecution({ root, taskId: "native-restart-stop", provider: "codex", runner: reopenedRunner, clock });
+  await service.reconcile(); await until(() => !reopenedRunner.current().running); await service.reconcile();
+  assert.equal(service.current().execution.providerState, "cancelled"); assert.equal(service.current().execution.quarantined, true);
+  assert.equal(service.current().exit, 137); assert.equal(readJson(join(root, job.id, "job.json")).killAfter, stopped.killAfter);
+  await assert.rejects(service.submit({ operationId: "overlap", spec: {} }), { code: "EXECUTION_STOPPED" });
+  const path = join(home, "native-kill-restart-evidence.json");
+  writeJsonAtomic(path, { detached, timerOwnerExited: true, persistedKillAfter: stopped.killAfter, providerState: service.current().execution.providerState, job: join(root, job.id, "job.json"), execution: join(root, "execution.json") });
+  t.diagnostic(`native kill restart evidence: ${path}`);
 });
 
 test("group liveness excludes zombie-only groups and retains live tool children", () => {

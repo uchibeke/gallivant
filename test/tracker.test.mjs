@@ -1861,7 +1861,7 @@ test("the pane corrects its scroll after prepending, and the cap spares what the
 
   // The history fetch goes to the read route, never to the stream, and addresses the run the way the pane was told to.
   assert.match(js, /BASE \+ "\/api\/run\/history\?"/, "the range route is a read, not the SSE endpoint");
-  assert.match(js, /h\.set\("before", String\(oldest\)\)/, "and asks for the window before what it holds");
+  assert.match(js, /h\.set\("before", String\(recovering \? cursor : oldest\)\)/, "and asks for the window before what it holds");
   assert.match(js, /new EventSource\(url\)/, "the live stream is untouched");
 });
 
@@ -1880,12 +1880,13 @@ function fakeDom() {
       // Rows are top-level <div class="ll...">. Splitting on the opening tag is enough: the renderer writes no nested
       // div and the test only needs the count and each row's class and text.
       const parts = String(v).split(/(?=<div class=")/).filter(Boolean);
-      const kids = parts.map(p => { const e = new El("div"); e.className = /<div class="([^"]*)"/.exec(p)?.[1] || ""; e._text = p; return e; });
+      const kids = parts.map(p => { const e = new El("div"); e.className = /<div class="([^"]*)"/.exec(p)?.[1] || ""; e._text = p; const id = /data-replay="(\d+)"/.exec(p)?.[1]; if (id) e.dataset.replay = id; const index = /data-replay-row="(\d+)"/.exec(p)?.[1]; if (index) e.dataset.replayRow = index; return e; });
       if (this.tagName === "template") { this.content = new El("div"); this.content.children = kids; } else this.children = kids;
     }
     set textContent(v) { this._text = String(v); } get textContent() { return this._text; }
     append(c) { if (c instanceof El && c.tagName === "div" && c.content === null && c.children.length && c.className === "") this.children.push(...c.children); else if (c instanceof El) this.children.push(c); }
     prepend(c) { if (c instanceof El && c.children.length && c.className === "") this.children.unshift(...c.children); else this.children.unshift(c); }
+    insertBefore(row, next) { row.remove(); const i = this.children.indexOf(next); this.children.splice(i < 0 ? this.children.length : i, 0, row); row.parent = this; }
     get childElementCount() { return this.children.length; }
     get firstElementChild() { return this.children[0]; }
     remove() { const i = this.parent?.children.indexOf(this); if (i >= 0) this.parent.children.splice(i, 1); }
@@ -1936,12 +1937,12 @@ async function paneOf(w, { fetchJson = async () => ({ lines: [], before: 0, from
     requestAnimationFrame: f => rafs.push(f),
     URLSearchParams, URL, Number, Math, Array, JSON, String, Object, Boolean, isNaN, parseInt, parseFloat,
     fetch: async url => ({ ok: true, status: 200, json: async () => fetchJson(String(url)) }),
-    console,
+    console, globalThis: { addEventListener: (event, fn) => { dom.frames[event] = fn; } },
   };
   const names = Object.keys(sandbox);
   new Function(...names, r.body())(...names.map(n => sandbox[n]));
   const flush = () => { while (rafs.length) rafs.shift()(); };
-  return { ...dom, flush, line: text => { dom.es()._on ? null : null; dom.es().onmessage({ data: JSON.stringify(text) }); }, };
+  return { ...dom, flush, line: (text, id) => { dom.es().onmessage({ data: JSON.stringify(text), lastEventId: id === undefined ? "" : String(id) }); }, };
 }
 
 test("prepending history leaves the reader looking at the same line, and the cap spares it", async () => {
@@ -1971,7 +1972,10 @@ test("prepending history leaves the reader looking at the same line, and the cap
 
   // The cap. Push enough live lines to blow past MAX_LINES and check that the 40 loaded rows are still there: the
   // budget is MAX_LINES plus what was loaded, so a burst of live output cannot undo the click.
-  for (let i = 0; i < 2100; i++) p.es().onmessage({ data: JSON.stringify(`flood ${i}`) });
+  for (let i = 0; i < 2100; i++) {
+    p.es().onmessage({ data: JSON.stringify(`flood ${i}`) });
+    if (i % 200 === 199) p.flush();
+  }
   p.flush();
   assert.equal(p.pane.childElementCount, 2040, "the cap is MAX_LINES plus the rows the reader loaded");
   assert.ok(p.pane.children[0]._text.includes("older 1"), "the oldest row is still the history they asked for");
@@ -1980,4 +1984,154 @@ test("prepending history leaves the reader looking at the same line, and the cap
   // What went instead: the oldest LIVE rows, which is the only thing that can go. Trimming from the top would have
   // eaten the history first, which is what a growing budget on its own quietly did.
   assert.ok(!p.pane.children.some(c => c._text.includes("line 0")), "the oldest live rows are the ones that were dropped");
+});
+
+test("unpainted bursts and repeated history pages keep browser buffers bounded", async () => {
+  const w = world({ runs: { "2026-09-24T02-00-00-000-fix": { lines: ["one"], exit: 0, endedAt: 1 } }, latest: "2026-09-24T02-00-00-000-fix" });
+  let page = 0;
+  const p = await paneOf(w, { fetchJson: () => {
+    const current = page++;
+    return { lines: Array.from({ length: 400 }, (_, i) => `page ${current} row ${i}`), from: 5000 - page * 400, before: 4999 - page * 400 };
+  } });
+  for (let i = 0; i < 3000; i++) p.line(`burst ${i}`);
+  p.flush();
+  assert.equal(p.pane.childElementCount, 400); assert.match(p.els.earlierstate.textContent, /buffer full/);
+  assert.ok(p.pane.children.at(-1)._text.includes("burst 2999"));
+  p.es()._on.skipped({ data: "5000" });
+  for (let i = 0; i < 7; i++) await p.els.earlier._on.click();
+  assert.equal(p.pane.childElementCount, 2401);
+  assert.ok(p.pane.children[0]._text.includes("page 6"), "the newly requested older page survives the history cap");
+});
+
+const replayIds = p => p.pane.children.map(row => Number(row.dataset.replay)).filter(Number.isSafeInteger);
+function historyPage(before, width = 400) {
+  const from = Math.max(1, before - width), ids = Array.from({ length: before - from }, (_, i) => from + i);
+  return { ids, lines: ids.map(id => `line ${id}`), from, before: from - 1 };
+}
+
+test("dropped SSE bursts expose exact paginated history without an initial skipped frame", async () => {
+  const requests = [], p = await paneOf(world(), { fetchJson: url => {
+    const before = Number(new URL(url, "http://localhost").searchParams.get("before")); requests.push(before); return historyPage(before);
+  } });
+  for (let id = 1; id <= 1000; id++) p.line(`line ${id}`, id);
+  p.flush(); assert.deepEqual(replayIds(p), Array.from({ length: 400 }, (_, i) => 601 + i));
+  assert.equal(p.els.earlier.hidden, false); assert.equal(p.els.earlier.disabled, false);
+  p.line("[exit 0]"); assert.equal(p.es().readyState, 2);
+  await p.els.earlier._on.click(); await p.els.earlier._on.click();
+  assert.deepEqual(requests, [601, 201]);
+  assert.deepEqual(replayIds(p), Array.from({ length: 1000 }, (_, i) => i + 1));
+  assert.equal(p.els.earlier.hidden, true);
+  p.line("[exit 0]"); assert.equal(p.es().readyState, 2);
+});
+
+test("burst recovery merges stable IDs between painted rows and preserves older history pagination", async () => {
+  const requests = [], p = await paneOf(world(), { fetchJson: url => {
+    const before = Number(new URL(url, "http://localhost").searchParams.get("before")); requests.push(before); return historyPage(before, 40);
+  } });
+  p.es()._on.skipped({ data: "100" });
+  for (let id = 101; id <= 120; id++) p.line(`line ${id}`, id); p.flush();
+  await p.els.earlier._on.click(); assert.deepEqual(requests, [101]);
+  for (let id = 121; id <= 620; id++) p.line(`line ${id}`, id); p.flush();
+  for (let page = 0; page < 3; page++) await p.els.earlier._on.click();
+  assert.deepEqual(requests, [101, 221, 181, 141]);
+  assert.deepEqual(replayIds(p), Array.from({ length: 560 }, (_, i) => 61 + i));
+  await p.els.earlier._on.click(); assert.equal(requests.at(-1), 61, "the original older-history cursor survives gap recovery");
+  assert.equal(new Set(replayIds(p)).size, replayIds(p).length, "painted and loaded rows are not replayed twice");
+});
+
+test("history failures and a burst during a fetch retain recovery cursors and bounded display state", async () => {
+  let fail = true, resolvePage; const requests = [];
+  const p = await paneOf(world(), { fetchJson: url => {
+    const before = Number(new URL(url, "http://localhost").searchParams.get("before")); requests.push(before);
+    if (fail) throw new Error("offline");
+    return new Promise(resolve => { resolvePage = () => resolve(historyPage(before)); });
+  } });
+  for (let id = 1; id <= 600; id++) p.line(`line ${id}`, id); p.flush();
+  await p.els.earlier._on.click(); assert.equal(p.els.earlier.hidden, false); assert.equal(p.els.earlier.disabled, false);
+  fail = false; const loading = p.els.earlier._on.click();
+  await new Promise(resolve => setImmediate(resolve));
+  for (let id = 601; id <= 1200; id++) p.line(`line ${id}`, id); p.flush();
+  resolvePage(); await loading;
+  assert.deepEqual(requests, [201, 201]);
+  const next = p.els.earlier._on.click(); await new Promise(resolve => setImmediate(resolve)); resolvePage(); await next;
+  assert.equal(requests.at(-1), 801);
+  assert.ok(p.pane.childElementCount <= 4000);
+  assert.equal(new Set(replayIds(p)).size, replayIds(p).length);
+  p.line("queued", 1201); p.frames.pagehide(); p.flush();
+  assert.equal(p.es().readyState, 2); assert.ok(!p.pane.children.some(row => row._text.includes("queued")));
+  p.line("late", 1202); p.flush(); assert.ok(!p.pane.children.some(row => row._text.includes("late")));
+});
+
+test("live DOM eviction preserves replay history even after the oldest page was loaded", async () => {
+  const requests = [], p = await paneOf(world(), { fetchJson: url => {
+    const before = Number(new URL(url, "http://localhost").searchParams.get("before")); requests.push(before); return historyPage(before);
+  } });
+  for (let id = 1; id <= 2200; id++) { p.line(`line ${id}`, id); if (id % 200 === 0) p.flush(); }
+  assert.equal(p.pane.childElementCount, 2000);
+  assert.equal(p.els.earlier.hidden, false);
+  await p.els.earlier._on.click();
+  assert.deepEqual(requests, [201]); assert.deepEqual(replayIds(p), Array.from({ length: 2200 }, (_, i) => i + 1));
+  assert.ok(p.pane.childElementCount <= 4000);
+});
+
+for (const firstId of [1, 10]) test(`partially evicted multi-row events restore missing rows in order (firstId=${firstId})`, async t => {
+  const event = JSON.stringify({ type: "assistant", message: { content: [
+    { type: "text", text: "Reading both files." }, { type: "tool_use", name: "Read", input: { file_path: "a.ts" } }, { type: "tool_use", name: "Read", input: { file_path: "b.ts" } },
+  ] } });
+  const requests = [], p = await paneOf(world(), { fetchJson: url => {
+    const before = Number(new URL(url, "http://localhost").searchParams.get("before")); requests.push(before);
+    return { lines: [event], ids: [firstId], from: firstId, before: 0 };
+  } });
+  p.line(event, firstId); p.flush();
+  for (let i = 1; i <= 1998; i++) { p.line(`tail ${i}`, firstId + i * 10); if (i % 200 === 0) p.flush(); } p.flush();
+  const siblings = () => p.pane.children.filter(row => Number(row.dataset.replay) === firstId);
+  assert.equal(p.pane.childElementCount, 2000); assert.deepEqual(siblings().map(row => row.dataset.replayRow), ["1", "2"]);
+  assert.equal(p.els.earlier.hidden, false); p.pane.scrollTop = 4;
+  await p.els.earlier._on.click();
+  assert.deepEqual(requests, [firstId + 1]); assert.equal(p.pane.scrollTop, 5);
+  assert.deepEqual(siblings().map(row => row.dataset.replayRow), ["0", "1", "2"]);
+  assert.ok(siblings()[0]._text.includes("Reading both files.")); assert.ok(siblings()[1]._text.includes("a.ts")); assert.ok(siblings()[2]._text.includes("b.ts"));
+  const rowKeys = p.pane.children.map(row => `${row.dataset.replay}:${row.dataset.replayRow}`);
+  assert.equal(new Set(rowKeys).size, rowKeys.length); assert.ok(p.pane.childElementCount <= 4000);
+  p.line("[exit 0]"); p.frames.pagehide(); await p.els.earlier._on.click(); assert.equal(requests.length, 1);
+  t.diagnostic(`multi-row recovery: ${JSON.stringify({ firstId, cursor: requests[0], recoveredRows: siblings().map(row => row.dataset.replayRow), totalRows: rowKeys.length, uniqueRows: new Set(rowKeys).size })}`);
+});
+
+test("orphan heartbeat rows retain their identity across overlapping recovery pages", async () => {
+  const heartbeat = JSON.stringify({ type: "tool_progress", parent_tool_use_id: "absent-call", tool_name: "Bash", elapsed_time_seconds: 30 });
+  const p = await paneOf(world(), { fetchJson: () => ({ lines: ["first", heartbeat], ids: [1, 2], from: 1, before: 0 }) });
+  p.line("first", 1); p.line(heartbeat, 2); p.flush();
+  const heartbeats = () => p.pane.children.filter(row => row.dataset.replay === "2");
+  assert.equal(heartbeats().length, 1); assert.equal(heartbeats()[0].dataset.replayRow, "0");
+  for (let id = 3; id <= 2001; id++) { p.line(`tail ${id}`, id); if (id % 200 === 0) p.flush(); } p.flush();
+  assert.equal(p.pane.childElementCount, 2000); assert.equal(heartbeats().length, 1);
+  await p.els.earlier._on.click();
+  assert.equal(p.pane.childElementCount, 2001); assert.equal(heartbeats().length, 1);
+  assert.equal(heartbeats()[0].dataset.replayRow, "0");
+});
+
+test("burst history uses sparse legacy byte IDs and discards a disconnected history response", async () => {
+  const requests = [], ids = Array.from({ length: 600 }, (_, i) => (i + 1) * 10);
+  let reply;
+  const p = await paneOf(world(), { fetchJson: url => {
+    const before = Number(new URL(url, "http://localhost").searchParams.get("before")); requests.push(before);
+    const selected = ids.filter(id => id < before);
+    return new Promise(resolve => { reply = () => resolve({ ids: selected, lines: selected.map(id => `line ${id}`), from: selected[0], before: 0 }); });
+  } });
+  for (const id of ids) p.line(`line ${id}`, id); p.flush();
+  const first = p.els.earlier._on.click(); await new Promise(resolve => setImmediate(resolve)); reply(); await first;
+  assert.deepEqual(requests, [2010]); assert.deepEqual(replayIds(p), ids);
+  for (let id = 6010; id <= 12000; id += 10) p.line(`line ${id}`, id); p.flush();
+  const last = p.els.earlier._on.click(); await new Promise(resolve => setImmediate(resolve));
+  const count = p.pane.childElementCount; p.frames.pagehide(); reply(); await last;
+  assert.equal(p.pane.childElementCount, count); assert.equal(p.es().readyState, 2);
+});
+
+test("unrecoverable burst history reports a retention gap instead of claiming the first line", async () => {
+  const p = await paneOf(world(), { fetchJson: () => ({ lines: [], ids: [], from: 201, before: 0, gap: "projection history expired" }) });
+  for (let id = 1; id <= 600; id++) p.line(`line ${id}`, id); p.flush();
+  await p.els.earlier._on.click();
+  assert.ok(p.pane.children.some(row => row.textContent === "projection history expired"));
+  assert.match(p.els.earlierstate.textContent, /some history is unavailable/);
+  assert.equal(p.els.earlier.hidden, true);
 });

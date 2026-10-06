@@ -1,0 +1,359 @@
+{
+  "version": 1,
+  "task_id": "task-df42674c6251c85b0edef13f",
+  "scope": "offline provider-health dispatch-fence review correction",
+  "recorded_at": "2026-10-06T04:15:15.244962+00:00",
+  "source_parent_revision": "3eee95b2b02524133a0c97e7ee81735b2ce8f0ed",
+  "review_comment_ids": [
+    4191366671
+  ],
+  "prior_evidence": [
+    "docs/audit/plugin-ready/execution-schedule.json"
+  ],
+  "commands": [
+    {
+      "command": "npm test",
+      "exit": 0,
+      "raw_log": "/tmp/execution-fence-tests.txt",
+      "sha256": "966dd2c2b20aa1ae4fc6f2db87276c42a1969af07eaf0336fdec5966ee62f957",
+      "tests": 996,
+      "passed": 996
+    },
+    {
+      "command": "npm run lint",
+      "exit": 0,
+      "raw_log": "/tmp/execution-fence-lint.txt",
+      "sha256": "8c7790de3f018fb4580f18ac70e1b355a0f76f522dd73acbdaa63632feffcecc"
+    },
+    {
+      "command": "npm run test:execution-backends",
+      "exit": 0,
+      "raw_log": "/tmp/execution-fence-backends.txt",
+      "sha256": "f2762a66ade6e2b6283a19e45fece0dfafdc31d5e7b28f1a2c9c54d4d8139e38",
+      "tests": 296,
+      "passed": 296
+    },
+    {
+      "command": "git diff --check",
+      "exit": 0,
+      "raw_log": "/tmp/execution-fence-diff.txt",
+      "evidence": "Empty output on final source/docs; repeated after evidence generation and staging."
+    }
+  ],
+  "artifact_hashes": {
+    "lib/commands/up.mjs": "363de931da37374460bf53009d8a8ca1adf99ca47130d02c4814037f78e933a9",
+    "lib/provider_health.mjs": "1250697922c7eb08f2d0c874286cbc49f13ae85c734ae3fb0eeb1d4b17ec0f41",
+    "lib/tick.mjs": "ac964fed49b7b9c254e75c7e57befe396f7ff6c680cd43e6831e3b9015a2e04a",
+    "test/execution-backends.test.mjs": "6be05b46c59882202ec3eee1254c2d1fb081b346c9a7235d0012df0079c64829",
+    "docs/execution.md": "428b711fe8960d611470c359930dba82d8a9f732c0eb271a302a772715717270"
+  },
+  "source_and_output_review": [
+    {
+      "rule": "Paid dispatch must use a current observation for its provider/account, including when a due probe has not started or acknowledged yet.",
+      "files": [
+        "lib/provider_health.mjs",
+        "lib/commands/up.mjs",
+        "lib/tick.mjs",
+        "lib/commands/resume.mjs",
+        "lib/commands/start.mjs",
+        "lib/chains.mjs"
+      ],
+      "boundaries_checked": [
+        "exact saved nextAttemptAt and last observed health",
+        "queued and in-flight scope fencing before workers start",
+        "no probing or state mutation from health reads",
+        "restart and account/provider isolation",
+        "post-checkout, credential, identity and input-head checks",
+        "post-remote-preparation check before submit/continue",
+        "native start/resume and remote submit/continue reuse the same boundary",
+        "fresh chain starts retain their direct readiness preflight",
+        "failed checks retain scoped backoff and remedy"
+      ],
+      "regressions": [
+        "due and queued provider health fences survive read-only access and restart without blocking fresh accounts",
+        "shared start and resume recheck provider health after asynchronous preparation before paid dispatch"
+      ]
+    },
+    {
+      "rule": "Health waiting must release review workers, resume only owned unstopped work after successful persistence, and clean up every failure path.",
+      "files": [
+        "lib/provider_health.mjs",
+        "lib/tick.mjs",
+        "lib/control.mjs",
+        "lib/commands/up.mjs"
+      ],
+      "boundaries_checked": [
+        "due scopes registered before the canonical tick",
+        "one bounded retry lane using the existing dispatch helper",
+        "progress/review and fresh-provider dispatch before a slow reply",
+        "eight waiting entries and four free review workers",
+        "successful refresh releases one dispatch in the same tick without new GitHub reads",
+        "failed health and timeout create no intent or allowance reservation",
+        "late timeout replies cannot restore readiness",
+        "fresh registry ownership, cursor, workflow and stop fences before deferred dispatch",
+        "no redispatch on read-only access or a second progress tick",
+        "queued/in-flight duplicate refresh deduplication",
+        "waiters resolve after persistence and are removed on write/schema errors",
+        "unknown state versions remain byte-preserved"
+      ],
+      "regressions": [
+        "provider health persistence failures release scoped waiters and preserve incompatible state",
+        "a due provider refresh fences dispatch while unrelated execution and GitHub review advance: failure/success/cancel/ownership-change/timeout",
+        "pending provider health leaves every GitHub review worker available to unrelated entries"
+      ]
+    }
+  ],
+  "representative_output": [
+    {
+      "case": "failure",
+      "evidence": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-4Z0OwE/dispatch-health-evidence.json",
+      "sha256": "176babd504bd0a9b67cd1544fe7ceb0100e95b306a3a34d1ec2975b078657c71",
+      "output": {
+        "kind": "Offline provider health fixture; no live qualification",
+        "reply": "failure",
+        "beforeReply": {
+          "remoteCalls": 0,
+          "localRuns": 1,
+          "progress": 2,
+          "reviewed": "done",
+          "fencedHealth": {
+            "ok": false,
+            "detail": "provider/account health refresh pending; awaiting the coordinator's next probe",
+            "failures": 0,
+            "observedAt": 1790215200000,
+            "nextAttemptAt": 1790215210000
+          },
+          "freshHealth": {
+            "ok": true,
+            "detail": "fixture account ready",
+            "failures": 0,
+            "observedAt": 1790215205000,
+            "nextAttemptAt": 1790215215000
+          }
+        },
+        "afterReply": {
+          "ok": false,
+          "detail": "fixture login expired",
+          "fix": "restore fixture account",
+          "failures": 1,
+          "observedAt": 1790215210000,
+          "nextAttemptAt": 1790215230000
+        },
+        "paidDispatches": 0,
+        "operations": [],
+        "waiterCleared": true,
+        "files": {
+          "health": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-4Z0OwE/provider-health.json",
+          "state": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-4Z0OwE/state.json"
+        }
+      },
+      "file_hashes": {
+        "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-4Z0OwE/provider-health.json": "5216a9fe4d27e6bddd4f877db9ad79474c0f0b9c6abd0e49eb80b368dde800c3",
+        "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-4Z0OwE/state.json": "29d36f387d0affc9d8dc3c9ac9a66e54998599f6d2f5ce9ae3ad4ba90db1304c"
+      }
+    },
+    {
+      "case": "success",
+      "evidence": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-DtVFe8/dispatch-health-evidence.json",
+      "sha256": "96826c3a07a609f0d50cec239191b87415086b4dad6c4dee5001a8f98dcc8673",
+      "output": {
+        "kind": "Offline provider health fixture; no live qualification",
+        "reply": "success",
+        "beforeReply": {
+          "remoteCalls": 0,
+          "localRuns": 1,
+          "progress": 2,
+          "reviewed": "done",
+          "fencedHealth": {
+            "ok": false,
+            "detail": "provider/account health refresh pending; awaiting the coordinator's next probe",
+            "failures": 0,
+            "observedAt": 1790215200000,
+            "nextAttemptAt": 1790215210000
+          },
+          "freshHealth": {
+            "ok": true,
+            "detail": "fixture account ready",
+            "failures": 0,
+            "observedAt": 1790215205000,
+            "nextAttemptAt": 1790215215000
+          }
+        },
+        "afterReply": {
+          "ok": true,
+          "detail": "fixture account ready",
+          "failures": 0,
+          "observedAt": 1790215210000,
+          "nextAttemptAt": 1790215220000
+        },
+        "paidDispatches": 1,
+        "operations": [
+          "initial:0:fix"
+        ],
+        "waiterCleared": true,
+        "files": {
+          "health": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-DtVFe8/provider-health.json",
+          "state": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-DtVFe8/state.json"
+        }
+      },
+      "file_hashes": {
+        "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-DtVFe8/provider-health.json": "023f1a95f515f845641f8b7feaaa0aa02850d32366a0b589f1ec98b2a473b17b",
+        "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-DtVFe8/state.json": "b47f8827b6e0d0dc07c9ceab657d413f47264106885110bb6bf12f71cb95d4d8"
+      }
+    },
+    {
+      "case": "cancel",
+      "evidence": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-5F6Jbi/dispatch-health-evidence.json",
+      "sha256": "9ba75734e33749a09ac473aab41588edd46a4869c0b06f7a2a8de701a5d0db3c",
+      "output": {
+        "kind": "Offline provider health fixture; no live qualification",
+        "reply": "cancel",
+        "beforeReply": {
+          "remoteCalls": 0,
+          "localRuns": 1,
+          "progress": 2,
+          "reviewed": "done",
+          "fencedHealth": {
+            "ok": false,
+            "detail": "provider/account health refresh pending; awaiting the coordinator's next probe",
+            "failures": 0,
+            "observedAt": 1790215200000,
+            "nextAttemptAt": 1790215210000
+          },
+          "freshHealth": {
+            "ok": true,
+            "detail": "fixture account ready",
+            "failures": 0,
+            "observedAt": 1790215205000,
+            "nextAttemptAt": 1790215215000
+          }
+        },
+        "afterReply": {
+          "ok": true,
+          "detail": "fixture account ready",
+          "failures": 0,
+          "observedAt": 1790215210000,
+          "nextAttemptAt": 1790215220000
+        },
+        "paidDispatches": 0,
+        "operations": [],
+        "waiterCleared": true,
+        "files": {
+          "health": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-5F6Jbi/provider-health.json",
+          "state": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-5F6Jbi/state.json"
+        }
+      },
+      "file_hashes": {
+        "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-5F6Jbi/provider-health.json": "023f1a95f515f845641f8b7feaaa0aa02850d32366a0b589f1ec98b2a473b17b",
+        "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-5F6Jbi/state.json": "31d71a440f18b13ae4030cb03ab4657b938b5ddf81c280ad50d45d87d2843779"
+      }
+    },
+    {
+      "case": "ownership-change",
+      "evidence": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-DpHLGY/dispatch-health-evidence.json",
+      "sha256": "2d67d22feba8b89317601b7c8e746d19a87f4dbf251ac3eafa80adb8f8c22c7b",
+      "output": {
+        "kind": "Offline provider health fixture; no live qualification",
+        "reply": "ownership-change",
+        "beforeReply": {
+          "remoteCalls": 0,
+          "localRuns": 1,
+          "progress": 2,
+          "reviewed": "done",
+          "fencedHealth": {
+            "ok": false,
+            "detail": "provider/account health refresh pending; awaiting the coordinator's next probe",
+            "failures": 0,
+            "observedAt": 1790215200000,
+            "nextAttemptAt": 1790215210000
+          },
+          "freshHealth": {
+            "ok": true,
+            "detail": "fixture account ready",
+            "failures": 0,
+            "observedAt": 1790215205000,
+            "nextAttemptAt": 1790215215000
+          }
+        },
+        "afterReply": {
+          "ok": true,
+          "detail": "fixture account ready",
+          "failures": 0,
+          "observedAt": 1790215210000,
+          "nextAttemptAt": 1790215220000
+        },
+        "paidDispatches": 0,
+        "operations": [],
+        "waiterCleared": true,
+        "files": {
+          "health": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-DpHLGY/provider-health.json",
+          "state": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-DpHLGY/state.json"
+        }
+      },
+      "file_hashes": {
+        "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-DpHLGY/provider-health.json": "023f1a95f515f845641f8b7feaaa0aa02850d32366a0b589f1ec98b2a473b17b",
+        "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-DpHLGY/state.json": "0dc623dc7670e23b0dd5f916b15ebc5006469cce6a5c3a764f36b36fcd0efe39"
+      }
+    },
+    {
+      "case": "timeout",
+      "evidence": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-6ZWg79/dispatch-health-evidence.json",
+      "sha256": "e31f8db2407468169e3db1a278e0d0a9425a3fc62903c62d5302dfeacb56153b",
+      "output": {
+        "kind": "Offline provider health fixture; no live qualification",
+        "reply": "timeout",
+        "beforeReply": {
+          "remoteCalls": 0,
+          "localRuns": 1,
+          "progress": 2,
+          "reviewed": "done",
+          "fencedHealth": {
+            "ok": false,
+            "detail": "provider/account health refresh pending; awaiting the coordinator's next probe",
+            "failures": 0,
+            "observedAt": 1790215200000,
+            "nextAttemptAt": 1790215210000
+          },
+          "freshHealth": {
+            "ok": true,
+            "detail": "fixture account ready",
+            "failures": 0,
+            "observedAt": 1790215205000,
+            "nextAttemptAt": 1790215215000
+          }
+        },
+        "afterReply": {
+          "ok": false,
+          "detail": "EXECUTION_DEADLINE",
+          "failures": 1,
+          "observedAt": 1790215210000,
+          "nextAttemptAt": 1790215230000
+        },
+        "paidDispatches": 0,
+        "operations": [],
+        "waiterCleared": true,
+        "files": {
+          "health": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-6ZWg79/provider-health.json",
+          "state": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-6ZWg79/state.json"
+        }
+      },
+      "file_hashes": {
+        "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-6ZWg79/provider-health.json": "33fae4a31a49e710c5528c187851043304f06459e1b5dcf6326f94c19bcd1375",
+        "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-6ZWg79/state.json": "a02ce198b33f603d590a41041bda47022c25388cad64ce4438396818a212fe7a"
+      }
+    }
+  ],
+  "external_qualification": {
+    "mandatory_live_prerequisites": [],
+    "live_paid_calls": 0,
+    "native_codex_preparation_qualified": false,
+    "remote_provider_available": {
+      "openai-agents": false,
+      "codex-cloud": false
+    },
+    "installed_plugin_qualified": false,
+    "model_access_exercised": false,
+    "browser_capture_required": false,
+    "remedy": "Complete the independent native preparation adapter and its limited-authority evidence before registry integration. Later production transports require implemented adapters, credentials, demonstrated model access and authorized bounded live evidence; preserve model/provider defaults and sandbox permissions."
+  }
+}

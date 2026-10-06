@@ -114,6 +114,23 @@ test("all ordinary daemon GitHub prose writes reject branding before execution",
   assert.deepEqual(calls, []);
 });
 
+test("GitHub writers reject NUL metadata before writes, including recovery-only migration", async () => {
+  const calls = [], current = { body: "", headRefName: identity.branch, isCrossRepository: false };
+  const gh = makeGh({ exec: async (_cmd, args) => { calls.push(args); return { stdout: args[1] === "view" ? JSON.stringify(current) : "" }; } });
+  for (const method of ["setBody", "setTitle", "comment"]) assert.throws(() => gh[method]("acme/widget", 1, "public\0private"), /contains NUL bytes/);
+  await assert.rejects(gh.addLabel("acme/widget", 1, "label\0private"), /contains NUL bytes/);
+  for (const field of ["title", "body"]) {
+    const request = { repo: "acme/widget", branch: "work/result", base: "main", title: "Valid title", body: "Valid body" };
+    request[field] += "\0private"; await assert.rejects(gh.publishResultPr(request), /contains NUL bytes/);
+  }
+  assert.deepEqual(calls, []);
+  for (const raw of ["Preserve public prose\0private", "Preserve public prose\n<!-- work-session\nignored\0payload\n-->\n"]) {
+    current.body = raw; calls.length = 0;
+    await assert.rejects(gh.setRecoveryMetadata("acme/widget", 1, identity), /contains NUL bytes/);
+    assert.equal(calls.length, 1); assert.equal(calls[0][1], "view"); assert.equal(current.body, raw);
+  }
+});
+
 test("status writes clear legacy and opposite labels, and a refused cleanup prevents a false ready status", async () => {
   const calls = [];
   const gh = makeGh({ exec: async (_cmd, args) => { calls.push(args); return { stdout: "" }; } });

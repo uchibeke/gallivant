@@ -1,0 +1,500 @@
+{
+  "version": 1,
+  "task_id": "task-df42674c6251c85b0edef13f",
+  "source_parent": "9bc9537b448acada535e0edaa5d0eb5822dd5d17",
+  "review": {
+    "id": 5425791383,
+    "inline_comment_ids": [
+      4193173979,
+      4193173985,
+      4193173993,
+      4193174002
+    ]
+  },
+  "commands": [
+    {
+      "command": "npm test",
+      "exit": 0,
+      "raw_log": "/tmp/execution-boundary-recovery-final-tests.txt",
+      "sha256": "2adbd0a3b007c6035ec1be3f0cc908053df387141ce79d22440d90bfa92d74f1",
+      "tests": 1052,
+      "passed": 1052,
+      "failed": 0
+    },
+    {
+      "command": "npm run lint",
+      "exit": 0,
+      "raw_log": "/tmp/execution-boundary-recovery-final-lint.txt",
+      "sha256": "8c7790de3f018fb4580f18ac70e1b355a0f76f522dd73acbdaa63632feffcecc"
+    },
+    {
+      "command": "npm run test:execution-backends",
+      "exit": 0,
+      "raw_log": "/tmp/execution-boundary-recovery-final-backends.txt",
+      "sha256": "04db096efd60d769e1e630082c963f59c8adc5192bf5b6e769089a4af11dfe3b",
+      "tests": 350,
+      "passed": 350,
+      "failed": 0
+    },
+    {
+      "command": "git diff --check",
+      "exit": 0,
+      "raw_log": "/tmp/execution-boundary-recovery-final-diff.txt",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    }
+  ],
+  "artifact_hashes": {
+    "docs/execution.md": "c155213e2d8a9edb35f12e62b3271723f25863587009d685079d2975b591c04b",
+    "lib/execution.mjs": "53e3e6bf1cb2edf63a14975f8281f3d1ebadbf17830edf2f1181b3a8b61073bb",
+    "lib/execution_io.mjs": "f9e7a870cbdf8a1e0ce7863c7a3e3fb4fea9bfded1385dc3bb6890e4afa42766",
+    "lib/execution_result.mjs": "339f894bd97d4ecb27fad1232987c5fde40e910d72a3b84349b06da2de4e0ece",
+    "templates/tracker/tracker.js": "488ea4ca10c561df94bb1e26a36c045dc0c16203b82400e10b581e21247b1d56",
+    "test/execution-backends.test.mjs": "7d0d3c6ff7d8591162092c9454bf5d40db826c7039847a5be07849e77c1182f1",
+    "test/run_stop.test.mjs": "a64db464cc3ea4572e1b6d436c8a756a5f347f14d00540b3fa66d40b9c4fcf90",
+    "test/tracker.test.mjs": "95b5dbf900a9a44976447da7c37d3b0d6abf344f44b35d26dfea8573d3e20eb4"
+  },
+  "focused_checks": [
+    {
+      "command": "node --test --test-name-pattern='partially evicted|orphan heartbeat|burst|disconnect|history.*bound|live DOM eviction' test/tracker.test.mjs",
+      "exit": 0,
+      "raw_log": "/tmp/execution-boundary-recovery-rows.txt",
+      "sha256": "c1f27044cabff2bd95a6a838e915855d2860b5daa4534475fcadcf7e0ac41f52",
+      "tests": 11,
+      "passed": 11,
+      "failed": 0
+    }
+  ],
+  "source_and_output_review": [
+    {
+      "rule": "Provider-controlled verification receives no coordinator credential or injection environment; evidence, bounds and cleanup remain canonical.",
+      "files": [
+        "lib/execution_result.mjs",
+        "lib/git.mjs",
+        "lib/gh.mjs",
+        "lib/prd.mjs",
+        "lib/tick.mjs",
+        "docs/execution.md"
+      ],
+      "boundaries_checked": [
+        "The sole Verify launcher supplies an explicit basics allowlist and existing Git/npm tooling helpers to /bin/sh -c, retaining the approved command, owned cwd, 120-second timeout and 256 KiB bound.",
+        "Tokens, arbitrary credential variables, proxy credentials, SSH agent state, NODE_OPTIONS and shell startup selectors are excluded; private HOME/XDG/temp/gh profiles replace personal configuration and repository Git helpers are reset.",
+        "Native subprocesses see none of 15 injected environment keys; success returns exit 0 and failure exit 23 with exact evidence. Private profiles are removed after success, failure, dirty-tree rejection and concurrent cancellation.",
+        "Published replay and blocked failure/interruption checkpoints cannot run commands again. Empty checks allocate no private profile and claim no test evidence.",
+        "Environment separation does not add an OS sandbox. Existing host restrictions, execution consent, provider/model defaults and later native preparation qualification are unchanged."
+      ],
+      "regressions": [
+        "verification uses a credential-free environment and removes private profiles on success and failure",
+        "verification tracked writes block publication at the unchanged native Git head",
+        "verification staged writes block publication at the unchanged native Git head",
+        "verification untracked writes block publication at the unchanged native Git head",
+        "cancellation during verification fences publication and retains verification evidence"
+      ]
+    },
+    {
+      "rule": "Only the coordinator resumes the durable local stop fallback, and only for the exact owned running job and validated surviving processes.",
+      "files": [
+        "lib/execution.mjs",
+        "lib/run.mjs",
+        "lib/control.mjs",
+        "lib/tick.mjs",
+        "test/run_stop.test.mjs",
+        "docs/execution.md"
+      ],
+      "boundaries_checked": [
+        "Reconciliation reuses requestRunCancellation and runner.kill after accepted run-ID matching; the runner honors the saved killAfter deadline rather than starting a new stop timer.",
+        "Before the deadline no fallback signal is sent. Read-only current/inspect never signals, reused PIDs and unavailable process inspection remain pending with RUN_STOP_UNVERIFIED, and further dispatch stays fenced.",
+        "A native cancellation owner exits before its timer fires. New coordinators recover attached and detached TERM-ignoring descendants from persisted process identities and confirm cancelled/137 only after shutdown.",
+        "Settled local outcomes, unfinished completion snapshots, local timeout fence release, remote/preparation permanent stops and legacy active-run identities keep their existing lifecycle behavior."
+      ],
+      "regressions": [
+        "coordinator reconciliation resumes an owned local kill fallback after restart without another control",
+        "restarted coordinator recovers a lost kill timer for native tools (detached=false)",
+        "restarted coordinator recovers a lost kill timer for native tools (detached=true)"
+      ]
+    },
+    {
+      "rule": "Reported remote sessions cannot replace recorded task/run/job/root ownership before observation, continuation, collection or publication.",
+      "files": [
+        "lib/execution_io.mjs",
+        "lib/execution.mjs",
+        "lib/execution_result.mjs",
+        "docs/execution.md"
+      ],
+      "boundaries_checked": [
+        "One session validator is used by acknowledgements, lookup/inspection, fresh and cached collection, and shared result publication. Missing/null reports retain ownership; a first nonempty report may establish an unrecorded session.",
+        "Foreign, empty or nonstring reported identities are rejected before event journal writes, cost adoption, terminal settlement, result persistence or artifact mutation.",
+        "A foreign continuation acknowledgement remains acceptance-unknown. Bad lookup cannot resolve it; correct lookup reconciles the same durable intent without another paid continuation.",
+        "Job/root/input-head, authoritative terminal outcome, timestamps, allowance, bounded I/O/backoff and stopped-result quarantine still apply. Cancellation replies only acknowledge the exact requested root and never adopt a returned session."
+      ],
+      "regressions": [
+        "openai-agents fixture: foreign sessions cannot enter observation, collection, cache or continuation ownership",
+        "codex-cloud fixture: foreign sessions cannot enter observation, collection, cache or continuation ownership",
+        "shared publication rejects foreign or malformed sessions before any artifact mutation"
+      ]
+    },
+    {
+      "rule": "History restores each missing rendered row using stable event and row identities, with bounded buffers and disconnect cleanup.",
+      "files": [
+        "templates/tracker/tracker.js",
+        "test/tracker.test.mjs",
+        "lib/tracker/stream.mjs",
+        "lib/tracker/runs.mjs",
+        "docs/execution.md"
+      ],
+      "boundaries_checked": [
+        "Paint assigns row positions before heartbeat filtering. Normal rows, orphan heartbeat rows and history rows carry the same event/position identity.",
+        "History deduplicates at row granularity, preserves surviving siblings and pending events, and merges missing rows by event then row position without losing tool/heartbeat state.",
+        "Numeric and sparse replay IDs restore the missing first row of a partially evicted three-row event in its original order; overlapping pages retain one orphan heartbeat row.",
+        "The 400-event pending cap, 2000-row live tail, bounded loaded history, scroll correction, pagination, retention gaps, failed fetch recovery and pagehide cancellation remain covered."
+      ],
+      "regressions": [
+        "partially evicted multi-row events restore missing rows in order (firstId=1)",
+        "partially evicted multi-row events restore missing rows in order (firstId=10)",
+        "orphan heartbeat rows retain their identity across overlapping recovery pages"
+      ]
+    }
+  ],
+  "representative_output": {
+    "evidence_kind": "Native POSIX processes, isolated Git trees and deterministic remote/DOM fixtures. No actual model, installed-plugin, browser/capture or production transport qualification is claimed.",
+    "reports": [
+      {
+        "label": "verification-environment",
+        "report_path": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-HPU6FB/verification-environment-evidence.json",
+        "report_sha256": "63e8f58df35b56baee65e80c199615cbff6dd88143ed30a9871723bd92dde1ce",
+        "observations": [
+          {
+            "failing": false,
+            "private_home_removed": true,
+            "env_keys": [
+              "COLORTERM",
+              "COREPACK_ENABLE_AUTO_PIN",
+              "GH_CONFIG_DIR",
+              "GH_PROMPT_DISABLED",
+              "GIT_ASKPASS",
+              "GIT_CONFIG_COUNT",
+              "GIT_CONFIG_GLOBAL",
+              "GIT_CONFIG_KEY_0",
+              "GIT_CONFIG_KEY_1",
+              "GIT_CONFIG_KEY_2",
+              "GIT_CONFIG_NOSYSTEM",
+              "GIT_CONFIG_VALUE_0",
+              "GIT_CONFIG_VALUE_1",
+              "GIT_CONFIG_VALUE_2",
+              "GIT_SSH_COMMAND",
+              "GIT_TERMINAL_PROMPT",
+              "HOME",
+              "LANG",
+              "LC_ALL",
+              "LC_CTYPE",
+              "NO_COLOR",
+              "NPM_CONFIG_GLOBALCONFIG",
+              "NPM_CONFIG_USERCONFIG",
+              "PATH",
+              "SSH_ASKPASS",
+              "TEMP",
+              "TERM",
+              "TMP",
+              "TMPDIR",
+              "USERPROFILE",
+              "XDG_CACHE_HOME",
+              "XDG_CONFIG_HOME",
+              "XDG_DATA_HOME",
+              "XDG_STATE_HOME",
+              "npm_config_manage_package_manager_versions"
+            ],
+            "shell": "/bin/sh",
+            "private_home": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-BO9vWx/verification-WOMZxX",
+            "verification": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-BO9vWx/verification.json",
+            "verification_sha256": "99faba2205162c9c4408c908fc86bcb6e3db4a9214d34783fac87774182506c7",
+            "checkpoint": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-BO9vWx/result-application.json",
+            "checkpoint_sha256": "3e86f6e71fc8409a403f5f5f22ee9a6e2ef7cfb447bd8b0980756d878ae766f1",
+            "actual_exit": 0,
+            "actual_output": "credential-free\n",
+            "phase": "published",
+            "reason": null
+          },
+          {
+            "failing": true,
+            "private_home_removed": true,
+            "env_keys": [
+              "COLORTERM",
+              "COREPACK_ENABLE_AUTO_PIN",
+              "GH_CONFIG_DIR",
+              "GH_PROMPT_DISABLED",
+              "GIT_ASKPASS",
+              "GIT_CONFIG_COUNT",
+              "GIT_CONFIG_GLOBAL",
+              "GIT_CONFIG_KEY_0",
+              "GIT_CONFIG_KEY_1",
+              "GIT_CONFIG_KEY_2",
+              "GIT_CONFIG_NOSYSTEM",
+              "GIT_CONFIG_VALUE_0",
+              "GIT_CONFIG_VALUE_1",
+              "GIT_CONFIG_VALUE_2",
+              "GIT_SSH_COMMAND",
+              "GIT_TERMINAL_PROMPT",
+              "HOME",
+              "LANG",
+              "LC_ALL",
+              "LC_CTYPE",
+              "NO_COLOR",
+              "NPM_CONFIG_GLOBALCONFIG",
+              "NPM_CONFIG_USERCONFIG",
+              "PATH",
+              "SSH_ASKPASS",
+              "TEMP",
+              "TERM",
+              "TMP",
+              "TMPDIR",
+              "USERPROFILE",
+              "XDG_CACHE_HOME",
+              "XDG_CONFIG_HOME",
+              "XDG_DATA_HOME",
+              "XDG_STATE_HOME",
+              "npm_config_manage_package_manager_versions"
+            ],
+            "shell": "/bin/sh",
+            "private_home": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-fO3ifN/verification-Zja8AU",
+            "verification": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-fO3ifN/verification.json",
+            "verification_sha256": "85fbde663df58107f0a1c806535a4f0f1e8b7c127d5dfd3cc68776dcbb6b0d99",
+            "checkpoint": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-fO3ifN/result-application.json",
+            "checkpoint_sha256": "ac86818d92f7f442a4a6727f229062c291a78cd6b17ebdda30ed89f2c4a081f1",
+            "actual_exit": 23,
+            "actual_output": "credential-free\n",
+            "phase": "blocked",
+            "reason": "verification-failed"
+          }
+        ]
+      },
+      {
+        "label": "provider-session",
+        "report_path": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-H5UMG7/session-ownership-evidence.json",
+        "report_sha256": "82562d3b91052d5c9b265dffeecd27a426f98fa3e20d0d09d10979cc40bdad53",
+        "observed": {
+          "provider": "openai-agents",
+          "ownedSession": "session-1",
+          "execution": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-xbkbtF/execution.json",
+          "rejectedObservationSessions": [
+            "foreign-session",
+            "",
+            42
+          ],
+          "continuationCalls": 1
+        },
+        "persisted_execution": {
+          "path": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-xbkbtF/execution.json",
+          "sha256": "f8809992dcee7e62190a191735c45192ab466018b4730d17099cfcebc6d5d413",
+          "task_id": "acme/widget/remote",
+          "provider": "openai-agents",
+          "run_id": "run-28dacf15-516e-429b-9810-4741aed0fcac",
+          "session_id": "session-1",
+          "provider_job_id": "job-2",
+          "turn_id": "turn-2",
+          "acceptance": "accepted",
+          "provider_state": "running",
+          "collected": false,
+          "cost_usd": null,
+          "stopped": null
+        }
+      },
+      {
+        "label": "provider-session",
+        "report_path": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-pRkaGg/session-ownership-evidence.json",
+        "report_sha256": "13ab4159e6446a1421c8c35fd549754d825615e6f68449215771747430d8fe93",
+        "observed": {
+          "provider": "codex-cloud",
+          "ownedSession": "session-1",
+          "execution": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-Agjcqv/execution.json",
+          "rejectedObservationSessions": [
+            "foreign-session",
+            "",
+            42
+          ],
+          "continuationCalls": 1
+        },
+        "persisted_execution": {
+          "path": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-Agjcqv/execution.json",
+          "sha256": "4d72f0b5abf4bf702bbe57c5517cb5b1f1aace4091a42017c2c1b8807b7a97b0",
+          "task_id": "acme/widget/remote",
+          "provider": "codex-cloud",
+          "run_id": "run-133f4381-4dcd-4357-8545-38bde6555d7d",
+          "session_id": "session-1",
+          "provider_job_id": "job-2",
+          "turn_id": "turn-2",
+          "acceptance": "accepted",
+          "provider_state": "running",
+          "collected": false,
+          "cost_usd": null,
+          "stopped": null
+        }
+      },
+      {
+        "label": "local-fallback",
+        "report_path": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-alfaOK/local-fallback-evidence.json",
+        "report_sha256": "06289e961b7e79b8468aa312b1f9cfff75d4b5cf06ff35100dfe095e7b81acea",
+        "observed": {
+          "execution": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-bGtnIv/execution.json",
+          "job": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-bGtnIv/legacy-active/job.json",
+          "persistedKillAfter": 1790215205000,
+          "signals": [
+            [
+              -123456790,
+              "SIGTERM"
+            ],
+            [
+              -123456789,
+              "SIGTERM"
+            ],
+            [
+              -123456790,
+              "SIGKILL"
+            ],
+            [
+              -123456789,
+              "SIGKILL"
+            ]
+          ]
+        },
+        "persisted_execution": {
+          "path": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-bGtnIv/execution.json",
+          "sha256": "8c6626e9c845e7adc98aa8faaaa716464b749ad5eab12bce3c04e5a6c3acb450",
+          "task_id": "legacy-task",
+          "provider": "codex",
+          "run_id": "legacy-active",
+          "session_id": "22222222-2222-4222-8222-222222222222",
+          "provider_job_id": "legacy-active",
+          "turn_id": null,
+          "acceptance": "accepted",
+          "provider_state": "cancelled",
+          "collected": true,
+          "cost_usd": null,
+          "stopped": "operator-cancelled"
+        },
+        "persisted_job": {
+          "path": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-bGtnIv/legacy-active/job.json",
+          "sha256": "fca18c659ac42c586287c7778672e06bd2a9c9eebef860fffb115bdac431cdd3",
+          "run_id": "legacy-active",
+          "exit": 137,
+          "killed": true,
+          "kill_after": 1790215205000,
+          "owned_process_count": 2
+        }
+      },
+      {
+        "label": "native-kill-restart",
+        "report_path": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-SwCWj7/native-kill-restart-evidence.json",
+        "report_sha256": "b53d26ebd5e2d0af0e580be15463408fd5fbbf7dee9cd8d48d49b6cf77653458",
+        "observed": {
+          "detached": false,
+          "timerOwnerExited": true,
+          "persistedKillAfter": 1791276890583,
+          "providerState": "cancelled",
+          "job": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-SwCWj7/runs/2026-10-06T08-54-45-173-stop-restart/job.json",
+          "execution": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-SwCWj7/runs/execution.json"
+        },
+        "persisted_execution": {
+          "path": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-SwCWj7/runs/execution.json",
+          "sha256": "f036b4191015b22fba69c7990181fd70e45161fb0b0c85b18f9a58d3167d5b94",
+          "task_id": "native-restart-stop",
+          "provider": "codex",
+          "run_id": "2026-10-06T08-54-45-173-stop-restart",
+          "session_id": null,
+          "provider_job_id": "2026-10-06T08-54-45-173-stop-restart",
+          "turn_id": null,
+          "acceptance": "accepted",
+          "provider_state": "cancelled",
+          "collected": true,
+          "cost_usd": null,
+          "stopped": "operator-cancelled"
+        },
+        "persisted_job": {
+          "path": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-SwCWj7/runs/2026-10-06T08-54-45-173-stop-restart/job.json",
+          "sha256": "3570c80d18d73b7322415cbcd93c81723340a42fc22f2baf4fb10e33f8dbd27b",
+          "run_id": "2026-10-06T08-54-45-173-stop-restart",
+          "exit": 137,
+          "killed": true,
+          "kill_after": 1791276890583,
+          "owned_process_count": 2
+        }
+      },
+      {
+        "label": "native-kill-restart",
+        "report_path": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-gglFNT/native-kill-restart-evidence.json",
+        "report_sha256": "3bdf4b3da462d7d33aef7c342ed996c313ca451563f68162d75c118d281d0e15",
+        "observed": {
+          "detached": true,
+          "timerOwnerExited": true,
+          "persistedKillAfter": 1791276893180,
+          "providerState": "cancelled",
+          "job": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-gglFNT/runs/2026-10-06T08-54-47-696-stop-restart/job.json",
+          "execution": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-gglFNT/runs/execution.json"
+        },
+        "persisted_execution": {
+          "path": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-gglFNT/runs/execution.json",
+          "sha256": "bb8ff93e353743df26e39e6bd5b3afab26b149d31b68475d92ab982012be8147",
+          "task_id": "native-restart-stop",
+          "provider": "codex",
+          "run_id": "2026-10-06T08-54-47-696-stop-restart",
+          "session_id": null,
+          "provider_job_id": "2026-10-06T08-54-47-696-stop-restart",
+          "turn_id": null,
+          "acceptance": "accepted",
+          "provider_state": "cancelled",
+          "collected": true,
+          "cost_usd": null,
+          "stopped": "operator-cancelled"
+        },
+        "persisted_job": {
+          "path": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-gglFNT/runs/2026-10-06T08-54-47-696-stop-restart/job.json",
+          "sha256": "f1b47c5e1cb65cff89b45c88bcac26f6c33567921228602b3671a39c367221b1",
+          "run_id": "2026-10-06T08-54-47-696-stop-restart",
+          "exit": 137,
+          "killed": true,
+          "kill_after": 1791276893180,
+          "owned_process_count": 2
+        }
+      }
+    ],
+    "multi_row_recovery": {
+      "raw_log": "/tmp/execution-boundary-recovery-final-backends.txt",
+      "observations": [
+        {
+          "firstId": 1,
+          "cursor": 2,
+          "recoveredRows": [
+            "0",
+            "1",
+            "2"
+          ],
+          "totalRows": 2001,
+          "uniqueRows": 2001
+        },
+        {
+          "firstId": 10,
+          "cursor": 11,
+          "recoveredRows": [
+            "0",
+            "1",
+            "2"
+          ],
+          "totalRows": 2001,
+          "uniqueRows": 2001
+        }
+      ],
+      "orphan_heartbeat_test": "test/tracker.test.mjs: orphan heartbeat rows retain their identity across overlapping recovery pages"
+    }
+  },
+  "external_qualification": {
+    "mandatory_live_prerequisites": [],
+    "live_paid_calls": 0,
+    "native_codex_preparation_qualified": false,
+    "remote_provider_available": {
+      "openai-agents": false,
+      "codex-cloud": false
+    },
+    "installed_plugin_qualified": false,
+    "model_access_exercised": false,
+    "browser_capture_required": false,
+    "remedy": "Complete the independent native preparation adapter and its limited-authority evidence before registry integration. Later production transports require implemented adapters, credentials, demonstrated model access and authorized bounded live evidence; preserve model/provider defaults and sandbox permissions."
+  }
+}

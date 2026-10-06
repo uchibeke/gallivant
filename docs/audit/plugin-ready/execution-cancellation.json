@@ -1,0 +1,144 @@
+{
+  "version": 1,
+  "task_id": "task-df42674c6251c85b0edef13f",
+  "scope": "offline legacy local cancellation review correction",
+  "recorded_at": "2026-10-06T00:43:14.810697+00:00",
+  "source_parent_revision": "5bbef8288576c33c1be0e30faf238a9b1c0d7301",
+  "review_comment_id": 4190285401,
+  "prior_evidence": [
+    "docs/audit/plugin-ready/execution-foundation.json",
+    "docs/audit/plugin-ready/execution-preparation.json"
+  ],
+  "commands": [
+    {
+      "command": "npm test",
+      "exit": 0,
+      "raw_log": "/tmp/execution-cancel-tests-final.txt",
+      "sha256": "a47541cd86efb2971a0a881439f914dd72f236ae0634889d4d697ead2ff9a328",
+      "tests": 937,
+      "passed": 937
+    },
+    {
+      "command": "npm run lint",
+      "exit": 0,
+      "raw_log": "/tmp/execution-cancel-lint.txt",
+      "sha256": "8c7790de3f018fb4580f18ac70e1b355a0f76f522dd73acbdaa63632feffcecc"
+    },
+    {
+      "command": "npm run test:execution-backends",
+      "exit": 0,
+      "raw_log": "/tmp/execution-cancel-backends.txt",
+      "sha256": "dc83aad567b33875bf31646bd56bf7f16028040fe84976a4875d2e2780b2b5b2",
+      "tests": 148,
+      "passed": 148
+    },
+    {
+      "command": "git diff --check",
+      "exit": 0,
+      "evidence": "Empty output on reviewed source; repeated after evidence generation and staging."
+    }
+  ],
+  "artifact_hashes": {
+    "lib/execution.mjs": "7278d6f870641a363a1f5b834b192f69855917d100550c57d115cb8106a4eb18",
+    "lib/control.mjs": "9bedaf33b207697eae5a68e48b963dc9e509df36e877c42db0f55e000e571e13",
+    "lib/run.mjs": "f6349f67598f9ff85a9c40efc77897639d1dc9985f22d2e8f8bc03aacb8f4582",
+    "test/execution-backends.test.mjs": "fac6c24ae998f73c8d927c42875b5ff6b9e19f97299386c51d907c9860722704",
+    "test/control.test.mjs": "aa35c65113bb3a9fa3409d6a0748f94b203e967090e1255e91e1173368485272",
+    "test/run_stop.test.mjs": "73fe2c8db4cb59794de70b624da5fecd5a8f53e1770c0c6dca2443f9edb18381",
+    "docs/execution.md": "fa7a2c10d721e0c51706a15a25dce0e548d9d2e665d96209e3b116354ed19443"
+  },
+  "source_and_output_review": [
+    {
+      "rule": "An owned signal request is not cancellation confirmation; all owned descendants must stop before confirmation.",
+      "files": [
+        "lib/execution.mjs",
+        "lib/control.mjs",
+        "lib/run.mjs"
+      ],
+      "sibling_callers_checked": [
+        "coordinator timeout",
+        "operator cancel fallback",
+        "interrupt settlement",
+        "unsafe preparation cleanup",
+        "preparation deadline cleanup"
+      ],
+      "regressions": [
+        "legacy cancellation stops the owned process tree, survives restart and quarantines late output",
+        "legacy control cancellation verifies cessation instead of trusting the kill return",
+        "legacy boundary cancellation waits for tool subprocesses (detached=false)",
+        "legacy boundary cancellation waits for tool subprocesses (detached=true)"
+      ]
+    },
+    {
+      "rule": "A stop must persist before signalling, preserve exact legacy identities, and retain unknown cost without inventing a submission intent.",
+      "files": [
+        "lib/execution.mjs",
+        "lib/context.mjs",
+        "docs/execution.md"
+      ],
+      "regression": "legacy cancellation keeps inspection failures and unsupported stops unconfirmed"
+    },
+    {
+      "rule": "A missing or different run cannot confirm cessation; saved local records must not retain computed liveness or stale exit metadata.",
+      "files": [
+        "lib/execution.mjs",
+        "test/execution-backends.test.mjs"
+      ],
+      "regression": "local cancellation and reconciliation cannot confirm a missing or different run",
+      "generated_output_finding": "The adopted record retained computed running=true and an old exit after cancellation. Reconciliation now persists the exact observed job fields without computed liveness; the regression asserts exit 137 and no running key."
+    }
+  ],
+  "representative_output": {
+    "execution": {
+      "path": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-H7LB5M/execution.json",
+      "sha256": "ded6136d8b310e671f68c5a93e6723f446e792bdf7b3db9cf6066a342dad42fc"
+    },
+    "job": {
+      "path": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-H7LB5M/legacy-active/job.json",
+      "sha256": "5473f5dbff7075be47b0b5855a5487a788b4361e2aa704eda7248fc7d550a84f"
+    },
+    "run_id": "legacy-active",
+    "provider_job_id": "legacy-active",
+    "provider_state": "cancelled",
+    "cost_usd": null,
+    "paid_intents": 0,
+    "quarantined": true,
+    "persisted_computed_liveness": false,
+    "evidence_kind": "Deterministic process-shaped fixture; native subprocess variants separately use owned Node fixtures, not a paid harness."
+  },
+  "earlier_checks": [
+    {
+      "raw_log": "/tmp/execution-cancel-focus.txt",
+      "sha256": "0be4e26fa9f84448ea12277cc35aa9a9b04c9725c18c0426250138138eac0457",
+      "result": "Sandbox run: 1/5 passed; native process ownership locks unavailable. Approved native process inspection was used afterward without weakening the lock."
+    },
+    {
+      "raw_log": "/tmp/execution-cancel-focus-native.txt",
+      "sha256": "78cb8c893e886f8336861bcd2f26c37042abb6edb3e3562b9e36b79d2a7eef3f",
+      "result": "5/5 focused cancellation cases passed before saved-state refinement."
+    },
+    {
+      "raw_log": "/tmp/execution-cancel-process-tree.txt",
+      "sha256": "26f3236d33fc9ae079ca3e2f9fdf2b7a3d4e52215b842e9a52c45bd9fc1c964d",
+      "result": "7/7 owned process-tree cases passed before saved-state refinement."
+    },
+    {
+      "raw_log": "/tmp/execution-cancel-tests.txt",
+      "sha256": "5914815354703f1ac88cfb1d6380d0c38faca7698d9609263cbc8c55aded4e24",
+      "result": "937/937 passed; source was refined during this run, so the final-source full suite was repeated."
+    }
+  ],
+  "external_qualification": {
+    "mandatory_live_prerequisites": [],
+    "live_paid_calls": 0,
+    "native_codex_preparation_qualified": false,
+    "remote_provider_available": {
+      "openai-agents": false,
+      "codex-cloud": false
+    },
+    "installed_plugin_qualified": false,
+    "model_access_exercised": false,
+    "browser_capture_required": false,
+    "remedy": "Complete the independent native preparation adapter and its limited-authority evidence before registry integration. Later production transports require implemented adapters, credentials, demonstrated model access and authorized bounded live evidence; preserve the existing model/provider and sandbox defaults."
+  }
+}

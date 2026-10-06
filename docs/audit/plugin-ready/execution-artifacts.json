@@ -1,0 +1,142 @@
+{
+  "version": 1,
+  "task_id": "task-df42674c6251c85b0edef13f",
+  "scope": "offline collected artifact integrity review correction",
+  "recorded_at": "2026-10-06T01:07:48.136013+00:00",
+  "source_parent_revision": "e7a6f0d43c8916ac5b99fa58186f3122953a6404",
+  "review_comment_id": 4190415647,
+  "prior_evidence": [
+    "docs/audit/plugin-ready/execution-foundation.json",
+    "docs/audit/plugin-ready/execution-preparation.json",
+    "docs/audit/plugin-ready/execution-cancellation.json"
+  ],
+  "commands": [
+    {
+      "command": "npm test",
+      "exit": 0,
+      "raw_log": "/tmp/execution-artifact-tests.txt",
+      "sha256": "4f64bd2eedf8d34ddbac6e66471a0127efd0eb1c2fe8ab3169fea27162d783ce",
+      "tests": 939,
+      "passed": 939
+    },
+    {
+      "command": "npm run lint",
+      "exit": 0,
+      "raw_log": "/tmp/execution-artifact-lint.txt",
+      "sha256": "e69d44fca4bba80d9286fbc8393e71cd7ec7860eaf83071f6ae6c563300e9fc7"
+    },
+    {
+      "command": "npm run test:execution-backends",
+      "exit": 0,
+      "raw_log": "/tmp/execution-artifact-backends.txt",
+      "sha256": "8f6abc493e93dd071bc69a1e54752a732c8fb1e2c1bd592c6d01d70c8d2b10fe",
+      "tests": 150,
+      "passed": 150
+    },
+    {
+      "command": "git diff --check",
+      "exit": 0,
+      "evidence": "Empty output on reviewed source; repeated after evidence generation and staging."
+    }
+  ],
+  "artifact_hashes": {
+    "lib/execution.mjs": "86f9d1c4ea9d86818405df887a11874634a6b32eb987f85cd6aeef6516be7904",
+    "lib/execution_io.mjs": "a332b710f1856d408e5cb8f2acc31a22619e7fe02afc04bd2977dc78b37496fc",
+    "lib/execution_result.mjs": "b93e620536e6c87eb4e96f1977275f7e1b46165978069ed38c770e383454ecf2",
+    "lib/commands/serve.mjs": "a3e8f851c903daacc66e58be36b1d40c696f113c55ae3d8d5f8fbddd742e1e52",
+    "test/execution-backends.test.mjs": "6ede08622676c94ce34b68eccfd7e25950c11750f6293f66c6d710d6a444ffef",
+    "docs/execution.md": "e7f209eda6b77a51766c33d886604d2e0adb91820e3e5c949e7e24c4d768f947"
+  },
+  "source_and_output_review": [
+    {
+      "rule": "Artifact bytes, paths and hashes are immutable private publication input; diagnostic redaction must not rewrite them or recompute hashes.",
+      "files": [
+        "lib/execution.mjs",
+        "lib/execution_io.mjs",
+        "lib/execution_result.mjs"
+      ],
+      "boundaries_checked": [
+        "collection",
+        "provider reply mutation",
+        "mode 0600 persistence",
+        "cached restart replay",
+        "original hash validation",
+        "canonical artifact application",
+        "coordinator verification",
+        "publication"
+      ],
+      "regression": "collected authentication source preserves exact artifact bytes through restart and publication",
+      "observed": "Authentication variable references, CRLF and Unicode retain exact bytes; changed content fails the original hash check before commit."
+    },
+    {
+      "rule": "Private artifacts and application paths cannot enter public projections; summaries and verification diagnostics use resolved-secret redaction.",
+      "files": [
+        "lib/commands/serve.mjs",
+        "lib/execution_result.mjs",
+        "lib/execution_io.mjs"
+      ],
+      "boundaries_checked": [
+        "provider-supplied summary override",
+        "deletion manifests",
+        "applying checkpoint",
+        "successful verification stdout",
+        "failed verification stdout",
+        "read-only result route",
+        "legacy version 1 result cache",
+        "100-artifact display limit"
+      ],
+      "regressions": [
+        "private artifact payloads and paths stay out of result projections and verification diagnostics",
+        "saved result route survives log retention, rejects traversal and never polls a provider"
+      ],
+      "observed": "Inspected the private manifest and generated result response. Original payload hashes match; the public view has redacted paths and diagnostics, no file text, and no provider calls during reads."
+    }
+  ],
+  "representative_output": {
+    "private": {
+      "path": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-5dMHLO/runs/acme__widget__result/run-48b1de34-2019-4403-8e9c-d80113b17a7c/result.json",
+      "sha256": "346016f7d1bf83a6da2d3ee4fb9aa9e9fef23a83a7b45e50959d89602353717c"
+    },
+    "public": {
+      "path": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-5dMHLO/runs/acme__widget__result/run-48b1de34-2019-4403-8e9c-d80113b17a7c/result-public-fixture.json",
+      "sha256": "82737d674561df37aa3707c2c7332231b240afa7683215f13efd2fdc87d2ff7e"
+    },
+    "verification": {
+      "path": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-5dMHLO/runs/acme__widget__result/run-48b1de34-2019-4403-8e9c-d80113b17a7c/verification.json",
+      "sha256": "8510f4518a2c1ee586678fd8402a76edf79742857a47150a63a42e9401cfbbc3"
+    },
+    "task_id": "acme/widget/result",
+    "run_id": "run-48b1de34-2019-4403-8e9c-d80113b17a7c",
+    "provider_job_id": "job-1",
+    "artifact_payload_hashes_match": true,
+    "public_payload_text_included": false,
+    "private_result_mode": "0o600",
+    "verification_exit": 2,
+    "evidence_kind": "Deterministic provider-shaped fixture; verification exit 2 is the intentionally failing case and is correctly retained without publication. No live provider qualification."
+  },
+  "focused_checks": [
+    {
+      "raw_log": "/tmp/execution-artifact-focus.txt",
+      "sha256": "ed380af0e06d1fa088bbc23e698e9f2534c41e0a71404e3666222d7f3795480c",
+      "result": "4/5 passed; the initial projection assertion expected paths in a published checkpoint. The fixture now reproduces the applying checkpoint that actually carries paths."
+    },
+    {
+      "raw_log": "/tmp/execution-artifact-focus-final.txt",
+      "sha256": "d288e2b8da7992d33aacbaa086a078fecf575a15992e79af9a7913459b2bd9ad",
+      "result": "5/5 focused publication, privacy, verification and result-route cases passed before adding legacy summary-limit assertions; final full and conformance suites include those assertions."
+    }
+  ],
+  "external_qualification": {
+    "mandatory_live_prerequisites": [],
+    "live_paid_calls": 0,
+    "native_codex_preparation_qualified": false,
+    "remote_provider_available": {
+      "openai-agents": false,
+      "codex-cloud": false
+    },
+    "installed_plugin_qualified": false,
+    "model_access_exercised": false,
+    "browser_capture_required": false,
+    "remedy": "Complete the independent native preparation adapter and its limited-authority evidence before registry integration. Later production transports require implemented adapters, credentials, demonstrated model access and authorized bounded live evidence; preserve the existing model/provider and sandbox defaults."
+  }
+}

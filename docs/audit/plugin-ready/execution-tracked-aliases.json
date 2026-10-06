@@ -1,0 +1,229 @@
+{
+  "version": 1,
+  "task_id": "task-df42674c6251c85b0edef13f",
+  "scope": "offline tracked repository path alias review correction",
+  "recorded_at": "2026-10-06T06:37:30.633112+00:00",
+  "source_parent_revision": "8bd62990cc40a632bbfb6da842945f083aad5aa4",
+  "review_comment_ids": [
+    4192155158
+  ],
+  "prior_evidence": [
+    "docs/audit/plugin-ready/execution-foundation.json",
+    "docs/audit/plugin-ready/execution-paths-journal.json",
+    "docs/audit/plugin-ready/execution-alias-output.json",
+    "docs/audit/plugin-ready/execution-terminal-outcomes.json"
+  ],
+  "commands": [
+    {
+      "command": "npm test",
+      "exit": 0,
+      "raw_log": "/tmp/execution-tracked-alias-tests.txt",
+      "sha256": "3945cee61da7155b8b2948ffad92c15a31084b34de61ae95dc38fdab8d3bc464",
+      "tests": 1025,
+      "passed": 1025
+    },
+    {
+      "command": "npm run lint",
+      "exit": 0,
+      "raw_log": "/tmp/execution-tracked-alias-lint.txt",
+      "sha256": "8c7790de3f018fb4580f18ac70e1b355a0f76f522dd73acbdaa63632feffcecc"
+    },
+    {
+      "command": "npm run test:execution-backends",
+      "exit": 0,
+      "raw_log": "/tmp/execution-tracked-alias-backends.txt",
+      "sha256": "cc98ae34805dcc623a3adbc4f5899d221adfaebf3431b02cbb25bc3e1da88650",
+      "tests": 325,
+      "passed": 325
+    },
+    {
+      "command": "git diff --check",
+      "exit": 0,
+      "raw_log": "/tmp/execution-tracked-alias-diff.txt",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    }
+  ],
+  "artifact_hashes": {
+    "lib/repository_files.mjs": "f7f1da09a1d8bb1986954ea4c5ec0b92f8da16e991fb4e50eb0322c36dc5a823",
+    "lib/git.mjs": "c06387730899f20b4eec516bdf2f71105ef1f9c0e6d46c5fdec7e74c01cc7cc8",
+    "lib/execution_result.mjs": "0ab4433cf7924be2a55ee65e25ef20be34b2b7e209519b7335833f2500b1b427",
+    "test/execution-backends.test.mjs": "ef47068c03c23272dd0bbc2db44f77370f14d8762bb57033bd63fc4c1e598722",
+    "docs/execution.md": "c22359b1b8f6d4015aa39c41fa19dd177ead57daa3b252ffebc488b83b6f40a5"
+  },
+  "focused_checks": [
+    {
+      "raw_log": "/tmp/execution-tracked-alias-focus.txt",
+      "sha256": "10cc9d934a1e9d33fbf6f49dd026c2f1d107738ac26edde070c325b31d83cd3d",
+      "tests": 25,
+      "passed": 25
+    }
+  ],
+  "source_and_output_review": [
+    {
+      "rule": "Artifact targets must preserve canonical repository identity across case and Unicode aliases, including existing tracked files and directories, before mutation or publication.",
+      "files": [
+        "lib/repository_files.mjs",
+        "lib/git.mjs",
+        "lib/execution_result.mjs",
+        "lib/tick.mjs"
+      ],
+      "boundaries_checked": [
+        "single artifact versus existing tracked file",
+        "different child filename under an aliased tracked parent",
+        "HEAD and index union including staged additions and index deletions",
+        "case, NFC and Unicode upper/lower folding",
+        "file/directory collisions and manifest-only parent aliases",
+        "exact-spelling edits, deletions and canonical input aliases",
+        "no content hash reads, writes, checkpoints, commits, verification, push or PR after alias refusal",
+        "verified recovery cannot replay commands or publish a conflicting tracked target",
+        "pushed results validate their complete tracked tree",
+        "published replay preserves its existing receipt without new work",
+        "raw NUL path metadata preserves leading whitespace and embedded newlines",
+        "commit and already-applied ownership checks reuse the same untrimmed bounded reader",
+        "missing, failing, oversized, malformed and incomplete metadata fail closed",
+        "generic metadata errors avoid echoing private repository paths",
+        "local CLI execution, task/readiness, provider defaults and schema versions remain unchanged"
+      ],
+      "regressions": [
+        "single artifacts reject aliases of native tracked files and parent directories before content validation or mutation",
+        "tracked alias checks include staged additions and HEAD paths removed from the index",
+        "portable targets reject parent and file-directory aliases while accepting exact tracked spelling",
+        "pushed and verified recovery reject tracked aliases without verification or publication replay",
+        "Git path readers preserve whitespace and NUL ordering with bounded complete metadata",
+        "missing or failing tracked path metadata stops result application before files, checkpoints or publication"
+      ]
+    }
+  ],
+  "path_read_limits": {
+    "timeout_ms_per_query": 2000,
+    "bytes_per_query": 1048576,
+    "queries": [
+      "ls-tree --name-only -r -z HEAD",
+      "ls-files --cached -z"
+    ],
+    "scope": "HEAD/index path metadata and shared staged/changed path readers"
+  },
+  "representative_output": {
+    "evidence_kind": "Generated offline manifests with native Git and filesystem observations; no live provider qualification.",
+    "raw_log": "/tmp/execution-tracked-alias-backends.txt",
+    "report_path": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-wI0chY/tracked-alias-evidence.json",
+    "report_sha256": "778942d571313ec82a5128ede75373ad11c252fbc307482285b6bc5b271caa8a",
+    "cases": [
+      {
+        "tracked": "src/File.js",
+        "target": "src/file.js",
+        "head": "8203b89832686e5d1b9fdfb6c99401a7d8c5bd7e",
+        "worktree": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-DAJkrp",
+        "resultDir": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-kZmPtD",
+        "trackedPaths": [
+          "a.txt",
+          "b.txt",
+          "src/File.js"
+        ],
+        "filesystemAlias": true,
+        "mutation": false,
+        "publicationCalls": [],
+        "manifestPreserved": true,
+        "tracked_file_sha256": "0c550bb91aaaacd2e58221b5a26385828b1237e15f25d5b83e65882ad148c167"
+      },
+      {
+        "tracked": "Src/old.js",
+        "target": "src/new.js",
+        "head": "ba5efd1d7bf6689e6ffffa4094daf15fecd53840",
+        "worktree": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-dKsOTJ",
+        "resultDir": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-LfmTPw",
+        "trackedPaths": [
+          "Src/old.js",
+          "a.txt",
+          "b.txt"
+        ],
+        "filesystemAlias": false,
+        "mutation": false,
+        "publicationCalls": [],
+        "manifestPreserved": true,
+        "tracked_file_sha256": "0c550bb91aaaacd2e58221b5a26385828b1237e15f25d5b83e65882ad148c167"
+      },
+      {
+        "tracked": "caf\u00e9/old.js",
+        "target": "cafe\u0301/new.js",
+        "head": "24ab573f4a16b3c96ca4bdae6ce4c17be4e44d5a",
+        "worktree": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-NG3kk9",
+        "resultDir": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-RjdJXb",
+        "trackedPaths": [
+          "a.txt",
+          "b.txt",
+          "caf\u00e9/old.js"
+        ],
+        "filesystemAlias": false,
+        "mutation": false,
+        "publicationCalls": [],
+        "manifestPreserved": true,
+        "tracked_file_sha256": "0c550bb91aaaacd2e58221b5a26385828b1237e15f25d5b83e65882ad148c167"
+      },
+      {
+        "tracked": "\u03a3/old.js",
+        "target": "\u03c2/new.js",
+        "head": "c83b3146311a2519d9e86bc4bf3a8029c1734c86",
+        "worktree": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-aRvx5l",
+        "resultDir": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-wFAMgM",
+        "trackedPaths": [
+          "a.txt",
+          "b.txt",
+          "\u03a3/old.js"
+        ],
+        "filesystemAlias": false,
+        "mutation": false,
+        "publicationCalls": [],
+        "manifestPreserved": true,
+        "tracked_file_sha256": "0c550bb91aaaacd2e58221b5a26385828b1237e15f25d5b83e65882ad148c167"
+      },
+      {
+        "tracked": "Stra\u00dfe/old.js",
+        "target": "STRASSE/new.js",
+        "head": "745517c88fb54b2d3422bb15be71172ba199465f",
+        "worktree": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-cIpFFC",
+        "resultDir": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-nGzKzB",
+        "trackedPaths": [
+          "Stra\u00dfe/old.js",
+          "a.txt",
+          "b.txt"
+        ],
+        "filesystemAlias": false,
+        "mutation": false,
+        "publicationCalls": [],
+        "manifestPreserved": true,
+        "tracked_file_sha256": "0c550bb91aaaacd2e58221b5a26385828b1237e15f25d5b83e65882ad148c167"
+      },
+      {
+        "tracked": " File.js",
+        "target": " file.js",
+        "head": "5df285484d3d17b0292c317e9129aa4639604518",
+        "worktree": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-YJdBkw",
+        "resultDir": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-xKMkzE",
+        "trackedPaths": [
+          " File.js",
+          "a.txt",
+          "b.txt"
+        ],
+        "filesystemAlias": true,
+        "mutation": false,
+        "publicationCalls": [],
+        "manifestPreserved": true,
+        "tracked_file_sha256": "0c550bb91aaaacd2e58221b5a26385828b1237e15f25d5b83e65882ad148c167"
+      }
+    ]
+  },
+  "external_qualification": {
+    "mandatory_live_prerequisites": [],
+    "live_paid_calls": 0,
+    "native_codex_preparation_qualified": false,
+    "remote_provider_available": {
+      "openai-agents": false,
+      "codex-cloud": false
+    },
+    "installed_plugin_qualified": false,
+    "model_access_exercised": false,
+    "browser_capture_required": false,
+    "remedy": "Complete the independent native preparation adapter and its limited-authority evidence before registry integration. Later production transports require implemented adapters, credentials, demonstrated model access and authorized bounded live evidence; preserve model/provider defaults and sandbox permissions."
+  }
+}

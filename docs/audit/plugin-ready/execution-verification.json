@@ -1,0 +1,213 @@
+{
+  "version": 1,
+  "task_id": "task-df42674c6251c85b0edef13f",
+  "scope": "offline verification lifecycle and publication review corrections",
+  "recorded_at": "2026-10-06T01:36:15.485585+00:00",
+  "source_parent_revision": "0992fcfbb21ccbc3bd13c132c887b0b3dcdc55d1",
+  "review_comment_ids": [
+    4190594614,
+    4190594620
+  ],
+  "prior_evidence": [
+    "docs/audit/plugin-ready/execution-foundation.json",
+    "docs/audit/plugin-ready/execution-preparation.json",
+    "docs/audit/plugin-ready/execution-cancellation.json",
+    "docs/audit/plugin-ready/execution-artifacts.json"
+  ],
+  "commands": [
+    {
+      "command": "npm test",
+      "exit": 0,
+      "raw_log": "/tmp/execution-verification-tests.txt",
+      "sha256": "3a0932fc850555cb468fb19875b874720c7ee26383a230e091469dbf770469c0",
+      "tests": 948,
+      "passed": 948
+    },
+    {
+      "command": "npm run lint",
+      "exit": 0,
+      "raw_log": "/tmp/execution-verification-lint.txt",
+      "sha256": "8c7790de3f018fb4580f18ac70e1b355a0f76f522dd73acbdaa63632feffcecc"
+    },
+    {
+      "command": "npm run test:execution-backends",
+      "exit": 0,
+      "raw_log": "/tmp/execution-verification-backends.txt",
+      "sha256": "8276de1a9e16cd3943e175a0a8996382c5d7ba5791683306888600fb5ef6bbc7",
+      "tests": 159,
+      "passed": 159
+    },
+    {
+      "command": "git diff --check",
+      "exit": 0,
+      "evidence": "Empty output after final source and documentation changes; repeated after evidence generation and staging."
+    }
+  ],
+  "artifact_hashes": {
+    "lib/execution_result.mjs": "e584348f22b9d005ad5be634474eb67a0162cc4abe148675ed9060c813706aec",
+    "lib/tick.mjs": "80c95a71515173ea4d9a9a9e0c30290fbad12a7081ab4cd5df38740dd17e6110",
+    "lib/control.mjs": "e593b97207b497e2b8ef5c45e981d8848b06cd48e0c7fdf2e4e04a070cb94f96",
+    "test/execution-backends.test.mjs": "6cf4528d18b5108f1747d0c307f7d7c8bab4b26bfe9184b064a3071706ece5de",
+    "docs/execution.md": "cea05a010bc4b97b53e13194d9b4ee8085cbfa90f42b0147d839fa1d2e1df869"
+  },
+  "source_and_output_review": [
+    {
+      "rule": "A failed or unacknowledged verification command cannot be automatically replayed by polling or recovery. Explicit correction must use the existing same-session control and execution boundary.",
+      "files": [
+        "lib/execution_result.mjs",
+        "lib/tick.mjs",
+        "lib/control.mjs",
+        "lib/commands/resume.mjs"
+      ],
+      "boundaries_checked": [
+        "command failure and timeout",
+        "per-command evidence persistence",
+        "interrupted verifying checkpoint",
+        "startup and periodic reconciliation",
+        "separate provider success and workflow stop",
+        "unrelated review progress",
+        "already queued and new PR recheck",
+        "explicit same-session corrective resume",
+        "cancel fence",
+        "verified push/PR acknowledgement recovery",
+        "published replay"
+      ],
+      "regressions": [
+        "failed verification prevents GitHub publication and leaves exact evidence",
+        "interrupted verification blocks replay while lost publication replies reuse verified evidence",
+        "failed remote verification survives polls and restart, settles workflow and permits explicit correction",
+        "cancellation during verification fences publication and retains verification evidence"
+      ],
+      "observed": "Failed command executed once over multiple coordinator ticks and restart; one collected result and no automatic continuation. Provider success remains succeeded with exit 0 and cost null while workflow is needs-human/result-verification. One explicit resume continues the same session and preserves the blocked old run. Successful verification is not replayed after a lost publication reply."
+    },
+    {
+      "rule": "Publication evidence must describe the exact committed revision from a clean index/worktree; uncommitted or verification-created commits must never be silently published or discarded.",
+      "files": [
+        "lib/execution_result.mjs",
+        "lib/git.mjs"
+      ],
+      "boundaries_checked": [
+        "artifact application and existing commitResult",
+        "strict status before verification",
+        "tracked unstaged changes",
+        "staged index changes",
+        "untracked generated source",
+        "after each approved command",
+        "empty Verify list",
+        "status read failure and invalid status",
+        "verification-created commit",
+        "provider-pushed result",
+        "post-push PR publication",
+        "verified recovery head/evidence freshness"
+      ],
+      "regressions": [
+        "verification tracked writes block publication at the unchanged native Git head",
+        "verification staged writes block publication at the unchanged native Git head",
+        "verification untracked writes block publication at the unchanged native Git head",
+        "pre-existing dirty files and unavailable status fail closed even with an empty Verify list",
+        "verification-created commits are retained and blocked instead of publishing stale evidence",
+        "pushed results and post-push publication use the same clean-checkout boundary",
+        "verified publication recovery rejects changed heads, dirty trees and missing evidence without command replay"
+      ],
+      "observed": "Native isolated Git repositories retain each tracked, staged and untracked mutation at an unchanged applied head, record successful command exit 0, stop before the next command, and publish nothing. Verification-created commits retain the changed head but block stale evidence. Status failures fail closed."
+    },
+    {
+      "rule": "Public result reads expose the recorded workflow stop without private artifact payloads or provider operations.",
+      "files": [
+        "lib/commands/serve.mjs",
+        "lib/execution_io.mjs"
+      ],
+      "boundaries_checked": [
+        "saved result projection",
+        "blocked checkpoint",
+        "failing verification output",
+        "bounded artifact summary",
+        "read-only configured run surface"
+      ],
+      "observed": "Inspected the generated result endpoint response: HTTP 200, blocked/verification-failed, exit 2, one artifact summary, zero provider calls, no files payload."
+    }
+  ],
+  "representative_output": [
+    {
+      "reason": "verification-dirty",
+      "phase": "blocked",
+      "checkpoint": {
+        "path": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-4XDxbF/result-application.json",
+        "sha256": "3e7b0cf05077ded0764ccb2d1abcc2790669241ab1993e08a61fa32fef9eae82"
+      },
+      "verification": {
+        "path": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-4XDxbF/verification.json",
+        "sha256": "3bcecbab7f85d337bd8962ca3ce9a1585546099740a4b10022a63cfd612b859a",
+        "observed_exits": [
+          0
+        ]
+      }
+    },
+    {
+      "reason": "verification-failed",
+      "phase": "blocked",
+      "checkpoint": {
+        "path": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-vJ6nB2/runs/acme__widget__result/run-e7af291d-f4e1-4dee-a476-d05a6e1dfafb/result-application.json",
+        "sha256": "1943cdf101e2052a7d8f2513d72790c21d2d1a2830d473997a13e613e103203d"
+      },
+      "verification": {
+        "path": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-vJ6nB2/runs/acme__widget__result/run-e7af291d-f4e1-4dee-a476-d05a6e1dfafb/verification.json",
+        "sha256": "d448b170c259bd8f32631153f7b9d91d27d45dc563d49e0a8012ec7c128acb72",
+        "observed_exits": [
+          2
+        ]
+      },
+      "public": {
+        "path": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-vJ6nB2/runs/acme__widget__result/run-e7af291d-f4e1-4dee-a476-d05a6e1dfafb/verification-public-fixture.json",
+        "sha256": "6a9f71bdff0a8f54d37f05a3d2ab9cd024552481edc6b554fafb7bb32dfc82bc",
+        "provider_calls": 0,
+        "artifact_payloads_included": false
+      },
+      "command_attempts": {
+        "path": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-vJ6nB2/runs/acme__widget__result/run-e7af291d-f4e1-4dee-a476-d05a6e1dfafb/verify-attempts.txt",
+        "sha256": "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881",
+        "count": 1
+      }
+    },
+    {
+      "reason": "verification-interrupted",
+      "phase": "blocked",
+      "checkpoint": {
+        "path": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-20fEBb/result-application.json",
+        "sha256": "543d4d3b5b42128fc603f6cf41a72b5753cff8a5e832a0e9aa670fdc725f9753"
+      },
+      "verification": {
+        "path": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-20fEBb/verification.json",
+        "sha256": "489d4801b20c8308628c56bb5b5dca5f2e61f38e16e2f5e83ef1ccd37e6d2f9d",
+        "observed_exits": []
+      }
+    }
+  ],
+  "focused_checks": [
+    {
+      "raw_log": "/tmp/execution-verification-focus.txt",
+      "sha256": "9079355af2d2054ed62f74787c277ebf69409f0d843d7353a84b5720c69ef07b",
+      "passed": 11,
+      "tests": 11
+    },
+    {
+      "raw_log": "/tmp/execution-verification-focus-final.txt",
+      "sha256": "52fe357e9163bd2597670e9fc9dd236fc1616733e76afc8cbb09901e9982f91b",
+      "passed": 15,
+      "tests": 15
+    }
+  ],
+  "external_qualification": {
+    "mandatory_live_prerequisites": [],
+    "live_paid_calls": 0,
+    "native_codex_preparation_qualified": false,
+    "remote_provider_available": {
+      "openai-agents": false,
+      "codex-cloud": false
+    },
+    "installed_plugin_qualified": false,
+    "model_access_exercised": false,
+    "browser_capture_required": false,
+    "remedy": "Complete the independent native preparation adapter and its limited-authority evidence before registry integration. Later production transports require implemented adapters, credentials, demonstrated model access and authorized bounded live evidence; preserve model/provider defaults and sandbox permissions."
+  }
+}

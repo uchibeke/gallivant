@@ -6,6 +6,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync, rmSync } from "node
 import { makeGit } from "../lib/git.mjs";
 import { queueChain, retryChain, cancelChain, tickChains, chainRows, renderChains } from "../lib/chains.mjs";
 import { makeState, STATES } from "../lib/state.mjs";
+import { writeJsonAtomic } from "../lib/fs.mjs";
 import { start } from "../lib/commands/start.mjs";
 import { makeTick } from "../lib/tick.mjs";
 import { CONFIG, GOOD_PRD, T0, tempHome, fakeRunner, makeClock, silentLog, fakeCredential, fakeIdentity, harnessBin, prFixture, codexLines } from "./helpers.mjs";
@@ -500,9 +501,37 @@ test("the normal daemon tick settles entries before advancing their chains and d
     observedSettled = true;
     return true;
   };
+  w.ctx.clock.advance(CONFIG.poll_seconds / 60);
   await daemon.tick();
   assert.equal(observedSettled, true);
+  w.ctx.clock.advance(CONFIG.poll_seconds / 60);
   await daemon.tick();
   assert.equal(w.starts(), 2);
   assert.equal(w.ctx.state.get(SECOND).state, STATES.running);
+});
+
+test("fast progress ticks retain chain review cadence, bound outage retries and reconcile on restart", async t => {
+  const w = world(); let progress = 0, reads = 0;
+  w.ctx.executionFor = id => ({ ...w.ctx.runnerFor(id), reconcile: async () => { progress++; } });
+  await w.queue(); const tick = makeTick(w.ctx); await tick.tick();
+  w.markPr(FIRST, { entryState: STATES.done });
+  const prView = w.ctx.gh.prView;
+  w.ctx.gh.prView = async (...args) => { reads++; return prView(...args); };
+  w.ctx.clock.advance(2); await tick.tick(); assert.equal(reads, 1);
+  for (let i = 0; i < 11; i++) { w.ctx.clock.advance(1 / 6); await tick.tick(); }
+  assert.equal(reads, 1); assert.equal(w.starts(), 1); assert.ok(progress >= 12);
+  w.ctx.clock.advance(1 / 6); await tick.tick(); assert.equal(reads, 2);
+  w.ctx.gh.prView = async () => { reads++; throw new Error("GitHub offline"); };
+  w.ctx.clock.advance(2); await tick.tick(); assert.equal(w.ctx.state.getChain("release").failures, 1);
+  for (let i = 0; i < 11; i++) { w.ctx.clock.advance(1 / 6); await tick.tick(); }
+  assert.equal(reads, 3); assert.equal(w.ctx.state.getChain("release").failures, 1);
+  w.ctx.clock.advance(1 / 6); await tick.tick(); assert.equal(reads, 4); assert.equal(w.ctx.state.getChain("release").failures, 2);
+  w.ctx.gh.prView = async (...args) => { reads++; return prView(...args); };
+  await makeTick(w.ctx).tick(); assert.equal(reads, 5); assert.equal(w.ctx.state.getChain("release").failures, 0);
+  assert.equal(w.starts(), 1, "restart inspects the owned chain without redispatching");
+  const evidence = join(w.home, "scheduler-chain-evidence.json");
+  writeJsonAtomic(evidence, { kind: "Offline chain fixture; no live qualification", reviewMs: CONFIG.poll_seconds * 1000,
+    progressMs: 10_000, progress, chainReads: reads, startedRuns: w.starts(), statePath: w.ctx.state.file,
+    chain: { status: w.ctx.state.getChain("release").status, index: w.ctx.state.getChain("release").index, failures: w.ctx.state.getChain("release").failures } });
+  t.diagnostic(`scheduler chain evidence: ${evidence}`);
 });

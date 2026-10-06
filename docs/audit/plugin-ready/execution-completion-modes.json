@@ -1,0 +1,322 @@
+{
+  "version": 1,
+  "task_id": "task-df42674c6251c85b0edef13f",
+  "scope": "offline completed-local cancellation and text artifact mode validation review corrections",
+  "recorded_at": "2026-10-06T07:59:27.460273+00:00",
+  "source_parent_revision": "a910edf0188cee812852e42bef25683bce62445b",
+  "review_comment_ids": [
+    4192724210,
+    4192724214
+  ],
+  "prior_evidence": [
+    "docs/audit/plugin-ready/execution-foundation.json",
+    "docs/audit/plugin-ready/execution-settled-stop.json",
+    "docs/audit/plugin-ready/execution-tracked-aliases.json"
+  ],
+  "commands": [
+    {
+      "command": "npm test",
+      "exit": 0,
+      "raw_log": "/tmp/execution-completion-modes-tests.txt",
+      "sha256": "28c03d2b55633081bc8d6904ad924b9b94f5da148623691c6587949427362cde",
+      "tests": 1040,
+      "passed": 1040
+    },
+    {
+      "command": "npm run lint",
+      "exit": 0,
+      "raw_log": "/tmp/execution-completion-modes-lint.txt",
+      "sha256": "8c7790de3f018fb4580f18ac70e1b355a0f76f522dd73acbdaa63632feffcecc"
+    },
+    {
+      "command": "npm run test:execution-backends",
+      "exit": 0,
+      "raw_log": "/tmp/execution-completion-modes-backends.txt",
+      "sha256": "d52bc6809c9d0a2875110137d4baead248dbf11c380d7a27f204abfc8ee2c711",
+      "tests": 340,
+      "passed": 340
+    },
+    {
+      "command": "git diff --check",
+      "exit": 0,
+      "raw_log": "/tmp/execution-completion-modes-diff.txt",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    }
+  ],
+  "artifact_hashes": {
+    "lib/execution.mjs": "caa139e49c4e06ff31bfbb14ceef984f6d5297ca2c5a58377b8965101c67c560",
+    "lib/execution_result.mjs": "935d1eb22b967aad388b84b1e860b2751a5a924576889059eecbb9b9c2a2e15c",
+    "lib/git.mjs": "e60a9dd948222cdb48f762409872b00dd34a71b32a7ab56b2530d50583416756",
+    "test/execution-backends.test.mjs": "95921cbace1369547a8592253d1391f38f59ff834b39ef31b47e8035644e51c9",
+    "docs/execution.md": "2285c55c4a0e465ee81d02cf6b7cffcf87c43c84b82b2c1b84f7dfca85838267"
+  },
+  "focused_checks": [
+    {
+      "raw_log": "/tmp/execution-completion-modes-final-focus.txt",
+      "sha256": "f56e692c846f5455eb726db11b8e0485e5c11b8e8d0cb129a479399aceae1558",
+      "exit": 0,
+      "tests": 21,
+      "passed": 21
+    }
+  ],
+  "initial_focused_check": {
+    "raw_log": "/tmp/execution-completion-modes-focus.txt",
+    "sha256": "0191f963d9ef211f059becf5ba089b1dc2744d3f472337e7daff0141d404c621",
+    "exit": 1,
+    "tests": 21,
+    "passed": 17,
+    "failed": 4,
+    "corrections": [
+      "Assert the actual parsed Claude fixture session instead of the unrelated carried session.",
+      "Exercise an active native run for quarantine rather than cancelling a naturally completed one.",
+      "Skip already committed deletions absent from both index and filesystem in the existing commit helper; retain ownership reconciliation and unrelated staged-change rejection."
+    ]
+  },
+  "source_and_output_review": [
+    {
+      "rule": "An exact locally completed job retains its original exit and result even when cancellation precedes collection; pending completion survives restart while active stops remain quarantined.",
+      "files": [
+        "lib/execution.mjs",
+        "lib/run.mjs",
+        "lib/control.mjs",
+        "lib/tick.mjs",
+        "lib/task_prepare.mjs",
+        "lib/commands/resume.mjs"
+      ],
+      "boundaries_checked": [
+        "Reuse local settlement and redaction for ordinary settle, cancel and restart completion recovery under the existing lock.",
+        "Persist exact completion and future dispatch fence before result-cache I/O; failed writes recover by reconciliation or repeated cancel.",
+        "Preserve actual exits 0/23, completion time, parsed session, nullable/known cost, operation ownership and saved results.",
+        "Require exact job identity, accepted ownership and a recorded exit; missing/foreign jobs and unknown exits do not qualify completion.",
+        "Unsupported cancel still preserves already completed local evidence without signalling.",
+        "Prior active stops and later successful output remain quarantined; remote and preparation fences retain existing behavior.",
+        "No model/provider defaults, sandbox policy, consent, limited preparation authority or schema versions changed."
+      ],
+      "regressions": [
+        "cancellation collects owned completed local jobs before the first reconciliation or settlement",
+        "completed local cancellation collection failures retain a recoverable snapshot and dispatch fence",
+        "completed local evidence needs an exact job and exit while active stop output remains quarantined",
+        "native completed local roots retain exact exits and results after cancel and log retention"
+      ]
+    },
+    {
+      "rule": "A text-only artifact manifest cannot authorize executable-bit or target-type changes beyond its input revision, including dirty targets and already applied recovery.",
+      "files": [
+        "lib/git.mjs",
+        "lib/execution_result.mjs",
+        "lib/repository_files.mjs",
+        "docs/execution.md"
+      ],
+      "boundaries_checked": [
+        "Canonical target and tracked-alias validation precede mode and content checks.",
+        "Compare input, HEAD, index and regular filesystem modes before artifact mutation; new files require Git mode 100644.",
+        "Reject filesystem, staged and committed deviations in both executable directions for edits, matching bytes and deletion.",
+        "Bound complete NUL-delimited mode metadata using the existing 2-second/1 MiB reader, preserving tabs and newlines.",
+        "Missing, malformed, truncated and oversized mode metadata fails closed without verification or publication.",
+        "Verified replay and commit-acknowledgement recovery retain mode checks; legitimate executable inputs, regular creations and deletions publish once.",
+        "Existing commit helper skips absent already committed deletion targets; staged unrelated files and input ownership remain guarded.",
+        "Pushed exact revisions remain governed by their existing ownership, alias and clean-tree checks."
+      ],
+      "regressions": [
+        "text artifacts reject filesystem, staged and committed mode changes before content mutation",
+        "text artifacts preserve executable inputs, regular creations and deletion modes through native recovery",
+        "new and verified text artifacts reject unrepresented modes without verification or publication replay",
+        "artifact mode metadata fails closed on unavailable, malformed, truncated and oversized Git reads"
+      ]
+    }
+  ],
+  "representative_output": {
+    "evidence_kind": "Offline transport and CLI-shaped fixtures plus native Node processes and isolated Git trees. Actual model, installed-plugin and production transport qualification is not claimed.",
+    "reports": [
+      {
+        "label": "native",
+        "report_path": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-gqEpy6/settled-native-evidence.json",
+        "report_sha256": "3b949bc317ef29ffd5836bc31f433f3abf25f865a0c10ff5f2e3883749f8b291",
+        "verified_cases": 4,
+        "representative_observations": [
+          {
+            "taskId": "acme/widget/native-settled",
+            "runId": "run-2cb6e743-e367-4860-bd84-68896c981ffe",
+            "exit": 0,
+            "collectedBeforeCancel": true,
+            "endedAt": 1791273091669,
+            "providerState": "succeeded",
+            "session": "22222222-2222-4222-8222-222222222222",
+            "stopped": "operator-cancelled",
+            "outcome": {
+              "ok": true,
+              "finished": true,
+              "lastMessage": "Done.",
+              "denials": [],
+              "cost": null,
+              "error": null
+            },
+            "files": {
+              "execution": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-O4PsBy/execution.json",
+              "job": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-O4PsBy/run-2cb6e743-e367-4860-bd84-68896c981ffe/job.json",
+              "result": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-O4PsBy/run-2cb6e743-e367-4860-bd84-68896c981ffe/result.json"
+            },
+            "files_sha256": {
+              "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-O4PsBy/execution.json": "a2704d65a20fd7a458d1017da1c5c19455962dbfd49bffecca733326e7bbc6b9",
+              "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-O4PsBy/run-2cb6e743-e367-4860-bd84-68896c981ffe/job.json": "f91911dd75ca990fb81ffaf97c9202520173184fface5c4c9582b89eeaee5478",
+              "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-O4PsBy/run-2cb6e743-e367-4860-bd84-68896c981ffe/result.json": "9f90708d1b1ef103aa1dcf22198339ac7f156425f9c3a7b5ed64bb36f2d4f692"
+            }
+          },
+          {
+            "taskId": "acme/widget/native-settled",
+            "runId": "run-52b7b495-b3da-4883-b793-e63029937dfa",
+            "exit": 0,
+            "collectedBeforeCancel": false,
+            "endedAt": 1791273093360,
+            "providerState": "succeeded",
+            "session": "22222222-2222-4222-8222-222222222222",
+            "stopped": "operator-cancelled",
+            "outcome": {
+              "ok": true,
+              "finished": true,
+              "lastMessage": "Done.",
+              "denials": [],
+              "cost": null,
+              "error": null
+            },
+            "files": {
+              "execution": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-Q0J4Gb/execution.json",
+              "job": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-Q0J4Gb/run-52b7b495-b3da-4883-b793-e63029937dfa/job.json",
+              "result": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-Q0J4Gb/run-52b7b495-b3da-4883-b793-e63029937dfa/result.json"
+            },
+            "files_sha256": {
+              "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-Q0J4Gb/execution.json": "f084e44dedee43c38b538b233428be0151982582e70dd1c3422afb11805ce0c2",
+              "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-Q0J4Gb/run-52b7b495-b3da-4883-b793-e63029937dfa/job.json": "10691a9371f992ee10a84e5f9017159badf57823b332a71edc1af95f265a0d6d",
+              "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-Q0J4Gb/run-52b7b495-b3da-4883-b793-e63029937dfa/result.json": "a411c1d89143295a67da2c857c0ee9a684ca49d4ffe20c66a84f8a1794484a15"
+            }
+          },
+          {
+            "taskId": "acme/widget/native-settled",
+            "runId": "run-d54eed81-32b6-4cd6-bc4d-2cf679412e79",
+            "exit": 23,
+            "collectedBeforeCancel": true,
+            "endedAt": 1791273094239,
+            "providerState": "failed",
+            "session": "22222222-2222-4222-8222-222222222222",
+            "stopped": "operator-cancelled",
+            "outcome": {
+              "ok": false,
+              "finished": true,
+              "lastMessage": "Done.",
+              "denials": [],
+              "cost": null,
+              "error": "boom"
+            },
+            "files": {
+              "execution": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-GoYS07/execution.json",
+              "job": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-GoYS07/run-d54eed81-32b6-4cd6-bc4d-2cf679412e79/job.json",
+              "result": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-GoYS07/run-d54eed81-32b6-4cd6-bc4d-2cf679412e79/result.json"
+            },
+            "files_sha256": {
+              "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-GoYS07/execution.json": "94c6adb903ef7d4cd6c8caddd1784bd47722e4c167599cddb2e7f80519928c43",
+              "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-GoYS07/run-d54eed81-32b6-4cd6-bc4d-2cf679412e79/job.json": "a28bc1dcd00775efef3c08d06ad8f85e7b7db77b8e923f66ba70df72d2373e38",
+              "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-GoYS07/run-d54eed81-32b6-4cd6-bc4d-2cf679412e79/result.json": "d92813bbe92549be2a2547f52a4a5712fc58e6471a1c29865f894bdc8acc652e"
+            }
+          },
+          {
+            "taskId": "acme/widget/native-settled",
+            "runId": "run-94b41e43-d26d-48a1-8c38-657a6a360fb7",
+            "exit": 23,
+            "collectedBeforeCancel": false,
+            "endedAt": 1791273095000,
+            "providerState": "failed",
+            "session": "22222222-2222-4222-8222-222222222222",
+            "stopped": "operator-cancelled",
+            "outcome": {
+              "ok": false,
+              "finished": true,
+              "lastMessage": "Done.",
+              "denials": [],
+              "cost": null,
+              "error": "boom"
+            },
+            "files": {
+              "execution": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-ZzMSyR/execution.json",
+              "job": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-ZzMSyR/run-94b41e43-d26d-48a1-8c38-657a6a360fb7/job.json",
+              "result": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-ZzMSyR/run-94b41e43-d26d-48a1-8c38-657a6a360fb7/result.json"
+            },
+            "files_sha256": {
+              "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-ZzMSyR/execution.json": "d174ac8db8f90581534419dc3b341bc999829903207c94af1536f3d4fd5adbda",
+              "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-ZzMSyR/run-94b41e43-d26d-48a1-8c38-657a6a360fb7/job.json": "aa09f08d79048ec344e6be56f14320e0b58dfea00e1ce25276a56cdabd4ac430",
+              "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-ZzMSyR/run-94b41e43-d26d-48a1-8c38-657a6a360fb7/result.json": "0b7b4b68f0665ac1a5054c3b7f3dbd283d91de2fbea40153fae664581017c193"
+            }
+          }
+        ]
+      },
+      {
+        "label": "modes",
+        "report_path": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-uFk0jO/artifact-mode-evidence.json",
+        "report_sha256": "5f9656f5d586f04ce09a098eef1647c52d89eccc6a8658dba61584dd504dcb59",
+        "verified_cases": 18,
+        "representative_observations": [
+          {
+            "source": "filesystem",
+            "operation": "edit",
+            "inputMode": "100644",
+            "inputHead": "4bf72bf079f14a69c595fc4eef7dd2748c774976",
+            "head": "4bf72bf079f14a69c595fc4eef7dd2748c774976",
+            "unchanged": true,
+            "filesystemMode": 493,
+            "worktree": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-bzG9PB",
+            "resultDir": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-K4yP1w",
+            "index_records_sha256": "42ce71b2364f0c03c5c31ca557a2a87a090702b1c336534abcb805a9ca37750c",
+            "files_sha256": {
+              "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-bzG9PB/a.txt": "6db7d803e74f1ffa7d8f5adc0bf95b3e15bf4c8373fffadf546227cc6c6742cb",
+              "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-bzG9PB/.git/index": "b0f78e6aefb75532c5e1a6f54e6c545945226c32d435332b477dc7adce2b8c0a"
+            }
+          },
+          {
+            "source": "index",
+            "operation": "edit",
+            "inputMode": "100644",
+            "inputHead": "d173f175d2eb91bf59c8316346f9ce7bb309c820",
+            "head": "d173f175d2eb91bf59c8316346f9ce7bb309c820",
+            "unchanged": true,
+            "filesystemMode": 420,
+            "worktree": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-iNWTpL",
+            "resultDir": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-hg7Lhs",
+            "index_records_sha256": "938d95bd016be9ab29ebf6dacde6b1ea2d04c8c9977d85c882b5bf5a89308d96",
+            "files_sha256": {
+              "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-iNWTpL/a.txt": "6db7d803e74f1ffa7d8f5adc0bf95b3e15bf4c8373fffadf546227cc6c6742cb",
+              "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-iNWTpL/.git/index": "94546dc1a83aa16afe48f916460ca8e85ec6c150c327bba68fb733050df874e5"
+            }
+          },
+          {
+            "source": "HEAD",
+            "operation": "edit",
+            "inputMode": "100644",
+            "inputHead": "24138f6b67dcea47dc54555d8859c95def53ec14",
+            "head": "f8d64a7b1636f611a3a39fe2c4ca15ef6f8fa8fb",
+            "unchanged": true,
+            "filesystemMode": 493,
+            "worktree": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-Tr4Us7",
+            "resultDir": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-wJV1el",
+            "index_records_sha256": "938d95bd016be9ab29ebf6dacde6b1ea2d04c8c9977d85c882b5bf5a89308d96",
+            "files_sha256": {
+              "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-Tr4Us7/a.txt": "6db7d803e74f1ffa7d8f5adc0bf95b3e15bf4c8373fffadf546227cc6c6742cb",
+              "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-Tr4Us7/.git/index": "71f77326c7f457803425e46e6acaaff8f1da685003ef318d395cd4201acec450"
+            }
+          }
+        ]
+      }
+    ]
+  },
+  "external_qualification": {
+    "mandatory_live_prerequisites": [],
+    "live_paid_calls": 0,
+    "native_codex_preparation_qualified": false,
+    "remote_provider_available": {
+      "openai-agents": false,
+      "codex-cloud": false
+    },
+    "installed_plugin_qualified": false,
+    "model_access_exercised": false,
+    "browser_capture_required": false,
+    "remedy": "Complete the independent native preparation adapter and its limited-authority evidence before registry integration. Later production transports require implemented adapters, credentials, demonstrated model access and authorized bounded live evidence; preserve model/provider defaults and sandbox permissions."
+  }
+}

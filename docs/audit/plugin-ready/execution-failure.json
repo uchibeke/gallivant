@@ -1,0 +1,196 @@
+{
+  "version": 1,
+  "task_id": "task-df42674c6251c85b0edef13f",
+  "scope": "offline failed-root result retrieval and settlement review correction",
+  "recorded_at": "2026-10-06T03:01:28.351578+00:00",
+  "source_parent_revision": "7fa12a456e4aa5eff4a70dbfe7e6ea7436908f0e",
+  "review_comment_ids": [
+    4191046246
+  ],
+  "prior_evidence": [
+    "docs/audit/plugin-ready/execution-foundation.json",
+    "docs/audit/plugin-ready/execution-preparation.json",
+    "docs/audit/plugin-ready/execution-cancellation.json",
+    "docs/audit/plugin-ready/execution-artifacts.json",
+    "docs/audit/plugin-ready/execution-verification.json",
+    "docs/audit/plugin-ready/execution-paths-journal.json",
+    "docs/audit/plugin-ready/execution-controls-turns.json"
+  ],
+  "commands": [
+    {
+      "command": "npm test",
+      "exit": 0,
+      "raw_log": "/tmp/execution-failure-tests.txt",
+      "sha256": "d4d14b5dc536108ae79e91fa1ef17f18f03d79bfc55c92f87af68c95727a89ee",
+      "tests": 976,
+      "passed": 976
+    },
+    {
+      "command": "npm run lint",
+      "exit": 0,
+      "raw_log": "/tmp/execution-failure-lint.txt",
+      "sha256": "8c7790de3f018fb4580f18ac70e1b355a0f76f522dd73acbdaa63632feffcecc"
+    },
+    {
+      "command": "npm run test:execution-backends",
+      "exit": 0,
+      "raw_log": "/tmp/execution-failure-backends.txt",
+      "sha256": "857c53e32f58b172c86ba5b9bc7be5b2e2716b9a77329859423f87abf87f8c21",
+      "tests": 247,
+      "passed": 247
+    },
+    {
+      "command": "git diff --check",
+      "exit": 0,
+      "evidence": "Empty output on final source/docs, repeated after evidence generation and staging."
+    }
+  ],
+  "artifact_hashes": {
+    "lib/execution.mjs": "4f646e0b476db86bdfa0b123be9f7c5292869bb2e57818b46a9d34fce776be0b",
+    "lib/execution_result.mjs": "1eec1aaa54dfd74048260d43088fa1ab6ed53458de14694cdabc60d44f75f77e",
+    "lib/tick.mjs": "093c38693e6755567bdc34cb5103e8f2bc7dbac18677df7b16a16119dc8b00aa",
+    "test/execution-backends.test.mjs": "42f4b48acda3340d824b957a0b46005f8ad8d65877fbeaaa1f828ba64cdbb0ff",
+    "test/execution-preparation.test.mjs": "36b98f0888b13b3112485851ec0fe76c48e3edab592507c81f7cde74edec73c0",
+    "docs/execution.md": "c86955c06217183245376a3fe40d79ca73ad6e5b587e214c0f50bf4d007fec8a"
+  },
+  "focused_checks": [
+    {
+      "raw_log": "/tmp/execution-failure-focus-final.txt",
+      "sha256": "ac382b6fa3199e4078c8904276c03d053b55b79b73f0806d4aec4a04882cce1c",
+      "tests": 86,
+      "passed": 86
+    }
+  ],
+  "source_and_output_review": [
+    {
+      "rule": "An authoritative failed root must retrieve its exact finished result before workflow settlement, while missing results retain ownership and prevent dispatch.",
+      "files": [
+        "lib/execution.mjs",
+        "lib/task_prepare.mjs",
+        "lib/tick.mjs",
+        "lib/commands/serve.mjs",
+        "lib/commands/status.mjs"
+      ],
+      "boundaries_checked": [
+        "failed and successful observations",
+        "terminalState versus result readiness",
+        "exact job/root/head/session checks",
+        "bounded missing/foreign results",
+        "restart while retrieving",
+        "private result write before state acknowledgement",
+        "cache replay for session/cost/completion time",
+        "usage and denial redaction",
+        "nullable unknown cost and retained reservation",
+        "old prematurely collected failure records",
+        "local adapter compatibility",
+        "log retention independent of saved result"
+      ],
+      "regressions": [
+        "openai-agents fixture: failed roots retrieve redacted diagnostics and replay durable result bookkeeping",
+        "codex-cloud fixture: failed roots retrieve redacted diagnostics and replay durable result bookkeeping",
+        "openai-agents fixture: failed roots with missing or foreign results stay live across restart",
+        "codex-cloud fixture: failed roots with missing or foreign results stay live across restart",
+        "older prematurely collected failures re-enter result retrieval without another dispatch",
+        "failed preparation retrieves diagnostics and usage before blocking readiness, including restart with missing results"
+      ]
+    },
+    {
+      "rule": "Failure diagnostics settle through the canonical error lane; failed artifacts cannot trigger publication or an endless application loop, and a stop quarantines terminal results.",
+      "files": [
+        "lib/tick.mjs",
+        "lib/execution_result.mjs",
+        "lib/execution.mjs",
+        "lib/control.mjs"
+      ],
+      "boundaries_checked": [
+        "successful-outcome publication gate",
+        "failed saved artifact cache",
+        "direct result writer refusal before mutation",
+        "existing error/session/cost/denial settlement",
+        "no automatic corrective dispatch",
+        "terminal result retrieval stop",
+        "post-collection stop for success and failure",
+        "no cancellation request for an already finished provider root",
+        "continued quarantine through restart"
+      ],
+      "regressions": [
+        "failed collected artifacts settle through the canonical error lane without publication or replay",
+        "a stop during failed result retrieval quarantines the completed root without a cancellation call",
+        "a stop after collected terminal results quarantines both success and failure caches"
+      ]
+    }
+  ],
+  "representative_output": {
+    "evidenceKind": "Offline generated transport fixture inspection; no live provider qualification.",
+    "root": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/execution-failure-lNNjGW",
+    "statePath": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/execution-failure-lNNjGW/execution.json",
+    "jobPath": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/execution-failure-lNNjGW/run-5ffeacdb-f282-4e5e-8cdf-0467147eee0d/job.json",
+    "resultPath": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/execution-failure-lNNjGW/run-5ffeacdb-f282-4e5e-8cdf-0467147eee0d/result.json",
+    "journalPath": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/execution-failure-lNNjGW/run-5ffeacdb-f282-4e5e-8cdf-0467147eee0d/events.jsonl",
+    "runId": "run-5ffeacdb-f282-4e5e-8cdf-0467147eee0d",
+    "pending": {
+      "providerState": "retrieving-results",
+      "terminalState": "failed",
+      "collected": false,
+      "running": true,
+      "exit": null
+    },
+    "final": {
+      "providerState": "failed",
+      "terminalState": "failed",
+      "collected": true,
+      "costUsd": 0.25,
+      "sessionId": "recovered-session",
+      "exit": 1,
+      "endedAt": 10000
+    },
+    "result": {
+      "outcome": {
+        "finished": true,
+        "ok": false,
+        "cost": 0.25,
+        "error": "failure: Bearer [redacted]",
+        "denials": [
+          "tool refused token=[redacted]"
+        ],
+        "lastMessage": "authentication failed"
+      },
+      "usage": {
+        "inputTokens": 17,
+        "api_key": "[redacted]"
+      },
+      "collectedAt": 10000,
+      "mode": "600"
+    },
+    "allowance": {
+      "totalUsd": 1,
+      "reservedUsd": 0.1,
+      "chargedUsd": 0.25
+    },
+    "calls": [
+      "submit",
+      "inspect",
+      "collect",
+      "collect"
+    ],
+    "replayTransportCalls": 0,
+    "outcomeSurvivesLogRetention": true,
+    "statePathSha256": "d02e5ff949384fe8ce2edccc149d7032cc79dddf3cb5fbb71d8d5d7d23dfde7c",
+    "jobPathSha256": "6c2a07e9e54642464367d858b1cc5ce35cd32bb9a95486b1e9f221f15892c399",
+    "resultPathSha256": "9fc5351044636088d8b56d875a85ed3ffbf6c1e6690583fb477c2b1d63bc58b8",
+    "journalPathSha256": "301dbc8e25f7dfca5fbb7226b09a6f84e0a213ec9aecdf7bd35d73432af9b8a5"
+  },
+  "external_qualification": {
+    "mandatory_live_prerequisites": [],
+    "live_paid_calls": 0,
+    "native_codex_preparation_qualified": false,
+    "remote_provider_available": {
+      "openai-agents": false,
+      "codex-cloud": false
+    },
+    "installed_plugin_qualified": false,
+    "model_access_exercised": false,
+    "browser_capture_required": false,
+    "remedy": "Complete the independent native preparation adapter and its limited-authority evidence before registry integration. Later production transports require implemented adapters, credentials, demonstrated model access and authorized bounded live evidence; preserve model/provider defaults and sandbox permissions."
+  }
+}

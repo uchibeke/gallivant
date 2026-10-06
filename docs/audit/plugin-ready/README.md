@@ -54,3 +54,11 @@ runtime credentials and actual model access, plus a bounded execution allowance
 covering one small intake/implementation and one forced CI/review correction.
 Preserve the existing provider, model and permissions. Recheck only a failed phase
 after resolving its observed cause. Offline fixtures are never live evidence.
+
+## Execution foundation
+
+[The execution contract](../../execution.md), [foundation evidence](execution-foundation.json)
+and [foundation checklist](execution-checklist.md) cover the later offline
+execution, polling and log milestone. These records supplement the intake audit;
+its historical qualification blockers above remain unchanged. Remote transport
+availability and installed-host/live release qualification are separate gates.
