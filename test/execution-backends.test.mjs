@@ -3,12 +3,12 @@ import assert from "node:assert/strict";
 import { join } from "node:path";
 import { createHash } from "node:crypto";
 import { EventEmitter } from "node:events";
-import { mkdirSync, readFileSync, writeFileSync, rmSync, renameSync, symlinkSync, cpSync, statSync } from "node:fs";
+import { mkdirSync, readFileSync, writeFileSync, rmSync, renameSync, symlinkSync, cpSync, statSync, lstatSync, existsSync } from "node:fs";
 import { pathToFileURL } from "node:url";
 import { makeExecution, executionLive, assertExecutionDependency } from "../lib/execution.mjs";
 import { executionRegistry, adapters, buildRun } from "../lib/harness.mjs";
 import { makeProviderHealth } from "../lib/provider_health.mjs";
-import { makeRunner } from "../lib/run.mjs";
+import { makeRunner, LOCAL_OUTPUT_LIMITS } from "../lib/run.mjs";
 import { journalFor } from "../lib/execution_journal.mjs";
 import { logWindow, LOG_LIMITS, appendProjection } from "../lib/run_log.mjs";
 import { streamRun, sliceRun } from "../lib/tracker/stream.mjs";
@@ -559,6 +559,133 @@ test("local Codex fixture uses existing adapter, journals output and survives la
   assert.equal(service.outcome(job.id).ok, true);
 });
 
+function localOutputFixture({ root = tempHome(), clock = makeClock(), id = "old-run", text = "", secret = "queued-private-value" } = {}) {
+  const dir = join(root, id), taskId = "acme/widget/output";
+  mkdirSync(dir, { recursive: true });
+  writeJsonAtomic(join(dir, "job.json"), { id, pid: null, exit: 0, startedAt: clock.now(), endedAt: clock.now(), privateOutput: { taskId, runId: id, provider: "codex" } });
+  writeJsonAtomic(join(dir, "sensitive-redactions.json"), { expiresAt: clock.now() + 86_400_000, secrets: [secret] });
+  writeFileSync(join(dir, "provider.log"), text);
+  writeFileSync(join(root, "latest-run"), id);
+  const openRunner = () => makeRunner(root, { clock, probe: () => false });
+  const open = () => makeExecution({ root, taskId, provider: "codex", clock, runner: openRunner() });
+  return { root, dir, taskId, id, clock, secret, openRunner, open };
+}
+const outputEvents = dir => readFileSync(join(dir, "events.jsonl"), "utf8").trim().split("\n").map(JSON.parse);
+
+test("completed local output survives a successor, restart and cursor replay with exact paginated history", async t => {
+  const root = tempHome(), cwd = tempHome(), clock = makeClock(), taskId = "acme/widget/output", secret = "queued-private-value";
+  const openRunner = () => makeRunner(root, { clock, probe: () => false });
+  const open = runner => makeExecution({ root, taskId, provider: "codex", clock, runner });
+  const runner = openRunner(), service = open(runner), session = "22222222-2222-4222-8222-222222222222";
+  const lines = Array.from({ length: 240 }, (_, i) => `old output ${i} ${secret}`);
+  lines.push(JSON.stringify({ type: "thread.started", thread_id: session }), JSON.stringify({ type: "item.completed", item: { type: "agent_message", text: "saved old result" } }), JSON.stringify({ type: "turn.completed" }));
+  const text = lines.join("\n") + `\nfinal old tail ${secret}`;
+  const old = await service.start("old", process.execPath, ["-e", `process.stdout.write(${JSON.stringify(text)})`], { cwd, env: { TEST_API_KEY: secret }, execution: { operationId: "old" } });
+  while (runner.read(old.id).exit === null) await new Promise(resolve => setImmediate(resolve));
+  await service.reconcile(); service.settle(old.id);
+  const oldDir = service.dirOf(old.id), checkpoint = readJson(join(oldDir, "local-output.json"));
+  assert.equal(outputEvents(oldDir).length, 100); assert.equal(checkpoint.pending, true);
+  assert.equal(service.outcome(old.id).lastMessage, "saved old result");
+  const next = await service.start("next", process.execPath, ["-e", 'process.stdout.write("next output\\n")'], { cwd, execution: { operationId: "next" } });
+  while (runner.read(next.id).exit === null) await new Promise(resolve => setImmediate(resolve));
+  const queueFile = join(root, "local-output-queue.json");
+  assert.deepEqual(readJson(queueFile), { version: 1, runs: [old.id] });
+  // Read-only status and tail reads cannot drain the queue or ingest diagnostics.
+  const readonly = open(openRunner()); readonly.current(); readonly.inspect(); logWindow(oldDir);
+  assert.deepEqual(readJson(join(oldDir, "local-output.json")), checkpoint);
+  const reopenedRunner = openRunner(), reopened = open(reopenedRunner);
+  await reopened.reconcile();
+  assert.equal(outputEvents(oldDir).length, 200);
+  assert.equal(outputEvents(reopened.dirOf(next.id))[0].data, "next output");
+  // Simulate losing only the ingestion acknowledgement after durable journaling.
+  writeJsonAtomic(join(oldDir, "local-output.json"), checkpoint);
+  await open(openRunner()).reconcile(); assert.equal(outputEvents(oldDir).length, 200);
+  await open(openRunner()).reconcile();
+  assert.deepEqual(readJson(queueFile), { version: 1, runs: [] });
+  const events = outputEvents(oldDir), expected = [...lines, `final old tail ${secret}`];
+  assert.equal(events.length, expected.length);
+  let offset = 0;
+  for (let i = 0; i < events.length; i++) {
+    assert.equal(events[i].eventId, `byte-${offset}`); assert.equal(events[i].sequence, i + 1);
+    assert.equal(events[i].runId, old.id); assert.equal(events[i].taskId, taskId); assert.equal(events[i].provenance, "local-cli");
+    assert.equal(events[i].data, expected[i].replaceAll(secret, "[redacted]"));
+    offset += Buffer.byteLength(expected[i]) + 1;
+  }
+  const ids = [], meter = { bytesRead: 0 };
+  for (let after = 0; after < events.length;) {
+    const page = logWindow(oldDir, { after, count: 40, meter });
+    assert.ok(page.ids.length > 0); ids.push(...page.ids); after = page.ids.at(-1);
+  }
+  assert.deepEqual(ids, events.map(event => event.sequence));
+  assert.doesNotMatch(readFileSync(join(oldDir, "job.log"), "utf8") + JSON.stringify(events), new RegExp(secret));
+  const outcome = reopened.outcome(old.id);
+  clock.advance(24 * 60 + 1); writeFileSync(join(root, "latest-run"), old.id); reopenedRunner.observe();
+  assert.equal(existsSync(join(oldDir, "provider.log")), false); assert.deepEqual(reopened.outcome(old.id), outcome);
+  writeJsonAtomic(join(root, "local-output-evidence.json"), { kind: "Offline local CLI output fixture", oldRun: old.id, nextRun: next.id, events: events.length, ids, queue: readJson(queueFile), result: outcome, files: { journal: join(oldDir, "events.jsonl"), log: join(oldDir, "job.log"), result: join(oldDir, "result.json") } });
+  t.diagnostic(`local output evidence: ${join(root, "local-output-evidence.json")}`);
+});
+
+test("large queued local output uses bounded round-robin pages while unrelated jobs and review advance", async t => {
+  const text = Array.from({ length: 2000 }, (_, i) => `large ${i} ${"x".repeat(4000)} queued-private-value\n`).join("");
+  const f = localOutputFixture({ text }), runner = f.openRunner(), queueFile = join(f.root, "local-output-queue.json");
+  runner.prepareStart();
+  localOutputFixture({ root: f.root, clock: f.clock, id: "second-old", text: "second old\n".repeat(150) }); runner.prepareStart();
+  const next = localOutputFixture({ root: f.root, clock: f.clock, id: "current-run", text: "current progress\n" });
+  assert.deepEqual(readJson(queueFile).runs, [f.id, "second-old"]);
+  const meter = f.openRunner().observe();
+  assert.ok(meter.pages <= LOCAL_OUTPUT_LIMITS.pages); assert.ok(meter.bytesRead <= LOCAL_OUTPUT_LIMITS.pages * LOCAL_OUTPUT_LIMITS.bytes);
+  assert.ok(meter.maxBufferBytes <= LOCAL_OUTPUT_LIMITS.bytes); assert.ok(meter.records <= LOCAL_OUTPUT_LIMITS.pages * LOCAL_OUTPUT_LIMITS.records);
+  assert.ok(readJson(join(f.dir, "local-output.json")).offset < Buffer.byteLength(text));
+  assert.equal(outputEvents(next.dir)[0].data, "current progress");
+  assert.deepEqual(readJson(queueFile).runs, ["second-old", f.id]);
+  // A missing execution.current still projects queued pre-upgrade local output.
+  const home = tempHome(), state = makeState(home), gh = fakeGh(), local = fakeRunner(f.clock);
+  for (const name of ["backlog", "unrelated", "review"]) state.put(`acme/widget/${name}`, newEntry({ repo: "acme/widget", harness: "codex", pr: 3, branch: "work/3", base: "main", worktree: tempHome(), state: name === "review" ? STATES.ready : STATES.done, nowIso: T0 }));
+  gh.prView = async () => prFixture({ number: 3, headRefName: "work/3", state: "MERGED" });
+  let progress = 0; local.reconcile = async () => { progress++; };
+  const ctx = { home, config: CONFIG, clock: f.clock, state, gh, git: fakeGit(), log: silentLog, notify: fakeNotify(), ownLogin: "me", readPrd: () => null, credential: fakeCredential(), identity: fakeIdentity(), executionFor: id => id.endsWith("/backlog") ? f.open() : local };
+  assert.ok((await makeTick(ctx).tick()).every(result => result.ok));
+  assert.ok(progress > 0); assert.equal(state.get("acme/widget/review").state, STATES.done);
+  assert.equal(outputEvents(join(f.root, "second-old")).length, 100);
+  assert.deepEqual(readJson(queueFile).runs, [f.id, "second-old"]);
+  writeJsonAtomic(join(f.root, "local-output-bounds-evidence.json"), { kind: "Offline bounded local projection fixture", rawBytes: Buffer.byteLength(text), limits: LOCAL_OUTPUT_LIMITS, meter, unrelatedProgress: progress, reviewState: state.get("acme/widget/review").state, queue: readJson(queueFile), files: { checkpoint: join(f.dir, "local-output.json"), journal: join(f.dir, "events.jsonl"), queue: queueFile } });
+  t.diagnostic(`local output bounds evidence: ${join(f.root, "local-output-bounds-evidence.json")}`);
+});
+
+test("queued local output has explicit stable gaps for expiry, missing diagnostics and missing redaction metadata", async () => {
+  for (const reason of ["diagnostic retention expired", "diagnostic file missing", "diagnostic file truncated", "redaction metadata missing"]) {
+    const f = localOutputFixture({ text: "queued-private-value\n".repeat(250) }), runner = f.openRunner();
+    runner.observe(); runner.prepareStart();
+    localOutputFixture({ root: f.root, clock: f.clock, id: "next-run", text: "next progress\n" });
+    writeJsonAtomic(join(f.dir, "result.json"), { outcome: { finished: true, ok: true, lastMessage: "durable result", cost: null } });
+    if (reason === "diagnostic retention expired") f.clock.advance(24 * 60 + 1);
+    if (reason === "diagnostic file missing") rmSync(join(f.dir, "provider.log"));
+    if (reason === "diagnostic file truncated") writeFileSync(join(f.dir, "provider.log"), "short");
+    if (reason === "redaction metadata missing") rmSync(join(f.dir, "sensitive-redactions.json"));
+    await f.open().reconcile();
+    const events = outputEvents(f.dir), gap = events.at(-1);
+    assert.equal(events.length, 101); assert.equal(gap.type, "gap"); assert.match(gap.data, new RegExp(reason));
+    assert.deepEqual(readJson(join(f.root, "local-output-queue.json")).runs, []);
+    assert.doesNotMatch(JSON.stringify(events) + readFileSync(join(f.dir, "job.log"), "utf8"), /queued-private-value/);
+    await f.open().reconcile(); assert.deepEqual(outputEvents(f.dir), events);
+    assert.equal(f.open().outcome(f.id).lastMessage, "durable result");
+  }
+});
+
+test("incompatible local projection state prevents paid intent and preserves ownership and allowance", async () => {
+  for (const corruption of ["version", "cursor", "queue-write"]) {
+    const f = localOutputFixture({ text: "old output\n" }), queue = join(f.root, "local-output-queue.json");
+    if (corruption === "version") writeJsonAtomic(queue, { version: 2, runs: [f.id] });
+    if (corruption === "cursor") writeJsonAtomic(join(f.dir, "local-output.json"), { offset: -1 });
+    if (corruption === "queue-write") mkdirSync(`${queue}.${process.pid}.tmp`);
+    await assert.rejects(f.open().submit({ ...input, spec: { cmd: process.execPath, args: ["-e", "process.exit(0)"], options: { cwd: tempHome() } } }), corruption === "version" ? /unsupported local output queue.*preserve.*restore/ : corruption === "cursor" ? /invalid local output cursor.*restore/ : { code: "EISDIR" });
+    assert.deepEqual(f.open().state().operations, {}); assert.equal(f.open().state().allowance, undefined);
+    assert.equal(readFileSync(join(f.root, "latest-run"), "utf8"), f.id);
+    if (corruption === "version") assert.deepEqual(readJson(queue), { version: 2, runs: [f.id] });
+    if (corruption === "cursor") assert.deepEqual(readJson(join(f.dir, "local-output.json")), { offset: -1 });
+  }
+});
+
 function resultFixture() {
   const dir = tempHome(), worktree = tempHome(), id = "acme/widget/result", revision = "a".repeat(40), runId = "result-run";
   writeFileSync(join(worktree, "a.txt"), "before");
@@ -685,6 +812,42 @@ test("artifact aliases reject duplicate canonical targets before content validat
   await assert.rejects(reconcileExecutionResult(unsafe.ctx, unsafe), /unsafe repository path/);
   assert.equal(readFileSync(join(unsafe.entry.worktree, "a.txt"), "utf8"), "before");
   assert.deepEqual(unsafe.calls, []);
+});
+
+test("case and Unicode artifact aliases reject one portable target before reading or applying payloads", async t => {
+  const observations = [];
+  for (const [first, alias] of [["src/File.js", "src/file.js"], ["Src/a.txt", "src/a.txt"], ["café.txt", "cafe\u0301.txt"], ["Σ.txt", "ς.txt"], ["Straße.txt", "STRASSE.txt"]]) {
+    for (const operation of ["create", "modify", "delete"]) {
+      const f = resultFixture();
+      if (operation !== "create") {
+        if (first.includes("/")) mkdirSync(join(f.entry.worktree, first.split("/")[0]));
+        writeFileSync(join(f.entry.worktree, first), "before");
+      }
+      const beforeHash = operation === "create" ? null : sha("before");
+      f.result.files = [{ path: first, beforeHash, afterHash: "invalid-content-hash", text: "first payload" },
+        { path: alias, beforeHash, afterHash: operation === "delete" ? null : sha("last payload"), text: operation === "delete" ? null : "last payload" }];
+      const original = structuredClone(f.result.files), filesystemAlias = operation !== "create" && existsSync(join(f.entry.worktree, alias)) && lstatSync(join(f.entry.worktree, first)).ino === lstatSync(join(f.entry.worktree, alias)).ino;
+      await assert.rejects(reconcileExecutionResult(f.ctx, f), /duplicate canonical result file/);
+      if (operation === "create") assert.equal(existsSync(join(f.entry.worktree, first)), false);
+      else assert.equal(readFileSync(join(f.entry.worktree, first), "utf8"), "before");
+      assert.deepEqual(f.result.files, original); assert.deepEqual(f.calls, []);
+      assert.equal(existsSync(join(f.dir, "result-application.json")), false);
+      observations.push({ paths: [first, alias], operation, filesystemAlias, mutation: false });
+    }
+  }
+  const dir = tempHome(); writeJsonAtomic(join(dir, "artifact-alias-evidence.json"), { kind: "Native filesystem observation and offline artifact manifest fixture", observations });
+  t.diagnostic(`artifact alias evidence: ${join(dir, "artifact-alias-evidence.json")}`);
+});
+
+test("one mixed-case artifact preserves its path and bytes through native Git publication and replay", async () => {
+  const f = await nativeResultFixture(), path = "Src/Auth.js", text = "export const token = process.env.API_TOKEN;\n";
+  f.result.files = [{ path, beforeHash: null, afterHash: sha(text), text }];
+  const original = structuredClone(f.result.files);
+  await reconcileExecutionResult(f.ctx, f); await reconcileExecutionResult(f.ctx, f);
+  assert.deepEqual(f.result.files, original); assert.equal(readFileSync(join(f.entry.worktree, path), "utf8"), text);
+  const files = await execFileAsync("git", ["ls-tree", "--name-only", "-r", "HEAD"], { cwd: f.entry.worktree });
+  assert.match(files.stdout, /Src\/Auth\.js/); assert.equal(readJson(join(f.dir, "result-application.json")).phase, "published");
+  assert.deepEqual(f.calls, ["commit", "verify", "push", "PR"]);
 });
 
 test("canonical artifact targets survive native commit acknowledgement loss without changing the private manifest", async () => {

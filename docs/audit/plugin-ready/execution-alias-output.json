@@ -1,0 +1,589 @@
+{
+  "version": 1,
+  "task_id": "task-df42674c6251c85b0edef13f",
+  "scope": "offline artifact alias and completed local output review corrections",
+  "recorded_at": "2026-10-06T04:45:14.215849+00:00",
+  "source_parent_revision": "4ea4fb087537217fff5ab60f1003ebd6a90f79f0",
+  "review_comment_ids": [
+    4191525150,
+    4191525151
+  ],
+  "prior_evidence": [
+    "docs/audit/plugin-ready/execution-paths-journal.json",
+    "docs/audit/plugin-ready/execution-fence.json"
+  ],
+  "commands": [
+    {
+      "command": "npm test",
+      "exit": 0,
+      "raw_log": "/tmp/execution-alias-output-tests.txt",
+      "sha256": "f82b8987b6b64dfac3b6e2f542eeabd06601913ea1c692d0e2a726d02f79da87",
+      "tests": 1002,
+      "passed": 1002
+    },
+    {
+      "command": "npm run lint",
+      "exit": 0,
+      "raw_log": "/tmp/execution-alias-output-lint.txt",
+      "sha256": "8c7790de3f018fb4580f18ac70e1b355a0f76f522dd73acbdaa63632feffcecc"
+    },
+    {
+      "command": "npm run test:execution-backends",
+      "exit": 0,
+      "raw_log": "/tmp/execution-alias-output-backends.txt",
+      "sha256": "4ebc48b21c2b64fc248a1739b79ff30469d9a9d86133f64f2063781b7dd5f5e2",
+      "tests": 302,
+      "passed": 302
+    },
+    {
+      "command": "git diff --check",
+      "exit": 0,
+      "raw_log": "/tmp/execution-alias-output-diff.txt",
+      "evidence": "Empty output on final source/docs; repeated after evidence generation and staging."
+    }
+  ],
+  "artifact_hashes": {
+    "lib/execution_result.mjs": "0f0298721f15a2377deedd5e90dba7de6f27f057c111691dcf1df40d90164cbf",
+    "lib/run.mjs": "c5e6f624a7aaec527026e1740a69dc95365d4c862bc2c10e691cc71e21bfacf9",
+    "lib/execution.mjs": "72775edd8fb0c1f701744130f115b831fcff0ab74aa2a8954885a4bb930cdad3",
+    "test/execution-backends.test.mjs": "56ad0bfd6a143abb3cbcee102bf930fe54ef6997e3f5a0e73d5a639c39ced97f",
+    "docs/execution.md": "50a2eb10668c69256ba06d369691271c4657a6a656c47b883bc4688da6a97d77"
+  },
+  "source_and_output_review": [
+    {
+      "rule": "Every accepted manifest target must have one exact content hash across supported checkout filesystems, before payload reads or writes.",
+      "files": [
+        "lib/execution_result.mjs",
+        "lib/repository_files.mjs",
+        "lib/git.mjs",
+        "lib/tick.mjs"
+      ],
+      "boundaries_checked": [
+        "shared containment and symlink validation for all artifact paths",
+        "duplicate full targets after path normalization and portable case/Unicode folding",
+        "creation, modification and deletion aliases with intentionally invalid first hashes",
+        "all rejection paths leave original bytes, private manifests and Git/GitHub calls untouched",
+        "single accepted casing/payload stays exact through native commit/push, publication and replay",
+        "commit acknowledgement recovery reuses canonical paths and original content hashes",
+        "verified/published checkpoints remain tied to the same result fingerprint",
+        "stops, ownership, clean verification and canonical PR writer remain enforced"
+      ],
+      "regressions": [
+        "case and Unicode artifact aliases reject one portable target before reading or applying payloads",
+        "one mixed-case artifact preserves its path and bytes through native Git publication and replay"
+      ]
+    },
+    {
+      "rule": "Moving the current local run cannot abandon unprojected history; replay remains bounded, owned, redacted and independent of task results.",
+      "files": [
+        "lib/run.mjs",
+        "lib/execution.mjs",
+        "lib/task_prepare.mjs",
+        "lib/tick.mjs",
+        "lib/control.mjs",
+        "lib/tracker/stream.mjs",
+        "lib/tracker/runs.mjs"
+      ],
+      "boundaries_checked": [
+        "standalone and canonical local dispatch register pending old cursors before pointer replacement",
+        "queue/cursor validation and persistence happen before paid execution intent or allowance reservation",
+        "existing process-tree BUSY/cancellation and post-spawn cleanup helpers remain in place",
+        "one queued page and one current page per observation with round-robin fairness",
+        "versioned queue survives restart and draining works without an execution.current record",
+        "cursor acknowledgement loss replays stable byte identities without duplicate normalized records",
+        "paginated public history recovers every old record including the final unterminated line",
+        "private secret values never enter journal or public projection",
+        "missing/truncated diagnostics, missing redaction metadata and expiry produce explicit gaps",
+        "retention never deletes cached result/application evidence",
+        "unsupported metadata preserves files and refuses a new paid intent",
+        "public readers do not start projections or independent provider loops",
+        "large raw logs assert read/buffer/record bounds and unrelated progress/review, without timing thresholds"
+      ],
+      "regressions": [
+        "completed local output survives a successor, restart and cursor replay with exact paginated history",
+        "large queued local output uses bounded round-robin pages while unrelated jobs and review advance",
+        "queued local output has explicit stable gaps for expiry, missing diagnostics and missing redaction metadata",
+        "incompatible local projection state prevents paid intent and preserves ownership and allowance"
+      ]
+    }
+  ],
+  "representative_output": [
+    {
+      "case": "artifact alias",
+      "evidence": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-EcfNFk/artifact-alias-evidence.json",
+      "sha256": "4cfa32e893ba619cb87d1f73810095ff6a0852abb555fb892e304cdd1bb5b9c6",
+      "output": {
+        "kind": "Native filesystem observation and offline artifact manifest fixture",
+        "observations": [
+          {
+            "paths": [
+              "src/File.js",
+              "src/file.js"
+            ],
+            "operation": "create",
+            "filesystemAlias": false,
+            "mutation": false
+          },
+          {
+            "paths": [
+              "src/File.js",
+              "src/file.js"
+            ],
+            "operation": "modify",
+            "filesystemAlias": true,
+            "mutation": false
+          },
+          {
+            "paths": [
+              "src/File.js",
+              "src/file.js"
+            ],
+            "operation": "delete",
+            "filesystemAlias": true,
+            "mutation": false
+          },
+          {
+            "paths": [
+              "Src/a.txt",
+              "src/a.txt"
+            ],
+            "operation": "create",
+            "filesystemAlias": false,
+            "mutation": false
+          },
+          {
+            "paths": [
+              "Src/a.txt",
+              "src/a.txt"
+            ],
+            "operation": "modify",
+            "filesystemAlias": true,
+            "mutation": false
+          },
+          {
+            "paths": [
+              "Src/a.txt",
+              "src/a.txt"
+            ],
+            "operation": "delete",
+            "filesystemAlias": true,
+            "mutation": false
+          },
+          {
+            "paths": [
+              "caf\u00e9.txt",
+              "cafe\u0301.txt"
+            ],
+            "operation": "create",
+            "filesystemAlias": false,
+            "mutation": false
+          },
+          {
+            "paths": [
+              "caf\u00e9.txt",
+              "cafe\u0301.txt"
+            ],
+            "operation": "modify",
+            "filesystemAlias": true,
+            "mutation": false
+          },
+          {
+            "paths": [
+              "caf\u00e9.txt",
+              "cafe\u0301.txt"
+            ],
+            "operation": "delete",
+            "filesystemAlias": true,
+            "mutation": false
+          },
+          {
+            "paths": [
+              "\u03a3.txt",
+              "\u03c2.txt"
+            ],
+            "operation": "create",
+            "filesystemAlias": false,
+            "mutation": false
+          },
+          {
+            "paths": [
+              "\u03a3.txt",
+              "\u03c2.txt"
+            ],
+            "operation": "modify",
+            "filesystemAlias": true,
+            "mutation": false
+          },
+          {
+            "paths": [
+              "\u03a3.txt",
+              "\u03c2.txt"
+            ],
+            "operation": "delete",
+            "filesystemAlias": true,
+            "mutation": false
+          },
+          {
+            "paths": [
+              "Stra\u00dfe.txt",
+              "STRASSE.txt"
+            ],
+            "operation": "create",
+            "filesystemAlias": false,
+            "mutation": false
+          },
+          {
+            "paths": [
+              "Stra\u00dfe.txt",
+              "STRASSE.txt"
+            ],
+            "operation": "modify",
+            "filesystemAlias": true,
+            "mutation": false
+          },
+          {
+            "paths": [
+              "Stra\u00dfe.txt",
+              "STRASSE.txt"
+            ],
+            "operation": "delete",
+            "filesystemAlias": true,
+            "mutation": false
+          }
+        ]
+      },
+      "file_hashes": {}
+    },
+    {
+      "case": "local output",
+      "evidence": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-oSO8cd/local-output-evidence.json",
+      "sha256": "8fcd1c38f0e8f4f6248a9f20d4178f5783f93e4578eb6886c0b93957349ecad2",
+      "output": {
+        "kind": "Offline local CLI output fixture",
+        "oldRun": "run-81ef489f-60c5-4ce0-9da4-aada67161a7e",
+        "nextRun": "run-c89bc7ee-db8e-4309-baa5-bec6a188badb",
+        "events": 244,
+        "ids": [
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7,
+          8,
+          9,
+          10,
+          11,
+          12,
+          13,
+          14,
+          15,
+          16,
+          17,
+          18,
+          19,
+          20,
+          21,
+          22,
+          23,
+          24,
+          25,
+          26,
+          27,
+          28,
+          29,
+          30,
+          31,
+          32,
+          33,
+          34,
+          35,
+          36,
+          37,
+          38,
+          39,
+          40,
+          41,
+          42,
+          43,
+          44,
+          45,
+          46,
+          47,
+          48,
+          49,
+          50,
+          51,
+          52,
+          53,
+          54,
+          55,
+          56,
+          57,
+          58,
+          59,
+          60,
+          61,
+          62,
+          63,
+          64,
+          65,
+          66,
+          67,
+          68,
+          69,
+          70,
+          71,
+          72,
+          73,
+          74,
+          75,
+          76,
+          77,
+          78,
+          79,
+          80,
+          81,
+          82,
+          83,
+          84,
+          85,
+          86,
+          87,
+          88,
+          89,
+          90,
+          91,
+          92,
+          93,
+          94,
+          95,
+          96,
+          97,
+          98,
+          99,
+          100,
+          101,
+          102,
+          103,
+          104,
+          105,
+          106,
+          107,
+          108,
+          109,
+          110,
+          111,
+          112,
+          113,
+          114,
+          115,
+          116,
+          117,
+          118,
+          119,
+          120,
+          121,
+          122,
+          123,
+          124,
+          125,
+          126,
+          127,
+          128,
+          129,
+          130,
+          131,
+          132,
+          133,
+          134,
+          135,
+          136,
+          137,
+          138,
+          139,
+          140,
+          141,
+          142,
+          143,
+          144,
+          145,
+          146,
+          147,
+          148,
+          149,
+          150,
+          151,
+          152,
+          153,
+          154,
+          155,
+          156,
+          157,
+          158,
+          159,
+          160,
+          161,
+          162,
+          163,
+          164,
+          165,
+          166,
+          167,
+          168,
+          169,
+          170,
+          171,
+          172,
+          173,
+          174,
+          175,
+          176,
+          177,
+          178,
+          179,
+          180,
+          181,
+          182,
+          183,
+          184,
+          185,
+          186,
+          187,
+          188,
+          189,
+          190,
+          191,
+          192,
+          193,
+          194,
+          195,
+          196,
+          197,
+          198,
+          199,
+          200,
+          201,
+          202,
+          203,
+          204,
+          205,
+          206,
+          207,
+          208,
+          209,
+          210,
+          211,
+          212,
+          213,
+          214,
+          215,
+          216,
+          217,
+          218,
+          219,
+          220,
+          221,
+          222,
+          223,
+          224,
+          225,
+          226,
+          227,
+          228,
+          229,
+          230,
+          231,
+          232,
+          233,
+          234,
+          235,
+          236,
+          237,
+          238,
+          239,
+          240,
+          241,
+          242,
+          243,
+          244
+        ],
+        "queue": {
+          "version": 1,
+          "runs": []
+        },
+        "result": {
+          "ok": true,
+          "finished": true,
+          "lastMessage": "saved old result",
+          "denials": [],
+          "cost": null,
+          "error": null
+        },
+        "files": {
+          "journal": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-oSO8cd/run-81ef489f-60c5-4ce0-9da4-aada67161a7e/events.jsonl",
+          "log": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-oSO8cd/run-81ef489f-60c5-4ce0-9da4-aada67161a7e/job.log",
+          "result": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-oSO8cd/run-81ef489f-60c5-4ce0-9da4-aada67161a7e/result.json"
+        }
+      },
+      "file_hashes": {
+        "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-oSO8cd/run-81ef489f-60c5-4ce0-9da4-aada67161a7e/events.jsonl": "f0c09fbf58321ad739c1660018a0e21cdd1a53ca1d3170bdee920ff1bfdee7ac",
+        "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-oSO8cd/run-81ef489f-60c5-4ce0-9da4-aada67161a7e/job.log": "ff03dda3e1763afdc33f28cc5172161d716b6066563c3830229be23c13a2f67a",
+        "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-oSO8cd/run-81ef489f-60c5-4ce0-9da4-aada67161a7e/result.json": "a5fd03dd6bf3143403c638b3dec4ac54f6bb40ec281c683a58c364cb8e344f83"
+      }
+    },
+    {
+      "case": "local output bounds",
+      "evidence": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-D43Smt/local-output-bounds-evidence.json",
+      "sha256": "2ab0731d80f292236c0ccc13a21a2ac5c0136638ed4e90d6a9dab1df247d981f",
+      "output": {
+        "kind": "Offline bounded local projection fixture",
+        "rawBytes": 8064890,
+        "limits": {
+          "records": 100,
+          "bytes": 262144,
+          "pages": 2
+        },
+        "meter": {
+          "pages": 2,
+          "bytesRead": 262161,
+          "maxBufferBytes": 262144,
+          "records": 66
+        },
+        "unrelatedProgress": 2,
+        "reviewState": "done",
+        "queue": {
+          "version": 1,
+          "runs": [
+            "old-run",
+            "second-old"
+          ]
+        },
+        "files": {
+          "checkpoint": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-D43Smt/old-run/local-output.json",
+          "journal": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-D43Smt/old-run/events.jsonl",
+          "queue": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-D43Smt/local-output-queue.json"
+        }
+      },
+      "file_hashes": {
+        "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-D43Smt/old-run/local-output.json": "8269e28cf574184a278b3b306923883c234ec9d8e5ee01cade94fdf95a9ac8e1",
+        "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-D43Smt/old-run/events.jsonl": "0daf0e43e6c8322994d0d0da9b1495b7faa2972483a3ec61c92c4a7bd5d4d155",
+        "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-D43Smt/local-output-queue.json": "53e577a84f70597e65f267a0d80a3de49cbdd7db9986441848f5f26633ed6860"
+      }
+    }
+  ],
+  "external_qualification": {
+    "mandatory_live_prerequisites": [],
+    "live_paid_calls": 0,
+    "native_codex_preparation_qualified": false,
+    "remote_provider_available": {
+      "openai-agents": false,
+      "codex-cloud": false
+    },
+    "installed_plugin_qualified": false,
+    "model_access_exercised": false,
+    "browser_capture_required": false,
+    "remedy": "Complete the independent native preparation adapter and its limited-authority evidence before registry integration. Later production transports require implemented adapters, credentials, demonstrated model access and authorized bounded live evidence; preserve model/provider defaults and sandbox permissions."
+  }
+}

@@ -214,6 +214,7 @@ Each new run retains compatible `job.json`/`job.log` plus:
 | `journal.json`, `event-keys/` | Durable append checkpoint and hashed exact provider/job/turn/event replay keys; interrupted append becomes an explicit gap |
 | `job.idx`, `log-meta.json` | Fixed-width 8-byte offsets, version 2 offset-plus-one encoding, stable sequence numbers and retained first sequence; zero entries denote gaps |
 | `local-output.json` | Raw local ingestion byte cursor, bounded page and pending marker |
+| `local-output-queue.json` (task run root) | Version 1 ordered unfinished local run IDs; persisted before replacing `latest-run` |
 | `result.json` | Mode 0600 private collected result, original artifact manifest/payloads, redacted outcome and `artifacts` summary; independent of retained logs |
 | `result-application.json`, `verification.json` | Artifact application/publication checkpoint and actual approved verification observations |
 
@@ -244,11 +245,28 @@ existing journal is shorter than the acknowledged offset, recovery refuses and
 preserves it: restore its matching backup before replay instead of extending
 the file with zero bytes or claiming a damaged prefix was repaired.
 
+Completed local output may outlive its current-run pointer. Before a successor
+can save an execution intent or start, the runner preserves the old unfinished
+cursor in `local-output-queue.json`. Coordinator reconciliation drains one
+queued run page and one current-run page, each at most 100 records and 262,144
+raw bytes (200 records and 524,288 bytes per observation; maximum single buffer
+262,144 bytes). Pending runs rotate through the queue; journal byte-position
+identities and atomic checkpoints make restart/replay duplicate-free. The queue
+is drained even when legacy execution metadata has no current record. Public
+status, tail and history reads do not ingest diagnostics or mutate this queue.
+Results settle independently of this backlog, so a large old log cannot postpone
+unrelated execution or GitHub review. Unsupported queue versions, invalid cursors
+and queue persistence errors preserve diagnostics and refuse a new paid intent;
+restore the matching compatible package/checkpoint before dispatch or replay.
+
 Private local diagnostics use `provider.log` and `sensitive-redactions.json`
 (mode 0600 in the private run tree). They are excluded from routes/projections.
 The redaction metadata records a 24-hour expiry; coordinator observation removes
-expired diagnostics once a durable result exists. For older, no-longer-current
-runs, retention maintenance must remove these two private files at expiry after
+expired diagnostics once a durable result exists. If queued bytes expire before
+projection, or diagnostics/redaction metadata are missing or truncated, the
+coordinator appends a stable explicit gap before removing the queue item; it
+never projects raw output without its redaction metadata. For older drained runs,
+retention maintenance must remove these two private files at expiry after
 checking `result.json`; never remove the result/application evidence. Legacy raw
 local files keep their existing runner semantics.
 
@@ -324,7 +342,12 @@ Shared result publication validates task/run/root-turn/input-head ownership,
 repository origin, task branch/base, paths/symlinks and artifact content/base
 hashes before mutation. Every artifact target is canonicalized with the shared
 repository containment/symlink validator before any content is read. Equivalent
-spellings (`a.txt`, `./a.txt`, repeated separators) cannot name duplicate targets;
+spellings (`a.txt`, `./a.txt`, repeated separators) cannot name duplicate targets.
+The manifest also rejects paths that collide after NFC normalization and Unicode
+upper/lower folding, including file or parent-directory case aliases. This is a
+conservative portable manifest rule on every filesystem, including case-sensitive
+checkouts: distinct files with ambiguous case/Unicode spellings require separate
+results. A single accepted path keeps its casing and original artifact bytes;
 application, commit paths and lost-acknowledgement reconciliation use the same
 canonical Git-relative paths. The private provider manifest remains unchanged.
 Applied content and input ancestry reconcile lost commit
@@ -374,7 +397,7 @@ returns the saved PR without executing commands again.
    new private-output runs they do not understand. Restore the matching package
    and state backup together; do not clear run pointers, transplant sessions or
    erase intents to make an old coordinator proceed.
-4. An unsupported registry, execution, health or journal version fails with an
+4. An unsupported registry, execution, health, local output queue or journal version fails with an
    actionable compatible-package/backup remedy. Preserve the original files and
    resolve that version error before restarting; redispatch is not a migration.
 
