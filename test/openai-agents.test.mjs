@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { join } from "node:path";
-import { mkdtempSync, readFileSync, writeFileSync, mkdirSync, rmSync, chmodSync, symlinkSync, unlinkSync } from "node:fs";
+import { mkdtempSync, readFileSync, writeFileSync, mkdirSync, rmSync, chmodSync, symlinkSync, unlinkSync, existsSync, statSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { execFileSync } from "node:child_process";
 import { gzipSync, gunzipSync } from "node:zlib";
@@ -12,10 +12,11 @@ import { validateAgentsConfig } from "../lib/openai_agents_config.mjs";
 import { agentsHttp } from "../lib/openai_agents_http.mjs";
 import { contentHash, prepareAgentsSources, AGENTS_WORKSPACE_HELPER } from "../lib/openai_agents_sources.mjs";
 import { start } from "../lib/commands/start.mjs";
-import { makeState, newEntry } from "../lib/state.mjs";
+import { makeState, newEntry, STATES } from "../lib/state.mjs";
 import { makeTick } from "../lib/tick.mjs";
 import { makeGit } from "../lib/git.mjs";
-import { CONFIG, GOOD_PRD, fakeCredential, fakeIdentity, fakeNotify, silentLog } from "./helpers.mjs";
+import { CONFIG, GOOD_PRD, fakeCredential, fakeIdentity, fakeNotify, fakeGit, fakeGh, silentLog } from "./helpers.mjs";
+import { requestControl } from "../lib/control.mjs";
 import { reconcileExecutionResult } from "../lib/execution_result.mjs";
 import { readJson } from "../lib/fs.mjs";
 const config = { account: "fixture", organization: "org-fixture", project: "proj-fixture", model: "fixture-model", environment: "openai_hosted", container_size: "small", network: { access: "disabled" }, allowance: { remainingUsd: 2, reservedUsd: 0.1 } };
@@ -25,14 +26,15 @@ const input = { operationId: "implementation", prompt: "Implement the approved b
 function fixture() {
   const root = mkdtempSync(join(tmpdir(), "agents-offline-")), calls = [], sessions = new Map(), turns = new Map();
   const clock = { now: () => 1_800_000_000_000 };
-  let serial = 0, lost = null, events = [], items = [], artifactPages = [], result = null, failure = null;
+  let serial = 0, lost = null, events = [], items = [], artifactPages = [], result = null, artifactBytes = null, failure = null;
+  const content = () => artifactBytes ?? JSON.stringify(result);
   const page = data => ({ data, has_more: false, last_id: data.at(-1)?.id ?? null });
   const fetcher = async (url, options) => {
     const route = new URL(url).pathname.replace("/v1", ""), search = new URL(url).searchParams;
     const body = options.body ? JSON.parse(options.body) : null;
     calls.push({ route, method: options.method, body, key: options.headers["Idempotency-Key"] });
     assert.equal(options.headers["OpenAI-Beta"], "agents=v1"); assert.equal(options.headers["OpenAI-Project"], config.project);
-    if (failure) { const status = failure; failure = null; return new Response("private provider error secret", { status, headers: { "retry-after": "2" } }); }
+    if (failure && (typeof failure === "number" || failure.route === route)) { const status = typeof failure === "number" ? failure : failure.status; failure = null; return new Response("private provider error secret", { status, headers: { "retry-after": "2" } }); }
     let value;
     if (route === `/models/${config.model}`) value = { id: config.model };
     else if (route === "/agents/sessions" && options.method === "GET") value = page([...sessions.values()]);
@@ -55,7 +57,10 @@ function fixture() {
       else if (route.includes("/turns/")) value = turns.get(route.split("/").at(-1));
       else if (route.endsWith("/items")) value = items.length ? { data: [items[search.get("after") ? 1 : 0]], has_more: !search.get("after") && items.length > 1, last_id: search.get("after") ? items[1].id : items[0].id } : page([]);
       else if (route.endsWith("/artifacts")) value = artifactPages[search.get("after") ? 1 : 0] || page([]);
-      else if (route.endsWith("/content")) return new Response(JSON.stringify(result));
+      else if (route.endsWith("/content")) {
+        if (lost === route) { lost = null; throw new Error("lost reply"); }
+        return new Response(content());
+      }
       else if (options.method === "DELETE") { sessions.delete(sessionId); value = null; }
       else value = session;
     }
@@ -68,10 +73,11 @@ function fixture() {
   const service = () => makeExecution({ root, taskId: "acme/widget/task", account: config.account, provider: "openai-agents", transport: transport(), capabilities: { ...capabilitiesFor("openai-agents"), models: [config.model] }, clock, jitter: () => 0 });
   const finish = (status = "completed") => { const turn = [...turns.values()].at(-1); turn.status = status; turn.completed_at = clock.now() / 1000; sessions.get(turn.session_id).status = "idle"; return turn; };
   const artifact = job => {
+    artifactBytes = null;
     result = { version: 1, inputHead: head, repo: input.repo, branch: input.branch, files: [{ path: "answer.txt", beforeHash: contentHash(initial), afterHash: contentHash(changed), text: changed }], pr: { title: "Implement answer", body: "Actual result" }, tests: [{ command: "node --test", exit: 0, inputHead: head, output: "passed" }] };
     artifactPages = [{ data: [{ id: "unrelated", turn_id: "other", path: "/workspace/outputs/old.json" }], has_more: true, last_id: "unrelated" }, { data: [{ id: "artifact-1", session_id: job.execution.sessionId, environment_id: job.execution.environment, turn_id: job.execution.turnId, path: "/workspace/outputs/result.json", size_bytes: Buffer.byteLength(JSON.stringify(result)) }], has_more: false }];
   };
-  return { root, clock, calls, sessions, turns, http, fetcher, transport, service, finish, artifact, syncArtifactSize: () => { artifactPages[1].data[0].size_bytes = Buffer.byteLength(JSON.stringify(result)); }, setEvents: v => { events = v; }, setItems: v => { items = v; }, setEnvironment: v => { fixtureEnvironment = v; }, fail: v => { failure = v; }, lose: v => { lost = v; }, getResult: () => result };
+  return { root, clock, calls, sessions, turns, http, fetcher, transport, service, finish, artifact, syncArtifactSize: () => { artifactPages[1].data[0].size_bytes = Buffer.byteLength(content()); }, setArtifactBytes: v => { artifactBytes = v; }, setEvents: v => { events = v; }, setItems: v => { items = v; }, setEnvironment: v => { fixtureEnvironment = v; }, fail: v => { failure = v; }, failAt: (route, status) => { failure = { route, status }; }, lose: v => { lost = v; }, getResult: () => result };
 }
 test("configuration refuses unavailable policy, missing billing selectors and private context", () => {
   assert.equal(validateAgentsConfig(config), config);
@@ -156,8 +162,94 @@ for (const status of [401, 429]) test(`HTTP ${status} preserves work and bounded
   for (let n = 0; n < 3; n++) { f.fail(status); await f.service().reconcile({ force: true }); }
   const before = f.calls.length; await f.service().reconcile({ force: true }); assert.equal(f.calls.length, before); assert.equal(f.service().current().execution.recoveryAction, "AGENTS_RECOVERY_REQUIRED"); assert.doesNotMatch(readFileSync(join(f.root, "execution.json"), "utf8"), /private provider error/);
 });
-for (const mutation of [r => { r.inputHead = "b".repeat(40); }, r => { r.files[0].path = "../escape"; }, r => { r.files[0].path = ".env"; }, r => { r.files[0].beforeHash = "foreign"; }, r => { r.files[0].afterHash = "truncated"; }]) test("artifact rejects unsafe paths, private paths, wrong source and hashes", async () => {
-  const f = fixture(), job = await f.service().submit(input); f.finish(); f.artifact(job); mutation(f.getResult()); f.syncArtifactSize(); await f.service().reconcile({ force: true }); await assert.rejects(f.service().collect()); assert.equal(f.service().current().running, true);
+test("deterministic artifact rejection survives coordinator restart and permits same-session correction", async t => {
+  const mutations = {
+    json: f => f.setArtifactBytes("{ malformed JSON"), nullManifest: f => f.setArtifactBytes("null"),
+    wrongHead: f => { f.getResult().inputHead = "b".repeat(40); },
+    unsafePath: f => { f.getResult().files[0].path = "../private-rejection-payload"; },
+    privatePath: f => { f.getResult().files[0].path = ".env"; },
+    beforeHash: f => { f.getResult().files[0].beforeHash = "foreign"; },
+    afterHash: f => { f.getResult().files[0].afterHash = "truncated"; },
+    nullFile: f => { f.getResult().files[0] = null; }, nullTest: f => { f.getResult().tests[0] = null; },
+    alias: f => { f.getResult().files.push({ ...f.getResult().files[0] }); },
+  }, observations = [];
+  for (const [kind, mutate] of Object.entries(mutations)) {
+    const f = fixture(), taskId = "acme/widget/task", job = await f.service().submit(input);
+    f.finish(); f.artifact(job); mutate(f); f.syncArtifactSize();
+    const state = makeState(f.root), notify = fakeNotify(), gh = fakeGh({ pr: { state: "OPEN" } });
+    const worktree = join(f.root, "checkout"); mkdirSync(worktree); writeFileSync(join(worktree, "answer.txt"), initial);
+    state.put(taskId, { ...newEntry({ harness: "openai-agents", repo: input.repo, branch: input.branch, worktree,
+      state: STATES.prOpen, nowIso: new Date(f.clock.now()).toISOString() }), base: "main", pr: 42,
+      session: job.execution.sessionId, execution: job.execution, last: { run: job.id, exit: null } });
+    const ctx = { home: f.root, state, config: { ...CONFIG, harness: { ...CONFIG.harness, "openai-agents": config } },
+      clock: f.clock, git: { ...fakeGit(), head: async () => head }, gh, ownLogin: "me", log: silentLog, notify,
+      credential: fakeCredential(), identity: fakeIdentity(), executionFor: f.service, readPrd: () => null,
+      executionInputFor: async (_id, _entry, round) => ({ ...input, ...round }) };
+    await makeTick(ctx).tickEntry(taskId, state.get(taskId));
+    const stopped = state.get(taskId), dir = f.service().dirOf(job.id), checkpoint = readJson(join(dir, "result-application.json"));
+    assert.equal(stopped.state, STATES.needsHuman, kind); assert.equal(stopped.reason, "result-verification");
+    assert.equal(stopped.pr, 42); assert.equal(stopped.last.exit, 0); assert.equal(stopped.last.cost, null);
+    assert.equal(stopped.execution.providerState, "succeeded"); assert.equal(f.service().current().running, false);
+    assert.equal(stopped.session, job.execution.sessionId); assert.equal(f.service().outcome(job.id).ok, false);
+    assert.equal(checkpoint.phase, "blocked"); assert.equal(checkpoint.reason, "result-collection-validation");
+    assert.equal(existsSync(join(dir, "result.json")), false); assert.equal(existsSync(join(dir, "verification.json")), false);
+    const rejection = Object.values(readJson(join(f.root, "agents.json")).operations)[0].collectionRejection;
+    const cache = join(f.root, rejection.cache), cached = readJson(cache), bytes = Buffer.from(cached.contentBase64, "base64");
+    assert.equal(cached.artifact.hash, contentHash(bytes)); assert.equal(cached.turnId, job.execution.turnId);
+    assert.equal(statSync(cache).mode & 0o777, 0o600);
+    assert.doesNotMatch(JSON.stringify({ checkpoint, stopped }), /private-rejection-payload|malformed JSON/);
+    f.setEnvironment("expired");
+    await assert.rejects(f.transport().deleteSession({ providerJobId: job.execution.providerJobId,
+      sessionId: job.execution.sessionId, turnId: job.execution.turnId }), { code: "EXECUTION_CONTROL" });
+    const before = f.calls.length, restarted = { ...ctx, state: makeState(f.root) };
+    for (let poll = 0; poll < 3; poll++) await makeTick(restarted).tickEntry(taskId, restarted.state.get(taskId));
+    await f.service().reconcile({ force: true }); await assert.rejects(f.service().collect(), { code: "EXECUTION_RESULT_BLOCKED" });
+    assert.equal(f.calls.length, before); assert.deepEqual(readJson(join(dir, "result-application.json")), checkpoint);
+    assert.equal(contentHash(Buffer.from(readJson(cache).contentBase64, "base64")), cached.artifact.hash);
+    assert.equal(readFileSync(join(worktree, "answer.txt"), "utf8"), initial); assert.equal(notify.sent.filter(x => x[0] === "needs").length, 1);
+    assert.throws(() => requestControl(restarted, { handle: taskId, action: "recheck" }), { code: "EXECUTION_RESULT_BLOCKED" });
+    f.setEnvironment("connected");
+    requestControl(restarted, { handle: taskId, action: "resume" }); await makeTick(restarted).tickEntry(taskId, restarted.state.get(taskId));
+    const correction = f.service().current();
+    assert.equal(restarted.state.get(taskId).control.status, "applied"); assert.equal(restarted.state.get(taskId).pr, 42);
+    assert.equal(correction.execution.sessionId, job.execution.sessionId); assert.notEqual(correction.execution.turnId, job.execution.turnId);
+    assert.equal(f.sessions.size, 1); assert.equal(f.turns.size, 2); assert.deepEqual(readJson(join(dir, "result-application.json")), checkpoint);
+    f.finish(); f.artifact(correction); await f.service().reconcile({ force: true }); assert.equal((await f.service().collect()).files[0].text, changed);
+    observations.push({ kind, checkpoint: join(dir, "result-application.json"), cache, registry: join(f.root, "state.json"),
+      initialRun: job.id, correctiveRun: correction.id, session: job.execution.sessionId, pr: 42, collections: 2,
+      rejectedDownloads: 1, notifications: 1, state: stopped.state, reason: stopped.reason, exit: stopped.last.exit, cost: stopped.last.cost });
+  }
+  const report = join(mkdtempSync(join(tmpdir(), "agents-rejection-evidence-")), "collection-rejection.json");
+  writeFileSync(report, JSON.stringify({ kind: "Provider-shaped offline lifecycle fixtures", observations }, null, 2));
+  t.diagnostic(`collection rejection evidence: ${report}`);
+});
+test("completed root with missing artifact delivery remains pending until the immutable result arrives", async () => {
+  const f = fixture(), job = await f.service().submit(input); f.finish(); await f.service().reconcile({ force: true });
+  await assert.rejects(f.service().collect(), { code: "EXECUTION_RESULT" });
+  assert.equal(f.service().current().running, true);
+  assert.equal(existsSync(join(f.service().dirOf(job.id), "result-application.json")), false);
+  f.artifact(job); assert.equal((await f.service().collect()).files[0].text, changed);
+  assert.equal(f.sessions.size, 1); assert.equal(f.turns.size, 1);
+});
+test("artifact rejection fences downloads before a coordinator checkpoint can be saved", async () => {
+  const f = fixture(), job = await f.service().submit(input); f.finish(); f.artifact(job); f.setArtifactBytes("{ broken"); f.syncArtifactSize();
+  await f.service().reconcile({ force: true });
+  const req = { providerJobId: job.execution.providerJobId, sessionId: job.execution.sessionId, turnId: job.execution.turnId };
+  await assert.rejects(f.transport().collect(req), { code: "EXECUTION_RESULT", collectionValidation: true });
+  const before = f.calls.length;
+  await assert.rejects(f.service().collect(), { code: "EXECUTION_RESULT", collectionValidation: true });
+  assert.equal(f.calls.length, before); assert.equal(f.service().current().running, false);
+});
+for (const failure of [401, 429, "lost"]) test(`artifact download ${failure} stays retryable without a rejection checkpoint`, async () => {
+  const f = fixture(), job = await f.service().submit(input); f.finish(); f.artifact(job); await f.service().reconcile({ force: true });
+  const route = `/agents/sessions/${job.execution.sessionId}/artifacts/artifact-1/content`;
+  if (failure === "lost") f.lose(route); else f.failAt(route, failure);
+  await assert.rejects(f.service().collect());
+  assert.equal(f.service().current().running, true); assert.equal(f.service().current().execution.providerState, "retrieving-results");
+  assert.equal(existsSync(join(f.service().dirOf(job.id), "result-application.json")), false);
+  assert.equal(Object.values(readJson(join(f.root, "agents.json")).operations)[0].collectionRejection, undefined);
+  assert.equal((await f.service().collect()).files[0].text, changed);
+  assert.equal(f.sessions.size, 1); assert.equal(f.turns.size, 1);
 });
 test("account/project isolation refuses foreign session metadata and persisted state", async () => {
   const f = fixture(), job = await f.service().submit(input); f.sessions.get(job.execution.sessionId).metadata.account = "foreign"; await f.service().reconcile({ force: true }); assert.equal(f.service().current().execution.recoveryAction, "EXECUTION_OWNERSHIP");

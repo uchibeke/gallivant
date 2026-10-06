@@ -13,6 +13,7 @@ installed-host qualification records remain independent.
 - [x] Recover authoritative root state and paginated saved items with replacement streams and explicit gaps.
 - [x] Bound failed/ambiguous recovery and refuse expired filesystem continuity.
 - [x] Download completed-turn artifacts, verify paths/hashes/base, save results before deletion, and use the existing PR writer.
+- [x] Persist deterministic artifact rejection, recover both checkpoint write boundaries, and require explicit same-session correction without repeated downloads.
 - [x] Deliver unchanged carried files and support receipt-only rounds without changing the code head.
 - [x] Preserve existing CI/review/evaluator/iteration rules and cancellation/timeout/allowance fences.
 - [x] Reject mandatory local policy and private context that hosted execution cannot enforce.

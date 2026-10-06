@@ -2,37 +2,38 @@
   "version": 1,
   "task_id": "task-cf82d9f43ca0da3c5bb29b67",
   "scope": "managed Agents REST implementation and provider-shaped offline lifecycle verification; live qualification remains unverified",
-  "recorded_at": "2026-10-06T14:46:37.364792+00:00",
+  "recorded_at": "2026-10-06T15:21:25.743Z",
   "base_revision": "7936830977bcb4615de418b9dd5c4d655501297b",
   "branch": "work/openai-agents-harness",
   "source_files": {
     "README.md": "6c9a9e9e79f7a9bd9157464ea2602f6ecde0b2878422e5c8dbea64a98d5f2ab8",
     "docs/audit/plugin-ready/README.md": "7f24289695807c9bd9d880e54e287c3bcfa1a3324543ca87eee68b1e24a9e8f7",
-    "docs/audit/plugin-ready/openai-agents-checklist.md": "3f257312e98ba32fe2c307d6cc8a425894490ab014d37066d9fb94d5d83cf154",
-    "docs/execution.md": "f856368ec5e3dbea3ebb325f76d3af14180ec6b53d999b198b085c0fe4b5ab3d",
-    "docs/openai-agents.md": "a254eb4b2de2a8c04c8a07e4247b5f16823ed1efdb161bef49c3a64ee6e7365d",
+    "docs/audit/plugin-ready/openai-agents-checklist.md": "ac0602cdf9996d6439c692cd764a967927dcb68a1df2a2ab2526297ff07015c5",
+    "docs/execution.md": "e6e9ccedcf38300dd68f968da094e61dd33c554dfb5df3e63c0553ff2babfbe4",
+    "docs/openai-agents.md": "9ce2e8b086efe8f6f60c4f57b1a3b4da094392a6b0b95bd223c63431606574c0",
     "docs/prds/openai-agents-harness.md": "b6d3ceeb20426248b5cf0d8527beaf93a6a69c09003cfc07d3a86fe8fa8b053a",
     "lib/block.mjs": "bd644a1564d6d3dcf3edad1ad1f931fa5f3e4246a041f20acbbb04c88c07c665",
     "lib/commands/doctor.mjs": "f360b366e6a20a29479925d2bb28d1fd9e38f1d97d09c764fbe2d033a1c8d23a",
     "lib/commands/start.mjs": "5b5d1f3c9c71126bd9ed0f7f7772a727f8dd1e3c7f50615c70ed4d5f22353796",
     "lib/config.mjs": "4cdd522fb24463d01023eb1650b5123ff0675ce6c7bbee4731020e2b1b0e9174",
     "lib/context.mjs": "8d086cc3dacaf68de5f84c11b1ac498d60d6b3b420b61214b5e631587e5b6119",
-    "lib/execution.mjs": "dbb1bbf28a4fc54000b1580ee9f7b8ac36f6b78baf61a77001d8c701b2ba338f",
+    "lib/execution.mjs": "a51da2e35dd82592780375758a0ea65f166dcdc643b37f8b9563706cf4b5e74d",
     "lib/harness.mjs": "50640ba71ec7b03f2690ce07ab5d1731034d6d710a833c425d7e354337c6c9b5",
-    "lib/openai_agents.mjs": "c56be0b60e1e9df765f0b6c4f308eacb0fe2efc8e1d100676c916f74981e33e5",
+    "lib/openai_agents.mjs": "e704dbc580b5c8b3dab1c93f7d647bf5de1755e821f17424f6c4d6d79dec6a6e",
     "lib/openai_agents_config.mjs": "7d9db1b55e3c0f71ada076811eb11baf9cfb0becdfed10f6a86ec6ecbfa69dc7",
     "lib/openai_agents_http.mjs": "bf09e30be66d2e22c240194a6e2658c6c9ba3f027a697a4e3db25a5d18f43b05",
     "lib/openai_agents_input.mjs": "a2978393dc2dfe348c97962d0a6a9356184e54a7fe426847b9195186fa8d0c68",
     "lib/openai_agents_sources.mjs": "c3b76d499c72ed5c65bde47e5784cb198130842eff88cc06a924efd6721b3d5b",
     "lib/probe.mjs": "9e70d8dbffd842dea3b46f76efe10a18a5d5a30570c722d17774b4f09c8adf0a",
-    "lib/tick.mjs": "e1012ef8ab6b235b45eba75567ce435cd1a049bb1df52295ac0c195133daf947",
+    "lib/tick.mjs": "526295af455a9e303d1e1b290250c08117683a7add0d8b1939f6bfeb40e66fa0",
     "package.json": "cc440ea2539b8d40772db637b1f6593584c66818f810c4a45719c7c563ff003a",
-    "test/execution-backends.test.mjs": "e96c3e01c3c305c4354d063b7592a266fb58df55715b4107be4abd232bdc00f6",
+    "test/execution-backends.test.mjs": "ae2a9b8c3c4735f4861585325bba1e8a3b9e9775948fa0f281dc91fc8ead9729",
     "test/openai-agents-live.mjs": "0f556440264766e17a369e6eaa6b71658833b93c18971b1ef1326d65452a20d2",
-    "test/openai-agents.test.mjs": "2ea8777cabe514fa80962541cdfebab7c1bbfacaef75fe0c9b1a00d9980638ea",
+    "test/openai-agents.test.mjs": "c2a883013679fe20c91cb6d59f79f8a807a775a1db13bb978f420e7405a246b7",
     "test/units.test.mjs": "ae8ab863aa48e3e44557e8f20c00bb8440682325ec099eb34a81f339cbb42b9f",
     "lib/execution_result.mjs": "f1ce8a8abc7682a106612cd6746d46c950a5da29014fe3753623d3d1bcaeec46",
-    "lib/verification_sandbox.mjs": "a45365a22f2a67c416948e31fc4a03d3f60f493b1ae475061a932c6f89b9cc6d"
+    "lib/verification_sandbox.mjs": "a45365a22f2a67c416948e31fc4a03d3f60f493b1ae475061a932c6f89b9cc6d",
+    "lib/execution_io.mjs": "b6024cdac19f53d3a2e4f13ab250ecb707bb78d1729e7fb53dab38c2c70c7145"
   },
   "frozen_inputs": {
     "docs/plans/plugin-ready-gallivant.md": "3081d47d8161043f9c32b6184f07ee8d4ca513822341c41a138bdf28f7459fc2",
@@ -52,10 +53,10 @@
     {
       "command": "npm test",
       "exit": 0,
-      "raw_log": "/tmp/agents-security-final-test.log",
-      "sha256": "65162732e3dff433f4b187e01fadf2ac0f1ab3fc3c24de71f755cb3ea5ef891d",
-      "tests": 1110,
-      "pass": 1110,
+      "raw_log": "/tmp/agents-collection-test.log",
+      "sha256": "c2cabaa9cf5773aade6472660cf348c41eaf108e5e8f3277f3377db42a2495b1",
+      "tests": 1116,
+      "pass": 1116,
       "fail": 0,
       "cancelled": 0,
       "skipped": 0
@@ -63,16 +64,16 @@
     {
       "command": "npm run lint",
       "exit": 0,
-      "raw_log": "/tmp/agents-security-final-lint.log",
+      "raw_log": "/tmp/agents-collection-lint.log",
       "sha256": "8c7790de3f018fb4580f18ac70e1b355a0f76f522dd73acbdaa63632feffcecc"
     },
     {
       "command": "npm run test:execution-backends",
       "exit": 0,
-      "raw_log": "/tmp/agents-security-final-backends.log",
-      "sha256": "bc5222de200a29eca9f515da5e846f9cd13cbbe716b30efec19f33f90991b47d",
-      "tests": 380,
-      "pass": 380,
+      "raw_log": "/tmp/agents-collection-backends.log",
+      "sha256": "ba889b0c2d20b0a532e4fda788d6684afa133ccf16658ac93471c46abaaeac95",
+      "tests": 385,
+      "pass": 385,
       "fail": 0,
       "cancelled": 0,
       "skipped": 0
@@ -80,10 +81,10 @@
     {
       "command": "npm run test:openai-agents",
       "exit": 0,
-      "raw_log": "/tmp/agents-security-final-openai.log",
-      "sha256": "932153f5ab2315567480cf23522c377f7a60162359240d11172593885f6ec565",
-      "tests": 28,
-      "pass": 28,
+      "raw_log": "/tmp/agents-collection-openai.log",
+      "sha256": "06cd9d3cc7e2ab175f8cd5a191f9c15bef4cb41e7a6de15b4acffd62ec0b38bd",
+      "tests": 29,
+      "pass": 29,
       "fail": 0,
       "cancelled": 0,
       "skipped": 0
@@ -91,7 +92,7 @@
     {
       "command": "git diff --check",
       "exit": 0,
-      "raw_log": "/tmp/agents-security-final-diff.log",
+      "raw_log": "/tmp/agents-collection-diff.log",
       "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
     }
   ],
@@ -187,14 +188,16 @@
       "evidence_kind": "implementation-and-offline-fixtures",
       "files": [
         "lib/openai_agents.mjs",
-        "lib/execution.mjs"
+        "lib/execution.mjs",
+        "lib/tick.mjs"
       ],
       "test_names": [
         "failed session opens no endless reconnect loop across restart",
         "failed or unsent launch recovery stops provider I/O and preserves ambiguity",
         "HTTP 401 preserves work and bounded retries with actionable private-safe errors",
         "HTTP 429 preserves work and bounded retries with actionable private-safe errors",
-        "expired filesystem still permits immutable artifact recovery but refuses continuation"
+        "expired filesystem still permits immutable artifact recovery but refuses continuation",
+        "deterministic artifact rejection survives coordinator restart and permits same-session correction"
       ]
     },
     {
@@ -205,12 +208,14 @@
         "lib/openai_agents_sources.mjs",
         "lib/openai_agents.mjs",
         "lib/execution_result.mjs",
-        "lib/verification_sandbox.mjs"
+        "lib/verification_sandbox.mjs",
+        "lib/execution.mjs",
+        "lib/tick.mjs"
       ],
       "test_names": [
         "managed artifacts reach the single PR writer with actual file and current-head verification",
         "sandbox publisher delivers unchanged carried files, receipt repairs and rejects symlinks and mode changes",
-        "artifact rejects unsafe paths, private paths, wrong source and hashes",
+        "deterministic artifact rejection survives coordinator restart and permits same-session correction",
         "host-file exfiltration in artifact and pushed-branch Verify scripts is denied before publication",
         "native verification permits npm and checkout tools while denying child, symlink, Git, journal and network escapes",
         "unavailable or unproven verification sandbox blocks once, preserves results and cleans its profile",
@@ -227,13 +232,15 @@
         "lib/tick.mjs",
         "lib/commands/resume.mjs",
         "lib/control.mjs",
-        "lib/deliverable.mjs"
+        "lib/deliverable.mjs",
+        "lib/execution.mjs"
       ],
       "test_names": [
         "shared resume uses remote capabilities and owned sessions without a fake CLI",
         "real REST adapter: implementation, artifact pagination, restart and same-session correction",
         "sandbox publisher delivers unchanged carried files, receipt repairs and rejects symlinks and mode changes",
-        "phase-bounded coordinator settlement cannot enter review dispatch or queued resume"
+        "phase-bounded coordinator settlement cannot enter review dispatch or queued resume",
+        "deterministic artifact rejection survives coordinator restart and permits same-session correction"
       ]
     },
     {
@@ -261,11 +268,13 @@
         "lib/openai_agents_input.mjs",
         "lib/openai_agents_http.mjs",
         "lib/execution_result.mjs",
-        "lib/verification_sandbox.mjs"
+        "lib/verification_sandbox.mjs",
+        "lib/execution.mjs",
+        "lib/tick.mjs"
       ],
       "test_names": [
         "configuration refuses unavailable policy, missing billing selectors and private context",
-        "artifact rejects unsafe paths, private paths, wrong source and hashes",
+        "deterministic artifact rejection survives coordinator restart and permits same-session correction",
         "host-file exfiltration in artifact and pushed-branch Verify scripts is denied before publication",
         "native verification permits npm and checkout tools while denying child, symlink, Git, journal and network escapes",
         "unavailable or unproven verification sandbox blocks once, preserves results and cleans its profile",
@@ -282,7 +291,9 @@
         "test/openai-agents.test.mjs",
         "test/execution-backends.test.mjs",
         "lib/execution_result.mjs",
-        "lib/verification_sandbox.mjs"
+        "lib/verification_sandbox.mjs",
+        "lib/execution.mjs",
+        "lib/tick.mjs"
       ],
       "test_names": [
         "account/project isolation refuses foreign session metadata and persisted state",
@@ -293,7 +304,18 @@
         "unavailable or unproven verification sandbox blocks once, preserves results and cleans its profile",
         "an earlier Verify command cannot replace the sandbox policy for a later command",
         "verification recovery rejects legacy unsandboxed evidence without replaying or pushing",
-        "a stop during sandbox preparation prevents Verify dispatch and removes the private profile"
+        "a stop during sandbox preparation prevents Verify dispatch and removes the private profile",
+        "deterministic artifact rejection survives coordinator restart and permits same-session correction",
+        "artifact rejection fences downloads before a coordinator checkpoint can be saved",
+        "completed root with missing artifact delivery remains pending until the immutable result arrives",
+        "artifact download 401 stays retryable without a rejection checkpoint",
+        "artifact download 429 stays retryable without a rejection checkpoint",
+        "artifact download lost stays retryable without a rejection checkpoint",
+        "unmarked collection errors and foreign rejection checkpoints cannot settle the owned run",
+        "openai-agents fixture: rejected collection recovers checkpoint-first crash and preserves succeeded root",
+        "openai-agents fixture: rejected collection recovers checkpoint-first crash and preserves failed root",
+        "codex-cloud fixture: rejected collection recovers checkpoint-first crash and preserves succeeded root",
+        "codex-cloud fixture: rejected collection recovers checkpoint-first crash and preserves failed root"
       ]
     },
     {
@@ -324,12 +346,12 @@
     "sha256": "16c09feca47099fa1005141c07af146326f38055bb27fd37f2da8966198533af"
   },
   "package_verification": {
-    "raw_record": "/tmp/agents-security-package-verification.json",
-    "sha256": "3c4f21f1dee71db5c26503a7706cc658b81c843e4084911bc3cbde2fa0ae3210",
-    "integrity": "sha512-oVEgb4yN1JixU6j397faB45HmM8+P5daRfU0ZZlyBZDmUF5Lhc469CPYgi0ocqO4n5HKs+2oLQ9zqqQU7k52OQ==",
+    "raw_record": "/tmp/agents-collection-package-verification.json",
+    "sha256": "3af1308b412e25fe2efd325bb6dd183ca6a22e6add6647a1afabd99a29a41a1d",
+    "integrity": "sha512-4Dr5sGeuO6p9A7GN+g29ixF3q3tWkQm4MFrBzbXD1hJsfV/DUU78MCj1NictpdDIV68pIiacpmJxRFakNxmAeg==",
     "files": 86,
-    "bytes": 421494,
-    "result": "adapter/context/execution/result/sandbox modules imported from the unpacked local package; no provider call"
+    "bytes": 423121,
+    "result": "adapter/context/execution/result/io/coordinator/sandbox modules imported from the unpacked local package with matching changed source hashes; no provider call"
   },
   "live": {
     "version": 1,
@@ -436,6 +458,57 @@
           "sha256": "c90399dd4baa75bb8c24183a65b50ae593d21380c60cd774ebd6a67da7afbe84"
         }
       ]
+    },
+    {
+      "rule": "A deterministic completed-turn artifact rejection must durably stop collection while preserving root ownership, work, cost and explicit corrective continuity",
+      "checked": [
+        "lib/openai_agents.mjs collect schema/portablePath/hash/alias validation, private cache and deletion refusal",
+        "lib/execution_io.mjs deterministic collection error marker versus transport/I/O failure",
+        "lib/execution.mjs collect checkpoint ordering, read recovery, failed-root migration, continuation/cancel and cost settlement",
+        "lib/tick.mjs result stop refreshes the same run before registry projection",
+        "lib/control.mjs recheck refusal and commands/resume.mjs same-session continuation",
+        "lib/execution_result.mjs existing blocked publication boundary and repository_files.mjs shared path validation"
+      ],
+      "regression": [
+        "deterministic artifact rejection survives coordinator restart and permits same-session correction",
+        "artifact rejection fences downloads before a coordinator checkpoint can be saved",
+        "completed root with missing artifact delivery remains pending until the immutable result arrives",
+        "artifact download 401 stays retryable without a rejection checkpoint",
+        "artifact download 429 stays retryable without a rejection checkpoint",
+        "artifact download lost stays retryable without a rejection checkpoint",
+        "unmarked collection errors and foreign rejection checkpoints cannot settle the owned run",
+        "openai-agents fixture: rejected collection recovers checkpoint-first crash and preserves succeeded root",
+        "openai-agents fixture: rejected collection recovers checkpoint-first crash and preserves failed root",
+        "codex-cloud fixture: rejected collection recovers checkpoint-first crash and preserves succeeded root",
+        "codex-cloud fixture: rejected collection recovers checkpoint-first crash and preserves failed root"
+      ],
+      "representative_output": [
+        {
+          "label": "provider-shaped offline rejection/restart/correction observations",
+          "path": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/agents-rejection-evidence-T4mFqW/collection-rejection.json",
+          "sha256": "79ba88c7a45b866922d427f91831c3e40ccff1dbf0748fe4958577c4bf6de60b"
+        },
+        {
+          "label": "json owned blocked checkpoint",
+          "path": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/agents-offline-NYNodU/run-6b76fc4d-5a0d-4fef-8f7c-a7760bb45351/result-application.json",
+          "sha256": "c7494f65f7d7fbed01872f6d12c2470090db2ef98ba54d8da70e328e69bf5a51"
+        },
+        {
+          "label": "json private untrusted artifact cache",
+          "path": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/agents-offline-NYNodU/run-6b76fc4d-5a0d-4fef-8f7c-a7760bb45351-rejected-artifact.json",
+          "sha256": "fa625d6058ecacc8e60666bf038f041cd4ea689df34954162ee6d4e03ca15a7e"
+        },
+        {
+          "label": "unsafePath owned blocked checkpoint",
+          "path": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/agents-offline-J1Lmcj/run-70090c68-d1cd-4311-8d99-63fe9df94c7a/result-application.json",
+          "sha256": "2372d36b9bd95cdb8ce30ea2cd2b58d2ed12d51d81752a52a22d087fb843f7cc"
+        },
+        {
+          "label": "unsafePath private untrusted artifact cache",
+          "path": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/agents-offline-J1Lmcj/run-70090c68-d1cd-4311-8d99-63fe9df94c7a-rejected-artifact.json",
+          "sha256": "d700a9c3ce780d107104c4fee0da7fd6b1f471477d5fec0620fa848771da01bb"
+        }
+      ]
     }
   ],
   "security_followup": {
@@ -488,5 +561,83 @@
       "verification recovery rejects legacy unsandboxed evidence without replaying or pushing",
       "a stop during sandbox preparation prevents Verify dispatch and removes the private profile"
     ]
+  },
+  "collection_rejection_followup": {
+    "review_id": 5430401542,
+    "inline_comment_id": 4196918468,
+    "reviewed_commit": "531f3082c5e120bc11503a7ec24e5fb86e46a278",
+    "evidence_kind": "provider-shaped offline lifecycle fixtures; no live provider calls",
+    "tests": [
+      "deterministic artifact rejection survives coordinator restart and permits same-session correction",
+      "artifact rejection fences downloads before a coordinator checkpoint can be saved",
+      "completed root with missing artifact delivery remains pending until the immutable result arrives",
+      "artifact download 401 stays retryable without a rejection checkpoint",
+      "artifact download 429 stays retryable without a rejection checkpoint",
+      "artifact download lost stays retryable without a rejection checkpoint",
+      "unmarked collection errors and foreign rejection checkpoints cannot settle the owned run",
+      "openai-agents fixture: rejected collection recovers checkpoint-first crash and preserves succeeded root",
+      "openai-agents fixture: rejected collection recovers checkpoint-first crash and preserves failed root",
+      "codex-cloud fixture: rejected collection recovers checkpoint-first crash and preserves succeeded root",
+      "codex-cloud fixture: rejected collection recovers checkpoint-first crash and preserves failed root"
+    ],
+    "representative_output": [
+      {
+        "label": "provider-shaped offline rejection/restart/correction observations",
+        "path": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/agents-rejection-evidence-T4mFqW/collection-rejection.json",
+        "sha256": "79ba88c7a45b866922d427f91831c3e40ccff1dbf0748fe4958577c4bf6de60b"
+      },
+      {
+        "label": "json owned blocked checkpoint",
+        "path": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/agents-offline-NYNodU/run-6b76fc4d-5a0d-4fef-8f7c-a7760bb45351/result-application.json",
+        "sha256": "c7494f65f7d7fbed01872f6d12c2470090db2ef98ba54d8da70e328e69bf5a51"
+      },
+      {
+        "label": "json private untrusted artifact cache",
+        "path": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/agents-offline-NYNodU/run-6b76fc4d-5a0d-4fef-8f7c-a7760bb45351-rejected-artifact.json",
+        "sha256": "fa625d6058ecacc8e60666bf038f041cd4ea689df34954162ee6d4e03ca15a7e"
+      },
+      {
+        "label": "unsafePath owned blocked checkpoint",
+        "path": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/agents-offline-J1Lmcj/run-70090c68-d1cd-4311-8d99-63fe9df94c7a/result-application.json",
+        "sha256": "2372d36b9bd95cdb8ce30ea2cd2b58d2ed12d51d81752a52a22d087fb843f7cc"
+      },
+      {
+        "label": "unsafePath private untrusted artifact cache",
+        "path": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/agents-offline-J1Lmcj/run-70090c68-d1cd-4311-8d99-63fe9df94c7a-rejected-artifact.json",
+        "sha256": "d700a9c3ce780d107104c4fee0da7fd6b1f471477d5fec0620fa848771da01bb"
+      }
+    ],
+    "root_outcome_preserved": true,
+    "unknown_cost_preserved": true,
+    "repeat_downloads": false,
+    "automatic_corrective_dispatch": false,
+    "native_sandbox_preflight": {
+      "driver": "sandbox-exec",
+      "filesystem": "checkout-and-runtime",
+      "network": "disabled",
+      "probe": "passed"
+    },
+    "mandatory_external_prerequisites": {
+      "version": 1,
+      "kind": "live",
+      "status": "unverified",
+      "phase": "preflight",
+      "at": "2026-10-06T13:09:30.294Z",
+      "blockers": [
+        "OPENAI_AGENTS_LIVE_HOME absent",
+        "OPENAI_AGENTS_LIVE_PRD absent",
+        "OPENAI_AGENTS_LIVE_REPO absent",
+        "OPENAI_AGENTS_CAMPAIGN_LEDGER absent",
+        "preflight only; no paid implementation or correction evidence collected"
+      ],
+      "costUsd": null,
+      "exit": 1,
+      "raw_log": "/tmp/agents-live-prerequisites.json",
+      "sha256": "cee7f8f2e92680df6183517c64864478649bc6bcaa5d78890a847d747bc3b0af",
+      "paid_calls": 0,
+      "inference_access": "unverified",
+      "host_plugin_capture": "not required for this REST milestone; installed-host release gate remains separate",
+      "remedy": "Supply the private configured live home and scoped project API key with Agents read/write plus inference access, authorized model/container/network, approved tiny disposable repository and PRD, and priced remaining aggregate USD 10 campaign ledger. Authorize implementation, reconcile observed cost, then force a current-head CI/trusted-review finding and authorize the same-session correction."
+    }
   }
 }

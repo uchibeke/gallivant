@@ -597,6 +597,18 @@ resume starts correction without clearing the rejected result. Missing collectio
 results, unavailable Git metadata and ordinary I/O failures remain unresolved and
 retryable. A failed checkpoint write cannot claim durable blocking or settlement.
 
+Transports distinguish deterministic validation of a downloaded completed-turn
+artifact with `collectionValidationError` from unavailable delivery or I/O.
+The shared collection boundary persists an owned `blocked` checkpoint with reason
+`result-collection-validation` before settling liveness. `resultRejected: true`
+retains the authoritative root status and actual exit while reporting unsuccessful
+delivery; no valid `result.json` is invented. The checkpoint restores settlement
+after a crash between its write and execution/job projection writes, using exact
+task/run/job/session/turn/input-head ownership. The coordinator refreshes that
+run's state before entering the same `needs-human` corrective lane. Repeated polls
+and rechecks cannot recollect rejected input; explicit same-session continuation
+keeps the old rejection evidence and starts a new owned turn.
+
 Verification requires the recorded applied commit and a clean Git index/worktree,
 including untracked files. The existing strict Git status helper checks both
 before commands, after each successful command and before PR publication; a

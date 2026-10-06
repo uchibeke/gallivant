@@ -7,7 +7,7 @@ import { createServer } from "node:net";
 import { mkdirSync, readFileSync, writeFileSync, rmSync, renameSync, symlinkSync, cpSync, statSync, lstatSync, existsSync, chmodSync, realpathSync } from "node:fs";
 import { pathToFileURL } from "node:url";
 import { makeExecution, executionLive, assertExecutionDependency } from "../lib/execution.mjs";
-import { redact, redactResultMetadata, EXECUTION_CURSOR_BYTES } from "../lib/execution_io.mjs";
+import { redact, redactResultMetadata, collectionValidationError, EXECUTION_CURSOR_BYTES } from "../lib/execution_io.mjs";
 import { executionRegistry, adapters, buildRun } from "../lib/harness.mjs";
 import { makeProviderHealth } from "../lib/provider_health.mjs";
 import { makeRunner, LOCAL_OUTPUT_LIMITS } from "../lib/run.mjs";
@@ -62,6 +62,44 @@ test("predecessor service is required and managed API is available while Cloud r
   const spec = buildRun({ harness: "codex", config: CONFIG, mode: "start", prompt: "offline", cwd: tempHome() });
   assert.equal(spec.cmd, CONFIG.harness.codex.bin);
   assert.ok(spec.args.includes('sandbox_mode="workspace-write"'));
+});
+
+for (const provider of ["openai-agents", "codex-cloud"]) for (const terminalState of ["succeeded", "failed"]) test(`${provider} fixture: rejected collection recovers checkpoint-first crash and preserves ${terminalState} root`, async () => {
+  const f = remote(provider, { collect: async () => { f.calls.push(["collect"]); throw collectionValidationError("invalid immutable result"); } });
+  const job = await f.service.submit(input);
+  f.observe({ state: terminalState, costUsd: 0.2, completedAt: f.clock.now() }); await f.service.reconcile({ force: true });
+  const before = readJson(join(f.root, "execution.json"));
+  await assert.rejects(f.service.collect(), { code: "EXECUTION_RESULT", collectionValidation: true });
+  const dir = f.service.dirOf(job.id), checkpoint = readJson(join(dir, "result-application.json"));
+  assert.equal(checkpoint.phase, "blocked"); assert.equal(checkpoint.reason, "result-collection-validation");
+  assert.equal(checkpoint.providerJobId, job.execution.providerJobId); assert.equal(checkpoint.turnId, job.execution.turnId);
+  assert.equal(existsSync(join(dir, "result.json")), false);
+  // A crash after checkpoint persistence must not reopen retrieval, including
+  // the older failed-root migration that repairs missing result.json records.
+  writeJsonAtomic(join(f.root, "execution.json"), before);
+  const recovered = f.reopen(), current = recovered.current(), calls = f.calls.length;
+  assert.equal(current.running, false); assert.equal(current.execution.providerState, terminalState);
+  assert.equal(current.execution.terminalState, terminalState); assert.equal(current.execution.collected, true);
+  assert.equal(current.execution.resultRejected, true); assert.equal(current.exit, terminalState === "succeeded" ? 0 : 1);
+  assert.equal(current.endedAt, f.clock.now()); assert.equal(current.completionInferred, false);
+  assert.equal(recovered.outcome(job.id).ok, false); assert.equal(recovered.outcome(job.id).cost, 0.2);
+  await recovered.reconcile({ force: true }); await assert.rejects(recovered.collect(), { code: "EXECUTION_RESULT_BLOCKED" });
+  assert.equal(f.calls.length, calls); assert.deepEqual(readJson(join(dir, "result-application.json")), checkpoint);
+  await assert.rejects(recovered.continue({ ...input, operationId: "foreign", sessionId: "foreign" }), { code: "EXECUTION_CONTINUATION" });
+  const next = await recovered.continue({ ...input, operationId: "correction", sessionId: current.execution.sessionId });
+  assert.equal(next.execution.sessionId, job.execution.sessionId); assert.notEqual(next.execution.turnId, job.execution.turnId);
+  assert.equal(f.calls.filter(c => c[0] === "submit").length, 1); assert.equal(f.calls.filter(c => c[0] === "continue").length, 1);
+});
+
+test("unmarked collection errors and foreign rejection checkpoints cannot settle the owned run", async () => {
+  const f = remote("openai-agents", { collect: async () => { throw Object.assign(new Error("retryable download"), { code: "EXECUTION_RESULT" }); } });
+  const job = await f.service.submit(input); f.observe({ state: "succeeded" }); await f.service.reconcile({ force: true });
+  await assert.rejects(f.service.collect(), { code: "EXECUTION_RESULT" });
+  assert.equal(f.service.current().running, true); assert.equal(existsSync(join(f.service.dirOf(job.id), "result-application.json")), false);
+  writeJsonAtomic(join(f.service.dirOf(job.id), "result-application.json"), { phase: "blocked", reason: "result-collection-validation",
+    taskId: "acme/widget/remote", runId: job.id, providerJobId: job.execution.providerJobId, sessionId: "foreign", turnId: job.execution.turnId, inputHead: input.inputHead });
+  assert.equal(f.reopen().current().running, true);
+  await assert.rejects(f.service.continue({ ...input, operationId: "duplicate", sessionId: job.execution.sessionId }), { code: "BUSY" });
 });
 
 test("missing predecessor module stops context startup with a dependency remedy", async () => {

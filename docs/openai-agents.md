@@ -169,6 +169,20 @@ rechecks branch ownership, base/head, aliases, modes and approved tests on the
 actual applied revision before pushing. Agent-reported tests are retained as such;
 coordinator-executed verification remains authoritative for PR publication.
 
+Malformed JSON, unsafe/private paths, wrong source heads, hash mismatches and
+portable aliases in a downloaded immutable artifact stop collection once. The
+adapter saves its rejected bytes and hash in the private mode-0600
+`<run>-rejected-artifact.json` cache, referenced by `agents.json`. These bytes are
+untrusted inspection data; they never enter the checkout, public logs or PR writer.
+The shared `result-application.json` checkpoint records
+`result-collection-validation`, and the task enters `needs-human` with reason
+`result-verification`. Provider root status, session, PR and observed/unknown cost
+remain intact. Polling, restart and PR recheck cannot redownload or accept that
+artifact. Inspect the checkpoint and private cache, then explicitly resume for a
+corrected result in the same session. Rejected artifacts do not qualify session
+deletion. Missing delivery, HTTP throttling/authentication, interrupted downloads
+and local persistence failures remain unresolved and retryable after repair.
+
 The coordinator executes every nonempty Verify list in an OS sandbox, including
 scripts changed by hosted results and their child processes. Install a dedicated
 Node 22+ runtime with npm and use macOS with `/usr/bin/sandbox-exec` plus
