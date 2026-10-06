@@ -37,8 +37,12 @@ test("daemon fences an old Codex account while GitHub review continues", async (
   state.put("acme/widget/probe", newEntry({ repo: "acme/widget", pr: 1, branch: "gallivant/probe", worktree: "/tmp/unused-probe", harness: "codex", state: STATES.prOpen, nowIso: T0 }));
   let runsRead = 0;
   const notify = fakeNotify();
+  // This case asserts version refusal and independent review progress, not
+  // subprocess scheduling under full-suite load. Match the standalone native
+  // probe budget; deterministic bounded-deadline/outage cases live in the
+  // execution-backends suite. Production's coordinator default stays 2 seconds.
   await up({
-    home, state, config: { ...CONFIG, repos: [], harness: { codex: { bin: harnessBin(home, "codex", { version: "0.155.1" }) } } },
+    home, state, config: { ...CONFIG, execution: { deadlineMs: 20_000 }, repos: [], harness: { codex: { bin: harnessBin(home, "codex", { version: "0.155.1" }) } } },
     gh: fakeGh({ pr: { state: "MERGED" } }), log: silentLog, notify,
     runnerFor: () => { runsRead++; return { current: () => null, start: () => { throw new Error("dispatch must not be reached"); } }; },
   }, { once: true });

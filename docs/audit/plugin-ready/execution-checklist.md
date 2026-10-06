@@ -6,6 +6,7 @@ See [the contract](../../execution.md) and [per-case evidence](execution-foundat
 - [x] Reuse the merged intake task service and existing lifecycle; fail missing prerequisites.
 - [x] Keep existing CLI identities, adapters and policy defaults compatible.
 - [x] Export a versioned execution/result boundary and one capability registry.
+- [x] Route drafting, clarification and repair through selected preparation capabilities and owned input-bound receipts.
 - [x] Persist owned intent, idempotency and recovery metadata before dispatch.
 - [x] Scope health by provider/account and separate progress/result work from review.
 - [x] Reconcile startup, stale observations, missed events and uncertain acceptance.
@@ -16,6 +17,7 @@ See [the contract](../../execution.md) and [per-case evidence](execution-foundat
 - [x] Preserve supported legacy local state and document compatible-package rollback.
 - [x] Supply deterministic API-shaped, Cloud-shaped and local Codex-shaped fixtures.
 - [ ] Implement either remote production transport (later milestones).
+- [ ] Independently qualify the owner-managed Codex preparation adapter before registering its limited authority.
 - [ ] Qualify provider/model access, repository/environment setup and remote controls live.
 - [ ] Qualify an installed plugin, public endpoint, screenshots or capture surface.
 - [ ] Merge, deploy, submit or publish a release (human/later milestone boundaries).

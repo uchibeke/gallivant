@@ -10,12 +10,16 @@ recreate intake or introduce another review engine. The approved brief is
 
 `executionRegistry` in `lib/harness.mjs` is the capability source for configuration,
 probes, the task service's `capabilities()` and `GET /api/capabilities`. Existing
-`claude`, `codex`, `copilot`, `gemini` and `goose` public names and CLI adapters are
+`claude`, `codex`, `opencode`, `gemini` and `goose` public names and CLI adapters are
 preserved. Each entry declares authentication, environments, preparation policy,
 continuation, observability, cancellation/interrupt, and cost/hard-cap support.
 Mandatory policy, model and environment choices are checked before dispatch;
 unsupported choices refuse execution without falling back or changing defaults.
-Native preparation retains its existing enforced tools-off gate.
+Preparation is an optional versioned capability of that same selected provider.
+The existing Claude tools-off policy is declared by its adapter; task lifecycle
+code contains no Claude-only name gate. Codex and other native adapters remain
+unqualified for preparation until they supply an enforced limited-authority
+capability. A private HOME or a version/sign-in probe does not qualify one.
 
 `openai-agents` and `codex-cloud` are reserved, **unavailable** entries. Their
 transports, authentication, installed-plugin behavior, model access and live
@@ -36,11 +40,13 @@ local runner or a transport. Its local facade preserves `start`, `current`,
 
 A transport implements the following asynchronous methods. Every method must
 honor its `AbortSignal`, bound responses, release resources on abort, and avoid
-creating its own scheduler or review loop. The coordinator alone calls them.
+creating its own scheduler or review loop. The coordinator owns progress/review
+scheduling. Explicit task preparation mutations can reconcile one owned turn at
+its persisted cadence; read-only clients never call a transport.
 
 | Method | Input and acknowledgement |
 | --- | --- |
-| `prepare` | Enforced preparation kind and authorized environment; scoped prepared environment |
+| `prepare` | Preparation kind, prompt, authorized limited environment and allowance; confirmed boundary and bounded environment grant, without paid submit |
 | `submit` | Task/provider/account, canonical run ID, operation ID, idempotency key, prompt/input head, mandatory policy, allowance; exact provider job, session and root turn IDs |
 | `inspect` | Exact owned job/session/turn, event cursor; authoritative state, observation time, bounded event page, next cursor, explicit gap and nullable cost |
 | `continue` | Same dispatch contract plus this provider's recorded native session; exact new owned job/root turn acknowledgement |
@@ -52,6 +58,27 @@ The public boundary's `inspect()` is deliberately a cached read. Its coordinator
 `reconcile()` invokes transport inspection/lookup. Reading CLI status, task
 inspection, UI status/history/results or SSE never probes providers, submits work,
 or starts an independent provider loop.
+
+For intake, `makeExecution.prepare()` returns an issued `receipt` and either the
+native `{cmd, args, options}` spec or a remote environment grant. The receipt
+contains version 1, provider/account, authority/boundary, task ID and an input
+fingerprint. `submit({kind: "intake", preparation: receipt, ...})` requires an
+issued receipt matching the exact prepared input. Changing argv, prompt or grant
+cannot reuse it. Environment credentials remain private; only their fingerprint
+enters execution state. Native preparation uses the selected CLI/config defaults,
+the existing small environment allowlist and enforced adapter argv. Optional
+adapter configuration receives an AbortSignal and the transport deadline;
+deadline or concurrent cancellation never issues late authority.
+
+Drafting, clarification and repair all call this operation and the shared submit,
+reconcile, collect and cancel boundary. Remote preparation returns `preparing`
+while acceptance or results are unknown, retaining exact ownership for explicit
+resume. It never waits in an independent polling loop. Unknown cost stays null;
+each remote turn reserves up to one sixteenth of the original task budget, and
+accounting retains the greater of reservation and reported usage. The existing
+16-turn, three-repair and runtime limits, immutable owner requirements,
+deterministic validation/readiness and explicit implementation consent remain
+canonical. Preparation grants no implementation or GitHub-writing authority.
 
 Example normalized observation and result (provider identities are illustrative):
 
@@ -88,7 +115,12 @@ remain unresolved; provider success alone does not mean workflow readiness.
 operations, stop fence and cumulative allowance. Each operation records the input
 fingerprint, canonical run ID, deterministic idempotency key, intent timestamp,
 input head and acceptance (`unknown` or `accepted`). Intent is atomically persisted
-before submit/continue. The process-identity lock serializes mutations on the
+before submit/continue. Issued preparation receipts live in `preparations`, keyed
+by their exact input fingerprints; intake execution metadata records its receipt
+and `kind`. Task attempts retain receipts, reservations and cached execution
+observations. Legacy scalar receipts remain valid only for the selected adapter's
+declared boundary; another provider's receipt cannot authorize readiness,
+answers, dispatch or recovery. The process-identity lock serializes mutations on the
 operator's local filesystem; this is not a distributed multi-host lease.
 
 Accepted execution metadata in both the registry and compatible `job.json`
@@ -229,3 +261,24 @@ rounds and human merge boundaries. No automatic merge is added.
 Run `npm run test:execution-backends` for focused G3/G3a/G6 fixture coverage and the
 full Verify set for regressions. [The foundation evidence](audit/plugin-ready/execution-foundation.json)
 is an offline G8 receipt, with live-provider status explicitly unqualified.
+The [shared preparation follow-up](audit/plugin-ready/execution-preparation.json)
+records the owner correction, final verification and source/output review.
+
+## Next milestone handoff
+
+M3/M4 and APort must consume these shared preparation/submit/inspection/result/
+control operations and the existing task service, without copying a runner or
+adding a review engine. An implemented provider registers preparation version 1,
+its concrete `boundary`, limited `authority` and remote `environment`; a CLI
+adapter additionally supplies its enforced `render`, optional abortable
+`configure` and required native minimum version. The context's `capabilitiesFor`
+and `executionFor` must use that same registry. Mark provider availability only
+after its implemented transport and required live evidence exist.
+
+The owner is investigating the Codex preparation adapter separately in
+`/private/tmp/gallivant-shared-preparation`. Integrate that independently verified
+adapter with this contract; this foundation neither duplicates its fix nor
+certifies its sandbox, model access or installed-plugin behavior. Preserve the
+operator's model/provider defaults, genuine limited preparation authority,
+bounded attempts and execution consent. Carry unmet live qualification evidence
+forward rather than substituting these deterministic fixtures.

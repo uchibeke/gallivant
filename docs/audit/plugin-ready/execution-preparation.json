@@ -1,0 +1,169 @@
+{
+  "version": 1,
+  "task_id": "task-df42674c6251c85b0edef13f",
+  "scope": "offline selected-harness preparation correction",
+  "recorded_at": "2026-10-06T00:17:24.944792+00:00",
+  "source_parent_revision": "2780dde2f44a7dad2d53a0957f677237dd49ac55",
+  "foundation_evidence": "docs/audit/plugin-ready/execution-foundation.json",
+  "commands": [
+    {
+      "command": "npm test",
+      "exit": 0,
+      "tests": 933,
+      "passed": 933,
+      "raw_log": "/tmp/execution-preparation-tests.txt",
+      "sha256": "e0f5b8b941beb64a6b8c86a3a5229eee7719c591f76813722f71c3031cdea5af"
+    },
+    {
+      "command": "npm run test:execution-backends",
+      "exit": 0,
+      "tests": 144,
+      "passed": 144,
+      "raw_log": "/tmp/execution-preparation-backends.txt",
+      "sha256": "13fadc881451f1796df7241dce170e2543db15b47888ba4e8cbbea8254883e9b"
+    },
+    {
+      "command": "npm run lint",
+      "exit": 0,
+      "raw_log": "/tmp/execution-preparation-lint.txt",
+      "sha256": "8c7790de3f018fb4580f18ac70e1b355a0f76f522dd73acbdaa63632feffcecc"
+    },
+    {
+      "command": "git diff --check",
+      "exit": 0,
+      "evidence": "empty output on reviewed source; repeated after evidence generation and staging"
+    }
+  ],
+  "artifact_hashes": {
+    "lib/harness.mjs": "1374a469773864e6b988b95a6397d132843e50233e765170849551ceac277094",
+    "lib/execution.mjs": "adb0134191fe8de61cf0d682c39c36d9efc2dfbffc2fe522deaf89d892b960f5",
+    "lib/execution_preparation.mjs": "2c7f3232b2b89d9bf49d20f9f291b692b206118df50133f92dc5140b8fccbae1",
+    "lib/context.mjs": "db287b69a448b373977c523d2045469561c98906d24f4244bcdb814f04b88716",
+    "lib/task_prepare.mjs": "e9f0af81bd6bcdbf3ab5b6e4c587d2b4bc218e0bdaa6aa03261b1a29b53d605d",
+    "lib/tasks.mjs": "42316db4f5afc468b64cc959dab2babb7edd8608e68d08ebcd435871fcc0c001",
+    "test/execution-preparation.test.mjs": "86a2e5e8054ec66f11fd9c30d158c7c7d9b0cdaad7cd8d7726a7a8f79238c265",
+    "test/task-intake.test.mjs": "b664c9816db229004dbd79e741047d78eee3e3a424f3ae9bd1aa44e9397f8aa1",
+    "test/probe.test.mjs": "c060c906b455ef1d8cac5fde6aa89ffda1309ae55ca0da6af87a36f20fc70b8a",
+    "package.json": "457f58170f9595cb44414f52c39e97162b043a7923b004b22fe015b449d9994f",
+    "docs/execution.md": "3747fa1d7446ffa2f34c9c9316634b06a3efc836a9848763e39ebd861ea55670",
+    "docs/audit/plugin-ready/execution-checklist.md": "43805081b9c25594e9b32d549c95b7c5232f2890e63372d58ed41410491fca50"
+  },
+  "source_and_output_review": [
+    {
+      "rule": "Preparation authority belongs to the selected execution capability, not a global adapter name or boundary constant.",
+      "files": [
+        "lib/harness.mjs",
+        "lib/tasks.mjs",
+        "lib/task_prepare.mjs"
+      ],
+      "boundaries_checked": [
+        "initial drafting",
+        "clarification",
+        "repair",
+        "readiness",
+        "explicit start",
+        "settled replay",
+        "owned recovery"
+      ],
+      "regression": "saved readiness, answer, start and recovery reject receipts borrowed from another selected provider"
+    },
+    {
+      "rule": "An authority receipt must bind the exact prepared input before paid dispatch; cancellation and expired configuration cannot issue late authority.",
+      "files": [
+        "lib/execution.mjs",
+        "lib/execution_preparation.mjs"
+      ],
+      "regressions": [
+        "shared local preparation preserves selected defaults, tools-off authority and private environment",
+        "local preparation configuration deadlines abort and never issue late authority or launch",
+        "remote preparation rejects foreign authority, changed input and cancellation during preparation"
+      ]
+    },
+    {
+      "rule": "Provider liveness and missing output are separate states; missing text must retain canonical bounded repair.",
+      "files": [
+        "lib/task_prepare.mjs",
+        "lib/tasks.mjs"
+      ],
+      "regressions": [
+        "codex fixture lost reply, launcher exit and missing result remain pending without duplicate dispatch",
+        "missing preparation text exhausts canonical repairs instead of masquerading as provider liveness"
+      ]
+    },
+    {
+      "rule": "Usage projections use the same resolved-secret redaction as collected results.",
+      "files": [
+        "lib/task_prepare.mjs",
+        "lib/execution.mjs"
+      ],
+      "regression": "preparation usage projections redact resolved secrets as well as credential-shaped keys"
+    },
+    {
+      "rule": "Functional version refusal assertions must not depend on a two-second subprocess startup under unrelated fixture load.",
+      "files": [
+        "test/probe.test.mjs"
+      ],
+      "change": "Only this version-refusal fixture uses the standalone 20-second native probe budget; production retains the 2-second deadline.",
+      "deadline_coverage": "test/execution-backends.test.mjs: scoped health deadlines/backoff permit another account and review to advance"
+    }
+  ],
+  "representative_output": {
+    "draft": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-IqXGEZ/tasks/task-a2a423561d739de736ef5395/drafts/revision-3/docs/prds/task-a2a423561d739de736ef5395.md",
+    "draft_sha256": "4e54cef6ba8c56e8064e73338fb13aa5b7c137a3acb55af06c74ec7696f4b1fa",
+    "saved_attempts": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-IqXGEZ/tasks/task-a2a423561d739de736ef5395/intake.json",
+    "saved_attempts_sha256": "384e947b5ab0d092588d23e9289ceecd38a947b23d38823d3e0f429da9e240dd",
+    "status": "ready",
+    "implementation_authorized": false,
+    "provider": "gemini",
+    "costs": [
+      null,
+      null
+    ],
+    "receipt_fingerprints": [
+      "3ef98b753cb30d124f9097c5420704a190ee86110466cbc614d729d2ef1b23f7",
+      "95fd00544cf6f15fdbe380443182ab184e3d346cda641484381aea76443bf107"
+    ],
+    "evidence_kind": "test-only remote-shaped transport; not native or live provider qualification"
+  },
+  "earlier_verification_attempts": [
+    {
+      "raw_log": "/tmp/execution-preparation-tests-concurrent-failure.txt",
+      "sha256": "997c0a3ce1205d4d86b3bcfd38e519741c139446120cd662a47ace593c818392",
+      "result": "932/933 passed; version-refusal fixture received EXECUTION_DEADLINE instead of a version result"
+    },
+    {
+      "raw_log": "/tmp/execution-preparation-tests-version-fixture-failure.txt",
+      "sha256": "4126aec3a032c2016938e0fdc4558a6f31942c1a796fc2a45f20ff4ecf12d46f",
+      "result": "932/933 passed; version-refusal fixture received EXECUTION_DEADLINE instead of a version result"
+    },
+    {
+      "raw_log": "/tmp/execution-preparation-probe.txt",
+      "sha256": "bd1fa0001e2c556e786634cb85ea4bcf8f21a45e59635508b379871dcea64300",
+      "result": "isolated probe suite: 3/3 passed before fixture-budget adjustment"
+    }
+  ],
+  "handoff": {
+    "contract": "docs/execution.md: Next milestone handoff",
+    "consumers": [
+      "M3",
+      "M4",
+      "APort"
+    ],
+    "reuse": "Selected capability registry, task service and shared preparation/submit/reconcile/collect/cancel operations; no copied runner.",
+    "native_codex_adapter_workspace": "/private/tmp/gallivant-shared-preparation",
+    "native_codex_adapter": "Parent-owned investigation; intentionally not duplicated or qualified here."
+  },
+  "external_qualification": {
+    "mandatory_live_prerequisites": [],
+    "live_paid_calls": 0,
+    "native_codex_preparation_qualified": false,
+    "remote_provider_available": {
+      "openai-agents": false,
+      "codex-cloud": false
+    },
+    "installed_plugin_qualified": false,
+    "model_access_exercised": false,
+    "browser_capture_required": false,
+    "remedy": "Complete the independent native preparation adapter and its limited-authority evidence before registry integration. Later production transports require implemented adapters, credentials, demonstrated model access and authorized bounded live evidence; preserve the existing model/provider and sandbox defaults."
+  }
+}
