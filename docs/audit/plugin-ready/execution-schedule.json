@@ -1,0 +1,187 @@
+{
+  "version": 1,
+  "task_id": "task-df42674c6251c85b0edef13f",
+  "scope": "offline runtime GitHub health and chain cadence review corrections",
+  "recorded_at": "2026-10-06T03:47:00.946970+00:00",
+  "source_parent_revision": "b02bfc639ab478edd62bb8276e09a0173386b859",
+  "review_comment_ids": [
+    4191284828,
+    4191284834
+  ],
+  "prior_evidence": [
+    "docs/audit/plugin-ready/execution-cost.json"
+  ],
+  "commands": [
+    {
+      "command": "npm test",
+      "exit": 0,
+      "raw_log": "/tmp/execution-schedule-tests.txt",
+      "sha256": "0ab028648e12942f34e3312401efff66274a652823530bfb69caa8467a31a6d7",
+      "tests": 987,
+      "passed": 987
+    },
+    {
+      "command": "npm run lint",
+      "exit": 0,
+      "raw_log": "/tmp/execution-schedule-lint.txt",
+      "sha256": "8c7790de3f018fb4580f18ac70e1b355a0f76f522dd73acbdaa63632feffcecc"
+    },
+    {
+      "command": "npm run test:execution-backends",
+      "exit": 0,
+      "raw_log": "/tmp/execution-schedule-backends.txt",
+      "sha256": "15e40d6cf0ff62093b0339ba5f7fff49212192457b3f89bc1795fcb933707b68",
+      "tests": 287,
+      "passed": 287
+    },
+    {
+      "command": "git diff --check",
+      "exit": 0,
+      "evidence": "Empty output on final source/docs, repeated after evidence generation and staging."
+    }
+  ],
+  "artifact_hashes": {
+    "lib/commands/up.mjs": "4131b2b2de0cc9da1bfc2a842fa12c67121de4f32143e8171616d0fbf96ee274",
+    "lib/provider_health.mjs": "c0bf7a850f2b2fc2bff1479f0b28d809c66d70eb52b1d33f05613e48972b9410",
+    "lib/probe.mjs": "60beb3050f37516b5b95aa130b28aa8973b6d00665f0985d36dd5ca634f73755",
+    "lib/gh.mjs": "42fb6a53c014ba906ae51af2b8b7d91cecbc17bf2a8c3882fd8943a7181a5700",
+    "lib/tick.mjs": "a8f4d9b420135acf2ba4d4ce65fda62d2333a40188bbb3f3bd0ed4bdd99091ff",
+    "test/probe.test.mjs": "c16916188da928178e06afe58b875dc73f47f0453591ed5256fa4adf6ad08de2",
+    "test/chains.test.mjs": "470a1762698b651bace2ba9298222de9753b50f3dd28af18d8d4275c5aa92d85",
+    "package.json": "28e639486f274a8fd3b538df4b4ccabc4c39ddd0dcfd8f9ca3f61bcd84400efc",
+    "docs/execution.md": "5ae74cc34d845a3b95ca7386723aac8c6cc4121bfd89b2ae0df7bd4e27ad2e91"
+  },
+  "source_and_output_review": [
+    {
+      "rule": "Runtime GitHub credential health must stay visible without sharing provider probe workers or suppressing unrelated progress.",
+      "files": [
+        "lib/commands/up.mjs",
+        "lib/provider_health.mjs",
+        "lib/probe.mjs",
+        "lib/gh.mjs",
+        "lib/notify.mjs",
+        "lib/commands/status.mjs"
+      ],
+      "boundaries_checked": [
+        "startup login and ownership",
+        "separate versioned health file and account scope",
+        "poll_seconds cadence and bounded failure backoff",
+        "native abort propagation before and after credential resolution",
+        "late success fencing",
+        "redacted failure detail and canonical authentication remedy",
+        "daemon probes.gh and status visibility",
+        "status reads without I/O",
+        "signal/timer/daemon lock cleanup"
+      ],
+      "regressions": [
+        "runtime GitHub authentication loss is visible with its remedy and recovers independently of providers",
+        "a slow GitHub health probe aborts at the bound without occupying the progress lane or accepting late success",
+        "GitHub user probes forward cancellation and refuse a delayed credential reply after abort",
+        "daemon fences an old Codex account while GitHub review continues"
+      ]
+    },
+    {
+      "rule": "Fast execution progress must not increase chain GitHub reads, ancestry checks or failed-check retry frequency.",
+      "files": [
+        "lib/tick.mjs",
+        "lib/chains.mjs",
+        "lib/commands/up.mjs"
+      ],
+      "boundaries_checked": [
+        "immediate startup chain reconciliation",
+        "poll_seconds gate set before chain I/O",
+        "eleven intermediate 10-second progress ticks",
+        "separate entry review schedule",
+        "outage failure counters only on due checks",
+        "one transition per chain per check",
+        "persisted predecessor and dispatch ownership",
+        "restart without duplicate submission",
+        "canonical entry settlement before dependent scheduling"
+      ],
+      "regressions": [
+        "fast progress ticks retain chain review cadence, bound outage retries and reconcile on restart",
+        "the normal daemon tick settles entries before advancing their chains and dispatches the successor"
+      ]
+    }
+  ],
+  "representative_output": [
+    {
+      "lane": "chain",
+      "evidence": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-Z0JQfY/scheduler-chain-evidence.json",
+      "sha256": "4de98ccc38143a2988b98ca5111624796eb9d9ad00fab05a23d0105ac0a58484",
+      "output": {
+        "kind": "Offline chain fixture; no live qualification",
+        "reviewMs": 120000,
+        "progressMs": 10000,
+        "progress": 27,
+        "chainReads": 5,
+        "startedRuns": 1,
+        "statePath": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-Z0JQfY/state.json",
+        "chain": {
+          "status": "active",
+          "index": 0,
+          "failures": 0
+        }
+      },
+      "file_hashes": {
+        "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-Z0JQfY/state.json": "4435b559806e5cadc4ab006ea2be777e0cb6c98ad0604ef55d78946baef87dd2"
+      }
+    },
+    {
+      "lane": "health",
+      "evidence": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-tjbDf9/scheduler-health-evidence.json",
+      "sha256": "32a0b37b5fa861bfeba4db851ecd06c33c8029b95c4e29d863520ecde7d43d27",
+      "output": {
+        "kind": "Offline runtime fixture; no live qualification",
+        "failure": {
+          "ok": false,
+          "detail": "GitHub credentials expired: Bearer [redacted]",
+          "failures": 1,
+          "observedAt": 1790215320000,
+          "nextAttemptAt": 1790215580073
+        },
+        "recovered": {
+          "ok": true,
+          "detail": "me",
+          "failures": 0,
+          "observedAt": 1790215580073,
+          "nextAttemptAt": 1790215700073
+        },
+        "provider": {
+          "ok": false,
+          "detail": "managed API transport belongs to the next milestone",
+          "fix": "install the implemented transport before selecting this provider",
+          "failures": 4,
+          "observedAt": 1790215580073,
+          "nextAttemptAt": 1790215740927
+        },
+        "progress": 15,
+        "githubCalls": 4,
+        "statusProviderCalls": 0,
+        "files": {
+          "daemon": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-tjbDf9/daemon.json",
+          "github": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-tjbDf9/github-health.json",
+          "providers": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-tjbDf9/provider-health.json"
+        }
+      },
+      "file_hashes": {
+        "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-tjbDf9/daemon.json": "0b76b147d30add57f1b14233ed45cd0c6952af6d860de524e333e7201e192225",
+        "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-tjbDf9/github-health.json": "d322fd1ed46168d2666d7de39a4f7126665a672b17c9a6f968b18767d33352b3",
+        "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-tjbDf9/provider-health.json": "1d5fa884a2e263453b465cf928ab03931ac34037fd6bbe307b8df4ed081b7970"
+      }
+    }
+  ],
+  "external_qualification": {
+    "mandatory_live_prerequisites": [],
+    "live_paid_calls": 0,
+    "native_codex_preparation_qualified": false,
+    "remote_provider_available": {
+      "openai-agents": false,
+      "codex-cloud": false
+    },
+    "installed_plugin_qualified": false,
+    "model_access_exercised": false,
+    "browser_capture_required": false,
+    "remedy": "Complete the independent native preparation adapter and its limited-authority evidence before registry integration. Later production transports require implemented adapters, credentials, demonstrated model access and authorized bounded live evidence; preserve model/provider defaults and sandbox permissions."
+  }
+}

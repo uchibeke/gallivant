@@ -177,7 +177,17 @@ success stops new work only for its scope.
 
 One coordinator tick has separate bounded progress and GitHub review worker
 lanes. Provider checks run alongside them. Progress polling is independent of
-`poll_seconds`, which still schedules review reads; startup forces reconciliation
+`poll_seconds`, which still schedules entry review and chain merge/ancestry reads.
+Each tick instance checks chains immediately on boot, then at most once per
+review interval; failed chain checks consume retries only on that schedule.
+GitHub authentication health has a separate bounded lane and `github-health.json`
+scope keyed by the startup login. It refreshes on `poll_seconds` with the same
+backoff/deadline rules, publishes `probes.gh` in daemon status and retains the
+existing `gh not ready` notification and authentication remedy. It cannot consume
+provider probe workers or fence unrelated execution progress. The native GitHub
+probe receives the abort signal, including a credential lookup that finishes
+after its deadline. Status/UI reads only persisted observations and never probe.
+Startup forces reconciliation
 once, then saved retry times govern subsequent inspection. Provider failures do
 not globally suppress ticks. UI polling reads these persisted results.
 
