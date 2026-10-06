@@ -12,6 +12,7 @@ import { validateAgentsConfig } from "../lib/openai_agents_config.mjs";
 import { agentsHttp } from "../lib/openai_agents_http.mjs";
 import { contentHash, prepareAgentsSources, AGENTS_WORKSPACE_HELPER } from "../lib/openai_agents_sources.mjs";
 import { start } from "../lib/commands/start.mjs";
+import { agentsInput } from "../lib/openai_agents_input.mjs";
 import { makeState, newEntry, STATES } from "../lib/state.mjs";
 import { makeTick } from "../lib/tick.mjs";
 import { makeGit } from "../lib/git.mjs";
@@ -19,9 +20,10 @@ import { CONFIG, GOOD_PRD, fakeCredential, fakeIdentity, fakeNotify, fakeGit, fa
 import { requestControl } from "../lib/control.mjs";
 import { resume } from "../lib/commands/resume.mjs";
 import { doctor } from "../lib/commands/doctor.mjs";
+import { routes } from "../lib/commands/serve.mjs";
 import { checkHarness } from "../lib/probe.mjs";
 import { reconcileExecutionResult } from "../lib/execution_result.mjs";
-import { readJson } from "../lib/fs.mjs";
+import { readJson, writeJsonAtomic } from "../lib/fs.mjs";
 const config = { account: "fixture", organization: "org-fixture", project: "proj-fixture", model: "fixture-model", environment: "openai_hosted", container_size: "small", network: { access: "disabled" }, allowance: { remainingUsd: 2, reservedUsd: 0.1 } };
 const head = "a".repeat(40), initial = "original\n", changed = "corrected\n";
 const sources = { data: Buffer.from("snapshot").toString("base64"), hash: contentHash("snapshot"), hashes: { "answer.txt": contentHash(initial) }, modes: { "answer.txt": 0o644 }, inputHead: head, repo: "acme/widget", branch: "work/widget" };
@@ -98,6 +100,36 @@ async function unsupportedHost(fn) {
   const descriptor = Object.getOwnPropertyDescriptor(process, "platform");
   Object.defineProperty(process, "platform", { ...descriptor, value: "unsupported-fixture" });
   try { return await fn(); } finally { Object.defineProperty(process, "platform", descriptor); }
+}
+
+function launchFixture() {
+  const f = fixture(), operator = join(f.root, "operator"), worktree = join(f.root, "worktrees/acme/widget/task");
+  mkdirSync(join(operator, "docs/prds"), { recursive: true }); mkdirSync(worktree, { recursive: true });
+  const brief = GOOD_PRD.replace("harness: codex", "harness: openai-agents"), prdPath = join(operator, "docs/prds/task.md"); writeFileSync(prdPath, brief);
+  const git = args => execFileSync("git", args, { cwd: worktree, encoding: "utf8", stdio: "pipe" });
+  git(["init", "-q", "-b", "work/task"]); writeFileSync(join(worktree, "answer.txt"), initial); git(["add", "."]);
+  git(["-c", "user.name=Fixture", "-c", "user.email=fixture@example.test", "commit", "-qm", "Input"]);
+  const commit = () => { git(["add", "-A"]); git(["-c", "user.name=Fixture", "-c", "user.email=fixture@example.test", "commit", "-qm", "Repair fixture source"]); };
+  const snapshot = join(f.root, "approved-brief.md"); let clones = 0;
+  const ctx = { home: f.root, ownLogin: "me", config: { ...CONFIG, home: f.root, worktrees: join(f.root, "worktrees"), harness: { "openai-agents": config } }, state: makeState(f.root), log: silentLog, notify: fakeNotify(), identity: fakeIdentity(), credential: fakeCredential(), clock: f.clock,
+    git: { toplevel: async () => operator, create: async () => { clones++; return worktree; }, head: async () => git(["rev-parse", "HEAD"]).trim(), exists: () => true, dirty: makeGit({ config: CONFIG }).dirty },
+    gh: { ...fakeGh(), repoInfo: async () => ({ nameWithOwner: "acme/widget", defaultBranch: "main" }), branchExists: async () => true, ensureLabels: async () => {}, ownPrByHead: async () => null },
+    executionFor: f.service, writePrd: (_key, value) => writeFileSync(snapshot, value), readPrd: () => existsSync(snapshot) ? readFileSync(snapshot, "utf8") : null };
+  ctx.executionInputFor = (id, entry, input, paths) => agentsInput(ctx, id, entry, input, paths);
+  return { ...f, ctx, operator, worktree, brief, prdPath, git, commit, snapshot, clones: () => clones, id: "acme/widget/task" };
+}
+
+async function launchAccess(f, fn) {
+  const originalFetch = globalThis.fetch, originalKey = process.env.OPENAI_API_KEY;
+  globalThis.fetch = f.fetcher; process.env.OPENAI_API_KEY = "offline-test-key";
+  try { return await fn(); }
+  finally { globalThis.fetch = originalFetch; if (originalKey === undefined) delete process.env.OPENAI_API_KEY; else process.env.OPENAI_API_KEY = originalKey; }
+}
+function launchPage(f) {
+  let code, html;
+  routes["GET /run"](f.ctx, { headers: { host: "127.0.0.1:8791" }, socket: { remoteAddress: "127.0.0.1", localPort: 8791 } },
+    { writeHead: value => { code = value; }, end: value => { html = value; } }, new URL(`http://127.0.0.1/run?id=${encodeURIComponent(f.id)}`), {});
+  assert.equal(code, 200); return html;
 }
 test("managed readiness proves native isolation before API reads and doctor reports unsupported hosts", async t => {
   const f = fixture(), selected = { harness: { "openai-agents": config } }, before = structuredClone(selected);
@@ -565,44 +597,168 @@ test("managed artifacts reach the single PR writer with actual file and current-
   await reconcileExecutionResult(ctx, { id: "acme/widget/task", entry, result, dir: f.service().dirOf(job.id) }); assert.equal(calls.length, 4);
 });
 
-for (const fault of ["reply-loss", "pre-send-refusal"]) test(fault === "reply-loss" ? "initial launch reply loss remains registered for coordinator restart without a second implementation" : "initial launch pre-send refusal remains registered for safe coordinator recovery", async () => {
-  const f = fixture(), originalFetch = globalThis.fetch, originalKey = process.env.OPENAI_API_KEY;
-  const operator = join(f.root, "operator"), worktree = join(f.root, "worktrees/acme/widget/task");
-  mkdirSync(join(operator, "docs/prds"), { recursive: true }); mkdirSync(worktree, { recursive: true });
-  const brief = GOOD_PRD.replace("harness: codex", "harness: openai-agents"), prdPath = join(operator, "docs/prds/task.md"); writeFileSync(prdPath, brief);
-  const git = args => execFileSync("git", args, { cwd: worktree, encoding: "utf8" }); git(["init", "-q", "-b", "work/task"]); writeFileSync(join(worktree, "answer.txt"), initial); git(["add", "."]); git(["-c", "user.name=Fixture", "-c", "user.email=fixture@example.test", "commit", "-qm", "Input"]);
-  const snapshots = new Map(), state = makeState(f.root);
-  const ctx = { home: f.root, ownLogin: "me", config: { ...CONFIG, home: f.root, worktrees: join(f.root, "worktrees"), harness: { "openai-agents": config } }, state, log: silentLog, notify: fakeNotify(), identity: fakeIdentity(), credential: fakeCredential(), clock: f.clock,
-    git: { toplevel: async () => operator, create: async () => worktree, head: async () => git(["rev-parse", "HEAD"]).trim(), exists: () => true },
-    gh: { repoInfo: async () => ({ nameWithOwner: "acme/widget", defaultBranch: "main" }), branchExists: async () => true, ensureLabels: async () => {}, ownPrByHead: async () => null },
-    executionFor: () => {
-      const service = f.service();
-      if (fault === "pre-send-refusal") { const submit = service.submit; service.submit = request => unsupportedHost(() => submit(request)); }
-      return service;
-    }, writePrd: (key, value) => snapshots.set(key, value), readPrd: key => snapshots.get(key) };
-  globalThis.fetch = f.fetcher; process.env.OPENAI_API_KEY = "offline-test-key";
-  try {
-    if (fault === "pre-send-refusal") {
-      await assert.rejects(start(ctx, { path: prdPath }), { dispatchNotSent: true });
+for (const [fault, name] of [
+  ["reply-loss", "initial launch reply loss remains registered for coordinator restart without a second implementation"],
+  ["pre-send-refusal", "initial launch pre-send refusal remains registered for safe coordinator recovery"],
+  ["legacy-refusal", "legacy initial refusal resumes from private non-dispatch proof without creating an unrelated implementation"],
+  ["prepare-refusal", "initial preparation refusal supports the shared operator control after repair and restart"],
+]) test(name, async t => {
+  const f = launchFixture(), { ctx, prdPath } = f, state = ctx.state;
+  ctx.executionFor = () => {
+    const service = f.service(), method = fault === "prepare-refusal" ? "prepare" : "submit", original = service[method];
+    if (fault !== "reply-loss") service[method] = request => unsupportedHost(() => original(request));
+    return service;
+  };
+  await launchAccess(f, async () => {
+    if (fault !== "reply-loss") {
+      await assert.rejects(start(ctx, { path: prdPath }), { code: "EXECUTION_VERIFICATION_SANDBOX" });
       const refused = makeState(f.root).get("acme/widget/task");
-      assert.equal(refused.state, STATES.needsHuman); assert.equal(refused.reason, "dispatch-refused");
-      assert.equal(refused.last.run, null); assert.match(refused.last.event, /before any provider request/);
+      assert.equal(refused.state, STATES.needsHuman); assert.equal(refused.reason, fault === "prepare-refusal" ? "launch-preparation" : "dispatch-refused");
+      assert.equal(refused.last.run, null); assert.equal(refused.initial_dispatch.status, "unsubmitted");
+      assert.equal(state.startClaim(f.id), null);
       assert.equal(f.service().current(), null); assert.equal(f.service().state().allowance, undefined);
       assert.equal(f.sessions.size, 0); assert.equal(f.turns.size, 0);
       await makeTick({ ...ctx, state: makeState(f.root) }).tickEntry("acme/widget/task", refused);
       assert.equal(f.service().current(), null); assert.equal(f.sessions.size, 0);
+      ctx.executionFor = f.service; ctx.state = makeState(f.root);
+      if (fault === "legacy-refusal") ctx.state.update(f.id, { initial_dispatch: null });
+      const page = launchPage(f), pagePath = join(f.root, "initial-controls.html"); writeFileSync(pagePath, page);
+      assert.match(page, /data-action="resume" data-available="true"[^>]*>Resume agent/);
+      assert.match(page, /Start the first run from the approved brief/);
+      assert.doesNotMatch(page.match(/data-action="resume"[^>]+/)[0], /disabled/);
+      let result;
+      if (fault === "prepare-refusal") {
+        requestControl(ctx, { handle: f.id, action: "resume" }); await makeTick(ctx).tickEntry(f.id, ctx.state.get(f.id));
+        assert.equal(ctx.state.get(f.id).control.status, "applied");
+        assert.match(ctx.state.get(f.id).control.message, /Started the initial run/);
+        result = { run: ctx.state.get(f.id).last.run, session: ctx.state.get(f.id).session };
+      } else { result = await resume(ctx, { handle: f.id, note: "Keep the approved requirements." }); assert.equal(result.initialLaunch, true); }
+      const entry = ctx.state.get(f.id), job = f.service().current();
+      assert.equal(entry.state, STATES.running); assert.equal(entry.initial_dispatch, null);
+      assert.equal(entry.last.run, result.run); assert.equal(result.session, "sess-1"); assert.equal(entry.session, "sess-1");
+      assert.equal(job.execution.operationId, refused.start_token); assert.equal(f.clones(), 1);
+      assert.equal(f.sessions.size, 1); assert.equal(f.turns.size, 1); assert.equal(entry.iteration, 0);
+      const delivered = f.calls.find(c => c.method === "POST" && c.route.endsWith("/events")).body.events[0].input[0].content[0].text;
+      assert.ok(delivered.includes(f.brief)); assert.match(delivered, /first provider implementation/);
+      await assert.rejects(resume(ctx, { handle: f.id }), /running/);
+      const path = join(f.root, "initial-resume-evidence.json");
+      writeFileSync(path, JSON.stringify({ kind: "provider-shaped initial refusal and actual shared resume/control lifecycle", fault, operationId: job.execution.operationId, runId: result.run, sessionId: result.session, inputHead: job.execution.inputHead, status: entry.state, controlMessage: entry.control?.message ?? null, page: pagePath, clones: f.clones(), sessions: f.sessions.size, turns: f.turns.size, paid_calls: 0 }, null, 2));
+      t.diagnostic(`initial resume evidence: ${path}`);
       return;
     }
     f.lose("/agents/sessions/sess-1/events"); await assert.rejects(start(ctx, { path: prdPath }), /lost reply/);
     const pending = makeState(f.root).get("acme/widget/task"); assert.ok(pending); assert.equal(pending.reason, "dispatch-intent"); assert.equal(pending.execution.acceptance, "unknown"); assert.ok(pending.last.run);
+    await assert.rejects(resume(ctx, { handle: f.id }), /no session to resume/);
     // A process crash can occur before the launcher copies the job into registry
     // state. The pre-I/O operation marker must still prove exact ownership.
     state.update("acme/widget/task", { execution: { version: 1, operationId: pending.execution.operationId }, last: { ...pending.last, run: null } });
     await makeTick({ ...ctx, state: makeState(f.root) }).tickEntry("acme/widget/task", state.get("acme/widget/task"));
     assert.equal(f.service().current().execution.acceptance, "accepted"); assert.equal(makeState(f.root).get("acme/widget/task").session, "sess-1");
     assert.equal(makeState(f.root).get("acme/widget/task").state, "running"); assert.equal(makeState(f.root).get("acme/widget/task").last.run, f.service().current().id);
+    assert.equal(makeState(f.root).get(f.id).initial_dispatch, null);
     await assert.rejects(start(ctx, { path: prdPath }), /already exists/); assert.equal(f.sessions.size, 1); assert.equal(f.turns.size, 1);
-  } finally { globalThis.fetch = originalFetch; if (originalKey === undefined) delete process.env.OPENAI_API_KEY; else process.env.OPENAI_API_KEY = originalKey; }
+  });
+});
+
+for (const fault of ["symlink", "submodule", "size", "head-race"]) test(`failed initial portable preparation is registered and resumes the preserved checkout after repair: ${fault}`, async () => {
+  const f = launchFixture(), originalHead = f.ctx.git.head;
+  if (fault === "symlink") { symlinkSync("answer.txt", join(f.worktree, "bad-link")); f.commit(); }
+  if (fault === "submodule") {
+    const nested = join(f.worktree, "vendor"); mkdirSync(nested);
+    f.git(["-C", nested, "init", "-q"]); writeFileSync(join(nested, "file.txt"), "nested"); f.git(["-C", nested, "add", "."]);
+    f.git(["-C", nested, "-c", "user.name=Fixture", "-c", "user.email=fixture@example.test", "commit", "-qm", "Nested input"]);
+    f.git(["update-index", "--add", "--cacheinfo", `160000,${f.git(["-C", nested, "rev-parse", "HEAD"]).trim()},vendor`]);
+    f.git(["-c", "user.name=Fixture", "-c", "user.email=fixture@example.test", "commit", "-qm", "Fixture submodule"]);
+  }
+  if (fault === "size") { for (const name of ["large-a", "large-b"]) writeFileSync(join(f.worktree, name), Buffer.alloc(5_500_000, 65)); f.commit(); }
+  if (fault === "head-race") f.ctx.git.head = async () => { const head = await originalHead(); writeFileSync(join(f.worktree, "answer.txt"), "changed before preparation\n"); f.commit(); return head; };
+  await launchAccess(f, async () => {
+    await assert.rejects(start(f.ctx, { path: f.prdPath }), { code: fault === "size" ? "AGENTS_SIZE" : "AGENTS_SOURCE" });
+    const entry = makeState(f.root).get(f.id);
+    assert.equal(entry.reason, "launch-preparation"); assert.equal(entry.initial_dispatch.status, "unsubmitted");
+    assert.equal(entry.worktree, f.worktree); assert.equal(entry.session, null); assert.equal(entry.last.run, null);
+    assert.equal(f.ctx.state.startClaim(f.id), null); assert.equal(f.service().current(), null); assert.deepEqual(f.service().state().operations, {});
+    assert.equal(f.calls.filter(c => c.method === "POST").length, 0); assert.equal(f.clones(), 1);
+    assert.equal(readFileSync(f.snapshot, "utf8"), f.brief); assert.equal(readFileSync(join(f.worktree, "docs/prds/task.md"), "utf8"), f.brief);
+    if (fault === "symlink") unlinkSync(join(f.worktree, "bad-link"));
+    if (fault === "submodule") rmSync(join(f.worktree, "vendor"), { recursive: true });
+    if (fault === "size") for (const name of ["large-a", "large-b"]) unlinkSync(join(f.worktree, name));
+    if (fault !== "head-race") f.commit(); f.ctx.git.head = originalHead; f.ctx.state = makeState(f.root);
+    const result = await resume(f.ctx, { handle: f.id });
+    assert.equal(result.initialLaunch, true); assert.equal(f.ctx.state.get(f.id).session, "sess-1");
+    assert.equal(f.service().current().execution.operationId, entry.start_token);
+    assert.equal(f.service().current().execution.inputHead, await originalHead());
+    assert.equal(f.sessions.size, 1); assert.equal(f.turns.size, 1); assert.equal(f.clones(), 1);
+    const creation = f.calls.find(c => c.route === "/agents/sessions" && c.method === "POST");
+    const source = JSON.parse(gunzipSync(Buffer.from(creation.body.environment.files[0].data, "base64")));
+    assert.equal(source.inputHead, await originalHead());
+    assert.equal(Buffer.from(source.files.find(file => file.path === "docs/prds/task.md").data, "base64").toString(), f.brief);
+  });
+});
+
+test("initial brief delivery failure stays registered and restores missing approved bytes after repair", async () => {
+  const f = launchFixture(), outside = join(f.root, "outside-checkout"); mkdirSync(outside);
+  symlinkSync(outside, join(f.worktree, "docs")); f.commit();
+  await launchAccess(f, async () => {
+    await assert.rejects(start(f.ctx, { path: f.prdPath }), /contains a symlink/);
+    const entry = makeState(f.root).get(f.id);
+    assert.equal(entry.reason, "launch-preparation"); assert.equal(entry.initial_dispatch.status, "unsubmitted");
+    assert.equal(f.ctx.state.startClaim(f.id), null); assert.equal(f.service().current(), null);
+    assert.equal(existsSync(join(outside, "prds/task.md")), false); assert.equal(f.calls.filter(c => c.method === "POST").length, 0);
+    unlinkSync(join(f.worktree, "docs")); f.commit(); f.ctx.state = makeState(f.root);
+    await resume(f.ctx, { handle: f.id });
+    assert.equal(readFileSync(join(f.worktree, "docs/prds/task.md"), "utf8"), f.brief);
+    assert.equal(readFileSync(f.snapshot, "utf8"), f.brief); assert.equal(f.clones(), 1);
+    assert.equal(f.sessions.size, 1); assert.equal(f.turns.size, 1);
+  });
+});
+
+test("unsubmitted initial resume preserves registry and inputs on readiness failure and refuses cancellation or unresolved intents", async () => {
+  const f = launchFixture(), originalExecution = f.ctx.executionFor;
+  f.ctx.executionFor = () => { const service = originalExecution(), send = service.submit; service.submit = input => unsupportedHost(() => send(input)); return service; };
+  await launchAccess(f, async () => {
+    await assert.rejects(start(f.ctx, { path: f.prdPath }), { dispatchNotSent: true });
+    f.ctx.executionFor = originalExecution; f.ctx.state = makeState(f.root);
+    const registry = readFileSync(join(f.root, "state.json")), ledger = readFileSync(join(f.root, "execution.json")), brief = readFileSync(f.snapshot), index = readFileSync(join(f.worktree, ".git/index"));
+    f.fail(401); await assert.rejects(resume(f.ctx, { handle: f.id }), /not ready/);
+    await unsupportedHost(() => assert.rejects(resume(f.ctx, { handle: f.id }), /not ready/));
+    for (const [path, bytes] of [[join(f.root, "state.json"), registry], [join(f.root, "execution.json"), ledger], [f.snapshot, brief], [join(f.worktree, ".git/index"), index]]) assert.deepEqual(readFileSync(path), bytes);
+    assert.equal(f.sessions.size, 0); assert.equal(f.turns.size, 0);
+    const entry = f.ctx.state.get(f.id);
+    f.ctx.state.update(f.id, { initial_dispatch: { ...entry.initial_dispatch, operationId: "unowned-operation" } });
+    await assert.rejects(resume(f.ctx, { handle: f.id }), /no proven unsubmitted initial launch/);
+    assert.match(launchPage(f), /data-action="resume" data-available="false"[^>]* disabled/);
+    assert.throws(() => requestControl(f.ctx, { handle: f.id, action: "resume" }), /no session/);
+    f.ctx.state.update(f.id, { initial_dispatch: entry.initial_dispatch });
+    writeJsonAtomic(join(f.root, "execution.json"), { ...JSON.parse(ledger), operations: { unresolved: { runId: "unknown-run", acceptance: "unknown" } } });
+    await assert.rejects(resume(f.ctx, { handle: f.id }), { code: "EXECUTION_UNKNOWN" });
+    assert.match(launchPage(f), /data-action="resume" data-available="false"[^>]* disabled/);
+    assert.throws(() => requestControl(f.ctx, { handle: f.id, action: "resume" }), { code: "EXECUTION_UNKNOWN" });
+    writeJsonAtomic(join(f.root, "execution.json"), JSON.parse(ledger));
+    await f.service().cancel(); await assert.rejects(resume(f.ctx, { handle: f.id }), { code: "EXECUTION_STOPPED" });
+    assert.match(launchPage(f), /data-action="resume" data-available="false"[^>]* disabled/);
+    assert.throws(() => requestControl(f.ctx, { handle: f.id, action: "resume" }), { code: "EXECUTION_STOPPED" });
+    assert.equal(f.calls.filter(c => c.method === "POST").length, 0);
+  });
+});
+
+test("initial retry reply loss reconciles the original operation through coordinator restart without another session", async () => {
+  const f = launchFixture();
+  const original = f.ctx.executionFor;
+  f.ctx.executionFor = () => { const service = original(), send = service.submit; service.submit = req => unsupportedHost(() => send(req)); return service; };
+  await launchAccess(f, async () => {
+    await assert.rejects(start(f.ctx, { path: f.prdPath }), { dispatchNotSent: true });
+    const operationId = f.ctx.state.get(f.id).initial_dispatch.operationId;
+    f.ctx.executionFor = original; f.ctx.state = makeState(f.root); f.lose("/agents/sessions/sess-1/events");
+    await assert.rejects(resume(f.ctx, { handle: f.id }), /lost reply/);
+    const pending = f.ctx.state.get(f.id); assert.equal(pending.reason, "dispatch-intent"); assert.equal(pending.initial_dispatch.status, "dispatching");
+    await assert.rejects(resume(f.ctx, { handle: f.id }), /no session to resume/);
+    await makeTick({ ...f.ctx, state: makeState(f.root) }).tickEntry(f.id, pending);
+    const recovered = makeState(f.root).get(f.id);
+    assert.equal(recovered.session, "sess-1"); assert.equal(recovered.initial_dispatch, null); assert.equal(recovered.state, STATES.running);
+    assert.equal(f.service().current().execution.operationId, operationId); assert.equal(recovered.last.run, f.service().current().id);
+    assert.equal(f.sessions.size, 1); assert.equal(f.turns.size, 1); assert.equal(f.clones(), 1);
+  });
 });
 test("phase-bounded coordinator settlement cannot enter review dispatch or queued resume", async () => {
   const f = fixture(), state = makeState(f.root), taskId = "acme/widget/task";

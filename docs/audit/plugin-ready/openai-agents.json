@@ -2,22 +2,22 @@
   "version": 1,
   "task_id": "task-cf82d9f43ca0da3c5bb29b67",
   "scope": "managed Agents REST implementation, provider-shaped offline lifecycle verification and native macOS verification readiness/enforcement; live qualification remains unverified",
-  "recorded_at": "2026-10-06T18:12:13.799Z",
+  "recorded_at": "2026-10-06T18:41:05.917Z",
   "base_revision": "401f5cb2e68382a28b6f35f5ca4e9cbcc9ea84fb",
   "branch": "work/openai-agents-harness",
   "source_files": {
     "README.md": "6c9a9e9e79f7a9bd9157464ea2602f6ecde0b2878422e5c8dbea64a98d5f2ab8",
     "docs/audit/plugin-ready/README.md": "7f24289695807c9bd9d880e54e287c3bcfa1a3324543ca87eee68b1e24a9e8f7",
-    "docs/audit/plugin-ready/openai-agents-checklist.md": "5ad9710a34a7f84e5878b43e7b86aa9eec70f9a100857041b588269484486fb9",
-    "docs/execution.md": "b6fe4aec28eb2dd68885ba9ef28f08563aff0d41da623f5e239cab5a156af09b",
-    "docs/openai-agents.md": "783347fa77bfc06c99d4d68d8b1c6bab55c15e0dd95fc4d325f8a37486785e3e",
+    "docs/audit/plugin-ready/openai-agents-checklist.md": "5111cc85d95dcf8a96fef9761cfe4e4465f106bc9a288efa1cbe1fa3d6a1ed4d",
+    "docs/execution.md": "37bcfff160999741a77475ae9f32d42d46919e7d9f7d37dde9ef491a9547956e",
+    "docs/openai-agents.md": "94947952dadae48c1d2a70ff7772fc2e004bb29080bb63ebc3f029cbf384aa90",
     "docs/prds/openai-agents-harness.md": "b6d3ceeb20426248b5cf0d8527beaf93a6a69c09003cfc07d3a86fe8fa8b053a",
     "lib/block.mjs": "bd644a1564d6d3dcf3edad1ad1f931fa5f3e4246a041f20acbbb04c88c07c665",
     "lib/commands/doctor.mjs": "6a1c916f1a3626ba7656123792adf9ba3fdbd963cb64a3641437e337e4f18997",
-    "lib/commands/start.mjs": "b9cf65f560a0ae0113b839cb52f9d91a5b9aa0f1189e6d488c0ce6685d8b7859",
+    "lib/commands/start.mjs": "fb081d7a775cbac690758d4abfe21b8e948feaed6a5c37408ead25f4292f65d3",
     "lib/config.mjs": "4cdd522fb24463d01023eb1650b5123ff0675ce6c7bbee4731020e2b1b0e9174",
     "lib/context.mjs": "8d086cc3dacaf68de5f84c11b1ac498d60d6b3b420b61214b5e631587e5b6119",
-    "lib/execution.mjs": "71445213d03a2d8454d788abafe739a24e2f7b8aa2efda10c24052efeb11ec58",
+    "lib/execution.mjs": "6a43518f89d1ad1e8c0303e51c486dd6ddc25cba2c8c4b2e816d10826e1f4322",
     "lib/harness.mjs": "50640ba71ec7b03f2690ce07ab5d1731034d6d710a833c425d7e354337c6c9b5",
     "lib/openai_agents.mjs": "7444f0bc6a038083b990b4f0a735d4989194e87dc326a3a703b89c773d0ac8ea",
     "lib/openai_agents_config.mjs": "7d9db1b55e3c0f71ada076811eb11baf9cfb0becdfed10f6a86ec6ecbfa69dc7",
@@ -25,16 +25,16 @@
     "lib/openai_agents_input.mjs": "a2978393dc2dfe348c97962d0a6a9356184e54a7fe426847b9195186fa8d0c68",
     "lib/openai_agents_sources.mjs": "afeb732805764635189bc6fe5523ca95564174c4fc08fc159d3118d5f668aeb1",
     "lib/probe.mjs": "bbacb430ed3ec7e3ab4b26fe01568d396d5d2257513264412c1c7e7ccb59383a",
-    "lib/tick.mjs": "899b73444ed1d56a97187480411352baf2c2de1d45a57709a2c53ac2ca146db9",
+    "lib/tick.mjs": "6781d3b6131ff2f5c3f29889d4ab3889ea18da1486576b7b3434232447f89dd3",
     "package.json": "cc440ea2539b8d40772db637b1f6593584c66818f810c4a45719c7c563ff003a",
     "test/execution-backends.test.mjs": "d1af68ac877c852819e48550ae3b8577c6049f4a0e76b86469a7b2f774a059a2",
     "test/openai-agents-live.mjs": "0f556440264766e17a369e6eaa6b71658833b93c18971b1ef1326d65452a20d2",
-    "test/openai-agents.test.mjs": "fb1a395208f5aa5a45e49dc48636e15c30adf073e96cb3a4fed5ff7ab8e89a41",
+    "test/openai-agents.test.mjs": "3b494956e2aa73374e5b18828b707be954824434e871da38e9f256c025203d53",
     "test/units.test.mjs": "ae8ab863aa48e3e44557e8f20c00bb8440682325ec099eb34a81f339cbb42b9f",
     "lib/execution_result.mjs": "b13f5169e3fa541f5cc1f8c4e87e401436849a5864ea514231246847c71c2f41",
     "lib/verification_sandbox.mjs": "afb289b9641bee6e95102f9c899fd99274bfe07f6f0b4db21e0002e1dc309a7d",
     "lib/execution_io.mjs": "80d2fce25ad27c1c9b19239568e19c5087d610f894cac817e1b9cf000c80f62e",
-    "lib/commands/resume.mjs": "d419275a301d5c5b37b856af28de201cdad1a3c70ca336bd1b2d6b01ef65bd5d",
+    "lib/commands/resume.mjs": "768a4aebb28960f5976fe7b239bba1e0b9b8ea4dab5a68c79ddf7da2a73e20bd",
     "lib/gh.mjs": "fc1fe24b0a72372160722f563637a8e556bd2622b410d7bedfb232a345ef455e",
     "docs/tasks.md": "4483b3c3a44117240e3ca10a5e55941578e7c3b2b20775a57af6743603a9bb34",
     "docs/architecture.md": "9dd05a08dc8253c9bd782e03ddd67fc3e35fa5d519a9d0a33b3e3a3d333cc01f",
@@ -44,7 +44,10 @@
     "lib/events.mjs": "776867f9a280ea179f2be8f6e570c88d468ebb5500db8864041fd29b01202e27",
     "lib/time.mjs": "da5f6d30e5059e9b3ed45c3e4a604a3ad20fcc17449ed2ff0429aa9c7a79f146",
     "test/execution-preparation.test.mjs": "363d4d89fb29b22ef5dfbdfb3889e583ef6b92eab8e4d498b0ec9ef1059c08e4",
-    "test/tick.test.mjs": "2e6b2e5766ed7d7dcc8003568964dad5e1de86bd9d7e8657e07054704db9a73d"
+    "test/tick.test.mjs": "2e6b2e5766ed7d7dcc8003568964dad5e1de86bd9d7e8657e07054704db9a73d",
+    "lib/control.mjs": "d37258c2c53aaed1e47ce74d06f80737efa15c12137605d0a125a10a5995534d",
+    "lib/commands/serve.mjs": "c53a41d97c614ca09d7411973522b7ca4e9adf4e0bb608c61c4ed405a547135e",
+    "lib/tracker/pages.mjs": "ceb768dd4e78931749ffd78918d37fb8a82805907d219e0bfe80c1478654d9e7"
   },
   "frozen_inputs": {
     "docs/plans/plugin-ready-gallivant.md": "3081d47d8161043f9c32b6184f07ee8d4ca513822341c41a138bdf28f7459fc2",
@@ -64,10 +67,10 @@
     {
       "command": "npm test",
       "exit": 0,
-      "raw_log": "/tmp/agents-dispatch-test-final.log",
-      "sha256": "e13407143cecf5df88c2bf065695f95429d71b34b82bcfa8e3d8543f3c0841fd",
-      "tests": 1145,
-      "pass": 1145,
+      "raw_log": "/tmp/agents-start-test-verified.log",
+      "sha256": "245ccec4ec159db1f8f0c603fa4cf9a3cfdb91666d262b1201326dbe6c447280",
+      "tests": 1154,
+      "pass": 1154,
       "fail": 0,
       "cancelled": 0,
       "skipped": 0
@@ -75,14 +78,14 @@
     {
       "command": "npm run lint",
       "exit": 0,
-      "raw_log": "/tmp/agents-dispatch-lint-final.log",
+      "raw_log": "/tmp/agents-start-lint-verified.log",
       "sha256": "8c7790de3f018fb4580f18ac70e1b355a0f76f522dd73acbdaa63632feffcecc"
     },
     {
       "command": "npm run test:execution-backends",
       "exit": 0,
-      "raw_log": "/tmp/agents-dispatch-backends-final.log",
-      "sha256": "ff1a7f2a5a66607c55d055ce1f1421c8d3bd06ed51ba3f4a09d349bc94465463",
+      "raw_log": "/tmp/agents-start-backends-verified.log",
+      "sha256": "f2bafd7265775baccd86030b428dff533148f29cc0d9ca341a9667554d9123ad",
       "tests": 396,
       "pass": 396,
       "fail": 0,
@@ -92,10 +95,10 @@
     {
       "command": "npm run test:openai-agents",
       "exit": 0,
-      "raw_log": "/tmp/agents-dispatch-openai-final.log",
-      "sha256": "52c38cfc74a32306010bab8f9af5432420d5a9b1dc6b04870d971ebfe6c4544f",
-      "tests": 44,
-      "pass": 44,
+      "raw_log": "/tmp/agents-start-openai-verified.log",
+      "sha256": "df13f33e24fcc24e859411425fbedfad4205aae7153d7cc41318b12888a31ead",
+      "tests": 53,
+      "pass": 53,
       "fail": 0,
       "cancelled": 0,
       "skipped": 0
@@ -103,7 +106,7 @@
     {
       "command": "git diff --check",
       "exit": 0,
-      "raw_log": "/tmp/agents-dispatch-diff-final.log",
+      "raw_log": "/tmp/agents-start-diff-verified.log",
       "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
     }
   ],
@@ -124,7 +127,8 @@
         "preparation capabilities expose policy data and validate the selected provider/account/version",
         "codex fixture preparation shares drafting, clarification, repair and deterministic readiness without CLI/PID",
         "gemini fixture preparation shares drafting, clarification, repair and deterministic readiness without CLI/PID",
-        "saved readiness, answer, start and recovery reject receipts borrowed from another selected provider"
+        "saved readiness, answer, start and recovery reject receipts borrowed from another selected provider",
+        "initial preparation refusal supports the shared operator control after repair and restart"
       ]
     },
     {
@@ -146,7 +150,8 @@
         "managed resume API refusal preserves checkout, accepted brief and sources, registry and session before mutation",
         "native verification supports Git checks with immutable current-revision metadata in normal and linked checkouts",
         "verification process helper preserves binary Git objects and binary failure diagnostics",
-        "npm entry point supports custom Node prefixes without granting their bin directory"
+        "npm entry point supports custom Node prefixes without granting their bin directory",
+        "unsubmitted initial resume preserves registry and inputs on readiness failure and refuses cancellation or unresolved intents"
       ]
     },
     {
@@ -172,7 +177,12 @@
         "managed pre-send host refusal releases intent and reservation across restart: continue=false",
         "managed pre-send host refusal releases intent and reservation across restart: continue=true",
         "malformed pre-send sources release only the unsubmitted intent without purchasing or stranding work",
-        "initial launch pre-send refusal remains registered for safe coordinator recovery"
+        "initial launch pre-send refusal remains registered for safe coordinator recovery",
+        "failed initial portable preparation is registered and resumes the preserved checkout after repair: symlink",
+        "failed initial portable preparation is registered and resumes the preserved checkout after repair: submodule",
+        "failed initial portable preparation is registered and resumes the preserved checkout after repair: size",
+        "failed initial portable preparation is registered and resumes the preserved checkout after repair: head-race",
+        "initial brief delivery failure stays registered and restores missing approved bytes after repair"
       ]
     },
     {
@@ -203,7 +213,10 @@
         "managed pre-send host refusal releases intent and reservation across restart: continue=false",
         "managed pre-send host refusal releases intent and reservation across restart: continue=true",
         "malformed pre-send sources release only the unsubmitted intent without purchasing or stranding work",
-        "initial launch pre-send refusal remains registered for safe coordinator recovery"
+        "initial launch pre-send refusal remains registered for safe coordinator recovery",
+        "legacy initial refusal resumes from private non-dispatch proof without creating an unrelated implementation",
+        "initial retry reply loss reconciles the original operation through coordinator restart without another session",
+        "initial launch reply loss remains registered for coordinator restart without a second implementation"
       ]
     },
     {
@@ -271,7 +284,15 @@
         "managed pre-send host refusal releases intent and reservation across restart: continue=false",
         "managed pre-send host refusal releases intent and reservation across restart: continue=true",
         "malformed pre-send sources release only the unsubmitted intent without purchasing or stranding work",
-        "initial launch pre-send refusal remains registered for safe coordinator recovery"
+        "initial launch pre-send refusal remains registered for safe coordinator recovery",
+        "initial preparation refusal supports the shared operator control after repair and restart",
+        "failed initial portable preparation is registered and resumes the preserved checkout after repair: symlink",
+        "failed initial portable preparation is registered and resumes the preserved checkout after repair: submodule",
+        "failed initial portable preparation is registered and resumes the preserved checkout after repair: size",
+        "failed initial portable preparation is registered and resumes the preserved checkout after repair: head-race",
+        "initial brief delivery failure stays registered and restores missing approved bytes after repair",
+        "unsubmitted initial resume preserves registry and inputs on readiness failure and refuses cancellation or unresolved intents",
+        "initial retry reply loss reconciles the original operation through coordinator restart without another session"
       ]
     },
     {
@@ -337,7 +358,10 @@
         "managed pre-send host refusal releases intent and reservation across restart: continue=false",
         "managed pre-send host refusal releases intent and reservation across restart: continue=true",
         "malformed pre-send sources release only the unsubmitted intent without purchasing or stranding work",
-        "initial launch pre-send refusal remains registered for safe coordinator recovery"
+        "initial launch pre-send refusal remains registered for safe coordinator recovery",
+        "initial preparation refusal supports the shared operator control after repair and restart",
+        "initial retry reply loss reconciles the original operation through coordinator restart without another session",
+        "initial launch reply loss remains registered for coordinator restart without a second implementation"
       ]
     },
     {
@@ -364,7 +388,9 @@
         "managed pre-send host refusal releases intent and reservation across restart: continue=false",
         "managed pre-send host refusal releases intent and reservation across restart: continue=true",
         "malformed pre-send sources release only the unsubmitted intent without purchasing or stranding work",
-        "initial launch pre-send refusal remains registered for safe coordinator recovery"
+        "initial launch pre-send refusal remains registered for safe coordinator recovery",
+        "unsubmitted initial resume preserves registry and inputs on readiness failure and refuses cancellation or unresolved intents",
+        "initial retry reply loss reconciles the original operation through coordinator restart without another session"
       ]
     },
     {
@@ -410,7 +436,11 @@
         "managed pre-send host refusal releases intent and reservation across restart: continue=false",
         "managed pre-send host refusal releases intent and reservation across restart: continue=true",
         "malformed pre-send sources release only the unsubmitted intent without purchasing or stranding work",
-        "initial launch pre-send refusal remains registered for safe coordinator recovery"
+        "initial launch pre-send refusal remains registered for safe coordinator recovery",
+        "failed initial portable preparation is registered and resumes the preserved checkout after repair: symlink",
+        "failed initial portable preparation is registered and resumes the preserved checkout after repair: submodule",
+        "initial brief delivery failure stays registered and restores missing approved bytes after repair",
+        "unsubmitted initial resume preserves registry and inputs on readiness failure and refuses cancellation or unresolved intents"
       ]
     },
     {
@@ -478,7 +508,16 @@
         "managed pre-send host refusal releases intent and reservation across restart: continue=false",
         "managed pre-send host refusal releases intent and reservation across restart: continue=true",
         "malformed pre-send sources release only the unsubmitted intent without purchasing or stranding work",
-        "initial launch pre-send refusal remains registered for safe coordinator recovery"
+        "initial launch pre-send refusal remains registered for safe coordinator recovery",
+        "legacy initial refusal resumes from private non-dispatch proof without creating an unrelated implementation",
+        "initial preparation refusal supports the shared operator control after repair and restart",
+        "failed initial portable preparation is registered and resumes the preserved checkout after repair: symlink",
+        "failed initial portable preparation is registered and resumes the preserved checkout after repair: submodule",
+        "failed initial portable preparation is registered and resumes the preserved checkout after repair: size",
+        "failed initial portable preparation is registered and resumes the preserved checkout after repair: head-race",
+        "initial brief delivery failure stays registered and restores missing approved bytes after repair",
+        "unsubmitted initial resume preserves registry and inputs on readiness failure and refuses cancellation or unresolved intents",
+        "initial retry reply loss reconciles the original operation through coordinator restart without another session"
       ]
     },
     {
@@ -501,7 +540,8 @@
         "docs/audit/plugin-ready/openai-agents-checklist.md"
       ],
       "test_names": [
-        "npm entry point supports custom Node prefixes without granting their bin directory"
+        "npm entry point supports custom Node prefixes without granting their bin directory",
+        "initial preparation refusal supports the shared operator control after repair and restart"
       ]
     }
   ],
@@ -511,13 +551,13 @@
     "sha256": "16c09feca47099fa1005141c07af146326f38055bb27fd37f2da8966198533af"
   },
   "package_verification": {
-    "raw_record": "/tmp/agents-dispatch-package-verification.json",
-    "sha256": "655a8ac302d09d1210cb9b75c100bbe2e68ab0255c0744cc136f37a0a14f356b",
-    "integrity": "sha512-mSnJdVc/nKMF1f4eM8vSWaXq+AhEkpDCZWmxEsu7RgVbWlJ7DIh6WACz3R5Shg8haesN8hQQvnpTyAaEEaSFwg==",
+    "raw_record": "/tmp/agents-start-package-verification.json",
+    "sha256": "caf4ef7231a41b9b7f532d4ae7562fd0001098ff6f3c859066c91cb8860e82cb",
+    "integrity": "sha512-cf7XT8bVh8nWogCMYO+yap5SgeEP5vSh9+skDB4m1h3xKqcvpAm4xebrXW/gpT1JGxddQEp/UPzlCkTT5PkS0g==",
     "files": 86,
-    "bytes": 431225,
-    "unpacked_bytes": 1314785,
-    "result": "twelve adapter/coordinator/execution/sandbox/readiness/source/process/command modules imported from the unpacked local package with matching source and operator/intake/handoff document hashes; scripts ignored; zero provider calls"
+    "bytes": 433224,
+    "unpacked_bytes": 1322120,
+    "result": "sixteen adapter/coordinator/execution/sandbox/readiness/source/start/resume/control/tracker modules imported from the unpacked local package with matching source and operator/intake/handoff document hashes; scripts ignored; zero provider calls"
   },
   "live": {
     "version": 1,
@@ -886,6 +926,69 @@
           "label": "native macOS preflight before implementation; unchanged live configuration gap; zero provider calls",
           "path": "/tmp/agents-dispatch-preflight.json",
           "sha256": "fe8e344cb77219b8b146f45437a0514f90a066a48fa85b71084c28ed33d0e3b2"
+        }
+      ]
+    },
+    {
+      "rule": "Every owned initial checkout must have an actionable recovery entry, and first submission after repair requires exact proof that no implementation has been dispatched",
+      "checked": [
+        "lib/commands/start.mjs: retain partial/unknown clone claims; consume a completed owned clone into the registry before source delivery, head capture and read-only provider preparation; persist the original start token and unsubmitted marker before these failure boundaries",
+        "lib/execution.mjs unsubmittedInitialDispatch: require matching start-token/operation identities and version, sessionless needs-human entry with no PR/run, empty execution intents/current run and no stop; legacy initial refusal requires private dispatchRefusals proof",
+        "lib/commands/resume.mjs: full native/API preflight before mutations, same approved contract/source checks, preserve ordinary unfinished edits, restore missing approved inputs after initial delivery failure, fresh initial prompt includes the complete saved brief and actual current revision",
+        "lib/tick.mjs startRun/tickEntry: reuse original initial operation through the shared preparation/submit path, persist dispatching before send, restore unsubmitted only on trusted pre-send refusal, retain uncertain provider intent and recover exact owned session/root on startup; clear the marker after acceptance",
+        "lib/control.mjs and lib/commands/serve.mjs plus lib/tracker/pages.mjs: CLI, queued operator action and tracker reuse the same proof; unknown/stopped/foreign launches cannot enable or queue a retry; acknowledge first submission without claiming an earlier session",
+        "lib/tasks.mjs startInternal and lib/state.mjs claimStart/putStarted/remove: intake ownership, approved digest and chain/start-token claims remain shared; task registration retains the checkout and lets existing remove/control paths address failures without a duplicate start",
+        "test/openai-agents.test.mjs: actual start/resume/control/loopback-route calls with provider-shaped offline sessions; symlink, submodule, expanded size, head race, brief-delivery refusal, native pre-send refusal, legacy proof, read-only 401/host failure, foreign token, unresolved intent, cancellation and reply loss across restart",
+        "representative generated loopback HTML, control receipt and uploaded source manifest reviewed: first-run wording, one clone/session/root and original operation with current verified input; no new policy/model/provider defaults or account authority"
+      ],
+      "regression": [
+        "initial launch pre-send refusal remains registered for safe coordinator recovery",
+        "legacy initial refusal resumes from private non-dispatch proof without creating an unrelated implementation",
+        "initial preparation refusal supports the shared operator control after repair and restart",
+        "failed initial portable preparation is registered and resumes the preserved checkout after repair: symlink",
+        "failed initial portable preparation is registered and resumes the preserved checkout after repair: submodule",
+        "failed initial portable preparation is registered and resumes the preserved checkout after repair: size",
+        "failed initial portable preparation is registered and resumes the preserved checkout after repair: head-race",
+        "initial brief delivery failure stays registered and restores missing approved bytes after repair",
+        "unsubmitted initial resume preserves registry and inputs on readiness failure and refuses cancellation or unresolved intents",
+        "initial retry reply loss reconciles the original operation through coordinator restart without another session",
+        "initial launch reply loss remains registered for coordinator restart without a second implementation"
+      ],
+      "representative_output": [
+        {
+          "label": "provider-shaped initial refusal and actual shared resume/control lifecycle",
+          "path": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/agents-offline-Y2bUUr/initial-resume-evidence.json",
+          "sha256": "bda6883cb59fb0ed1ad43e493e23f70b1c16e42d524e5a7734b4854394eacb8f",
+          "page": {
+            "path": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/agents-offline-Y2bUUr/initial-controls.html",
+            "sha256": "6b91171088cc929c82013cb6d03867d248ee4ea94cbae03c700507b20de506ea",
+            "kind": "actual loopback tracker route HTML with offline provider state; no installed-browser qualification"
+          }
+        },
+        {
+          "label": "provider-shaped initial refusal and actual shared resume/control lifecycle",
+          "path": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/agents-offline-lEOCXJ/initial-resume-evidence.json",
+          "sha256": "e2e39862aff870ac1aeeff4c23d27e930e32d0f89b152d38c4e3e5665ee57489",
+          "page": {
+            "path": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/agents-offline-lEOCXJ/initial-controls.html",
+            "sha256": "15872dd17ac74bf25d1ff619fbab00dfd6d45dc9bb99a5ca2a86559019c5c456",
+            "kind": "actual loopback tracker route HTML with offline provider state; no installed-browser qualification"
+          }
+        },
+        {
+          "label": "provider-shaped initial refusal and actual shared resume/control lifecycle",
+          "path": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/agents-offline-ds95Ek/initial-resume-evidence.json",
+          "sha256": "16cfdd794a8b6f3d4ffbca807752a3c7fe1a0c4fefd2cab1b97be9099125e119",
+          "page": {
+            "path": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/agents-offline-ds95Ek/initial-controls.html",
+            "sha256": "ea680f1f3da60e2c0280a7c26efd4b74d23b8b39e7364cfcdca6847f3f3a9d2a",
+            "kind": "actual loopback tracker route HTML with offline provider state; no installed-browser qualification"
+          }
+        },
+        {
+          "label": "native macOS preflight before this review batch; unchanged absent live inputs; zero provider calls",
+          "path": "/tmp/agents-start-preflight.json",
+          "sha256": "2cbc617f658e4a9c2eff7bca0915b501e808fe5a10a23a1ab7756cddfbb64954"
         }
       ]
     }
@@ -1314,5 +1417,75 @@
     },
     "paid_calls": 0,
     "live_prerequisites": "unchanged; original failed preflight and exact external remedy preserved in live"
+  },
+  "initial_launch_followup": {
+    "review_id": 5432829994,
+    "reviewed_commit": "52f580dc0de55d05d797612afc6a1583408a98cb",
+    "inline_comment_ids": [
+      4198948598,
+      4198948613
+    ],
+    "status": "addressed",
+    "rule": "Every owned initial checkout must have an actionable recovery entry, and first submission after repair requires exact proof that no implementation has been dispatched",
+    "evidence_kind": "provider-shaped offline shared lifecycle, actual native macOS preflight and generated loopback route HTML; live inference/installed-browser/native-Linux qualification remains unverified",
+    "tests": [
+      "initial launch pre-send refusal remains registered for safe coordinator recovery",
+      "legacy initial refusal resumes from private non-dispatch proof without creating an unrelated implementation",
+      "initial preparation refusal supports the shared operator control after repair and restart",
+      "failed initial portable preparation is registered and resumes the preserved checkout after repair: symlink",
+      "failed initial portable preparation is registered and resumes the preserved checkout after repair: submodule",
+      "failed initial portable preparation is registered and resumes the preserved checkout after repair: size",
+      "failed initial portable preparation is registered and resumes the preserved checkout after repair: head-race",
+      "initial brief delivery failure stays registered and restores missing approved bytes after repair",
+      "unsubmitted initial resume preserves registry and inputs on readiness failure and refuses cancellation or unresolved intents",
+      "initial retry reply loss reconciles the original operation through coordinator restart without another session",
+      "initial launch reply loss remains registered for coordinator restart without a second implementation"
+    ],
+    "focused": {
+      "command": "node --test --test-name-pattern='initial (launch|preparation|refusal|portable|resume|retry|brief delivery)|legacy initial|failed initial|unsubmitted initial' test/openai-agents.test.mjs",
+      "exit": 0,
+      "pass": 11,
+      "raw_log": "/tmp/agents-start-focused-passed.log",
+      "sha256": "47a008fa662d12f5ce63c97d511c618540da777184cf0bd0450e27998023b9fc"
+    },
+    "representative_output": [
+      {
+        "label": "provider-shaped initial refusal and actual shared resume/control lifecycle",
+        "path": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/agents-offline-Y2bUUr/initial-resume-evidence.json",
+        "sha256": "bda6883cb59fb0ed1ad43e493e23f70b1c16e42d524e5a7734b4854394eacb8f",
+        "page": {
+          "path": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/agents-offline-Y2bUUr/initial-controls.html",
+          "sha256": "6b91171088cc929c82013cb6d03867d248ee4ea94cbae03c700507b20de506ea",
+          "kind": "actual loopback tracker route HTML with offline provider state; no installed-browser qualification"
+        }
+      },
+      {
+        "label": "provider-shaped initial refusal and actual shared resume/control lifecycle",
+        "path": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/agents-offline-lEOCXJ/initial-resume-evidence.json",
+        "sha256": "e2e39862aff870ac1aeeff4c23d27e930e32d0f89b152d38c4e3e5665ee57489",
+        "page": {
+          "path": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/agents-offline-lEOCXJ/initial-controls.html",
+          "sha256": "15872dd17ac74bf25d1ff619fbab00dfd6d45dc9bb99a5ca2a86559019c5c456",
+          "kind": "actual loopback tracker route HTML with offline provider state; no installed-browser qualification"
+        }
+      },
+      {
+        "label": "provider-shaped initial refusal and actual shared resume/control lifecycle",
+        "path": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/agents-offline-ds95Ek/initial-resume-evidence.json",
+        "sha256": "16cfdd794a8b6f3d4ffbca807752a3c7fe1a0c4fefd2cab1b97be9099125e119",
+        "page": {
+          "path": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/agents-offline-ds95Ek/initial-controls.html",
+          "sha256": "ea680f1f3da60e2c0280a7c26efd4b74d23b8b39e7364cfcdca6847f3f3a9d2a",
+          "kind": "actual loopback tracker route HTML with offline provider state; no installed-browser qualification"
+        }
+      },
+      {
+        "label": "native macOS preflight before this review batch; unchanged absent live inputs; zero provider calls",
+        "path": "/tmp/agents-start-preflight.json",
+        "sha256": "2cbc617f658e4a9c2eff7bca0915b501e808fe5a10a23a1ab7756cddfbb64954"
+      }
+    ],
+    "paid_calls": 0,
+    "live_prerequisites": "unchanged; original failed live preflight and exact external remedy preserved in live"
   }
 }

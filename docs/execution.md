@@ -204,6 +204,18 @@ and review dispatch stop with `dispatch-refused`; repair the prerequisites and
 explicitly resume. The same authorized operation can also be retried through the
 shared service across restart. This release does not apply to provider setup
 requests, lost replies, unmarked errors or an unproven deadline.
+Remote start consumes its clone claim into a registered `launch-preparation` entry
+before source delivery and read-only provider preparation. `initial_dispatch`
+version 1 retains the original start-token operation and `unsubmitted` status.
+`unsubmittedInitialDispatch` verifies that token, the entry's sessionless ownership
+and an empty, unstopped execution ledger before CLI/control/tracker resume can
+authorize the first submission. Existing private refusal proof also recovers older
+initial refusal entries. The shared coordinator rebuilds verified current inputs
+from the saved approved brief, changes the marker to `dispatching` before submit,
+and clears it after acceptance or exact startup reconciliation. Proven pre-send
+refusals restore `unsubmitted`; unknown acceptance keeps its recorded intent and
+cannot start another session. Partial/unknown clone failures still retain their
+original claim for inspection rather than silently deleting an owned checkout.
 Unknown acceptance never authorizes another dispatch. Startup
 and periodic lookup reconcile it; without authoritative lookup an operator must
 inspect the recorded key and restore exact ownership. Never manually delete an

@@ -162,6 +162,22 @@ reconnecting. Repair credentials/throttling/configuration and explicitly authori
 require saved artifact recovery and explicit replacement-session authorization;
 automatic replacement is not supported, and no old filesystem survival is claimed.
 
+The owned checkout is registered before source delivery or remote input preparation.
+A source symlink/submodule, oversized snapshot, changed head or preparation failure
+leaves a `needs-human` task with reason `launch-preparation`, its saved brief and
+checkout intact, and a versioned `initial_dispatch` marked `unsubmitted`. Repair
+the repository or prerequisites and run `gallivant resume <task-id>`; the tracker
+Resume action uses the same transition. A proven first-dispatch refusal follows
+this path with reason `dispatch-refused`. Resume rechecks full native/API readiness
+and contract/source validation, restores missing approved inputs without replacing
+unfinished edits, and submits the original operation from the current verified
+revision and full approved brief. This is the first provider implementation, so no
+prior session is claimed. Older initial refusals can use their private
+`dispatchRefusals` proof. A stopped task, existing execution intent/run, foreign
+operation or ambiguous acceptance cannot use this transition. After dispatch starts,
+the marker is `dispatching`; only reconciliation may recover a lost reply, and an
+accepted launch clears the marker. Ordinary later resumes retain the same session.
+
 Cancellation sends `agent.session.input.cancel` only after confirming the owned
 root is the session's single active root. HTTP acceptance is distinguished from
 confirmed cancellation. Cancel, timeout and exhausted allowance fence future
