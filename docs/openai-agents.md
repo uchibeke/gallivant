@@ -169,6 +169,29 @@ rechecks branch ownership, base/head, aliases, modes and approved tests on the
 actual applied revision before pushing. Agent-reported tests are retained as such;
 coordinator-executed verification remains authoritative for PR publication.
 
+The coordinator executes every nonempty Verify list in an OS sandbox, including
+scripts changed by hosted results and their child processes. Install a dedicated
+Node 22+ runtime with npm and use macOS with `/usr/bin/sandbox-exec` plus
+`/System/Library/Sandbox/Profiles/dyld-support.sb`, or Linux with `/usr/bin/bwrap`
+and enabled unprivileged user/PID/network namespaces. System tools, the running
+Node binary and its npm package are readable; only the checkout and an empty
+temporary profile are writable. Git metadata, coordinator journals, private
+host files and host network access remain inaccessible. Arbitrary inherited PATH
+entries are removed; provision dependencies in the checkout before Verify runs.
+Network-dependent tests and unsupported tools fail rather than widen access.
+
+A five-second native enforcement probe runs before any repository code. Failure
+blocks publication once with `verification-sandbox-unavailable`; inspect
+`result-application.json` and `verification.json`, repair the host sandbox/runtime,
+and explicitly resume the same task. Saved artifacts and the applied code are
+retained. Each command records sandbox provenance alongside its head, exit and
+output. An interrupted verification or older `verified` checkpoint without that
+provenance cannot push or silently replay commands. Already published results
+remain read-only recovery records. See [the shared boundary](execution.md) for
+runtime grants and cleanup. Native macOS enforcement tests are distinct from
+provider-shaped fixtures; Linux namespace support requires the same native suite
+on the selected Linux host. Neither is live Agents API qualification.
+
 Immutable published artifacts survive sandbox expiry, but not session deletion.
 Downloaded results are saved in `runs/<task>/<run>-artifacts.json` and the canonical
 per-run result before settlement. Preserve that directory independently of log

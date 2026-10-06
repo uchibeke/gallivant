@@ -2,15 +2,15 @@
   "version": 1,
   "task_id": "task-cf82d9f43ca0da3c5bb29b67",
   "scope": "managed Agents REST implementation and provider-shaped offline lifecycle verification; live qualification remains unverified",
-  "recorded_at": "2026-10-06T14:02:05.379022+00:00",
+  "recorded_at": "2026-10-06T14:46:37.364792+00:00",
   "base_revision": "7936830977bcb4615de418b9dd5c4d655501297b",
   "branch": "work/openai-agents-harness",
   "source_files": {
     "README.md": "6c9a9e9e79f7a9bd9157464ea2602f6ecde0b2878422e5c8dbea64a98d5f2ab8",
     "docs/audit/plugin-ready/README.md": "7f24289695807c9bd9d880e54e287c3bcfa1a3324543ca87eee68b1e24a9e8f7",
-    "docs/audit/plugin-ready/openai-agents-checklist.md": "73dc474ea066ffda466afc138bd9648f352ce360e5319d073a644f9c958d649b",
-    "docs/execution.md": "9e0eb323ad624f15ca1769b75a971711e26a8d3c259541ed6e639b10d6620b1a",
-    "docs/openai-agents.md": "7ed635424ba0ca8856faacf7976c036c7c7a4a4667d43e63fec3799dec3c8337",
+    "docs/audit/plugin-ready/openai-agents-checklist.md": "3f257312e98ba32fe2c307d6cc8a425894490ab014d37066d9fb94d5d83cf154",
+    "docs/execution.md": "f856368ec5e3dbea3ebb325f76d3af14180ec6b53d999b198b085c0fe4b5ab3d",
+    "docs/openai-agents.md": "a254eb4b2de2a8c04c8a07e4247b5f16823ed1efdb161bef49c3a64ee6e7365d",
     "docs/prds/openai-agents-harness.md": "b6d3ceeb20426248b5cf0d8527beaf93a6a69c09003cfc07d3a86fe8fa8b053a",
     "lib/block.mjs": "bd644a1564d6d3dcf3edad1ad1f931fa5f3e4246a041f20acbbb04c88c07c665",
     "lib/commands/doctor.mjs": "f360b366e6a20a29479925d2bb28d1fd9e38f1d97d09c764fbe2d033a1c8d23a",
@@ -27,10 +27,12 @@
     "lib/probe.mjs": "9e70d8dbffd842dea3b46f76efe10a18a5d5a30570c722d17774b4f09c8adf0a",
     "lib/tick.mjs": "e1012ef8ab6b235b45eba75567ce435cd1a049bb1df52295ac0c195133daf947",
     "package.json": "cc440ea2539b8d40772db637b1f6593584c66818f810c4a45719c7c563ff003a",
-    "test/execution-backends.test.mjs": "76365e17e2aedd7318cb2459066549c652a5880a5cc9589935999f649cc0258e",
+    "test/execution-backends.test.mjs": "e96c3e01c3c305c4354d063b7592a266fb58df55715b4107be4abd232bdc00f6",
     "test/openai-agents-live.mjs": "0f556440264766e17a369e6eaa6b71658833b93c18971b1ef1326d65452a20d2",
     "test/openai-agents.test.mjs": "2ea8777cabe514fa80962541cdfebab7c1bbfacaef75fe0c9b1a00d9980638ea",
-    "test/units.test.mjs": "ae8ab863aa48e3e44557e8f20c00bb8440682325ec099eb34a81f339cbb42b9f"
+    "test/units.test.mjs": "ae8ab863aa48e3e44557e8f20c00bb8440682325ec099eb34a81f339cbb42b9f",
+    "lib/execution_result.mjs": "f1ce8a8abc7682a106612cd6746d46c950a5da29014fe3753623d3d1bcaeec46",
+    "lib/verification_sandbox.mjs": "a45365a22f2a67c416948e31fc4a03d3f60f493b1ae475061a932c6f89b9cc6d"
   },
   "frozen_inputs": {
     "docs/plans/plugin-ready-gallivant.md": "3081d47d8161043f9c32b6184f07ee8d4ca513822341c41a138bdf28f7459fc2",
@@ -50,10 +52,10 @@
     {
       "command": "npm test",
       "exit": 0,
-      "raw_log": "/tmp/agents-npm-test-final.log",
-      "sha256": "bc4485370395c3a68aa418e8b8efca79e506cdc94b4952ef002d44d53c801c55",
-      "tests": 1104,
-      "pass": 1104,
+      "raw_log": "/tmp/agents-security-final-test.log",
+      "sha256": "65162732e3dff433f4b187e01fadf2ac0f1ab3fc3c24de71f755cb3ea5ef891d",
+      "tests": 1110,
+      "pass": 1110,
       "fail": 0,
       "cancelled": 0,
       "skipped": 0
@@ -61,16 +63,16 @@
     {
       "command": "npm run lint",
       "exit": 0,
-      "raw_log": "/tmp/agents-lint-final.log",
+      "raw_log": "/tmp/agents-security-final-lint.log",
       "sha256": "8c7790de3f018fb4580f18ac70e1b355a0f76f522dd73acbdaa63632feffcecc"
     },
     {
       "command": "npm run test:execution-backends",
       "exit": 0,
-      "raw_log": "/tmp/agents-backends-final.log",
-      "sha256": "1a58e17d249ab9347c3dadb85d6ef75f3d92323aefe2adb2f474001f50e9b421",
-      "tests": 374,
-      "pass": 374,
+      "raw_log": "/tmp/agents-security-final-backends.log",
+      "sha256": "bc5222de200a29eca9f515da5e846f9cd13cbbe716b30efec19f33f90991b47d",
+      "tests": 380,
+      "pass": 380,
       "fail": 0,
       "cancelled": 0,
       "skipped": 0
@@ -78,8 +80,8 @@
     {
       "command": "npm run test:openai-agents",
       "exit": 0,
-      "raw_log": "/tmp/agents-focused-final.log",
-      "sha256": "682bb5aeff6b488f5a3287cac1dd0b93c3b52c21a61f1038ba701689127aa3c9",
+      "raw_log": "/tmp/agents-security-final-openai.log",
+      "sha256": "932153f5ab2315567480cf23522c377f7a60162359240d11172593885f6ec565",
       "tests": 28,
       "pass": 28,
       "fail": 0,
@@ -89,7 +91,7 @@
     {
       "command": "git diff --check",
       "exit": 0,
-      "raw_log": "/tmp/agents-diff-check-final.log",
+      "raw_log": "/tmp/agents-security-final-diff.log",
       "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
     }
   ],
@@ -198,16 +200,23 @@
     {
       "criterion_id": "ac-8",
       "met": true,
-      "evidence_kind": "implementation-and-offline-fixtures",
+      "evidence_kind": "implementation, provider-shaped fixtures and native macOS verification enforcement",
       "files": [
         "lib/openai_agents_sources.mjs",
         "lib/openai_agents.mjs",
-        "lib/execution_result.mjs"
+        "lib/execution_result.mjs",
+        "lib/verification_sandbox.mjs"
       ],
       "test_names": [
         "managed artifacts reach the single PR writer with actual file and current-head verification",
         "sandbox publisher delivers unchanged carried files, receipt repairs and rejects symlinks and mode changes",
-        "artifact rejects unsafe paths, private paths, wrong source and hashes"
+        "artifact rejects unsafe paths, private paths, wrong source and hashes",
+        "host-file exfiltration in artifact and pushed-branch Verify scripts is denied before publication",
+        "native verification permits npm and checkout tools while denying child, symlink, Git, journal and network escapes",
+        "unavailable or unproven verification sandbox blocks once, preserves results and cleans its profile",
+        "an earlier Verify command cannot replace the sandbox policy for a later command",
+        "verification recovery rejects legacy unsandboxed evidence without replaying or pushing",
+        "a stop during sandbox preparation prevents Verify dispatch and removes the private profile"
       ]
     },
     {
@@ -246,29 +255,45 @@
     {
       "criterion_id": "ac-11",
       "met": true,
-      "evidence_kind": "implementation-and-offline-fixtures",
+      "evidence_kind": "implementation, provider-shaped fixtures and native macOS verification enforcement",
       "files": [
         "lib/openai_agents_config.mjs",
         "lib/openai_agents_input.mjs",
-        "lib/openai_agents_http.mjs"
+        "lib/openai_agents_http.mjs",
+        "lib/execution_result.mjs",
+        "lib/verification_sandbox.mjs"
       ],
       "test_names": [
         "configuration refuses unavailable policy, missing billing selectors and private context",
-        "artifact rejects unsafe paths, private paths, wrong source and hashes"
+        "artifact rejects unsafe paths, private paths, wrong source and hashes",
+        "host-file exfiltration in artifact and pushed-branch Verify scripts is denied before publication",
+        "native verification permits npm and checkout tools while denying child, symlink, Git, journal and network escapes",
+        "unavailable or unproven verification sandbox blocks once, preserves results and cleans its profile",
+        "an earlier Verify command cannot replace the sandbox policy for a later command",
+        "verification recovery rejects legacy unsandboxed evidence without replaying or pushing",
+        "a stop during sandbox preparation prevents Verify dispatch and removes the private profile"
       ]
     },
     {
       "criterion_id": "ac-12",
       "met": true,
-      "evidence_kind": "implementation-and-offline-fixtures",
+      "evidence_kind": "implementation, provider-shaped fixtures and native macOS verification enforcement",
       "files": [
         "test/openai-agents.test.mjs",
-        "test/execution-backends.test.mjs"
+        "test/execution-backends.test.mjs",
+        "lib/execution_result.mjs",
+        "lib/verification_sandbox.mjs"
       ],
       "test_names": [
         "account/project isolation refuses foreign session metadata and persisted state",
         "initial launch reply loss remains registered for coordinator restart without a second implementation",
-        "phase-bounded coordinator settlement cannot enter review dispatch or queued resume"
+        "phase-bounded coordinator settlement cannot enter review dispatch or queued resume",
+        "host-file exfiltration in artifact and pushed-branch Verify scripts is denied before publication",
+        "native verification permits npm and checkout tools while denying child, symlink, Git, journal and network escapes",
+        "unavailable or unproven verification sandbox blocks once, preserves results and cleans its profile",
+        "an earlier Verify command cannot replace the sandbox policy for a later command",
+        "verification recovery rejects legacy unsandboxed evidence without replaying or pushing",
+        "a stop during sandbox preparation prevents Verify dispatch and removes the private profile"
       ]
     },
     {
@@ -299,12 +324,12 @@
     "sha256": "16c09feca47099fa1005141c07af146326f38055bb27fd37f2da8966198533af"
   },
   "package_verification": {
-    "raw_record": "/tmp/agents-package-verification.json",
-    "sha256": "4b029def2f8d1abfa912dc3474b75f5af6116d6e349718fb662421412675bcd2",
-    "integrity": "sha512-ot9dFDbkqKbU1mgJRFin1e1JW8Y/P5DeWMi2oh8EIcZYVoGgRHkSOVFUWp8d/XJofHxWIbOZ9e0zdqNZuVfMPw==",
-    "files": 85,
-    "bytes": 417414,
-    "result": "adapter/context/execution exports imported from unpacked local package; no provider call"
+    "raw_record": "/tmp/agents-security-package-verification.json",
+    "sha256": "3c4f21f1dee71db5c26503a7706cc658b81c843e4084911bc3cbde2fa0ae3210",
+    "integrity": "sha512-oVEgb4yN1JixU6j397faB45HmM8+P5daRfU0ZZlyBZDmUF5Lhc469CPYgi0ocqO4n5HKs+2oLQ9zqqQU7k52OQ==",
+    "files": 86,
+    "bytes": 421494,
+    "result": "adapter/context/execution/result/sandbox modules imported from the unpacked local package; no provider call"
   },
   "live": {
     "version": 1,
@@ -376,6 +401,92 @@
         "test/openai-agents-live.mjs reservation/restart/failure/lock paths"
       ],
       "regression": "phase-bounded coordinator settlement cannot enter review dispatch or queued resume"
+    },
+    {
+      "rule": "Verification authority must be enforced by an immutable OS boundary, including descendants and recovery",
+      "checked": [
+        "lib/execution_result.mjs artifact/pushedHead application, verification, replay and cleanup",
+        "lib/verification_sandbox.mjs runtime grants, immutable policy, bounded enforcement probe and cleanup",
+        "lib/tick.mjs result-verification settlement",
+        "lib/control.mjs publication block/resume",
+        "lib/git.mjs commitResult/pushResult and repository_files.mjs target containment"
+      ],
+      "regression": [
+        "host-file exfiltration in artifact and pushed-branch Verify scripts is denied before publication",
+        "native verification permits npm and checkout tools while denying child, symlink, Git, journal and network escapes",
+        "unavailable or unproven verification sandbox blocks once, preserves results and cleans its profile",
+        "an earlier Verify command cannot replace the sandbox policy for a later command",
+        "verification recovery rejects legacy unsandboxed evidence without replaying or pushing",
+        "a stop during sandbox preparation prevents Verify dispatch and removes the private profile"
+      ],
+      "representative_output": [
+        {
+          "label": "native host-file denial evidence",
+          "path": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-5qvSQx/verification-host-file-denial.json",
+          "sha256": "344f912517868bc0380240c7d7eea3f790efdd7e3c46d859fdedad42d53588eb"
+        },
+        {
+          "label": "native child/network isolation evidence",
+          "path": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-TQhP3x/verification.json",
+          "sha256": "3e5268ae1570b8f8741227fc1296ca89cb4101500311fba68595b5f603350b72"
+        },
+        {
+          "label": "immutable sandbox policy evidence",
+          "path": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-aRNJK7/verification.json",
+          "sha256": "c90399dd4baa75bb8c24183a65b50ae593d21380c60cd774ebd6a67da7afbe84"
+        }
+      ]
     }
-  ]
+  ],
+  "security_followup": {
+    "reviewed_commit": "b3e195bb85de84f4e0f359a57c4832478fef4d29",
+    "review_comment": 4196366285,
+    "status": "addressed",
+    "rule": "Provider-controlled verification must not inherit coordinator filesystem, network or policy authority",
+    "implementation": [
+      "lib/verification_sandbox.mjs",
+      "lib/execution_result.mjs"
+    ],
+    "native_host": {
+      "os": "macOS 26.3",
+      "node": "22.22.0",
+      "npm": "10.9.4",
+      "driver": "sandbox-exec",
+      "filesystem": "checkout-and-runtime",
+      "network": "disabled",
+      "enforcement": "native outside-read/outside-write/TCP denial probe passed before repository commands",
+      "records": [
+        {
+          "label": "native host-file denial evidence",
+          "path": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-5qvSQx/verification-host-file-denial.json",
+          "sha256": "344f912517868bc0380240c7d7eea3f790efdd7e3c46d859fdedad42d53588eb"
+        },
+        {
+          "label": "native child/network isolation evidence",
+          "path": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-TQhP3x/verification.json",
+          "sha256": "3e5268ae1570b8f8741227fc1296ca89cb4101500311fba68595b5f603350b72"
+        },
+        {
+          "label": "immutable sandbox policy evidence",
+          "path": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-aRNJK7/verification.json",
+          "sha256": "c90399dd4baa75bb8c24183a65b50ae593d21380c60cd774ebd6a67da7afbe84"
+        }
+      ],
+      "hardlink_probe": {
+        "raw_log": "/tmp/agents-security-hardlink-probe.log",
+        "sha256": "22b5dd1f33cba9c45d7c106592e262680d87c084bb679a941b9035b56d540a36",
+        "result": "native hard-link escape denied"
+      }
+    },
+    "linux": "implementation present; native bubblewrap enforcement unverified on this macOS host",
+    "provider_live": "unverified; original G8 prerequisites and remedy below remain unmet; no paid calls",
+    "tests": [
+      "host-file exfiltration in artifact and pushed-branch Verify scripts is denied before publication",
+      "native verification permits npm and checkout tools while denying child, symlink, Git, journal and network escapes",
+      "unavailable or unproven verification sandbox blocks once, preserves results and cleans its profile",
+      "an earlier Verify command cannot replace the sandbox policy for a later command",
+      "verification recovery rejects legacy unsandboxed evidence without replaying or pushing",
+      "a stop during sandbox preparation prevents Verify dispatch and removes the private profile"
+    ]
+  }
 }

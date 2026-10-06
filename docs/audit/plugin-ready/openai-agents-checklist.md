@@ -17,6 +17,7 @@ installed-host qualification records remain independent.
 - [x] Preserve existing CI/review/evaluator/iteration rules and cancellation/timeout/allowance fences.
 - [x] Reject mandatory local policy and private context that hosted execution cannot enforce.
 - [x] Verify provider-shaped offline fixtures, actual generated sandbox output and shared publication behavior.
+- [x] Sandbox shared artifact/branch-result Verify commands with native filesystem/network enforcement, immutable policy and checked recovery provenance.
 - [x] Document installation, supported REST beta/Node versions, setup, polling, continuation, artifacts and verification.
 - [ ] Qualify one real implementation and forced CI/trusted-review correction with the same session/PR across restart (ac-13).
 - [ ] Qualify the installed host/plugin, browser/capture surface and final release in the later release milestone.
@@ -30,3 +31,14 @@ remaining priced campaign allowance; then authorize the two bounded phases. The
 correction requires an actual current-head CI or configured trusted-review finding.
 Reconcile observed API plus hosted-compute cost before starting it. No paid phase,
 installed-host qualification or successful live delivery is claimed by fixtures.
+
+The security follow-up also exercises actual macOS 26.3 `sandbox-exec` enforcement
+with Node 22.22.0/npm 10.9.4. Host-file exfiltration is denied for both result
+transports; child processes, escaping symlinks, Git metadata, journals and host TCP
+access are blocked while npm and checkout tools work. An earlier Verify command
+cannot replace a later command's policy. Missing/unproven isolation and older
+unsandboxed recovery evidence block once without publication or repeated dispatch;
+private profiles are removed on success, failure and cancellation. Linux
+`bubblewrap` enforcement requires running the native suite on the selected Linux
+host and is not claimed by the macOS result. Live provider access remains subject
+to the separate unmet ac-13 gate above.

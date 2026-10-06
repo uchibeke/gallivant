@@ -559,8 +559,28 @@ An empty private HOME/XDG/temp profile exists for the command list and is remove
 on success, failure, dirty-tree rejection or cancellation. Existing Git/tooling
 environment helpers disable system/global credential stores, interactive auth
 and user npm configuration; repository credential helpers are reset too.
-This environment separation adds no OS sandbox; configured host restrictions
-still apply. The canonical tick continues to own readiness, trusted feedback,
+Verification also requires an OS filesystem/network sandbox. macOS uses
+`/usr/bin/sandbox-exec` with the installed `dyld-support.sb` loader rules and a
+deny-default profile. Linux uses `/usr/bin/bwrap` with isolated user, PID, IPC and
+network namespaces and a private mount tree. Only the checkout and private
+verification profile are writable; fixed system tools/libraries, the running
+Node binary and its npm package are readable. Git metadata is hidden or denied.
+PATH is limited to that Node installation, `/usr/bin` and `/bin`; arbitrary
+operator PATH entries and configuration directories are not granted. Commands
+needing other tools must use an isolated supported runtime installation rather
+than broadening access to an operator home. Network-dependent Verify commands
+fail: fetch dependencies in the approved execution environment or use installed
+checkout dependencies for offline verification.
+Before repository code runs, a bounded trusted probe checks private writes,
+denied outside reads/writes and host TCP isolation. No missing executable,
+namespace restriction or failed probe can fall back to an ordinary host shell.
+It records `verification-sandbox-unavailable`, preserves the applied revision
+and saved results, and requires explicit operator recovery after host repair.
+Success/failure evidence records the sandbox driver and enforcement probe.
+Recovered `verified` checkpoints lacking this provenance block before push;
+completed commands are never silently replayed. Empty Verify lists still record
+no test claim. The profile and probe files are removed on every exit.
+The canonical tick continues to own readiness, trusted feedback,
 freshness, receipts, conflicts, rounds and human merge boundaries. No automatic
 merge is added.
 

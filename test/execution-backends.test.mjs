@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { join } from "node:path";
 import { createHash } from "node:crypto";
 import { EventEmitter } from "node:events";
+import { createServer } from "node:net";
 import { mkdirSync, readFileSync, writeFileSync, rmSync, renameSync, symlinkSync, cpSync, statSync, lstatSync, existsSync, chmodSync, realpathSync } from "node:fs";
 import { pathToFileURL } from "node:url";
 import { makeExecution, executionLive, assertExecutionDependency } from "../lib/execution.mjs";
@@ -18,6 +19,7 @@ import { makeState, newEntry, STATES, idSlug } from "../lib/state.mjs";
 import { routes } from "../lib/commands/serve.mjs";
 import { makeTick } from "../lib/tick.mjs";
 import { reconcileExecutionResult, verificationEnvironment } from "../lib/execution_result.mjs";
+import { prepareVerificationSandbox, verificationSandboxSpec, validVerificationSandbox } from "../lib/verification_sandbox.mjs";
 import { resume } from "../lib/commands/resume.mjs";
 import { acquireProcessLock } from "../lib/daemon.mjs";
 import { makeGit, GIT_PATH_LIMITS } from "../lib/git.mjs";
@@ -2042,7 +2044,7 @@ test("interrupted verification blocks replay while lost publication replies reus
 });
 
 test("failed remote verification survives polls and restart, settles workflow and permits explicit correction", async () => {
-  const f = await collectedArtifactFixture(), state = makeState(f.ctx.home), attempts = join(f.dir, "verify-attempts.txt");
+  const f = await collectedArtifactFixture(), state = makeState(f.ctx.home), attempts = join(f.entry.worktree, "verify-attempts.txt");
   f.ctx.readPrd = () => `# Brief\n\n## Verify\n\n- \`node -e 'require("fs").appendFileSync(${JSON.stringify(attempts)}, "x"); process.exit(2)'\`\n`;
   state.put(f.id, { ...f.entry, last: { run: f.job.id, exit: null }, execution: f.service.current().execution });
   const reviewId = "acme/widget/review";
@@ -2212,6 +2214,111 @@ async function nativeResultFixture() {
   return { ...f, verify: async (...args) => { f.calls.push("verify"); return execFileAsync(...args); } };
 }
 
+test("host-file exfiltration in artifact and pushed-branch Verify scripts is denied before publication", async t => {
+  const observations = [];
+  for (const transport of ["artifacts", "pushed-branch"]) {
+    const f = await nativeResultFixture(), outside = join(tempHome(), "operator-private"), secret = "host-file-must-not-reach-evidence";
+    writeFileSync(outside, secret);
+    const text = `console.log(require('node:fs').readFileSync(${JSON.stringify(outside)},'utf8'));\n`;
+    f.result.files = [{ path: "verify.cjs", beforeHash: null, afterHash: sha(text), text }];
+    f.ctx.readPrd = () => "# Brief\n\n## Verify\n\n- `node verify.cjs`\n";
+    if (transport === "pushed-branch") {
+      writeFileSync(join(f.entry.worktree, "verify.cjs"), text); await f.ctx.git.commitResult(f.entry.worktree, ["verify.cjs"]);
+      delete f.result.files; f.result.pushedHead = await f.ctx.git.head(f.entry.worktree);
+      f.ctx.gh.refSha = async () => f.result.pushedHead; f.ctx.gh.containsCommit = async () => true;
+      f.calls.length = 0;
+    }
+    let privateHome;
+    const verify = f.verify; f.verify = (...args) => { privateHome = args[2].env.HOME; return verify(...args); };
+    await assert.rejects(reconcileExecutionResult(f.ctx, f), { code: "EXECUTION_RESULT_BLOCKED" });
+    const evidence = readJson(join(f.dir, "verification.json")), checkpoint = readJson(join(f.dir, "result-application.json"));
+    assert.equal(checkpoint.reason, "verification-failed"); assert.notEqual(evidence.evidence[0].exit, 0);
+    assert.equal(validVerificationSandbox(evidence.evidence[0].sandbox), true);
+    assert.doesNotMatch(JSON.stringify(evidence), new RegExp(secret)); assert.equal(readFileSync(outside, "utf8"), secret);
+    assert.equal(existsSync(privateHome), false); assert.equal(f.calls.includes("push"), false); assert.equal(f.calls.includes("PR"), false);
+    const calls = [...f.calls]; await assert.rejects(reconcileExecutionResult(f.ctx, f), { code: "EXECUTION_RESULT_BLOCKED" });
+    assert.deepEqual(f.calls, calls); assert.deepEqual(readJson(join(f.dir, "verification.json")), evidence);
+    observations.push({ transport, evidence: join(f.dir, "verification.json"), checkpoint: join(f.dir, "result-application.json"), hostContentsExposed: false, published: false, privateHomeRemoved: true });
+  }
+  const path = join(tempHome(), "verification-host-file-denial.json"); writeJsonAtomic(path, { kind: "native OS enforcement with provider-controlled result fixtures", observations });
+  t.diagnostic(`native host-file denial evidence: ${path}`);
+});
+
+test("native verification permits npm and checkout tools while denying child, symlink, Git, journal and network escapes", async t => {
+  const f = await nativeResultFixture(), outside = join(tempHome(), "operator-private"), marker = "outside-secret";
+  writeFileSync(outside, marker);
+  const server = createServer(socket => { socket.destroy(); assert.fail("verification reached coordinator network"); });
+  await new Promise(resolve => server.listen(0, "127.0.0.1", resolve));
+  try {
+    const text = `const fs=require('node:fs'),assert=require('node:assert/strict'),cp=require('node:child_process'),net=require('node:net');
+const outside=${JSON.stringify(outside)},journal=${JSON.stringify(join(f.dir, "result-application.json"))};
+const denied=fn=>assert.throws(fn,e=>['EPERM','EACCES','ENOENT'].includes(e.code));
+denied(()=>fs.readFileSync(outside)); denied(()=>fs.writeFileSync(outside,'changed')); denied(()=>fs.readFileSync(journal));
+denied(()=>fs.readFileSync('.git/config')); denied(()=>fs.writeFileSync('.git/config','changed'));
+fs.symlinkSync(outside,'escape-link'); try{denied(()=>fs.readFileSync('escape-link'));}finally{fs.unlinkSync('escape-link');}
+const child=cp.spawnSync(process.execPath,['-e',"require('node:fs').readFileSync(process.argv[1])",outside],{encoding:'utf8'});
+assert.notEqual(child.status,0); assert.equal(child.stdout,'');
+const socket=net.connect({host:'127.0.0.1',port:${server.address().port}}); socket.on('connect',()=>process.exit(41));
+socket.on('error',e=>{assert.ok(['EPERM','EACCES','ENETUNREACH','EHOSTUNREACH','ECONNREFUSED'].includes(e.code)); console.log('host-access-denied');});
+`;
+    const pkg = JSON.stringify({ scripts: { test: "node verify.cjs" } });
+    f.result.files = [{ path: "verify.cjs", beforeHash: null, afterHash: sha(text), text }, { path: "package.json", beforeHash: null, afterHash: sha(pkg), text: pkg }];
+    f.ctx.readPrd = () => "# Brief\n\n## Verify\n\n- `npm test`\n";
+    t.diagnostic(`native child/network isolation evidence: ${join(f.dir, "verification.json")}`);
+    const done = await reconcileExecutionResult(f.ctx, f);
+    assert.match(done.evidence[0].output, /host-access-denied/); assert.doesNotMatch(done.evidence[0].output, new RegExp(marker));
+    assert.equal(validVerificationSandbox(done.evidence[0].sandbox), true);
+    assert.equal(readFileSync(outside, "utf8"), marker); assert.deepEqual(f.calls, ["commit", "verify", "push", "PR"]);
+  } finally { await new Promise(resolve => server.close(resolve)); }
+});
+
+test("unavailable or unproven verification sandbox blocks once, preserves results and cleans its profile", async () => {
+  for (const failure of ["unavailable", "unproven"]) {
+    const f = resultFixture(); let probes = 0, privateHome;
+    f.sandbox = async ({ home }) => { probes++; privateHome = home; if (failure === "unavailable") throw new Error("install the required OS sandbox"); return { cmd: "/bin/sh", args: [], evidence: {} }; };
+    await assert.rejects(reconcileExecutionResult(f.ctx, f), { code: "EXECUTION_RESULT_BLOCKED" });
+    assert.equal(readJson(join(f.dir, "result-application.json")).reason, "verification-sandbox-unavailable");
+    assert.deepEqual(readJson(join(f.dir, "verification.json")).evidence, []); assert.equal(readFileSync(join(f.entry.worktree, "a.txt"), "utf8"), "after");
+    assert.equal(existsSync(privateHome), false); assert.deepEqual(f.calls, ["commit"]);
+    await assert.rejects(reconcileExecutionResult(f.ctx, f), { code: "EXECUTION_RESULT_BLOCKED" }); assert.equal(probes, 1);
+  }
+  const worktree = tempHome(), home = tempHome(), env = verificationEnvironment(home);
+  assert.throws(() => verificationSandboxSpec({ worktree, home, env, platform: "unsupported" }), { code: "EXECUTION_VERIFICATION_SANDBOX" });
+  assert.throws(() => verificationSandboxSpec({ worktree, home: worktree, env }), { code: "EXECUTION_VERIFICATION_SANDBOX" });
+});
+
+test("an earlier Verify command cannot replace the sandbox policy for a later command", async t => {
+  const f = await nativeResultFixture(), outside = join(tempHome(), "operator-private"), marker = "policy-replacement-secret";
+  writeFileSync(outside, marker);
+  const text = `const fs=require('node:fs'); fs.writeFileSync(process.env.HOME+'/sandbox.sb','(version 1)(allow default)'); console.log('profile-write');`;
+  f.result.files = [{ path: "verify.cjs", beforeHash: null, afterHash: sha(text), text }];
+  f.ctx.readPrd = () => `# Brief\n\n## Verify\n\n- \`node verify.cjs\`\n- \`node -e 'console.log(require("node:fs").readFileSync(${JSON.stringify(outside)},"utf8"))'\`\n`;
+  await assert.rejects(reconcileExecutionResult(f.ctx, f), { code: "EXECUTION_RESULT_BLOCKED" });
+  const evidence = readJson(join(f.dir, "verification.json"));
+  assert.equal(evidence.evidence.length, 2); assert.equal(evidence.evidence[0].exit, 0); assert.notEqual(evidence.evidence[1].exit, 0);
+  assert.doesNotMatch(JSON.stringify(evidence), new RegExp(marker)); assert.equal(readFileSync(outside, "utf8"), marker);
+  assert.deepEqual(f.calls, ["commit", "verify", "verify"]);
+  t.diagnostic(`immutable sandbox policy evidence: ${join(f.dir, "verification.json")}`);
+});
+
+test("verification recovery rejects legacy unsandboxed evidence without replaying or pushing", async () => {
+  const f = resultFixture(); f.ctx.git.pushResult = async () => { throw new Error("lost push reply"); };
+  await assert.rejects(reconcileExecutionResult(f.ctx, f), /lost push reply/);
+  const path = join(f.dir, "verification.json"), saved = readJson(path); delete saved.evidence[0].sandbox; writeJsonAtomic(path, saved);
+  f.calls.length = 0;
+  await assert.rejects(reconcileExecutionResult(f.ctx, f), /enforced OS sandbox/);
+  assert.equal(readJson(join(f.dir, "result-application.json")).reason, "verification-evidence-unavailable");
+  assert.deepEqual(readJson(path), saved); assert.deepEqual(f.calls, []);
+});
+
+test("a stop during sandbox preparation prevents Verify dispatch and removes the private profile", async () => {
+  const f = resultFixture(); let privateHome;
+  f.sandbox = async options => { privateHome = options.home; const prepared = await prepareVerificationSandbox(options); f.entry.dispatch_stopped = true; return prepared; };
+  await assert.rejects(reconcileExecutionResult(f.ctx, f), /quarantined/);
+  assert.deepEqual(f.calls, ["commit"]); assert.equal(existsSync(privateHome), false);
+  assert.deepEqual(readJson(join(f.dir, "verification.json")).evidence, []);
+});
+
 test("verification uses a credential-free environment and removes private profiles on success and failure", async t => {
   const keys = ["GH_TOKEN", "GITHUB_TOKEN", "AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY", "AWS_SESSION_TOKEN", "OPENAI_API_KEY", "ANTHROPIC_API_KEY", "DATABASE_URL", "CUSTOM_CREDENTIAL", "SSH_AUTH_SOCK", "NPM_CONFIG_TOKEN", "HTTP_PROXY", "NODE_OPTIONS", "ENV", "BASH_ENV"];
   const inherited = Object.fromEntries(keys.map(key => [key, process.env[key]])), observations = [];
@@ -2223,8 +2330,9 @@ test("verification uses a credential-free environment and removes private profil
       f.ctx.readPrd = () => `# Brief\n\n## Verify\n\n- \`node -e '${code}'\`\n`;
       f.verify = async (shell, args, options) => {
         assert.ok(options.env); for(const key of keys) assert.equal(options.env[key], undefined);
-        assert.equal(options.env.PATH, process.env.PATH); assert.equal(options.env.NPM_CONFIG_USERCONFIG, "/dev/null");
-        assert.equal(options.env.NPM_CONFIG_GLOBALCONFIG, "/dev/null"); assert.equal(options.env.GIT_CONFIG_NOSYSTEM, "1");
+        assert.equal(options.env.PATH, [...new Set([join(realpathSync(process.execPath), ".."), "/usr/bin", "/bin"])].join(":"));
+        for (const key of ["NPM_CONFIG_USERCONFIG", "NPM_CONFIG_GLOBALCONFIG"]) { assert.ok(options.env[key].startsWith(options.env.HOME + "/")); assert.equal(readFileSync(options.env[key], "utf8"), ""); }
+        assert.notEqual(options.env.NPM_CONFIG_USERCONFIG, options.env.NPM_CONFIG_GLOBALCONFIG); assert.equal(options.env.GIT_CONFIG_NOSYSTEM, "1");
         const last = Number(options.env.GIT_CONFIG_COUNT) - 1;
         assert.equal(options.env[`GIT_CONFIG_KEY_${last}`], "credential.helper"); assert.equal(options.env[`GIT_CONFIG_VALUE_${last}`], "");
         assert.notEqual(options.env.HOME, process.env.HOME); assert.equal(statSync(options.env.HOME).mode & 0o777, 0o700);
@@ -2258,8 +2366,8 @@ function posixVerification(f, commands, startup, marker) {
   const invocations = [];
   f.ctx.readPrd = () => `# Brief\n\n## Verify\n\n${commands.map(command => `- \`${command}\``).join("\n")}\n`;
   f.verify = async (shell, args, options) => {
-    assert.equal(shell, "/bin/sh");
-    assert.deepEqual(args, ["-c", commands[invocations.length]]);
+    assert.ok(["/usr/bin/sandbox-exec", "/usr/bin/bwrap"].includes(shell));
+    assert.deepEqual(args.slice(-3), ["/bin/sh", "-c", commands[invocations.length]]);
     const { env, ...bounds } = options;
     assert.deepEqual(bounds, { cwd: f.entry.worktree, timeout: 120_000, maxBuffer: 262_144 });
     assert.ok(env); assert.equal(env.SHELL, undefined); assert.equal(env.ENV, undefined); assert.equal(env.BASH_ENV, undefined);
@@ -2413,10 +2521,10 @@ for (const mutation of ["tracked", "staged", "untracked"]) test(`verification ${
   f.ctx.readPrd = () => `# Brief\n\n## Verify\n\n- \`${command}\`\n- \`printf must-not-run\`\n`;
   await assert.rejects(reconcileExecutionResult(f.ctx, f), { code: "EXECUTION_RESULT_BLOCKED" });
   const checkpoint = readJson(join(f.dir, "result-application.json")), evidence = readJson(join(f.dir, "verification.json"));
-  assert.equal(checkpoint.phase, "blocked"); assert.equal(checkpoint.reason, "verification-dirty");
+  assert.equal(checkpoint.phase, "blocked"); assert.equal(checkpoint.reason, mutation === "staged" ? "verification-failed" : "verification-dirty");
   assert.ok(privateHome); assert.equal(existsSync(privateHome), false);
   assert.equal(await f.ctx.git.head(f.entry.worktree), checkpoint.appliedHead);
-  assert.equal(evidence.evidence.length, 1); assert.equal(evidence.evidence[0].exit, 0);
+  assert.equal(evidence.evidence.length, 1); assert.equal(evidence.evidence[0].exit === 0, mutation !== "staged");
   assert.deepEqual(f.calls, ["commit", "verify"]);
   assert.deepEqual(await f.ctx.git.dirty(f.entry.worktree, { strict: true }), mutation === "untracked" ? { modified: 0, untracked: 1 } : { modified: 1, untracked: 0 });
   assert.equal(readFileSync(join(f.entry.worktree, mutation === "untracked" ? "generated.txt" : "b.txt"), "utf8"), mutation === "untracked" ? "created" : "dirty");
@@ -2439,15 +2547,15 @@ test("pre-existing dirty files and unavailable status fail closed even with an e
   }
 });
 
-test("verification-created commits are retained and blocked instead of publishing stale evidence", async () => {
+test("verification cannot stage or commit through coordinator Git metadata", async () => {
   const f = await nativeResultFixture();
   f.ctx.readPrd = () => '# Brief\n\n## Verify\n\n- `printf changed > b.txt && git add -- b.txt && git -c user.name=Verifier -c user.email=verifier@example.test commit -m "Verification change"`\n';
   await assert.rejects(reconcileExecutionResult(f.ctx, f), { code: "EXECUTION_RESULT_BLOCKED" });
   const checkpoint = readJson(join(f.dir, "result-application.json"));
-  assert.equal(checkpoint.reason, "verification-head-changed");
-  assert.notEqual(await f.ctx.git.head(f.entry.worktree), checkpoint.appliedHead);
-  assert.deepEqual(await f.ctx.git.dirty(f.entry.worktree, { strict: true }), { modified: 0, untracked: 0 });
-  assert.equal(readJson(join(f.dir, "verification.json")).evidence[0].exit, 0);
+  assert.equal(checkpoint.reason, "verification-failed");
+  assert.equal(await f.ctx.git.head(f.entry.worktree), checkpoint.appliedHead);
+  assert.deepEqual(await f.ctx.git.dirty(f.entry.worktree, { strict: true }), { modified: 1, untracked: 0 });
+  assert.notEqual(readJson(join(f.dir, "verification.json")).evidence[0].exit, 0);
   assert.deepEqual(f.calls, ["commit", "verify"]);
 });
 
