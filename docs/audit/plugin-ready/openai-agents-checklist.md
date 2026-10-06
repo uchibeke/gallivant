@@ -23,6 +23,8 @@ installed-host qualification records remain independent.
 - [x] Recover explicit answer retries through the owned pending call or saved output, and refuse resumed task mutation when full API readiness fails.
 - [x] Permit native Git Verify commands through immutable current-revision metadata, and refuse ordinary dirty hosted sources before resume or dispatch.
 - [x] Document installation, supported REST beta/Node versions, setup, polling, continuation, artifacts and verification.
+- [x] Reconcile the approved base's receipt cursor fixes, selected-provider preparation contract and single M5/M6 connected execution successor.
+- [ ] Integrate the separately reviewed restricted Codex preparation capability through the selected base after PR #10 merges; no adapter copy or provider-name gate.
 - [ ] Qualify one real implementation and forced CI/trusted-review correction with the same session/PR across restart (ac-13).
 - [ ] Qualify the installed host/plugin, browser/capture surface and final release in the later release milestone.
 
@@ -35,6 +37,20 @@ remaining priced campaign allowance; then authorize the two bounded phases. The
 correction requires an actual current-head CI or configured trusted-review finding.
 Reconcile observed API plus hosted-compute cost before starting it. No paid phase,
 installed-host qualification or successful live delivery is claimed by fixtures.
+
+The 2026-10-06 handoff observed Codex preparation PR #10 open at
+`39dec7c787a503956f18b745d92a13166d287c45`, absent from the selected base. Its
+1081-test and native 0.160.0 loopback qualification are upstream evidence, not
+tests rerun or paid inference verified by this milestone. The shared preparation
+service already uses selected-provider capabilities for drafts, questions and
+repairs, with deterministic readiness and explicit dispatch. The remedy is to
+merge the reviewed upstream change into the base and have the coordinator sync
+dependent branches. The M5/M6 handoff reuses draft
+[`aporthq/agent-passport#417`](https://github.com/aporthq/agent-passport/pull/417),
+canonical PRD `docs/prds/aport-task-delivery-workflow-integration.md`, job identity
+`aporthq/agent-passport/aport-task-delivery-workflow-integration`. Its original
+T0–T9 requirements remain binding; actual M5 artifact pinning and full connected
+auth/storage/UI workflow qualification remain that successor's work.
 
 The security follow-up also exercises actual macOS 26.3 `sandbox-exec` enforcement
 with Node 22.22.0/npm 10.9.4. Host-file exfiltration is denied for both result

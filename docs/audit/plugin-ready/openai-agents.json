@@ -2,15 +2,15 @@
   "version": 1,
   "task_id": "task-cf82d9f43ca0da3c5bb29b67",
   "scope": "managed Agents REST implementation, provider-shaped offline lifecycle verification and native macOS verification readiness/enforcement; live qualification remains unverified",
-  "recorded_at": "2026-10-06T17:10:08.493Z",
-  "base_revision": "7936830977bcb4615de418b9dd5c4d655501297b",
+  "recorded_at": "2026-10-06T17:24:50.771Z",
+  "base_revision": "401f5cb2e68382a28b6f35f5ca4e9cbcc9ea84fb",
   "branch": "work/openai-agents-harness",
   "source_files": {
     "README.md": "6c9a9e9e79f7a9bd9157464ea2602f6ecde0b2878422e5c8dbea64a98d5f2ab8",
     "docs/audit/plugin-ready/README.md": "7f24289695807c9bd9d880e54e287c3bcfa1a3324543ca87eee68b1e24a9e8f7",
-    "docs/audit/plugin-ready/openai-agents-checklist.md": "5569fd1b828d47b81bd5cff775fecccf14a3984604b26ad6a2ff9ba3ace0e751",
-    "docs/execution.md": "ce133dd1e2c4fb3514d96fefbb44b60a8e7f8c4727332d5606895eaab5971d5c",
-    "docs/openai-agents.md": "79fb90a8e0b684730957b2104f0aecdcb12b027c61f27f0f6bdb99b6cea1e085",
+    "docs/audit/plugin-ready/openai-agents-checklist.md": "0b647bb8ca559de6418517f942d1aefc2dad338269967c4a208ab9d19ebecc42",
+    "docs/execution.md": "9073540f1e36379f53cc7c4fa2afc4659791410d268bc1933d615dee01cdba2e",
+    "docs/openai-agents.md": "45f496d062a9dc600fb4feeb148cfa451fc1f3e191ea732dbd839ed6f0ff891f",
     "docs/prds/openai-agents-harness.md": "b6d3ceeb20426248b5cf0d8527beaf93a6a69c09003cfc07d3a86fe8fa8b053a",
     "lib/block.mjs": "bd644a1564d6d3dcf3edad1ad1f931fa5f3e4246a041f20acbbb04c88c07c665",
     "lib/commands/doctor.mjs": "6a1c916f1a3626ba7656123792adf9ba3fdbd963cb64a3641437e337e4f18997",
@@ -25,7 +25,7 @@
     "lib/openai_agents_input.mjs": "a2978393dc2dfe348c97962d0a6a9356184e54a7fe426847b9195186fa8d0c68",
     "lib/openai_agents_sources.mjs": "afeb732805764635189bc6fe5523ca95564174c4fc08fc159d3118d5f668aeb1",
     "lib/probe.mjs": "bbacb430ed3ec7e3ab4b26fe01568d396d5d2257513264412c1c7e7ccb59383a",
-    "lib/tick.mjs": "aed02c1ba7c995463db00824176f28c2fa9bd8ebf20794ecc98802ba9fa34c04",
+    "lib/tick.mjs": "53b69eac574948db952eaf17bbbcff19a5446059ffa046380367037140afa6c7",
     "package.json": "cc440ea2539b8d40772db637b1f6593584c66818f810c4a45719c7c563ff003a",
     "test/execution-backends.test.mjs": "21bfd87b1bf0fda0af5adbd43061d84db9cc4ea2f014e82bb0c7881a85d5c16a",
     "test/openai-agents-live.mjs": "0f556440264766e17a369e6eaa6b71658833b93c18971b1ef1326d65452a20d2",
@@ -35,7 +35,16 @@
     "lib/verification_sandbox.mjs": "3eaa247b5f9f4dda5def32d1f4e852661316b479ce3559b30ac31f32edea399d",
     "lib/execution_io.mjs": "b6024cdac19f53d3a2e4f13ab250ecb707bb78d1729e7fb53dab38c2c70c7145",
     "lib/commands/resume.mjs": "d419275a301d5c5b37b856af28de201cdad1a3c70ca336bd1b2d6b01ef65bd5d",
-    "lib/gh.mjs": "fc1fe24b0a72372160722f563637a8e556bd2622b410d7bedfb232a345ef455e"
+    "lib/gh.mjs": "fc1fe24b0a72372160722f563637a8e556bd2622b410d7bedfb232a345ef455e",
+    "docs/tasks.md": "4483b3c3a44117240e3ca10a5e55941578e7c3b2b20775a57af6743603a9bb34",
+    "docs/architecture.md": "9dd05a08dc8253c9bd782e03ddd67fc3e35fa5d519a9d0a33b3e3a3d333cc01f",
+    "lib/task_prepare.mjs": "f0f27738e208f174aa89dba3a6f70f382cf7e03abe541df5d1854aed4adb9492",
+    "lib/execution_preparation.mjs": "2c7f3232b2b89d9bf49d20f9f291b692b206118df50133f92dc5140b8fccbae1",
+    "lib/tasks.mjs": "37b24281af6e49067eb4a525fe418bcbf3d0b6134057526b190fe6162f5e4bbb",
+    "lib/events.mjs": "776867f9a280ea179f2be8f6e570c88d468ebb5500db8864041fd29b01202e27",
+    "lib/time.mjs": "da5f6d30e5059e9b3ed45c3e4a604a3ad20fcc17449ed2ff0429aa9c7a79f146",
+    "test/execution-preparation.test.mjs": "363d4d89fb29b22ef5dfbdfb3889e583ef6b92eab8e4d498b0ec9ef1059c08e4",
+    "test/tick.test.mjs": "2e6b2e5766ed7d7dcc8003568964dad5e1de86bd9d7e8657e07054704db9a73d"
   },
   "frozen_inputs": {
     "docs/plans/plugin-ready-gallivant.md": "3081d47d8161043f9c32b6184f07ee8d4ca513822341c41a138bdf28f7459fc2",
@@ -55,10 +64,10 @@
     {
       "command": "npm test",
       "exit": 0,
-      "raw_log": "/tmp/agents-git-test-verified.log",
-      "sha256": "a0ad7199b3ff2e237c9c1fb7e5d6be3d6fafdb7cb424e2e60232369b77b8648d",
-      "tests": 1132,
-      "pass": 1132,
+      "raw_log": "/tmp/agents-base-test-verified.log",
+      "sha256": "1c1bcb63af925913059e7e89ee438a514784ad9ae4d231ff0fdfeb66fae7ff67",
+      "tests": 1135,
+      "pass": 1135,
       "fail": 0,
       "cancelled": 0,
       "skipped": 0
@@ -66,14 +75,14 @@
     {
       "command": "npm run lint",
       "exit": 0,
-      "raw_log": "/tmp/agents-git-lint-verified.log",
+      "raw_log": "/tmp/agents-base-lint-verified.log",
       "sha256": "8c7790de3f018fb4580f18ac70e1b355a0f76f522dd73acbdaa63632feffcecc"
     },
     {
       "command": "npm run test:execution-backends",
       "exit": 0,
-      "raw_log": "/tmp/agents-git-backends-verified.log",
-      "sha256": "72031878f9e670ab9de142cbbaaad16be672bf1b684f238f1791958885b02758",
+      "raw_log": "/tmp/agents-base-backends-verified.log",
+      "sha256": "142c0682d10d9215da5a2c6c6bfc3307068bd609c023f33c290ba2a4e38b36eb",
       "tests": 390,
       "pass": 390,
       "fail": 0,
@@ -83,8 +92,8 @@
     {
       "command": "npm run test:openai-agents",
       "exit": 0,
-      "raw_log": "/tmp/agents-git-openai-verified.log",
-      "sha256": "0d13429d3a42afcfd16fb092943f8e835c061853d3805a189cd1f1a3e606b449",
+      "raw_log": "/tmp/agents-base-openai-verified.log",
+      "sha256": "484655dc52434a6defe82a31b31ab0768ccc6154e8626e03179a23c1ca7e67b3",
       "tests": 40,
       "pass": 40,
       "fail": 0,
@@ -94,7 +103,7 @@
     {
       "command": "git diff --check",
       "exit": 0,
-      "raw_log": "/tmp/agents-git-diff-verified.log",
+      "raw_log": "/tmp/agents-base-diff-verified.log",
       "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
     }
   ],
@@ -111,7 +120,11 @@
       ],
       "test_names": [
         "missing predecessor module stops context startup with a dependency remedy",
-        "predecessor service is required and managed API is available while Cloud remains reserved"
+        "predecessor service is required and managed API is available while Cloud remains reserved",
+        "preparation capabilities expose policy data and validate the selected provider/account/version",
+        "codex fixture preparation shares drafting, clarification, repair and deterministic readiness without CLI/PID",
+        "gemini fixture preparation shares drafting, clarification, repair and deterministic readiness without CLI/PID",
+        "saved readiness, answer, start and recovery reject receipts borrowed from another selected provider"
       ]
     },
     {
@@ -283,7 +296,10 @@
         "remote host refusal precedes checkout mutation and paid correction while unrelated PR review settles",
         "managed resume API refusal preserves checkout, accepted brief and sources, registry and session before mutation",
         "hosted snapshots refuse unfinished tracked, staged, deleted, renamed and untracked files without uploading them",
-        "managed dirty resume refuses before merge, reopen, registry mutation or corrective dispatch"
+        "managed dirty resume refuses before merge, reopen, registry mutation or corrective dispatch",
+        "a receipt-only run dispatches reviews arriving during the run exactly once",
+        "receipt-only settlement preserves feedback while owing its own recoverable round marker",
+        "receipt announcement retries recognize GitHub timestamps in the run-start second"
       ]
     },
     {
@@ -388,7 +404,14 @@
         "native verification supports Git checks with immutable current-revision metadata in normal and linked checkouts",
         "verification process helper preserves binary Git objects and binary failure diagnostics",
         "hosted snapshots refuse unfinished tracked, staged, deleted, renamed and untracked files without uploading them",
-        "managed dirty resume refuses before merge, reopen, registry mutation or corrective dispatch"
+        "managed dirty resume refuses before merge, reopen, registry mutation or corrective dispatch",
+        "a receipt-only run dispatches reviews arriving during the run exactly once",
+        "receipt-only settlement preserves feedback while owing its own recoverable round marker",
+        "receipt announcement retries recognize GitHub timestamps in the run-start second",
+        "preparation capabilities expose policy data and validate the selected provider/account/version",
+        "codex fixture preparation shares drafting, clarification, repair and deterministic readiness without CLI/PID",
+        "gemini fixture preparation shares drafting, clarification, repair and deterministic readiness without CLI/PID",
+        "saved readiness, answer, start and recovery reject receipts borrowed from another selected provider"
       ]
     },
     {
@@ -419,13 +442,13 @@
     "sha256": "16c09feca47099fa1005141c07af146326f38055bb27fd37f2da8966198533af"
   },
   "package_verification": {
-    "raw_record": "/tmp/agents-git-package-verification.json",
-    "sha256": "4d8940fe1e63fed0ea01e1292e31bda584fc269b845cc6ecfe5e7a96338fa640",
-    "integrity": "sha512-NU3ovXuOeynEnP/+bSEg+c2zHnxpv6ssl5huM7MwX04TNhwFBXOZ9q9suLqlHjMSzS9ZavuH8zztqGPHuUribA==",
+    "raw_record": "/tmp/agents-base-package-verification.json",
+    "sha256": "91d7534fe194118b9f30800fe94dc3bf052d0c7838ed122d1598e4c692511a58",
+    "integrity": "sha512-YBkC1A8HNKJLYjFhj89BeyrNeD4rdYnZIBefmn05ybTbivwcIAtl75TOE+TTBiuPdKKyNk+JaFWwiE69NmyBIw==",
     "files": 86,
-    "bytes": 428237,
-    "unpacked_bytes": 1306049,
-    "result": "twelve adapter/coordinator/execution/sandbox/readiness/source/process/command modules imported from the unpacked local package with matching source and document hashes; scripts ignored; zero provider calls"
+    "bytes": 429944,
+    "unpacked_bytes": 1310653,
+    "result": "twelve adapter/coordinator/execution/sandbox/readiness/source/process/command modules imported from the unpacked local package with matching source and operator/intake/handoff document hashes; scripts ignored; zero provider calls"
   },
   "live": {
     "version": 1,
@@ -712,6 +735,44 @@
           "sha256": "d452181bba3234168a0afef32f49114e7a7b355e3e1ea92a5fed76583522a129"
         }
       ]
+    },
+    {
+      "rule": "Keep the single coordinator and selected-provider preparation capability; retain review feedback during receipt repairs, and carry upstream integration and live prerequisites honestly",
+      "checked": [
+        "approved base commits 9eb95cb, 401f5cb, 5066462 and e27b236: preserved unchanged; base receipt cursor/announcement fixes reuse coordinator state and existing iteration/review rules",
+        "lib/tick.mjs settleRun/dispatch/postRoundComment, lib/events.mjs deriveEvents/hasOwnComment and lib/time.mjs floorSecond: preserved dispatched keys for receipt/public-only rounds, inclusive event boundaries, run-start-second marker recovery and once-only round count",
+        "lib/tasks.mjs prepare/answer/resume/ready/start, lib/task_prepare.mjs prepareTurn and lib/execution.mjs prepare/submit: shared selected-provider/account receipts for drafts/questions/repairs, deterministic readiness and explicit execution authorization",
+        "lib/harness.mjs and context execution/capability registry: unavailable preparation refuses before drafting, no Claude-name gate or provider/model fallback added; PR #10 remains an upstream base dependency rather than an adapter copied here",
+        "PR #10 exact head/diff and PR #417 exact head/canonical draft PRD read through native gh; no other repository write, workflow runner, API inference, native Codex job or installed-plugin qualification attempted",
+        "docs/openai-agents.md, docs/execution.md, docs/tasks.md and checklist: reconcile pending preparation integration, fixture/live separation, M5 artifact pinning and one M6 successor with original T0-T9",
+        "representative package exports/document hashes and actual selected-base registry output reviewed; native readiness passed, original live blockers and ac-13 false retained"
+      ],
+      "regression": [
+        "a receipt-only run dispatches reviews arriving during the run exactly once",
+        "receipt-only settlement preserves feedback while owing its own recoverable round marker",
+        "receipt announcement retries recognize GitHub timestamps in the run-start second",
+        "preparation capabilities expose policy data and validate the selected provider/account/version",
+        "codex fixture preparation shares drafting, clarification, repair and deterministic readiness without CLI/PID",
+        "gemini fixture preparation shares drafting, clarification, repair and deterministic readiness without CLI/PID",
+        "saved readiness, answer, start and recovery reject receipts borrowed from another selected provider"
+      ],
+      "representative_output": [
+        {
+          "label": "native macOS enforcement and unchanged missing live configuration; zero provider calls",
+          "path": "/tmp/agents-base-preflight.json",
+          "sha256": "890c103f3942e10ef06a00b2b1827bc059986521b771d0c867f9859e4d5f93e0"
+        },
+        {
+          "label": "actual selected-base registry: missing Codex and managed preparation capabilities; no fallback or paid probe",
+          "path": "/tmp/agents-base-capabilities.json",
+          "sha256": "c9e7334153057d15f390a7378b384066e76b2daffa2810bfe33cd94d40ca9b0b"
+        },
+        {
+          "label": "unpacked source and operator/intake/handoff documents match this checkout",
+          "path": "/tmp/agents-base-package-verification.json",
+          "sha256": "91d7534fe194118b9f30800fe94dc3bf052d0c7838ed122d1598e4c692511a58"
+        }
+      ]
     }
   ],
   "security_followup": {
@@ -980,5 +1041,76 @@
     "paid_calls": 0,
     "dirty_policy": "explicit refusal; commit intended edits on the owned branch before same-session resume; approved brief/source overlays remain supported",
     "live_prerequisites": "unchanged; original failed preflight and external remedy preserved in live"
+  },
+  "original_base_revision": "7936830977bcb4615de418b9dd5c4d655501297b",
+  "base_reconciliation_followup": {
+    "at": "2026-10-06T17:24:50.762Z",
+    "status": "reviewed-and-documented",
+    "rule": "Keep the single coordinator and selected-provider preparation capability; retain review feedback during receipt repairs, and carry upstream integration and live prerequisites honestly",
+    "preserved_commits": [
+      "9eb95cb6484bd4b034e46afff729b9b621d7b121",
+      "401f5cb2e68382a28b6f35f5ca4e9cbcc9ea84fb",
+      "5066462c68eff62b83b8bfbccfe8ed343bd2b17e",
+      "e27b2365eb8471efa09a5e6d397fde30a9801302"
+    ],
+    "selected_provider_preparation": {
+      "service": "lib/task_prepare.mjs prepareTurn -> executionRunner(..., task.harness).prepare/submit; questions and repairs reuse this path",
+      "capability_record": "/tmp/agents-base-capabilities.json",
+      "upstream_pr": "https://github.com/uchibeke/gallivant/pull/10",
+      "head": "39dec7c787a503956f18b745d92a13166d287c45",
+      "state": "OPEN",
+      "integration": "unmet; reviewed PR remains open and capability absent from selected base",
+      "remedy": "merge reviewed PR #10 into the selected base, then let the coordinator sync this branch; do not copy its adapter or restore a provider-name gate",
+      "upstream_evidence": "PR #10 body: 1081 tests; native 0.160.0 boundary qualification against loopback provider; not rerun here and not live inference access",
+      "raw_record": "/tmp/agents-base-pr10.json",
+      "sha256": "be48d620e6b646cfd981b99bc6fd0d2c503b7324328a81e84c1bb5409be3e4ae",
+      "reviewed_diff": "/tmp/agents-base-pr10.diff",
+      "diff_sha256": "afcc07f97bf4783f315770d764a4a73bfa9723de61f4ebc44e8c00ddcb37c8c4"
+    },
+    "connected_successor": {
+      "pr": "https://github.com/aporthq/agent-passport/pull/417",
+      "head": "86ab14ec750b9c4d771056aa13504dbcfbf36999",
+      "state": "OPEN",
+      "draft": true,
+      "canonical_prd": "docs/prds/aport-task-delivery-workflow-integration.md",
+      "job_identity": "aporthq/agent-passport/aport-task-delivery-workflow-integration",
+      "requirements": "preserve original T0-T9; stay draft until actual M5 artifact; pin version/commit/integrity/actual exports; connect existing auth/regional storage/shared UI to shared coordinator; qualify full workflow; no second runner or duplicate foundation job",
+      "raw_record": "/tmp/agents-successor-pr417.json",
+      "sha256": "6f07951d48feddcfcb3f1dbb125fad323c02d8ee0aeaa7fc34dbab453049aed9",
+      "read_prd": "/tmp/agents-successor-prd.md",
+      "prd_sha256": "128d067dcfc31b05534fe58b488dfb21b320910e2b4d9934646a7b7c3f7bd77f",
+      "implementation": "not part of this repository or API milestone"
+    },
+    "evidence_kind": "approved base regressions and shared preparation offline fixtures; native macOS probe; upstream PR observations; live access remains unverified",
+    "tests": [
+      "a receipt-only run dispatches reviews arriving during the run exactly once",
+      "receipt-only settlement preserves feedback while owing its own recoverable round marker",
+      "receipt announcement retries recognize GitHub timestamps in the run-start second",
+      "preparation capabilities expose policy data and validate the selected provider/account/version",
+      "codex fixture preparation shares drafting, clarification, repair and deterministic readiness without CLI/PID",
+      "gemini fixture preparation shares drafting, clarification, repair and deterministic readiness without CLI/PID",
+      "saved readiness, answer, start and recovery reject receipts borrowed from another selected provider"
+    ],
+    "representative_output": [
+      {
+        "label": "native macOS enforcement and unchanged missing live configuration; zero provider calls",
+        "path": "/tmp/agents-base-preflight.json",
+        "sha256": "890c103f3942e10ef06a00b2b1827bc059986521b771d0c867f9859e4d5f93e0"
+      },
+      {
+        "label": "actual selected-base registry: missing Codex and managed preparation capabilities; no fallback or paid probe",
+        "path": "/tmp/agents-base-capabilities.json",
+        "sha256": "c9e7334153057d15f390a7378b384066e76b2daffa2810bfe33cd94d40ca9b0b"
+      },
+      {
+        "label": "unpacked source and operator/intake/handoff documents match this checkout",
+        "path": "/tmp/agents-base-package-verification.json",
+        "sha256": "91d7534fe194118b9f30800fe94dc3bf052d0c7838ed122d1598e4c692511a58"
+      }
+    ],
+    "paid_calls": 0,
+    "native_codex_calls": 0,
+    "other_repository_writes": 0,
+    "live_prerequisites": "unchanged; original failed preflight and exact external remedy preserved in live"
   }
 }

@@ -17,9 +17,11 @@ Mandatory policy, model and environment choices are checked before dispatch;
 unsupported choices refuse execution without falling back or changing defaults.
 Preparation is an optional versioned capability of that same selected provider.
 The existing Claude tools-off policy is declared by its adapter; task lifecycle
-code contains no Claude-only name gate. Codex and other native adapters remain
-unqualified for preparation until they supply an enforced limited-authority
-capability. A private HOME or a version/sign-in probe does not qualify one.
+code contains no Claude-only name gate. This base lacks a Codex preparation
+capability; its separately qualified adapter is awaiting integration as described
+in the [handoff](#next-milestone-handoff). Other native adapters likewise need an
+enforced limited-authority capability. A private HOME or a version/sign-in probe
+does not qualify one.
 
 `openai-agents` has an implemented managed REST transport; see
 [account/environment setup and verification](openai-agents.md). `codex-cloud`
@@ -702,10 +704,30 @@ adapter additionally supplies its enforced `render`, optional abortable
 and `executionFor` must use that same registry. Mark provider availability only
 after its implemented transport and required live evidence exist.
 
-The owner is investigating the Codex preparation adapter separately in
-`/private/tmp/gallivant-shared-preparation`. Integrate that independently verified
-adapter with this contract; this foundation neither duplicates its fix nor
-certifies its sandbox, model access or installed-plugin behavior. Preserve the
-operator's model/provider defaults, genuine limited preparation authority,
-bounded attempts and execution consent. Carry unmet live qualification evidence
-forward rather than substituting these deterministic fixtures.
+The restricted Codex preparation adapter is implemented separately in
+[`uchibeke/gallivant#10`](https://github.com/uchibeke/gallivant/pull/10), head
+`39dec7c787a503956f18b745d92a13166d287c45`, built on merged M2. As of 2026-10-06,
+that PR remains open and its adapter is absent from this selected base. Merge the
+reviewed change into the base and let the coordinator sync dependent branches;
+consume its registry capability rather than copying its adapter or restoring a
+provider-name gate. Drafting, questions and repairs already use the selected
+provider through this shared execution contract. Validation/readiness remains
+deterministic, and implementation still requires explicit authorization.
+
+PR #10 records 1081 passing tests and native Codex 0.160.0 boundary qualification
+against a loopback provider. That evidence tests installed CLI/configuration
+enforcement; it does not establish paid model access, managed preparation or
+installed-plugin behavior. Preserve the operator's model/provider defaults,
+limited preparation authority, bounded attempts and execution consent. Carry
+unmet live qualification evidence forward rather than substituting fixtures.
+
+The single M5/M6 connected execution successor is
+[`aporthq/agent-passport#417`](https://github.com/aporthq/agent-passport/pull/417),
+with canonical PRD `docs/prds/aport-task-delivery-workflow-integration.md` and job
+identity `aporthq/agent-passport/aport-task-delivery-workflow-integration`. It
+preserves the original T0–T9 requirements and stays draft until the actual M5
+portable artifact exists. M6 must reuse it, pin the artifact's version, commit,
+integrity and actual exports, connect existing APort authentication, regional
+storage and shared UI to this task service and single coordinator, and qualify the
+full workflow. No second runner, duplicate foundation job or other-repository
+implementation is part of this API milestone.

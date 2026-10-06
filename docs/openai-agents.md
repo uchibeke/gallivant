@@ -69,12 +69,16 @@ gallivant why owner/repo/my-task
 gallivant resume owner/repo/my-task --note 'Apply this authorized correction'
 ```
 
-Natural-language intake still uses a preparation-capable local adapter; the
-managed backend does not claim an enforced draft-only preparation mode. Prepare
-and approve the brief with that service, then select the managed backend for
-implementation. A tool-free draft API is not inferred from coding-session access.
-No selection changes global defaults. The same task, branch, PR and session are
-used for review fixes, stale heads, receipt repair and base reconciliation, within
+Natural-language intake uses the selected provider's versioned preparation
+capability through the shared execution service for drafting, questions and
+repairs. The task service owns deterministic validation/readiness and explicit
+implementation authorization. This managed adapter has no enforced preparation
+capability, so selecting it for intake returns `TASK_PREPARATION_BOUNDARY` before
+any provider call; coding-session access does not establish limited drafting
+authority. There is no automatic provider switch. Use a hand-authored approved
+PRD with the explicit `ready`/`start` path above until this adapter supplies that
+capability. No selection changes global defaults. The same task, branch, PR and
+session are used for review fixes, stale heads, receipt repair and base reconciliation, within
 the existing iteration limits. Each round sends the coordinator's current exact
 input head and saved brief/source snapshots. The remote repository contains that
 verified revision's files and modes, plus carried files, rather than Git history;
@@ -89,9 +93,16 @@ review dispatch use the same source check, and preparation rechecks both status
 and HEAD before accepting the portable snapshot. No unfinished file is discarded
 or silently uploaded.
 The task CLI (`gallivant task 'Implement the approved request' --harness openai-agents`)
-reports missing preparation support. Follow the [existing intake workflow](tasks.md)
-with a qualified preparation backend, and approve a ready PRD for the explicit
-managed implementation start above.
+reports that missing capability. [The shared intake workflow](tasks.md) always
+retains the selected provider for preparation, clarification and repairs; a
+different selection requires an explicit operator choice. The restricted native
+Codex preparation adapter is supplied separately by
+[`uchibeke/gallivant#10`](https://github.com/uchibeke/gallivant/pull/10)
+at `39dec7c787a503956f18b745d92a13166d287c45`. It remains open and absent from this
+selected base as of 2026-10-06. Merge the reviewed adapter into the base, then let
+the coordinator sync this branch; this API milestone does not copy its adapter.
+Its native 0.160.0 loopback-provider boundary qualification is separate from live
+inference access and does not qualify managed preparation.
 
 The shared execution boundary also exposes scoped question answers:
 
@@ -317,6 +328,18 @@ milestone; no plugin or browser surface is required for this REST adapter.
 
 The current audit records missing live credentials/configuration. Supply the exact
 prerequisites above to obtain live evidence. M6 still owns final release qualification.
+
+M5/M6 must reuse the single connected execution successor
+[`aporthq/agent-passport#417`](https://github.com/aporthq/agent-passport/pull/417),
+canonical PRD `docs/prds/aport-task-delivery-workflow-integration.md`, job identity
+`aporthq/agent-passport/aport-task-delivery-workflow-integration`. It preserves the
+original T0–T9 requirements and remains draft until the actual M5 portable artifact
+is available. M6 must pin that artifact's version, commit, integrity and actual
+exports, connect existing APort authentication, regional storage and shared UI to
+the shared task service/coordinator, and qualify the full workflow. These are
+handoff requirements, not work implemented in this repository; do not create a
+second runner or another foundation job. Missing API and installed-host evidence
+remain separate unmet gates.
 
 Official contracts: [overview](https://developers.openai.com/api/docs/guides/agents-api/overview),
 [quickstart and permissions](https://developers.openai.com/api/docs/guides/agents-api/quickstart),
