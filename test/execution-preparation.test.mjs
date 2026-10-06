@@ -233,6 +233,31 @@ test("failed preparation retrieves diagnostics and usage before blocking readine
   assert.equal(f.calls.filter(c => c === "submit").length, 1); assert.equal(f.dispatches(), 0);
 });
 
+test("contradictory preparation results retain the authoritative outcome without readiness, repair or implementation dispatch", async () => {
+  for (const failed of [true, false]) {
+    const f = fixture("codex", { failed }), collect = f.transport.collect;
+    f.transport.collect = async req => {
+      const result = await collect(req);
+      return { ...result, outcome: { ...result.outcome, ok: failed } };
+    };
+    let r = await f.service.prepare({ text: "Add CSV export.", harness: "codex" });
+    for (let i = 0; i < 2; i++) {
+      assert.equal(r.status, "preparing"); assert.equal(r.readiness, null); assert.equal(r.draft, null);
+      assert.equal(r.preparation.attempts.length, 1); assert.equal(r.preparation.repairs, 0);
+      assert.equal(r.preparation.attempts[0].settled, false);
+      assert.equal(r.preparation.attempts[0].execution.terminalState, failed ? "failed" : "succeeded");
+      assert.equal(r.preparation.attempts[0].execution.collected, false);
+      assert.match(r.preparation.attempts[0].recoveryAction, /contradicts the authoritative terminal root/);
+      r = await f.reopen().resume({ taskId: r.taskId, expectedRevision: r.revision });
+    }
+    f.transport.collect = collect;
+    r = await f.reopen().resume({ taskId: r.taskId, expectedRevision: r.revision });
+    assert.equal(r.status, failed ? "blocked" : "ready");
+    assert.equal(r.preparation.attempts[0].ok, !failed);
+    assert.equal(f.calls.filter(c => c === "submit").length, 1); assert.equal(f.dispatches(), 0);
+  }
+});
+
 test("preparation settlement retains known cost across lower observations and null result usage", async () => {
   const f = fixture("codex", { missing: true, observationCost: 0.6 });
   let r = await f.service.prepare({ text: "Add CSV export.", harness: "codex", requestId: "preparation-cost" });

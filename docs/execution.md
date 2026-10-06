@@ -179,7 +179,19 @@ and `status-unknown`. They are separate from existing workflow/review states.
 Stale reads, missing events, launcher exit, a cached response or silence cannot
 complete a remote turn. Both success and failure enter retrieval until an exact
 finished result is saved; `terminalState` retains the authoritative root outcome
-while workflow settlement waits. Failure diagnostics, denials, usage and recovered
+while workflow settlement waits. Fresh and cached results must agree with that
+outcome before persistence or settlement; the shared PR writer enforces the same
+check before artifact or GitHub operations. A contradictory result stays
+unresolved with `EXECUTION_RESULT`, retaining its observation, ownership and
+allowance without authorizing another run. A later inspection cannot replace
+the retained terminal state. Older collected records whose state contradicts
+their retained observation re-enter retrieval; their private cache remains for
+inspection and cannot authorize publication. Records without exact job/root
+ownership cannot retain a qualified terminal claim; lookup must establish that
+identity and its authoritative completion before a cache can settle it.
+Correct the provider's exact owned
+result before retrying collection; do not erase identities or redispatch.
+Failure diagnostics, denials, usage and recovered
 session identity survive collection and cached-result replay. `collectedAt` records
 durable retrieval separately from owned completion/observation timestamps, so
 restart does not lose cost, session or completion time. Older failure records claiming collection without a

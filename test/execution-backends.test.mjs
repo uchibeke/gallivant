@@ -1685,6 +1685,7 @@ test("incomplete legacy remote ownership cannot settle, reuse an acknowledgement
   const cached = readJson(join(f.service.dirOf(job.id), "result.json"));
   cached.turnId = null; writeJsonAtomic(join(f.service.dirOf(job.id), "result.json"), cached);
   assert.equal(f.reopen().current().running, true); assert.equal(f.reopen().current().execution.acceptance, "unknown");
+  assert.equal(f.reopen().current().execution.terminalState, null);
   await assert.rejects(f.reopen().submit(input), { code: "EXECUTION_UNKNOWN" });
   await assert.rejects(f.reopen().collect(), { code: "EXECUTION_RESULT" });
   const lookup = f.transport.lookup;
@@ -1696,6 +1697,12 @@ test("incomplete legacy remote ownership cannot settle, reuse an acknowledgement
   assert.equal(f.service.current().execution.turnId, "turn-1");
   await assert.rejects(f.service.collect(), { code: "EXECUTION_RESULT" }); // Cached null/wrong turn is rejected too.
   assert.equal(f.calls.filter(c => c[0] === "collect").length, 1);
+  cached.turnId = "turn-1"; writeJsonAtomic(join(f.service.dirOf(job.id), "result.json"), cached);
+  await assert.rejects(f.reopen().collect(), /root turn has not authoritatively completed/);
+  assert.equal(f.service.current().running, true);
+  f.observe({ state: "succeeded" }); await f.reopen().reconcile({ force: true });
+  await f.reopen().collect(); assert.equal(f.service.current().running, false);
+  assert.equal(f.calls.filter(c => c[0] === "collect").length, 1); // Recovery replays the qualified cache.
 });
 
 test("unacknowledged cancellation remains pending and older stopped records recover the same stop intent", async () => {
@@ -1761,6 +1768,115 @@ for (const provider of ["openai-agents", "codex-cloud"]) {
     assert.equal(f.service.state().allowance.chargedUsd, 0.1);
   });
 }
+
+for (const provider of ["openai-agents", "codex-cloud"]) {
+  test(`${provider} fixture: contradictory terminal results stay unresolved through cache replay, polling and restart`, async t => {
+    for (const terminalState of ["succeeded", "failed"]) for (const cached of [false, true]) {
+      const f = remote(provider), job = await f.service.submit(input);
+      f.observe({ state: terminalState, costUsd: 0.25 }); await f.service.reconcile({ force: true });
+      const path = join(f.service.dirOf(job.id), "result.json"), pending = f.service.state();
+      const result = { version: 1, taskId: "acme/widget/remote", runId: job.id, providerJobId: job.execution.providerJobId,
+        turnId: job.execution.turnId, sessionId: job.execution.sessionId, inputHead: input.inputHead, collectedAt: f.clock.now(),
+        outcome: { finished: true, ok: terminalState !== "succeeded", cost: 0.9, denials: [] },
+        files: [{ path: "a.txt", beforeHash: sha("before"), afterHash: sha("after"), text: "after" }] };
+      f.transport.collect = async () => { f.calls.push(["collect"]); return result; };
+      if (cached) writeJsonAtomic(path, result);
+      const cacheBytes = cached ? readFileSync(path, "utf8") : null;
+      await assert.rejects(f.reopen().collect(), error => error.code === "EXECUTION_RESULT" && /contradicts the authoritative terminal root/.test(error.message));
+      assert.deepEqual(f.service.state(), pending);
+      assert.equal(f.reopen().current().execution.providerState, "retrieving-results");
+      assert.equal(f.reopen().current().execution.terminalState, terminalState);
+      assert.equal(f.reopen().current().execution.collected, false);
+      assert.equal(f.reopen().current().running, true); assert.equal(f.reopen().current().exit, null);
+      assert.equal(f.service.state().allowance.chargedUsd, 0.25);
+      assert.equal(cached ? readFileSync(path, "utf8") : f.service.result(job.id), cacheBytes);
+      await assert.rejects(f.reopen().continue({ ...input, operationId: "premature-correction", sessionId: job.execution.sessionId }), { code: "BUSY" });
+
+      const home = tempHome(), state = makeState(home), id = "acme/widget/remote", gh = fakeGh(), gitCalls = [];
+      const git = Object.fromEntries(Object.entries(fakeGit()).map(([name, method]) => [name, (...args) => { gitCalls.push(name); return method(...args); }]));
+      const entry = newEntry({ repo: "acme/widget", harness: provider, branch: "work/remote", pr: 1, state: STATES.fixing, nowIso: T0 });
+      state.put(id, { ...entry, last: { run: job.id, exit: null } });
+      const ctx = { home, state, gh, git, config: CONFIG, clock: f.clock, ownLogin: "me", log: silentLog, notify: fakeNotify(), executionFor: () => f.reopen(), readPrd: () => null };
+      const before = state.get(id);
+      await makeTick(ctx).tickEntry(id, before);
+      await makeTick(ctx).tickEntry(id, state.get(id));
+      assert.deepEqual(state.get(id), before); assert.deepEqual(gh.calls, []); assert.deepEqual(gitCalls, []);
+      assert.equal(readJson(join(f.service.dirOf(job.id), "result-application.json")), null);
+      assert.equal(cached ? readFileSync(path, "utf8") : f.service.result(job.id), cacheBytes);
+      assert.equal(f.calls.filter(c => c[0] === "submit").length, 1); assert.equal(f.calls.filter(c => c[0] === "continue").length, 0);
+
+      // A fresh inspection cannot make a contradictory cached outcome agree by
+      // replacing the retained authoritative root state or journaling its page.
+      f.clock.advance(1); f.observe({ state: terminalState === "failed" ? "succeeded" : "failed", observedAt: f.clock.now(), events: [{ eventId: "contradiction", data: "must not enter history" }] });
+      await f.reopen().reconcile({ force: true });
+      assert.equal(f.service.current().execution.providerState, "status-unknown");
+      assert.equal(f.service.current().execution.terminalState, terminalState);
+      assert.equal(f.service.current().execution.recoveryAction, "EXECUTION_PROTOCOL");
+      assert.equal(existsSync(join(f.service.dirOf(job.id), "events.jsonl")), false);
+      t.diagnostic(`Terminal outcome fixture evidence: ${JSON.stringify({ provider, terminalState, cached, statePath: join(f.root, "execution.json"), jobPath: join(f.service.dirOf(job.id), "job.json"), resultPath: path, registryPath: join(home, "state.json"), rejectedOutcome: result.outcome.ok, pending, publicationCalls: [...gh.calls, ...gitCalls], cachePreserved: true })}`);
+
+      f.clock.advance(1); f.observe({ state: terminalState, observedAt: f.clock.now(), events: [] });
+      await f.reopen().reconcile({ force: true });
+      result.outcome = { finished: true, ok: terminalState === "succeeded", cost: null, denials: [], ...(terminalState === "failed" ? { error: "owned failure" } : {}) };
+      if (cached) writeJsonAtomic(path, result); // Explicit correction of the rejected private cache.
+      await f.reopen().collect();
+      assert.equal(f.reopen().current().execution.providerState, terminalState);
+      assert.equal(f.reopen().current().exit, terminalState === "succeeded" ? 0 : 1);
+      assert.equal(f.service.current().execution.costUsd, 0.25);
+      const calls = f.calls.length; await f.reopen().collect(); assert.equal(f.calls.length, calls);
+    }
+  });
+}
+
+test("pre-fix contradictory collected outcomes re-enter retrieval without trusting the cache or redispatching", async () => {
+  for (const terminalState of ["succeeded", "failed"]) for (const cached of [true, false]) {
+    const f = remote(), job = await f.service.submit(input);
+    f.observe({ state: terminalState }); await f.service.reconcile({ force: true });
+    const raw = f.service.state(), providerState = terminalState === "succeeded" ? "failed" : "succeeded";
+    Object.assign(raw.current.execution, { providerState, collected: true }); raw.current.exit = providerState === "succeeded" ? 0 : 1; raw.current.endedAt = f.clock.now();
+    writeJsonAtomic(join(f.root, "execution.json"), raw);
+    const path = join(f.service.dirOf(job.id), "result.json"), result = { taskId: raw.taskId, runId: job.id,
+      providerJobId: job.execution.providerJobId, turnId: job.execution.turnId, inputHead: input.inputHead,
+      outcome: { finished: true, ok: providerState === "succeeded", cost: null } };
+    f.transport.collect = async () => { f.calls.push(["collect"]); return result; };
+    if (cached) writeJsonAtomic(path, result);
+    const cache = cached ? readFileSync(path, "utf8") : null;
+    assert.equal(f.reopen().current().execution.providerState, "retrieving-results");
+    assert.equal(f.reopen().current().execution.collected, false); assert.equal(f.reopen().current().running, true);
+    assert.equal(f.reopen().current().execution.terminalState, terminalState);
+    assert.equal(f.reopen().current().exit, null); assert.equal(f.reopen().current().endedAt, null);
+    await assert.rejects(f.reopen().collect(), /contradicts the authoritative terminal root/);
+    await assert.rejects(f.reopen().submit({ ...input, operationId: "replacement" }), { code: "BUSY" });
+    assert.equal(cached ? readFileSync(path, "utf8") : f.service.result(job.id), cache); assert.equal(f.calls.filter(c => c[0] === "submit").length, 1);
+    assert.equal(f.calls.filter(c => c[0] === "collect").length, cached ? 0 : 1);
+  }
+});
+
+test("shared publication rejects terminal outcome contradictions before verification or file and GitHub mutation", async () => {
+  for (const terminalState of ["failed", "succeeded"]) for (const legacy of [false, true]) {
+    const f = resultFixture();
+    Object.assign(f.entry.execution, legacy ? { providerState: terminalState } : { terminalState, providerState: "retrieving-results" });
+    f.result.outcome = { finished: true, ok: terminalState !== "succeeded" };
+    await assert.rejects(reconcileExecutionResult(f.ctx, f), /contradicts the authoritative terminal root/);
+    assert.deepEqual(f.calls, []); assert.equal(readFileSync(join(f.entry.worktree, "a.txt"), "utf8"), "before");
+    assert.equal(readJson(join(f.dir, "result-application.json")), null);
+  }
+});
+
+test("cancellation after a contradictory terminal inspection quarantines the known completed root without a stop call", async () => {
+  for (const terminalState of ["succeeded", "failed"]) {
+    const f = remote(); await f.service.submit(input);
+    f.observe({ state: terminalState }); await f.service.reconcile({ force: true });
+    f.observe({ state: terminalState === "succeeded" ? "failed" : "succeeded" }); await f.service.reconcile({ force: true });
+    assert.equal(f.service.current().execution.providerState, "status-unknown");
+    assert.deepEqual(await f.reopen().cancel(), { confirmed: false });
+    assert.equal(f.service.current().execution.providerState, terminalState);
+    assert.equal(f.service.current().execution.quarantined, true);
+    assert.equal(f.service.current().execution.cancellation.status, "terminal");
+    assert.equal(f.calls.some(c => c[0] === "cancel"), false);
+    await assert.rejects(f.reopen().collect(), { code: "EXECUTION_QUARANTINED" });
+  }
+});
 
 test("older prematurely collected failures re-enter result retrieval without another dispatch", async () => {
   const f = remote(), job = await f.service.submit(input), raw = f.service.state();
