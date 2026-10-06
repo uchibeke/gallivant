@@ -1880,7 +1880,7 @@ function fakeDom() {
       // Rows are top-level <div class="ll...">. Splitting on the opening tag is enough: the renderer writes no nested
       // div and the test only needs the count and each row's class and text.
       const parts = String(v).split(/(?=<div class=")/).filter(Boolean);
-      const kids = parts.map(p => { const e = new El("div"); e.className = /<div class="([^"]*)"/.exec(p)?.[1] || ""; e._text = p; const id = /data-replay="(\d+)"/.exec(p)?.[1]; if (id) e.dataset.replay = id; return e; });
+      const kids = parts.map(p => { const e = new El("div"); e.className = /<div class="([^"]*)"/.exec(p)?.[1] || ""; e._text = p; const id = /data-replay="(\d+)"/.exec(p)?.[1]; if (id) e.dataset.replay = id; const index = /data-replay-row="(\d+)"/.exec(p)?.[1]; if (index) e.dataset.replayRow = index; return e; });
       if (this.tagName === "template") { this.content = new El("div"); this.content.children = kids; } else this.children = kids;
     }
     set textContent(v) { this._text = String(v); } get textContent() { return this._text; }
@@ -2072,6 +2072,42 @@ test("live DOM eviction preserves replay history even after the oldest page was 
   await p.els.earlier._on.click();
   assert.deepEqual(requests, [201]); assert.deepEqual(replayIds(p), Array.from({ length: 2200 }, (_, i) => i + 1));
   assert.ok(p.pane.childElementCount <= 4000);
+});
+
+for (const firstId of [1, 10]) test(`partially evicted multi-row events restore missing rows in order (firstId=${firstId})`, async t => {
+  const event = JSON.stringify({ type: "assistant", message: { content: [
+    { type: "text", text: "Reading both files." }, { type: "tool_use", name: "Read", input: { file_path: "a.ts" } }, { type: "tool_use", name: "Read", input: { file_path: "b.ts" } },
+  ] } });
+  const requests = [], p = await paneOf(world(), { fetchJson: url => {
+    const before = Number(new URL(url, "http://localhost").searchParams.get("before")); requests.push(before);
+    return { lines: [event], ids: [firstId], from: firstId, before: 0 };
+  } });
+  p.line(event, firstId); p.flush();
+  for (let i = 1; i <= 1998; i++) { p.line(`tail ${i}`, firstId + i * 10); if (i % 200 === 0) p.flush(); } p.flush();
+  const siblings = () => p.pane.children.filter(row => Number(row.dataset.replay) === firstId);
+  assert.equal(p.pane.childElementCount, 2000); assert.deepEqual(siblings().map(row => row.dataset.replayRow), ["1", "2"]);
+  assert.equal(p.els.earlier.hidden, false); p.pane.scrollTop = 4;
+  await p.els.earlier._on.click();
+  assert.deepEqual(requests, [firstId + 1]); assert.equal(p.pane.scrollTop, 5);
+  assert.deepEqual(siblings().map(row => row.dataset.replayRow), ["0", "1", "2"]);
+  assert.ok(siblings()[0]._text.includes("Reading both files.")); assert.ok(siblings()[1]._text.includes("a.ts")); assert.ok(siblings()[2]._text.includes("b.ts"));
+  const rowKeys = p.pane.children.map(row => `${row.dataset.replay}:${row.dataset.replayRow}`);
+  assert.equal(new Set(rowKeys).size, rowKeys.length); assert.ok(p.pane.childElementCount <= 4000);
+  p.line("[exit 0]"); p.frames.pagehide(); await p.els.earlier._on.click(); assert.equal(requests.length, 1);
+  t.diagnostic(`multi-row recovery: ${JSON.stringify({ firstId, cursor: requests[0], recoveredRows: siblings().map(row => row.dataset.replayRow), totalRows: rowKeys.length, uniqueRows: new Set(rowKeys).size })}`);
+});
+
+test("orphan heartbeat rows retain their identity across overlapping recovery pages", async () => {
+  const heartbeat = JSON.stringify({ type: "tool_progress", parent_tool_use_id: "absent-call", tool_name: "Bash", elapsed_time_seconds: 30 });
+  const p = await paneOf(world(), { fetchJson: () => ({ lines: ["first", heartbeat], ids: [1, 2], from: 1, before: 0 }) });
+  p.line("first", 1); p.line(heartbeat, 2); p.flush();
+  const heartbeats = () => p.pane.children.filter(row => row.dataset.replay === "2");
+  assert.equal(heartbeats().length, 1); assert.equal(heartbeats()[0].dataset.replayRow, "0");
+  for (let id = 3; id <= 2001; id++) { p.line(`tail ${id}`, id); if (id % 200 === 0) p.flush(); } p.flush();
+  assert.equal(p.pane.childElementCount, 2000); assert.equal(heartbeats().length, 1);
+  await p.els.earlier._on.click();
+  assert.equal(p.pane.childElementCount, 2001); assert.equal(heartbeats().length, 1);
+  assert.equal(heartbeats()[0].dataset.replayRow, "0");
 });
 
 test("burst history uses sparse legacy byte IDs and discards a disconnected history response", async () => {

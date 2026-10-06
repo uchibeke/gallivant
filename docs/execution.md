@@ -167,6 +167,11 @@ results cannot fill that identity. Collection validates saved results against th
 exact task/run/job/root turn as well as newly retrieved results. Raw job projections
 use the recorded transport kind (or canonical registry for older records) and
 cannot treat an unresolved remote root as terminal; CLI runs need no root-turn ID.
+Reported remote sessions must be nonempty strings and match an already recorded
+session. Omitted/null sessions retain that identity; the first reported session
+may establish it when none is known. The same check protects acknowledgement,
+lookup, inspection, fresh/cached collection and shared publication, before events
+or usage are adopted. A foreign reply cannot authorize a native continuation.
 
 For local adapters that do not echo a session ID, the boundary retains the session
 minted by the existing start path. Legacy continuation uses the recorded registry
@@ -199,7 +204,7 @@ result re-enter retrieval without redispatch. Failed artifacts remain private;
 only a successful collected outcome can enter the shared publication path. A
 stop during terminal result retrieval or after collection quarantines the result
 without issuing a cancellation call for a root already known to have finished.
-Foreign job/root-turn observations refuse reconciliation. Unavailable
+Foreign job/session/root-turn observations refuse reconciliation. Unavailable
 status carries timestamps, retry time and recovery action rather than fabricated
 liveness. Terminal collected results survive log removal.
 
@@ -340,7 +345,9 @@ disconnect. The browser caps live and history DOM at 2,000 lines each and pendin
 lines at 400. Buffered events retain their SSE replay IDs. Display drops coalesce
 into a bounded pair of recovery cursors, separate from the oldest history cursor;
 the existing history button retrieves the missing windows without a `skipped`
-frame. History merges by replay ID, avoids duplicates with painted/pending rows
+frame. Each rendered row keeps its event replay ID and stable position within
+that event. History restores missing row positions even when a sibling remains,
+merges by event ID and row position, avoids duplicates with painted/pending rows
 and preserves older pagination through bursts and reconnects, including legacy
 byte IDs. DOM eviction also exposes recoverable history. A failed history read
 retains its cursor; page exit aborts the read and discards pending/late frames.
@@ -359,6 +366,11 @@ session identity before cancellation. This stop-only record has `legacy: true`,
 remains requested while owned descendants survive or inspection is unavailable;
 restart reconciliation confirms only the same observed run and quarantines its
 late output. A kill request alone never confirms cessation.
+Coordinator reconciliation also resumes the runner's persisted `killAfter`
+fallback when its original timer owner exited. The existing process-identity
+checks still refuse reused PIDs or unavailable inspection, and the same owned
+run remains cancellation-requested until its descendants are confirmed stopped.
+Read-only status/history access never signals a process.
 Cancelling after a local run has been collected preserves its success/failure,
 exit, end time, result, usage and session; only future dispatch is fenced. No
 process stop is requested for that completed run, including when cancellation
@@ -457,9 +469,17 @@ bounds). They use a fixed non-login POSIX shell (`/bin/sh -c`), preserving the
 approved command text without selecting the operator's `SHELL` or sourcing login
 startup files. Verify commands must use POSIX shell syntax and explicitly invoke
 any other interpreter they need. Provider assertions are not verification
-evidence. The canonical tick continues to own readiness, trusted feedback,
-freshness, receipts, conflicts,
-rounds and human merge boundaries. No automatic merge is added.
+evidence. Verification receives an explicit allowlist of PATH, locale, timezone,
+terminal/color and CI settings. Coordinator tokens, provider credentials,
+proxies, SSH agents, shell startup and Node injection variables are excluded.
+An empty private HOME/XDG/temp profile exists for the command list and is removed
+on success, failure, dirty-tree rejection or cancellation. Existing Git/tooling
+environment helpers disable system/global credential stores, interactive auth
+and user npm configuration; repository credential helpers are reset too.
+This environment separation adds no OS sandbox; configured host restrictions
+still apply. The canonical tick continues to own readiness, trusted feedback,
+freshness, receipts, conflicts, rounds and human merge boundaries. No automatic
+merge is added.
 
 Verification requires the recorded applied commit and a clean Git index/worktree,
 including untracked files. The existing strict Git status helper checks both

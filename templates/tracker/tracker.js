@@ -192,9 +192,9 @@ if (pane) {
   // This cursor can recover a burst between rows already painted on the page.
   let recoveryBefore = null, recoveryFloor = null;
   const replayId = value => Number.isSafeInteger(Number(value)) && Number(value) > 0 ? Number(value) : null;
-  const eventHtml = (row, id) => {
+  const eventHtml = (row, id, index) => {
     const html = renderParsed(row, { harness });
-    return id === null ? html : html.replace(/^(<div class="[^"]*")/, '$1 data-replay="' + id + '"');
+    return id === null ? html : html.replace(/^(<div class="[^"]*")/, '$1 data-replay="' + id + '" data-replay-row="' + index + '"');
   };
   const rememberDropped = (id, before) => {
     if (id === null || before === null) return;
@@ -271,16 +271,16 @@ if (pane) {
     // The markup is appended to the pane itself rather than inside a wrapper div. The cap below counts the pane's
     // children, and a wrapper per frame made one paint of three hundred lines count as a single child, so the cap
     // never fired and the DOM grew without bound on a long run.
-    const rows = pending.flatMap(event => renderRows(event.line, { harness }).map(row => ({ row, id: event.id })));
+    const rows = pending.flatMap(event => renderRows(event.line, { harness }).map((row, index) => ({ row, id: event.id, index })));
     pending = [];
-    const html = rows.filter(r => r.row.kind !== "beat").map(r => eventHtml(r.row, r.id)).join("");
+    const html = rows.filter(r => r.row.kind !== "beat").map(r => eventHtml(r.row, r.id, r.index)).join("");
     if (html) { const t = document.createElement("template"); t.innerHTML = html; pane.append(t.content); }
     // A heartbeat whose row is not on the pane (trimmed by the cap, or the pane opened after the call started) still
     // deserves to be said: a Bash step alive for four minutes with nothing on screen is the complaint this answers.
     const orphans = rows.filter(r => r.row.kind === "beat" && !beat(r.row));
     if (orphans.length) {
       const t = document.createElement("template");
-      t.innerHTML = orphans.map(r => eventHtml(r.row, r.id)).join("");
+      t.innerHTML = orphans.map(r => eventHtml(r.row, r.id, r.index)).join("");
       pane.append(t.content);
     }
     if (stick) pane.scrollTop = pane.scrollHeight;
@@ -340,11 +340,12 @@ if (pane) {
       const got = await r.json();
       if (disconnected) return;
       const lines = Array.isArray(got.lines) ? got.lines : [];
-      const present = new Set([...pane.children].map(row => replayId(row.dataset.replay)).filter(id => id !== null));
-      for (const event of pending) if (event.id !== null) present.add(event.id);
+      const present = new Set([...pane.children].filter(row => replayId(row.dataset.replay) !== null).map(row => `${row.dataset.replay}:${row.dataset.replayRow ?? 0}`));
+      const queued = new Set(pending.map(event => event.id).filter(id => id !== null));
       const html = lines.flatMap((line, i) => {
         const id = replayId(got.ids?.[i] ?? (Number.isSafeInteger(got.from) ? got.from + i : null));
-        return id !== null && present.has(id) ? [] : renderRows(line, { harness }).map(row => eventHtml(row, id));
+        if (id !== null && queued.has(id)) return [];
+        return renderRows(line, { harness }).flatMap((row, index) => id !== null && present.has(`${id}:${index}`) ? [] : eventHtml(row, id, index));
       }).join("");
       const before = pane.scrollHeight, top = pane.scrollTop;
       if (html) {
@@ -358,7 +359,8 @@ if (pane) {
           // keeping the existing tool rows and heartbeat state intact.
           for (const row of [...t.content.children]) {
             const id = replayId(row.dataset.replay);
-            const next = [...pane.children].find(el => replayId(el.dataset.replay) > id);
+            const index = Number(row.dataset.replayRow ?? 0);
+            const next = [...pane.children].find(el => replayId(el.dataset.replay) > id || (replayId(el.dataset.replay) === id && Number(el.dataset.replayRow ?? 0) > index));
             pane.insertBefore(row, next ?? null);
           }
           const firstLive = [...pane.children].findIndex(row => (replayId(row.dataset.replay) ?? 0) >= cursor);

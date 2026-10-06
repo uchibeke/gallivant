@@ -17,7 +17,7 @@ import { writeJsonAtomic, readJson } from "../lib/fs.mjs";
 import { makeState, newEntry, STATES, idSlug } from "../lib/state.mjs";
 import { routes } from "../lib/commands/serve.mjs";
 import { makeTick } from "../lib/tick.mjs";
-import { reconcileExecutionResult } from "../lib/execution_result.mjs";
+import { reconcileExecutionResult, verificationEnvironment } from "../lib/execution_result.mjs";
 import { resume } from "../lib/commands/resume.mjs";
 import { acquireProcessLock } from "../lib/daemon.mjs";
 import { makeGit, GIT_PATH_LIMITS } from "../lib/git.mjs";
@@ -111,6 +111,56 @@ test("unknown acceptance without lookup stays visible through startup and period
   assert.equal(state.providerState, "status-unknown"); assert.match(state.recoveryAction, /manually/);
   assert.equal(state.costUsd, null);
   await assert.rejects(f.service.submit({ ...input, operationId: "new" }), { code: "BUSY" });
+});
+
+for (const provider of ["openai-agents", "codex-cloud"]) test(`${provider} fixture: foreign sessions cannot enter observation, collection, cache or continuation ownership`, async t => {
+  const f = remote(provider), job = await f.service.submit(input), owned = job.execution.sessionId;
+  for (const sessionId of ["foreign-session", "", 42]) {
+    f.observe({ sessionId, state: "succeeded", costUsd: 0.8, events: [{ eventId: "foreign", type: "output", data: "foreign event" }] });
+    await f.reopen().reconcile({ force: true });
+    const ex = f.reopen().current().execution;
+    assert.equal(ex.sessionId, owned); assert.equal(ex.acceptance, "accepted"); assert.equal(ex.collected, false);
+    assert.equal(ex.providerState, "status-unknown"); assert.equal(ex.recoveryAction, "EXECUTION_OWNERSHIP"); assert.equal(ex.costUsd, null);
+    assert.equal(ex.cursor, undefined); assert.equal(ex.terminalState, undefined);
+    assert.equal(existsSync(join(f.service.dirOf(job.id), "events.jsonl")), false);
+  }
+  for (const sessionId of [undefined, null, owned]) {
+    f.observe({ sessionId, state: "running", costUsd: null, events: [] }); await f.reopen().reconcile({ force: true });
+    assert.equal(f.service.current().execution.sessionId, owned); assert.equal(f.service.current().execution.providerState, "running");
+  }
+  f.observe({ sessionId: owned, state: "succeeded" }); await f.service.reconcile({ force: true });
+  const collect = f.transport.collect, path = join(f.service.dirOf(job.id), "result.json");
+  for (const sessionId of ["foreign-session", "", 42]) {
+    f.transport.collect = async req => ({ ...await collect(req), sessionId });
+    await assert.rejects(f.reopen().collect(), { code: "EXECUTION_RESULT" }); assert.equal(existsSync(path), false);
+    writeJsonAtomic(path, { taskId: "acme/widget/remote", runId: job.id, providerJobId: job.execution.providerJobId, turnId: job.execution.turnId, inputHead: input.inputHead,
+      sessionId, outcome: { finished: true, ok: true, cost: null } });
+    await assert.rejects(f.reopen().collect(), { code: "EXECUTION_RESULT" });
+    assert.equal(f.service.current().execution.sessionId, owned); assert.equal(f.service.current().execution.collected, false); rmSync(path);
+  }
+  f.transport.collect = collect; await f.service.collect();
+  const next = f.transport.continue; let reply;
+  f.transport.continue = async req => { reply = await next(req); return { ...reply, sessionId: "foreign-session" }; };
+  const continuation = { ...input, operationId: "owned-correction", sessionId: owned };
+  await assert.rejects(f.reopen().continue(continuation), { code: "EXECUTION_UNKNOWN" });
+  assert.equal(f.service.current().execution.sessionId, owned);
+  f.transport.lookup = async () => ({ ...reply, sessionId: "foreign-session", state: "running", observedAt: f.clock.now() });
+  await f.reopen().reconcile({ force: true }); assert.equal(f.service.current().execution.recoveryAction, "EXECUTION_OWNERSHIP");
+  await assert.rejects(f.reopen().continue(continuation), { code: "EXECUTION_UNKNOWN" });
+  f.transport.lookup = async () => ({ ...reply, sessionId: owned, state: "running", observedAt: f.clock.now() });
+  await f.reopen().reconcile({ force: true }); await f.reopen().continue(continuation);
+  assert.equal(f.calls.filter(call => call[0] === "continue").length, 1); assert.equal(f.service.current().execution.sessionId, owned);
+  const evidence = join(tempHome(), "session-ownership-evidence.json");
+  writeJsonAtomic(evidence, { provider, ownedSession: owned, execution: join(f.root, "execution.json"), rejectedObservationSessions: ["foreign-session", "", 42], continuationCalls: 1 });
+  t.diagnostic(`session ownership evidence: ${evidence}`);
+});
+
+test("shared publication rejects foreign or malformed sessions before any artifact mutation", async () => {
+  for (const sessionId of ["foreign-session", "", 42]) {
+    const f = resultFixture(); f.entry.execution.sessionId = "owned-session"; f.result.sessionId = sessionId;
+    await assert.rejects(reconcileExecutionResult(f.ctx, f), /does not belong/);
+    assert.deepEqual(f.calls, []); assert.equal(readFileSync(join(f.entry.worktree, "a.txt"), "utf8"), "before");
+  }
 });
 
 test("concurrent dispatch and cancellation share durable task ownership", async () => {
@@ -548,6 +598,26 @@ test("legacy cancellation stops the owned process tree, survives restart and qua
   await assert.rejects(restarted.collect(), { code: "EXECUTION_QUARANTINED" });
   assert.equal(readJson(join(f.root, f.id, "result.json")), null);
   assert.equal(readJson(join(f.root, f.id, "job.json")).execution.providerState, "cancelled");
+});
+
+test("coordinator reconciliation resumes an owned local kill fallback after restart without another control", async t => {
+  const f = legacyCancellationFixture(); await f.open().cancel(); const stopped = readJson(join(f.root, f.id, "job.json"));
+  const restarted = f.open(); await restarted.reconcile();
+  assert.equal(f.signals.length, 2, "the persisted deadline has not elapsed");
+  f.clock.advance(1); assert.equal(restarted.current().running, true); assert.equal(f.signals.length, 2, "read-only access never signals");
+  await restarted.reconcile(); assert.deepEqual(f.signals.slice(-2), [[-123456790, "SIGKILL"], [-123456789, "SIGKILL"]]);
+  assert.equal(readJson(join(f.root, f.id, "job.json")).killAfter, stopped.killAfter);
+  assert.equal(restarted.current().execution.providerState, "cancellation-requested");
+  f.setMembers([{ pid: 123456790, group: 123456790, started: "reused-tool" }]);
+  const signals = f.signals.length; await restarted.reconcile();
+  assert.equal(f.signals.length, signals); assert.equal(restarted.current().execution.recoveryAction, "RUN_STOP_UNVERIFIED");
+  f.setMembers(null); await restarted.reconcile(); assert.equal(f.signals.length, signals);
+  await assert.rejects(restarted.submit({ ...input, spec: {} }), { code: "EXECUTION_STOPPED" });
+  f.setMembers([]); await restarted.reconcile();
+  assert.equal(restarted.current().execution.providerState, "cancelled"); assert.equal(restarted.state().current.exit, 137);
+  const evidence = join(tempHome(), "local-fallback-evidence.json");
+  writeJsonAtomic(evidence, { execution: join(f.root, "execution.json"), job: join(f.root, f.id, "job.json"), persistedKillAfter: stopped.killAfter, signals: f.signals });
+  t.diagnostic(`local fallback evidence: ${evidence}`);
 });
 
 test("legacy cancellation keeps inspection failures and unsupported stops unconfirmed", async () => {
@@ -1589,15 +1659,59 @@ async function nativeResultFixture() {
   return { ...f, verify: async (...args) => { f.calls.push("verify"); return execFileAsync(...args); } };
 }
 
+test("verification uses a credential-free environment and removes private profiles on success and failure", async t => {
+  const keys = ["GH_TOKEN", "GITHUB_TOKEN", "AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY", "AWS_SESSION_TOKEN", "OPENAI_API_KEY", "ANTHROPIC_API_KEY", "DATABASE_URL", "CUSTOM_CREDENTIAL", "SSH_AUTH_SOCK", "NPM_CONFIG_TOKEN", "HTTP_PROXY", "NODE_OPTIONS", "ENV", "BASH_ENV"];
+  const inherited = Object.fromEntries(keys.map(key => [key, process.env[key]])), observations = [];
+  try {
+    for (const failing of [false, true]) {
+      const f = await nativeResultFixture(), invocations = [];
+      for (const key of keys) process.env[key] = key === "NODE_OPTIONS" ? "--trace-warnings" : "verification-private-sentinel";
+      const code = `const fs=require("node:fs"); const keys=${JSON.stringify(keys)}; if(keys.some(key=>Object.hasOwn(process.env,key))) process.exit(31); if(fs.existsSync(process.env.HOME+"/.npmrc")) process.exit(32); fs.writeFileSync(process.env.HOME+"/cache-proof","private"); console.log("credential-free"); process.exit(${failing ? 23 : 0});`;
+      f.ctx.readPrd = () => `# Brief\n\n## Verify\n\n- \`node -e '${code}'\`\n`;
+      f.verify = async (shell, args, options) => {
+        assert.ok(options.env); for(const key of keys) assert.equal(options.env[key], undefined);
+        assert.equal(options.env.PATH, process.env.PATH); assert.equal(options.env.NPM_CONFIG_USERCONFIG, "/dev/null");
+        assert.equal(options.env.NPM_CONFIG_GLOBALCONFIG, "/dev/null"); assert.equal(options.env.GIT_CONFIG_NOSYSTEM, "1");
+        const last = Number(options.env.GIT_CONFIG_COUNT) - 1;
+        assert.equal(options.env[`GIT_CONFIG_KEY_${last}`], "credential.helper"); assert.equal(options.env[`GIT_CONFIG_VALUE_${last}`], "");
+        assert.notEqual(options.env.HOME, process.env.HOME); assert.equal(statSync(options.env.HOME).mode & 0o777, 0o700);
+        invocations.push({ shell, args, envKeys: Object.keys(options.env).sort(), privateHome: options.env.HOME });
+        return execFileAsync(shell, args, options);
+      };
+      if (failing) await assert.rejects(reconcileExecutionResult(f.ctx, f), { code: "EXECUTION_RESULT_BLOCKED" });
+      else await reconcileExecutionResult(f.ctx, f);
+      assert.equal(invocations.length, 1); assert.equal(existsSync(invocations[0].privateHome), false);
+      const evidence = readJson(join(f.dir, "verification.json")), checkpoint = readJson(join(f.dir, "result-application.json"));
+      assert.equal(evidence.evidence[0].exit, failing ? 23 : 0); assert.equal(evidence.evidence[0].output, "credential-free\n");
+      assert.doesNotMatch(JSON.stringify(evidence), /verification-private-sentinel/);
+      if (failing) await assert.rejects(reconcileExecutionResult(f.ctx, f), { code: "EXECUTION_RESULT_BLOCKED" });
+      else await reconcileExecutionResult(f.ctx, f);
+      assert.equal(invocations.length, 1); assert.deepEqual(readJson(join(f.dir, "verification.json")), evidence);
+      assert.equal(checkpoint.phase, failing ? "blocked" : "published");
+      observations.push({ failing, removedPrivateHome: true, invocations, verification: join(f.dir, "verification.json"), checkpoint: join(f.dir, "result-application.json") });
+      for (const key of keys) if (inherited[key] === undefined) delete process.env[key]; else process.env[key] = inherited[key];
+    }
+  } finally {
+    for (const key of keys) if (inherited[key] === undefined) delete process.env[key]; else process.env[key] = inherited[key];
+  }
+  const root = tempHome(), source = { PATH: process.env.PATH, HOME: "foreign-home", XDG_CONFIG_HOME: "foreign-config", CUSTOM_CREDENTIAL: "opaque", BASH_ENV: "startup", HTTP_PROXY: "http://user:password@example.test" };
+  const env = verificationEnvironment(root, source);
+  assert.equal(env.HOME, root); assert.notEqual(env.XDG_CONFIG_HOME, source.XDG_CONFIG_HOME);
+  assert.equal(env.CUSTOM_CREDENTIAL, undefined); assert.equal(env.BASH_ENV, undefined); assert.equal(env.HTTP_PROXY, undefined);
+  const path = join(tempHome(), "verification-environment-evidence.json"); writeJsonAtomic(path, { observations }); t.diagnostic(`verification environment evidence: ${path}`);
+});
+
 function posixVerification(f, commands, startup, marker) {
   const invocations = [];
   f.ctx.readPrd = () => `# Brief\n\n## Verify\n\n${commands.map(command => `- \`${command}\``).join("\n")}\n`;
   f.verify = async (shell, args, options) => {
     assert.equal(shell, "/bin/sh");
     assert.deepEqual(args, ["-c", commands[invocations.length]]);
-    assert.deepEqual(options, { cwd: f.entry.worktree, timeout: 120_000, maxBuffer: 262_144 });
+    const { env, ...bounds } = options;
+    assert.deepEqual(bounds, { cwd: f.entry.worktree, timeout: 120_000, maxBuffer: 262_144 });
+    assert.ok(env); assert.equal(env.SHELL, undefined); assert.equal(env.ENV, undefined); assert.equal(env.BASH_ENV, undefined);
     invocations.push({ shell, args, ...options }); f.calls.push("verify");
-    return execFileAsync(shell, args, { ...options, env: { ...process.env, ENV: startup, BASH_ENV: startup, POSIX_STARTUP_MARKER: marker } });
+    return execFileAsync(shell, args, { ...options, env: { ...env, ENV: startup, BASH_ENV: startup, POSIX_STARTUP_MARKER: marker } });
   };
   return invocations;
 }
@@ -1740,11 +1854,14 @@ test("artifact mode metadata fails closed on unavailable, malformed, truncated a
 
 for (const mutation of ["tracked", "staged", "untracked"]) test(`verification ${mutation} writes block publication at the unchanged native Git head`, async () => {
   const f = await nativeResultFixture();
+  const verify = f.verify; let privateHome;
+  f.verify = (cmd, args, options) => { privateHome = options.env.HOME; return verify(cmd, args, options); };
   const command = mutation === "untracked" ? "printf created > generated.txt" : `printf dirty > b.txt${mutation === "staged" ? " && git add -- b.txt" : ""}`;
   f.ctx.readPrd = () => `# Brief\n\n## Verify\n\n- \`${command}\`\n- \`printf must-not-run\`\n`;
   await assert.rejects(reconcileExecutionResult(f.ctx, f), { code: "EXECUTION_RESULT_BLOCKED" });
   const checkpoint = readJson(join(f.dir, "result-application.json")), evidence = readJson(join(f.dir, "verification.json"));
   assert.equal(checkpoint.phase, "blocked"); assert.equal(checkpoint.reason, "verification-dirty");
+  assert.ok(privateHome); assert.equal(existsSync(privateHome), false);
   assert.equal(await f.ctx.git.head(f.entry.worktree), checkpoint.appliedHead);
   assert.equal(evidence.evidence.length, 1); assert.equal(evidence.evidence[0].exit, 0);
   assert.deepEqual(f.calls, ["commit", "verify"]);
@@ -1932,11 +2049,12 @@ test("verification evidence records an actual approved command, independent of p
 });
 
 test("cancellation during verification fences publication and retains verification evidence", async () => {
-  const f = resultFixture(); let stopped = false;
+  const f = resultFixture(); let stopped = false, privateHome;
   f.ctx.state = { get: () => ({ ...f.entry, dispatch_stopped: stopped ? "cancellation-requested" : null }) };
-  f.verify = async () => { f.calls.push("verify"); stopped = true; return { stdout: "verified" }; };
+  f.verify = async (cmd, args, options) => { f.calls.push("verify"); privateHome = options.env.HOME; stopped = true; return { stdout: "verified" }; };
   await assert.rejects(reconcileExecutionResult(f.ctx, f), /concurrent stop/);
   assert.deepEqual(f.calls, ["commit", "verify"]); assert.equal(readJson(join(f.dir, "verification.json")).evidence[0].exit, 0);
+  assert.ok(privateHome); assert.equal(existsSync(privateHome), false);
 });
 
 test("slow remote result collection cannot occupy the GitHub review lane", async () => {
