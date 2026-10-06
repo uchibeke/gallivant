@@ -126,6 +126,14 @@ Hashes must be real SHA-256 values, and input heads real exact revisions. Result
 collection supplies canonical version/task/run identities even if a transport
 returns conflicting fields. Missing, oversized, mismatched or incomplete results
 remain unresolved; provider success alone does not mean workflow readiness.
+Private result ownership (`taskId`, `runId`, `providerJobId`, `sessionId`, `turnId`,
+`inputHead`, `repo`, `branch`, `pushedHead`) retains exact protocol values through
+redaction, collection and replay, even when an opaque ID resembles a credential
+or equals a supplied secret. Collection validates provider identities before
+saving them; publication independently validates repository, branch and revisions.
+Diagnostic fields remain redacted. A previously rewritten identity is not a valid
+substitute: preserve the cache and restore exact ownership from the recorded
+acknowledgement/provider root before continuing; never redispatch for recovery.
 
 `completedAt` is the exact owned root's completion time in UTC epoch milliseconds,
 not submission-client exit or collection time. An inspection may supply it only
@@ -286,7 +294,7 @@ Each new run retains compatible `job.json`/`job.log` plus:
 | `job.idx`, `log-meta.json` | Fixed-width 8-byte offsets, version 2 offset-plus-one encoding, stable sequence numbers and retained first sequence; zero entries denote gaps |
 | `local-output.json` | Raw local ingestion byte cursor, bounded page, pending marker and persistent `discarding` state |
 | `local-output-queue.json` (task run root) | Version 1 ordered local run IDs awaiting projection or private-file cleanup; persisted before replacing `latest-run` |
-| `result.json` | Mode 0600 private collected result, original artifact manifest/payloads, redacted outcome and `artifacts` summary; independent of retained logs |
+| `result.json` | Mode 0600 private collected result, exact ownership fields and artifact manifest/payloads, redacted diagnostics and `artifacts` summary; independent of retained logs |
 | `result-application.json`, `verification.json` | Artifact application/publication checkpoint and actual approved verification observations |
 
 Provider-order numbers survive out-of-order arrival; ingestion order remains
@@ -306,6 +314,10 @@ hashes and ownership before application. Modified/truncated content cannot publi
 The additive version 1 `artifacts` field is a redacted path/hash summary generated
 by collection, overriding any provider-supplied summary. Tracker result responses
 use this summary for artifacts and application paths, and never include file text.
+The result route redacts its complete response through the execution's supplied
+and retained run secrets, including ownership fields and publication checkpoints;
+standalone run readers use recognized-credential redaction. These read-only views
+never replace private routing identities or call a provider.
 Legacy results without the summary retain their already-redacted projection.
 Verification output also uses the execution boundary's supplied-secret redaction.
 Previously modified cached artifacts remain invalid; restore exact artifacts for

@@ -1,0 +1,584 @@
+{
+  "version": 1,
+  "task_id": "task-df42674c6251c85b0edef13f",
+  "source_parent": "f98ec2a69e46dc1d346ac33570974bf45a055637",
+  "observed_at": "2026-10-06T11:42:23.107668+00:00",
+  "review": {
+    "id": 5427658560,
+    "inline_comment_ids": [
+      4194697905
+    ]
+  },
+  "commands": [
+    {
+      "command": "npm test",
+      "exit": 0,
+      "raw_log": "/tmp/execution-result-identity-final-tests.txt",
+      "sha256": "d79d468492e436650eaca6b2935f1a0d189cc9b9a47658a35abe5127cf6e97f4",
+      "tests": 1072,
+      "passed": 1072,
+      "failed": 0
+    },
+    {
+      "command": "npm run lint",
+      "exit": 0,
+      "raw_log": "/tmp/execution-result-identity-final-lint.txt",
+      "sha256": "8c7790de3f018fb4580f18ac70e1b355a0f76f522dd73acbdaa63632feffcecc"
+    },
+    {
+      "command": "npm run test:execution-backends",
+      "exit": 0,
+      "raw_log": "/tmp/execution-result-identity-final-backends.txt",
+      "sha256": "14512109987416a175a567d11fbb4df933cf7a5d2665c927fca5d1ca8c8565d0",
+      "tests": 370,
+      "passed": 370,
+      "failed": 0
+    },
+    {
+      "command": "git diff --check",
+      "exit": 0,
+      "raw_log": "/tmp/execution-result-identity-final-diff.txt",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    }
+  ],
+  "artifact_hashes": {
+    "lib/execution_io.mjs": "c1c9acf0785f70715cfe920e445f787a3c2f74487f51055cfea0fe256db5f0a7",
+    "lib/commands/serve.mjs": "f3d853ddda878c6c8595a8d2fcec3a577fb2560887e3e3955e0ae83c546e9066",
+    "test/execution-backends.test.mjs": "932e4eb24fa649e3530a565df28e5dab08091f8de0a6680b6b86baa8caea5b10",
+    "docs/execution.md": "16ae3765282fc29e9f4f04b5379284386491e72e206730745c833d6ee4d65052"
+  },
+  "regression_reproduction": {
+    "command": "node --test --test-name-pattern='result metadata redaction preserves|opaque remote identities survive|opaque local identities survive' test/execution-backends.test.mjs",
+    "exit": 1,
+    "raw_log": "/tmp/execution-result-identity-red.txt",
+    "sha256": "188eb690a644e46d7a920119f1f17d7fce2325bb270b558cb0170e2df8ad2cf5",
+    "tests": 3,
+    "passed": 0,
+    "failed": 3,
+    "expected_failure": true
+  },
+  "related_regression_reproduction": {
+    "command": "node --test --test-name-pattern='result metadata redaction preserves|opaque remote identities survive|opaque local identities survive' test/execution-backends.test.mjs",
+    "exit": 1,
+    "raw_log": "/tmp/execution-result-identity-public-red.txt",
+    "sha256": "f2413272b89a229da17fa8f5441d5e72f452ea23cf1c2a846876bd0711430c8d",
+    "tests": 3,
+    "passed": 2,
+    "failed": 1,
+    "expected_failure": true
+  },
+  "focused_checks": [
+    {
+      "command": "node --test --test-name-pattern='result metadata redaction preserves|opaque remote identities survive|opaque local identities survive|private artifact payloads|overlapping collection and environment|foreign sessions cannot enter|local settlement, collection' test/execution-backends.test.mjs",
+      "exit": 0,
+      "raw_log": "/tmp/execution-result-identity-focus.txt",
+      "sha256": "d6ff254fdb3f406a4bec0de1cf44a4b41e3ab432a0f134b379e7acf639fcc544",
+      "tests": 8,
+      "passed": 8,
+      "failed": 0
+    }
+  ],
+  "source_and_output_review": [
+    {
+      "rule": "Diagnostic redaction must not mutate private protocol or publication ownership, and preserving exact private values must not expose them through public result projections.",
+      "files": [
+        "lib/execution_io.mjs",
+        "lib/execution.mjs",
+        "lib/execution_result.mjs",
+        "lib/execution_journal.mjs",
+        "lib/commands/serve.mjs",
+        "lib/task_prepare.mjs",
+        "test/execution-backends.test.mjs",
+        "docs/execution.md"
+      ],
+      "boundaries_checked": [
+        "Collection validates the exact remote job/root/input head/session and terminal outcome before redaction; canonical task/run identities override returned metadata. Cached collection revalidates these fields before adoption.",
+        "Private result taskId, runId, providerJobId, sessionId, turnId, inputHead, repo, branch and pushedHead are preserved verbatim. Publication still validates original repository, owned branch, revision and artifact hashes before mutation; redaction cannot turn unowned input into an owned surrogate.",
+        "Outcome, lines, usage, PR diagnostic text and the generated artifact summary remain redacted. Raw artifacts retain exact bytes and hashes in mode 0600 results. Inputs and supplied secret lists are unchanged.",
+        "Local collect uses the same helper; local settlement already writes exact validated identities with redacted diagnostics. Five CLI adapters, preassigned and discovered session readers, saved result replay and continuation retain native identities.",
+        "Remote applyCollectedResult adopts exact owned session IDs; both reserved provider fixtures publish against the pre-collection snapshot and continue the same session after restart with one collection and one initial fixture submission.",
+        "The result route builds its existing bounded summary, then sanitizes the entire response using the execution/run supplied secrets with recognized-credential fallback for standalone readers. Ownership, application checkpoints and verification output are public-redacted without rewriting private files or calling a provider.",
+        "Journal projections and verification diagnostics still apply normal redaction. Preparation reads exact owned sessions but separately sanitizes outcome and usage. Artifact retention and cancellation do not determine routing identity.",
+        "Private result/execution ownership remains exact for credential-shaped and secret-equal fixture IDs, while public result, journal output and verification diagnostic projections redact them. Foreign sessions, contradictory terminal outcomes, absent results, invalid manifests and stopped tasks retain the existing rejection/quarantine paths.",
+        "Previously rewritten cached identities require restoring exact ownership from recorded acknowledgement/provider evidence without erasing intents or redispatching. No automatic reconstruction, transport availability, live model/plugin qualification, permissions or merge authority is claimed."
+      ],
+      "regressions": [
+        "result metadata redaction preserves exact private ownership while cleaning diagnostics",
+        "opaque remote identities survive collection, publication and continuation while public results stay redacted",
+        "opaque local identities survive settlement, collection and cached continuation without diagnostic exposure",
+        "foreign sessions cannot enter observation, collection, cache or continuation ownership",
+        "private artifact payloads and paths stay out of result projections and verification diagnostics"
+      ]
+    }
+  ],
+  "representative_output": {
+    "evidence_kind": "Deterministic provider-shaped and CLI adapter collection, publication, redaction, replay and continuation fixtures; no live provider/model or installed-plugin qualification.",
+    "reports": [
+      {
+        "label": "remote",
+        "report_path": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-vw2Wpq/remote-result-identities.json",
+        "report_sha256": "2dc3d98a08abc8ba0060a890647a9b67d98d532c02c3f61f25ace5d3d86426a2",
+        "cases": 4,
+        "observations": [
+          {
+            "provider": "openai-agents",
+            "supplied": false,
+            "identities": {
+              "providerJobId": "sk-ownedcredentialshape-providerJobId",
+              "sessionId": "sk-ownedcredentialshape-sessionId",
+              "turnId": "sk-ownedcredentialshape-turnId",
+              "taskId": "acme/widget/result",
+              "runId": "run-05df206c-e697-40e4-96e9-e0438c9b66ad",
+              "inputHead": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+              "repo": "acme/widget",
+              "branch": "work/result"
+            },
+            "continuationSession": "sk-ownedcredentialshape-sessionId",
+            "paidFixtureSubmits": 1,
+            "collectCalls": 1,
+            "files": {
+              "execution": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-hGjEE4/runs/acme__widget__result/execution.json",
+              "result": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-hGjEE4/runs/acme__widget__result/run-05df206c-e697-40e4-96e9-e0438c9b66ad/result.json",
+              "publicResult": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-hGjEE4/runs/acme__widget__result/run-05df206c-e697-40e4-96e9-e0438c9b66ad/identity-public-result.json",
+              "application": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-hGjEE4/runs/acme__widget__result/run-05df206c-e697-40e4-96e9-e0438c9b66ad/result-application.json",
+              "verification": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-hGjEE4/runs/acme__widget__result/run-05df206c-e697-40e4-96e9-e0438c9b66ad/verification.json",
+              "events": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-hGjEE4/runs/acme__widget__result/run-05df206c-e697-40e4-96e9-e0438c9b66ad/events.jsonl",
+              "log": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-hGjEE4/runs/acme__widget__result/run-05df206c-e697-40e4-96e9-e0438c9b66ad/job.log"
+            },
+            "result_sha256": "d77e33998ca15c2a05ce74819b7e39d74bd1eefc4e36848679a5637a93921944",
+            "result_mode": "0600",
+            "publication_phase": "published",
+            "verification_exit": 0,
+            "public_identity_fields": {
+              "taskId": "acme/widget/result",
+              "runId": "run-05df206c-e697-40e4-96e9-e0438c9b66ad",
+              "providerJobId": "[redacted]",
+              "sessionId": "[redacted]",
+              "turnId": "[redacted]",
+              "inputHead": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+            },
+            "public_result_sha256": "cfa8dfa63adf127aba2b5583bc2e827a5f5e04dc834bab7caed46fb4f4fe142b"
+          },
+          {
+            "provider": "openai-agents",
+            "supplied": true,
+            "identities": {
+              "providerJobId": "opaque-owned-providerJobId",
+              "sessionId": "opaque-owned-sessionId",
+              "turnId": "opaque-owned-turnId",
+              "taskId": "acme/widget/result",
+              "runId": "run-8fe20863-6367-41b3-9b72-84ee7c509dce",
+              "inputHead": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+              "repo": "acme/widget",
+              "branch": "work/result"
+            },
+            "continuationSession": "opaque-owned-sessionId",
+            "paidFixtureSubmits": 1,
+            "collectCalls": 1,
+            "files": {
+              "execution": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-qlDntv/runs/acme__widget__result/execution.json",
+              "result": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-qlDntv/runs/acme__widget__result/run-8fe20863-6367-41b3-9b72-84ee7c509dce/result.json",
+              "publicResult": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-qlDntv/runs/acme__widget__result/run-8fe20863-6367-41b3-9b72-84ee7c509dce/identity-public-result.json",
+              "application": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-qlDntv/runs/acme__widget__result/run-8fe20863-6367-41b3-9b72-84ee7c509dce/result-application.json",
+              "verification": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-qlDntv/runs/acme__widget__result/run-8fe20863-6367-41b3-9b72-84ee7c509dce/verification.json",
+              "events": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-qlDntv/runs/acme__widget__result/run-8fe20863-6367-41b3-9b72-84ee7c509dce/events.jsonl",
+              "log": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-qlDntv/runs/acme__widget__result/run-8fe20863-6367-41b3-9b72-84ee7c509dce/job.log"
+            },
+            "result_sha256": "98f8decf72cb28f261e1ab9007292284b76b5e43eaa252836018510a5dc0bfa9",
+            "result_mode": "0600",
+            "publication_phase": "published",
+            "verification_exit": 0,
+            "public_identity_fields": {
+              "taskId": "[redacted]",
+              "runId": "[redacted]",
+              "providerJobId": "[redacted]",
+              "sessionId": "[redacted]",
+              "turnId": "[redacted]",
+              "inputHead": "[redacted]"
+            },
+            "public_result_sha256": "6d7a72905942d1df8bd2700b7a9b8ee28319c286567427c87a16b7fb49503ad9"
+          },
+          {
+            "provider": "codex-cloud",
+            "supplied": false,
+            "identities": {
+              "providerJobId": "sk-ownedcredentialshape-providerJobId",
+              "sessionId": "sk-ownedcredentialshape-sessionId",
+              "turnId": "sk-ownedcredentialshape-turnId",
+              "taskId": "acme/widget/result",
+              "runId": "run-3d048a7a-9d67-4cd9-91c3-1a577cc94ecf",
+              "inputHead": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+              "repo": "acme/widget",
+              "branch": "work/result"
+            },
+            "continuationSession": "sk-ownedcredentialshape-sessionId",
+            "paidFixtureSubmits": 1,
+            "collectCalls": 1,
+            "files": {
+              "execution": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-22FbND/runs/acme__widget__result/execution.json",
+              "result": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-22FbND/runs/acme__widget__result/run-3d048a7a-9d67-4cd9-91c3-1a577cc94ecf/result.json",
+              "publicResult": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-22FbND/runs/acme__widget__result/run-3d048a7a-9d67-4cd9-91c3-1a577cc94ecf/identity-public-result.json",
+              "application": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-22FbND/runs/acme__widget__result/run-3d048a7a-9d67-4cd9-91c3-1a577cc94ecf/result-application.json",
+              "verification": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-22FbND/runs/acme__widget__result/run-3d048a7a-9d67-4cd9-91c3-1a577cc94ecf/verification.json",
+              "events": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-22FbND/runs/acme__widget__result/run-3d048a7a-9d67-4cd9-91c3-1a577cc94ecf/events.jsonl",
+              "log": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-22FbND/runs/acme__widget__result/run-3d048a7a-9d67-4cd9-91c3-1a577cc94ecf/job.log"
+            },
+            "result_sha256": "56117f8a01f5e8ee18c0af7e7b962e919bb59c13b9dc2eb7c8cd2ed2625b8f97",
+            "result_mode": "0600",
+            "publication_phase": "published",
+            "verification_exit": 0,
+            "public_identity_fields": {
+              "taskId": "acme/widget/result",
+              "runId": "run-3d048a7a-9d67-4cd9-91c3-1a577cc94ecf",
+              "providerJobId": "[redacted]",
+              "sessionId": "[redacted]",
+              "turnId": "[redacted]",
+              "inputHead": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+            },
+            "public_result_sha256": "a7819ab03def113a1459140a7af322835bf29c6cfedff6df5200366240c50541"
+          },
+          {
+            "provider": "codex-cloud",
+            "supplied": true,
+            "identities": {
+              "providerJobId": "opaque-owned-providerJobId",
+              "sessionId": "opaque-owned-sessionId",
+              "turnId": "opaque-owned-turnId",
+              "taskId": "acme/widget/result",
+              "runId": "run-85b11936-9e7e-4d34-8a4c-4bc92ebcc0d1",
+              "inputHead": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+              "repo": "acme/widget",
+              "branch": "work/result"
+            },
+            "continuationSession": "opaque-owned-sessionId",
+            "paidFixtureSubmits": 1,
+            "collectCalls": 1,
+            "files": {
+              "execution": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-bLRzRi/runs/acme__widget__result/execution.json",
+              "result": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-bLRzRi/runs/acme__widget__result/run-85b11936-9e7e-4d34-8a4c-4bc92ebcc0d1/result.json",
+              "publicResult": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-bLRzRi/runs/acme__widget__result/run-85b11936-9e7e-4d34-8a4c-4bc92ebcc0d1/identity-public-result.json",
+              "application": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-bLRzRi/runs/acme__widget__result/run-85b11936-9e7e-4d34-8a4c-4bc92ebcc0d1/result-application.json",
+              "verification": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-bLRzRi/runs/acme__widget__result/run-85b11936-9e7e-4d34-8a4c-4bc92ebcc0d1/verification.json",
+              "events": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-bLRzRi/runs/acme__widget__result/run-85b11936-9e7e-4d34-8a4c-4bc92ebcc0d1/events.jsonl",
+              "log": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-bLRzRi/runs/acme__widget__result/run-85b11936-9e7e-4d34-8a4c-4bc92ebcc0d1/job.log"
+            },
+            "result_sha256": "de5103699ed1111f783b44f55da741a7d48a1af31c1ec1565c785bc1d1c6ba88",
+            "result_mode": "0600",
+            "publication_phase": "published",
+            "verification_exit": 0,
+            "public_identity_fields": {
+              "taskId": "[redacted]",
+              "runId": "[redacted]",
+              "providerJobId": "[redacted]",
+              "sessionId": "[redacted]",
+              "turnId": "[redacted]",
+              "inputHead": "[redacted]"
+            },
+            "public_result_sha256": "66a26ec601c2c8d0e478cb524dc30129283af239cb2c292be1220237023ba4f5"
+          }
+        ]
+      },
+      {
+        "label": "local",
+        "report_path": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-RvoX3M/local-result-identities.json",
+        "report_sha256": "6f450e81485154d5111793e0cb7d44a32deff3b84ad8c976c64ab8aca38116ad",
+        "cases": 20,
+        "observations": [
+          {
+            "provider": "claude",
+            "path": "collect",
+            "supplied": false,
+            "sessionId": "sk-ownedcredentialshape-localsession",
+            "continuationSession": "sk-ownedcredentialshape-localsession",
+            "launches": 2,
+            "files": {
+              "result": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-wG8XgO/runs/run-0b8bfc81-81b0-444b-8a51-54f9fc4cb674/result.json",
+              "execution": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-wG8XgO/runs/execution.json"
+            },
+            "result_sha256": "bbb99e5f9888d9ceeb233ede921919b2e3e877dfa1a7d4840a5780261d8dfb39",
+            "result_mode": "0600"
+          },
+          {
+            "provider": "claude",
+            "path": "collect",
+            "supplied": true,
+            "sessionId": "22222222-2222-4222-8222-222222222222",
+            "continuationSession": "22222222-2222-4222-8222-222222222222",
+            "launches": 2,
+            "files": {
+              "result": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-ItPDTB/runs/run-f0171c3f-0eeb-409d-ab88-66fe05595b25/result.json",
+              "execution": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-ItPDTB/runs/execution.json"
+            },
+            "result_sha256": "2236ea321d9978aa99b2d9e4a968ee4d0064b48f44602c8225a32a4f0058957c",
+            "result_mode": "0600"
+          },
+          {
+            "provider": "claude",
+            "path": "settle",
+            "supplied": false,
+            "sessionId": "sk-ownedcredentialshape-localsession",
+            "continuationSession": "sk-ownedcredentialshape-localsession",
+            "launches": 2,
+            "files": {
+              "result": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-SV8MuW/runs/run-645180ab-eefc-4906-af78-aaa93784a73d/result.json",
+              "execution": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-SV8MuW/runs/execution.json"
+            },
+            "result_sha256": "c8be73b70f3b1538065e2606b811e9b2cdc9ba0ce7c0d884919b63ed3801b157",
+            "result_mode": "0600"
+          },
+          {
+            "provider": "claude",
+            "path": "settle",
+            "supplied": true,
+            "sessionId": "22222222-2222-4222-8222-222222222222",
+            "continuationSession": "22222222-2222-4222-8222-222222222222",
+            "launches": 2,
+            "files": {
+              "result": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-yhvgBI/runs/run-1cf4036a-e5cd-4a85-88b8-9ba627a73e93/result.json",
+              "execution": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-yhvgBI/runs/execution.json"
+            },
+            "result_sha256": "7012da1e8fa2b51e008ae7582e846ceb2a26f3aa2136fce00defb94990dafa53",
+            "result_mode": "0600"
+          },
+          {
+            "provider": "gemini",
+            "path": "collect",
+            "supplied": false,
+            "sessionId": "sk-ownedcredentialshape-localsession",
+            "continuationSession": "sk-ownedcredentialshape-localsession",
+            "launches": 2,
+            "files": {
+              "result": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-ohKuqB/runs/run-76107bfb-3e08-4792-a90e-d24a0440ce04/result.json",
+              "execution": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-ohKuqB/runs/execution.json"
+            },
+            "result_sha256": "51a57953092fb6206a6a4f80bbfce00e092fad1296b53655999dabb3900ea40e",
+            "result_mode": "0600"
+          },
+          {
+            "provider": "gemini",
+            "path": "collect",
+            "supplied": true,
+            "sessionId": "22222222-2222-4222-8222-222222222222",
+            "continuationSession": "22222222-2222-4222-8222-222222222222",
+            "launches": 2,
+            "files": {
+              "result": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-SgMsK5/runs/run-d327d2f0-8710-4671-9ecb-1b793e2b593a/result.json",
+              "execution": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-SgMsK5/runs/execution.json"
+            },
+            "result_sha256": "e6e93b389c9fcb408c147f98532fa07a2b4687644ee568908667968fbd90ec9a",
+            "result_mode": "0600"
+          },
+          {
+            "provider": "gemini",
+            "path": "settle",
+            "supplied": false,
+            "sessionId": "sk-ownedcredentialshape-localsession",
+            "continuationSession": "sk-ownedcredentialshape-localsession",
+            "launches": 2,
+            "files": {
+              "result": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-VXfotM/runs/run-7d5ac3a9-a73f-4c1e-acf7-94f0c3c0a4cd/result.json",
+              "execution": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-VXfotM/runs/execution.json"
+            },
+            "result_sha256": "a0e86bdb298d70c940b9c0428cec9cb18cd6ad0d2d81866063d22b6e92862d28",
+            "result_mode": "0600"
+          },
+          {
+            "provider": "gemini",
+            "path": "settle",
+            "supplied": true,
+            "sessionId": "22222222-2222-4222-8222-222222222222",
+            "continuationSession": "22222222-2222-4222-8222-222222222222",
+            "launches": 2,
+            "files": {
+              "result": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-8YZsGS/runs/run-9a2753c8-5b90-4cec-8242-1d5fa6fe74f0/result.json",
+              "execution": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-8YZsGS/runs/execution.json"
+            },
+            "result_sha256": "813624dd80d056e09a94835e7d171eda7062a98a4a97964a038504ecafc14dfb",
+            "result_mode": "0600"
+          },
+          {
+            "provider": "codex",
+            "path": "collect",
+            "supplied": false,
+            "sessionId": "sk-ownedcredentialshape-localsession",
+            "continuationSession": "sk-ownedcredentialshape-localsession",
+            "launches": 2,
+            "files": {
+              "result": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-FIYi96/runs/run-b5a59685-f1d5-4ff7-8694-13b8b1ddf8ad/result.json",
+              "execution": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-FIYi96/runs/execution.json"
+            },
+            "result_sha256": "528c0cc16baca1e36a5218ad8649c60872a829bff8f002f33d8d09ad322cd7fa",
+            "result_mode": "0600"
+          },
+          {
+            "provider": "codex",
+            "path": "collect",
+            "supplied": true,
+            "sessionId": "22222222-2222-4222-8222-222222222222",
+            "continuationSession": "22222222-2222-4222-8222-222222222222",
+            "launches": 2,
+            "files": {
+              "result": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-FEZPvW/runs/run-ff1604b7-45a7-424d-933a-0b115a86428d/result.json",
+              "execution": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-FEZPvW/runs/execution.json"
+            },
+            "result_sha256": "1ff64d99e914ee0b8c08fa96320ee183822837d80c5c25c941e7ffb100425f22",
+            "result_mode": "0600"
+          },
+          {
+            "provider": "codex",
+            "path": "settle",
+            "supplied": false,
+            "sessionId": "sk-ownedcredentialshape-localsession",
+            "continuationSession": "sk-ownedcredentialshape-localsession",
+            "launches": 2,
+            "files": {
+              "result": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-cNIwge/runs/run-91e767cd-438a-4623-baec-54abc0f952a4/result.json",
+              "execution": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-cNIwge/runs/execution.json"
+            },
+            "result_sha256": "558b5569ae82f91cd07cb74fa0f185e63bc2d94a78ccc277f1726afa0393526c",
+            "result_mode": "0600"
+          },
+          {
+            "provider": "codex",
+            "path": "settle",
+            "supplied": true,
+            "sessionId": "22222222-2222-4222-8222-222222222222",
+            "continuationSession": "22222222-2222-4222-8222-222222222222",
+            "launches": 2,
+            "files": {
+              "result": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-GbDHww/runs/run-e9d12c78-1790-4cc0-b3c2-2b695a6eb539/result.json",
+              "execution": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-GbDHww/runs/execution.json"
+            },
+            "result_sha256": "dff6c0d23c2037d501d281fd7e6fe5b09d814459bcc7a86eda9d60e72f110993",
+            "result_mode": "0600"
+          },
+          {
+            "provider": "opencode",
+            "path": "collect",
+            "supplied": false,
+            "sessionId": "sk-ownedcredentialshape-localsession",
+            "continuationSession": "sk-ownedcredentialshape-localsession",
+            "launches": 2,
+            "files": {
+              "result": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-6AM2fi/runs/run-2a64b250-b1ca-4505-aabd-540415ca31ec/result.json",
+              "execution": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-6AM2fi/runs/execution.json"
+            },
+            "result_sha256": "785e269323b2a05e2734af5c2bbc71f05009d229cf62a8daca55430dd48bf222",
+            "result_mode": "0600"
+          },
+          {
+            "provider": "opencode",
+            "path": "collect",
+            "supplied": true,
+            "sessionId": "22222222-2222-4222-8222-222222222222",
+            "continuationSession": "22222222-2222-4222-8222-222222222222",
+            "launches": 2,
+            "files": {
+              "result": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-wI7gc8/runs/run-91b85aa4-744f-47bd-849f-74bc23d18392/result.json",
+              "execution": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-wI7gc8/runs/execution.json"
+            },
+            "result_sha256": "e63227601e4bf4ae0e360e0d2523794b170d3bcd90c6f65913aaf65ea6ab6687",
+            "result_mode": "0600"
+          },
+          {
+            "provider": "opencode",
+            "path": "settle",
+            "supplied": false,
+            "sessionId": "sk-ownedcredentialshape-localsession",
+            "continuationSession": "sk-ownedcredentialshape-localsession",
+            "launches": 2,
+            "files": {
+              "result": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-tAIlcV/runs/run-2db1ae65-9c9d-4697-ab62-85d1ab5dd6db/result.json",
+              "execution": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-tAIlcV/runs/execution.json"
+            },
+            "result_sha256": "8c22f72e4361942b99675b6c155edff8e34cdee097ea16a26ff3097c82a9b882",
+            "result_mode": "0600"
+          },
+          {
+            "provider": "opencode",
+            "path": "settle",
+            "supplied": true,
+            "sessionId": "22222222-2222-4222-8222-222222222222",
+            "continuationSession": "22222222-2222-4222-8222-222222222222",
+            "launches": 2,
+            "files": {
+              "result": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-pHqzkr/runs/run-c8352650-fa81-4abb-9959-14a2b47daeba/result.json",
+              "execution": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-pHqzkr/runs/execution.json"
+            },
+            "result_sha256": "ba022d5344bc473928a415fdd2b1f44e38b2106c04fe6e804ea32680bcc46d51",
+            "result_mode": "0600"
+          },
+          {
+            "provider": "goose",
+            "path": "collect",
+            "supplied": false,
+            "sessionId": "sk-ownedcredentialshape-localsession",
+            "continuationSession": "sk-ownedcredentialshape-localsession",
+            "launches": 2,
+            "files": {
+              "result": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-ntKujd/runs/run-ac6f6128-037a-49dc-af65-7f594c998b2e/result.json",
+              "execution": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-ntKujd/runs/execution.json"
+            },
+            "result_sha256": "14c956ce185add05e0bf8220b95d548198ae7e6af60b5096291abc6a845af8cc",
+            "result_mode": "0600"
+          },
+          {
+            "provider": "goose",
+            "path": "collect",
+            "supplied": true,
+            "sessionId": "22222222-2222-4222-8222-222222222222",
+            "continuationSession": "22222222-2222-4222-8222-222222222222",
+            "launches": 2,
+            "files": {
+              "result": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-1xCnm2/runs/run-9ee014b9-2c30-4b5d-b99e-82e5330ffca4/result.json",
+              "execution": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-1xCnm2/runs/execution.json"
+            },
+            "result_sha256": "65169fb0f005845f9199ba65672498e6a3b4d12862f42ee33d34a517876083fa",
+            "result_mode": "0600"
+          },
+          {
+            "provider": "goose",
+            "path": "settle",
+            "supplied": false,
+            "sessionId": "sk-ownedcredentialshape-localsession",
+            "continuationSession": "sk-ownedcredentialshape-localsession",
+            "launches": 2,
+            "files": {
+              "result": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-qsVsfq/runs/run-20899c9e-146f-4d50-ac82-269a3861c3ac/result.json",
+              "execution": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-qsVsfq/runs/execution.json"
+            },
+            "result_sha256": "15fc8d1f9c1461c1e5c1dc725ab9071c8f55de8095ae0eb349facc5a44948e0e",
+            "result_mode": "0600"
+          },
+          {
+            "provider": "goose",
+            "path": "settle",
+            "supplied": true,
+            "sessionId": "22222222-2222-4222-8222-222222222222",
+            "continuationSession": "22222222-2222-4222-8222-222222222222",
+            "launches": 2,
+            "files": {
+              "result": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-K6LiCQ/runs/run-d9f5fc6f-95d3-44fa-af05-fd195ad5c4e3/result.json",
+              "execution": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-K6LiCQ/runs/execution.json"
+            },
+            "result_sha256": "457756ca477c66981b2e46844729c9519769a7abd11d92fc07804e24d820317a",
+            "result_mode": "0600"
+          }
+        ]
+      }
+    ]
+  },
+  "external_qualification": {
+    "mandatory_live_prerequisites": [],
+    "live_paid_calls": 0,
+    "native_codex_preparation_qualified": false,
+    "remote_provider_available": {
+      "openai-agents": false,
+      "codex-cloud": false
+    },
+    "installed_plugin_qualified": false,
+    "model_access_exercised": false,
+    "browser_capture_required": false,
+    "remedy": "Complete the independent native preparation adapter and its limited-authority evidence before registry integration. Later production transports require implemented adapters, credentials, demonstrated model access and authorized bounded live evidence; preserve model/provider defaults and sandbox permissions."
+  }
+}

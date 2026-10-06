@@ -6,7 +6,7 @@ import { EventEmitter } from "node:events";
 import { mkdirSync, readFileSync, writeFileSync, rmSync, renameSync, symlinkSync, cpSync, statSync, lstatSync, existsSync, chmodSync, realpathSync } from "node:fs";
 import { pathToFileURL } from "node:url";
 import { makeExecution, executionLive, assertExecutionDependency } from "../lib/execution.mjs";
-import { redact, EXECUTION_CURSOR_BYTES } from "../lib/execution_io.mjs";
+import { redact, redactResultMetadata, EXECUTION_CURSOR_BYTES } from "../lib/execution_io.mjs";
 import { executionRegistry, adapters, buildRun } from "../lib/harness.mjs";
 import { makeProviderHealth } from "../lib/provider_health.mjs";
 import { makeRunner, LOCAL_OUTPUT_LIMITS } from "../lib/run.mjs";
@@ -1534,11 +1534,13 @@ function resultFixture() {
   return { id, entry, result, dir, ctx, verify, calls };
 }
 
-async function collectedArtifactFixture(secrets = []) {
-  const f = resultFixture(), provider = remote(), home = tempHome(), root = join(home, "runs", idSlug(f.id));
-  const options = { root, taskId: f.id, provider: "openai-agents", account: "test", transport: provider.transport, capabilities: provider.capabilities, clock: provider.clock, secrets };
+async function collectedArtifactFixture(secrets = [], { providerName = "openai-agents", accepted } = {}) {
+  const f = resultFixture(), provider = remote(providerName), home = tempHome(), root = join(home, "runs", idSlug(f.id));
+  const submit = provider.transport.submit;
+  if (accepted) provider.transport.submit = async req => { await submit(req); provider.observe(accepted); return accepted; };
+  const options = { root, taskId: f.id, provider: providerName, account: "test", transport: provider.transport, capabilities: provider.capabilities, clock: provider.clock, secrets };
   const reopen = () => makeExecution(options), service = reopen(), job = await service.submit(input);
-  f.entry.harness = "openai-agents"; f.entry.session = job.execution.sessionId; f.entry.execution = job.execution;
+  f.entry.harness = providerName; f.entry.session = job.execution.sessionId; f.entry.execution = job.execution;
   Object.assign(f.result, { runId: job.id, providerJobId: job.execution.providerJobId, sessionId: job.execution.sessionId, turnId: job.execution.turnId,
     outcome: { finished: true, ok: true, cost: null, denials: [] } });
   provider.transport.collect = async () => { provider.calls.push(["collect"]); return f.result; };
@@ -1548,6 +1550,102 @@ async function collectedArtifactFixture(secrets = []) {
     provider.observe({ state: "succeeded" }); await service.reconcile({ force: true }); return service.collect();
   } };
 }
+
+test("result metadata redaction preserves exact private ownership while cleaning diagnostics", () => {
+  for (const supplied of [false, true]) {
+    const keys = ["taskId", "runId", "providerJobId", "sessionId", "turnId", "inputHead", "repo", "branch", "pushedHead"];
+    const identities = Object.fromEntries(keys.map(key => [key, supplied ? `opaque-owned-${key}` : `sk-ownedcredentialshape-${key}`]));
+    const secrets = supplied ? Object.values(identities) : [], message = Object.values(identities).join(" ");
+    const original = { ...identities, version: 1, outcome: { finished: true, ok: true, lastMessage: message },
+      lines: [message], usage: { detail: message }, pr: { title: message, body: message },
+      files: [{ path: identities.branch, afterHash: identities.inputHead, text: message }] };
+    const snapshot = structuredClone(original), clean = redactResultMetadata(original, secrets);
+    for (const key of keys) assert.equal(clean[key], identities[key], `${key} remains exact private publication input`);
+    assert.deepEqual(clean.files, original.files); assert.deepEqual(original, snapshot);
+    assert.deepEqual(clean.artifacts, [{ path: "[redacted]", hash: "[redacted]" }]);
+    for (const value of Object.values(identities)) {
+      assert.equal(JSON.stringify({ outcome: clean.outcome, lines: clean.lines, usage: clean.usage, pr: clean.pr }).includes(value), false);
+      assert.equal(JSON.stringify(redact(clean, secrets)).includes(value), false);
+    }
+    const omitted = redactResultMetadata({ outcome: { finished: true, ok: true }, sessionId: null });
+    assert.equal(omitted.sessionId, null); assert.equal(Object.hasOwn(omitted, "providerJobId"), false);
+  }
+});
+
+test("opaque remote identities survive collection, publication and continuation while public results stay redacted", async t => {
+  const evidence = [];
+  for (const providerName of ["openai-agents", "codex-cloud"]) for (const supplied of [false, true]) {
+    const accepted = Object.fromEntries(["providerJobId", "sessionId", "turnId"].map(key => [key,
+      supplied ? `opaque-owned-${key}` : `sk-ownedcredentialshape-${key}`]));
+    const secrets = supplied ? Object.values(accepted) : [], f = await collectedArtifactFixture(secrets, { providerName, accepted });
+    if (supplied) secrets.push(f.id, f.job.id, input.inputHead, f.entry.repo, f.entry.branch);
+    const identities = { ...accepted, taskId: f.id, runId: f.job.id, inputHead: input.inputHead, repo: f.entry.repo, branch: f.entry.branch };
+    const privateMessage = Object.values(accepted).join(" ");
+    f.result.lines = [privateMessage]; f.result.outcome.lastMessage = privateMessage; f.result.usage = { detail: privateMessage };
+    f.provider.observe({ events: [{ eventId: "owned-output", type: "output", data: privateMessage }] });
+    const source = structuredClone(f.result), collected = await f.collect();
+    for (const [key, value] of Object.entries(identities)) assert.equal(collected[key], value);
+    assert.deepEqual(f.result, source); assert.equal(statSync(join(f.dir, "result.json")).mode & 0o777, 0o600);
+    assert.equal(f.reopen().current().execution.sessionId, accepted.sessionId);
+    assert.equal(f.reopen().sessionFrom(f.job.id), accepted.sessionId);
+    const bytes = readFileSync(join(f.dir, "result.json"), "utf8"), replay = await f.reopen().collect();
+    assert.deepEqual(replay, collected); assert.equal(readFileSync(join(f.dir, "result.json"), "utf8"), bytes);
+    assert.equal(f.provider.calls.filter(c => c[0] === "collect").length, 1);
+    f.verify = async () => { f.calls.push("verify"); return { stdout: privateMessage, stderr: "" }; };
+    const done = await reconcileExecutionResult(f.ctx, { ...f, result: replay });
+    assert.deepEqual(f.calls, ["commit", "verify", "push", "PR"]); assert.equal(done.evidence[0].exit, 0);
+    assert.equal(readFileSync(join(f.entry.worktree, "a.txt"), "utf8"), "after");
+    const state = makeState(f.ctx.home); state.put(f.id, f.entry);
+    const response = { writeHead(code) { this.code = code; }, end(body) { this.body = body; } }, before = f.provider.calls.length;
+    routes["GET /api/run/result"]({ ...f.ctx, state }, {}, response, new URL(`http://localhost/api/run/result?id=${f.id}&run=${f.job.id}`));
+    assert.equal(response.code, 200); assert.equal(f.provider.calls.length, before);
+    const view = JSON.parse(response.body);
+    for (const value of [...Object.values(accepted), ...secrets]) assert.equal(response.body.includes(value), false);
+    for (const key of ["providerJobId", "sessionId", "turnId"]) assert.equal(view[key], "[redacted]");
+    assert.equal(Object.hasOwn(view, "files"), false);
+    for (const file of ["events.jsonl", "job.log", "verification.json"]) {
+      const output = readFileSync(join(f.dir, file), "utf8");
+      for (const value of Object.values(accepted)) assert.equal(output.includes(value), false);
+    }
+    const publicPath = join(f.dir, "identity-public-result.json"); writeJsonAtomic(publicPath, view);
+    const next = await f.reopen().continue({ ...input, operationId: "owned-next", sessionId: accepted.sessionId });
+    assert.equal(next.execution.sessionId, accepted.sessionId);
+    assert.equal(f.provider.calls.filter(c => c[0] === "continue").length, 1);
+    assert.equal(f.provider.calls.find(c => c[0] === "continue")[1].sessionId, accepted.sessionId);
+    assert.equal(f.provider.calls.filter(c => c[0] === "submit").length, 1);
+    evidence.push({ provider: providerName, supplied, identities, continuationSession: next.execution.sessionId, paidFixtureSubmits: 1, collectCalls: 1,
+      files: { execution: join(f.service.root, "execution.json"), result: join(f.dir, "result.json"), publicResult: publicPath,
+        application: join(f.dir, "result-application.json"), verification: join(f.dir, "verification.json"), events: join(f.dir, "events.jsonl"), log: join(f.dir, "job.log") } });
+  }
+  const report = join(tempHome(), "remote-result-identities.json"); writeJsonAtomic(report, { cases: evidence });
+  t.diagnostic(`remote result identity evidence: ${report}`);
+});
+
+test("opaque local identities survive settlement, collection and cached continuation without diagnostic exposure", async t => {
+  const evidence = [];
+  for (const provider of ["claude", "gemini", "codex", "opencode", "goose"]) for (const path of ["collect", "settle"]) for (const supplied of [false, true]) {
+    const f = localTimeoutFixture({ provider }), sessionId = supplied ? f.session : "sk-ownedcredentialshape-localsession";
+    const secrets = supplied ? [sessionId] : [], service = f.open({ secrets });
+    const job = await service.submit({ ...input, recordedSessionId: sessionId, spec: { cmd: "offline-cli-fixture", args: [], options: {} } });
+    if (supplied) secrets.push(f.id, job.id, input.inputHead);
+    f.runner.finish(localSessionLines(provider, sessionId), { exit: 0 });
+    await service.reconcile();
+    if (path === "collect") await service.collect(); else service.settle(job.id);
+    const cachedPath = join(f.root, job.id, "result.json"), bytes = readFileSync(cachedPath, "utf8"), saved = readJson(cachedPath);
+    assert.equal(saved.sessionId, sessionId); assert.equal(saved.taskId, f.id); assert.equal(saved.runId, job.id);
+    if (path === "settle") { assert.equal(saved.providerJobId, job.id); assert.equal(saved.inputHead, input.inputHead); }
+    const reopened = f.open({ secrets }), replay = await reopened.collect();
+    assert.deepEqual(replay, saved); assert.equal(readFileSync(cachedPath, "utf8"), bytes);
+    assert.equal(reopened.sessionFrom(job.id), sessionId); assert.equal(reopened.current().execution.sessionId, sessionId);
+    assert.equal(JSON.stringify(reopened.sanitize(saved, job.id)).includes(sessionId), false);
+    const next = await reopened.continue({ operationId: "owned-next", sessionId, spec: { cmd: "offline-cli-fixture", args: [], options: {} } });
+    assert.equal(next.execution.sessionId, sessionId); assert.equal(f.runner.started.length, 2);
+    evidence.push({ provider, path, supplied, sessionId, continuationSession: next.execution.sessionId, launches: 2,
+      files: { result: cachedPath, execution: join(f.root, "execution.json") } });
+  }
+  const report = join(tempHome(), "local-result-identities.json"); writeJsonAtomic(report, { cases: evidence });
+  t.diagnostic(`local result identity evidence: ${report}`);
+});
 
 test("collected authentication source preserves exact artifact bytes through restart and publication", async () => {
   const f = await collectedArtifactFixture();
