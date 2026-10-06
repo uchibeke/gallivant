@@ -9,7 +9,7 @@
   "engines": { "node": ">=22" },
   "scripts": {
     "test": "node --test test/*.test.mjs",
-    "test:execution-backends": "node --test test/execution-backends.test.mjs test/execution-preparation.test.mjs test/loop.test.mjs test/recovery.test.mjs test/review.test.mjs test/control.test.mjs test/tracker_controls.test.mjs test/public_format.test.mjs test/public_output.test.mjs",
+    "test:execution-backends": "node --test test/execution-backends.test.mjs test/execution-preparation.test.mjs test/loop.test.mjs test/recovery.test.mjs test/review.test.mjs test/control.test.mjs test/tracker_controls.test.mjs test/tracker.test.mjs test/public_format.test.mjs test/public_output.test.mjs",
     "test:task-intake": "node --test test/task-intake.test.mjs",
     "test:live-harnesses": "node test/live-harnesses.mjs",
     "lint": "node --check bin/gallivant.mjs && for f in lib/*.mjs lib/*/*.mjs; do node --check \"$f\" || exit 1; done"

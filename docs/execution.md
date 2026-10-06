@@ -51,7 +51,7 @@ its persisted cadence; read-only clients never call a transport.
 | `inspect` | Exact owned job/session/turn, event cursor; authoritative state, observation time, bounded event page, next cursor, explicit gap and nullable cost |
 | `continue` | Same dispatch contract plus this provider's recorded native session; exact new owned job/root turn acknowledgement |
 | `collect` | Exact job/session/turn/input head; finished boolean outcome, nullable cost, saved result and optional artifact manifest or verified pushed revision |
-| `cancel` | Exact owned job/root turn; `confirmed: true` only after authoritative remote cancellation |
+| `cancel` | Task/provider/account/run, exact owned job/session/root turn, durable cancellation idempotency key and AbortSignal; boolean `confirmed`, true only after authoritative remote cancellation |
 | optional `lookup` | Persisted intent/idempotency key after lost acknowledgement; authoritative exact job observation, or unresolved null |
 
 The public boundary's `inspect()` is deliberately a cached read. Its coordinator
@@ -124,7 +124,7 @@ answers, dispatch or recovery. The process-identity lock serializes mutations on
 operator's local filesystem; this is not a distributed multi-host lease.
 
 Accepted execution metadata in both the registry and compatible `job.json`
-contains exact job/session/root-turn IDs, environment/model/policy, provider state,
+contains transport kind, exact job/session/root-turn IDs, environment/model/policy, provider state,
 nullable `observedAt`, `reconciledAt`, `nextAttemptAt`, failures, cursor, nullable
 cost, collected/quarantined flags, controls and saved workflow ownership. Saved
 workflow cursors recover a correction accepted before registry acknowledgement.
@@ -132,7 +132,14 @@ A repeated operation with identical input reuses its acknowledgement; changed
 input conflicts. Unknown acceptance never authorizes another dispatch. Startup
 and periodic lookup reconcile it; without authoritative lookup an operator must
 inspect the recorded key and restore exact ownership. Never delete that intent to
-force a retry.
+force a retry. Remote submission/continuation acknowledgements and every lookup
+or observation require nonempty string job and root-turn IDs. A job-only reply
+keeps its reservation and unresolved intent. Incomplete older remote records
+must recover the root through the intent lookup; job-level inspection or cached
+results cannot fill that identity. Collection validates saved results against the
+exact task/run/job/root turn as well as newly retrieved results. Raw job projections
+use the recorded transport kind (or canonical registry for older records) and
+cannot treat an unresolved remote root as terminal; CLI runs need no root-turn ID.
 
 For local adapters that do not echo a session ID, the boundary retains the session
 minted by the existing start path. Legacy continuation uses the recorded registry
@@ -226,7 +233,14 @@ configured run trees. `Last-Event-ID` resumes replay; history's `before` cursor
 paginates older windows. SSE has a 20-second heartbeat, a 320 KiB pending-buffer
 cap, pauses file reads on backpressure, and removes watchers/timers/listeners on
 disconnect. The browser caps live and history DOM at 2,000 lines each and pending
-lines at 400. `/api/run/result` exposes saved outcomes, artifact hashes and
+lines at 400. Buffered events retain their SSE replay IDs. Display drops coalesce
+into a bounded pair of recovery cursors, separate from the oldest history cursor;
+the existing history button retrieves the missing windows without a `skipped`
+frame. History merges by replay ID, avoids duplicates with painted/pending rows
+and preserves older pagination through bursts and reconnects, including legacy
+byte IDs. DOM eviction also exposes recoverable history. A failed history read
+retains its cursor; page exit aborts the read and discards pending/late frames.
+`/api/run/result` exposes saved outcomes, artifact hashes and
 verification evidence after log retention, without exposing raw diagnostics.
 
 ## Controls, costs and publication
@@ -242,7 +256,19 @@ remains requested while owned descendants survive or inspection is unavailable;
 restart reconciliation confirms only the same observed run and quarantines its
 late output. A kill request alone never confirms cessation.
 Remote cancellation never equates stopping a submission client with stopping its
-job. Interrupted continuity requires native capability and exact session ownership.
+job. The additive `execution.cancellation` record stores status (`pending`,
+`acknowledged`, `confirmed`, `unsupported` or `terminal`), request reason/time,
+idempotency key, attempt/failure counts and retry times. A stop requested during
+unknown submission acceptance remains pending. Authoritative lookup first saves
+exact owned job/root identity, then the existing coordinator sends the stop.
+Lost stop replies retry the same key under bounded backoff; transports must make
+that cancellation key idempotent. An acknowledged unconfirmed stop is inspected
+until cancellation is authoritative, without resending every tick. Unsupported
+stops never call the transport. Natural completion still quarantines the output
+and records `terminal`, without claiming cancellation. Applied control receipts
+are updated when the matching run's later reconciliation confirms cancellation.
+No read-only client drives this recovery. Interrupted continuity requires native
+capability and exact session ownership.
 Cancelled/timed-out work cannot overlap a replacement; late results are
 quarantined. A requested deadline abort leaves unknown acceptance unresolved.
 

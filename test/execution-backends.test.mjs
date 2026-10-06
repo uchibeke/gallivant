@@ -946,3 +946,161 @@ test("reported usage above a reservation exhausts allowance without double charg
   await assert.rejects(f.reopen().continue({ ...input, operationId: "over-budget", sessionId: "session-1" }), { code: "EXECUTION_ALLOWANCE" });
   assert.equal(f.calls.filter(x => x[0] === "continue").length, 0);
 });
+
+for (const provider of ["openai-agents", "codex-cloud"]) {
+  test(`${provider} fixture: applied cancellation survives unknown submission and cancels recovered ownership once`, async () => {
+    const f = remote(provider), submit = f.transport.submit;
+    f.transport.submit = async req => { await submit(req); throw new Error("reply lost"); };
+    await assert.rejects(f.service.submit(input), /reply lost/);
+    const run = f.service.current(), home = tempHome(), state = makeState(home), id = "acme/widget/remote";
+    state.put(id, { ...newEntry({ repo: "acme/widget", harness: provider, branch: "work/remote", state: STATES.running, nowIso: T0 }),
+      last: { run: run.id, exit: null }, control: { id: "cancel-unknown", action: "cancel", status: "queued" }, dispatch_stopped: "cancellation-requested" });
+    const ctx = { home, config: CONFIG, clock: f.clock, state, gh: fakeGh(), ownLogin: "me", git: fakeGit(), log: silentLog,
+      notify: fakeNotify(), readPrd: () => null, executionFor: () => f.reopen() };
+    await makeTick(ctx).tickEntry(id, state.get(id));
+    assert.equal(state.get(id).control.status, "applied");
+    assert.equal(state.get(id).reason, "cancellation-requested");
+    const persisted = f.service.state().current.execution.cancellation;
+    assert.equal(persisted.status, "pending"); assert.equal(persisted.attempts, 0);
+    assert.equal(f.calls.some(c => c[0] === "cancel"), false);
+    const restarted = { ...ctx, state: makeState(home) };
+    await makeTick(restarted).tickEntry(id, restarted.state.get(id));
+    await makeTick(restarted).tickEntry(id, restarted.state.get(id));
+    const cancelled = f.reopen().current();
+    assert.equal(cancelled.execution.acceptance, "accepted");
+    assert.equal(cancelled.execution.providerState, "cancelled"); assert.equal(cancelled.execution.quarantined, true);
+    assert.equal(cancelled.execution.cancellation.status, "confirmed");
+    assert.equal(cancelled.execution.costUsd, null);
+    assert.equal(restarted.state.get(id).reason, "cancelled");
+    assert.equal(restarted.state.get(id).control.id, "cancel-unknown");
+    assert.equal(restarted.state.get(id).control.message, "Cancellation confirmed.");
+    const stops = f.calls.filter(c => c[0] === "cancel");
+    assert.equal(stops.length, 1); assert.equal(stops[0][1].providerJobId, "job-1"); assert.equal(stops[0][1].turnId, "turn-1");
+    assert.equal(stops[0][1].account, "test"); assert.equal(stops[0][1].idempotencyKey, persisted.idempotencyKey);
+    assert.equal(f.calls.filter(c => c[0] === "submit").length, 1);
+    await assert.rejects(f.reopen().continue({ ...input, operationId: "after-cancel", sessionId: "session-1" }), { code: "EXECUTION_STOPPED" });
+    await assert.rejects(f.reopen().collect(), { code: "EXECUTION_QUARANTINED" });
+    assert.equal(f.calls.filter(c => c[0] === "collect").length, 0);
+  });
+}
+
+test("cancellation retries lost replies with one durable key and bounded restart backoff", async () => {
+  const f = remote(); await f.service.submit(input);
+  f.transport.cancel = async req => { f.calls.push(["cancel", req]); throw new Error("lost cancellation reply"); };
+  await assert.rejects(f.service.cancel("timeout"), /lost cancellation reply/);
+  const intent = f.service.current().execution.cancellation;
+  assert.equal(intent.status, "pending"); assert.equal(intent.attempts, 1);
+  for (let i = 0; i < 5; i++) await f.reopen().reconcile({ force: true });
+  assert.equal(f.calls.filter(c => c[0] === "cancel").length, 1);
+  f.clock.advance(intent.nextAttemptAt - f.clock.now());
+  await f.reopen().reconcile();
+  const second = f.service.current().execution.cancellation;
+  assert.equal(second.attempts, 2); assert.ok(second.nextAttemptAt > intent.nextAttemptAt);
+  f.transport.cancel = async req => { f.calls.push(["cancel", req]); return { confirmed: false }; };
+  f.clock.advance(second.nextAttemptAt - f.clock.now()); await f.reopen().reconcile();
+  assert.equal(f.service.current().execution.cancellation.status, "acknowledged");
+  for (let i = 0; i < 5; i++) await f.reopen().reconcile({ force: true });
+  assert.equal(f.calls.filter(c => c[0] === "cancel").length, 3);
+  assert.equal(new Set(f.calls.filter(c => c[0] === "cancel").map(c => c[1].idempotencyKey)).size, 1);
+  f.observe({ state: "cancelled" }); await f.reopen().reconcile({ force: true });
+  assert.equal(f.service.current().execution.cancellation.status, "confirmed");
+  assert.equal(f.service.current().execution.providerState, "cancelled");
+});
+
+test("pending cancellation refuses incomplete lookup ownership and never calls an unsupported stop", async () => {
+  for (const supported of [true, false]) {
+    const f = remote(), submit = f.transport.submit;
+    f.capabilities.controls.cancel = supported;
+    f.transport.submit = async req => { await submit(req); throw new Error("reply lost"); };
+    await assert.rejects(f.service.submit(input)); await f.service.cancel();
+    const lookup = f.transport.lookup;
+    f.transport.lookup = async req => ({ ...await lookup(req), turnId: null });
+    await f.reopen().reconcile({ force: true });
+    assert.equal(f.service.current().execution.acceptance, "unknown");
+    assert.equal(f.service.current().execution.recoveryAction, "EXECUTION_OWNERSHIP");
+    assert.equal(f.calls.some(c => c[0] === "cancel"), false);
+    f.transport.lookup = lookup; await f.reopen().reconcile({ force: true });
+    assert.equal(f.service.current().execution.cancellation.status, supported ? "confirmed" : "unsupported");
+    assert.equal(f.calls.filter(c => c[0] === "cancel").length, supported ? 1 : 0);
+  }
+});
+
+test("natural completion after a pending stop quarantines results without claiming cancellation", async () => {
+  const f = remote(), submit = f.transport.submit;
+  f.transport.submit = async req => { await submit(req); throw new Error("reply lost"); };
+  await assert.rejects(f.service.submit(input)); await f.service.cancel();
+  const lookup = f.transport.lookup;
+  f.transport.lookup = async req => ({ ...await lookup(req), state: "succeeded" });
+  await f.reopen().reconcile({ force: true });
+  assert.equal(f.service.current().execution.providerState, "succeeded");
+  assert.equal(f.service.current().execution.cancellation.status, "terminal");
+  assert.equal(f.service.current().execution.quarantined, true);
+  assert.deepEqual(await f.service.cancel(), { confirmed: false });
+  assert.equal(f.calls.some(c => c[0] === "cancel"), false);
+  await assert.rejects(f.service.collect(), { code: "EXECUTION_QUARANTINED" });
+});
+
+test("remote dispatch and continuation require exact job and root-turn acknowledgements", async () => {
+  for (const acknowledgement of [{ providerJobId: "job-1" }, { providerJobId: "job-1", turnId: " " }, { providerJobId: 1, turnId: "root" }]) {
+    const f = remote(), submit = f.transport.submit;
+    f.transport.submit = async req => { await submit(req); return acknowledgement; };
+    await assert.rejects(f.service.submit(input), { code: "EXECUTION_UNKNOWN" });
+    assert.equal(f.reopen().current().execution.acceptance, "unknown");
+    assert.equal(f.service.current().running, true); assert.equal(f.service.state().allowance.reservedUsd, 0.1);
+    await assert.rejects(f.service.submit(input), { code: "EXECUTION_UNKNOWN" });
+    await assert.rejects(f.service.submit({ ...input, operationId: "replacement" }), { code: "BUSY" });
+    await assert.rejects(f.service.collect(), { code: "EXECUTION_RESULT" });
+    assert.equal(f.calls.filter(c => c[0] === "submit").length, 1);
+    await f.reopen().reconcile({ force: true });
+    assert.equal(f.service.current().execution.turnId, "turn-1");
+    assert.equal(f.service.current().execution.acceptance, "accepted");
+  }
+  const f = remote(); const job = await f.service.submit(input);
+  f.observe({ state: "succeeded" }); await f.service.reconcile({ force: true }); await f.service.collect();
+  f.transport.continue = async req => { f.calls.push(["continue", req]); return { providerJobId: "job-2", sessionId: req.sessionId }; };
+  const followup = { ...input, operationId: "followup", sessionId: job.execution.sessionId };
+  await assert.rejects(f.service.continue(followup), { code: "EXECUTION_UNKNOWN" });
+  await assert.rejects(f.reopen().continue(followup), { code: "EXECUTION_UNKNOWN" });
+  assert.equal(f.calls.filter(c => c[0] === "continue").length, 1);
+});
+
+test("incomplete legacy remote ownership cannot settle, reuse an acknowledgement or collect cached results", async () => {
+  const f = remote(), job = await f.service.submit(input);
+  f.observe({ state: "succeeded" }); await f.service.reconcile({ force: true }); await f.service.collect();
+  const raw = f.service.state();
+  Object.assign(raw.current.execution, { turnId: null, providerState: "succeeded", collected: true });
+  raw.operations.first.job.execution.turnId = null;
+  assert.equal(executionLive(raw.current), true, "raw job projections cannot settle unqualified remote ownership");
+  delete raw.current.execution.transport;
+  assert.equal(executionLive(raw.current), true, "older remote metadata uses the canonical capability registry");
+  writeJsonAtomic(join(f.root, "execution.json"), raw);
+  const cached = readJson(join(f.service.dirOf(job.id), "result.json"));
+  cached.turnId = null; writeJsonAtomic(join(f.service.dirOf(job.id), "result.json"), cached);
+  assert.equal(f.reopen().current().running, true); assert.equal(f.reopen().current().execution.acceptance, "unknown");
+  await assert.rejects(f.reopen().submit(input), { code: "EXECUTION_UNKNOWN" });
+  await assert.rejects(f.reopen().collect(), { code: "EXECUTION_RESULT" });
+  const lookup = f.transport.lookup;
+  f.transport.lookup = async req => ({ ...await lookup(req), turnId: null, state: "succeeded" });
+  await f.reopen().reconcile({ force: true });
+  assert.equal(f.service.current().execution.acceptance, "unknown");
+  assert.equal(f.calls.filter(c => c[0] === "inspect").length, 1); // Only the original qualified run.
+  f.transport.lookup = lookup; await f.reopen().reconcile({ force: true });
+  assert.equal(f.service.current().execution.turnId, "turn-1");
+  await assert.rejects(f.service.collect(), { code: "EXECUTION_RESULT" }); // Cached null/wrong turn is rejected too.
+  assert.equal(f.calls.filter(c => c[0] === "collect").length, 1);
+});
+
+test("unacknowledged cancellation remains pending and older stopped records recover the same stop intent", async () => {
+  const f = remote(); await f.service.submit(input);
+  f.transport.cancel = async req => { f.calls.push(["cancel", req]); return null; };
+  await assert.rejects(f.service.cancel(), { code: "EXECUTION_PROTOCOL" });
+  const record = f.service.state(), key = record.current.execution.cancellation.idempotencyKey;
+  assert.equal(record.current.execution.cancellation.status, "pending");
+  delete record.current.execution.cancellation;
+  writeJsonAtomic(join(f.root, "execution.json"), record);
+  f.transport.cancel = async req => { f.calls.push(["cancel", req]); return { confirmed: true }; };
+  await f.reopen().reconcile({ force: true });
+  assert.equal(f.service.current().execution.cancellation.status, "confirmed");
+  assert.equal(f.service.current().execution.cancellation.idempotencyKey, key);
+  assert.equal(f.calls.filter(c => c[0] === "cancel").length, 2);
+});
