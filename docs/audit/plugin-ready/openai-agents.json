@@ -1,0 +1,381 @@
+{
+  "version": 1,
+  "task_id": "task-cf82d9f43ca0da3c5bb29b67",
+  "scope": "managed Agents REST implementation and provider-shaped offline lifecycle verification; live qualification remains unverified",
+  "recorded_at": "2026-10-06T14:02:05.379022+00:00",
+  "base_revision": "7936830977bcb4615de418b9dd5c4d655501297b",
+  "branch": "work/openai-agents-harness",
+  "source_files": {
+    "README.md": "6c9a9e9e79f7a9bd9157464ea2602f6ecde0b2878422e5c8dbea64a98d5f2ab8",
+    "docs/audit/plugin-ready/README.md": "7f24289695807c9bd9d880e54e287c3bcfa1a3324543ca87eee68b1e24a9e8f7",
+    "docs/audit/plugin-ready/openai-agents-checklist.md": "73dc474ea066ffda466afc138bd9648f352ce360e5319d073a644f9c958d649b",
+    "docs/execution.md": "9e0eb323ad624f15ca1769b75a971711e26a8d3c259541ed6e639b10d6620b1a",
+    "docs/openai-agents.md": "7ed635424ba0ca8856faacf7976c036c7c7a4a4667d43e63fec3799dec3c8337",
+    "docs/prds/openai-agents-harness.md": "b6d3ceeb20426248b5cf0d8527beaf93a6a69c09003cfc07d3a86fe8fa8b053a",
+    "lib/block.mjs": "bd644a1564d6d3dcf3edad1ad1f931fa5f3e4246a041f20acbbb04c88c07c665",
+    "lib/commands/doctor.mjs": "f360b366e6a20a29479925d2bb28d1fd9e38f1d97d09c764fbe2d033a1c8d23a",
+    "lib/commands/start.mjs": "5b5d1f3c9c71126bd9ed0f7f7772a727f8dd1e3c7f50615c70ed4d5f22353796",
+    "lib/config.mjs": "4cdd522fb24463d01023eb1650b5123ff0675ce6c7bbee4731020e2b1b0e9174",
+    "lib/context.mjs": "8d086cc3dacaf68de5f84c11b1ac498d60d6b3b420b61214b5e631587e5b6119",
+    "lib/execution.mjs": "dbb1bbf28a4fc54000b1580ee9f7b8ac36f6b78baf61a77001d8c701b2ba338f",
+    "lib/harness.mjs": "50640ba71ec7b03f2690ce07ab5d1731034d6d710a833c425d7e354337c6c9b5",
+    "lib/openai_agents.mjs": "c56be0b60e1e9df765f0b6c4f308eacb0fe2efc8e1d100676c916f74981e33e5",
+    "lib/openai_agents_config.mjs": "7d9db1b55e3c0f71ada076811eb11baf9cfb0becdfed10f6a86ec6ecbfa69dc7",
+    "lib/openai_agents_http.mjs": "bf09e30be66d2e22c240194a6e2658c6c9ba3f027a697a4e3db25a5d18f43b05",
+    "lib/openai_agents_input.mjs": "a2978393dc2dfe348c97962d0a6a9356184e54a7fe426847b9195186fa8d0c68",
+    "lib/openai_agents_sources.mjs": "c3b76d499c72ed5c65bde47e5784cb198130842eff88cc06a924efd6721b3d5b",
+    "lib/probe.mjs": "9e70d8dbffd842dea3b46f76efe10a18a5d5a30570c722d17774b4f09c8adf0a",
+    "lib/tick.mjs": "e1012ef8ab6b235b45eba75567ce435cd1a049bb1df52295ac0c195133daf947",
+    "package.json": "cc440ea2539b8d40772db637b1f6593584c66818f810c4a45719c7c563ff003a",
+    "test/execution-backends.test.mjs": "76365e17e2aedd7318cb2459066549c652a5880a5cc9589935999f649cc0258e",
+    "test/openai-agents-live.mjs": "0f556440264766e17a369e6eaa6b71658833b93c18971b1ef1326d65452a20d2",
+    "test/openai-agents.test.mjs": "2ea8777cabe514fa80962541cdfebab7c1bbfacaef75fe0c9b1a00d9980638ea",
+    "test/units.test.mjs": "ae8ab863aa48e3e44557e8f20c00bb8440682325ec099eb34a81f339cbb42b9f"
+  },
+  "frozen_inputs": {
+    "docs/plans/plugin-ready-gallivant.md": "3081d47d8161043f9c32b6184f07ee8d4ca513822341c41a138bdf28f7459fc2",
+    "docs/plans/plugin-hosting-and-live-tests.md": "21194dd4af8090950d2e80fea79fa5154ca79fa4a3289a5e4404883a38c9f11d",
+    "docs/prds/natural-language-tasks.md": "03256f613e8b8e5b84bd7791581c38d2a3bc2b0ba36b5e8b2f8ee2b548097c0d",
+    "docs/prds/hosted-codex-harnesses.md": "5d21326d44207c5cfd281561b40e873328607d94bbe40c8a8f0456b73ab65f63"
+  },
+  "versions": {
+    "node": "22.22.0",
+    "npm": "10.9.4",
+    "package": "0.1.0",
+    "agents_api": "agents=v1",
+    "execution": 1,
+    "registry": 1
+  },
+  "commands": [
+    {
+      "command": "npm test",
+      "exit": 0,
+      "raw_log": "/tmp/agents-npm-test-final.log",
+      "sha256": "bc4485370395c3a68aa418e8b8efca79e506cdc94b4952ef002d44d53c801c55",
+      "tests": 1104,
+      "pass": 1104,
+      "fail": 0,
+      "cancelled": 0,
+      "skipped": 0
+    },
+    {
+      "command": "npm run lint",
+      "exit": 0,
+      "raw_log": "/tmp/agents-lint-final.log",
+      "sha256": "8c7790de3f018fb4580f18ac70e1b355a0f76f522dd73acbdaa63632feffcecc"
+    },
+    {
+      "command": "npm run test:execution-backends",
+      "exit": 0,
+      "raw_log": "/tmp/agents-backends-final.log",
+      "sha256": "1a58e17d249ab9347c3dadb85d6ef75f3d92323aefe2adb2f474001f50e9b421",
+      "tests": 374,
+      "pass": 374,
+      "fail": 0,
+      "cancelled": 0,
+      "skipped": 0
+    },
+    {
+      "command": "npm run test:openai-agents",
+      "exit": 0,
+      "raw_log": "/tmp/agents-focused-final.log",
+      "sha256": "682bb5aeff6b488f5a3287cac1dd0b93c3b52c21a61f1038ba701689127aa3c9",
+      "tests": 28,
+      "pass": 28,
+      "fail": 0,
+      "cancelled": 0,
+      "skipped": 0
+    },
+    {
+      "command": "git diff --check",
+      "exit": 0,
+      "raw_log": "/tmp/agents-diff-check-final.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    }
+  ],
+  "cases": [
+    {
+      "criterion_id": "ac-1",
+      "met": true,
+      "evidence_kind": "implementation-and-offline-fixtures",
+      "files": [
+        "lib/context.mjs",
+        "lib/harness.mjs",
+        "lib/execution.mjs",
+        "lib/tick.mjs"
+      ],
+      "test_names": [
+        "missing predecessor module stops context startup with a dependency remedy",
+        "predecessor service is required and managed API is available while Cloud remains reserved"
+      ]
+    },
+    {
+      "criterion_id": "ac-2",
+      "met": true,
+      "evidence_kind": "implementation-and-offline-fixtures",
+      "files": [
+        "lib/openai_agents_config.mjs",
+        "lib/openai_agents.mjs",
+        "lib/probe.mjs"
+      ],
+      "test_names": [
+        "configuration refuses unavailable policy, missing billing selectors and private context",
+        "read-only account probe records exact selectors without claiming inference or hard caps"
+      ]
+    },
+    {
+      "criterion_id": "ac-3",
+      "met": true,
+      "evidence_kind": "implementation-and-offline-fixtures",
+      "files": [
+        "lib/openai_agents.mjs",
+        "lib/openai_agents_sources.mjs",
+        "lib/commands/start.mjs"
+      ],
+      "test_names": [
+        "real REST adapter: implementation, artifact pagination, restart and same-session correction",
+        "source snapshot preserves binary blobs, exact revision and verified carried files",
+        "initial launch reply loss remains registered for coordinator restart without a second implementation"
+      ]
+    },
+    {
+      "criterion_id": "ac-4",
+      "met": true,
+      "evidence_kind": "implementation-and-offline-fixtures",
+      "files": [
+        "lib/openai_agents.mjs",
+        "lib/openai_agents_input.mjs",
+        "lib/execution.mjs"
+      ],
+      "test_names": [
+        "authorized required action answer targets exact existing turn and rejects arbitrary tools",
+        "real REST adapter: implementation, artifact pagination, restart and same-session correction"
+      ]
+    },
+    {
+      "criterion_id": "ac-5",
+      "met": true,
+      "evidence_kind": "implementation-and-offline-fixtures",
+      "files": [
+        "lib/openai_agents.mjs",
+        "lib/openai_agents_http.mjs",
+        "lib/execution_journal.mjs"
+      ],
+      "test_names": [
+        "subagent completion, closed stream and idle session never settle a running root",
+        "reconnect restores paginated items, discards reordered deltas after done and labels gaps"
+      ]
+    },
+    {
+      "criterion_id": "ac-6",
+      "met": true,
+      "evidence_kind": "implementation-and-offline-fixtures",
+      "files": [
+        "lib/openai_agents.mjs",
+        "lib/openai_agents_http.mjs"
+      ],
+      "test_names": [
+        "reconnect restores paginated items, discards reordered deltas after done and labels gaps",
+        "unresolved root identity has a three-attempt recovery circuit without resending"
+      ]
+    },
+    {
+      "criterion_id": "ac-7",
+      "met": true,
+      "evidence_kind": "implementation-and-offline-fixtures",
+      "files": [
+        "lib/openai_agents.mjs",
+        "lib/execution.mjs"
+      ],
+      "test_names": [
+        "failed session opens no endless reconnect loop across restart",
+        "failed or unsent launch recovery stops provider I/O and preserves ambiguity",
+        "HTTP 401 preserves work and bounded retries with actionable private-safe errors",
+        "HTTP 429 preserves work and bounded retries with actionable private-safe errors",
+        "expired filesystem still permits immutable artifact recovery but refuses continuation"
+      ]
+    },
+    {
+      "criterion_id": "ac-8",
+      "met": true,
+      "evidence_kind": "implementation-and-offline-fixtures",
+      "files": [
+        "lib/openai_agents_sources.mjs",
+        "lib/openai_agents.mjs",
+        "lib/execution_result.mjs"
+      ],
+      "test_names": [
+        "managed artifacts reach the single PR writer with actual file and current-head verification",
+        "sandbox publisher delivers unchanged carried files, receipt repairs and rejects symlinks and mode changes",
+        "artifact rejects unsafe paths, private paths, wrong source and hashes"
+      ]
+    },
+    {
+      "criterion_id": "ac-9",
+      "met": true,
+      "evidence_kind": "implementation-and-offline-fixtures",
+      "files": [
+        "lib/tick.mjs",
+        "lib/commands/resume.mjs",
+        "lib/control.mjs",
+        "lib/deliverable.mjs"
+      ],
+      "test_names": [
+        "shared resume uses remote capabilities and owned sessions without a fake CLI",
+        "real REST adapter: implementation, artifact pagination, restart and same-session correction",
+        "sandbox publisher delivers unchanged carried files, receipt repairs and rejects symlinks and mode changes",
+        "phase-bounded coordinator settlement cannot enter review dispatch or queued resume"
+      ]
+    },
+    {
+      "criterion_id": "ac-10",
+      "met": true,
+      "evidence_kind": "implementation-and-offline-fixtures",
+      "files": [
+        "lib/openai_agents.mjs",
+        "lib/execution.mjs"
+      ],
+      "test_names": [
+        "cancellation uses active turn cancellation, fences dispatch and quarantines late artifacts",
+        "remote and preparation timeout fences remain permanent after authoritative shutdown",
+        "reported usage above a reservation exhausts allowance without double charging replay",
+        "unknown cost stays null until a valid zero and cancellation retains known spend",
+        "phase-bounded coordinator settlement cannot enter review dispatch or queued resume"
+      ]
+    },
+    {
+      "criterion_id": "ac-11",
+      "met": true,
+      "evidence_kind": "implementation-and-offline-fixtures",
+      "files": [
+        "lib/openai_agents_config.mjs",
+        "lib/openai_agents_input.mjs",
+        "lib/openai_agents_http.mjs"
+      ],
+      "test_names": [
+        "configuration refuses unavailable policy, missing billing selectors and private context",
+        "artifact rejects unsafe paths, private paths, wrong source and hashes"
+      ]
+    },
+    {
+      "criterion_id": "ac-12",
+      "met": true,
+      "evidence_kind": "implementation-and-offline-fixtures",
+      "files": [
+        "test/openai-agents.test.mjs",
+        "test/execution-backends.test.mjs"
+      ],
+      "test_names": [
+        "account/project isolation refuses foreign session metadata and persisted state",
+        "initial launch reply loss remains registered for coordinator restart without a second implementation",
+        "phase-bounded coordinator settlement cannot enter review dispatch or queued resume"
+      ]
+    },
+    {
+      "criterion_id": "ac-13",
+      "met": false,
+      "evidence_kind": "unverified-live",
+      "files": [
+        "test/openai-agents-live.mjs",
+        "docs/openai-agents.md"
+      ],
+      "test_names": []
+    },
+    {
+      "criterion_id": "ac-14",
+      "met": true,
+      "evidence_kind": "documentation-and-package",
+      "files": [
+        "docs/openai-agents.md",
+        "docs/execution.md",
+        "docs/audit/plugin-ready/openai-agents-checklist.md"
+      ],
+      "test_names": []
+    }
+  ],
+  "representative_generated_output": {
+    "kind": "fixture",
+    "path": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/agents-offline-TjJ8J6/run-2dbafa8a-f0b8-4cdb-94a7-89d4d5a5ac26-artifacts.json",
+    "sha256": "16c09feca47099fa1005141c07af146326f38055bb27fd37f2da8966198533af"
+  },
+  "package_verification": {
+    "raw_record": "/tmp/agents-package-verification.json",
+    "sha256": "4b029def2f8d1abfa912dc3474b75f5af6116d6e349718fb662421412675bcd2",
+    "integrity": "sha512-ot9dFDbkqKbU1mgJRFin1e1JW8Y/P5DeWMi2oh8EIcZYVoGgRHkSOVFUWp8d/XJofHxWIbOZ9e0zdqNZuVfMPw==",
+    "files": 85,
+    "bytes": 417414,
+    "result": "adapter/context/execution exports imported from unpacked local package; no provider call"
+  },
+  "live": {
+    "version": 1,
+    "kind": "live",
+    "status": "unverified",
+    "phase": "preflight",
+    "at": "2026-10-06T13:09:30.294Z",
+    "blockers": [
+      "OPENAI_AGENTS_LIVE_HOME absent",
+      "OPENAI_AGENTS_LIVE_PRD absent",
+      "OPENAI_AGENTS_LIVE_REPO absent",
+      "OPENAI_AGENTS_CAMPAIGN_LEDGER absent",
+      "preflight only; no paid implementation or correction evidence collected"
+    ],
+    "costUsd": null,
+    "exit": 1,
+    "raw_log": "/tmp/agents-live-prerequisites.json",
+    "sha256": "cee7f8f2e92680df6183517c64864478649bc6bcaa5d78890a847d747bc3b0af",
+    "paid_calls": 0,
+    "inference_access": "unverified",
+    "host_plugin_capture": "not required for this REST milestone; installed-host release gate remains separate",
+    "remedy": "Supply the private configured live home and scoped project API key with Agents read/write plus inference access, authorized model/container/network, approved tiny disposable repository and PRD, and priced remaining aggregate USD 10 campaign ledger. Authorize implementation, reconcile observed cost, then force a current-head CI/trusted-review finding and authorize the same-session correction."
+  },
+  "pre_push_review": [
+    {
+      "rule": "Persist exact ownership before irreversible dispatch",
+      "checked": [
+        "lib/commands/start.mjs",
+        "lib/tick.mjs",
+        "lib/state.mjs",
+        "lib/execution.mjs"
+      ],
+      "regression": "initial launch reply loss remains registered for coordinator restart without a second implementation"
+    },
+    {
+      "rule": "Provider session identity must round-trip without a local executable",
+      "checked": [
+        "lib/harness.mjs",
+        "lib/block.mjs",
+        "lib/probe.mjs",
+        "lib/context.mjs",
+        "lib/commands/doctor.mjs"
+      ],
+      "regression": "every harness session ID round-trips through recovery metadata; managed API fixture launches without pid"
+    },
+    {
+      "rule": "Failed or ambiguous provider recovery must stop repeated I/O while preserving work",
+      "checked": [
+        "lib/openai_agents.mjs lookup/inspect/resetRecovery",
+        "lib/execution.mjs reconcile"
+      ],
+      "regression": "failed or unsent launch recovery and three-attempt circuit tests"
+    },
+    {
+      "rule": "Portable files must preserve approved inputs and reject unsupported output boundaries",
+      "checked": [
+        "lib/openai_agents_sources.mjs prepare/restore/publish",
+        "lib/openai_agents.mjs collect",
+        "lib/repository_files.mjs",
+        "lib/execution_result.mjs",
+        "lib/git.mjs commitResult"
+      ],
+      "regression": "sandbox output, unchanged carried files, receipt-only head preservation, symlink/mode/size, wrong-base/hash tests"
+    },
+    {
+      "rule": "A campaign phase may observe and publish only its explicitly authorized paid round",
+      "checked": [
+        "lib/tick.mjs settlement and queued controls",
+        "test/openai-agents-live.mjs reservation/restart/failure/lock paths"
+      ],
+      "regression": "phase-bounded coordinator settlement cannot enter review dispatch or queued resume"
+    }
+  ]
+}

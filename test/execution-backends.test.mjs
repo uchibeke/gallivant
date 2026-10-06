@@ -51,10 +51,10 @@ function remote(provider = "openai-agents", overrides = {}) {
   return { root, clock, calls, transport, capabilities, service: makeExecution(options), reopen: () => makeExecution(options), observe: patch => { observation = { ...observation, ...patch }; }, jobs };
 }
 
-test("predecessor service is required and remote selections remain unavailable", () => {
+test("predecessor service is required and managed API is available while Cloud remains reserved", () => {
   assert.throws(() => assertExecutionDependency(null), { code: "EXECUTION_DEPENDENCY" });
   assertExecutionDependency(() => {});
-  assert.equal(executionRegistry["openai-agents"].available, false);
+  assert.equal(executionRegistry["openai-agents"].available, true);
   assert.equal(executionRegistry["codex-cloud"].available, false);
   for (const name of Object.keys(adapters)) assert.equal(executionRegistry[name].adapter, adapters[name]);
   const spec = buildRun({ harness: "codex", config: CONFIG, mode: "start", prompt: "offline", cwd: tempHome() });

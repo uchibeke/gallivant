@@ -62,3 +62,12 @@ and [foundation checklist](execution-checklist.md) cover the later offline
 execution, polling and log milestone. These records supplement the intake audit;
 its historical qualification blockers above remain unchanged. Remote transport
 availability and installed-host/live release qualification are separate gates.
+
+## Managed Agents API
+
+[Transport evidence](openai-agents.json), [its checklist](openai-agents-checklist.md)
+and [operator instructions](../../openai-agents.md) cover the managed REST adapter.
+Provider-shaped offline lifecycle tests and generated artifacts are verified
+separately from live qualification. The nonpaid preflight found missing live
+configuration, disposable repository/brief and campaign ledger. Criterion ac-13
+remains unverified; earlier milestone blockers and installed-host gates are retained.

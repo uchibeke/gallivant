@@ -21,12 +21,12 @@ code contains no Claude-only name gate. Codex and other native adapters remain
 unqualified for preparation until they supply an enforced limited-authority
 capability. A private HOME or a version/sign-in probe does not qualify one.
 
-`openai-agents` and `codex-cloud` are reserved, **unavailable** entries. Their
-transports, authentication, installed-plugin behavior, model access and live
-qualification belong to subsequent milestones. The fixtures in the offline suite
-are test-only transports and cannot qualify either provider for production.
-This milestone requires no browser, capture surface, installed plugin, live model
-call or paid campaign. Existing intake qualification blockers remain recorded in
+`openai-agents` has an implemented managed REST transport; see
+[account/environment setup and verification](openai-agents.md). `codex-cloud`
+remains reserved and unavailable until its transport milestone. Offline fixtures
+exercise shared lifecycle behavior; they do not certify live account/model access
+or installed-plugin behavior. The separately opt-in Agents campaign retains unmet
+live prerequisites explicitly. Existing intake qualification blockers remain in
 [the intake evidence](audit/plugin-ready/README.md).
 
 ## Exported boundary
