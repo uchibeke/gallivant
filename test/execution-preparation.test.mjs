@@ -78,7 +78,7 @@ test("remote preparation rejects foreign authority, changed input and cancellati
   assert.equal(service.current(), null);
 });
 
-function fixture(provider, { question = false, repair = false, pending = false, lostReply = false, missing = false, lookupAvailable = true, unconfirmedCancel = false } = {}) {
+function fixture(provider, { question = false, repair = false, pending = false, lostReply = false, missing = false, lookupAvailable = true, unconfirmedCancel = false, failed = false } = {}) {
   const home = tempHome(), checkout = join(home, "checkout"); mkdirSync(checkout);
   writeFileSync(join(checkout, "package.json"), JSON.stringify({ packageManager: "npm@10", scripts: { test: "node --test", lint: "node --check index.mjs" } }));
   const preparation = { version: 1, boundary: `${provider}-fixture-text-v1`, authority: "text-only", environment: "sandbox" };
@@ -97,10 +97,11 @@ function fixture(provider, { question = false, repair = false, pending = false, 
     },
     lookup: async req => { calls.push("lookup"); return lookupAvailable ? observe(jobs.get(req.intent.idempotencyKey)) : null; },
     inspect: async () => { calls.push("inspect"); return observe(current); },
-    collect: async req => { calls.push("collect"); return { ...req, signal: undefined, outcome: { finished: !missing, ok: true, denials: [], cost: null, lastMessage: current.message } }; },
+    collect: async req => { calls.push("collect"); return { ...req, signal: undefined, outcome: { finished: !missing, ok: !failed, denials: failed ? ["restricted tool refused"] : [], cost: failed ? 0.2 : null,
+      lastMessage: current.message, ...(failed ? { error: "provider preparation failed" } : {}) }, ...(failed ? { usage: { inputTokens: 17, api_key: "private" } } : {}) }; },
     cancel: async () => { calls.push("cancel"); return { confirmed: !unconfirmedCancel }; },
   };
-  const observe = job => job && ({ providerJobId: job.providerJobId, turnId: job.turnId, sessionId: job.sessionId, state: pending ? "running" : "succeeded", observedAt: Date.now(), events: [] });
+  const observe = job => job && ({ providerJobId: job.providerJobId, turnId: job.turnId, sessionId: job.sessionId, state: pending ? "running" : failed ? "failed" : "succeeded", observedAt: Date.now(), events: [] });
   const options = id => ({ root: join(home, "runs", id.split("/").at(-1)), taskId: id, provider, account, transport, capabilities, limits: { progressMs: 0 } });
   const ctx = {
     home, log: silentLog, config: { ...CONFIG, harness: { [provider]: { account } }, deliverable: { ...CONFIG.deliverable, evaluator: "local" } }, state: makeState(home),
@@ -206,4 +207,23 @@ test("preparation usage projections redact resolved secrets as well as credentia
   assert.equal(r.status, "ready", JSON.stringify(r.failures));
   assert.deepEqual(r.preparation.attempts[0].usage, [{ input_tokens: 7, detail: "[redacted]", token: "[redacted]" }]);
   assert.ok(!JSON.stringify(r).includes("opaque-fixture-credential")); assert.ok(!JSON.stringify(r).includes("private-value"));
+});
+
+test("failed preparation retrieves diagnostics and usage before blocking readiness, including restart with missing results", async () => {
+  const f = fixture("codex", { failed: true, missing: true });
+  let r = await f.service.prepare({ text: "Add CSV export.", harness: "codex", requestId: "failed-preparation" });
+  assert.equal(r.status, "preparing"); assert.equal(r.readiness, null); assert.equal(r.draft, null);
+  assert.equal(r.preparation.attempts[0].execution.providerState, "retrieving-results");
+  assert.equal(r.preparation.attempts[0].execution.terminalState, "failed");
+  f.results(); r = await f.reopen().resume({ taskId: r.taskId, expectedRevision: r.revision });
+  assert.equal(r.status, "blocked"); assert.equal(r.readiness, null); assert.equal(r.draft, null);
+  const attempt = r.preparation.attempts[0];
+  assert.equal(attempt.settled, true); assert.equal(attempt.ok, false); assert.equal(attempt.cost, 0.2);
+  assert.equal(attempt.error, "provider preparation failed; restricted tool refused");
+  assert.deepEqual(attempt.usage, { inputTokens: 17, api_key: "[redacted]" });
+  assert.equal(attempt.execution.providerState, "failed"); assert.equal(attempt.execution.collected, true);
+  const before = [...f.calls];
+  r = await f.reopen().resume({ taskId: r.taskId, expectedRevision: r.revision });
+  assert.equal(r.status, "blocked"); assert.deepEqual(f.calls, before);
+  assert.equal(f.calls.filter(c => c === "submit").length, 1); assert.equal(f.dispatches(), 0);
 });

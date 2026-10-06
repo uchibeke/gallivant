@@ -150,8 +150,17 @@ Provider states are `queued`, `provisioning`, `running`, `waiting-for-input`,
 `retrieving-results`, `succeeded`, `failed`, `cancellation-requested`, `cancelled`
 and `status-unknown`. They are separate from existing workflow/review states.
 Stale reads, missing events, launcher exit, a cached response or silence cannot
-complete a remote turn. Success enters retrieval until an exact finished result
-is saved. Foreign job/root-turn observations refuse reconciliation. Unavailable
+complete a remote turn. Both success and failure enter retrieval until an exact
+finished result is saved; `terminalState` retains the authoritative root outcome
+while workflow settlement waits. Failure diagnostics, denials, usage and recovered
+session identity survive collection and cached-result replay. `collectedAt` binds
+completion bookkeeping to the durable result, so restart does not lose cost,
+session or completion time. Older failure records claiming collection without a
+result re-enter retrieval without redispatch. Failed artifacts remain private;
+only a successful collected outcome can enter the shared publication path. A
+stop during terminal result retrieval or after collection quarantines the result
+without issuing a cancellation call for a root already known to have finished.
+Foreign job/root-turn observations refuse reconciliation. Unavailable
 status carries timestamps, retry time and recovery action rather than fabricated
 liveness. Terminal collected results survive log removal.
 

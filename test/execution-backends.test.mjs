@@ -1104,3 +1104,108 @@ test("unacknowledged cancellation remains pending and older stopped records reco
   assert.equal(f.service.current().execution.cancellation.idempotencyKey, key);
   assert.equal(f.calls.filter(c => c[0] === "cancel").length, 2);
 });
+
+for (const provider of ["openai-agents", "codex-cloud"]) {
+  test(`${provider} fixture: failed roots retrieve redacted diagnostics and replay durable result bookkeeping`, async () => {
+    const f = remote(provider), submit = f.transport.submit;
+    f.transport.submit = async req => { const accepted = await submit(req); f.observe({ sessionId: null }); return { ...accepted, sessionId: null }; };
+    const job = await f.service.submit(input);
+    f.observe({ state: "failed" }); await f.service.reconcile({ force: true });
+    const before = f.service.state(), ex = f.service.current().execution;
+    assert.equal(ex.providerState, "retrieving-results"); assert.equal(ex.terminalState, "failed"); assert.equal(ex.collected, false);
+    assert.equal(f.service.current().running, true); assert.equal(f.service.current().exit, null);
+    await assert.rejects(f.reopen().continue({ ...input, operationId: "premature", sessionId: "session-1" }), { code: "BUSY" });
+    f.transport.collect = async req => { f.calls.push(["collect", req]); return { ...req, signal: undefined, sessionId: "recovered-session",
+      usage: { inputTokens: 17, api_key: "secret-usage" }, outcome: { finished: true, ok: false, cost: 0.25,
+        error: "provider failed: Bearer secret-error", denials: ["tool refused token=secret-denial"], lastMessage: "authentication failed" } }; };
+    const result = await f.reopen().collect();
+    assert.equal(result.outcome.error, "provider failed: Bearer [redacted]");
+    assert.deepEqual(result.outcome.denials, ["tool refused token=[redacted]"]);
+    assert.deepEqual(result.usage, { inputTokens: 17, api_key: "[redacted]" });
+    assert.equal(f.service.current().execution.providerState, "failed"); assert.equal(f.service.current().running, false);
+    assert.equal(f.service.outcome(job.id).cost, 0.25); assert.equal(f.service.sessionFrom(job.id), "recovered-session");
+    assert.equal(f.service.current().execution.costUsd, 0.25); assert.equal(f.service.current().exit, 1);
+    // Crash after the private result write but before boundary acknowledgement.
+    writeJsonAtomic(join(f.root, "execution.json"), before); f.clock.advance(17);
+    const replay = await f.reopen().collect(); assert.deepEqual(replay, JSON.parse(JSON.stringify(result)));
+    assert.equal(f.service.current().execution.sessionId, "recovered-session"); assert.equal(f.service.current().execution.costUsd, 0.25);
+    assert.equal(f.service.current().endedAt, result.collectedAt); assert.equal(f.service.state().allowance.chargedUsd, 0.25);
+    rmSync(join(f.service.dirOf(job.id), "job.log"), { force: true });
+    assert.equal((await f.reopen().collect()).outcome.lastMessage, "authentication failed");
+    await f.reopen().reconcile({ force: true });
+    assert.equal(f.calls.filter(c => c[0] === "collect").length, 1); assert.equal(f.calls.filter(c => c[0] === "submit").length, 1);
+    assert.equal(f.calls.filter(c => c[0] === "continue").length, 0);
+  });
+  test(`${provider} fixture: failed roots with missing or foreign results stay live across restart`, async () => {
+    const f = remote(provider), job = await f.service.submit(input);
+    f.observe({ state: "failed" }); await f.service.reconcile({ force: true });
+    const collect = f.transport.collect;
+    f.transport.collect = async () => null;
+    await assert.rejects(f.reopen().collect(), { code: "EXECUTION_RESULT" });
+    assert.equal(f.reopen().current().running, true); assert.equal(f.service.current().execution.collected, false);
+    f.transport.collect = async req => ({ ...await collect(req), turnId: "subagent-turn", outcome: { finished: true, ok: false, cost: null } });
+    await assert.rejects(f.reopen().collect(), { code: "EXECUTION_RESULT" });
+    assert.equal(f.service.result(job.id), null);
+    f.transport.collect = async req => ({ ...await collect(req), outcome: { finished: true, ok: false, cost: null, error: "saved failure", denials: [] } });
+    await f.reopen().collect();
+    assert.equal(f.service.current().running, false); assert.equal(f.service.current().execution.providerState, "failed");
+    assert.equal(f.service.current().execution.costUsd, null); assert.equal(f.service.outcome(job.id).cost, null);
+    assert.equal(f.service.state().allowance.chargedUsd, 0.1);
+  });
+}
+
+test("older prematurely collected failures re-enter result retrieval without another dispatch", async () => {
+  const f = remote(), job = await f.service.submit(input), raw = f.service.state();
+  Object.assign(raw.current.execution, { providerState: "failed", collected: true }); raw.current.exit = 1; raw.current.endedAt = f.clock.now();
+  writeJsonAtomic(join(f.root, "execution.json"), raw);
+  assert.equal(f.reopen().current().execution.providerState, "retrieving-results");
+  assert.equal(f.reopen().current().execution.terminalState, "failed"); assert.equal(f.reopen().current().exit, null);
+  assert.equal(f.reopen().current().endedAt, null);
+  await assert.rejects(f.reopen().submit({ ...input, operationId: "replacement" }), { code: "BUSY" });
+  const collect = f.transport.collect;
+  f.transport.collect = async req => ({ ...await collect(req), outcome: { finished: true, ok: false, cost: null, error: "recovered failure" } });
+  await f.reopen().collect(); assert.equal(f.service.outcome(job.id).error, "recovered failure");
+  assert.equal(f.calls.filter(c => c[0] === "submit").length, 1);
+});
+
+test("a stop during failed result retrieval quarantines the completed root without a cancellation call", async () => {
+  const f = remote(); await f.service.submit(input); f.observe({ state: "failed" }); await f.service.reconcile({ force: true });
+  assert.deepEqual(await f.service.cancel(), { confirmed: false });
+  assert.equal(f.service.current().execution.providerState, "failed"); assert.equal(f.service.current().execution.quarantined, true);
+  assert.equal(f.service.current().execution.cancellation.status, "terminal");
+  assert.equal(f.calls.some(c => c[0] === "cancel"), false);
+  await assert.rejects(f.reopen().collect(), { code: "EXECUTION_QUARANTINED" });
+});
+
+test("failed collected artifacts settle through the canonical error lane without publication or replay", async () => {
+  const f = remote(), job = await f.service.submit(input), home = tempHome(), state = makeState(home), id = "acme/widget/remote";
+  const gh = fakeGh(), entry = newEntry({ repo: "acme/widget", harness: "openai-agents", branch: "work/remote", pr: 1, state: STATES.fixing, nowIso: T0 });
+  state.put(id, { ...entry, cursor: { ...entry.cursor, fixed_sha: gh.data.pr.headRefOid }, last: { run: job.id, exit: null } });
+  f.transport.collect = async req => { f.calls.push(["collect", req]); return { ...req, signal: undefined,
+    files: [{ path: "../never-apply", text: "private failed artifact" }], outcome: { finished: true, ok: false, cost: 0.2, error: "provider failed", denials: ["restricted tool refused"] } }; };
+  f.observe({ state: "failed" });
+  const ctx = { home, config: CONFIG, clock: f.clock, state, gh, ownLogin: "me", git: fakeGit(), log: silentLog, notify: fakeNotify(), readPrd: () => null, executionFor: () => f.reopen() };
+  await makeTick(ctx).tickEntry(id, state.get(id));
+  const failed = state.get(id); assert.equal(failed.state, STATES.needsHuman); assert.equal(failed.reason, "harness-error");
+  assert.equal(failed.last.exit, 1); assert.equal(failed.last.cost, 0.2); assert.equal(failed.last.error, "provider failed");
+  assert.deepEqual(failed.last.denials, ["restricted tool refused"]); assert.equal(failed.session, "session-1");
+  assert.equal(failed.execution.providerState, "failed");
+  await makeTick(ctx).tickEntry(id, state.get(id));
+  assert.equal(f.calls.filter(c => c[0] === "collect").length, 1); assert.equal(f.calls.filter(c => c[0] === "continue").length, 0);
+  assert.equal(readJson(join(f.service.dirOf(job.id), "result-application.json")), null);
+  const direct = resultFixture(); direct.result.outcome = { finished: true, ok: false };
+  await assert.rejects(reconcileExecutionResult(direct.ctx, direct), /failed root-turn results cannot authorize publication/);
+  assert.deepEqual(direct.calls, []); assert.equal(readFileSync(join(direct.entry.worktree, "a.txt"), "utf8"), "before");
+});
+
+test("a stop after collected terminal results quarantines both success and failure caches", async () => {
+  for (const state of ["succeeded", "failed"]) {
+    const f = remote(), collect = f.transport.collect;
+    await f.service.submit(input); f.observe({ state }); await f.service.reconcile({ force: true });
+    f.transport.collect = async req => ({ ...await collect(req), outcome: { finished: true, ok: state === "succeeded", cost: null } });
+    await f.service.collect(); assert.deepEqual(await f.service.cancel(), { confirmed: false });
+    assert.equal(f.service.current().execution.quarantined, true); assert.equal(f.service.current().execution.providerState, state);
+    assert.equal(f.calls.some(c => c[0] === "cancel"), false);
+    await assert.rejects(f.reopen().collect(), { code: "EXECUTION_QUARANTINED" });
+  }
+});
