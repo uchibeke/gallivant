@@ -117,3 +117,10 @@ Apache-2.0.
 
 Managed coding sessions through the Agents API are available as an explicit
 `openai-agents` selection. See [account/environment setup, recovery and verification](docs/openai-agents.md). Live qualification is separately opt-in and remains unverified when access prerequisites are absent.
+
+`codex-cloud` uses the supported Codex 0.160.0 Cloud CLI on a trusted operator
+worker. It carries approved snapshots on a verified input revision and uses
+successor tasks for review corrections under one task/PR. See
+[Cloud setup, supported controls and recovery](docs/codex-cloud.md). Native
+continuation/cancellation and delegated public authentication are unavailable;
+live qualification remains unverified.

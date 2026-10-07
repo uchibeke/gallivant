@@ -71,3 +71,12 @@ Provider-shaped offline lifecycle tests and generated artifacts are verified
 separately from live qualification. The nonpaid preflight found missing live
 configuration, disposable repository/brief and campaign ledger. Criterion ac-13
 remains unverified; earlier milestone blockers and installed-host gates are retained.
+
+## Codex Cloud
+
+[Cloud evidence](codex-cloud.json), [its checklist](codex-cloud-checklist.md)
+and [operator instructions](../../codex-cloud.md) cover the supported native CLI
+transport and successor continuity. Exact task recovery and shared PR outcomes
+are offline evidence. The read-only native listing succeeded; the opt-in live
+preflight found no selected environment/disposable brief/repository or campaign
+configuration. Real native attempt IDs and live qualification remain unmet.
