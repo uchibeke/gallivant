@@ -116,3 +116,36 @@ The initial restricted focused run could not identify the process for an existin
 learning-store lock test; the supported host escalation passed all 63 cases.
 No live isolation retry or model call was made. Linux/live evidence and all recorded
 implementation gaps remain outstanding; production stays **UNQUALIFIED**.
+
+
+## Oversized-source pagination follow-up
+
+Actual offline results on the same macOS host:
+
+| Command | Recorded result | Output pointer |
+| --- | --- | --- |
+| `npm test` | 1,244 passed; 0 failed, skipped or cancelled; 286,118.128834 ms | `/private/tmp/review-learning-batch5-full.log` |
+| `npm run lint` | Exit 0 | Operator session command output |
+| `npm run test:learning` | 47 passed; 0 failed, skipped or cancelled; 56,026.983709 ms | `/private/tmp/review-learning-batch5-suite.log` |
+| `git diff --check` | Exit 0 | Operator session command output |
+
+`test/learning.test.mjs` now exercises 1,200 eligible entries for each source kind
+across restart, rate limits and dry-run; 6,500 ineligible inline comments across the
+page cap before reaching an older PR; review eligibility and summary digests across
+source checkpoints; deferred deletion; and read-only expiry of checkpoint excerpts.
+A 100-comment response containing 65,536-character bodies verifies transport/parser
+agreement above one MiB, with explicit rejection beyond the 64 MiB parser ceiling.
+The earlier focused collector run passed all 24 tests in
+`/private/tmp/review-learning-batch5-focused.log`.
+
+Representative offline dry-run output in
+`/private/tmp/review-learning-batch5-preview.json` retains inline page 59 after exactly
+60 requests with no eligible observations or inference. Only minimized review
+context and source IDs persist across pages; completing inline enumeration drops
+that context. Existing observation/storage caps and changing upstream page order
+remain disclosed coverage limits, rather than claims of a point-in-time snapshot.
+
+No live isolation probe or paid model call was attempted. The oversized single-PR
+continuation gap is resolved; the installed isolation, Linux/live qualification and
+other previously recorded implementation gaps remain outstanding. Production stays
+**UNQUALIFIED / collection only**.

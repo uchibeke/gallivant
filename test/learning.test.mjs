@@ -108,7 +108,7 @@ test("default scan windows survive page caps, advancing clocks, dry-run and rest
     await service.configure(repo, "collect");
     const first = await service.collect(repo, "example/project", options);
     assert.equal(first.capped, true); assert.equal(first.complete, false);
-    assert.deepEqual(first.continuation, { page: 1, index: 19 });
+    assert.equal(first.continuation.page, 1); assert.equal(first.continuation.index, 19);
     if (variant === "legacy") await store.transaction(repo, s => { delete s.scans[0].request; });
     time += 86400_000;
     const restarted = createLearningService({ root, store, trust, gh, clock: { now: () => time } });
@@ -117,7 +117,7 @@ test("default scan windows survive page caps, advancing clocks, dry-run and rest
     assert.equal(dry.id, first.id); assert.equal(dry.until, first.until); assert.equal(dry.complete, true);
     assert.equal(canonical(store.load(repo)), before); assert(calls.filter(([kind]) => kind !== "pulls").every(([, pr]) => pr === 20));
     const resumed = await restarted.collect(repo, "example/project", options);
-    assert.equal(resumed.id, first.id); assert.equal(resumed.since, first.since); assert.equal(resumed.added, 1);
+    assert.equal(resumed.id, first.id); assert.equal(resumed.since, first.since); assert.equal(first.added + resumed.added, 20);
     assert.equal(resumed.complete, true); assert.equal(Object.keys(store.load(repo).observations).length, 20);
     const next = await restarted.collect(repo, "example/project", { ...options, dryRun: true });
     assert.notEqual(next.id, first.id); assert.equal(next.until, new Date(time).toISOString());
@@ -303,4 +303,100 @@ test("CLI disables locally during GitHub outages and invokes revocation controls
   for (const mode of ["collect", "apply"]) await assert.rejects(learnCommand({ learning: service }, { args: ["configure"], values: { repo: "example/project", mode } }), /GitHub unavailable/);
   await assert.rejects(learnCommand({ learning: service }, { args: ["configure"], values: { repo: "unknown/project", mode: "off" } }), /no learning state/);
   assert.equal(service.mode(repo), "off");
+});
+
+
+test("oversized PR source pages checkpoint across restart, rate limits and dry-run before reaching older PRs", async t => {
+  for (const kind of ["reviews", "inline", "comments"]) {
+    let time = Date.parse(now), limited = false;
+    const calls = [], raw = snapshot().inline[0];
+    const gh = { learningPage: async (_name, source, { pr, page }) => {
+      calls.push([source, pr, page]);
+      if (source === "pulls") return { items: [snapshot().pr, { ...snapshot().pr, number: 2 }], complete: true };
+      if (source !== kind || pr === 2) return { items: [], complete: true };
+      if (limited) return { items: [], complete: false, rateLimited: true, retryAt: time + 1000 };
+      return { items: Array.from({ length: 100 }, (_, i) => ({ ...raw, id: (page - 1) * 100 + i + 1,
+        user: { login: "maintainer" }, state: "CHANGES_REQUESTED", submitted_at: raw.updated_at,
+        body: kind === "comments" ? "/fix Validate input" : "Validate input" })), complete: page === 12 };
+    } };
+    const { service, store, root } = fixture(t, { gh, clock: { now: () => time } });
+    await service.configure(repo, "collect");
+    const first = await service.collect(repo, "example/project");
+    assert(first.capped); assert(first.continuation.source.page > 1);
+    const nextPage = first.continuation.source.page;
+    const restart = () => createLearningService({ root, store, gh, trust, clock: { now: () => time } });
+    limited = true; const throttled = await restart().collect(repo, "example/project");
+    assert.equal(throttled.continuation.source.page, nextPage); assert(throttled.retryAt);
+    time += 2000; limited = false;
+    const before = canonical(store.load(repo)); calls.length = 0;
+    const dry = await restart().collect(repo, "example/project", { dryRun: true });
+    assert(dry.complete); assert.equal(canonical(store.load(repo)), before);
+    assert.equal(calls.find(([source]) => source === kind)[2], nextPage);
+    const done = await restart().collect(repo, "example/project");
+    assert(done.complete); assert.equal(done.prs, 2);
+    assert.equal(Object.keys(store.load(repo).observations).length, 1200);
+  }
+});
+
+test("large transport pages preserve long bodies while enforcing one shared byte bound", async () => {
+  const body = "x".repeat(65536), items = Array.from({ length: 100 }, (_, id) => ({ id, body }));
+  let bound;
+  const gh = makeGh({ exec: async (_cmd, _args, options) => { bound = options.maxBuffer; return { stdout: "HTTP/2.0 200 OK\n\n" + JSON.stringify(items) }; } });
+  const page = await gh.learningPage("example/project", "comments", { pr: 1 });
+  assert(page.complete); assert.equal(page.items.length, 100); assert.equal(page.items[99].body, body);
+  assert.equal(bound, 64 * 1024 * 1024);
+  const tooLarge = makeGh({ exec: async () => ({ stdout: "HTTP/2.0 200 OK\n\n[\"" + "x".repeat(bound) + "\"]" }) });
+  await assert.rejects(tooLarge.learningPage("example/project", "comments", { pr: 1 }), /JSON.*limit|JSON.*large/i);
+});
+
+
+test("source checkpoints preserve review eligibility and defer deletions until complete enumeration", async t => {
+  let time = Date.parse(now), limited = true;
+  const raw = snapshot().inline[0], review = { id: 9, user: raw.user, state: "COMMENTED", body: "Review summary", submitted_at: raw.updated_at };
+  const calls = [];
+  const gh = { learningPage: async (_name, kind, { page, pr }) => {
+    calls.push([kind, page]);
+    if (kind === "pulls") return { items: [snapshot().pr], complete: true };
+    if (kind === "reviews") return { items: [review, { ...review, id: 10, user: { login: "maintainer" } }], complete: true };
+    if (kind === "comments") return { items: [], complete: true };
+    if (page === 2 && limited) return { items: [], complete: false, rateLimited: true, retryAt: time + 1000 };
+    return { items: page === 1 ? [{ ...raw, id: 100, pull_request_review_id: 9 }, { ...raw, id: 101, user: { login: "maintainer" }, pull_request_review_id: 10 }] : [{ ...raw, id: 77, pull_request_review_id: 9 }], complete: page === 2 };
+  } };
+  const { service, store, root } = fixture(t, { gh, clock: { now: () => time } });
+  await service.configure(repo, "collect");
+  await service.observe(repo, { ...snapshot(), inline: [raw, { ...raw, id: 88 }] });
+  const first = await service.collect(repo, "example/project");
+  assert.equal(first.continuation.source.page, 2);
+  assert(Object.values(store.load(repo).observations).every(o => !o.deleted));
+  const beforeReport = canonical(store.load(repo)); time += 31 * 86400_000;
+  const report = service.report(repo);
+  assert(report.scans[0].continuation.source.reviews.every(r => r.excerpt.excerpt === "[raw excerpt expired]"));
+  assert.equal(canonical(store.load(repo)), beforeReport); time -= 31 * 86400_000;
+  limited = false; time += 2000; calls.length = 0;
+  const restarted = createLearningService({ root, store, gh, trust, clock: { now: () => time } });
+  assert((await restarted.collect(repo, "example/project")).complete);
+  assert(!calls.some(([kind, page]) => kind === "inline" && page === 1));
+  const observations = Object.values(store.load(repo).observations);
+  assert(observations.some(o => o.content.id === "9" && o.content.sourceDigest === minimized(review.body).sourceDigest));
+  assert(!observations.some(o => o.content.id === "101"));
+  assert(observations.find(o => o.content.id === "88").deleted);
+  assert(!observations.find(o => o.content.id === "77").deleted);
+});
+
+test("ineligible raw pages still checkpoint and reach older PRs across the transport page cap", async t => {
+  const calls = [];
+  const gh = { learningPage: async (_name, kind, { pr, page }) => {
+    calls.push([kind, pr, page]);
+    if (kind === "pulls") return { items: [snapshot().pr, { ...snapshot().pr, number: 2 }], complete: true };
+    if (pr === 1 && kind === "inline") return { items: Array.from({ length: 100 }, (_, i) => ({ ...snapshot().inline[0], id: page * 100 + i, user: { login: "untrusted" } })), complete: page === 65 };
+    return { items: pr === 2 && kind === "inline" ? snapshot().inline : [], complete: true };
+  } };
+  const { service, store, root } = fixture(t, { gh }); await service.configure(repo, "collect");
+  const first = await service.collect(repo, "example/project"); assert(first.capped); assert.equal(first.eligible, 0);
+  const next = first.continuation.source.page; assert(next > 1);
+  calls.length = 0;
+  const restarted = createLearningService({ root, store, gh, trust, clock: { now: () => Date.parse(now) } });
+  assert((await restarted.collect(repo, "example/project")).complete);
+  assert.equal(calls.find(([kind]) => kind === "inline")[2], next);
+  assert.equal(Object.values(store.load(repo).observations)[0].content.pr, 2);
 });

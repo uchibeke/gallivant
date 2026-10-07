@@ -49,13 +49,20 @@ The automatic lane rotates a window of at most 100 due watched entries, independ
 of request completion order. Idle progress ticks retain the next window.
 
 Coverage, caps, continuation and rate-limit retry time are reported. Interrupted
-scans replay the unfinished PR; immutable evidence revisions deduplicate overlap.
+scans resume the unfinished source kind and page within a PR; immutable evidence
+revisions deduplicate overlap. Each page saves minimized findings and continuation
+together, including pages containing only ineligible comments. Deletion is deferred
+until the complete source has been enumerated. Required review context is minimized,
+retained only through inline enumeration, and subject to the 30-day excerpt limit.
 When `--until` is omitted, retries reuse the incomplete scan's original date window,
 including after restart; completion allows the next invocation to open a fresh window.
 Dry-run uses the same transport and eligibility rules but writes no learning state
-and runs no inference. A very large single PR or continuously moving pagination can
-leave coverage incomplete; the report must be inspected before assuming full history
-was collected. No evidence link is opened or fetched.
+and runs no inference. A source page reserves up to 200 eligible events (100 comments
+and their review summaries), so an invocation can stop below the 1,000-finding cap.
+Transport and parsing share a 64 MiB ceiling for each 100-item page before body
+minimization. The 10,000-observation/context-identity storage bounds and continuously
+moving upstream pagination can still leave coverage incomplete; inspect the report
+before assuming full history was collected. No evidence link is opened or fetched.
 
 `revise` validates closed-schema JSON and creates an unapproved revision:
 
