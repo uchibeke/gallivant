@@ -673,3 +673,34 @@ test("failed extraction result merge retains its reservation across restart", as
   assert.equal(calls, 1); assert.equal(f.service.list(repo).length, 0);
   await restarted.configure(repo, "off"); assert.equal(f.store.load(repo).mode, "off");
 });
+
+
+test("report preserves partial measured resources without inventing missing usage or latency", async t => {
+  const { service, store } = fixture(t);
+  const empty = service.report(repo);
+  assert.equal(empty.costs.knownUsd, null); assert.equal(empty.costs.measured, false);
+  assert.equal(empty.tokens.total, null); assert.equal(empty.latency.extraction.total, null);
+  await store.transaction(repo, state => {
+    state.extraction = [
+      { inputDigest: "a".repeat(64), status: "completed", costUsd: 0.25, tokens: 12, latencyMs: 50 },
+      { inputDigest: "b".repeat(64), status: "intent", costUsd: null },
+      { inputDigest: "c".repeat(64), status: "unresolved", costUsd: 0, tokens: 0, latencyMs: 0 },
+      { inputDigest: "d".repeat(64), status: "unresolved" },
+    ];
+    state.scans = [{ complete: true, latencyMs: 100 }, { complete: false }];
+  });
+  const before = canonical(store.load(repo)), report = service.report(repo);
+  assert.equal(canonical(store.load(repo)), before, "inspection must not write journal state");
+  assert.equal(report.costs.knownUsd, null);
+  assert.equal(report.costs.knownSubtotalUsd, 0.25); assert.equal(report.costs.measured, true);
+  assert.equal(report.costs.knownOperations, 2); assert.equal(report.costs.unknownOperations, 2);
+  assert.deepEqual({ ...report.tokens, scope: undefined }, { records: 4, known: 2, unknown: 2, knownTotal: 12, total: null, scope: undefined });
+  assert.deepEqual(report.latency.extraction, { records: 4, known: 2, unknown: 2, knownTotal: 50, total: null });
+  assert.deepEqual(report.latency.collection, { records: 2, known: 1, unknown: 1, knownTotal: 100, total: null });
+  assert.match(report.latency.scope, /not cumulative/);
+  assert.equal(report.confirmedRecurrence.count, null); assert.match(report.effectiveness, /unmeasured/);
+  await store.transaction(repo, state => { state.extraction = [{ costUsd: 0, tokens: 0, latencyMs: 0 }]; });
+  const zero = service.report(repo);
+  assert.equal(zero.costs.knownUsd, 0); assert.equal(zero.costs.measured, true);
+  assert.equal(zero.tokens.total, 0); assert.equal(zero.latency.extraction.total, 0);
+});

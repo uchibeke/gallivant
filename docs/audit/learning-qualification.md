@@ -765,3 +765,36 @@ Final Verify on macOS: `npm test` passed all 1,339 tests with no failures, skips
 or cancellations (214,523.426 ms; `/private/tmp/learning-review24-full.log`).
 `npm run test:learning` passed 84 tests; `npm run lint` exited 0
 (`/private/tmp/learning-review24-lint.log`); `git diff --check` passed.
+
+## Outcome-reporting progress after completion denial
+
+The denial remains valid, but resource reporting can advance without new model or
+isolation access. Reports now retain known extraction-spend subtotals when other
+reservations have unknown usage, count known versus unknown operations, and
+summarize recorded tokens and collection/extraction latency. Complete totals stay
+null when any record is unknown. Empty journals are unmeasured; explicitly recorded
+zeroes remain measured. Collection summaries disclose that each retained scan
+contains its last invocation's latency, not cumulative elapsed time. Coding/review
+costs and latency outside the journal are excluded explicitly.
+
+`test/learning.test.mjs: report preserves partial measured resources without
+inventing missing usage or latency` covers mixed completed/unresolved/reserved and
+legacy records, measured zeroes, empty histories and read-only inspection.
+The generated offline example `/private/tmp/learning-progress28-report.json` was
+reviewed: one measured reservation and one unknown reservation produce a $0.25
+known subtotal, 12 known tokens and 50 measured milliseconds, with all complete
+totals null and effectiveness still unmeasured. It is fixture output, not live
+provider or qualification evidence. Review included extraction result validation,
+unresolved reservations, scan report persistence, CLI display and both raw and
+aggregate report fields.
+
+The learning suite passed 85 tests (52,883.432125 ms;
+`/private/tmp/learning-progress28-suite.log`). Full eligible-run accounting and
+review-round/outcome correlation are still missing, so ac-14 remains false along
+with the other six previously unmet criteria. No denied probe or model call was
+retried; production qualification is unchanged.
+
+Final Verify: `npm test` passed 1,340 tests without failures, skips or
+cancellations (213,495.339583 ms; `/private/tmp/learning-progress28-full.log`).
+`npm run test:learning` passed 85 tests; `npm run lint` exited 0
+(`/private/tmp/learning-progress28-lint.log`); `git diff --check` passed.

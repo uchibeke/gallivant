@@ -281,8 +281,15 @@ re-enrollment/continuity once supported. Do not replace authority.json or restor
 older checkpoint to simulate rotation. Local signatures cannot prove freshness after
 arbitrary rollback of the entire protected installation; V1 has no remote witness.
 
-Reports separate confirmed recurrence from evidence-count suggestions. Known cost
-is traceable; unresolved usage is unknown, not zero. The delivered-run denominator
+Reports separate confirmed recurrence from evidence-count suggestions. Extraction
+costs expose the known subtotal and counts of measured versus unknown operations;
+`knownUsd` stays null when any retained reservation has unknown cost. Recorded
+tokens and collection/extraction latency expose the same completeness counts and
+measured subtotals. Empty histories are unmeasured; a reported zero is measured.
+Collection latency describes the last invocation in each retained scan record,
+not cumulative scan duration. These summaries exclude coding/provider costs and
+review latency outside the learning journal. Raw records retain their provenance.
+Unresolved usage is unknown, not zero. The delivered-run denominator
 does not yet cover every eligible coding attempt, and review-round/latency outcome
 correlation remains outstanding. Different task mixes cannot establish causal
 effectiveness. Held-out deterministic cases and real disposable OpenSSH bypass tests
