@@ -180,3 +180,14 @@ The gate's flagged sequence is in `npm-shrinkwrap.json:1536`, at
 It remains unchanged. The gate owner must distinguish integrity data from
 placeholder prose. Deployment, live qualification and human-merged artifact
 attestations remain unmet; this finding does not authorize bypassing the gate.
+
+Operation receipts created by the current adapter and answer service use
+`canonical-v1` SHA-256 signatures: object keys sort recursively while array order
+and values remain significant. Restart retries may reorder request and answer-map
+keys without changing operation identity. Unversioned legacy signatures still
+accept the original request serialization; their hashes cannot reconstruct the
+original key order, so retain the original request when retrying old receipts.
+Do not allocate a new operation ID to work around an uncertain legacy result.
+Rollback consumers that predate canonical signatures may refuse their replay;
+retain the current compatible runtime until those operations settle, or restore
+the matching runtime and durable-state backup together.

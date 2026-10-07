@@ -262,7 +262,7 @@ test("prototype-sensitive operation IDs persist and replay through CLI, restart,
     const accepted=await invoke(w.service,input);assert.equal(accepted.status,phase==="started"?"started":"ready");
     const saved=store.read(first.taskId);assert.equal(Object.hasOwn(saved.operations,operationId),true);
     assert.deepEqual(Object.keys(saved.operations),[operationId]);assert.equal(Object.getPrototypeOf(saved.operations),Object.prototype);
-    assert.equal(saved.operations[operationId],contentDigest(JSON.stringify({answers:input.answers,verifyCommands:[]})));
+    assert.equal(saved.operations[operationId],"canonical-v1:"+contentDigest(JSON.stringify({answers:input.answers,verifyCommands:[]})));
     if(phase==="preparing") {saved.status="preparing";saved.output=unresolved.output;saved.readiness=null;store.save(saved);}
     w.ctx.state=makeState(w.home);
     const reopened=createTaskService(w.ctx,{prepare,daemon:async()=>{throw Error("duplicate daemon launch");}}),replay=await invoke(reopened,input);

@@ -572,3 +572,46 @@ test("installed control projection agrees with sessionless resume writer and ada
   assert.equal(ctx.state.get(id).control.action, "resume");
   assert.equal((await inspect()).controls.resume, false);
 });
+
+
+test("installed operation receipts replay reordered objects through interrupted answers and preserve legacy retries", async () => {
+  const w = world(); await w.contextFor(scope("alice"), "widget");
+  let calls = 0;
+  w.worlds.get("alice").taskOptions.prepare = async (_ctx, task) => {
+    calls++;
+    const output = draftFor(task), questions = [
+      { id: "q-r-1", text: "Which format?", requirements: ["r-1"] },
+      { id: "q-r-2", text: "Which helper?", requirements: ["r-2"] },
+    ];
+    output.questions = questions.filter(q => !task.answers[q.id]);
+    output.mapping = output.mapping.map(m => {
+      const q = questions.find(q => q.requirements.includes(m.requirementId));
+      return !q ? m : task.answers[q.id] ? { ...m, resolvedBy: q.id } : { requirementId: m.requirementId, questionId: q.id };
+    });
+    output.criteria = output.criteria.filter(c => output.mapping.some(m => m.criteria?.includes(c.id)));
+    return JSON.stringify(output);
+  };
+  const input = prepare(), first = await w.delivery.dispatch("prepare", input, "alice");
+  const reorder = obj => Object.fromEntries(Object.entries(obj).reverse());
+  assert.deepEqual(await w.delivery.dispatch("prepare", { ...reorder(input), allowance: reorder(input.allowance) }, "alice"), first);
+  assert.equal(calls, 1);
+  await assert.rejects(w.delivery.dispatch("prepare", { ...input, text: request + " Changed." }, "alice"), { code: "DELIVERY_CONFLICT" });
+  const answer = { ...mutate(first, "answer"), answers: { "q-r-1": "Use CSV.", "q-r-2": "Reuse existing helper; no dependencies." } };
+  const accepted = await w.delivery.dispatch("answer", answer, "alice"), before = calls;
+  const retry = { ...reorder(answer), answers: reorder(answer.answers) };
+  assert.deepEqual(await createTaskDelivery(w.opts).dispatch("answer", retry, "alice"), accepted);
+  // Simulate loss of the adapter acknowledgement after the service saved its answer receipt.
+  await w.opts.store.transaction(scope("alice"), async (data, save) => { data.operations.answer.status = "intent"; await save(data); });
+  assert.deepEqual(await createTaskDelivery(w.opts).dispatch("answer", retry, "alice"), accepted);
+  assert.equal(calls, before);
+  await assert.rejects(w.delivery.dispatch("answer", { ...retry, answers: { ...retry.answers, "q-r-1": "Use JSON." } }, "alice"), { code: "DELIVERY_CONFLICT" });
+  const intakePath = join(w.worlds.get("alice").ctx.home, "tasks", first.taskId, "intake.json");
+  const intake = JSON.parse(readFileSync(intakePath, "utf8"));
+  intake.operations.answer = createHash("sha256").update(JSON.stringify({ answers: answer.answers, verifyCommands: [] })).digest("hex");
+  writeJsonAtomic(intakePath, intake);
+  await w.opts.store.transaction(scope("alice"), async (data, save) => { data.operations.answer.status = "intent"; await save(data); });
+  assert.deepEqual(await w.delivery.dispatch("answer", answer, "alice"), accepted);
+  assert.equal(calls, before);
+  await w.opts.store.transaction(scope("alice"), async (data, save) => { data.operations.prepare.signature = createHash("sha256").update(JSON.stringify(["prepare", input])).digest("hex"); await save(data); });
+  assert.deepEqual(await w.delivery.dispatch("prepare", input, "alice"), first);
+});
