@@ -659,3 +659,43 @@ cancellations (255,306.295916 ms; `/private/tmp/learning-review21-full.log`).
 `npm run test:learning` passed 82 tests (71,189.060125 ms;
 `/private/tmp/learning-review21-suite.log`), `npm run lint` exited 0
 (`/private/tmp/learning-review21-lint.log`), and `git diff --check` passed.
+
+## Merged preparation boundary assessment
+
+Reviewed merge `59abf71` and preparation base `bbb9704` on 2026-10-07. The
+restricted preparation adapter is useful shared infrastructure, but this merge
+alone does not qualify extraction or application. No production qualification
+flag or acceptance attestation changes as a result of the merge.
+
+| Requirement | Merged implementation and remaining work |
+| --- | --- |
+| Data-only inference | `lib/preparation_codex.mjs` disables model tools, MCP, plugins, hooks, delegation, inherited instructions, memory and telemetry; it checks effective configuration and managed requirements before drafting. Reuse this adapter through `lib/execution_preparation.mjs` when implementing extraction, rather than duplicating its launch/configuration logic. |
+| Learning extraction integration | `lib/context.mjs: learningFor` still constructs the service without an extractor or qualified profile. `lib/learning.mjs: extract` requires an explicit data-only extractor and qualification, reserves a bounded evidence batch and allowance, and validates results. A drafting capability receipt is not an extraction qualification receipt. The missing bridge must preserve the exact reserved batch/input digest, JSON candidate validation, separate allowance, cancellation/deadline and unresolved-reservation behavior. |
+| Credential and authority exclusion | `lib/task_environment.mjs: preparationEnvironment` snapshots selected provider authentication for native inference. The approved extraction profile must distinguish necessary inference authentication from coding/approval credentials and demonstrate that the latter are inaccessible. Native preparation configuration is not an outer OS boundary for arbitrary coding-worker code, the signer, active store, checkpoint or control routes. Ordinary implementation runs do not inherit the preparation restrictions. |
+| Evidence scope | `docs/audit/preparation-context-boundary.md` records native loopback-provider fixture evidence for drafting. It is useful tool/context isolation evidence, but does not establish live access to the configured provider, installed learning extraction, or signed approval/delivery/retirement. No fixture result is promoted to live qualification. |
+| External prerequisites | The recorded macOS sandbox denial remains unresolved; no Linux host or live ceremony evidence is available. Browser/capture and plugin installation are not prerequisites for this data-only path; preparation explicitly disables those surfaces. No paid call, provider/model change, nested inference job or unchanged denied probe was attempted during this assessment. |
+
+The next extraction integration must use the existing execution service and its
+restricted preparation adapter, then qualify the exact selected executable and
+profile with disposable hostile-evidence probes. Production application separately
+needs enforced denial of worker access to key/trust/verifier/checkpoint/terminal
+and privileged controls. Provide a macOS operator environment permitting the fixed
+sandbox probe and a Linux host with `/usr/bin/bwrap` plus working namespaces; record
+the actual opt-in ceremony and platform results. Successful sign-in or version
+checks cannot establish any of these claims.
+
+Criteria ac-3, ac-5, ac-8, ac-11 and ac-15 therefore remain unmet. Independent
+implementation gaps in ac-14 (complete outcome correlation) and ac-16 (signed
+rotation/loss recovery and qualified operation) also remain; they are not external
+credential failures and are not repaired by the preparation merge. Collection,
+local inspection, emergency disable and signed revocation retries remain available
+under their existing rules. Earlier inline findings through review 5446905186 are
+already addressed and retain their existing regression and thread history.
+
+Fresh Verify after the merge on the same macOS host: `npm test` passed all 1,337
+tests, with no failures, skips or cancellations (222,330.612709 ms;
+`/private/tmp/learning-merge-full.log`). `npm run test:learning` passed all 82 tests
+(55,894.405166 ms; `/private/tmp/learning-merge-suite.log`). `npm run lint` exited 0
+(`/private/tmp/learning-merge-lint.log`), and `git diff --check` passed. These are
+offline implementation results; no new native-model or installed-boundary
+qualification is inferred. This follow-up changes documentation only.

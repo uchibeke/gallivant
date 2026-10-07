@@ -126,6 +126,13 @@ digests acquire revision keys when the same bounded input is encountered. No ins
 production extractor currently implements that boundary; `dataOnly` metadata is not
 an operator configuration option. List/show/report/explain cannot launch paid work.
 
+Restricted task preparation now supplies shared native tool/context controls that
+a future extraction adapter can reuse. It does not connect the learning extractor
+or qualify ordinary coding workers, signing authority or control routes. The
+[merged-boundary assessment](audit/learning-qualification.md#merged-preparation-boundary-assessment)
+records the reusable pieces, remaining integration work and external qualification
+requirements. Preparation fixture results do not enable production learning.
+
 ## Approval workflow contract and prerequisites
 
 These commands describe the intended workflow; **the deployment stages below refuse
