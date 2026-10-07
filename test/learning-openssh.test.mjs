@@ -10,7 +10,7 @@ import { canonical, hash } from "../lib/learning_data.mjs";
 import { createLearningService, LEARNING_LIMITS } from "../lib/learning.mjs";
 import { learnCommand } from "../lib/commands/learn.mjs";
 import { fixture, pending, proposed, repo } from "./learning-fixtures.mjs";
-import { learningDispatch, revokeLearningAttempts } from "../lib/learning_input.mjs";
+import { learningDispatch, learningPaths, revokeLearningAttempts } from "../lib/learning_input.mjs";
 import { makeExecution } from "../lib/execution.mjs";
 import { executionRegistry } from "../lib/harness.mjs";
 
@@ -445,7 +445,7 @@ test("delivery capacity preserves exact retries and emergency controls", async t
   await f.service.configure(repo, "apply");
   const input = { operationId: "retained", profile: "fixture", inputDigest: "a".repeat(64) };
   const first = await f.service.context(repo, input);
-  await assert.rejects(f.service.context(repo, { ...input, operationId: "oversized", paths: Array(1000).fill("src/long-file-name.mjs") }), /delivery detail byte limit/);
+  await assert.rejects(f.service.context(repo, { ...input, operationId: "oversized", profile: "x".repeat(LEARNING_LIMITS.deliveryBytes) }), /delivery detail byte limit/);
   await f.store.transaction(repo, s => {
     for (let i = 1; i < LEARNING_LIMITS.deliveries; i++) {
       const key = hash(String(i)); s.deliveries[key] = { ...first, key, operationId: String(i), delivered: true, runId: String(i) };
@@ -460,4 +460,27 @@ test("delivery capacity preserves exact retries and emergency controls", async t
   assert.equal(f.store.load(repo).mode, "off");
   assert.equal(Object.keys(f.store.load(repo).deliveries).length, LEARNING_LIMITS.deliveries);
   assert.equal(f.service.explain(repo, "original-run")[0].contextDigest, first.contextDigest);
+});
+
+
+test("full accepted long path budgets select advice with bounded audit detail", async t => {
+  const f = await enrolled(t);
+  const paths = learningPaths({}, Array.from({ length: 200 }, (_, i) => `src/${String(i).padStart(3, "0")}/` + "é".repeat(252)));
+  assert.equal(paths.length, 200); assert.equal(Buffer.byteLength(paths[0]), 512);
+  const scoped = await f.service.revise(repo, "lesson-last-path", proposed(f.candidate.content.evidence[0], { id: "lesson-last-path", paths: [paths.at(-1)] }));
+  await f.service.approve(repo, [{ id: scoped.content.id, digest: scoped.digest }], { confirm: () => true });
+  await f.service.configure(repo, "apply");
+  for (const [profile, known] of [["local-fixture", paths], ["hosted-fixture", paths.map(p => p.replace("src/", "lib/"))]]) {
+    const input = { operationId: profile, profile, paths: known, inputDigest: hash(known), taskId: profile };
+    const delivery = await f.service.context(repo, input);
+    assert.equal(delivery.rules.length, profile === "local-fixture" ? 1 : 0);
+    assert.equal(delivery.pathAudit.digest, hash(known)); assert.equal(delivery.pathAudit.count, 200);
+    assert.equal(delivery.pathAudit.omitted, 200 - delivery.paths.length); assert(delivery.pathAudit.omitted > 0);
+    assert(Buffer.byteLength(canonical(delivery.paths)) <= LEARNING_LIMITS.pathAuditBytes);
+    assert(Buffer.byteLength(canonical(delivery)) <= LEARNING_LIMITS.deliveryBytes);
+    assert.deepEqual(await f.service.context(repo, input), delivery);
+    assert.equal(await learningDispatch({ learning: f.service }, profile, { learning: { ...delivery, repo } }, () => "accepted"), "accepted");
+    await f.service.delivered(repo, delivery.key, profile);
+    assert.deepEqual(f.service.explain(repo, profile)[0].pathAudit, delivery.pathAudit);
+  }
 });

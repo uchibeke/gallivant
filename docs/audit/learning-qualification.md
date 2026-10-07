@@ -583,3 +583,26 @@ three-attempt recovery circuit without resending` reported zero initial sends
 recheck passed all 1,284 tests with no failures, skips or cancellations
 (284,854.866042 ms; `/private/tmp/learning-review18-full-recheck.log`). No unrelated
 code or test changes were made. `git diff --check` passed.
+
+## Review batch 19: full path budgets with bounded delivery audit
+
+Selection still considers every accepted task path. Delivery persistence now stores
+a JSON-encoded path sample bounded to 2 KiB, with a digest, count and omitted count
+for the full list. Managed dispatch inputs retain all selected task paths. This
+keeps the existing 16 KiB record and 1,000-record caps without refusing supported
+200-path inputs solely because their paths are long.
+
+The regression passes 200 distinct 512-byte UTF-8 paths through the shared path
+selector and matches a signed rule on the last path, beyond the audit sample. It
+also exercises a nonmatching path set, launch admission, exact retry equality,
+delivery acknowledgement and inspection of the full-list digest. The oversized
+record regression still rejects oversized non-path metadata. Review covered
+local/hosted shared input construction, persistent audit, retry input and report
+boundaries. No paid work or unchanged blocked isolation probe ran; production
+qualification and the seven unmet criteria remain unchanged.
+
+Verify on macOS: `npm test` passed all 1,285 tests with no failures, skips or
+cancellations (304,132.304417 ms; `/private/tmp/learning-review19-full.log`).
+`npm run test:learning` passed 80 tests (84,626.753375 ms;
+`/private/tmp/learning-review19-suite.log`), `npm run lint` exited 0
+(`/private/tmp/learning-review19-lint.log`), and `git diff --check` passed.

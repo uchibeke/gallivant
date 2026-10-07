@@ -318,3 +318,10 @@ reservation is unchanged; disabled collection or stale evidence refuses candidat
 insertion. A failed merge leaves the reservation intact and does not authorize
 repeat inference. Known returned cost and token counts remain recorded even when
 a concurrent change prevents accepting the proposals.
+
+
+Delivery path audit details retain an encoded JSON sample of at most 2 KiB,
+plus `pathAudit.digest`, `count` and `omitted` for the full accepted path list.
+Rule selection still considers every accepted path, including those omitted from
+the stored sample. Managed inputs retain the full list; the audit digest allows
+that exact list to be checked without duplicating it in every delivery record.
