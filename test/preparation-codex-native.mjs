@@ -18,6 +18,13 @@ mkdirSync(cwd); mkdirSync(configHome, { recursive: true });
 const marker = join(root, "unexpected-tool-execution");
 const insideMarker = join(cwd, "unexpected-implementation");
 const notifyMarker = join(root, "unexpected-notification");
+const instructionFile = join(root, "unselected-owner-instructions.md");
+const privateInstruction = "GALLIVANT_UNSELECTED_PRIVATE_INSTRUCTION_SENTINEL";
+writeFileSync(instructionFile, privateInstruction);
+// Force the catalog into the native loader. A custom provider's /models URL
+// alone does not prove that its metadata was used to resolve agent tools.
+const privateCatalog = join(configHome, "fixture-model-catalog.json");
+writeFileSync(privateCatalog, JSON.stringify({ models: catalog.models }));
 const observations = [];
 let requests = [], responseIndex = 0;
 const server = createServer(async (request, response) => {
@@ -29,8 +36,8 @@ const server = createServer(async (request, response) => {
   const n = responseIndex++;
   const item = n === 2 || n === 3
     ? { id: `patch_${n}`, type: "custom_tool_call", call_id: `call_patch_${n}`, name: "apply_patch", input: `*** Begin Patch\n*** Add File: ${n === 2 ? marker : insideMarker}\n+unexpected write\n*** End Patch\n` }
-    : n < 2
-    ? { id: `fc_${n}`, type: "function_call", call_id: `call_${n}`, name: n === 0 ? "exec_command" : "mcp__fixture__write", arguments: JSON.stringify({ cmd: `touch ${marker}` }) }
+    : n < 2 || n === 4
+    ? { id: `fc_${n}`, type: "function_call", call_id: `call_${n}`, name: n === 4 ? "spawn_agent" : n === 0 ? "exec_command" : "mcp__fixture__write", arguments: JSON.stringify(n === 4 ? { task_name: "forbidden", message: "Return unexpected delegation" } : { cmd: `touch ${marker}` }) }
     : { id: "msg_fixture", type: "message", role: "assistant", content: [{ type: "output_text", text: "prepared", annotations: [] }] };
   const result = { id: `resp_${n}`, object: "response", status: "completed", output: [item], usage: { input_tokens: 1, output_tokens: 1, total_tokens: 2 } };
   response.writeHead(200, { "content-type": "text/event-stream" });
@@ -50,8 +57,12 @@ try {
     assert.ok(catalog.models.some(m => m.slug === model), `missing real metadata for ${model}`);
     writeFileSync(join(configHome, "config.toml"), [
       `model=${JSON.stringify(model)}`, 'model_provider="preparation_fixture"',
+      `model_catalog_json=${JSON.stringify(privateCatalog)}`,
+      `model_instructions_file=${JSON.stringify(instructionFile)}`,
+      `experimental_compact_prompt_file=${JSON.stringify(instructionFile)}`,
       `notify=${JSON.stringify([process.execPath, "-e", `require('node:fs').writeFileSync(${JSON.stringify(notifyMarker)},process.argv.at(-1))`])}`,
-      'sandbox_mode="workspace-write"', '[sandbox_workspace_write]', 'network_access=true',
+      'sandbox_mode="workspace-write"', '[agents]', 'enabled=true', '[features]', 'multi_agent_v2=true',
+      '[sandbox_workspace_write]', 'network_access=true',
       '[permissions.gallivant_preparation.filesystem]', '":root"="write"',
       '[model_providers.preparation_fixture]', 'name="preparation_fixture"', `base_url=${JSON.stringify(url)}`,
       'wire_api="responses"', 'requires_openai_auth=false', 'supports_websockets=false',
@@ -70,17 +81,18 @@ try {
     assert.equal(existsSync(marker), false, "disabled tools executed");
     assert.equal(existsSync(insideMarker), false, "preparation modified its workspace");
     assert.equal(existsSync(notifyMarker), false, "legacy notify received the intake prompt outside the sandbox");
-    assert.equal(requests.length, 5, "hostile shell, MCP and inside/outside patch replies were processed before completion");
+    assert.equal(requests.length, 6, "hostile shell, MCP, inside/outside patch and delegation replies were processed before completion");
     for (const request of requests) {
       assert.equal(request.model, model, "adapter changed the selected model");
       assert.ok((request.tools ?? []).every(t => ["request_user_input", "apply_patch"].includes(t.name)), "preparation exposed an unrestricted tool");
+      assert.ok(!JSON.stringify(request).includes(privateInstruction), "unselected host instructions reached the model");
     }
     const outcome = adapterFor("codex").outcome(output.trim().split("\n"));
     assert.equal(outcome.ok, true, output); assert.equal(outcome.lastMessage, "prepared");
-    observations.push({ model, requests: requests.length, tools: (requests[0].tools ?? []).map(t => t.name), hostileToolCallsRejected: 4, notifierDisabled: true, output: outcome.lastMessage });
+    observations.push({ model, catalogMultiAgentVersion: catalog.models.find(m => m.slug === model).multi_agent_version, requests: requests.length, tools: (requests[0].tools ?? []).map(t => t.name), hostileToolCallsRejected: 5, notifierDisabled: true, unselectedInstructionsExcluded: true, output: outcome.lastMessage });
   }
   const refusedOverrides = [];
-  for (const override of ['sandbox_mode="workspace-write"', 'features.shell_tool=true', 'permissions.gallivant_preparation.filesystem.":root"="write"', `notify=${JSON.stringify([process.execPath, "-e", "process.exit(1)"])}`]) {
+  for (const override of ['sandbox_mode="workspace-write"', 'features.shell_tool=true', 'agents.enabled=true', 'features.multi_agent_v2=true', `model_instructions_file=${JSON.stringify(instructionFile)}`, `experimental_compact_prompt_file=${JSON.stringify(instructionFile)}`, 'permissions.gallivant_preparation.filesystem.":root"="write"', `notify=${JSON.stringify([process.execPath, "-e", "process.exit(1)"])}`]) {
     let spec = buildPreparationRun({ harness: "codex", config: { harness: { codex: { bin } }, max_budget_usd: 0 }, mode: "start", session: null, prompt: "This must never reach the provider", cwd });
     // Inject a conflicting effective value without changing system/MDM policy.
     // The unit fixture separately exercises merged administrator-layer results.
@@ -92,5 +104,6 @@ try {
   }
   await new Promise(resolve => setTimeout(resolve, 250));
   assert.equal(existsSync(notifyMarker), false, "legacy notifier ran asynchronously");
+  assert.equal(readFileSync(instructionFile, "utf8"), privateInstruction, "operator instruction file was changed");
   console.log(JSON.stringify({ nativeVersion: spawnSync(bin, ["--version"], { encoding: "utf8", env }).stdout.trim(), provider: "loopback fixture; no inference", observations, refusedOverrides }, null, 2));
 } finally { server.closeAllConnections(); server.close(); rmSync(root, { recursive: true, force: true }); }

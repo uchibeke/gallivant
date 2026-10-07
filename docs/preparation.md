@@ -14,19 +14,24 @@ The canonical adapter registry owns preparation boundaries. Claude uses its
 tools-off mode. Codex 0.160.0 uses an isolated permission profile, no approvals,
 disabled command network, no shell/browser/apps/plugins/hooks/delegation tools,
 and explicit disabling of every inherited MCP server. An empty MCP table alone
-does not remove inherited entries. Some model catalogs still expose apply_patch;
-the sandbox denies its file access. No preparation tool receives project or
+does not remove inherited entries. Both `agents.enabled` and
+`features.multi_agent_v2` are disabled: a model-selected V2 delegation capability
+can override the V1 `features.multi_agent` switch. Some model catalogs still
+expose apply_patch; the sandbox denies its file access. No preparation tool receives project or
 credential filesystem grants. Selected source text is supplied in the prompt.
 
 The task-private config snapshot is parsed with bundled smol-toml. Model and
 provider settings are retained; legacy sandbox settings are removed because they
 override permission profiles. Legacy `notify` commands are removed from the private
 snapshot and disabled explicitly; turning off hooks alone does not disable them.
+Inherited `model_instructions_file` and `experimental_compact_prompt_file` paths
+are removed from the private snapshot. Codex reads these host files itself, so a
+tool permission profile cannot prevent their contents reaching model context.
 Before any drafting turn, a bounded native `config/read` probe verifies the merged
 settings, including system and MDM overrides. It starts no model turn, sends no
 intake text and discards configuration diagnostics. Conflicting sandbox, tool,
-notification, MCP or permission settings fail closed before a preparation receipt
-is returned. Managed policy is never rewritten to obtain a pass.
+notification, instruction-file, MCP or permission settings fail closed before a
+preparation receipt is returned. Managed policy is never rewritten to obtain a pass.
 Native operator files and managed requirements are unchanged.
 Unsupported named config profiles and ambiguous MCP server names stop
 before drafting with an actionable error. Implementation argv is unchanged.
@@ -39,12 +44,14 @@ node test/preparation-codex-native.mjs /absolute/path/to/codex \
   /path/to/models_cache.json gpt-6.1-sol gpt-6-astra gpt-5.5
 ```
 
-On 2026-10-06, Codex 0.160.0 processed all three model catalogs. Each completed
-after rejecting forced shell, inherited MCP and file-patch calls both inside and
-outside the preparation workspace, despite inherited writable settings. Sol and Astra
-exposed no tools; GPT-5.5 exposed request_user_input and apply_patch, with writes
-denied. Inherited notification commands stayed disabled; conflicting effective
-settings were refused before any model request. Managed precedence is covered
+The native fixture explicitly loads the supplied model catalog, including its
+delegation version. It attempts shell, inherited MCP, delegation and file-patch
+calls both inside and outside the workspace. It also seeds instruction files
+outside the workspace and checks every provider request for their sentinel text.
+On 2026-10-07, all three models passed these checks with Codex 0.160.0, including
+Sol and Astra with explicit V2 catalog metadata. Inherited notification commands
+stayed disabled and unselected instruction text was absent from every request.
+Conflicting effective settings were refused before any model request. Managed precedence is covered
 by protocol regression fixtures without editing the machine's administrator policy.
 This proves native CLI/configuration behavior with a fixture provider,
 not live provider eligibility or a completed APort/ChatGPT workflow.

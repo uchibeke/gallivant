@@ -46,6 +46,8 @@ test("Codex preparation removes native tools and disables every inherited MCP se
   for (const flag of ['approval_policy="never"', 'default_permissions="gallivant_preparation"', 'web_search="disabled"', 'features.shell_tool=false', 'features.apps=false', 'features.plugins=false', 'features.hooks=false', 'features.computer_use=false', 'features.multi_agent=false', 'features.image_generation=false', 'features.view_image=false', 'features.goals=false', 'features.code_mode_host=false', 'mcp_servers.a_first.enabled=false', 'mcp_servers.z-last.enabled=false']) assert.ok(final.args.includes(flag), flag);
   assert.equal(final.args.at(-1), spec.args.at(-1));
   assert.ok(final.args.includes("notify=[]"));
+  assert.ok(final.args.includes("agents.enabled=false"));
+  assert.ok(final.args.includes("features.multi_agent_v2=false"));
   assert.ok(!final.args.includes("-m"), "the configured model remains selected");
   assert.ok(!final.args.some(a => a.startsWith("model_provider=")), "the configured provider remains selected");
   assert.ok(!final.args.some(a => /^sandbox_mode=|^sandbox_workspace_write\./.test(a)));
@@ -67,6 +69,10 @@ test("managed effective settings cannot override the preparation boundary", asyn
     "MCP enabled by default": c => { c.mcp_servers = { managed: { command: "private-command" } }; },
     "tools re-enabled": c => { c.features.shell_tool = true; },
     "hooks re-enabled": c => { c.features.hooks = true; },
+    "model-selected delegation restored": c => { c.agents.enabled = true; },
+    "explicit V2 delegation restored": c => { c.features.multi_agent_v2 = true; },
+    "instruction file restored": c => { c.model_instructions_file = "/private/secret-credential"; },
+    "compact instruction file restored": c => { c.experimental_compact_prompt_file = "/private/secret-credential"; },
     "notifier restored": c => { c.notify = ["private-command", "secret-credential"]; },
     "named config profile": c => { c.profile = "implementation"; },
     "incomplete protocol result": c => { delete c.features; },
@@ -80,6 +86,18 @@ test("managed effective settings cannot override the preparation boundary", asyn
     assert.equal(readFileSync(join(dir, "managed_config.toml"), "utf8"), policy);
     assert.equal(existsSync(join(dir, "unexpected-turn")), false);
   });
+});
+
+test("preparation strips unselected instruction files without modifying their contents or provider settings", async () => {
+  const dir = tempHome(), spec = codexFixture(dir);
+  const instruction = join(dir, "owner-instructions.md");
+  writeFileSync(instruction, "private-owner-context");
+  writeFileSync(join(dir, "config.toml"), `model="selected-model"\nmodel_provider="selected-provider"\nmodel_instructions_file=${JSON.stringify(instruction)}\nexperimental_compact_prompt_file=${JSON.stringify(instruction)}\n[agents]\nenabled=true\n[features]\nmulti_agent_v2=true\n`);
+  await spec.configure(spec, { cwd: dir, env: { CODEX_HOME: dir } });
+  const saved = readFileSync(join(dir, "config.toml"), "utf8");
+  assert.doesNotMatch(saved, /model_instructions_file|experimental_compact_prompt_file|owner-instructions/);
+  assert.match(saved, /selected-model/); assert.match(saved, /selected-provider/);
+  assert.equal(readFileSync(instruction, "utf8"), "private-owner-context");
 });
 
 test("compatible managed provider settings remain usable; invalid inspection fails closed", async () => {

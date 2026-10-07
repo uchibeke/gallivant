@@ -25,7 +25,9 @@ does not qualify one.
 
 `openai-agents` has an implemented managed REST transport; see
 [account/environment setup and verification](openai-agents.md). `codex-cloud`
-remains reserved and unavailable until its transport milestone. Offline fixtures
+has an implemented CLI transport but remains unavailable for new dispatch until
+a supported interface verifies the selected environment's connected repository;
+see [Cloud setup and recovery](codex-cloud.md). Offline fixtures
 exercise shared lifecycle behavior; they do not certify live account/model access
 or installed-plugin behavior. The separately opt-in Agents campaign retains unmet
 live prerequisites explicitly. Existing intake qualification blockers remain in
