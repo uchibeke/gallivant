@@ -325,3 +325,11 @@ plus `pathAudit.digest`, `count` and `omitted` for the full accepted path list.
 Rule selection still considers every accepted path, including those omitted from
 the stored sample. Managed inputs retain the full list; the audit digest allows
 that exact list to be checked without duplicating it in every delivery record.
+
+The executable selected with setup's `--ssh-keygen` is pinned in protected
+enrollment metadata and reused by later CLI and daemon services without another
+flag. Pending enrollment retries also reuse that pin. Each cryptographic use,
+including doctor probes, checks the exact executable path and digest before
+execution; a changed or missing binary requires restoring the pinned installation
+or separately reviewed requalification. Local collection and emergency disable
+do not require resolving or executing the signer.

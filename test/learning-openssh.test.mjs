@@ -5,7 +5,7 @@ import { mkdtempSync, mkdirSync, copyFileSync, writeFileSync, readFileSync, rmSy
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { openSshSigner, encryptedKey, signingEnvironment, NAMESPACE, SIGNER_ID } from "../lib/learning_signer.mjs";
+import { openSshSigner, storedOpenSshSigner, encryptedKey, signingEnvironment, NAMESPACE, SIGNER_ID } from "../lib/learning_signer.mjs";
 import { canonical, hash } from "../lib/learning_data.mjs";
 import { createLearningService, LEARNING_LIMITS } from "../lib/learning.mjs";
 import { learnCommand } from "../lib/commands/learn.mjs";
@@ -483,4 +483,38 @@ test("full accepted long path budgets select advice with bounded audit detail", 
     await f.service.delivered(repo, delivery.key, profile);
     assert.deepEqual(f.service.explain(repo, profile)[0].pathAudit, delivery.pathAudit);
   }
+});
+
+
+test("custom enrolled signer survives CLI restart and refuses changed executable bytes", async t => {
+  const f = fixture(t), executable = join(f.dir, "portable-ssh-keygen"), approval = join(f.dir, "approval");
+  writeFileSync(executable, '#!/bin/sh\nexec /usr/bin/ssh-keygen "$@"\n', { mode: 0o700 }); mkdirSync(approval, { mode: 0o700 });
+  const keyPath = join(approval, "key"), qualify = () => ({ qualified: true, fixtureOnly: true });
+  let selectedPath;
+  const ctx = { learningFor(_login, options) {
+    selectedPath = options.signerExecutable;
+    const actual = storedOpenSshSigner(f.store, { executable: selectedPath });
+    return createLearningService({ store: f.store, qualify, signer: { ...actual, terminal() {},
+      createKey(path) { copyFileSync(key, path); copyFileSync(key + ".pub", path + ".pub"); return encryptedKey(path); },
+      sign: bytes => signFixture(bytes),
+    } });
+  } };
+  await learnCommand(ctx, { args: ["setup"], values: { "key-path": keyPath, "ssh-keygen": executable }, confirm: () => true });
+  assert.equal(selectedPath, executable); assert.equal(f.store.readAuthority().signer.path, executable);
+  const c = await pending(f.service, f.store);
+  const reviewer = createLearningService({ store: f.store, qualify, signer: { ...storedOpenSshSigner(f.store), terminal() {}, sign: bytes => signFixture(bytes) } });
+  await reviewer.approve(repo, [{ id: c.content.id, digest: c.digest }], { confirm: () => true });
+  f.service.rememberRepo("example/project", repo);
+  const restarted = createLearningService({ store: f.store, qualify, probeIsolation: async () => ({ qualified: false }) });
+  const doctor = await restarted.doctor(); assert.equal(doctor.enrollment.enrolled, true); assert.equal(doctor.openssh.signer.path, executable);
+  assert.deepEqual(await learnCommand({ learning: restarted }, { args: ["recover"], values: { repo: "example/project" } }), []);
+  await restarted.configure(repo, "apply");
+  assert.equal((await restarted.context(repo, { operationId: "after-restart", profile: "fixture", inputDigest: "a".repeat(64) })).rules.length, 1);
+  const marker = join(f.dir, "must-not-execute");
+  writeFileSync(executable, `#!/bin/sh\ntouch '${marker}'\n`);
+  const changed = createLearningService({ store: f.store, qualify, probeIsolation: async () => ({ qualified: false }) });
+  assert.equal((await changed.doctor()).openssh.available, false);
+  await assert.rejects(changed.recover(repo), /pinned signer changed/);
+  assert.equal(existsSync(marker), false);
+  await changed.configure(repo, "off"); assert.equal(changed.mode(repo), "off");
 });

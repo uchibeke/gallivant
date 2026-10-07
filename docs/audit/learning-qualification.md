@@ -606,3 +606,33 @@ cancellations (304,132.304417 ms; `/private/tmp/learning-review19-full.log`).
 `npm run test:learning` passed 80 tests (84,626.753375 ms;
 `/private/tmp/learning-review19-suite.log`), `npm run lint` exited 0
 (`/private/tmp/learning-review19-lint.log`), and `git diff --check` passed.
+
+## Review batch 20: reuse the enrolled OpenSSH executable
+
+Default learning services lazily load the signer path from protected enrolled or
+pending enrollment metadata. Each signer operation checks the recorded path and
+bytes before invoking the executable; enrolled signer metadata must also agree
+with its enrollment manifest. Setup selection flows through both the CLI fallback
+and context factory, whose cache distinguishes explicit executable selections.
+Collection and emergency disable do not resolve the cryptographic dependency.
+
+The disposable-key regression enrolls a separately pinned executable launcher for system OpenSSH through
+the command service factory, signs an approval, restarts without specifying the
+executable, and verifies doctor, recovery and apply context. Replacing that file
+with a marker-writing script is rejected before execution; disabling still works.
+Review covered setup retries, cached CLI/daemon services, capability probes,
+signature verification and local outage controls. This is offline cryptographic
+evidence; no production enrollment, paid inference or unchanged denied isolation
+probe ran. The seven unmet criteria and installed/live qualification gaps remain.
+
+The initial new fixture attempted to relocate the macOS system executable; its
+capability probe failed and a disposable diagnostic observed `SIGKILL` with no
+stderr. The final fixture uses a separately pinned launcher invoking the original
+system OpenSSH, with no OS protection changes. The final learning suite passed
+81 tests (55,566.288 ms; `/private/tmp/learning-review20-suite-final.log`). The
+initial fixture failure is retained in `/private/tmp/learning-review20-suite.log`.
+
+Final Verify on macOS: `npm test` passed all 1,286 tests without failures, skips
+or cancellations (263,993.927583 ms; `/private/tmp/learning-review20-full.log`).
+`npm run test:learning` passed 81 tests, `npm run lint` exited 0
+(`/private/tmp/learning-review20-lint.log`), and `git diff --check` passed.
