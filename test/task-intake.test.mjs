@@ -382,7 +382,11 @@ test("partial answers retain context while unsafe, oversized or changed selectio
   const question = await legacy.service.prepare({text:REQUEST});
   const reply = {taskId:question.taskId,expectedRevision:question.revision,operationId:"legacy-answer",answers:{"q-r-1":"Use CSV."}};
   const answered = await legacy.service.answer(reply);
-  assert.equal(taskStore(legacy.home).read(question.taskId).operations[reply.operationId], contentDigest(JSON.stringify({answers:reply.answers,verifyCommands:[]})));
+  const legacySignature = contentDigest(JSON.stringify({answers:reply.answers,verifyCommands:[]}));
+  const saved = taskStore(legacy.home).read(question.taskId);
+  assert.equal(saved.operations[reply.operationId], "canonical-v1:" + legacySignature);
+  saved.operations[reply.operationId] = legacySignature;
+  taskStore(legacy.home).save(saved);
   assert.deepEqual(await legacy.service.answer(reply), answered);
 });
 
