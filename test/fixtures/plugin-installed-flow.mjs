@@ -288,6 +288,37 @@ await makeExecution({root:home+'/runs',taskId:'eviction',account:'alice',provide
   } finally { if (child.exitCode === null && child.signalCode === null) child.kill("SIGKILL"); }
 });
 
+test("installed preparation and readiness callbacks pin their runtime before implementation registration", async () => {
+  for (const phase of ["preparation", "readiness"]) {
+    const w = world({ question: phase === "preparation" }); await w.contextFor(scope("alice"), "widget");
+    const bound = w.worlds.get("alice"), ctx = bound.ctx;
+    migrateRuntimeState({ home: ctx.home, manifest });
+    let entered, release;
+    const started = new Promise(resolve => { entered = resolve; }), finished = new Promise(resolve => { release = resolve; });
+    let pending;
+    if (phase === "preparation") {
+      bound.taskOptions.prepare = async (_ctx, task) => { entered(); await finished; return JSON.stringify(draftFor(task, { question: true })); };
+      pending = w.delivery.dispatch("prepare", prepare(), "alice");
+    } else {
+      const task = await w.delivery.dispatch("prepare", prepare(), "alice");
+      const path = join(ctx.home, "tasks", task.taskId, "intake.json"), intake = JSON.parse(readFileSync(path));
+      intake.readiness = null; writeJsonAtomic(path, intake);
+      bound.taskOptions.decideReady = async () => { entered(); await finished; return { ok: true, decisionId: "fixture-readiness", report: "" }; };
+      pending = w.delivery.dispatch("validate", mutate(task, "validate-pending"), "alice");
+    }
+    try {
+      await Promise.race([started, pending.then(() => { throw new Error("operation completed before the pending callback"); })]);
+      assert.equal(ctx.state.entries().length, 0);
+      assert.equal(checkRuntimeState({ home: ctx.home, manifest }).active, true);
+      const pin = readFileSync(join(ctx.home, "runtime-pin.json"));
+      assert.throws(() => migrateRuntimeState({ home: ctx.home, manifest: { ...manifest, coreSha256: "b".repeat(64) } }), { code: "RUNTIME_ACTIVE_PIN" });
+      assert.deepEqual(readFileSync(join(ctx.home, "runtime-pin.json")), pin);
+    } finally { release(); await pending; }
+    assert.equal(checkRuntimeState({ home: ctx.home, manifest }).active, false);
+    migrateRuntimeState({ home: ctx.home, manifest: { ...manifest, coreSha256: "b".repeat(64) } });
+  }
+});
+
 test("compatible package/state backup and rollback preserve task/provider/brief identities; active pins reject replacement", async () => {
   const w = world({ question: false }), task = await w.delivery.dispatch("prepare", prepare(), "alice"), ctx = w.worlds.get("alice").ctx;
   migrateRuntimeState({ home: ctx.home, manifest });

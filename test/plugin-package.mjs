@@ -52,7 +52,7 @@ execFileSync(process.execPath, ["--test", "flow.mjs"], { cwd: consumer, stdio: "
 // Re-run provider/lifecycle conformance against ONLY emitted artifact modules.
 // Internal-module tests use the retained compatibility export; public consumers
 // above import only documented stable entrypoints.
-const conformance = ["execution-backends.test.mjs", "execution-preparation.test.mjs", "openai-agents.test.mjs", "codex-cloud.test.mjs", "loop.test.mjs", "review.test.mjs", "recovery.test.mjs", "control.test.mjs", "task-delivery.test.mjs", "plugin-package.test.mjs"];
+const conformance = ["execution-backends.test.mjs", "execution-preparation.test.mjs", "openai-agents.test.mjs", "codex-cloud.test.mjs", "loop.test.mjs", "review.test.mjs", "recovery.test.mjs", "control.test.mjs", "task-delivery.test.mjs", "plugin-package.test.mjs", "runtime-delivery.test.mjs"];
 for (const file of [...conformance, "codex-cloud-live-validation.mjs"]) {
   const source = readFileSync(join(root, "test", file), "utf8").replace(/new URL\("\.\.\/([^"\n]+)", import\.meta\.url\)/g, (_, path) => `new URL("./node_modules/gallivant/${path}", import.meta.url)`).replace(/"\.\.\/lib\//g, '"gallivant/lib/');
   writeFileSync(join(consumer, file), source);

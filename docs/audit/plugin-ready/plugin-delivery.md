@@ -36,6 +36,15 @@ and installed artifacts. Scoped discovery filters repository authorization befor
 the list limit; source and installed MCP tests cover late authorized tasks,
 authorized-only truncation and reads that schedule no work.
 
+Runtime review regressions in `test/runtime-delivery.test.mjs` cover preparation,
+pending readiness, unresolved cancellation/results and orphaned execution before
+registry creation. Checks, migration, backup and restore retain the same active
+artifact pin; settled work still permits a compatible update. Installed task
+callbacks exercise the pin guard while preparation or readiness is awaiting a
+reply. The same installed conformance suite exercises startup reconciliation over
+every bounded batch, a restart at a nonzero cursor, failed-advance cleanup and
+normal provider backoff after a full sweep, without duplicate dispatch.
+
 Unmet attestations remain explicit:
 
 - **ac-5:** Actual Pages runtime/binding execution is unavailable. Node package

@@ -11,8 +11,8 @@
     "base": "96e81031516bdf6663dd3b97ac39b8f57022568b",
     "sourceVerified": true,
     "uncommittedPayload": [
-      "lib/plugin_package.mjs",
-      "lib/task_delivery.mjs"
+      "lib/runtime_node.mjs",
+      "lib/runtime_state.mjs"
     ],
     "mergedM5": false,
     "predecessorMerges": [
@@ -21,14 +21,14 @@
       "2b4514fb27fcb493e62bfed913fffc204215f155",
       "96e81031516bdf6663dd3b97ac39b8f57022568b"
     ],
-    "testedSourceCommit": "cc93eb4d968d2086122f43dfcbccdf2e8e0bd9f9"
+    "testedSourceCommit": "446734f33f5389d74cf10d083cebd46f62dd1e97"
   },
   "artifact": {
     "coreArtifact": "gallivant-0.2.0.tgz",
-    "coreSha256": "664a414520d3d82d2973df22fe62d74f1a4a1d45d3363c8e30910cf5da10896f",
+    "coreSha256": "e8f55eb00b2a3cd448ffdd7a36709e117846812cecee362e35457a3b71b2e67f",
     "hashes": {
       "plugin": "8753892ceb5552fc37ba011929830f4c754d717f8d8031e31fb9b4935b465e1a",
-      "runtime": "234cf180a9a2617bc50100ee53a4aa884eb4b8ae6e29388ca9cc7caf8c5aa123",
+      "runtime": "1728e843e72c5b553cdc87b1f8cba666620500325c7591f48c5dd4e0daafbafe",
       "operations": "ff65510908d61dd30b71e79e443614356fc157bbf70c3717f16a581fe6f721b3"
     },
     "dependencyLockSha256": "bf3969111f7c4b84071fc14c59d870e296ee045024c8056757ac3e3466bc2b28",
@@ -111,8 +111,8 @@
       "lib/run_log.mjs": "7d0b28731be434c6764ea400e4fe9d95ea0cc81179c9ead80d140d23153abcdb",
       "lib/run.mjs": "3682818ab95bf3b27c262449aa521be094caee9c8f133e94740923ebafb91315",
       "lib/runtime_dependencies.mjs": "6d25b972c116026643f348dc55586009d2746f68b99f47d450b2a3ef35625949",
-      "lib/runtime_node.mjs": "41c417ff5e352d8ad36174a6051eb6533fd26251c2ccfa20edbcd47ef37edb35",
-      "lib/runtime_state.mjs": "fb77979fdcbabb2c2f10fce3e52c2236c0e20e2fc41cc78c5aab5fc03881c1f6",
+      "lib/runtime_node.mjs": "c7edac93b36c53e2cc9cfdd8e7439720a72f30670cfdf7c078e7a02dff1055dd",
+      "lib/runtime_state.mjs": "4e31e602188faa35ffdcdf07d59a46ffe3a2d390836872dcad1cd1508bf2880c",
       "lib/sources/index.mjs": "88e1550751e9f52c82e94085bcb77bbd2b80466c9e2192670593f12894c4a4ec",
       "lib/sources/prd.mjs": "b26425213d537d8bf640abee1046481925de30d676fdb9b6a6b9239cdc50effd",
       "lib/start_contract.mjs": "e154f36dcf54c93b4308a93d8926dca8f28358c4e41234dc684008706ea23ab9",
@@ -354,7 +354,8 @@
       "tests": [
         "installed process eviction case",
         "installed duplicate owner and stale fence case",
-        "installed API/Cloud unknown-acceptance restart cases"
+        "installed API/Cloud unknown-acceptance restart cases",
+        "test/runtime-delivery.test.mjs: both hosted transports force every startup batch, restart a nonzero-cursor sweep, preserve failed-advance checkpoints and never resubmit unknown intent"
       ],
       "evidence": "Killed native fixture owner is recovered; unresolved provider intent retains exactly one paid-work spy write"
     },
@@ -463,7 +464,9 @@
         "installed synthetic 0.2.1 artifact install and 0.2.0 rollback",
         "active runtime digest refusal",
         "major/schema mismatch refusal",
-        "ancestor symlink/hash backup refusal"
+        "ancestor symlink/hash backup refusal",
+        "test/runtime-delivery.test.mjs: pre-registration preparation/readiness/cancellation/execution pins across check/migrate/backup/restore and idle updates",
+        "test/fixtures/plugin-installed-flow.mjs: installed preparation and readiness callbacks pin their runtime before implementation registration"
       ],
       "evidence": "Intake and provider identity bytes preserved through actual installs and matching private backup restore; no active-job replacement"
     },
@@ -476,7 +479,7 @@
         "lib/harness.mjs"
       ],
       "tests": [
-        "18 installed consumer flow cases",
+        "19 installed consumer flow cases",
         "installed local/API/Cloud provider and lifecycle conformance",
         "inherited hosted bounded-preparation refusal cases"
       ],
@@ -516,25 +519,25 @@
       {
         "command": "npm test",
         "exitCode": 0,
-        "tests": 1212,
-        "pass": 1212,
+        "tests": 1225,
+        "pass": 1225,
         "fail": 0,
-        "log": "/tmp/plugin-delivery-review-final-unit-tests.log"
+        "log": "/tmp/plugin-delivery-runtime-unit-tests.log"
       },
       {
         "command": "npm run lint",
         "exitCode": 0,
-        "log": "/tmp/plugin-delivery-review-final-lint.log"
+        "log": "/tmp/plugin-delivery-runtime-lint.log"
       },
       {
         "command": "npm run test:plugin-package",
         "exitCode": 0,
-        "consumerFlowTests": 18,
-        "installedConformanceTests": 388,
+        "consumerFlowTests": 19,
+        "installedConformanceTests": 401,
         "fail": 0,
-        "log": "/tmp/plugin-delivery-review-final-package-tests.log",
-        "consumerEvidence": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/task-plugin-consumer-SVWhez/evidence.json",
-        "conformanceLog": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/task-plugin-consumer-SVWhez/conformance.log"
+        "log": "/tmp/plugin-delivery-runtime-package-tests.log",
+        "consumerEvidence": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/task-plugin-consumer-jn4JVv/evidence.json",
+        "conformanceLog": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/task-plugin-consumer-jn4JVv/conformance.log"
       },
       {
         "command": "git diff --check",
@@ -544,11 +547,11 @@
     ],
     "verifiedPayloadFiles": 112,
     "logSha256": {
-      "/tmp/plugin-delivery-review-final-unit-tests.log": "0a3d6a134a0de5f8e65147da67d77cd5359b464f978f34031c6744a631a12609",
-      "/tmp/plugin-delivery-review-final-package-tests.log": "2ccec28cd1a326af04e96ed0f9e70457d33cce9521699de34eb835127e5ffe0d",
-      "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/task-plugin-consumer-SVWhez/conformance.log": "1eaf86e41e4b27783fd3053fdb8b3fa29eb98a97f219edc527ebe3fa515269a3",
-      "/tmp/plugin-delivery-review-final-lint.log": "2f32bd854b16ced20ab71be2afd3673b887efc4815c6e55ea7b941ebc5aa8a0b",
-      "/tmp/plugin-delivery-review-focused.log": "5664be1405d0f18fee354a022a1864c15006cbad5cd757647a5aba7a04ab55f1"
+      "/tmp/plugin-delivery-runtime-unit-tests.log": "edf4bb3ead124264fee478a091b379d9dda68b7f2cda600d5249d2e539e8a00f",
+      "/tmp/plugin-delivery-runtime-package-tests.log": "2590d30ede4695351a69bcbd2ec49586960b1ffe4a1c9147b614c408ed90dbf6",
+      "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/task-plugin-consumer-jn4JVv/conformance.log": "76163208023c2f5ba1e63b78f1d306a3498e445bd0ea048e1e43ff663542c665",
+      "/tmp/plugin-delivery-runtime-lint.log": "2f32bd854b16ced20ab71be2afd3673b887efc4815c6e55ea7b941ebc5aa8a0b",
+      "/tmp/plugin-delivery-runtime-focused.log": "9ee95081b9bdebb983645020f8e9cfdfbfc0a01e98518fc7ccdf4168a76c997e"
     },
     "hostEvidence": false,
     "fixturePurpose": "Deterministic unpaid installed-artifact compatibility; no actual installed host or live provider qualification",
@@ -568,7 +571,10 @@
       "partial package output cleanup; exact emitted license; publishable dependency shrinkwrap",
       "Git root/HEAD/status errors fail closed for public candidates; failed internal status leaves sourceVerified:false; source mismatch remains explicit",
       "same runtime payload policy detects modified/deleted/renamed files; no-renames status retains both paths; failed candidates remove owned partial output",
-      "repository authorization precedes list cap and truncated count; 0/1/100/101 authorized records after 101 revoked records; actual installed MCP summary/UI metadata agree and reads schedule no work"
+      "repository authorization precedes list cap and truncated count; 0/1/100/101 authorized records after 101 revoked records; actual installed MCP summary/UI metadata agree and reads schedule no work",
+      "active artifact pin includes preparing/validating intake, pending readiness, unsettled attempts and cancellations; canonical executionLive covers unknown acceptance and uncollected results",
+      "matching active backups/restores preserve identities; mismatched migration/backup refuses before pin/output changes; settled records still permit idle compatible updates",
+      "startup process identity remains pending across every bounded entry batch; new processes reset a nonzero cursor; failed advances retain checkpoint and release ownership; completed sweeps restore normal backoff without duplicate submission"
     ]
   },
   "reviewFollowup": {
@@ -596,6 +602,34 @@
       "pass": 17,
       "fail": 0,
       "log": "/tmp/plugin-delivery-review-focused.log"
+    },
+    "externalPrerequisites": "Previously observed unmet prerequisites retained; no unchanged live call retried and no installed-host/model-access evidence inferred from fixtures"
+  },
+  "runtimeReviewFollowup": {
+    "reviewId": 5440576822,
+    "reviewedCommit": "446734f33f5389d74cf10d083cebd46f62dd1e97",
+    "items": [
+      {
+        "commentId": 4205471640,
+        "implementation": "lib/runtime_state.mjs",
+        "tests": [
+          "test/runtime-delivery.test.mjs",
+          "test/fixtures/plugin-installed-flow.mjs"
+        ],
+        "rule": "The active artifact pin covers work before registry creation and unresolved authoritative execution, including readiness and cancellation"
+      },
+      {
+        "commentId": 4205471650,
+        "implementation": "lib/runtime_node.mjs",
+        "tests": "test/runtime-delivery.test.mjs",
+        "rule": "Restart completion is persisted only after a full successful bounded cursor sweep; partial and failed sweeps do not skip earlier or later entries"
+      }
+    ],
+    "focusedVerification": {
+      "tests": 13,
+      "pass": 13,
+      "fail": 0,
+      "log": "/tmp/plugin-delivery-runtime-focused.log"
     },
     "externalPrerequisites": "Previously observed unmet prerequisites retained; no unchanged live call retried and no installed-host/model-access evidence inferred from fixtures"
   }
