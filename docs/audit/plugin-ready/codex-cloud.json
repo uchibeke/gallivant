@@ -1,0 +1,407 @@
+{
+  "version": 1,
+  "task_id": "task-608e7283e7d7d42cfb91eb6b",
+  "scope": "Supported native CLI transport and offline shared lifecycle/PR conformance; live qualification remains unverified",
+  "recorded_at": "2026-10-07T02:33:32.840222+00:00",
+  "base_revision": "2b4514fb27fcb493e62bfed913fffc204215f155",
+  "implementation_revision": "2557dd856ee873b0ba6408fcc6e5c02f898a47b0",
+  "branch": "work/codex-cloud-harness",
+  "source_files": {
+    "README.md": "9e6e79dfe29e0e3f6b876d53dfdadafd5869158a662782468e461ed9316bfa2d",
+    "docs/audit/plugin-ready/README.md": "3f1402208589e6242586f8364f901db29098553533334f407275243edd7b403d",
+    "docs/audit/plugin-ready/codex-cloud-checklist.md": "db9698aba9209bb384deaabdd74e3afb4cea4d812b132b94cdcbb0d5dbda8361",
+    "docs/codex-cloud.md": "6de83ebb45e1511a0f92dded49649828695fb4cff230be00671d523f93141519",
+    "docs/prds/codex-cloud-harness.md": "7ad37c4c6100d03647990177ae84357b2edaf3ee5954e377b25d4700d7ad0d1b",
+    "lib/codex_cloud.mjs": "fbf51b9c90f886466dceb0c1195da762a1053c69ac7c2716a95bbe03e4d3032b",
+    "lib/codex_cloud_config.mjs": "5a00849751ed7825b3517f25627163c65092d0a0f898b5e3b0ef5e0e5921582b",
+    "lib/codex_cloud_input.mjs": "3661e53a358fa7d3e2d42382b853a2073b65198333f3015f7d566dbe426d31b7",
+    "lib/codex_cloud_result.mjs": "25086ac700844128fa9ed2436fd862fdac7184303af8590b7eab0aaff8db2731",
+    "lib/commands/resume.mjs": "7663ab78b11db8e7729fbf7678bc59680d7df847edb6c593111526600c97b380",
+    "lib/commands/start.mjs": "d818ce4188fad42475518b0d53d8dfddb329fb8ac800200a7adc1fe71e06dc16",
+    "lib/config.mjs": "75812e41f4087f69f79f5c4f3099462c26fec015ad4501cb59f6e1b4e0cc40f0",
+    "lib/context.mjs": "f67e26f49f70bf610060809b8f1e679a43fb2622b84da9785c39a1646ead20a0",
+    "lib/execution.mjs": "dd4a5cf73f6aabe6aac2dcb710f3509abd45fd86cf5797b4f312e1e3c6259fa4",
+    "lib/execution_input.mjs": "9fd16569f9ac9286ff4990a7bc442114ebff681bcd43972fccba033e66e02cf1",
+    "lib/git.mjs": "fd2e6a0775f908ccacf18709a00c703c2506f1c3226b662ee0321d79133b7498",
+    "lib/harness.mjs": "3004621095d43fa8341bec99a671be310b14e4217bdb552fe93cf615562279fd",
+    "lib/probe.mjs": "9e5d91970dd021f6524366fb224a3c23ab13177949ba34d135b5b7c44bcf63e7",
+    "lib/tick.mjs": "4b75ad239705f0e13cecdc4b69528668fa7610efaac568972fd80cdd22b0317e",
+    "package.json": "7af15137d9b914464d70b567e2278debb39aef4723871844941c2cf07ae3d19c",
+    "test/codex-cloud-live.mjs": "11bebf6724e5fddde3df2093cf3556f0909dbf1a710c42d30649b6312b9cdc44",
+    "test/codex-cloud.test.mjs": "171d1576588590df24e5e44ba85ba1b21790e3485993079c5300776792020098",
+    "test/execution-backends.test.mjs": "1c06b8ee5f4286a81c45b3ded9b0d707534260a34fcad84d59f6cc5f078f5c49",
+    "test/units.test.mjs": "5475baf43bceeae4d6f0bc1717904b69a58b5c8e9ad7d8e8ad2ee22b0f5516b3"
+  },
+  "frozen_inputs": {
+    "docs/plans/plugin-ready-gallivant.md": "3081d47d8161043f9c32b6184f07ee8d4ca513822341c41a138bdf28f7459fc2",
+    "docs/plans/plugin-hosting-and-live-tests.md": "21194dd4af8090950d2e80fea79fa5154ca79fa4a3289a5e4404883a38c9f11d",
+    "docs/prds/natural-language-tasks.md": "03256f613e8b8e5b84bd7791581c38d2a3bc2b0ba36b5e8b2f8ee2b548097c0d",
+    "docs/prds/hosted-codex-harnesses.md": "5d21326d44207c5cfd281561b40e873328607d94bbe40c8a8f0456b73ab65f63",
+    "docs/prds/openai-agents-harness.md": "b6d3ceeb20426248b5cf0d8527beaf93a6a69c09003cfc07d3a86fe8fa8b053a"
+  },
+  "commands": [
+    {
+      "command": "npm test",
+      "exit": 0,
+      "raw_log": {
+        "path": "/tmp/cloud-final-npm-test.log",
+        "sha256": "a64984eefeb3f73624387214201f0a3f5f57ebcaad3cf9d0fddcf699f56ab5d4"
+      },
+      "tap_runs": [
+        {
+          "tests": 1177,
+          "pass": 1177,
+          "fail": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0,
+          "duration_ms": 274553.148958
+        }
+      ]
+    },
+    {
+      "command": "npm run lint",
+      "exit": 0,
+      "raw_log": {
+        "path": "/tmp/cloud-final-lint.log",
+        "sha256": "8c7790de3f018fb4580f18ac70e1b355a0f76f522dd73acbdaa63632feffcecc"
+      }
+    },
+    {
+      "command": "npm run test:execution-backends",
+      "exit": 0,
+      "raw_log": {
+        "path": "/tmp/cloud-final-backends.log",
+        "sha256": "24255d70f01f7383c67d21f5bc772160679126d864c71fe84f60a5942a718c78"
+      },
+      "tap_runs": [
+        {
+          "tests": 397,
+          "pass": 397,
+          "fail": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0,
+          "duration_ms": 226016.17925
+        }
+      ]
+    },
+    {
+      "command": "npm run test:openai-agents",
+      "exit": 0,
+      "raw_log": {
+        "path": "/tmp/cloud-final-agents.log",
+        "sha256": "6c72902ae9933754aed3238ece97ffd5081e7535784037e0c80217f74155676b"
+      },
+      "tap_runs": [
+        {
+          "tests": 59,
+          "pass": 59,
+          "fail": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0,
+          "duration_ms": 42105.808667
+        }
+      ]
+    },
+    {
+      "command": "npm run test:codex-cloud",
+      "exit": 0,
+      "raw_log": {
+        "path": "/tmp/cloud-final-cloud.log",
+        "sha256": "bc66d53dabb2652c6d358a634673788ebfc4848bcd7fc6ddf1853e5d76d1c397"
+      },
+      "tap_runs": [
+        {
+          "tests": 16,
+          "pass": 16,
+          "fail": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0,
+          "duration_ms": 3246.585625
+        },
+        {
+          "tests": 16,
+          "pass": 16,
+          "fail": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0,
+          "duration_ms": 15095.027333
+        }
+      ]
+    },
+    {
+      "command": "git diff --check",
+      "exit": 0,
+      "raw_log": {
+        "path": "/tmp/cloud-final-diff.log",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      }
+    }
+  ],
+  "offline": {
+    "kind": "CLI-output fixtures plus actual native Git/diff, snapshot, installed-package and shared verification checks; not paid Cloud inference",
+    "test_file": "test/codex-cloud.test.mjs",
+    "test_names": [
+      "Cloud capabilities preserve defaults and refuse unsupported delegation, policy, models and attempts",
+      "Cloud access checks pinned CLI, ChatGPT sign-in, command surface and chosen environment without inference",
+      "Cloud native login uses stderr and drops application credentials",
+      "Cloud launcher exit is queued, pagination reconciles exact task, restart and duplicate observations are durable",
+      "Cloud lost acknowledgement never chooses newest task or creates duplicate paid work",
+      "Cloud persisted native acknowledgement recovers a coordinator crash without resubmission",
+      "Cloud dispatch rejects moved remote heads, auth refusal and local absolute references before a paid command",
+      "Cloud repeated pagination cursor fails bounded recovery and never adopts an unrelated task",
+      "Cloud collection converts diff in isolation, verifies run/base and resumes as a successor in one logical session",
+      "Cloud native continuation is refused without demonstrated capability",
+      "Cloud multiple attempts, foreign environments and missing exact identity stay unknown with timestamped errors",
+      "Cloud stop retains native task link, fences successors and quarantines late success",
+      "Cloud diffs reject wrong bases, path escapes, symlinks, mode changes and stale result identity before application",
+      "Cloud collection keeps unavailable Git and local I/O retryable and cleans its temporary directory",
+      "Cloud input publishes only approved snapshots, verifies remote bytes and preserves task upstream",
+      "Cloud adapter and operator instructions ship in a clean installed package without provider calls"
+    ],
+    "shared_cases_command": "npm run test:codex-cloud",
+    "criteria_attestations": [
+      {
+        "criterion_id": "ac-1",
+        "met": true,
+        "evidence": "lib/execution_input.mjs, lib/context.mjs and lib/tick.mjs; docs/audit/plugin-ready/codex-cloud.json commands records the full, execution-backends and openai-agents passing suites"
+      },
+      {
+        "criterion_id": "ac-2",
+        "met": false,
+        "evidence": "docs/audit/plugin-ready/codex-cloud.json prerequisites: native CLI 0.160.0 and ChatGPT read access observed, but selected environment/repository mapping and inference eligibility were not demonstrated"
+      },
+      {
+        "criterion_id": "ac-3",
+        "met": false,
+        "evidence": "lib/codex_cloud.mjs ack and dispatch persist real task IDs and intent; providerAttemptId is null because native cloud list/diff expose an attempt count/selector without a native attempt ID"
+      },
+      {
+        "criterion_id": "ac-4",
+        "met": true,
+        "evidence": "test/codex-cloud.test.mjs: Cloud input publishes only approved snapshots, verifies remote bytes and preserves task upstream; Cloud dispatch rejects moved remote heads, auth refusal and local absolute references before a paid command"
+      },
+      {
+        "criterion_id": "ac-5",
+        "met": true,
+        "evidence": "test/codex-cloud.test.mjs: Cloud launcher exit is queued, pagination reconciles exact task, restart and duplicate observations are durable; Cloud multiple attempts, foreign environments and missing exact identity stay unknown with timestamped errors"
+      },
+      {
+        "criterion_id": "ac-6",
+        "met": true,
+        "evidence": "test/codex-cloud.test.mjs: Cloud lost acknowledgement never chooses newest task or creates duplicate paid work; Cloud persisted native acknowledgement recovers a coordinator crash without resubmission; test/execution-backends.test.mjs publication recovery cases"
+      },
+      {
+        "criterion_id": "ac-7",
+        "met": true,
+        "evidence": "test/codex-cloud.test.mjs: Cloud collection converts diff in isolation, verifies run/base and resumes as a successor in one logical session; Cloud native continuation is refused without demonstrated capability; lib/tick.mjs shared continuation dispatch"
+      },
+      {
+        "criterion_id": "ac-8",
+        "met": true,
+        "evidence": "test/execution-backends.test.mjs: result publication validates, verified publication recovery, failed remote verification and interrupted verification cases; lib/codex_cloud_result.mjs returns the shared validated manifest"
+      },
+      {
+        "criterion_id": "ac-9",
+        "met": true,
+        "evidence": "docs/audit/plugin-ready/codex-cloud.json commands records passing full lifecycle and backend conformance; lib/tick.mjs retains the shared GitHub event, gate, evaluator and bounded-round paths"
+      },
+      {
+        "criterion_id": "ac-10",
+        "met": true,
+        "evidence": "test/codex-cloud.test.mjs: Cloud stop retains native task link, fences successors and quarantines late success; lib/harness.mjs controls cancel and interrupt false; lib/execution.mjs unsupported-cancellation recovery message"
+      },
+      {
+        "criterion_id": "ac-11",
+        "met": true,
+        "evidence": "docs/codex-cloud.md Trusted worker setup; test/codex-cloud.test.mjs: Cloud capabilities preserve defaults and refuse unsupported delegation, policy, models and attempts; Cloud native login uses stderr and drops application credentials"
+      },
+      {
+        "criterion_id": "ac-12",
+        "met": true,
+        "evidence": "test/codex-cloud.test.mjs and focused shared Cloud/publication cases from npm run test:codex-cloud; docs/audit/plugin-ready/codex-cloud.json includes passing local/API conformance command results"
+      },
+      {
+        "criterion_id": "ac-13",
+        "met": false,
+        "evidence": "docs/audit/plugin-ready/codex-cloud.json live.preflight records exit 1 at 2026-10-07T02:08:32.089Z: CODEX_CLOUD_LIVE_HOME, CODEX_CLOUD_LIVE_PRD, CODEX_CLOUD_LIVE_REPO and CODEX_CLOUD_CAMPAIGN_LEDGER absent; zero paid Cloud dispatches"
+      },
+      {
+        "criterion_id": "ac-14",
+        "met": true,
+        "evidence": "docs/codex-cloud.md setup, supported CLI command examples, exact-task recovery, successor/cancellation differences, account limits and live qualification; clean installed-package smoke case in test/codex-cloud.test.mjs"
+      }
+    ]
+  },
+  "prerequisites": {
+    "native_read_checks": {
+      "executable": "/Users/uchi/.local/share/gallivant/codex/node_modules/.bin/codex",
+      "version_command": "--version",
+      "version_output": "codex-cli 0.160.0",
+      "sign_in_command": "login status",
+      "sign_in_output": "Logged in using ChatGPT",
+      "list_command": "cloud list --json --limit 1",
+      "list_output": {
+        "tasks": [],
+        "cursor": null
+      },
+      "inference_verified": false,
+      "selected_environment_mapping_verified": false,
+      "provider_attempt_id_available": false,
+      "native_continuation": false,
+      "native_cancel": false,
+      "cost_source": "chatgpt-account",
+      "per_task_cost_usd": null
+    },
+    "predecessors": {
+      "base_contains": [
+        "shared execution/task contracts",
+        "natural-language intake",
+        "managed Agents API"
+      ],
+      "separate_local_preparation_pr": {
+        "number": 10,
+        "state_at_initial_check": "OPEN",
+        "mergedAt_at_initial_check": null,
+        "head_at_initial_check": "b736848f2fda3eea4b042e7e883b41e3ef5eb55f",
+        "copied_into_this_change": false
+      }
+    },
+    "host_surface": "Native process inspection and macOS verification sandbox checks passed through supported test escalation; package security defaults were unchanged",
+    "plugin_browser_surface": "Not required by M4; installed plugin/browser release qualification remains in M5/M6 and is not claimed",
+    "remedy": "Supply a private Cloud live home/config, published environment connected to an operator-authorized disposable repository, approved live brief, demonstrated account/model eligibility, and the external aggregate campaign/account allowance ledger. Resolve native attempt identity through a supported interface before qualifying ac-3. Merge the separately reviewed local preparation predecessor rather than copying it."
+  },
+  "live": {
+    "status": "unverified",
+    "preflight": {
+      "command": "npm run test:codex-cloud:live",
+      "exit": 1,
+      "raw_log": {
+        "path": "/tmp/codex-cloud-live-preflight.json",
+        "sha256": "f10c2c488c2061825eaf3a11943262dc5c71f5ca137373addd19b6acf1571f8b"
+      },
+      "report": {
+        "version": 1,
+        "kind": "live",
+        "status": "unverified",
+        "phase": "preflight",
+        "at": "2026-10-07T02:08:32.089Z",
+        "blockers": [
+          "CODEX_CLOUD_LIVE_HOME absent",
+          "CODEX_CLOUD_LIVE_PRD absent",
+          "CODEX_CLOUD_LIVE_REPO absent",
+          "CODEX_CLOUD_CAMPAIGN_LEDGER absent",
+          "preflight only; no paid implementation/correction evidence collected"
+        ],
+        "costUsd": null,
+        "costSource": "chatgpt-account",
+        "continuity": "successor-task"
+      }
+    },
+    "paid_cloud_dispatches": 0,
+    "real_implementation_verified": false,
+    "real_correction_verified": false,
+    "script": "test/codex-cloud-live.mjs",
+    "cost_source": "chatgpt-account",
+    "cost_usd": null
+  },
+  "review": {
+    "rule": "Provider data cannot authorize a foreign root, mutate an operator checkout, change task tracking, or turn transient infrastructure failure into terminal artifact rejection",
+    "source_boundaries": [
+      "lib/codex_cloud_input.mjs",
+      "lib/codex_cloud.mjs",
+      "lib/codex_cloud_result.mjs",
+      "lib/execution.mjs",
+      "lib/execution_result.mjs",
+      "lib/git.mjs"
+    ],
+    "findings_addressed": [
+      {
+        "finding": "Snapshot publication could move the task upstream",
+        "fix": "Dedicated pushSnapshotRef omits --set-upstream; shared result pushes retain their existing task tracking",
+        "test": "Cloud input publishes only approved snapshots, verifies remote bytes and preserves task upstream"
+      },
+      {
+        "finding": "Approved overlay mode changes could be committed as delivered context",
+        "fix": "Reuse resultModesMatch before input commit; compare returned patch file modes with saved source modes",
+        "tests": [
+          "Cloud diffs reject wrong bases, path escapes, symlinks, mode changes and stale result identity before application",
+          "Cloud input publishes only approved snapshots, verifies remote bytes and preserves task upstream"
+        ]
+      },
+      {
+        "finding": "General error journaling could admit rejected foreign or future observations",
+        "fix": "Only trusted transport observation errors carry an explicit journaling marker; shared ownership/cursor/terminal rejection stays unchanged",
+        "regression_logs": [
+          {
+            "path": "/tmp/cloud-boundary-review.log",
+            "sha256": "9f84aa185687867f45a11e9f9696af2fa7db0e511916f1deb7b4832f583e4744"
+          },
+          {
+            "path": "/tmp/cloud-terminal-review.log",
+            "sha256": "d12219b82d6b8e578499707d8ce7d258512ab79b6d990e52aac560cb4890ed0a"
+          }
+        ]
+      },
+      {
+        "finding": "Unavailable Git or local I/O could permanently reject a valid provider result",
+        "fix": "Keep infrastructure errors retryable, classify deterministic patch rejection, and release disposable-directory resources on both paths",
+        "test": "Cloud collection keeps unavailable Git and local I/O retryable and cleans its temporary directory"
+      },
+      {
+        "finding": "Native login writes sign-in status to stderr",
+        "fix": "Combine stderr only for native login checks and continue excluding application credentials from child environment",
+        "test": "Cloud native login uses stderr and drops application credentials"
+      }
+    ],
+    "representative_generated_output": [
+      {
+        "kind": "Shared offline publication cleanup checkpoints; no live Cloud/GitHub task evidence",
+        "path": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-HBMB94/publication-cleanup-evidence.json",
+        "sha256": "9e6f031ab37d770f28dfa2e23b1a61422867be34b8e0fb1bd70b3ea351e5160b"
+      },
+      {
+        "kind": "Native verification command and sandbox records",
+        "path": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-HK9VBR/posix-verification-success.json",
+        "sha256": "f94d63ed80cfdd9df115a724fc013e530ceef99213cdbdd2e879e0fbf9e3c117"
+      }
+    ],
+    "other_output_reviewed": [
+      "Actual generated Cloud test prompts/identity envelopes and returned diff manifests in test/codex-cloud.test.mjs",
+      "Clean npm pack extraction and installed CLI --help output in the installed-package smoke test"
+    ]
+  },
+  "earlier_attempts": [
+    {
+      "raw_log": {
+        "path": "/tmp/cloud-full-verified.log",
+        "sha256": "438350bc8931f0d8b7d253a668350785479158e3c5dbbe4a5bfcb1f32442b97a"
+      },
+      "result": "Initial six observation-journal regressions and two session/setup fixture regressions were corrected before final verification"
+    },
+    {
+      "raw_log": {
+        "path": "/tmp/cloud-agents-verified.log",
+        "sha256": "fd0d204d937b484917c01316117137d45cbd7250a6bd9bad3e9501aa9bb21f89"
+      },
+      "result": "One native readiness deadline under concurrent heavy suites; final conformance suites ran sequentially without changing limits or permissions"
+    },
+    {
+      "raw_log": {
+        "path": "/tmp/cloud-all-tests.log",
+        "sha256": "9599ac7bd931895596a5235e7a7b4df28e1478be65a97b69924b7ed7bb39906c"
+      },
+      "result": "Outer workspace sandbox denied OS facilities required by existing native tests; supported escalation was used and the exact waiting original test process tree was stopped"
+    }
+  ],
+  "references": [
+    "https://learn.chatgpt.com/docs/developer-commands?surface=cli",
+    "https://learn.chatgpt.com/docs/auth",
+    "https://learn.chatgpt.com/docs/environments/cloud-environments",
+    "https://github.com/openai/codex/tree/rust-v0.160.0/codex-rs/cloud-tasks"
+  ]
+}
