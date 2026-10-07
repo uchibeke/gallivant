@@ -522,3 +522,34 @@ skips or cancellations (225,813.114917 ms; `/private/tmp/learning-review16-full.
 `npm run test:learning` passed 74 tests with no failures, skips or cancellations
 (41,815.8165 ms; `/private/tmp/learning-review16-suite-final.log`). `npm run lint`
 exited 0 (`/private/tmp/learning-review16-lint.log`), and `git diff --check` passed.
+
+## Review batch 17: provenance, approval concurrency and delivery bounds
+
+Extraction validates every candidate evidence digest against its exact reserved
+input batch before inserting any proposals. The regression returns a superseded
+repository observation with the correct current input digest and confirms an
+unresolved extraction with no candidate or approval writes.
+
+Approval freezes the full preview under lock, releases it before confirmation and
+secret entry, then reloads state and compares mode, parent, sequence, trust root
+and complete review text before each persistence phase. Concurrent rejection and
+emergency disable refuse stale approval; unsigned preparations cannot activate
+through recovery. Existing signed-preparation crash recovery remains covered.
+
+New delivery intents are capped at 1,000 records and 16 KiB per record. Existing
+retry identities, pending revocation targets, audit details and denominators are
+retained rather than evicted. Tests fill capacity, refuse overflow and oversized
+metadata, acknowledge an existing intent, prune and disable successfully. This is
+a hard capacity policy, not automatic archival; operators can disable application
+and preserve the protected audit backup while continuing without advice.
+
+Source review included extraction insertion, preview/signature persistence and
+failure cleanup, context retry/admission, delivery acknowledgement, revocation,
+inspection and pruning. No new paid calls, production enrollment or repeated
+blocked isolation probes ran. The seven unmet criteria and Linux/live gaps remain.
+
+Verify on macOS: `npm test` passed 1,282 tests with no failures, skips or
+cancellations (342,218.952375 ms; `/private/tmp/learning-review17-full.log`).
+`npm run test:learning` passed 77 tests (51,408.105584 ms;
+`/private/tmp/learning-review17-suite.log`), `npm run lint` exited 0
+(`/private/tmp/learning-review17-lint.log`), and `git diff --check` passed.

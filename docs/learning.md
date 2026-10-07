@@ -293,3 +293,19 @@ user/PID/network namespaces and a dedicated Node installation are prerequisites.
 Neither fix alone enables production apply; the actual installed execution profile
 still needs integration and qualification. Never weaken the boundary to turn a
 test green. Normal unenrolled coding runs keep their existing behavior.
+
+
+Delivery audit storage is limited to 1,000 exact operation records per repository
+and 16 KiB per newly prepared record, including context, paths and omissions.
+Reports disclose usage and limits. At capacity, new advice-bearing operations fail
+before launch; existing retries, delivery acknowledgements, pruning, retirement,
+and disabling remain available. Records are not silently evicted: prepared
+revocation targets, exact retry identities, digests and accepted-run denominators
+remain intact. Automatic archival is not implemented; do not delete audit records
+or reset the store to bypass capacity. Disable application to continue without
+advice while preserving the protected audit backup.
+
+Approval confirmation and passphrase entry run without the shared store lock.
+The service rechecks the complete frozen preview, mode, parent, sequence and trust
+root after each interaction; concurrent changes require a new reviewed approval.
+Extraction candidates may cite only evidence included in that reserved batch.

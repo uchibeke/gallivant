@@ -617,3 +617,18 @@ test("extraction reserves exact revisions and advances beyond a full batch acros
   assert.equal(batches.length, 2, "legacy exact-batch reservations must not be repurchased");
   assert.equal(f.store.load(repo).extraction[0].observationDigests.length, 1000);
 });
+
+
+test("extraction refuses repository evidence outside its reserved batch", async t => {
+  let excluded;
+  const f = fixture(t, { qualify: () => ({ qualified: true, fixtureOnly: true }), extractor: { dataOnly: true, execute: async input => {
+    assert(!input.observations.some(o => o.digest === excluded));
+    return { json: canonical([proposed(excluded, { provenance: { provider: "fixture", inputDigest: input.inputDigest, at: now } })]) };
+  } } });
+  await observed(f.service);
+  excluded = Object.keys(f.store.load(repo).observations)[0];
+  await f.service.observe(repo, snapshot("Edited source", { updated_at: "2026-10-06T02:00:00Z" }));
+  const result = await f.service.extract(repo, { allowanceUsd: 0.1 });
+  assert.equal(result.status, "unresolved"); assert.equal(result.code, "LEARNING_EVIDENCE");
+  assert.equal(f.service.list(repo).length, 0); assert.equal(f.store.load(repo).sequence, 0);
+});

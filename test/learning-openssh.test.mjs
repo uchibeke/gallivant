@@ -7,7 +7,7 @@ import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { openSshSigner, encryptedKey, signingEnvironment, NAMESPACE, SIGNER_ID } from "../lib/learning_signer.mjs";
 import { canonical, hash } from "../lib/learning_data.mjs";
-import { createLearningService } from "../lib/learning.mjs";
+import { createLearningService, LEARNING_LIMITS } from "../lib/learning.mjs";
 import { learnCommand } from "../lib/commands/learn.mjs";
 import { fixture, pending, proposed, repo } from "./learning-fixtures.mjs";
 import { learningDispatch, revokeLearningAttempts } from "../lib/learning_input.mjs";
@@ -135,8 +135,9 @@ test("recovery commits exactly signed prepared bytes after an interrupted atomic
 
 test("concurrent approval cannot change a preview or active checkpoint", async t => {
   const f = await enrolled(t);
-  await f.service.approve(repo, [{ id: f.candidate.content.id, digest: f.candidate.digest }], { confirm: async () => { await assert.rejects(f.service.reject(repo, f.candidate.content.id, f.candidate.digest, "concurrent"), /already running/); return true; } });
-  assert.equal(f.store.load(repo).sequence, 1);
+  await assert.rejects(f.service.approve(repo, [{ id: f.candidate.content.id, digest: f.candidate.digest }], { confirm: async () => { await f.service.reject(repo, f.candidate.content.id, f.candidate.digest, "concurrent"); return true; } }), /approval state changed/);
+  assert.equal(f.store.load(repo).sequence, 0);
+  assert.deepEqual(f.store.load(repo).prepared, {});
 });
 
 test("context rechecks disabled mode under lock after asynchronous qualification", async t => {
@@ -413,4 +414,50 @@ test("recovery retries committed revocations before refusing unqualified prepare
   await assert.rejects(recovery.recover(repo), { code: "LEARNING_UNQUALIFIED" });
   assert.equal(controls, 2); assert.equal(canonical(f.store.load(repo)), before);
   assert.deepEqual(f.store.load(repo).active, []);
+});
+
+
+test("approval prompts release the lock and disabled state fences signing", async t => {
+  for (const phase of ["confirm", "sign"]) {
+    let f;
+    const custom = signer();
+    custom.sign = bytes => {
+      const release = f.store.lock();
+      try { const s = f.store.load(repo); s.mode = "off"; f.store.saveLocked(repo, s); } finally { release(); }
+      return signFixture(bytes);
+    };
+    f = await enrolled(t, phase === "sign" ? { signer: custom } : {});
+    await assert.rejects(f.service.approve(repo, [{ id: f.candidate.content.id, digest: f.candidate.digest }], { confirm: async () => {
+      await f.service.prune(repo);
+      if (phase === "confirm") await f.service.configure(repo, "off");
+      return true;
+    } }), /approval state changed/);
+    const state = f.store.load(repo);
+    assert.equal(state.mode, "off"); assert.equal(state.sequence, 0);
+    assert(Object.values(state.prepared).every(p => p.signature === null));
+    await f.service.recover(repo); assert.equal(f.store.load(repo).sequence, 0);
+  }
+});
+
+test("delivery capacity preserves exact retries and emergency controls", async t => {
+  const f = await enrolled(t);
+  await f.service.approve(repo, [{ id: f.candidate.content.id, digest: f.candidate.digest }], { confirm: () => true });
+  await f.service.configure(repo, "apply");
+  const input = { operationId: "retained", profile: "fixture", inputDigest: "a".repeat(64) };
+  const first = await f.service.context(repo, input);
+  await assert.rejects(f.service.context(repo, { ...input, operationId: "oversized", paths: Array(1000).fill("src/long-file-name.mjs") }), /delivery detail byte limit/);
+  await f.store.transaction(repo, s => {
+    for (let i = 1; i < LEARNING_LIMITS.deliveries; i++) {
+      const key = hash(String(i)); s.deliveries[key] = { ...first, key, operationId: String(i), delivered: true, runId: String(i) };
+    }
+  });
+  assert.deepEqual(await f.service.context(repo, input), first);
+  await assert.rejects(f.service.context(repo, { ...input, operationId: "overflow" }), /delivery audit capacity/);
+  await f.service.delivered(repo, first.key, "original-run");
+  await f.service.prune(repo);
+  assert.equal(f.service.report(repo).eligibleRunDenominator, LEARNING_LIMITS.deliveries);
+  await f.service.configure(repo, "off");
+  assert.equal(f.store.load(repo).mode, "off");
+  assert.equal(Object.keys(f.store.load(repo).deliveries).length, LEARNING_LIMITS.deliveries);
+  assert.equal(f.service.explain(repo, "original-run")[0].contextDigest, first.contextDigest);
 });
