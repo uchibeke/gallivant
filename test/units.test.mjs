@@ -17,7 +17,7 @@ import { signInFix, probeFix } from "../lib/probe.mjs";
 import { HOME } from "../lib/fs.mjs";
 import { messages } from "../lib/notify.mjs";
 import { guardrailMode } from "../lib/aport.mjs";
-import { repoFromRemote, remoteMatches, makeGh, MAX_DIFF_BYTES, READY_LABEL } from "../lib/gh.mjs";
+import { repoFromRemote, remoteMatches, repositoryMatches, makeGh, MAX_DIFF_BYTES, READY_LABEL } from "../lib/gh.mjs";
 import { CONFIG, T0, at, tempHome, claudeResultLines, codexLines, geminiLines, opencodeLines, gooseLines, GOOD_PRD } from "./helpers.mjs";
 
 test("APort diagnostics report the enforcement the hook uses when aliases conflict", () => {
@@ -478,6 +478,10 @@ test("a remote URL is parsed into owner/repo and compared exactly, so a fork suf
 
   // GitHub treats owner and name case-insensitively, so the comparison does too.
   assert.equal(remoteMatches("https://github.com/Acme/Widget.git", "acme/widget"), true);
+  assert.equal(repositoryMatches("Acme/Widget", "acme/widget"), true);
+  assert.equal(repositoryMatches("acme/widget", "Acme/Widget"), true);
+  for (const other of ["acme/widget-fork", "other/widget", "widget/acme", "", null, undefined, 1]) assert.equal(repositoryMatches("Acme/Widget", other), false);
+  assert.equal(repositoryMatches(null, null), false);
   // A repository whose name ends in .git is not confused with the suffix, and a dot is not a name.
   assert.equal(repoFromRemote("https://github.com/acme/widget.js.git"), "acme/widget.js");
   assert.equal(repoFromRemote("git@github.com:acme/.git"), null);

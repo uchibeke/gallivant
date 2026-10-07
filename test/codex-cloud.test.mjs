@@ -306,6 +306,36 @@ test("Cloud dispatch rejects moved remote heads, auth refusal and local absolute
   f.auth("not signed in"); await assert.rejects(f.service().submit(input), error => error.dispatchNotSent === true);
   assert.equal(f.tasks.size, 0); assert.equal(f.service().current(), null);
 });
+test("Cloud transport accepts repository letter case across dispatch, restart and successors", async t => {
+  const observations = [];
+  for (const [configuredRepo, canonicalRepo] of [["Acme/Widget", repo], [repo, "Acme/Widget"]]) {
+    const f = fixture(t), source = JSON.parse(gunzipSync(bytes)); source.repo = canonicalRepo;
+    const snapshot = gzipSync(Buffer.from(JSON.stringify(source)));
+    const request = { ...input, repo: canonicalRepo, sources: { ...input.sources, repo: canonicalRepo, data: snapshot.toString("base64"), hash: contentHash(snapshot) } };
+    const transport = repository => makeCloudTransport({ root: f.root, taskId: "acme/widget/task", account: "operator", config: { ...config, repository }, cli: f.cli, clock: f.clock, verification: async () => {}, verifyRemote: async req => { assert.equal(req.repo, canonicalRepo); } });
+    const service = repository => makeExecution({ root: f.root, taskId: "acme/widget/task", account: "operator", provider: "codex-cloud", capabilities: { ...capabilitiesFor("codex-cloud"), environments: [config.environment] }, transport: transport(repository), clock: f.clock });
+    const first = await service(configuredRepo).submit(request), op = Object.values(readJson(join(f.root, "cloud.json")).operations)[0];
+    assert.equal(op.repo, canonicalRepo);
+    for (const other of ["acme/widget-fork", "other/widget", "widget/acme", null]) {
+      await assert.rejects(transport(configuredRepo).prepare({ ...request, repo: other, sources: { ...request.sources, repo: other } }), error => error.code === "CLOUD_SOURCE");
+    }
+    // A configuration spelling may change; immutable request/source/result
+    // envelopes still have to repeat the exact identity recorded at dispatch.
+    await assert.rejects(transport(configuredRepo).prepare({ ...request, sources: { ...request.sources, repo: canonicalRepo.toUpperCase() } }), error => error.code === "CLOUD_SOURCE");
+    await assert.rejects(cloudDiffResult(patch(op, { repo: canonicalRepo.toUpperCase() }), op), error => error.collectionValidation === true);
+    await assert.rejects(transport("acme/widget-fork").inspect({ providerJobId: first.execution.providerJobId, sessionId: first.execution.sessionId, turnId: first.execution.turnId }), error => error.code === "EXECUTION_OWNERSHIP");
+    assert.equal(f.tasks.size, 1);
+    f.finish(); f.diff(patch(op, { repo: canonicalRepo })); f.advance();
+    const restarted = service(configuredRepo.toUpperCase()); await restarted.reconcile({ force: true });
+    const result = await restarted.collect(); assert.equal(result.repo, canonicalRepo); assert.equal(result.files[0].text, "new\n");
+    const child = await service(configuredRepo.toUpperCase()).continue({ ...request, operationId: "review", sessionId: first.execution.sessionId });
+    assert.equal(child.execution.sessionId, first.execution.sessionId); assert.equal(child.execution.effective.parentTaskId, first.execution.providerJobId);
+    assert.equal(f.tasks.size, 2); assert.equal(readJson(join(f.root, "cloud.json")).repository, configuredRepo);
+    assert.ok(Object.values(readJson(join(f.root, "cloud.json")).operations).every(saved => saved.repo === canonicalRepo));
+    observations.push({ configuredRepo, canonicalRepo, storedRepository: readJson(join(f.root, "cloud.json")).repository, initialTask: first.execution.providerJobId, successorTask: child.execution.providerJobId, continuity: child.execution.effective.continuity, resultRepo: result.repo, sourceHash: request.sources.hash, dispatchedTasks: f.tasks.size });
+  }
+  t.diagnostic(JSON.stringify({ repositoryCaseTransport: observations }));
+});
 test("Cloud repeated pagination cursor fails bounded recovery and never adopts an unrelated task", async t => {
   const f = fixture(t), job = await f.service().submit(input);
   const cli = async args => args[1] === "list" ? JSON.stringify({ tasks: [], cursor: "same" }) : f.cli(args);
@@ -437,7 +467,7 @@ test("Cloud collection keeps unavailable Git and local I/O retryable and cleans 
     assert.equal(existsSync(directory), false);
   }
 });
-test("Cloud input publishes only approved snapshots, verifies remote bytes and preserves task upstream", async t => {
+function sourceFixture(t) {
   const root = mkdtempSync(join(tmpdir(), "cloud-source-")); t.after(() => rmSync(root, { recursive: true, force: true }));
   const git = (...args) => execFileSync("git", args, { cwd: root, encoding: "utf8" }).trim();
   git("init", "-b", branch); git("config", "user.name", "Fixture"); git("config", "user.email", "fixture@localhost");
@@ -449,6 +479,29 @@ test("Cloud input publishes only approved snapshots, verifies remote bytes and p
     gh: { refSha: async (_, ref) => refs.get(ref), fileAtStrict: async (_, path, revision) => execFileSync("git", ["show", `${revision}:${path}`], { cwd: root, encoding: "utf8" }) } };
   const entry = { harness: "codex-cloud", repo, branch, base: "main", worktree: root, checkout: "/operator", prd: "brief.md", sources: ["source.md"] };
   writeFileSync(join(root, "brief.md"), ctx.readPrd()); writeFileSync(join(root, "source.md"), ctx.readSource());
+  return { root, git, refs, calls, ctx, entry };
+}
+test("Cloud input accepts repository letter case and preserves exact snapshot ownership", async t => {
+  const observations = [];
+  for (const [configuredRepo, canonicalRepo] of [[repo, "Acme/Widget"], ["Acme/Widget", repo]]) {
+    const { git, refs, calls, ctx, entry } = sourceFixture(t);
+    ctx.config.harness["codex-cloud"] = { ...config, repository: configuredRepo }; entry.repo = canonicalRepo;
+    const delivered = await cloudInput(ctx, "task", entry, { ...input, inputHead: git("rev-parse", "HEAD") });
+    const snapshot = JSON.parse(gunzipSync(Buffer.from(delivered.sources.data, "base64")));
+    assert.equal(delivered.repo, canonicalRepo); assert.equal(delivered.sources.repo, canonicalRepo); assert.equal(snapshot.repo, canonicalRepo);
+    assert.equal(refs.get(delivered.sources.inputBranch), delivered.inputHead); assert.equal(git("status", "--porcelain"), "");
+    assert.deepEqual(Object.keys(delivered.sources.hashes), ["brief.md", "source.md"]);
+    for (const other of ["acme/widget-fork", "other/widget", "widget/acme", null]) {
+      await assert.rejects(cloudInput(ctx, "task", { ...entry, repo: other }, delivered), error => error.code === "CLOUD_SOURCE");
+    }
+    await assert.rejects(cloudInput(ctx, "task", { ...entry, branch: branch.toUpperCase() }, delivered), error => error.code === "CLOUD_SOURCE");
+    assert.equal(git("rev-parse", "HEAD"), delivered.inputHead); assert.equal(calls.length, 2);
+    observations.push({ configuredRepo, canonicalRepo, snapshotRepo: snapshot.repo, inputHead: delivered.inputHead, remoteRefHead: refs.get(delivered.sources.inputBranch), sourceHash: delivered.sources.hash, approvedHashes: delivered.sources.hashes, pushedRefs: calls });
+  }
+  t.diagnostic(JSON.stringify({ repositoryCaseInput: observations }));
+});
+test("Cloud input publishes only approved snapshots, verifies remote bytes and preserves task upstream", async t => {
+  const { root, git, refs, calls, ctx, entry } = sourceFixture(t);
   const delivered = await cloudInput(ctx, "task", entry, { ...input, inputHead: git("rev-parse", "HEAD") });
   assert.equal(refs.get(delivered.sources.inputBranch), delivered.inputHead); assert.deepEqual(Object.keys(delivered.sources.hashes), ["brief.md", "source.md"]);
   assert.deepEqual(calls.map(call => call[0]), ["task", "snapshot"]); assert.equal(git("status", "--porcelain"), "");
