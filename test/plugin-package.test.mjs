@@ -48,6 +48,28 @@ test("internal packaging never claims source verification after failed Git statu
   assert.equal(manifest.classification, "internal-development-fixture; not-installed-host-evidence");
   assert.equal(manifest.submissionReady, false);
 });
+test("bundled preparation parser is included without admitting other dependency payloads", t => {
+  gitFixture(t);
+  const manifest = buildPluginPackage({ ...fixture(), internal: true });
+  assert.ok(manifest.payloadHashes["node_modules/smol-toml/dist/index.js"]);
+  assert.ok(manifest.payloadHashes["node_modules/smol-toml/package.json"]);
+  const original = childProcess.execFileSync;
+  let injected;
+  t.mock.method(childProcess, "execFileSync", (file, args, options) => {
+    const result = original(file, args, options);
+    if (file !== "npm" || args[0] !== "pack") return result;
+    const packed = JSON.parse(result);
+    packed[0].files.push({ path: injected });
+    return JSON.stringify(packed);
+  });
+  syncBuiltinESMExports();
+  for (const path of ["node_modules/unlisted/index.js", "node_modules/smol-toml/.env", "node_modules/smol-toml/dist/../secret.js", "node_modules/smol-toml/install.sh"]) {
+    injected = path;
+    const input = { ...fixture(), internal: true };
+    assert.throws(() => buildPluginPackage(input), { code: "PACKAGE_CONTENT" });
+    assert.equal(existsSync(input.out), false);
+  }
+});
 test("successful Git status still rejects modified public payload and removes partial output", t => {
   gitFixture(t, { status: " M lib/plugin_package.mjs\0" });
   const input = fixture();

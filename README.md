@@ -6,9 +6,9 @@ Gallivant starts a coding-agent session for a PRD, and then keeps the pull reque
 
 It implements adapters for Claude Code, Codex, Gemini CLI, OpenCode and Goose, with [APort](https://github.com/aporthq/aport-agent-guardrails) hooks on Claude Code and Codex. Claude/Codex have production evidence; the current Gemini, OpenCode and Goose coding probes have blocked or failed results from native permissions, provider setup, and live-test defects. See the [version/provider support matrix and live evidence](docs/audit/harness-live-validation.md) before selecting a harness. The loop resumes the recorded session that opened the PR. Every PR carries the harness and session id in its body, so the loop can be rebuilt from GitHub after local state is lost.
 
-Node 22, `gh` for all GitHub access, ntfy for notifications. No GitHub App, no webhook server, no database.
+Node 22, `gh` for all GitHub access, ntfy for notifications. One bundled TOML parser preserves Codex configuration during isolated preparation. No GitHub App, webhook server or database.
 
-With Claude configured, you can also start from natural language:
+With Claude or Codex configured, you can also start from natural language:
 `gallivant task "Add CSV export without new dependencies" --harness claude`
 prepares an isolated, validated brief. Add `--run` to authorize
 implementation once material questions are resolved. [Task operations](docs/tasks.md)
@@ -33,8 +33,8 @@ gallivant status                       # what needs you, what is running, whethe
 
 ## Install
 
-There are no dependencies, so every option below is just a way to put one executable file on your PATH. Node 22 or
-newer is the only requirement.
+Use Node 22 or newer. npm installs the locked TOML parser; packed releases include
+it. Run `npm ci` before running directly from a fresh source checkout.
 
 ```bash
 npm link                    # from the clone: a symlink into your node bin directory. Undo with `npm unlink -g gallivant`.

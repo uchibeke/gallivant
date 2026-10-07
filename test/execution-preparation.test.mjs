@@ -23,7 +23,9 @@ test("preparation capabilities expose policy data and validate the selected prov
   assert.equal(publicCapability.preparation.boundary, capability.preparation.boundary);
   assert.equal(publicCapability.preparation.render, undefined);
   assert.deepEqual(JSON.parse(JSON.stringify(publicCapability)), publicCapability);
-  for (const provider of ["codex", "gemini", "opencode", "goose", "openai-agents", "codex-cloud"]) assert.equal(capabilitiesFor(provider).preparation ?? null, null);
+  assert.equal(preparationReceipt("codex").authority, "sandboxed-draft");
+  assert.equal(isPreparationReceipt("codex", preparationReceipt("codex")), true);
+  for (const provider of ["gemini", "opencode", "goose", "openai-agents", "codex-cloud"]) assert.equal(capabilitiesFor(provider).preparation ?? null, null);
 });
 
 test("shared local preparation preserves selected defaults, tools-off authority and private environment", async () => {
