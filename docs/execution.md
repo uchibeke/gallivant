@@ -727,18 +727,17 @@ adapter additionally supplies its enforced `render`, optional abortable
 and `executionFor` must use that same registry. Mark provider availability only
 after its implemented transport and required live evidence exist.
 
-The restricted Codex preparation adapter is implemented separately in
-[`uchibeke/gallivant#10`](https://github.com/uchibeke/gallivant/pull/10), head
-`39dec7c787a503956f18b745d92a13166d287c45`, built on merged M2. As of 2026-10-06,
-that PR remains open and its adapter is absent from this selected base. Merge the
-reviewed change into the base and let the coordinator sync dependent branches;
-consume its registry capability rather than copying its adapter or restoring a
-provider-name gate. Drafting, questions and repairs already use the selected
+The restricted Codex preparation adapter introduced in
+[`uchibeke/gallivant#10`](https://github.com/uchibeke/gallivant/pull/10) is registered
+alongside the shared execution foundation and Agents API transport. Consume its
+registry capability rather than copying its adapter or restoring a provider-name
+gate. Drafting, questions and repairs already use the selected
 provider through this shared execution contract. Validation/readiness remains
 deterministic, and implementation still requires explicit authorization.
 
-PR #10 records 1081 passing tests and native Codex 0.160.0 boundary qualification
-against a loopback provider. That evidence tests installed CLI/configuration
+The [preparation qualification](preparation.md) records native Codex 0.160.0 checks
+against a loopback provider, including inherited notifier and effective-policy
+regressions. That evidence tests installed CLI/configuration
 enforcement; it does not establish paid model access, managed preparation or
 installed-plugin behavior. Preserve the operator's model/provider defaults,
 limited preparation authority, bounded attempts and execution consent. Carry

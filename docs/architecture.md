@@ -12,7 +12,7 @@ Shared inputs carry validated task/event paths for scope selection. Explicit fre
 learning continuity records its intent in the registry and execution boundary,
 retaining task history and cumulative allowance while fencing the old session.
 
-One actor, one file of rules, everything else is plumbing. About 1,500 lines of plain ESM with no dependencies.
+One actor, one file of rules, everything else is plumbing. Plain ESM; one bundled TOML parser handles isolated Codex configuration without inventing another config parser.
 
 ```
 bin/gallivant.mjs        CLI: parse args, build the context, call one command
