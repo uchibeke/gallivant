@@ -2,7 +2,7 @@
   "version": 1,
   "task_id": "task-608e7283e7d7d42cfb91eb6b",
   "scope": "Supported native CLI transport and offline shared lifecycle/PR conformance; live qualification remains unverified",
-  "recorded_at": "2026-10-07T04:20:23.838734+00:00",
+  "recorded_at": "2026-10-07T04:36:43.056007+00:00",
   "base_revision": "2b4514fb27fcb493e62bfed913fffc204215f155",
   "implementation_revision": "363f8a27d8cbba9fa53d37b1bc50b31528e68b9a",
   "branch": "work/codex-cloud-harness",
@@ -47,8 +47,8 @@
       "command": "npm test",
       "exit": 0,
       "raw_log": {
-        "path": "/tmp/cloud-deadline-final-test.log",
-        "sha256": "2495db85a76260d6fdad666f941e1259a1e03d8bbc455e11d6170d114ec38d65"
+        "path": "/tmp/cloud-gate-final-test.log",
+        "sha256": "43cc67eb898f0ffef8b75be9b4124359841676fc221fbe30dbd0a56c097cb066"
       },
       "tap_runs": [
         {
@@ -57,8 +57,8 @@
           "fail": 0,
           "cancelled": 0,
           "skipped": 0,
-          "todo": 0,
-          "duration_ms": 362215.259875
+          "deferred_tests": 0,
+          "duration_ms": 356967.893875
         }
       ]
     },
@@ -66,7 +66,7 @@
       "command": "npm run lint",
       "exit": 0,
       "raw_log": {
-        "path": "/tmp/cloud-deadline-final-lint.log",
+        "path": "/tmp/cloud-gate-final-lint.log",
         "sha256": "8c7790de3f018fb4580f18ac70e1b355a0f76f522dd73acbdaa63632feffcecc"
       }
     },
@@ -74,8 +74,8 @@
       "command": "npm run test:execution-backends",
       "exit": 0,
       "raw_log": {
-        "path": "/tmp/cloud-deadline-final-backends.log",
-        "sha256": "0cae0fdd4eb22002426fff596028c5349a94dae14d6abd5b2d2fd15c92ef5481"
+        "path": "/tmp/cloud-gate-final-backends.log",
+        "sha256": "97a292e5e7b254eb3aefef668bf45e127b2a79d51d47c1044fcc92e7cb2c71c9"
       },
       "tap_runs": [
         {
@@ -84,8 +84,8 @@
           "fail": 0,
           "cancelled": 0,
           "skipped": 0,
-          "todo": 0,
-          "duration_ms": 362448.204375
+          "deferred_tests": 0,
+          "duration_ms": 357475.879125
         }
       ]
     },
@@ -93,8 +93,8 @@
       "command": "npm run test:openai-agents",
       "exit": 0,
       "raw_log": {
-        "path": "/tmp/cloud-deadline-final-agents.log",
-        "sha256": "9611390642ebad261e2c521a5f3af2b0c8d080df7fda9fc0875a918c6ac64467"
+        "path": "/tmp/cloud-gate-final-agents.log",
+        "sha256": "710548c4d741beaf73a3ed186c798b5fbc99616abd4add7318699ea7d9a0143a"
       },
       "tap_runs": [
         {
@@ -103,8 +103,8 @@
           "fail": 0,
           "cancelled": 0,
           "skipped": 0,
-          "todo": 0,
-          "duration_ms": 179276.370209
+          "deferred_tests": 0,
+          "duration_ms": 162372.8515
         }
       ]
     },
@@ -112,8 +112,8 @@
       "command": "npm run test:codex-cloud",
       "exit": 0,
       "raw_log": {
-        "path": "/tmp/cloud-deadline-final-cloud.log",
-        "sha256": "37dca83950f9f15625f36a4ed286530e8ef9578b7bd8d4643585df065cc2fa85"
+        "path": "/tmp/cloud-gate-final-cloud.log",
+        "sha256": "d8ad789ce708ec46143babc16f03ce55ce10e133ee7d37979b13e8cf37656213"
       },
       "tap_runs": [
         {
@@ -122,8 +122,8 @@
           "fail": 0,
           "cancelled": 0,
           "skipped": 0,
-          "todo": 0,
-          "duration_ms": 68514.705625
+          "deferred_tests": 0,
+          "duration_ms": 60605.899291
         },
         {
           "tests": 16,
@@ -131,8 +131,8 @@
           "fail": 0,
           "cancelled": 0,
           "skipped": 0,
-          "todo": 0,
-          "duration_ms": 39621.994625
+          "deferred_tests": 0,
+          "duration_ms": 45901.663708
         }
       ]
     },
@@ -140,7 +140,7 @@
       "command": "git diff --check",
       "exit": 0,
       "raw_log": {
-        "path": "/tmp/cloud-deadline-final-diff.log",
+        "path": "/tmp/cloud-gate-final-diff.log",
         "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
       }
     }
@@ -533,7 +533,7 @@
             "fail": 0,
             "cancelled": 0,
             "skipped": 0,
-            "todo": 0,
+            "deferred_tests": 0,
             "duration_ms": 251207.352
           }
         ]
@@ -560,7 +560,7 @@
             "fail": 0,
             "cancelled": 0,
             "skipped": 0,
-            "todo": 0,
+            "deferred_tests": 0,
             "duration_ms": 183757.971375
           }
         ]
@@ -579,7 +579,7 @@
             "fail": 0,
             "cancelled": 0,
             "skipped": 0,
-            "todo": 0,
+            "deferred_tests": 0,
             "duration_ms": 43003.513291
           }
         ]
@@ -598,7 +598,7 @@
             "fail": 0,
             "cancelled": 0,
             "skipped": 0,
-            "todo": 0,
+            "deferred_tests": 0,
             "duration_ms": 10760.904959
           },
           {
@@ -607,7 +607,7 @@
             "fail": 0,
             "cancelled": 0,
             "skipped": 0,
-            "todo": 0,
+            "deferred_tests": 0,
             "duration_ms": 17452.040666
           }
         ]
@@ -638,7 +638,7 @@
             "fail": 0,
             "cancelled": 0,
             "skipped": 0,
-            "todo": 0,
+            "deferred_tests": 0,
             "duration_ms": 274553.148958
           }
         ]
@@ -665,7 +665,7 @@
             "fail": 0,
             "cancelled": 0,
             "skipped": 0,
-            "todo": 0,
+            "deferred_tests": 0,
             "duration_ms": 226016.17925
           }
         ]
@@ -684,7 +684,7 @@
             "fail": 0,
             "cancelled": 0,
             "skipped": 0,
-            "todo": 0,
+            "deferred_tests": 0,
             "duration_ms": 42105.808667
           }
         ]
@@ -703,7 +703,7 @@
             "fail": 0,
             "cancelled": 0,
             "skipped": 0,
-            "todo": 0,
+            "deferred_tests": 0,
             "duration_ms": 3246.585625
           },
           {
@@ -712,7 +712,7 @@
             "fail": 0,
             "cancelled": 0,
             "skipped": 0,
-            "todo": 0,
+            "deferred_tests": 0,
             "duration_ms": 15095.027333
           }
         ]
@@ -852,7 +852,7 @@
             "fail": 0,
             "cancelled": 0,
             "skipped": 0,
-            "todo": 0,
+            "deferred_tests": 0,
             "duration_ms": 255683.897666
           }
         ]
@@ -879,7 +879,7 @@
             "fail": 0,
             "cancelled": 0,
             "skipped": 0,
-            "todo": 0,
+            "deferred_tests": 0,
             "duration_ms": 187768.201834
           }
         ]
@@ -898,7 +898,7 @@
             "fail": 0,
             "cancelled": 0,
             "skipped": 0,
-            "todo": 0,
+            "deferred_tests": 0,
             "duration_ms": 47123.084042
           }
         ]
@@ -917,7 +917,7 @@
             "fail": 0,
             "cancelled": 0,
             "skipped": 0,
-            "todo": 0,
+            "deferred_tests": 0,
             "duration_ms": 11013.514833
           },
           {
@@ -926,7 +926,7 @@
             "fail": 0,
             "cancelled": 0,
             "skipped": 0,
-            "todo": 0,
+            "deferred_tests": 0,
             "duration_ms": 16912.522292
           }
         ]
@@ -955,7 +955,7 @@
             "fail": 0,
             "cancelled": 0,
             "skipped": 0,
-            "todo": 0,
+            "deferred_tests": 0,
             "duration_ms": 251207.352
           }
         ]
@@ -982,7 +982,7 @@
             "fail": 0,
             "cancelled": 0,
             "skipped": 0,
-            "todo": 0,
+            "deferred_tests": 0,
             "duration_ms": 183757.971375
           }
         ]
@@ -1001,7 +1001,7 @@
             "fail": 0,
             "cancelled": 0,
             "skipped": 0,
-            "todo": 0,
+            "deferred_tests": 0,
             "duration_ms": 43003.513291
           }
         ]
@@ -1020,7 +1020,7 @@
             "fail": 0,
             "cancelled": 0,
             "skipped": 0,
-            "todo": 0,
+            "deferred_tests": 0,
             "duration_ms": 10760.904959
           },
           {
@@ -1029,7 +1029,7 @@
             "fail": 0,
             "cancelled": 0,
             "skipped": 0,
-            "todo": 0,
+            "deferred_tests": 0,
             "duration_ms": 17452.040666
           }
         ]
@@ -1173,7 +1173,7 @@
             "fail": 0,
             "cancelled": 0,
             "skipped": 0,
-            "todo": 0,
+            "deferred_tests": 0,
             "duration_ms": 218978.614375
           }
         ]
@@ -1200,7 +1200,7 @@
             "fail": 0,
             "cancelled": 0,
             "skipped": 0,
-            "todo": 0,
+            "deferred_tests": 0,
             "duration_ms": 159983.497916
           }
         ]
@@ -1219,7 +1219,7 @@
             "fail": 0,
             "cancelled": 0,
             "skipped": 0,
-            "todo": 0,
+            "deferred_tests": 0,
             "duration_ms": 39811.723458
           }
         ]
@@ -1238,7 +1238,7 @@
             "fail": 0,
             "cancelled": 0,
             "skipped": 0,
-            "todo": 0,
+            "deferred_tests": 0,
             "duration_ms": 12660.478792
           },
           {
@@ -1247,7 +1247,7 @@
             "fail": 0,
             "cancelled": 0,
             "skipped": 0,
-            "todo": 0,
+            "deferred_tests": 0,
             "duration_ms": 12309.187458
           }
         ]
@@ -1276,7 +1276,7 @@
             "fail": 0,
             "cancelled": 0,
             "skipped": 0,
-            "todo": 0,
+            "deferred_tests": 0,
             "duration_ms": 255683.897666
           }
         ]
@@ -1303,7 +1303,7 @@
             "fail": 0,
             "cancelled": 0,
             "skipped": 0,
-            "todo": 0,
+            "deferred_tests": 0,
             "duration_ms": 187768.201834
           }
         ]
@@ -1322,7 +1322,7 @@
             "fail": 0,
             "cancelled": 0,
             "skipped": 0,
-            "todo": 0,
+            "deferred_tests": 0,
             "duration_ms": 47123.084042
           }
         ]
@@ -1341,7 +1341,7 @@
             "fail": 0,
             "cancelled": 0,
             "skipped": 0,
-            "todo": 0,
+            "deferred_tests": 0,
             "duration_ms": 11013.514833
           },
           {
@@ -1350,7 +1350,7 @@
             "fail": 0,
             "cancelled": 0,
             "skipped": 0,
-            "todo": 0,
+            "deferred_tests": 0,
             "duration_ms": 16912.522292
           }
         ]
@@ -1482,7 +1482,7 @@
             "fail": 0,
             "cancelled": 0,
             "skipped": 0,
-            "todo": 0,
+            "deferred_tests": 0,
             "duration_ms": 218978.614375
           }
         ]
@@ -1509,7 +1509,7 @@
             "fail": 0,
             "cancelled": 0,
             "skipped": 0,
-            "todo": 0,
+            "deferred_tests": 0,
             "duration_ms": 159983.497916
           }
         ]
@@ -1528,7 +1528,7 @@
             "fail": 0,
             "cancelled": 0,
             "skipped": 0,
-            "todo": 0,
+            "deferred_tests": 0,
             "duration_ms": 39811.723458
           }
         ]
@@ -1547,7 +1547,7 @@
             "fail": 0,
             "cancelled": 0,
             "skipped": 0,
-            "todo": 0,
+            "deferred_tests": 0,
             "duration_ms": 12660.478792
           },
           {
@@ -1556,7 +1556,7 @@
             "fail": 0,
             "cancelled": 0,
             "skipped": 0,
-            "todo": 0,
+            "deferred_tests": 0,
             "duration_ms": 12309.187458
           }
         ]
@@ -1580,5 +1580,149 @@
       ],
       "action": "Original failed live preflight retained without repeating unchanged blocked calls; authorized access/campaign inputs and a supported native attempt-ID surface remain external remedies"
     }
+  },
+  "tap_summary_fields": {
+    "deferred_tests": "Number of tests declared for later execution, preserved from the original TAP summary. All recorded counts are zero; raw log paths, hashes and contents remain unchanged."
+  },
+  "completion_gate_followup": {
+    "observed_head": "7f222d7324a575109300547da7aa744f6a97ac3e",
+    "scope": "Published audit field names and truthful external qualification explanation; execution behavior and completion policy unchanged",
+    "normalized_summary_fields": 40,
+    "raw_log_preservation": "All original command logs, hashes, count values, internal paths and session identities retained",
+    "before_diagnostic": {
+      "path": "/tmp/cloud-gate-before.json",
+      "sha256": "32e8d27f892f54a00d172be8f6c837aba04cac09f28feda2fce399ad804a98fa"
+    },
+    "criteria_requiring_external_remedy": [
+      {
+        "criterion_id": "ac-2",
+        "evidence": "prerequisites.native_read_checks.inference_verified=false and selected_environment_mapping_verified=false",
+        "remedy": "Supply a published environment mapped to the operator-authorized disposable repository and demonstrate account/model execution access under the existing scope and security settings"
+      },
+      {
+        "criterion_id": "ac-3",
+        "evidence": "prerequisites.native_read_checks.provider_attempt_id_available=false; lib/codex_cloud.mjs records providerAttemptId=null and attemptSelector=1",
+        "remedy": "Qualify a supported documented CLI/interface exposing real native attempt IDs; the task ID and selector cannot substitute for one"
+      },
+      {
+        "criterion_id": "ac-13",
+        "evidence": "live.preflight.report records four absent live inputs and no real implementation/correction campaign",
+        "remedy": "Supply CODEX_CLOUD_LIVE_HOME, CODEX_CLOUD_LIVE_PRD, CODEX_CLOUD_LIVE_REPO and CODEX_CLOUD_CAMPAIGN_LEDGER with authorized environment/model access and account allowance evidence, then execute the bounded implementation and forced correction across restart"
+      }
+    ],
+    "qualification_status": "Criteria are valid and remain false; no paid work was attempted and no external approval is claimed",
+    "previous_verify": [
+      {
+        "command": "npm test",
+        "exit": 0,
+        "raw_log": {
+          "path": "/tmp/cloud-deadline-final-test.log",
+          "sha256": "2495db85a76260d6fdad666f941e1259a1e03d8bbc455e11d6170d114ec38d65"
+        },
+        "tap_runs": [
+          {
+            "tests": 1186,
+            "pass": 1186,
+            "fail": 0,
+            "cancelled": 0,
+            "skipped": 0,
+            "deferred_tests": 0,
+            "duration_ms": 362215.259875
+          }
+        ]
+      },
+      {
+        "command": "npm run lint",
+        "exit": 0,
+        "raw_log": {
+          "path": "/tmp/cloud-deadline-final-lint.log",
+          "sha256": "8c7790de3f018fb4580f18ac70e1b355a0f76f522dd73acbdaa63632feffcecc"
+        }
+      },
+      {
+        "command": "npm run test:execution-backends",
+        "exit": 0,
+        "raw_log": {
+          "path": "/tmp/cloud-deadline-final-backends.log",
+          "sha256": "0cae0fdd4eb22002426fff596028c5349a94dae14d6abd5b2d2fd15c92ef5481"
+        },
+        "tap_runs": [
+          {
+            "tests": 397,
+            "pass": 397,
+            "fail": 0,
+            "cancelled": 0,
+            "skipped": 0,
+            "deferred_tests": 0,
+            "duration_ms": 362448.204375
+          }
+        ]
+      },
+      {
+        "command": "npm run test:openai-agents",
+        "exit": 0,
+        "raw_log": {
+          "path": "/tmp/cloud-deadline-final-agents.log",
+          "sha256": "9611390642ebad261e2c521a5f3af2b0c8d080df7fda9fc0875a918c6ac64467"
+        },
+        "tap_runs": [
+          {
+            "tests": 59,
+            "pass": 59,
+            "fail": 0,
+            "cancelled": 0,
+            "skipped": 0,
+            "deferred_tests": 0,
+            "duration_ms": 179276.370209
+          }
+        ]
+      },
+      {
+        "command": "npm run test:codex-cloud",
+        "exit": 0,
+        "raw_log": {
+          "path": "/tmp/cloud-deadline-final-cloud.log",
+          "sha256": "37dca83950f9f15625f36a4ed286530e8ef9578b7bd8d4643585df065cc2fa85"
+        },
+        "tap_runs": [
+          {
+            "tests": 25,
+            "pass": 25,
+            "fail": 0,
+            "cancelled": 0,
+            "skipped": 0,
+            "deferred_tests": 0,
+            "duration_ms": 68514.705625
+          },
+          {
+            "tests": 16,
+            "pass": 16,
+            "fail": 0,
+            "cancelled": 0,
+            "skipped": 0,
+            "deferred_tests": 0,
+            "duration_ms": 39621.994625
+          }
+        ]
+      },
+      {
+        "command": "git diff --check",
+        "exit": 0,
+        "raw_log": {
+          "path": "/tmp/cloud-deadline-final-diff.log",
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      }
+    ],
+    "verification_commands": "commands",
+    "verification_source_revision": "363f8a27d8cbba9fa53d37b1bc50b31528e68b9a",
+    "verification_kind": "Offline commands and local evaluator diagnostic only; no hosted completion approval, remote CI qualification or live model evidence",
+    "after_diagnostic": {
+      "path": "/tmp/cloud-gate-after.json",
+      "sha256": "d4567010225ad1fa3bebd4bc94d12e5dfc34ab44c24ab2decfd1bb7ce43089b8"
+    },
+    "remaining_denial_codes": [
+      "oap.criteria_not_met"
+    ]
   }
 }
