@@ -75,6 +75,13 @@ validation with emission for screenshots, UI and icon files, including missing
 files, directories, symlinks, size bounds and credential patterns. Source and
 installed tests also verify CLI failure status and partial-output cleanup.
 
+Every Node coordinator wake revalidates the exact artifact pin under ownership
+before scheduling or task advancement. Regressions cover delayed first callbacks,
+repeated callbacks after migration, lock cleanup and a matching new runtime.
+Model summaries expose saved, redacted question text with stable IDs; installed
+MCP tests complete preparation and answering without the optional UI resource or
+reading UI metadata. Private view fields remain excluded from model summaries.
+
 Unmet attestations remain explicit:
 
 - **ac-5:** Actual Pages runtime/binding execution is unavailable. Node package

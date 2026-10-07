@@ -11,7 +11,8 @@
     "base": "96e81031516bdf6663dd3b97ac39b8f57022568b",
     "sourceVerified": true,
     "uncommittedPayload": [
-      "lib/plugin_package.mjs"
+      "lib/runtime_node.mjs",
+      "lib/task_delivery_view.mjs"
     ],
     "mergedM5": false,
     "predecessorMerges": [
@@ -20,14 +21,14 @@
       "2b4514fb27fcb493e62bfed913fffc204215f155",
       "96e81031516bdf6663dd3b97ac39b8f57022568b"
     ],
-    "testedSourceCommit": "15e22b96979b35297d4b84eed961d569362ea1c1"
+    "testedSourceCommit": "9d57390d013afcd09f49f5c794d9bddea51a5f13"
   },
   "artifact": {
     "coreArtifact": "gallivant-0.2.0.tgz",
-    "coreSha256": "51f518604d33b7be69be6e8e9c5f70799d631d2146ce60c6f787e9257c3f019c",
+    "coreSha256": "e6c0697310986ad027ddc175dd0325f21ae90fccc892cc3edb64e267bf72bb19",
     "hashes": {
       "plugin": "8753892ceb5552fc37ba011929830f4c754d717f8d8031e31fb9b4935b465e1a",
-      "runtime": "71268c597513f06bdf8098a5a3d532d6ca1cb88f766d73b1a91a1c07de759bdb",
+      "runtime": "020148be9ebcc9f9225fe278fe295c8e95cf1509201ce451cce82b0921038c83",
       "operations": "2077c0558cd4634accf66e530f186b52e2f91bfea502ff7c6f212d2e2efb800f"
     },
     "dependencyLockSha256": "bf3969111f7c4b84071fc14c59d870e296ee045024c8056757ac3e3466bc2b28",
@@ -110,7 +111,7 @@
       "lib/run_log.mjs": "7d0b28731be434c6764ea400e4fe9d95ea0cc81179c9ead80d140d23153abcdb",
       "lib/run.mjs": "3682818ab95bf3b27c262449aa521be094caee9c8f133e94740923ebafb91315",
       "lib/runtime_dependencies.mjs": "6d25b972c116026643f348dc55586009d2746f68b99f47d450b2a3ef35625949",
-      "lib/runtime_node.mjs": "77a32855378d504bff3bfe33813bc6a2771cfd186358342783a25769037aa366",
+      "lib/runtime_node.mjs": "93c334133140a02622cbbedc41362ba98f75275e4c5b12824a1323f7641518de",
       "lib/runtime_state.mjs": "13fb874a59895ceef04408b0ae57cfd9a3b58ef0701eec1d4efc4c34adf691cd",
       "lib/sources/index.mjs": "88e1550751e9f52c82e94085bcb77bbd2b80466c9e2192670593f12894c4a4ec",
       "lib/sources/prd.mjs": "b26425213d537d8bf640abee1046481925de30d676fdb9b6a6b9239cdc50effd",
@@ -121,7 +122,7 @@
       "lib/task_delivery_contract.mjs": "1c23368cef58ff0083560805399022f52dbdb85272af0867da66da929d029eec",
       "lib/task_delivery_mcp.mjs": "5a3cc12b7ef9e15f063d8030bb4b53f27ca82edfa5d8ea63ca34b6c09f7edb90",
       "lib/task_delivery_store.mjs": "4573831285d16421d3ec7e56b78735ee10d6f8952a1b4475eed7fa1387636b0d",
-      "lib/task_delivery_view.mjs": "823e244f20357eddb0e02a1abe52a1ad26fc2d92a75901c2010e1247013498d1",
+      "lib/task_delivery_view.mjs": "4d42c784728cdf75f73f3ca1c727b45803c7aca67e965f9f9d2232506d89d357",
       "lib/task_delivery.mjs": "681e60f71ea6e280b21b7f2f2032c4bc3d00ba08441f13c95accdbffd68076ba",
       "lib/task_environment.mjs": "5c61d5d5393014206f078c86084b40d263f59b7dc939c445a4ed86111e4c2b2c",
       "lib/task_prepare.mjs": "f0f27738e208f174aa89dba3a6f70f382cf7e03abe541df5d1854aed4adb9492",
@@ -357,7 +358,8 @@
         "installed API/Cloud unknown-acceptance restart cases",
         "test/runtime-delivery.test.mjs: both hosted transports force every startup batch, restart a nonzero-cursor sweep, preserve failed-advance checkpoints and never resubmit unknown intent",
         "test/runtime-delivery.test.mjs: 36 retained history records and 25 active chains rotate in bounded batches across reconstructed coordinators, shrinking active sets and cancellations; entry startup still covers every batch",
-        "test/runtime-delivery.test.mjs: chain review cadence survives fast wakes, process restart, failed advances and GitHub failures while entry reconciliation continues; cancelled suffix cannot re-poll a visited prefix"
+        "test/runtime-delivery.test.mjs: chain review cadence survives fast wakes, process restart, failed advances and GitHub failures while entry reconciliation continues; cancelled suffix cannot re-poll a visited prefix",
+        "test/runtime-delivery.test.mjs: delayed and repeated coordinator wakes revalidate the artifact pin under ownership before scheduling or task effects, release ownership on refusal and allow the matching runtime"
       ],
       "evidence": "Killed native fixture owner is recovered; unresolved provider intent retains exactly one paid-work spy write"
     },
@@ -388,7 +390,8 @@
         "installed evidence/log/current PR/control flow",
         "real SDK emitted resource fixture with global/thread metadata",
         "inherited read-only tracker/provider projection conformance",
-        "test/fixtures/plugin-installed-flow.mjs: installed MCP capability model/text summaries supply repository and harness for task_prepare, preserve cost/control setup and schedule no provider work"
+        "test/fixtures/plugin-installed-flow.mjs: installed MCP capability model/text summaries supply repository and harness for task_prepare, preserve cost/control setup and schedule no provider work",
+        "test/task-delivery.test.mjs redacted question projection; test/fixtures/plugin-installed-flow.mjs installed MCP without UI asks and answers using only model-visible saved questions"
       ],
       "evidence": "Saved views and bounded logs use cached current/result observations; no UI reconciliation call or provider poller"
     },
@@ -487,7 +490,7 @@
         "lib/harness.mjs"
       ],
       "tests": [
-        "20 installed consumer flow cases",
+        "21 installed consumer flow cases",
         "installed local/API/Cloud provider and lifecycle conformance",
         "inherited hosted bounded-preparation refusal cases"
       ],
@@ -527,25 +530,25 @@
       {
         "command": "npm test",
         "exitCode": 0,
-        "tests": 1246,
-        "pass": 1246,
+        "tests": 1248,
+        "pass": 1248,
         "fail": 0,
-        "log": "/tmp/plugin-delivery-validation-unit-tests.log"
+        "log": "/tmp/plugin-delivery-wake-unit-tests.log"
       },
       {
         "command": "npm run lint",
         "exitCode": 0,
-        "log": "/tmp/plugin-delivery-validation-lint.log"
+        "log": "/tmp/plugin-delivery-wake-lint.log"
       },
       {
         "command": "npm run test:plugin-package",
         "exitCode": 0,
-        "consumerFlowTests": 20,
-        "installedConformanceTests": 422,
+        "consumerFlowTests": 21,
+        "installedConformanceTests": 424,
         "fail": 0,
-        "log": "/tmp/plugin-delivery-validation-package-tests.log",
-        "consumerEvidence": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/task-plugin-consumer-yXfKE9/evidence.json",
-        "conformanceLog": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/task-plugin-consumer-yXfKE9/conformance.log"
+        "log": "/tmp/plugin-delivery-wake-package-tests.log",
+        "consumerEvidence": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/task-plugin-consumer-FkLP1Q/evidence.json",
+        "conformanceLog": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/task-plugin-consumer-FkLP1Q/conformance.log"
       },
       {
         "command": "git diff --check",
@@ -555,11 +558,11 @@
     ],
     "verifiedPayloadFiles": 112,
     "logSha256": {
-      "/tmp/plugin-delivery-validation-unit-tests.log": "88fcc21cb643a150a8b2e00215fea0bc74ccd6ae7c9f074a9754ab6233ea3666",
-      "/tmp/plugin-delivery-validation-package-tests.log": "d5dcb0df4e7a0824c292e8c25d0a50b449692f6656dce9d4a4c8ff38a930ec66",
-      "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/task-plugin-consumer-yXfKE9/conformance.log": "a2ec3a8e85d8af64430f79e4d96879da099c727912f3dc30838a8b3996e9d7e6",
-      "/tmp/plugin-delivery-validation-lint.log": "2f32bd854b16ced20ab71be2afd3673b887efc4815c6e55ea7b941ebc5aa8a0b",
-      "/tmp/plugin-delivery-validation-focused-final.log": "8af84f41761382b02cebbd3891b4b8485580e656c4256cee57e3ad74ac185fa1"
+      "/tmp/plugin-delivery-wake-unit-tests.log": "92102a5e3a3aa2197bb510ec61ee42287831c906ed2d174cabb2aca3a3058676",
+      "/tmp/plugin-delivery-wake-package-tests.log": "08e3951f9a3a1b37e60bca98209484cefc478bd9231a98fee7173f377ed6aab6",
+      "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/task-plugin-consumer-FkLP1Q/conformance.log": "65bc58ad891d9d680a9597c68bcee50dfe6f614ea3ef811734f426aea3e28d0a",
+      "/tmp/plugin-delivery-wake-lint.log": "2f32bd854b16ced20ab71be2afd3673b887efc4815c6e55ea7b941ebc5aa8a0b",
+      "/tmp/plugin-delivery-wake-focused.log": "d5bd2dad8ec246a2c2a1fcb48626d5e0f068e10709c0eb5752d71785146ee279"
     },
     "hostEvidence": false,
     "fixturePurpose": "Deterministic unpaid installed-artifact compatibility; no actual installed host or live provider qualification",
@@ -588,7 +591,8 @@
       "active chain windows exclude done/cancelled/stopped history and rotate by durable name cursor; shrinking sets, restart and failure do not lose continuation or starve entry batches",
       "canonical makeTick chain deadline is restored and checkpointed by the Node wrapper only after a successful chain pass; pending batches finish without revisiting a cancelled suffix; disabled/skipped chain passes preserve cursor/deadline and fast entry reconciliation continues",
       "Backup and restore bind the copied runtime pin to the envelope artifact before output; locks release on refusal. Public source verification includes untracked, ignored and deleted npm controls and hidden payload directories; internal fixtures record them and failed builds remove partial output.",
-      "Public URL checks cover endpoint, metadata and all resource origins after URL canonicalization; preflight and emission share asset validation for every screenshot, UI and icon, including failure cleanup and CLI exit status."
+      "Public URL checks cover endpoint, metadata and all resource origins after URL canonicalization; preflight and emission share asset validation for every screenshot, UI and icon, including failure cleanup and CLI exit status.",
+      "The Node owner adapter revalidates pin identity before the portable schedule/advance envelope on every callback; model projections include only saved redacted question IDs/text across task responses and list summaries."
     ]
   },
   "reviewFollowup": {
@@ -794,6 +798,40 @@
       "log": "/tmp/plugin-delivery-validation-focused.log",
       "error": "npm cache/log filesystem EPERM",
       "resolution": "Same focused suite passed using supported permission escalation; no filesystem permission changes"
+    },
+    "externalPrerequisites": "Previously observed unmet prerequisites retained; no unchanged live call retried and no installed-host/model-access evidence inferred from fixtures"
+  },
+  "wakeQuestionReviewFollowup": {
+    "reviewId": 5442175343,
+    "reviewedCommit": "9d57390d013afcd09f49f5c794d9bddea51a5f13",
+    "items": [
+      {
+        "commentId": 4206792004,
+        "implementation": [
+          "lib/runtime_node.mjs"
+        ],
+        "tests": [
+          "test/runtime-delivery.test.mjs delayed and repeated coordinator wakes revalidate the pin under ownership before effects"
+        ],
+        "rule": "A coordinator object cannot retain permission to run after its namespace artifact pin changes"
+      },
+      {
+        "commentId": 4206792015,
+        "implementation": [
+          "lib/task_delivery_view.mjs"
+        ],
+        "tests": [
+          "test/task-delivery.test.mjs model questions retain saved redacted text and IDs without private view fields",
+          "test/fixtures/plugin-installed-flow.mjs installed MCP without UI exposes saved questions and answers using model-visible fields"
+        ],
+        "rule": "Conversational clients must receive the saved question text needed to answer without the optional UI"
+      }
+    ],
+    "focusedVerification": {
+      "tests": 29,
+      "pass": 29,
+      "fail": 0,
+      "log": "/tmp/plugin-delivery-wake-focused.log"
     },
     "externalPrerequisites": "Previously observed unmet prerequisites retained; no unchanged live call retried and no installed-host/model-access evidence inferred from fixtures"
   }

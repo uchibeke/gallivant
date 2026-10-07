@@ -234,3 +234,30 @@ test("backup distinguishes unpinned legacy state from an invalid existing pin", 
     assert.equal(existsSync(join(home, "daemon.lock")), false);
   }
 });
+
+
+test("delayed and repeated coordinator wakes revalidate the pin under ownership before effects", async () => {
+  const home = tempHome(), state = makeState(home), store = createNodeOwnerStore({ home, durable: true });
+  migrateRuntimeState({ home, manifest });
+  let reads = 0, schedules = 0;
+  const ctx = { home, state: { ...state, entries: () => { reads++; return state.entries(); } }, clock: makeClock(), config: CONFIG, ownLogin: "me", log: silentLog, gh: fakeGh(), git: fakeGit(), notify: fakeNotify() };
+  const coordinator = createNodeCoordinator({ ctx, store, manifest, schedule: async () => { schedules++; } });
+  // Migration after construction but before the very first callback.
+  migrateRuntimeState({ home, manifest: update });
+  const pin = readFileSync(join(home, "runtime-pin.json"));
+  for (let i = 0; i < 2; i++) await assert.rejects(coordinator.wake(), { code: "COORDINATOR_PIN" });
+  assert.equal(reads, 0); assert.equal(schedules, 0);
+  assert.deepEqual(readFileSync(join(home, "runtime-pin.json")), pin);
+  assert.equal(existsSync(join(home, "daemon.lock")), false);
+  assert.equal(readJson(join(home, "coordinator.json")).cursor, undefined);
+  // A previously successful coordinator must also reject later migrations.
+  migrateRuntimeState({ home, manifest }); await coordinator.wake();
+  const before = { reads, schedules, checkpoint: readJson(join(home, "coordinator.json")) };
+  migrateRuntimeState({ home, manifest: update });
+  await assert.rejects(coordinator.wake(), { code: "COORDINATOR_PIN" });
+  assert.equal(reads, before.reads); assert.equal(schedules, before.schedules);
+  assert.equal(readJson(join(home, "coordinator.json")).cursor, before.checkpoint.cursor);
+  assert.equal(existsSync(join(home, "daemon.lock")), false);
+  const current = createNodeCoordinator({ ctx, store, manifest: update, schedule: async () => { schedules++; } });
+  await current.wake(); assert.equal(schedules, before.schedules + 1);
+});

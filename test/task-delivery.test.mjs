@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { taskExecutionConfig, taskProviderAllowance } from "../lib/task_allowance.mjs";
 import { CORE_VERSION, assertCompatible } from "../lib/task_delivery_contract.mjs";
 import { controlAvailability } from "../lib/control_contract.mjs";
+import { modelSummary, taskView } from "../lib/task_delivery_view.mjs";
 import { createTaskDelivery } from "../lib/task_delivery.mjs";
 
 const config = { max_budget_usd: 10, run_timeout_minutes: 30 };
@@ -97,4 +98,13 @@ test("capability discovery paginates only authorized repositories and reauthoriz
   repositories = [];
   assert.equal((await delivery.dispatch("capabilities", {}, "alice")).truncated, false);
   assert.equal(contexts.length, before);
+});
+
+
+test("model questions retain saved redacted text and IDs without private view fields", () => {
+  const view = taskView({ taskId: "saved", revision: 2, status: "needs-input", repo: "acme/widget", questions: [{ id: "q-r-1", text: "Choose format for private-provider-value?", privateExtra: "hidden" }], original: "private original", draft: { text: "private brief" }, failures: ["private failure"] }, { secrets: ["private-provider-value"] });
+  const summary = modelSummary(view);
+  assert.deepEqual(summary.questions, [{ id: "q-r-1", text: view.questions[0].text }]);
+  assert.deepEqual(summary.questionIds, ["q-r-1"]);
+  assert.doesNotMatch(JSON.stringify(summary), /private-provider-value|hidden|private original|private brief|private failure/);
 });

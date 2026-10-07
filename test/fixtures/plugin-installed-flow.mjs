@@ -263,6 +263,26 @@ test("installed MCP capability pages supply model-visible repository and harness
   } finally { await client.close(); await server.close(); }
 });
 
+test("installed MCP without UI exposes saved questions and answers using model-visible fields", async () => {
+  const w = world(), server = new Server({ name: "question-flow", version: "1" }, { capabilities: { tools: {} } });
+  await registerTaskDelivery(server, { delivery: w.delivery, identityFor: async () => "alice" });
+  const client = new Client({ name: "consumer", version: "1" }), [a, b] = InMemoryTransport.createLinkedPair();
+  await server.connect(a); await client.connect(b);
+  try {
+    const prepared = await client.callTool({ name: "task_prepare", arguments: prepare() });
+    const model = prepared.structuredContent;
+    assert.equal(model.status, "needs-input");
+    assert.equal(model.questions[0].text, "Which file format should export use?");
+    assert.deepEqual(JSON.parse(prepared.content[0].text), model);
+    const inspected = await client.callTool({ name: "task_inspect", arguments: { taskId: model.taskId } });
+    assert.deepEqual(inspected.structuredContent.questions, model.questions);
+    const answer = await client.callTool({ name: "task_answer", arguments: { ...mutate(inspected.structuredContent, "model-answer"), answers: { [model.questions[0].id]: "Use CSV." } } });
+    assert.equal(answer.structuredContent.status, "ready");
+    assert.deepEqual(answer.structuredContent.questions, []);
+    assert.equal(answer.structuredContent.brief, undefined);
+  } finally { await client.close(); await server.close(); }
+});
+
 test("real MCP SDK shares schemas, annotations and built resource; reads never dispatch", async () => {
   const w = world(); let identity = "alice";
   const server = new Server({ name: "task-delivery-test", version: "1" }, { capabilities: { tools: {}, resources: {} } });
