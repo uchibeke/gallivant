@@ -312,6 +312,29 @@ test("filesystem refuses symlinks, cross-repository scopes and concurrent mutati
   await assert.rejects(service.reviseFromFile(repo, "lesson-x", path), /duplicate/);
 });
 
+test("legacy learning stores gain an empty preparation archive without read-time writes", async t => {
+  const { service, store } = fixture(t);
+  await service.configure(repo, "collect");
+  const legacy = store.load(repo); delete legacy.preparationHistory;
+  const release = store.lock(); try { store.saveLocked(repo, legacy); } finally { release(); }
+  const file = join(store.root, `repo-${hash(repo)}.json`), before = readFileSync(file, "utf8");
+  assert.deepEqual(store.load(repo).preparationHistory, {});
+  assert.deepEqual(service.report(repo).preparations, { pending: 0, obsolete: 0 });
+  assert.equal(readFileSync(file, "utf8"), before);
+});
+
+test("repository identity lookup forwards cancellation and rejects late aborted results", async t => {
+  const controller = new AbortController();
+  const gh = makeGh({ exec: async (_cmd, _args, options) => {
+    assert.equal(options.signal, controller.signal);
+    return { stdout: JSON.stringify({ id: 1234, private: true }) };
+  } });
+  const { service } = fixture(t, { gh });
+  assert.deepEqual(await service.resolveRepo("example/project", { signal: controller.signal }), repo);
+  gh.learningRepository = async () => { controller.abort(); return { ...repo, id: "9999" }; };
+  await assert.rejects(service.resolveRepo("example/project", { signal: controller.signal }), e => e.name === "AbortError");
+});
+
 test("CLI refuses forged flags, unknown commands and implicit approval selection", async t => {
   const { service, store } = fixture(t);
   const c = await pending(service, store);

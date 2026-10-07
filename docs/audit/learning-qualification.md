@@ -269,3 +269,46 @@ was rechecked during source review:
 | `npm run lint` | Exit 0 | `/private/tmp/review-learning-batch8-final-lint.log` |
 | `npm run test:learning` | 58 passed; 0 failed, skipped or cancelled; 38,833.643375 ms | `/private/tmp/review-learning-batch8-final-suite.log` |
 | `git diff --check` | Exit 0 | Operator session command output |
+
+## Immutable identity and obsolete-preparation review follow-up
+
+Automatic observation now resolves the current immutable repository identity in
+the post-dispatch collection step before persistence. Replacement names and
+lookup failures skip collection without changing coding cursors, rounds or fix
+dispatch. One lookup per repository shares a five-second batch deadline; abort
+signals reach the existing GitHub transport and late responses cannot update the
+service cache. No automatic lookup enrolls a replacement identity.
+
+Recovery validates each signed preparation and its content digest before either
+committing it against the exact current parent or archiving an obsolete sequence.
+The protected archive retains signed bytes, retirement time and superseding
+transition digest, with a 1,000-record cap. Archive movement and later activation
+share one atomic transaction. Invalid obsolete signatures still block recovery;
+old signatures never rebase. Legacy stores acquire an empty in-memory archive
+without read-time writes, and reports expose pending/obsolete counts.
+
+Source review covered automatic versus historical identity resolution, signal
+propagation, late-response cleanup, signed commit/recovery and storage migration.
+The inspected generated output in `/private/tmp/review-learning-batch9-suite.log`
+includes `automaticIdentity` diagnostics: one fix for each match/replacement/outage
+case, zero stored observations for replacement and outage, and identical coding
+cursor advancement. `obsoletePreparationRecovery` records an archived sequence 1
+followed by a committed sequence 2, retaining exactly one obsolete signed record.
+Tests also cover interrupted recovery persistence, restart, repeated recovery,
+forged obsolete signatures and cancellation of a stalled identity lookup.
+
+The learning suite passed 63 tests with zero failures, skips or cancellations
+(41,104.567833 ms). Existing installed-isolation, Linux/live and implementation gaps
+remain unmet. Production remains **UNQUALIFIED / collection only**. The recorded
+`sandbox_apply: Operation not permitted` failure was not retried. Qualification
+still requires supported Linux/macOS hosts, a permitted actual isolation probe,
+a qualified worker/extractor/control boundary and a disposable live ceremony.
+
+Required Verify results on the same macOS host:
+
+| Command | Recorded result | Output pointer |
+| --- | --- | --- |
+| `npm test` | 1,268 passed; 0 failed, skipped or cancelled; 249,782.894042 ms | `/private/tmp/review-learning-batch9-full.log` |
+| `npm run lint` | Exit 0 | `/private/tmp/review-learning-batch9-lint.log` |
+| `npm run test:learning` | 63 passed; 0 failed, skipped or cancelled; 41,104.567833 ms | `/private/tmp/review-learning-batch9-suite.log` |
+| `git diff --check` | Exit 0 | Operator session command output |

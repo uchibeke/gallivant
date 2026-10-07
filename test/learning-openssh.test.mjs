@@ -227,8 +227,46 @@ test("stale signed intent requires another preview and cannot silently rebase", 
   f.store.saveLocked = save;
   const other = await f.service.revise(repo, "lesson-other", { ...f.candidate.content, id: "lesson-other", guidance: "Validate all fields as one record." });
   await f.service.approve(repo, [{ id: other.content.id, digest: other.digest }], { confirm: () => true });
-  await assert.rejects(f.service.recover(repo), /stale\/replayed/);
+  const obsolete = await f.service.recover(repo);
+  assert.equal(obsolete[0].disposition, "obsolete"); assert.equal(obsolete[0].supersededBy, f.store.load(repo).parent);
+  assert.deepEqual(await f.service.recover(repo), []);
   assert.equal(f.store.load(repo).sequence, 1); assert.equal(f.service.show(repo, f.candidate.content.id).status, "pending");
+});
+
+test("obsolete signed preparations cannot poison later recovery and retirement is atomic", async t => {
+  const f = await enrolled(t), save = f.store.saveLocked;
+  const crashApproval = async (selection, reason) => {
+    let writes = 0;
+    f.store.saveLocked = (repo, state) => { if (++writes === 3) throw new Error("crash after signing"); save(repo, state); };
+    try { await assert.rejects(f.service.approve(repo, selection, { reason, confirm: () => true }), /crash after signing/); }
+    finally { f.store.saveLocked = save; }
+  };
+  const first = [{ id: f.candidate.content.id, digest: f.candidate.digest }];
+  await crashApproval(first, "First review");
+  const [obsoleteKey, obsolete] = Object.entries(f.store.load(repo).prepared)[0];
+  await f.service.approve(repo, first, { reason: "Explicitly reviewed retry", confirm: () => true });
+  const other = await f.service.revise(repo, "lesson-other", { ...f.candidate.content, id: "lesson-other", guidance: "Validate all fields as one record." });
+  await crashApproval([{ id: other.content.id, digest: other.digest }], "Later review");
+  const before = canonical(f.store.load(repo)), transaction = f.store.transaction;
+  f.store.transaction = (repo, fn) => transaction(repo, async s => { await fn(s); throw new Error("crash before recovery rename"); });
+  try { await assert.rejects(f.service.recover(repo), /crash before recovery rename/); }
+  finally { f.store.transaction = transaction; }
+  assert.equal(canonical(f.store.load(repo)), before);
+  // Corrupt obsolete signatures remain an error, never a silently deleted item.
+  await transaction(repo, s => { s.prepared[obsoleteKey].signature = signFixture(canonical(obsolete.manifest), NAMESPACE, otherKey); });
+  const corrupt = canonical(f.store.load(repo));
+  await assert.rejects(f.service.recover(repo), /verification failed/);
+  assert.equal(canonical(f.store.load(repo)), corrupt);
+  await transaction(repo, s => { s.prepared[obsoleteKey] = obsolete; });
+  const restarted = createLearningService({ store: f.store, signer: { ...signer(), sign() { assert.fail("recovery cannot sign"); } }, qualify: () => ({ qualified: true, fixtureOnly: true }) });
+  const results = await restarted.recover(repo), state = f.store.load(repo);
+  assert.equal(results[0].disposition, "obsolete"); assert.equal(results[1].sequence, 2);
+  assert.equal(state.sequence, 2); assert.equal(state.active.length, 2); assert.deepEqual(state.prepared, {});
+  assert.deepEqual(state.preparationHistory[obsoleteKey].manifest, obsolete.manifest);
+  assert.equal(state.preparationHistory[obsoleteKey].signature, obsolete.signature);
+  assert.deepEqual(restarted.report(repo).preparations, { pending: 0, obsolete: 1 });
+  assert.deepEqual(await restarted.recover(repo), []);
+  t.diagnostic(JSON.stringify({ obsoletePreparationRecovery: results, archiveCount: Object.keys(state.preparationHistory).length, activeSequence: state.sequence }));
 });
 
 test("trust substitution and missing checkpoint fail before any context, including after restart", async t => {

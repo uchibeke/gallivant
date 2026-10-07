@@ -74,7 +74,7 @@ test("automatic collection runs after fixing feedback and cannot consume rounds 
   const { state, id } = seededState({ state: STATES.prOpen }), clock = makeClock(), runner = fakeRunner(clock);
   const gh = fakeGh({ inline: [inline({ id: 9, by: "me", at: at(1), body: "Validate the error path" })] });
   let observations = 0;
-  const learning = { identityFor: () => repo, mode: () => "collect", observe: async () => { observations++; assert.equal(runner.started.length, 1, "fix dispatch precedes collection"); throw new Error("learning storage unavailable"); } };
+  const learning = { identityFor: () => repo, mode: () => "collect", resolveRepo: async () => { assert.equal(runner.started.length, 1, "fix dispatch precedes identity lookup"); return repo; }, observe: async () => { observations++; assert.equal(runner.started.length, 1, "fix dispatch precedes collection"); throw new Error("learning storage unavailable"); } };
   const tick = makeTick({ config: CONFIG, state, gh, git: fakeGit(), notify: fakeNotify(), log: silentLog, clock, ownLogin: "me", runnerFor: () => runner, readPrd: () => null, credential: fakeCredential(), identity: fakeIdentity(), learning });
   const before = state.get(id).iteration;
   const result = await tick.tick();
@@ -89,14 +89,56 @@ test("automatic observations retain configured private and internal visibility a
     gh.learningRepository = async () => ({ ...repo, visibility });
     const { service, store, root } = fixture(t, { gh });
     await learnCommand({ learning: service }, { args: ["configure"], values: { repo: "acme/widget", mode: "collect" } });
-    gh.learningRepository = async () => { throw new Error("automatic observation must not fetch credentials or metadata"); };
+    let resolutions = 0;
+    gh.learningRepository = async (_name, { signal }) => { resolutions++; assert(signal instanceof AbortSignal); return { ...repo, visibility }; };
     const restarted = createLearningService({ root, store, gh, trust: makeTrust({ trusted_authors: ["maintainer"], reviewer: null }, "me") });
     const tick = makeTick({ config: CONFIG, state, gh, git: fakeGit(), notify: fakeNotify(), log: silentLog, clock, ownLogin: "me", runnerFor: () => runner, readPrd: () => null, learning: restarted });
     const results = await tick.tick(); assert(results.every(r => r.ok));
     const observations = Object.values(store.load(repo).observations);
+    assert.equal(resolutions, 1);
     assert.equal(observations.length, 1); assert.equal(observations[0].content.visibility, visibility);
     assert.deepEqual(observations[0].content.repo, repo); assert.deepEqual(restarted.identityFor("acme/widget"), repo);
   }
+});
+
+test("automatic identity mismatch or outage skips learning after independently dispatching fixes", async t => {
+  for (const outcome of ["match", "replacement", "outage"]) {
+    const { state, id, home } = seededState(); t.after(() => rmSync(home, { recursive: true, force: true }));
+    const clock = makeClock(), runner = fakeRunner(clock), warnings = [];
+    const gh = fakeGh({ inline: [inline({ id: 9, by: "me", at: at(1), body: "Validate the error path" })] });
+    gh.learningRepository = async () => ({ ...repo, visibility: "private" });
+    const { service, store } = fixture(t, { gh, trust: makeTrust({ trusted_authors: ["me"], reviewer: null }, "me") });
+    await service.resolveRepo("acme/widget", { remember: true }); await service.configure(repo, "collect");
+    gh.learningRepository = async () => {
+      assert.equal(runner.started.length, 1, "identity checks cannot delay the fix");
+      if (outcome === "outage") throw new Error("GitHub unavailable");
+      return { ...repo, id: outcome === "replacement" ? "9999" : repo.id, visibility: "private" };
+    };
+    const before = state.get(id), tick = makeTick({ config: CONFIG, state, gh, git: fakeGit(), notify: fakeNotify(), log: { ...silentLog, warn: message => warnings.push(message) }, clock,
+      ownLogin: "me", runnerFor: () => runner, readPrd: () => null, credential: fakeCredential(), identity: fakeIdentity(), learning: service });
+    assert((await tick.tick()).every(r => r.ok));
+    assert.equal(runner.started.length, 1); assert.equal(state.get(id).iteration, before.iteration); assert.equal(state.get(id).cursor.since, at(1));
+    assert.equal(Object.keys(store.load(repo).observations).length, outcome === "match" ? 1 : 0);
+    assert.deepEqual(service.identityFor("acme/widget"), repo, "automatic reads cannot re-enroll a replacement repository");
+    assert.equal(Object.keys(store.load({ ...repo, id: "9999" }).observations).length, 0);
+    if (outcome !== "match") assert(warnings.some(w => /learning/.test(w)));
+    t.diagnostic(JSON.stringify({ automaticIdentity: outcome, fixes: runner.started.length, observations: Object.keys(store.load(repo).observations).length, cursor: state.get(id).cursor.since }));
+  }
+});
+
+test("automatic identity lookup has a cancellable bounded post-dispatch deadline", async t => {
+  const { state, id, home } = seededState(); t.after(() => rmSync(home, { recursive: true, force: true }));
+  const clock = makeClock(), runner = fakeRunner(clock), warnings = [];
+  const gh = fakeGh({ inline: [inline({ id: 9, by: "me", at: at(1), body: "Validate the error path" })] });
+  let signal;
+  const learning = { identityFor: () => repo, mode: () => "collect", resolveRepo: async (_name, options) => {
+    assert.equal(runner.started.length, 1); signal = options.signal; return new Promise(() => {});
+  }, observe: () => assert.fail("unresolved identity cannot store observations") };
+  const tick = makeTick({ config: CONFIG, state, gh, git: fakeGit(), notify: fakeNotify(), log: { ...silentLog, warn: message => warnings.push(message) }, clock,
+    ownLogin: "me", runnerFor: () => runner, readPrd: () => null, credential: fakeCredential(), identity: fakeIdentity(), learning });
+  assert((await tick.tick()).every(r => r.ok));
+  assert(signal.aborted); assert(warnings.some(w => /EXECUTION_DEADLINE/.test(w)));
+  assert.equal(runner.started.length, 1); assert.equal(state.get(id).cursor.since, at(1));
 });
 
 test("bounded automatic observation rotates across stable watched order and failed writes", async t => {
@@ -106,7 +148,8 @@ test("bounded automatic observation rotates across stable watched order and fail
   const state = { ...seeded.state, entries: () => [...records], get: id => records.get(id), update: (id, patch) => { const old = records.get(id); const next = { ...old, ...(typeof patch === "function" ? patch(old) : patch) }; records.set(id, next); return next; } };
   const gh = fakeGh(); gh.prView = async (_repo, pr) => ({ ...gh.data.pr, number: pr });
   gh.setRecoveryMetadata = async (_repo, pr) => ({ ...gh.data.pr, number: pr });
-  const observed = [], learning = { identityFor: () => repo, mode: () => "collect", observe: async (_repo, snapshot) => { observed.push(snapshot.pr.number); if (snapshot.pr.number === 1) throw new Error("temporary write failure"); } };
+  let resolutions = 0;
+  const observed = [], learning = { identityFor: () => repo, mode: () => "collect", resolveRepo: async () => { resolutions++; return repo; }, observe: async (_repo, snapshot) => { observed.push(snapshot.pr.number); if (snapshot.pr.number === 1) throw new Error("temporary write failure"); } };
   const tick = makeTick({ config: CONFIG, state, gh, git: fakeGit(), notify: fakeNotify(), log: silentLog, clock, ownLogin: "me", runnerFor: () => runner, executionFor: () => runner, readPrd: () => null, learning });
   for (let i = 0; i < 3; i++) {
     const before = observed.length, results = await tick.tick();
@@ -116,6 +159,7 @@ test("bounded automatic observation rotates across stable watched order and fail
     clock.advance(2);
   }
   assert.equal(new Set(observed).size, 201);
+  assert.equal(resolutions, 3, "one immutable identity check per repository in each observation batch");
   assert.deepEqual(observed.slice(0, 100).sort((a, b) => a - b), Array.from({ length: 100 }, (_, i) => i + 1));
   assert.deepEqual(observed.slice(100, 200).sort((a, b) => a - b), Array.from({ length: 100 }, (_, i) => i + 101));
 });

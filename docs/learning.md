@@ -83,9 +83,14 @@ Resolved source visibility is retained in evidence separately from immutable
 repository identity; unavailable classification is reported as unknown. Dismissal
 and deletion flags retain their first observed timestamp without changing evidence
 hashes. Retracted evidence remains inspectable and is excluded from extraction.
-Configuration persists the last-resolved visibility for automatic observation after
-restart. Legacy identity-only records remain readable; repeat `learn configure
---repo owner/project --mode collect` to refresh their unknown classification.
+Configuration persists the last-resolved visibility. Before storing automatic
+observations, the post-dispatch collection step revalidates the immutable repository
+ID and refreshes classification; a name replacement or lookup outage skips learning
+without altering coding feedback. Identity checks share a five-second batch budget
+and one lookup per repository per batch. Skips are logged and later ticks rotate
+the bounded observation window. Legacy identity-only records remain readable.
+Use historical collection to cover feedback missed while identity lookup was
+unavailable; advancing coding cursors do not promise an automatic learning retry.
 
 `learn configure --repo owner/project --mode off` uses the stored identity and invokes
 local revocation controls even when GitHub, credentials or the remote repository are
@@ -154,6 +159,12 @@ one revision per invocation; explicit batches are available only to the shared
 service and enumerate every ID/digest in the preview.
 `learn recover` also retries controls for committed retirements and replacements
 from verified signed history, without signing or activating another transition.
+Recovery verifies obsolete signed preparations whose sequence was already consumed
+and moves them to a protected audit archive, then continues eligible preparations.
+It never rebases an old signature. Invalid signatures still fail closed. The archive
+retains exact signed bytes and disposition, is capped at 1,000 records, and its count
+appears in `learn report`; older stores migrate the empty archive without read-time
+writes. Include it in the same protected-store backup as approval history.
 
 Activation checks canonical RFC 8785 bytes, SSHSIG namespace, enrolled signer,
 repository identity, sequence/parent, evidence and complete active-set digests.
