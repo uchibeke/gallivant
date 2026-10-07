@@ -94,14 +94,22 @@ registration prefixes each name with `task_`; there is one schema/annotation
 mapping. Preparation, readiness, start and controls are writes with external
 effects. Reads inspect saved state and create no provider poller. MCP registration
 expects APort's per-request `identityFor` and authorized built `readResource`.
+Capabilities return at most 100 authorized repositories, sorted by opaque ID,
+with `truncated` and `nextCursor`. Pass `nextCursor` as `cursor` to continue;
+a null cursor ends the traversal. Every page reauthorizes the account. Repository
+IDs and provider availability, preparation, setup, cost and control fields appear in both
+MCP model content and UI metadata, so a client can construct `prepare` directly.
+The optional cursor extends operation schema version 1 without changing existing
+empty-input calls. Restart discovery to include newly granted IDs before a cursor.
+
 APort owns transport-level OAuth discovery/challenges, origin/audience validation,
 credential rotation, request limits, quota, retention and production authorization.
 
 Full UI views include questions, brief, harness/cost/setup, allowance, progress,
 bounded logs, artifact IDs/hashes, source snapshots, PR URLs and supported controls.
 They remove local paths and redact resolved secrets. Automatic model output is
-limited to task/revision/status/question IDs and the PR link. Raw logs and brief
-bytes stay in UI metadata. Artifact download authorization/storage remains APort's
+limited to the capability discovery fields above, task/revision/status/question
+IDs and the PR link. Raw logs and brief bytes stay in UI metadata. Artifact download authorization/storage remains APort's
 job; the public dispatcher exposes stable manifests, not arbitrary file retrieval.
 
 `uiResourceConfiguration` accepts the single registered `ui://` URI, dedicated
@@ -117,7 +125,11 @@ Node 22 is the supported workflow runtime. Inject `ctx.state`, `gh`, `git`,
 using the predecessor context contracts. The runtime calls `makeTick` for all
 review decisions. Durable home stores registry, tasks, briefs, provider intent,
 events and artifacts; neither container disk nor Pages temporary files suffice.
-Bounded entry/chain batches run on each externally scheduled wake. The next wake
+Bounded entry/chain batches run on each externally scheduled wake. Active chains
+rotate by a persisted name cursor; done, cancelled and stopped history consumes
+no batch slots. Completion or cancellation cannot shift the remaining window.
+`maxChains: 0` explicitly disables chain processing for that coordinator. Entry
+and chain cursors commit only after a successful tick. The next wake
 is scheduled before reconciliation, so a crash cannot lose recovery scheduling.
 
 `createNodeOwnerStore({home,durable:true,replicas:1})` uses the existing daemon

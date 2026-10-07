@@ -11,8 +11,12 @@
     "base": "96e81031516bdf6663dd3b97ac39b8f57022568b",
     "sourceVerified": true,
     "uncommittedPayload": [
+      "docs/task-delivery.md",
       "lib/runtime_node.mjs",
-      "lib/runtime_state.mjs"
+      "lib/task_delivery.mjs",
+      "lib/task_delivery_contract.mjs",
+      "lib/task_delivery_mcp.mjs",
+      "lib/task_delivery_view.mjs"
     ],
     "mergedM5": false,
     "predecessorMerges": [
@@ -21,15 +25,15 @@
       "2b4514fb27fcb493e62bfed913fffc204215f155",
       "96e81031516bdf6663dd3b97ac39b8f57022568b"
     ],
-    "testedSourceCommit": "446734f33f5389d74cf10d083cebd46f62dd1e97"
+    "testedSourceCommit": "2fcff61c27a348274fc767b92c439a3d67e33ce5"
   },
   "artifact": {
     "coreArtifact": "gallivant-0.2.0.tgz",
-    "coreSha256": "e8f55eb00b2a3cd448ffdd7a36709e117846812cecee362e35457a3b71b2e67f",
+    "coreSha256": "16105733dc72cbbb5b1696382a58ae478f4842d4b71a6fa304d49b99c197890d",
     "hashes": {
       "plugin": "8753892ceb5552fc37ba011929830f4c754d717f8d8031e31fb9b4935b465e1a",
-      "runtime": "1728e843e72c5b553cdc87b1f8cba666620500325c7591f48c5dd4e0daafbafe",
-      "operations": "ff65510908d61dd30b71e79e443614356fc157bbf70c3717f16a581fe6f721b3"
+      "runtime": "2964c09b387d0e539339c56b837015aba136febb017b36eff7a42b08ba895b7b",
+      "operations": "2077c0558cd4634accf66e530f186b52e2f91bfea502ff7c6f212d2e2efb800f"
     },
     "dependencyLockSha256": "bf3969111f7c4b84071fc14c59d870e296ee045024c8056757ac3e3466bc2b28",
     "payloadHashes": {
@@ -49,7 +53,7 @@
       "docs/install.md": "5087cb207e20c31ef39d955fd8536184f86113d61348e955f380e30172705a85",
       "docs/openai-agents.md": "38f162e4d4918bdab372be804e1a06a6a9582493c941f07799f97324f4637db2",
       "docs/prd.md": "be2cb95955ecc38056dac390152d874172f6582816603fcacc14b8bd4f762c33",
-      "docs/task-delivery.md": "dd5c01aa2ffd8832350bdac3e9c7449d2aac58860596f5140e0ca9bd88b6b1be",
+      "docs/task-delivery.md": "4698ed3badef4ec429e2ca4aaba3e1d48f0eb33c43e7a0344be5cf8f1a5f8435",
       "docs/tasks.md": "4483b3c3a44117240e3ca10a5e55941578e7c3b2b20775a57af6743603a9bb34",
       "lib/aport.mjs": "5c046abda8964a0439ee699bf658b9a00fdd7527884848f7fb22c3fe6c9e1d74",
       "lib/attribution.mjs": "cddb3eafe44f1dee26999a987ad9b1c62332cc9eb1ee17925cd2b961a9ccac17",
@@ -111,7 +115,7 @@
       "lib/run_log.mjs": "7d0b28731be434c6764ea400e4fe9d95ea0cc81179c9ead80d140d23153abcdb",
       "lib/run.mjs": "3682818ab95bf3b27c262449aa521be094caee9c8f133e94740923ebafb91315",
       "lib/runtime_dependencies.mjs": "6d25b972c116026643f348dc55586009d2746f68b99f47d450b2a3ef35625949",
-      "lib/runtime_node.mjs": "c7edac93b36c53e2cc9cfdd8e7439720a72f30670cfdf7c078e7a02dff1055dd",
+      "lib/runtime_node.mjs": "c7a2d41fc4e774bd2f08969db9cf6f7d3a67c03f0d0f88ccbb03da8364e74c1b",
       "lib/runtime_state.mjs": "4e31e602188faa35ffdcdf07d59a46ffe3a2d390836872dcad1cd1508bf2880c",
       "lib/sources/index.mjs": "88e1550751e9f52c82e94085bcb77bbd2b80466c9e2192670593f12894c4a4ec",
       "lib/sources/prd.mjs": "b26425213d537d8bf640abee1046481925de30d676fdb9b6a6b9239cdc50effd",
@@ -119,11 +123,11 @@
       "lib/state.mjs": "2bcd199eb410c2a590138600c4f8b9f1aeeefea037f29f19d14ae56a9b9fa940",
       "lib/task_allowance.mjs": "8c5e73b502fc84ff51f61df947d33690c0cf4505be00d9cdd93f6ce445fa23b9",
       "lib/task_contract.mjs": "56d440e08c228a4df27d06f9fa181ec6160e876a13dcd90fdf0416fab7c2fff4",
-      "lib/task_delivery_contract.mjs": "8324476c5631a9fbec39db5abe1fa78f7e4672a3ccfc22c0ef60c773bc284000",
-      "lib/task_delivery_mcp.mjs": "7d309968a236a0f8f8046dac97a6d36a8b8d6aacf74274261268fcc69e752b08",
+      "lib/task_delivery_contract.mjs": "1c23368cef58ff0083560805399022f52dbdb85272af0867da66da929d029eec",
+      "lib/task_delivery_mcp.mjs": "5a3cc12b7ef9e15f063d8030bb4b53f27ca82edfa5d8ea63ca34b6c09f7edb90",
       "lib/task_delivery_store.mjs": "4573831285d16421d3ec7e56b78735ee10d6f8952a1b4475eed7fa1387636b0d",
-      "lib/task_delivery_view.mjs": "3a92d3fd1cdb7e6b139b81286d470c997e8e1c7558620ed9360e83beca2190b9",
-      "lib/task_delivery.mjs": "9e1980ce2e80ef9b425040b9cb14e5c882516833cdb5e696590918355511a86c",
+      "lib/task_delivery_view.mjs": "823e244f20357eddb0e02a1abe52a1ad26fc2d92a75901c2010e1247013498d1",
+      "lib/task_delivery.mjs": "681e60f71ea6e280b21b7f2f2032c4bc3d00ba08441f13c95accdbffd68076ba",
       "lib/task_environment.mjs": "5c61d5d5393014206f078c86084b40d263f59b7dc939c445a4ed86111e4c2b2c",
       "lib/task_prepare.mjs": "f0f27738e208f174aa89dba3a6f70f382cf7e03abe541df5d1854aed4adb9492",
       "lib/task_store.mjs": "54383d2c1893f6b805ed15b2690f38625f734f65ff7f286906829d192a65d2b4",
@@ -339,7 +343,8 @@
       "tests": [
         "installed real MCP SDK dispatch/resource case",
         "installed revision conflict, duplicate operation, __proto__ and lost-wake cases",
-        "test/task-delivery.test.mjs: scoped list limits and truncation depend only on currently authorized tasks"
+        "test/task-delivery.test.mjs: scoped list limits and truncation depend only on currently authorized tasks",
+        "test/task-delivery.test.mjs and installed MCP: 205 repository keyset traversal, per-page reauthorization, revoked cursor, empty/exact-limit boundaries and invalid cursor refusal"
       ],
       "evidence": "One TASK_OPERATIONS mapping; persisted scoped intent/signature/acknowledgement and per-call authorization"
     },
@@ -355,7 +360,8 @@
         "installed process eviction case",
         "installed duplicate owner and stale fence case",
         "installed API/Cloud unknown-acceptance restart cases",
-        "test/runtime-delivery.test.mjs: both hosted transports force every startup batch, restart a nonzero-cursor sweep, preserve failed-advance checkpoints and never resubmit unknown intent"
+        "test/runtime-delivery.test.mjs: both hosted transports force every startup batch, restart a nonzero-cursor sweep, preserve failed-advance checkpoints and never resubmit unknown intent",
+        "test/runtime-delivery.test.mjs: 36 retained history records and 25 active chains rotate in bounded batches across reconstructed coordinators, shrinking active sets and cancellations; entry startup still covers every batch"
       ],
       "evidence": "Killed native fixture owner is recovered; unresolved provider intent retains exactly one paid-work spy write"
     },
@@ -385,7 +391,8 @@
       "tests": [
         "installed evidence/log/current PR/control flow",
         "real SDK emitted resource fixture with global/thread metadata",
-        "inherited read-only tracker/provider projection conformance"
+        "inherited read-only tracker/provider projection conformance",
+        "test/fixtures/plugin-installed-flow.mjs: installed MCP capability model/text summaries supply repository and harness for task_prepare, preserve cost/control setup and schedule no provider work"
       ],
       "evidence": "Saved views and bounded logs use cached current/result observations; no UI reconciliation call or provider poller"
     },
@@ -479,7 +486,7 @@
         "lib/harness.mjs"
       ],
       "tests": [
-        "19 installed consumer flow cases",
+        "20 installed consumer flow cases",
         "installed local/API/Cloud provider and lifecycle conformance",
         "inherited hosted bounded-preparation refusal cases"
       ],
@@ -519,25 +526,25 @@
       {
         "command": "npm test",
         "exitCode": 0,
-        "tests": 1225,
-        "pass": 1225,
+        "tests": 1227,
+        "pass": 1227,
         "fail": 0,
-        "log": "/tmp/plugin-delivery-runtime-unit-tests.log"
+        "log": "/tmp/plugin-delivery-discovery-unit-tests.log"
       },
       {
         "command": "npm run lint",
         "exitCode": 0,
-        "log": "/tmp/plugin-delivery-runtime-lint.log"
+        "log": "/tmp/plugin-delivery-discovery-lint.log"
       },
       {
         "command": "npm run test:plugin-package",
         "exitCode": 0,
-        "consumerFlowTests": 19,
-        "installedConformanceTests": 401,
+        "consumerFlowTests": 20,
+        "installedConformanceTests": 403,
         "fail": 0,
-        "log": "/tmp/plugin-delivery-runtime-package-tests.log",
-        "consumerEvidence": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/task-plugin-consumer-jn4JVv/evidence.json",
-        "conformanceLog": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/task-plugin-consumer-jn4JVv/conformance.log"
+        "log": "/tmp/plugin-delivery-discovery-final-package-tests.log",
+        "consumerEvidence": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/task-plugin-consumer-TTunZw/evidence.json",
+        "conformanceLog": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/task-plugin-consumer-TTunZw/conformance.log"
       },
       {
         "command": "git diff --check",
@@ -547,11 +554,11 @@
     ],
     "verifiedPayloadFiles": 112,
     "logSha256": {
-      "/tmp/plugin-delivery-runtime-unit-tests.log": "edf4bb3ead124264fee478a091b379d9dda68b7f2cda600d5249d2e539e8a00f",
-      "/tmp/plugin-delivery-runtime-package-tests.log": "2590d30ede4695351a69bcbd2ec49586960b1ffe4a1c9147b614c408ed90dbf6",
-      "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/task-plugin-consumer-jn4JVv/conformance.log": "76163208023c2f5ba1e63b78f1d306a3498e445bd0ea048e1e43ff663542c665",
-      "/tmp/plugin-delivery-runtime-lint.log": "2f32bd854b16ced20ab71be2afd3673b887efc4815c6e55ea7b941ebc5aa8a0b",
-      "/tmp/plugin-delivery-runtime-focused.log": "9ee95081b9bdebb983645020f8e9cfdfbfc0a01e98518fc7ccdf4168a76c997e"
+      "/tmp/plugin-delivery-discovery-unit-tests.log": "b5463ccea48420ded120cb970015f26e4b61f853d0ea6cd3dc4f52813328f3bf",
+      "/tmp/plugin-delivery-discovery-final-package-tests.log": "9cc482b49cdab82613bc4dc52d8f33775d71e8f5518354636223aa4965217f10",
+      "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/task-plugin-consumer-TTunZw/conformance.log": "d33642cf7775d4a6da444b6f77871adb7ad959b0cdb3119e88245fde381f0e47",
+      "/tmp/plugin-delivery-discovery-lint.log": "2f32bd854b16ced20ab71be2afd3673b887efc4815c6e55ea7b941ebc5aa8a0b",
+      "/tmp/plugin-delivery-discovery-focused.log": "16ad66a19da3c53a06331b9530223978cde87aecf65f0eb3f9c3171da5e15044"
     },
     "hostEvidence": false,
     "fixturePurpose": "Deterministic unpaid installed-artifact compatibility; no actual installed host or live provider qualification",
@@ -574,7 +581,10 @@
       "repository authorization precedes list cap and truncated count; 0/1/100/101 authorized records after 101 revoked records; actual installed MCP summary/UI metadata agree and reads schedule no work",
       "active artifact pin includes preparing/validating intake, pending readiness, unsettled attempts and cancellations; canonical executionLive covers unknown acceptance and uncollected results",
       "matching active backups/restores preserve identities; mismatched migration/backup refuses before pin/output changes; settled records still permit idle compatible updates",
-      "startup process identity remains pending across every bounded entry batch; new processes reset a nonzero cursor; failed advances retain checkpoint and release ownership; completed sweeps restore normal backoff without duplicate submission"
+      "startup process identity remains pending across every bounded entry batch; new processes reset a nonzero cursor; failed advances retain checkpoint and release ownership; completed sweeps restore normal backoff without duplicate submission",
+      "capability discovery uses one optional cursor schema, bounded authorized keyset pages and explicit nextCursor/truncated fields; every page reauthorizes without store writes, provider probes or wake-ups",
+      "MCP model/text and UI capabilities retain authorized repository identity and configured harness setup, preparation, cost and controls through a public-field projection",
+      "active chain windows exclude done/cancelled/stopped history and rotate by durable name cursor; shrinking sets, restart and failure do not lose continuation or starve entry batches"
     ]
   },
   "reviewFollowup": {
@@ -630,6 +640,46 @@
       "pass": 13,
       "fail": 0,
       "log": "/tmp/plugin-delivery-runtime-focused.log"
+    },
+    "externalPrerequisites": "Previously observed unmet prerequisites retained; no unchanged live call retried and no installed-host/model-access evidence inferred from fixtures"
+  },
+  "discoveryReviewFollowup": {
+    "reviewId": 5440993864,
+    "reviewedCommit": "2fcff61c27a348274fc767b92c439a3d67e33ce5",
+    "items": [
+      {
+        "commentId": 4205813420,
+        "implementation": [
+          "lib/task_delivery_mcp.mjs",
+          "lib/task_delivery_view.mjs"
+        ],
+        "tests": "test/fixtures/plugin-installed-flow.mjs installed MCP capability pages supply model-visible repository and harness inputs for preparation",
+        "rule": "The model receives bounded public discovery fields needed to prepare authorized work; private configuration stays outside the projection"
+      },
+      {
+        "commentId": 4205813431,
+        "implementation": "lib/runtime_node.mjs",
+        "tests": "test/runtime-delivery.test.mjs bounded chain batches ignore history and rotate durably while active chains leave the set",
+        "rule": "Retained history never consumes active batch slots or blocks entry cursor progress; active chains rotate through a persisted keyset cursor"
+      },
+      {
+        "commentId": 4205813443,
+        "implementation": [
+          "lib/task_delivery.mjs",
+          "lib/task_delivery_contract.mjs"
+        ],
+        "tests": [
+          "test/task-delivery.test.mjs",
+          "test/fixtures/plugin-installed-flow.mjs"
+        ],
+        "rule": "Every authorized repository is discoverable through bounded continuation pages under current account authorization"
+      }
+    ],
+    "focusedVerification": {
+      "tests": 24,
+      "pass": 24,
+      "fail": 0,
+      "log": "/tmp/plugin-delivery-discovery-focused.log"
     },
     "externalPrerequisites": "Previously observed unmet prerequisites retained; no unchanged live call retried and no installed-host/model-access evidence inferred from fixtures"
   }

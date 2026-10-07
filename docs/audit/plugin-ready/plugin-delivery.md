@@ -45,6 +45,14 @@ reply. The same installed conformance suite exercises startup reconciliation ove
 every bounded batch, a restart at a nonzero cursor, failed-advance cleanup and
 normal provider backoff after a full sweep, without duplicate dispatch.
 
+Capability discovery regressions cover 205 authorized repositories, continuation
+through revoked IDs, account changes and exact/empty page boundaries. The installed
+MCP client uses only model-visible capability fields to choose a repository and
+harness for preparation. Cost/control/setup fields stay available while private
+configuration stays excluded; reads schedule no work. Chain regressions retain 36
+historical records and rotate 25 active chains in bounded windows across restarts,
+completion and cancellation, preserving checkpoint failure cleanup and entry progress.
+
 Unmet attestations remain explicit:
 
 - **ac-5:** Actual Pages runtime/binding execution is unavailable. Node package

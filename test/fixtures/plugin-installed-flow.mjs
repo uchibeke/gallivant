@@ -212,6 +212,57 @@ test("installed scoped list and MCP results discover later authorized tasks and 
   } finally { await client.close(); await server.close(); }
 });
 
+test("installed MCP capability pages supply model-visible repository and harness inputs for preparation", async () => {
+  let wakes = 0, identity = "alice";
+  const w = world({ schedule: async () => { wakes++; } });
+  const ids = Array.from({ length: 205 }, (_, i) => `repo-${String(i).padStart(3, "0")}`);
+  const delivery = createTaskDelivery({ ...w.opts,
+    authorize: async ({ identity }) => ({ ...scope(identity), repositories: identity === "alice" ? [...ids].reverse() : ["bob-only"] }),
+    contextFor: async (scope, id) => {
+      const bound = await w.contextFor(scope, "widget");
+      return { ...bound, ctx: { ...bound.ctx, config: { ...bound.ctx.config, harness: id === ids.at(-1) ? bound.ctx.config.harness : {} } } };
+    },
+  });
+  const server = new Server({ name: "capability-discovery", version: "1" }, { capabilities: { tools: {} } });
+  await registerTaskDelivery(server, { delivery, identityFor: async () => identity });
+  const client = new Client({ name: "consumer", version: "1" }), [a, b] = InMemoryTransport.createLinkedPair();
+  await server.connect(a); await client.connect(b);
+  try {
+    const discovered = []; let cursor, chosen;
+    do {
+      const result = await client.callTool({ name: "task_capabilities", arguments: cursor ? { cursor } : {} });
+      assert.notEqual(result.isError, true);
+      const summary = result.structuredContent;
+      assert.deepEqual(JSON.parse(result.content[0].text), summary);
+      assert.ok(summary.repositories.length <= 100);
+      assert.deepEqual(summary.repositories.map(r => r.id), result._meta.taskDelivery.repositories.map(r => r.id));
+      assert.equal(summary.truncated, Boolean(summary.nextCursor));
+      assert.doesNotMatch(JSON.stringify(summary), /private-provider-value|harnessBin|checkout|settings|bin"/);
+      for (const repo of summary.repositories) {
+        discovered.push(repo.id);
+        for (const provider of repo.providers) {
+          assert.equal(typeof provider.setup, "string"); assert.equal(typeof provider.preparationSetup, "string");
+          const declared = executionCapabilities().find(p => p.name === provider.name);
+          assert.deepEqual(provider.controls, declared.controls); assert.deepEqual(provider.cost, declared.cost);
+          assert.equal(provider.transport, declared.transport); assert.equal(provider.continuation, declared.continuation);
+          if (provider.configured && provider.available && provider.canPrepare) chosen = { repositoryId: repo.id, harness: provider.name };
+        }
+      }
+      cursor = summary.nextCursor;
+    } while (cursor);
+    assert.deepEqual(discovered, ids); assert.equal(wakes, 0, "discovery cannot schedule work");
+    assert.equal(chosen.repositoryId, ids.at(-1));
+    const prepared = await client.callTool({ name: "task_prepare", arguments: { ...prepare(), ...chosen } });
+    assert.equal(prepared.structuredContent.status, "needs-input"); assert.equal(wakes, 1);
+    identity = "bob";
+    const bob = await client.callTool({ name: "task_capabilities", arguments: {} });
+    assert.deepEqual(bob.structuredContent.repositories.map(r => r.id), ["bob-only"]);
+    assert.equal(bob.structuredContent.nextCursor, null);
+    const invalid = await client.callTool({ name: "task_capabilities", arguments: { cursor: "../private" } });
+    assert.equal(invalid.isError, true);
+  } finally { await client.close(); await server.close(); }
+});
+
 test("real MCP SDK shares schemas, annotations and built resource; reads never dispatch", async () => {
   const w = world(); let identity = "alice";
   const server = new Server({ name: "task-delivery-test", version: "1" }, { capabilities: { tools: {}, resources: {} } });

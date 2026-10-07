@@ -65,3 +65,36 @@ test("scoped list limits and truncation depend only on currently authorized task
     assert.equal(contexts.length, Math.min(count, 100));
   });
 });
+
+test("capability discovery paginates only authorized repositories and reauthorizes every cursor", async () => {
+  let repositories = Array.from({ length: 205 }, (_, i) => `repo-${String(i).padStart(3, "0")}`).reverse();
+  const contexts = [], delivery = createTaskDelivery({
+    authorize: async ({ identity }) => ({ tenant: "tenant", account: identity, region: "ca", environment: "preview", scopes: ["task-delivery:read"], repositories: identity === "alice" ? repositories : ["bob-only"] }),
+    store: { read: () => assert.fail("capabilities cannot read tasks"), transaction: () => assert.fail("capabilities cannot mutate tasks") },
+    schedule: () => assert.fail("capabilities cannot schedule providers"),
+    contextFor: async (scope, id) => {
+      assert.ok(scope.repositories.includes(id)); contexts.push(id);
+      return { ctx: { config: { harness: {} } }, repository: { dir: "/checkout", repo: "acme/widget" } };
+    },
+  });
+  const first = await delivery.dispatch("capabilities", {}, "alice");
+  assert.equal(first.repositories.length, 100); assert.equal(first.truncated, true); assert.equal(first.nextCursor, "repo-099");
+  // Revoking the cursor itself must neither expose that repository nor lose the
+  // remaining authorized suffix. New pages never trust the old authorization.
+  repositories = repositories.filter(id => id !== "repo-099" && id !== "repo-101");
+  const second = await delivery.dispatch("capabilities", { cursor: first.nextCursor }, "alice");
+  const third = await delivery.dispatch("capabilities", { cursor: second.nextCursor }, "alice");
+  assert.equal(second.repositories.length, 100); assert.equal(second.nextCursor, "repo-200");
+  assert.deepEqual(third.repositories.map(r => r.id), ["repo-201", "repo-202", "repo-203", "repo-204"]);
+  assert.equal(third.truncated, false); assert.equal(third.nextCursor, null);
+  const bob = await delivery.dispatch("capabilities", { cursor: first.nextCursor }, "bob");
+  assert.deepEqual(bob.repositories, []); assert.equal(bob.nextCursor, null);
+  for (const cursor of ["../outside", 1, "x".repeat(129)]) await assert.rejects(delivery.dispatch("capabilities", { cursor }, "alice"), { code: "DELIVERY_INPUT" });
+  repositories = Array.from({ length: 100 }, (_, i) => `repo-${String(i).padStart(3, "0")}`);
+  const exact = await delivery.dispatch("capabilities", {}, "alice");
+  assert.equal(exact.repositories.length, 100); assert.equal(exact.truncated, false); assert.equal(exact.nextCursor, null);
+  const before = contexts.length;
+  repositories = [];
+  assert.equal((await delivery.dispatch("capabilities", {}, "alice")).truncated, false);
+  assert.equal(contexts.length, before);
+});

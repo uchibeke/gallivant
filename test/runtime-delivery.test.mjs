@@ -70,18 +70,20 @@ for (const provider of ["openai-agents", "codex-cloud"]) test(`${provider} start
     writeJsonAtomic(join(root, "execution.json"), saved);
     executions.set(id, execution); state.put(id, { state: "done", harness: provider, last: { run: saved.current.id } });
   }
+  for (let i = 0; i < 25; i++) state.createChain({ name: `history-${i}`, status: i % 2 ? "done" : "cancelled", steps: [], index: 0 });
   const native = createNodeOwnerStore({ home, durable: true });
   // Deterministic process identities over the real fenced durable store. These
   // unpaid transports do not qualify installed-host or live provider behavior.
   const store = { withOwner: fn => native.withOwner(owner => fn({ ...owner, processIdentity: identity })) };
-  await native.withOwner(owner => owner.saveCheckpoint({ processIdentity: "previous-process", cursor: 2 }));
+  await native.withOwner(owner => owner.saveCheckpoint({ processIdentity: "previous-process", cursor: 2, chainCursor: "history-12" }));
   const ctx = { home, state, clock, ownLogin: "me", config: CONFIG, log: silentLog, gh: fakeGh(), git: fakeGit(), notify: fakeNotify(), executionFor: id => executions.get(id) };
   const schedule = async () => { wakes++; };
-  const failing = createNodeCoordinator({ ctx: { ...ctx, state: { ...state, chains: () => [["queued-chain", {}]] } }, store, schedule, manifest, maxEntries: 2, maxChains: 0 });
-  await assert.rejects(failing.wake(), { code: "COORDINATOR_CAPACITY" });
+  const failing = createNodeCoordinator({ ctx: { ...ctx, state: { ...state, chains: () => { throw Object.assign(new Error("fixture state read failed"), { code: "FIXTURE_STATE" }); } } }, store, schedule, manifest, maxEntries: 2, maxChains: 0 });
+  await assert.rejects(failing.wake(), { code: "FIXTURE_STATE" });
   assert.equal(readJson(join(home, "coordinator.json")).processIdentity, "previous-process");
   assert.equal(readJson(join(home, "coordinator.json")).cursor, 2, "failed advance must not commit its cursor or restart completion");
   assert.equal(existsSync(join(home, "daemon.lock")), false);
+  assert.equal(readJson(join(home, "coordinator.json")).chainCursor, "history-12");
   lookups.length = 0;
   const coordinator = () => createNodeCoordinator({ ctx, store, schedule, manifest, maxEntries: 2 });
   await coordinator().wake();
@@ -101,4 +103,36 @@ for (const provider of ["openai-agents", "codex-cloud"]) test(`${provider} start
   assert.equal(lookups.length, 5, "a completed startup sweep returns to saved provider backoff");
   assert.equal(submits, 5, "unknown acceptance must never purchase another dispatch");
   assert.equal(wakes, 9);
+});
+
+test("bounded chain batches ignore history and rotate durably while active chains leave the set", async () => {
+  const home = tempHome(), state = makeState(home), clock = makeClock();
+  migrateRuntimeState({ home, manifest });
+  for (let i = 0; i < 36; i++) state.createChain({ name: `history-${i}`, status: ["done", "cancelled", "stopped"][i % 3], steps: [], index: 0 });
+  const names = Array.from({ length: 25 }, (_, i) => `work-${String(i).padStart(2, "0")}`);
+  for (const name of names) state.createChain({ name, status: "active", index: 0, steps: [{ id: `acme/widget/${name}`, dispatch: "unknown-start" }] });
+  const ctx = { home, state, clock, ownLogin: "me", config: CONFIG, log: silentLog, gh: fakeGh(), git: fakeGit(), notify: fakeNotify(),
+    runnerFor: () => assert.fail("unknown chain dispatch cannot launch a runner") };
+  const store = createNodeOwnerStore({ home, durable: true });
+  const coordinator = (maxChains = 10) => createNodeCoordinator({ ctx, store, schedule: async () => {}, manifest, maxChains });
+  const disabled = await coordinator(0).wake(); assert.equal(disabled.length, 0);
+  assert.equal(state.getChain(names[0]).status, "active");
+  const first = await coordinator().wake();
+  assert.deepEqual(first.map(r => r.chain), names.slice(0, 10));
+  assert.equal(readJson(join(home, "coordinator.json")).chainCursor, names[9]);
+  assert.ok(names.slice(0, 10).every(name => state.getChain(name).status === "stopped"));
+  state.updateChain(names[10], { status: "cancelled" });
+  const second = await coordinator().wake();
+  assert.deepEqual(second.map(r => r.chain), names.slice(11, 21));
+  assert.equal(readJson(join(home, "coordinator.json")).chainCursor, names[20]);
+  // A newly active prefix is picked up on the next rotation, not lost when
+  // earlier completed chains disappear from the active window.
+  state.updateChain(names[0], { status: "active" });
+  const third = await coordinator().wake();
+  assert.deepEqual(third.map(r => r.chain), names.slice(21));
+  assert.equal(readJson(join(home, "coordinator.json")).chainCursor, null);
+  const fourth = await coordinator().wake(); assert.deepEqual(fourth.map(r => r.chain), [names[0]]);
+  assert.deepEqual(await coordinator().wake(), []);
+  assert.equal(state.chains().length, 61, "history remains intact");
+  assert.equal(existsSync(join(home, "daemon.lock")), false);
 });
