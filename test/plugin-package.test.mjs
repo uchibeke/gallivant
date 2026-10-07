@@ -1,3 +1,4 @@
+import { PNG } from "pngjs";
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import childProcess from "node:child_process";
@@ -13,7 +14,7 @@ const sourceCommit = "a".repeat(40);
 function fixture() {
   const home = tempHome(), ui = join(home, "ui.html"), image = join(home, "image.png");
   writeFileSync(ui, "<!doctype html><p>Unpaid package validation fixture.</p>");
-  writeFileSync(image, "unpaid image fixture");
+  writeFileSync(image, PNG.sync.write({ width: 1, height: 1, data: Buffer.from([0, 0, 0, 255]) }));
   return { out: join(home, "out"), coreVersion: "0.2.0", sourceCommit,
     config: { publisher: "APort", supportEmail: "support@aport.io", endpoint: "https://aport.io/mcp",
       homepage: "https://aport.io", supportUrl: "https://aport.io/support", privacyUrl: "https://aport.io/privacy",
@@ -172,4 +173,22 @@ test("public asset preflight and builder share regular file, size and secret con
   writeFileSync(config, JSON.stringify(input.config));
   const result = childProcess.spawnSync(process.execPath, [join(root, "bin/package-plugin.mjs"), "--config", config, "--validate-public"], { encoding: "utf8" });
   assert.equal(result.status, 1); assert.equal(JSON.parse(result.stdout).ok, false);
+});
+
+
+test("image assets must decode as bounded PNG in both preflight and emission", t => {
+  gitFixture(t);
+  const valid = PNG.sync.write({ width: 1, height: 1, data: Buffer.from([0, 0, 0, 255]) });
+  const corrupt = Buffer.from(valid); corrupt[corrupt.length - 1] ^= 1;
+  const huge = Buffer.from(valid); huge.writeUInt32BE(0xffffffff, 16);
+  for (const bytes of [Buffer.from("plain text"), Buffer.from([255,216,255,224]), valid.subarray(0, 40), corrupt, huge]) {
+    for (const field of ["icon", "screenshots"]) {
+      const input = fixture(), path = join(dirname(input.out), "invalid.png"); writeFileSync(path, bytes);
+      input.config.assets[field] = field === "icon" ? path : [path];
+      assert.equal(validatePublicRelease(input.config).ok, false);
+      assert.throws(() => buildPluginPackage(input), { code: "PACKAGE_RELEASE" });
+      assert.throws(() => buildPluginPackage({ ...input, internal: true }), { code: "PACKAGE_ASSET" });
+      assert.equal(existsSync(join(input.out, "manifest.json")), false);
+    }
+  }
 });

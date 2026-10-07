@@ -546,3 +546,29 @@ test("installed discovered repository IDs work for preparation and capability cu
     await assert.rejects(delivery.dispatch("capabilities", {}, "alice"), { code: "DELIVERY_CONFIG" });
   }
 });
+
+
+test("installed control projection agrees with sessionless resume writer and adapter capabilities", async () => {
+  let wakes = 0;
+  const w = world({ question: false, schedule: async () => { wakes++; } });
+  let task = await w.delivery.dispatch("prepare", prepare(), "alice");
+  task = await w.delivery.dispatch("start", { ...mutate(task, "start"), run: true }, "alice");
+  const ctx = w.worlds.get("alice").ctx, id = task.implementation.id;
+  let saved = { operations: {} };
+  ctx.executionFor = () => ({ current: () => null, state: () => saved, capabilities: { transport: "remote", controls: { interrupt: false, cancel: false } } });
+  ctx.coordinatorHealth = () => ({ usable: true });
+  ctx.state.update(id, { state: "needs-human", reason: "dispatch-refused", session: null, pr: null, last: null, start_token: "initial", execution: { version: 1, operationId: "initial" }, initial_dispatch: { version: 1, operationId: "initial", status: "unsubmitted" } });
+  const before = wakes;
+  const inspect = () => w.delivery.dispatch("inspect", { taskId: task.taskId }, "alice");
+  let viewed = await inspect();
+  assert.equal(viewed.controls.resume, true); assert.equal(viewed.controls.message, true);
+  assert.equal(viewed.controls.interrupt, false);
+  assert.equal(viewed.controls.cancellation, "stop-future-dispatch; remote-compute-may-continue");
+  saved = { stopped: true, operations: {} }; assert.equal((await inspect()).controls.resume, false);
+  saved = { operations: { initial: {} } }; assert.equal((await inspect()).controls.resume, false);
+  saved = { operations: {} }; viewed = await inspect();
+  assert.equal(wakes, before);
+  await w.delivery.dispatch("control", { ...mutate(viewed, "resume"), action: "resume" }, "alice");
+  assert.equal(ctx.state.get(id).control.action, "resume");
+  assert.equal((await inspect()).controls.resume, false);
+});

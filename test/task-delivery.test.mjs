@@ -134,3 +134,13 @@ test("requested evidence and log summaries are bounded projections of redacted s
   assert.equal(logs.returnedLines, 2); assert.equal(logs.nextAfter, 2); assert.equal(logs.gap, "retention");
   assert.doesNotMatch(JSON.stringify(logs), /private raw/);
 });
+
+
+test("model control summaries expose only bounded canonical availability", () => {
+  const controls = { recheck: true, resume: false, message: true, cancel: true, interrupt: false, cancellation: "stop-future-dispatch; remote-compute-may-continue", extra: "secret" };
+  const summary = modelSummary({ controls });
+  assert.deepEqual(summary.controls, { recheck: true, resume: false, message: true, cancel: true, interrupt: false });
+  assert.equal(summary.cancellation, controls.cancellation);
+  assert.doesNotMatch(JSON.stringify(summary), /secret/);
+  assert.equal(modelSummary({ controls: { cancellation: "private error" } }).cancellation, null);
+});
