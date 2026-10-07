@@ -2,17 +2,17 @@
   "version": 1,
   "task_id": "task-608e7283e7d7d42cfb91eb6b",
   "scope": "Supported native CLI transport and offline shared lifecycle/PR conformance; live qualification remains unverified",
-  "recorded_at": "2026-10-07T04:02:53.675531+00:00",
+  "recorded_at": "2026-10-07T04:20:23.838734+00:00",
   "base_revision": "2b4514fb27fcb493e62bfed913fffc204215f155",
-  "implementation_revision": "d7c5103c62b15c04d2d481a5f40a7b0a21361529",
+  "implementation_revision": "363f8a27d8cbba9fa53d37b1bc50b31528e68b9a",
   "branch": "work/codex-cloud-harness",
   "source_files": {
     "README.md": "9e6e79dfe29e0e3f6b876d53dfdadafd5869158a662782468e461ed9316bfa2d",
     "docs/audit/plugin-ready/README.md": "3f1402208589e6242586f8364f901db29098553533334f407275243edd7b403d",
     "docs/audit/plugin-ready/codex-cloud-checklist.md": "e8b586216de216075303e80ba7720eba6133b37536eab5d367f4c66cdd4a02e8",
-    "docs/codex-cloud.md": "7be6c92154d27c300e5eacf8e1adf759963e21523b0d1d63e7616fcdf54d56f5",
+    "docs/codex-cloud.md": "f93272c7607399a5b44b332f439f148bc7d16ab67714d10bbf9bc1dd91957648",
     "docs/prds/codex-cloud-harness.md": "7ad37c4c6100d03647990177ae84357b2edaf3ee5954e377b25d4700d7ad0d1b",
-    "lib/codex_cloud.mjs": "328dff9d15dd837027b372b95bf7c1ea55bfde53cab62cbdbd3595e15349aca9",
+    "lib/codex_cloud.mjs": "4888dbcacb330d7c49ab9d2c330c90d4a6ad0bc73a2e9b47547aedd0aab3c029",
     "lib/codex_cloud_config.mjs": "5a00849751ed7825b3517f25627163c65092d0a0f898b5e3b0ef5e0e5921582b",
     "lib/codex_cloud_input.mjs": "3661e53a358fa7d3e2d42382b853a2073b65198333f3015f7d566dbe426d31b7",
     "lib/codex_cloud_result.mjs": "88ebb5214020b847f195c38f99d11be573e53c1770500242521736667fd15b0d",
@@ -28,7 +28,7 @@
     "lib/tick.mjs": "4b75ad239705f0e13cecdc4b69528668fa7610efaac568972fd80cdd22b0317e",
     "package.json": "7af15137d9b914464d70b567e2278debb39aef4723871844941c2cf07ae3d19c",
     "test/codex-cloud-live.mjs": "11bebf6724e5fddde3df2093cf3556f0909dbf1a710c42d30649b6312b9cdc44",
-    "test/codex-cloud.test.mjs": "18235068f597073dfec31bbed8c5977ec8aa5a18bd8e2673dad92973b15f18cf",
+    "test/codex-cloud.test.mjs": "ae08045622b0cdf111934b1fe3bf94c673b601098b41d44ed52037075dc59e6f",
     "test/execution-backends.test.mjs": "1c06b8ee5f4286a81c45b3ded9b0d707534260a34fcad84d59f6cc5f078f5c49",
     "test/units.test.mjs": "5475baf43bceeae4d6f0bc1717904b69a58b5c8e9ad7d8e8ad2ee22b0f5516b3",
     "lib/execution_io.mjs": "b63df0d51bb54700e74cd9804fb5a77ca2c2bfcac4070484082bf1272eb6d7d5",
@@ -47,18 +47,18 @@
       "command": "npm test",
       "exit": 0,
       "raw_log": {
-        "path": "/tmp/cloud-boundaries-final-test.log",
-        "sha256": "844da715c09a1ea4321e9d4d1e5528da87e0360efc26c3c84970195460e3a645"
+        "path": "/tmp/cloud-deadline-final-test.log",
+        "sha256": "2495db85a76260d6fdad666f941e1259a1e03d8bbc455e11d6170d114ec38d65"
       },
       "tap_runs": [
         {
-          "tests": 1184,
-          "pass": 1184,
+          "tests": 1186,
+          "pass": 1186,
           "fail": 0,
           "cancelled": 0,
           "skipped": 0,
           "todo": 0,
-          "duration_ms": 218978.614375
+          "duration_ms": 362215.259875
         }
       ]
     },
@@ -66,7 +66,7 @@
       "command": "npm run lint",
       "exit": 0,
       "raw_log": {
-        "path": "/tmp/cloud-boundaries-final-lint.log",
+        "path": "/tmp/cloud-deadline-final-lint.log",
         "sha256": "8c7790de3f018fb4580f18ac70e1b355a0f76f522dd73acbdaa63632feffcecc"
       }
     },
@@ -74,8 +74,8 @@
       "command": "npm run test:execution-backends",
       "exit": 0,
       "raw_log": {
-        "path": "/tmp/cloud-boundaries-final-backends.log",
-        "sha256": "6d6dc19a9d912b9ec4a3f21c07a4ae1832c87baf50585236ee63bc3f545367cc"
+        "path": "/tmp/cloud-deadline-final-backends.log",
+        "sha256": "0cae0fdd4eb22002426fff596028c5349a94dae14d6abd5b2d2fd15c92ef5481"
       },
       "tap_runs": [
         {
@@ -85,7 +85,7 @@
           "cancelled": 0,
           "skipped": 0,
           "todo": 0,
-          "duration_ms": 159983.497916
+          "duration_ms": 362448.204375
         }
       ]
     },
@@ -93,8 +93,8 @@
       "command": "npm run test:openai-agents",
       "exit": 0,
       "raw_log": {
-        "path": "/tmp/cloud-boundaries-final-agents.log",
-        "sha256": "2e6cab0a816e54d85b83ca5eb51ac6bf9b3cc28c86a74c69031fa1a7ae509b55"
+        "path": "/tmp/cloud-deadline-final-agents.log",
+        "sha256": "9611390642ebad261e2c521a5f3af2b0c8d080df7fda9fc0875a918c6ac64467"
       },
       "tap_runs": [
         {
@@ -104,7 +104,7 @@
           "cancelled": 0,
           "skipped": 0,
           "todo": 0,
-          "duration_ms": 39811.723458
+          "duration_ms": 179276.370209
         }
       ]
     },
@@ -112,18 +112,18 @@
       "command": "npm run test:codex-cloud",
       "exit": 0,
       "raw_log": {
-        "path": "/tmp/cloud-boundaries-final-cloud.log",
-        "sha256": "e3beb1087367e35af32266db8775211416e2339c9cf207deca70f1a45506d16d"
+        "path": "/tmp/cloud-deadline-final-cloud.log",
+        "sha256": "37dca83950f9f15625f36a4ed286530e8ef9578b7bd8d4643585df065cc2fa85"
       },
       "tap_runs": [
         {
-          "tests": 23,
-          "pass": 23,
+          "tests": 25,
+          "pass": 25,
           "fail": 0,
           "cancelled": 0,
           "skipped": 0,
           "todo": 0,
-          "duration_ms": 12660.478792
+          "duration_ms": 68514.705625
         },
         {
           "tests": 16,
@@ -132,7 +132,7 @@
           "cancelled": 0,
           "skipped": 0,
           "todo": 0,
-          "duration_ms": 12309.187458
+          "duration_ms": 39621.994625
         }
       ]
     },
@@ -140,7 +140,7 @@
       "command": "git diff --check",
       "exit": 0,
       "raw_log": {
-        "path": "/tmp/cloud-boundaries-final-diff.log",
+        "path": "/tmp/cloud-deadline-final-diff.log",
         "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
       }
     }
@@ -152,6 +152,8 @@
       "Cloud capabilities preserve defaults and refuse unsupported delegation, policy, models and attempts",
       "Cloud access checks pinned CLI, ChatGPT sign-in, command surface and chosen environment without inference",
       "Cloud native login uses stderr and drops application credentials",
+      "Cloud configured deadlines retain delayed submission acknowledgements and successor ownership",
+      "Cloud configured deadline aborts the client and retains unknown acceptance without overlapping restart work",
       "Cloud launcher exit is queued, pagination reconciles exact task, restart and duplicate observations are durable",
       "Cloud filtered listings reconcile null or omitted environment fields through restart and collection",
       "Cloud filtered listing failures retain unknown ownership without unfiltered fallback or resubmission",
@@ -203,7 +205,7 @@
       {
         "criterion_id": "ac-6",
         "met": true,
-        "evidence": "test/codex-cloud.test.mjs: Cloud lost acknowledgement never chooses newest task or creates duplicate paid work; Cloud persisted native acknowledgement recovers a coordinator crash without resubmission; test/execution-backends.test.mjs publication recovery cases"
+        "evidence": "test/codex-cloud.test.mjs: Cloud configured deadline aborts the client and retains unknown acceptance without overlapping restart work; Cloud lost acknowledgement never chooses newest task or creates duplicate paid work; docs/audit/plugin-ready/codex-cloud.json submission_deadline_followup"
       },
       {
         "criterion_id": "ac-7",
@@ -223,7 +225,7 @@
       {
         "criterion_id": "ac-10",
         "met": true,
-        "evidence": "test/codex-cloud.test.mjs: Cloud stop retains native task link, fences successors and quarantines late success; lib/harness.mjs controls cancel and interrupt false; lib/execution.mjs unsupported-cancellation recovery message"
+        "evidence": "test/codex-cloud.test.mjs: Cloud configured deadline aborts the client and retains unknown acceptance without overlapping restart work; Cloud stop retains native task link, fences successors and quarantines late success; docs/codex-cloud.md shared request deadline and remote compute semantics"
       },
       {
         "criterion_id": "ac-11",
@@ -233,7 +235,7 @@
       {
         "criterion_id": "ac-12",
         "met": true,
-        "evidence": "docs/audit/plugin-ready/codex-cloud.json commands records 1184 full, 397 execution-backends, 59 openai-agents, 23 Cloud adapter and 16 shared cases passing; test/openai-agents.test.mjs deterministic artifact rejection covers missing test commands, foreign test revisions and fractional exits"
+        "evidence": "docs/audit/plugin-ready/codex-cloud.json commands records 1186 full, 397 execution-backends, 59 openai-agents, 25 Cloud adapter and 16 shared cases passing; submission_deadline_followup includes failing-before-fix and timed initial/successor/restart/abort evidence"
       },
       {
         "criterion_id": "ac-13",
@@ -243,7 +245,7 @@
       {
         "criterion_id": "ac-14",
         "met": true,
-        "evidence": "docs/codex-cloud.md setup, supported CLI command examples, exact-task recovery, successor/cancellation differences, account limits and live qualification; clean installed-package smoke case in test/codex-cloud.test.mjs"
+        "evidence": "docs/codex-cloud.md setup, supported CLI commands, shared abort deadlines and standalone fallback, exact-task recovery, successor/cancellation differences, account limits and live qualification; clean installed-package smoke case in test/codex-cloud.test.mjs"
       }
     ]
   },
@@ -748,7 +750,7 @@
       }
     ]
   },
-  "previous_implementation_revision": "1648e37268162dd4ca205ed9702759eb218900c5",
+  "previous_implementation_revision": "d7c5103c62b15c04d2d481a5f40a7b0a21361529",
   "environment_listing_followup": {
     "review_id": 5437267892,
     "inline_comment_ids": [
@@ -1369,6 +1371,205 @@
       },
       "result": "1184 tests passed before making the test-record inputHead schema explicit; the final full suite was rerun after that source and assertion change"
     },
+    "paid_cloud_dispatches": 0,
+    "live_prerequisites": {
+      "absent": [
+        "CODEX_CLOUD_LIVE_HOME",
+        "CODEX_CLOUD_LIVE_PRD",
+        "CODEX_CLOUD_LIVE_REPO",
+        "CODEX_CLOUD_CAMPAIGN_LEDGER"
+      ],
+      "action": "Original failed live preflight retained without repeating unchanged blocked calls; authorized access/campaign inputs and a supported native attempt-ID surface remain external remedies"
+    }
+  },
+  "submission_deadline_followup": {
+    "review_id": 5437533289,
+    "inline_comment_ids": [
+      4202970026
+    ],
+    "reviewed_commit": "3b865bbac1d6aa1b029dd4d6f7a1ac2848fa6994",
+    "fix_commit": "363f8a27d8cbba9fa53d37b1bc50b31528e68b9a",
+    "status": "addressed",
+    "kind": "Offline timed execFile fixture through the real CLI wrapper and shared execution lifecycle; no native Cloud inference or attempt-ID qualification",
+    "rule": "The shared configured request deadline bounds Cloud acknowledgement, access, listing and diff operations; an earlier fixed client timeout must not erase an otherwise recoverable submission acknowledgement window",
+    "boundaries_reviewed": [
+      "lib/codex_cloud.mjs cloudCli credential filtering, initial and successor dispatch, prepare/access checks, pagination/lookup and diff collection",
+      "lib/execution_io.mjs boundedCall abort timer and late-reply fence; lib/execution.mjs durable ownership, unknown acceptance, restart, reservations, unsupported cancellation and quarantine",
+      "lib/gh.mjs execFileAsync signal/timeout forwarding and subprocess cleanup; docs/codex-cloud.md configured request limit and remote-compute distinction"
+    ],
+    "test_names": [
+      "Cloud configured deadlines retain delayed submission acknowledgements and successor ownership",
+      "Cloud configured deadline aborts the client and retains unknown acceptance without overlapping restart work",
+      "Cloud native login uses stderr and drops application credentials",
+      "Cloud lost acknowledgement never chooses newest task or creates duplicate paid work",
+      "Cloud stop retains native task link, fences successors and quarantines late success"
+    ],
+    "regression_before_fix": {
+      "raw_log": {
+        "path": "/tmp/cloud-deadline-regression-red.log",
+        "sha256": "f1585ade24440f35c85b46acfd1c910f881fae75c4731356ca946a77fd28c2a1"
+      },
+      "tests": 2,
+      "pass": 0,
+      "fail": 2,
+      "observed": "The fixed child timeout lost the 11-second acknowledgement and produced CHILD_TIMEOUT instead of the configured EXECUTION_DEADLINE"
+    },
+    "focused_verify": {
+      "raw_log": {
+        "path": "/tmp/cloud-deadline-focused-final.log",
+        "sha256": "b41644c7acfda96ec85696595ddcec15a16521e333d6d77bbb57077efd00df82"
+      },
+      "tests": 5,
+      "pass": 5,
+      "fail": 0
+    },
+    "representative_generated_output": {
+      "cloud-submission-deadline-evidence.json": {
+        "path": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-0jJZlM/cloud-submission-deadline-evidence.json",
+        "sha256": "1b8d8b71c1243b509a805fcf1e4a8bbe459b10619a0574390e8853f18005b010"
+      },
+      "cloud-submission-abort-evidence.json": {
+        "path": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-X6oNEW/cloud-submission-abort-evidence.json",
+        "sha256": "68619957bca8e3623e49c97d103accf641809f1bbc746140cc441327e3938592"
+      }
+    },
+    "delayed_acknowledgement": {
+      "kind": "offline timed execFile fixture; no paid Cloud dispatch",
+      "deadlineMs": 20000,
+      "acknowledgementDelayMs": 11000,
+      "observations": [
+        {
+          "operation": "implementation",
+          "acceptance": "accepted",
+          "taskId": "task_fixture1",
+          "sessionId": "task_fixture1",
+          "parentTaskId": null
+        },
+        {
+          "operation": "review",
+          "acceptance": "accepted",
+          "taskId": "task_fixture2",
+          "sessionId": "task_fixture1",
+          "parentTaskId": "task_fixture1"
+        }
+      ]
+    },
+    "expired_deadline": {
+      "kind": "offline timed execFile fixture; no paid Cloud dispatch",
+      "deadlineMs": 20000,
+      "acknowledgementDelayMs": 25000,
+      "clientAborted": true,
+      "providerTasks": 1,
+      "ownedTaskId": null,
+      "acceptance": "unknown",
+      "stopped": "timeout",
+      "savedResult": false,
+      "recoveryAction": "remote cancellation unsupported; execution may continue at the retained task link; no future dispatch, late results quarantined"
+    },
+    "verification_commands": "commands",
+    "previous_verify": [
+      {
+        "command": "npm test",
+        "exit": 0,
+        "raw_log": {
+          "path": "/tmp/cloud-boundaries-final-test.log",
+          "sha256": "844da715c09a1ea4321e9d4d1e5528da87e0360efc26c3c84970195460e3a645"
+        },
+        "tap_runs": [
+          {
+            "tests": 1184,
+            "pass": 1184,
+            "fail": 0,
+            "cancelled": 0,
+            "skipped": 0,
+            "todo": 0,
+            "duration_ms": 218978.614375
+          }
+        ]
+      },
+      {
+        "command": "npm run lint",
+        "exit": 0,
+        "raw_log": {
+          "path": "/tmp/cloud-boundaries-final-lint.log",
+          "sha256": "8c7790de3f018fb4580f18ac70e1b355a0f76f522dd73acbdaa63632feffcecc"
+        }
+      },
+      {
+        "command": "npm run test:execution-backends",
+        "exit": 0,
+        "raw_log": {
+          "path": "/tmp/cloud-boundaries-final-backends.log",
+          "sha256": "6d6dc19a9d912b9ec4a3f21c07a4ae1832c87baf50585236ee63bc3f545367cc"
+        },
+        "tap_runs": [
+          {
+            "tests": 397,
+            "pass": 397,
+            "fail": 0,
+            "cancelled": 0,
+            "skipped": 0,
+            "todo": 0,
+            "duration_ms": 159983.497916
+          }
+        ]
+      },
+      {
+        "command": "npm run test:openai-agents",
+        "exit": 0,
+        "raw_log": {
+          "path": "/tmp/cloud-boundaries-final-agents.log",
+          "sha256": "2e6cab0a816e54d85b83ca5eb51ac6bf9b3cc28c86a74c69031fa1a7ae509b55"
+        },
+        "tap_runs": [
+          {
+            "tests": 59,
+            "pass": 59,
+            "fail": 0,
+            "cancelled": 0,
+            "skipped": 0,
+            "todo": 0,
+            "duration_ms": 39811.723458
+          }
+        ]
+      },
+      {
+        "command": "npm run test:codex-cloud",
+        "exit": 0,
+        "raw_log": {
+          "path": "/tmp/cloud-boundaries-final-cloud.log",
+          "sha256": "e3beb1087367e35af32266db8775211416e2339c9cf207deca70f1a45506d16d"
+        },
+        "tap_runs": [
+          {
+            "tests": 23,
+            "pass": 23,
+            "fail": 0,
+            "cancelled": 0,
+            "skipped": 0,
+            "todo": 0,
+            "duration_ms": 12660.478792
+          },
+          {
+            "tests": 16,
+            "pass": 16,
+            "fail": 0,
+            "cancelled": 0,
+            "skipped": 0,
+            "todo": 0,
+            "duration_ms": 12309.187458
+          }
+        ]
+      },
+      {
+        "command": "git diff --check",
+        "exit": 0,
+        "raw_log": {
+          "path": "/tmp/cloud-boundaries-final-diff.log",
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      }
+    ],
     "paid_cloud_dispatches": 0,
     "live_prerequisites": {
       "absent": [
