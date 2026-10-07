@@ -110,7 +110,7 @@ test("historical pagination scans old PR updates; dry-run never writes or infers
   assert.equal(dry.eligible, 2); assert.equal(dry.complete, true); assert.equal(readdirSync(join(root, "..")).includes("state"), false);
   await service.configure(repo, "collect");
   const scan = await service.collect(repo, "example/project", { since: "2026-10-01", until: "2026-10-07" });
-  assert.equal(scan.added, 2); assert.equal(scan.pages, 5);
+  assert.equal(scan.added, 2); assert.equal(scan.pages, 6);
   assert.equal((await service.collect(repo, "example/project", { since: "2026-10-01", until: "2026-10-07" })).duplicates, 2);
   assert.equal(store.load(repo).observations[Object.keys(store.load(repo).observations)[0]].content.createdAt, "2026-09-15T00:00:00Z");
   assert(calls.some(c => c[0] === "inline" && c[1] === 2));
@@ -527,4 +527,52 @@ test("CLI pruning removes expired excerpts without remote repository access", as
   const observation = Object.values(store.load(repo).observations)[0];
   assert.equal(observation.expired, true); assert.equal(observation.content.excerpt, "[raw excerpt expired]");
   assert.equal((await learnCommand({ learning: service }, { args: ["prune"], values: { repo: "example/project" } })).expired, 0);
+});
+
+test("buffered review retention uses observation age even with a future scan endpoint", async t => {
+  let time = Date.parse(now);
+  const gh = { learningPage: async (_name, kind) => kind === "inline"
+    ? { items: [], complete: false, rateLimited: true, retryAt: time + 1000 }
+    : { items: kind === "pulls" ? [snapshot().pr] : [{ id: 9, user: { login: "maintainer" }, state: "COMMENTED", body: "Buffered raw text", submitted_at: now }], complete: true } };
+  const f = fixture(t, { gh, clock: { now: () => time } }); await f.service.configure(repo, "collect");
+  await f.service.collect(repo, "example/project", { since: "2026-10-01", until: "2027-01-01" });
+  const read = () => f.store.load(repo).scans[0].continuation.source.reviews[0];
+  assert.equal(read().observedAt, now); assert.equal(read().excerpt.excerpt, "Buffered raw text");
+  time += 31 * 86400_000;
+  assert.equal(f.service.report(repo).scans[0].continuation.source.reviews[0].excerpt.excerpt, "[raw excerpt expired]");
+  assert.equal(read().excerpt.excerpt, "Buffered raw text", "report does not write");
+  await f.service.prune(repo); assert.equal(read().excerpt.excerpt, "[raw excerpt expired]");
+  await f.store.transaction(repo, s => { const r = s.scans[0].continuation.source.reviews[0]; delete r.observedAt; r.excerpt.excerpt = "Legacy unknown age"; });
+  await f.service.prune(repo); assert.equal(read().excerpt.excerpt, "[raw excerpt expired]");
+});
+
+test("completed-prefix traversal advances beyond sixty listing pages across restart", async t => {
+  let time = Date.parse(now), seed = true, limited = false;
+  const calls = [], options = { since: "2026-10-01", until: "2026-10-07" };
+  const gh = { learningPage: async (_name, kind, { page, pr }) => {
+    calls.push([kind, page]);
+    if (seed) return { items: [], complete: true };
+    if (kind === "pulls") {
+      if (limited && page === 61) return { items: [], complete: false, rateLimited: true, retryAt: time + 1000 };
+      return { items: Array.from({ length: page === 61 ? 1 : 100 }, (_, i) => ({ ...snapshot().pr, number: (page - 1) * 100 + i + 1 })), complete: page === 61 };
+    }
+    return { items: kind === "inline" && pr === 6001 ? snapshot().inline : [], complete: true };
+  } };
+  const f = fixture(t, { gh, clock: { now: () => time } }); await f.service.configure(repo, "collect");
+  const initial = await f.service.collect(repo, "example/project", { ...options, dryRun: true });
+  await f.store.transaction(repo, s => { s.scans = [{ ...initial, dryRun: false, complete: false, continuation: { page: 1, index: 0 }, completedPrs: Array.from({ length: 6000 }, (_, i) => i + 1) }]; });
+  seed = false; calls.length = 0;
+  const first = await f.service.collect(repo, "example/project", options);
+  assert.equal(first.pages, 60); assert.equal(first.listingPage, 61); assert(!first.complete);
+  const restart = () => createLearningService({ store: f.store, trust, gh, clock: { now: () => time } });
+  limited = true; const throttled = await restart().collect(repo, "example/project", options);
+  assert.equal(throttled.listingPage, 61); assert(throttled.retryAt);
+  time += 1001; limited = false;
+  const before = canonical(f.store.load(repo));
+  const dry = await restart().collect(repo, "example/project", { ...options, dryRun: true });
+  assert.equal(dry.added, 1); assert.equal(canonical(f.store.load(repo)), before);
+  let result;
+  for (let i = 0; i < 3; i++) { result = await restart().collect(repo, "example/project", options); if (result.complete) break; }
+  assert(result.complete); assert(calls.some(([kind, page]) => kind === "pulls" && page === 61));
+  assert.equal(Object.values(f.store.load(repo).observations)[0].content.pr, 6001);
 });

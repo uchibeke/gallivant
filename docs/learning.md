@@ -49,15 +49,18 @@ The automatic lane rotates a window of at most 100 due watched entries, independ
 of request completion order. Idle progress ticks retain the next window.
 
 Coverage, caps, continuation and rate-limit retry time are reported. Interrupted
-scans resume the unfinished source kind and page within a PR. PR listings restart
-at page one and skip persisted completed PR identities, so movement between list
-pages cannot turn a saved array index into a missing PR. The completed identity
-set is capped at 10,000, and listing overlap counts toward the 60-page invocation
-budget; repositories deeper than that listing budget can remain incomplete. Immutable evidence
+scans resume the unfinished source kind and page within a PR. PR listing passes
+retain their page cursor across invocations and skip persisted completed PR identities.
+A pass that discovers new identities triggers another pass from page one to catch
+PRs moved ahead of its cursor; completion requires a pass with no new identities.
+Both passes respect the 60-page invocation budget and retain progress beyond page
+60. The completed identity set remains capped at 10,000. Immutable evidence
 revisions deduplicate overlap. Each page saves minimized findings and continuation
 together, including pages containing only ineligible comments. Deletion is deferred
 until the complete source has been enumerated. Required review context is minimized,
-retained only through inline enumeration, and subject to the 30-day excerpt limit.
+retained only through inline enumeration, and subject to the 30-day excerpt limit
+from its stored observation timestamp, independently of a future scan endpoint.
+Legacy buffers without a trustworthy observation timestamp are redacted on read or prune.
 When `--until` is omitted, retries reuse the incomplete scan's original date window,
 including after restart; completion allows the next invocation to open a fresh window.
 Dry-run uses the same transport and eligibility rules but writes no learning state

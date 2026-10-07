@@ -405,3 +405,35 @@ Verify: `npm test` passed 1,272 tests, no failures/skips/cancellations
 `npm run lint` exited 0 (`/private/tmp/learning-review12-lint-final.log`), and
 `git diff --check` passed. Regression outputs confirm retention counts 1 then 0,
 unchanged original state on identity refusal, and controls targeting the original ID.
+
+## Buffered retention and deep listing progress follow-up
+
+Buffered review context now stores its observation timestamp and expires after
+30 days from that timestamp, independently of explicit future scan endpoints.
+Unknown legacy ages are redacted conservatively. Report remains read-only; prune
+persists redaction, and scan-save expiration runs after merging its checkpoint.
+The future-endpoint regression checks unexpired storage, aged read-only redaction,
+persistent pruning and legacy buffers without timestamps. Its initial fixture used
+a default date window excluding the review; an explicit in-range start corrected it.
+
+Listing traversal now checkpoints its page across bounded invocations. A pass
+finding new PR identities triggers a deduplicated pass from page one; completion
+requires a pass finding none. This retains progress through prefixes longer than
+60 pages while preserving coverage of PRs moving ahead of a prior cursor. A seeded
+6,000-completed-identity regression reaches PR 6,001, including a page-61 rate limit,
+service restart, dry-run immutability and a completed verification pass. Existing
+cross-page movement and source-pagination regressions exercise the sibling paths.
+The 60-page/time/identity caps remain enforced; continuously changing upstream
+listings are not snapshot-consistent and that coverage limit remains disclosed.
+
+Source and representative report checks covered listingPage, completedPrs, retryAt,
+completion, observation timestamps, read-only reporting and atomic pruning. No
+production enrollment, paid model call or unchanged denied isolation probe ran.
+The seven existing unmet criteria and Linux/live qualification remedies remain.
+
+Verify on the same macOS host: `npm test` passed 1,274 tests with no failures,
+skips or cancellations (243,595.023667 ms; `/private/tmp/learning-review13-full.log`).
+`npm run test:learning` passed 69 tests with no failures, skips or cancellations
+(37,861.43075 ms; `/private/tmp/learning-review13-suite-final.log`).
+`npm run lint` exited 0 (`/private/tmp/learning-review13-lint.log`), and
+`git diff --check` passed after the final audit update.
