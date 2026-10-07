@@ -781,6 +781,7 @@ test("every harness's own session id round-trips through the block, and a malfor
     gemini: "f2abfca4-05e6-46a0-ab2c-e411ceb3ca07",
     opencode: "ses_f25fcd907ffesl1i92jsR2lh9I",
     goose: "gallivant-068021d7-3490-4f2e-a6f1-30e1c00498c9",
+    "openai-agents": "sess_123",
   };
   assert.deepEqual(Object.keys(real), HARNESSES, "every adapter has a real id here, and the list comes from the adapters");
   for (const [harness, session] of Object.entries(real)) {
@@ -788,7 +789,7 @@ test("every harness's own session id round-trips through the block, and a malfor
     const parsed = parseBlock(upsertBlock("Adds export.", block));
     assert.deepEqual(parsed.block, block, `${harness}: the id the adapter mints is the id the block reads back`);
     // A generated id, not just the captured one, so a change to `newSession` cannot drift from `isSession`.
-    const minted = adapters[harness].newSession();
+    const minted = adapters[harness]?.newSession();
     if (minted) assert.deepEqual(parseBlock(upsertBlock("x", { ...block, session: minted })).block?.session, minted, `${harness}: a freshly minted id parses`);
   }
   // The shapes are per harness, not one union: opencode's id is not a goose id and neither is a claude UUID.

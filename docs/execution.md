@@ -17,16 +17,18 @@ Mandatory policy, model and environment choices are checked before dispatch;
 unsupported choices refuse execution without falling back or changing defaults.
 Preparation is an optional versioned capability of that same selected provider.
 The existing Claude tools-off policy is declared by its adapter; task lifecycle
-code contains no Claude-only name gate. Codex and other native adapters remain
-unqualified for preparation until they supply an enforced limited-authority
-capability. A private HOME or a version/sign-in probe does not qualify one.
+code contains no Claude-only name gate. This base lacks a Codex preparation
+capability; its separately qualified adapter is awaiting integration as described
+in the [handoff](#next-milestone-handoff). Other native adapters likewise need an
+enforced limited-authority capability. A private HOME or a version/sign-in probe
+does not qualify one.
 
-`openai-agents` and `codex-cloud` are reserved, **unavailable** entries. Their
-transports, authentication, installed-plugin behavior, model access and live
-qualification belong to subsequent milestones. The fixtures in the offline suite
-are test-only transports and cannot qualify either provider for production.
-This milestone requires no browser, capture surface, installed plugin, live model
-call or paid campaign. Existing intake qualification blockers remain recorded in
+`openai-agents` has an implemented managed REST transport; see
+[account/environment setup and verification](openai-agents.md). `codex-cloud`
+remains reserved and unavailable until its transport milestone. Offline fixtures
+exercise shared lifecycle behavior; they do not certify live account/model access
+or installed-plugin behavior. The separately opt-in Agents campaign retains unmet
+live prerequisites explicitly. Existing intake qualification blockers remain in
 [the intake evidence](audit/plugin-ready/README.md).
 
 ## Exported boundary
@@ -53,6 +55,7 @@ its persisted cadence; read-only clients never call a transport.
 | `collect` | Exact job/session/turn/input head; finished boolean outcome, nullable cost, optional nullable `completedAt`, saved result and optional artifact manifest or verified pushed revision |
 | `cancel` | Task/provider/account/run, exact owned job/session/root turn, durable cancellation idempotency key and AbortSignal; boolean `confirmed`, true only after authoritative remote cancellation |
 | optional `lookup` | Persisted intent/idempotency key after lost acknowledgement; authoritative exact job observation, or unresolved null |
+| optional `recoverResponse` | Explicit retry of the identical authorized answer and stable key; reconcile the owned pending call or saved output before replay/acceptance |
 
 The public boundary's `inspect()` is deliberately a cached read. Its coordinator
 `reconcile()` invokes transport inspection/lookup. Reading CLI status, task
@@ -192,10 +195,31 @@ nullable `observedAt`, `reconciledAt`, `nextAttemptAt`, failures, cursor, nullab
 cost, collected/quarantined flags, controls and saved workflow ownership. Saved
 workflow cursors recover a correction accepted before registry acknowledgement.
 A repeated operation with identical input reuses its acknowledgement; changed
-input conflicts. Unknown acceptance never authorizes another dispatch. Startup
+input conflicts. A trusted transport can mark a local refusal with
+`dispatchNotSentError` only before persisting its transport operation and before
+every provider request. The shared boundary then restores the prior root and
+allowance, removes the unsubmitted projection, and retains the latest twenty
+private `dispatchRefusals` (operation/run IDs, timestamp and code). Initial start
+and review dispatch stop with `dispatch-refused`; repair the prerequisites and
+explicitly resume. The same authorized operation can also be retried through the
+shared service across restart. This release does not apply to provider setup
+requests, lost replies, unmarked errors or an unproven deadline.
+Remote start consumes its clone claim into a registered `launch-preparation` entry
+before source delivery and read-only provider preparation. `initial_dispatch`
+version 1 retains the original start-token operation and `unsubmitted` status.
+`unsubmittedInitialDispatch` verifies that token, the entry's sessionless ownership
+and an empty, unstopped execution ledger before CLI/control/tracker resume can
+authorize the first submission. Existing private refusal proof also recovers older
+initial refusal entries. The shared coordinator rebuilds verified current inputs
+from the saved approved brief, changes the marker to `dispatching` before submit,
+and clears it after acceptance or exact startup reconciliation. Proven pre-send
+refusals restore `unsubmitted`; unknown acceptance keeps its recorded intent and
+cannot start another session. Partial/unknown clone failures still retain their
+original claim for inspection rather than silently deleting an owned checkout.
+Unknown acceptance never authorizes another dispatch. Startup
 and periodic lookup reconcile it; without authoritative lookup an operator must
-inspect the recorded key and restore exact ownership. Never delete that intent to
-force a retry. Remote submission/continuation acknowledgements and every lookup
+inspect the recorded key and restore exact ownership. Never manually delete an
+acceptance-unknown intent to force a retry. Remote submission/continuation acknowledgements and every lookup
 or observation require nonempty string job and root-turn IDs. A job-only reply
 keeps its reservation and unresolved intent. Incomplete older remote records
 must recover the root through the intent lookup; job-level inspection or cached
@@ -559,8 +583,60 @@ An empty private HOME/XDG/temp profile exists for the command list and is remove
 on success, failure, dirty-tree rejection or cancellation. Existing Git/tooling
 environment helpers disable system/global credential stores, interactive auth
 and user npm configuration; repository credential helpers are reset too.
-This environment separation adds no OS sandbox; configured host restrictions
-still apply. The canonical tick continues to own readiness, trusted feedback,
+Verification also requires an OS filesystem/network sandbox. macOS uses
+`/usr/bin/sandbox-exec` with the installed `dyld-support.sb` loader rules and a
+deny-default profile. Linux uses `/usr/bin/bwrap` with isolated user, PID, IPC and
+network namespaces and a private mount tree. Only the checkout and private
+verification profile are writable; fixed system tools/libraries, the running
+Node binary and its npm package are readable. Git metadata is hidden or denied.
+PATH is limited to that Node installation, `/usr/bin` and `/bin`; arbitrary
+operator PATH entries and configuration directories are not granted. Commands
+needing other tools must use an isolated supported runtime installation rather
+than broadening access to an operator home. Network-dependent Verify commands
+fail: fetch dependencies in the approved execution environment or use installed
+checkout dependencies for offline verification.
+Before repository code runs, a bounded trusted probe checks private writes,
+denied outside reads/writes and host TCP isolation. No missing executable,
+namespace restriction or failed probe can fall back to an ordinary host shell.
+It records `verification-sandbox-unavailable`, preserves the applied revision
+and saved results, and requires explicit operator recovery after host repair.
+Success/failure evidence records the sandbox driver and enforcement probe.
+Recovered `verified` checkpoints lacking this provenance block before push;
+completed commands are never silently replayed. Empty Verify lists still record
+no test claim. The profile and probe files are removed on every exit.
+Git checks use an immutable temporary `GIT_DIR` containing only the exact current
+commit/tree/blob objects and a reconstructed index; the real Git directory or
+linked-worktree pointer stays hidden. Config, hooks, remotes, reflogs, alternate
+stores and ancestor history are not copied. The shared process helper preserves
+binary Git object bytes, and the same native read-only policy protects the view
+on macOS and Linux. macOS Git additionally requires its fixed installed Command
+Line Tools runtime. The view has bounded object count, bytes and preparation time
+and is removed on success, refusal, command failure and stop.
+Remote readiness also exercises this enforcement in disposable directories with
+the same empty verification environment and a trusted empty Git commit; actual
+Git reads and denied index writes prove that the runtime and read-only metadata
+boundary work before cloning. Doctor and initial start check before
+API access or cloning; manual resume and review dispatch check before checkout
+recreation or base merging, and the managed transport checks before new provider
+dispatch. Failed/unproven/aborted probes refuse with
+`EXECUTION_VERIFICATION_SANDBOX` and the existing OS/runtime remedy. No repository
+code runs, and temporary profiles are removed on every path. Preparation and
+provider-health records retain the successful probe evidence. Read-only progress,
+artifact collection and cancellation remain available after host refusal. The
+publication-time probe still verifies the actual applied checkout and descendants.
+Manual resume uses full native/API readiness before recreation, merging,
+resnapshot acceptance or reopening state. API refusal preserves the existing
+brief/source snapshots and session/PR along with the checkout.
+Hosted resume additionally refuses ordinary unfinished repository files before
+merge or reopening; commit those intended edits on the owned branch and resume
+the same session. Source preparation repeats this check for all dispatch paths,
+allowing only approved brief/carried-source overlays with verified saved bytes.
+An unanswered operator request uses the same durable signature/key on explicit retry: the
+shared boundary calls optional `recoverResponse`, leaving transports without a
+safe recovery method ambiguous. The managed adapter verifies the current owned
+pending `ask_operator` call before replay, or confirms matching successful saved
+output across bounded pages; an absent action alone never proves acceptance.
+The canonical tick continues to own readiness, trusted feedback,
 freshness, receipts, conflicts, rounds and human merge boundaries. No automatic
 merge is added.
 
@@ -576,6 +652,18 @@ settles the provider's actual exit, cost and session, and an explicit same-sessi
 resume starts correction without clearing the rejected result. Missing collection
 results, unavailable Git metadata and ordinary I/O failures remain unresolved and
 retryable. A failed checkpoint write cannot claim durable blocking or settlement.
+
+Transports distinguish deterministic validation of a downloaded completed-turn
+artifact with `collectionValidationError` from unavailable delivery or I/O.
+The shared collection boundary persists an owned `blocked` checkpoint with reason
+`result-collection-validation` before settling liveness. `resultRejected: true`
+retains the authoritative root status and actual exit while reporting unsuccessful
+delivery; no valid `result.json` is invented. The checkpoint restores settlement
+after a crash between its write and execution/job projection writes, using exact
+task/run/job/session/turn/input-head ownership. The coordinator refreshes that
+run's state before entering the same `needs-human` corrective lane. Repeated polls
+and rechecks cannot recollect rejected input; explicit same-session continuation
+keeps the old rejection evidence and starts a new owned turn.
 
 Verification requires the recorded applied commit and a clean Git index/worktree,
 including untracked files. The existing strict Git status helper checks both
@@ -637,10 +725,29 @@ adapter additionally supplies its enforced `render`, optional abortable
 and `executionFor` must use that same registry. Mark provider availability only
 after its implemented transport and required live evidence exist.
 
-The owner is investigating the Codex preparation adapter separately in
-`/private/tmp/gallivant-shared-preparation`. Integrate that independently verified
-adapter with this contract; this foundation neither duplicates its fix nor
-certifies its sandbox, model access or installed-plugin behavior. Preserve the
-operator's model/provider defaults, genuine limited preparation authority,
-bounded attempts and execution consent. Carry unmet live qualification evidence
-forward rather than substituting these deterministic fixtures.
+The restricted Codex preparation adapter introduced in
+[`uchibeke/gallivant#10`](https://github.com/uchibeke/gallivant/pull/10) is registered
+alongside the shared execution foundation and Agents API transport. Consume its
+registry capability rather than copying its adapter or restoring a provider-name
+gate. Drafting, questions and repairs already use the selected
+provider through this shared execution contract. Validation/readiness remains
+deterministic, and implementation still requires explicit authorization.
+
+The [preparation qualification](preparation.md) records native Codex 0.160.0 checks
+against a loopback provider, including inherited notifier and effective-policy
+regressions. That evidence tests installed CLI/configuration
+enforcement; it does not establish paid model access, managed preparation or
+installed-plugin behavior. Preserve the operator's model/provider defaults,
+limited preparation authority, bounded attempts and execution consent. Carry
+unmet live qualification evidence forward rather than substituting fixtures.
+
+The single M5/M6 connected execution successor is
+[`aporthq/agent-passport#417`](https://github.com/aporthq/agent-passport/pull/417),
+with canonical PRD `docs/prds/aport-task-delivery-workflow-integration.md` and job
+identity `aporthq/agent-passport/aport-task-delivery-workflow-integration`. It
+preserves the original T0–T9 requirements and stays draft until the actual M5
+portable artifact exists. M6 must reuse it, pin the artifact's version, commit,
+integrity and actual exports, connect existing APort authentication, regional
+storage and shared UI to this task service and single coordinator, and qualify the
+full workflow. No second runner, duplicate foundation job or other-repository
+implementation is part of this API milestone.

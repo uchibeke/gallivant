@@ -6,7 +6,9 @@ can use inference even when you only prepare; it does not start implementation o
 open a pull request without execution authorization.
 
 Preparation uses a capability on the selected harness adapter, through the same
-runner as implementation. The examples select Claude; `--harness codex` uses Codex
+execution service for drafting, questions and repairs. Gallivant owns deterministic
+validation/readiness and explicit implementation authorization. The examples
+select Claude; `--harness codex` uses Codex
 0.160.0 or newer. Claude removes its tools. Codex removes external and execution
 tools and uses a filesystem profile that grants no project or credential access
 to any remaining tool. Only the bounded context in the prompt is available.

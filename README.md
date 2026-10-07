@@ -114,3 +114,6 @@ After resolving the documented blockers, repeat the opt-in live suite from a sou
 Not yet: mid-turn message delivery, Telegram, GitHub-issue input, cursor-agent (its event stream is unverified), or a service installer. See the milestones in the PRD.
 
 Apache-2.0.
+
+Managed coding sessions through the Agents API are available as an explicit
+`openai-agents` selection. See [account/environment setup, recovery and verification](docs/openai-agents.md). Live qualification is separately opt-in and remains unverified when access prerequisites are absent.
