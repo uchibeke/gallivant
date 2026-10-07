@@ -11,12 +11,8 @@
     "base": "96e81031516bdf6663dd3b97ac39b8f57022568b",
     "sourceVerified": true,
     "uncommittedPayload": [
-      "docs/task-delivery.md",
       "lib/plugin_package.mjs",
-      "lib/task_delivery.mjs",
-      "lib/task_delivery_contract.mjs",
-      "lib/task_delivery_mcp.mjs",
-      "lib/task_delivery_view.mjs"
+      "lib/task_delivery.mjs"
     ],
     "mergedM5": false,
     "predecessorMerges": [
@@ -25,14 +21,14 @@
       "2b4514fb27fcb493e62bfed913fffc204215f155",
       "96e81031516bdf6663dd3b97ac39b8f57022568b"
     ],
-    "testedSourceCommit": "3c157624065dd609ef24e0541a2afca9c21b697c"
+    "testedSourceCommit": "2efa7ff42eded325ea3e47b4a91b8a8748b42f1c"
   },
   "artifact": {
     "coreArtifact": "gallivant-0.2.0.tgz",
-    "coreSha256": "911793fbc01e45f1d67f01db42fdc67f414df75f48983cc4d7bac25dba0c81bc",
+    "coreSha256": "78f93e86311bb433179c4ebfeac63622c005b039d5bd902f6902bc4cfc88e36c",
     "hashes": {
       "plugin": "8753892ceb5552fc37ba011929830f4c754d717f8d8031e31fb9b4935b465e1a",
-      "runtime": "df33599323a38ad0c368ce49f3aab647b998bd9e08cca8276610066a07343eb9",
+      "runtime": "8d0838af985a5559e22390a2abab3ebc6cfa40dc38500ec46b5a1f22e26a7e63",
       "operations": "99ef0130a684480c1d673a5b00c52834e9f46f9b55531270098967f6be4a930a"
     },
     "dependencyLockSha256": "bf3969111f7c4b84071fc14c59d870e296ee045024c8056757ac3e3466bc2b28",
@@ -104,7 +100,7 @@
       "lib/openai_agents_input.mjs": "3b012e8c7c51d9d007762e1f849ea3caaf7bbf9ab128a6f5c916bff195b6b83c",
       "lib/openai_agents_sources.mjs": "9d61867d9f86901b084f37d4da6c344df24a0ff71b7ab0537273aad4b18f1132",
       "lib/openai_agents.mjs": "3b67fe601cb8ad268f2d997d55e19bad4aca1f016293595036825892d1991702",
-      "lib/plugin_package.mjs": "32706209d360ed74cbc9c4c7940d554c0b887aab954cbdd96f391b5e3e13a0f6",
+      "lib/plugin_package.mjs": "6ecfc0524f10c65232965a94a507188ccf58f98e2d27f5f07cd30af9e1619f4f",
       "lib/prd.mjs": "3e8bd68d62e8e61fe3624cdcc76e27e78e079d77e25a1484aafa7f5ca6f6ffe3",
       "lib/probe.mjs": "e6df979a29b05ee385366cc28787d5adf9254ff90c79444574ed759d0739d5a2",
       "lib/prompt.mjs": "e1c09b06350397feb038c6cae75b798d2970fff5c7b9c03289e2d14e8b390be2",
@@ -127,7 +123,7 @@
       "lib/task_delivery_mcp.mjs": "accb8029caad59af900a1ddb6cd8a39e0bfcde6053fdc33b6c49ad1eca654576",
       "lib/task_delivery_store.mjs": "4573831285d16421d3ec7e56b78735ee10d6f8952a1b4475eed7fa1387636b0d",
       "lib/task_delivery_view.mjs": "979b411fbdc8f8914c1bc253adb823daebdd64e5923c467e1232f3ec52e6b5fb",
-      "lib/task_delivery.mjs": "706a4afffa25ecc400d0125f26538d931207e72b921e052396ebb71ceffa65db",
+      "lib/task_delivery.mjs": "64c7215c87c1040fdf6194498019e4b78524a653eacf01b95dc93ff7452a22f5",
       "lib/task_environment.mjs": "5c61d5d5393014206f078c86084b40d263f59b7dc939c445a4ed86111e4c2b2c",
       "lib/task_prepare.mjs": "f0f27738e208f174aa89dba3a6f70f382cf7e03abe541df5d1854aed4adb9492",
       "lib/task_store.mjs": "54383d2c1893f6b805ed15b2690f38625f734f65ff7f286906829d192a65d2b4",
@@ -500,7 +496,7 @@
         "lib/harness.mjs"
       ],
       "tests": [
-        "23 installed consumer flow cases",
+        "24 installed consumer flow cases",
         "installed local/API/Cloud provider and lifecycle conformance",
         "inherited hosted bounded-preparation refusal cases"
       ],
@@ -543,22 +539,22 @@
         "tests": 1250,
         "pass": 1250,
         "fail": 0,
-        "log": "/tmp/plugin-delivery-evidence-unit-tests.log"
+        "log": "/tmp/plugin-global-unit.log"
       },
       {
         "command": "npm run lint",
         "exitCode": 0,
-        "log": "/tmp/plugin-delivery-evidence-lint.log"
+        "log": "/tmp/plugin-global-lint.log"
       },
       {
         "command": "npm run test:plugin-package",
         "exitCode": 0,
-        "consumerFlowTests": 23,
+        "consumerFlowTests": 24,
         "installedConformanceTests": 426,
         "fail": 0,
-        "log": "/tmp/plugin-delivery-evidence-package-tests.log",
-        "consumerEvidence": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/task-plugin-consumer-a85t1G/evidence.json",
-        "conformanceLog": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/task-plugin-consumer-a85t1G/conformance.log"
+        "log": "/tmp/plugin-global-package.log",
+        "consumerEvidence": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/task-plugin-consumer-DXgsVN/evidence.json",
+        "conformanceLog": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/task-plugin-consumer-DXgsVN/conformance.log"
       },
       {
         "command": "git diff --check",
@@ -568,11 +564,10 @@
     ],
     "verifiedPayloadFiles": 112,
     "logSha256": {
-      "/tmp/plugin-delivery-evidence-unit-tests.log": "81d385cee577d6897ed0eb982c23a50cd8e2df9219120f1e6b2148014e4e5e8e",
-      "/tmp/plugin-delivery-evidence-package-tests.log": "4b859339afeb36271e068c95d0bda99e00c8247f45d1c89bec35fb1544920357",
-      "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/task-plugin-consumer-a85t1G/conformance.log": "9e236be62b55d036cb7c38dff95b81444f57884d31f44102808a3111929e999c",
-      "/tmp/plugin-delivery-evidence-lint.log": "2f32bd854b16ced20ab71be2afd3673b887efc4815c6e55ea7b941ebc5aa8a0b",
-      "/tmp/plugin-delivery-evidence-focused.log": "99a8c67d405736bd786273edb3358000a31cd057503616a81b972e168204f52a"
+      "/tmp/plugin-global-unit.log": "3c5ba8499ad2aac50e9c6617e022f33373e9ce652c61499febaf9cd55dba905d",
+      "/tmp/plugin-global-lint.log": "2f32bd854b16ced20ab71be2afd3673b887efc4815c6e55ea7b941ebc5aa8a0b",
+      "/tmp/plugin-global-package.log": "a721b55e7a4302c628c925561b832a6662be5a0086aa062219f15f04bda8d938",
+      "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/task-plugin-consumer-DXgsVN/conformance.log": "897a04dbb4c638a8a9b06c676a6df5c4d895501b365869b5f9c211602923024c"
     },
     "hostEvidence": false,
     "fixturePurpose": "Deterministic unpaid installed-artifact compatibility; no actual installed host or live provider qualification",
@@ -963,5 +958,28 @@
       "log": "/tmp/plugin-delivery-evidence-focused.log"
     },
     "externalPrerequisites": "Previously observed unmet prerequisites retained; no unchanged live call retried and no installed-host/model-access evidence inferred from fixtures"
+  },
+  "bindingHostReviewFollowup": {
+    "reviewId": 5443503659,
+    "reviewedCommit": "2efa7ff42eded325ea3e47b4a91b8a8748b42f1c",
+    "items": [
+      {
+        "commentId": 4207872651,
+        "implementation": "lib/task_delivery.mjs getContext",
+        "test": "test/fixtures/plugin-installed-flow.mjs installed delivery never narrows cached account bindings",
+        "rule": "Adapter-owned bindings and account limits must remain unchanged across reads, successful preparation and allowance rejection"
+      },
+      {
+        "commentId": 4207872666,
+        "implementation": "lib/plugin_package.mjs globalIpv4/globalIpv6",
+        "test": "test/plugin-package.test.mjs public URL matrix and global-address positive controls",
+        "rule": "Public numeric endpoints must identify global destinations; classify canonical IPv4, IPv6 and embedded IPv4 consistently"
+      }
+    ],
+    "initialFocusedAttempt": {
+      "log": "/tmp/plugin-global-focused.log",
+      "result": "Sandbox npm cache/log writes unavailable; required full source and installed suites rerun with approved permissions"
+    },
+    "externalPrerequisites": "Unchanged unavailable deployment and live provider/host evidence retained; no blocked call repeated"
   }
 }

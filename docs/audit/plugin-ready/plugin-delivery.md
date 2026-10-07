@@ -103,6 +103,13 @@ including deleted cursors and cross-account isolation. Public URL regressions
 also reject private/link-local IPv4, IPv6 and mapped addresses. Source and installed
 consumer checks cover these boundaries without starting provider pollers.
 
+Cached binding regression coverage now prepares $1 and $5 tasks under the same
+$10 account limit using a frozen adapter-owned binding, then rejects an excessive
+request and checks a read without mutating the original context. Public numeric
+URL validation classifies canonical IPv4/IPv6 and embedded IPv4, rejecting
+non-global reserved, documentation, multicast and transition ranges while retaining
+global positive controls. Source and installed package tests share the URL matrix.
+
 Unmet attestations remain explicit:
 
 - **ac-5:** Actual Pages runtime/binding execution is unavailable. Node package

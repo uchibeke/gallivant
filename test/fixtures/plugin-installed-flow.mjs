@@ -508,3 +508,22 @@ test("actual installed Node runtime imports; Pages full-runtime dependencies req
   assert.equal(NODE_RUNTIME_REQUIREMENTS.replicas, 1); assert.match(NODE_RUNTIME_REQUIREMENTS.pagesRemedy, /Node 22.*durable volume/);
   t.diagnostic("Node imports and bounded coordinator exercised above; no Workers-native workflow runtime is claimed.");
 });
+
+
+test("installed delivery never narrows cached account bindings", async () => {
+  const w = world(), bound = await w.contextFor(scope("alice"), "widget");
+  bound.ctx.config.max_budget_usd = 10;
+  const originalCtx = bound.ctx, originalConfig = bound.ctx.config;
+  Object.freeze(bound);
+  const delivery = createTaskDelivery({ ...w.opts, contextFor: async () => bound });
+  for (const budgetUsd of [1, 5]) {
+    const task = await delivery.dispatch("prepare", { ...prepare(`budget-${budgetUsd}`), allowance: { budgetUsd, runtimeMs: 60000 } }, "alice");
+    assert.equal(task.allowance.budgetUsd, budgetUsd);
+    assert.equal(bound.ctx, originalCtx); assert.equal(bound.ctx.config, originalConfig);
+    assert.equal(bound.ctx.config.max_budget_usd, 10);
+    assert.equal(bound.ctx.taskSecrets, undefined);
+  }
+  await assert.rejects(delivery.dispatch("prepare", { ...prepare("over-limit"), allowance: { budgetUsd: 11, runtimeMs: 60000 } }, "alice"), { code: "DELIVERY_ALLOWANCE" });
+  await delivery.dispatch("capabilities", {}, "alice");
+  assert.equal(bound.ctx, originalCtx);
+});
