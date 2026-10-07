@@ -59,6 +59,36 @@ function patch(op, overrides = {}, envelopeOnly = false) {
   const diff = `diff --git a/answer.txt b/answer.txt\nindex 3367afd..3e75765 100644\n--- a/answer.txt\n+++ b/answer.txt\n@@ -1 +1 @@\n-old\n+new\ndiff --git a/${CLOUD_RESULT_PATH} b/${CLOUD_RESULT_PATH}\nnew file mode 100644\n--- /dev/null\n+++ b/${CLOUD_RESULT_PATH}\n@@ -0,0 +1 @@\n+${JSON.stringify(receipt)}\n`;
   return envelopeOnly ? diff.slice(diff.indexOf(`diff --git a/${CLOUD_RESULT_PATH}`)) : diff;
 }
+function delayedSubmission(t, delayMs) {
+  const f = fixture(t), subprocesses = []; let entered;
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  const cli = cloudCli(config, async (bin, args, options) => {
+    assert.equal(bin, config.bin);
+    subprocesses.push({ command: args.slice(0, 2), timeout: options.timeout, signal: options.signal });
+    const stdout = await f.cli(args);
+    if (args[1] !== "exec" || args.includes("--help")) return { stdout };
+    // Offline execFile fixture: remote acceptance precedes the URL, and either
+    // subprocess timeout or the shared abort signal ends only the local client.
+    return new Promise((resolve, reject) => {
+      const done = error => {
+        clearTimeout(reply); clearTimeout(timeout); options.signal?.removeEventListener("abort", abort);
+        if (error) reject(error); else resolve({ stdout });
+      };
+      const abort = () => done(Object.assign(new Error("submission client aborted"), { code: "ABORT_ERR" }));
+      const reply = setTimeout(() => done(), delayMs);
+      const timeout = options.timeout > 0 ? setTimeout(() => done(Object.assign(new Error("submission client timed out"), { code: "CHILD_TIMEOUT" })), options.timeout) : null;
+      options.signal?.addEventListener("abort", abort, { once: true }); entered();
+    });
+  });
+  const transport = () => makeCloudTransport({ root: f.root, taskId: "acme/widget/task", account: "operator", config, cli, clock: f.clock, verification: async () => {}, verifyRemote: async () => {} });
+  const service = () => makeExecution({ root: f.root, taskId: "acme/widget/task", account: "operator", provider: "codex-cloud", capabilities: { ...capabilitiesFor("codex-cloud"), environments: [config.environment] }, transport: transport(), clock: f.clock, limits: { deadlineMs: 20_000 } });
+  const start = operation => {
+    const started = new Promise(resolve => { entered = resolve; });
+    const pending = operation(); pending.catch(() => {});
+    return { entered: started, pending };
+  };
+  return { ...f, service, subprocesses, start };
+}
 test("Cloud capabilities preserve defaults and refuse unsupported delegation, policy, models and attempts", () => {
   assert.equal(capabilitiesFor("codex-cloud").continuation, "successor-task");
   assert.equal(capabilitiesFor("codex").transport, "cli"); assert.equal(capabilitiesFor("openai-agents").continuation, "native-session");
@@ -76,9 +106,55 @@ test("Cloud access checks pinned CLI, ChatGPT sign-in, command surface and chose
 test("Cloud native login uses stderr and drops application credentials", async () => {
   const cli = cloudCli(config, async (bin, args, opts) => {
     assert.equal(bin, config.bin); assert.equal(opts.env.OPENAI_API_KEY, undefined); assert.equal(opts.env.GH_TOKEN, undefined);
+    assert.equal(opts.timeout, 10_000); // Standalone calls still have a fallback bound.
     return { stdout: "", stderr: "Logged in using ChatGPT\n" };
   });
   assert.match(await cli(["login", "status"]), /ChatGPT/);
+});
+test("Cloud configured deadlines retain delayed submission acknowledgements and successor ownership", async t => {
+  const f = delayedSubmission(t, 11_000), observations = []; let sessionId;
+  for (const operation of ["implementation", "review"]) {
+    const started = f.start(() => operation === "implementation" ? f.service().submit(input) : f.service().continue({ ...input, operationId: operation, sessionId }));
+    // Wait only for the subprocess to start, then model its delayed URL.
+    await started.entered;
+    t.mock.timers.tick(11_000);
+    const job = await started.pending; sessionId ||= job.execution.sessionId;
+    assert.equal(job.execution.acceptance, "accepted"); assert.equal(job.execution.providerState, "queued"); assert.equal(job.execution.sessionId, sessionId);
+    const op = Object.values(readJson(join(f.root, "cloud.json")).operations).at(-1);
+    assert.equal(op.taskId, job.execution.providerJobId); assert.equal(op.acceptance, "accepted");
+    f.finish(); f.diff(patch(op)); f.advance(); await f.service().reconcile({ force: true });
+    assert.equal((await f.service().collect()).providerJobId, op.taskId);
+    observations.push({ operation, acceptance: job.execution.acceptance, taskId: op.taskId, sessionId, parentTaskId: op.parentTaskId });
+  }
+  assert.equal(f.tasks.size, 2);
+  assert.equal(observations[1].parentTaskId, observations[0].taskId);
+  for (const subprocess of f.subprocesses) { assert.equal(subprocess.timeout, 0); assert.ok(subprocess.signal instanceof AbortSignal); }
+  const evidencePath = join(tempHome(), "cloud-submission-deadline-evidence.json");
+  writeJsonAtomic(evidencePath, { kind: "offline timed execFile fixture; no paid Cloud dispatch", deadlineMs: 20_000, acknowledgementDelayMs: 11_000, observations }); t.diagnostic(evidencePath);
+});
+test("Cloud configured deadline aborts the client and retains unknown acceptance without overlapping restart work", async t => {
+  const f = delayedSubmission(t, 25_000), started = f.start(() => f.service().submit(input));
+  await started.entered;
+  t.mock.timers.tick(10_000); await new Promise(resolve => setImmediate(resolve));
+  assert.equal(f.subprocesses.at(-1).signal.aborted, false);
+  t.mock.timers.tick(10_000); await assert.rejects(started.pending, { code: "EXECUTION_DEADLINE" });
+  assert.equal(f.subprocesses.at(-1).signal.aborted, true);
+  const op = Object.values(readJson(join(f.root, "cloud.json")).operations)[0];
+  assert.equal(op.taskId, null); assert.equal(op.acceptance, "unknown"); assert.equal(f.tasks.size, 1);
+  f.advance(); await f.service().reconcile({ force: true });
+  assert.equal(f.service().current().execution.acceptance, "unknown");
+  await assert.rejects(f.service().submit(input), /unknown/);
+  await assert.rejects(f.service().submit({ ...input, operationId: "overlap" }), /previous|unresolved|BUSY/);
+  assert.deepEqual(await f.service().cancel("timeout"), { confirmed: false, unsupported: true });
+  assert.match(f.service().current().execution.recoveryAction, /execution may continue/);
+  f.finish(); t.mock.timers.tick(5_000); f.advance(); await f.service().reconcile({ force: true });
+  assert.equal(f.service().current().execution.acceptance, "unknown"); await assert.rejects(f.service().collect(), /quarantined/);
+  await assert.rejects(f.service().submit({ ...input, operationId: "after-stop" }), /stopped/);
+  assert.equal(f.tasks.size, 1); assert.equal(Object.values(readJson(join(f.root, "cloud.json")).operations)[0].taskId, null);
+  const evidencePath = join(tempHome(), "cloud-submission-abort-evidence.json");
+  writeJsonAtomic(evidencePath, { kind: "offline timed execFile fixture; no paid Cloud dispatch", deadlineMs: 20_000, acknowledgementDelayMs: 25_000,
+    clientAborted: f.subprocesses.at(-1).signal.aborted, providerTasks: f.tasks.size, ownedTaskId: op.taskId, acceptance: f.service().current().execution.acceptance,
+    stopped: f.service().state().stopped, savedResult: existsSync(join(f.service().dirOf(f.service().current().id), "result.json")), recoveryAction: f.service().current().execution.recoveryAction }); t.diagnostic(evidencePath);
 });
 test("Cloud launcher exit is queued, pagination reconciles exact task, restart and duplicate observations are durable", async t => {
   const f = fixture(t), first = f.service(), job = await first.submit(input);

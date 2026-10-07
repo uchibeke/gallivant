@@ -54,7 +54,12 @@ Add this entry to the private `config.json` without changing existing selections
 
 This explicit request deadline allows bounded CLI/network and native verification
 work within the shared configurable limit. It does not change package defaults
-or bound the duration of remote compute.
+or bound the duration of remote compute. Submission, access checks, listings and
+diff retrieval use the shared abort signal without a shorter subprocess timeout;
+standalone diagnostic calls without a signal retain a 10-second fallback. If the
+deadline expires before a submission URL is received, acceptance remains unknown
+and dispatch is fenced until exact ownership can be reconciled. Stopping the
+submission client does not stop remote compute.
 
 Amounts are explicit conservative accounting reservations, not a Cloud billing
 cap. Unknown usage retains reservations. Cloud uses the authorized ChatGPT
