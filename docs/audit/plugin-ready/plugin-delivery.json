@@ -11,8 +11,12 @@
     "base": "96e81031516bdf6663dd3b97ac39b8f57022568b",
     "sourceVerified": true,
     "uncommittedPayload": [
+      "docs/task-delivery.md",
       "lib/plugin_package.mjs",
-      "lib/runtime_node.mjs"
+      "lib/task_delivery.mjs",
+      "lib/task_delivery_contract.mjs",
+      "lib/task_delivery_mcp.mjs",
+      "lib/task_delivery_view.mjs"
     ],
     "mergedM5": false,
     "predecessorMerges": [
@@ -21,15 +25,15 @@
       "2b4514fb27fcb493e62bfed913fffc204215f155",
       "96e81031516bdf6663dd3b97ac39b8f57022568b"
     ],
-    "testedSourceCommit": "bd53fe333559b91fa56811d6ecb00acb6293a214"
+    "testedSourceCommit": "3c157624065dd609ef24e0541a2afca9c21b697c"
   },
   "artifact": {
     "coreArtifact": "gallivant-0.2.0.tgz",
-    "coreSha256": "e693bc7f19371ae027a571478c1a0e4ddd75cfab4a89bc148c4acbebc2430fe9",
+    "coreSha256": "911793fbc01e45f1d67f01db42fdc67f414df75f48983cc4d7bac25dba0c81bc",
     "hashes": {
       "plugin": "8753892ceb5552fc37ba011929830f4c754d717f8d8031e31fb9b4935b465e1a",
-      "runtime": "69b2b8a551d538beb0be9e293f20e7fe02354af0aa264b446585f1aa693efd62",
-      "operations": "2077c0558cd4634accf66e530f186b52e2f91bfea502ff7c6f212d2e2efb800f"
+      "runtime": "df33599323a38ad0c368ce49f3aab647b998bd9e08cca8276610066a07343eb9",
+      "operations": "99ef0130a684480c1d673a5b00c52834e9f46f9b55531270098967f6be4a930a"
     },
     "dependencyLockSha256": "bf3969111f7c4b84071fc14c59d870e296ee045024c8056757ac3e3466bc2b28",
     "payloadHashes": {
@@ -49,7 +53,7 @@
       "docs/install.md": "5087cb207e20c31ef39d955fd8536184f86113d61348e955f380e30172705a85",
       "docs/openai-agents.md": "38f162e4d4918bdab372be804e1a06a6a9582493c941f07799f97324f4637db2",
       "docs/prd.md": "be2cb95955ecc38056dac390152d874172f6582816603fcacc14b8bd4f762c33",
-      "docs/task-delivery.md": "409925ebc75b3a92ca0cdff266837b7d796f2755f82ea30c36c880a3e084f19c",
+      "docs/task-delivery.md": "e39cfb9d95c3108b79342e892a2db87a907ba829c04174bde56c00e96dd53535",
       "docs/tasks.md": "4483b3c3a44117240e3ca10a5e55941578e7c3b2b20775a57af6743603a9bb34",
       "lib/aport.mjs": "5c046abda8964a0439ee699bf658b9a00fdd7527884848f7fb22c3fe6c9e1d74",
       "lib/attribution.mjs": "cddb3eafe44f1dee26999a987ad9b1c62332cc9eb1ee17925cd2b961a9ccac17",
@@ -100,7 +104,7 @@
       "lib/openai_agents_input.mjs": "3b012e8c7c51d9d007762e1f849ea3caaf7bbf9ab128a6f5c916bff195b6b83c",
       "lib/openai_agents_sources.mjs": "9d61867d9f86901b084f37d4da6c344df24a0ff71b7ab0537273aad4b18f1132",
       "lib/openai_agents.mjs": "3b67fe601cb8ad268f2d997d55e19bad4aca1f016293595036825892d1991702",
-      "lib/plugin_package.mjs": "9423eaade11905d694a7735b7be0aa3dc461cd7ccc065dc01d781d00fce38092",
+      "lib/plugin_package.mjs": "32706209d360ed74cbc9c4c7940d554c0b887aab954cbdd96f391b5e3e13a0f6",
       "lib/prd.mjs": "3e8bd68d62e8e61fe3624cdcc76e27e78e079d77e25a1484aafa7f5ca6f6ffe3",
       "lib/probe.mjs": "e6df979a29b05ee385366cc28787d5adf9254ff90c79444574ed759d0739d5a2",
       "lib/prompt.mjs": "e1c09b06350397feb038c6cae75b798d2970fff5c7b9c03289e2d14e8b390be2",
@@ -119,11 +123,11 @@
       "lib/state.mjs": "2bcd199eb410c2a590138600c4f8b9f1aeeefea037f29f19d14ae56a9b9fa940",
       "lib/task_allowance.mjs": "8c5e73b502fc84ff51f61df947d33690c0cf4505be00d9cdd93f6ce445fa23b9",
       "lib/task_contract.mjs": "56d440e08c228a4df27d06f9fa181ec6160e876a13dcd90fdf0416fab7c2fff4",
-      "lib/task_delivery_contract.mjs": "1c23368cef58ff0083560805399022f52dbdb85272af0867da66da929d029eec",
-      "lib/task_delivery_mcp.mjs": "5a3cc12b7ef9e15f063d8030bb4b53f27ca82edfa5d8ea63ca34b6c09f7edb90",
+      "lib/task_delivery_contract.mjs": "e60e3c932bddbf4a273609a069d9db75995db2be353a2e1adaf4c833528425ad",
+      "lib/task_delivery_mcp.mjs": "accb8029caad59af900a1ddb6cd8a39e0bfcde6053fdc33b6c49ad1eca654576",
       "lib/task_delivery_store.mjs": "4573831285d16421d3ec7e56b78735ee10d6f8952a1b4475eed7fa1387636b0d",
-      "lib/task_delivery_view.mjs": "4d42c784728cdf75f73f3ca1c727b45803c7aca67e965f9f9d2232506d89d357",
-      "lib/task_delivery.mjs": "681e60f71ea6e280b21b7f2f2032c4bc3d00ba08441f13c95accdbffd68076ba",
+      "lib/task_delivery_view.mjs": "979b411fbdc8f8914c1bc253adb823daebdd64e5923c467e1232f3ec52e6b5fb",
+      "lib/task_delivery.mjs": "706a4afffa25ecc400d0125f26538d931207e72b921e052396ebb71ceffa65db",
       "lib/task_environment.mjs": "5c61d5d5393014206f078c86084b40d263f59b7dc939c445a4ed86111e4c2b2c",
       "lib/task_prepare.mjs": "f0f27738e208f174aa89dba3a6f70f382cf7e03abe541df5d1854aed4adb9492",
       "lib/task_store.mjs": "54383d2c1893f6b805ed15b2690f38625f734f65ff7f286906829d192a65d2b4",
@@ -340,7 +344,8 @@
         "installed real MCP SDK dispatch/resource case",
         "installed revision conflict, duplicate operation, __proto__ and lost-wake cases",
         "test/task-delivery.test.mjs: scoped list limits and truncation depend only on currently authorized tasks",
-        "test/task-delivery.test.mjs and installed MCP: 205 repository keyset traversal, per-page reauthorization, revoked cursor, empty/exact-limit boundaries and invalid cursor refusal"
+        "test/task-delivery.test.mjs and installed MCP: 205 repository keyset traversal, per-page reauthorization, revoked cursor, empty/exact-limit boundaries and invalid cursor refusal",
+        "test/task-delivery.test.mjs task list continuation after deleted cursor and revoked access; test/fixtures/plugin-installed-flow.mjs installed MCP 101-task pagination and cross-account cursor isolation"
       ],
       "evidence": "One TASK_OPERATIONS mapping; persisted scoped intent/signature/acknowledgement and per-call authorization"
     },
@@ -392,7 +397,8 @@
         "real SDK emitted resource fixture with global/thread metadata",
         "inherited read-only tracker/provider projection conformance",
         "test/fixtures/plugin-installed-flow.mjs: installed MCP capability model/text summaries supply repository and harness for task_prepare, preserve cost/control setup and schedule no provider work",
-        "test/task-delivery.test.mjs redacted question projection; test/fixtures/plugin-installed-flow.mjs installed MCP without UI asks and answers using only model-visible saved questions"
+        "test/task-delivery.test.mjs redacted question projection; test/fixtures/plugin-installed-flow.mjs installed MCP without UI asks and answers using only model-visible saved questions",
+        "test/task-delivery.test.mjs bounded redacted evidence/log summaries; test/fixtures/plugin-installed-flow.mjs installed MCP artifact/test observations and log-window metadata without raw model payloads"
       ],
       "evidence": "Saved views and bounded logs use cached current/result observations; no UI reconciliation call or provider poller"
     },
@@ -460,7 +466,8 @@
         "test/plugin-package.test.mjs: source and installed Git root/HEAD/status failure, internal proof, source mismatch and modified/deleted/renamed payload cleanup regressions",
         "test/plugin-package.test.mjs: internal packaging records npm controls without claiming public qualification",
         "test/plugin-package.test.mjs: public URLs reject canonical loopbacks and aliases across every configured URL; asset preflight and builder share regular-file, size and secret constraints; CLI exits unsuccessfully for missing screenshots",
-        "test/plugin-package.test.mjs public URL matrix rejects canonical IPv4/IPv6 unspecified addresses and alternate spellings across all public URL fields"
+        "test/plugin-package.test.mjs public URL matrix rejects canonical IPv4/IPv6 unspecified addresses and alternate spellings across all public URL fields",
+        "test/plugin-package.test.mjs private/link-local IPv4, IPv6 and mapped equivalents rejected across public URL fields"
       ],
       "evidence": "Internal classification and submissionReady:false emitted; public configuration errors are actionable"
     },
@@ -493,7 +500,7 @@
         "lib/harness.mjs"
       ],
       "tests": [
-        "22 installed consumer flow cases",
+        "23 installed consumer flow cases",
         "installed local/API/Cloud provider and lifecycle conformance",
         "inherited hosted bounded-preparation refusal cases"
       ],
@@ -533,25 +540,25 @@
       {
         "command": "npm test",
         "exitCode": 0,
-        "tests": 1249,
-        "pass": 1249,
+        "tests": 1250,
+        "pass": 1250,
         "fail": 0,
-        "log": "/tmp/plugin-delivery-keyset-unit-tests.log"
+        "log": "/tmp/plugin-delivery-evidence-unit-tests.log"
       },
       {
         "command": "npm run lint",
         "exitCode": 0,
-        "log": "/tmp/plugin-delivery-keyset-lint.log"
+        "log": "/tmp/plugin-delivery-evidence-lint.log"
       },
       {
         "command": "npm run test:plugin-package",
         "exitCode": 0,
-        "consumerFlowTests": 22,
-        "installedConformanceTests": 425,
+        "consumerFlowTests": 23,
+        "installedConformanceTests": 426,
         "fail": 0,
-        "log": "/tmp/plugin-delivery-keyset-package-tests.log",
-        "consumerEvidence": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/task-plugin-consumer-TOrniE/evidence.json",
-        "conformanceLog": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/task-plugin-consumer-TOrniE/conformance.log"
+        "log": "/tmp/plugin-delivery-evidence-package-tests.log",
+        "consumerEvidence": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/task-plugin-consumer-a85t1G/evidence.json",
+        "conformanceLog": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/task-plugin-consumer-a85t1G/conformance.log"
       },
       {
         "command": "git diff --check",
@@ -561,11 +568,11 @@
     ],
     "verifiedPayloadFiles": 112,
     "logSha256": {
-      "/tmp/plugin-delivery-keyset-unit-tests.log": "f9f9e0dfb4673cfd822e268c6f2ab8e3f4f9ef24a96072bf621a893c57fb9e04",
-      "/tmp/plugin-delivery-keyset-package-tests.log": "1e9e4532f95d1b17130ff3e70bc27261868f66f4554da8841c62ba8d1b458e4d",
-      "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/task-plugin-consumer-TOrniE/conformance.log": "08b177688dc5d417c0b6b0189f5da7ca623f74ce871f50aa863527b79bd2c584",
-      "/tmp/plugin-delivery-keyset-lint.log": "2f32bd854b16ced20ab71be2afd3673b887efc4815c6e55ea7b941ebc5aa8a0b",
-      "/tmp/plugin-delivery-keyset-focused.log": "c8609031ddd91f156d75a8a3fe79535d1c9d021285d300d23f2316eb4b9c2670"
+      "/tmp/plugin-delivery-evidence-unit-tests.log": "81d385cee577d6897ed0eb982c23a50cd8e2df9219120f1e6b2148014e4e5e8e",
+      "/tmp/plugin-delivery-evidence-package-tests.log": "4b859339afeb36271e068c95d0bda99e00c8247f45d1c89bec35fb1544920357",
+      "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/task-plugin-consumer-a85t1G/conformance.log": "9e236be62b55d036cb7c38dff95b81444f57884d31f44102808a3111929e999c",
+      "/tmp/plugin-delivery-evidence-lint.log": "2f32bd854b16ced20ab71be2afd3673b887efc4815c6e55ea7b941ebc5aa8a0b",
+      "/tmp/plugin-delivery-evidence-focused.log": "99a8c67d405736bd786273edb3358000a31cd057503616a81b972e168204f52a"
     },
     "hostEvidence": false,
     "fixturePurpose": "Deterministic unpaid installed-artifact compatibility; no actual installed host or live provider qualification",
@@ -597,7 +604,8 @@
       "Public URL checks cover endpoint, metadata and all resource origins after URL canonicalization; preflight and emission share asset validation for every screenshot, UI and icon, including failure cleanup and CLI exit status.",
       "The Node owner adapter revalidates pin identity before the portable schedule/advance envelope on every callback; model projections include only saved redacted question IDs/text across task responses and list summaries.",
       "Runtime ledger recognition follows taskStore/context.executionFor canonical paths, including actual cloud.json; backup skips only owned intake/execution/publication/delivery lock paths and recovery directories, retaining selected repository snapshots verbatim.",
-      "Entry windows sort and continue by persisted key, commit only after successful advance and safely replay legacy numeric checkpoints; shared public URL validation rejects unspecified IPv4/IPv6 and mapped forms."
+      "Entry windows sort and continue by persisted key, commit only after successful advance and safely replay legacy numeric checkpoints; shared public URL validation rejects unspecified IPv4/IPv6 and mapped forms.",
+      "Evidence/log MCP projections explicitly allow bounded observed fields and exclude raw payloads; list keysets reauthorize on every page and expose continuation to model/text/UI; public URL checks reject private and link-local numeric hosts and mapped forms."
     ]
   },
   "reviewFollowup": {
@@ -904,6 +912,55 @@
       "pass": 43,
       "fail": 0,
       "log": "/tmp/plugin-delivery-keyset-focused.log"
+    },
+    "externalPrerequisites": "Previously observed unmet prerequisites retained; no unchanged live call retried and no installed-host/model-access evidence inferred from fixtures"
+  },
+  "evidenceListReviewFollowup": {
+    "reviewId": 5443078678,
+    "reviewedCommit": "3c157624065dd609ef24e0541a2afca9c21b697c",
+    "items": [
+      {
+        "commentId": 4207528656,
+        "implementation": [
+          "lib/task_delivery_view.mjs",
+          "lib/task_delivery_mcp.mjs",
+          "lib/task_delivery.mjs"
+        ],
+        "tests": [
+          "test/task-delivery.test.mjs requested evidence and log summaries are bounded projections of redacted saved observations",
+          "test/fixtures/plugin-installed-flow.mjs installed MCP evidence and logs expose bounded model observations without raw payloads"
+        ],
+        "rule": "Requested saved evidence must be useful to model clients while raw briefs, logs and private diagnostics remain excluded"
+      },
+      {
+        "commentId": 4207528663,
+        "implementation": [
+          "lib/task_delivery.mjs",
+          "lib/task_delivery_contract.mjs",
+          "lib/task_delivery_mcp.mjs"
+        ],
+        "tests": [
+          "test/task-delivery.test.mjs scoped list continuation after cursor deletion and repository revocation",
+          "test/fixtures/plugin-installed-flow.mjs installed MCP pagination and cross-account isolation"
+        ],
+        "rule": "Every currently authorized saved task must be discoverable through bounded reauthorized continuation"
+      },
+      {
+        "commentId": 4207528672,
+        "implementation": [
+          "lib/plugin_package.mjs"
+        ],
+        "tests": [
+          "test/plugin-package.test.mjs public URL matrix private/link-local IPv4, IPv6 and mapped host rejection"
+        ],
+        "rule": "Public destinations cannot be private or link-local numeric hosts"
+      }
+    ],
+    "focusedVerification": {
+      "tests": 36,
+      "pass": 36,
+      "fail": 0,
+      "log": "/tmp/plugin-delivery-evidence-focused.log"
     },
     "externalPrerequisites": "Previously observed unmet prerequisites retained; no unchanged live call retried and no installed-host/model-access evidence inferred from fixtures"
   }

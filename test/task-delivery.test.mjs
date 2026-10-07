@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { taskExecutionConfig, taskProviderAllowance } from "../lib/task_allowance.mjs";
 import { CORE_VERSION, assertCompatible } from "../lib/task_delivery_contract.mjs";
 import { controlAvailability } from "../lib/control_contract.mjs";
-import { modelSummary, taskView } from "../lib/task_delivery_view.mjs";
+import { modelSummary, taskView, evidenceSummary, logSummary } from "../lib/task_delivery_view.mjs";
 import { createTaskDelivery } from "../lib/task_delivery.mjs";
 
 const config = { max_budget_usd: 10, run_timeout_minutes: 30 };
@@ -46,8 +46,9 @@ test("scoped list limits and truncation depend only on currently authorized task
       tasks[id] = { repositoryId: i < 101 ? "revoked" : "widget" };
       if (i >= 101) authorizedIds.push(id);
     }
+    let repositories = ["widget"];
     const delivery = createTaskDelivery({
-      authorize: async () => ({ tenant: "tenant", account: "alice", region: "ca", environment: "preview", scopes: ["task-delivery:read"], repositories: ["widget"] }),
+      authorize: async () => ({ tenant: "tenant", account: "alice", region: "ca", environment: "preview", scopes: ["task-delivery:read"], repositories }),
       store: { read: async () => ({ version: 1, tasks }), transaction: () => assert.fail("list cannot mutate state") },
       schedule: () => assert.fail("list cannot schedule provider reconciliation"),
       contextFor: async (_scope, repoId) => {
@@ -64,6 +65,15 @@ test("scoped list limits and truncation depend only on currently authorized task
     assert.equal(listed.truncated, count > 100);
     assert.deepEqual(inspected, authorizedIds.slice(0, 100));
     assert.equal(contexts.length, Math.min(count, 100));
+    if (listed.nextCursor) {
+      delete tasks[listed.nextCursor]; // deleted cursor keys still permit continuation
+      const next = await delivery.dispatch("list", { cursor: listed.nextCursor }, "alice");
+      assert.deepEqual(next.tasks.map(t => t.taskId), authorizedIds.slice(100));
+      assert.equal(next.nextCursor, null); assert.equal(next.truncated, false);
+      repositories = [];
+      assert.deepEqual((await delivery.dispatch("list", { cursor: listed.nextCursor }, "alice")).tasks, []);
+      await assert.rejects(delivery.dispatch("list", { cursor: "../other" }, "alice"), { code: "DELIVERY_INPUT" });
+    }
   });
 });
 
@@ -107,4 +117,20 @@ test("model questions retain saved redacted text and IDs without private view fi
   assert.deepEqual(summary.questions, [{ id: "q-r-1", text: view.questions[0].text }]);
   assert.deepEqual(summary.questionIds, ["q-r-1"]);
   assert.doesNotMatch(JSON.stringify(summary), /private-provider-value|hidden|private original|private brief|private failure/);
+});
+
+
+test("requested evidence and log summaries are bounded projections of redacted saved observations", () => {
+  const view = taskView({ taskId: "saved", revision: 3, artifacts: [{ id: "brief", hash: "a" }], draft: { text: "private brief" } }, {
+    result: { tests: [{ command: "private-secret test", inputHead: "head", exit: 1, output: "private diagnostic" }] },
+    verification: { head: "head", evidence: [{ command: "npm test", head: "head", exit: 0, output: "private diagnostic" }] }, secrets: ["private-secret"] });
+  const summary = evidenceSummary(view);
+  assert.deepEqual(summary.artifacts, [{ id: "brief", hash: "a" }]);
+  assert.equal(summary.providerTests[0].exit, 1); assert.equal(summary.verification.observations[0].exit, 0);
+  assert.doesNotMatch(JSON.stringify(summary), /private-secret|private brief|private diagnostic/);
+  const bounded = evidenceSummary({ ...view, artifacts: Array(110).fill({ id: "x".repeat(500), hash: "h" }), evidence: { providerTests: Array(110).fill({ command: "x".repeat(1000), exit: 0 }) } });
+  assert.equal(bounded.artifacts.length, 100); assert.equal(bounded.providerTests.length, 100); assert.equal(bounded.providerTests[0].command.length, 300);
+  const logs = logSummary({ version: 1, taskId: "saved", total: 2, from: 1, to: 2, lines: ["private raw", "log"], gap: "retention" });
+  assert.equal(logs.returnedLines, 2); assert.equal(logs.nextAfter, 2); assert.equal(logs.gap, "retention");
+  assert.doesNotMatch(JSON.stringify(logs), /private raw/);
 });

@@ -96,6 +96,13 @@ regressions verify removal, restart, saved backoff and no duplicate submission.
 The public URL matrix also rejects IPv4/IPv6 unspecified wildcard addresses,
 including canonicalized alternate spellings and mapped forms.
 
+Requested MCP evidence exposes bounded artifact IDs, test claims and coordinator
+verification observations; log summaries expose window counts/gaps and continuation
+without raw text. Task lists use reauthorized keyset pagination after reconnect,
+including deleted cursors and cross-account isolation. Public URL regressions
+also reject private/link-local IPv4, IPv6 and mapped addresses. Source and installed
+consumer checks cover these boundaries without starting provider pollers.
+
 Unmet attestations remain explicit:
 
 - **ac-5:** Actual Pages runtime/binding execution is unavailable. Node package

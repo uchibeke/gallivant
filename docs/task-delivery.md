@@ -284,3 +284,13 @@ reviewer account with shared campaign allowance; authentic screenshots/demo;
 working legal/support pages; eligible publisher project/org/domain verification;
 bounded G9 kit with five positive/three negative cases. APort is publisher. No
 release approval, submission, deployment or publication is claimed by M5.
+
+### Model-visible discovery and evidence
+
+`list` accepts an optional saved task ID as `cursor`, returns at most 100 authorized
+tasks in ID order, and supplies `nextCursor` when `truncated` is true. Every page
+uses current account and repository authorization; a cursor grants no access.
+MCP evidence responses expose bounded artifact IDs/hashes, provider test claims,
+coordinator verification observations and the PR link. Log responses expose the
+saved window range, count, gap and `nextAfter`, while raw log text and briefs remain
+in authorized UI metadata. Neither read operation starts provider reconciliation.

@@ -202,11 +202,17 @@ test("installed scoped list and MCP results discover later authorized tasks and 
       await w.opts.store.transaction(scope("alice"), async (data, save) => { data.tasks = { ...revoked, ...owned }; await save(data); });
       const result = await client.callTool({ name: "task_list", arguments: {} });
       assert.notEqual(result.isError, true);
-      const expected = Object.keys(owned).slice(0, 100);
+      const expected = Object.keys(owned).sort().slice(0, 100);
       assert.deepEqual(result.structuredContent.tasks.map(view => view.taskId), expected);
       assert.deepEqual(result._meta.taskDelivery.tasks.map(view => view.taskId), expected);
       assert.equal(result.structuredContent.truncated, count > 100); assert.equal(result._meta.taskDelivery.truncated, count > 100);
+      if (count > 100) {
+        const next = await client.callTool({ name: "task_list", arguments: { cursor: result.structuredContent.nextCursor } });
+        assert.deepEqual(next.structuredContent.tasks.map(t => t.taskId), Object.keys(owned).sort().slice(100));
+        assert.equal(next.structuredContent.nextCursor, null); assert.equal(next.structuredContent.truncated, false);
+      }
     }
+    assert.deepEqual((await w.delivery.dispatch("list", { cursor: Object.keys(authorized).sort()[99] }, "bob")).tasks, []);
     assert.equal(wakes, 1, "list reads cannot schedule work");
     assert.equal(ctx.state.entries().length, 0, "list reads cannot start implementation");
   } finally { await client.close(); await server.close(); }
@@ -280,6 +286,32 @@ test("installed MCP without UI exposes saved questions and answers using model-v
     assert.equal(answer.structuredContent.status, "ready");
     assert.deepEqual(answer.structuredContent.questions, []);
     assert.equal(answer.structuredContent.brief, undefined);
+  } finally { await client.close(); await server.close(); }
+});
+
+test("installed MCP evidence and logs expose bounded model observations without raw payloads", async () => {
+  let wakes = 0; const w = world({ question: false, schedule: async () => { wakes++; } });
+  let task = await w.delivery.dispatch("prepare", prepare(), "alice");
+  task = await w.delivery.dispatch("start", { ...mutate(task, "start-evidence"), run: true }, "alice");
+  const ctx = w.worlds.get("alice").ctx, runId = task.implementation.run;
+  const dir = join(ctx.home, "runs", task.implementation.id.replaceAll("/", "__"), runId); mkdirSync(dir, { recursive: true });
+  writeJsonAtomic(join(dir, "verification.json"), { version: 1, head: "observed-head", evidence: [{ command: "npm test", exit: 0, head: "observed-head", output: "private-provider-value private diagnostic" }] });
+  appendProjection(dir, "private-provider-value raw log text");
+  const server = new Server({ name: "evidence-flow", version: "1" }, { capabilities: { tools: {} } });
+  await registerTaskDelivery(server, { delivery: w.delivery, identityFor: async () => "alice" });
+  const client = new Client({ name: "consumer", version: "1" }), [a, b] = InMemoryTransport.createLinkedPair();
+  await server.connect(a); await client.connect(b); const before = wakes;
+  try {
+    const evidence = await client.callTool({ name: "task_evidence", arguments: { taskId: task.taskId } });
+    assert.ok(evidence.structuredContent.artifacts.some(a => a.id === "brief"));
+    assert.equal(evidence.structuredContent.verification.observations[0].exit, 0);
+    assert.deepEqual(JSON.parse(evidence.content[0].text), evidence.structuredContent);
+    const logs = await client.callTool({ name: "task_logs", arguments: { taskId: task.taskId, count: 10 } });
+    assert.equal(logs.structuredContent.returnedLines, 1); assert.equal(logs.structuredContent.nextAfter, 1);
+    assert.deepEqual(JSON.parse(logs.content[0].text), logs.structuredContent);
+    assert.doesNotMatch(JSON.stringify([evidence.structuredContent, logs.structuredContent]), /private-provider-value|private diagnostic|raw log text/);
+    assert.equal(evidence.structuredContent.brief, undefined); assert.equal(logs.structuredContent.lines, undefined);
+    assert.equal(wakes, before);
   } finally { await client.close(); await server.close(); }
 });
 
