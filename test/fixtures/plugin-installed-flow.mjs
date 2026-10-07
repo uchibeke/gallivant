@@ -175,6 +175,43 @@ test("two-account boundary rejects hostile inputs and scoped IDs on every operat
   await assert.rejects(w.delivery.dispatch("prepare", { ...prepare("excessive"), allowance: { budgetUsd: 100, runtimeMs: 60000 } }, "alice"), { code: "DELIVERY_ALLOWANCE" });
 });
 
+test("installed scoped list and MCP results discover later authorized tasks and report authorized truncation", async () => {
+  let wakes = 0;
+  const w = world({ schedule: async () => { wakes++; } }), task = await w.delivery.dispatch("prepare", prepare(), "alice");
+  const ctx = w.worlds.get("alice").ctx;
+  const intake = JSON.parse(readFileSync(join(ctx.home, "tasks", task.taskId, "intake.json")));
+  const saved = w.opts.store.read(scope("alice")).tasks[task.taskId], revoked = {};
+  for (let i = 0; i < 101; i++) revoked["task-" + i.toString(16).padStart(24, "0")] = { repositoryId: "revoked" };
+  await w.opts.store.transaction(scope("alice"), async (data, save) => { data.tasks = { ...revoked, [task.taskId]: saved }; await save(data); });
+  const later = await w.delivery.dispatch("list", {}, "alice");
+  assert.deepEqual(later.tasks.map(view => view.taskId), [task.taskId]); assert.equal(later.truncated, false);
+  const authorized = { [task.taskId]: saved };
+  // Saved intake fixtures exercise installed service inspection without another
+  // inference or dispatch; every clone has its own supported task identity.
+  for (let i = 101; i < 201; i++) {
+    const id = "task-" + i.toString(16).padStart(24, "0");
+    writeJsonAtomic(join(ctx.home, "tasks", id, "intake.json"), { ...intake, id }); authorized[id] = saved;
+  }
+  const server = new Server({ name: "scoped-list-test", version: "1" }, { capabilities: { tools: {} } });
+  await registerTaskDelivery(server, { delivery: w.delivery, identityFor: async () => "alice" });
+  const client = new Client({ name: "consumer", version: "1" }), [a, b] = InMemoryTransport.createLinkedPair();
+  await server.connect(a); await client.connect(b);
+  try {
+    for (const count of [0, 100, 101]) {
+      const owned = Object.fromEntries(Object.entries(authorized).slice(0, count));
+      await w.opts.store.transaction(scope("alice"), async (data, save) => { data.tasks = { ...revoked, ...owned }; await save(data); });
+      const result = await client.callTool({ name: "task_list", arguments: {} });
+      assert.notEqual(result.isError, true);
+      const expected = Object.keys(owned).slice(0, 100);
+      assert.deepEqual(result.structuredContent.tasks.map(view => view.taskId), expected);
+      assert.deepEqual(result._meta.taskDelivery.tasks.map(view => view.taskId), expected);
+      assert.equal(result.structuredContent.truncated, count > 100); assert.equal(result._meta.taskDelivery.truncated, count > 100);
+    }
+    assert.equal(wakes, 1, "list reads cannot schedule work");
+    assert.equal(ctx.state.entries().length, 0, "list reads cannot start implementation");
+  } finally { await client.close(); await server.close(); }
+});
+
 test("real MCP SDK shares schemas, annotations and built resource; reads never dispatch", async () => {
   const w = world(); let identity = "alice";
   const server = new Server({ name: "task-delivery-test", version: "1" }, { capabilities: { tools: {}, resources: {} } });

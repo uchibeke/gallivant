@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { taskExecutionConfig, taskProviderAllowance } from "../lib/task_allowance.mjs";
 import { CORE_VERSION, assertCompatible } from "../lib/task_delivery_contract.mjs";
 import { controlAvailability } from "../lib/control_contract.mjs";
+import { createTaskDelivery } from "../lib/task_delivery.mjs";
 
 const config = { max_budget_usd: 10, run_timeout_minutes: 30 };
 const task = { deliveryAllowance: { budgetUsd: 1, runtimeMs: 60000 } };
@@ -34,4 +35,33 @@ test("shared controls never advertise continuation after a retained dispatch sto
   const controls = controlAvailability({ state: "needs-human", session: "owned", dispatch_stopped: "cancellation-requested", pr: 1 }, null, { controls: { cancel: false } });
   assert.equal(controls.resume, false); assert.equal(controls.message, false); assert.equal(controls.interrupt, false);
   assert.equal(controls.recheck, true); assert.match(controls.cancellation, /may-continue/);
+});
+
+test("scoped list limits and truncation depend only on currently authorized tasks", async t => {
+  for (const count of [0, 1, 100, 101]) await t.test(`${count} authorized tasks after 101 revoked records`, async () => {
+    const tasks = {}, authorizedIds = [], inspected = [], contexts = [];
+    for (let i = 0; i < 101 + count; i++) {
+      const id = "task-" + i.toString(16).padStart(24, "0");
+      tasks[id] = { repositoryId: i < 101 ? "revoked" : "widget" };
+      if (i >= 101) authorizedIds.push(id);
+    }
+    const delivery = createTaskDelivery({
+      authorize: async () => ({ tenant: "tenant", account: "alice", region: "ca", environment: "preview", scopes: ["task-delivery:read"], repositories: ["widget"] }),
+      store: { read: async () => ({ version: 1, tasks }), transaction: () => assert.fail("list cannot mutate state") },
+      schedule: () => assert.fail("list cannot schedule provider reconciliation"),
+      contextFor: async (_scope, repoId) => {
+        contexts.push(repoId); assert.equal(repoId, "widget");
+        return { ctx: { home: "/scoped-home", state: { startClaim: () => null } }, repository: { dir: "/checkout", repo: "acme/widget" },
+          taskOptions: { store: { read: id => {
+            inspected.push(id); assert.ok(authorizedIds.includes(id));
+            return { id, revision: 1, status: "needs-input", repo: "acme/widget", harness: "claude", requirements: [], context: [], questions: [], attempts: [] };
+          } } } };
+      },
+    });
+    const listed = await delivery.dispatch("list", {}, "alice");
+    assert.deepEqual(listed.tasks.map(task => task.taskId), authorizedIds.slice(0, 100));
+    assert.equal(listed.truncated, count > 100);
+    assert.deepEqual(inspected, authorizedIds.slice(0, 100));
+    assert.equal(contexts.length, Math.min(count, 100));
+  });
 });

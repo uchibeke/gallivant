@@ -29,6 +29,13 @@ active-job runtime pins. The actual installed builder also rebuilds from its
 published dependency shrinkwrap. Focused regressions live in `test/task-delivery.test.mjs`
 and the artifact-installed `test/fixtures/plugin-installed-flow.mjs`.
 
+The review follow-up also checks fail-closed Git source proof, including root,
+HEAD and status failures, source mismatch, deleted/renamed payload files and
+partial-output cleanup. `test/plugin-package.test.mjs` runs against both source
+and installed artifacts. Scoped discovery filters repository authorization before
+the list limit; source and installed MCP tests cover late authorized tasks,
+authorized-only truncation and reads that schedule no work.
+
 Unmet attestations remain explicit:
 
 - **ac-5:** Actual Pages runtime/binding execution is unavailable. Node package
