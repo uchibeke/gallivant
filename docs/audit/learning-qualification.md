@@ -90,3 +90,29 @@ shows separate identity/classification metadata and a successful offline disable
 Legacy identity-only records remain readable and require a configuration refresh
 to acquire their previously unrecorded visibility. No model calls or live isolation
 retries were made; production remains UNQUALIFIED with the same outstanding criteria.
+
+
+## Accepted-run delivery follow-up
+
+Actual offline results on the same macOS host:
+
+| Command | Recorded result | Output pointer |
+| --- | --- | --- |
+| `npm test` | 1,240 passed; 0 failed, skipped or cancelled; 246,902.359667 ms | `/private/tmp/review-learning-batch4-full.log` |
+| `npm run lint` | Exit 0 | Operator session command output |
+| `npm run test:learning` | 43 passed; 0 failed, skipped or cancelled; 37,171.9675 ms | `/private/tmp/review-learning-batch4-suite.log` |
+| `git diff --check` | Exit 0 | Operator session command output |
+
+The 63 focused dispatch/start/resume tests also passed in
+`/private/tmp/review-learning-batch4-focused.log`. New regressions cover a locked
+learning audit after accepted fix, initial start and resume; recovery of accepted
+local/remote execution records before audit; restart without redispatch; and lost
+audit replies while preserving later attempts. A pending outbox record is saved
+atomically with ownership and cursor; retries never overwrite newer pinned advice.
+The representative offline output `/private/tmp/review-learning-batch4-preview.json`
+shows exact repository/input/run linkage before and after audit recovery.
+
+The initial restricted focused run could not identify the process for an existing
+learning-store lock test; the supported host escalation passed all 63 cases.
+No live isolation retry or model call was made. Linux/live evidence and all recorded
+implementation gaps remain outstanding; production stays **UNQUALIFIED**.

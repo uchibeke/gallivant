@@ -160,6 +160,15 @@ cancellation capabilities with honest confirmation limits. If old native memory
 contains retired advice, resume refuses and preserves task, PR and code. Automatic
 fresh-provider continuation remains to be implemented; old memory is not erased.
 
+Accepted run ownership, feedback cursors and pending delivery audit records are
+saved together before writing to the learning store. If that store is locked or
+unavailable, coding continues with its pinned context and the registry retains
+the exact repository/input/run tuple. Coordinator ticks retry up to ten pending
+records per entry, including after restart or completion. Lost replies are safe
+to retry; an older audit cannot replace a later attempt's pinned context. A pending
+audit warning means reports may temporarily omit that delivery, not that its worker
+failed to start. Preserve the registry as well as the learning store during recovery.
+
 ## Privacy, backup and recovery
 
 Raw excerpts are bounded to 2 KiB, redacted and escaped before persistence. Source

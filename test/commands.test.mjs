@@ -790,3 +790,20 @@ test("the packaged template is found by the installed package, not by a relative
   for (const name of ["prd.md", "passport.gallivant.json"]) assert.ok(existsSync(templatePath(name)), `${name} ships with the package`);
   assert.ok(templatePath("prd.md").startsWith("/"), "resolved absolutely, so it works from any cwd");
 });
+
+
+test("initial start retains accepted ownership when the learning delivery audit is locked", async () => {
+  const w = startWorld(), repo = { host: "github.com", id: "1234" };
+  let observed;
+  w.ctx.learning = { identityFor: () => repo, resolveRepo: async () => repo, mode: () => "apply",
+    context: async () => ({ key: "d".repeat(64), section: "Advisory", rules: [] }),
+    delivered: async (_repo, _key, runId) => {
+      observed = { runId, entry: w.ctx.state.entries()[0][1] };
+      throw new Error("operation.lock busy");
+    } };
+  const result = await start(w.ctx, { path: w.prdPath });
+  assert.equal(observed.runId, result.run);
+  assert.equal(observed.entry.last.run, result.run);
+  assert.equal(Object.keys(observed.entry.learning_deliveries).length, 1);
+  assert.equal(w.ctx.state.get(result.id).last.run, result.run);
+});

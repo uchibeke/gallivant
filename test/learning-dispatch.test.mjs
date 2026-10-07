@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { learningInput, learningDelivered, revokeLearningAttempts } from "../lib/learning_input.mjs";
+import { learningInput, learningDelivered, learningDeliveryPatch, revokeLearningAttempts } from "../lib/learning_input.mjs";
 import { createLearningService } from "../lib/learning.mjs";
 import { repo, fixture } from "./learning-fixtures.mjs";
 import { hash } from "../lib/learning_data.mjs";
@@ -18,10 +18,12 @@ test("shared local/hosted inputs retain exact task gates and record the managed 
     delivered: async (_repo, key, runId) => ({ key, runId, delivered: true }),
   };
   for (const harness of ["codex", "claude", "openai-agents", "codex-cloud"]) {
-    const ctx = { learning: service, state: { update: (...args) => updates.push(args) } };
+    let entry;
+    const ctx = { learning: service, state: { get: () => entry, update: (_id, patch) => { entry = { ...entry, ...patch(entry) }; updates.push(entry); } } };
     const managed = await learningInput(ctx, "task-1", { repo: "example/project", harness }, input);
     assert(managed.prompt.startsWith(input.prompt)); assert(managed.prompt.includes("Reviewed advisory")); assert.equal(managed.allowance, input.allowance); assert.deepEqual(managed.mandatoryPolicy, input.mandatoryPolicy);
-    await learningDelivered(ctx, "task-1", managed, { id: "run-1" });
+    entry = { last: { run: "run-1" }, ...learningDeliveryPatch({}, managed, { id: "run-1" }) };
+    await learningDelivered(ctx, "task-1");
     assert.equal(managed.managedInputDigest, hash({ ...input, advice: "Reviewed advisory guidance" }));
   }
   assert.equal(updates.length, 4);
@@ -97,4 +99,71 @@ test("bounded automatic observation rotates across stable watched order and fail
   assert.equal(new Set(observed).size, 201);
   assert.deepEqual(observed.slice(0, 100).sort((a, b) => a - b), Array.from({ length: 100 }, (_, i) => i + 1));
   assert.deepEqual(observed.slice(100, 200).sort((a, b) => a - b), Array.from({ length: 100 }, (_, i) => i + 101));
+});
+
+
+test("accepted fix ownership and cursor survive learning audit failure and restart without redispatch", async t => {
+  const { state, id, home } = seededState(), clock = makeClock(), runner = fakeRunner(clock);
+  t.after(() => rmSync(home, { recursive: true, force: true }));
+  const gh = fakeGh({ inline: [inline({ id: 9, by: "me", at: at(1), body: "Validate the error path" })] });
+  let locked = true, audits = 0;
+  const learning = { identityFor: () => repo, mode: () => "apply", resolveRepo: async () => repo,
+    context: async () => ({ key: "a".repeat(64), section: "Advisory", rules: [{ id: "lesson-x", digest: "b".repeat(64) }] }),
+    observe: async () => {}, delivered: async (_repo, key, runId) => {
+      audits++;
+      assert.equal(state.get(id).last.run, runId, "ownership precedes audit");
+      assert.equal(state.get(id).cursor.since, at(1), "feedback acknowledged before audit");
+      assert.equal(state.get(id).learning.rules[0].id, "lesson-x", "revocation knows delivered advice even while audit is locked");
+      if (locked) throw new Error("operation.lock busy");
+      return { key, runId, delivered: true };
+    } };
+  const deps = { config: CONFIG, state, gh, git: fakeGit(), notify: fakeNotify(), log: silentLog, clock, ownLogin: "me", runnerFor: () => runner, readPrd: () => null, credential: fakeCredential(), identity: fakeIdentity(), learning };
+  const before = state.get(id).iteration;
+  assert((await makeTick(deps).tick()).every(r => r.ok));
+  assert.equal(runner.started.length, 1); assert.equal(audits, 1);
+  assert.equal(Object.keys(state.get(id).learning_deliveries).length, 1);
+  assert.equal(state.get(id).iteration, before);
+  locked = false;
+  assert((await makeTick(deps).tick()).every(r => r.ok));
+  assert.equal(audits, 2); assert.equal(runner.started.length, 1);
+  assert.deepEqual(state.get(id).learning_deliveries, {});
+  assert.equal(state.get(id).learning.delivered, true);
+});
+
+test("accepted execution recovery persists ownership before retryable delivery audit", async t => {
+  for (const transport of ["local", "remote"]) {
+    const { state, id, home } = seededState(); t.after(() => rmSync(home, { recursive: true, force: true }));
+    const clock = makeClock(), runner = fakeRunner(clock), entry = state.get(id);
+    const run = { id: "accepted-run", running: true, execution: { version: 1, acceptance: "accepted", transport,
+      operationId: `${entry.last?.run || "initial"}:${entry.iteration}:fix`,
+      workflow: { cursor: { ...entry.cursor, since: at(1) } },
+      learning: { repo, key: "c".repeat(64), rules: [] } } };
+    runner.current = () => run;
+    let audits = 0;
+    const learning = { identityFor: () => null, delivered: async () => {
+      audits++; assert.equal(state.get(id).last.run, run.id); assert.equal(state.get(id).cursor.since, at(1));
+      throw new Error("operation.lock busy");
+    } };
+    const tick = makeTick({ config: CONFIG, state, gh: fakeGh(), git: fakeGit(), notify: fakeNotify(), log: silentLog, clock,
+      ownLogin: "me", runnerFor: () => runner, executionFor: () => runner, readPrd: () => null, learning });
+    assert((await tick.tick()).every(r => r.ok));
+    assert.equal(audits, 1); assert.equal(state.get(id).last.run, run.id);
+    assert.equal(Object.keys(state.get(id).learning_deliveries).length, 1);
+    assert.equal(runner.started.length, 0);
+  }
+});
+
+test("delivery outbox retains older runs and retries lost replies without replacing newer advice", async () => {
+  let entry = {}, calls = 0, fail = true;
+  const managed = key => ({ learning: { repo, key, rules: [] } });
+  for (const runId of ["run-old", "run-new"]) entry = { ...entry, last: { run: runId }, ...learningDeliveryPatch(entry, managed(runId), { id: runId }) };
+  const ctx = { state: { get: () => entry, update: (_id, patch) => { if (fail) { fail = false; throw new Error("registry write failed after audit commit"); } entry = { ...entry, ...patch(entry) }; } },
+    learning: { delivered: async (_repo, key, runId) => { calls++; return { key, runId, delivered: true }; } } };
+  await learningDelivered(ctx, "task");
+  assert.equal(Object.keys(entry.learning_deliveries).length, 2);
+  assert.equal(entry.learning.key, "run-new");
+  await learningDelivered(ctx, "task");
+  assert.equal(calls, 3); assert.deepEqual(entry.learning_deliveries, {});
+  assert.equal(entry.learning.key, "run-new"); assert.equal(entry.learning.runId, "run-new");
+  assert.deepEqual(learningDeliveryPatch(entry, managed("unknown"), { id: "pending", execution: { acceptance: "unknown" } }), {});
 });

@@ -195,3 +195,20 @@ test("a missing checkout is recreated from the branch, because the session's mem
   assert.deepEqual(w.cloned, [w.state.get(w.id).worktree]);
   assert.equal(w.runner.started.length, 1, "and the run still starts");
 });
+
+
+test("resume retains accepted ownership when the learning delivery audit is locked", async () => {
+  const w = world(), repo = { host: "github.com", id: "1234" };
+  let observed;
+  w.ctx.learning = { identityFor: () => repo, resolveRepo: async () => repo, mode: () => "apply",
+    context: async () => ({ key: "d".repeat(64), section: "Advisory", rules: [] }),
+    delivered: async (_repo, _key, runId) => {
+      observed = { runId, entry: w.ctx.state.entries()[0][1] };
+      throw new Error("operation.lock busy");
+    } };
+  const result = await resume(w.ctx, { handle: w.id });
+  assert.equal(observed.runId, result.run);
+  assert.equal(observed.entry.last.run, result.run);
+  assert.equal(Object.keys(observed.entry.learning_deliveries).length, 1);
+  assert.equal(w.ctx.state.get(result.id).last.run, result.run);
+});
