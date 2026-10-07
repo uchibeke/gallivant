@@ -8,6 +8,13 @@ It implements adapters for Claude Code, Codex, Gemini CLI, OpenCode and Goose, w
 
 Node 22, `gh` for all GitHub access, ntfy for notifications. One bundled TOML parser preserves Codex configuration during isolated preparation. No GitHub App, webhook server or database.
 
+Repository review learning adds bounded collection and exact candidate review through
+`gallivant learn`. Approved-memory signing and activation are tested with disposable
+OpenSSH keys, but production learning remains **UNQUALIFIED and collection only**:
+installed worker/extractor isolation still needs implementation and live qualification.
+Learning defaults off, requires human review, and cannot change task or completion
+gates. See [learning](docs/learning.md) and its [qualification record](docs/audit/learning-qualification.md).
+
 With Claude or Codex configured, you can also start from natural language:
 `gallivant task "Add CSV export without new dependencies" --harness claude`
 prepares an isolated, validated brief. Add `--run` to authorize

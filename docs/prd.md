@@ -1,5 +1,12 @@
 # The PRD contract
 
+Repository review lessons are advisory shared inputs. They cannot rewrite this
+contract, its Verify commands, acceptance criteria or APort completion gates.
+Candidate/repository instructions are not learning approval authority. See
+[learning](learning.md) for exact revision review, signed activation and the
+collection-only qualification status; an incomplete implementation receipt must
+keep unmet criteria false.
+
 A PRD is the whole brief a session gets, and the only thing you write by hand. So the rules are strict, there is no override flag, and `gallivant start` refuses a PRD that has not passed `gallivant ready`.
 
 ```bash

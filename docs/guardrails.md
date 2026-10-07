@@ -1,5 +1,18 @@
 # Guardrails
 
+Review learning adds a separate signature boundary, not a new permission source.
+Workers may propose data but cannot enroll keys, write trust/checkpoints or activate
+memory. File modes and TTYs alone do not isolate a same-UID arbitrary-shell worker;
+native escalation and control routes must also be excluded. Current adapters are
+UNQUALIFIED for learning application and remain collection only. OpenSSH signing
+pins the executable, removes agent/askpass/loader variables, requires an encrypted
+dedicated key and verifies exact canonical content before activation and dispatch.
+An explicit `resume --fresh-session` requires settled ownership and cannot clear
+unrelated stop fences or reset cumulative execution allowance. Lost replies use
+the same session-identity checks as submission. This does not qualify an otherwise
+unsupported learning profile.
+See [learning](learning.md) for limits, recovery and actual missing qualification.
+
 Unattended runs act with your GitHub identity on your code. Each guarantee below names the control that provides it. APort is installed on both harnesses from day one, and this page is honest about what it enforces today and what it does not.
 
 | Guarantee | Control | APort's part |
