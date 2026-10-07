@@ -2,9 +2,9 @@
   "version": 1,
   "task_id": "task-608e7283e7d7d42cfb91eb6b",
   "scope": "Supported native CLI transport and offline shared lifecycle/PR conformance; live qualification remains unverified",
-  "recorded_at": "2026-10-07T04:56:26.902554+00:00",
+  "recorded_at": "2026-10-07T05:20:53.007204+00:00",
   "base_revision": "2b4514fb27fcb493e62bfed913fffc204215f155",
-  "implementation_revision": "b385123bef5563f05984172b3e8def19417784e7",
+  "implementation_revision": "339c4d80a2a6e2197de939419311b2f359f16001",
   "branch": "work/codex-cloud-harness",
   "source_files": {
     "README.md": "9e6e79dfe29e0e3f6b876d53dfdadafd5869158a662782468e461ed9316bfa2d",
@@ -27,14 +27,15 @@
     "lib/probe.mjs": "9e5d91970dd021f6524366fb224a3c23ab13177949ba34d135b5b7c44bcf63e7",
     "lib/tick.mjs": "4b75ad239705f0e13cecdc4b69528668fa7610efaac568972fd80cdd22b0317e",
     "package.json": "7af15137d9b914464d70b567e2278debb39aef4723871844941c2cf07ae3d19c",
-    "test/codex-cloud-live.mjs": "11bebf6724e5fddde3df2093cf3556f0909dbf1a710c42d30649b6312b9cdc44",
-    "test/codex-cloud.test.mjs": "ff99deba00e1fa3dce773960a94e460fff460e622631b6c42814e15255342cac",
+    "test/codex-cloud-live.mjs": "dce42bf102ef01bfce743e14a07b6550fa442b24ce48cc9c66f8630b5b91886c",
+    "test/codex-cloud.test.mjs": "d124a7b25c02ca52a12059cd01710cc36df6994916a4be4b1b4aa6b356f4b835",
     "test/execution-backends.test.mjs": "1c06b8ee5f4286a81c45b3ded9b0d707534260a34fcad84d59f6cc5f078f5c49",
     "test/units.test.mjs": "d874ff9dfd72774b014ba68c30ecf90945554f38968a8334b3ca4cfea22e91a7",
     "lib/execution_io.mjs": "b63df0d51bb54700e74cd9804fb5a77ca2c2bfcac4070484082bf1272eb6d7d5",
     "lib/openai_agents.mjs": "3b67fe601cb8ad268f2d997d55e19bad4aca1f016293595036825892d1991702",
     "test/openai-agents.test.mjs": "ad2edea7c06ce45b1ad34e869b59f1e68c6c71667b45c7026b777bdbbb888c64",
-    "lib/gh.mjs": "c61f812d70c1c35d379e947bc99af4122013254119c7a0fad585e5f48e1e85b1"
+    "lib/gh.mjs": "c61f812d70c1c35d379e947bc99af4122013254119c7a0fad585e5f48e1e85b1",
+    "test/codex-cloud-live-validation.mjs": "a0cdaf556b10ddf00269641350915e897a3d555ed195cd338a3af8c19d7d113a"
   },
   "frozen_inputs": {
     "docs/plans/plugin-ready-gallivant.md": "3081d47d8161043f9c32b6184f07ee8d4ca513822341c41a138bdf28f7459fc2",
@@ -48,18 +49,18 @@
       "command": "npm test",
       "exit": 0,
       "raw_log": {
-        "path": "/tmp/cloud-repository-case-test.log",
-        "sha256": "e273cf96e23ebf4642e373e96c86be854dcbba157e9b7100f929357a9b347323"
+        "path": "/tmp/cloud-live-case-test.log",
+        "sha256": "ca3284241151f18615dfb0232973ebbccb02739e19dd4e02f5b76852139db999"
       },
       "tap_runs": [
         {
-          "tests": 1188,
-          "pass": 1188,
+          "tests": 1190,
+          "pass": 1190,
           "fail": 0,
           "cancelled": 0,
           "skipped": 0,
           "deferred_tests": 0,
-          "duration_ms": 365384.632208
+          "duration_ms": 356017.235166
         }
       ]
     },
@@ -67,7 +68,7 @@
       "command": "npm run lint",
       "exit": 0,
       "raw_log": {
-        "path": "/tmp/cloud-repository-case-lint.log",
+        "path": "/tmp/cloud-live-case-lint.log",
         "sha256": "8c7790de3f018fb4580f18ac70e1b355a0f76f522dd73acbdaa63632feffcecc"
       }
     },
@@ -75,8 +76,8 @@
       "command": "npm run test:execution-backends",
       "exit": 0,
       "raw_log": {
-        "path": "/tmp/cloud-repository-case-backends.log",
-        "sha256": "b532fe918333a298d1d250b55284c16998ec9f54089b7267e519299ebdf589f2"
+        "path": "/tmp/cloud-live-case-backends.log",
+        "sha256": "b628f4cf41b54298b6b385d34d89f60673fa8df7aedacaa3f3fa7ed5bec5ad63"
       },
       "tap_runs": [
         {
@@ -86,7 +87,7 @@
           "cancelled": 0,
           "skipped": 0,
           "deferred_tests": 0,
-          "duration_ms": 365711.1625
+          "duration_ms": 355232.907875
         }
       ]
     },
@@ -94,8 +95,8 @@
       "command": "npm run test:openai-agents",
       "exit": 0,
       "raw_log": {
-        "path": "/tmp/cloud-repository-case-agents.log",
-        "sha256": "cd23baf288d5368eb18b64214667ff2cad47e24385894e3f8b941ea4c0af72e4"
+        "path": "/tmp/cloud-live-case-agents.log",
+        "sha256": "8adafdf86a6152034c4498725ab582d5df48bdc28001fb8ff5133090e2b7b447"
       },
       "tap_runs": [
         {
@@ -105,7 +106,7 @@
           "cancelled": 0,
           "skipped": 0,
           "deferred_tests": 0,
-          "duration_ms": 183849.288625
+          "duration_ms": 170752.134084
         }
       ]
     },
@@ -113,18 +114,18 @@
       "command": "npm run test:codex-cloud",
       "exit": 0,
       "raw_log": {
-        "path": "/tmp/cloud-repository-case-cloud.log",
-        "sha256": "f140de2c7dd3b88cd99029da8c04c3ae7be1b44f246ab3413ba98c5907621074"
+        "path": "/tmp/cloud-live-case-cloud.log",
+        "sha256": "c40c34c4987ca74d88426fcce75e2d1c4401a14f1c7fcbc1912f7ee09e93835e"
       },
       "tap_runs": [
         {
-          "tests": 27,
-          "pass": 27,
+          "tests": 29,
+          "pass": 29,
           "fail": 0,
           "cancelled": 0,
           "skipped": 0,
           "deferred_tests": 0,
-          "duration_ms": 77420.538791
+          "duration_ms": 72540.965834
         },
         {
           "tests": 16,
@@ -133,7 +134,7 @@
           "cancelled": 0,
           "skipped": 0,
           "deferred_tests": 0,
-          "duration_ms": 52581.912083
+          "duration_ms": 39958.148583
         }
       ]
     },
@@ -141,7 +142,7 @@
       "command": "git diff --check",
       "exit": 0,
       "raw_log": {
-        "path": "/tmp/cloud-repository-case-diff.log",
+        "path": "/tmp/cloud-live-case-diff.log",
         "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
       }
     }
@@ -152,6 +153,8 @@
     "test_names": [
       "Cloud capabilities preserve defaults and refuse unsupported delegation, policy, models and attempts",
       "Cloud access checks pinned CLI, ChatGPT sign-in, command surface and chosen environment without inference",
+      "Cloud live preflight accepts repository letter case without relaxing campaign allowance gates",
+      "Cloud live correction accepts repository letter case and preserves session and PR ownership",
       "Cloud native login uses stderr and drops application credentials",
       "Cloud configured deadlines retain delayed submission acknowledgements and successor ownership",
       "Cloud configured deadline aborts the client and retains unknown acceptance without overlapping restart work",
@@ -238,7 +241,7 @@
       {
         "criterion_id": "ac-12",
         "met": true,
-        "evidence": "docs/audit/plugin-ready/codex-cloud.json commands records 1188 full, 397 execution-backends, 59 openai-agents, 27 Cloud adapter and 16 shared cases passing; repository_identity_followup includes two failing-before-fix cases, shared remote identity regression and recorded snapshot/restart/successor output"
+        "evidence": "docs/audit/plugin-ready/codex-cloud.json commands records 1190 full, 397 execution-backends, 59 openai-agents, 29 Cloud adapter and 16 shared cases passing; live_repository_identity_followup records two failing-before-fix cases, all 16 configuration/ledger/brief casing combinations and unchanged allowance/session/PR rejection gates"
       },
       {
         "criterion_id": "ac-13",
@@ -753,7 +756,7 @@
       }
     ]
   },
-  "previous_implementation_revision": "363f8a27d8cbba9fa53d37b1bc50b31528e68b9a",
+  "previous_implementation_revision": "b385123bef5563f05984172b3e8def19417784e7",
   "environment_listing_followup": {
     "review_id": 5437267892,
     "inline_comment_ids": [
@@ -1997,6 +2000,345 @@
     },
     "local_completion_diagnostic": {
       "path": "/tmp/cloud-repository-case-gate.json",
+      "sha256": "d4567010225ad1fa3bebd4bc94d12e5dfc34ab44c24ab2decfd1bb7ce43089b8",
+      "kind": "Local evaluator over proposed receipt and complete added output; no hosted approval or live qualification",
+      "remaining_denial_codes": [
+        "oap.criteria_not_met"
+      ]
+    }
+  },
+  "live_repository_identity_followup": {
+    "review_id": 5437873190,
+    "inline_comment_id": 4203266001,
+    "observed_head": "23245c4adbab9adf249ec1d48da374c05e33dc52",
+    "source_revision": "339c4d80a2a6e2197de939419311b2f359f16001",
+    "rule": "The live worker configuration, account ledger, authorized repository and resolved brief identify one case-insensitive GitHub repository; saved logical task/session/PR ownership stays intact",
+    "fixed_boundaries": [
+      "test/codex-cloud-live-validation.mjs cloudLedgerBlockers, cloudRequestBlockers and cloudCorrectionMatches",
+      "test/codex-cloud-live.mjs preflight and correction use the same read-only guards"
+    ],
+    "reviewed_boundaries": [
+      "lib/gh.mjs repositoryMatches",
+      "lib/codex_cloud.mjs prepare and restart ownership",
+      "lib/codex_cloud_input.mjs configured repository and exact snapshot delivery",
+      "lib/codex_cloud_result.mjs immutable result envelope",
+      "test/codex-cloud-live.mjs account access, outside-repository ledger, phase-intent fence, exact stored task lookup, reservation before dispatch, restart observation, deadline cancellation, error journal and daemon lock cleanup"
+    ],
+    "unchanged_gates": [
+      "API aggregate USD 10 ledger and reconciled charges",
+      "operator account",
+      "selected environment",
+      "ChatGPT billing source",
+      "positive integer task allowance",
+      "current usage evidence within one day",
+      "observation deadline at most 120 seconds",
+      "selected Cloud harness",
+      "exact saved logical task lookup",
+      "session",
+      "PR",
+      "current-head trusted findings",
+      "single phase intent and reservation"
+    ],
+    "before_fix": {
+      "command": "node --test --test-name-pattern='Cloud live preflight|Cloud live correction' test/codex-cloud.test.mjs",
+      "exit": 1,
+      "kind": "Extracted unchanged strict predicates used by the opt-in runner, tested offline before applying repositoryMatches",
+      "raw_log": {
+        "path": "/tmp/cloud-live-case-before.log",
+        "sha256": "10ad7faa9471f3e8affe5d65a877b29906270bd1a8aa05e879fbacffddabb609"
+      },
+      "tap_runs": [
+        {
+          "tests": 2,
+          "pass": 0,
+          "fail": 2,
+          "cancelled": 0,
+          "skipped": 0,
+          "deferred_tests": 0,
+          "duration_ms": 74.027959
+        }
+      ]
+    },
+    "focused_verify": {
+      "command": "node --test --test-name-pattern='Cloud live preflight|Cloud live correction' test/codex-cloud.test.mjs",
+      "exit": 0,
+      "raw_log": {
+        "path": "/tmp/cloud-live-case-focused.log",
+        "sha256": "c735cdf603bafc3a8eff16a031e0f003fa7464953c6739a6c76727f34830ed8e"
+      },
+      "tap_runs": [
+        {
+          "tests": 2,
+          "pass": 2,
+          "fail": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "deferred_tests": 0,
+          "duration_ms": 78.189667
+        }
+      ]
+    },
+    "representative_generated_output": {
+      "kind": "Offline read-only guard results only; no native account/model access, provider tasks or live implementation/correction evidence",
+      "raw_log": {
+        "path": "/tmp/cloud-live-case-focused.log",
+        "sha256": "c735cdf603bafc3a8eff16a031e0f003fa7464953c6739a6c76727f34830ed8e"
+      },
+      "records": [
+        {
+          "liveRepositoryPreflight": {
+            "kind": "offline read-only validation; no live qualification",
+            "cases": [
+              {
+                "configuredRepo": "acme/widget",
+                "authorizedRepo": "acme/widget",
+                "ledgerRepo": "acme/widget",
+                "canonicalRepo": "acme/widget",
+                "blockers": []
+              },
+              {
+                "configuredRepo": "acme/widget",
+                "authorizedRepo": "acme/widget",
+                "ledgerRepo": "acme/widget",
+                "canonicalRepo": "Acme/Widget",
+                "blockers": []
+              },
+              {
+                "configuredRepo": "acme/widget",
+                "authorizedRepo": "acme/widget",
+                "ledgerRepo": "Acme/Widget",
+                "canonicalRepo": "acme/widget",
+                "blockers": []
+              },
+              {
+                "configuredRepo": "acme/widget",
+                "authorizedRepo": "acme/widget",
+                "ledgerRepo": "Acme/Widget",
+                "canonicalRepo": "Acme/Widget",
+                "blockers": []
+              },
+              {
+                "configuredRepo": "acme/widget",
+                "authorizedRepo": "Acme/Widget",
+                "ledgerRepo": "acme/widget",
+                "canonicalRepo": "acme/widget",
+                "blockers": []
+              },
+              {
+                "configuredRepo": "acme/widget",
+                "authorizedRepo": "Acme/Widget",
+                "ledgerRepo": "acme/widget",
+                "canonicalRepo": "Acme/Widget",
+                "blockers": []
+              },
+              {
+                "configuredRepo": "acme/widget",
+                "authorizedRepo": "Acme/Widget",
+                "ledgerRepo": "Acme/Widget",
+                "canonicalRepo": "acme/widget",
+                "blockers": []
+              },
+              {
+                "configuredRepo": "acme/widget",
+                "authorizedRepo": "Acme/Widget",
+                "ledgerRepo": "Acme/Widget",
+                "canonicalRepo": "Acme/Widget",
+                "blockers": []
+              },
+              {
+                "configuredRepo": "Acme/Widget",
+                "authorizedRepo": "acme/widget",
+                "ledgerRepo": "acme/widget",
+                "canonicalRepo": "acme/widget",
+                "blockers": []
+              },
+              {
+                "configuredRepo": "Acme/Widget",
+                "authorizedRepo": "acme/widget",
+                "ledgerRepo": "acme/widget",
+                "canonicalRepo": "Acme/Widget",
+                "blockers": []
+              },
+              {
+                "configuredRepo": "Acme/Widget",
+                "authorizedRepo": "acme/widget",
+                "ledgerRepo": "Acme/Widget",
+                "canonicalRepo": "acme/widget",
+                "blockers": []
+              },
+              {
+                "configuredRepo": "Acme/Widget",
+                "authorizedRepo": "acme/widget",
+                "ledgerRepo": "Acme/Widget",
+                "canonicalRepo": "Acme/Widget",
+                "blockers": []
+              },
+              {
+                "configuredRepo": "Acme/Widget",
+                "authorizedRepo": "Acme/Widget",
+                "ledgerRepo": "acme/widget",
+                "canonicalRepo": "acme/widget",
+                "blockers": []
+              },
+              {
+                "configuredRepo": "Acme/Widget",
+                "authorizedRepo": "Acme/Widget",
+                "ledgerRepo": "acme/widget",
+                "canonicalRepo": "Acme/Widget",
+                "blockers": []
+              },
+              {
+                "configuredRepo": "Acme/Widget",
+                "authorizedRepo": "Acme/Widget",
+                "ledgerRepo": "Acme/Widget",
+                "canonicalRepo": "acme/widget",
+                "blockers": []
+              },
+              {
+                "configuredRepo": "Acme/Widget",
+                "authorizedRepo": "Acme/Widget",
+                "ledgerRepo": "Acme/Widget",
+                "canonicalRepo": "Acme/Widget",
+                "blockers": []
+              }
+            ],
+            "providerCalls": 0,
+            "inputRecordsUnchanged": true
+          }
+        },
+        {
+          "liveRepositoryCorrection": {
+            "kind": "offline read-only validation; no live qualification",
+            "canonicalRepo": "Acme/Widget",
+            "storedRepo": "acme/widget",
+            "taskId": "acme/widget/task",
+            "session": "task_fixture1",
+            "pr": 11,
+            "providerCalls": 0,
+            "inputRecordsUnchanged": true
+          }
+        }
+      ]
+    },
+    "regressions": [
+      "Cloud live preflight accepts repository letter case without relaxing campaign allowance gates",
+      "Cloud live correction accepts repository letter case and preserves session and PR ownership"
+    ],
+    "previous_verify": [
+      {
+        "command": "npm test",
+        "exit": 0,
+        "raw_log": {
+          "path": "/tmp/cloud-repository-case-test.log",
+          "sha256": "e273cf96e23ebf4642e373e96c86be854dcbba157e9b7100f929357a9b347323"
+        },
+        "tap_runs": [
+          {
+            "tests": 1188,
+            "pass": 1188,
+            "fail": 0,
+            "cancelled": 0,
+            "skipped": 0,
+            "deferred_tests": 0,
+            "duration_ms": 365384.632208
+          }
+        ]
+      },
+      {
+        "command": "npm run lint",
+        "exit": 0,
+        "raw_log": {
+          "path": "/tmp/cloud-repository-case-lint.log",
+          "sha256": "8c7790de3f018fb4580f18ac70e1b355a0f76f522dd73acbdaa63632feffcecc"
+        }
+      },
+      {
+        "command": "npm run test:execution-backends",
+        "exit": 0,
+        "raw_log": {
+          "path": "/tmp/cloud-repository-case-backends.log",
+          "sha256": "b532fe918333a298d1d250b55284c16998ec9f54089b7267e519299ebdf589f2"
+        },
+        "tap_runs": [
+          {
+            "tests": 397,
+            "pass": 397,
+            "fail": 0,
+            "cancelled": 0,
+            "skipped": 0,
+            "deferred_tests": 0,
+            "duration_ms": 365711.1625
+          }
+        ]
+      },
+      {
+        "command": "npm run test:openai-agents",
+        "exit": 0,
+        "raw_log": {
+          "path": "/tmp/cloud-repository-case-agents.log",
+          "sha256": "cd23baf288d5368eb18b64214667ff2cad47e24385894e3f8b941ea4c0af72e4"
+        },
+        "tap_runs": [
+          {
+            "tests": 59,
+            "pass": 59,
+            "fail": 0,
+            "cancelled": 0,
+            "skipped": 0,
+            "deferred_tests": 0,
+            "duration_ms": 183849.288625
+          }
+        ]
+      },
+      {
+        "command": "npm run test:codex-cloud",
+        "exit": 0,
+        "raw_log": {
+          "path": "/tmp/cloud-repository-case-cloud.log",
+          "sha256": "f140de2c7dd3b88cd99029da8c04c3ae7be1b44f246ab3413ba98c5907621074"
+        },
+        "tap_runs": [
+          {
+            "tests": 27,
+            "pass": 27,
+            "fail": 0,
+            "cancelled": 0,
+            "skipped": 0,
+            "deferred_tests": 0,
+            "duration_ms": 77420.538791
+          },
+          {
+            "tests": 16,
+            "pass": 16,
+            "fail": 0,
+            "cancelled": 0,
+            "skipped": 0,
+            "deferred_tests": 0,
+            "duration_ms": 52581.912083
+          }
+        ]
+      },
+      {
+        "command": "git diff --check",
+        "exit": 0,
+        "raw_log": {
+          "path": "/tmp/cloud-repository-case-diff.log",
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      }
+    ],
+    "paid_cloud_dispatches": 0,
+    "live_prerequisites": {
+      "absent": [
+        "CODEX_CLOUD_LIVE_HOME",
+        "CODEX_CLOUD_LIVE_PRD",
+        "CODEX_CLOUD_LIVE_REPO",
+        "CODEX_CLOUD_CAMPAIGN_LEDGER"
+      ],
+      "action": "Original failed native preflight and unavailable attempt identity preserved; no unchanged blocked live call repeated. Supply the private worker configuration, approved brief, authorized disposable environment/repository, demonstrated model access, supported native attempt-ID interface and current campaign/account allowance ledger before live qualification"
+    },
+    "local_completion_diagnostic": {
+      "path": "/tmp/cloud-live-case-gate.json",
       "sha256": "d4567010225ad1fa3bebd4bc94d12e5dfc34ab44c24ab2decfd1bb7ce43089b8",
       "kind": "Local evaluator over proposed receipt and complete added output; no hosted approval or live qualification",
       "remaining_denial_codes": [
