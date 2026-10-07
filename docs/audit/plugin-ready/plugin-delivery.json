@@ -12,8 +12,7 @@
     "sourceVerified": true,
     "uncommittedPayload": [
       "lib/plugin_package.mjs",
-      "lib/task_delivery.mjs",
-      "lib/task_delivery_contract.mjs"
+      "lib/runtime_state.mjs"
     ],
     "mergedM5": false,
     "predecessorMerges": [
@@ -22,14 +21,14 @@
       "2b4514fb27fcb493e62bfed913fffc204215f155",
       "96e81031516bdf6663dd3b97ac39b8f57022568b"
     ],
-    "testedSourceCommit": "67cc4ce91e63a6f29c4dda1a7dc9c76e04969cd0"
+    "testedSourceCommit": "c169957f1aeebdfbb99bd6489d56b04af189c99e"
   },
   "artifact": {
     "coreArtifact": "gallivant-0.2.0.tgz",
-    "coreSha256": "cc862fa646887aee417d5ed40ff531a27bc6eed90b1b62c5503b70ca3571dde4",
+    "coreSha256": "60e1a760778c40487f3d6fced210e12ee1a8570ed7efbc0996136fdd0a26dcd6",
     "hashes": {
       "plugin": "8753892ceb5552fc37ba011929830f4c754d717f8d8031e31fb9b4935b465e1a",
-      "runtime": "66d6f5a4aad5d4a62625074a8fc837c8f7f257e66b1506b0faa9039ab00e0119",
+      "runtime": "91fa35f515ed27827e53e70508364f4899514b772829e40dc9f2ba39da1c48d4",
       "operations": "86e62501fa7a3d6d29e26830cd43b2648b32978912d2096a8690ed2e2fab0f86"
     },
     "dependencyLockSha256": "bf3969111f7c4b84071fc14c59d870e296ee045024c8056757ac3e3466bc2b28",
@@ -101,7 +100,7 @@
       "lib/openai_agents_input.mjs": "3b012e8c7c51d9d007762e1f849ea3caaf7bbf9ab128a6f5c916bff195b6b83c",
       "lib/openai_agents_sources.mjs": "9d61867d9f86901b084f37d4da6c344df24a0ff71b7ab0537273aad4b18f1132",
       "lib/openai_agents.mjs": "3b67fe601cb8ad268f2d997d55e19bad4aca1f016293595036825892d1991702",
-      "lib/plugin_package.mjs": "0ec9c52c1a7252508f05055500b361a98cba6dceba3c316c3d33607ce35cf80f",
+      "lib/plugin_package.mjs": "e4a7eddb732e8637be92dcae14b17965f72f8410a5df7af3d9b9fc1b42362f8e",
       "lib/prd.mjs": "3e8bd68d62e8e61fe3624cdcc76e27e78e079d77e25a1484aafa7f5ca6f6ffe3",
       "lib/probe.mjs": "e6df979a29b05ee385366cc28787d5adf9254ff90c79444574ed759d0739d5a2",
       "lib/prompt.mjs": "e1c09b06350397feb038c6cae75b798d2970fff5c7b9c03289e2d14e8b390be2",
@@ -113,7 +112,7 @@
       "lib/run.mjs": "3682818ab95bf3b27c262449aa521be094caee9c8f133e94740923ebafb91315",
       "lib/runtime_dependencies.mjs": "6d25b972c116026643f348dc55586009d2746f68b99f47d450b2a3ef35625949",
       "lib/runtime_node.mjs": "1f99515bbe05164d16ff27a5bd0d462880c84fae21973d36078ab3d5e2747df5",
-      "lib/runtime_state.mjs": "c8f594736f47f7640f3b8c35fee433ae5c9fbae702a1dd9c209fc8747dacb306",
+      "lib/runtime_state.mjs": "d268b26a8e020013bc2130a6c1a08664cbddb0d36ce6aac53f7b6b4d7effef2f",
       "lib/sources/index.mjs": "88e1550751e9f52c82e94085bcb77bbd2b80466c9e2192670593f12894c4a4ec",
       "lib/sources/prd.mjs": "b26425213d537d8bf640abee1046481925de30d676fdb9b6a6b9239cdc50effd",
       "lib/start_contract.mjs": "e154f36dcf54c93b4308a93d8926dca8f28358c4e41234dc684008706ea23ab9",
@@ -537,25 +536,25 @@
       {
         "command": "npm test",
         "exitCode": 0,
-        "tests": 1251,
-        "pass": 1251,
+        "tests": 1252,
+        "pass": 1252,
         "fail": 0,
-        "log": "/tmp/plugin-repo-unit.log"
+        "log": "/tmp/plugin-path-unit.log"
       },
       {
         "command": "npm run lint",
         "exitCode": 0,
-        "log": "/tmp/plugin-repo-lint.log"
+        "log": "/tmp/plugin-path-lint.log"
       },
       {
         "command": "npm run test:plugin-package",
         "exitCode": 0,
         "consumerFlowTests": 25,
-        "installedConformanceTests": 427,
+        "installedConformanceTests": 428,
         "fail": 0,
-        "log": "/tmp/plugin-repo-package.log",
-        "consumerEvidence": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/task-plugin-consumer-gvQTGR/evidence.json",
-        "conformanceLog": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/task-plugin-consumer-gvQTGR/conformance.log"
+        "log": "/tmp/plugin-path-package.log",
+        "consumerEvidence": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/task-plugin-consumer-FVeA6S/evidence.json",
+        "conformanceLog": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/task-plugin-consumer-FVeA6S/conformance.log"
       },
       {
         "command": "git diff --check",
@@ -565,10 +564,10 @@
     ],
     "verifiedPayloadFiles": 112,
     "logSha256": {
-      "/tmp/plugin-repo-unit.log": "e0bc63937f64040c9c2b32dce48d7ab8d67e01921ab376fdc36ff5cb542e34dd",
-      "/tmp/plugin-repo-lint.log": "2f32bd854b16ced20ab71be2afd3673b887efc4815c6e55ea7b941ebc5aa8a0b",
-      "/tmp/plugin-repo-package.log": "65a0bc55beade4f534d9d8f299605f5232cc1c050f5745c4b99e1d1fe12e55ac",
-      "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/task-plugin-consumer-gvQTGR/conformance.log": "337778cc07b21f86e33915a09f06036a14f1d8d12225428a2ae74942903fa0da"
+      "/tmp/plugin-path-unit.log": "981655bfe65c11f444ac67b43b63917f4b31cd6fdd6f7b6e319b6dbf3cf87293",
+      "/tmp/plugin-path-lint.log": "2f32bd854b16ced20ab71be2afd3673b887efc4815c6e55ea7b941ebc5aa8a0b",
+      "/tmp/plugin-path-package.log": "14d89d0b086926c4e767a361b31c19f62e5988c6dbf757b66da8d5ba4172c0d8",
+      "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/task-plugin-consumer-FVeA6S/conformance.log": "8d1f66c70e864d7535ed70d4f7eb22c786c308876f6cd58e5ae0cc2e67f25830"
     },
     "hostEvidence": false,
     "fixturePurpose": "Deterministic unpaid installed-artifact compatibility; no actual installed host or live provider qualification",
@@ -1010,5 +1009,30 @@
       "result": "Sandbox process identity unavailable; full suites run with approved native process permissions"
     },
     "externalPrerequisites": "Unchanged unavailable deployment and live provider/host evidence retained; no blocked call repeated"
+  },
+  "canonicalBackupReviewFollowup": {
+    "reviewId": 5443970880,
+    "reviewedCommit": "c169957f1aeebdfbb99bd6489d56b04af189c99e",
+    "items": [
+      {
+        "commentId": 4208263506,
+        "implementation": "lib/runtime_state.mjs canonicalPath and backupRuntimeState",
+        "test": "test/runtime-delivery.test.mjs backup canonicalizes symlink ancestors before checking namespace separation",
+        "rule": "A backup must remain physically outside the namespace, including through existing symlink ancestors"
+      },
+      {
+        "commentId": 4208263518,
+        "implementation": "lib/plugin_package.mjs publicLocalHost",
+        "test": "test/plugin-package.test.mjs public URL matrix local namespace",
+        "rule": "Public destinations cannot use multicast DNS local names"
+      }
+    ],
+    "externalPrerequisites": "Unchanged unavailable deployment and live provider/host evidence retained; no blocked call repeated",
+    "initialVerification": {
+      "unitLog": "/tmp/plugin-path-unit-initial.log",
+      "packageLog": "/tmp/plugin-path-package-initial.log",
+      "conformanceLog": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/task-plugin-consumer-7qGAC2/conformance.log",
+      "result": "Each full suite had one obsolete dangling-symlink error expectation; corrected EEXIST to ENOENT while preserving path-content assertions; 21 focused runtime tests passed before full reruns"
+    }
   }
 }

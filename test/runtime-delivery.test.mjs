@@ -307,8 +307,29 @@ test("restore and backup refuse existing outputs without modifying their content
     if (kind === "symlink") { mkdirSync(target); writeFileSync(join(target, "unrelated"), "keep"); }
     if (kind.includes("symlink")) symlinkSync(target, out);
     assert.throws(() => restoreRuntimeState({ backup, out, manifest }), { code: "EEXIST" });
-    assert.throws(() => backupRuntimeState({ home, out, manifest }), { code: "EEXIST" });
+    assert.throws(() => backupRuntimeState({ home, out, manifest }), { code: kind === "dangling-symlink" ? "ENOENT" : "EEXIST" });
     if (kind.includes("symlink")) assert.equal(lstatSync(out).isSymbolicLink(), true);
     if (kind !== "dangling-symlink") assert.equal(readFileSync(kind === "file" ? out : join(out, "unrelated"), "utf8"), "keep");
   }
+});
+
+
+test("backup canonicalizes symlink ancestors before checking namespace separation", () => {
+  const root = tempHome(), home = join(root, "home"), alias = join(root, "alias");
+  mkdirSync(home); mkdirSync(join(home, "tasks")); symlinkSync(home, alias);
+  for (const inputHome of [home, alias]) {
+    for (const out of [join(alias, "tasks", "backup"), join(home, "tasks", "backup"), join(alias, "tasks", "missing", "backup"), alias, root]) {
+      assert.throws(() => backupRuntimeState({ home: inputHome, out, manifest }), { code: "RUNTIME_STATE", message: /outside/ });
+      assert.equal(existsSync(join(home, "tasks", "backup")), false);
+      assert.equal(existsSync(join(home, "daemon.lock")), false);
+    }
+  }
+  const external = join(root, "external"), externalAlias = join(root, "external-alias");
+  mkdirSync(external); symlinkSync(external, externalAlias);
+  const backup = join(externalAlias, "backup");
+  backupRuntimeState({ home: alias, out: backup, manifest });
+  assert.equal(existsSync(join(external, "backup", "backup.json")), true);
+  const dangling = join(root, "dangling"); symlinkSync(join(home, "absent"), dangling);
+  assert.throws(() => backupRuntimeState({ home, out: join(dangling, "backup"), manifest }), { code: "ENOENT" });
+  assert.equal(lstatSync(dangling).isSymbolicLink(), true);
 });

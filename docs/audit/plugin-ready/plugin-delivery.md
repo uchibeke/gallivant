@@ -119,6 +119,12 @@ The restore finding did not reproduce: native non-recursive `mkdirSync` throws
 `EEXIST` before cleanup. Source and installed regressions prove existing files,
 directories and symlinks remain intact for both restore and backup.
 
+Backup separation checks now resolve existing ancestors for both namespace and
+destination before locking or creating output. Source and installed regressions
+cover namespace aliases, aliased nested destinations, missing suffixes, dangling
+symlinks and a valid external alias. Public URL checks reject `local` and its
+subdomains, including uppercase and trailing-dot forms in every URL field.
+
 Unmet attestations remain explicit:
 
 - **ac-5:** Actual Pages runtime/binding execution is unavailable. Node package
