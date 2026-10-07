@@ -12,6 +12,7 @@ import { acquireDaemon } from "../lib/daemon.mjs";
 import { entryId } from "../lib/state.mjs";
 import { contentHash } from "../lib/openai_agents_sources.mjs";
 import { deriveEvents, makeTrust } from "../lib/events.mjs";
+import { cloudLedgerBlockers, cloudRequestBlockers, cloudCorrectionMatches } from "./codex-cloud-live-validation.mjs";
 const phase = process.argv.find(value => value.startsWith("--phase="))?.slice(8) || "preflight";
 const execute = process.argv.includes("--execute");
 const report = { version: 1, kind: "live", status: "unverified", phase, at: new Date().toISOString(), blockers: [], costUsd: null, costSource: "chatgpt-account", continuity: "successor-task" };
@@ -23,11 +24,9 @@ try { if (!report.blockers.length) {
   const ctx = makeContext({ home }), config = ctx.config.harness["codex-cloud"], ledger = readJson(ledgerPath), evidencePath = join(home, "cloud-live-evidence.json");
   const access = await checkCloudAccess(config, { signal: AbortSignal.timeout(10_000) });
   if (!access.ok) report.blockers.push(`${access.detail}: ${access.fix}`);
-  const apiReserved = Array.isArray(ledger?.attempts) ? ledger.attempts.reduce((sum, item) => sum + Math.max(item.reservedUsd, item.observedCostUsd ?? 0), 0) : NaN;
-  if (ledger?.version !== 1 || ledger.limitUsd !== 10 || !Number.isFinite(apiReserved) || apiReserved > ledger.limitUsd || ledger.attempts.some(item => !Number.isFinite(item.reservedUsd) || item.reservedUsd <= 0 || !Number.isFinite(item.observedCostUsd) || item.observedCostUsd < 0)) report.blockers.push("shared API campaign ledger requires reconciled prior charges within aggregate USD 10 allowance");
-  if (ledger?.cloud?.account !== "operator" || ledger.cloud.environment !== config?.environment || ledger.cloud.repo !== process.env.CODEX_CLOUD_LIVE_REPO || ledger.cloud.billingSource !== "chatgpt-account" || !Number.isSafeInteger(ledger.cloud.remainingTasks) || ledger.cloud.remainingTasks < 1 || !ledger.cloud.accountUsageEvidence || !Number.isFinite(Date.parse(ledger.cloud.checkedAt)) || Math.abs(Date.now() - Date.parse(ledger.cloud.checkedAt)) > 86_400_000 || !Number.isFinite(ledger.cloud.taskSeconds) || ledger.cloud.taskSeconds <= 0 || ledger.cloud.taskSeconds > 120) report.blockers.push("Cloud needs separate authorized account allowance, selected environment/repo, current account usage evidence and <=120-second observation deadline");
+  report.blockers.push(...cloudLedgerBlockers(config, ledger, process.env.CODEX_CLOUD_LIVE_REPO));
   const request = await requestFor(process.env.CODEX_CLOUD_LIVE_PRD, { git: ctx.git, gh: ctx.gh });
-  if (request.repo !== process.env.CODEX_CLOUD_LIVE_REPO || request.harness !== "codex-cloud" || request.repo !== config?.repository) report.blockers.push("live brief must select the authorized disposable repository and codex-cloud");
+  report.blockers.push(...cloudRequestBlockers(config, request, process.env.CODEX_CLOUD_LIVE_REPO));
   const campaign = readJson(evidencePath, { version: 1, status: "unverified", phases: {}, taskId: entryId(request.repo, request.id) });
   if (execute && !["implementation", "correction"].includes(phase)) report.blockers.push("execution needs --phase=implementation or --phase=correction");
   if (execute && campaign.phases[phase]) report.blockers.push("phase already has a dispatch intent; reconcile saved task instead of submitting again");
@@ -38,7 +37,7 @@ try { if (!report.blockers.length) {
       const ownLogin = await ctx.gh.user(); let findings = [];
       if (phase === "correction") {
         const entry = ctx.state.get(campaign.taskId);
-        if (!entry || entry.repo !== request.repo || entry.harness !== "codex-cloud" || entry.session !== campaign.sessionId || entry.pr !== campaign.pr) throw new Error("saved campaign task/session/PR differs; no correction authorized");
+        if (!cloudCorrectionMatches(entry, request, campaign)) throw new Error("saved campaign task/session/PR differs; no correction authorized");
         const [pr, reviews, inline, comments] = await Promise.all([ctx.gh.prView(entry.repo, entry.pr), ctx.gh.reviews(entry.repo, entry.pr), ctx.gh.inlineComments(entry.repo, entry.pr, entry.cursor.since), ctx.gh.issueComments(entry.repo, entry.pr, entry.cursor.since)]);
         findings = deriveEvents({ pr, reviews, inline, comments, entry, trust: makeTrust(ctx.config, ownLogin) }).events;
         if (!findings.length || pr.headRefOid !== await ctx.git.head(entry.worktree)) throw new Error("an actual current-head failed check or trusted review finding is required");

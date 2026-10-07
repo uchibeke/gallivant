@@ -22,6 +22,7 @@ import { publicReviewHash } from "../lib/public_output.mjs";
 import { CONFIG, T0, fakeGh, fakeNotify, silentLog, prFixture, tempHome } from "./helpers.mjs";
 import { readJson, writeJsonAtomic } from "../lib/fs.mjs";
 import { contentHash } from "../lib/openai_agents_sources.mjs";
+import { cloudLedgerBlockers, cloudRequestBlockers, cloudCorrectionMatches } from "./codex-cloud-live-validation.mjs";
 const config = { bin: "/fixture/codex", account: "operator", authentication: "operator-chatgpt", mode: "trusted-worker", environment: "env-fixture", repository: "acme/widget", continuation: "successor-task", billing_source: "chatgpt-account", allowance: { remainingUsd: 1, reservedUsd: .1 } };
 const head = "a".repeat(40), repo = config.repository, branch = "work/widget";
 const bytes = gzipSync(Buffer.from(JSON.stringify({ version: 1, inputHead: head, repo, branch, files: [{ path: "answer.txt", data: Buffer.from("old\n").toString("base64"), hash: contentHash("old\n"), mode: 0o644 }] })));
@@ -102,6 +103,39 @@ test("Cloud access checks pinned CLI, ChatGPT sign-in, command surface and chose
   assert.equal((await checkCloudAccess(config, { cli: noFilter })).detail, "CLOUD_VERSION");
   f.auth("Logged in using an API key"); assert.equal((await checkCloudAccess(config, { cli: f.cli })).detail, "CLOUD_AUTH");
   f.version("codex-cli 0.161.0"); assert.equal((await checkCloudAccess(config, { cli: f.cli })).detail, "CLOUD_VERSION");
+});
+test("Cloud live preflight accepts repository letter case without relaxing campaign allowance gates", t => {
+  const now = Date.parse("2026-10-07T00:00:00Z"), spellings = [repo, "Acme/Widget"], observations = [];
+  const ledger = { version: 1, limitUsd: 10, attempts: [{ reservedUsd: 1, observedCostUsd: 1 }], cloud: { account: "operator", environment: config.environment, repo, billingSource: "chatgpt-account", remainingTasks: 2, accountUsageEvidence: "private-account-usage-record", checkedAt: new Date(now).toISOString(), taskSeconds: 120 } };
+  const request = { repo, harness: "codex-cloud" };
+  for (const configuredRepo of spellings) for (const authorizedRepo of spellings) for (const ledgerRepo of spellings) for (const canonicalRepo of spellings) {
+    const selected = { ...config, repository: configuredRepo }, allowance = { ...ledger, cloud: { ...ledger.cloud, repo: ledgerRepo } }, brief = { ...request, repo: canonicalRepo }, before = JSON.stringify({ selected, allowance, brief });
+    assert.deepEqual([...cloudLedgerBlockers(selected, allowance, authorizedRepo, now), ...cloudRequestBlockers(selected, brief, authorizedRepo)], []);
+    assert.equal(JSON.stringify({ selected, allowance, brief }), before);
+    observations.push({ configuredRepo, authorizedRepo, ledgerRepo, canonicalRepo, blockers: [] });
+  }
+  for (const foreign of ["acme/widget-fork", "other/widget", "widget/acme", null]) {
+    assert.ok(cloudLedgerBlockers(config, { ...ledger, cloud: { ...ledger.cloud, repo: foreign } }, repo, now).length);
+    assert.ok(cloudRequestBlockers({ ...config, repository: foreign }, request, repo).length);
+    assert.ok(cloudRequestBlockers(config, { ...request, repo: foreign }, repo).length);
+    assert.ok(cloudRequestBlockers(config, request, foreign).length);
+  }
+  for (const cloud of [{ account: "someone-else" }, { environment: config.environment.toUpperCase() }, { billingSource: "api" }, { remainingTasks: 0 }, { remainingTasks: 1.5 }, { accountUsageEvidence: null }, { checkedAt: "invalid" }, { checkedAt: new Date(now - 86_400_001).toISOString() }, { taskSeconds: 0 }, { taskSeconds: 121 }]) {
+    assert.ok(cloudLedgerBlockers(config, { ...ledger, cloud: { ...ledger.cloud, ...cloud } }, repo, now).length);
+  }
+  for (const invalid of [{ limitUsd: 11 }, { attempts: [{ reservedUsd: 1, observedCostUsd: null }] }, { attempts: [{ reservedUsd: 11, observedCostUsd: 11 }] }]) assert.ok(cloudLedgerBlockers(config, { ...ledger, ...invalid }, repo, now).length);
+  assert.ok(cloudRequestBlockers(config, { ...request, harness: "codex" }, repo).length);
+  t.diagnostic(JSON.stringify({ liveRepositoryPreflight: { kind: "offline read-only validation; no live qualification", cases: observations, providerCalls: 0, inputRecordsUnchanged: true } }));
+});
+test("Cloud live correction accepts repository letter case and preserves session and PR ownership", t => {
+  const request = { repo: "Acme/Widget", harness: "codex-cloud" }, campaign = { taskId: "acme/widget/task", sessionId: "task_fixture1", pr: 11 }, entry = { repo, harness: "codex-cloud", session: campaign.sessionId, pr: campaign.pr };
+  const before = JSON.stringify({ request, campaign, entry });
+  assert.equal(cloudCorrectionMatches(entry, request, campaign), true);
+  assert.equal(cloudCorrectionMatches({ ...entry, repo: request.repo }, { ...request, repo }, campaign), true);
+  for (const change of [{ repo: "acme/widget-fork" }, { repo: "other/widget" }, { repo: null }, { harness: "codex" }, { session: "task_fixture2" }, { pr: 12 }]) assert.equal(cloudCorrectionMatches({ ...entry, ...change }, request, campaign), false);
+  assert.equal(cloudCorrectionMatches(null, request, campaign), false);
+  assert.equal(JSON.stringify({ request, campaign, entry }), before);
+  t.diagnostic(JSON.stringify({ liveRepositoryCorrection: { kind: "offline read-only validation; no live qualification", canonicalRepo: request.repo, storedRepo: entry.repo, taskId: campaign.taskId, session: campaign.sessionId, pr: campaign.pr, providerCalls: 0, inputRecordsUnchanged: true } }));
 });
 test("Cloud native login uses stderr and drops application credentials", async () => {
   const cli = cloudCli(config, async (bin, args, opts) => {
