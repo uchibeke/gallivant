@@ -107,9 +107,15 @@ existing recorded dispatch. An exited submission command acknowledges a URL; it
 does not finish remote work. Native `status` exits nonzero for non-ready tasks;
 the adapter uses the JSON listing's status rather than interpreting an exit as
 task failure. Listings paginate up to 20 pages/1 MiB with shared request deadlines,
-backoff and coordinator concurrency. Exact saved task/environment IDs and a
-single attempt are required. Missing tasks, unexpected attempts, malformed pages,
-cursor loops and failures remain unknown; no newest-task selection occurs.
+backoff and coordinator concurrency. Every page includes the configured `--env`;
+the pinned CLI resolves that environment before issuing its filtered list request.
+Its list-item mapper emits a null `environment_id`, so environment ownership
+comes from the successful filtered request and persisted configuration, while
+the exact saved task ID, URL and single attempt are still required. Contradictory
+environment metadata, missing tasks, unexpected attempts, malformed pages, cursor
+loops and failed filtered requests remain unknown; there is no unfiltered fallback
+or newest-task selection. Status events record the configured environment with
+`environmentSource: filtered-listing`, rather than claiming a per-task field.
 
 Cloud `pending` remains queued/pending because this interface cannot distinguish
 provisioning from execution. `ready`, `applied` and `error` observations retain
@@ -218,4 +224,6 @@ Official references checked 2026-10-06:
 [Cloud environments](https://learn.chatgpt.com/docs/environments/cloud-environments),
 [authentication](https://learn.chatgpt.com/docs/auth).
 The version-specific public CLI source was also inspected for status/JSON/diff
-semantics; no internal endpoint from that source is called by this adapter.
+semantics, including [environment resolution and filtered listing](https://github.com/openai/codex/blob/rust-v0.160.0/codex-rs/cloud-tasks/src/lib.rs)
+and [list-item mapping](https://github.com/openai/codex/blob/rust-v0.160.0/codex-rs/cloud-tasks-client/src/http.rs).
+No internal endpoint from that source is called by this adapter.

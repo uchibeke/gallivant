@@ -10,6 +10,7 @@ briefs are unchanged.
 - [x] Persist intent, exact native task links and explicitly numbered single attempts.
 - [x] Keep unknown acknowledgements fenced; reconcile persisted acknowledgements.
 - [x] Bound and paginate inspection, journal actual status/errors and disclose log gaps.
+- [x] Reconcile pinned CLI null environment fields through filtered requests, including restart and failed-page recovery fixtures.
 - [x] Record successor child/parent IDs under one logical task and PR.
 - [x] Validate diffs in isolation; preserve shared verification/publication checkpoints.
 - [x] Refuse native interrupt, mandatory unsupported policy and public credential delegation.

@@ -35,10 +35,12 @@ function fixture(t) {
     if (args.includes("--help")) return "--env --branch --attempts --json --cursor --limit --attempt";
     if (args[1] === "exec") {
       const id = `task_fixture${tasks.size + 1}`;
-      tasks.set(id, { id, url: `https://chatgpt.com/codex/tasks/${id}`, status: "pending", environment_id: config.environment, attempt_total: 1, summary: { files_changed: 1, lines_added: 1, lines_removed: 1 }, updated_at: new Date(now).toISOString() });
+      // The pinned CLI's list-item mapper emits null, even for --env listings.
+      tasks.set(id, { id, url: `https://chatgpt.com/codex/tasks/${id}`, status: "pending", environment_id: null, attempt_total: 1, summary: { files_changed: 1, lines_added: 1, lines_removed: 1 }, updated_at: new Date(now).toISOString() });
       if (lost) throw new Error("lost submission reply"); return tasks.get(id).url;
     }
     if (args[1] === "list") {
+      assert.equal(args[args.indexOf("--env") + 1], config.environment);
       pages++;
       if (paging && !args.includes("--cursor")) return JSON.stringify({ tasks: [{ id: "task_unrelated" }], cursor: "second" });
       return JSON.stringify({ tasks: [...tasks.values()], cursor: null });
@@ -65,6 +67,8 @@ test("Cloud access checks pinned CLI, ChatGPT sign-in, command surface and chose
   const f = fixture(t);
   assert.equal((await checkCloudAccess(config, { cli: f.cli })).ok, true);
   assert.equal(f.calls.some(args => args[1] === "exec" && !args.includes("--help")), false);
+  const noFilter = args => args[1] === "list" && args.includes("--help") ? "--json --cursor --limit" : f.cli(args);
+  assert.equal((await checkCloudAccess(config, { cli: noFilter })).detail, "CLOUD_VERSION");
   f.auth("Logged in using an API key"); assert.equal((await checkCloudAccess(config, { cli: f.cli })).detail, "CLOUD_AUTH");
   f.version("codex-cli 0.161.0"); assert.equal((await checkCloudAccess(config, { cli: f.cli })).detail, "CLOUD_VERSION");
 });
@@ -84,6 +88,60 @@ test("Cloud launcher exit is queued, pagination reconciles exact task, restart a
   const events = readFileSync(join(first.dirOf(job.id), "events.jsonl"), "utf8");
   f.advance(); await f.service().reconcile({ force: true }); assert.equal(readFileSync(join(first.dirOf(job.id), "events.jsonl"), "utf8"), events);
   assert.match(events, /tokenToolLogs.*unavailable/);
+});
+test("Cloud filtered listings reconcile null or omitted environment fields through restart and collection", async t => {
+  const observations = [];
+  for (const environment of [null, undefined, config.environment]) {
+    const f = fixture(t), job = await f.service().submit(input), task = f.tasks.get(job.execution.providerJobId);
+    if (environment === undefined) delete task.environment_id; else task.environment_id = environment;
+    f.paging(); f.advance(); await f.service().reconcile({ force: true });
+    assert.equal(f.service().current().execution.providerState, "queued");
+    const saved = f.service().state(), op = Object.values(readJson(join(f.root, "cloud.json")).operations)[0];
+    saved.current.execution.acceptance = "unknown"; saved.current.execution.providerJobId = null; saved.current.execution.turnId = null; saved.current.execution.sessionId = null;
+    saved.operations[input.operationId].acceptance = "unknown"; writeJsonAtomic(join(f.root, "execution.json"), saved);
+    f.finish(); f.diff(patch(op)); f.advance(); await f.service().reconcile({ force: true });
+    assert.equal(f.service().current().execution.providerState, "retrieving-results");
+    const result = await f.service().collect();
+    assert.equal(f.service().current().execution.providerState, "succeeded");
+    assert.equal(result.files[0].text, "new\n"); assert.equal(result.providerJobId, job.execution.providerJobId);
+    assert.equal(f.tasks.size, 1); assert.ok(f.calls.some(args => args.includes("--cursor")));
+    assert.deepEqual(f.calls.findLast(args => args[1] === "diff"), ["cloud", "diff", job.execution.providerJobId, "--attempt", "1"]);
+    const events = readFileSync(join(f.service().dirOf(job.id), "events.jsonl"), "utf8").trim().split("\n").map(line => JSON.parse(line));
+    const observation = events.findLast(event => event.type === "status");
+    assert.equal(observation.data.environment, config.environment); assert.equal(observation.data.environmentSource, "filtered-listing");
+    assert.equal(observation.data.providerStatus, "ready"); assert.equal(observation.data.diffAvailable, true); assert.equal(observation.timestamp, f.clock.now());
+    observations.push({ rowEnvironment: environment === undefined ? "omitted" : environment, observation, result: { providerJobId: result.providerJobId, outcome: result.outcome, fileHash: contentHash(result.files[0].text) }, listingRequests: f.calls.filter(args => args[1] === "list" && !args.includes("--help")), dispatchedTasks: f.tasks.size });
+  }
+  const evidencePath = join(tempHome(), "cloud-filtered-listing-evidence.json");
+  writeJsonAtomic(evidencePath, { kind: "offline pinned CLI list fixtures; no live inference qualification", observations }); t.diagnostic(evidencePath);
+});
+test("Cloud filtered listing failures retain unknown ownership without unfiltered fallback or resubmission", async t => {
+  for (const failedCursor of [null, "second"]) {
+    const f = fixture(t), calls = []; let fail = false;
+    const cli = async args => {
+      calls.push(args);
+      if (fail && args[1] === "list" && (args.includes("--cursor") ? args[args.indexOf("--cursor") + 1] : null) === failedCursor) throw new Error("environment resolution/listing refused");
+      return f.cli(args);
+    };
+    const transport = () => makeCloudTransport({ root: f.root, taskId: "acme/widget/task", account: "operator", config, cli, clock: f.clock, verification: async () => {}, verifyRemote: async () => {} });
+    const service = () => makeExecution({ root: f.root, taskId: "acme/widget/task", account: "operator", provider: "codex-cloud", capabilities: { ...capabilitiesFor("codex-cloud"), environments: [config.environment] }, transport: transport(), clock: f.clock });
+    const job = await service().submit(input), op = Object.values(readJson(join(f.root, "cloud.json")).operations)[0];
+    if (failedCursor) f.paging();
+    f.finish(); f.diff(patch(op)); fail = true; f.advance(); await service().reconcile({ force: true });
+    assert.equal(service().current().execution.providerState, "status-unknown");
+    assert.equal(service().current().execution.providerJobId, job.execution.providerJobId);
+    assert.equal(Object.values(readJson(join(f.root, "cloud.json")).operations)[0].state, "queued");
+    assert.match(readFileSync(join(service().dirOf(job.id), "events.jsonl"), "utf8"), /CLOUD_LIST/);
+    await assert.rejects(service().collect()); await assert.rejects(service().submit({ ...input, operationId: "duplicate" }));
+    assert.equal(calls.some(args => args[1] === "diff" && !args.includes("--help")), false);
+    fail = false; f.advance(); await service().reconcile({ force: true });
+    assert.equal((await service().collect()).files[0].text, "new\n"); assert.equal(f.tasks.size, 1);
+    for (const args of calls.filter(args => args[1] === "list" && !args.includes("--help"))) assert.equal(args[args.indexOf("--env") + 1], config.environment);
+    const changed = makeCloudTransport({ root: f.root, taskId: "acme/widget/task", account: "operator", config: { ...config, environment: "env-foreign" }, cli });
+    const before = calls.length;
+    await assert.rejects(changed.inspect({ providerJobId: job.execution.providerJobId, turnId: job.execution.turnId, sessionId: job.execution.sessionId }), error => error.code === "EXECUTION_OWNERSHIP");
+    assert.equal(calls.length, before);
+  }
 });
 test("Cloud lost acknowledgement never chooses newest task or creates duplicate paid work", async t => {
   const f = fixture(t); f.lost();
