@@ -553,3 +553,33 @@ cancellations (342,218.952375 ms; `/private/tmp/learning-review17-full.log`).
 `npm run test:learning` passed 77 tests (51,408.105584 ms;
 `/private/tmp/learning-review17-suite.log`), `npm run lint` exited 0
 (`/private/tmp/learning-review17-lint.log`), and `git diff --check` passed.
+
+## Review batch 18: extraction execution outside the store lock
+
+Extraction uses separate reservation and result-merge transactions around the
+existing bounded external-call helper. It persists exact batch membership before
+execution, then reloads current state and verifies the original reservation before
+merging. Disable and unrelated-repository mutations remain available during the
+external wait. Concurrent source edits refuse stale proposals; unrelated new
+observations survive the merge. Returned costs remain recorded even when proposals
+are refused. A failed merge retains the reservation across restart and cannot
+repurchase the same batch.
+
+Regression callbacks run local pruning, nested extraction inspection, observation
+and same/foreign repository mode changes during execution. A separate lock-conflict
+regression verifies durable reservation retention after the external reply. Review
+covered reservation persistence, all validation before insertion, fresh-state
+merge, failure lock cleanup, timeout handling through the existing helper, and
+collection/inspection callers. No production key, paid inference or repeated
+blocked isolation probe ran; the seven unmet criteria and live/Linux gaps remain.
+
+Verify on macOS: `npm run test:learning` passed 79 tests (154,013.988959 ms;
+`/private/tmp/learning-review18-suite.log`), and `npm run lint` exited 0
+(`/private/tmp/learning-review18-lint.log`). The first `npm test` run passed 1,283
+of 1,284 tests; the unchanged provider test `unresolved root identity has a
+three-attempt recovery circuit without resending` reported zero initial sends
+(`/private/tmp/learning-review18-full.log`). Its isolated recheck passed
+(`/private/tmp/learning-review18-recovery-recheck.log`), and the full `npm test`
+recheck passed all 1,284 tests with no failures, skips or cancellations
+(284,854.866042 ms; `/private/tmp/learning-review18-full-recheck.log`). No unrelated
+code or test changes were made. `git diff --check` passed.

@@ -632,3 +632,44 @@ test("extraction refuses repository evidence outside its reserved batch", async 
   assert.equal(result.status, "unresolved"); assert.equal(result.code, "LEARNING_EVIDENCE");
   assert.equal(f.service.list(repo).length, 0); assert.equal(f.store.load(repo).sequence, 0);
 });
+
+test("extraction releases the store lock and merges concurrent mutations safely", async t => {
+  for (const mutation of ["disable", "observe", "supersede"]) {
+    let f, calls = 0;
+    const extractor = { dataOnly: true, execute: async input => {
+      calls++;
+      assert.equal(f.store.load(repo).extraction[0].status, "intent");
+      assert.equal((await f.service.extract(repo, { allowanceUsd: 0.1 })).status, "intent");
+      await f.service.configure(foreign, "collect");
+      await f.service.configure(foreign, "off");
+      await f.service.prune(repo);
+      if (mutation === "disable") await f.service.configure(repo, "off");
+      else await f.service.observe(repo, snapshot("Concurrent correction", { id: mutation === "observe" ? 88 : 77, updated_at: "2026-10-06T02:00:00Z" }));
+      return { json: canonical([proposed(input.observations[0].digest, { provenance: { provider: "fixture", inputDigest: input.inputDigest, at: now } })]), costUsd: 0.01, tokens: 10 };
+    } };
+    f = fixture(t, { extractor, qualify: () => ({ qualified: true, fixtureOnly: true }) });
+    await observed(f.service);
+    const result = await f.service.extract(repo, { allowanceUsd: 0.1 });
+    assert.equal(calls, 1); assert.equal(f.store.load(foreign).mode, "off");
+    assert.equal(result.costUsd, 0.01); assert.equal(result.tokens, 10);
+    assert.equal(result.status, mutation === "observe" ? "completed" : "unresolved");
+    assert.equal(f.service.list(repo).length, mutation === "observe" ? 1 : 0);
+    if (mutation === "disable") { assert.equal(result.code, "LEARNING_OFF"); assert.equal(f.store.load(repo).mode, "off"); }
+    else assert.equal(Object.keys(f.store.load(repo).observations).length, 2);
+    if (mutation === "supersede") assert.equal(result.code, "LEARNING_EVIDENCE");
+    assert.equal(f.store.load(repo).sequence, 0);
+  }
+});
+
+test("failed extraction result merge retains its reservation across restart", async t => {
+  let f, release, calls = 0;
+  const extractor = { dataOnly: true, execute: async () => { calls++; release = f.store.lock(); return { json: "[]" }; } };
+  const qualify = () => ({ qualified: true, fixtureOnly: true });
+  f = fixture(t, { extractor, qualify }); await observed(f.service);
+  try { await assert.rejects(f.service.extract(repo, { allowanceUsd: 0.1 }), /already running/); }
+  finally { release?.(); }
+  const restarted = createLearningService({ store: f.store, extractor, qualify });
+  assert.equal((await restarted.extract(repo, { allowanceUsd: 0.1 })).status, "intent");
+  assert.equal(calls, 1); assert.equal(f.service.list(repo).length, 0);
+  await restarted.configure(repo, "off"); assert.equal(f.store.load(repo).mode, "off");
+});

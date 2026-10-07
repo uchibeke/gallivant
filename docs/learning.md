@@ -309,3 +309,12 @@ Approval confirmation and passphrase entry run without the shared store lock.
 The service rechecks the complete frozen preview, mode, parent, sequence and trust
 root after each interaction; concurrent changes require a new reviewed approval.
 Extraction candidates may cite only evidence included in that reserved batch.
+
+
+Extraction reserves exact observation revisions durably before releasing the store
+lock for external execution. Other repositories and emergency disable can mutate
+state during that wait. Results merge into newly loaded state only if the original
+reservation is unchanged; disabled collection or stale evidence refuses candidate
+insertion. A failed merge leaves the reservation intact and does not authorize
+repeat inference. Known returned cost and token counts remain recorded even when
+a concurrent change prevents accepting the proposals.
