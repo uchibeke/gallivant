@@ -2,9 +2,9 @@
   "version": 1,
   "task_id": "task-608e7283e7d7d42cfb91eb6b",
   "scope": "Supported native CLI transport and offline shared lifecycle/PR conformance; live qualification remains unverified",
-  "recorded_at": "2026-10-07T04:36:43.056007+00:00",
+  "recorded_at": "2026-10-07T04:56:26.902554+00:00",
   "base_revision": "2b4514fb27fcb493e62bfed913fffc204215f155",
-  "implementation_revision": "363f8a27d8cbba9fa53d37b1bc50b31528e68b9a",
+  "implementation_revision": "b385123bef5563f05984172b3e8def19417784e7",
   "branch": "work/codex-cloud-harness",
   "source_files": {
     "README.md": "9e6e79dfe29e0e3f6b876d53dfdadafd5869158a662782468e461ed9316bfa2d",
@@ -12,9 +12,9 @@
     "docs/audit/plugin-ready/codex-cloud-checklist.md": "e8b586216de216075303e80ba7720eba6133b37536eab5d367f4c66cdd4a02e8",
     "docs/codex-cloud.md": "f93272c7607399a5b44b332f439f148bc7d16ab67714d10bbf9bc1dd91957648",
     "docs/prds/codex-cloud-harness.md": "7ad37c4c6100d03647990177ae84357b2edaf3ee5954e377b25d4700d7ad0d1b",
-    "lib/codex_cloud.mjs": "4888dbcacb330d7c49ab9d2c330c90d4a6ad0bc73a2e9b47547aedd0aab3c029",
+    "lib/codex_cloud.mjs": "77bb524ffae5c3d44e194398ada0532b88f6a639a44fc2864ae57679283ea5e0",
     "lib/codex_cloud_config.mjs": "5a00849751ed7825b3517f25627163c65092d0a0f898b5e3b0ef5e0e5921582b",
-    "lib/codex_cloud_input.mjs": "3661e53a358fa7d3e2d42382b853a2073b65198333f3015f7d566dbe426d31b7",
+    "lib/codex_cloud_input.mjs": "e07c0db4a2e70736ce1a57cf4dc818cf7f4ecdc525e3a685499000ca1ed9fa9a",
     "lib/codex_cloud_result.mjs": "88ebb5214020b847f195c38f99d11be573e53c1770500242521736667fd15b0d",
     "lib/commands/resume.mjs": "7663ab78b11db8e7729fbf7678bc59680d7df847edb6c593111526600c97b380",
     "lib/commands/start.mjs": "d818ce4188fad42475518b0d53d8dfddb329fb8ac800200a7adc1fe71e06dc16",
@@ -28,12 +28,13 @@
     "lib/tick.mjs": "4b75ad239705f0e13cecdc4b69528668fa7610efaac568972fd80cdd22b0317e",
     "package.json": "7af15137d9b914464d70b567e2278debb39aef4723871844941c2cf07ae3d19c",
     "test/codex-cloud-live.mjs": "11bebf6724e5fddde3df2093cf3556f0909dbf1a710c42d30649b6312b9cdc44",
-    "test/codex-cloud.test.mjs": "ae08045622b0cdf111934b1fe3bf94c673b601098b41d44ed52037075dc59e6f",
+    "test/codex-cloud.test.mjs": "ff99deba00e1fa3dce773960a94e460fff460e622631b6c42814e15255342cac",
     "test/execution-backends.test.mjs": "1c06b8ee5f4286a81c45b3ded9b0d707534260a34fcad84d59f6cc5f078f5c49",
-    "test/units.test.mjs": "5475baf43bceeae4d6f0bc1717904b69a58b5c8e9ad7d8e8ad2ee22b0f5516b3",
+    "test/units.test.mjs": "d874ff9dfd72774b014ba68c30ecf90945554f38968a8334b3ca4cfea22e91a7",
     "lib/execution_io.mjs": "b63df0d51bb54700e74cd9804fb5a77ca2c2bfcac4070484082bf1272eb6d7d5",
     "lib/openai_agents.mjs": "3b67fe601cb8ad268f2d997d55e19bad4aca1f016293595036825892d1991702",
-    "test/openai-agents.test.mjs": "ad2edea7c06ce45b1ad34e869b59f1e68c6c71667b45c7026b777bdbbb888c64"
+    "test/openai-agents.test.mjs": "ad2edea7c06ce45b1ad34e869b59f1e68c6c71667b45c7026b777bdbbb888c64",
+    "lib/gh.mjs": "c61f812d70c1c35d379e947bc99af4122013254119c7a0fad585e5f48e1e85b1"
   },
   "frozen_inputs": {
     "docs/plans/plugin-ready-gallivant.md": "3081d47d8161043f9c32b6184f07ee8d4ca513822341c41a138bdf28f7459fc2",
@@ -47,18 +48,18 @@
       "command": "npm test",
       "exit": 0,
       "raw_log": {
-        "path": "/tmp/cloud-gate-final-test.log",
-        "sha256": "43cc67eb898f0ffef8b75be9b4124359841676fc221fbe30dbd0a56c097cb066"
+        "path": "/tmp/cloud-repository-case-test.log",
+        "sha256": "e273cf96e23ebf4642e373e96c86be854dcbba157e9b7100f929357a9b347323"
       },
       "tap_runs": [
         {
-          "tests": 1186,
-          "pass": 1186,
+          "tests": 1188,
+          "pass": 1188,
           "fail": 0,
           "cancelled": 0,
           "skipped": 0,
           "deferred_tests": 0,
-          "duration_ms": 356967.893875
+          "duration_ms": 365384.632208
         }
       ]
     },
@@ -66,7 +67,7 @@
       "command": "npm run lint",
       "exit": 0,
       "raw_log": {
-        "path": "/tmp/cloud-gate-final-lint.log",
+        "path": "/tmp/cloud-repository-case-lint.log",
         "sha256": "8c7790de3f018fb4580f18ac70e1b355a0f76f522dd73acbdaa63632feffcecc"
       }
     },
@@ -74,8 +75,8 @@
       "command": "npm run test:execution-backends",
       "exit": 0,
       "raw_log": {
-        "path": "/tmp/cloud-gate-final-backends.log",
-        "sha256": "97a292e5e7b254eb3aefef668bf45e127b2a79d51d47c1044fcc92e7cb2c71c9"
+        "path": "/tmp/cloud-repository-case-backends.log",
+        "sha256": "b532fe918333a298d1d250b55284c16998ec9f54089b7267e519299ebdf589f2"
       },
       "tap_runs": [
         {
@@ -85,7 +86,7 @@
           "cancelled": 0,
           "skipped": 0,
           "deferred_tests": 0,
-          "duration_ms": 357475.879125
+          "duration_ms": 365711.1625
         }
       ]
     },
@@ -93,8 +94,8 @@
       "command": "npm run test:openai-agents",
       "exit": 0,
       "raw_log": {
-        "path": "/tmp/cloud-gate-final-agents.log",
-        "sha256": "710548c4d741beaf73a3ed186c798b5fbc99616abd4add7318699ea7d9a0143a"
+        "path": "/tmp/cloud-repository-case-agents.log",
+        "sha256": "cd23baf288d5368eb18b64214667ff2cad47e24385894e3f8b941ea4c0af72e4"
       },
       "tap_runs": [
         {
@@ -104,7 +105,7 @@
           "cancelled": 0,
           "skipped": 0,
           "deferred_tests": 0,
-          "duration_ms": 162372.8515
+          "duration_ms": 183849.288625
         }
       ]
     },
@@ -112,18 +113,18 @@
       "command": "npm run test:codex-cloud",
       "exit": 0,
       "raw_log": {
-        "path": "/tmp/cloud-gate-final-cloud.log",
-        "sha256": "d8ad789ce708ec46143babc16f03ce55ce10e133ee7d37979b13e8cf37656213"
+        "path": "/tmp/cloud-repository-case-cloud.log",
+        "sha256": "f140de2c7dd3b88cd99029da8c04c3ae7be1b44f246ab3413ba98c5907621074"
       },
       "tap_runs": [
         {
-          "tests": 25,
-          "pass": 25,
+          "tests": 27,
+          "pass": 27,
           "fail": 0,
           "cancelled": 0,
           "skipped": 0,
           "deferred_tests": 0,
-          "duration_ms": 60605.899291
+          "duration_ms": 77420.538791
         },
         {
           "tests": 16,
@@ -132,7 +133,7 @@
           "cancelled": 0,
           "skipped": 0,
           "deferred_tests": 0,
-          "duration_ms": 45901.663708
+          "duration_ms": 52581.912083
         }
       ]
     },
@@ -140,7 +141,7 @@
       "command": "git diff --check",
       "exit": 0,
       "raw_log": {
-        "path": "/tmp/cloud-gate-final-diff.log",
+        "path": "/tmp/cloud-repository-case-diff.log",
         "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
       }
     }
@@ -163,6 +164,7 @@
       "Cloud lost acknowledgement never chooses newest task or creates duplicate paid work",
       "Cloud persisted native acknowledgement recovers a coordinator crash without resubmission",
       "Cloud dispatch rejects moved remote heads, auth refusal and local absolute references before a paid command",
+      "Cloud transport accepts repository letter case across dispatch, restart and successors",
       "Cloud repeated pagination cursor fails bounded recovery and never adopts an unrelated task",
       "Cloud collection converts diff in isolation, verifies run/base and resumes as a successor in one logical session",
       "Cloud envelope-only results require an owned successor and exact envelope identity",
@@ -172,6 +174,7 @@
       "Cloud stop retains native task link, fences successors and quarantines late success",
       "Cloud diffs reject wrong bases, path escapes, symlinks, mode changes and stale result identity before application",
       "Cloud collection keeps unavailable Git and local I/O retryable and cleans its temporary directory",
+      "Cloud input accepts repository letter case and preserves exact snapshot ownership",
       "Cloud input publishes only approved snapshots, verifies remote bytes and preserves task upstream",
       "Cloud adapter and operator instructions ship in a clean installed package without provider calls"
     ],
@@ -195,7 +198,7 @@
       {
         "criterion_id": "ac-4",
         "met": true,
-        "evidence": "test/codex-cloud.test.mjs: Cloud input publishes only approved snapshots, verifies remote bytes and preserves task upstream; Cloud dispatch rejects moved remote heads, auth refusal and local absolute references before a paid command"
+        "evidence": "test/codex-cloud.test.mjs: Cloud input accepts repository letter case and preserves exact snapshot ownership; Cloud input publishes only approved snapshots, verifies remote bytes and preserves task upstream; docs/audit/plugin-ready/codex-cloud.json repository_identity_followup"
       },
       {
         "criterion_id": "ac-5",
@@ -205,12 +208,12 @@
       {
         "criterion_id": "ac-6",
         "met": true,
-        "evidence": "test/codex-cloud.test.mjs: Cloud configured deadline aborts the client and retains unknown acceptance without overlapping restart work; Cloud lost acknowledgement never chooses newest task or creates duplicate paid work; docs/audit/plugin-ready/codex-cloud.json submission_deadline_followup"
+        "evidence": "test/codex-cloud.test.mjs: Cloud configured deadline aborts the client and retains unknown acceptance without overlapping restart work; Cloud lost acknowledgement never chooses newest task or creates duplicate paid work; docs/audit/plugin-ready/codex-cloud.json submission_deadline_followup; Cloud transport accepts repository letter case across dispatch, restart and successors"
       },
       {
         "criterion_id": "ac-7",
         "met": true,
-        "evidence": "test/codex-cloud.test.mjs: Cloud collection converts diff in isolation, verifies run/base and resumes as a successor in one logical session; Cloud native continuation is refused without demonstrated capability; lib/tick.mjs shared continuation dispatch"
+        "evidence": "test/codex-cloud.test.mjs: Cloud collection converts diff in isolation, verifies run/base and resumes as a successor in one logical session; Cloud native continuation is refused without demonstrated capability; lib/tick.mjs shared continuation dispatch; Cloud transport accepts repository letter case across dispatch, restart and successors"
       },
       {
         "criterion_id": "ac-8",
@@ -235,7 +238,7 @@
       {
         "criterion_id": "ac-12",
         "met": true,
-        "evidence": "docs/audit/plugin-ready/codex-cloud.json commands records 1186 full, 397 execution-backends, 59 openai-agents, 25 Cloud adapter and 16 shared cases passing; submission_deadline_followup includes failing-before-fix and timed initial/successor/restart/abort evidence"
+        "evidence": "docs/audit/plugin-ready/codex-cloud.json commands records 1188 full, 397 execution-backends, 59 openai-agents, 27 Cloud adapter and 16 shared cases passing; repository_identity_followup includes two failing-before-fix cases, shared remote identity regression and recorded snapshot/restart/successor output"
       },
       {
         "criterion_id": "ac-13",
@@ -750,7 +753,7 @@
       }
     ]
   },
-  "previous_implementation_revision": "d7c5103c62b15c04d2d481a5f40a7b0a21361529",
+  "previous_implementation_revision": "363f8a27d8cbba9fa53d37b1bc50b31528e68b9a",
   "environment_listing_followup": {
     "review_id": 5437267892,
     "inline_comment_ids": [
@@ -1724,5 +1727,281 @@
     "remaining_denial_codes": [
       "oap.criteria_not_met"
     ]
+  },
+  "repository_identity_followup": {
+    "review_id": 5437715019,
+    "inline_comment_id": 4203132068,
+    "observed_head": "96bcd5db9a509ad22d65f7bfac13a22f721ba2e2",
+    "source_revision": "b385123bef5563f05984172b3e8def19417784e7",
+    "rule": "GitHub owner/repo identity ignores letter case; preserve exact approved snapshot and operation envelope values",
+    "fixed_boundaries": [
+      "lib/codex_cloud_input.mjs deliverCloudInput",
+      "lib/codex_cloud.mjs prepare and read",
+      "lib/gh.mjs repositoryMatches shared with remoteMatches"
+    ],
+    "reviewed_boundaries": [
+      "lib/context.mjs remote revision/hash verifier",
+      "lib/execution_result.mjs checkout/result ownership",
+      "lib/codex_cloud_result.mjs immutable snapshot and result envelopes",
+      "lib/codex_cloud.mjs idempotent dispatch and restart ownership",
+      "lib/codex_cloud_input.mjs source preparation and publication lock cleanup"
+    ],
+    "unchanged_exact_identity": [
+      "logical task ID",
+      "account",
+      "environment",
+      "branch",
+      "input revision",
+      "source hashes",
+      "run ID",
+      "source/request/result repository spelling"
+    ],
+    "before_fix": {
+      "command": "node --test --test-name-pattern='repository letter case' test/codex-cloud.test.mjs",
+      "exit": 1,
+      "raw_log": {
+        "path": "/tmp/cloud-repository-case-before-authorized.log",
+        "sha256": "7f643a611304b7a339a2c7896d8cfd78e270d2fca89ed798a8b06df733b365a8"
+      },
+      "tap_runs": [
+        {
+          "tests": 2,
+          "pass": 0,
+          "fail": 2,
+          "cancelled": 0,
+          "skipped": 0,
+          "deferred_tests": 0,
+          "duration_ms": 215.048458
+        }
+      ]
+    },
+    "focused_verify": {
+      "command": "node --test --test-name-pattern='repository letter case|a remote URL' test/codex-cloud.test.mjs test/units.test.mjs",
+      "exit": 0,
+      "raw_log": {
+        "path": "/tmp/cloud-repository-case-focused-final.log",
+        "sha256": "a64df8c443b6824f357736c2f4bbcd94768159be864d4b1905a1e17fd62f0b68"
+      },
+      "tap_runs": [
+        {
+          "tests": 3,
+          "pass": 3,
+          "fail": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "deferred_tests": 0,
+          "duration_ms": 3990.091
+        }
+      ]
+    },
+    "representative_generated_output": {
+      "kind": "Offline injected Cloud CLI and GitHub responses with native Git snapshot commits and isolated diff application; no live provider identities or remote inference",
+      "raw_log": {
+        "path": "/tmp/cloud-repository-case-focused-final.log",
+        "sha256": "a64df8c443b6824f357736c2f4bbcd94768159be864d4b1905a1e17fd62f0b68"
+      },
+      "records": [
+        {
+          "repositoryCaseTransport": [
+            {
+              "configuredRepo": "Acme/Widget",
+              "canonicalRepo": "acme/widget",
+              "storedRepository": "Acme/Widget",
+              "initialTask": "task_fixture1",
+              "successorTask": "task_fixture2",
+              "continuity": "successor-task",
+              "resultRepo": "acme/widget",
+              "sourceHash": "bd8db421cbd546f8829586cf73ed326fad77279fb9add87421c2b98164cea95b",
+              "dispatchedTasks": 2
+            },
+            {
+              "configuredRepo": "acme/widget",
+              "canonicalRepo": "Acme/Widget",
+              "storedRepository": "acme/widget",
+              "initialTask": "task_fixture1",
+              "successorTask": "task_fixture2",
+              "continuity": "successor-task",
+              "resultRepo": "Acme/Widget",
+              "sourceHash": "28d94ab93de962929847197934e312ffe55793fd3187bd8707b095096096308a",
+              "dispatchedTasks": 2
+            }
+          ]
+        },
+        {
+          "repositoryCaseInput": [
+            {
+              "configuredRepo": "acme/widget",
+              "canonicalRepo": "Acme/Widget",
+              "snapshotRepo": "Acme/Widget",
+              "inputHead": "a77c82dc9bf5d01917848046dda9f80d420d024d",
+              "remoteRefHead": "a77c82dc9bf5d01917848046dda9f80d420d024d",
+              "sourceHash": "2a9efb7479228816ccf7f05fc08a29bafb8826f2f7e8502f7f81dd49081c5bb9",
+              "approvedHashes": {
+                "brief.md": "f6ec4d9da4d7556097be0987096a3e5fcd23232cf0325f426e64777dcc8a67bb",
+                "source.md": "7e53dcddee74253b418dba39a8b28661ecc8fa887d4ce0f95beaca5f63bbbf63"
+              },
+              "pushedRefs": [
+                [
+                  "task",
+                  "work/widget"
+                ],
+                [
+                  "snapshot",
+                  "work/widget-cloud-a77c82dc9bf5d01917848046dda9f80d420d024d"
+                ]
+              ]
+            },
+            {
+              "configuredRepo": "Acme/Widget",
+              "canonicalRepo": "acme/widget",
+              "snapshotRepo": "acme/widget",
+              "inputHead": "969db482c527c9de362466e53531c5220ce233cc",
+              "remoteRefHead": "969db482c527c9de362466e53531c5220ce233cc",
+              "sourceHash": "e6a57bcafdd11c3778e41bc4bb8ede8329e8fb07a2207f0b519f8a846d199ef5",
+              "approvedHashes": {
+                "brief.md": "f6ec4d9da4d7556097be0987096a3e5fcd23232cf0325f426e64777dcc8a67bb",
+                "source.md": "7e53dcddee74253b418dba39a8b28661ecc8fa887d4ce0f95beaca5f63bbbf63"
+              },
+              "pushedRefs": [
+                [
+                  "task",
+                  "work/widget"
+                ],
+                [
+                  "snapshot",
+                  "work/widget-cloud-969db482c527c9de362466e53531c5220ce233cc"
+                ]
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    "regressions": [
+      "Cloud input accepts repository letter case and preserves exact snapshot ownership",
+      "Cloud transport accepts repository letter case across dispatch, restart and successors",
+      "a remote URL is parsed into owner/repo and compared exactly, so a fork suffix is not the same repo"
+    ],
+    "previous_verify": [
+      {
+        "command": "npm test",
+        "exit": 0,
+        "raw_log": {
+          "path": "/tmp/cloud-gate-final-test.log",
+          "sha256": "43cc67eb898f0ffef8b75be9b4124359841676fc221fbe30dbd0a56c097cb066"
+        },
+        "tap_runs": [
+          {
+            "tests": 1186,
+            "pass": 1186,
+            "fail": 0,
+            "cancelled": 0,
+            "skipped": 0,
+            "deferred_tests": 0,
+            "duration_ms": 356967.893875
+          }
+        ]
+      },
+      {
+        "command": "npm run lint",
+        "exit": 0,
+        "raw_log": {
+          "path": "/tmp/cloud-gate-final-lint.log",
+          "sha256": "8c7790de3f018fb4580f18ac70e1b355a0f76f522dd73acbdaa63632feffcecc"
+        }
+      },
+      {
+        "command": "npm run test:execution-backends",
+        "exit": 0,
+        "raw_log": {
+          "path": "/tmp/cloud-gate-final-backends.log",
+          "sha256": "97a292e5e7b254eb3aefef668bf45e127b2a79d51d47c1044fcc92e7cb2c71c9"
+        },
+        "tap_runs": [
+          {
+            "tests": 397,
+            "pass": 397,
+            "fail": 0,
+            "cancelled": 0,
+            "skipped": 0,
+            "deferred_tests": 0,
+            "duration_ms": 357475.879125
+          }
+        ]
+      },
+      {
+        "command": "npm run test:openai-agents",
+        "exit": 0,
+        "raw_log": {
+          "path": "/tmp/cloud-gate-final-agents.log",
+          "sha256": "710548c4d741beaf73a3ed186c798b5fbc99616abd4add7318699ea7d9a0143a"
+        },
+        "tap_runs": [
+          {
+            "tests": 59,
+            "pass": 59,
+            "fail": 0,
+            "cancelled": 0,
+            "skipped": 0,
+            "deferred_tests": 0,
+            "duration_ms": 162372.8515
+          }
+        ]
+      },
+      {
+        "command": "npm run test:codex-cloud",
+        "exit": 0,
+        "raw_log": {
+          "path": "/tmp/cloud-gate-final-cloud.log",
+          "sha256": "d8ad789ce708ec46143babc16f03ce55ce10e133ee7d37979b13e8cf37656213"
+        },
+        "tap_runs": [
+          {
+            "tests": 25,
+            "pass": 25,
+            "fail": 0,
+            "cancelled": 0,
+            "skipped": 0,
+            "deferred_tests": 0,
+            "duration_ms": 60605.899291
+          },
+          {
+            "tests": 16,
+            "pass": 16,
+            "fail": 0,
+            "cancelled": 0,
+            "skipped": 0,
+            "deferred_tests": 0,
+            "duration_ms": 45901.663708
+          }
+        ]
+      },
+      {
+        "command": "git diff --check",
+        "exit": 0,
+        "raw_log": {
+          "path": "/tmp/cloud-gate-final-diff.log",
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      }
+    ],
+    "paid_cloud_dispatches": 0,
+    "live_prerequisites": {
+      "absent": [
+        "CODEX_CLOUD_LIVE_HOME",
+        "CODEX_CLOUD_LIVE_PRD",
+        "CODEX_CLOUD_LIVE_REPO",
+        "CODEX_CLOUD_CAMPAIGN_LEDGER"
+      ],
+      "action": "Original failed preflight and unavailable native attempt identity retained; no unchanged blocked call or paid dispatch repeated; environment/model access, supported native attempt-ID interface and approved live campaign inputs remain external remedies"
+    },
+    "local_completion_diagnostic": {
+      "path": "/tmp/cloud-repository-case-gate.json",
+      "sha256": "d4567010225ad1fa3bebd4bc94d12e5dfc34ab44c24ab2decfd1bb7ce43089b8",
+      "kind": "Local evaluator over proposed receipt and complete added output; no hosted approval or live qualification",
+      "remaining_denial_codes": [
+        "oap.criteria_not_met"
+      ]
+    }
   }
 }
