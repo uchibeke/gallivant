@@ -5,5 +5,5 @@ import { openSshSigner } from "../lib/learning_signer.mjs";
 const [authorityFile, manifestFile] = process.argv.slice(2);
 try {
   const signature = openSshSigner().sign(readFileSync(manifestFile, "utf8"), JSON.parse(readFileSync(authorityFile, "utf8")));
-  console.log("SIGNATURE_RESULT:" + Buffer.from(signature).toString("base64"));
+  process.stdout.write("SIGNATURE_RESULT:" + Buffer.from(signature).toString("base64") + "\n");
 } catch (e) { console.error("SIGNATURE_FAILURE:" + e.code); process.exitCode = 1; }

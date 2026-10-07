@@ -105,7 +105,7 @@ async function dispatch(argv) {
   if (cmd === "learn") {
     const ctx = makeContext({ needConfig: arg !== "setup" && (arg !== "doctor" || !!values.repo), readOnly: !!values["dry-run"] || ["list", "show", "report", "explain", "doctor"].includes(arg) });
     const result = await learnCommand(ctx, { args: arg ? positionals.slice(1) : [], values });
-    console.log(safeDisplay(result));
+    process.stdout.write(safeDisplay(result) + "\n");
     return result?.isolation?.qualified === false ? 1 : 0;
   }
 

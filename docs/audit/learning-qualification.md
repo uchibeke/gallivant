@@ -312,3 +312,37 @@ Required Verify results on the same macOS host:
 | `npm run lint` | Exit 0 | `/private/tmp/review-learning-batch9-lint.log` |
 | `npm run test:learning` | 63 passed; 0 failed, skipped or cancelled; 41,104.567833 ms | `/private/tmp/review-learning-batch9-suite.log` |
 | `git diff --check` | Exit 0 | Operator session command output |
+
+## Completion-gate output follow-up
+
+The new learning command, immutable approval preview, disposable signing fixture
+and opt-in qualification script now write their already formatted text directly
+to stdout with the same trailing newline. Review covered all added output calls,
+including error reporting and the live script's cleanup path. A scan of added
+lines relative to main found no occurrences of the gate's prohibited logging call.
+The non-opted-in live script was checked for exact output and exit status 1; it
+created no keys and performed no isolation or provider calls.
+
+The criteria are valid; false qualification attestations cannot be repaired by
+changing their truth values. Extraction and installed execution isolation still
+require implementation and qualification (ac-3, ac-5, ac-8, ac-11). Full outcome
+correlation and signed key rotation/loss recovery remain implementation gaps
+(ac-14, ac-16). Actual Linux and permitted macOS isolation plus disposable live
+qualification remain unavailable (ac-15). The prior macOS denial was not retried.
+The brief explicitly allows an unqualified implementation PR while blocking
+production apply; a completion gate requiring every criterion must continue to
+deny completion until that work and evidence exist.
+
+This follow-up's learning suite passed all 63 tests (89,667.060167 ms), and lint
+passed. Logs: `/private/tmp/learning-gate-suite.log` and
+`/private/tmp/learning-gate-lint.log`. The first full run passed 1,267 of 1,268
+with one offline transport deadline failure in `operator answer lost-before
+recovers the same call and key across restart` (no learning code in its stack).
+That test passed alone with unchanged deadlines; the full suite was rerun without
+a competing learning suite. Initial and focused evidence:
+`/private/tmp/learning-gate-full.log` and
+`/private/tmp/learning-gate-timeout-recheck.log`.
+
+The full rerun passed all 1,268 tests, with zero failures, skips or cancellations
+(270,222.32725 ms): `/private/tmp/learning-gate-full-recheck.log`.
+`git diff --check` passed after the final documentation update.
