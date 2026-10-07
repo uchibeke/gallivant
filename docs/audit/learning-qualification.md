@@ -437,3 +437,26 @@ skips or cancellations (243,595.023667 ms; `/private/tmp/learning-review13-full.
 (37,861.43075 ms; `/private/tmp/learning-review13-suite-final.log`).
 `npm run lint` exited 0 (`/private/tmp/learning-review13-lint.log`), and
 `git diff --check` passed after the final audit update.
+
+## Offline unavailable-extraction CLI follow-up
+
+The extraction CLI constructs the learning service without resolving a GitHub user
+and uses the remembered immutable repository identity. Collection still resolves
+its authenticated reviewer identity; extraction consumes previously collected local
+evidence and retains the existing isolation and separate-allowance checks.
+
+The regression uses the lazy service-construction route with both GitHub user and
+repository lookups unavailable. It verifies the actual service returns unavailable
+with inference false, preserves observations and identity state, never invokes the
+extractor, and refuses an unknown local repository without remote calls. It also
+checks collection still authenticates. Source review covered context construction,
+the CLI identity boundary and the shared service's refusal before its transaction.
+No paid calls, production keys, enrollment or unchanged denied probe were invoked.
+Existing installed isolation, Linux/live evidence and seven unmet criteria remain;
+the recorded qualification remedies still apply.
+
+Verify on the same macOS host: `npm test` passed 1,275 tests with no failures,
+skips or cancellations (228,050.519083 ms; `/private/tmp/learning-review14-full.log`).
+`npm run test:learning` passed 70 tests with no failures, skips or cancellations
+(37,210.437875 ms; `/private/tmp/learning-review14-suite.log`). `npm run lint`
+exited 0 (`/private/tmp/learning-review14-lint.log`), and `git diff --check` passed.

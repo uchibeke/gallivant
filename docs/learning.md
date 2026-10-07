@@ -111,7 +111,10 @@ unavailable. Enabling collection or application still resolves the remote identi
 If revocation controls fail after the mode is saved, repeat the disabled-mode
 command: both `off` and `collect` retry controls even when the mode is unchanged.
 
-Extraction currently reports unavailable. The service seam bounds a separate
+Extraction consumes stored evidence using the remembered immutable identity and
+does not authenticate to GitHub or resolve the remote repository. With an
+unqualified installed profile it reports unavailable even during a GitHub outage.
+The service seam bounds a separate
 allowance (maximum $1 per extraction), 30 seconds and 20 candidate revisions. It
 persists an intent/reservation before invoking an injected data-only execution
 dependency. An unresolved result is not automatically retried. No installed

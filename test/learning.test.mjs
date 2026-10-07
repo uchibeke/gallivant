@@ -576,3 +576,21 @@ test("completed-prefix traversal advances beyond sixty listing pages across rest
   assert(result.complete); assert(calls.some(([kind, page]) => kind === "pulls" && page === 61));
   assert.equal(Object.values(f.store.load(repo).observations)[0].content.pr, 6001);
 });
+
+test("CLI unavailable extraction uses local identity without GitHub authentication", async t => {
+  let remoteCalls = 0, extractionCalls = 0, constructed = 0;
+  const gh = { user() { remoteCalls++; throw new Error("GitHub unavailable"); }, learningRepository() { remoteCalls++; throw new Error("GitHub unavailable"); } };
+  const { service, store } = fixture(t, { gh, extractor: { dataOnly: true, execute() { extractionCalls++; assert.fail("unqualified extraction must not run"); } } });
+  await observed(service); service.rememberRepo("example/project", repo);
+  const before = canonical(store.load(repo)), identities = canonical(store.identities());
+  const ctx = { gh, learningFor(login) { constructed++; assert.equal(login, undefined); return service; } };
+  const result = await learnCommand(ctx, { args: ["extract"], values: { repo: "example/project", "learning-budget": "1" } });
+  assert.equal(result.status, "unavailable"); assert.equal(result.inference, false);
+  assert.match(result.reason, /data-only extraction profile/);
+  assert.equal(constructed, 1); assert.equal(remoteCalls, 0); assert.equal(extractionCalls, 0);
+  assert.equal(canonical(store.load(repo)), before); assert.equal(canonical(store.identities()), identities);
+  await assert.rejects(learnCommand(ctx, { args: ["extract"], values: { repo: "unknown/project" } }), /no learning state/);
+  assert.equal(remoteCalls, 0);
+  await assert.rejects(learnCommand(ctx, { args: ["collect"], values: { repo: "example/project" } }), /GitHub unavailable/);
+  assert.equal(remoteCalls, 1, "collection still authenticates its reviewer trust identity");
+});
