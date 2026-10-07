@@ -13,10 +13,7 @@
     "uncommittedPayload": [
       "docs/task-delivery.md",
       "lib/runtime_node.mjs",
-      "lib/task_delivery.mjs",
-      "lib/task_delivery_contract.mjs",
-      "lib/task_delivery_mcp.mjs",
-      "lib/task_delivery_view.mjs"
+      "lib/tick.mjs"
     ],
     "mergedM5": false,
     "predecessorMerges": [
@@ -25,14 +22,14 @@
       "2b4514fb27fcb493e62bfed913fffc204215f155",
       "96e81031516bdf6663dd3b97ac39b8f57022568b"
     ],
-    "testedSourceCommit": "2fcff61c27a348274fc767b92c439a3d67e33ce5"
+    "testedSourceCommit": "28a7584f5136a4d702882c1cd3148e324fdcf08b"
   },
   "artifact": {
     "coreArtifact": "gallivant-0.2.0.tgz",
-    "coreSha256": "16105733dc72cbbb5b1696382a58ae478f4842d4b71a6fa304d49b99c197890d",
+    "coreSha256": "722b9aa9b28c99c244416670cf79b43c3c99d39e3df76522c8ebdf2ce618815b",
     "hashes": {
       "plugin": "8753892ceb5552fc37ba011929830f4c754d717f8d8031e31fb9b4935b465e1a",
-      "runtime": "2964c09b387d0e539339c56b837015aba136febb017b36eff7a42b08ba895b7b",
+      "runtime": "6d6c42bc35968fb2911f3744be07d93d8f160ba8cc6cd9b48b8f2d0f16a55bd6",
       "operations": "2077c0558cd4634accf66e530f186b52e2f91bfea502ff7c6f212d2e2efb800f"
     },
     "dependencyLockSha256": "bf3969111f7c4b84071fc14c59d870e296ee045024c8056757ac3e3466bc2b28",
@@ -53,7 +50,7 @@
       "docs/install.md": "5087cb207e20c31ef39d955fd8536184f86113d61348e955f380e30172705a85",
       "docs/openai-agents.md": "38f162e4d4918bdab372be804e1a06a6a9582493c941f07799f97324f4637db2",
       "docs/prd.md": "be2cb95955ecc38056dac390152d874172f6582816603fcacc14b8bd4f762c33",
-      "docs/task-delivery.md": "4698ed3badef4ec429e2ca4aaba3e1d48f0eb33c43e7a0344be5cf8f1a5f8435",
+      "docs/task-delivery.md": "65ca926f8dd782737829e3f2dcf8ab839720edc9bf3bd781d33282bb1e097961",
       "docs/tasks.md": "4483b3c3a44117240e3ca10a5e55941578e7c3b2b20775a57af6743603a9bb34",
       "lib/aport.mjs": "5c046abda8964a0439ee699bf658b9a00fdd7527884848f7fb22c3fe6c9e1d74",
       "lib/attribution.mjs": "cddb3eafe44f1dee26999a987ad9b1c62332cc9eb1ee17925cd2b961a9ccac17",
@@ -115,7 +112,7 @@
       "lib/run_log.mjs": "7d0b28731be434c6764ea400e4fe9d95ea0cc81179c9ead80d140d23153abcdb",
       "lib/run.mjs": "3682818ab95bf3b27c262449aa521be094caee9c8f133e94740923ebafb91315",
       "lib/runtime_dependencies.mjs": "6d25b972c116026643f348dc55586009d2746f68b99f47d450b2a3ef35625949",
-      "lib/runtime_node.mjs": "c7a2d41fc4e774bd2f08969db9cf6f7d3a67c03f0d0f88ccbb03da8364e74c1b",
+      "lib/runtime_node.mjs": "77a32855378d504bff3bfe33813bc6a2771cfd186358342783a25769037aa366",
       "lib/runtime_state.mjs": "4e31e602188faa35ffdcdf07d59a46ffe3a2d390836872dcad1cd1508bf2880c",
       "lib/sources/index.mjs": "88e1550751e9f52c82e94085bcb77bbd2b80466c9e2192670593f12894c4a4ec",
       "lib/sources/prd.mjs": "b26425213d537d8bf640abee1046481925de30d676fdb9b6a6b9239cdc50effd",
@@ -132,7 +129,7 @@
       "lib/task_prepare.mjs": "f0f27738e208f174aa89dba3a6f70f382cf7e03abe541df5d1854aed4adb9492",
       "lib/task_store.mjs": "54383d2c1893f6b805ed15b2690f38625f734f65ff7f286906829d192a65d2b4",
       "lib/tasks.mjs": "5ba7e9c4ff64916bfbe764609f94351315261d8a4997bc77ff0cf13f83990929",
-      "lib/tick.mjs": "baf57c0b86f8cf9953a8b18ca68f978ff54b6e3250a47e00d1952896a97c5382",
+      "lib/tick.mjs": "c02529df7a48ccedc40bac8e9e52287e96c76840de66c6c50dbadeafe9c173b0",
       "lib/time.mjs": "da5f6d30e5059e9b3ed45c3e4a604a3ad20fcc17449ed2ff0429aa9c7a79f146",
       "lib/tracker/assets.mjs": "10b86b3cf08e784e578d18881e28bc9f8fdebc2ab467dbc5fc338269f4a114e2",
       "lib/tracker/pages.mjs": "ceb768dd4e78931749ffd78918d37fb8a82805907d219e0bfe80c1478654d9e7",
@@ -361,7 +358,8 @@
         "installed duplicate owner and stale fence case",
         "installed API/Cloud unknown-acceptance restart cases",
         "test/runtime-delivery.test.mjs: both hosted transports force every startup batch, restart a nonzero-cursor sweep, preserve failed-advance checkpoints and never resubmit unknown intent",
-        "test/runtime-delivery.test.mjs: 36 retained history records and 25 active chains rotate in bounded batches across reconstructed coordinators, shrinking active sets and cancellations; entry startup still covers every batch"
+        "test/runtime-delivery.test.mjs: 36 retained history records and 25 active chains rotate in bounded batches across reconstructed coordinators, shrinking active sets and cancellations; entry startup still covers every batch",
+        "test/runtime-delivery.test.mjs: chain review cadence survives fast wakes, process restart, failed advances and GitHub failures while entry reconciliation continues; cancelled suffix cannot re-poll a visited prefix"
       ],
       "evidence": "Killed native fixture owner is recovered; unresolved provider intent retains exactly one paid-work spy write"
     },
@@ -425,7 +423,8 @@
       "tests": [
         "npm test",
         "installed lifecycle/control/recovery/provider conformance",
-        "packed CLI --help test"
+        "packed CLI --help test",
+        "test/chains.test.mjs: fast progress ticks retain chain review cadence, bound outage retries and reconcile on restart; ordinary daemon defaults remain unchanged"
       ],
       "evidence": "Version-1 registry/task/run/source shapes retained; optional SDK import is lazy; existing CLI/tracker suites pass"
     },
@@ -526,25 +525,25 @@
       {
         "command": "npm test",
         "exitCode": 0,
-        "tests": 1227,
-        "pass": 1227,
+        "tests": 1228,
+        "pass": 1228,
         "fail": 0,
-        "log": "/tmp/plugin-delivery-discovery-unit-tests.log"
+        "log": "/tmp/plugin-delivery-cadence-final-unit-tests.log"
       },
       {
         "command": "npm run lint",
         "exitCode": 0,
-        "log": "/tmp/plugin-delivery-discovery-lint.log"
+        "log": "/tmp/plugin-delivery-cadence-lint.log"
       },
       {
         "command": "npm run test:plugin-package",
         "exitCode": 0,
         "consumerFlowTests": 20,
-        "installedConformanceTests": 403,
+        "installedConformanceTests": 404,
         "fail": 0,
-        "log": "/tmp/plugin-delivery-discovery-final-package-tests.log",
-        "consumerEvidence": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/task-plugin-consumer-TTunZw/evidence.json",
-        "conformanceLog": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/task-plugin-consumer-TTunZw/conformance.log"
+        "log": "/tmp/plugin-delivery-cadence-package-tests.log",
+        "consumerEvidence": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/task-plugin-consumer-FRwCRl/evidence.json",
+        "conformanceLog": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/task-plugin-consumer-FRwCRl/conformance.log"
       },
       {
         "command": "git diff --check",
@@ -554,11 +553,13 @@
     ],
     "verifiedPayloadFiles": 112,
     "logSha256": {
-      "/tmp/plugin-delivery-discovery-unit-tests.log": "b5463ccea48420ded120cb970015f26e4b61f853d0ea6cd3dc4f52813328f3bf",
-      "/tmp/plugin-delivery-discovery-final-package-tests.log": "9cc482b49cdab82613bc4dc52d8f33775d71e8f5518354636223aa4965217f10",
-      "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/task-plugin-consumer-TTunZw/conformance.log": "d33642cf7775d4a6da444b6f77871adb7ad959b0cdb3119e88245fde381f0e47",
-      "/tmp/plugin-delivery-discovery-lint.log": "2f32bd854b16ced20ab71be2afd3673b887efc4815c6e55ea7b941ebc5aa8a0b",
-      "/tmp/plugin-delivery-discovery-focused.log": "16ad66a19da3c53a06331b9530223978cde87aecf65f0eb3f9c3171da5e15044"
+      "/tmp/plugin-delivery-cadence-final-unit-tests.log": "3408060ea265f6a9759c5a44231f8692fa69c3daea89de1b876f5341fe212cc9",
+      "/tmp/plugin-delivery-cadence-package-tests.log": "034738f96c9278c4d408b823e6ccd312b471e09bd45e6892759975d5f3c48489",
+      "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/task-plugin-consumer-FRwCRl/conformance.log": "2a88e4ac3cca4bf507e03afaae4f55a0125d64838ee04db38d50f55ce7c6aef7",
+      "/tmp/plugin-delivery-cadence-lint.log": "2f32bd854b16ced20ab71be2afd3673b887efc4815c6e55ea7b941ebc5aa8a0b",
+      "/tmp/plugin-delivery-cadence-focused.log": "1715f85405a6b1163590fe3fff141a1b0c4eec40f2639527047ed81357e55883",
+      "/tmp/plugin-delivery-cadence-unit-tests.log": "28741fc5e161d0bdab1d2ad4458bc4dbe32bf23c7203f1d1a07c233ee563cd3c",
+      "/tmp/plugin-delivery-cadence-rest-recheck.log": "8bd1f6ff32be545b4ab31fe888a86bb26ebab93cf7fc07049c3eeae7c8342e5d"
     },
     "hostEvidence": false,
     "fixturePurpose": "Deterministic unpaid installed-artifact compatibility; no actual installed host or live provider qualification",
@@ -584,7 +585,8 @@
       "startup process identity remains pending across every bounded entry batch; new processes reset a nonzero cursor; failed advances retain checkpoint and release ownership; completed sweeps restore normal backoff without duplicate submission",
       "capability discovery uses one optional cursor schema, bounded authorized keyset pages and explicit nextCursor/truncated fields; every page reauthorizes without store writes, provider probes or wake-ups",
       "MCP model/text and UI capabilities retain authorized repository identity and configured harness setup, preparation, cost and controls through a public-field projection",
-      "active chain windows exclude done/cancelled/stopped history and rotate by durable name cursor; shrinking sets, restart and failure do not lose continuation or starve entry batches"
+      "active chain windows exclude done/cancelled/stopped history and rotate by durable name cursor; shrinking sets, restart and failure do not lose continuation or starve entry batches",
+      "canonical makeTick chain deadline is restored and checkpointed by the Node wrapper only after a successful chain pass; pending batches finish without revisiting a cancelled suffix; disabled/skipped chain passes preserve cursor/deadline and fast entry reconciliation continues"
     ]
   },
   "reviewFollowup": {
@@ -682,5 +684,41 @@
       "log": "/tmp/plugin-delivery-discovery-focused.log"
     },
     "externalPrerequisites": "Previously observed unmet prerequisites retained; no unchanged live call retried and no installed-host/model-access evidence inferred from fixtures"
+  },
+  "cadenceReviewFollowup": {
+    "reviewId": 5441206914,
+    "reviewedCommit": "28a7584f5136a4d702882c1cd3148e324fdcf08b",
+    "items": [
+      {
+        "commentId": 4205992582,
+        "implementation": [
+          "lib/runtime_node.mjs",
+          "lib/tick.mjs"
+        ],
+        "tests": [
+          "test/runtime-delivery.test.mjs chain review cadence survives fast wakes, process restart and failed advances while entry work continues",
+          "test/chains.test.mjs fast progress ticks retain chain review cadence, bound outage retries and reconcile on restart"
+        ],
+        "rule": "Bounded coordinator wakes retain the canonical chain review deadline without slowing entry/provider reconciliation or losing pending chain batches"
+      }
+    ],
+    "focusedVerification": {
+      "tests": 15,
+      "pass": 15,
+      "fail": 0,
+      "log": "/tmp/plugin-delivery-cadence-focused.log"
+    },
+    "externalPrerequisites": "Previously observed unmet prerequisites retained; no unchanged live call retried and no installed-host/model-access evidence inferred from fixtures",
+    "initialUnitFailure": {
+      "log": "/tmp/plugin-delivery-cadence-unit-tests.log",
+      "tests": 1228,
+      "pass": 1227,
+      "fail": 1,
+      "test": "test/openai-agents.test.mjs real REST adapter: implementation, artifact pagination, restart and same-session correction",
+      "observedError": "EXECUTION_DEADLINE: transport deadline exceeded; reconcile acceptance before retrying",
+      "isolatedRecheck": "/tmp/plugin-delivery-cadence-rest-recheck.log",
+      "isolatedExitCode": 0,
+      "resolution": "The offline fixture passed in isolation and in installed conformance; reran npm test without the concurrent artifact suite. No timeout or production transport settings changed."
+    }
   }
 }

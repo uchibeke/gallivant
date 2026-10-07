@@ -53,6 +53,13 @@ configuration stays excluded; reads schedule no work. Chain regressions retain 3
 historical records and rotate 25 active chains in bounded windows across restarts,
 completion and cancellation, preserving checkpoint failure cleanup and entry progress.
 
+The Node wrapper now checkpoints the canonical tick's chain review deadline.
+Cadence regressions use ten-second wakes and a 120-second review interval across
+reconstructed coordinators, process identity changes and GitHub failures. They
+also check failed-advance cleanup, disabled chains, cancelled batch suffixes and
+continued entry reconciliation. The same regression runs against the installed
+artifact; ordinary daemon cadence remains covered by `test/chains.test.mjs`.
+
 Unmet attestations remain explicit:
 
 - **ac-5:** Actual Pages runtime/binding execution is unavailable. Node package

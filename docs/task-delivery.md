@@ -129,7 +129,10 @@ Bounded entry/chain batches run on each externally scheduled wake. Active chains
 rotate by a persisted name cursor; done, cancelled and stopped history consumes
 no batch slots. Completion or cancellation cannot shift the remaining window.
 `maxChains: 0` explicitly disables chain processing for that coordinator. Entry
-and chain cursors commit only after a successful tick. The next wake
+and chain cursors commit only after a successful tick. The canonical tick's chain
+poll deadline is persisted too: pending batches finish their sweep, then chain
+reads wait for `poll_seconds` even across process restarts. Faster wakes continue
+entry/provider reconciliation without advancing the chain cursor. The next wake
 is scheduled before reconciliation, so a crash cannot lose recovery scheduling.
 
 `createNodeOwnerStore({home,durable:true,replicas:1})` uses the existing daemon

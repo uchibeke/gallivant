@@ -131,8 +131,71 @@ test("bounded chain batches ignore history and rotate durably while active chain
   const third = await coordinator().wake();
   assert.deepEqual(third.map(r => r.chain), names.slice(21));
   assert.equal(readJson(join(home, "coordinator.json")).chainCursor, null);
+  clock.advance(CONFIG.poll_seconds / 60);
   const fourth = await coordinator().wake(); assert.deepEqual(fourth.map(r => r.chain), [names[0]]);
   assert.deepEqual(await coordinator().wake(), []);
+  // If the remaining suffix disappears, close the sweep instead of polling an
+  // already visited prefix before its review deadline.
+  state.updateChain(names[0], { status: "active" });
+  await store.withOwner(owner => owner.saveCheckpoint({ chainCursor: names[20] }));
+  assert.deepEqual(await coordinator().wake(), []);
+  assert.equal(state.getChain(names[0]).status, "active");
+  assert.equal(readJson(join(home, "coordinator.json")).chainCursor, null);
+  clock.advance(CONFIG.poll_seconds / 60);
+  assert.deepEqual((await coordinator().wake()).map(r => r.chain), [names[0]]);
   assert.equal(state.chains().length, 61, "history remains intact");
   assert.equal(existsSync(join(home, "daemon.lock")), false);
+});
+
+test("chain review cadence survives fast wakes, process restart and failed advances while entry work continues", async () => {
+  const home = tempHome(), state = makeState(home), clock = makeClock(), reads = [], ancestry = [];
+  migrateRuntimeState({ home, manifest });
+  const entries = {}, chains = {};
+  for (let i = 1; i <= 3; i++) {
+    const name = `chain-${i}`, id = `acme/widget/job-${i}`, dispatch = `dispatch-${i}`;
+    entries[id] = { state: "done", harness: "claude", repo: "acme/widget", base: "main", branch: `work/job-${i}`, checkout: "/fixture", prd: `job-${i}.md`, start_token: `token-${i}`, pr: i, chain: { name, index: 0, dispatch } };
+    chains[name] = { name, repo: "acme/widget", base: "main", status: "active", index: 0, steps: [{ id, checkout: "/fixture", relPath: `job-${i}.md`, dispatch }] };
+  }
+  writeJsonAtomic(join(home, "state.json"), { version: 1, entries, chains });
+  let progress = 0, identity = "fixture-original", failReads = false, merged = false;
+  const runner = { current: () => null, reconcile: async () => { progress++; } };
+  const ctx = { home, state, clock, ownLogin: "me", config: { ...CONFIG, poll_seconds: 120 }, log: silentLog, git: fakeGit(), notify: fakeNotify(),
+    executionFor: () => runner, runnerFor: () => runner,
+    gh: { ...fakeGh(), prView: async (_repo, number) => {
+      reads.push(number); if (failReads) throw new Error("fixture GitHub unavailable");
+      return { number, url: `https://github.com/acme/widget/pull/${number}`, headRefName: `work/job-${number}`, baseRefName: "main", isCrossRepository: false,
+        state: merged ? "MERGED" : "OPEN", mergeCommit: { oid: "a".repeat(40) }, mergedAt: "2026-09-24T02:00:00Z" };
+    }, containsCommit: async (_repo, _base, sha) => { ancestry.push(sha); return true; } },
+  };
+  const native = createNodeOwnerStore({ home, durable: true });
+  const store = { withOwner: fn => native.withOwner(owner => fn({ ...owner, processIdentity: identity })) };
+  const coordinator = (context = ctx, maxChains = 2) => createNodeCoordinator({ ctx: context, store, schedule: async () => {}, manifest, maxEntries: 1, maxChains });
+  await coordinator(ctx, 0).wake();
+  assert.equal(readJson(join(home, "coordinator.json")).nextChainAt, undefined, "disabled chains cannot postpone the first enabled sweep");
+  await coordinator().wake(); assert.deepEqual(reads, [1, 2]);
+  clock.advance(10 / 60); await coordinator().wake(); assert.deepEqual(reads, [1, 2, 3]);
+  const deadline = clock.now() + 120000;
+  assert.equal(readJson(join(home, "coordinator.json")).nextChainAt, deadline);
+  for (let i = 0; i < 11; i++) {
+    clock.advance(10 / 60); identity = "fixture-restarted";
+    await coordinator().wake();
+    assert.deepEqual(reads, [1, 2, 3], "fast wakes and restart cannot repeat chain GitHub reads");
+    assert.equal(readJson(join(home, "coordinator.json")).chainCursor, null);
+    assert.equal(readJson(join(home, "coordinator.json")).nextChainAt, deadline);
+  }
+  assert.equal(progress, 14, "one bounded entry still reconciles on every wake");
+  clock.advance(10 / 60);
+  const broken = { ...ctx, state: { ...state, chains: () => { throw new Error("fixture state read failure"); } } };
+  await assert.rejects(coordinator(broken).wake(), /fixture state read failure/);
+  assert.equal(readJson(join(home, "coordinator.json")).nextChainAt, deadline);
+  assert.equal(existsSync(join(home, "daemon.lock")), false);
+  failReads = true;
+  await coordinator().wake(); assert.deepEqual(reads, [1, 2, 3, 1, 2]);
+  clock.advance(10 / 60); await coordinator().wake(); assert.deepEqual(reads, [1, 2, 3, 1, 2, 3]);
+  failReads = false; merged = true;
+  clock.advance(10 / 60); await coordinator().wake(); assert.equal(reads.length, 6, "GitHub failures retain the normal review cadence");
+  clock.advance(110 / 60); await coordinator().wake();
+  clock.advance(10 / 60); await coordinator().wake();
+  assert.deepEqual(reads, [1, 2, 3, 1, 2, 3, 1, 2, 3]); assert.equal(ancestry.length, 3);
+  assert.ok(state.chains().every(([, c]) => c.status === "done"));
 });
