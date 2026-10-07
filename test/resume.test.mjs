@@ -195,3 +195,66 @@ test("a missing checkout is recreated from the branch, because the session's mem
   assert.deepEqual(w.cloned, [w.state.get(w.id).worktree]);
   assert.equal(w.runner.started.length, 1, "and the run still starts");
 });
+
+
+test("resume retains accepted ownership when the learning delivery audit is locked", async () => {
+  const w = world(), repo = { host: "github.com", id: "1234" };
+  let observed;
+  w.ctx.learning = { identityFor: () => repo, resolveRepo: async () => repo, mode: () => "apply",
+    dispatch: async (_repo, _intent, launch) => launch(), context: async () => ({ key: "d".repeat(64), section: "Advisory", rules: [] }),
+    delivered: async (_repo, _key, runId) => {
+      observed = { runId, entry: w.ctx.state.entries()[0][1] };
+      throw new Error("operation.lock busy");
+    } };
+  const result = await resume(w.ctx, { handle: w.id });
+  assert.equal(observed.runId, result.run);
+  assert.equal(observed.entry.last.run, result.run);
+  assert.equal(Object.keys(observed.entry.learning_deliveries).length, 1);
+  assert.equal(w.ctx.state.get(result.id).last.run, result.run);
+});
+
+test("resume refuses revoked learning admission without consuming review state", async () => {
+  const w = world(), repo = { host: "github.com", id: "1234" }, before = w.state.get(w.id);
+  w.ctx.learning = { identityFor: () => repo, resolveRepo: async () => repo, mode: () => "apply",
+    context: async () => ({ key: "d".repeat(64), section: "Prepared advice", rules: [] }),
+    dispatch: async () => { throw new Error("revoked before launch"); },
+  };
+  await assert.rejects(resume(w.ctx, { handle: w.id }), e => /revoked before launch/.test(e.message) && e.dispatchNotSent);
+  assert.equal(w.runner.started.length, 0);
+  for (const key of ["session", "last", "cursor", "iteration", "pr"]) assert.deepEqual(w.state.get(w.id)[key], before[key]);
+});
+
+
+test("fresh learning resume preserves task and review state while replacing native memory", async () => {
+  const w = world({ pr: 142, iteration: 2, learning: { repo: { host: "github.com", id: "1234" }, rules: [{ id: "old", digest: "b".repeat(64) }] }, learning_revocation: { freshSessionRequired: true } });
+  const before = w.state.get(w.id), repo = before.learning.repo;
+  w.ctx.learning = { identityFor: () => repo, resolveRepo: async () => { throw new Error("GitHub unavailable"); }, mode: () => "off", context: async () => { throw new Error("disabled continuation must be local"); } };
+  const result = await resume(w.ctx, { handle: w.id, freshSession: true });
+  const after = w.state.get(w.id);
+  assert.notEqual(result.session, before.session);
+  for (const key of ["repo", "pr", "branch", "worktree", "iteration", "cursor"]) assert.deepEqual(after[key], before[key]);
+  assert.equal(after.learning_continuity.previousSession, before.session);
+  assert.equal(after.learning_continuity.status, "accepted"); assert.equal(after.learning_revocation, null);
+  assert(w.runner.started[0].args.some(v => v.includes("Approved brief snapshot:")));
+  assert(!w.runner.started[0].args.includes("--resume"));
+});
+
+test("fresh learning resume refuses unresolved work and unrelated sessions", async () => {
+  const w = world(); await assert.rejects(resume(w.ctx, { handle: w.id, freshSession: true }), /requires recorded learned context/);
+  w.state.update(w.id, { learning_revocation: { freshSessionRequired: true }, last: { run: "unsettled", exit: null } });
+  await assert.rejects(resume(w.ctx, { handle: w.id, freshSession: true }), /still needs settling/);
+  assert.equal(w.runner.started.length, 0);
+});
+
+
+test("fresh learning resume retries the prepared session after a pre-launch failure", async () => {
+  const w = world({ learning_revocation: { freshSessionRequired: true } });
+  const launch = w.runner.start; let fail = true;
+  w.runner.start = async (...args) => { if (fail) { fail = false; throw new Error("pre-launch fixture failure"); } return launch(...args); };
+  await assert.rejects(resume(w.ctx, { handle: w.id, freshSession: true }), /pre-launch/);
+  const pending = w.state.get(w.id);
+  assert.equal(pending.session, SESSION); assert.equal(pending.learning_continuity.status, "prepared");
+  const result = await resume(w.ctx, { handle: w.id, freshSession: true });
+  assert.equal(result.session, pending.learning_continuity.newSession);
+  assert.equal(w.runner.started.length, 1);
+});
