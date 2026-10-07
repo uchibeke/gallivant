@@ -136,6 +136,27 @@ test("concurrent approval cannot change a preview or active checkpoint", async t
   assert.equal(f.store.load(repo).sequence, 1);
 });
 
+test("recovery retries committed retirement controls without signing another transition", async t => {
+  const f = await enrolled(t, { onRevocation: async intent => {
+    if (intent.removed?.length) throw new Error("registry locked after signed commit");
+    return [];
+  } });
+  const selection = [{ id: f.candidate.content.id, digest: f.candidate.digest }];
+  await f.service.approve(repo, selection, { confirm: () => true });
+  await assert.rejects(f.service.approve(repo, selection, { action: "retire", reason: "No longer applicable", confirm: () => true }), /registry locked/);
+  const committed = canonical(f.store.load(repo));
+  assert.equal(f.store.load(repo).sequence, 2); assert.deepEqual(f.store.load(repo).active, []);
+  const calls = [], restarted = createLearningService({ store: f.store, signer: { ...signer(), sign() { throw new Error("must not sign during recovery"); } }, qualify: () => ({ qualified: true, fixtureOnly: true }), onRevocation: async intent => {
+    const release = f.store.lock(); release(); // Controls run after the atomic transaction.
+    calls.push(intent); return [{ cancellation: { confirmed: true } }];
+  } });
+  for (let retry = 0; retry < 2; retry++) {
+    assert.equal((await restarted.recover(repo))[0].controls[0].cancellation.confirmed, true);
+    assert.equal(canonical(f.store.load(repo)), committed);
+  }
+  assert.equal(calls.length, 2); assert.deepEqual(calls[0].removed, selection);
+});
+
 test("stale signed intent requires another preview and cannot silently rebase", async t => {
   const f = await enrolled(t), save = f.store.saveLocked; let writes = 0;
   f.store.saveLocked = (repo, s) => { if (++writes === 3) throw new Error("interrupted activation"); save(repo, s); };

@@ -183,3 +183,43 @@ The explicit operator transition is implemented; automatic session replacement i
 not implied. No paid model call or unchanged blocked sandbox probe was run. Installed
 isolation, Linux/live evidence, extraction, rotation/recovery and outcome-correlation
 gaps remain outstanding, and production remains **UNQUALIFIED / collection only**.
+
+## Revocation and concurrent-observation review follow-up
+
+The shared service retries disabled-mode controls even when the mode was already
+committed before a control failure. Signed-transition recovery uses verified
+history to retry retirement/replacement controls outside the learning-store lock.
+`test/learning.test.mjs` covers both disabled modes across failure and restart;
+`test/learning-openssh.test.mjs` covers committed retirement, repeated recovery,
+unchanged signed state and no extra signing.
+
+Source revisions are reconciled by source timestamp, observation timestamp and a
+deterministic digest tie-break in both automatic reads and historical merges.
+The concurrent-merge tests exercise both arrival orders and preserve candidate
+rejections. Disabled fresh-session inputs pin empty advice locally, avoiding both
+a GitHub lookup and an enable race; the actual resume test retains task/PR/cursor
+ownership during the simulated GitHub outage.
+
+Source and generated-output review included the shared observation writers,
+post-commit control/recovery paths, and shared input/accepted-delivery boundaries.
+`/private/tmp/review-learning-batch7-preview.json` records two concurrent revisions
+with only the newer one current, a successful control retry from `off`, and empty
+managed advice with unchanged task text. This is disposable fixture evidence.
+The preview needed process inspection for the existing process-identity lock;
+it succeeded using supported sandbox escalation after the restricted attempt
+refused to acquire that lock. No installed isolation claim follows from it.
+
+The focused tests passed 69 cases in
+`/private/tmp/review-learning-batch7-focused.log` (27,078.498416 ms).
+Linux/live qualification and the documented implementation gaps remain outstanding;
+production remains **UNQUALIFIED / collection only**. No unchanged OS-isolation
+probe or paid model call was attempted.
+
+Required Verify results on the same macOS host:
+
+| Command | Recorded result | Output pointer |
+| --- | --- | --- |
+| `npm test` | 1,256 passed; 0 failed, skipped or cancelled; 428,764.9535 ms | `/private/tmp/review-learning-batch7-full.log` |
+| `npm run lint` | Exit 0 | `/private/tmp/review-learning-batch7-lint.log` |
+| `npm run test:learning` | 53 passed; 0 failed, skipped or cancelled; 50,640.928125 ms | `/private/tmp/review-learning-batch7-suite.log` |
+| `git diff --check` | Exit 0 | Operator session command output |

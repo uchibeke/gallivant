@@ -90,6 +90,8 @@ restart. Legacy identity-only records remain readable; repeat `learn configure
 `learn configure --repo owner/project --mode off` uses the stored identity and invokes
 local revocation controls even when GitHub, credentials or the remote repository are
 unavailable. Enabling collection or application still resolves the remote identity.
+If revocation controls fail after the mode is saved, repeat the disabled-mode
+command: both `off` and `collect` retry controls even when the mode is unchanged.
 
 Extraction currently reports unavailable. The service seam bounds a separate
 allowance (maximum $1 per extraction), 30 seconds and 20 candidate revisions. It
@@ -150,6 +152,8 @@ Cancellation or failed signing changes no active content. Signed prepared intent
 may be recovered only against its exact current parent. The CLI currently selects
 one revision per invocation; explicit batches are available only to the shared
 service and enumerate every ID/digest in the preview.
+`learn recover` also retries controls for committed retirements and replacements
+from verified signed history, without signing or activating another transition.
 
 Activation checks canonical RFC 8785 bytes, SSHSIG namespace, enrolled signer,
 repository identity, sequence/parent, evidence and complete active-set digests.
@@ -173,6 +177,9 @@ with the approved brief, current task/PR context and current approved advice. It
 preserves checkout, branch, cursors, iteration, operation history and cumulative
 allowance. Unconfirmed cancellation and unrelated stop fences remain blocking;
 a provider returning the retired session is refused. Old memory is not erased.
+When learning is `off` or `collect`, this fresh-session transition clears advice
+locally without a learning-related GitHub lookup. Any independently required
+provider or coding-workflow credentials still apply.
 
 Accepted run ownership, feedback cursors and pending delivery audit records are
 saved together before writing to the learning store. If that store is locked or

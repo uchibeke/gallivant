@@ -51,6 +51,25 @@ test("default migrated profiles cannot activate with forged configuration or fix
   assert.equal(service.mode(repo), "off");
 });
 
+test("disabled advice clears offline with a fresh session and cannot race into unchecked application", async () => {
+  for (const mode of ["off", "collect"]) {
+    const entry = { repo: "example/project", harness: "codex", session: "old-session", learning: { repo, rules: [{ id: "old", digest: "b".repeat(64) }] } };
+    let modeReads = 0;
+    const service = {
+      identityFor: () => repo, mode: () => ++modeReads === 1 ? mode : "apply",
+      resolveRepo: async () => { throw new Error("GitHub unavailable"); },
+      context: async () => { throw new Error("concurrent enable must not add unchecked advice"); },
+    };
+    await assert.rejects(learningInput({ learning: service }, "task", entry, input), /fresh-session/);
+    modeReads = 0;
+    const managed = await learningInput({ learning: service }, "task", { ...entry, session: null }, input);
+    assert.equal(managed.prompt, input.prompt); assert.equal(managed.learning.section, "");
+    assert.equal(managed.learning.mode, mode); assert.equal(managed.learning.delivered, false);
+    assert.deepEqual(learningDeliveryPatch(entry, managed, { id: "new-run" }).learning.rules, []);
+    assert.equal(managed.allowance, input.allowance); assert.equal(managed.mandatoryPolicy, input.mandatoryPolicy);
+  }
+});
+
 test("automatic collection runs after fixing feedback and cannot consume rounds or delay dispatch", async () => {
   const { state, id } = seededState({ state: STATES.prOpen }), clock = makeClock(), runner = fakeRunner(clock);
   const gh = fakeGh({ inline: [inline({ id: 9, by: "me", at: at(1), body: "Validate the error path" })] });

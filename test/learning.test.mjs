@@ -55,6 +55,40 @@ test("deletion requires full source enumeration and does not alter candidate con
   assert.equal(service.show(repo, c.content.id, c.digest).digest, c.digest);
 });
 
+test("out-of-order automatic observations retain only the newest source revision", async t => {
+  const { service, store } = fixture(t);
+  await observed(service);
+  await service.observe(repo, snapshot("Newest correction", { updated_at: "2026-10-06T02:00:00Z" }));
+  await service.observe(repo, snapshot("Delayed correction", { updated_at: "2026-10-06T01:00:00Z" }));
+  const current = Object.values(store.load(repo).observations).filter(o => !o.superseded);
+  assert.equal(current.length, 1); assert.equal(current[0].content.excerpt, "Newest correction");
+});
+
+test("historical merges reconcile concurrent source revisions without losing dispositions", async t => {
+  for (const newer of ["automatic", "historical"]) {
+    let injected = false, service, store;
+    const historical = snapshot("Historical correction", { updated_at: newer === "historical" ? "2026-10-06T02:00:00Z" : "2026-10-06T01:00:00Z" });
+    const automatic = snapshot("Automatic correction", { updated_at: newer === "automatic" ? "2026-10-06T02:00:00Z" : "2026-10-06T01:00:00Z" });
+    const gh = { learningPage: async (_name, kind) => {
+      if (kind === "inline" && !injected) {
+        injected = true;
+        await service.observe(repo, automatic);
+        await service.reject(repo, c.content.id, c.digest, "Keep rejection across scan merges");
+      }
+      return { items: kind === "pulls" ? [historical.pr] : kind === "inline" ? historical.inline : [], complete: true };
+    } };
+    ({ service, store } = fixture(t, { gh }));
+    const c = await pending(service, store);
+    assert((await service.collect(repo, "example/project")).complete);
+    const state = store.load(repo), current = Object.values(state.observations).filter(o => !o.superseded);
+    assert.equal(Object.keys(state.observations).length, 3);
+    assert.equal(current.length, 1); assert.equal(current[0].content.excerpt, newer === "automatic" ? "Automatic correction" : "Historical correction");
+    assert.equal(service.show(repo, c.content.id, c.digest).status, "rejected");
+    await service.collect(repo, "example/project");
+    assert.deepEqual(Object.values(store.load(repo).observations).filter(o => !o.superseded), current);
+  }
+});
+
 test("candidate review, exact rejection suppression, revision and overlap conflicts persist", async t => {
   const { service, store, root } = fixture(t);
   const c = await pending(service, store);
@@ -303,6 +337,25 @@ test("CLI disables locally during GitHub outages and invokes revocation controls
   for (const mode of ["collect", "apply"]) await assert.rejects(learnCommand({ learning: service }, { args: ["configure"], values: { repo: "example/project", mode } }), /GitHub unavailable/);
   await assert.rejects(learnCommand({ learning: service }, { args: ["configure"], values: { repo: "unknown/project", mode: "off" } }), /no learning state/);
   assert.equal(service.mode(repo), "off");
+});
+
+test("disabled modes retry revocation after a committed mode and failed controls across restart", async t => {
+  for (const mode of ["off", "collect"]) {
+    const { service, store, root } = fixture(t, { onRevocation: async () => { throw new Error("registry locked"); } });
+    await store.transaction(repo, s => { s.mode = "apply"; });
+    await assert.rejects(service.configure(repo, mode), /registry locked/);
+    assert.equal(service.mode(repo), mode);
+    let calls = 0;
+    const restarted = createLearningService({ root, store, onRevocation: async intent => {
+      calls++; assert.deepEqual(intent.repo, repo); assert.equal(intent.removed, null);
+      return [{ cancellation: { confirmed: true } }];
+    } });
+    for (let retry = 0; retry < 2; retry++) {
+      const result = await restarted.configure(repo, mode);
+      assert.equal(result.before, mode); assert.equal(result.controls[0].cancellation.confirmed, true);
+    }
+    assert.equal(calls, 2);
+  }
 });
 
 

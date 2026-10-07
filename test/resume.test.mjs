@@ -217,7 +217,7 @@ test("resume retains accepted ownership when the learning delivery audit is lock
 test("fresh learning resume preserves task and review state while replacing native memory", async () => {
   const w = world({ pr: 142, iteration: 2, learning: { repo: { host: "github.com", id: "1234" }, rules: [{ id: "old", digest: "b".repeat(64) }] }, learning_revocation: { freshSessionRequired: true } });
   const before = w.state.get(w.id), repo = before.learning.repo;
-  w.ctx.learning = { identityFor: () => repo, resolveRepo: async () => repo, mode: () => "off", context: async () => ({ section: "", mode: "off", freshSessionRequired: true }) };
+  w.ctx.learning = { identityFor: () => repo, resolveRepo: async () => { throw new Error("GitHub unavailable"); }, mode: () => "off", context: async () => { throw new Error("disabled continuation must be local"); } };
   const result = await resume(w.ctx, { handle: w.id, freshSession: true });
   const after = w.state.get(w.id);
   assert.notEqual(result.session, before.session);
