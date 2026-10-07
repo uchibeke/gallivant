@@ -101,7 +101,7 @@ for (const control of [".npmignore", ".gitignore"]) test(`npm pack applies neste
 
 test("public URLs reject canonical loopbacks and aliases across every configured URL", t => {
   gitFixture(t);
-  for (const host of ["127.0.0.1", "127.9.8.7", "127.1", "2130706433", "0x7f000001", "[::1]", "[0:0:0:0:0:0:0:1]", "[::ffff:127.0.0.1]", "localhost.localdomain", "LOCALHOST.", "child.localhost", "localhost.localdomain.", "localhost6.localdomain6", "ip6-localhost", "ip6-loopback", "example.com."]) {
+  for (const host of ["0.0.0.0", "0", "0x0", "[::]", "[0:0:0:0:0:0:0:0]", "[::ffff:0.0.0.0]", "127.0.0.1", "127.9.8.7", "127.1", "2130706433", "0x7f000001", "[::1]", "[0:0:0:0:0:0:0:1]", "[::ffff:127.0.0.1]", "localhost.localdomain", "LOCALHOST.", "child.localhost", "localhost.localdomain.", "localhost6.localdomain6", "ip6-localhost", "ip6-loopback", "example.com."]) {
     for (const field of ["endpoint", "homepage", "supportUrl", "privacyUrl", "termsUrl", "licenseUrl", "domain", "connectDomains", "resourceDomains"]) {
       const input = fixture(), url = `https://${host}`;
       if (field === "domain") input.config.resource.domain = url;

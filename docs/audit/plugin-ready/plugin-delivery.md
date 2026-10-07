@@ -89,6 +89,13 @@ paths and their recovery directories, preserving selected repository lockfiles.
 Installed recovery tests restore those sources and successfully answer the saved
 intake; canonical unsupported ledger versions still fail closed.
 
+Entry batches now persist a sorted entry key. Removing an already processed
+entry cannot skip remaining startup reconciliation; legacy numeric checkpoints
+restart safely, and failed advances do not commit progress. Both hosted transport
+regressions verify removal, restart, saved backoff and no duplicate submission.
+The public URL matrix also rejects IPv4/IPv6 unspecified wildcard addresses,
+including canonicalized alternate spellings and mapped forms.
+
 Unmet attestations remain explicit:
 
 - **ac-5:** Actual Pages runtime/binding execution is unavailable. Node package

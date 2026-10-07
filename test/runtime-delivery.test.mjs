@@ -55,7 +55,7 @@ test("settled preparation, completed cancellation and collected execution allow 
   assert.equal(readJson(join(home, "runtime-pin.json")).coreSha256, update.coreSha256);
 });
 
-for (const provider of ["openai-agents", "codex-cloud"]) test(`${provider} startup reconciliation spans every bounded batch and restarts a partial sweep`, async () => {
+for (const provider of ["openai-agents", "codex-cloud"]) test(`${provider} startup keyset reconciliation survives removed entries and restarts a partial sweep`, async () => {
   const home = tempHome(), clock = makeClock(), state = makeState(home), executions = new Map(), lookups = [];
   migrateRuntimeState({ home, manifest });
   let submits = 0, identity = "fixture-first-process", wakes = 0;
@@ -89,18 +89,19 @@ for (const provider of ["openai-agents", "codex-cloud"]) test(`${provider} start
   await coordinator().wake();
   assert.deepEqual(lookups, [...executions.keys()].slice(0, 2));
   assert.equal(readJson(join(home, "coordinator.json")).processIdentity, "previous-process");
-  assert.equal(readJson(join(home, "coordinator.json")).cursor, 2);
+  assert.equal(readJson(join(home, "coordinator.json")).entryCursor, "acme/widget/job-1");
+  state.remove("acme/widget/job-1"); // Removing the saved key must not shift past job-2.
   await coordinator().wake();
   assert.deepEqual(lookups, [...executions.keys()].slice(0, 4));
   assert.equal(readJson(join(home, "coordinator.json")).processIdentity, "previous-process");
   identity = "fixture-restarted-process"; lookups.length = 0;
   for (let i = 0; i < 3; i++) await coordinator().wake();
-  assert.deepEqual(lookups, [...executions.keys()], "a new process must also reconcile entries before the interrupted cursor");
+  assert.deepEqual(lookups, [...executions.keys()].filter(id => id !== "acme/widget/job-1"), "a new process must also reconcile entries before the interrupted cursor");
   assert.equal(readJson(join(home, "coordinator.json")).cursor, 0);
   assert.equal(readJson(join(home, "coordinator.json")).processIdentity, identity);
   assert.equal(readJson(join(home, "coordinator.json")).startupProcessIdentity, null);
   for (let i = 0; i < 3; i++) await coordinator().wake();
-  assert.equal(lookups.length, 5, "a completed startup sweep returns to saved provider backoff");
+  assert.equal(lookups.length, 4, "a completed startup sweep returns to saved provider backoff");
   assert.equal(submits, 5, "unknown acceptance must never purchase another dispatch");
   assert.equal(wakes, 9);
 });

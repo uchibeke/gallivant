@@ -11,7 +11,8 @@
     "base": "96e81031516bdf6663dd3b97ac39b8f57022568b",
     "sourceVerified": true,
     "uncommittedPayload": [
-      "lib/runtime_state.mjs"
+      "lib/plugin_package.mjs",
+      "lib/runtime_node.mjs"
     ],
     "mergedM5": false,
     "predecessorMerges": [
@@ -20,14 +21,14 @@
       "2b4514fb27fcb493e62bfed913fffc204215f155",
       "96e81031516bdf6663dd3b97ac39b8f57022568b"
     ],
-    "testedSourceCommit": "3ec6a9c73c8f6493a2590732eb0060edb979c4db"
+    "testedSourceCommit": "bd53fe333559b91fa56811d6ecb00acb6293a214"
   },
   "artifact": {
     "coreArtifact": "gallivant-0.2.0.tgz",
-    "coreSha256": "9285016343e116bae8d8bb1493396519176b379f873a2dcbbbd716552d32d9c5",
+    "coreSha256": "e693bc7f19371ae027a571478c1a0e4ddd75cfab4a89bc148c4acbebc2430fe9",
     "hashes": {
       "plugin": "8753892ceb5552fc37ba011929830f4c754d717f8d8031e31fb9b4935b465e1a",
-      "runtime": "7a3c2e77bdd57f6d80b0de7e71c6fc8378ffac55d885e46b1ff2bb0900fa668e",
+      "runtime": "69b2b8a551d538beb0be9e293f20e7fe02354af0aa264b446585f1aa693efd62",
       "operations": "2077c0558cd4634accf66e530f186b52e2f91bfea502ff7c6f212d2e2efb800f"
     },
     "dependencyLockSha256": "bf3969111f7c4b84071fc14c59d870e296ee045024c8056757ac3e3466bc2b28",
@@ -99,7 +100,7 @@
       "lib/openai_agents_input.mjs": "3b012e8c7c51d9d007762e1f849ea3caaf7bbf9ab128a6f5c916bff195b6b83c",
       "lib/openai_agents_sources.mjs": "9d61867d9f86901b084f37d4da6c344df24a0ff71b7ab0537273aad4b18f1132",
       "lib/openai_agents.mjs": "3b67fe601cb8ad268f2d997d55e19bad4aca1f016293595036825892d1991702",
-      "lib/plugin_package.mjs": "0e8aabd570a4a5e90a9039032c435ee5104f276feaba1a25d72c2345ae56d392",
+      "lib/plugin_package.mjs": "9423eaade11905d694a7735b7be0aa3dc461cd7ccc065dc01d781d00fce38092",
       "lib/prd.mjs": "3e8bd68d62e8e61fe3624cdcc76e27e78e079d77e25a1484aafa7f5ca6f6ffe3",
       "lib/probe.mjs": "e6df979a29b05ee385366cc28787d5adf9254ff90c79444574ed759d0739d5a2",
       "lib/prompt.mjs": "e1c09b06350397feb038c6cae75b798d2970fff5c7b9c03289e2d14e8b390be2",
@@ -110,7 +111,7 @@
       "lib/run_log.mjs": "7d0b28731be434c6764ea400e4fe9d95ea0cc81179c9ead80d140d23153abcdb",
       "lib/run.mjs": "3682818ab95bf3b27c262449aa521be094caee9c8f133e94740923ebafb91315",
       "lib/runtime_dependencies.mjs": "6d25b972c116026643f348dc55586009d2746f68b99f47d450b2a3ef35625949",
-      "lib/runtime_node.mjs": "93c334133140a02622cbbedc41362ba98f75275e4c5b12824a1323f7641518de",
+      "lib/runtime_node.mjs": "1f99515bbe05164d16ff27a5bd0d462880c84fae21973d36078ab3d5e2747df5",
       "lib/runtime_state.mjs": "c8f594736f47f7640f3b8c35fee433ae5c9fbae702a1dd9c209fc8747dacb306",
       "lib/sources/index.mjs": "88e1550751e9f52c82e94085bcb77bbd2b80466c9e2192670593f12894c4a4ec",
       "lib/sources/prd.mjs": "b26425213d537d8bf640abee1046481925de30d676fdb9b6a6b9239cdc50effd",
@@ -358,7 +359,8 @@
         "test/runtime-delivery.test.mjs: both hosted transports force every startup batch, restart a nonzero-cursor sweep, preserve failed-advance checkpoints and never resubmit unknown intent",
         "test/runtime-delivery.test.mjs: 36 retained history records and 25 active chains rotate in bounded batches across reconstructed coordinators, shrinking active sets and cancellations; entry startup still covers every batch",
         "test/runtime-delivery.test.mjs: chain review cadence survives fast wakes, process restart, failed advances and GitHub failures while entry reconciliation continues; cancelled suffix cannot re-poll a visited prefix",
-        "test/runtime-delivery.test.mjs: delayed and repeated coordinator wakes revalidate the artifact pin under ownership before scheduling or task effects, release ownership on refusal and allow the matching runtime"
+        "test/runtime-delivery.test.mjs: delayed and repeated coordinator wakes revalidate the artifact pin under ownership before scheduling or task effects, release ownership on refusal and allow the matching runtime",
+        "test/runtime-delivery.test.mjs: both hosted startup keyset reconciliation cases remove the saved entry key between bounded wakes, retain forced reconciliation, restart safely and never resubmit"
       ],
       "evidence": "Killed native fixture owner is recovered; unresolved provider intent retains exactly one paid-work spy write"
     },
@@ -457,7 +459,8 @@
         "secret asset refusal removes partial output",
         "test/plugin-package.test.mjs: source and installed Git root/HEAD/status failure, internal proof, source mismatch and modified/deleted/renamed payload cleanup regressions",
         "test/plugin-package.test.mjs: internal packaging records npm controls without claiming public qualification",
-        "test/plugin-package.test.mjs: public URLs reject canonical loopbacks and aliases across every configured URL; asset preflight and builder share regular-file, size and secret constraints; CLI exits unsuccessfully for missing screenshots"
+        "test/plugin-package.test.mjs: public URLs reject canonical loopbacks and aliases across every configured URL; asset preflight and builder share regular-file, size and secret constraints; CLI exits unsuccessfully for missing screenshots",
+        "test/plugin-package.test.mjs public URL matrix rejects canonical IPv4/IPv6 unspecified addresses and alternate spellings across all public URL fields"
       ],
       "evidence": "Internal classification and submissionReady:false emitted; public configuration errors are actionable"
     },
@@ -533,12 +536,12 @@
         "tests": 1249,
         "pass": 1249,
         "fail": 0,
-        "log": "/tmp/plugin-delivery-paths-unit-tests.log"
+        "log": "/tmp/plugin-delivery-keyset-unit-tests.log"
       },
       {
         "command": "npm run lint",
         "exitCode": 0,
-        "log": "/tmp/plugin-delivery-paths-lint.log"
+        "log": "/tmp/plugin-delivery-keyset-lint.log"
       },
       {
         "command": "npm run test:plugin-package",
@@ -546,9 +549,9 @@
         "consumerFlowTests": 22,
         "installedConformanceTests": 425,
         "fail": 0,
-        "log": "/tmp/plugin-delivery-paths-package-tests.log",
-        "consumerEvidence": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/task-plugin-consumer-b5c3lp/evidence.json",
-        "conformanceLog": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/task-plugin-consumer-b5c3lp/conformance.log"
+        "log": "/tmp/plugin-delivery-keyset-package-tests.log",
+        "consumerEvidence": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/task-plugin-consumer-TOrniE/evidence.json",
+        "conformanceLog": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/task-plugin-consumer-TOrniE/conformance.log"
       },
       {
         "command": "git diff --check",
@@ -558,11 +561,11 @@
     ],
     "verifiedPayloadFiles": 112,
     "logSha256": {
-      "/tmp/plugin-delivery-paths-unit-tests.log": "ed4da0d25086ee9fc70bcf322dac8eb2b1d1527be73bd1e7856779ef1de766fa",
-      "/tmp/plugin-delivery-paths-package-tests.log": "d79788b8e0939302b25225bb48c055df9b8df0a95cc4ff96d8e656828ae3d015",
-      "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/task-plugin-consumer-b5c3lp/conformance.log": "bb38215ee0ff4c6e7c41d4c7f0b6ffee17eafc3c442bbe16b352bcf1e8a89037",
-      "/tmp/plugin-delivery-paths-lint.log": "2f32bd854b16ced20ab71be2afd3673b887efc4815c6e55ea7b941ebc5aa8a0b",
-      "/tmp/plugin-delivery-paths-focused.log": "da815c64636b364627656f7aba073225c18b77c97105765a6228991d1ab21a9e"
+      "/tmp/plugin-delivery-keyset-unit-tests.log": "f9f9e0dfb4673cfd822e268c6f2ab8e3f4f9ef24a96072bf621a893c57fb9e04",
+      "/tmp/plugin-delivery-keyset-package-tests.log": "1e9e4532f95d1b17130ff3e70bc27261868f66f4554da8841c62ba8d1b458e4d",
+      "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/task-plugin-consumer-TOrniE/conformance.log": "08b177688dc5d417c0b6b0189f5da7ca623f74ce871f50aa863527b79bd2c584",
+      "/tmp/plugin-delivery-keyset-lint.log": "2f32bd854b16ced20ab71be2afd3673b887efc4815c6e55ea7b941ebc5aa8a0b",
+      "/tmp/plugin-delivery-keyset-focused.log": "c8609031ddd91f156d75a8a3fe79535d1c9d021285d300d23f2316eb4b9c2670"
     },
     "hostEvidence": false,
     "fixturePurpose": "Deterministic unpaid installed-artifact compatibility; no actual installed host or live provider qualification",
@@ -593,7 +596,8 @@
       "Backup and restore bind the copied runtime pin to the envelope artifact before output; locks release on refusal. Public source verification includes untracked, ignored and deleted npm controls and hidden payload directories; internal fixtures record them and failed builds remove partial output.",
       "Public URL checks cover endpoint, metadata and all resource origins after URL canonicalization; preflight and emission share asset validation for every screenshot, UI and icon, including failure cleanup and CLI exit status.",
       "The Node owner adapter revalidates pin identity before the portable schedule/advance envelope on every callback; model projections include only saved redacted question IDs/text across task responses and list summaries.",
-      "Runtime ledger recognition follows taskStore/context.executionFor canonical paths, including actual cloud.json; backup skips only owned intake/execution/publication/delivery lock paths and recovery directories, retaining selected repository snapshots verbatim."
+      "Runtime ledger recognition follows taskStore/context.executionFor canonical paths, including actual cloud.json; backup skips only owned intake/execution/publication/delivery lock paths and recovery directories, retaining selected repository snapshots verbatim.",
+      "Entry windows sort and continue by persisted key, commit only after successful advance and safely replay legacy numeric checkpoints; shared public URL validation rejects unspecified IPv4/IPv6 and mapped forms."
     ]
   },
   "reviewFollowup": {
@@ -867,6 +871,39 @@
       "pass": 19,
       "fail": 0,
       "log": "/tmp/plugin-delivery-paths-focused.log"
+    },
+    "externalPrerequisites": "Previously observed unmet prerequisites retained; no unchanged live call retried and no installed-host/model-access evidence inferred from fixtures"
+  },
+  "entryKeysetReviewFollowup": {
+    "reviewId": 5442844014,
+    "reviewedCommit": "bd53fe333559b91fa56811d6ecb00acb6293a214",
+    "items": [
+      {
+        "commentId": 4207337329,
+        "implementation": [
+          "lib/runtime_node.mjs"
+        ],
+        "tests": [
+          "test/runtime-delivery.test.mjs both hosted startup keyset reconciliation survives removed entries and restarts a partial sweep"
+        ],
+        "rule": "Removing processed entries cannot skip the remaining startup reconciliation window"
+      },
+      {
+        "commentId": 4207337345,
+        "implementation": [
+          "lib/plugin_package.mjs"
+        ],
+        "tests": [
+          "test/plugin-package.test.mjs public URLs reject canonical loopbacks and aliases across every configured URL, including unspecified IPv4/IPv6 variants"
+        ],
+        "rule": "Public endpoints and resource origins must reject unspecified wildcard destinations"
+      }
+    ],
+    "focusedVerification": {
+      "tests": 43,
+      "pass": 43,
+      "fail": 0,
+      "log": "/tmp/plugin-delivery-keyset-focused.log"
     },
     "externalPrerequisites": "Previously observed unmet prerequisites retained; no unchanged live call retried and no installed-host/model-access evidence inferred from fixtures"
   }
