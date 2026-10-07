@@ -92,7 +92,99 @@ test("rate-limit continuation survives restart without acknowledging a coding cu
   assert.equal((await restarted.collect(repo, "example/project")).pages, 0);
   assert.equal((await restarted.collect(repo, "example/project", { since: "2026-09-01" })).pages, 0, "another date range cannot bypass repository backoff");
   limited = false; time += 60_001;
-  assert.equal((await restarted.collect(repo, "example/project")).added, 1);
+  const resumed = await restarted.collect(repo, "example/project");
+  assert.equal(resumed.added, 1); assert.equal(resumed.id, r.id); assert.equal(resumed.until, r.until);
+});
+
+test("default scan windows survive page caps, advancing clocks, dry-run and restart", async t => {
+  for (const variant of ["default", "since", "legacy"]) {
+    let time = Date.parse(now);
+    const calls = [], options = variant === "since" ? { since: "2026-10-01" } : {};
+    const gh = { learningPage: async (_name, kind, { pr }) => {
+      calls.push([kind, pr]);
+      return { items: kind === "pulls" ? Array.from({ length: 20 }, (_, i) => ({ ...snapshot().pr, number: i + 1 })) : kind === "inline" ? snapshot().inline : [], complete: true };
+    } };
+    const { service, store, root } = fixture(t, { gh, clock: { now: () => time } });
+    await service.configure(repo, "collect");
+    const first = await service.collect(repo, "example/project", options);
+    assert.equal(first.capped, true); assert.equal(first.complete, false);
+    assert.deepEqual(first.continuation, { page: 1, index: 19 });
+    if (variant === "legacy") await store.transaction(repo, s => { delete s.scans[0].request; });
+    time += 86400_000;
+    const restarted = createLearningService({ root, store, trust, gh, clock: { now: () => time } });
+    const before = canonical(store.load(repo)); calls.length = 0;
+    const dry = await restarted.collect(repo, "example/project", { ...options, dryRun: true });
+    assert.equal(dry.id, first.id); assert.equal(dry.until, first.until); assert.equal(dry.complete, true);
+    assert.equal(canonical(store.load(repo)), before); assert(calls.filter(([kind]) => kind !== "pulls").every(([, pr]) => pr === 20));
+    const resumed = await restarted.collect(repo, "example/project", options);
+    assert.equal(resumed.id, first.id); assert.equal(resumed.since, first.since); assert.equal(resumed.added, 1);
+    assert.equal(resumed.complete, true); assert.equal(Object.keys(store.load(repo).observations).length, 20);
+    const next = await restarted.collect(repo, "example/project", { ...options, dryRun: true });
+    assert.notEqual(next.id, first.id); assert.equal(next.until, new Date(time).toISOString());
+    const explicit = await restarted.collect(repo, "example/project", { since: "2026-10-01", until: "2026-10-06", dryRun: true });
+    assert.equal(explicit.until, "2026-10-06T00:00:00.000Z"); assert.notEqual(explicit.id, first.id);
+  }
+});
+
+test("historical dismissals preserve retraction metadata and exclude stale extraction evidence", async t => {
+  let time = Date.parse(now), dismissed = false, removed = false, duringScan = null;
+  const review = { id: 9, user: { login: "reviewer[bot]", type: "Bot" }, state: "CHANGES_REQUESTED", body: "Validate the whole record.", submitted_at: "2026-10-06T00:00:00Z" };
+  const gh = { learningPage: async (_name, kind) => {
+    if (kind === "pulls" && duringScan) { const run = duringScan; duringScan = null; await run(); }
+    return { items: kind === "pulls" ? [snapshot().pr] : kind === "reviews" ? [{ ...review, state: dismissed ? "DISMISSED" : review.state }] : kind === "inline" && !removed ? [{ ...snapshot().inline[0], pull_request_review_id: 9 }] : [], complete: true };
+  } };
+  let extracted;
+  const { service, store, root } = fixture(t, { gh, clock: { now: () => time }, qualify: () => ({ qualified: true, fixtureOnly: true }), extractor: { dataOnly: true, execute: async input => { extracted = input.observations; return { json: "[]" }; } } });
+  await service.configure(repo, "collect"); await service.collect(repo, "example/project");
+  const original = store.load(repo), evidence = Object.keys(original.observations);
+  assert.equal(evidence.length, 2);
+  const c = await service.revise(repo, "lesson-validation", proposed(evidence[0], { evidence }));
+  dismissed = true; time += 60_000;
+  const before = canonical(store.load(repo));
+  await service.collect(repo, "example/project", { dryRun: true }); assert.equal(canonical(store.load(repo)), before);
+  // Collection merges a stale snapshot over a concurrent candidate disposition.
+  duringScan = () => service.reject(repo, c.content.id, c.digest, "Review was dismissed");
+  await service.collect(repo, "example/project");
+  const retractedAt = new Date(time).toISOString();
+  const restarted = createLearningService({ root });
+  const shown = restarted.show(repo, c.content.id, c.digest);
+  assert.equal(shown.status, "rejected"); assert.equal(shown.digest, c.digest);
+  for (const e of shown.evidence) {
+    assert.equal(e.retracted, true); assert.equal(e.retractedAt, retractedAt);
+    assert.equal(hash(e.content), e.digest); assert.deepEqual(e.content, original.observations[e.digest].content);
+  }
+  time += 60_000; removed = true; await service.collect(repo, "example/project");
+  for (const e of service.list(repo)[0].evidence) assert.equal(e.retractedAt, retractedAt);
+  assert(service.show(repo, c.content.id, c.digest).evidence.some(e => e.deleted));
+  await service.observe(repo, snapshot("Unrelated current feedback", { id: 88 }));
+  await service.extract(repo, { allowanceUsd: 0.1 });
+  assert.equal(extracted.length, 1); assert.equal(extracted[0].id, "88");
+});
+
+test("resolved visibility survives CLI collection, review and extraction without widening identity", async t => {
+  let visibility = "private", resolvedId = repo.id, extracted;
+  const gh = { learningRepository: async () => ({ ...repo, id: resolvedId, visibility }), learningPage: async (_name, kind) => ({ items: kind === "pulls" ? [snapshot().pr] : kind === "inline" ? snapshot().inline : [], complete: true }) };
+  const { service, store, root } = fixture(t, { gh, qualify: () => ({ qualified: true, fixtureOnly: true }), extractor: { dataOnly: true, execute: async input => { extracted = input.observations; return { json: "[]" }; } } });
+  const ctx = { learning: service };
+  await learnCommand(ctx, { args: [], values: { repo: "example/project", "dry-run": true } });
+  assert.equal(readdirSync(join(root, "..")).includes("state"), false);
+  await learnCommand(ctx, { args: ["configure"], values: { repo: "example/project", mode: "collect" } });
+  await learnCommand(ctx, { args: [], values: { repo: "example/project" } });
+  assert.deepEqual(service.identityFor("example/project"), repo);
+  const evidence = Object.keys(store.load(repo).observations)[0];
+  const c = await service.revise(repo, "lesson-validation", proposed(evidence));
+  const restarted = createLearningService({ root });
+  assert.equal(restarted.show(repo, c.content.id, c.digest).evidence[0].content.visibility, "private");
+  await service.extract(repo, { allowanceUsd: 0.1 });
+  assert.equal(extracted[0].visibility, "private"); assert.deepEqual(extracted[0].repo, repo);
+  visibility = "public"; assert.deepEqual(await service.resolveRepo("example/project"), repo);
+  await service.observe(repo, snapshot("New public source", { id: 88 }));
+  assert.equal(Object.values(store.load(repo).observations).find(o => o.content.id === "88").content.visibility, "public");
+  resolvedId = foreign.id; await service.resolveRepo("example/project");
+  await service.observe(repo, snapshot("Unresolved source identity", { id: 89 }));
+  assert.equal(Object.values(store.load(repo).observations).find(o => o.content.id === "89").content.visibility, "unknown");
+  await service.observe(repo, { ...snapshot("Invalid visibility", { id: 90 }), visibility: "private\u001b[2J" });
+  assert.equal(Object.values(store.load(repo).observations).find(o => o.content.id === "90").content.visibility, "unknown");
 });
 
 test("transport failure checkpoints coverage without writes during dry-run", async t => {

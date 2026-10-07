@@ -47,3 +47,25 @@ deliberately omitting authorization verification breaks the security assertions.
 These offline results are macOS evidence only. Linux execution and the opt-in live
 ceremony remain **NOT RUN / UNQUALIFIED**. Local temporary output pointers are
 retained for this session; CI or another host must produce its own recorded results.
+
+## Collection review follow-up
+
+The three collection regressions were verified on the same macOS host:
+
+| Command | Recorded result | Output pointer |
+| --- | --- | --- |
+| `npm test` | 1,232 passed; 0 failed, skipped or cancelled; 223,565.336916 ms | `/private/tmp/review-learning-feedback-full.log` |
+| `npm run lint` | Exit 0 | Operator session command output |
+| `npm run test:learning` | 37 passed; 0 failed, skipped or cancelled; 29,528.720459 ms | `/private/tmp/review-learning-feedback-suite.log` |
+| `git diff --check` and `git diff --cached --check` | Exit 0 | Operator session command output |
+
+Focused cases in `test/learning.test.mjs` cover fixed scan windows across page caps,
+clock advancement, dry-run and restart (including legacy records); historical
+dismissal metadata with concurrent candidate rejection; and source visibility
+through CLI collection, review and extraction without changing repository identity.
+The generated review view at `/private/tmp/review-learning-feedback-preview.json`
+retains private classification and retraction timestamps with unchanged evidence
+digests. Retracted sources are excluded from subsequent extraction.
+
+No live isolation call was retried. Linux/live qualification and all previously
+recorded implementation gaps remain outstanding; production remains UNQUALIFIED.

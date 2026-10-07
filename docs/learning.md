@@ -48,6 +48,8 @@ to flag deletion; filtered automatic reads cannot establish absence.
 
 Coverage, caps, continuation and rate-limit retry time are reported. Interrupted
 scans replay the unfinished PR; immutable evidence revisions deduplicate overlap.
+When `--until` is omitted, retries reuse the incomplete scan's original date window,
+including after restart; completion allows the next invocation to open a fresh window.
 Dry-run uses the same transport and eligibility rules but writes no learning state
 and runs no inference. A very large single PR or continuously moving pagination can
 leave coverage incomplete; the report must be inspected before assuming full history
@@ -67,6 +69,11 @@ or combining evidence never inherits approval. Exact rejected revisions remain
 suppressed. Contradictions require human judgment; repetition is a suggestion, not
 validation. Copying guidance to AGENTS.md is optional ordinary reviewed navigation,
 never enrollment or an automatic per-run rewrite.
+
+Resolved source visibility is retained in evidence separately from immutable
+repository identity; unavailable classification is reported as unknown. Dismissal
+and deletion flags retain their first observed timestamp without changing evidence
+hashes. Retracted evidence remains inspectable and is excluded from extraction.
 
 Extraction currently reports unavailable. The service seam bounds a separate
 allowance (maximum $1 per extraction), 30 seconds and 20 candidate revisions. It
