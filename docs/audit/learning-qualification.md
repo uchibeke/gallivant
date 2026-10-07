@@ -493,3 +493,32 @@ skips or cancellations (242,869.780625 ms; `/private/tmp/learning-review15-full.
 (37,730.506542 ms; `/private/tmp/learning-review15-suite-final.log`).
 `npm run lint` exited 0 (`/private/tmp/learning-review15-lint.log`), and
 `git diff --check` passed after the final audit update.
+
+## Interactive setup lock and unqualified revocation recovery follow-up
+
+Setup snapshots pending enrollment and performs confirmation, key creation and
+signing outside the global store lock. Intent and authority writes each reacquire
+the lock, compare the expected pending bytes, refuse concurrent enrollment, and
+revalidate the exact encrypted key and pinned signer. Regression callbacks perform
+local configuration/pruning during confirmation and acquire the lock during key
+creation/signing; a changed intent during signing refuses authority publication.
+A subsequent reviewed retry signs the new pending identity explicitly.
+
+Recovery verifies committed signed history and fences/reconciles its removals
+before requiring current application qualification. A signed prepared transition
+still cannot activate while qualification is unavailable. The regression commits
+retirement with failed controls, drops qualification, retries cancellation, then
+interrupts a later signed activation and confirms another controls retry leaves
+that pending activation and all repository state unchanged.
+
+Review covered both compare-and-swap writes, prompt cancellation, signer/key
+revalidation, lock release on failure, signed-history checks and prepared recovery.
+Existing disposable-key retry and stale/forged transition regressions remain in
+scope. No production enrollment, paid calls or unchanged denied isolation probe ran;
+existing Linux/live gaps and the seven unmet criteria remain unchanged.
+
+Verify on the same macOS host: `npm test` passed 1,279 tests with no failures,
+skips or cancellations (225,813.114917 ms; `/private/tmp/learning-review16-full.log`).
+`npm run test:learning` passed 74 tests with no failures, skips or cancellations
+(41,815.8165 ms; `/private/tmp/learning-review16-suite-final.log`). `npm run lint`
+exited 0 (`/private/tmp/learning-review16-lint.log`), and `git diff --check` passed.

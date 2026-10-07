@@ -378,3 +378,39 @@ test("setup retries pending encrypted key enrollment after signing failure", asy
   const enrolled = f.store.readAuthority(); real.verify(canonical(enrolled.enrollment), enrolled.signature, enrolled);
   assert.equal(enrolled.id, JSON.parse(intent).id);
 });
+
+test("setup releases the shared lock for prompts and refuses changed enrollment intents", async t => {
+  const f = fixture(t), approval = join(f.dir, "approval"); mkdirSync(approval, { mode: 0o700 });
+  const keyPath = join(approval, "key"), qualify = () => ({ qualified: true, fixtureOnly: true });
+  let changed = false;
+  const checkUnlocked = () => { const release = f.store.lock(); release(); };
+  const setupSigner = { ...signer(), probe() {}, createKey(path) { checkUnlocked(); copyFileSync(key, path); copyFileSync(key + ".pub", path + ".pub"); return encryptedKey(path); }, sign(bytes) {
+    checkUnlocked();
+    if (!changed) { changed = true; const release = f.store.lock(); try { const intent = f.store.readEnrollment(); intent.id = "22222222-2222-4222-8222-222222222222"; f.store.writeEnrollment(intent); } finally { release(); } }
+    return signFixture(bytes);
+  } };
+  const service = createLearningService({ store: f.store, signer: setupSigner, qualify });
+  await assert.rejects(service.setup({ keyPath, confirm: async () => { await f.service.configure(repo, "collect"); await f.service.prune(repo); return true; } }), /concurrent enrollment changed/);
+  assert.equal(f.store.readAuthority(), null); assert.equal(f.service.mode(repo), "collect");
+  assert.equal((await service.setup({ keyPath, confirm: () => { checkUnlocked(); return true; } })).enrolled, true);
+});
+
+test("recovery retries committed revocations before refusing unqualified prepared activation", async t => {
+  const f = await enrolled(t, { onRevocation: async intent => { if (intent.removed?.length) throw new Error("controls unavailable"); return []; } });
+  const selection = [{ id: f.candidate.content.id, digest: f.candidate.digest }];
+  await f.service.approve(repo, selection, { confirm: () => true });
+  await assert.rejects(f.service.approve(repo, selection, { action: "retire", reason: "Remove stale advice", confirm: () => true }), /controls unavailable/);
+  let controls = 0;
+  const recovery = createLearningService({ store: f.store, signer: signer(), qualify: () => ({ qualified: false }), onRevocation: async () => { controls++; return [{ cancellation: { confirmed: true } }]; } });
+  assert.equal((await recovery.recover(repo))[0].controls[0].cancellation.confirmed, true);
+  const candidate = await f.service.revise(repo, f.candidate.content.id, { ...f.candidate.content, guidance: "Validate complete records before writing any fields." });
+  const save = f.store.saveLocked; let writes = 0;
+  f.store.saveLocked = (r, s) => { if (++writes === 3) throw new Error("interrupted activation"); return save(r, s); };
+  try { await assert.rejects(f.service.approve(repo, [{ id: candidate.content.id, digest: candidate.digest }], { confirm: () => true }), /interrupted activation/); }
+  finally { f.store.saveLocked = save; }
+  const before = canonical(f.store.load(repo));
+  assert(Object.values(f.store.load(repo).prepared)[0].signature);
+  await assert.rejects(recovery.recover(repo), { code: "LEARNING_UNQUALIFIED" });
+  assert.equal(controls, 2); assert.equal(canonical(f.store.load(repo)), before);
+  assert.deepEqual(f.store.load(repo).active, []);
+});

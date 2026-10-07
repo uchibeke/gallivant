@@ -74,7 +74,9 @@ Pruning uses the remembered immutable identity and removes expired local excerpt
 even when GitHub is unavailable. Reconfiguration refuses a different resolved ID;
 identity persistence also refuses replacement, preserving offline disable ownership.
 Recovery uses the remembered immutable repository identity and signed local state,
-so retrying revocation controls does not depend on GitHub availability. Batch
+so retrying revocation controls does not depend on GitHub availability. Verified
+committed removals retry their controls even after qualification is lost; prepared
+transitions still require qualification before activation. Batch
 approval rejects multiple revisions of one candidate before preview or signing.
 
 `revise` validates closed-schema JSON and creates an unapproved revision:
@@ -230,6 +232,8 @@ failed to start. Preserve the registry as well as the learning store during reco
 
 A failed enrollment signature retains the newly created encrypted key and a protected
 `enrollment-intent.json` containing only its identity, path and pinned signer metadata.
+Setup prompts, key creation and signing run outside the global store lock. Each
+write reacquires it and checks that the pending intent and authority are unchanged.
 Retry `learn setup` with the same key path: it verifies the exact encrypted key and
 signer, previews the pending enrollment and requests fresh signing. Cancellation
 preserves the pending intent; substituted keys, paths or signers are refused. The
