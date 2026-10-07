@@ -21,8 +21,14 @@ if (args[0] === '--version') {
   console.log(${JSON.stringify(version)});
   process.exit(${versionExit});
 }
+if (args[0] === 'mcp' && args[1] === 'list') { console.log('[]'); process.exit(0); }
+if (args[0] === 'app-server') {
+  const { serveCodexConfig } = await import(${JSON.stringify(new URL("./codex-config-fixture.mjs", import.meta.url).href)});
+  serveCodexConfig();
+} else {
 console.log(${JSON.stringify(signInOutput ?? (harness === "claude" ? JSON.stringify({ loggedIn: signedIn }) : "login status"))});
 process.exit(${signedIn ? 0 : 1});
+}
 `;
   // .mjs makes this independent of the temporary directory's package scope.
   writeFileSync(`${bin}.mjs`, source, { mode: 0o755 });

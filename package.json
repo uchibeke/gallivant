@@ -20,5 +20,7 @@
   },
   "keywords": ["claude-code", "codex", "pull-request", "autonomous", "agent", "aport"],
   "license": "Apache-2.0",
-  "repository": { "type": "git", "url": "https://github.com/uchibeke/gallivant.git" }
+  "repository": { "type": "git", "url": "https://github.com/uchibeke/gallivant.git" },
+  "dependencies": { "smol-toml": "1.9.0" },
+  "bundledDependencies": ["smol-toml"]
 }
