@@ -110,6 +110,15 @@ URL validation classifies canonical IPv4/IPv6 and embedded IPv4, rejecting
 non-global reserved, documentation, multicast and transition ranges while retaining
 global positive controls. Source and installed package tests share the URL matrix.
 
+Repository discovery and preparation share `REPOSITORY_ID_SCHEMA`, including
+slash-separated opaque IDs such as `acme/widget`, bounded to 128 characters.
+Unsupported adapter IDs fail before discovery. Installed regression coverage
+pages 101 such IDs and prepares the discovered repository. Public URL checks
+reject the reserved `.example` namespace in every configured URL field.
+The restore finding did not reproduce: native non-recursive `mkdirSync` throws
+`EEXIST` before cleanup. Source and installed regressions prove existing files,
+directories and symlinks remain intact for both restore and backup.
+
 Unmet attestations remain explicit:
 
 - **ac-5:** Actual Pages runtime/binding execution is unavailable. Node package

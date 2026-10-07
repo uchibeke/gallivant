@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { join } from "node:path";
-import { existsSync, readFileSync, mkdirSync, writeFileSync } from "node:fs";
+import { existsSync, readFileSync, mkdirSync, writeFileSync, symlinkSync, lstatSync } from "node:fs";
 import { checkRuntimeState, migrateRuntimeState, backupRuntimeState, restoreRuntimeState } from "../lib/runtime_state.mjs";
 import { createNodeCoordinator, createNodeOwnerStore } from "../lib/runtime_node.mjs";
 import { CORE_VERSION } from "../lib/task_delivery_contract.mjs";
@@ -293,5 +293,22 @@ test("only canonical ledgers affect runtime checks and backups preserve reposito
     writeJsonAtomic(join(restored, "runs", "owned", `${name}.json`), { version: 42 });
     assert.throws(() => checkRuntimeState({ home: restored, manifest }), { code: "RUNTIME_STATE" });
     writeJsonAtomic(join(restored, "runs", "owned", `${name}.json`), { version: 1 });
+  }
+});
+
+
+test("restore and backup refuse existing outputs without modifying their contents", () => {
+  const home = tempHome(), backup = join(tempHome(), "backup");
+  backupRuntimeState({ home, out: backup, manifest });
+  for (const kind of ["directory", "file", "symlink", "dangling-symlink"]) {
+    const parent = tempHome(), out = join(parent, "out"), target = join(parent, "target");
+    if (kind === "directory") { mkdirSync(out); writeFileSync(join(out, "unrelated"), "keep"); }
+    if (kind === "file") writeFileSync(out, "keep");
+    if (kind === "symlink") { mkdirSync(target); writeFileSync(join(target, "unrelated"), "keep"); }
+    if (kind.includes("symlink")) symlinkSync(target, out);
+    assert.throws(() => restoreRuntimeState({ backup, out, manifest }), { code: "EEXIST" });
+    assert.throws(() => backupRuntimeState({ home, out, manifest }), { code: "EEXIST" });
+    if (kind.includes("symlink")) assert.equal(lstatSync(out).isSymbolicLink(), true);
+    if (kind !== "dangling-symlink") assert.equal(readFileSync(kind === "file" ? out : join(out, "unrelated"), "utf8"), "keep");
   }
 });

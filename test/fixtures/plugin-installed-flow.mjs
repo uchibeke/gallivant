@@ -527,3 +527,22 @@ test("installed delivery never narrows cached account bindings", async () => {
   await delivery.dispatch("capabilities", {}, "alice");
   assert.equal(bound.ctx, originalCtx);
 });
+
+
+test("installed discovered repository IDs work for preparation and capability cursors", async () => {
+  const w = world(), ids = Array.from({ length: 101 }, (_, i) => `acme/widget-${String(i).padStart(3, "0")}`);
+  let repositories = ids;
+  const delivery = createTaskDelivery({ ...w.opts,
+    authorize: async () => ({ ...scope("alice"), repositories }),
+    contextFor: async (s, id) => { assert.ok(ids.includes(id)); return w.contextFor(s, "widget"); },
+  });
+  const first = await delivery.dispatch("capabilities", {}, "alice");
+  const next = await delivery.dispatch("capabilities", { cursor: first.nextCursor }, "alice");
+  assert.deepEqual(next.repositories.map(r => r.id), ids.slice(100));
+  const task = await delivery.dispatch("prepare", { ...prepare(), repositoryId: next.repositories[0].id }, "alice");
+  assert.equal(task.status, "needs-input");
+  for (const invalid of ["../other", "x".repeat(129), "", "repo\nsecret"]) {
+    repositories = [invalid];
+    await assert.rejects(delivery.dispatch("capabilities", {}, "alice"), { code: "DELIVERY_CONFIG" });
+  }
+});
