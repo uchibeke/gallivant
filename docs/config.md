@@ -1,5 +1,14 @@
 # Config
 
+Learning migration defaults to off. Per-repository `off`, `collect` and `apply` modes
+live in protected `$GALLIVANT_HOME/learning` state, changed only through
+`gallivant learn configure --repo owner/repo --mode MODE`; task fields, branch files
+and receipts cannot enable them. There is no `learning.enabled` or qualification
+boolean in config.json. Current installed profiles are UNQUALIFIED: collect works,
+while apply and key setup refuse before activation. Key paths are separate explicit
+operator paths, and OpenSSH is pinned outside worker writes. See [learning](learning.md)
+for the CLI, bounds, separate extraction allowance and backup/rotation limitations.
+
 `~/.gallivant/config.json`, mode 600. `gallivant doctor` prints a complete one from your machine when the file is missing. Set `GALLIVANT_HOME` to use another directory.
 
 | Key | Default | Meaning |

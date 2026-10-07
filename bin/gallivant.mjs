@@ -18,10 +18,25 @@ import { requestControl } from "../lib/control.mjs";
 import { queueChain, retryChain, cancelChain, renderChains } from "../lib/chains.mjs";
 import { taskCommand, renderTask } from "../lib/commands/task.mjs";
 import { TASK_VERSION } from "../lib/tasks.mjs";
+import { learnCommand } from "../lib/commands/learn.mjs";
+import { safeDisplay } from "../lib/learning_data.mjs";
 
 const HELP = `gallivant: write a PRD, mark it ready, go outside.
 
   gallivant doctor [--send] [--probe]   install checklist and health probe
+  gallivant learn [--repo owner/repo] [--since YYYY-MM-DD] [--until YYYY-MM-DD] [--dry-run]
+                                         bounded historical feedback collection; independent coding cursor
+  gallivant learn doctor [--repo owner/repo]
+  gallivant learn setup --key-path <absolute-path> [--ssh-keygen /usr/bin/ssh-keygen]
+                                         explicit interactive encrypted-key enrollment; isolation required
+  gallivant learn configure --repo owner/repo --mode off|collect|apply
+  gallivant learn list|report --repo owner/repo [--status pending]
+  gallivant learn show|approve|retire|reject <id> --repo owner/repo --revision <SHA256> [--reason text]
+  gallivant learn revise <id> --repo owner/repo --from reviewed-rule.json
+  gallivant learn explain --repo owner/repo --run RUN_ID
+  gallivant learn recover|prune --repo owner/repo
+  gallivant learn extract --repo owner/repo --learning-budget <USD>
+                                         data-only qualified profile required; list/report never infer
   gallivant new <name> [--harness <name>] [--dir <repo>]
                                          write a starting PRD into docs/prds/ of the repo you are in
   gallivant task [prepare] "<request>" [--stdin] [--dir <checkout>] [--repo <owner/repo>]
@@ -69,6 +84,9 @@ const OPTIONS = {
   run: { type: "boolean" }, stdin: { type: "boolean" }, repo: { type: "string" }, revision: { type: "string" },
   "request-id": { type: "string" }, context: { type: "string", multiple: true },
   answer: { type: "string", multiple: true }, verify: { type: "string", multiple: true },
+  since: { type: "string" }, until: { type: "string" }, "dry-run": { type: "boolean" },
+  mode: { type: "string" }, status: { type: "string" }, from: { type: "string" }, reason: { type: "string" },
+  "key-path": { type: "string" }, "ssh-keygen": { type: "string" }, "learning-budget": { type: "string" },
 };
 
 const portOf = v => {
@@ -78,10 +96,17 @@ const portOf = v => {
   return n;
 };
 
-async function main(argv) {
-  const { values, positionals } = parseArgs({ args: argv, options: OPTIONS, allowPositionals: true });
+async function dispatch(argv) {
+  const options = argv[0] === "learn" ? { ...OPTIONS, run: { type: "string" } } : OPTIONS;
+  const { values, positionals } = parseArgs({ args: argv, options, allowPositionals: true });
   const [cmd, arg] = positionals;
   if (values.help || !cmd || cmd === "help") { console.log(HELP); return 0; }
+  if (cmd === "learn") {
+    const ctx = makeContext({ needConfig: arg !== "setup" && (arg !== "doctor" || !!values.repo), readOnly: !!values["dry-run"] || ["list", "show", "report", "explain", "doctor"].includes(arg) });
+    const result = await learnCommand(ctx, { args: arg ? positionals.slice(1) : [], values });
+    console.log(safeDisplay(result));
+    return result?.isolation?.qualified === false ? 1 : 0;
+  }
 
   if (cmd === "doctor") { const r = renderDoctor(await doctor({ send: values.send, probe: values.probe })); console.log(r.text); return r.exitCode; }
   if (cmd === "ready") {
@@ -192,6 +217,14 @@ async function main(argv) {
     }
     case "remove": { if (!arg) throw new Error("remove needs a handle"); const id = resolveHandle(ctx.state.entries(), arg); ctx.state.remove(id); console.log(`${id}: removed from the registry`); return 0; }
     default: throw new Error(`unknown command "${cmd}"\n\n${HELP}`);
+  }
+}
+
+async function main(argv) {
+  try { return await dispatch(argv); }
+  catch (e) {
+    if (argv[0] === "learn") e.message = safeDisplay({ error: { code: e.code || "LEARNING_FAILED", message: e.message } });
+    throw e;
   }
 }
 

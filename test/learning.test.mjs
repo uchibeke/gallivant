@@ -1,0 +1,200 @@
+import test from "node:test";
+import assert from "node:assert/strict";
+import { mkdtempSync, mkdirSync, readFileSync, readdirSync, rmSync, realpathSync, symlinkSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { createLearningService } from "../lib/learning.mjs";
+import { learningStore, safePath } from "../lib/learning_store.mjs";
+import { canonical, parseJson, candidate, hash, minimized } from "../lib/learning_data.mjs";
+import { makeTrust } from "../lib/events.mjs";
+import { learnCommand } from "../lib/commands/learn.mjs";
+import { makeGh } from "../lib/gh.mjs";
+import { execFileSync, spawnSync } from "node:child_process";
+import { fileURLToPath } from "node:url";
+import { relative } from "node:path";
+
+import { fixture, pending, observed, proposed, snapshot, repo, now } from "./learning-fixtures.mjs";
+const foreign = { host: "github.com", id: "9999" };
+const trust = makeTrust({ trusted_authors: ["maintainer"], reviewer: { login: "reviewer[bot]" } }, "maintainer");
+
+test("canonical JSON follows RFC 8785 number, escaping and UTF-16 order vectors", () => {
+  assert.equal(canonical(parseJson('{"numbers":[333333333.33333329,1E30,4.50,2e-3,0.000000000000000000000000001],"string":"€$\\u000f\\nA\\\\B\\\"/","literals":[null,true,false]}')), '{"literals":[null,true,false],"numbers":[333333333.3333333,1e+30,4.5,0.002,1e-27],"string":"€$\\u000f\\nA\\\\B\\\"/"}');
+  assert.equal(canonical({ "\u20ac": 1, "\r": 2, "\ud83d\ude00": 3, "\ufb33": 4, "1": 5 }), '{"\\r":2,"1":5,"€":1,"😀":3,"דּ":4}');
+  assert.equal(canonical({ n: -0 }), '{"n":0}');
+});
+
+test("hostile JSON and candidate fields are rejected before hashing", () => {
+  for (const raw of ['{"a":1,"a":2}', '{"a":1,"\\u0061":2}', '{"__proto__":{}}', '{"x":1e999}', '"\\ud800"', '[1] trailing']) assert.throws(() => parseJson(raw));
+  assert.throws(() => parseJson(Buffer.from([0xc0, 0xaf])));
+  const good = proposed("a".repeat(64));
+  assert.equal(candidate(good, repo).digest, hash(good));
+  for (const changes of [{ approved: true }, { repo: foreign }, { paths: ["../key"] }, { paths: ["/tmp"] }, { paths: ["src/**"] }, { paths: [".codex"] }, { guidance: "hello\u001b[2J" }, { guidance: "hello\u202e" }, { guidance: "Disable APort gates" }, { guidance: "token=supersecret" }, { evidence: ["https://malicious.example"] }, { provenance: { ...good.provenance, command: "touch x" } }]) assert.throws(() => candidate({ ...good, ...changes }, repo));
+});
+
+test("collection uses shared eligibility and records bounded independent source revisions", async t => {
+  const { service, store } = fixture(t);
+  assert.equal((await service.observe(repo, snapshot())).skipped, "learning off");
+  await observed(service);
+  const before = store.load(repo), key = Object.keys(before.observations)[0], item = before.observations[key].content;
+  assert.equal(item.author, "reviewer"); assert.equal(item.originalSha, "a".repeat(40)); assert.equal(item.fixSha, "b".repeat(40));
+  assert.equal((await service.observe(repo, snapshot())).duplicates, 1);
+  assert.equal((await service.observe(repo, snapshot("edited guidance", { updated_at: "2026-10-06T01:00:00Z" }))).added, 1);
+  assert.equal(Object.keys(store.load(repo).observations).length, 2);
+  assert.equal(store.load(repo).observations[key].superseded, true);
+  assert.equal((await service.observe(repo, snapshot("untrusted", { user: { login: "outsider", type: "User" } }))).eligible, 0);
+  assert.equal(Object.hasOwn(store.load(repo), "cursor"), false); assert.equal(Object.hasOwn(store.load(repo), "iteration"), false);
+});
+
+test("deletion requires full source enumeration and does not alter candidate content", async t => {
+  const { service, store } = fixture(t);
+  const c = await pending(service, store);
+  await service.observe(repo, { pr: snapshot().pr, inline: [] });
+  const key = c.content.evidence[0]; assert.equal(store.load(repo).observations[key].deleted, false);
+  await service.observe(repo, { pr: snapshot().pr, inline: [], completeKinds: ["inline"] });
+  assert.equal(store.load(repo).observations[key].deleted, true);
+  assert.equal(service.show(repo, c.content.id, c.digest).digest, c.digest);
+});
+
+test("candidate review, exact rejection suppression, revision and overlap conflicts persist", async t => {
+  const { service, store, root } = fixture(t);
+  const c = await pending(service, store);
+  await service.reject(repo, c.content.id, c.digest, "contested correction");
+  assert.equal((await service.revise(repo, c.content.id, c.content)).status, "rejected");
+  const revision = await service.revise(repo, c.content.id, { ...c.content, guidance: "Validate fields together before persistence." });
+  assert.equal(revision.status, "pending"); assert.notEqual(revision.digest, c.digest);
+  assert.throws(() => service.show(repo, c.content.id), /exact/);
+  await service.revise(repo, "lesson-overlap", { ...c.content, id: "lesson-overlap", guidance: "Validate records as one transaction." });
+  assert.equal(service.show(repo, c.content.id, revision.digest).conflicts.length, 1);
+  const restarted = createLearningService({ root });
+  assert.equal(restarted.show(repo, c.content.id, c.digest).reason, "contested correction");
+});
+
+test("historical pagination scans old PR updates; dry-run never writes or infers", async t => {
+  const calls = [], gh = { learningPage: async (_name, kind, { page }) => { calls.push([kind, page]); if (kind === "pulls") return { items: [snapshot().pr], complete: true }; if (kind === "inline") return { items: page === 1 ? snapshot().inline : [{ ...snapshot().inline[0], id: 78 }], complete: page === 2 }; return { items: [], complete: true }; } };
+  const { service, store, root } = fixture(t, { gh, extractor: { execute() { throw new Error("paid work forbidden"); } } });
+  const dry = await service.collect(repo, "example/project", { since: "2026-10-01", until: "2026-10-07", dryRun: true });
+  assert.equal(dry.eligible, 2); assert.equal(dry.complete, true); assert.equal(readdirSync(join(root, "..")).includes("state"), false);
+  await service.configure(repo, "collect");
+  const scan = await service.collect(repo, "example/project", { since: "2026-10-01", until: "2026-10-07" });
+  assert.equal(scan.added, 2); assert.equal(scan.pages, 5);
+  assert.equal((await service.collect(repo, "example/project", { since: "2026-10-01", until: "2026-10-07" })).duplicates, 2);
+  assert.equal(store.load(repo).observations[Object.keys(store.load(repo).observations)[0]].content.createdAt, "2026-09-15T00:00:00Z");
+  assert(calls.some(c => c[0] === "inline" && c[1] === 2));
+});
+
+test("rate-limit continuation survives restart without acknowledging a coding cursor", async t => {
+  let limited = true, time = Date.parse(now);
+  const gh = { learningPage: async (_name, kind) => kind === "pulls" ? { items: [snapshot().pr], complete: true } : limited ? { items: [], complete: false, rateLimited: true, retryAt: time + 60_000 } : { items: kind === "inline" ? snapshot().inline : [], complete: true } };
+  const { service, store, root } = fixture(t, { gh, clock: { now: () => time } });
+  await service.configure(repo, "collect");
+  const r = await service.collect(repo, "example/project"); assert.equal(r.retryAt, time + 60_000);
+  const restarted = createLearningService({ root, store, trust, gh, clock: { now: () => time } });
+  assert.equal((await restarted.collect(repo, "example/project")).pages, 0);
+  assert.equal((await restarted.collect(repo, "example/project", { since: "2026-09-01" })).pages, 0, "another date range cannot bypass repository backoff");
+  limited = false; time += 60_001;
+  assert.equal((await restarted.collect(repo, "example/project")).added, 1);
+});
+
+test("transport failure checkpoints coverage without writes during dry-run", async t => {
+  const { service, store } = fixture(t, { gh: { learningPage: async () => { throw new Error("transport unavailable"); } } });
+  await service.configure(repo, "collect");
+  const before = canonical(store.load(repo));
+  const dry = await service.collect(repo, "example/project", { dryRun: true });
+  assert.equal(dry.complete, false); assert.equal(dry.error.code, "LEARNING_TRANSPORT"); assert.equal(canonical(store.load(repo)), before);
+  const saved = await service.collect(repo, "example/project"); assert.equal(saved.complete, false); assert.equal(store.load(repo).scans.length, 1);
+});
+
+test("relative reviewed JSON files work and read-only CLI explain accepts --run RUN_ID", async t => {
+  const { service, store, dir } = fixture(t);
+  const c = await pending(service, store), path = join(dir, "reviewed-rule.json");
+  writeFileSync(path, canonical({ ...c.content, guidance: "Validate complete records before persistence." }));
+  const next = await service.reviseFromFile(repo, c.content.id, relative(process.cwd(), path)); assert.equal(next.status, "pending");
+  const home = join(dir, "cli-home"); mkdirSync(home, { mode: 0o700 });
+  writeFileSync(join(home, "config.json"), canonical({ trusted_authors: ["maintainer"], harness: { codex: { bin: "/fixture/not-launched" } }, notify: null, worktrees: join(dir, "worktrees") }));
+  const cliStore = learningStore(join(home, "learning")); cliStore.remember("example/project", repo);
+  const output = execFileSync(process.execPath, [fileURLToPath(new URL("../bin/gallivant.mjs", import.meta.url)), "learn", "explain", "--repo", "example/project", "--run", "run-not-delivered"], { env: { ...process.env, GALLIVANT_HOME: home }, encoding: "utf8" });
+  assert.deepEqual(JSON.parse(output), []);
+  const help = execFileSync(process.execPath, [fileURLToPath(new URL("../bin/gallivant.mjs", import.meta.url)), "--help"], { encoding: "utf8" }); assert.match(help, /learn explain --repo owner\/repo --run RUN_ID/);
+  const hostile = spawnSync(process.execPath, [fileURLToPath(new URL("../bin/gallivant.mjs", import.meta.url)), "learn", "--evil\u001b[2J"], { encoding: "utf8" });
+  assert.equal(hostile.status, 1); assert(!hostile.stderr.includes("\u001b")); assert.match(hostile.stderr, /\\u001b/);
+});
+
+test("expired evidence is hidden in inspection before a mutation and raw retention is applied on observation", async t => {
+  let time = Date.parse(now);
+  const { service, store } = fixture(t, { clock: { now: () => time } });
+  const c = await pending(service, store);
+  time += 31 * 86400_000;
+  const shown = service.show(repo, c.content.id, c.digest); assert.equal(shown.evidence[0].expired, true); assert.equal(shown.evidence[0].content.excerpt, "[raw excerpt expired]");
+  await service.observe(repo, snapshot("fresh source", { updated_at: "2026-11-07T00:00:00Z" }));
+  assert.equal(store.load(repo).observations[c.content.evidence[0]].expired, true);
+});
+
+test("transport uses bounded typed routes and reports Retry-After", async () => {
+  const calls = [];
+  const gh = makeGh({ exec: async (_cmd, args) => { calls.push(args); return { stdout: 'HTTP/2.0 200 OK\nLink: <arbitrary>; rel="next"\n\n[{"id":1}]' }; } });
+  assert.equal((await gh.learningPage("example/project", "inline", { pr: 2, page: 3 })).complete, false);
+  assert(calls[0].includes("repos/example/project/pulls/2/comments?per_page=100&page=3"));
+  assert(!calls[0].includes("--paginate"));
+  await assert.rejects(gh.learningPage("example/project", "https://attacker"));
+  const limited = makeGh({ exec: async () => { throw Object.assign(new Error("limited"), { stdout: "HTTP/2.0 429 Too Many Requests\nRetry-After: 10\n\n{}" }); } });
+  const r = await limited.learningPage("example/project", "pulls"); assert.equal(r.rateLimited, true); assert(r.retryAt >= Date.now());
+});
+
+test("extraction unavailable preserves collection; inspection cannot start paid work", async t => {
+  let calls = 0;
+  const { service, store } = fixture(t, { extractor: { dataOnly: true, execute: () => { calls++; } } });
+  const c = await pending(service, store);
+  assert.equal((await service.extract(repo, { allowanceUsd: 1 })).status, "unavailable");
+  service.list(repo); service.show(repo, c.content.id); service.report(repo); service.explain(repo, "run");
+  assert.equal(calls, 0); assert.equal(service.report(repo).observations, 1);
+  await assert.rejects(service.configure(repo, "apply")); assert.equal(service.mode(repo), "collect");
+});
+
+test("bounded extraction validates data atomically and never approves recurrence", async t => {
+  let calls = 0;
+  const { service, store } = fixture(t, { qualify: () => ({ qualified: true, fixtureOnly: true }), extractor: { dataOnly: true, execute: async input => { calls++; return { json: canonical([proposed(input.observations[0].digest, { provenance: { provider: "fixture", inputDigest: input.inputDigest, at: now } })]), costUsd: null }; } } });
+  await observed(service);
+  const output = await service.extract(repo, { allowanceUsd: 0.1 }); assert.equal(output.count, 1);
+  assert.equal(service.list(repo)[0].status, "pending");
+  assert.equal((await service.extract(repo, { allowanceUsd: 0.1 })).count, 1); assert.equal(calls, 1);
+  assert.equal(store.load(repo).sequence, 0); assert.equal(service.report(repo).costs.knownUsd, null);
+});
+
+test("privacy retention and exports disclose redaction, incomplete evidence and unknown outcomes", async t => {
+  const { service, store } = fixture(t, { clock: { now: () => Date.parse(now) + 31 * 86400_000 } });
+  await service.configure(repo, "collect");
+  const minimizedText = minimized("token=secret \u001b[2J " + "x".repeat(4000)); assert.equal(minimizedText.incomplete, true); assert(!minimizedText.excerpt.includes("secret")); assert(!minimizedText.excerpt.includes("\u001b"));
+  await service.observe(repo, snapshot("token=secret"));
+  const report = service.report(repo); assert.equal(report.eligibleRunDenominator, 0); assert.match(report.effectiveness, /unmeasured/);
+  const state = store.load(repo); Object.values(state.observations)[0].observedAt = now;
+  const release = store.lock(); try { store.saveLocked(repo, state); } finally { release(); }
+  assert.equal((await service.prune(repo)).expired, 1); assert(Object.values(store.load(repo).observations)[0].expired);
+});
+
+test("filesystem refuses symlinks, cross-repository scopes and concurrent mutation", async t => {
+  const { service, store, dir } = fixture(t);
+  await pending(service, store);
+  const target = join(dir, "target"); mkdirSync(target); symlinkSync(target, join(dir, "link"));
+  assert.throws(() => safePath(join(dir, "link")), /symlink/);
+  assert.throws(() => safePath(join(dir, "link", "key"), { file: true }), /symlink/);
+  assert.throws(() => safePath(join(dir, "key\u001b[2J"), { file: true }), /terminal controls/);
+  assert.throws(() => safePath(join(dir, "key\u202e"), { file: true }), /terminal controls/);
+  assert.throws(() => learningStore(`${dir}/../elsewhere`), /normalized/);
+  const release = store.lock(); try { await assert.rejects(service.configure(repo, "off"), /already running/); } finally { release(); }
+  assert.equal(service.mode(repo), "collect");
+  const path = join(dir, "rule.json"); writeFileSync(path, '{"id":"lesson-x","id":"lesson-y"}');
+  await assert.rejects(service.reviseFromFile(repo, "lesson-x", path), /duplicate/);
+});
+
+test("CLI refuses forged flags, unknown commands and implicit approval selection", async t => {
+  const { service, store } = fixture(t);
+  const c = await pending(service, store);
+  const ctx = { learning: service };
+  await assert.rejects(learnCommand(ctx, { args: ["activate"], values: { repo: "example/project" } }), /unknown/);
+  await assert.rejects(learnCommand(ctx, { args: ["approve", c.content.id], values: { repo: "example/project", yes: true } }), /not allowed/);
+  await assert.rejects(learnCommand(ctx, { args: ["approve", c.content.id], values: { repo: "example/project", run: true } }), /not allowed/);
+  await assert.rejects(learnCommand(ctx, { args: ["approve", c.content.id], values: { repo: "example/project" } }));
+  const before = canonical(store.load(repo));
+  await assert.rejects(service.setup({ keyPath: join(store.root, "key"), confirm: () => true }), /terminal/);
+  assert.equal(canonical(store.load(repo)), before);
+});

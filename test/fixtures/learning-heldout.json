@@ -1,0 +1,5 @@
+[
+  { "paths": [], "selected": ["lesson-validation"], "omitted": ["lesson-project"], "reason": "task paths unknown" },
+  { "paths": ["src/input/parser.mjs"], "selected": ["lesson-project", "lesson-validation"], "omitted": [] },
+  { "paths": ["src/input-other/parser.mjs"], "selected": ["lesson-validation"], "omitted": ["lesson-project"], "reason": "unmatched literal scope" }
+]

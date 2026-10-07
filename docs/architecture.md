@@ -1,5 +1,14 @@
 # Architecture
 
+Repository review learning uses one coordinator-owned [learning service](learning.md)
+for CLI and daemon observation, candidate dispositions, signing, transition recovery
+and bounded shared inputs. Its state lives outside checkouts under the operator home;
+coding-review cursors and budgets remain separate. Canonical JSON is authority,
+escaped review text is a view, and only exact enrolled OpenSSH signatures authorize
+transitions. Installed execution isolation remains UNQUALIFIED, so production
+setup/extraction/application refuse activation. The [carried design](plans/review-feedback-learning.md)
+remains normative; the [qualification record](audit/learning-qualification.md) lists gaps.
+
 One actor, one file of rules, everything else is plumbing. About 1,500 lines of plain ESM with no dependencies.
 
 ```
