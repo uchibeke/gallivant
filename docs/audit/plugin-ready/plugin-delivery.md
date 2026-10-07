@@ -69,6 +69,12 @@ nested Git ignore fallback and hidden payload directories. Real npm tarballs sho
 that these controls can omit an exported module; public builds refuse those changes
 and internal fixtures record them without claiming release qualification.
 
+Public URL regressions reject normalized loopback addresses and localhost aliases
+across endpoint, metadata and resource origins. Release preflight shares asset
+validation with emission for screenshots, UI and icon files, including missing
+files, directories, symlinks, size bounds and credential patterns. Source and
+installed tests also verify CLI failure status and partial-output cleanup.
+
 Unmet attestations remain explicit:
 
 - **ac-5:** Actual Pages runtime/binding execution is unavailable. Node package

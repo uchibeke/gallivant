@@ -11,9 +11,7 @@
     "base": "96e81031516bdf6663dd3b97ac39b8f57022568b",
     "sourceVerified": true,
     "uncommittedPayload": [
-      "docs/task-delivery.md",
-      "lib/plugin_package.mjs",
-      "lib/runtime_state.mjs"
+      "lib/plugin_package.mjs"
     ],
     "mergedM5": false,
     "predecessorMerges": [
@@ -22,14 +20,14 @@
       "2b4514fb27fcb493e62bfed913fffc204215f155",
       "96e81031516bdf6663dd3b97ac39b8f57022568b"
     ],
-    "testedSourceCommit": "9edb2e4d0d7df6323b3c3e2023c208088eaa517f"
+    "testedSourceCommit": "15e22b96979b35297d4b84eed961d569362ea1c1"
   },
   "artifact": {
     "coreArtifact": "gallivant-0.2.0.tgz",
-    "coreSha256": "bda7d680893e6ca8f8f84356987d90101c063769eb4f96d4d862910df61ab21f",
+    "coreSha256": "51f518604d33b7be69be6e8e9c5f70799d631d2146ce60c6f787e9257c3f019c",
     "hashes": {
       "plugin": "8753892ceb5552fc37ba011929830f4c754d717f8d8031e31fb9b4935b465e1a",
-      "runtime": "ccc5d30cafe207b8cefa56710e3173dd38e1f498cbe7ba39b76a5c61f5b7ca7c",
+      "runtime": "71268c597513f06bdf8098a5a3d532d6ca1cb88f766d73b1a91a1c07de759bdb",
       "operations": "2077c0558cd4634accf66e530f186b52e2f91bfea502ff7c6f212d2e2efb800f"
     },
     "dependencyLockSha256": "bf3969111f7c4b84071fc14c59d870e296ee045024c8056757ac3e3466bc2b28",
@@ -101,7 +99,7 @@
       "lib/openai_agents_input.mjs": "3b012e8c7c51d9d007762e1f849ea3caaf7bbf9ab128a6f5c916bff195b6b83c",
       "lib/openai_agents_sources.mjs": "9d61867d9f86901b084f37d4da6c344df24a0ff71b7ab0537273aad4b18f1132",
       "lib/openai_agents.mjs": "3b67fe601cb8ad268f2d997d55e19bad4aca1f016293595036825892d1991702",
-      "lib/plugin_package.mjs": "a030c37d7159ab5f37f13fe9a384ef150e88797079b1bebb63e74b219f67b943",
+      "lib/plugin_package.mjs": "0e8aabd570a4a5e90a9039032c435ee5104f276feaba1a25d72c2345ae56d392",
       "lib/prd.mjs": "3e8bd68d62e8e61fe3624cdcc76e27e78e079d77e25a1484aafa7f5ca6f6ffe3",
       "lib/probe.mjs": "e6df979a29b05ee385366cc28787d5adf9254ff90c79444574ed759d0739d5a2",
       "lib/prompt.mjs": "e1c09b06350397feb038c6cae75b798d2970fff5c7b9c03289e2d14e8b390be2",
@@ -456,7 +454,8 @@
         "test/plugin-package.mjs: missing metadata/example endpoint/built assets/public refusal",
         "secret asset refusal removes partial output",
         "test/plugin-package.test.mjs: source and installed Git root/HEAD/status failure, internal proof, source mismatch and modified/deleted/renamed payload cleanup regressions",
-        "test/plugin-package.test.mjs: internal packaging records npm controls without claiming public qualification"
+        "test/plugin-package.test.mjs: internal packaging records npm controls without claiming public qualification",
+        "test/plugin-package.test.mjs: public URLs reject canonical loopbacks and aliases across every configured URL; asset preflight and builder share regular-file, size and secret constraints; CLI exits unsuccessfully for missing screenshots"
       ],
       "evidence": "Internal classification and submissionReady:false emitted; public configuration errors are actionable"
     },
@@ -528,25 +527,25 @@
       {
         "command": "npm test",
         "exitCode": 0,
-        "tests": 1244,
-        "pass": 1244,
+        "tests": 1246,
+        "pass": 1246,
         "fail": 0,
-        "log": "/tmp/plugin-delivery-backup-unit-tests.log"
+        "log": "/tmp/plugin-delivery-validation-unit-tests.log"
       },
       {
         "command": "npm run lint",
         "exitCode": 0,
-        "log": "/tmp/plugin-delivery-backup-lint.log"
+        "log": "/tmp/plugin-delivery-validation-lint.log"
       },
       {
         "command": "npm run test:plugin-package",
         "exitCode": 0,
         "consumerFlowTests": 20,
-        "installedConformanceTests": 420,
+        "installedConformanceTests": 422,
         "fail": 0,
-        "log": "/tmp/plugin-delivery-backup-package-tests.log",
-        "consumerEvidence": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/task-plugin-consumer-w4jsin/evidence.json",
-        "conformanceLog": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/task-plugin-consumer-w4jsin/conformance.log"
+        "log": "/tmp/plugin-delivery-validation-package-tests.log",
+        "consumerEvidence": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/task-plugin-consumer-yXfKE9/evidence.json",
+        "conformanceLog": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/task-plugin-consumer-yXfKE9/conformance.log"
       },
       {
         "command": "git diff --check",
@@ -556,11 +555,11 @@
     ],
     "verifiedPayloadFiles": 112,
     "logSha256": {
-      "/tmp/plugin-delivery-backup-unit-tests.log": "47e50cf2b8525ec820c62c3bfb24a1a1ab5ebbe41f0d278b0328b5abf0cd3bc2",
-      "/tmp/plugin-delivery-backup-package-tests.log": "9525163b51d6f89decdc4adbb1db14e4eeecf19f3079de7ff03dd30d147dfa69",
-      "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/task-plugin-consumer-w4jsin/conformance.log": "17795c4b4be8bfde236582b014f6c36330f2eced5a4e214333b8701c145d9cfc",
-      "/tmp/plugin-delivery-backup-lint.log": "2f32bd854b16ced20ab71be2afd3673b887efc4815c6e55ea7b941ebc5aa8a0b",
-      "/tmp/plugin-delivery-backup-focused.log": "e4dc8f3fdc3963f13f2af932e63be2b8b590444ab8063a8a50c668f3ba73c5f9"
+      "/tmp/plugin-delivery-validation-unit-tests.log": "88fcc21cb643a150a8b2e00215fea0bc74ccd6ae7c9f074a9754ab6233ea3666",
+      "/tmp/plugin-delivery-validation-package-tests.log": "d5dcb0df4e7a0824c292e8c25d0a50b449692f6656dce9d4a4c8ff38a930ec66",
+      "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/task-plugin-consumer-yXfKE9/conformance.log": "a2ec3a8e85d8af64430f79e4d96879da099c727912f3dc30838a8b3996e9d7e6",
+      "/tmp/plugin-delivery-validation-lint.log": "2f32bd854b16ced20ab71be2afd3673b887efc4815c6e55ea7b941ebc5aa8a0b",
+      "/tmp/plugin-delivery-validation-focused-final.log": "8af84f41761382b02cebbd3891b4b8485580e656c4256cee57e3ad74ac185fa1"
     },
     "hostEvidence": false,
     "fixturePurpose": "Deterministic unpaid installed-artifact compatibility; no actual installed host or live provider qualification",
@@ -588,7 +587,8 @@
       "MCP model/text and UI capabilities retain authorized repository identity and configured harness setup, preparation, cost and controls through a public-field projection",
       "active chain windows exclude done/cancelled/stopped history and rotate by durable name cursor; shrinking sets, restart and failure do not lose continuation or starve entry batches",
       "canonical makeTick chain deadline is restored and checkpointed by the Node wrapper only after a successful chain pass; pending batches finish without revisiting a cancelled suffix; disabled/skipped chain passes preserve cursor/deadline and fast entry reconciliation continues",
-      "Backup and restore bind the copied runtime pin to the envelope artifact before output; locks release on refusal. Public source verification includes untracked, ignored and deleted npm controls and hidden payload directories; internal fixtures record them and failed builds remove partial output."
+      "Backup and restore bind the copied runtime pin to the envelope artifact before output; locks release on refusal. Public source verification includes untracked, ignored and deleted npm controls and hidden payload directories; internal fixtures record them and failed builds remove partial output.",
+      "Public URL checks cover endpoint, metadata and all resource origins after URL canonicalization; preflight and emission share asset validation for every screenshot, UI and icon, including failure cleanup and CLI exit status."
     ]
   },
   "reviewFollowup": {
@@ -756,6 +756,44 @@
       "pass": 39,
       "fail": 0,
       "log": "/tmp/plugin-delivery-backup-focused.log"
+    },
+    "externalPrerequisites": "Previously observed unmet prerequisites retained; no unchanged live call retried and no installed-host/model-access evidence inferred from fixtures"
+  },
+  "validationReviewFollowup": {
+    "reviewId": 5441859780,
+    "reviewedCommit": "15e22b96979b35297d4b84eed961d569362ea1c1",
+    "items": [
+      {
+        "commentId": 4206534666,
+        "implementation": [
+          "lib/plugin_package.mjs"
+        ],
+        "tests": [
+          "test/plugin-package.test.mjs public URLs reject canonical loopbacks and aliases across every configured URL"
+        ],
+        "rule": "Public endpoint, metadata and resource URLs cannot target loopback hosts or localhost aliases"
+      },
+      {
+        "commentId": 4206534672,
+        "implementation": [
+          "lib/plugin_package.mjs"
+        ],
+        "tests": [
+          "test/plugin-package.test.mjs public asset preflight and builder share regular file, size and secret constraints"
+        ],
+        "rule": "Release preflight and artifact emission must use the same asset constraints for all configured files"
+      }
+    ],
+    "focusedVerification": {
+      "tests": 24,
+      "pass": 24,
+      "fail": 0,
+      "log": "/tmp/plugin-delivery-validation-focused-final.log"
+    },
+    "initialSandboxFailure": {
+      "log": "/tmp/plugin-delivery-validation-focused.log",
+      "error": "npm cache/log filesystem EPERM",
+      "resolution": "Same focused suite passed using supported permission escalation; no filesystem permission changes"
     },
     "externalPrerequisites": "Previously observed unmet prerequisites retained; no unchanged live call retried and no installed-host/model-access evidence inferred from fixtures"
   }

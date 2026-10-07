@@ -4,8 +4,8 @@ import childProcess from "node:child_process";
 import { syncBuiltinESMExports } from "node:module";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { existsSync, writeFileSync, mkdirSync } from "node:fs";
-import { buildPluginPackage } from "../lib/plugin_package.mjs";
+import { existsSync, writeFileSync, mkdirSync, symlinkSync } from "node:fs";
+import { buildPluginPackage, validatePublicRelease } from "../lib/plugin_package.mjs";
 import { tempHome } from "./helpers.mjs";
 
 const root = dirname(fileURLToPath(new URL("../package.json", import.meta.url)));
@@ -96,4 +96,54 @@ for (const control of [".npmignore", ".gitignore"]) test(`npm pack applies neste
   const packed = JSON.parse(childProcess.execFileSync("npm", ["pack", "--ignore-scripts", "--json"], { cwd: dir, encoding: "utf8" }))[0];
   assert.ok(packed.files.some(file => file.path === "lib/retained.mjs"));
   assert.ok(!packed.files.some(file => file.path === "lib/task_delivery.mjs"), "ignore controls can remove an exported module from a real tarball");
+});
+
+
+test("public URLs reject canonical loopbacks and aliases across every configured URL", t => {
+  gitFixture(t);
+  for (const host of ["127.0.0.1", "127.9.8.7", "127.1", "2130706433", "0x7f000001", "[::1]", "[0:0:0:0:0:0:0:1]", "[::ffff:127.0.0.1]", "localhost.localdomain", "LOCALHOST.", "child.localhost", "localhost.localdomain.", "localhost6.localdomain6", "ip6-localhost", "ip6-loopback", "example.com."]) {
+    for (const field of ["endpoint", "homepage", "supportUrl", "privacyUrl", "termsUrl", "licenseUrl", "domain", "connectDomains", "resourceDomains"]) {
+      const input = fixture(), url = `https://${host}`;
+      if (field === "domain") input.config.resource.domain = url;
+      else if (field.endsWith("Domains")) input.config.resource[field] = [url];
+      else input.config[field] = url;
+      assert.equal(validatePublicRelease(input.config).ok, false, `${field}: ${host}`);
+      assert.throws(() => buildPluginPackage(input), { code: "PACKAGE_RELEASE" });
+      assert.equal(existsSync(input.out), false);
+    }
+  }
+  const input = fixture();
+  assert.equal(validatePublicRelease(input.config).ok, true);
+  input.config.endpoint = "https://localhost";
+  assert.equal(buildPluginPackage({ ...input, internal: true }).submissionReady, false);
+});
+
+test("public asset preflight and builder share regular file, size and secret constraints", t => {
+  gitFixture(t);
+  for (const kind of ["missing", "directory", "symlink", "oversize", "secret"]) {
+    for (const field of ["ui", "icon", "screenshots"]) {
+      const input = fixture(), path = join(dirname(input.out), "bad-asset");
+      if (kind === "directory") mkdirSync(path);
+      if (kind === "symlink") symlinkSync(input.config.assets.icon, path);
+      if (kind === "oversize") writeFileSync(path, Buffer.alloc(5242881));
+      if (kind === "secret") writeFileSync(path, "Bearer fixture_secret_token");
+      input.config.assets[field] = field === "screenshots" ? [input.config.assets.icon, path] : path;
+      const result = validatePublicRelease(input.config);
+      assert.equal(result.ok, false, `${field}: ${kind}`);
+      assert.ok(result.errors.some(error => error.includes(`assets.${field}`)));
+      assert.throws(() => buildPluginPackage(input), { code: "PACKAGE_RELEASE" });
+      assert.equal(existsSync(input.out), false);
+      assert.throws(() => buildPluginPackage({ ...input, internal: true }), { code: "PACKAGE_ASSET" });
+      assert.equal(existsSync(input.out), false);
+    }
+  }
+  for (const invalid of ["image.png", {}, Array(9).fill("image.png"), [null], Array(1)]) {
+    const input = fixture(); input.config.assets.screenshots = invalid;
+    assert.equal(validatePublicRelease(input.config).ok, false);
+  }
+  const input = fixture(), config = join(dirname(input.out), "config.json");
+  input.config.assets.screenshots = [join(dirname(input.out), "missing.png")];
+  writeFileSync(config, JSON.stringify(input.config));
+  const result = childProcess.spawnSync(process.execPath, [join(root, "bin/package-plugin.mjs"), "--config", config, "--validate-public"], { encoding: "utf8" });
+  assert.equal(result.status, 1); assert.equal(JSON.parse(result.stdout).ok, false);
 });
