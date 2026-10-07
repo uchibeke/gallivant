@@ -1,7 +1,7 @@
 import { test, before, after } from "node:test";
 import assert from "node:assert/strict";
 import { execFileSync, spawnSync } from "node:child_process";
-import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync, realpathSync, existsSync } from "node:fs";
+import { mkdtempSync, mkdirSync, copyFileSync, writeFileSync, readFileSync, rmSync, realpathSync, existsSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -355,4 +355,26 @@ test("batch approval refuses duplicate candidate IDs before terminal or signing"
     for (const action of ["approve", "retire"]) await assert.rejects(service.approve(repo, [first, second], { action, confirm() { assert.fail("must not preview"); } }), { code: "LEARNING_INPUT" });
   }
   assert.equal(canonical(f.store.load(repo)), before);
+});
+
+
+test("setup retries pending encrypted key enrollment after signing failure", async t => {
+  let creates = 0;
+  const f = fixture(t), approval = join(f.dir, "approval"); mkdirSync(approval, { mode: 0o700 });
+  const keyPath = join(approval, "key");
+  const firstSigner = { ...signer(), probe() {}, createKey(path) { creates++; copyFileSync(key, path); copyFileSync(key + ".pub", path + ".pub"); return encryptedKey(path); }, sign() { throw new Error("signing cancelled"); } };
+  const qualify = () => ({ qualified: true, fixtureOnly: true });
+  const first = createLearningService({ store: f.store, signer: firstSigner, qualify });
+  await assert.rejects(first.setup({ keyPath, confirm: () => true }), /signing cancelled/);
+  const intent = canonical(f.store.readEnrollment()); assert.equal(f.store.readAuthority(), null);
+  const restarted = createLearningService({ store: f.store, signer: { ...signer(), probe() {}, createKey() { assert.fail("retry must not recreate key"); } }, qualify });
+  await assert.rejects(restarted.setup({ keyPath, confirm: () => false }), { code: "LEARNING_CANCELLED" });
+  assert.equal(canonical(f.store.readEnrollment()), intent); assert.equal(f.store.readAuthority(), null);
+  copyFileSync(otherKey, keyPath);
+  await assert.rejects(restarted.setup({ keyPath, confirm() { assert.fail("substituted key must fail before preview"); } }), /pending enrollment/);
+  copyFileSync(key, keyPath);
+  const result = await restarted.setup({ keyPath, confirm: preview => { assert.match(preview, /retry signed enrollment/); assert.match(preview, /fingerprint/); return true; } });
+  assert.equal(result.enrolled, true); assert.equal(creates, 1);
+  const enrolled = f.store.readAuthority(); real.verify(canonical(enrolled.enrollment), enrolled.signature, enrolled);
+  assert.equal(enrolled.id, JSON.parse(intent).id);
 });

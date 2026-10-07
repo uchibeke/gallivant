@@ -460,3 +460,36 @@ skips or cancellations (228,050.519083 ms; `/private/tmp/learning-review14-full.
 `npm run test:learning` passed 70 tests with no failures, skips or cancellations
 (37,210.437875 ms; `/private/tmp/learning-review14-suite.log`). `npm run lint`
 exited 0 (`/private/tmp/learning-review14-lint.log`), and `git diff --check` passed.
+
+## Extraction rotation and enrollment retry follow-up
+
+Extraction reservations now persist exact observation revision digests before
+invoking the extractor. Subsequent bounded batches exclude completed and unresolved
+reservations, allowing later observations to progress without repurchasing unknown
+acceptance. An exact legacy batch can acquire revision keys without inference.
+The regression collects 1,001 observations, loses the first batch's reply, restarts,
+processes the final observation, and verifies two disjoint reservations and no
+additional inference on repeats or exact legacy migration. No candidate is approved.
+
+Setup saves protected pending enrollment metadata after creating the encrypted key
+and before signing. Retries under the same operation lock require matching key,
+path and pinned signer, a new immutable preview, and fresh signing. Failed signing
+or retry cancellation retains the intent; substituted keys are refused. The
+OpenSSH regression copies only disposable encrypted test keys, simulates signing
+failure, cancels a retry, rejects substitution, then verifies enrollment of the
+same key and authority ID without another key creation. The metadata contains no
+private key bytes and remains audit history after successful enrollment.
+
+Source review covered reservation persistence/failure/restart, setup cancellation,
+concurrent authority checks, key validation, lock cleanup and protected intent IO.
+A failure during key creation or before the enrollment intent can be persisted is
+not claimed recoverable by this signing-retry mechanism. No production keys,
+enrollment, paid inference or unchanged denied probe were requested. Existing
+installed isolation, Linux/live evidence and seven unmet criteria remain unchanged.
+
+Verify on the same macOS host: `npm test` passed 1,277 tests with no failures,
+skips or cancellations (242,869.780625 ms; `/private/tmp/learning-review15-full.log`).
+`npm run test:learning` passed 72 tests with no failures, skips or cancellations
+(37,730.506542 ms; `/private/tmp/learning-review15-suite-final.log`).
+`npm run lint` exited 0 (`/private/tmp/learning-review15-lint.log`), and
+`git diff --check` passed after the final audit update.

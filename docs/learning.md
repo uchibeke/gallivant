@@ -117,7 +117,10 @@ unqualified installed profile it reports unavailable even during a GitHub outage
 The service seam bounds a separate
 allowance (maximum $1 per extraction), 30 seconds and 20 candidate revisions. It
 persists an intent/reservation before invoking an injected data-only execution
-dependency. An unresolved result is not automatically retried. No installed
+dependency. Each intent reserves its exact observation revision digests; later
+invocations select the next unreserved batch, including after restart. Unresolved
+batches remain reserved and are not automatically repurchased. Legacy exact-batch
+digests acquire revision keys when the same bounded input is encountered. No installed
 production extractor currently implements that boundary; `dataOnly` metadata is not
 an operator configuration option. List/show/report/explain cannot launch paid work.
 
@@ -224,6 +227,14 @@ records per entry, including after restart or completion. Lost replies are safe
 to retry; an older audit cannot replace a later attempt's pinned context. A pending
 audit warning means reports may temporarily omit that delivery, not that its worker
 failed to start. Preserve the registry as well as the learning store during recovery.
+
+A failed enrollment signature retains the newly created encrypted key and a protected
+`enrollment-intent.json` containing only its identity, path and pinned signer metadata.
+Retry `learn setup` with the same key path: it verifies the exact encrypted key and
+signer, previews the pending enrollment and requests fresh signing. Cancellation
+preserves the pending intent; substituted keys, paths or signers are refused. The
+intent remains audit metadata after success and cannot replace an enrolled authority.
+Include it in the protected-state backup; keep encrypted private keys separately.
 
 ## Privacy, backup and recovery
 

@@ -594,3 +594,26 @@ test("CLI unavailable extraction uses local identity without GitHub authenticati
   await assert.rejects(learnCommand(ctx, { args: ["collect"], values: { repo: "example/project" } }), /GitHub unavailable/);
   assert.equal(remoteCalls, 1, "collection still authenticates its reviewer trust identity");
 });
+
+test("extraction reserves exact revisions and advances beyond a full batch across restart", async t => {
+  const batches = []; let fail = true;
+  const extractor = { dataOnly: true, execute: async input => { batches.push(input.observations.map(o => o.digest)); if (fail) throw new Error("reply lost"); return { json: "[]" }; } };
+  const qualify = () => ({ qualified: true, fixtureOnly: true });
+  const f = fixture(t, { extractor, qualify }); await f.service.configure(repo, "collect");
+  const raw = snapshot().inline[0];
+  await f.service.observe(repo, { ...snapshot(), inline: Array.from({ length: 1000 }, (_, i) => ({ ...raw, id: i + 1 })) });
+  await f.service.observe(repo, { ...snapshot(), inline: [{ ...raw, id: 1001 }] });
+  assert.equal(Object.keys(f.store.load(repo).observations).length, 1001);
+  assert.equal((await f.service.extract(repo, { allowanceUsd: 0.1 })).status, "unresolved");
+  fail = false;
+  const restarted = createLearningService({ store: f.store, extractor, qualify, clock: { now: () => Date.parse(now) } });
+  assert.equal((await restarted.extract(repo, { allowanceUsd: 0.1 })).status, "completed");
+  await restarted.extract(repo, { allowanceUsd: 0.1 });
+  assert.deepEqual(batches.map(b => b.length), [1000, 1]);
+  assert.equal(new Set(batches.flat()).size, 1001);
+  assert.equal(f.store.load(repo).extraction.length, 2); assert.equal(f.store.load(repo).sequence, 0);
+  await f.store.transaction(repo, s => { delete s.extraction[0].observationDigests; });
+  await restarted.extract(repo, { allowanceUsd: 0.1 });
+  assert.equal(batches.length, 2, "legacy exact-batch reservations must not be repurchased");
+  assert.equal(f.store.load(repo).extraction[0].observationDigests.length, 1000);
+});
