@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { learningInput, learningDelivered, learningDeliveryPatch, revokeLearningAttempts } from "../lib/learning_input.mjs";
+import { learningInput, learningDispatch, learningDelivered, learningDeliveryPatch, revokeLearningAttempts } from "../lib/learning_input.mjs";
 import { createLearningService } from "../lib/learning.mjs";
 import { repo, fixture } from "./learning-fixtures.mjs";
 import { hash } from "../lib/learning_data.mjs";
@@ -127,7 +127,7 @@ test("accepted fix ownership and cursor survive learning audit failure and resta
   const gh = fakeGh({ inline: [inline({ id: 9, by: "me", at: at(1), body: "Validate the error path" })] });
   let locked = true, audits = 0;
   const learning = { identityFor: () => repo, mode: () => "apply", resolveRepo: async () => repo,
-    context: async () => ({ key: "a".repeat(64), section: "Advisory", rules: [{ id: "lesson-x", digest: "b".repeat(64) }] }),
+    dispatch: async (_repo, _intent, launch) => launch(), context: async () => ({ key: "a".repeat(64), section: "Advisory", rules: [{ id: "lesson-x", digest: "b".repeat(64) }] }),
     observe: async () => {}, delivered: async (_repo, key, runId) => {
       audits++;
       assert.equal(state.get(id).last.run, runId, "ownership precedes audit");
@@ -187,12 +187,33 @@ test("delivery outbox retains older runs and retries lost replies without replac
   assert.deepEqual(learningDeliveryPatch(entry, managed("unknown"), { id: "pending", execution: { acceptance: "unknown" } }), {});
 });
 
+test("revoked acceptance audits retain controls through lock failures and lost registry publication", async () => {
+  const snapshot = { key: "e".repeat(64), rules: [{ id: "old", digest: "f".repeat(64) }], revoked: { reason: "signed retirement/replacement" } };
+  let entry = { harness: "codex", last: { run: "accepted" }, cursor: { since: "unchanged" }, ...learningDeliveryPatch({}, { learning: { ...snapshot, repo } }, { id: "accepted" }) };
+  let controls = 0;
+  const ctx = { state: { entries: () => [["task", entry]], get: () => entry, update: (_id, patch) => entry = { ...entry, ...(typeof patch === "function" ? patch(entry) : patch) } },
+    learning: { delivered: async () => ({ ...snapshot, delivered: true, runId: "accepted" }) },
+    runnerFor: () => ({ current: () => ({ id: "accepted", running: true }), cancel: async () => { if (++controls === 1) throw new Error("execution lock busy"); return { confirmed: true }; } }),
+  };
+  await learningDelivered(ctx, "task");
+  assert.equal(Object.keys(entry.learning_deliveries).length, 1); assert(entry.learning_revocation.freshSessionRequired);
+  await learningDelivered(ctx, "task");
+  assert.deepEqual(entry.learning_deliveries, {}); assert.equal(entry.learning_revocation.cancellation.confirmed, true);
+  assert.equal(entry.last.run, "accepted"); assert.deepEqual(entry.cursor, { since: "unchanged" }); assert.equal(controls, 2);
+});
+
+test("prepared revocation cannot cancel an unrelated current operation and missing admission refuses launch", async () => {
+  const ctx = { state: { entries: () => [], get: () => null }, runnerFor: () => ({ current: () => ({ running: true, execution: { operationId: "different" } }), cancel: () => assert.fail("unrelated work") }) };
+  assert.deepEqual(await revokeLearningAttempts(ctx, { repo, reason: "retired", removed: [], prepared: [{ taskId: "task", profile: "codex", key: "a".repeat(64), operationId: "old" }] }), []);
+  await assert.rejects(learningDispatch(ctx, "task", { learning: { repo, key: "a".repeat(64) } }, () => assert.fail("no admission service")), e => e.code === "LEARNING_UNQUALIFIED" && e.dispatchNotSent);
+});
+
 
 test("known task and inline event paths reach shared scoped context selection", async t => {
   const { state, id, home } = seededState({ sources: ["packages/api/schema.json"] }); t.after(() => rmSync(home, { recursive: true, force: true }));
   const clock = makeClock(), runner = fakeRunner(clock), seen = [];
   const learning = { identityFor: () => repo, resolveRepo: async () => repo, mode: () => "apply", observe: async () => {},
-    context: async (_repo, options) => { seen.push(options); return { key: "d".repeat(64), section: "Scoped advice", rules: [], paths: options.paths }; }, delivered: async (_repo, key, runId) => ({ key, runId, paths: seen.at(-1).paths }) };
+    dispatch: async (_repo, _intent, launch) => launch(), context: async (_repo, options) => { seen.push(options); return { key: "d".repeat(64), section: "Scoped advice", rules: [], paths: options.paths }; }, delivered: async (_repo, key, runId) => ({ key, runId, paths: seen.at(-1).paths }) };
   const gh = fakeGh({ inline: [{ ...inline({ id: 9, by: "me", at: at(1), body: "Validate input" }), path: "packages/api/input.mjs" }] });
   const tick = makeTick({ config: CONFIG, state, gh, git: fakeGit(), notify: fakeNotify(), log: silentLog, clock, ownLogin: "me", runnerFor: () => runner, readPrd: () => null, credential: fakeCredential(), identity: fakeIdentity(), learning });
   assert((await tick.tick()).every(r => r.ok));

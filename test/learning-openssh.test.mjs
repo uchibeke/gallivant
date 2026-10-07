@@ -10,6 +10,9 @@ import { canonical, hash } from "../lib/learning_data.mjs";
 import { createLearningService } from "../lib/learning.mjs";
 import { learnCommand } from "../lib/commands/learn.mjs";
 import { fixture, pending, proposed, repo } from "./learning-fixtures.mjs";
+import { learningDispatch, revokeLearningAttempts } from "../lib/learning_input.mjs";
+import { makeExecution } from "../lib/execution.mjs";
+import { executionRegistry } from "../lib/harness.mjs";
 
 let dir, key, otherKey, plainKey, authority, askpass, askpassMarker;
 const real = openSshSigner(), passphrase = "disposable-test-passphrase-only";
@@ -136,6 +139,66 @@ test("concurrent approval cannot change a preview or active checkpoint", async t
   assert.equal(f.store.load(repo).sequence, 1);
 });
 
+test("context rechecks disabled mode under lock after asynchronous qualification", async t => {
+  for (const mode of ["off", "collect"]) {
+    let disable = false, service;
+    const f = await enrolled(t, { qualify: async () => {
+      if (disable) { disable = false; await service.configure(repo, mode); }
+      return { qualified: true, fixtureOnly: true };
+    } });
+    service = f.service;
+    await service.approve(repo, [{ id: f.candidate.content.id, digest: f.candidate.digest }], { confirm: () => true });
+    await service.configure(repo, "apply"); disable = true;
+    const context = await service.context(repo, { operationId: "racing-disable", profile: "fixture", inputDigest: "a".repeat(64), previous: { rules: [{ id: "old" }] } });
+    assert.equal(context.mode, mode); assert.equal(context.section, ""); assert.equal(context.freshSessionRequired, true);
+    assert.deepEqual(f.store.load(repo).deliveries, {});
+  }
+});
+
+test("retirement and disabled modes durably fence prepared launch admission", async t => {
+  for (const action of ["retire", "off", "collect"]) {
+    const f = await enrolled(t);
+    const selection = [{ id: f.candidate.content.id, digest: f.candidate.digest }];
+    await f.service.approve(repo, selection, { confirm: () => true }); await f.service.configure(repo, "apply");
+    const snapshot = await f.service.context(repo, { taskId: "example/project/new", operationId: "prepared", profile: "codex", inputDigest: "a".repeat(64) });
+    const unqualifiedService = createLearningService({ store: f.store, signer: signer() });
+    await assert.rejects(learningDispatch({ learning: unqualifiedService }, "example/project/new", { learning: { ...snapshot, repo } }, () => assert.fail("unqualified profile")), e => e.code === "LEARNING_UNQUALIFIED" && e.dispatchNotSent);
+    if (action === "retire") await f.service.approve(repo, selection, { action, reason: "Retire before launch", confirm: () => true });
+    else await f.service.configure(repo, action);
+    assert(f.store.load(repo).deliveries[snapshot.key].revoked);
+    const restarted = createLearningService({ store: f.store, signer: signer(), qualify: () => ({ qualified: true, fixtureOnly: true }) });
+    await restarted.configure(repo, "apply");
+    await assert.rejects(learningDispatch({ learning: restarted }, "example/project/new", { learning: { ...snapshot, repo } }, () => assert.fail("retired guidance must never launch")), e => e.code === "LEARNING_STALE_CONTEXT" && e.dispatchNotSent === true);
+  }
+});
+
+test("launch admission serializes retirement and cancels accepted work before registry registration", async t => {
+  for (const provider of ["codex", "openai-agents"]) {
+    let execution, job = null, cancelled = 0;
+    const ctx = { state: { entries: () => [], get: () => null, update: () => assert.fail("start has no entry yet") }, executionFor: () => execution };
+    const f = await enrolled(t, { onRevocation: intent => revokeLearningAttempts(ctx, intent) });
+    const selection = [{ id: f.candidate.content.id, digest: f.candidate.digest }], taskId = "example/project/new";
+    await f.service.approve(repo, selection, { confirm: () => true }); await f.service.configure(repo, "apply");
+    const snapshot = await f.service.context(repo, { taskId, operationId: "prepared", profile: provider, inputDigest: "a".repeat(64) });
+    const remote = provider === "openai-agents";
+    execution = makeExecution({ root: join(f.dir, "execution"), taskId, provider,
+      ...(remote ? { transport: { submit: async () => ({ providerJobId: "job", sessionId: "session", turnId: "turn" }), cancel: async () => { cancelled++; return { confirmed: true }; } }, capabilities: { ...executionRegistry[provider], available: true, controls: { cancel: true } } }
+        : { runner: { current: () => job, lines: () => [], annotate() {}, start: async (_name, _cmd, _args, options) => job = { id: options.runId, running: true, exit: null }, kill: () => { cancelled++; job.running = false; job.exit = 137; return true; } } }),
+    });
+    const managed = { operationId: "prepared", learning: { ...snapshot, repo }, allowance: { remainingUsd: 1, reservedUsd: 0.1 } };
+    const accepted = await learningDispatch({ learning: f.service }, taskId, managed, async () => {
+      await assert.rejects(f.service.configure(repo, "off"), /already running/);
+      assert.equal(f.service.mode(repo), "apply");
+      return remote ? execution.submit(managed) : execution.start("start", "fixture", [], { execution: managed });
+    });
+    assert.equal(execution.current().id, accepted.id);
+    await f.service.approve(repo, selection, { action: "retire", reason: "Retire after acceptance", confirm: () => true });
+    assert.equal(execution.state().stopped, "learned advice retired"); assert.equal(cancelled, 1);
+    assert.equal(f.store.load(repo).deliveries[snapshot.key].delivered, false);
+    t.diagnostic(JSON.stringify({ preparedDeliveryRevocation: { provider, taskId, key: snapshot.key, acceptedRun: accepted.id, registryEntries: ctx.state.entries().length, stopped: execution.state().stopped, cancellationCalls: cancelled, qualification: "offline fixture; UNQUALIFIED for production" } }));
+  }
+});
+
 test("recovery retries committed retirement controls without signing another transition", async t => {
   const f = await enrolled(t, { onRevocation: async intent => {
     if (intent.removed?.length) throw new Error("registry locked after signed commit");
@@ -209,7 +272,7 @@ test("revisions stay unapproved until signed replacement and stale undelivered i
   assert.equal(f.store.load(repo).active[0].digest, f.candidate.digest);
   await f.service.approve(repo, [{ id: next.content.id, digest: next.digest }], { confirm: () => true });
   assert.equal(f.service.show(repo, f.candidate.content.id, f.candidate.digest).status, "retired");
-  await assert.rejects(f.service.context(repo, intent), /older bundle/);
+  await assert.rejects(f.service.context(repo, intent), /revoked/);
 });
 
 test("forged transitions, extra batch rules, foreign repo, replay and rollback cannot dispatch", async t => {

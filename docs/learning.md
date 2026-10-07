@@ -181,6 +181,14 @@ When learning is `off` or `collect`, this fresh-session transition clears advice
 locally without a learning-related GitHub lookup. Any independently required
 provider or coding-workflow credentials still apply.
 
+Prepared advice records the owning task before launch. Admission rechecks mode,
+revocation and signed active revisions under the learning lock and holds that lock
+through provider acceptance. Retirement or disable racing that launch reports a
+busy operation and must be retried; it has not committed a stop. Once committed,
+revocation also reaches accepted execution intents before registry publication.
+Retired prepared inputs stay fenced across restart and re-enabling application.
+The accepted-delivery outbox retries unconfirmed cancellation without redispatch.
+
 Accepted run ownership, feedback cursors and pending delivery audit records are
 saved together before writing to the learning store. If that store is locked or
 unavailable, coding continues with its pinned context and the registry retains

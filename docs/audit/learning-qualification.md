@@ -223,3 +223,49 @@ Required Verify results on the same macOS host:
 | `npm run lint` | Exit 0 | `/private/tmp/review-learning-batch7-lint.log` |
 | `npm run test:learning` | 53 passed; 0 failed, skipped or cancelled; 50,640.928125 ms | `/private/tmp/review-learning-batch7-suite.log` |
 | `git diff --check` | Exit 0 | Operator session command output |
+
+## Prepared-delivery revocation review follow-up
+
+Context selection now rechecks the current mode inside the learning transaction.
+Prepared deliveries record task identity. The shared launch admission service
+checks qualification, protected mode, exact context identity and signed active
+revisions, holding the learning lock through provider acceptance. Disable or
+retirement racing that launch fails busy before committing; operators retry it.
+Once committed, revocation markers fence old inputs across restart and re-enable.
+Prepared ownership also lets controls reach accepted local/hosted executions before
+registry publication; delivery audits retain unconfirmed cancellation for retry.
+
+Source review covered initial start, resumed/review dispatch, signed commit and
+recovery, legacy delivery reconciliation, admission failures and lock cleanup.
+No provider launch occurs for a revoked or unqualified intent; pre-launch failures
+retain the existing dispatch-not-sent semantics. Learning persistence remains
+outside the accepted-run ownership save. Controls run outside the learning lock.
+
+Focused regressions are in `test/learning-openssh.test.mjs` (mode changes during
+qualification, durable prepared-intent fencing, real execution-boundary controls
+before registry registration), `test/learning-dispatch.test.mjs` (cancellation
+retry and unrelated-operation exclusion), and `test/commands.test.mjs` /
+`test/resume.test.mjs` (caller admission and unchanged review ownership).
+
+The existing native sandbox refusal, absent Linux host and unqualified installed
+worker/extractor boundary remain unchanged. Production is **UNQUALIFIED /
+collection only**; these are disposable offline regressions, not live approval
+or installed-boundary evidence. No paid inference or unchanged probe was run.
+
+Representative generated output was inspected in
+`/private/tmp/review-learning-batch8-final-suite.log`: the
+`preparedDeliveryRevocation` diagnostics record exact task/context/run identities
+for both local and hosted offline transports, zero registry entries, one
+cancellation call and the durable `learned advice retired` fence. The final
+learning suite passed 58 tests with no failures, skips or cancellations
+(38,833.643375 ms). This output explicitly labels production UNQUALIFIED.
+
+Final Verify results on the same macOS host, after launch-admission qualification
+was rechecked during source review:
+
+| Command | Recorded result | Output pointer |
+| --- | --- | --- |
+| `npm test` | 1,263 passed; 0 failed, skipped or cancelled; 412,842.460292 ms | `/private/tmp/review-learning-batch8-final-full.log` |
+| `npm run lint` | Exit 0 | `/private/tmp/review-learning-batch8-final-lint.log` |
+| `npm run test:learning` | 58 passed; 0 failed, skipped or cancelled; 38,833.643375 ms | `/private/tmp/review-learning-batch8-final-suite.log` |
+| `git diff --check` | Exit 0 | Operator session command output |

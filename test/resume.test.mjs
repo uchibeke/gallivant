@@ -201,7 +201,7 @@ test("resume retains accepted ownership when the learning delivery audit is lock
   const w = world(), repo = { host: "github.com", id: "1234" };
   let observed;
   w.ctx.learning = { identityFor: () => repo, resolveRepo: async () => repo, mode: () => "apply",
-    context: async () => ({ key: "d".repeat(64), section: "Advisory", rules: [] }),
+    dispatch: async (_repo, _intent, launch) => launch(), context: async () => ({ key: "d".repeat(64), section: "Advisory", rules: [] }),
     delivered: async (_repo, _key, runId) => {
       observed = { runId, entry: w.ctx.state.entries()[0][1] };
       throw new Error("operation.lock busy");
@@ -211,6 +211,17 @@ test("resume retains accepted ownership when the learning delivery audit is lock
   assert.equal(observed.entry.last.run, result.run);
   assert.equal(Object.keys(observed.entry.learning_deliveries).length, 1);
   assert.equal(w.ctx.state.get(result.id).last.run, result.run);
+});
+
+test("resume refuses revoked learning admission without consuming review state", async () => {
+  const w = world(), repo = { host: "github.com", id: "1234" }, before = w.state.get(w.id);
+  w.ctx.learning = { identityFor: () => repo, resolveRepo: async () => repo, mode: () => "apply",
+    context: async () => ({ key: "d".repeat(64), section: "Prepared advice", rules: [] }),
+    dispatch: async () => { throw new Error("revoked before launch"); },
+  };
+  await assert.rejects(resume(w.ctx, { handle: w.id }), e => /revoked before launch/.test(e.message) && e.dispatchNotSent);
+  assert.equal(w.runner.started.length, 0);
+  for (const key of ["session", "last", "cursor", "iteration", "pr"]) assert.deepEqual(w.state.get(w.id)[key], before[key]);
 });
 
 
