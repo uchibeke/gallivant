@@ -67,6 +67,9 @@ Transport and parsing share a 64 MiB ceiling for each 100-item page before body
 minimization. The 10,000-observation/context-identity storage bounds and continuously
 moving upstream pagination can still leave coverage incomplete; inspect the report
 before assuming full history was collected. No evidence link is opened or fetched.
+Pruning uses the remembered immutable identity and removes expired local excerpts
+even when GitHub is unavailable. Reconfiguration refuses a different resolved ID;
+identity persistence also refuses replacement, preserving offline disable ownership.
 Recovery uses the remembered immutable repository identity and signed local state,
 so retrying revocation controls does not depend on GitHub availability. Batch
 approval rejects multiple revisions of one candidate before preview or signing.

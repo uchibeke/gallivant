@@ -497,3 +497,34 @@ test("historical continuation follows PR identities after update-order movement"
   assert.deepEqual(new Set(calls), new Set([20, 21]));
   assert.equal(new Set(Object.values(f.store.load(repo).observations).map(o => o.content.pr)).size, 21);
 });
+
+test("reconfiguration refuses replacement identities and preserves offline disable ownership", async t => {
+  const controls = [];
+  const gh = { learningRepository: async () => ({ ...foreign, visibility: "public" }) };
+  const { service, store } = fixture(t, { gh, onRevocation: async intent => { controls.push(intent); return []; } });
+  store.remember("example/project", repo);
+  await store.transaction(repo, s => { s.mode = "apply"; });
+  const before = canonical(store.load(repo)), identities = canonical(store.identities());
+  for (const mode of ["collect", "apply"]) await assert.rejects(learnCommand({ learning: service }, { args: ["configure"], values: { repo: "EXAMPLE/PROJECT", mode } }), /identity changed/);
+  assert.equal(canonical(store.load(repo)), before); assert.equal(service.mode(foreign), "off");
+  assert.equal(canonical(store.identities()), identities); assert.equal(controls.length, 0);
+  assert.throws(() => service.rememberRepo("example/project", foreign), /identity changed/);
+  await assert.rejects(service.resolveRepo("example/project", { remember: true }), /identity changed/);
+  assert.equal(canonical(store.identities()), identities);
+  await learnCommand({ learning: service }, { args: ["configure"], values: { repo: "example/project", mode: "off" } });
+  assert.equal(service.mode(repo), "off"); assert.deepEqual(controls[0].repo, repo);
+  service.rememberRepo("example/project", repo); // Rejected writes release the lock; same-ID updates remain valid.
+});
+
+test("CLI pruning removes expired excerpts without remote repository access", async t => {
+  let time = Date.parse(now);
+  const gh = { learningRepository() { assert.fail("pruning must remain local"); } };
+  const { service, store } = fixture(t, { gh, clock: { now: () => time } });
+  await observed(service); service.rememberRepo("example/project", repo);
+  time += 31 * 86400_000;
+  const result = await learnCommand({ learning: service }, { args: ["prune"], values: { repo: "example/project" } });
+  assert.equal(result.expired, 1);
+  const observation = Object.values(store.load(repo).observations)[0];
+  assert.equal(observation.expired, true); assert.equal(observation.content.excerpt, "[raw excerpt expired]");
+  assert.equal((await learnCommand({ learning: service }, { args: ["prune"], values: { repo: "example/project" } })).expired, 0);
+});

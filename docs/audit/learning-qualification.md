@@ -378,3 +378,30 @@ skips or cancellations (227,674.123834 ms), recorded in
 with no failures, skips or cancellations (39,062.381542 ms), recorded in
 `/private/tmp/learning-review11-suite-final.log`. `npm run lint` exited 0
 (`/private/tmp/learning-review11-lint.log`), and `git diff --check` passed.
+
+## Repository reconfiguration and offline retention follow-up
+
+Configuration compares resolved and remembered immutable identities before changing
+mode. The persistence boundary also checks existing legacy and structured identity
+records under its lock before writing, covering explicit remembering and resolving
+with enrollment enabled. Replacement names cannot overwrite offline disable
+ownership. Regression coverage leaves the original apply state unchanged on refused
+reconfiguration, then disables that original identity locally and verifies controls.
+Rejected persistence releases its lock; same-identity visibility updates still work.
+
+Pruning now resolves only the remembered local identity. The CLI regression advances
+the retention clock, removes the expired excerpt with GitHub unavailable, and checks
+idempotent repeated cleanup. The initial test run found an incorrect nested-field
+assertion in the new test; the assertion was corrected to the existing string field.
+Source review covered identity writer callers, case normalization, legacy records,
+lock cleanup, local command construction and pruning's existing atomic transaction.
+Production remains UNQUALIFIED; the recorded native isolation refusal was not
+retried. Linux/live evidence and the seven existing unmet criteria remain unchanged.
+
+Verify: `npm test` passed 1,272 tests, no failures/skips/cancellations
+(228,546.192292 ms; `/private/tmp/learning-review12-full.log`).
+`npm run test:learning` passed 67 tests, no failures/skips/cancellations
+(36,564.551667 ms; `/private/tmp/learning-review12-suite-final.log`).
+`npm run lint` exited 0 (`/private/tmp/learning-review12-lint-final.log`), and
+`git diff --check` passed. Regression outputs confirm retention counts 1 then 0,
+unchanged original state on identity refusal, and controls targeting the original ID.
