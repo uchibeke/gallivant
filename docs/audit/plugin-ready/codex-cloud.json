@@ -2,17 +2,17 @@
   "version": 1,
   "task_id": "task-608e7283e7d7d42cfb91eb6b",
   "scope": "Supported native CLI transport and offline shared lifecycle/PR conformance; live qualification remains unverified",
-  "recorded_at": "2026-10-07T03:11:38.924593+00:00",
+  "recorded_at": "2026-10-07T03:37:38.323218+00:00",
   "base_revision": "2b4514fb27fcb493e62bfed913fffc204215f155",
-  "implementation_revision": "31f9371ff557fa5c0721d0bc61c595ec920de61a",
+  "implementation_revision": "1648e37268162dd4ca205ed9702759eb218900c5",
   "branch": "work/codex-cloud-harness",
   "source_files": {
     "README.md": "9e6e79dfe29e0e3f6b876d53dfdadafd5869158a662782468e461ed9316bfa2d",
     "docs/audit/plugin-ready/README.md": "3f1402208589e6242586f8364f901db29098553533334f407275243edd7b403d",
-    "docs/audit/plugin-ready/codex-cloud-checklist.md": "db9698aba9209bb384deaabdd74e3afb4cea4d812b132b94cdcbb0d5dbda8361",
-    "docs/codex-cloud.md": "33b5f68ac1022dedaee27513575bb269e9f693a03390df86cfbdefc39e0fe07f",
+    "docs/audit/plugin-ready/codex-cloud-checklist.md": "e8b586216de216075303e80ba7720eba6133b37536eab5d367f4c66cdd4a02e8",
+    "docs/codex-cloud.md": "570d8d0cfc03aa4e08171d4a7d10af055861c0b9174bf7228000f0a22b4b855d",
     "docs/prds/codex-cloud-harness.md": "7ad37c4c6100d03647990177ae84357b2edaf3ee5954e377b25d4700d7ad0d1b",
-    "lib/codex_cloud.mjs": "9ec01fc5827bd66035424a2c5cdd86a710826a31a2a804152ea3aa137d9d4efd",
+    "lib/codex_cloud.mjs": "2eee3812cb12f0bb2a6978066e5e11251fc992858da6ba3a0e90a49efdc41025",
     "lib/codex_cloud_config.mjs": "5a00849751ed7825b3517f25627163c65092d0a0f898b5e3b0ef5e0e5921582b",
     "lib/codex_cloud_input.mjs": "3661e53a358fa7d3e2d42382b853a2073b65198333f3015f7d566dbe426d31b7",
     "lib/codex_cloud_result.mjs": "d0c58b8afab0d7cf80f84db45a492261ccd6220a26ebfc8807a4cead07dd32ec",
@@ -28,7 +28,7 @@
     "lib/tick.mjs": "4b75ad239705f0e13cecdc4b69528668fa7610efaac568972fd80cdd22b0317e",
     "package.json": "7af15137d9b914464d70b567e2278debb39aef4723871844941c2cf07ae3d19c",
     "test/codex-cloud-live.mjs": "11bebf6724e5fddde3df2093cf3556f0909dbf1a710c42d30649b6312b9cdc44",
-    "test/codex-cloud.test.mjs": "bf58c2c37f0014e46593bc69dbd4773e5c327a8388e0a8bac22bf9b242409b72",
+    "test/codex-cloud.test.mjs": "a8c87e5d6e27542132e96072a46d999985a03ef404c3d67724e33caccc68848f",
     "test/execution-backends.test.mjs": "1c06b8ee5f4286a81c45b3ded9b0d707534260a34fcad84d59f6cc5f078f5c49",
     "test/units.test.mjs": "5475baf43bceeae4d6f0bc1717904b69a58b5c8e9ad7d8e8ad2ee22b0f5516b3"
   },
@@ -44,18 +44,18 @@
       "command": "npm test",
       "exit": 0,
       "raw_log": {
-        "path": "/tmp/cloud-receipt-recovery-final-test.log",
-        "sha256": "9c8616e57ecf1b9154d6c24ed0ac7b333860700aefaba9c87b184ee48a0da572"
+        "path": "/tmp/cloud-env-final-test.log",
+        "sha256": "f90805781cbff6a264c297bcbad5f054246a20f3d2ee1d9161df2632c4ce890d"
       },
       "tap_runs": [
         {
-          "tests": 1179,
-          "pass": 1179,
+          "tests": 1181,
+          "pass": 1181,
           "fail": 0,
           "cancelled": 0,
           "skipped": 0,
           "todo": 0,
-          "duration_ms": 251207.352
+          "duration_ms": 255683.897666
         }
       ]
     },
@@ -63,7 +63,7 @@
       "command": "npm run lint",
       "exit": 0,
       "raw_log": {
-        "path": "/tmp/cloud-receipt-recovery-final-lint.log",
+        "path": "/tmp/cloud-env-final-lint.log",
         "sha256": "8c7790de3f018fb4580f18ac70e1b355a0f76f522dd73acbdaa63632feffcecc"
       }
     },
@@ -71,8 +71,8 @@
       "command": "npm run test:execution-backends",
       "exit": 0,
       "raw_log": {
-        "path": "/tmp/cloud-receipt-recovery-final-backends.log",
-        "sha256": "c2e9ec3669400dff77fc441800cffacb53c6ef1e06cc6f41f956b16a51dcecaa"
+        "path": "/tmp/cloud-env-final-backends.log",
+        "sha256": "75f54675167658ea563851ee8d5f3a4d38268ad991dddd7f6c5aeda726d10ce8"
       },
       "tap_runs": [
         {
@@ -82,7 +82,7 @@
           "cancelled": 0,
           "skipped": 0,
           "todo": 0,
-          "duration_ms": 183757.971375
+          "duration_ms": 187768.201834
         }
       ]
     },
@@ -90,8 +90,8 @@
       "command": "npm run test:openai-agents",
       "exit": 0,
       "raw_log": {
-        "path": "/tmp/cloud-receipt-recovery-final-agents.log",
-        "sha256": "c8db41ae60ed9e7788d5b67674feab8c42a2b2d78b0a36c2d4afab910ad446f8"
+        "path": "/tmp/cloud-env-final-agents.log",
+        "sha256": "9102e0a9dacf787a3535b4d6df4139bb6c8aed8f8c7079369d63f5316e88e58c"
       },
       "tap_runs": [
         {
@@ -101,7 +101,7 @@
           "cancelled": 0,
           "skipped": 0,
           "todo": 0,
-          "duration_ms": 43003.513291
+          "duration_ms": 47123.084042
         }
       ]
     },
@@ -109,18 +109,18 @@
       "command": "npm run test:codex-cloud",
       "exit": 0,
       "raw_log": {
-        "path": "/tmp/cloud-receipt-recovery-final-cloud.log",
-        "sha256": "62da6ab7a5f314cdf27ab358079659dfad9606bc84ad4feeba6bbac4b9ad2ef5"
+        "path": "/tmp/cloud-env-final-cloud.log",
+        "sha256": "dd68a45152f5ed17ff13e5353bf0d65d0a49a7192e333ef1e008b1847bd98a87"
       },
       "tap_runs": [
         {
-          "tests": 18,
-          "pass": 18,
+          "tests": 20,
+          "pass": 20,
           "fail": 0,
           "cancelled": 0,
           "skipped": 0,
           "todo": 0,
-          "duration_ms": 10760.904959
+          "duration_ms": 11013.514833
         },
         {
           "tests": 16,
@@ -129,7 +129,7 @@
           "cancelled": 0,
           "skipped": 0,
           "todo": 0,
-          "duration_ms": 17452.040666
+          "duration_ms": 16912.522292
         }
       ]
     },
@@ -137,7 +137,7 @@
       "command": "git diff --check",
       "exit": 0,
       "raw_log": {
-        "path": "/tmp/cloud-receipt-recovery-final-diff.log",
+        "path": "/tmp/cloud-env-final-diff.log",
         "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
       }
     }
@@ -150,6 +150,8 @@
       "Cloud access checks pinned CLI, ChatGPT sign-in, command surface and chosen environment without inference",
       "Cloud native login uses stderr and drops application credentials",
       "Cloud launcher exit is queued, pagination reconciles exact task, restart and duplicate observations are durable",
+      "Cloud filtered listings reconcile null or omitted environment fields through restart and collection",
+      "Cloud filtered listing failures retain unknown ownership without unfiltered fallback or resubmission",
       "Cloud lost acknowledgement never chooses newest task or creates duplicate paid work",
       "Cloud persisted native acknowledgement recovers a coordinator crash without resubmission",
       "Cloud dispatch rejects moved remote heads, auth refusal and local absolute references before a paid command",
@@ -190,7 +192,7 @@
       {
         "criterion_id": "ac-5",
         "met": true,
-        "evidence": "test/codex-cloud.test.mjs: Cloud launcher exit is queued, pagination reconciles exact task, restart and duplicate observations are durable; Cloud multiple attempts, foreign environments and missing exact identity stay unknown with timestamped errors"
+        "evidence": "test/codex-cloud.test.mjs: Cloud filtered listings reconcile null or omitted environment fields through restart and collection; Cloud filtered listing failures retain unknown ownership without unfiltered fallback or resubmission; docs/audit/plugin-ready/codex-cloud.json environment_listing_followup"
       },
       {
         "criterion_id": "ac-6",
@@ -225,7 +227,7 @@
       {
         "criterion_id": "ac-12",
         "met": true,
-        "evidence": "test/codex-cloud.test.mjs includes envelope-only ownership, stale-head, publication reply-loss and restart regressions; docs/audit/plugin-ready/codex-cloud.json commands records Cloud, local and Agents API conformance"
+        "evidence": "test/codex-cloud.test.mjs pinned null environment fixtures and filtered-list restart/failure regressions; docs/audit/plugin-ready/codex-cloud.json commands records 1181 full, 397 execution-backends, 59 openai-agents, 20 Cloud adapter and 16 shared cases passing"
       },
       {
         "criterion_id": "ac-13",
@@ -404,7 +406,9 @@
     "https://learn.chatgpt.com/docs/developer-commands?surface=cli",
     "https://learn.chatgpt.com/docs/auth",
     "https://learn.chatgpt.com/docs/environments/cloud-environments",
-    "https://github.com/openai/codex/tree/rust-v0.160.0/codex-rs/cloud-tasks"
+    "https://github.com/openai/codex/tree/rust-v0.160.0/codex-rs/cloud-tasks",
+    "https://github.com/openai/codex/blob/rust-v0.160.0/codex-rs/cloud-tasks-client/src/http.rs",
+    "https://github.com/openai/codex/blob/rust-v0.160.0/codex-rs/cloud-tasks/src/lib.rs"
   ],
   "original_implementation_revision": "2557dd856ee873b0ba6408fcc6e5c02f898a47b0",
   "receipt_public_text_followup": {
@@ -737,5 +741,309 @@
         "result": "Final focused ownership, stale-head, restart, receipt/public-text, resume and zero-progress parity checks passed"
       }
     ]
+  },
+  "previous_implementation_revision": "31f9371ff557fa5c0721d0bc61c595ec920de61a",
+  "environment_listing_followup": {
+    "review_id": 5437267892,
+    "inline_comment_ids": [
+      4202739146
+    ],
+    "reviewed_commit": "b4c93a84b821a188901e24760b91c0a36da4fa4d",
+    "fix_commit": "1648e37268162dd4ca205ed9702759eb218900c5",
+    "status": "addressed",
+    "kind": "offline pinned CLI list fixtures; no live inference qualification",
+    "rule": "Environment ownership comes from the successful configured --env request and persisted namespace, while exact saved task, URL and single-attempt ownership remain mandatory",
+    "primary_source_findings": [
+      {
+        "url": "https://github.com/openai/codex/blob/rust-v0.160.0/codex-rs/cloud-tasks-client/src/http.rs",
+        "functions": [
+          "map_task_list_item_to_summary",
+          "api::Tasks::list"
+        ],
+        "observed": "List-item environment_id is None; task listing passes the environment filter and cursor to the provider request"
+      },
+      {
+        "url": "https://github.com/openai/codex/blob/rust-v0.160.0/codex-rs/cloud-tasks/src/lib.rs",
+        "functions": [
+          "resolve_environment_id",
+          "run_list_command"
+        ],
+        "observed": "The CLI resolves the requested environment or refuses it, then supplies the resolved environment to the listing before emitting JSON"
+      }
+    ],
+    "boundaries_reviewed": [
+      "lib/codex_cloud.mjs listPage and checkCloudAccess share --env filtering, including every pagination cursor",
+      "lib/codex_cloud.mjs observe/inspect/lookup use exact persisted task and configuration ownership before recording provider status",
+      "lib/execution.mjs inspection-error journal, terminal collection, ambiguity and cancellation quarantine",
+      "test/codex-cloud.test.mjs pinned list fixtures, publication successors and native Git/sandbox result writer conformance"
+    ],
+    "test_names": [
+      "Cloud access checks pinned CLI, ChatGPT sign-in, command surface and chosen environment without inference",
+      "Cloud filtered listings reconcile null or omitted environment fields through restart and collection",
+      "Cloud filtered listing failures retain unknown ownership without unfiltered fallback or resubmission"
+    ],
+    "regression_before_fix": {
+      "raw_log": {
+        "path": "/tmp/cloud-env-regression-red.log",
+        "sha256": "035138163161a4b61b5ff67428e56b7168da493b7246ad2776ed55a91889439e"
+      },
+      "result": "Expected queued, observed status-unknown for a null environment_id with an acknowledged exact task"
+    },
+    "focused_verify": {
+      "raw_log": {
+        "path": "/tmp/cloud-env-regression-final.log",
+        "sha256": "46f0ad9bb166d8d18b91ea1dfd2b3d829fee5c7d1d2549c94869c602aba4352f"
+      },
+      "tests": 3,
+      "pass": 3,
+      "fail": 0
+    },
+    "representative_generated_output": {
+      "path": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-jC7IT0/cloud-filtered-listing-evidence.json",
+      "sha256": "5267783c919ec2458d2b87a4b6d97df0694fe74f91d686d3373f92425678c2ff"
+    },
+    "outcomes": [
+      {
+        "row_environment": null,
+        "provider_status": "ready",
+        "environment_source": "filtered-listing",
+        "listing_requests": 5,
+        "dispatched_tasks": 1,
+        "collected_file_sha256": "7aa7a5359173d05b63cfd682e3c38487f3cb4f7f1d60659fe59fab1505977d4c"
+      },
+      {
+        "row_environment": "omitted",
+        "provider_status": "ready",
+        "environment_source": "filtered-listing",
+        "listing_requests": 5,
+        "dispatched_tasks": 1,
+        "collected_file_sha256": "7aa7a5359173d05b63cfd682e3c38487f3cb4f7f1d60659fe59fab1505977d4c"
+      },
+      {
+        "row_environment": "env-fixture",
+        "provider_status": "ready",
+        "environment_source": "filtered-listing",
+        "listing_requests": 5,
+        "dispatched_tasks": 1,
+        "collected_file_sha256": "7aa7a5359173d05b63cfd682e3c38487f3cb4f7f1d60659fe59fab1505977d4c"
+      }
+    ],
+    "failure_recovery": "Initial and later filtered-page failures journal CLOUD_LIST, retain exact task ownership, refuse collection/redispatch, and recover the same task after restart; changed persisted environment refuses before CLI calls",
+    "commands": [
+      {
+        "command": "npm test",
+        "exit": 0,
+        "raw_log": {
+          "path": "/tmp/cloud-env-final-test.log",
+          "sha256": "f90805781cbff6a264c297bcbad5f054246a20f3d2ee1d9161df2632c4ce890d"
+        },
+        "tap_runs": [
+          {
+            "tests": 1181,
+            "pass": 1181,
+            "fail": 0,
+            "cancelled": 0,
+            "skipped": 0,
+            "todo": 0,
+            "duration_ms": 255683.897666
+          }
+        ]
+      },
+      {
+        "command": "npm run lint",
+        "exit": 0,
+        "raw_log": {
+          "path": "/tmp/cloud-env-final-lint.log",
+          "sha256": "8c7790de3f018fb4580f18ac70e1b355a0f76f522dd73acbdaa63632feffcecc"
+        }
+      },
+      {
+        "command": "npm run test:execution-backends",
+        "exit": 0,
+        "raw_log": {
+          "path": "/tmp/cloud-env-final-backends.log",
+          "sha256": "75f54675167658ea563851ee8d5f3a4d38268ad991dddd7f6c5aeda726d10ce8"
+        },
+        "tap_runs": [
+          {
+            "tests": 397,
+            "pass": 397,
+            "fail": 0,
+            "cancelled": 0,
+            "skipped": 0,
+            "todo": 0,
+            "duration_ms": 187768.201834
+          }
+        ]
+      },
+      {
+        "command": "npm run test:openai-agents",
+        "exit": 0,
+        "raw_log": {
+          "path": "/tmp/cloud-env-final-agents.log",
+          "sha256": "9102e0a9dacf787a3535b4d6df4139bb6c8aed8f8c7079369d63f5316e88e58c"
+        },
+        "tap_runs": [
+          {
+            "tests": 59,
+            "pass": 59,
+            "fail": 0,
+            "cancelled": 0,
+            "skipped": 0,
+            "todo": 0,
+            "duration_ms": 47123.084042
+          }
+        ]
+      },
+      {
+        "command": "npm run test:codex-cloud",
+        "exit": 0,
+        "raw_log": {
+          "path": "/tmp/cloud-env-final-cloud.log",
+          "sha256": "dd68a45152f5ed17ff13e5353bf0d65d0a49a7192e333ef1e008b1847bd98a87"
+        },
+        "tap_runs": [
+          {
+            "tests": 20,
+            "pass": 20,
+            "fail": 0,
+            "cancelled": 0,
+            "skipped": 0,
+            "todo": 0,
+            "duration_ms": 11013.514833
+          },
+          {
+            "tests": 16,
+            "pass": 16,
+            "fail": 0,
+            "cancelled": 0,
+            "skipped": 0,
+            "todo": 0,
+            "duration_ms": 16912.522292
+          }
+        ]
+      },
+      {
+        "command": "git diff --check",
+        "exit": 0,
+        "raw_log": {
+          "path": "/tmp/cloud-env-final-diff.log",
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      }
+    ],
+    "previous_verify": [
+      {
+        "command": "npm test",
+        "exit": 0,
+        "raw_log": {
+          "path": "/tmp/cloud-receipt-recovery-final-test.log",
+          "sha256": "9c8616e57ecf1b9154d6c24ed0ac7b333860700aefaba9c87b184ee48a0da572"
+        },
+        "tap_runs": [
+          {
+            "tests": 1179,
+            "pass": 1179,
+            "fail": 0,
+            "cancelled": 0,
+            "skipped": 0,
+            "todo": 0,
+            "duration_ms": 251207.352
+          }
+        ]
+      },
+      {
+        "command": "npm run lint",
+        "exit": 0,
+        "raw_log": {
+          "path": "/tmp/cloud-receipt-recovery-final-lint.log",
+          "sha256": "8c7790de3f018fb4580f18ac70e1b355a0f76f522dd73acbdaa63632feffcecc"
+        }
+      },
+      {
+        "command": "npm run test:execution-backends",
+        "exit": 0,
+        "raw_log": {
+          "path": "/tmp/cloud-receipt-recovery-final-backends.log",
+          "sha256": "c2e9ec3669400dff77fc441800cffacb53c6ef1e06cc6f41f956b16a51dcecaa"
+        },
+        "tap_runs": [
+          {
+            "tests": 397,
+            "pass": 397,
+            "fail": 0,
+            "cancelled": 0,
+            "skipped": 0,
+            "todo": 0,
+            "duration_ms": 183757.971375
+          }
+        ]
+      },
+      {
+        "command": "npm run test:openai-agents",
+        "exit": 0,
+        "raw_log": {
+          "path": "/tmp/cloud-receipt-recovery-final-agents.log",
+          "sha256": "c8db41ae60ed9e7788d5b67674feab8c42a2b2d78b0a36c2d4afab910ad446f8"
+        },
+        "tap_runs": [
+          {
+            "tests": 59,
+            "pass": 59,
+            "fail": 0,
+            "cancelled": 0,
+            "skipped": 0,
+            "todo": 0,
+            "duration_ms": 43003.513291
+          }
+        ]
+      },
+      {
+        "command": "npm run test:codex-cloud",
+        "exit": 0,
+        "raw_log": {
+          "path": "/tmp/cloud-receipt-recovery-final-cloud.log",
+          "sha256": "62da6ab7a5f314cdf27ab358079659dfad9606bc84ad4feeba6bbac4b9ad2ef5"
+        },
+        "tap_runs": [
+          {
+            "tests": 18,
+            "pass": 18,
+            "fail": 0,
+            "cancelled": 0,
+            "skipped": 0,
+            "todo": 0,
+            "duration_ms": 10760.904959
+          },
+          {
+            "tests": 16,
+            "pass": 16,
+            "fail": 0,
+            "cancelled": 0,
+            "skipped": 0,
+            "todo": 0,
+            "duration_ms": 17452.040666
+          }
+        ]
+      },
+      {
+        "command": "git diff --check",
+        "exit": 0,
+        "raw_log": {
+          "path": "/tmp/cloud-receipt-recovery-final-diff.log",
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      }
+    ],
+    "paid_cloud_dispatches": 0,
+    "live_prerequisites": {
+      "absent": [
+        "CODEX_CLOUD_LIVE_HOME",
+        "CODEX_CLOUD_LIVE_PRD",
+        "CODEX_CLOUD_LIVE_REPO",
+        "CODEX_CLOUD_CAMPAIGN_LEDGER"
+      ],
+      "action": "Original failed preflight retained without rerunning unchanged blocked work; no live inference qualification or native attempt IDs claimed"
+    }
   }
 }
