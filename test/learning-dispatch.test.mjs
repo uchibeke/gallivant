@@ -40,7 +40,7 @@ test("retired native session memory blocks resume while preserving logical task 
   const entry = { repo: "example/project", harness: "codex", session: "native-session", learning: { rules: [{ id: "lesson-x", digest: "b".repeat(64) }] }, pr: 27, worktree: "/checkout", cursor: { since: "unchanged" }, iteration: 2 };
   const original = JSON.stringify(entry);
   const service = { identityFor: () => repo, mode: () => "collect", resolveRepo: async () => repo, context: async () => ({ section: "", freshSessionRequired: true }) };
-  await assert.rejects(learningInput({ learning: service }, "task", entry, input), /fresh-provider continuity/);
+  await assert.rejects(learningInput({ learning: service }, "task", entry, input), /fresh-session/);
   assert.equal(JSON.stringify(entry), original);
 });
 
@@ -166,4 +166,20 @@ test("delivery outbox retains older runs and retries lost replies without replac
   assert.equal(calls, 3); assert.deepEqual(entry.learning_deliveries, {});
   assert.equal(entry.learning.key, "run-new"); assert.equal(entry.learning.runId, "run-new");
   assert.deepEqual(learningDeliveryPatch(entry, managed("unknown"), { id: "pending", execution: { acceptance: "unknown" } }), {});
+});
+
+
+test("known task and inline event paths reach shared scoped context selection", async t => {
+  const { state, id, home } = seededState({ sources: ["packages/api/schema.json"] }); t.after(() => rmSync(home, { recursive: true, force: true }));
+  const clock = makeClock(), runner = fakeRunner(clock), seen = [];
+  const learning = { identityFor: () => repo, resolveRepo: async () => repo, mode: () => "apply", observe: async () => {},
+    context: async (_repo, options) => { seen.push(options); return { key: "d".repeat(64), section: "Scoped advice", rules: [], paths: options.paths }; }, delivered: async (_repo, key, runId) => ({ key, runId, paths: seen.at(-1).paths }) };
+  const gh = fakeGh({ inline: [{ ...inline({ id: 9, by: "me", at: at(1), body: "Validate input" }), path: "packages/api/input.mjs" }] });
+  const tick = makeTick({ config: CONFIG, state, gh, git: fakeGit(), notify: fakeNotify(), log: silentLog, clock, ownLogin: "me", runnerFor: () => runner, readPrd: () => null, credential: fakeCredential(), identity: fakeIdentity(), learning });
+  assert((await tick.tick()).every(r => r.ok));
+  assert(seen[0].paths.includes("packages/api/input.mjs")); assert(seen[0].paths.includes("packages/api/schema.json"));
+  assert.deepEqual(state.get(id).learning.paths, seen[0].paths);
+  await learningInput({ learning }, id, state.get(id), { ...input, paths: ["../escape", "/foreign", "packages/api/input.mjs"] });
+  assert(!seen.at(-1).paths.includes("../escape")); assert(!seen.at(-1).paths.includes("/foreign"));
+  assert.deepEqual(seen.at(-1).paths, [...new Set(seen.at(-1).paths)].sort());
 });

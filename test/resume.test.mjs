@@ -212,3 +212,38 @@ test("resume retains accepted ownership when the learning delivery audit is lock
   assert.equal(Object.keys(observed.entry.learning_deliveries).length, 1);
   assert.equal(w.ctx.state.get(result.id).last.run, result.run);
 });
+
+
+test("fresh learning resume preserves task and review state while replacing native memory", async () => {
+  const w = world({ pr: 142, iteration: 2, learning: { repo: { host: "github.com", id: "1234" }, rules: [{ id: "old", digest: "b".repeat(64) }] }, learning_revocation: { freshSessionRequired: true } });
+  const before = w.state.get(w.id), repo = before.learning.repo;
+  w.ctx.learning = { identityFor: () => repo, resolveRepo: async () => repo, mode: () => "off", context: async () => ({ section: "", mode: "off", freshSessionRequired: true }) };
+  const result = await resume(w.ctx, { handle: w.id, freshSession: true });
+  const after = w.state.get(w.id);
+  assert.notEqual(result.session, before.session);
+  for (const key of ["repo", "pr", "branch", "worktree", "iteration", "cursor"]) assert.deepEqual(after[key], before[key]);
+  assert.equal(after.learning_continuity.previousSession, before.session);
+  assert.equal(after.learning_continuity.status, "accepted"); assert.equal(after.learning_revocation, null);
+  assert(w.runner.started[0].args.some(v => v.includes("Approved brief snapshot:")));
+  assert(!w.runner.started[0].args.includes("--resume"));
+});
+
+test("fresh learning resume refuses unresolved work and unrelated sessions", async () => {
+  const w = world(); await assert.rejects(resume(w.ctx, { handle: w.id, freshSession: true }), /requires recorded learned context/);
+  w.state.update(w.id, { learning_revocation: { freshSessionRequired: true }, last: { run: "unsettled", exit: null } });
+  await assert.rejects(resume(w.ctx, { handle: w.id, freshSession: true }), /still needs settling/);
+  assert.equal(w.runner.started.length, 0);
+});
+
+
+test("fresh learning resume retries the prepared session after a pre-launch failure", async () => {
+  const w = world({ learning_revocation: { freshSessionRequired: true } });
+  const launch = w.runner.start; let fail = true;
+  w.runner.start = async (...args) => { if (fail) { fail = false; throw new Error("pre-launch fixture failure"); } return launch(...args); };
+  await assert.rejects(resume(w.ctx, { handle: w.id, freshSession: true }), /pre-launch/);
+  const pending = w.state.get(w.id);
+  assert.equal(pending.session, SESSION); assert.equal(pending.learning_continuity.status, "prepared");
+  const result = await resume(w.ctx, { handle: w.id, freshSession: true });
+  assert.equal(result.session, pending.learning_continuity.newSession);
+  assert.equal(w.runner.started.length, 1);
+});

@@ -23,7 +23,7 @@ create production keys, enroll this device, switch providers, spend model calls 
 install the development checkout as the coordinator to manufacture evidence.
 
 Outstanding implementation includes installed isolation and extraction adapters,
-automatic fresh-provider continuity, signed key rotation/recovery and complete
+signed key rotation/recovery and complete
 eligible-run/review-round/outcome correlation. These are kept as false criteria in
 the PR completion receipt. Successful fixtures do not close those gaps.
 
@@ -149,3 +149,37 @@ No live isolation probe or paid model call was attempted. The oversized single-P
 continuation gap is resolved; the installed isolation, Linux/live qualification and
 other previously recorded implementation gaps remain outstanding. Production stays
 **UNQUALIFIED / collection only**.
+
+
+## Scoped guidance and fresh-session continuity follow-up
+
+Actual offline results on the same macOS host, against the final source:
+
+| Command | Recorded result | Output pointer |
+| --- | --- | --- |
+| `npm test` | 1,251 passed; 0 failed, skipped or cancelled; 302,220.708083 ms | `/private/tmp/review-learning-batch6-verified-full.log` |
+| `npm run lint` | Exit 0 | Operator session command output |
+| `npm run test:learning` | 48 passed; 0 failed, skipped or cancelled; 37,977.324458 ms | `/private/tmp/review-learning-batch6-final-suite.log` |
+| `git diff --check` | Exit 0 | Operator session command output |
+
+Regressions in `test/learning-dispatch.test.mjs` and `test/commands.test.mjs`
+exercise task/carried-file and inline-event paths through actual dispatch callers,
+with traversal/absolute paths excluded. Existing signed held-out relevance fixtures
+in `test/learning-openssh.test.mjs` exercise selection and omission by literal scope.
+The generated CLI help `/private/tmp/review-learning-batch6-help.txt` and path view
+`/private/tmp/review-learning-batch6-preview.json` were inspected before publication.
+
+`test/resume.test.mjs` exercises explicit fresh-session continuity, unchanged task,
+PR, checkout, cursors and iteration, and retry of the prepared native session.
+`test/execution-backends.test.mjs` exercises the real execution boundary with offline
+transports: cumulative allowance retention, unrelated-stop and unconfirmed-cancel
+refusal, retired-session rejection on submission and lookup, and local lost-reply
+recovery with preassigned or provider-assigned IDs. The six focused recovery cases
+passed in `/private/tmp/review-learning-batch6-final-recovery.log`.
+
+Source review extended session-identity checks to acceptance recovery and native
+providers assigning IDs after launch; the full suite was rerun after those fixes.
+The explicit operator transition is implemented; automatic session replacement is
+not implied. No paid model call or unchanged blocked sandbox probe was run. Installed
+isolation, Linux/live evidence, extraction, rotation/recovery and outcome-correlation
+gaps remain outstanding, and production remains **UNQUALIFIED / collection only**.

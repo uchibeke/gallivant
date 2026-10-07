@@ -3795,3 +3795,67 @@ test("result route reports the owned cumulative cost without polling or rewritin
   assert.equal(service.result(job.id).outcome.cost, null); assert.equal(service.current().execution.costUsd, null);
   assert.equal(readFileSync(join(service.dirOf(job.id), "result.json"), "utf8"), bytes); assert.equal(f.calls.length, before);
 });
+
+
+test("fresh learning continuity keeps remote ownership and allowance and refuses old sessions or unrelated stops", async () => {
+  const f = remote(), old = await f.service.submit(input);
+  await assert.rejects(f.service.freshLearningSession({ runId: old.id, sessionId: old.execution.sessionId }), /exact settled/);
+  f.observe({ state: "succeeded", costUsd: 0.2 }); await f.service.reconcile({ force: true }); await f.service.collect();
+  const before = f.service.state();
+  await f.service.cancel("learned advice retired");
+  await f.service.freshLearningSession({ runId: old.id, sessionId: old.execution.sessionId });
+  const reopened = f.reopen();
+  assert.deepEqual(reopened.state().allowance, before.allowance);
+  await assert.rejects(reopened.continue({ ...input, operationId: "old-continuation", sessionId: old.execution.sessionId }), /new provider session/);
+  const next = await reopened.submit({ ...input, operationId: "fresh", sessionId: null });
+  assert.notEqual(next.execution.sessionId, old.execution.sessionId);
+  assert.equal(Object.keys(reopened.state().operations).length, 2);
+  const stopped = remote(), job = await stopped.service.submit(input);
+  stopped.observe({ state: "succeeded" }); await stopped.service.reconcile({ force: true }); await stopped.service.collect();
+  await stopped.service.cancel("operator-cancelled");
+  await assert.rejects(stopped.service.freshLearningSession({ runId: job.id, sessionId: job.execution.sessionId }), /unrelated stop/);
+});
+
+
+test("fresh learning continuity rejects a provider reusing revoked memory and unconfirmed cancellation", async () => {
+  const f = remote(), job = await f.service.submit(input);
+  await f.service.cancel("learned advice retired");
+  await f.service.freshLearningSession({ runId: job.id, sessionId: job.execution.sessionId });
+  f.transport.submit = async () => ({ providerJobId: "another-job", turnId: "another-turn", sessionId: job.execution.sessionId });
+  await assert.rejects(f.service.submit({ ...input, operationId: "fresh-refused" }), /exact provider job/);
+  assert.equal(f.service.state().current.execution.acceptance, "unknown");
+  f.transport.lookup = async () => ({ providerJobId: "another-job", turnId: "another-turn", sessionId: job.execution.sessionId, state: "running", observedAt: f.clock.now() });
+  await f.reopen().reconcile({ force: true });
+  assert.equal(f.service.state().current.execution.acceptance, "unknown", "lookup cannot recover the retired session");
+  f.transport.lookup = async () => ({ providerJobId: "another-job", turnId: "another-turn", sessionId: "fresh-session", state: "running", observedAt: f.clock.now() });
+  await f.reopen().reconcile({ force: true });
+  assert.equal(f.service.state().current.execution.acceptance, "accepted");
+  assert.equal(f.service.state().learningContinuity.pending, false);
+  assert.equal(f.calls.filter(call => call[0] === "submit").length, 1, "reconciliation never resubmits");
+  const waiting = remote("openai-agents", { cancel: async () => ({ confirmed: false }) }), active = await waiting.service.submit(input);
+  await waiting.service.cancel("learned advice retired");
+  await assert.rejects(waiting.service.freshLearningSession({ runId: active.id, sessionId: active.execution.sessionId }), /exact settled/);
+  assert.equal(waiting.service.state().stopped, "learned advice retired");
+});
+
+test("fresh learning local launch recovery retains prepared or provider-assigned sessions after a lost reply", async () => {
+  for (const nextSession of [null, "33333333-3333-4333-8333-333333333333"]) {
+    const f = localTimeoutFixture(), service = f.open();
+    const request = { operationId: "before-learning-reset", recordedSessionId: f.session, spec: { cmd: "fixture", args: [], options: { cwd: f.home } } };
+    const old = await service.submit(request);
+    f.runner.finish(codexLines()); await service.reconcile({ force: true }); await service.collect();
+    await service.freshLearningSession({ runId: old.id, sessionId: f.session });
+    const launch = f.runner.start;
+    f.runner.start = (...args) => { launch(...args); throw new Error("fixture lost launch reply"); };
+    await assert.rejects(service.submit({ ...request, operationId: "fresh-local", recordedSessionId: nextSession }), /lost launch reply/);
+    const recovered = f.open(); await recovered.reconcile({ force: true });
+    assert.equal(recovered.current().execution.acceptance, "accepted");
+    assert.equal(recovered.current().execution.sessionId, nextSession);
+    assert.equal(recovered.state().learningContinuity.pending, false);
+    assert.equal(f.runner.started.length, 2);
+    f.runner.finish(localSessionLines("codex", nextSession || "44444444-4444-4444-8444-444444444444"));
+    assert.notEqual(recovered.sessionFrom(recovered.current().id), f.session);
+    f.runner.finish(localSessionLines("codex", f.session));
+    assert.throws(() => recovered.sessionFrom(recovered.current().id), /retired provider memory/);
+  }
+});

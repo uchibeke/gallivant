@@ -158,14 +158,21 @@ existing process-identity lock. A stale signature requires another preview; roll
 is another signed transition. Hashes and timestamps alone authorize nothing.
 
 Shared dispatch selects at most 20 lessons and 8 KiB, in stable ID order. Literal
-project scopes match supplied task paths. The current dispatch hook supplies unknown
-paths, so only repository-wide guidance would be selected. It records bundle/rule,
+project scopes match validated repository-relative paths from inline review events,
+carried task files and the approved brief path. Up to 200 unique paths are selected
+in stable order; invalid/absolute/traversing paths are excluded. The pinned paths
+carry forward into resume, and unknown paths still omit project-scoped guidance.
+It records bundle/rule,
 original input, managed input and context digests plus omissions; actual delivery is
 recorded after an accepted attempt ID exists. Pending and foreign material never
 enters managed context. Retirement fences later delivery and uses existing
 cancellation capabilities with honest confirmation limits. If old native memory
-contains retired advice, resume refuses and preserves task, PR and code. Automatic
-fresh-provider continuation remains to be implemented; old memory is not erased.
+contains retired advice, ordinary resume refuses and preserves task, PR and code.
+After the existing run settles, explicitly run `gallivant resume <handle> --fresh-session`. This saves a retryable transition and starts a new provider session
+with the approved brief, current task/PR context and current approved advice. It
+preserves checkout, branch, cursors, iteration, operation history and cumulative
+allowance. Unconfirmed cancellation and unrelated stop fences remain blocking;
+a provider returning the retired session is refused. Old memory is not erased.
 
 Accepted run ownership, feedback cursors and pending delivery audit records are
 saved together before writing to the learning store. If that store is locked or

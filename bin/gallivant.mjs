@@ -64,9 +64,10 @@ const HELP = `gallivant: write a PRD, mark it ready, go outside.
   gallivant status [--all] [--json]      needs-you, running, daemon health
   gallivant serve [--port 8791]          local tracker: live logs, PR recheck and session updates
   gallivant why <handle>                 why a PR stopped; handle is <repo>#<pr>, a PRD path, or the id
-  gallivant resume <handle> [--note "..."] [--resnapshot]
+  gallivant resume <handle> [--note "..."] [--resnapshot] [--fresh-session]
                                          put a stopped entry back to work in the session that was doing it;
                                          --resnapshot makes an edited brief the one the gate judges
+                                         --fresh-session replaces retired learned memory after settlement
   gallivant recheck <handle>           queue a PR recheck without resetting its budget
   gallivant cancel <handle>            stop further dispatch; request provider cancellation
   gallivant say <handle> --note "..." [--interrupt]
@@ -78,7 +79,7 @@ Config: $GALLIVANT_HOME/config.json (default ~/.gallivant). Run doctor for the f
 const OPTIONS = {
   check: { type: "boolean" }, once: { type: "boolean" }, all: { type: "boolean" }, json: { type: "boolean" },
   send: { type: "boolean" }, probe: { type: "boolean" }, help: { type: "boolean", short: "h" },
-  "no-daemon": { type: "boolean" }, note: { type: "string" }, resnapshot: { type: "boolean" }, interrupt: { type: "boolean" },
+  "no-daemon": { type: "boolean" }, note: { type: "string" }, resnapshot: { type: "boolean" }, "fresh-session": { type: "boolean" }, interrupt: { type: "boolean" },
   base: { type: "string" }, harness: { type: "string" }, session: { type: "string" }, worktree: { type: "string" }, dir: { type: "string" }, port: { type: "string" },
   cancel: { type: "boolean" }, retry: { type: "boolean" },
   run: { type: "boolean" }, stdin: { type: "boolean" }, repo: { type: "string" }, revision: { type: "string" },
@@ -204,7 +205,7 @@ async function dispatch(argv) {
     case "why": { if (!arg) throw new Error("why needs a handle"); console.log(why(ctx, { handle: arg })); return 0; }
     case "resume": {
       if (!arg) throw new Error("resume needs a handle: the id, a PRD path, or <repo>#<pr>");
-      const r = await resume(ctx, { handle: arg, note: values.note, resnapshot: values.resnapshot });
+      const r = await resume(ctx, { handle: arg, note: values.note, resnapshot: values.resnapshot, freshSession: values["fresh-session"] });
       console.log(`${r.handle}: resumed in ${r.worktree} (run ${r.run})${r.attach ? `\nby hand: ${r.attach}` : "\nProvider progress is recorded by the coordinator."}`);
       // Printed because replacing the brief the gate judges is not something to do quietly, and the operator asked for it
       // one command ago: what they see back is what they actually changed.

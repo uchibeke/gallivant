@@ -8,6 +8,9 @@ escaped review text is a view, and only exact enrolled OpenSSH signatures author
 transitions. Installed execution isolation remains UNQUALIFIED, so production
 setup/extraction/application refuse activation. The [carried design](plans/review-feedback-learning.md)
 remains normative; the [qualification record](audit/learning-qualification.md) lists gaps.
+Shared inputs carry validated task/event paths for scope selection. Explicit fresh
+learning continuity records its intent in the registry and execution boundary,
+retaining task history and cumulative allowance while fencing the old session.
 
 One actor, one file of rules, everything else is plumbing. About 1,500 lines of plain ESM with no dependencies.
 
