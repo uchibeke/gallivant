@@ -486,6 +486,38 @@ test("full accepted long path budgets select advice with bounded audit detail", 
 });
 
 
+test("pending apply cannot overwrite a later disable across mode cycles and legacy state", async t => {
+  for (const initial of ["off", "collect", "apply"]) {
+    for (const disabled of ["off", "collect"]) {
+      const f = await enrolled(t);
+      await f.service.configure(repo, initial);
+      // Simulate the pre-generation on-disk schema, without rewriting it on read.
+      await f.store.transaction(repo, state => { delete state.modeGeneration; });
+      assert.equal(f.store.load(repo).modeGeneration, null);
+      let release, entered;
+      const started = new Promise(resolve => { entered = resolve; });
+      const waiting = new Promise(resolve => { release = resolve; });
+      const enabling = createLearningService({ store: f.store, signer: signer(), qualify: async () => {
+        entered(); await waiting; return { qualified: true, fixtureOnly: true };
+      } });
+      const pendingApply = enabling.configure(repo, "apply");
+      await started;
+      let controls = 0;
+      const restarted = createLearningService({ store: f.store, signer: signer(), qualify: () => ({ qualified: true, fixtureOnly: true }), onRevocation: async () => { controls++; return []; } });
+      await restarted.configure(repo, disabled);
+      assert.equal(controls, 1);
+      // ABA must remain stale even if another explicit request restores the mode.
+      if (initial !== disabled) await restarted.configure(repo, initial);
+      const frozen = canonical(f.store.load(repo));
+      release();
+      await assert.rejects(pendingApply, /mode changed during qualification/);
+      assert.equal(canonical(f.store.load(repo)), frozen);
+      await restarted.configure(repo, "apply");
+      assert.equal(restarted.mode(repo), "apply");
+    }
+  }
+});
+
 test("signer refuses replaceable parent and ancestor directories before execution", async t => {
   const f = fixture(t), ancestor = join(f.dir, "signer-install"), parent = join(ancestor, "bin");
   mkdirSync(ancestor, { mode: 0o700 }); mkdirSync(parent, { mode: 0o700 });

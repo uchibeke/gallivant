@@ -110,6 +110,11 @@ unavailable; advancing coding cursors do not promise an automatic learning retry
 `learn configure --repo owner/project --mode off` uses the stored identity and invokes
 local revocation controls even when GitHub, credentials or the remote repository are
 unavailable. Enabling collection or application still resolves the remote identity.
+Every configuration write advances a durable mode generation, including repeated
+disables. An apply request awaiting qualification refuses to commit if that
+generation changed; a new explicit apply request is required. Older state files
+acquire this field on their next write without changing their current mode.
+
 If revocation controls fail after the mode is saved, repeat the disabled-mode
 command: both `off` and `collect` retry controls even when the mode is unchanged.
 
@@ -143,7 +148,8 @@ OpenSSH must support both `ssh-keygen -Y sign` and `-Y verify`. `learn doctor` p
 these operations with a disposable key rather than relying on a version string.
 Choose an absolute protected executable (default `/usr/bin/ssh-keygen`). The file
 and every ancestor must be owned by root or the operator, with no group/other
-write permission. A root-owned sticky temporary ancestor is permitted only above
+write permission. Only the fixed system temporary root (`/tmp`, resolved through its system alias)
+may be a root-owned sticky ancestor, and only above
 a private trusted directory; the executable's immediate parent must never be
 group/other-writable. These checks run on each pin, including after enrollment.
 They do not isolate a worker running as the operator: that still requires the

@@ -730,3 +730,38 @@ Final Verify: `npm test` passed all 1,338 tests with no failures, skips or
 cancellations (216,889.489125 ms; `/private/tmp/learning-review23-full.log`).
 `npm run test:learning` passed 83 tests; `npm run lint` exited 0
 (`/private/tmp/learning-review23-lint.log`); `git diff --check` passed.
+
+## Review batch 24: stale enable fencing and fixed temporary ancestor
+
+Configuration now persists a fresh mode generation on every write, including a
+repeated disable. Apply captures the generation before asynchronous qualification,
+then compares it and verifies signed state under the transaction lock. A request
+that predates a later disable cannot silently restore application, even if the
+mode subsequently returns to its original value. Legacy files read with a null
+generation and acquire the field on their next write. Revocation controls still
+run after the disabled mode commits and remain retryable.
+
+`test/learning-openssh.test.mjs: pending apply cannot overwrite a later disable
+across mode cycles and legacy state` covers all initial modes, both disabling
+modes, separate service instances, completed controls, repeated modes, mode cycles,
+unchanged state after refusal and a new explicit apply request. Source review
+confirmed configuration is the shared mode writer; scan/extraction merges reload
+current state, and context still checks application mode under its own lock.
+
+The signer sticky exception now requires the fixed system temporary root (`/tmp`
+resolved through its system alias), root ownership and a private trusted child.
+Environment-selected temporary paths cannot broaden it. The existing replaceable
+ancestor regression includes arbitrary 01777 parents and higher ancestors, which
+must be refused regardless of whether the operator is root. Review feedback
+reported its failure under UID 0 before this fix; this session's macOS tests do not
+claim to reproduce a Linux/root run. Same-UID worker isolation remains required.
+
+The learning suite passed 84 tests with no failures, skips or cancellations
+(54,365.682459 ms; `/private/tmp/learning-review24-suite.log`). No paid/native-model
+call or unchanged denied sandbox probe ran. The seven unmet criteria and external
+qualification remedies recorded above remain unchanged.
+
+Final Verify on macOS: `npm test` passed all 1,339 tests with no failures, skips
+or cancellations (214,523.426 ms; `/private/tmp/learning-review24-full.log`).
+`npm run test:learning` passed 84 tests; `npm run lint` exited 0
+(`/private/tmp/learning-review24-lint.log`); `git diff --check` passed.
