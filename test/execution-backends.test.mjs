@@ -163,11 +163,11 @@ function remoteReadinessFixture(t, ctx) {
   });
 }
 
-test("predecessor service is required and remote transports are selectable without claiming Cloud live qualification", () => {
+test("predecessor service and Agents remain available while unqualified Cloud dispatch stays unavailable", () => {
   assert.throws(() => assertExecutionDependency(null), { code: "EXECUTION_DEPENDENCY" });
   assertExecutionDependency(() => {});
   assert.equal(executionRegistry["openai-agents"].available, true);
-  assert.equal(executionRegistry["codex-cloud"].available, true);
+  assert.equal(executionRegistry["codex-cloud"].available, false);
   assert.equal(executionRegistry["codex-cloud"].liveQualified, false);
   for (const name of Object.keys(adapters)) assert.equal(executionRegistry[name].adapter, adapters[name]);
   const spec = buildRun({ harness: "codex", config: CONFIG, mode: "start", prompt: "offline", cwd: tempHome() });

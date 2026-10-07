@@ -1,10 +1,12 @@
 # Codex Cloud execution
 
-`codex-cloud` is a selectable remote adapter using the supported experimental
-Codex CLI Cloud commands. It uses the existing task, execution journal, polling,
-GitHub gates and result writer. Its implementation is offline tested; live
-qualification is **unverified**. Local Codex and `openai-agents` keep their
-existing defaults and continuation behavior.
+`codex-cloud` implements the experimental Codex CLI transport through the shared
+task, execution journal, polling, GitHub gates and result writer. **New dispatch
+is unavailable:** the pinned CLI cannot prove which repository is connected to
+the selected environment. Read diagnostics and recovery of previously owned
+tasks remain available. Its implementation is offline tested; live qualification
+is **unverified**. Local Codex and `openai-agents` retain their existing defaults
+and continuation behavior.
 
 ## Trusted worker setup
 
@@ -28,10 +30,25 @@ and its repository explicitly; branch/ref access is checked using the existing
 scoped GitHub connection. That GitHub connection and Cloud's connected-repository
 authority are separate. The filtered native listing resolves the environment and
 proves read authorization, but does not prove inference eligibility or confirm
-the environment's repository mapping. A real Cloud run must verify its input
-revision and snapshot hashes before editing. Missing live proof remains visible.
+the environment's repository mapping. Neither a configured repository name nor
+an operator's UI observation is a machine-verified dispatch authorization.
 
-Add this entry to the private `config.json` without changing existing selections:
+The registry marks Cloud unavailable, and its native access check returns
+`CLOUD_ENVIRONMENT_REPOSITORY` after successful read diagnostics with
+`effective.repository: null`. Normal start/resume and provider readiness refuse new work;
+the transport also refuses before saving a Cloud dispatch intent or calling
+`cloud exec`. Initial and successor submission use the same gate. GitHub branch
+access cannot substitute for Cloud environment ownership.
+
+The exact remedy is to qualify and implement a supported documented interface
+that binds the authorized account, selected environment and connected repository
+before enabling dispatch. Requalification must verify branch/revision access and
+model eligibility under the existing security settings. There is no configuration
+flag to bypass this gate. Do not infer proof from task listing fields or use a
+private endpoint, browser automation or a trial paid submission to find the mapping.
+
+This private `config.json` entry describes the intended setup and supports owned
+task recovery; adding it does not enable dispatch or change existing selections:
 
 ```json
 {
@@ -78,11 +95,15 @@ options, and completion receipts do not replace pre-action enforcement.
 
 ## Dispatch, inspection and delivery
 
-Select `harness: codex-cloud` in an approved hand-authored PRD, then use the shared
-`gallivant doctor`, `gallivant ready <brief>`, `gallivant start <brief>` and
-coordinator workflow. Restricted natural-language preparation is not advertised
-for Cloud. PR #10's local preparation adapter is not present in this base and
-must be merged rather than copied into this provider.
+The shared `gallivant doctor` and provider readiness gates report Cloud's
+unavailable capability and mapping remedy; start and resume use those gates.
+Cloud remains a recognized provider in configuration, approved brief parsing and
+saved recovery identities. Recognition does not authorize new work. An approved PRD
+with `harness: codex-cloud` cannot dispatch until that boundary is qualified.
+The following delivery contract is implemented and exercised by explicit offline
+fixtures; it is not a live dispatch qualification. Restricted natural-language
+preparation is not advertised for Cloud. PR #10's local preparation adapter is
+not present in this base and must be merged rather than copied into this provider.
 
 Before dispatch, the isolated owned task checkout must contain only committed
 code and the approved brief/source overlays. The existing portable snapshot
@@ -96,28 +117,30 @@ recovery; after the logical task is retired, an operator can remove its recorded
 input refs under the repository's retention policy. No automatic remote deletion
 or force push is performed.
 
-The coordinator rechecks the task/input refs and snapshot hashes immediately
-before calling:
+The implemented submission path rechecks the task/input refs and snapshot hashes
+before `cloud exec --env ENV_ID --branch INPUT_REF --attempts 1`. That documented
+call has no repository argument and stays blocked until environment mapping is
+verified. Do not invoke it manually to bypass qualification or retry an owned
+intent. Read-only diagnostics for previously acknowledged tasks are:
 
 ```sh
-"/absolute/path/to/codex" cloud exec --env ENV_ID --branch INPUT_REF --attempts 1 "approved input"
 "/absolute/path/to/codex" cloud list --json --env ENV_ID --limit 20
 "/absolute/path/to/codex" cloud list --json --env ENV_ID --limit 20 --cursor CURSOR
 "/absolute/path/to/codex" cloud status TASK_ID
 "/absolute/path/to/codex" cloud diff TASK_ID --attempt 1
 ```
 
-These are native diagnostic examples. Do not manually run `exec` to retry an
-existing recorded dispatch. An exited submission command acknowledges a URL; it
-does not finish remote work. Native `status` exits nonzero for non-ready tasks;
+These are native read-only examples. An exited submission command acknowledges a
+URL; it does not finish remote work. Native `status` exits nonzero for non-ready tasks;
 the adapter uses the JSON listing's status rather than interpreting an exit as
 task failure. Listings paginate up to 20 pages/1 MiB with shared request deadlines,
 backoff and coordinator concurrency. Every page includes the configured `--env`;
 the pinned CLI resolves that environment before issuing its filtered list request.
-Its list-item mapper emits a null `environment_id`, so environment ownership
-comes from the successful filtered request and persisted configuration, while
-the exact saved task ID, URL and single attempt are still required. Contradictory
-environment metadata, missing tasks, unexpected attempts, malformed pages, cursor
+Its list-item mapper emits a null `environment_id`, so an owned task's listing
+scope comes from the successful filtered request and persisted configuration.
+This scope does not prove the environment's connected repository or authorize a
+new submission. The exact saved task ID, URL and single attempt remain required.
+Contradictory environment metadata, missing tasks, unexpected attempts, malformed pages, cursor
 loops and failed filtered requests remain unknown; there is no unfiltered fallback
 or newest-task selection. Status events record the configured environment with
 `environmentSource: filtered-listing`, rather than claiming a per-task field.
@@ -170,8 +193,8 @@ dispatches still require deliverable file changes.
 
 ## Continuation, cancellation and recovery
 
-The qualified CLI exposes no native Cloud resume/cancel command. Every review
-correction creates a **successor task** after its exact predecessor settles. Each
+The pinned CLI exposes no native Cloud resume/cancel command. The implemented
+review correction creates a **successor task** after its exact predecessor settles. Each
 child gets approved requirements/snapshots, current pushed code, trusted feedback
 and recorded decisions. The shared logical session stays the initial Cloud task
 ID; each run records its child task ID, parent, input revision and continuity mode.
@@ -224,15 +247,18 @@ npm run test:codex-cloud:live -- --execute --phase=implementation
 npm run test:codex-cloud:live -- --execute --phase=correction
 ```
 
-Preflight is read-only and returns unverified on missing prerequisites. Executing
-a phase reserves one authorized account task and persists intent before start or
-resume. Never repeat an intent-bearing phase. The suite restarts the coordinator,
-externally verifies pushed file bytes/head, actual Verify evidence, one PR and
+Preflight is read-only and returns unverified on missing prerequisites or the
+unqualified environment mapping. With this pinned adapter, both execution phases
+are blocked before account reservation or campaign dispatch intent. After a
+supported mapping interface is implemented and qualified, a phase reserves one
+authorized account task and persists intent before start or resume. Never repeat
+an intent-bearing phase. The suite restarts the coordinator, externally verifies pushed file bytes/head, actual Verify evidence, one PR and
 successor parentage, and saves `cloud-live-evidence.json` privately. Costs and
 missing native attempt IDs remain unknown. Installed-plugin/browser release
 evidence belongs to M5/M6; neither a CLI help check nor these fixtures qualifies it.
 
-Official references checked 2026-10-06:
+Command and environment references rechecked 2026-10-07; authentication checked
+2026-10-06:
 [developer commands](https://learn.chatgpt.com/docs/developer-commands),
 [Cloud environments](https://learn.chatgpt.com/docs/environments/cloud-environments),
 [authentication](https://learn.chatgpt.com/docs/auth).

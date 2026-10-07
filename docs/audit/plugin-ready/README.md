@@ -79,4 +79,7 @@ and [operator instructions](../../codex-cloud.md) cover the supported native CLI
 transport and successor continuity. Exact task recovery and shared PR outcomes
 are offline evidence. The read-only native listing succeeded; the opt-in live
 preflight found no selected environment/disposable brief/repository or campaign
-configuration. Real native attempt IDs and live qualification remain unmet.
+configuration. New dispatch is unavailable until a supported interface proves the
+selected environment's connected repository; read access and GitHub ref access
+cannot establish that mapping. Owned-task inspection/recovery remains available.
+Real native attempt IDs and live qualification remain unmet.

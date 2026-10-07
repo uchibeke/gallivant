@@ -4,7 +4,7 @@ See [evidence](codex-cloud.json), [the approved brief](../../prds/codex-cloud-ha
 and [operator setup/recovery](../../codex-cloud.md). Carried plans and predecessor
 briefs are unchanged.
 
-- [x] Select a supported CLI adapter through the shared execution/task registry.
+- [x] Register the CLI transport through shared contracts; refuse unqualified new dispatch.
 - [x] Keep local/API contracts, GitHub gates and one PR writer canonical.
 - [x] Deliver only approved snapshots and pin/verify the remote input revision.
 - [x] Persist intent, exact native task links and explicitly numbered single attempts.
@@ -16,6 +16,7 @@ briefs are unchanged.
 - [x] Refuse native interrupt, mandatory unsupported policy and public credential delegation.
 - [x] Fence stop/timeout and quarantine late results while disclosing continued remote execution.
 - [x] Supply offline regressions and a clean installed-package smoke check.
+- [ ] Qualify and implement a supported environment-to-repository interface before enabling dispatch.
 - [ ] Demonstrate the configured Cloud environment's connected repository and model execution access.
 - [ ] Obtain real native attempt IDs through a supported interface; selectors are not those IDs.
 - [ ] Execute one real implementation and forced CI/review correction across coordinator restart.
@@ -24,7 +25,8 @@ briefs are unchanged.
 - [ ] Qualify installed plugin/browser release surfaces in their owning M5/M6 milestones.
 
 Missing live configuration is an external prerequisite, not an offline pass.
-Supply the private home/config, disposable authorized repository/brief, published
-environment and current external campaign/account allowance ledger described in
+First qualify the supported mapping interface; configuration alone cannot enable
+dispatch. Supply the private home/config, disposable authorized repository/brief,
+published environment and current external campaign/account allowance ledger described in
 the operator documentation. Resume only the unresolved phase under the existing
 task ownership. No Cloud task or paid inference was submitted during this run.

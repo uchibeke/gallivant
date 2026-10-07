@@ -23,9 +23,20 @@ import { CONFIG, T0, fakeGh, fakeNotify, silentLog, prFixture, tempHome } from "
 import { readJson, writeJsonAtomic } from "../lib/fs.mjs";
 import { contentHash } from "../lib/openai_agents_sources.mjs";
 import { cloudLedgerBlockers, cloudRequestBlockers, cloudCorrectionMatches } from "./codex-cloud-live-validation.mjs";
+import { checkHarness } from "../lib/probe.mjs";
+import { HARNESSES, validate } from "../lib/config.mjs";
+import { renderBlock, parseBlock } from "../lib/block.mjs";
 const config = { bin: "/fixture/codex", account: "operator", authentication: "operator-chatgpt", mode: "trusted-worker", environment: "env-fixture", repository: "acme/widget", continuation: "successor-task", billing_source: "chatgpt-account", allowance: { remainingUsd: 1, reservedUsd: .1 } };
 const head = "a".repeat(40), repo = config.repository, branch = "work/widget";
 const bytes = gzipSync(Buffer.from(JSON.stringify({ version: 1, inputHead: head, repo, branch, files: [{ path: "answer.txt", data: Buffer.from("old\n").toString("base64"), hash: contentHash("old\n"), mode: 0o644 }] })));
+// Dependency injection is confined to offline fixtures. The production context
+// never overrides the native access check or the unavailable capability.
+async function offlineCloudAccess(selected, options) {
+  const access = await checkCloudAccess(selected, options);
+  return access.detail === "CLOUD_ENVIRONMENT_REPOSITORY"
+    ? { ...access, ok: true, detail: "offline environment mapping fixture; no live qualification", effective: { ...access.effective, repository: selected.repository } }
+    : access;
+}
 const input = { operationId: "implementation", inputHead: head, repo, branch, base: "main", environment: config.environment, allowance: config.allowance, prompt: "Implement the approved requirements", sources: { data: bytes.toString("base64"), hash: contentHash(bytes), inputHead: head, inputBranch: `${branch}-cloud-${head}`, repo, branch, hashes: {} } };
 function fixture(t) {
   const root = mkdtempSync(join(tmpdir(), "cloud-offline-")); t.after(() => rmSync(root, { recursive: true, force: true }));
@@ -50,8 +61,8 @@ function fixture(t) {
     if (args[1] === "diff") return diff;
     throw new Error("unsupported fixture command");
   };
-  const clock = { now: () => now }, capabilities = { ...capabilitiesFor("codex-cloud"), environments: [config.environment] };
-  const transport = () => makeCloudTransport({ root, taskId: "acme/widget/task", account: "operator", config, cli, clock, verification: async () => {}, verifyRemote: async () => {} });
+  const clock = { now: () => now }, capabilities = { ...capabilitiesFor("codex-cloud"), available: true, environments: [config.environment] };
+  const transport = () => makeCloudTransport({ root, taskId: "acme/widget/task", account: "operator", config, cli, clock, checkAccess: offlineCloudAccess, verification: async () => {}, verifyRemote: async () => {} });
   const service = () => makeExecution({ root, taskId: "acme/widget/task", account: "operator", provider: "codex-cloud", capabilities, transport: transport(), clock });
   return { root, tasks, calls, cli, clock, transport, service, advance: () => { now += 1000; }, finish: () => { [...tasks.values()].at(-1).status = "ready"; }, lost: () => { lost = true; }, paging: () => { paging = true; }, pages: () => pages, auth: value => { auth = value; }, version: value => { version = value; }, diff: value => { diff = value; } };
 }
@@ -81,8 +92,8 @@ function delayedSubmission(t, delayMs) {
       options.signal?.addEventListener("abort", abort, { once: true }); entered();
     });
   });
-  const transport = () => makeCloudTransport({ root: f.root, taskId: "acme/widget/task", account: "operator", config, cli, clock: f.clock, verification: async () => {}, verifyRemote: async () => {} });
-  const service = () => makeExecution({ root: f.root, taskId: "acme/widget/task", account: "operator", provider: "codex-cloud", capabilities: { ...capabilitiesFor("codex-cloud"), environments: [config.environment] }, transport: transport(), clock: f.clock, limits: { deadlineMs: 20_000 } });
+  const transport = () => makeCloudTransport({ root: f.root, taskId: "acme/widget/task", account: "operator", config, cli, clock: f.clock, checkAccess: offlineCloudAccess, verification: async () => {}, verifyRemote: async () => {} });
+  const service = () => makeExecution({ root: f.root, taskId: "acme/widget/task", account: "operator", provider: "codex-cloud", capabilities: { ...capabilitiesFor("codex-cloud"), available: true, environments: [config.environment] }, transport: transport(), clock: f.clock, limits: { deadlineMs: 20_000 } });
   const start = operation => {
     const started = new Promise(resolve => { entered = resolve; });
     const pending = operation(); pending.catch(() => {});
@@ -95,14 +106,65 @@ test("Cloud capabilities preserve defaults and refuse unsupported delegation, po
   assert.equal(capabilitiesFor("codex").transport, "cli"); assert.equal(capabilitiesFor("openai-agents").continuation, "native-session");
   for (const change of [{ account: "someone-else" }, { mode: "public" }, { authentication: "cookies" }, { model: "override" }, { attempts: 2 }, { mandatory_policy: ["workspace-write"] }, { context_paths: ["/private"] }, { allowance: { remainingUsd: 0, reservedUsd: 0 } }]) assert.throws(() => validateCloudConfig({ ...config, ...change }));
 });
-test("Cloud access checks pinned CLI, ChatGPT sign-in, command surface and chosen environment without inference", async t => {
+test("Cloud access diagnostics refuse dispatch without an environment repository mapping", async t => {
   const f = fixture(t);
-  assert.equal((await checkCloudAccess(config, { cli: f.cli })).ok, true);
+  const access = await checkCloudAccess(config, { cli: f.cli });
+  assert.equal(access.ok, false); assert.equal(access.detail, "CLOUD_ENVIRONMENT_REPOSITORY");
+  assert.equal(access.effective.repository, null); assert.equal(access.effective.environment, config.environment);
+  assert.match(access.fix, /supported.*environment.*repository/);
+  // Task listing fields and operator configuration are not environment metadata.
+  for (const repository of [config.repository, "other/widget"]) {
+    const cli = args => args[1] === "list" && !args.includes("--help") ? JSON.stringify({ tasks: [], cursor: null, repository }) : f.cli(args);
+    assert.equal((await checkCloudAccess(config, { cli })).detail, "CLOUD_ENVIRONMENT_REPOSITORY");
+  }
   assert.equal(f.calls.some(args => args[1] === "exec" && !args.includes("--help")), false);
   const noFilter = args => args[1] === "list" && args.includes("--help") ? "--json --cursor --limit" : f.cli(args);
   assert.equal((await checkCloudAccess(config, { cli: noFilter })).detail, "CLOUD_VERSION");
   f.auth("Logged in using an API key"); assert.equal((await checkCloudAccess(config, { cli: f.cli })).detail, "CLOUD_AUTH");
   f.version("codex-cli 0.161.0"); assert.equal((await checkCloudAccess(config, { cli: f.cli })).detail, "CLOUD_VERSION");
+});
+test("Cloud unqualified capability and transport refuse initial and successor dispatch before paid intent", async t => {
+  const f = fixture(t), selected = capabilitiesFor("codex-cloud"), configured = { harness: { "codex-cloud": config } };
+  const readiness = await checkHarness("codex-cloud", configured, { cli: f.cli });
+  assert.equal(readiness.ok, false); assert.match(readiness.fix, /supported.*environment.*repository/);
+  assert.equal(selected.available, false); assert.equal(f.calls.length, 0);
+  let taskRefVerifierCalls = 0;
+  const raw = (overrides = {}) => makeCloudTransport({ root: f.root, taskId: "acme/widget/task", account: "operator", config, cli: f.cli, clock: f.clock,
+    verification: async () => {}, verifyRemote: async () => { taskRefVerifierCalls++; }, ...overrides });
+  const normal = () => makeExecution({ root: f.root, taskId: "acme/widget/task", account: "operator", provider: "codex-cloud", transport: raw(), clock: f.clock });
+  for (const method of ["prepare", "submit", "continue"]) await assert.rejects(normal()[method](input), { code: "EXECUTION_UNAVAILABLE" });
+  for (const method of ["submit", "continue"]) await assert.rejects(raw()[method]({ ...input, runId: "run-refused", idempotencyKey: "refused", sessionId: "task_saved" }), error => error.code === "CLOUD_ENVIRONMENT_REPOSITORY" && error.dispatchNotSent === true);
+  for (const effective of [null, {}, { repository: "other/widget", environment: config.environment }, { repository: repo, environment: "env-foreign" }]) {
+    // A future injected qualifier must bind both identities; success alone is
+    // insufficient, and never reaches the coordinator's GitHub ref verifier.
+    await assert.rejects(raw({ checkAccess: async () => ({ ok: true, effective }) }).submit({ ...input, runId: "run-refused", idempotencyKey: "refused" }), error => error.code === "CLOUD_ENVIRONMENT_REPOSITORY" && error.dispatchNotSent === true);
+  }
+  assert.equal(existsSync(join(f.root, "cloud.json")), false); assert.equal(normal().current(), null);
+  assert.deepEqual(normal().state().operations, {}); assert.equal(normal().state().allowance, undefined); assert.equal(taskRefVerifierCalls, 0);
+  assert.equal(f.tasks.size, 0); assert.equal(f.calls.some(args => args[1] === "exec" && !args.includes("--help")), false);
+  t.diagnostic(JSON.stringify({ kind: "offline refusal fixture; no live qualification", readiness, capabilities: { available: selected.available, reason: selected.reason, fix: selected.fix }, cloudIntentSaved: false, paidCommands: 0, taskRefVerifierCalls }));
+});
+test("Cloud recovery remains read-only when new dispatch is unavailable", async t => {
+  const f = fixture(t), job = await f.service().submit(input), op = Object.values(readJson(join(f.root, "cloud.json")).operations)[0];
+  f.finish(); f.diff(patch(op)); f.advance();
+  const raw = makeCloudTransport({ root: f.root, taskId: "acme/widget/task", account: "operator", config, cli: f.cli, clock: f.clock });
+  const recovering = makeExecution({ root: f.root, taskId: "acme/widget/task", account: "operator", provider: "codex-cloud", transport: raw, clock: f.clock });
+  assert.equal(recovering.capabilities.available, false);
+  await recovering.reconcile({ force: true });
+  assert.equal(recovering.current().execution.providerJobId, job.execution.providerJobId);
+  assert.equal((await recovering.collect()).files[0].text, "new\n");
+  await assert.rejects(recovering.continue({ ...input, operationId: "review", sessionId: job.execution.sessionId }), { code: "EXECUTION_UNAVAILABLE" });
+  assert.equal(f.tasks.size, 1);
+  t.diagnostic(JSON.stringify({ kind: "offline owned-task recovery; no live qualification", available: false, taskId: job.execution.providerJobId, state: recovering.current().execution.providerState, collected: recovering.current().execution.collected, providerTasks: f.tasks.size }));
+});
+test("Cloud provider recognition preserves configuration and recovery identity while dispatch is unavailable", () => {
+  assert.equal(capabilitiesFor("codex-cloud").available, false);
+  assert.ok(HARNESSES.includes("codex-cloud"));
+  assert.deepEqual(validate({ ...CONFIG, harness: { "codex-cloud": config } }), []);
+  const block = { prd: "docs/prds/cloud-task.md", harness: "codex-cloud", session: "task_owned", branch: "work/widget" };
+  assert.deepEqual(parseBlock(renderBlock(block)).block, block);
+  for (const session of ["../task_owned", "task_/foreign", "task_"]) assert.equal(parseBlock(renderBlock({ ...block, session })).block, null);
+  assert.equal(parseBlock(renderBlock({ ...block, harness: "unknown-provider" })).block, null);
 });
 test("Cloud live preflight accepts repository letter case without relaxing campaign allowance gates", t => {
   const now = Date.parse("2026-10-07T00:00:00Z"), spellings = [repo, "Acme/Widget"], observations = [];
@@ -234,8 +296,8 @@ test("Cloud filtered listing failures retain unknown ownership without unfiltere
       if (fail && args[1] === "list" && (args.includes("--cursor") ? args[args.indexOf("--cursor") + 1] : null) === failedCursor) throw new Error("environment resolution/listing refused");
       return f.cli(args);
     };
-    const transport = () => makeCloudTransport({ root: f.root, taskId: "acme/widget/task", account: "operator", config, cli, clock: f.clock, verification: async () => {}, verifyRemote: async () => {} });
-    const service = () => makeExecution({ root: f.root, taskId: "acme/widget/task", account: "operator", provider: "codex-cloud", capabilities: { ...capabilitiesFor("codex-cloud"), environments: [config.environment] }, transport: transport(), clock: f.clock });
+    const transport = () => makeCloudTransport({ root: f.root, taskId: "acme/widget/task", account: "operator", config, cli, clock: f.clock, checkAccess: offlineCloudAccess, verification: async () => {}, verifyRemote: async () => {} });
+    const service = () => makeExecution({ root: f.root, taskId: "acme/widget/task", account: "operator", provider: "codex-cloud", capabilities: { ...capabilitiesFor("codex-cloud"), available: true, environments: [config.environment] }, transport: transport(), clock: f.clock });
     const job = await service().submit(input), op = Object.values(readJson(join(f.root, "cloud.json")).operations)[0];
     if (failedCursor) f.paging();
     f.finish(); f.diff(patch(op)); fail = true; f.advance(); await service().reconcile({ force: true });
@@ -334,7 +396,7 @@ test("Cloud persisted native acknowledgement recovers a coordinator crash withou
 });
 test("Cloud dispatch rejects moved remote heads, auth refusal and local absolute references before a paid command", async t => {
   const f = fixture(t);
-  const transport = makeCloudTransport({ root: f.root, taskId: "task", account: "operator", config, cli: f.cli, verification: async () => {}, verifyRemote: async () => { throw new Error("remote head moved"); } });
+  const transport = makeCloudTransport({ root: f.root, taskId: "task", account: "operator", config, cli: f.cli, checkAccess: offlineCloudAccess, verification: async () => {}, verifyRemote: async () => { throw new Error("remote head moved"); } });
   await assert.rejects(transport.submit({ ...input, runId: "run-test", idempotencyKey: "dispatch-key" }), error => error.dispatchNotSent === true);
   await assert.rejects(f.service().submit({ ...input, prompt: "Read /Users/operator/private.txt" }), error => error.dispatchNotSent === true);
   f.auth("not signed in"); await assert.rejects(f.service().submit(input), error => error.dispatchNotSent === true);
@@ -346,8 +408,8 @@ test("Cloud transport accepts repository letter case across dispatch, restart an
     const f = fixture(t), source = JSON.parse(gunzipSync(bytes)); source.repo = canonicalRepo;
     const snapshot = gzipSync(Buffer.from(JSON.stringify(source)));
     const request = { ...input, repo: canonicalRepo, sources: { ...input.sources, repo: canonicalRepo, data: snapshot.toString("base64"), hash: contentHash(snapshot) } };
-    const transport = repository => makeCloudTransport({ root: f.root, taskId: "acme/widget/task", account: "operator", config: { ...config, repository }, cli: f.cli, clock: f.clock, verification: async () => {}, verifyRemote: async req => { assert.equal(req.repo, canonicalRepo); } });
-    const service = repository => makeExecution({ root: f.root, taskId: "acme/widget/task", account: "operator", provider: "codex-cloud", capabilities: { ...capabilitiesFor("codex-cloud"), environments: [config.environment] }, transport: transport(repository), clock: f.clock });
+    const transport = repository => makeCloudTransport({ root: f.root, taskId: "acme/widget/task", account: "operator", config: { ...config, repository }, cli: f.cli, clock: f.clock, checkAccess: offlineCloudAccess, verification: async () => {}, verifyRemote: async req => { assert.equal(req.repo, canonicalRepo); } });
+    const service = repository => makeExecution({ root: f.root, taskId: "acme/widget/task", account: "operator", provider: "codex-cloud", capabilities: { ...capabilitiesFor("codex-cloud"), available: true, environments: [config.environment] }, transport: transport(repository), clock: f.clock });
     const first = await service(configuredRepo).submit(request), op = Object.values(readJson(join(f.root, "cloud.json")).operations)[0];
     assert.equal(op.repo, canonicalRepo);
     for (const other of ["acme/widget-fork", "other/widget", "widget/acme", null]) {
@@ -550,7 +612,8 @@ test("Cloud adapter and operator instructions ship in a clean installed package 
   assert.ok(artifact.files.some(file => file.path === "lib/codex_cloud.mjs")); assert.ok(artifact.files.some(file => file.path === "docs/codex-cloud.md"));
   execFileSync("tar", ["-xzf", join(root, artifact.filename), "-C", root]);
   const installed = await import(pathToFileURL(join(root, "package/lib/harness.mjs")));
-  assert.equal(installed.capabilitiesFor("codex-cloud").available, true); assert.equal(installed.capabilitiesFor("codex-cloud").liveQualified, false);
+  assert.equal(installed.capabilitiesFor("codex-cloud").available, false); assert.equal(installed.capabilitiesFor("codex-cloud").liveQualified, false);
+  assert.match(installed.capabilitiesFor("codex-cloud").fix, /supported.*environment.*repository/);
   const cliHelp = execFileSync(process.execPath, [join(root, "package/bin/gallivant.mjs"), "--help"], { encoding: "utf8" });
   assert.match(cliHelp, /start/);
 });
