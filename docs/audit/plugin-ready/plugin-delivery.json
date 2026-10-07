@@ -10,10 +10,7 @@
   "source": {
     "base": "96e81031516bdf6663dd3b97ac39b8f57022568b",
     "sourceVerified": true,
-    "uncommittedPayload": [
-      "lib/plugin_package.mjs",
-      "lib/runtime_state.mjs"
-    ],
+    "uncommittedPayload": [],
     "mergedM5": false,
     "predecessorMerges": [
       "7df07ac08f382b2274df26ef2b58b8c390e5bb68",
@@ -21,36 +18,38 @@
       "2b4514fb27fcb493e62bfed913fffc204215f155",
       "96e81031516bdf6663dd3b97ac39b8f57022568b"
     ],
-    "testedSourceCommit": "c169957f1aeebdfbb99bd6489d56b04af189c99e"
+    "testedSourceCommit": "26f9e25b410442116bd8ca80f190f5241abbd0e9"
   },
   "artifact": {
     "coreArtifact": "gallivant-0.2.0.tgz",
-    "coreSha256": "60e1a760778c40487f3d6fced210e12ee1a8570ed7efbc0996136fdd0a26dcd6",
+    "coreSha256": "22c34c20a79ba216f89cc2df24a25b18f2a37491a6924dec1d9ffce4826f3bfe",
     "hashes": {
       "plugin": "8753892ceb5552fc37ba011929830f4c754d717f8d8031e31fb9b4935b465e1a",
-      "runtime": "91fa35f515ed27827e53e70508364f4899514b772829e40dc9f2ba39da1c48d4",
+      "runtime": "5243dcf0794739bd8cb3e474b678dfd095f10fa8716f8719861fea967008196d",
       "operations": "86e62501fa7a3d6d29e26830cd43b2648b32978912d2096a8690ed2e2fab0f86"
     },
-    "dependencyLockSha256": "bf3969111f7c4b84071fc14c59d870e296ee045024c8056757ac3e3466bc2b28",
+    "dependencyLockSha256": "c0f2f9bb3ad4d1bb8356c1162a8e71109534d747a5bc3182d4cce6457760c6d8",
     "payloadHashes": {
       "LICENSE": "f3279adc1b8fec70bdd2a8e52c41eb2d3b4a4fa955524662bd79da541b1cef41",
-      "README.md": "efb5a5359fcf64bd2de37000d5f4d311ad9fc51a5460834bf8ff36bb9774a35c",
-      "bin/gallivant.mjs": "e16b1b04030b9503a1642435fe25f6f6fd2d9435fe208e228977cdbdb6ddb16d",
+      "README.md": "e5571ad571fcd34991c030e6f7a37026239cb847fe38061d611a33a1049e29ce",
+      "bin/gallivant.mjs": "bccdde0a8a53c3851c7e650b8102e7f98e97d7a16bfd25f2c232e5be78887f11",
       "bin/package-plugin.mjs": "8a3a5555438cad17f1812e5af15aedb54c9081f8a280db519a502b78af20b5ce",
       "bin/task-delivery-state.mjs": "fb14f536b8b567f25b07eebc1dff91229a280ae60c2bbe619abb45a4bc09646b",
       "docs/app.md": "7508a7fa0ecacfe54c20da0f81069ac02218814e71773c31d7e2dcce75ea34e3",
-      "docs/architecture.md": "9dd05a08dc8253c9bd782e03ddd67fc3e35fa5d519a9d0a33b3e3a3d333cc01f",
+      "docs/architecture.md": "f7c5dc61a4ac05f1be90c2cc115d68acbbaabb189388d296717a2452bed1c7e7",
       "docs/chains.md": "8c08ce8c8de49b513fd7f8b15d8af0b21e1e8b75938d934a1830d3f3bde1b814",
       "docs/codex-cloud.md": "138e9e15bd33d0e4d4aca291244ef99e32b0586ac4eb8da593de9488be1a3e2e",
       "docs/commands.md": "e0e91e3c4c2ca35aa60dcbfdfb35524714ad2e955f46d6d4e0811e304b45dda2",
-      "docs/config.md": "8a49a8705b2f9f40378ec03d69bee53688499ebce4bc27fe68d4207eaf941063",
-      "docs/execution.md": "fa0827b7264832dfe92ee40fd96079d7f7b11fb2674970e83c30e3ea554f07c3",
-      "docs/guardrails.md": "6534c1279c5515a28afcfb98e232e784393d745b715df7c214a1a4a7585fb0f7",
+      "docs/config.md": "3a956336bd5fc7dad0a0caa41058954da4dc7fc1b23efb18c41200974833a5db",
+      "docs/execution.md": "5c8a431549d63ae4b2f6f721c9ef70cbd720fb882bce5e4591cf17757001ebde",
+      "docs/guardrails.md": "d4dd7ece3b9e943c503866b8ca1b93901ea4fecde521b72fe98bd8afc97cffa4",
       "docs/install.md": "5087cb207e20c31ef39d955fd8536184f86113d61348e955f380e30172705a85",
+      "docs/learning.md": "7d28f975424af6cc566a7c27348cc295cb493cfdfd0f028d9111e926bb3cb9ce",
       "docs/openai-agents.md": "38f162e4d4918bdab372be804e1a06a6a9582493c941f07799f97324f4637db2",
-      "docs/prd.md": "be2cb95955ecc38056dac390152d874172f6582816603fcacc14b8bd4f762c33",
+      "docs/prd.md": "c018adab1b0df85f0c4fcec3a05b2b03911ded645987a21c13b61df0dcb41594",
+      "docs/preparation.md": "814ad941a8291accc4036eb022edd64ed9e3a1e39f985a9f35b25f7eeae8ee9f",
       "docs/task-delivery.md": "e39cfb9d95c3108b79342e892a2db87a907ba829c04174bde56c00e96dd53535",
-      "docs/tasks.md": "4483b3c3a44117240e3ca10a5e55941578e7c3b2b20775a57af6743603a9bb34",
+      "docs/tasks.md": "ca7b8d5f332c42d0518ab9e4524c865a73ec57534d82a88392d7df93ebff6c2c",
       "lib/aport.mjs": "5c046abda8964a0439ee699bf658b9a00fdd7527884848f7fb22c3fe6c9e1d74",
       "lib/attribution.mjs": "cddb3eafe44f1dee26999a987ad9b1c62332cc9eb1ee17925cd2b961a9ccac17",
       "lib/block.mjs": "bd644a1564d6d3dcf3edad1ad1f931fa5f3e4246a041f20acbbb04c88c07c665",
@@ -61,18 +60,19 @@
       "lib/codex_cloud_result.mjs": "88ebb5214020b847f195c38f99d11be573e53c1770500242521736667fd15b0d",
       "lib/codex_cloud.mjs": "169de9f2db33237aca3984888b175d26f5c7a2dc791997c54d20aedda771131a",
       "lib/commands/doctor.mjs": "6a1c916f1a3626ba7656123792adf9ba3fdbd963cb64a3641437e337e4f18997",
+      "lib/commands/learn.mjs": "4ee8273d03f7322b6f5af94681cc022e07a36046c79524343ab2f351e1a53e04",
       "lib/commands/new.mjs": "e1bc49c5e3d28c085d458de3e379d6d4b05bf6eedbf54cb2808d778419546170",
       "lib/commands/ready.mjs": "916c0ba660146c28d4a64ac8dff6e1596d4ff1e0fa7d61e784ae10f92b4b67f9",
       "lib/commands/register.mjs": "93139d98b4ea777df5e64e3871cfb9ddccf0a43843751bda4170847e870f99d1",
-      "lib/commands/resume.mjs": "7663ab78b11db8e7729fbf7678bc59680d7df847edb6c593111526600c97b380",
+      "lib/commands/resume.mjs": "0d5468afc5900c11dd5c48c84084af820cfaf44870ed5548b934d9217de061b7",
       "lib/commands/serve.mjs": "c53a41d97c614ca09d7411973522b7ca4e9adf4e0bb608c61c4ed405a547135e",
-      "lib/commands/start.mjs": "937127f19d485706f49ee7f6fffaf077139f40b3014017e688cf09665f13585b",
+      "lib/commands/start.mjs": "12e7f26aff07049f9845e0842356a0e7b7b1dc2f058bfc81cb456312b6425dc4",
       "lib/commands/status.mjs": "41ededea71ae3b2bcf986511720c2a397af7abedcd96b2966674840a2800d6cc",
       "lib/commands/task.mjs": "6acb1927df1aa6326678e4f7c4b5b0e439f10477ee24ef09df1579d7be49ef41",
       "lib/commands/up.mjs": "363de931da37374460bf53009d8a8ca1adf99ca47130d02c4814037f78e933a9",
       "lib/commands/why.mjs": "bad1866f6f7af98640f546ff0850a057a2ac1c416cbcfae8a8c3a0cf1997e69e",
       "lib/config.mjs": "64a11002c4963648966db9a8c04f44da8cbfde81698800932d4e854bc4f1b097",
-      "lib/context.mjs": "f67e26f49f70bf610060809b8f1e679a43fb2622b84da9785c39a1646ead20a0",
+      "lib/context.mjs": "349ed15ad1c4afe16d782147d5c2eb733135461c8075b8c348bb8af438a6cb1c",
       "lib/control_contract.mjs": "adfabab7a8c63cf4a4fde40f8743e8dc0e53be99339cdd4016bab42534a861dc",
       "lib/control.mjs": "a2d922af5cd19d5ac28b4d61f55b3b56159b4fe9958fd5a9627e9fdd2c8625b4",
       "lib/coordinator.mjs": "fa6f8ea55df5f326e54fb853bf49ee48db8bb94e88f664ea315497a596584d3a",
@@ -83,16 +83,22 @@
       "lib/execution_input.mjs": "9fd16569f9ac9286ff4990a7bc442114ebff681bcd43972fccba033e66e02cf1",
       "lib/execution_io.mjs": "b63df0d51bb54700e74cd9804fb5a77ca2c2bfcac4070484082bf1272eb6d7d5",
       "lib/execution_journal.mjs": "ae4773b26f024f8d53ce57d2aba2172454b75680bf0f6934f1b77c455eec12f2",
-      "lib/execution_preparation.mjs": "2c7f3232b2b89d9bf49d20f9f291b692b206118df50133f92dc5140b8fccbae1",
+      "lib/execution_preparation.mjs": "13360c3b30d856212cfd3769eef2f23bad10115c27d2db51c691479119d4391e",
       "lib/execution_result.mjs": "b13f5169e3fa541f5cc1f8c4e87e401436849a5864ea514231246847c71c2f41",
-      "lib/execution.mjs": "e58bf73123ffcd4ca2fb1b0f9226f9d306ff75eada83286f4d58ba0fd0891abc",
+      "lib/execution.mjs": "7c2d2970000824dbc55fc474b0518114d7951eb4bbb5652f2e81facf7ff0e859",
       "lib/fs.mjs": "d7eb5f7ef5b74d03bf75434db3c4b2d8017c01b7d3adbe902ad0d0ea0483176a",
-      "lib/gh.mjs": "c61f812d70c1c35d379e947bc99af4122013254119c7a0fad585e5f48e1e85b1",
+      "lib/gh.mjs": "04f7b604178dc964215310fcb52cbc5363b74118e45cbaa70e30b860b9bc24b5",
       "lib/git.mjs": "fd2e6a0775f908ccacf18709a00c703c2506f1c3226b662ee0321d79133b7498",
       "lib/harness_log.mjs": "0e4d2a6214ac6bec21777b86897a12513d3f42c58e1be7e7372d9f9f0f9f4cbd",
-      "lib/harness.mjs": "4dc9a79e47be0446ae8765c317960d91c25be07f1a5d8f513969c75946416cf4",
+      "lib/harness.mjs": "39768ce71cdc4502cae2e976be76d93671f8e8d7b4113c94f5048b9a2f31a16a",
       "lib/hash.mjs": "32636b4251c725981360c0eba661e27f693422780a5c7bf9801eeaa733067143",
       "lib/identity.mjs": "01c56e4b70e60c48cf6f5200d6913cd7725ce36939acbe9af8d1d5c0a11ccd6e",
+      "lib/learning_data.mjs": "0eeb455a4e8b1a45a3f349a9a5d5953e3c83d2701815d599b166ef4033f6817a",
+      "lib/learning_input.mjs": "27f20a6cdfe5e9c0a607ac4faff0896f0ccfafadb503476bf06eec29635e88de",
+      "lib/learning_qualification.mjs": "c9c2d1ce1e6ed8285e70913dbb6fd62cf05865d317e57e893fe2df600bbc8999",
+      "lib/learning_signer.mjs": "3ddfa5e2ccc7bd18c3ea27d3870e5444522b18eb4eef07674535e43e4de9c1a1",
+      "lib/learning_store.mjs": "6343231897a714a4b646c98bd945e0fcfb89df42dabc538020e163eb3f8484f1",
+      "lib/learning.mjs": "ddc2777b72cef19e22313a05265a4816d8f6876de1f0c84860cf0ce83a5781ad",
       "lib/log.mjs": "f0dbc3360fde0fdf724e098156c56ef4554289f24af857eea05c09af6334bcfe",
       "lib/notify.mjs": "9b989ec3ac9ff61a6ff440f78a3e03a260d1aa95d429d95a5a2dc49d3f84d332",
       "lib/openai_agents_config.mjs": "7d9db1b55e3c0f71ada076811eb11baf9cfb0becdfed10f6a86ec6ecbfa69dc7",
@@ -100,9 +106,10 @@
       "lib/openai_agents_input.mjs": "3b012e8c7c51d9d007762e1f849ea3caaf7bbf9ab128a6f5c916bff195b6b83c",
       "lib/openai_agents_sources.mjs": "9d61867d9f86901b084f37d4da6c344df24a0ff71b7ab0537273aad4b18f1132",
       "lib/openai_agents.mjs": "3b67fe601cb8ad268f2d997d55e19bad4aca1f016293595036825892d1991702",
-      "lib/plugin_package.mjs": "e4a7eddb732e8637be92dcae14b17965f72f8410a5df7af3d9b9fc1b42362f8e",
+      "lib/plugin_package.mjs": "38c21ca54c959154274719afcd7ce660fdcfb0c7e3f2dea597d8eb0a4f61dd28",
       "lib/prd.mjs": "3e8bd68d62e8e61fe3624cdcc76e27e78e079d77e25a1484aafa7f5ca6f6ffe3",
-      "lib/probe.mjs": "e6df979a29b05ee385366cc28787d5adf9254ff90c79444574ed759d0739d5a2",
+      "lib/preparation_codex.mjs": "d1fcd4d1ec49b3a086622ec2777fa231b4fbc9c0d6e13bb90702d27b785fc447",
+      "lib/probe.mjs": "191639a18233649d523effbf2411d100946e6463d70f380c41aec8301bb42197",
       "lib/prompt.mjs": "e1c09b06350397feb038c6cae75b798d2970fff5c7b9c03289e2d14e8b390be2",
       "lib/provider_health.mjs": "1250697922c7eb08f2d0c874286cbc49f13ae85c734ae3fb0eeb1d4b17ec0f41",
       "lib/public_output.mjs": "108f886c9fdc7fd46ba72fd67d7d9efc8780d033a2a6cc1b27bdff0a3ab4d296",
@@ -122,21 +129,40 @@
       "lib/task_delivery_contract.mjs": "a1362086807fb69855f2ec625e53f1cc65c35e94809b2950142eaeb67a30b2ec",
       "lib/task_delivery_mcp.mjs": "accb8029caad59af900a1ddb6cd8a39e0bfcde6053fdc33b6c49ad1eca654576",
       "lib/task_delivery_store.mjs": "4573831285d16421d3ec7e56b78735ee10d6f8952a1b4475eed7fa1387636b0d",
-      "lib/task_delivery_view.mjs": "979b411fbdc8f8914c1bc253adb823daebdd64e5923c467e1232f3ec52e6b5fb",
-      "lib/task_delivery.mjs": "7839f5741418d041128b2935cf9957497117269eee0a1f60d25420611a407fcc",
+      "lib/task_delivery_view.mjs": "9b0d7447ed645d0f8a0bc89495b2df589f258b979f6e853eaf090b9bcd4c0167",
+      "lib/task_delivery.mjs": "dc9e17c567a8fede0f5eab6b1603ea203e6e33ea22f5016f79529a5b60c726ec",
       "lib/task_environment.mjs": "5c61d5d5393014206f078c86084b40d263f59b7dc939c445a4ed86111e4c2b2c",
       "lib/task_prepare.mjs": "f0f27738e208f174aa89dba3a6f70f382cf7e03abe541df5d1854aed4adb9492",
       "lib/task_store.mjs": "54383d2c1893f6b805ed15b2690f38625f734f65ff7f286906829d192a65d2b4",
       "lib/tasks.mjs": "5ba7e9c4ff64916bfbe764609f94351315261d8a4997bc77ff0cf13f83990929",
-      "lib/tick.mjs": "c02529df7a48ccedc40bac8e9e52287e96c76840de66c6c50dbadeafe9c173b0",
+      "lib/tick.mjs": "ed7f456f62c299b6dd8d31b39c2b2ebc3fdf81e7d2e5ead285de66c0c4a0ff5d",
       "lib/time.mjs": "da5f6d30e5059e9b3ed45c3e4a604a3ad20fcc17449ed2ff0429aa9c7a79f146",
       "lib/tracker/assets.mjs": "10b86b3cf08e784e578d18881e28bc9f8fdebc2ab467dbc5fc338269f4a114e2",
       "lib/tracker/pages.mjs": "ceb768dd4e78931749ffd78918d37fb8a82805907d219e0bfe80c1478654d9e7",
       "lib/tracker/runs.mjs": "5f6c8ca8a579512955fce1dd37701543c1bdbd4869b09058bc1211563cdfd7c1",
       "lib/tracker/stream.mjs": "9ec51d5e852899b04718598ead5a0231b6f4817f5b54935a3f18ca153d943dc1",
       "lib/verification_sandbox.mjs": "afb289b9641bee6e95102f9c899fd99274bfe07f6f0b4db21e0002e1dc309a7d",
-      "npm-shrinkwrap.json": "bf3969111f7c4b84071fc14c59d870e296ee045024c8056757ac3e3466bc2b28",
-      "package.json": "4b9f7b344379c3fa178e0b85c6b6dcff8bbc54276da043bcd49b874890d23e77",
+      "node_modules/smol-toml/dist/date.d.ts": "c7ad3531c131f2b5b246b2d208b75c5403475ad155b7661fa2d673104b806791",
+      "node_modules/smol-toml/dist/date.js": "ef924a2a42c7f16761e7098c3ed8e04195ecbcb02d5c369db0aee76f251a409c",
+      "node_modules/smol-toml/dist/error.d.ts": "02e33cdc5ca75f517f44b31070640be0fe6d0169dd91c266d02a1e2a71e064ac",
+      "node_modules/smol-toml/dist/error.js": "76f8e47f5fc57273748242d59570656d7c921a80bceb2291ca5a4d7a723e9f29",
+      "node_modules/smol-toml/dist/extract.js": "b964c8f39c737172295b31b9ee61b49e513ff12788e119ddfdbb68c448054c12",
+      "node_modules/smol-toml/dist/index.cjs": "09ce310a8bcc1bb5c7dc2813c88b4bfbbeb685e4c186a9631ff54da7e85c880f",
+      "node_modules/smol-toml/dist/index.d.ts": "b4556819c2ed0cd4016d05a6bfd7d4773c0b5ffb39c8ed547796ce4a1093d9b8",
+      "node_modules/smol-toml/dist/index.js": "dc8e0afc74477e514f5cb8492b587560c1d7d68cec03a994cc8bc4af99c8da2a",
+      "node_modules/smol-toml/dist/parse.d.ts": "2b230dc984b6e51b545bfe222f9965cc2ff434164ed9428bec415c5e508a9854",
+      "node_modules/smol-toml/dist/parse.js": "195e33ea068bf6f3acb5b3342792ac4aa954bba7e751519ba869c00da395ecdb",
+      "node_modules/smol-toml/dist/primitive.js": "be47fe90bf9a410af0b9204b6b34617f4b38e57f08198b10cb024a0272eb5936",
+      "node_modules/smol-toml/dist/stringify.d.ts": "628a6a55714fcf4a4eb0e59866ab1e5cc67c1b9e0cfc8524ccc8d6b5ee24ad7c",
+      "node_modules/smol-toml/dist/stringify.js": "c717d95456426dc8a0b07c9d03a4e434d5dea8254fca24e5fd93a22de3bcd44c",
+      "node_modules/smol-toml/dist/struct.js": "736742cfa645bbd08bc5396c5f7ddbea5c3b7ac5d61fe86031846f5769131deb",
+      "node_modules/smol-toml/dist/util.d.ts": "e6b1d3eecb240dc71d0dc28d1beee69cefd6ee014507c822909be0a7117517e0",
+      "node_modules/smol-toml/dist/util.js": "6327e40efd957128da15867c3a32293950a925570b457b1b78c735452cebc08e",
+      "node_modules/smol-toml/LICENSE": "fa5659948374d4f555594f47f6da073b40dc503e921aeeece30df4362b3051a5",
+      "node_modules/smol-toml/package.json": "0e35bde6992fef675058596ea0e94c2d3ca65e5f9b73a326d94208be6210f192",
+      "node_modules/smol-toml/README.md": "bcaaa3befbd5bc5373cc6d80f4502afbe83179f96dcf9a336c43deb7ffa24c65",
+      "npm-shrinkwrap.json": "c0f2f9bb3ad4d1bb8356c1162a8e71109534d747a5bc3182d4cce6457760c6d8",
+      "package.json": "ccc154a3238dbec9f3531112db9ec1e87ccbc152ebbcf3c38144d00ecb0097cf",
       "templates/claude-settings.json": "9b7ac20389f1f4f3b64d470cbcf832e879ff478ad93fc96b09d01829401a2d3e",
       "templates/passport.gallivant.json": "6da0a81a24218588e46d3bb60a2741cbaa036cb6edaadb849256e40711794cbb",
       "templates/plugin/schemas/mcp.schema.json": "6539175bfcdf43085855183e86da40ea94b166547a72b47ae9a0a390516d3acb",
@@ -496,7 +522,7 @@
         "lib/harness.mjs"
       ],
       "tests": [
-        "25 installed consumer flow cases",
+        "26 installed consumer flow cases",
         "installed local/API/Cloud provider and lifecycle conformance",
         "inherited hosted bounded-preparation refusal cases"
       ],
@@ -536,25 +562,25 @@
       {
         "command": "npm test",
         "exitCode": 0,
-        "tests": 1252,
-        "pass": 1252,
+        "tests": 1399,
+        "pass": 1399,
         "fail": 0,
-        "log": "/tmp/plugin-path-unit.log"
+        "log": "/private/tmp/pr12-combined-unit.log"
       },
       {
         "command": "npm run lint",
         "exitCode": 0,
-        "log": "/tmp/plugin-path-lint.log"
+        "log": "/private/tmp/pr12-combined-lint.log"
       },
       {
         "command": "npm run test:plugin-package",
         "exitCode": 0,
-        "consumerFlowTests": 25,
-        "installedConformanceTests": 428,
+        "consumerFlowTests": 26,
+        "installedConformanceTests": 434,
         "fail": 0,
-        "log": "/tmp/plugin-path-package.log",
-        "consumerEvidence": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/task-plugin-consumer-FVeA6S/evidence.json",
-        "conformanceLog": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/task-plugin-consumer-FVeA6S/conformance.log"
+        "log": "/private/tmp/pr12-combined-package.log",
+        "consumerEvidence": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/task-plugin-consumer-CI3DCO/evidence.json",
+        "conformanceLog": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/task-plugin-consumer-CI3DCO/conformance.log"
       },
       {
         "command": "git diff --check",
@@ -562,12 +588,12 @@
         "output": "No output"
       }
     ],
-    "verifiedPayloadFiles": 112,
+    "verifiedPayloadFiles": 141,
     "logSha256": {
-      "/tmp/plugin-path-unit.log": "981655bfe65c11f444ac67b43b63917f4b31cd6fdd6f7b6e319b6dbf3cf87293",
-      "/tmp/plugin-path-lint.log": "2f32bd854b16ced20ab71be2afd3673b887efc4815c6e55ea7b941ebc5aa8a0b",
-      "/tmp/plugin-path-package.log": "14d89d0b086926c4e767a361b31c19f62e5988c6dbf757b66da8d5ba4172c0d8",
-      "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/task-plugin-consumer-FVeA6S/conformance.log": "8d1f66c70e864d7535ed70d4f7eb22c786c308876f6cd58e5ae0cc2e67f25830"
+      "/private/tmp/pr12-combined-unit.log": "cb7a6ee3bf6d36838bd24485362f34afb1b1689b0b2756eef1a202408ef0c4ff",
+      "/private/tmp/pr12-combined-lint.log": "2f32bd854b16ced20ab71be2afd3673b887efc4815c6e55ea7b941ebc5aa8a0b",
+      "/private/tmp/pr12-combined-package.log": "cafc93a653a0d1af901c58458810a6e3d0a9374cebe969ffe59663e56e5b9e97",
+      "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/task-plugin-consumer-CI3DCO/conformance.log": "a20df9898a433bf3be2e4c6938c088f4bedafc76e3123ce97d1014a90fe40cd6"
     },
     "hostEvidence": false,
     "fixturePurpose": "Deterministic unpaid installed-artifact compatibility; no actual installed host or live provider qualification",
@@ -1034,5 +1060,34 @@
       "conformanceLog": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/task-plugin-consumer-7qGAC2/conformance.log",
       "result": "Each full suite had one obsolete dangling-symlink error expectation; corrected EEXIST to ENOENT while preserving path-content assertions; 21 focused runtime tests passed before full reruns"
     }
+  },
+  "controlsAndAssetsReviewFollowup": {
+    "reviewId": 5444297155,
+    "items": [
+      {
+        "commentId": 4208542734,
+        "implementation": "lib/task_delivery_view.mjs modelSummary",
+        "test": "test/task-delivery.test.mjs model control summaries expose only bounded canonical availability"
+      },
+      {
+        "commentId": 4208542758,
+        "implementation": "lib/task_delivery.mjs project uses unsubmittedInitialDispatch and injected capabilities",
+        "test": "test/fixtures/plugin-installed-flow.mjs installed control projection agrees with sessionless resume writer and adapter capabilities"
+      },
+      {
+        "commentId": 4208542769,
+        "implementation": "lib/plugin_package.mjs readAsset validates PNG dimensions, decoding and CRC for preflight and emission",
+        "test": "test/plugin-package.test.mjs image assets must decode as bounded PNG in both preflight and emission"
+      }
+    ],
+    "gateFalsePositive": {
+      "path": "npm-shrinkwrap.json",
+      "entry": "node_modules/safer-buffer.integrity",
+      "line": 1536,
+      "disposition": "Flagged sequence occurs inside legitimate dependency integrity; preserved unchanged. Gate owner must distinguish checksum data from placeholder prose."
+    },
+    "baseMerge": "26f9e25 preserves task allowances in managed local and remote learning dispatch",
+    "initialVerification": "Sandbox cache writes denied; normal escalation allowed verification. New installed regression initially lacked execution version, corrected to version 1 before combined verification.",
+    "externalPrerequisites": "Earlier endpoint HTTP 503 and unavailable hosted preparation/live host qualification remain unmet; no new live evidence claimed."
   }
 }

@@ -161,3 +161,22 @@ and the bounded G9 release kit. Pinned Cloud listing, sign-in or version checks
 prove neither inference nor environment-to-repository access. Agents credentials,
 model/environment access, supported Cloud dispatch, deployed endpoint, built UI
 and installed task-delivery host tools remain prerequisites.
+
+The supported-controls and PNG follow-up shares the canonical unsubmitted-launch
+predicate with the control writer and uses the injected adapter's capabilities.
+Model summaries allowlist controls and cancellation semantics. Installed coverage
+checks stopped/uncertain ownership, successful sessionless resume, queued controls
+and reads without scheduling. Image preflight and emission reject malformed PNG,
+CRC failures, other formats and dimensions above 16,777,216 pixels, with cleanup.
+
+Combined source `26f9e25b410442116bd8ca80f190f5241abbd0e9` passed 1,399 full tests,
+26 installed-consumer flows, 434 installed conformance tests, lint and whitespace
+checks. The manifest records no uncommitted payload; the JSON index records its
+exact digest and log pointers. The base merge preserves task allowances for both
+local rebuilt learning prompts and remote managed dispatch input.
+
+The gate's flagged sequence is in `npm-shrinkwrap.json:1536`, at
+`packages["node_modules/safer-buffer"].integrity`, inside a legitimate checksum.
+It remains unchanged. The gate owner must distinguish integrity data from
+placeholder prose. Deployment, live qualification and human-merged artifact
+attestations remain unmet; this finding does not authorize bypassing the gate.
