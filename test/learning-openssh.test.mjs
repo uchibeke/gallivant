@@ -1,7 +1,7 @@
 import { test, before, after } from "node:test";
 import assert from "node:assert/strict";
 import { execFileSync, spawnSync } from "node:child_process";
-import { mkdtempSync, mkdirSync, copyFileSync, writeFileSync, readFileSync, rmSync, realpathSync, existsSync } from "node:fs";
+import { mkdtempSync, mkdirSync, copyFileSync, writeFileSync, readFileSync, rmSync, realpathSync, existsSync, chmodSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -485,6 +485,27 @@ test("full accepted long path budgets select advice with bounded audit detail", 
   }
 });
 
+
+test("signer refuses replaceable parent and ancestor directories before execution", async t => {
+  const f = fixture(t), ancestor = join(f.dir, "signer-install"), parent = join(ancestor, "bin");
+  mkdirSync(ancestor, { mode: 0o700 }); mkdirSync(parent, { mode: 0o700 });
+  const executable = join(parent, "ssh-keygen"), marker = join(f.dir, "unexpected-execution");
+  writeFileSync(executable, `#!/bin/sh\ntouch '${marker}'\n`, { mode: 0o755 });
+  const selected = openSshSigner({ executable });
+  const pin = selected.pinned();
+  const enrolledAuthority = { ...authority, signer: pin };
+  for (const directory of [parent, ancestor]) {
+    for (const mode of [0o775, 0o777, 0o1777]) {
+      chmodSync(directory, mode);
+      assert.throws(() => selected.pinned(), /protected from directory replacement/);
+      assert.throws(() => selected.probe(), /protected from directory replacement/);
+      assert.throws(() => selected.verify("message", authority.signature, enrolledAuthority), /protected from directory replacement/);
+      assert.equal(existsSync(marker), false);
+      chmodSync(directory, 0o700);
+    }
+  }
+  assert.deepEqual(selected.pinned(), pin);
+});
 
 test("custom enrolled signer survives CLI restart and refuses changed executable bytes", async t => {
   const f = fixture(t), executable = join(f.dir, "portable-ssh-keygen"), approval = join(f.dir, "approval");

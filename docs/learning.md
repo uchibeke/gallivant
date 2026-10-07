@@ -141,7 +141,13 @@ development branch as the coordinator or create production keys to test it.
 
 OpenSSH must support both `ssh-keygen -Y sign` and `-Y verify`. `learn doctor` probes
 these operations with a disposable key rather than relying on a version string.
-Choose an absolute protected executable (default `/usr/bin/ssh-keygen`). Linux
+Choose an absolute protected executable (default `/usr/bin/ssh-keygen`). The file
+and every ancestor must be owned by root or the operator, with no group/other
+write permission. A root-owned sticky temporary ancestor is permitted only above
+a private trusted directory; the executable's immediate parent must never be
+group/other-writable. These checks run on each pin, including after enrollment.
+They do not isolate a worker running as the operator: that still requires the
+qualified outer boundary. Linux
 operators can install their distribution's `openssh-client`; macOS operators use
 their system OpenSSH or an operator-installed portable build. Changes to the pinned
 binary require requalification. The offline suite additionally uses Python 3 for

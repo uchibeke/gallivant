@@ -699,3 +699,34 @@ tests, with no failures, skips or cancellations (222,330.612709 ms;
 (`/private/tmp/learning-merge-lint.log`), and `git diff --check` passed. These are
 offline implementation results; no new native-model or installed-boundary
 qualification is inferred. This follow-up changes documentation only.
+
+## Review batch 23: protect signer directory entries
+
+Signer pinning now checks root/operator ownership for the executable and every
+ancestor, and refuses group/other-writable directories as well as writable files.
+A root-owned sticky temporary ancestor is allowed only above a private trusted
+directory; a writable immediate executable parent is always refused. This keeps
+disposable private test installations portable without treating an arbitrary
+writable directory as protected. Same-UID worker isolation remains a separate
+unmet production prerequisite.
+
+The regression `signer refuses replaceable parent and ancestor directories before
+execution` changes both immediate and higher directories to 0775, 0777 and 01777
+after an initial successful pin. Pinning, capability probing and authorization
+verification all refuse before a marker-writing executable runs. Restoring safe
+permissions restores the same pin. The existing custom-enrollment/restart test
+continues to exercise actual disposable OpenSSH signatures. Source review checked
+setup/key creation, probe, signing, verification, stored signer selection and
+recovery callers; all use the shared pin validation.
+
+The restricted focused run passed the new case but could not identify its process
+for the existing enrollment lock test (`/private/tmp/learning-review23-focused.log`).
+The supported escalated learning suite passed all 83 tests (53,537.011542 ms;
+`/private/tmp/learning-review23-suite.log`). No denied isolation probe was repeated,
+and no model/provider call or production enrollment was made. Seven previously
+unmet criteria remain unmet.
+
+Final Verify: `npm test` passed all 1,338 tests with no failures, skips or
+cancellations (216,889.489125 ms; `/private/tmp/learning-review23-full.log`).
+`npm run test:learning` passed 83 tests; `npm run lint` exited 0
+(`/private/tmp/learning-review23-lint.log`); `git diff --check` passed.
