@@ -116,6 +116,11 @@ environment metadata, missing tasks, unexpected attempts, malformed pages, curso
 loops and failed filtered requests remain unknown; there is no unfiltered fallback
 or newest-task selection. Status events record the configured environment with
 `environmentSource: filtered-listing`, rather than claiming a per-task field.
+The CLI may also omit the attempt count when sibling metadata is unavailable.
+For an owned dispatch sent with `--attempts 1`, null or omitted counts preserve
+selector 1; explicit counts other than one refuse collection. Events retain the
+actual reported count as `providerAttemptTotal`, including null. Missing counts
+and selector 1 do not establish a native attempt ID.
 
 Cloud `pending` remains queued/pending because this interface cannot distinguish
 provisioning from execution. `ready`, `applied` and `error` observations retain
@@ -145,6 +150,9 @@ existing filesystem/network sandbox, and opens/updates one regular PR. Its
 checkpoint reconciles already committed/pushed files and lost PR acknowledgements
 without applying or verifying them twice. Provider test claims are preserved as
 provider records; only coordinator-executed evidence qualifies verification.
+Both hosted adapters validate each provider test record's command string, exact
+input revision and integer exit status before accepting it. Empty test lists remain
+empty; malformed records block collection and cannot become publication evidence.
 
 An approved successor may return only the owned result envelope, including
 `receipt`, `public-text` and explicit resume corrections.

@@ -452,6 +452,9 @@ test("deterministic artifact rejection survives coordinator restart and permits 
     beforeHash: f => { f.getResult().files[0].beforeHash = "foreign"; },
     afterHash: f => { f.getResult().files[0].afterHash = "truncated"; },
     nullFile: f => { f.getResult().files[0] = null; }, nullTest: f => { f.getResult().tests[0] = null; },
+    missingTestCommand: f => { f.getResult().tests[0] = {}; },
+    wrongTestHead: f => { f.getResult().tests[0].inputHead = "b".repeat(40); },
+    fractionalTestExit: f => { f.getResult().tests[0].exit = .5; },
     alias: f => { f.getResult().files.push({ ...f.getResult().files[0] }); },
   }, observations = [];
   for (const [kind, mutate] of Object.entries(mutations)) {

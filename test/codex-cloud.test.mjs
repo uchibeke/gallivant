@@ -6,6 +6,7 @@ import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 import { gzipSync, gunzipSync } from "node:zlib";
 import { execFileSync } from "node:child_process";
+import { execFileAsync } from "../lib/gh.mjs";
 import { makeCloudTransport, checkCloudAccess, cloudCli } from "../lib/codex_cloud.mjs";
 import { validateCloudConfig } from "../lib/codex_cloud_config.mjs";
 import { CLOUD_RESULT_PATH, cloudDiffResult } from "../lib/codex_cloud_result.mjs";
@@ -36,7 +37,7 @@ function fixture(t) {
     if (args[1] === "exec") {
       const id = `task_fixture${tasks.size + 1}`;
       // The pinned CLI's list-item mapper emits null, even for --env listings.
-      tasks.set(id, { id, url: `https://chatgpt.com/codex/tasks/${id}`, status: "pending", environment_id: null, attempt_total: 1, summary: { files_changed: 1, lines_added: 1, lines_removed: 1 }, updated_at: new Date(now).toISOString() });
+      tasks.set(id, { id, url: `https://chatgpt.com/codex/tasks/${id}`, status: "pending", environment_id: null, attempt_total: null, summary: { files_changed: 1, lines_added: 1, lines_removed: 1 }, updated_at: new Date(now).toISOString() });
       if (lost) throw new Error("lost submission reply"); return tasks.get(id).url;
     }
     if (args[1] === "list") {
@@ -142,6 +143,68 @@ test("Cloud filtered listing failures retain unknown ownership without unfiltere
     await assert.rejects(changed.inspect({ providerJobId: job.execution.providerJobId, turnId: job.execution.turnId, sessionId: job.execution.sessionId }), error => error.code === "EXECUTION_OWNERSHIP");
     assert.equal(calls.length, before);
   }
+});
+test("Cloud nullable attempt counts preserve owned single-attempt pagination, restart and successors", async t => {
+  const observations = [];
+  for (const count of [null, undefined, 1]) {
+    const f = fixture(t), job = await f.service().submit(input), task = f.tasks.get(job.execution.providerJobId);
+    if (count === undefined) delete task.attempt_total; else task.attempt_total = count;
+    f.paging(); f.advance(); await f.service().reconcile({ force: true });
+    assert.equal(f.service().current().execution.providerState, "queued");
+    const saved = f.service().state(), op = Object.values(readJson(join(f.root, "cloud.json")).operations)[0];
+    saved.current.execution.acceptance = "unknown"; saved.current.execution.providerJobId = null; saved.current.execution.turnId = null; saved.current.execution.sessionId = null;
+    saved.operations[input.operationId].acceptance = "unknown"; writeJsonAtomic(join(f.root, "execution.json"), saved);
+    f.finish(); f.diff(patch(op)); f.advance(); await f.service().reconcile({ force: true });
+    assert.equal((await f.service().collect()).files[0].text, "new\n");
+    const events = readFileSync(join(f.service().dirOf(job.id), "events.jsonl"), "utf8").trim().split("\n").map(line => JSON.parse(line));
+    const observation = events.findLast(event => event.type === "status");
+    assert.equal(observation.data.providerAttemptTotal, count ?? null); assert.equal(observation.data.attemptSelector, 1); assert.equal(observation.data.providerAttemptId, null);
+    const child = await f.service().continue({ ...input, operationId: "review", sessionId: job.execution.sessionId, prompt: "Approved current-head review feedback" });
+    const childTask = f.tasks.get(child.execution.providerJobId);
+    if (count === undefined) delete childTask.attempt_total; else childTask.attempt_total = count;
+    f.finish(); f.diff(patch(Object.values(readJson(join(f.root, "cloud.json")).operations).at(-1))); f.advance(); await f.service().reconcile({ force: true });
+    assert.equal((await f.service().collect()).files[0].text, "new\n");
+    assert.equal(child.execution.sessionId, job.execution.sessionId); assert.equal(child.execution.effective.parentTaskId, job.execution.providerJobId);
+    const dispatches = f.calls.filter(args => args[1] === "exec" && !args.includes("--help"));
+    assert.equal(dispatches.length, 2);
+    for (const args of dispatches) {
+      assert.equal(args[args.indexOf("--attempts") + 1], "1");
+      assert.ok(args.at(-1).includes(`inputHead (exactly ${head}), exit (integer)`));
+    }
+    assert.equal(f.tasks.size, 2);
+    observations.push({ count: count === undefined ? "omitted" : count, observation, parent: job.execution.providerJobId, child: child.execution.providerJobId, dispatches: dispatches.map(args => args.slice(0, -1)) });
+  }
+  const report = join(tempHome(), "cloud-nullable-attempt-evidence.json");
+  writeJsonAtomic(report, { kind: "offline pinned CLI fixtures; no live inference or native attempt-ID qualification", observations }); t.diagnostic(report);
+});
+test("Cloud result test records require commands, owned revisions and integer exits with isolated cleanup", async () => {
+  const op = { ...input, runId: "owned-run" }, valid = { command: "node --test", inputHead: head, exit: 0, output: "provider-reported output" };
+  const invalid = [{}, null, { ...valid, command: 5 }, { ...valid, inputHead: undefined }, { ...valid, inputHead: "b".repeat(40) }, { ...valid, exit: undefined }, { ...valid, exit: "0" }, { ...valid, exit: .5 }];
+  for (const successor of [false, true]) {
+    const owned = { ...op, continuity: successor ? "successor-task" : "initial-task" }; let checkout;
+    const exec = (bin, args, options) => { checkout = options.cwd; return execFileAsync(bin, args, options); };
+    for (const record of invalid) {
+      await assert.rejects(cloudDiffResult(patch(op, { tests: [record] }, successor), owned, { exec }), error => error.collectionValidation === true);
+      assert.equal(existsSync(checkout), false);
+    }
+    for (const tests of [[], [valid], [{ ...valid, exit: 1 }]]) {
+      assert.deepEqual((await cloudDiffResult(patch(op, { tests }, successor), owned, { exec })).tests, tests);
+      assert.equal(existsSync(checkout), false);
+    }
+  }
+});
+test("Cloud malformed test evidence blocks collection across restart without saving or publishing it", async t => {
+  const f = fixture(t), job = await f.service().submit(input), op = Object.values(readJson(join(f.root, "cloud.json")).operations)[0];
+  f.finish(); f.diff(patch(op, { tests: [{}] })); f.advance(); await f.service().reconcile({ force: true });
+  await assert.rejects(f.service().collect(), error => error.collectionValidation === true);
+  const dir = f.service().dirOf(job.id), checkpoint = readJson(join(dir, "result-application.json"));
+  assert.equal(checkpoint.phase, "blocked"); assert.equal(checkpoint.reason, "result-collection-validation");
+  assert.equal(existsSync(join(dir, "result.json")), false); assert.equal(existsSync(join(dir, "verification.json")), false); assert.equal(existsSync(join(f.root, "answer.txt")), false);
+  const calls = f.calls.length;
+  f.advance(); await f.service().reconcile({ force: true }); await assert.rejects(f.service().collect(), { code: "EXECUTION_RESULT_BLOCKED" });
+  assert.equal(f.calls.length, calls); assert.deepEqual(readJson(join(dir, "result-application.json")), checkpoint);
+  const report = join(tempHome(), "cloud-rejected-test-evidence.json");
+  writeJsonAtomic(report, { kind: "offline malformed provider test fixture; no live inference", checkpoint, savedResult: existsSync(join(dir, "result.json")), savedVerification: existsSync(join(dir, "verification.json")), sourceFileApplied: existsSync(join(f.root, "answer.txt")), callsBeforeRestart: calls, callsAfterRestart: f.calls.length }); t.diagnostic(report);
 });
 test("Cloud lost acknowledgement never chooses newest task or creates duplicate paid work", async t => {
   const f = fixture(t); f.lost();
@@ -269,7 +332,7 @@ test("Cloud native continuation is refused without demonstrated capability", asy
   assert.equal(f.tasks.size, 0);
 });
 test("Cloud multiple attempts, foreign environments and missing exact identity stay unknown with timestamped errors", async t => {
-  for (const change of [{ attempt_total: 2 }, { environment_id: "env-foreign" }, { id: "task_foreign" }]) {
+  for (const change of [...[0, 2, -1, 1.5, "1", false].map(attempt_total => ({ attempt_total })), { environment_id: "env-foreign" }, { id: "task_foreign" }]) {
     const f = fixture(t), job = await f.service().submit(input); Object.assign([...f.tasks.values()][0], change);
     f.advance(); await f.service().reconcile({ force: true });
     assert.equal(f.service().current().execution.providerState, "status-unknown");
