@@ -2,17 +2,17 @@
   "version": 1,
   "task_id": "task-608e7283e7d7d42cfb91eb6b",
   "scope": "Supported native CLI transport and offline shared lifecycle/PR conformance; new dispatch unavailable pending environment repository mapping qualification; live qualification unverified",
-  "recorded_at": "2026-10-07T05:51:44.090622+00:00",
+  "recorded_at": "2026-10-07T06:15:28.365Z",
   "base_revision": "2b4514fb27fcb493e62bfed913fffc204215f155",
-  "implementation_revision": "fbfdd4b91da4ed8098806f6317b52abdfb6f206f",
+  "implementation_revision": "b778ebd10bcce9e5b05018ed6ad017f5ccef3f4b",
   "branch": "work/codex-cloud-harness",
   "source_files": {
     "README.md": "c4076bee067d88004e49cdfede14346491118cf1b69ab394f450fd547f896c0c",
     "docs/audit/plugin-ready/README.md": "e75f6aba550075031060b5846540aeff1a2e5ae5e942ddb6c87152986cf184f0",
     "docs/audit/plugin-ready/codex-cloud-checklist.md": "484ba5008fab112d678f75b1658221c33d1ae4096579a4ff1e3df129373cbd04",
-    "docs/codex-cloud.md": "23edf8a28aac813d9a1f06ad2b9113de75e460cde5effeafef46364b29574abc",
+    "docs/codex-cloud.md": "138e9e15bd33d0e4d4aca291244ef99e32b0586ac4eb8da593de9488be1a3e2e",
     "docs/prds/codex-cloud-harness.md": "7ad37c4c6100d03647990177ae84357b2edaf3ee5954e377b25d4700d7ad0d1b",
-    "lib/codex_cloud.mjs": "6e9b1bcf2ffdf42655e14fcd4a7aab144048f943c9236c6ef3be26ba3a86f3d8",
+    "lib/codex_cloud.mjs": "169de9f2db33237aca3984888b175d26f5c7a2dc791997c54d20aedda771131a",
     "lib/codex_cloud_config.mjs": "3f22485817b7cb90678b79bbf7252e378f87e39b87f5b139f42a48f4df52425c",
     "lib/codex_cloud_input.mjs": "e07c0db4a2e70736ce1a57cf4dc818cf7f4ecdc525e3a685499000ca1ed9fa9a",
     "lib/codex_cloud_result.mjs": "88ebb5214020b847f195c38f99d11be573e53c1770500242521736667fd15b0d",
@@ -28,7 +28,7 @@
     "lib/tick.mjs": "4b75ad239705f0e13cecdc4b69528668fa7610efaac568972fd80cdd22b0317e",
     "package.json": "7af15137d9b914464d70b567e2278debb39aef4723871844941c2cf07ae3d19c",
     "test/codex-cloud-live.mjs": "dce42bf102ef01bfce743e14a07b6550fa442b24ce48cc9c66f8630b5b91886c",
-    "test/codex-cloud.test.mjs": "bf7335eeb1c20bcd07e5f2e7c6f9a355bdcc137964c4c12c87ea26f3445586c9",
+    "test/codex-cloud.test.mjs": "e1ac8fe892ff0d5bfa1880480b32831b86effd8040cf160efdc8ef612b98144e",
     "test/execution-backends.test.mjs": "732437d0ea334293743bc529a4f63bd9a83e946ef661e6ee0ec717fb56317446",
     "test/units.test.mjs": "d874ff9dfd72774b014ba68c30ecf90945554f38968a8334b3ca4cfea22e91a7",
     "lib/execution_io.mjs": "b63df0d51bb54700e74cd9804fb5a77ca2c2bfcac4070484082bf1272eb6d7d5",
@@ -50,18 +50,18 @@
       "command": "npm test",
       "exit": 0,
       "raw_log": {
-        "path": "/tmp/cloud-mapping-final-test.log",
-        "sha256": "ef189ef5dd87e63cb52a4406f31644dac11e5fd92f52c43fe0adee6f8c0d83b2"
+        "path": "/tmp/cloud-recovery-pin-test.log",
+        "sha256": "20b9e8ea895d74b216520c40e2c3d5f7429804a3435c185405dab3eb08cd5cf0"
       },
       "tap_runs": [
         {
-          "tests": 1193,
-          "pass": 1193,
+          "tests": 1195,
+          "pass": 1195,
           "fail": 0,
           "cancelled": 0,
           "skipped": 0,
           "deferred_tests": 0,
-          "duration_ms": 347218.078083
+          "duration_ms": 346816.528167
         }
       ]
     },
@@ -69,7 +69,7 @@
       "command": "npm run lint",
       "exit": 0,
       "raw_log": {
-        "path": "/tmp/cloud-mapping-final-lint.log",
+        "path": "/tmp/cloud-recovery-pin-lint.log",
         "sha256": "8c7790de3f018fb4580f18ac70e1b355a0f76f522dd73acbdaa63632feffcecc"
       }
     },
@@ -77,8 +77,8 @@
       "command": "npm run test:execution-backends",
       "exit": 0,
       "raw_log": {
-        "path": "/tmp/cloud-mapping-final-backends.log",
-        "sha256": "b4e48999ff5743703787a9cde29c1ba7e7c729107d2b80319846ab339b7aa163"
+        "path": "/tmp/cloud-recovery-pin-backends.log",
+        "sha256": "ab0dd40d7c2b1efe6e0971cecc877f54766cffbca00da1ec5528c92e813e28a0"
       },
       "tap_runs": [
         {
@@ -88,7 +88,7 @@
           "cancelled": 0,
           "skipped": 0,
           "deferred_tests": 0,
-          "duration_ms": 347615.428583
+          "duration_ms": 347030.732458
         }
       ]
     },
@@ -96,8 +96,8 @@
       "command": "npm run test:openai-agents",
       "exit": 0,
       "raw_log": {
-        "path": "/tmp/cloud-mapping-final-agents.log",
-        "sha256": "a60d4be09ab21f497b79b5f96dfe8b8d5bfb96310c4d2e79028ba903ad2d8508"
+        "path": "/tmp/cloud-recovery-pin-agents.log",
+        "sha256": "8588c6d94fec8ab6a4e1ee8008a6606ec2b437120f9a34a4bb41e29dd62ec63e"
       },
       "tap_runs": [
         {
@@ -107,7 +107,7 @@
           "cancelled": 0,
           "skipped": 0,
           "deferred_tests": 0,
-          "duration_ms": 160780.554417
+          "duration_ms": 169073.589833
         }
       ]
     },
@@ -115,18 +115,18 @@
       "command": "npm run test:codex-cloud",
       "exit": 0,
       "raw_log": {
-        "path": "/tmp/cloud-mapping-final-cloud.log",
-        "sha256": "7a086d06235cf55330232776962bfa4e3a01d257e6c8e4592ab3ab47bc98d480"
+        "path": "/tmp/cloud-recovery-pin-cloud.log",
+        "sha256": "00df77549c0250873204ce6bdd9357ddc614b98267028e710d033546688c40bb"
       },
       "tap_runs": [
         {
-          "tests": 32,
-          "pass": 32,
+          "tests": 34,
+          "pass": 34,
           "fail": 0,
           "cancelled": 0,
           "skipped": 0,
           "deferred_tests": 0,
-          "duration_ms": 71323.037541
+          "duration_ms": 73666.921167
         },
         {
           "tests": 16,
@@ -135,7 +135,7 @@
           "cancelled": 0,
           "skipped": 0,
           "deferred_tests": 0,
-          "duration_ms": 36666.2465
+          "duration_ms": 38773.694
         }
       ]
     },
@@ -143,7 +143,7 @@
       "command": "git diff --check",
       "exit": 0,
       "raw_log": {
-        "path": "/tmp/cloud-mapping-final-diff.log",
+        "path": "/tmp/cloud-recovery-pin-diff.log",
         "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
       }
     }
@@ -156,6 +156,8 @@
       "Cloud access diagnostics refuse dispatch without an environment repository mapping",
       "Cloud unqualified capability and transport refuse initial and successor dispatch before paid intent",
       "Cloud recovery remains read-only when new dispatch is unavailable",
+      "Cloud recovery checks the pinned CLI before inspection and acknowledgement lookup",
+      "Cloud recovery version failures preserve owned work across restart and refuse unqualified diffs",
       "Cloud provider recognition preserves configuration and recovery identity while dispatch is unavailable",
       "Cloud live preflight accepts repository letter case without relaxing campaign allowance gates",
       "Cloud live correction accepts repository letter case and preserves session and PR ownership",
@@ -210,7 +212,7 @@
       {
         "criterion_id": "ac-5",
         "met": true,
-        "evidence": "test/codex-cloud.test.mjs: Cloud nullable attempt counts preserve owned single-attempt pagination, restart and successors; Cloud multiple attempts, foreign environments and missing exact identity stay unknown with timestamped errors; docs/audit/plugin-ready/codex-cloud.json attempt_and_test_records_followup"
+        "evidence": "test/codex-cloud.test.mjs: Cloud recovery checks the pinned CLI before inspection and acknowledgement lookup; Cloud recovery version failures preserve owned work across restart and refuse unqualified diffs; Cloud nullable attempt counts preserve owned single-attempt pagination, restart and successors; docs/audit/plugin-ready/codex-cloud.json recovery_version_followup"
       },
       {
         "criterion_id": "ac-6",
@@ -225,7 +227,7 @@
       {
         "criterion_id": "ac-8",
         "met": true,
-        "evidence": "test/codex-cloud.test.mjs: Cloud result test records require commands, owned revisions and integer exits with isolated cleanup; Cloud malformed test evidence blocks collection across restart without saving or publishing it; Cloud envelope-only corrections share one PR, restart recovery and bounded round decisions"
+        "evidence": "test/codex-cloud.test.mjs: Cloud result test records require commands, owned revisions and integer exits with isolated cleanup; Cloud malformed test evidence blocks collection across restart without saving or publishing it; Cloud envelope-only corrections share one PR, restart recovery and bounded round decisions; Cloud recovery version failures preserve owned work across restart and refuse unqualified diffs"
       },
       {
         "criterion_id": "ac-9",
@@ -245,7 +247,7 @@
       {
         "criterion_id": "ac-12",
         "met": true,
-        "evidence": "docs/audit/plugin-ready/codex-cloud.json commands: 1193 full, 397 execution-backends, 59 openai-agents, 32 Cloud adapter and 16 shared cases passing; environment_repository_mapping_followup records failing-before-fix, pre-send refusals and owned-task recovery while dispatch is unavailable"
+        "evidence": "docs/audit/plugin-ready/codex-cloud.json commands: 1195 full, 397 execution-backends, 59 openai-agents, 34 Cloud adapter and 16 shared cases passing; recovery_version_followup records failing-before-fix and pinned recovery across restart"
       },
       {
         "criterion_id": "ac-13",
@@ -255,7 +257,7 @@
       {
         "criterion_id": "ac-14",
         "met": true,
-        "evidence": "docs/codex-cloud.md unavailable new dispatch and mapping qualification remedy, pinned CLI setup and read-only commands, source delivery contract, logs, exact-task recovery, successor/cancellation differences, account limits and blocked live phases; clean installed-package smoke in test/codex-cloud.test.mjs"
+        "evidence": "docs/codex-cloud.md unavailable new dispatch and mapping qualification remedy, pinned CLI setup and read-only commands, source delivery contract, logs, exact-task recovery, successor/cancellation differences, account limits and blocked live phases; clean installed-package smoke in test/codex-cloud.test.mjs; independent inspection/collection version checks and retryable recovery remedy"
       }
     ]
   },
@@ -413,6 +415,14 @@
           "Cloud recovery remains read-only when new dispatch is unavailable",
           "Cloud provider recognition preserves configuration and recovery identity while dispatch is unavailable"
         ]
+      },
+      {
+        "finding": "Acknowledged-task recovery could accept status and diffs from a changed unqualified CLI",
+        "fix": "Reuse the exact version pin before inspection, acknowledgement lookup and collection without relying on unavailable dispatch readiness; preserve retryable ownership and shared deadlines",
+        "tests": [
+          "Cloud recovery checks the pinned CLI before inspection and acknowledgement lookup",
+          "Cloud recovery version failures preserve owned work across restart and refuse unqualified diffs"
+        ]
       }
     ],
     "representative_generated_output": [
@@ -430,6 +440,11 @@
         "kind": "Actual offline unqualified-dispatch refusal and owned-task recovery outputs; no live qualification",
         "path": "/tmp/cloud-mapping-generated-output.json",
         "sha256": "4248faa0751676b3f30680b661e41f20b4c5f299811754291ce1418aa53ae319"
+      },
+      {
+        "kind": "Offline pinned recovery refusal and restoration across restart; no live qualification",
+        "path": "/tmp/cloud-recovery-pin-generated-output.json",
+        "sha256": "562e2ee98afdfc8ca0a9c95d299f9a15c1f9e85e04240b1cd4385023698c05b7"
       }
     ],
     "other_output_reviewed": [
@@ -800,7 +815,7 @@
       }
     ]
   },
-  "previous_implementation_revision": "339c4d80a2a6e2197de939419311b2f359f16001",
+  "previous_implementation_revision": "fbfdd4b91da4ed8098806f6317b52abdfb6f206f",
   "environment_listing_followup": {
     "review_id": 5437267892,
     "inline_comment_ids": [
@@ -2661,6 +2676,212 @@
         "sha256": "99bc7a44255e30e9b253228ac4fbfb93ead9b7a90cfa05c3967ffbaa4b2dfbe8"
       },
       "reason": "The outer sandbox denied process inspection and native verification; the supported authorized escalation produced the baseline failure and final passing offline evidence without changing product permissions"
+    }
+  },
+  "recovery_version_followup": {
+    "review_id": 5438293073,
+    "inline_comment_id": 4203624499,
+    "observed_head": "70788ae6d9b60783a01dc2d7ffd6caaed6c46b65",
+    "source_revision": "b778ebd10bcce9e5b05018ed6ad017f5ccef3f4b",
+    "rule": "Only the qualified CLI version may supply native status or diff evidence; recovery must enforce the pin independently of new-dispatch availability",
+    "fixed_boundaries": [
+      "lib/codex_cloud.mjs shared checkCloudVersion used by access diagnostics, owned inspection/lookup and collection",
+      "docs/codex-cloud.md independent recovery version check and restoration remedy"
+    ],
+    "reviewed_boundaries": [
+      "lib/probe.mjs unavailable capability intentionally skips readiness; recovery performs its own pin check",
+      "lib/context.mjs and live campaign use the production transport without a version override",
+      "lib/codex_cloud.mjs ownership and terminal checks precede native diagnostics; lookup without acknowledgement stays unknown",
+      "lib/execution.mjs journals inspection errors with timestamp/backoff and retains exact task identity",
+      "lib/execution.mjs collection infrastructure errors stay retryable without result or validation-block checkpoint",
+      "lib/codex_cloud_result.mjs isolated diff conversion starts only after the pin and existing cleanup remains unchanged",
+      "shared saved-result validation reuses collected evidence without new native reads or patch application",
+      "initial/successor dispatch and mandatory-policy gates remain unchanged"
+    ],
+    "before_fix": {
+      "command": "node --test --test-name-pattern='Cloud recovery checks the pinned|Cloud recovery version failures' test/codex-cloud.test.mjs",
+      "exit": 1,
+      "raw_log": {
+        "path": "/tmp/cloud-recovery-pin-before.log",
+        "sha256": "042269a54868c15089dc341d9de5d29cd079af5cf503907d9fe67fdef115453f"
+      },
+      "tap_runs": [
+        {
+          "tests": 2,
+          "pass": 0,
+          "fail": 2,
+          "cancelled": 0,
+          "skipped": 0,
+          "deferred_tests": 0,
+          "duration_ms": 243.815917
+        }
+      ]
+    },
+    "focused_verify": {
+      "command": "node --test --test-name-pattern='Cloud recovery checks the pinned|Cloud recovery version failures|Cloud access diagnostics|Cloud recovery remains|Cloud persisted native acknowledgement' test/codex-cloud.test.mjs",
+      "exit": 0,
+      "raw_log": {
+        "path": "/tmp/cloud-recovery-pin-focused.log",
+        "sha256": "f657bb248dc84a9743faed526bb39a2ae04380bac50c09e485db5e75999bdd03"
+      },
+      "tap_runs": [
+        {
+          "tests": 5,
+          "pass": 5,
+          "fail": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "deferred_tests": 0,
+          "duration_ms": 838.006833
+        }
+      ]
+    },
+    "representative_generated_output": {
+      "path": "/tmp/cloud-recovery-pin-generated-output.json",
+      "sha256": "562e2ee98afdfc8ca0a9c95d299f9a15c1f9e85e04240b1cd4385023698c05b7"
+    },
+    "regressions": [
+      "Cloud recovery checks the pinned CLI before inspection and acknowledgement lookup",
+      "Cloud recovery version failures preserve owned work across restart and refuse unqualified diffs"
+    ],
+    "previous_verify": [
+      {
+        "command": "npm test",
+        "exit": 0,
+        "raw_log": {
+          "path": "/tmp/cloud-mapping-final-test.log",
+          "sha256": "ef189ef5dd87e63cb52a4406f31644dac11e5fd92f52c43fe0adee6f8c0d83b2"
+        },
+        "tap_runs": [
+          {
+            "tests": 1193,
+            "pass": 1193,
+            "fail": 0,
+            "cancelled": 0,
+            "skipped": 0,
+            "deferred_tests": 0,
+            "duration_ms": 347218.078083
+          }
+        ]
+      },
+      {
+        "command": "npm run lint",
+        "exit": 0,
+        "raw_log": {
+          "path": "/tmp/cloud-mapping-final-lint.log",
+          "sha256": "8c7790de3f018fb4580f18ac70e1b355a0f76f522dd73acbdaa63632feffcecc"
+        }
+      },
+      {
+        "command": "npm run test:execution-backends",
+        "exit": 0,
+        "raw_log": {
+          "path": "/tmp/cloud-mapping-final-backends.log",
+          "sha256": "b4e48999ff5743703787a9cde29c1ba7e7c729107d2b80319846ab339b7aa163"
+        },
+        "tap_runs": [
+          {
+            "tests": 397,
+            "pass": 397,
+            "fail": 0,
+            "cancelled": 0,
+            "skipped": 0,
+            "deferred_tests": 0,
+            "duration_ms": 347615.428583
+          }
+        ]
+      },
+      {
+        "command": "npm run test:openai-agents",
+        "exit": 0,
+        "raw_log": {
+          "path": "/tmp/cloud-mapping-final-agents.log",
+          "sha256": "a60d4be09ab21f497b79b5f96dfe8b8d5bfb96310c4d2e79028ba903ad2d8508"
+        },
+        "tap_runs": [
+          {
+            "tests": 59,
+            "pass": 59,
+            "fail": 0,
+            "cancelled": 0,
+            "skipped": 0,
+            "deferred_tests": 0,
+            "duration_ms": 160780.554417
+          }
+        ]
+      },
+      {
+        "command": "npm run test:codex-cloud",
+        "exit": 0,
+        "raw_log": {
+          "path": "/tmp/cloud-mapping-final-cloud.log",
+          "sha256": "7a086d06235cf55330232776962bfa4e3a01d257e6c8e4592ab3ab47bc98d480"
+        },
+        "tap_runs": [
+          {
+            "tests": 32,
+            "pass": 32,
+            "fail": 0,
+            "cancelled": 0,
+            "skipped": 0,
+            "deferred_tests": 0,
+            "duration_ms": 71323.037541
+          },
+          {
+            "tests": 16,
+            "pass": 16,
+            "fail": 0,
+            "cancelled": 0,
+            "skipped": 0,
+            "deferred_tests": 0,
+            "duration_ms": 36666.2465
+          }
+        ]
+      },
+      {
+        "command": "git diff --check",
+        "exit": 0,
+        "raw_log": {
+          "path": "/tmp/cloud-mapping-final-diff.log",
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      }
+    ],
+    "paid_cloud_dispatches": 0,
+    "live_prerequisites": {
+      "missing": [
+        "CODEX_CLOUD_LIVE_HOME",
+        "CODEX_CLOUD_LIVE_PRD",
+        "CODEX_CLOUD_LIVE_REPO",
+        "CODEX_CLOUD_CAMPAIGN_LEDGER"
+      ],
+      "unchanged_blocked_preflight_repeated": false,
+      "remedy": "Qualify and implement a supported documented interface proving the authorized Cloud account/environment-to-repository mapping before enabling dispatch. Then supply a private live home/config, published environment connected to the operator-authorized disposable repository, approved live brief, demonstrated model eligibility and the external aggregate campaign/account allowance ledger. Resolve native attempt identity through a supported interface before qualifying ac-3. Merge the separately reviewed local preparation predecessor rather than copying it."
+    },
+    "local_completion_diagnostic": {
+      "command": "node /tmp/cloud-gate-diagnostic.mjs /tmp/cloud-recovery-pin-pr-body.md",
+      "exit": 0,
+      "raw_log": {
+        "path": "/tmp/cloud-recovery-pin-completion-diagnostic.json",
+        "sha256": "d4567010225ad1fa3bebd4bc94d12e5dfc34ab44c24ab2decfd1bb7ce43089b8"
+      },
+      "result": {
+        "kind": "Local evaluator diagnostic using previously observed passing Verify commands; not a hosted approval or live qualification",
+        "criteria": 14,
+        "blockedPatterns": 6,
+        "allow": false,
+        "denials": [
+          {
+            "code": "oap.criteria_not_met",
+            "message": "Not met: ac-2, ac-3, ac-13. Resolve them or explain in the PR why the criterion is wrong."
+          }
+        ],
+        "unmet": [
+          "ac-2",
+          "ac-3",
+          "ac-13"
+        ]
+      }
     }
   }
 }
