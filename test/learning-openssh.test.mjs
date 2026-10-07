@@ -207,14 +207,15 @@ test("recovery retries committed retirement controls without signing another tra
   const selection = [{ id: f.candidate.content.id, digest: f.candidate.digest }];
   await f.service.approve(repo, selection, { confirm: () => true });
   await assert.rejects(f.service.approve(repo, selection, { action: "retire", reason: "No longer applicable", confirm: () => true }), /registry locked/);
+  f.service.rememberRepo("example/project", repo);
   const committed = canonical(f.store.load(repo));
   assert.equal(f.store.load(repo).sequence, 2); assert.deepEqual(f.store.load(repo).active, []);
-  const calls = [], restarted = createLearningService({ store: f.store, signer: { ...signer(), sign() { throw new Error("must not sign during recovery"); } }, qualify: () => ({ qualified: true, fixtureOnly: true }), onRevocation: async intent => {
+  const calls = [], restarted = createLearningService({ store: f.store, gh: { learningRepository() { assert.fail("offline recovery must not resolve GitHub identity"); } }, signer: { ...signer(), sign() { throw new Error("must not sign during recovery"); } }, qualify: () => ({ qualified: true, fixtureOnly: true }), onRevocation: async intent => {
     const release = f.store.lock(); release(); // Controls run after the atomic transaction.
     calls.push(intent); return [{ cancellation: { confirmed: true } }];
   } });
   for (let retry = 0; retry < 2; retry++) {
-    assert.equal((await restarted.recover(repo))[0].controls[0].cancellation.confirmed, true);
+    assert.equal((await learnCommand({ learning: restarted }, { args: ["recover"], values: { repo: "example/project" } }))[0].controls[0].cancellation.confirmed, true);
     assert.equal(canonical(f.store.load(repo)), committed);
   }
   assert.equal(calls.length, 2); assert.deepEqual(calls[0].removed, selection);
@@ -341,4 +342,17 @@ test("the hostile-signature security oracle detects a deliberately bypassed veri
   await oracle(f.service);
   const bypassed = createLearningService({ store: f.store, signer: { ...signer(), verify() { return true; } }, qualify: () => ({ qualified: true, fixtureOnly: true }) });
   await assert.rejects(oracle(bypassed), /Missing expected rejection/);
+});
+
+
+test("batch approval refuses duplicate candidate IDs before terminal or signing", async t => {
+  const f = await enrolled(t);
+  const revision = await f.service.revise(repo, f.candidate.content.id, { ...f.candidate.content, guidance: "Validate the complete record before persisting it." });
+  const before = canonical(f.store.load(repo));
+  const service = createLearningService({ store: f.store, signer: { ...signer(), terminal() { assert.fail("must reject before terminal"); }, sign() { assert.fail("must not sign"); } } });
+  const first = { id: f.candidate.content.id, digest: f.candidate.digest };
+  for (const second of [first, { id: revision.content.id, digest: revision.digest }]) {
+    for (const action of ["approve", "retire"]) await assert.rejects(service.approve(repo, [first, second], { action, confirm() { assert.fail("must not preview"); } }), { code: "LEARNING_INPUT" });
+  }
+  assert.equal(canonical(f.store.load(repo)), before);
 });

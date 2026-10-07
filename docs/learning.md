@@ -49,7 +49,11 @@ The automatic lane rotates a window of at most 100 due watched entries, independ
 of request completion order. Idle progress ticks retain the next window.
 
 Coverage, caps, continuation and rate-limit retry time are reported. Interrupted
-scans resume the unfinished source kind and page within a PR; immutable evidence
+scans resume the unfinished source kind and page within a PR. PR listings restart
+at page one and skip persisted completed PR identities, so movement between list
+pages cannot turn a saved array index into a missing PR. The completed identity
+set is capped at 10,000, and listing overlap counts toward the 60-page invocation
+budget; repositories deeper than that listing budget can remain incomplete. Immutable evidence
 revisions deduplicate overlap. Each page saves minimized findings and continuation
 together, including pages containing only ineligible comments. Deletion is deferred
 until the complete source has been enumerated. Required review context is minimized,
@@ -63,6 +67,9 @@ Transport and parsing share a 64 MiB ceiling for each 100-item page before body
 minimization. The 10,000-observation/context-identity storage bounds and continuously
 moving upstream pagination can still leave coverage incomplete; inspect the report
 before assuming full history was collected. No evidence link is opened or fetched.
+Recovery uses the remembered immutable repository identity and signed local state,
+so retrying revocation controls does not depend on GitHub availability. Batch
+approval rejects multiple revisions of one candidate before preview or signing.
 
 `revise` validates closed-schema JSON and creates an unapproved revision:
 

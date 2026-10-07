@@ -346,3 +346,35 @@ a competing learning suite. Initial and focused evidence:
 The full rerun passed all 1,268 tests, with zero failures, skips or cancellations
 (270,222.32725 ms): `/private/tmp/learning-gate-full-recheck.log`.
 `git diff --check` passed after the final documentation update.
+
+## Offline recovery, stable scan identities and batch-selection follow-up
+
+Recovery CLI now uses the remembered immutable repository identity, while signature,
+namespace, authority and sequence verification remain in the shared service. The
+existing interrupted-retirement regression now retries through the CLI with a
+GitHub transport that fails if invoked, and confirms repeated control recovery
+without new signatures or state changes.
+
+Historical retries restart update-sorted PR listing pages and deduplicate against
+persisted completed PR identities. An unfinished source retains its own PR number,
+kind and page independently of the new listing order. The regression moves an
+unscanned PR from a later page ahead of the saved index, restarts the service,
+checks dry-run state immutability, and verifies all 21 PRs were observed. The identity
+set is bounded at 10,000; listing overlap consumes the 60-page invocation budget,
+so deep or continuously changing history can remain explicitly incomplete.
+Legacy scans without the identity set safely re-enumerate and deduplicate evidence.
+
+Batch selection validates unique candidate IDs as well as exact revision keys
+before terminal access, preview or signing. Regression checks both duplicate exact
+revisions and different revisions of one ID for approval and retirement, preserving
+the entire state byte-for-byte. Review covered shared apply validation, local
+recovery callers, source checkpoint/deletion paths, dry-run and budget exits.
+No production key, enrollment, paid inference or unchanged denied probe was run;
+the existing seven unmet criteria and qualification remedies remain unchanged.
+
+Verify on the same macOS host: `npm test` passed 1,270 tests with no failures,
+skips or cancellations (227,674.123834 ms), recorded in
+`/private/tmp/learning-review11-full.log`. `npm run test:learning` passed 65 tests
+with no failures, skips or cancellations (39,062.381542 ms), recorded in
+`/private/tmp/learning-review11-suite-final.log`. `npm run lint` exited 0
+(`/private/tmp/learning-review11-lint.log`), and `git diff --check` passed.

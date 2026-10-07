@@ -476,3 +476,24 @@ test("ineligible raw pages still checkpoint and reach older PRs across the trans
   assert.equal(calls.find(([kind]) => kind === "inline")[2], next);
   assert.equal(Object.values(store.load(repo).observations)[0].content.pr, 2);
 });
+
+test("historical continuation follows PR identities after update-order movement", async t => {
+  let order = Array.from({ length: 21 }, (_, i) => i + 1);
+  const calls = [];
+  const gh = { learningPage: async (_name, kind, { pr, page }) => {
+    if (kind !== "pulls") calls.push(pr);
+    return { items: kind === "pulls" ? order.slice((page - 1) * 20, page * 20).map(number => ({ ...snapshot().pr, number })) : kind === "inline" ? snapshot().inline : [], complete: kind !== "pulls" || page === 2 };
+  } };
+  const f = fixture(t, { gh }); await f.service.configure(repo, "collect");
+  const first = await f.service.collect(repo, "example/project");
+  assert(first.capped); assert.equal(first.completedPrs.length, 19);
+  order = [21, ...order.filter(n => n !== 21)]; calls.length = 0;
+  const restarted = createLearningService({ store: f.store, trust, gh, clock: { now: () => Date.parse(now) } });
+  const before = canonical(f.store.load(repo));
+  const dry = await restarted.collect(repo, "example/project", { dryRun: true });
+  assert(dry.complete); assert.equal(canonical(f.store.load(repo)), before);
+  const result = await restarted.collect(repo, "example/project");
+  assert(result.complete); assert.equal(result.completedPrs.length, 21);
+  assert.deepEqual(new Set(calls), new Set([20, 21]));
+  assert.equal(new Set(Object.values(f.store.load(repo).observations).map(o => o.content.pr)).size, 21);
+});
