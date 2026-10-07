@@ -333,3 +333,11 @@ including doctor probes, checks the exact executable path and digest before
 execution; a changed or missing binary requires restoring the pinned installation
 or separately reviewed requalification. Local collection and emergency disable
 do not require resolving or executing the signer.
+
+
+Omitted-rule audits retain at most 1 KiB of encoded detail, further reduced to
+fit the delivery record's remaining byte budget. `omissionAudit` records the full
+ordered list digest, total count, unsampled count and counts by omission reason.
+Rule selection still traverses the entire verified active bundle; the sample does
+not change relevance or context limits. Exact selected rule references and the
+bundle digest remain available alongside this summary for audit reconstruction.

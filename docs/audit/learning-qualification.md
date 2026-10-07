@@ -636,3 +636,26 @@ Final Verify on macOS: `npm test` passed all 1,286 tests without failures, skips
 or cancellations (263,993.927583 ms; `/private/tmp/learning-review20-full.log`).
 `npm run test:learning` passed 81 tests, `npm run lint` exited 0
 (`/private/tmp/learning-review20-lint.log`), and `git diff --check` passed.
+
+## Review batch 21: bound omitted-rule audit detail
+
+Delivery omissions now retain a sample limited to 1 KiB and the remaining encoded
+record space, plus a full ordered-list digest, count, unsampled count and counts
+by reason. The summary is reserved before fitting detail. A shared encoded-size
+sampler also preserves the existing path audit behavior. Selection still traverses
+all verified active revisions and respects the same lesson and context limits.
+
+The regression constructs 200 active revisions in ten real disposable OpenSSH
+signed transitions and validates the full history through normal context and
+launch admission. It covers context-budget, unmatched-scope and unknown-path
+omissions, exact summary reconstruction, bounded serialized size, retries,
+acknowledgement and inspection. Review covered shared local/hosted inputs,
+persistent delivery and report boundaries; no omission data affects revocation
+of the exact selected rules. No paid inference, production enrollment or repeated
+blocked isolation probe ran. The seven unmet criteria remain unchanged.
+
+Verify on macOS: `npm test` passed all 1,287 tests with no failures, skips or
+cancellations (255,306.295916 ms; `/private/tmp/learning-review21-full.log`).
+`npm run test:learning` passed 82 tests (71,189.060125 ms;
+`/private/tmp/learning-review21-suite.log`), `npm run lint` exited 0
+(`/private/tmp/learning-review21-lint.log`), and `git diff --check` passed.

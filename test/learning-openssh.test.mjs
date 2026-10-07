@@ -6,7 +6,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { openSshSigner, storedOpenSshSigner, encryptedKey, signingEnvironment, NAMESPACE, SIGNER_ID } from "../lib/learning_signer.mjs";
-import { canonical, hash } from "../lib/learning_data.mjs";
+import { canonical, hash, candidate } from "../lib/learning_data.mjs";
 import { createLearningService, LEARNING_LIMITS } from "../lib/learning.mjs";
 import { learnCommand } from "../lib/commands/learn.mjs";
 import { fixture, pending, proposed, repo } from "./learning-fixtures.mjs";
@@ -517,4 +517,42 @@ test("custom enrolled signer survives CLI restart and refuses changed executable
   await assert.rejects(changed.recover(repo), /pinned signer changed/);
   assert.equal(existsSync(marker), false);
   await changed.configure(repo, "off"); assert.equal(changed.mode(repo), "off");
+});
+
+
+test("large signed bundles retain bounded omission audits and dispatch normally", async t => {
+  const f = await enrolled(t), evidence = f.candidate.content.evidence[0];
+  await f.store.transaction(repo, s => {
+    const revisions = Array.from({ length: 200 }, (_, i) => candidate(proposed(evidence, { id: `lesson-${String(i).padStart(3, "0")}`, paths: ["src"] }), repo));
+    let active = [], parent = null;
+    for (let offset = 0; offset < revisions.length; offset += 20) {
+      const batch = revisions.slice(offset, offset + 20), sequence = offset / 20 + 1;
+      for (const c of batch) s.candidates[`${c.content.id}:${c.digest}`] = { ...c, status: "active" };
+      active = [...active, ...batch.map(c => ({ id: c.content.id, digest: c.digest }))];
+      const manifest = { version: 1, type: "transition", namespace: NAMESPACE, authority: authority.id, repo, fingerprint: authority.fingerprint, action: "approve", sequence, parent,
+        add: batch.map(c => ({ ...c, evidence: [s.observations[evidence].content] })), remove: [], activeDigest: hash(active), evidenceDigests: batch.map(() => evidence), reason: null, at: "2026-10-07T00:00:00.000Z" };
+      const digest = hash(manifest);
+      s.transitions[sequence] = { manifest, digest, signature: signFixture(canonical(manifest)) };
+      parent = digest;
+    }
+    s.active = active; s.parent = parent; s.sequence = 10;
+    s.checkpoint = { authority: authority.id, repo, sequence: 10, parent, activeDigest: hash(active) };
+  });
+  await f.service.configure(repo, "apply");
+  for (const paths of [["src/file.mjs"], ["other/file.mjs"], []]) {
+    const input = { operationId: hash(paths), profile: "fixture", taskId: "task", inputDigest: hash(paths), paths };
+    const d = await f.service.context(repo, input), selected = new Set(d.rules.map(r => r.digest));
+    const reason = !paths.length ? "task paths unknown" : paths[0].startsWith("src/") ? "context budget" : "unmatched literal scope";
+    const omitted = f.store.load(repo).active.filter(r => !selected.has(r.digest)).map(r => ({ ...r, reason }));
+    assert.equal(d.rules.length, paths[0]?.startsWith("src/") ? 20 : 0);
+    assert.equal(d.omissionAudit.digest, hash(omitted)); assert.equal(d.omissionAudit.count, omitted.length);
+    assert.deepEqual(d.omissionAudit.reasons, { [reason]: omitted.length });
+    assert.equal(d.omissionAudit.omitted, omitted.length - d.omitted.length); assert(d.omissionAudit.omitted > 0);
+    assert(Buffer.byteLength(canonical(d.omitted)) <= LEARNING_LIMITS.omissionAuditBytes);
+    assert(Buffer.byteLength(canonical(d)) <= LEARNING_LIMITS.deliveryBytes);
+    assert.deepEqual(await f.service.context(repo, input), d);
+    assert.equal(await learningDispatch({ learning: f.service }, "task", { learning: { ...d, repo } }, () => "accepted"), "accepted");
+    await f.service.delivered(repo, d.key, input.operationId);
+    assert.deepEqual(f.service.explain(repo, input.operationId)[0].omissionAudit, d.omissionAudit);
+  }
 });
