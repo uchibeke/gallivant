@@ -82,6 +82,13 @@ Model summaries expose saved, redacted question text with stable IDs; installed
 MCP tests complete preparation and answering without the optional UI resource or
 reading UI metadata. Private view fields remain excluded from model summaries.
 
+Runtime state recognition uses canonical intake and execution/provider ledger
+paths, including the Cloud backend's actual `cloud.json`. Snapshot basenames do
+not affect compatibility or liveness. Backups exclude only owned process-lock
+paths and their recovery directories, preserving selected repository lockfiles.
+Installed recovery tests restore those sources and successfully answer the saved
+intake; canonical unsupported ledger versions still fail closed.
+
 Unmet attestations remain explicit:
 
 - **ac-5:** Actual Pages runtime/binding execution is unavailable. Node package

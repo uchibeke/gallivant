@@ -11,8 +11,7 @@
     "base": "96e81031516bdf6663dd3b97ac39b8f57022568b",
     "sourceVerified": true,
     "uncommittedPayload": [
-      "lib/runtime_node.mjs",
-      "lib/task_delivery_view.mjs"
+      "lib/runtime_state.mjs"
     ],
     "mergedM5": false,
     "predecessorMerges": [
@@ -21,14 +20,14 @@
       "2b4514fb27fcb493e62bfed913fffc204215f155",
       "96e81031516bdf6663dd3b97ac39b8f57022568b"
     ],
-    "testedSourceCommit": "9d57390d013afcd09f49f5c794d9bddea51a5f13"
+    "testedSourceCommit": "3ec6a9c73c8f6493a2590732eb0060edb979c4db"
   },
   "artifact": {
     "coreArtifact": "gallivant-0.2.0.tgz",
-    "coreSha256": "e6c0697310986ad027ddc175dd0325f21ae90fccc892cc3edb64e267bf72bb19",
+    "coreSha256": "9285016343e116bae8d8bb1493396519176b379f873a2dcbbbd716552d32d9c5",
     "hashes": {
       "plugin": "8753892ceb5552fc37ba011929830f4c754d717f8d8031e31fb9b4935b465e1a",
-      "runtime": "020148be9ebcc9f9225fe278fe295c8e95cf1509201ce451cce82b0921038c83",
+      "runtime": "7a3c2e77bdd57f6d80b0de7e71c6fc8378ffac55d885e46b1ff2bb0900fa668e",
       "operations": "2077c0558cd4634accf66e530f186b52e2f91bfea502ff7c6f212d2e2efb800f"
     },
     "dependencyLockSha256": "bf3969111f7c4b84071fc14c59d870e296ee045024c8056757ac3e3466bc2b28",
@@ -112,7 +111,7 @@
       "lib/run.mjs": "3682818ab95bf3b27c262449aa521be094caee9c8f133e94740923ebafb91315",
       "lib/runtime_dependencies.mjs": "6d25b972c116026643f348dc55586009d2746f68b99f47d450b2a3ef35625949",
       "lib/runtime_node.mjs": "93c334133140a02622cbbedc41362ba98f75275e4c5b12824a1323f7641518de",
-      "lib/runtime_state.mjs": "13fb874a59895ceef04408b0ae57cfd9a3b58ef0701eec1d4efc4c34adf691cd",
+      "lib/runtime_state.mjs": "c8f594736f47f7640f3b8c35fee433ae5c9fbae702a1dd9c209fc8747dacb306",
       "lib/sources/index.mjs": "88e1550751e9f52c82e94085bcb77bbd2b80466c9e2192670593f12894c4a4ec",
       "lib/sources/prd.mjs": "b26425213d537d8bf640abee1046481925de30d676fdb9b6a6b9239cdc50effd",
       "lib/start_contract.mjs": "e154f36dcf54c93b4308a93d8926dca8f28358c4e41234dc684008706ea23ab9",
@@ -477,7 +476,8 @@
         "ancestor symlink/hash backup refusal",
         "test/runtime-delivery.test.mjs: pre-registration preparation/readiness/cancellation/execution pins across check/migrate/backup/restore and idle updates",
         "test/fixtures/plugin-installed-flow.mjs: installed preparation and readiness callbacks pin their runtime before implementation registration",
-        "test/runtime-delivery.test.mjs: idle backup requires old artifact, restore checks copied pin before output, invalid pins fail and legacy state remains compatible; installed patch rollback starts the restored coordinator"
+        "test/runtime-delivery.test.mjs: idle backup requires old artifact, restore checks copied pin before output, invalid pins fail and legacy state remains compatible; installed patch rollback starts the restored coordinator",
+        "test/runtime-delivery.test.mjs canonical ledgers only, retained source lockfiles and exact process-lock exclusions; test/fixtures/plugin-installed-flow.mjs restored selected ledger-named/lock sources permit answer recovery"
       ],
       "evidence": "Intake and provider identity bytes preserved through actual installs and matching private backup restore; no active-job replacement"
     },
@@ -490,7 +490,7 @@
         "lib/harness.mjs"
       ],
       "tests": [
-        "21 installed consumer flow cases",
+        "22 installed consumer flow cases",
         "installed local/API/Cloud provider and lifecycle conformance",
         "inherited hosted bounded-preparation refusal cases"
       ],
@@ -530,25 +530,25 @@
       {
         "command": "npm test",
         "exitCode": 0,
-        "tests": 1248,
-        "pass": 1248,
+        "tests": 1249,
+        "pass": 1249,
         "fail": 0,
-        "log": "/tmp/plugin-delivery-wake-unit-tests.log"
+        "log": "/tmp/plugin-delivery-paths-unit-tests.log"
       },
       {
         "command": "npm run lint",
         "exitCode": 0,
-        "log": "/tmp/plugin-delivery-wake-lint.log"
+        "log": "/tmp/plugin-delivery-paths-lint.log"
       },
       {
         "command": "npm run test:plugin-package",
         "exitCode": 0,
-        "consumerFlowTests": 21,
-        "installedConformanceTests": 424,
+        "consumerFlowTests": 22,
+        "installedConformanceTests": 425,
         "fail": 0,
-        "log": "/tmp/plugin-delivery-wake-package-tests.log",
-        "consumerEvidence": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/task-plugin-consumer-FkLP1Q/evidence.json",
-        "conformanceLog": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/task-plugin-consumer-FkLP1Q/conformance.log"
+        "log": "/tmp/plugin-delivery-paths-package-tests.log",
+        "consumerEvidence": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/task-plugin-consumer-b5c3lp/evidence.json",
+        "conformanceLog": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/task-plugin-consumer-b5c3lp/conformance.log"
       },
       {
         "command": "git diff --check",
@@ -558,11 +558,11 @@
     ],
     "verifiedPayloadFiles": 112,
     "logSha256": {
-      "/tmp/plugin-delivery-wake-unit-tests.log": "92102a5e3a3aa2197bb510ec61ee42287831c906ed2d174cabb2aca3a3058676",
-      "/tmp/plugin-delivery-wake-package-tests.log": "08e3951f9a3a1b37e60bca98209484cefc478bd9231a98fee7173f377ed6aab6",
-      "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/task-plugin-consumer-FkLP1Q/conformance.log": "65bc58ad891d9d680a9597c68bcee50dfe6f614ea3ef811734f426aea3e28d0a",
-      "/tmp/plugin-delivery-wake-lint.log": "2f32bd854b16ced20ab71be2afd3673b887efc4815c6e55ea7b941ebc5aa8a0b",
-      "/tmp/plugin-delivery-wake-focused.log": "d5bd2dad8ec246a2c2a1fcb48626d5e0f068e10709c0eb5752d71785146ee279"
+      "/tmp/plugin-delivery-paths-unit-tests.log": "ed4da0d25086ee9fc70bcf322dac8eb2b1d1527be73bd1e7856779ef1de766fa",
+      "/tmp/plugin-delivery-paths-package-tests.log": "d79788b8e0939302b25225bb48c055df9b8df0a95cc4ff96d8e656828ae3d015",
+      "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/task-plugin-consumer-b5c3lp/conformance.log": "bb38215ee0ff4c6e7c41d4c7f0b6ffee17eafc3c442bbe16b352bcf1e8a89037",
+      "/tmp/plugin-delivery-paths-lint.log": "2f32bd854b16ced20ab71be2afd3673b887efc4815c6e55ea7b941ebc5aa8a0b",
+      "/tmp/plugin-delivery-paths-focused.log": "da815c64636b364627656f7aba073225c18b77c97105765a6228991d1ab21a9e"
     },
     "hostEvidence": false,
     "fixturePurpose": "Deterministic unpaid installed-artifact compatibility; no actual installed host or live provider qualification",
@@ -592,7 +592,8 @@
       "canonical makeTick chain deadline is restored and checkpointed by the Node wrapper only after a successful chain pass; pending batches finish without revisiting a cancelled suffix; disabled/skipped chain passes preserve cursor/deadline and fast entry reconciliation continues",
       "Backup and restore bind the copied runtime pin to the envelope artifact before output; locks release on refusal. Public source verification includes untracked, ignored and deleted npm controls and hidden payload directories; internal fixtures record them and failed builds remove partial output.",
       "Public URL checks cover endpoint, metadata and all resource origins after URL canonicalization; preflight and emission share asset validation for every screenshot, UI and icon, including failure cleanup and CLI exit status.",
-      "The Node owner adapter revalidates pin identity before the portable schedule/advance envelope on every callback; model projections include only saved redacted question IDs/text across task responses and list summaries."
+      "The Node owner adapter revalidates pin identity before the portable schedule/advance envelope on every callback; model projections include only saved redacted question IDs/text across task responses and list summaries.",
+      "Runtime ledger recognition follows taskStore/context.executionFor canonical paths, including actual cloud.json; backup skips only owned intake/execution/publication/delivery lock paths and recovery directories, retaining selected repository snapshots verbatim."
     ]
   },
   "reviewFollowup": {
@@ -832,6 +833,40 @@
       "pass": 29,
       "fail": 0,
       "log": "/tmp/plugin-delivery-wake-focused.log"
+    },
+    "externalPrerequisites": "Previously observed unmet prerequisites retained; no unchanged live call retried and no installed-host/model-access evidence inferred from fixtures"
+  },
+  "statePathReviewFollowup": {
+    "reviewId": 5442505680,
+    "reviewedCommit": "3ec6a9c73c8f6493a2590732eb0060edb979c4db",
+    "items": [
+      {
+        "commentId": 4207062187,
+        "implementation": [
+          "lib/runtime_state.mjs"
+        ],
+        "tests": [
+          "test/runtime-delivery.test.mjs only canonical ledgers affect runtime checks and backups preserve repository lock snapshots"
+        ],
+        "rule": "Selected repository context is not runtime state merely because its basename resembles a ledger"
+      },
+      {
+        "commentId": 4207062203,
+        "implementation": [
+          "lib/runtime_state.mjs"
+        ],
+        "tests": [
+          "test/runtime-delivery.test.mjs only canonical ledgers affect runtime checks and backups preserve repository lock snapshots",
+          "test/fixtures/plugin-installed-flow.mjs installed backup restores selected ledger-named and lock sources for answer recovery"
+        ],
+        "rule": "Backups preserve all selected source bytes while excluding only known process-lock paths"
+      }
+    ],
+    "focusedVerification": {
+      "tests": 19,
+      "pass": 19,
+      "fail": 0,
+      "log": "/tmp/plugin-delivery-paths-focused.log"
     },
     "externalPrerequisites": "Previously observed unmet prerequisites retained; no unchanged live call retried and no installed-host/model-access evidence inferred from fixtures"
   }

@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { mkdirSync, writeFileSync, readFileSync, existsSync, cpSync, symlinkSync, statSync } from "node:fs";
+import { mkdirSync, writeFileSync, readFileSync, existsSync, cpSync, symlinkSync, statSync, rmSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { execFileSync, fork } from "node:child_process";
 import { once } from "node:events";
@@ -388,6 +388,23 @@ test("installed preparation and readiness callbacks pin their runtime before imp
     assert.equal(checkRuntimeState({ home: ctx.home, manifest }).active, false);
     migrateRuntimeState({ home: ctx.home, manifest: { ...manifest, coreSha256: "b".repeat(64) } });
   }
+});
+
+test("installed backup restores selected ledger-named and lock sources for answer recovery", async () => {
+  const w = world(), bound = await w.contextFor(scope("alice"), "widget");
+  const names = ["yarn.lock", "bun.lock", "poetry.lock", "execution.json", "agents.json", "codex-cloud.json", "intake.json"];
+  for (const [i, name] of names.entries()) { writeFileSync(join(bound.repository.dir, name), `selected repository context ${name}`); bound.repository.context[`source${i}`] = name; }
+  let task = await w.delivery.dispatch("prepare", { ...prepare(), contextIds: names.map((_, i) => `source${i}`) }, "alice");
+  assert.equal(task.status, "needs-input");
+  const ctx = bound.ctx; migrateRuntimeState({ home: ctx.home, manifest });
+  const intake = JSON.parse(readFileSync(join(ctx.home, "tasks", task.taskId, "intake.json")));
+  const relativeDraft = intake.draft.root.slice(ctx.home.length + 1), backup = join(w.root, "context-backup"), restored = join(w.root, "context-restored");
+  backupRuntimeState({ home: ctx.home, out: backup, manifest }); restoreRuntimeState({ backup, out: restored, manifest });
+  for (const name of names) assert.deepEqual(readFileSync(join(restored, relativeDraft, name)), readFileSync(join(ctx.home, relativeDraft, name)));
+  // Durable namespaces retain their mounted absolute path during rollback.
+  rmSync(join(ctx.home, "tasks"), { recursive: true }); cpSync(join(restored, "tasks"), join(ctx.home, "tasks"), { recursive: true });
+  task = await w.delivery.dispatch("answer", { ...mutate(task, "restored-answer"), answers: { "q-r-1": "Use CSV." } }, "alice");
+  assert.equal(task.status, "ready", JSON.stringify(task.failures));
 });
 
 test("compatible package/state backup and rollback preserve task/provider/brief identities; active pins reject replacement", async () => {

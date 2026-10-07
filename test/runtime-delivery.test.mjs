@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { join } from "node:path";
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, readFileSync, mkdirSync, writeFileSync } from "node:fs";
 import { checkRuntimeState, migrateRuntimeState, backupRuntimeState, restoreRuntimeState } from "../lib/runtime_state.mjs";
 import { createNodeCoordinator, createNodeOwnerStore } from "../lib/runtime_node.mjs";
 import { CORE_VERSION } from "../lib/task_delivery_contract.mjs";
@@ -17,12 +17,12 @@ const remote = { transport: "remote", provider: "openai-agents", acceptance: "ac
 
 test("pre-registration intake and execution records retain their exact active artifact pin", async t => {
   const cases = [
-    ["preparing before launch", "tasks/intake.json", { status: "preparing", attempts: [] }],
-    ["validating", "tasks/intake.json", { status: "validating", attempts: [] }],
-    ["pending readiness on a ready task", "tasks/intake.json", { status: "ready", readiness: { pending: true }, attempts: [] }],
-    ["blocked local launch acknowledgement", "tasks/intake.json", { status: "blocked", attempts: [{ settled: false, run: null }] }],
-    ["blocked remote cancellation", "tasks/intake.json", { status: "blocked", attempts: [{ settled: true, cancellation: { status: "pending" } }] }],
-    ["settled attempt with unresolved provider", "tasks/intake.json", { status: "blocked", attempts: [{ settled: true, execution: { ...remote, acceptance: "unknown" } }] }],
+    ["preparing before launch", `tasks/${taskId}/intake.json`, { status: "preparing", attempts: [] }],
+    ["validating", `tasks/${taskId}/intake.json`, { status: "validating", attempts: [] }],
+    ["pending readiness on a ready task", `tasks/${taskId}/intake.json`, { status: "ready", readiness: { pending: true }, attempts: [] }],
+    ["blocked local launch acknowledgement", `tasks/${taskId}/intake.json`, { status: "blocked", attempts: [{ settled: false, run: null }] }],
+    ["blocked remote cancellation", `tasks/${taskId}/intake.json`, { status: "blocked", attempts: [{ settled: true, cancellation: { status: "pending" } }] }],
+    ["settled attempt with unresolved provider", `tasks/${taskId}/intake.json`, { status: "blocked", attempts: [{ settled: true, execution: { ...remote, acceptance: "unknown" } }] }],
     ["orphaned execution", "runs/intake/execution.json", { current: { execution: { ...remote, providerState: "running", collected: false } }, operations: {} }],
     ["unknown dispatch without current job", "runs/intake/execution.json", { current: null, operations: { prepare: { acceptance: "unknown" } } }],
     ["completed root awaiting results", "runs/intake/execution.json", { current: { execution: { ...remote, collected: false } }, operations: {} }],
@@ -260,4 +260,37 @@ test("delayed and repeated coordinator wakes revalidate the pin under ownership 
   assert.equal(existsSync(join(home, "daemon.lock")), false);
   const current = createNodeCoordinator({ ctx, store, manifest: update, schedule: async () => { schedules++; } });
   await current.wake(); assert.equal(schedules, before.schedules + 1);
+});
+
+
+test("only canonical ledgers affect runtime checks and backups preserve repository lock snapshots", async () => {
+  const home = tempHome(), draft = `tasks/${taskId}/drafts/revision-1`;
+  const snapshots = ["execution.json", "agents.json", "cloud.json", "codex-cloud.json", "intake.json", "yarn.lock", "bun.lock", "poetry.lock", "intake.lock", "execution.lock.recovery", "nested/publication.lock"];
+  for (const name of snapshots) {
+    const path = join(home, draft, name); mkdirSync(join(path, ".."), { recursive: true });
+    writeFileSync(path, name.endsWith(".json") ? '{"version":42,"status":"preparing"}' : `source ${name}`);
+  }
+  writeJsonAtomic(join(home, draft, "nested/intake.json"), { version: 1, status: "preparing", attempts: [] });
+  const locks = [`tasks/${taskId}/intake.lock`, "runs/intake__fixture/execution.lock", "runs/intake__fixture/publication.lock", `delivery/${"a".repeat(64)}/delivery.lock`];
+  for (const path of locks) {
+    mkdirSync(join(home, path, ".."), { recursive: true }); writeFileSync(join(home, path), "stale process owner");
+    mkdirSync(join(home, path + ".recovery")); writeFileSync(join(home, path + ".recovery", "marker"), "stale recovery");
+  }
+  assert.equal(checkRuntimeState({ home, manifest }).active, false);
+  migrateRuntimeState({ home, manifest });
+  const ctx = { home, state: makeState(home), config: CONFIG, clock: makeClock(), ownLogin: "me", log: silentLog, gh: fakeGh(), git: fakeGit(), notify: fakeNotify() };
+  await createNodeCoordinator({ ctx, store: createNodeOwnerStore({ home, durable: true }), manifest, schedule: async () => {} }).wake();
+  const backup = join(tempHome(), "backup"), restored = join(tempHome(), "restored");
+  backupRuntimeState({ home, out: backup, manifest }); restoreRuntimeState({ backup, out: restored, manifest });
+  const hashes = readJson(join(backup, "backup.json")).hashes;
+  for (const name of snapshots) {
+    assert.ok(hashes[`${draft}/${name}`]);
+    assert.deepEqual(readFileSync(join(restored, draft, name)), readFileSync(join(home, draft, name)));
+  }
+  for (const path of locks) { assert.equal(existsSync(join(restored, path)), false); assert.equal(existsSync(join(restored, path + ".recovery")), false); }
+  for (const name of ["execution", "agents", "cloud"]) {
+    writeJsonAtomic(join(restored, "runs", "owned", `${name}.json`), { version: 42 });
+    assert.throws(() => checkRuntimeState({ home: restored, manifest }), { code: "RUNTIME_STATE" });
+    writeJsonAtomic(join(restored, "runs", "owned", `${name}.json`), { version: 1 });
+  }
 });
