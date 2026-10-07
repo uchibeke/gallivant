@@ -133,7 +133,14 @@ intent. Read-only diagnostics for previously acknowledged tasks are:
 These are native read-only examples. An exited submission command acknowledges a
 URL; it does not finish remote work. Native `status` exits nonzero for non-ready tasks;
 the adapter uses the JSON listing's status rather than interpreting an exit as
-task failure. Listings paginate up to 20 pages/1 MiB with shared request deadlines,
+task failure. Every adapter inspection (including acknowledgement recovery) and
+result collection checks the configured executable's exact **0.160.0** version
+before reading listings or diffs, independently of the new-dispatch gate. A changed
+version stops native retrieval, retains the owned task and reports `CLOUD_VERSION`;
+restore the qualified executable to retry the same task. It does not reject the
+result as a malformed artifact, create a successor or enable new dispatch. Already
+collected, validated results are reused without another native command.
+Listings paginate up to 20 pages/1 MiB with shared request deadlines,
 backoff and coordinator concurrency. Every page includes the configured `--env`;
 the pinned CLI resolves that environment before issuing its filtered list request.
 Its list-item mapper emits a null `environment_id`, so an owned task's listing

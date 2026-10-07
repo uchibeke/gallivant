@@ -157,6 +157,70 @@ test("Cloud recovery remains read-only when new dispatch is unavailable", async 
   assert.equal(f.tasks.size, 1);
   t.diagnostic(JSON.stringify({ kind: "offline owned-task recovery; no live qualification", available: false, taskId: job.execution.providerJobId, state: recovering.current().execution.providerState, collected: recovering.current().execution.collected, providerTasks: f.tasks.size }));
 });
+test("Cloud recovery checks the pinned CLI before inspection and acknowledgement lookup", async t => {
+  const f = fixture(t), job = await f.service().submit(input), saved = readFileSync(join(f.root, "cloud.json"), "utf8");
+  const signal = new AbortController().signal, observations = [];
+  const cli = (args, receivedSignal) => { assert.equal(receivedSignal, signal); return f.cli(args); };
+  const raw = () => makeCloudTransport({ root: f.root, taskId: "acme/widget/task", account: "operator", config, cli, clock: f.clock });
+  const request = { ...job.execution, signal }, intent = f.service().state().operations[input.operationId];
+  for (const version of ["codex-cli 0.161.0", "codex-cli 0.159.0", "codex-cli 0.160.0-extra", "", "unrecognized executable"]) {
+    f.version(version);
+    for (const [method, req] of [["inspect", request], ["lookup", { intent, signal }]]) {
+      const start = f.calls.length;
+      await assert.rejects(raw()[method](req), error => error.code === "CLOUD_VERSION" && error.providerObservationError === true);
+      assert.deepEqual(f.calls.slice(start), [["--version"]]);
+      assert.equal(readFileSync(join(f.root, "cloud.json"), "utf8"), saved);
+      observations.push({ method, version, error: "CLOUD_VERSION", listingCalls: 0, ownershipChanged: false });
+    }
+  }
+  // Ownership failures precede all subprocesses, including diagnostics.
+  const start = f.calls.length;
+  await assert.rejects(raw().inspect({ ...request, providerJobId: "task_foreign" }), { code: "EXECUTION_OWNERSHIP" });
+  assert.equal(f.calls.length, start);
+  f.version("codex-cli 0.160.0\n"); f.paging();
+  assert.equal((await raw().lookup({ intent, signal })).providerJobId, job.execution.providerJobId);
+  assert.deepEqual(f.calls.slice(start).map(args => args.slice(0, 2)), [["--version"], ["cloud", "list"], ["cloud", "list"]]);
+  assert.equal(f.tasks.size, 1);
+  t.diagnostic(JSON.stringify({ kind: "offline CLI replacement fixture; no live qualification", observations, restoredTask: job.execution.providerJobId, providerTasks: f.tasks.size }));
+});
+test("Cloud recovery version failures preserve owned work across restart and refuse unqualified diffs", async t => {
+  const f = fixture(t), job = await f.service().submit(input), op = Object.values(readJson(join(f.root, "cloud.json")).operations)[0];
+  f.finish(); f.diff(patch(op)); f.advance();
+  const raw = () => makeCloudTransport({ root: f.root, taskId: "acme/widget/task", account: "operator", config, cli: f.cli, clock: f.clock });
+  const recovering = () => makeExecution({ root: f.root, taskId: "acme/widget/task", account: "operator", provider: "codex-cloud", transport: raw(), clock: f.clock });
+  assert.equal(recovering().capabilities.available, false);
+  f.version("codex-cli 0.161.0");
+  const start = f.calls.length;
+  await recovering().reconcile({ force: true });
+  const failed = recovering().current().execution;
+  assert.equal(failed.providerState, "status-unknown"); assert.equal(failed.recoveryAction, "CLOUD_VERSION");
+  assert.equal(failed.providerJobId, job.execution.providerJobId); assert.equal(failed.acceptance, "accepted");
+  assert.ok(failed.nextAttemptAt > f.clock.now()); assert.deepEqual(f.calls.slice(start), [["--version"]]);
+  const dir = recovering().dirOf(job.id), events = readFileSync(join(dir, "events.jsonl"), "utf8").trim().split("\n").map(JSON.parse);
+  assert.ok(events.some(event => event.type === "error" && event.data.code === "CLOUD_VERSION" && event.timestamp === f.clock.now()));
+  f.version("codex-cli 0.160.0"); f.advance(); await recovering().reconcile({ force: true });
+  assert.equal(recovering().current().execution.providerState, "retrieving-results");
+  const providerState = readFileSync(join(f.root, "cloud.json"), "utf8"), terminal = recovering().current().execution;
+  const collectionFailures = [];
+  for (const version of ["codex-cli 0.161.0", "codex-cli 0.159.0", ""]) {
+    f.version(version); const before = f.calls.length;
+    await assert.rejects(recovering().collect(), error => error.code === "CLOUD_VERSION" && !error.collectionValidation);
+    assert.deepEqual(f.calls.slice(before), [["--version"]]);
+    assert.equal(readFileSync(join(f.root, "cloud.json"), "utf8"), providerState);
+    assert.deepEqual(recovering().current().execution, terminal);
+    for (const file of ["result.json", "verification.json", "result-application.json"]) assert.equal(existsSync(join(dir, file)), false);
+    collectionFailures.push({ version, diffCalls: 0, savedResult: false, validationBlocked: false });
+  }
+  f.version("codex-cli 0.160.0"); const before = f.calls.length;
+  const result = await recovering().collect();
+  assert.equal(result.providerJobId, job.execution.providerJobId); assert.equal(result.files[0].text, "new\n");
+  assert.deepEqual(f.calls.slice(before).map(args => args.slice(0, 2)), [["--version"], ["cloud", "diff"]]);
+  const collectedCalls = f.calls.length;
+  assert.deepEqual(await recovering().collect(), result); assert.equal(f.calls.length, collectedCalls);
+  await assert.rejects(recovering().continue({ ...input, operationId: "review", sessionId: job.execution.sessionId }), { code: "EXECUTION_UNAVAILABLE" });
+  assert.equal(f.tasks.size, 1); assert.equal(existsSync(join(f.root, "answer.txt")), false);
+  t.diagnostic(JSON.stringify({ kind: "offline coordinator restart; no live qualification", failed, collectionFailures, restoredTask: result.providerJobId, available: false, providerTasks: f.tasks.size, collectionReused: true }));
+});
 test("Cloud provider recognition preserves configuration and recovery identity while dispatch is unavailable", () => {
   assert.equal(capabilitiesFor("codex-cloud").available, false);
   assert.ok(HARNESSES.includes("codex-cloud"));
