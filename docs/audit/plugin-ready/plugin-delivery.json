@@ -12,8 +12,8 @@
     "sourceVerified": true,
     "uncommittedPayload": [
       "docs/task-delivery.md",
-      "lib/runtime_node.mjs",
-      "lib/tick.mjs"
+      "lib/plugin_package.mjs",
+      "lib/runtime_state.mjs"
     ],
     "mergedM5": false,
     "predecessorMerges": [
@@ -22,14 +22,14 @@
       "2b4514fb27fcb493e62bfed913fffc204215f155",
       "96e81031516bdf6663dd3b97ac39b8f57022568b"
     ],
-    "testedSourceCommit": "28a7584f5136a4d702882c1cd3148e324fdcf08b"
+    "testedSourceCommit": "9edb2e4d0d7df6323b3c3e2023c208088eaa517f"
   },
   "artifact": {
     "coreArtifact": "gallivant-0.2.0.tgz",
-    "coreSha256": "722b9aa9b28c99c244416670cf79b43c3c99d39e3df76522c8ebdf2ce618815b",
+    "coreSha256": "bda7d680893e6ca8f8f84356987d90101c063769eb4f96d4d862910df61ab21f",
     "hashes": {
       "plugin": "8753892ceb5552fc37ba011929830f4c754d717f8d8031e31fb9b4935b465e1a",
-      "runtime": "6d6c42bc35968fb2911f3744be07d93d8f160ba8cc6cd9b48b8f2d0f16a55bd6",
+      "runtime": "ccc5d30cafe207b8cefa56710e3173dd38e1f498cbe7ba39b76a5c61f5b7ca7c",
       "operations": "2077c0558cd4634accf66e530f186b52e2f91bfea502ff7c6f212d2e2efb800f"
     },
     "dependencyLockSha256": "bf3969111f7c4b84071fc14c59d870e296ee045024c8056757ac3e3466bc2b28",
@@ -50,7 +50,7 @@
       "docs/install.md": "5087cb207e20c31ef39d955fd8536184f86113d61348e955f380e30172705a85",
       "docs/openai-agents.md": "38f162e4d4918bdab372be804e1a06a6a9582493c941f07799f97324f4637db2",
       "docs/prd.md": "be2cb95955ecc38056dac390152d874172f6582816603fcacc14b8bd4f762c33",
-      "docs/task-delivery.md": "65ca926f8dd782737829e3f2dcf8ab839720edc9bf3bd781d33282bb1e097961",
+      "docs/task-delivery.md": "409925ebc75b3a92ca0cdff266837b7d796f2755f82ea30c36c880a3e084f19c",
       "docs/tasks.md": "4483b3c3a44117240e3ca10a5e55941578e7c3b2b20775a57af6743603a9bb34",
       "lib/aport.mjs": "5c046abda8964a0439ee699bf658b9a00fdd7527884848f7fb22c3fe6c9e1d74",
       "lib/attribution.mjs": "cddb3eafe44f1dee26999a987ad9b1c62332cc9eb1ee17925cd2b961a9ccac17",
@@ -101,7 +101,7 @@
       "lib/openai_agents_input.mjs": "3b012e8c7c51d9d007762e1f849ea3caaf7bbf9ab128a6f5c916bff195b6b83c",
       "lib/openai_agents_sources.mjs": "9d61867d9f86901b084f37d4da6c344df24a0ff71b7ab0537273aad4b18f1132",
       "lib/openai_agents.mjs": "3b67fe601cb8ad268f2d997d55e19bad4aca1f016293595036825892d1991702",
-      "lib/plugin_package.mjs": "42af2518f6976c6154565cbf54db906ef70522fe4b36ce6bce07f5e11d069378",
+      "lib/plugin_package.mjs": "a030c37d7159ab5f37f13fe9a384ef150e88797079b1bebb63e74b219f67b943",
       "lib/prd.mjs": "3e8bd68d62e8e61fe3624cdcc76e27e78e079d77e25a1484aafa7f5ca6f6ffe3",
       "lib/probe.mjs": "e6df979a29b05ee385366cc28787d5adf9254ff90c79444574ed759d0739d5a2",
       "lib/prompt.mjs": "e1c09b06350397feb038c6cae75b798d2970fff5c7b9c03289e2d14e8b390be2",
@@ -113,7 +113,7 @@
       "lib/run.mjs": "3682818ab95bf3b27c262449aa521be094caee9c8f133e94740923ebafb91315",
       "lib/runtime_dependencies.mjs": "6d25b972c116026643f348dc55586009d2746f68b99f47d450b2a3ef35625949",
       "lib/runtime_node.mjs": "77a32855378d504bff3bfe33813bc6a2771cfd186358342783a25769037aa366",
-      "lib/runtime_state.mjs": "4e31e602188faa35ffdcdf07d59a46ffe3a2d390836872dcad1cd1508bf2880c",
+      "lib/runtime_state.mjs": "13fb874a59895ceef04408b0ae57cfd9a3b58ef0701eec1d4efc4c34adf691cd",
       "lib/sources/index.mjs": "88e1550751e9f52c82e94085bcb77bbd2b80466c9e2192670593f12894c4a4ec",
       "lib/sources/prd.mjs": "b26425213d537d8bf640abee1046481925de30d676fdb9b6a6b9239cdc50effd",
       "lib/start_contract.mjs": "e154f36dcf54c93b4308a93d8926dca8f28358c4e41234dc684008706ea23ab9",
@@ -440,7 +440,8 @@
       "tests": [
         "test/plugin-package.mjs: two-build exact hashes and extracted payload hash audit",
         "installed packager rebuild with retained shrinkwrap",
-        "test/plugin-package.test.mjs: source and installed Git root/HEAD/status failure, internal proof, source mismatch and modified/deleted/renamed payload cleanup regressions"
+        "test/plugin-package.test.mjs: source and installed Git root/HEAD/status failure, internal proof, source mismatch and modified/deleted/renamed payload cleanup regressions",
+        "test/plugin-package.test.mjs: untracked, ignored and deleted npm packaging controls refuse public output; actual npm pack proves nested ignore controls omit exports"
       ],
       "evidence": "One combined ZIP and npm runtime artifact; source/contracts/export/lock/payload/schema/asset SHA-256 manifests; LICENSE exact byte comparison"
     },
@@ -454,7 +455,8 @@
       "tests": [
         "test/plugin-package.mjs: missing metadata/example endpoint/built assets/public refusal",
         "secret asset refusal removes partial output",
-        "test/plugin-package.test.mjs: source and installed Git root/HEAD/status failure, internal proof, source mismatch and modified/deleted/renamed payload cleanup regressions"
+        "test/plugin-package.test.mjs: source and installed Git root/HEAD/status failure, internal proof, source mismatch and modified/deleted/renamed payload cleanup regressions",
+        "test/plugin-package.test.mjs: internal packaging records npm controls without claiming public qualification"
       ],
       "evidence": "Internal classification and submissionReady:false emitted; public configuration errors are actionable"
     },
@@ -472,7 +474,8 @@
         "major/schema mismatch refusal",
         "ancestor symlink/hash backup refusal",
         "test/runtime-delivery.test.mjs: pre-registration preparation/readiness/cancellation/execution pins across check/migrate/backup/restore and idle updates",
-        "test/fixtures/plugin-installed-flow.mjs: installed preparation and readiness callbacks pin their runtime before implementation registration"
+        "test/fixtures/plugin-installed-flow.mjs: installed preparation and readiness callbacks pin their runtime before implementation registration",
+        "test/runtime-delivery.test.mjs: idle backup requires old artifact, restore checks copied pin before output, invalid pins fail and legacy state remains compatible; installed patch rollback starts the restored coordinator"
       ],
       "evidence": "Intake and provider identity bytes preserved through actual installs and matching private backup restore; no active-job replacement"
     },
@@ -525,25 +528,25 @@
       {
         "command": "npm test",
         "exitCode": 0,
-        "tests": 1228,
-        "pass": 1228,
+        "tests": 1244,
+        "pass": 1244,
         "fail": 0,
-        "log": "/tmp/plugin-delivery-cadence-final-unit-tests.log"
+        "log": "/tmp/plugin-delivery-backup-unit-tests.log"
       },
       {
         "command": "npm run lint",
         "exitCode": 0,
-        "log": "/tmp/plugin-delivery-cadence-lint.log"
+        "log": "/tmp/plugin-delivery-backup-lint.log"
       },
       {
         "command": "npm run test:plugin-package",
         "exitCode": 0,
         "consumerFlowTests": 20,
-        "installedConformanceTests": 404,
+        "installedConformanceTests": 420,
         "fail": 0,
-        "log": "/tmp/plugin-delivery-cadence-package-tests.log",
-        "consumerEvidence": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/task-plugin-consumer-FRwCRl/evidence.json",
-        "conformanceLog": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/task-plugin-consumer-FRwCRl/conformance.log"
+        "log": "/tmp/plugin-delivery-backup-package-tests.log",
+        "consumerEvidence": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/task-plugin-consumer-w4jsin/evidence.json",
+        "conformanceLog": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/task-plugin-consumer-w4jsin/conformance.log"
       },
       {
         "command": "git diff --check",
@@ -553,13 +556,11 @@
     ],
     "verifiedPayloadFiles": 112,
     "logSha256": {
-      "/tmp/plugin-delivery-cadence-final-unit-tests.log": "3408060ea265f6a9759c5a44231f8692fa69c3daea89de1b876f5341fe212cc9",
-      "/tmp/plugin-delivery-cadence-package-tests.log": "034738f96c9278c4d408b823e6ccd312b471e09bd45e6892759975d5f3c48489",
-      "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/task-plugin-consumer-FRwCRl/conformance.log": "2a88e4ac3cca4bf507e03afaae4f55a0125d64838ee04db38d50f55ce7c6aef7",
-      "/tmp/plugin-delivery-cadence-lint.log": "2f32bd854b16ced20ab71be2afd3673b887efc4815c6e55ea7b941ebc5aa8a0b",
-      "/tmp/plugin-delivery-cadence-focused.log": "1715f85405a6b1163590fe3fff141a1b0c4eec40f2639527047ed81357e55883",
-      "/tmp/plugin-delivery-cadence-unit-tests.log": "28741fc5e161d0bdab1d2ad4458bc4dbe32bf23c7203f1d1a07c233ee563cd3c",
-      "/tmp/plugin-delivery-cadence-rest-recheck.log": "8bd1f6ff32be545b4ab31fe888a86bb26ebab93cf7fc07049c3eeae7c8342e5d"
+      "/tmp/plugin-delivery-backup-unit-tests.log": "47e50cf2b8525ec820c62c3bfb24a1a1ab5ebbe41f0d278b0328b5abf0cd3bc2",
+      "/tmp/plugin-delivery-backup-package-tests.log": "9525163b51d6f89decdc4adbb1db14e4eeecf19f3079de7ff03dd30d147dfa69",
+      "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/task-plugin-consumer-w4jsin/conformance.log": "17795c4b4be8bfde236582b014f6c36330f2eced5a4e214333b8701c145d9cfc",
+      "/tmp/plugin-delivery-backup-lint.log": "2f32bd854b16ced20ab71be2afd3673b887efc4815c6e55ea7b941ebc5aa8a0b",
+      "/tmp/plugin-delivery-backup-focused.log": "e4dc8f3fdc3963f13f2af932e63be2b8b590444ab8063a8a50c668f3ba73c5f9"
     },
     "hostEvidence": false,
     "fixturePurpose": "Deterministic unpaid installed-artifact compatibility; no actual installed host or live provider qualification",
@@ -586,7 +587,8 @@
       "capability discovery uses one optional cursor schema, bounded authorized keyset pages and explicit nextCursor/truncated fields; every page reauthorizes without store writes, provider probes or wake-ups",
       "MCP model/text and UI capabilities retain authorized repository identity and configured harness setup, preparation, cost and controls through a public-field projection",
       "active chain windows exclude done/cancelled/stopped history and rotate by durable name cursor; shrinking sets, restart and failure do not lose continuation or starve entry batches",
-      "canonical makeTick chain deadline is restored and checkpointed by the Node wrapper only after a successful chain pass; pending batches finish without revisiting a cancelled suffix; disabled/skipped chain passes preserve cursor/deadline and fast entry reconciliation continues"
+      "canonical makeTick chain deadline is restored and checkpointed by the Node wrapper only after a successful chain pass; pending batches finish without revisiting a cancelled suffix; disabled/skipped chain passes preserve cursor/deadline and fast entry reconciliation continues",
+      "Backup and restore bind the copied runtime pin to the envelope artifact before output; locks release on refusal. Public source verification includes untracked, ignored and deleted npm controls and hidden payload directories; internal fixtures record them and failed builds remove partial output."
     ]
   },
   "reviewFollowup": {
@@ -720,5 +722,41 @@
       "isolatedExitCode": 0,
       "resolution": "The offline fixture passed in isolation and in installed conformance; reran npm test without the concurrent artifact suite. No timeout or production transport settings changed."
     }
+  },
+  "backupReviewFollowup": {
+    "reviewId": 5441535926,
+    "reviewedCommit": "9edb2e4d0d7df6323b3c3e2023c208088eaa517f",
+    "items": [
+      {
+        "commentId": 4206256759,
+        "implementation": [
+          "lib/runtime_state.mjs",
+          "docs/task-delivery.md"
+        ],
+        "tests": [
+          "test/runtime-delivery.test.mjs idle upgrade backups require the old artifact and reject inconsistent rollback pins before output",
+          "test/fixtures/plugin-installed-flow.mjs actual compatible patch install and rollback preserve saved identities"
+        ],
+        "rule": "Backups must identify the pinned artifact and remain startable after rollback"
+      },
+      {
+        "commentId": 4206256766,
+        "implementation": [
+          "lib/plugin_package.mjs"
+        ],
+        "tests": [
+          "test/plugin-package.test.mjs public packaging refuses uncommitted npm control",
+          "test/plugin-package.test.mjs npm pack applies nested ignore files to exported modules"
+        ],
+        "rule": "Source verification must include packaging controls that change the emitted payload"
+      }
+    ],
+    "focusedVerification": {
+      "tests": 39,
+      "pass": 39,
+      "fail": 0,
+      "log": "/tmp/plugin-delivery-backup-focused.log"
+    },
+    "externalPrerequisites": "Previously observed unmet prerequisites retained; no unchanged live call retried and no installed-host/model-access evidence inferred from fixtures"
   }
 }

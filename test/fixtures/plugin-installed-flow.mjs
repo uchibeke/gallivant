@@ -404,7 +404,6 @@ test("actual compatible patch install and rollback preserve saved identities; ma
   const provider = join(ctx.home, "runs", "fixture", "agents.json"); mkdirSync(dirname(provider), { recursive: true });
   writeJsonAtomic(provider, { version: 1, taskId: task.taskId, sessionId: "session-preserved", turnId: "root-preserved" });
   const providerBytes = readFileSync(provider), backup = join(w.root, "previous-state");
-  backupRuntimeState({ home: ctx.home, out: backup, manifest });
   const patch = join(w.root, "patch"), install = join(w.root, "upgrade-consumer");
   cpSync(new URL("node_modules/gallivant", import.meta.url), patch, { recursive: true });
   const pkg = JSON.parse(readFileSync(join(patch, "package.json"))); pkg.version = "0.2.1";
@@ -412,6 +411,10 @@ test("actual compatible patch install and rollback preserve saved identities; ma
   const contract = join(patch, "lib/task_delivery_contract.mjs"); writeFileSync(contract, readFileSync(contract, "utf8").replace('CORE_VERSION = "0.2.0"', 'CORE_VERSION = "0.2.1"'));
   const packed = JSON.parse(execFileSync("npm", ["pack", "--ignore-scripts", "--json"], { cwd: patch, encoding: "utf8" }))[0];
   const tarball = join(patch, packed.filename), patchManifest = { ...manifest, coreVersion: "0.2.1", coreSha256: createHash("sha256").update(readFileSync(tarball)).digest("hex") };
+  const rejectedBackup = join(w.root, "candidate-backup"), oldPin = readFileSync(join(ctx.home, "runtime-pin.json"));
+  assert.throws(() => backupRuntimeState({ home: ctx.home, out: rejectedBackup, manifest: patchManifest }), { code: "RUNTIME_STATE" });
+  assert.equal(existsSync(rejectedBackup), false); assert.deepEqual(readFileSync(join(ctx.home, "runtime-pin.json")), oldPin);
+  backupRuntimeState({ home: ctx.home, out: backup, manifest });
   mkdirSync(install); writeFileSync(join(install, "package.json"), '{"private":true,"type":"module"}');
   execFileSync("npm", ["install", "--ignore-scripts", "--omit=dev", "--no-audit", "--no-fund", tarball], { cwd: install, stdio: "pipe" });
   const script = join(install, "check.mjs");
@@ -425,6 +428,9 @@ test("actual compatible patch install and rollback preserve saved identities; ma
   execFileSync(process.execPath, [script], { cwd: install, stdio: "pipe" });
   assert.deepEqual(readFileSync(join(restored, "tasks", task.taskId, "intake.json")), before);
   assert.deepEqual(readFileSync(join(restored, "runs/fixture/agents.json")), providerBytes);
+  assert.deepEqual(readFileSync(join(restored, "runtime-pin.json")), oldPin);
+  const restoredCtx = { ...ctx, home: restored, state: makeState(restored) };
+  await createNodeCoordinator({ ctx: restoredCtx, store: createNodeOwnerStore({ home: restored, durable: true }), manifest, schedule: async () => {} }).wake();
 });
 
 test("actual installed Node runtime imports; Pages full-runtime dependencies require the measured Node remedy", async t => {

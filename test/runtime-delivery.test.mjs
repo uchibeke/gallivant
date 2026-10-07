@@ -199,3 +199,38 @@ test("chain review cadence survives fast wakes, process restart and failed advan
   assert.deepEqual(reads, [1, 2, 3, 1, 2, 3, 1, 2, 3]); assert.equal(ancestry.length, 3);
   assert.ok(state.chains().every(([, c]) => c.status === "done"));
 });
+
+test("idle upgrade backups require the old artifact and reject inconsistent rollback pins before output", async () => {
+  const home = tempHome(), backup = join(tempHome(), "backup"), restored = join(tempHome(), "restored"), wrong = join(tempHome(), "wrong");
+  migrateRuntimeState({ home, manifest });
+  writeJsonAtomic(join(home, "runs", "retained", "agents.json"), { version: 1, sessionId: "retained-session", turnId: "retained-turn" });
+  const pin = readFileSync(join(home, "runtime-pin.json")), provider = readFileSync(join(home, "runs", "retained", "agents.json"));
+  assert.throws(() => backupRuntimeState({ home, out: wrong, manifest: update }), { code: "RUNTIME_STATE", message: /pre-upgrade manifest/ });
+  assert.equal(existsSync(wrong), false); assert.deepEqual(readFileSync(join(home, "runtime-pin.json")), pin);
+  assert.equal(existsSync(join(home, "daemon.lock")), false);
+  backupRuntimeState({ home, out: backup, manifest });
+  assert.equal(readJson(join(backup, "backup.json")).coreSha256, manifest.coreSha256);
+  migrateRuntimeState({ home, manifest: update });
+  restoreRuntimeState({ backup, out: restored, manifest });
+  assert.deepEqual(readFileSync(join(restored, "runtime-pin.json")), pin);
+  assert.deepEqual(readFileSync(join(restored, "runs", "retained", "agents.json")), provider);
+  const ctx = { home: restored, state: makeState(restored), config: CONFIG, ownLogin: "me", clock: makeClock(), log: silentLog, gh: fakeGh(), git: fakeGit(), notify: fakeNotify() };
+  await createNodeCoordinator({ ctx, store: createNodeOwnerStore({ home: restored, durable: true }), manifest, schedule: async () => {} }).wake();
+  const envelope = readJson(join(backup, "backup.json"));
+  writeJsonAtomic(join(backup, "backup.json"), { ...envelope, coreSha256: update.coreSha256 });
+  assert.throws(() => restoreRuntimeState({ backup, out: wrong, manifest: update }), { code: "RUNTIME_STATE", message: /pre-upgrade manifest/ });
+  assert.equal(existsSync(wrong), false, "an inconsistent idle pin must fail before creating a namespace");
+});
+
+test("backup distinguishes unpinned legacy state from an invalid existing pin", () => {
+  const home = tempHome(), backup = join(tempHome(), "backup"), restored = join(tempHome(), "restored");
+  backupRuntimeState({ home, out: backup, manifest });
+  assert.equal(restoreRuntimeState({ backup, out: restored, manifest }).pinned, null);
+  for (const invalid of [null, false, 0, { version: 2, coreSha256: manifest.coreSha256, coreVersion: manifest.coreVersion }]) {
+    writeJsonAtomic(join(home, "runtime-pin.json"), invalid);
+    const out = join(tempHome(), "rejected");
+    assert.throws(() => backupRuntimeState({ home, out, manifest }), { code: "RUNTIME_STATE" });
+    assert.equal(existsSync(out), false);
+    assert.equal(existsSync(join(home, "daemon.lock")), false);
+  }
+});

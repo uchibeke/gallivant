@@ -180,7 +180,10 @@ an enforced provider preparation adapter and its account access are available.
 
 ## Build, configure, upgrade and rollback
 
-Build from the same tagged/merged source and explicit core version:
+Build from the same tagged/merged source and explicit core version. Commit or
+remove npm ignore/configuration controls before a public build, including ignored
+controls or directories under the runtime payload. Internal builds record these
+changes and remain development fixtures:
 
 ```sh
 npm ci
@@ -190,7 +193,7 @@ npm run package:plugin -- --config /private/aport-package.json --out /private/ca
 task-delivery-package --config /private/aport-package.json --validate-public
 npm install --ignore-scripts /private/candidate/gallivant-0.2.0.tgz
 task-delivery-state check --home /durable/preview --manifest /private/candidate/runtime.json
-task-delivery-state backup --home /durable/preview --manifest /private/candidate/runtime.json --out /private/backup
+task-delivery-state backup --home /durable/preview --manifest /private/previous/runtime.json --out /private/backup
 task-delivery-state migrate --home /durable/preview --manifest /private/candidate/runtime.json
 # Roll back package AND state into a fresh namespace, then switch the existing binding.
 npm install --ignore-scripts /private/previous/gallivant-0.2.0.tgz
@@ -201,7 +204,11 @@ npm run test:plugin-package
 Stop new intake/wake-ups and the old coordinator before backup/migration. Active
 jobs retain their runtime; incompatible changes fail with this remedy. Backups
 are private, outside public packages, omit operator config/auth, and preserve
-task/run/provider/source identities. Restore only a matching artifact/backup.
+task/run/provider/source identities. Back up with the currently pinned, pre-upgrade
+manifest; a candidate manifest cannot label an older namespace's backup. Restore
+requires both the backup envelope and copied runtime pin to match the selected
+artifact. Unpinned legacy state can be backed up with an explicit compatible
+manifest and must be migrated before enabling its coordinator.
 Verify store consistency before switching bindings. Keep old runtime artifacts
 and credential bindings available for rollback; do not merge/upgrade live jobs.
 

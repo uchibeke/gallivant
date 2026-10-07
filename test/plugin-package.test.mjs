@@ -4,7 +4,7 @@ import childProcess from "node:child_process";
 import { syncBuiltinESMExports } from "node:module";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { existsSync, writeFileSync } from "node:fs";
+import { existsSync, writeFileSync, mkdirSync } from "node:fs";
 import { buildPluginPackage } from "../lib/plugin_package.mjs";
 import { tempHome } from "./helpers.mjs";
 
@@ -39,7 +39,7 @@ for (const fail of ["root", "head", "status"]) test(`public packaging fails clos
   const calls = gitFixture(t, { fail }), input = fixture();
   assert.throws(() => buildPluginPackage(input), { code: "PACKAGE_SOURCE", message: /Git source verification failed/ });
   assert.equal(existsSync(input.out), false, "source errors must not emit a candidate or partial output");
-  if (fail === "status") assert.deepEqual(calls, [["rev-parse", "--show-toplevel"], ["rev-parse", "HEAD"], ["status", "--porcelain=v1", "-z", "--untracked-files=all", "--no-renames"]]);
+  if (fail === "status") assert.deepEqual(calls, [["rev-parse", "--show-toplevel"], ["rev-parse", "HEAD"], ["status", "--porcelain=v1", "-z", "--untracked-files=all", "--no-renames", "--ignored=matching"]]);
 });
 test("internal packaging never claims source verification after failed Git status", t => {
   gitFixture(t, { fail: "status" });
@@ -67,4 +67,33 @@ test("source commit mismatch remains an explicit refusal in public and internal 
     assert.throws(() => buildPluginPackage({ ...input, internal }), { code: "PACKAGE_SOURCE", message: /differs from HEAD/ });
     assert.equal(existsSync(input.out), false);
   }
+});
+
+for (const path of [".npmignore", ".gitignore", ".npmrc", "lib/.npmignore", "lib/nested/.gitignore", "bin/.npmignore", "templates/plugin/.npmignore", "docs/.npmignore"]) test(`public packaging refuses uncommitted npm control ${path}`, t => {
+  gitFixture(t, { status: `?? ${path}\0` });
+  const input = fixture();
+  assert.throws(() => buildPluginPackage(input), { code: "PACKAGE_SOURCE", message: /packaging-control/ });
+  assert.equal(existsSync(input.out), false);
+});
+for (const status of ["!! lib/.npmignore\0", "!! lib/ignored/\0", " D .npmignore\0"]) test(`public packaging refuses ignored or deleted controls: ${status.trim()}`, t => {
+  gitFixture(t, { status }); const input = fixture();
+  assert.throws(() => buildPluginPackage(input), { code: "PACKAGE_SOURCE" });
+  assert.equal(existsSync(input.out), false);
+});
+test("internal packaging records npm controls without claiming public qualification", t => {
+  gitFixture(t, { status: "?? lib/.npmignore\0!! node_modules/\0" });
+  const manifest = buildPluginPackage({ ...fixture(), internal: true });
+  assert.deepEqual(manifest.uncommittedPayload, ["lib/.npmignore"]);
+  assert.equal(manifest.submissionReady, false);
+});
+
+for (const control of [".npmignore", ".gitignore"]) test(`npm pack applies nested ${control} to exported modules`, () => {
+  const dir = tempHome(); mkdirSync(join(dir, "lib"));
+  writeFileSync(join(dir, "package.json"), JSON.stringify({ name: "pack-control-fixture", version: "1.0.0", files: ["lib"], exports: { ".": "./lib/task_delivery.mjs" } }));
+  writeFileSync(join(dir, "lib/task_delivery.mjs"), "export const fixture = true;\n");
+  writeFileSync(join(dir, "lib/retained.mjs"), "export const retained = true;\n");
+  writeFileSync(join(dir, "lib", control), "task_delivery.mjs\n");
+  const packed = JSON.parse(childProcess.execFileSync("npm", ["pack", "--ignore-scripts", "--json"], { cwd: dir, encoding: "utf8" }))[0];
+  assert.ok(packed.files.some(file => file.path === "lib/retained.mjs"));
+  assert.ok(!packed.files.some(file => file.path === "lib/task_delivery.mjs"), "ignore controls can remove an exported module from a real tarball");
 });

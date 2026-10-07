@@ -60,6 +60,15 @@ also check failed-advance cleanup, disabled chains, cancelled batch suffixes and
 continued entry reconciliation. The same regression runs against the installed
 artifact; ordinary daemon cadence remains covered by `test/chains.test.mjs`.
 
+Backup identity regressions require the pre-upgrade manifest for a pinned idle
+namespace and validate the copied pin before restoring any output. The installed
+patch upgrade/rollback test starts the restored coordinator and preserves provider
+identities. Invalid pins fail closed; unpinned legacy state remains migratable.
+Packaging regressions cover untracked, ignored and deleted npm controls, including
+nested Git ignore fallback and hidden payload directories. Real npm tarballs show
+that these controls can omit an exported module; public builds refuse those changes
+and internal fixtures record them without claiming release qualification.
+
 Unmet attestations remain explicit:
 
 - **ac-5:** Actual Pages runtime/binding execution is unavailable. Node package
