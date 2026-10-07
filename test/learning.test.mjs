@@ -290,3 +290,17 @@ test("CLI refuses forged flags, unknown commands and implicit approval selection
   await assert.rejects(service.setup({ keyPath: join(store.root, "key"), confirm: () => true }), /terminal/);
   assert.equal(canonical(store.load(repo)), before);
 });
+
+test("CLI disables locally during GitHub outages and invokes revocation controls", async t => {
+  const controls = [], gh = { learningRepository: async () => { throw new Error("GitHub unavailable"); } };
+  const { service, store } = fixture(t, { gh, onRevocation: async intent => { assert.equal(service.mode(repo), "off"); controls.push(intent); return [{ cancellation: { unsupported: true }, freshSessionRequired: true }]; } });
+  store.remember("example/project", repo); // Legacy identity-only records remain usable offline.
+  await store.transaction(repo, s => { s.mode = "apply"; });
+  const result = await learnCommand({ learning: service }, { args: ["configure"], values: { repo: "example/project", mode: "off" } });
+  assert.equal(result.mode, "off"); assert.equal(result.controls[0].freshSessionRequired, true);
+  assert.equal(controls.length, 1); assert.deepEqual(controls[0].repo, repo);
+  assert.deepEqual(service.identityFor("example/project"), repo);
+  for (const mode of ["collect", "apply"]) await assert.rejects(learnCommand({ learning: service }, { args: ["configure"], values: { repo: "example/project", mode } }), /GitHub unavailable/);
+  await assert.rejects(learnCommand({ learning: service }, { args: ["configure"], values: { repo: "unknown/project", mode: "off" } }), /no learning state/);
+  assert.equal(service.mode(repo), "off");
+});

@@ -69,3 +69,24 @@ digests. Retracted sources are excluded from subsequent extraction.
 
 No live isolation call was retried. Linux/live qualification and all previously
 recorded implementation gaps remain outstanding; production remains UNQUALIFIED.
+
+## Operator and scheduler follow-up
+
+Actual offline results on the same macOS host:
+
+| Command | Recorded result | Output pointer |
+| --- | --- | --- |
+| `npm test` | 1,235 passed; 0 failed, skipped or cancelled; 227,356.149084 ms | `/private/tmp/review-learning-batch3-full.log` |
+| `npm run lint` | Exit 0 | Operator session command output |
+| `npm run test:learning` | 40 passed; 0 failed, skipped or cancelled; 31,386.166708 ms | `/private/tmp/review-learning-batch3-suite.log` |
+| `git diff --check` and `git diff --cached --check` | Exit 0 | Operator session command output |
+
+Regressions exercise local disable and revocation during a GitHub outage; persisted
+private/internal classification through the actual tick after restart; rotation
+across 201 watched entries with failed writes and idle progress ticks; and a CLI
+approval reason included in both the complete preview and the OpenSSH-signed manifest.
+The disposable generated output at `/private/tmp/review-learning-batch3-preview.json`
+shows separate identity/classification metadata and a successful offline disable.
+Legacy identity-only records remain readable and require a configuration refresh
+to acquire their previously unrecorded visibility. No model calls or live isolation
+retries were made; production remains UNQUALIFIED with the same outstanding criteria.

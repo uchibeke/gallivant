@@ -5,6 +5,9 @@ import { createLearningService } from "../lib/learning.mjs";
 import { repo, fixture } from "./learning-fixtures.mjs";
 import { hash } from "../lib/learning_data.mjs";
 import { makeTick } from "../lib/tick.mjs";
+import { learnCommand } from "../lib/commands/learn.mjs";
+import { rmSync } from "node:fs";
+import { makeTrust } from "../lib/events.mjs";
 import { CONFIG, seededState, makeClock, fakeGh, fakeGit, fakeNotify, fakeRunner, fakeCredential, fakeIdentity, silentLog, STATES, inline, at } from "./helpers.mjs";
 
 const input = { operationId: "op-1", prompt: "Task gates\nVerify: npm test\nAcceptance: exact contract", mandatoryPolicy: ["workspace-write", "auto-review"], allowance: { remainingUsd: 2, reservedUsd: 1 } };
@@ -55,4 +58,43 @@ test("automatic collection runs after fixing feedback and cannot consume rounds 
   const before = state.get(id).iteration;
   const result = await tick.tick();
   assert.equal(result[0].ok, true); assert.equal(runner.started.length, 1); assert.equal(observations, 1); assert.equal(state.get(id).iteration, before);
+});
+
+test("automatic observations retain configured private and internal visibility after restart", async t => {
+  for (const visibility of ["private", "internal"]) {
+    const { state, home } = seededState(); t.after(() => rmSync(home, { recursive: true, force: true }));
+    const clock = makeClock(), runner = fakeRunner(clock);
+    const gh = fakeGh({ inline: [inline({ id: 9, by: "maintainer", at: at(1), body: "Validate the error path" })] });
+    gh.learningRepository = async () => ({ ...repo, visibility });
+    const { service, store, root } = fixture(t, { gh });
+    await learnCommand({ learning: service }, { args: ["configure"], values: { repo: "acme/widget", mode: "collect" } });
+    gh.learningRepository = async () => { throw new Error("automatic observation must not fetch credentials or metadata"); };
+    const restarted = createLearningService({ root, store, gh, trust: makeTrust({ trusted_authors: ["maintainer"], reviewer: null }, "me") });
+    const tick = makeTick({ config: CONFIG, state, gh, git: fakeGit(), notify: fakeNotify(), log: silentLog, clock, ownLogin: "me", runnerFor: () => runner, readPrd: () => null, learning: restarted });
+    const results = await tick.tick(); assert(results.every(r => r.ok));
+    const observations = Object.values(store.load(repo).observations);
+    assert.equal(observations.length, 1); assert.equal(observations[0].content.visibility, visibility);
+    assert.deepEqual(observations[0].content.repo, repo); assert.deepEqual(restarted.identityFor("acme/widget"), repo);
+  }
+});
+
+test("bounded automatic observation rotates across stable watched order and failed writes", async t => {
+  const seeded = seededState(); t.after(() => rmSync(seeded.home, { recursive: true, force: true }));
+  const template = seeded.state.get(seeded.id), clock = makeClock(), runner = fakeRunner(clock);
+  const records = new Map(Array.from({ length: 201 }, (_, i) => [`entry-${i}`, { ...structuredClone(template), pr: i + 1 }]));
+  const state = { ...seeded.state, entries: () => [...records], get: id => records.get(id), update: (id, patch) => { const old = records.get(id); const next = { ...old, ...(typeof patch === "function" ? patch(old) : patch) }; records.set(id, next); return next; } };
+  const gh = fakeGh(); gh.prView = async (_repo, pr) => ({ ...gh.data.pr, number: pr });
+  gh.setRecoveryMetadata = async (_repo, pr) => ({ ...gh.data.pr, number: pr });
+  const observed = [], learning = { identityFor: () => repo, mode: () => "collect", observe: async (_repo, snapshot) => { observed.push(snapshot.pr.number); if (snapshot.pr.number === 1) throw new Error("temporary write failure"); } };
+  const tick = makeTick({ config: CONFIG, state, gh, git: fakeGit(), notify: fakeNotify(), log: silentLog, clock, ownLogin: "me", runnerFor: () => runner, executionFor: () => runner, readPrd: () => null, learning });
+  for (let i = 0; i < 3; i++) {
+    const before = observed.length, results = await tick.tick();
+    assert(results.every(r => r.ok)); assert.equal(observed.length - before, 100);
+    assert.equal(runner.started.length, 0);
+    await tick.tick(); assert.equal(observed.length - before, 100, "idle progress ticks retain the next observation window");
+    clock.advance(2);
+  }
+  assert.equal(new Set(observed).size, 201);
+  assert.deepEqual(observed.slice(0, 100).sort((a, b) => a - b), Array.from({ length: 100 }, (_, i) => i + 1));
+  assert.deepEqual(observed.slice(100, 200).sort((a, b) => a - b), Array.from({ length: 100 }, (_, i) => i + 101));
 });

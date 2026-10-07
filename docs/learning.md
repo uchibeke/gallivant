@@ -45,6 +45,8 @@ time, including old PRs. Separate learning cursors never acknowledge coding even
 consume review rounds or change task identity. Automatic observation runs after
 coding/review dispatch and does no extraction. A full source enumeration is needed
 to flag deletion; filtered automatic reads cannot establish absence.
+The automatic lane rotates a window of at most 100 due watched entries, independently
+of request completion order. Idle progress ticks retain the next window.
 
 Coverage, caps, continuation and rate-limit retry time are reported. Interrupted
 scans replay the unfinished PR; immutable evidence revisions deduplicate overlap.
@@ -74,6 +76,13 @@ Resolved source visibility is retained in evidence separately from immutable
 repository identity; unavailable classification is reported as unknown. Dismissal
 and deletion flags retain their first observed timestamp without changing evidence
 hashes. Retracted evidence remains inspectable and is excluded from extraction.
+Configuration persists the last-resolved visibility for automatic observation after
+restart. Legacy identity-only records remain readable; repeat `learn configure
+--repo owner/project --mode collect` to refresh their unknown classification.
+
+`learn configure --repo owner/project --mode off` uses the stored identity and invokes
+local revocation controls even when GitHub, credentials or the remote repository are
+unavailable. Enabling collection or application still resolves the remote identity.
 
 Extraction currently reports unavailable. The service seam bounds a separate
 allowance (maximum $1 per extraction), 30 seconds and 20 candidate revisions. It
@@ -128,6 +137,8 @@ evidence, then takes a separate explicit confirmation before fresh OpenSSH signi
 There is no `--yes`, wildcard, approve-all, alternate activation command or unsigned
 flag. Signing uses a pinned executable and minimal environment: agent, askpass,
 provider and dynamic-loader variables are absent; `SSH_ASKPASS_REQUIRE=never`.
+An optional `--reason` on `learn approve` appears in the immutable preview and signed
+transition as an audit explanation.
 Cancellation or failed signing changes no active content. Signed prepared intent
 may be recovered only against its exact current parent. The CLI currently selects
 one revision per invocation; explicit batches are available only to the shared

@@ -8,6 +8,7 @@ import { fileURLToPath } from "node:url";
 import { openSshSigner, encryptedKey, signingEnvironment, NAMESPACE, SIGNER_ID } from "../lib/learning_signer.mjs";
 import { canonical, hash } from "../lib/learning_data.mjs";
 import { createLearningService } from "../lib/learning.mjs";
+import { learnCommand } from "../lib/commands/learn.mjs";
 import { fixture, pending, proposed, repo } from "./learning-fixtures.mjs";
 
 let dir, key, otherKey, plainKey, authority, askpass, askpassMarker;
@@ -95,8 +96,13 @@ test("complete frozen preview precedes signing; cancellation changes no state", 
   const before = canonical(f.store.load(repo));
   await assert.rejects(f.service.approve(repo, [{ id: f.candidate.content.id, digest: f.candidate.digest }], { confirm: preview => { assert(preview.includes(f.candidate.content.guidance)); assert(preview.includes(f.candidate.content.example)); assert(preview.includes('"evidence"')); assert(preview.includes('"conflicts"')); return false; } }), /cancelled/);
   assert.equal(canonical(f.store.load(repo)), before); assert.equal(signed, false);
-  const result = await f.service.approve(repo, [{ id: f.candidate.content.id, digest: f.candidate.digest }], { confirm: preview => { previewed = true; assert(preview.includes(f.candidate.digest)); return true; } });
+  const reason = "Reviewed regression evidence for input validation";
+  const result = await learnCommand({ learning: { ...f.service, resolveRepo: async () => repo } }, {
+    args: ["approve", f.candidate.content.id], values: { repo: "example/project", revision: f.candidate.digest, reason },
+    confirm: preview => { previewed = true; assert(preview.includes(f.candidate.digest)); assert(preview.includes(reason)); return true; },
+  });
   assert.equal(result.sequence, 1); assert.equal(signed, true); assert.equal(f.store.load(repo).checkpoint.sequence, 1);
+  assert.equal(f.store.load(repo).transitions["1"].manifest.reason, reason);
 });
 
 test("signed activation, relevant bounded context, retirement and fresh-memory fencing", async t => {
