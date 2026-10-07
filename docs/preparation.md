@@ -24,13 +24,24 @@ The task-private config snapshot is parsed with bundled smol-toml. Model and
 provider settings are retained; legacy sandbox settings are removed because they
 override permission profiles. Legacy `notify` commands are removed from the private
 snapshot and disabled explicitly; turning off hooks alone does not disable them.
-Inherited `model_instructions_file` and `experimental_compact_prompt_file` paths
-are removed from the private snapshot. Codex reads these host files itself, so a
-tool permission profile cannot prevent their contents reaching model context.
-Before any drafting turn, a bounded native `config/read` probe verifies the merged
-settings, including system and MDM overrides. It starts no model turn, sends no
-intake text and discards configuration diagnostics. Conflicting sandbox, tool,
-notification, instruction-file, MCP or permission settings fail closed before a
+Inherited `instructions`, `developer_instructions`, `compact_prompt`,
+`model_instructions_file` and `experimental_compact_prompt_file` are removed from
+the private snapshot. Codex reads these itself, outside tool permissions. Automatic
+skill instructions, bundled/cloud skills, memory usage/generation and token-budget
+compaction overrides are disabled. Stale `AGENTS.md` and `AGENTS.override.md` in the
+private Codex home are unlinked: global instructions ignore `project_doc_max_bytes`.
+The operator's own AGENTS files are never copied or changed.
+
+Native telemetry exporters, prompt logging and analytics/feedback are disabled.
+Private `log_dir` and `sqlite_home` overrides are removed so draft logs/state stay
+under the private home; inherited hooks and notifications remain disabled.
+Before any drafting turn, a bounded native `config/read` **and**
+`configRequirements/read` probe verifies merged settings and separate managed
+requirements. The latter can inject developer instructions or force runtime
+permission/approval/web-search fallbacks absent from the raw config. Both reads
+share one timeout, cancellation handler and output bound. They start no model
+turn, send no intake text and discard configuration diagnostics. Conflicting
+context, telemetry, storage, sandbox, tool, notification, MCP or permission settings fail closed before a
 preparation receipt is returned. Managed policy is never rewritten to obtain a pass.
 Native operator files and managed requirements are unchanged.
 Unsupported named config profiles and ambiguous MCP server names stop
@@ -46,15 +57,21 @@ node test/preparation-codex-native.mjs /absolute/path/to/codex \
 
 The native fixture explicitly loads the supplied model catalog, including its
 delegation version. It attempts shell, inherited MCP, delegation and file-patch
-calls both inside and outside the workspace. It also seeds instruction files
-outside the workspace and checks every provider request for their sentinel text.
+calls both inside and outside the workspace. It seeds file and inline instructions,
+project/global AGENTS, skill metadata, memory, notifications, telemetry and external
+state paths. Every provider request is checked for sentinel context. Model choice
+and reasoning effort must survive, and external writes/telemetry must stay absent.
 On 2026-10-07, all three models passed these checks with Codex 0.160.0, including
 Sol and Astra with explicit V2 catalog metadata. Inherited notification commands
 stayed disabled and unselected instruction text was absent from every request.
 Conflicting effective settings were refused before any model request. Managed precedence is covered
-by protocol regression fixtures without editing the machine's administrator policy.
+by protocol regression fixtures, including separate instruction requirements and
+permission fallbacks, without editing the machine's administrator policy.
 This proves native CLI/configuration behavior with a fixture provider,
 not live provider eligibility or a completed APort/ChatGPT workflow.
+
+The [PR #10 context and side-effect audit](audit/preparation-context-boundary.md)
+records the source-backed findings, regression coverage and trust limits.
 
 Official configuration references:
 [permissions](https://learn.chatgpt.com/docs/permissions),

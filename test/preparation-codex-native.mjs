@@ -21,14 +21,22 @@ const notifyMarker = join(root, "unexpected-notification");
 const instructionFile = join(root, "unselected-owner-instructions.md");
 const privateInstruction = "GALLIVANT_UNSELECTED_PRIVATE_INSTRUCTION_SENTINEL";
 writeFileSync(instructionFile, privateInstruction);
+const inlineSentinels = ["GALLIVANT_PRIVATE_SYSTEM_SENTINEL", "GALLIVANT_PRIVATE_DEVELOPER_SENTINEL", "GALLIVANT_PRIVATE_COMPACT_SENTINEL"];
+const discoverySentinels = ["PROJECT_AGENTS", "HOME_AGENTS", "MEMORY", "SKILL"].map(name => `GALLIVANT_UNSELECTED_${name}_SENTINEL`);
+for (const [i, path] of [join(cwd, "AGENTS.md"), join(configHome, "AGENTS.md"), join(configHome, "memories", "memory_summary.md"), join(configHome, "skills", "owner", "SKILL.md")].entries()) {
+  mkdirSync(join(path, ".."), { recursive: true });
+  writeFileSync(path, path.endsWith("SKILL.md") ? `---\nname: owner\ndescription: ${discoverySentinels[i]}\n---\n${discoverySentinels[i]}` : discoverySentinels[i]);
+}
+const ownerLog = join(root, "owner-log"), ownerDb = join(root, "owner-db");
 // Force the catalog into the native loader. A custom provider's /models URL
 // alone does not prove that its metadata was used to resolve agent tools.
 const privateCatalog = join(configHome, "fixture-model-catalog.json");
 writeFileSync(privateCatalog, JSON.stringify({ models: catalog.models }));
 const observations = [];
-let requests = [], responseIndex = 0;
+let requests = [], responseIndex = 0, telemetryRequests = 0;
 const server = createServer(async (request, response) => {
   if (request.url.startsWith("/models")) { response.writeHead(200, { "content-type": "application/json" }); response.end(JSON.stringify({ models: catalog.models })); return; }
+  if (request.url.startsWith("/telemetry")) { telemetryRequests++; request.resume(); response.writeHead(200); response.end("{}"); return; }
   let bytes = ""; for await (const chunk of request) bytes += chunk;
   const body = JSON.parse(bytes); requests.push(body);
   // A hostile/incorrect provider response must not be able to invoke a tool
@@ -57,11 +65,19 @@ try {
     assert.ok(catalog.models.some(m => m.slug === model), `missing real metadata for ${model}`);
     writeFileSync(join(configHome, "config.toml"), [
       `model=${JSON.stringify(model)}`, 'model_provider="preparation_fixture"',
+      'model_reasoning_effort="high"',
       `model_catalog_json=${JSON.stringify(privateCatalog)}`,
+      ...["instructions", "developer_instructions", "compact_prompt"].map((key, i) => `${key}=${JSON.stringify(inlineSentinels[i])}`),
       `model_instructions_file=${JSON.stringify(instructionFile)}`,
       `experimental_compact_prompt_file=${JSON.stringify(instructionFile)}`,
+      `log_dir=${JSON.stringify(ownerLog)}`, `sqlite_home=${JSON.stringify(ownerDb)}`,
       `notify=${JSON.stringify([process.execPath, "-e", `require('node:fs').writeFileSync(${JSON.stringify(notifyMarker)},process.argv.at(-1))`])}`,
-      'sandbox_mode="workspace-write"', '[agents]', 'enabled=true', '[features]', 'multi_agent_v2=true',
+      'sandbox_mode="workspace-write"', '[agents]', 'enabled=true', '[features]', 'multi_agent_v2=true', 'memories=true', 'request_permissions_tool=true',
+      `token_budget={enabled=true,auto_compact_fallback_prompt=${JSON.stringify(inlineSentinels[2])},auto_compact_fallback_buffer_tokens=64}`,
+      '[skills]', 'include_instructions=true', '[skills.bundled]', 'enabled=true',
+      '[memories]', 'generate_memories=true', 'use_memories=true',
+      '[otel]', 'log_user_prompt=true', 'log_agent_responses=true',
+      '[otel.exporter.otlp-http]', `endpoint=${JSON.stringify(`${url}/telemetry`)}`, 'protocol="json"',
       '[sandbox_workspace_write]', 'network_access=true',
       '[permissions.gallivant_preparation.filesystem]', '":root"="write"',
       '[model_providers.preparation_fixture]', 'name="preparation_fixture"', `base_url=${JSON.stringify(url)}`,
@@ -84,15 +100,16 @@ try {
     assert.equal(requests.length, 6, "hostile shell, MCP, inside/outside patch and delegation replies were processed before completion");
     for (const request of requests) {
       assert.equal(request.model, model, "adapter changed the selected model");
+      assert.equal(request.reasoning?.effort, "high", "adapter changed the selected reasoning effort");
       assert.ok((request.tools ?? []).every(t => ["request_user_input", "apply_patch"].includes(t.name)), "preparation exposed an unrestricted tool");
-      assert.ok(!JSON.stringify(request).includes(privateInstruction), "unselected host instructions reached the model");
+      for (const sentinel of [privateInstruction, ...inlineSentinels, ...discoverySentinels]) assert.ok(!JSON.stringify(request).includes(sentinel), `unselected host context reached the model: ${sentinel}`);
     }
     const outcome = adapterFor("codex").outcome(output.trim().split("\n"));
     assert.equal(outcome.ok, true, output); assert.equal(outcome.lastMessage, "prepared");
-    observations.push({ model, catalogMultiAgentVersion: catalog.models.find(m => m.slug === model).multi_agent_version, requests: requests.length, tools: (requests[0].tools ?? []).map(t => t.name), hostileToolCallsRejected: 5, notifierDisabled: true, unselectedInstructionsExcluded: true, output: outcome.lastMessage });
+    observations.push({ model, catalogMultiAgentVersion: catalog.models.find(m => m.slug === model).multi_agent_version, requests: requests.length, tools: (requests[0].tools ?? []).map(t => t.name), hostileToolCallsRejected: 5, notifierDisabled: true, unselectedInstructionsExcluded: true, reasoningEffortPreserved: true, output: outcome.lastMessage });
   }
   const refusedOverrides = [];
-  for (const override of ['sandbox_mode="workspace-write"', 'features.shell_tool=true', 'agents.enabled=true', 'features.multi_agent_v2=true', `model_instructions_file=${JSON.stringify(instructionFile)}`, `experimental_compact_prompt_file=${JSON.stringify(instructionFile)}`, 'permissions.gallivant_preparation.filesystem.":root"="write"', `notify=${JSON.stringify([process.execPath, "-e", "process.exit(1)"])}`]) {
+  for (const override of ['sandbox_mode="workspace-write"', 'features.shell_tool=true', 'agents.enabled=true', 'features.multi_agent_v2=true', 'instructions="unselected-system"', 'developer_instructions="unselected-developer"', 'compact_prompt="unselected-compaction"', 'skills.include_instructions=true', 'memories.use_memories=true', 'otel.log_user_prompt=true', `model_instructions_file=${JSON.stringify(instructionFile)}`, `experimental_compact_prompt_file=${JSON.stringify(instructionFile)}`, 'permissions.gallivant_preparation.filesystem.":root"="write"', `notify=${JSON.stringify([process.execPath, "-e", "process.exit(1)"])}`]) {
     let spec = buildPreparationRun({ harness: "codex", config: { harness: { codex: { bin } }, max_budget_usd: 0 }, mode: "start", session: null, prompt: "This must never reach the provider", cwd });
     // Inject a conflicting effective value without changing system/MDM policy.
     // The unit fixture separately exercises merged administrator-layer results.
@@ -104,6 +121,9 @@ try {
   }
   await new Promise(resolve => setTimeout(resolve, 250));
   assert.equal(existsSync(notifyMarker), false, "legacy notifier ran asynchronously");
+  assert.equal(telemetryRequests, 0, "native telemetry exported preparation data");
+  assert.equal(existsSync(ownerLog), false, "native logs escaped the private home");
+  assert.equal(existsSync(ownerDb), false, "native state escaped the private home");
   assert.equal(readFileSync(instructionFile, "utf8"), privateInstruction, "operator instruction file was changed");
   console.log(JSON.stringify({ nativeVersion: spawnSync(bin, ["--version"], { encoding: "utf8", env }).stdout.trim(), provider: "loopback fixture; no inference", observations, refusedOverrides }, null, 2));
 } finally { server.closeAllConnections(); server.close(); rmSync(root, { recursive: true, force: true }); }
