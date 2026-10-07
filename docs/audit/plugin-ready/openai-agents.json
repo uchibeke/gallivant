@@ -1,0 +1,1739 @@
+{
+  "version": 1,
+  "task_id": "task-cf82d9f43ca0da3c5bb29b67",
+  "scope": "managed Agents REST implementation, provider-shaped offline lifecycle verification and native macOS verification readiness/enforcement; live qualification remains unverified",
+  "recorded_at": "2026-10-06T19:12:27.343Z",
+  "base_revision": "401f5cb2e68382a28b6f35f5ca4e9cbcc9ea84fb",
+  "branch": "work/openai-agents-harness",
+  "source_files": {
+    "README.md": "6c9a9e9e79f7a9bd9157464ea2602f6ecde0b2878422e5c8dbea64a98d5f2ab8",
+    "docs/audit/plugin-ready/README.md": "7f24289695807c9bd9d880e54e287c3bcfa1a3324543ca87eee68b1e24a9e8f7",
+    "docs/audit/plugin-ready/openai-agents-checklist.md": "6f2c23bd4fff91f9a925adaeea218dc9d0298443b591606629b02de030248980",
+    "docs/execution.md": "37bcfff160999741a77475ae9f32d42d46919e7d9f7d37dde9ef491a9547956e",
+    "docs/openai-agents.md": "38f162e4d4918bdab372be804e1a06a6a9582493c941f07799f97324f4637db2",
+    "docs/prds/openai-agents-harness.md": "b6d3ceeb20426248b5cf0d8527beaf93a6a69c09003cfc07d3a86fe8fa8b053a",
+    "lib/block.mjs": "bd644a1564d6d3dcf3edad1ad1f931fa5f3e4246a041f20acbbb04c88c07c665",
+    "lib/commands/doctor.mjs": "6a1c916f1a3626ba7656123792adf9ba3fdbd963cb64a3641437e337e4f18997",
+    "lib/commands/start.mjs": "fb081d7a775cbac690758d4abfe21b8e948feaed6a5c37408ead25f4292f65d3",
+    "lib/config.mjs": "4cdd522fb24463d01023eb1650b5123ff0675ce6c7bbee4731020e2b1b0e9174",
+    "lib/context.mjs": "8d086cc3dacaf68de5f84c11b1ac498d60d6b3b420b61214b5e631587e5b6119",
+    "lib/execution.mjs": "6a43518f89d1ad1e8c0303e51c486dd6ddc25cba2c8c4b2e816d10826e1f4322",
+    "lib/harness.mjs": "50640ba71ec7b03f2690ce07ab5d1731034d6d710a833c425d7e354337c6c9b5",
+    "lib/openai_agents.mjs": "cfe7bd53a8c89d30eea142b623c5cbcc5d234e4a96e2a71cfe4e000d67343363",
+    "lib/openai_agents_config.mjs": "7d9db1b55e3c0f71ada076811eb11baf9cfb0becdfed10f6a86ec6ecbfa69dc7",
+    "lib/openai_agents_http.mjs": "addca807057cd4b999cc6d67324de798c00fd455c962df23b135fed4b90f7206",
+    "lib/openai_agents_input.mjs": "a2978393dc2dfe348c97962d0a6a9356184e54a7fe426847b9195186fa8d0c68",
+    "lib/openai_agents_sources.mjs": "9d61867d9f86901b084f37d4da6c344df24a0ff71b7ab0537273aad4b18f1132",
+    "lib/probe.mjs": "bbacb430ed3ec7e3ab4b26fe01568d396d5d2257513264412c1c7e7ccb59383a",
+    "lib/tick.mjs": "6781d3b6131ff2f5c3f29889d4ab3889ea18da1486576b7b3434232447f89dd3",
+    "package.json": "cc440ea2539b8d40772db637b1f6593584c66818f810c4a45719c7c563ff003a",
+    "test/execution-backends.test.mjs": "0e812ca352904e9de84e3499054d09223955d3b159ebda007b55fe8ab4b8fbdc",
+    "test/openai-agents-live.mjs": "0f556440264766e17a369e6eaa6b71658833b93c18971b1ef1326d65452a20d2",
+    "test/openai-agents.test.mjs": "8b2b68a25b96bd3a138ab0b4d5321acb7298da56b8b77323cb76f58590a54121",
+    "test/units.test.mjs": "ae8ab863aa48e3e44557e8f20c00bb8440682325ec099eb34a81f339cbb42b9f",
+    "lib/execution_result.mjs": "b13f5169e3fa541f5cc1f8c4e87e401436849a5864ea514231246847c71c2f41",
+    "lib/verification_sandbox.mjs": "afb289b9641bee6e95102f9c899fd99274bfe07f6f0b4db21e0002e1dc309a7d",
+    "lib/execution_io.mjs": "5e38e1a02b88cc46bcddbe66f3414a764bb23c1f0f3ab648ab77b971af2730a9",
+    "lib/commands/resume.mjs": "768a4aebb28960f5976fe7b239bba1e0b9b8ea4dab5a68c79ddf7da2a73e20bd",
+    "lib/gh.mjs": "fc1fe24b0a72372160722f563637a8e556bd2622b410d7bedfb232a345ef455e",
+    "docs/tasks.md": "4483b3c3a44117240e3ca10a5e55941578e7c3b2b20775a57af6743603a9bb34",
+    "docs/architecture.md": "9dd05a08dc8253c9bd782e03ddd67fc3e35fa5d519a9d0a33b3e3a3d333cc01f",
+    "lib/task_prepare.mjs": "f0f27738e208f174aa89dba3a6f70f382cf7e03abe541df5d1854aed4adb9492",
+    "lib/execution_preparation.mjs": "2c7f3232b2b89d9bf49d20f9f291b692b206118df50133f92dc5140b8fccbae1",
+    "lib/tasks.mjs": "37b24281af6e49067eb4a525fe418bcbf3d0b6134057526b190fe6162f5e4bbb",
+    "lib/events.mjs": "776867f9a280ea179f2be8f6e570c88d468ebb5500db8864041fd29b01202e27",
+    "lib/time.mjs": "da5f6d30e5059e9b3ed45c3e4a604a3ad20fcc17449ed2ff0429aa9c7a79f146",
+    "test/execution-preparation.test.mjs": "363d4d89fb29b22ef5dfbdfb3889e583ef6b92eab8e4d498b0ec9ef1059c08e4",
+    "test/tick.test.mjs": "2e6b2e5766ed7d7dcc8003568964dad5e1de86bd9d7e8657e07054704db9a73d",
+    "lib/control.mjs": "d37258c2c53aaed1e47ce74d06f80737efa15c12137605d0a125a10a5995534d",
+    "lib/commands/serve.mjs": "c53a41d97c614ca09d7411973522b7ca4e9adf4e0bb608c61c4ed405a547135e",
+    "lib/tracker/pages.mjs": "ceb768dd4e78931749ffd78918d37fb8a82805907d219e0bfe80c1478654d9e7",
+    "lib/provider_health.mjs": "1250697922c7eb08f2d0c874286cbc49f13ae85c734ae3fb0eeb1d4b17ec0f41"
+  },
+  "frozen_inputs": {
+    "docs/plans/plugin-ready-gallivant.md": "3081d47d8161043f9c32b6184f07ee8d4ca513822341c41a138bdf28f7459fc2",
+    "docs/plans/plugin-hosting-and-live-tests.md": "21194dd4af8090950d2e80fea79fa5154ca79fa4a3289a5e4404883a38c9f11d",
+    "docs/prds/natural-language-tasks.md": "03256f613e8b8e5b84bd7791581c38d2a3bc2b0ba36b5e8b2f8ee2b548097c0d",
+    "docs/prds/hosted-codex-harnesses.md": "5d21326d44207c5cfd281561b40e873328607d94bbe40c8a8f0456b73ab65f63"
+  },
+  "versions": {
+    "node": "22.22.0",
+    "npm": "10.9.4",
+    "package": "0.1.0",
+    "agents_api": "agents=v1",
+    "execution": 1,
+    "registry": 1
+  },
+  "commands": [
+    {
+      "command": "npm test",
+      "exit": 0,
+      "raw_log": "/tmp/agents-retry-source-test-final.log",
+      "sha256": "befd8da5c82245d5cbe31adfb575d5f3e8840f0f3c2ab11777ae8406b780810f",
+      "tests": 1161,
+      "pass": 1161,
+      "fail": 0,
+      "cancelled": 0,
+      "skipped": 0
+    },
+    {
+      "command": "npm run lint",
+      "exit": 0,
+      "raw_log": "/tmp/agents-retry-source-lint-final.log",
+      "sha256": "8c7790de3f018fb4580f18ac70e1b355a0f76f522dd73acbdaa63632feffcecc"
+    },
+    {
+      "command": "npm run test:execution-backends",
+      "exit": 0,
+      "raw_log": "/tmp/agents-retry-source-backends-final.log",
+      "sha256": "a47002fcdbd673a21d7b5547c9c67b084a45f20a75b11dbf85ef6662d100b29e",
+      "tests": 397,
+      "pass": 397,
+      "fail": 0,
+      "cancelled": 0,
+      "skipped": 0
+    },
+    {
+      "command": "npm run test:openai-agents",
+      "exit": 0,
+      "raw_log": "/tmp/agents-retry-source-openai-final.log",
+      "sha256": "ebf2dcaaa4d2549bb413a3bf1b968998a04d27fe085f8767df34382c0c4fcec0",
+      "tests": 59,
+      "pass": 59,
+      "fail": 0,
+      "cancelled": 0,
+      "skipped": 0
+    },
+    {
+      "command": "git diff --check",
+      "exit": 0,
+      "raw_log": "/tmp/agents-retry-source-diff-final.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    }
+  ],
+  "cases": [
+    {
+      "criterion_id": "ac-1",
+      "met": true,
+      "evidence_kind": "implementation-and-offline-fixtures",
+      "files": [
+        "lib/context.mjs",
+        "lib/harness.mjs",
+        "lib/execution.mjs",
+        "lib/tick.mjs"
+      ],
+      "test_names": [
+        "missing predecessor module stops context startup with a dependency remedy",
+        "predecessor service is required and managed API is available while Cloud remains reserved",
+        "preparation capabilities expose policy data and validate the selected provider/account/version",
+        "codex fixture preparation shares drafting, clarification, repair and deterministic readiness without CLI/PID",
+        "gemini fixture preparation shares drafting, clarification, repair and deterministic readiness without CLI/PID",
+        "saved readiness, answer, start and recovery reject receipts borrowed from another selected provider",
+        "initial preparation refusal supports the shared operator control after repair and restart"
+      ]
+    },
+    {
+      "criterion_id": "ac-2",
+      "met": true,
+      "evidence_kind": "implementation-and-offline-fixtures",
+      "files": [
+        "lib/openai_agents_config.mjs",
+        "lib/openai_agents.mjs",
+        "lib/probe.mjs",
+        "lib/execution_result.mjs",
+        "lib/verification_sandbox.mjs"
+      ],
+      "test_names": [
+        "configuration refuses unavailable policy, missing billing selectors and private context",
+        "read-only account probe records exact selectors without claiming inference or hard caps",
+        "managed readiness proves native isolation before API reads and doctor reports unsupported hosts",
+        "unsupported host blocks managed start before cloning, snapshots or provider access",
+        "managed resume API refusal preserves checkout, accepted brief and sources, registry and session before mutation",
+        "native verification supports Git checks with immutable current-revision metadata in normal and linked checkouts",
+        "verification process helper preserves binary Git objects and binary failure diagnostics",
+        "npm entry point supports custom Node prefixes without granting their bin directory",
+        "unsubmitted initial resume preserves registry and inputs on readiness failure and refuses cancellation or unresolved intents",
+        "invalid provider retry delays preserve finite reconciliation, health and cancellation schedules across restart",
+        "Retry-After seconds and HTTP dates remain finite and bounded",
+        "Agents readiness carries HTTP-date throttling into shared account health after restart",
+        "throttled http-date retry survives restart and defers coordinator polling",
+        "throttled malformed retry survives restart and defers coordinator polling",
+        "throttled capped retry survives restart and defers coordinator polling"
+      ]
+    },
+    {
+      "criterion_id": "ac-3",
+      "met": true,
+      "evidence_kind": "implementation-and-offline-fixtures",
+      "files": [
+        "lib/openai_agents.mjs",
+        "lib/openai_agents_sources.mjs",
+        "lib/commands/start.mjs"
+      ],
+      "test_names": [
+        "real REST adapter: implementation, artifact pagination, restart and same-session correction",
+        "source snapshot preserves binary blobs, exact revision and verified carried files",
+        "initial launch reply loss remains registered for coordinator restart without a second implementation",
+        "hosted snapshots refuse unfinished tracked, staged, deleted, renamed and untracked files without uploading them",
+        "managed dirty resume refuses before merge, reopen, registry mutation or corrective dispatch",
+        "openai-agents fixture: proven pre-send refusal restores the prior root and allowance without ambiguity",
+        "codex-cloud fixture: proven pre-send refusal restores the prior root and allowance without ambiguity",
+        "an unmarked submission failure cannot release an intent merely because its error code names readiness",
+        "cancellation retry after a proven pre-send refusal still fences the restored task",
+        "a proven unsent review correction stops actionably without moving feedback or the prior root",
+        "managed pre-send host refusal releases intent and reservation across restart: continue=false",
+        "managed pre-send host refusal releases intent and reservation across restart: continue=true",
+        "malformed pre-send sources release only the unsubmitted intent without purchasing or stranding work",
+        "initial launch pre-send refusal remains registered for safe coordinator recovery",
+        "failed initial portable preparation is registered and resumes the preserved checkout after repair: symlink",
+        "failed initial portable preparation is registered and resumes the preserved checkout after repair: submodule",
+        "failed initial portable preparation is registered and resumes the preserved checkout after repair: size",
+        "failed initial portable preparation is registered and resumes the preserved checkout after repair: head-race",
+        "initial brief delivery failure stays registered and restores missing approved bytes after repair",
+        "SHA-256 source snapshot reaches hosted dispatch and immutable result recovery"
+      ]
+    },
+    {
+      "criterion_id": "ac-4",
+      "met": true,
+      "evidence_kind": "implementation-and-offline-fixtures",
+      "files": [
+        "lib/openai_agents.mjs",
+        "lib/openai_agents_input.mjs",
+        "lib/execution.mjs"
+      ],
+      "test_names": [
+        "authorized required action answer targets exact existing turn and rejects arbitrary tools",
+        "real REST adapter: implementation, artifact pagination, restart and same-session correction",
+        "operator answer lost-before recovers the same call and key across restart",
+        "operator answer timeout-before recovers the same call and key across restart",
+        "operator answer lost-after recovers the same call and key across restart",
+        "operator answer cleanup recovers the same call and key across restart",
+        "ambiguous answer recovery refuses changed actions, missing proof, foreign roots and stopped sessions without resending",
+        "answer ambiguity requires a safe transport recovery method and preserves ownership, key and stop fences",
+        "hosted snapshots refuse unfinished tracked, staged, deleted, renamed and untracked files without uploading them",
+        "managed dirty resume refuses before merge, reopen, registry mutation or corrective dispatch",
+        "openai-agents fixture: proven pre-send refusal restores the prior root and allowance without ambiguity",
+        "codex-cloud fixture: proven pre-send refusal restores the prior root and allowance without ambiguity",
+        "an unmarked submission failure cannot release an intent merely because its error code names readiness",
+        "cancellation retry after a proven pre-send refusal still fences the restored task",
+        "a proven unsent review correction stops actionably without moving feedback or the prior root",
+        "managed pre-send host refusal releases intent and reservation across restart: continue=false",
+        "managed pre-send host refusal releases intent and reservation across restart: continue=true",
+        "malformed pre-send sources release only the unsubmitted intent without purchasing or stranding work",
+        "initial launch pre-send refusal remains registered for safe coordinator recovery",
+        "legacy initial refusal resumes from private non-dispatch proof without creating an unrelated implementation",
+        "initial retry reply loss reconciles the original operation through coordinator restart without another session",
+        "initial launch reply loss remains registered for coordinator restart without a second implementation"
+      ]
+    },
+    {
+      "criterion_id": "ac-5",
+      "met": true,
+      "evidence_kind": "implementation-and-offline-fixtures",
+      "files": [
+        "lib/openai_agents.mjs",
+        "lib/openai_agents_http.mjs",
+        "lib/execution_journal.mjs"
+      ],
+      "test_names": [
+        "subagent completion, closed stream and idle session never settle a running root",
+        "reconnect restores paginated items, discards reordered deltas after done and labels gaps"
+      ]
+    },
+    {
+      "criterion_id": "ac-6",
+      "met": true,
+      "evidence_kind": "implementation-and-offline-fixtures",
+      "files": [
+        "lib/openai_agents.mjs",
+        "lib/openai_agents_http.mjs"
+      ],
+      "test_names": [
+        "reconnect restores paginated items, discards reordered deltas after done and labels gaps",
+        "unresolved root identity has a three-attempt recovery circuit without resending",
+        "operator answer lost-after recovers the same call and key across restart",
+        "invalid provider retry delays preserve finite reconciliation, health and cancellation schedules across restart",
+        "Retry-After seconds and HTTP dates remain finite and bounded",
+        "Agents readiness carries HTTP-date throttling into shared account health after restart",
+        "throttled http-date retry survives restart and defers coordinator polling",
+        "throttled malformed retry survives restart and defers coordinator polling",
+        "throttled capped retry survives restart and defers coordinator polling"
+      ]
+    },
+    {
+      "criterion_id": "ac-7",
+      "met": true,
+      "evidence_kind": "implementation-and-offline-fixtures",
+      "files": [
+        "lib/openai_agents.mjs",
+        "lib/execution.mjs",
+        "lib/tick.mjs",
+        "lib/execution_result.mjs",
+        "lib/verification_sandbox.mjs"
+      ],
+      "test_names": [
+        "failed session opens no endless reconnect loop across restart",
+        "failed or unsent launch recovery stops provider I/O and preserves ambiguity",
+        "HTTP 401 preserves work and bounded retries with actionable private-safe errors",
+        "HTTP 429 preserves work and bounded retries with actionable private-safe errors",
+        "expired filesystem still permits immutable artifact recovery but refuses continuation",
+        "deterministic artifact rejection survives coordinator restart and permits same-session correction",
+        "unsupported host refuses preparation, direct dispatch and manual continuation while artifact recovery remains available",
+        "remote host refusal precedes checkout mutation and paid correction while unrelated PR review settles",
+        "operator answer lost-before recovers the same call and key across restart",
+        "operator answer timeout-before recovers the same call and key across restart",
+        "operator answer lost-after recovers the same call and key across restart",
+        "operator answer cleanup recovers the same call and key across restart",
+        "ambiguous answer recovery refuses changed actions, missing proof, foreign roots and stopped sessions without resending",
+        "answer ambiguity requires a safe transport recovery method and preserves ownership, key and stop fences",
+        "managed resume API refusal preserves checkout, accepted brief and sources, registry and session before mutation",
+        "hosted snapshots refuse unfinished tracked, staged, deleted, renamed and untracked files without uploading them",
+        "managed dirty resume refuses before merge, reopen, registry mutation or corrective dispatch",
+        "openai-agents fixture: proven pre-send refusal restores the prior root and allowance without ambiguity",
+        "codex-cloud fixture: proven pre-send refusal restores the prior root and allowance without ambiguity",
+        "an unmarked submission failure cannot release an intent merely because its error code names readiness",
+        "cancellation retry after a proven pre-send refusal still fences the restored task",
+        "a proven unsent review correction stops actionably without moving feedback or the prior root",
+        "managed pre-send host refusal releases intent and reservation across restart: continue=false",
+        "managed pre-send host refusal releases intent and reservation across restart: continue=true",
+        "malformed pre-send sources release only the unsubmitted intent without purchasing or stranding work",
+        "initial launch pre-send refusal remains registered for safe coordinator recovery",
+        "initial preparation refusal supports the shared operator control after repair and restart",
+        "failed initial portable preparation is registered and resumes the preserved checkout after repair: symlink",
+        "failed initial portable preparation is registered and resumes the preserved checkout after repair: submodule",
+        "failed initial portable preparation is registered and resumes the preserved checkout after repair: size",
+        "failed initial portable preparation is registered and resumes the preserved checkout after repair: head-race",
+        "initial brief delivery failure stays registered and restores missing approved bytes after repair",
+        "unsubmitted initial resume preserves registry and inputs on readiness failure and refuses cancellation or unresolved intents",
+        "initial retry reply loss reconciles the original operation through coordinator restart without another session",
+        "invalid provider retry delays preserve finite reconciliation, health and cancellation schedules across restart",
+        "Retry-After seconds and HTTP dates remain finite and bounded",
+        "Agents readiness carries HTTP-date throttling into shared account health after restart",
+        "throttled http-date retry survives restart and defers coordinator polling",
+        "throttled malformed retry survives restart and defers coordinator polling",
+        "throttled capped retry survives restart and defers coordinator polling"
+      ]
+    },
+    {
+      "criterion_id": "ac-8",
+      "met": true,
+      "evidence_kind": "implementation, provider-shaped fixtures and native macOS verification enforcement",
+      "files": [
+        "lib/openai_agents_sources.mjs",
+        "lib/openai_agents.mjs",
+        "lib/execution_result.mjs",
+        "lib/verification_sandbox.mjs",
+        "lib/execution.mjs",
+        "lib/tick.mjs"
+      ],
+      "test_names": [
+        "managed artifacts reach the single PR writer with actual file and current-head verification",
+        "sandbox publisher delivers unchanged carried files, receipt repairs and rejects symlinks and mode changes",
+        "deterministic artifact rejection survives coordinator restart and permits same-session correction",
+        "host-file exfiltration in artifact and pushed-branch Verify scripts is denied before publication",
+        "native verification permits npm and checkout tools while denying child, symlink, Git, journal and network escapes",
+        "unavailable or unproven verification sandbox blocks once, preserves results and cleans its profile",
+        "an earlier Verify command cannot replace the sandbox policy for a later command",
+        "verification recovery rejects legacy unsandboxed evidence without replaying or pushing",
+        "a stop during sandbox preparation prevents Verify dispatch and removes the private profile",
+        "unsupported host refuses preparation, direct dispatch and manual continuation while artifact recovery remains available",
+        "native verification supports Git checks with immutable current-revision metadata in normal and linked checkouts",
+        "verification process helper preserves binary Git objects and binary failure diagnostics",
+        "npm entry point supports custom Node prefixes without granting their bin directory",
+        "source snapshot preserves binary blobs, exact revision and verified carried files",
+        "SHA-256 source snapshot reaches hosted dispatch and immutable result recovery"
+      ]
+    },
+    {
+      "criterion_id": "ac-9",
+      "met": true,
+      "evidence_kind": "implementation-and-offline-fixtures",
+      "files": [
+        "lib/tick.mjs",
+        "lib/commands/resume.mjs",
+        "lib/control.mjs",
+        "lib/deliverable.mjs",
+        "lib/execution.mjs",
+        "lib/execution_result.mjs",
+        "lib/verification_sandbox.mjs"
+      ],
+      "test_names": [
+        "shared resume uses remote capabilities and owned sessions without a fake CLI",
+        "real REST adapter: implementation, artifact pagination, restart and same-session correction",
+        "sandbox publisher delivers unchanged carried files, receipt repairs and rejects symlinks and mode changes",
+        "phase-bounded coordinator settlement cannot enter review dispatch or queued resume",
+        "deterministic artifact rejection survives coordinator restart and permits same-session correction",
+        "unsupported host refuses preparation, direct dispatch and manual continuation while artifact recovery remains available",
+        "remote host refusal precedes checkout mutation and paid correction while unrelated PR review settles",
+        "managed resume API refusal preserves checkout, accepted brief and sources, registry and session before mutation",
+        "hosted snapshots refuse unfinished tracked, staged, deleted, renamed and untracked files without uploading them",
+        "managed dirty resume refuses before merge, reopen, registry mutation or corrective dispatch",
+        "a receipt-only run dispatches reviews arriving during the run exactly once",
+        "receipt-only settlement preserves feedback while owing its own recoverable round marker",
+        "receipt announcement retries recognize GitHub timestamps in the run-start second",
+        "openai-agents fixture: proven pre-send refusal restores the prior root and allowance without ambiguity",
+        "codex-cloud fixture: proven pre-send refusal restores the prior root and allowance without ambiguity",
+        "an unmarked submission failure cannot release an intent merely because its error code names readiness",
+        "cancellation retry after a proven pre-send refusal still fences the restored task",
+        "a proven unsent review correction stops actionably without moving feedback or the prior root",
+        "managed pre-send host refusal releases intent and reservation across restart: continue=false",
+        "managed pre-send host refusal releases intent and reservation across restart: continue=true",
+        "malformed pre-send sources release only the unsubmitted intent without purchasing or stranding work",
+        "initial launch pre-send refusal remains registered for safe coordinator recovery",
+        "initial preparation refusal supports the shared operator control after repair and restart",
+        "initial retry reply loss reconciles the original operation through coordinator restart without another session",
+        "initial launch reply loss remains registered for coordinator restart without a second implementation"
+      ]
+    },
+    {
+      "criterion_id": "ac-10",
+      "met": true,
+      "evidence_kind": "implementation-and-offline-fixtures",
+      "files": [
+        "lib/openai_agents.mjs",
+        "lib/execution.mjs"
+      ],
+      "test_names": [
+        "cancellation uses active turn cancellation, fences dispatch and quarantines late artifacts",
+        "remote and preparation timeout fences remain permanent after authoritative shutdown",
+        "reported usage above a reservation exhausts allowance without double charging replay",
+        "unknown cost stays null until a valid zero and cancellation retains known spend",
+        "phase-bounded coordinator settlement cannot enter review dispatch or queued resume",
+        "ambiguous answer recovery refuses changed actions, missing proof, foreign roots and stopped sessions without resending",
+        "answer ambiguity requires a safe transport recovery method and preserves ownership, key and stop fences",
+        "openai-agents fixture: proven pre-send refusal restores the prior root and allowance without ambiguity",
+        "codex-cloud fixture: proven pre-send refusal restores the prior root and allowance without ambiguity",
+        "an unmarked submission failure cannot release an intent merely because its error code names readiness",
+        "cancellation retry after a proven pre-send refusal still fences the restored task",
+        "a proven unsent review correction stops actionably without moving feedback or the prior root",
+        "managed pre-send host refusal releases intent and reservation across restart: continue=false",
+        "managed pre-send host refusal releases intent and reservation across restart: continue=true",
+        "malformed pre-send sources release only the unsubmitted intent without purchasing or stranding work",
+        "initial launch pre-send refusal remains registered for safe coordinator recovery",
+        "unsubmitted initial resume preserves registry and inputs on readiness failure and refuses cancellation or unresolved intents",
+        "initial retry reply loss reconciles the original operation through coordinator restart without another session",
+        "invalid provider retry delays preserve finite reconciliation, health and cancellation schedules across restart",
+        "Retry-After seconds and HTTP dates remain finite and bounded",
+        "Agents readiness carries HTTP-date throttling into shared account health after restart",
+        "throttled http-date retry survives restart and defers coordinator polling",
+        "throttled malformed retry survives restart and defers coordinator polling",
+        "throttled capped retry survives restart and defers coordinator polling"
+      ]
+    },
+    {
+      "criterion_id": "ac-11",
+      "met": true,
+      "evidence_kind": "implementation, provider-shaped fixtures and native macOS verification enforcement",
+      "files": [
+        "lib/openai_agents_config.mjs",
+        "lib/openai_agents_input.mjs",
+        "lib/openai_agents_http.mjs",
+        "lib/execution_result.mjs",
+        "lib/verification_sandbox.mjs",
+        "lib/execution.mjs",
+        "lib/tick.mjs"
+      ],
+      "test_names": [
+        "configuration refuses unavailable policy, missing billing selectors and private context",
+        "deterministic artifact rejection survives coordinator restart and permits same-session correction",
+        "host-file exfiltration in artifact and pushed-branch Verify scripts is denied before publication",
+        "native verification permits npm and checkout tools while denying child, symlink, Git, journal and network escapes",
+        "unavailable or unproven verification sandbox blocks once, preserves results and cleans its profile",
+        "an earlier Verify command cannot replace the sandbox policy for a later command",
+        "verification recovery rejects legacy unsandboxed evidence without replaying or pushing",
+        "a stop during sandbox preparation prevents Verify dispatch and removes the private profile",
+        "managed readiness proves native isolation before API reads and doctor reports unsupported hosts",
+        "unsupported host blocks managed start before cloning, snapshots or provider access",
+        "unsupported host refuses preparation, direct dispatch and manual continuation while artifact recovery remains available",
+        "readiness enforcement rejects failed, unproven and aborted probes and always removes scratch profiles",
+        "remote host refusal precedes checkout mutation and paid correction while unrelated PR review settles",
+        "ambiguous answer recovery refuses changed actions, missing proof, foreign roots and stopped sessions without resending",
+        "answer ambiguity requires a safe transport recovery method and preserves ownership, key and stop fences",
+        "managed resume API refusal preserves checkout, accepted brief and sources, registry and session before mutation",
+        "native verification supports Git checks with immutable current-revision metadata in normal and linked checkouts",
+        "verification process helper preserves binary Git objects and binary failure diagnostics",
+        "hosted snapshots refuse unfinished tracked, staged, deleted, renamed and untracked files without uploading them",
+        "managed dirty resume refuses before merge, reopen, registry mutation or corrective dispatch",
+        "npm entry point supports custom Node prefixes without granting their bin directory",
+        "openai-agents fixture: proven pre-send refusal restores the prior root and allowance without ambiguity",
+        "codex-cloud fixture: proven pre-send refusal restores the prior root and allowance without ambiguity",
+        "an unmarked submission failure cannot release an intent merely because its error code names readiness",
+        "cancellation retry after a proven pre-send refusal still fences the restored task",
+        "a proven unsent review correction stops actionably without moving feedback or the prior root",
+        "managed pre-send host refusal releases intent and reservation across restart: continue=false",
+        "managed pre-send host refusal releases intent and reservation across restart: continue=true",
+        "malformed pre-send sources release only the unsubmitted intent without purchasing or stranding work",
+        "initial launch pre-send refusal remains registered for safe coordinator recovery",
+        "failed initial portable preparation is registered and resumes the preserved checkout after repair: symlink",
+        "failed initial portable preparation is registered and resumes the preserved checkout after repair: submodule",
+        "initial brief delivery failure stays registered and restores missing approved bytes after repair",
+        "unsubmitted initial resume preserves registry and inputs on readiness failure and refuses cancellation or unresolved intents",
+        "source snapshot preserves binary blobs, exact revision and verified carried files",
+        "SHA-256 source snapshot reaches hosted dispatch and immutable result recovery"
+      ]
+    },
+    {
+      "criterion_id": "ac-12",
+      "met": true,
+      "evidence_kind": "implementation, provider-shaped fixtures and native macOS verification enforcement",
+      "files": [
+        "test/openai-agents.test.mjs",
+        "test/execution-backends.test.mjs",
+        "lib/execution_result.mjs",
+        "lib/verification_sandbox.mjs",
+        "lib/execution.mjs",
+        "lib/tick.mjs"
+      ],
+      "test_names": [
+        "account/project isolation refuses foreign session metadata and persisted state",
+        "initial launch reply loss remains registered for coordinator restart without a second implementation",
+        "phase-bounded coordinator settlement cannot enter review dispatch or queued resume",
+        "host-file exfiltration in artifact and pushed-branch Verify scripts is denied before publication",
+        "native verification permits npm and checkout tools while denying child, symlink, Git, journal and network escapes",
+        "unavailable or unproven verification sandbox blocks once, preserves results and cleans its profile",
+        "an earlier Verify command cannot replace the sandbox policy for a later command",
+        "verification recovery rejects legacy unsandboxed evidence without replaying or pushing",
+        "a stop during sandbox preparation prevents Verify dispatch and removes the private profile",
+        "deterministic artifact rejection survives coordinator restart and permits same-session correction",
+        "artifact rejection fences downloads before a coordinator checkpoint can be saved",
+        "completed root with missing artifact delivery remains pending until the immutable result arrives",
+        "artifact download 401 stays retryable without a rejection checkpoint",
+        "artifact download 429 stays retryable without a rejection checkpoint",
+        "artifact download lost stays retryable without a rejection checkpoint",
+        "unmarked collection errors and foreign rejection checkpoints cannot settle the owned run",
+        "openai-agents fixture: rejected collection recovers checkpoint-first crash and preserves succeeded root",
+        "openai-agents fixture: rejected collection recovers checkpoint-first crash and preserves failed root",
+        "codex-cloud fixture: rejected collection recovers checkpoint-first crash and preserves succeeded root",
+        "codex-cloud fixture: rejected collection recovers checkpoint-first crash and preserves failed root",
+        "managed readiness proves native isolation before API reads and doctor reports unsupported hosts",
+        "unsupported host blocks managed start before cloning, snapshots or provider access",
+        "unsupported host refuses preparation, direct dispatch and manual continuation while artifact recovery remains available",
+        "readiness enforcement rejects failed, unproven and aborted probes and always removes scratch profiles",
+        "remote host refusal precedes checkout mutation and paid correction while unrelated PR review settles",
+        "operator answer lost-before recovers the same call and key across restart",
+        "operator answer timeout-before recovers the same call and key across restart",
+        "operator answer lost-after recovers the same call and key across restart",
+        "operator answer cleanup recovers the same call and key across restart",
+        "ambiguous answer recovery refuses changed actions, missing proof, foreign roots and stopped sessions without resending",
+        "answer ambiguity requires a safe transport recovery method and preserves ownership, key and stop fences",
+        "managed resume API refusal preserves checkout, accepted brief and sources, registry and session before mutation",
+        "native verification supports Git checks with immutable current-revision metadata in normal and linked checkouts",
+        "verification process helper preserves binary Git objects and binary failure diagnostics",
+        "hosted snapshots refuse unfinished tracked, staged, deleted, renamed and untracked files without uploading them",
+        "managed dirty resume refuses before merge, reopen, registry mutation or corrective dispatch",
+        "a receipt-only run dispatches reviews arriving during the run exactly once",
+        "receipt-only settlement preserves feedback while owing its own recoverable round marker",
+        "receipt announcement retries recognize GitHub timestamps in the run-start second",
+        "preparation capabilities expose policy data and validate the selected provider/account/version",
+        "codex fixture preparation shares drafting, clarification, repair and deterministic readiness without CLI/PID",
+        "gemini fixture preparation shares drafting, clarification, repair and deterministic readiness without CLI/PID",
+        "saved readiness, answer, start and recovery reject receipts borrowed from another selected provider",
+        "npm entry point supports custom Node prefixes without granting their bin directory",
+        "openai-agents fixture: proven pre-send refusal restores the prior root and allowance without ambiguity",
+        "codex-cloud fixture: proven pre-send refusal restores the prior root and allowance without ambiguity",
+        "an unmarked submission failure cannot release an intent merely because its error code names readiness",
+        "cancellation retry after a proven pre-send refusal still fences the restored task",
+        "a proven unsent review correction stops actionably without moving feedback or the prior root",
+        "managed pre-send host refusal releases intent and reservation across restart: continue=false",
+        "managed pre-send host refusal releases intent and reservation across restart: continue=true",
+        "malformed pre-send sources release only the unsubmitted intent without purchasing or stranding work",
+        "initial launch pre-send refusal remains registered for safe coordinator recovery",
+        "legacy initial refusal resumes from private non-dispatch proof without creating an unrelated implementation",
+        "initial preparation refusal supports the shared operator control after repair and restart",
+        "failed initial portable preparation is registered and resumes the preserved checkout after repair: symlink",
+        "failed initial portable preparation is registered and resumes the preserved checkout after repair: submodule",
+        "failed initial portable preparation is registered and resumes the preserved checkout after repair: size",
+        "failed initial portable preparation is registered and resumes the preserved checkout after repair: head-race",
+        "initial brief delivery failure stays registered and restores missing approved bytes after repair",
+        "unsubmitted initial resume preserves registry and inputs on readiness failure and refuses cancellation or unresolved intents",
+        "initial retry reply loss reconciles the original operation through coordinator restart without another session",
+        "invalid provider retry delays preserve finite reconciliation, health and cancellation schedules across restart",
+        "Retry-After seconds and HTTP dates remain finite and bounded",
+        "Agents readiness carries HTTP-date throttling into shared account health after restart",
+        "throttled http-date retry survives restart and defers coordinator polling",
+        "throttled malformed retry survives restart and defers coordinator polling",
+        "throttled capped retry survives restart and defers coordinator polling",
+        "source snapshot preserves binary blobs, exact revision and verified carried files",
+        "SHA-256 source snapshot reaches hosted dispatch and immutable result recovery"
+      ]
+    },
+    {
+      "criterion_id": "ac-13",
+      "met": false,
+      "evidence_kind": "unverified-live",
+      "files": [
+        "test/openai-agents-live.mjs",
+        "docs/openai-agents.md"
+      ],
+      "test_names": []
+    },
+    {
+      "criterion_id": "ac-14",
+      "met": true,
+      "evidence_kind": "documentation-and-package",
+      "files": [
+        "docs/openai-agents.md",
+        "docs/execution.md",
+        "docs/audit/plugin-ready/openai-agents-checklist.md"
+      ],
+      "test_names": [
+        "npm entry point supports custom Node prefixes without granting their bin directory",
+        "initial preparation refusal supports the shared operator control after repair and restart"
+      ]
+    }
+  ],
+  "representative_generated_output": {
+    "kind": "fixture",
+    "path": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/agents-offline-TjJ8J6/run-2dbafa8a-f0b8-4cdb-94a7-89d4d5a5ac26-artifacts.json",
+    "sha256": "16c09feca47099fa1005141c07af146326f38055bb27fd37f2da8966198533af"
+  },
+  "package_verification": {
+    "raw_record": "/tmp/agents-retry-source-package-verification.json",
+    "sha256": "94d7623d2b3b41f22919d973a9e8e723ffab8428c72b3d192bc35884285765eb",
+    "integrity": "sha512-jBtSSx4/TVn3Akpk7Vd6eglwTjWO+VIeiB9iQdFBQF/CITXT+HF6GqDD/u96Rk4cE0yGtiLNujILHVzI5EUNeQ==",
+    "files": 86,
+    "bytes": 433879,
+    "unpacked_bytes": 1323755,
+    "result": "seventeen HTTP/adapter/coordinator/execution/sandbox/readiness/source/start/resume/control/tracker modules imported from the unpacked local package with matching source and operator/intake/handoff document hashes; scripts ignored; zero provider calls"
+  },
+  "live": {
+    "version": 1,
+    "kind": "live",
+    "status": "unverified",
+    "phase": "preflight",
+    "at": "2026-10-06T13:09:30.294Z",
+    "blockers": [
+      "OPENAI_AGENTS_LIVE_HOME absent",
+      "OPENAI_AGENTS_LIVE_PRD absent",
+      "OPENAI_AGENTS_LIVE_REPO absent",
+      "OPENAI_AGENTS_CAMPAIGN_LEDGER absent",
+      "preflight only; no paid implementation or correction evidence collected"
+    ],
+    "costUsd": null,
+    "exit": 1,
+    "raw_log": "/tmp/agents-live-prerequisites.json",
+    "sha256": "cee7f8f2e92680df6183517c64864478649bc6bcaa5d78890a847d747bc3b0af",
+    "paid_calls": 0,
+    "inference_access": "unverified",
+    "host_plugin_capture": "not required for this REST milestone; installed-host release gate remains separate",
+    "remedy": "Supply the private configured live home and scoped project API key with Agents read/write plus inference access, authorized model/container/network, approved tiny disposable repository and PRD, and priced remaining aggregate USD 10 campaign ledger. Authorize implementation, reconcile observed cost, then force a current-head CI/trusted-review finding and authorize the same-session correction."
+  },
+  "pre_push_review": [
+    {
+      "rule": "Persist exact ownership before irreversible dispatch",
+      "checked": [
+        "lib/commands/start.mjs",
+        "lib/tick.mjs",
+        "lib/state.mjs",
+        "lib/execution.mjs"
+      ],
+      "regression": "initial launch reply loss remains registered for coordinator restart without a second implementation"
+    },
+    {
+      "rule": "Provider session identity must round-trip without a local executable",
+      "checked": [
+        "lib/harness.mjs",
+        "lib/block.mjs",
+        "lib/probe.mjs",
+        "lib/context.mjs",
+        "lib/commands/doctor.mjs"
+      ],
+      "regression": "every harness session ID round-trips through recovery metadata; managed API fixture launches without pid"
+    },
+    {
+      "rule": "Failed or ambiguous provider recovery must stop repeated I/O while preserving work",
+      "checked": [
+        "lib/openai_agents.mjs lookup/inspect/resetRecovery",
+        "lib/execution.mjs reconcile"
+      ],
+      "regression": "failed or unsent launch recovery and three-attempt circuit tests"
+    },
+    {
+      "rule": "Portable files must preserve approved inputs and reject unsupported output boundaries",
+      "checked": [
+        "lib/openai_agents_sources.mjs prepare/restore/publish",
+        "lib/openai_agents.mjs collect",
+        "lib/repository_files.mjs",
+        "lib/execution_result.mjs",
+        "lib/git.mjs commitResult"
+      ],
+      "regression": "sandbox output, unchanged carried files, receipt-only head preservation, symlink/mode/size, wrong-base/hash tests"
+    },
+    {
+      "rule": "A campaign phase may observe and publish only its explicitly authorized paid round",
+      "checked": [
+        "lib/tick.mjs settlement and queued controls",
+        "test/openai-agents-live.mjs reservation/restart/failure/lock paths"
+      ],
+      "regression": "phase-bounded coordinator settlement cannot enter review dispatch or queued resume"
+    },
+    {
+      "rule": "Verification authority must be enforced by an immutable OS boundary, including descendants and recovery",
+      "checked": [
+        "lib/execution_result.mjs artifact/pushedHead application, verification, replay and cleanup",
+        "lib/verification_sandbox.mjs runtime grants, immutable policy, bounded enforcement probe and cleanup",
+        "lib/tick.mjs result-verification settlement",
+        "lib/control.mjs publication block/resume",
+        "lib/git.mjs commitResult/pushResult and repository_files.mjs target containment"
+      ],
+      "regression": [
+        "host-file exfiltration in artifact and pushed-branch Verify scripts is denied before publication",
+        "native verification permits npm and checkout tools while denying child, symlink, Git, journal and network escapes",
+        "unavailable or unproven verification sandbox blocks once, preserves results and cleans its profile",
+        "an earlier Verify command cannot replace the sandbox policy for a later command",
+        "verification recovery rejects legacy unsandboxed evidence without replaying or pushing",
+        "a stop during sandbox preparation prevents Verify dispatch and removes the private profile"
+      ],
+      "representative_output": [
+        {
+          "label": "native host-file denial evidence",
+          "path": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-5qvSQx/verification-host-file-denial.json",
+          "sha256": "344f912517868bc0380240c7d7eea3f790efdd7e3c46d859fdedad42d53588eb"
+        },
+        {
+          "label": "native child/network isolation evidence",
+          "path": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-TQhP3x/verification.json",
+          "sha256": "3e5268ae1570b8f8741227fc1296ca89cb4101500311fba68595b5f603350b72"
+        },
+        {
+          "label": "immutable sandbox policy evidence",
+          "path": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-aRNJK7/verification.json",
+          "sha256": "c90399dd4baa75bb8c24183a65b50ae593d21380c60cd774ebd6a67da7afbe84"
+        }
+      ]
+    },
+    {
+      "rule": "A deterministic completed-turn artifact rejection must durably stop collection while preserving root ownership, work, cost and explicit corrective continuity",
+      "checked": [
+        "lib/openai_agents.mjs collect schema/portablePath/hash/alias validation, private cache and deletion refusal",
+        "lib/execution_io.mjs deterministic collection error marker versus transport/I/O failure",
+        "lib/execution.mjs collect checkpoint ordering, read recovery, failed-root migration, continuation/cancel and cost settlement",
+        "lib/tick.mjs result stop refreshes the same run before registry projection",
+        "lib/control.mjs recheck refusal and commands/resume.mjs same-session continuation",
+        "lib/execution_result.mjs existing blocked publication boundary and repository_files.mjs shared path validation"
+      ],
+      "regression": [
+        "deterministic artifact rejection survives coordinator restart and permits same-session correction",
+        "artifact rejection fences downloads before a coordinator checkpoint can be saved",
+        "completed root with missing artifact delivery remains pending until the immutable result arrives",
+        "artifact download 401 stays retryable without a rejection checkpoint",
+        "artifact download 429 stays retryable without a rejection checkpoint",
+        "artifact download lost stays retryable without a rejection checkpoint",
+        "unmarked collection errors and foreign rejection checkpoints cannot settle the owned run",
+        "openai-agents fixture: rejected collection recovers checkpoint-first crash and preserves succeeded root",
+        "openai-agents fixture: rejected collection recovers checkpoint-first crash and preserves failed root",
+        "codex-cloud fixture: rejected collection recovers checkpoint-first crash and preserves succeeded root",
+        "codex-cloud fixture: rejected collection recovers checkpoint-first crash and preserves failed root"
+      ],
+      "representative_output": [
+        {
+          "label": "provider-shaped offline rejection/restart/correction observations",
+          "path": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/agents-rejection-evidence-T4mFqW/collection-rejection.json",
+          "sha256": "79ba88c7a45b866922d427f91831c3e40ccff1dbf0748fe4958577c4bf6de60b"
+        },
+        {
+          "label": "json owned blocked checkpoint",
+          "path": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/agents-offline-NYNodU/run-6b76fc4d-5a0d-4fef-8f7c-a7760bb45351/result-application.json",
+          "sha256": "c7494f65f7d7fbed01872f6d12c2470090db2ef98ba54d8da70e328e69bf5a51"
+        },
+        {
+          "label": "json private untrusted artifact cache",
+          "path": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/agents-offline-NYNodU/run-6b76fc4d-5a0d-4fef-8f7c-a7760bb45351-rejected-artifact.json",
+          "sha256": "fa625d6058ecacc8e60666bf038f041cd4ea689df34954162ee6d4e03ca15a7e"
+        },
+        {
+          "label": "unsafePath owned blocked checkpoint",
+          "path": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/agents-offline-J1Lmcj/run-70090c68-d1cd-4311-8d99-63fe9df94c7a/result-application.json",
+          "sha256": "2372d36b9bd95cdb8ce30ea2cd2b58d2ed12d51d81752a52a22d087fb843f7cc"
+        },
+        {
+          "label": "unsafePath private untrusted artifact cache",
+          "path": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/agents-offline-J1Lmcj/run-70090c68-d1cd-4311-8d99-63fe9df94c7a-rejected-artifact.json",
+          "sha256": "d700a9c3ce780d107104c4fee0da7fd6b1f471477d5fec0620fa848771da01bb"
+        }
+      ]
+    },
+    {
+      "rule": "Mandatory verification host capability must be enforced before paid remote dispatch or checkout mutation",
+      "checked": [
+        "lib/probe.mjs checkHarness and commands/doctor.mjs: native enforcement before API readiness",
+        "lib/commands/start.mjs existing requireHarness before clone and task snapshots",
+        "lib/commands/resume.mjs before checkout recreation, base merging and resnapshot",
+        "lib/tick.mjs dispatch/startRun before checkout mutation and new review round; actionable needs-human state",
+        "lib/openai_agents.mjs prepare/direct submit/continue before provider intent or paid I/O; accepted replay remains idempotent",
+        "lib/execution_result.mjs disposable empty verification environment, proof validation, abort and cleanup",
+        "lib/verification_sandbox.mjs native five-second enforcement with cancellation signal",
+        "read-only inspect/collect/cancel recovery remains available; final publication retains actual-worktree enforcement"
+      ],
+      "regression": [
+        "managed readiness proves native isolation before API reads and doctor reports unsupported hosts",
+        "unsupported host blocks managed start before cloning, snapshots or provider access",
+        "unsupported host refuses preparation, direct dispatch and manual continuation while artifact recovery remains available",
+        "readiness enforcement rejects failed, unproven and aborted probes and always removes scratch profiles",
+        "remote host refusal precedes checkout mutation and paid correction while unrelated PR review settles"
+      ],
+      "representative_output": [
+        {
+          "label": "native macOS sandbox enforcement preflight before implementation; no provider calls",
+          "path": "/tmp/agents-readiness-native-preflight.json",
+          "sha256": "c0c861b0bba5f028ddf8e644515fe40761ebe53e303b8d26442cde014f5e82bc"
+        },
+        {
+          "label": "native macOS readiness with provider-shaped offline read access and unsupported-host refusal",
+          "path": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/agents-offline-8P4nYp/native-readiness-evidence.json",
+          "sha256": "363dfbca76bb5bdd2ca82265eeccd237a56cd2be0151428ad5a104be56824b84"
+        }
+      ]
+    },
+    {
+      "rule": "Recover explicit ambiguous answers without changing logical input or tool authority; full remote readiness must precede resumed task mutations",
+      "checked": [
+        "lib/execution.mjs respond: process lock, owned task/account/session/root, authorization, durable signature/key, cache, safe optional recovery method and stop fence",
+        "lib/openai_agents.mjs respond/recoverResponse: shared ownership and pending ask_operator validation, subscribe-before-snapshot/send, root status, identical key replay, bounded paginated matching output, acknowledgement before stream cleanup",
+        "lib/openai_agents.mjs lookup/inspect/collect/cancel: root outcome and cost remain authoritative; answer acceptance creates no new session or turn",
+        "lib/commands/resume.mjs: full requireHarness before checkout recreation, merge, snapshot acceptance, reopen or dispatch",
+        "lib/probe.mjs checkHarness/requireHarness and commands/start.mjs/doctor.mjs: existing native/config/account/model/environment readiness boundary reused",
+        "lib/control.mjs queued resume and tick.mjs startRun/dispatch: same session/PR with existing correction, failure and iteration rules",
+        "test fixtures: pending versus accepted delivery loss, deadline, cleanup, history pagination, changed input/tool/root, missing proof, account isolation, cancellation, failed Verify and artifact rejection correction"
+      ],
+      "regression": [
+        "operator answer lost-before recovers the same call and key across restart",
+        "operator answer timeout-before recovers the same call and key across restart",
+        "operator answer lost-after recovers the same call and key across restart",
+        "operator answer cleanup recovers the same call and key across restart",
+        "ambiguous answer recovery refuses changed actions, missing proof, foreign roots and stopped sessions without resending",
+        "answer ambiguity requires a safe transport recovery method and preserves ownership, key and stop fences",
+        "managed resume API refusal preserves checkout, accepted brief and sources, registry and session before mutation"
+      ],
+      "representative_output": [
+        {
+          "label": "provider-shaped offline answer recovery: lost-before",
+          "path": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/agents-offline-daIuO0/answer-recovery-evidence.json",
+          "sha256": "0f236aad581dbc354fef191db4cb8e90d751413717aed7cf23f4d9cc0784bc37"
+        },
+        {
+          "label": "provider-shaped offline answer recovery: timeout-before",
+          "path": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/agents-offline-iHGa8i/answer-recovery-evidence.json",
+          "sha256": "3f361276c88e5acf4304c538023cd2edbd2caf952a7672ad2f1c0f05d815c918"
+        },
+        {
+          "label": "provider-shaped offline answer recovery: lost-after",
+          "path": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/agents-offline-Qt9OP3/answer-recovery-evidence.json",
+          "sha256": "a733607fa1e231ed5ea5330c7ad259c84aeb558e92890c96d38a1aeed895ae46"
+        },
+        {
+          "label": "provider-shaped offline answer recovery: cleanup",
+          "path": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/agents-offline-BDVaiZ/answer-recovery-evidence.json",
+          "sha256": "fbd8dabdfa11e2bc6d3f36e51c77a908866c40f264c0a16ee62b16c5b41dc03f"
+        },
+        {
+          "label": "provider-shaped offline readiness refusal",
+          "path": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/agents-resume-refusal-PNOiJi/resume-readiness-evidence.json",
+          "sha256": "a3373d086b04090f46256abf932567f7027bf4349a82dce76f0743cfcfc94395"
+        },
+        {
+          "label": "native macOS sandbox readiness preflight; no provider calls",
+          "path": "/tmp/agents-answer-preflight.json",
+          "sha256": "8a4ff6af0a95c618c52199f773a984e506b59a845f5c3af4c2b9639c1831e120"
+        }
+      ]
+    },
+    {
+      "rule": "Git Verify commands need immutable current-revision metadata without coordinator secrets; a hosted source must not silently omit preserved unfinished edits",
+      "checked": [
+        "lib/verification_sandbox.mjs: containment and driver validation before metadata, exact commit/tree/blob hashes, no history/config/hooks/remotes/alternates copied, bounded objects/bytes/time, readonly macOS/Linux view and native Git probe",
+        "lib/execution_result.mjs: same sandbox for artifacts and branch transport, immutable policy, current-head checks, blocked failures, stop fences and profile cleanup",
+        "lib/gh.mjs execFileAsync and sibling callers: utf8 default retained, explicit binary stdout/stderr supported, bounded failure diagnostics",
+        "lib/openai_agents_sources.mjs and openai_agents_input.mjs: same dirty/source check for initial/review/manual dispatch; only verified brief/source overlays exempt; HEAD/status rechecked before snapshot",
+        "lib/commands/resume.mjs and queued control resume: refuse ordinary dirty files before merge, reopen, snapshot/registry writes or paid continuation; preserve original session/PR",
+        "native normal and linked checkouts, metadata mutation/rename/history refusal, cleanup, existing host-file/child/network guards; tracked/staged/deleted/renamed/untracked/symlink/mode source refusal"
+      ],
+      "regression": [
+        "native verification supports Git checks with immutable current-revision metadata in normal and linked checkouts",
+        "verification process helper preserves binary Git objects and binary failure diagnostics",
+        "hosted snapshots refuse unfinished tracked, staged, deleted, renamed and untracked files without uploading them",
+        "managed dirty resume refuses before merge, reopen, registry mutation or corrective dispatch"
+      ],
+      "representative_output": [
+        {
+          "label": "native macOS Git case, linked=false",
+          "path": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-TyGNZt/verification.json",
+          "sha256": "16e97b4f604670565b12d0d995452ec4051675bb20083c1270ba361ac445b5c9"
+        },
+        {
+          "label": "native macOS Git case, linked=true",
+          "path": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-8Y7sLS/verification.json",
+          "sha256": "1341277a185b915a676d1eadf12083a515300b52f1c9ae1699ee0460f4b36460"
+        },
+        {
+          "label": "native Git verification with provider-controlled result fixtures",
+          "path": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-DGWEwB/git-verification-evidence.json",
+          "sha256": "ad151273b1f53ca944054e8d618280cc94f0f8e5bf0654f7ba7b1e577d9db9cf"
+        },
+        {
+          "label": "native Git source refusal with no provider calls",
+          "path": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/agents-dirty-evidence-mmuWtQ/dirty-source-evidence.json",
+          "sha256": "bc5f77f9d88481a508302ed0300c24102e562e4831499a6bd37e0a47e0cb6e2c"
+        },
+        {
+          "label": "native macOS preflight; Git read and denied-write probe; zero provider calls",
+          "path": "/tmp/agents-git-readiness-final.json",
+          "sha256": "d452181bba3234168a0afef32f49114e7a7b355e3e1ea92a5fed76583522a129"
+        }
+      ]
+    },
+    {
+      "rule": "Keep the single coordinator and selected-provider preparation capability; retain review feedback during receipt repairs, and carry upstream integration and live prerequisites honestly",
+      "checked": [
+        "approved base commits 9eb95cb, 401f5cb, 5066462 and e27b236: preserved unchanged; base receipt cursor/announcement fixes reuse coordinator state and existing iteration/review rules",
+        "lib/tick.mjs settleRun/dispatch/postRoundComment, lib/events.mjs deriveEvents/hasOwnComment and lib/time.mjs floorSecond: preserved dispatched keys for receipt/public-only rounds, inclusive event boundaries, run-start-second marker recovery and once-only round count",
+        "lib/tasks.mjs prepare/answer/resume/ready/start, lib/task_prepare.mjs prepareTurn and lib/execution.mjs prepare/submit: shared selected-provider/account receipts for drafts/questions/repairs, deterministic readiness and explicit execution authorization",
+        "lib/harness.mjs and context execution/capability registry: unavailable preparation refuses before drafting, no Claude-name gate or provider/model fallback added; PR #10 remains an upstream base dependency rather than an adapter copied here",
+        "PR #10 exact head/diff and PR #417 exact head/canonical draft PRD read through native gh; no other repository write, workflow runner, API inference, native Codex job or installed-plugin qualification attempted",
+        "docs/openai-agents.md, docs/execution.md, docs/tasks.md and checklist: reconcile pending preparation integration, fixture/live separation, M5 artifact pinning and one M6 successor with original T0-T9",
+        "representative package exports/document hashes and actual selected-base registry output reviewed; native readiness passed, original live blockers and ac-13 false retained"
+      ],
+      "regression": [
+        "a receipt-only run dispatches reviews arriving during the run exactly once",
+        "receipt-only settlement preserves feedback while owing its own recoverable round marker",
+        "receipt announcement retries recognize GitHub timestamps in the run-start second",
+        "preparation capabilities expose policy data and validate the selected provider/account/version",
+        "codex fixture preparation shares drafting, clarification, repair and deterministic readiness without CLI/PID",
+        "gemini fixture preparation shares drafting, clarification, repair and deterministic readiness without CLI/PID",
+        "saved readiness, answer, start and recovery reject receipts borrowed from another selected provider"
+      ],
+      "representative_output": [
+        {
+          "label": "native macOS enforcement and unchanged missing live configuration; zero provider calls",
+          "path": "/tmp/agents-base-preflight.json",
+          "sha256": "890c103f3942e10ef06a00b2b1827bc059986521b771d0c867f9859e4d5f93e0"
+        },
+        {
+          "label": "actual selected-base registry: missing Codex and managed preparation capabilities; no fallback or paid probe",
+          "path": "/tmp/agents-base-capabilities.json",
+          "sha256": "c9e7334153057d15f390a7378b384066e76b2daffa2810bfe33cd94d40ca9b0b"
+        },
+        {
+          "label": "unpacked source and operator/intake/handoff documents match this checkout",
+          "path": "/tmp/agents-base-package-verification.json",
+          "sha256": "91d7534fe194118b9f30800fe94dc3bf052d0c7838ed122d1598e4c692511a58"
+        }
+      ]
+    },
+    {
+      "rule": "Make approved npm verification usable without expanding host grants, and distinguish proven local non-dispatch from uncertain provider acceptance",
+      "checked": [
+        "lib/verification_sandbox.mjs verificationSandboxSpec/verificationRuntimeMounts/PROBE: fixed read-only Node/npm grants, symlink to CLI module for custom Linux prefix, preserve system-bin launcher, no broader Node bin directory; selected executable launcher is opened inside readiness and actual npm execution is covered by the native regression",
+        "lib/execution_result.mjs publication/readiness and lib/probe.mjs: shared native boundary still applies to artifacts, branch transport and doctor; filesystem/network/Git protections and temporary profile cleanup retained",
+        "lib/openai_agents.mjs dispatch submit/continue: mark only local config/source/owned-session/run-ID/host refusals before operation save or any provider request; existing operation and provider requests remain ambiguous after lost replies",
+        "lib/execution.mjs dispatch/read/reconcile/cancel: restore prior root, operations and allowance only on trusted pre-send marker, remove only new unsubmitted projection, bound private code-only refusal history to twenty; preserve stop ownership and lost-reply intent",
+        "lib/commands/start.mjs and lib/tick.mjs startRun/dispatch: initial/review refusals stop actionably with no false live run; retain feedback cursor, same session/PR and iteration count; manual resume retains existing API/native preflight",
+        "test/execution-backends.test.mjs and test/openai-agents.test.mjs: actual native custom-prefix npm execution, denied unrelated bin files, same-root/allowance restore, restart/retry, bounded history, cancellation lock protocol, malformed sources, start/review states and unmarked error fence",
+        "representative npm and provider-shaped refusal output reviewed; Linux mount plan is offline and native enforcement is macOS, with Linux/provider-live qualification still unverified"
+      ],
+      "regression": [
+        "npm entry point supports custom Node prefixes without granting their bin directory",
+        "openai-agents fixture: proven pre-send refusal restores the prior root and allowance without ambiguity",
+        "codex-cloud fixture: proven pre-send refusal restores the prior root and allowance without ambiguity",
+        "an unmarked submission failure cannot release an intent merely because its error code names readiness",
+        "cancellation retry after a proven pre-send refusal still fences the restored task",
+        "a proven unsent review correction stops actionably without moving feedback or the prior root",
+        "managed pre-send host refusal releases intent and reservation across restart: continue=false",
+        "managed pre-send host refusal releases intent and reservation across restart: continue=true",
+        "malformed pre-send sources release only the unsubmitted intent without purchasing or stranding work",
+        "initial launch pre-send refusal remains registered for safe coordinator recovery"
+      ],
+      "representative_output": [
+        {
+          "label": "offline Linux mount plan and actual native custom-prefix npm execution",
+          "path": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-O1nWZa/npm-prefix-evidence.json",
+          "sha256": "66441a1a5a26ee6ac49477d75c61f9de4aba45bf03371348d0c994087a7300fb"
+        },
+        {
+          "label": "provider-shaped offline lifecycle with native host preflight",
+          "path": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/agents-offline-oQCXNO/pre-send-refusal-evidence.json",
+          "sha256": "41173c409a37f9afe44231d3b387200c70ec8695a6a133163cfe3a5a68f9ed58"
+        },
+        {
+          "label": "provider-shaped offline lifecycle with native host preflight",
+          "path": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/agents-offline-cdZsGl/pre-send-refusal-evidence.json",
+          "sha256": "244eb13617b56417795391243fa690a91319dbc9314642c54721035f3c177f9a"
+        },
+        {
+          "label": "native macOS preflight before implementation; unchanged live configuration gap; zero provider calls",
+          "path": "/tmp/agents-dispatch-preflight.json",
+          "sha256": "fe8e344cb77219b8b146f45437a0514f90a066a48fa85b71084c28ed33d0e3b2"
+        }
+      ]
+    },
+    {
+      "rule": "Every owned initial checkout must have an actionable recovery entry, and first submission after repair requires exact proof that no implementation has been dispatched",
+      "checked": [
+        "lib/commands/start.mjs: retain partial/unknown clone claims; consume a completed owned clone into the registry before source delivery, head capture and read-only provider preparation; persist the original start token and unsubmitted marker before these failure boundaries",
+        "lib/execution.mjs unsubmittedInitialDispatch: require matching start-token/operation identities and version, sessionless needs-human entry with no PR/run, empty execution intents/current run and no stop; legacy initial refusal requires private dispatchRefusals proof",
+        "lib/commands/resume.mjs: full native/API preflight before mutations, same approved contract/source checks, preserve ordinary unfinished edits, restore missing approved inputs after initial delivery failure, fresh initial prompt includes the complete saved brief and actual current revision",
+        "lib/tick.mjs startRun/tickEntry: reuse original initial operation through the shared preparation/submit path, persist dispatching before send, restore unsubmitted only on trusted pre-send refusal, retain uncertain provider intent and recover exact owned session/root on startup; clear the marker after acceptance",
+        "lib/control.mjs and lib/commands/serve.mjs plus lib/tracker/pages.mjs: CLI, queued operator action and tracker reuse the same proof; unknown/stopped/foreign launches cannot enable or queue a retry; acknowledge first submission without claiming an earlier session",
+        "lib/tasks.mjs startInternal and lib/state.mjs claimStart/putStarted/remove: intake ownership, approved digest and chain/start-token claims remain shared; task registration retains the checkout and lets existing remove/control paths address failures without a duplicate start",
+        "test/openai-agents.test.mjs: actual start/resume/control/loopback-route calls with provider-shaped offline sessions; symlink, submodule, expanded size, head race, brief-delivery refusal, native pre-send refusal, legacy proof, read-only 401/host failure, foreign token, unresolved intent, cancellation and reply loss across restart",
+        "representative generated loopback HTML, control receipt and uploaded source manifest reviewed: first-run wording, one clone/session/root and original operation with current verified input; no new policy/model/provider defaults or account authority"
+      ],
+      "regression": [
+        "initial launch pre-send refusal remains registered for safe coordinator recovery",
+        "legacy initial refusal resumes from private non-dispatch proof without creating an unrelated implementation",
+        "initial preparation refusal supports the shared operator control after repair and restart",
+        "failed initial portable preparation is registered and resumes the preserved checkout after repair: symlink",
+        "failed initial portable preparation is registered and resumes the preserved checkout after repair: submodule",
+        "failed initial portable preparation is registered and resumes the preserved checkout after repair: size",
+        "failed initial portable preparation is registered and resumes the preserved checkout after repair: head-race",
+        "initial brief delivery failure stays registered and restores missing approved bytes after repair",
+        "unsubmitted initial resume preserves registry and inputs on readiness failure and refuses cancellation or unresolved intents",
+        "initial retry reply loss reconciles the original operation through coordinator restart without another session",
+        "initial launch reply loss remains registered for coordinator restart without a second implementation"
+      ],
+      "representative_output": [
+        {
+          "label": "provider-shaped initial refusal and actual shared resume/control lifecycle",
+          "path": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/agents-offline-Y2bUUr/initial-resume-evidence.json",
+          "sha256": "bda6883cb59fb0ed1ad43e493e23f70b1c16e42d524e5a7734b4854394eacb8f",
+          "page": {
+            "path": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/agents-offline-Y2bUUr/initial-controls.html",
+            "sha256": "6b91171088cc929c82013cb6d03867d248ee4ea94cbae03c700507b20de506ea",
+            "kind": "actual loopback tracker route HTML with offline provider state; no installed-browser qualification"
+          }
+        },
+        {
+          "label": "provider-shaped initial refusal and actual shared resume/control lifecycle",
+          "path": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/agents-offline-lEOCXJ/initial-resume-evidence.json",
+          "sha256": "e2e39862aff870ac1aeeff4c23d27e930e32d0f89b152d38c4e3e5665ee57489",
+          "page": {
+            "path": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/agents-offline-lEOCXJ/initial-controls.html",
+            "sha256": "15872dd17ac74bf25d1ff619fbab00dfd6d45dc9bb99a5ca2a86559019c5c456",
+            "kind": "actual loopback tracker route HTML with offline provider state; no installed-browser qualification"
+          }
+        },
+        {
+          "label": "provider-shaped initial refusal and actual shared resume/control lifecycle",
+          "path": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/agents-offline-ds95Ek/initial-resume-evidence.json",
+          "sha256": "16cfdd794a8b6f3d4ffbca807752a3c7fe1a0c4fefd2cab1b97be9099125e119",
+          "page": {
+            "path": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/agents-offline-ds95Ek/initial-controls.html",
+            "sha256": "ea680f1f3da60e2c0280a7c26efd4b74d23b8b39e7364cfcdca6847f3f3a9d2a",
+            "kind": "actual loopback tracker route HTML with offline provider state; no installed-browser qualification"
+          }
+        },
+        {
+          "label": "native macOS preflight before this review batch; unchanged absent live inputs; zero provider calls",
+          "path": "/tmp/agents-start-preflight.json",
+          "sha256": "2cbc617f658e4a9c2eff7bca0915b501e808fe5a10a23a1ab7756cddfbb64954"
+        }
+      ]
+    },
+    {
+      "rule": "Every retry schedule must retain a finite bounded deadline through transport, persistence and coordinator restart",
+      "checked": [
+        "lib/openai_agents_http.mjs: delta-seconds, IMF/RFC850/asctime GMT parsing, invalid/past/overflow fallback, private body cancellation and shared clock",
+        "lib/execution_io.mjs: finite retry-delay boundary reused by reconciliation, provider health and cancellation",
+        "lib/openai_agents.mjs: readiness delay propagation, transport clock and bounded recovery circuit",
+        "lib/provider_health.mjs: saved failure deadlines, due checks and restart",
+        "lib/execution.mjs: reconciliation and cancellation deadlines, ownership and stop fences"
+      ],
+      "regression": [
+        "invalid provider retry delays preserve finite reconciliation, health and cancellation schedules across restart",
+        "Retry-After seconds and HTTP dates remain finite and bounded",
+        "Agents readiness carries HTTP-date throttling into shared account health after restart",
+        "throttled http-date retry survives restart and defers coordinator polling",
+        "throttled malformed retry survives restart and defers coordinator polling",
+        "throttled capped retry survives restart and defers coordinator polling"
+      ],
+      "representative_output": [
+        {
+          "label": "shared retry boundary evidence",
+          "path": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-dW35el/retry-boundary-evidence.json",
+          "sha256": "ba14dad83f1ffb3912ea3affae0cfda4358110f8c03dc923f17eb1d976a76768"
+        },
+        {
+          "label": "readiness retry evidence",
+          "path": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/agents-offline-fxoTi6/provider-health.json",
+          "sha256": "16a7096d1b7a81b917397a7c0ca405d9bd14123718faa2bbd033c71aa518987f"
+        },
+        {
+          "label": "retry scheduling evidence",
+          "path": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/agents-offline-xqHvZr/retry-evidence.json",
+          "sha256": "039b99c78bb507fd6821293b5a604934a7100216cb36cb28f8251c2cabaf34b1"
+        },
+        {
+          "label": "retry scheduling evidence",
+          "path": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/agents-offline-QZzJBj/retry-evidence.json",
+          "sha256": "3d4a540d036b7dd42da4370a24218cd38011554b1aafa92b932c229cbc42edf4"
+        },
+        {
+          "label": "retry scheduling evidence",
+          "path": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/agents-offline-I4n3n1/retry-evidence.json",
+          "sha256": "c5c423524c31d24c7dd800be897fec1341e655d63f0edc5a0f54005349cf0b75"
+        },
+        {
+          "label": "native macOS preflight; four live inputs still absent; zero provider calls",
+          "path": "/tmp/agents-retry-source-preflight.json",
+          "sha256": "121235eb8fdbcf3ee4026dc9226d7a5597d25786ca17cb1596ca6623e41dd8f7"
+        }
+      ]
+    },
+    {
+      "rule": "Portable snapshots must preserve the exact repository revision and use its Git object format consistently without widening path, size or hash authority",
+      "checked": [
+        "lib/openai_agents_sources.mjs: exact 40/64-character HEAD, matching tree blob width, repeated HEAD/status checks, binary blobs and approved overlays",
+        "lib/openai_agents_input.mjs and lib/openai_agents.mjs: exact snapshot hash/input identity before dispatch; immutable paginated result and test head validation",
+        "lib/execution_result.mjs, lib/git.mjs and lib/verification_sandbox.mjs: owned head checks and SHA-256-compatible publication/verification boundaries already in scope",
+        "native SHA-1/SHA-256 repositories; unsupported and mixed widths refused before blob reads; generated uploaded manifest and recovered artifact files/test records reviewed"
+      ],
+      "regression": [
+        "source snapshot preserves binary blobs, exact revision and verified carried files",
+        "SHA-256 source snapshot reaches hosted dispatch and immutable result recovery"
+      ],
+      "representative_output": [
+        {
+          "label": "SHA-256 source evidence",
+          "path": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/agents-offline-t8i0Qn/sha256-source-evidence.json",
+          "sha256": "1b484650a37aa236be9261be544bc714acc4c211962ce4516dd93eb271427246"
+        }
+      ]
+    }
+  ],
+  "security_followup": {
+    "reviewed_commit": "b3e195bb85de84f4e0f359a57c4832478fef4d29",
+    "review_comment": 4196366285,
+    "status": "addressed",
+    "rule": "Provider-controlled verification must not inherit coordinator filesystem, network or policy authority",
+    "implementation": [
+      "lib/verification_sandbox.mjs",
+      "lib/execution_result.mjs"
+    ],
+    "native_host": {
+      "os": "macOS 26.3",
+      "node": "22.22.0",
+      "npm": "10.9.4",
+      "driver": "sandbox-exec",
+      "filesystem": "checkout-and-runtime",
+      "network": "disabled",
+      "enforcement": "native outside-read/outside-write/TCP denial probe passed before repository commands",
+      "records": [
+        {
+          "label": "native host-file denial evidence",
+          "path": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-5qvSQx/verification-host-file-denial.json",
+          "sha256": "344f912517868bc0380240c7d7eea3f790efdd7e3c46d859fdedad42d53588eb"
+        },
+        {
+          "label": "native child/network isolation evidence",
+          "path": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-TQhP3x/verification.json",
+          "sha256": "3e5268ae1570b8f8741227fc1296ca89cb4101500311fba68595b5f603350b72"
+        },
+        {
+          "label": "immutable sandbox policy evidence",
+          "path": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-aRNJK7/verification.json",
+          "sha256": "c90399dd4baa75bb8c24183a65b50ae593d21380c60cd774ebd6a67da7afbe84"
+        }
+      ],
+      "hardlink_probe": {
+        "raw_log": "/tmp/agents-security-hardlink-probe.log",
+        "sha256": "22b5dd1f33cba9c45d7c106592e262680d87c084bb679a941b9035b56d540a36",
+        "result": "native hard-link escape denied"
+      }
+    },
+    "linux": "implementation present; native bubblewrap enforcement unverified on this macOS host",
+    "provider_live": "unverified; original G8 prerequisites and remedy below remain unmet; no paid calls",
+    "tests": [
+      "host-file exfiltration in artifact and pushed-branch Verify scripts is denied before publication",
+      "native verification permits npm and checkout tools while denying child, symlink, Git, journal and network escapes",
+      "unavailable or unproven verification sandbox blocks once, preserves results and cleans its profile",
+      "an earlier Verify command cannot replace the sandbox policy for a later command",
+      "verification recovery rejects legacy unsandboxed evidence without replaying or pushing",
+      "a stop during sandbox preparation prevents Verify dispatch and removes the private profile"
+    ]
+  },
+  "collection_rejection_followup": {
+    "review_id": 5430401542,
+    "inline_comment_id": 4196918468,
+    "reviewed_commit": "531f3082c5e120bc11503a7ec24e5fb86e46a278",
+    "evidence_kind": "provider-shaped offline lifecycle fixtures; no live provider calls",
+    "tests": [
+      "deterministic artifact rejection survives coordinator restart and permits same-session correction",
+      "artifact rejection fences downloads before a coordinator checkpoint can be saved",
+      "completed root with missing artifact delivery remains pending until the immutable result arrives",
+      "artifact download 401 stays retryable without a rejection checkpoint",
+      "artifact download 429 stays retryable without a rejection checkpoint",
+      "artifact download lost stays retryable without a rejection checkpoint",
+      "unmarked collection errors and foreign rejection checkpoints cannot settle the owned run",
+      "openai-agents fixture: rejected collection recovers checkpoint-first crash and preserves succeeded root",
+      "openai-agents fixture: rejected collection recovers checkpoint-first crash and preserves failed root",
+      "codex-cloud fixture: rejected collection recovers checkpoint-first crash and preserves succeeded root",
+      "codex-cloud fixture: rejected collection recovers checkpoint-first crash and preserves failed root"
+    ],
+    "representative_output": [
+      {
+        "label": "provider-shaped offline rejection/restart/correction observations",
+        "path": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/agents-rejection-evidence-T4mFqW/collection-rejection.json",
+        "sha256": "79ba88c7a45b866922d427f91831c3e40ccff1dbf0748fe4958577c4bf6de60b"
+      },
+      {
+        "label": "json owned blocked checkpoint",
+        "path": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/agents-offline-NYNodU/run-6b76fc4d-5a0d-4fef-8f7c-a7760bb45351/result-application.json",
+        "sha256": "c7494f65f7d7fbed01872f6d12c2470090db2ef98ba54d8da70e328e69bf5a51"
+      },
+      {
+        "label": "json private untrusted artifact cache",
+        "path": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/agents-offline-NYNodU/run-6b76fc4d-5a0d-4fef-8f7c-a7760bb45351-rejected-artifact.json",
+        "sha256": "fa625d6058ecacc8e60666bf038f041cd4ea689df34954162ee6d4e03ca15a7e"
+      },
+      {
+        "label": "unsafePath owned blocked checkpoint",
+        "path": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/agents-offline-J1Lmcj/run-70090c68-d1cd-4311-8d99-63fe9df94c7a/result-application.json",
+        "sha256": "2372d36b9bd95cdb8ce30ea2cd2b58d2ed12d51d81752a52a22d087fb843f7cc"
+      },
+      {
+        "label": "unsafePath private untrusted artifact cache",
+        "path": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/agents-offline-J1Lmcj/run-70090c68-d1cd-4311-8d99-63fe9df94c7a-rejected-artifact.json",
+        "sha256": "d700a9c3ce780d107104c4fee0da7fd6b1f471477d5fec0620fa848771da01bb"
+      }
+    ],
+    "root_outcome_preserved": true,
+    "unknown_cost_preserved": true,
+    "repeat_downloads": false,
+    "automatic_corrective_dispatch": false,
+    "native_sandbox_preflight": {
+      "driver": "sandbox-exec",
+      "filesystem": "checkout-and-runtime",
+      "network": "disabled",
+      "probe": "passed"
+    },
+    "mandatory_external_prerequisites": {
+      "version": 1,
+      "kind": "live",
+      "status": "unverified",
+      "phase": "preflight",
+      "at": "2026-10-06T13:09:30.294Z",
+      "blockers": [
+        "OPENAI_AGENTS_LIVE_HOME absent",
+        "OPENAI_AGENTS_LIVE_PRD absent",
+        "OPENAI_AGENTS_LIVE_REPO absent",
+        "OPENAI_AGENTS_CAMPAIGN_LEDGER absent",
+        "preflight only; no paid implementation or correction evidence collected"
+      ],
+      "costUsd": null,
+      "exit": 1,
+      "raw_log": "/tmp/agents-live-prerequisites.json",
+      "sha256": "cee7f8f2e92680df6183517c64864478649bc6bcaa5d78890a847d747bc3b0af",
+      "paid_calls": 0,
+      "inference_access": "unverified",
+      "host_plugin_capture": "not required for this REST milestone; installed-host release gate remains separate",
+      "remedy": "Supply the private configured live home and scoped project API key with Agents read/write plus inference access, authorized model/container/network, approved tiny disposable repository and PRD, and priced remaining aggregate USD 10 campaign ledger. Authorize implementation, reconcile observed cost, then force a current-head CI/trusted-review finding and authorize the same-session correction."
+    }
+  },
+  "verification_readiness_followup": {
+    "review_id": 5430886396,
+    "inline_comment_id": 4197307944,
+    "reviewed_commit": "68b5ee9a970f62de842a00b0c41b58f8855a7312",
+    "status": "addressed",
+    "rule": "Mandatory verification host capability must be enforced before paid remote dispatch or checkout mutation",
+    "evidence_kind": "native macOS enforcement plus provider-shaped offline lifecycle fixtures; Linux native and live provider qualification remain unverified",
+    "tests": [
+      "managed readiness proves native isolation before API reads and doctor reports unsupported hosts",
+      "unsupported host blocks managed start before cloning, snapshots or provider access",
+      "unsupported host refuses preparation, direct dispatch and manual continuation while artifact recovery remains available",
+      "readiness enforcement rejects failed, unproven and aborted probes and always removes scratch profiles",
+      "remote host refusal precedes checkout mutation and paid correction while unrelated PR review settles"
+    ],
+    "representative_output": [
+      {
+        "label": "native macOS sandbox enforcement preflight before implementation; no provider calls",
+        "path": "/tmp/agents-readiness-native-preflight.json",
+        "sha256": "c0c861b0bba5f028ddf8e644515fe40761ebe53e303b8d26442cde014f5e82bc"
+      },
+      {
+        "label": "native macOS readiness with provider-shaped offline read access and unsupported-host refusal",
+        "path": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/agents-offline-8P4nYp/native-readiness-evidence.json",
+        "sha256": "363dfbca76bb5bdd2ca82265eeccd237a56cd2be0151428ad5a104be56824b84"
+      }
+    ],
+    "paid_calls": 0,
+    "live_prerequisites": "unchanged; original live preflight and external remedy preserved in live",
+    "supported_host_probe": {
+      "version": 1,
+      "driver": "sandbox-exec",
+      "filesystem": "checkout-and-runtime",
+      "network": "disabled",
+      "probe": "passed"
+    }
+  },
+  "answer_resume_followup": {
+    "review_id": 5431337456,
+    "reviewed_commit": "804742711910643dfb532959f299fa652260d39c",
+    "inline_comment_ids": [
+      4197685000,
+      4197685012
+    ],
+    "status": "addressed",
+    "rule": "Recover explicit ambiguous answers without changing logical input or tool authority; full remote readiness must precede resumed task mutations",
+    "evidence_kind": "provider-shaped offline lifecycle fixtures with native macOS readiness enforcement; provider-live and Linux native qualification remain unverified",
+    "tests": [
+      "operator answer lost-before recovers the same call and key across restart",
+      "operator answer timeout-before recovers the same call and key across restart",
+      "operator answer lost-after recovers the same call and key across restart",
+      "operator answer cleanup recovers the same call and key across restart",
+      "ambiguous answer recovery refuses changed actions, missing proof, foreign roots and stopped sessions without resending",
+      "answer ambiguity requires a safe transport recovery method and preserves ownership, key and stop fences",
+      "managed resume API refusal preserves checkout, accepted brief and sources, registry and session before mutation"
+    ],
+    "representative_output": [
+      {
+        "label": "provider-shaped offline answer recovery: lost-before",
+        "path": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/agents-offline-daIuO0/answer-recovery-evidence.json",
+        "sha256": "0f236aad581dbc354fef191db4cb8e90d751413717aed7cf23f4d9cc0784bc37"
+      },
+      {
+        "label": "provider-shaped offline answer recovery: timeout-before",
+        "path": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/agents-offline-iHGa8i/answer-recovery-evidence.json",
+        "sha256": "3f361276c88e5acf4304c538023cd2edbd2caf952a7672ad2f1c0f05d815c918"
+      },
+      {
+        "label": "provider-shaped offline answer recovery: lost-after",
+        "path": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/agents-offline-Qt9OP3/answer-recovery-evidence.json",
+        "sha256": "a733607fa1e231ed5ea5330c7ad259c84aeb558e92890c96d38a1aeed895ae46"
+      },
+      {
+        "label": "provider-shaped offline answer recovery: cleanup",
+        "path": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/agents-offline-BDVaiZ/answer-recovery-evidence.json",
+        "sha256": "fbd8dabdfa11e2bc6d3f36e51c77a908866c40f264c0a16ee62b16c5b41dc03f"
+      },
+      {
+        "label": "provider-shaped offline readiness refusal",
+        "path": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/agents-resume-refusal-PNOiJi/resume-readiness-evidence.json",
+        "sha256": "a3373d086b04090f46256abf932567f7027bf4349a82dce76f0743cfcfc94395"
+      },
+      {
+        "label": "native macOS sandbox readiness preflight; no provider calls",
+        "path": "/tmp/agents-answer-preflight.json",
+        "sha256": "8a4ff6af0a95c618c52199f773a984e506b59a845f5c3af4c2b9639c1831e120"
+      }
+    ],
+    "paid_calls": 0,
+    "automatic_answer_replay": false,
+    "live_prerequisites": "unchanged; original preflight and external remedy preserved in live"
+  },
+  "git_source_followup": {
+    "review_id": 5431786732,
+    "reviewed_commit": "5b11412aae99bc1705d013bcf3b1d2be49db90cf",
+    "inline_comment_ids": [
+      4198067149,
+      4198067160
+    ],
+    "status": "addressed",
+    "rule": "Git Verify commands need immutable current-revision metadata without coordinator secrets; a hosted source must not silently omit preserved unfinished edits",
+    "evidence_kind": "native macOS Git/runtime enforcement and provider-shaped offline lifecycle fixtures; Linux native and provider-live qualification remain unverified",
+    "tests": [
+      "native verification supports Git checks with immutable current-revision metadata in normal and linked checkouts",
+      "verification process helper preserves binary Git objects and binary failure diagnostics",
+      "hosted snapshots refuse unfinished tracked, staged, deleted, renamed and untracked files without uploading them",
+      "managed dirty resume refuses before merge, reopen, registry mutation or corrective dispatch"
+    ],
+    "representative_output": [
+      {
+        "label": "native macOS Git case, linked=false",
+        "path": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-TyGNZt/verification.json",
+        "sha256": "16e97b4f604670565b12d0d995452ec4051675bb20083c1270ba361ac445b5c9"
+      },
+      {
+        "label": "native macOS Git case, linked=true",
+        "path": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-8Y7sLS/verification.json",
+        "sha256": "1341277a185b915a676d1eadf12083a515300b52f1c9ae1699ee0460f4b36460"
+      },
+      {
+        "label": "native Git verification with provider-controlled result fixtures",
+        "path": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-DGWEwB/git-verification-evidence.json",
+        "sha256": "ad151273b1f53ca944054e8d618280cc94f0f8e5bf0654f7ba7b1e577d9db9cf"
+      },
+      {
+        "label": "native Git source refusal with no provider calls",
+        "path": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/agents-dirty-evidence-mmuWtQ/dirty-source-evidence.json",
+        "sha256": "bc5f77f9d88481a508302ed0300c24102e562e4831499a6bd37e0a47e0cb6e2c"
+      },
+      {
+        "label": "native macOS preflight; Git read and denied-write probe; zero provider calls",
+        "path": "/tmp/agents-git-readiness-final.json",
+        "sha256": "d452181bba3234168a0afef32f49114e7a7b355e3e1ea92a5fed76583522a129"
+      }
+    ],
+    "paid_calls": 0,
+    "dirty_policy": "explicit refusal; commit intended edits on the owned branch before same-session resume; approved brief/source overlays remain supported",
+    "live_prerequisites": "unchanged; original failed preflight and external remedy preserved in live"
+  },
+  "original_base_revision": "7936830977bcb4615de418b9dd5c4d655501297b",
+  "base_reconciliation_followup": {
+    "at": "2026-10-06T17:24:50.762Z",
+    "status": "reviewed-and-documented",
+    "rule": "Keep the single coordinator and selected-provider preparation capability; retain review feedback during receipt repairs, and carry upstream integration and live prerequisites honestly",
+    "preserved_commits": [
+      "9eb95cb6484bd4b034e46afff729b9b621d7b121",
+      "401f5cb2e68382a28b6f35f5ca4e9cbcc9ea84fb",
+      "5066462c68eff62b83b8bfbccfe8ed343bd2b17e",
+      "e27b2365eb8471efa09a5e6d397fde30a9801302"
+    ],
+    "selected_provider_preparation": {
+      "service": "lib/task_prepare.mjs prepareTurn -> executionRunner(..., task.harness).prepare/submit; questions and repairs reuse this path",
+      "capability_record": "/tmp/agents-base-capabilities.json",
+      "upstream_pr": "https://github.com/uchibeke/gallivant/pull/10",
+      "head": "39dec7c787a503956f18b745d92a13166d287c45",
+      "state": "OPEN",
+      "integration": "unmet; reviewed PR remains open and capability absent from selected base",
+      "remedy": "merge reviewed PR #10 into the selected base, then let the coordinator sync this branch; do not copy its adapter or restore a provider-name gate",
+      "upstream_evidence": "PR #10 body: 1081 tests; native 0.160.0 boundary qualification against loopback provider; not rerun here and not live inference access",
+      "raw_record": "/tmp/agents-base-pr10.json",
+      "sha256": "be48d620e6b646cfd981b99bc6fd0d2c503b7324328a81e84c1bb5409be3e4ae",
+      "reviewed_diff": "/tmp/agents-base-pr10.diff",
+      "diff_sha256": "afcc07f97bf4783f315770d764a4a73bfa9723de61f4ebc44e8c00ddcb37c8c4"
+    },
+    "connected_successor": {
+      "pr": "https://github.com/aporthq/agent-passport/pull/417",
+      "head": "86ab14ec750b9c4d771056aa13504dbcfbf36999",
+      "state": "OPEN",
+      "draft": true,
+      "canonical_prd": "docs/prds/aport-task-delivery-workflow-integration.md",
+      "job_identity": "aporthq/agent-passport/aport-task-delivery-workflow-integration",
+      "requirements": "preserve original T0-T9; stay draft until actual M5 artifact; pin version/commit/integrity/actual exports; connect existing auth/regional storage/shared UI to shared coordinator; qualify full workflow; no second runner or duplicate foundation job",
+      "raw_record": "/tmp/agents-successor-pr417.json",
+      "sha256": "6f07951d48feddcfcb3f1dbb125fad323c02d8ee0aeaa7fc34dbab453049aed9",
+      "read_prd": "/tmp/agents-successor-prd.md",
+      "prd_sha256": "128d067dcfc31b05534fe58b488dfb21b320910e2b4d9934646a7b7c3f7bd77f",
+      "implementation": "not part of this repository or API milestone"
+    },
+    "evidence_kind": "approved base regressions and shared preparation offline fixtures; native macOS probe; upstream PR observations; live access remains unverified",
+    "tests": [
+      "a receipt-only run dispatches reviews arriving during the run exactly once",
+      "receipt-only settlement preserves feedback while owing its own recoverable round marker",
+      "receipt announcement retries recognize GitHub timestamps in the run-start second",
+      "preparation capabilities expose policy data and validate the selected provider/account/version",
+      "codex fixture preparation shares drafting, clarification, repair and deterministic readiness without CLI/PID",
+      "gemini fixture preparation shares drafting, clarification, repair and deterministic readiness without CLI/PID",
+      "saved readiness, answer, start and recovery reject receipts borrowed from another selected provider"
+    ],
+    "representative_output": [
+      {
+        "label": "native macOS enforcement and unchanged missing live configuration; zero provider calls",
+        "path": "/tmp/agents-base-preflight.json",
+        "sha256": "890c103f3942e10ef06a00b2b1827bc059986521b771d0c867f9859e4d5f93e0"
+      },
+      {
+        "label": "actual selected-base registry: missing Codex and managed preparation capabilities; no fallback or paid probe",
+        "path": "/tmp/agents-base-capabilities.json",
+        "sha256": "c9e7334153057d15f390a7378b384066e76b2daffa2810bfe33cd94d40ca9b0b"
+      },
+      {
+        "label": "unpacked source and operator/intake/handoff documents match this checkout",
+        "path": "/tmp/agents-base-package-verification.json",
+        "sha256": "91d7534fe194118b9f30800fe94dc3bf052d0c7838ed122d1598e4c692511a58"
+      }
+    ],
+    "paid_calls": 0,
+    "native_codex_calls": 0,
+    "other_repository_writes": 0,
+    "live_prerequisites": "unchanged; original failed preflight and exact external remedy preserved in live"
+  },
+  "runtime_dispatch_followup": {
+    "review_id": 5432352899,
+    "reviewed_commit": "d8bdcfa5f83a237e5b9021d9d80b15114e14cf48",
+    "inline_comment_ids": [
+      4198542616,
+      4198542626
+    ],
+    "status": "addressed",
+    "rule": "Make approved npm verification usable without expanding host grants, and distinguish proven local non-dispatch from uncertain provider acceptance",
+    "evidence_kind": "actual native macOS custom-prefix npm verification, offline Linux mount plan, and provider-shaped shared lifecycle fixtures; native Linux and live inference remain unverified",
+    "tests": [
+      "npm entry point supports custom Node prefixes without granting their bin directory",
+      "openai-agents fixture: proven pre-send refusal restores the prior root and allowance without ambiguity",
+      "codex-cloud fixture: proven pre-send refusal restores the prior root and allowance without ambiguity",
+      "an unmarked submission failure cannot release an intent merely because its error code names readiness",
+      "cancellation retry after a proven pre-send refusal still fences the restored task",
+      "a proven unsent review correction stops actionably without moving feedback or the prior root",
+      "managed pre-send host refusal releases intent and reservation across restart: continue=false",
+      "managed pre-send host refusal releases intent and reservation across restart: continue=true",
+      "malformed pre-send sources release only the unsubmitted intent without purchasing or stranding work",
+      "initial launch pre-send refusal remains registered for safe coordinator recovery"
+    ],
+    "regression_logs": [
+      {
+        "path": "/tmp/agents-dispatch-backends-final.log",
+        "sha256": "ff1a7f2a5a66607c55d055ce1f1421c8d3bd06ed51ba3f4a09d349bc94465463"
+      },
+      {
+        "path": "/tmp/agents-dispatch-openai-final.log",
+        "sha256": "52c38cfc74a32306010bab8f9af5432420d5a9b1dc6b04870d971ebfe6c4544f"
+      }
+    ],
+    "representative_output": [
+      {
+        "label": "offline Linux mount plan and actual native custom-prefix npm execution",
+        "path": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-O1nWZa/npm-prefix-evidence.json",
+        "sha256": "66441a1a5a26ee6ac49477d75c61f9de4aba45bf03371348d0c994087a7300fb"
+      },
+      {
+        "label": "provider-shaped offline lifecycle with native host preflight",
+        "path": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/agents-offline-oQCXNO/pre-send-refusal-evidence.json",
+        "sha256": "41173c409a37f9afe44231d3b387200c70ec8695a6a133163cfe3a5a68f9ed58"
+      },
+      {
+        "label": "provider-shaped offline lifecycle with native host preflight",
+        "path": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/agents-offline-cdZsGl/pre-send-refusal-evidence.json",
+        "sha256": "244eb13617b56417795391243fa690a91319dbc9314642c54721035f3c177f9a"
+      },
+      {
+        "label": "native macOS preflight before implementation; unchanged live configuration gap; zero provider calls",
+        "path": "/tmp/agents-dispatch-preflight.json",
+        "sha256": "fe8e344cb77219b8b146f45437a0514f90a066a48fa85b71084c28ed33d0e3b2"
+      }
+    ],
+    "earlier_attempts": {
+      "attempts": [
+        {
+          "command": "npm test",
+          "exit": 1,
+          "failures": [
+            "malformed pre-send sources release only the unsubmitted intent without purchasing or stranding work",
+            "real REST adapter: implementation, artifact pagination, restart and same-session correction",
+            "lost /agents/sessions reply stays fenced and never duplicates dispatch",
+            "deterministic artifact rejection survives coordinator restart and permits same-session correction"
+          ],
+          "code": "EXECUTION_DEADLINE",
+          "raw_log": "/tmp/agents-dispatch-test-verified.log",
+          "sha256": "e9ac6bdacea1c8601df32647945f3e53cc0d687c43c545c8bdb48dca78bbc765"
+        },
+        {
+          "command": "npm run test:openai-agents",
+          "exit": 1,
+          "failures": [
+            "subagent completion, closed stream and idle session never settle a running root",
+            "reconnect restores paginated items, discards reordered deltas after done and labels gaps",
+            "authorized required action answer targets exact existing turn and rejects arbitrary tools"
+          ],
+          "code": "EXECUTION_DEADLINE",
+          "raw_log": "/tmp/agents-dispatch-openai-verified.log",
+          "sha256": "4e35574f7afe1b4e59e7e685a2e264ceeb85ce47480db0012f4bfcac325e5bbc"
+        }
+      ],
+      "remedy": "repeated npm process startup in each readiness probe exceeded existing transport deadlines under concurrent suites; changed readiness to open and check the selected executable launcher inside the OS boundary, retained actual native npm execution in the regression, then reran every required check; deadlines, allowance and permissions unchanged"
+    },
+    "paid_calls": 0,
+    "live_prerequisites": "unchanged; original failed preflight and exact external remedy preserved in live"
+  },
+  "initial_launch_followup": {
+    "review_id": 5432829994,
+    "reviewed_commit": "52f580dc0de55d05d797612afc6a1583408a98cb",
+    "inline_comment_ids": [
+      4198948598,
+      4198948613
+    ],
+    "status": "addressed",
+    "rule": "Every owned initial checkout must have an actionable recovery entry, and first submission after repair requires exact proof that no implementation has been dispatched",
+    "evidence_kind": "provider-shaped offline shared lifecycle, actual native macOS preflight and generated loopback route HTML; live inference/installed-browser/native-Linux qualification remains unverified",
+    "tests": [
+      "initial launch pre-send refusal remains registered for safe coordinator recovery",
+      "legacy initial refusal resumes from private non-dispatch proof without creating an unrelated implementation",
+      "initial preparation refusal supports the shared operator control after repair and restart",
+      "failed initial portable preparation is registered and resumes the preserved checkout after repair: symlink",
+      "failed initial portable preparation is registered and resumes the preserved checkout after repair: submodule",
+      "failed initial portable preparation is registered and resumes the preserved checkout after repair: size",
+      "failed initial portable preparation is registered and resumes the preserved checkout after repair: head-race",
+      "initial brief delivery failure stays registered and restores missing approved bytes after repair",
+      "unsubmitted initial resume preserves registry and inputs on readiness failure and refuses cancellation or unresolved intents",
+      "initial retry reply loss reconciles the original operation through coordinator restart without another session",
+      "initial launch reply loss remains registered for coordinator restart without a second implementation"
+    ],
+    "focused": {
+      "command": "node --test --test-name-pattern='initial (launch|preparation|refusal|portable|resume|retry|brief delivery)|legacy initial|failed initial|unsubmitted initial' test/openai-agents.test.mjs",
+      "exit": 0,
+      "pass": 11,
+      "raw_log": "/tmp/agents-start-focused-passed.log",
+      "sha256": "47a008fa662d12f5ce63c97d511c618540da777184cf0bd0450e27998023b9fc"
+    },
+    "representative_output": [
+      {
+        "label": "provider-shaped initial refusal and actual shared resume/control lifecycle",
+        "path": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/agents-offline-Y2bUUr/initial-resume-evidence.json",
+        "sha256": "bda6883cb59fb0ed1ad43e493e23f70b1c16e42d524e5a7734b4854394eacb8f",
+        "page": {
+          "path": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/agents-offline-Y2bUUr/initial-controls.html",
+          "sha256": "6b91171088cc929c82013cb6d03867d248ee4ea94cbae03c700507b20de506ea",
+          "kind": "actual loopback tracker route HTML with offline provider state; no installed-browser qualification"
+        }
+      },
+      {
+        "label": "provider-shaped initial refusal and actual shared resume/control lifecycle",
+        "path": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/agents-offline-lEOCXJ/initial-resume-evidence.json",
+        "sha256": "e2e39862aff870ac1aeeff4c23d27e930e32d0f89b152d38c4e3e5665ee57489",
+        "page": {
+          "path": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/agents-offline-lEOCXJ/initial-controls.html",
+          "sha256": "15872dd17ac74bf25d1ff619fbab00dfd6d45dc9bb99a5ca2a86559019c5c456",
+          "kind": "actual loopback tracker route HTML with offline provider state; no installed-browser qualification"
+        }
+      },
+      {
+        "label": "provider-shaped initial refusal and actual shared resume/control lifecycle",
+        "path": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/agents-offline-ds95Ek/initial-resume-evidence.json",
+        "sha256": "16cfdd794a8b6f3d4ffbca807752a3c7fe1a0c4fefd2cab1b97be9099125e119",
+        "page": {
+          "path": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/agents-offline-ds95Ek/initial-controls.html",
+          "sha256": "ea680f1f3da60e2c0280a7c26efd4b74d23b8b39e7364cfcdca6847f3f3a9d2a",
+          "kind": "actual loopback tracker route HTML with offline provider state; no installed-browser qualification"
+        }
+      },
+      {
+        "label": "native macOS preflight before this review batch; unchanged absent live inputs; zero provider calls",
+        "path": "/tmp/agents-start-preflight.json",
+        "sha256": "2cbc617f658e4a9c2eff7bca0915b501e808fe5a10a23a1ab7756cddfbb64954"
+      }
+    ],
+    "paid_calls": 0,
+    "live_prerequisites": "unchanged; original failed live preflight and exact external remedy preserved in live"
+  },
+  "retry_source_followup": {
+    "review": 5433219577,
+    "reviewed_commit": "ab5287773261b37ee595c411eec87e44c2e39f53",
+    "inline_comments": [
+      4199277386,
+      4199277394
+    ],
+    "kind": "native Git and provider-shaped offline lifecycle fixtures; live inference remains unverified",
+    "test_names": [
+      "invalid provider retry delays preserve finite reconciliation, health and cancellation schedules across restart",
+      "Retry-After seconds and HTTP dates remain finite and bounded",
+      "Agents readiness carries HTTP-date throttling into shared account health after restart",
+      "throttled http-date retry survives restart and defers coordinator polling",
+      "throttled malformed retry survives restart and defers coordinator polling",
+      "throttled capped retry survives restart and defers coordinator polling",
+      "source snapshot preserves binary blobs, exact revision and verified carried files",
+      "SHA-256 source snapshot reaches hosted dispatch and immutable result recovery"
+    ],
+    "focused": {
+      "command": "focused retry/source regressions",
+      "exit": 0,
+      "raw_log": "/tmp/agents-retry-source-focused-final.log",
+      "sha256": "b624dca745d4ccf6ae6c1fc01526fab2dec4ea1149f00d44fb2bba4364c069ae",
+      "tests": 8,
+      "pass": 8,
+      "fail": 0,
+      "cancelled": 0,
+      "skipped": 0
+    },
+    "initial_failure": {
+      "command": "initial focused retry/source regressions",
+      "exit": 1,
+      "raw_log": "/tmp/agents-retry-source-focused.log",
+      "sha256": "7d8ddf9d7a11dc3ea297c886af18daff3c9805baf510f6ad802253d6d81b43c3",
+      "tests": 7,
+      "pass": 6,
+      "fail": 1,
+      "reason": "obsolete asctime HTTP date used local timezone; corrected to GMT before final verification"
+    },
+    "previous_verify": [
+      {
+        "command": "npm test",
+        "exit": 0,
+        "raw_log": "/tmp/agents-start-test-verified.log",
+        "sha256": "245ccec4ec159db1f8f0c603fa4cf9a3cfdb91666d262b1201326dbe6c447280",
+        "tests": 1154,
+        "pass": 1154,
+        "fail": 0,
+        "cancelled": 0,
+        "skipped": 0
+      },
+      {
+        "command": "npm run lint",
+        "exit": 0,
+        "raw_log": "/tmp/agents-start-lint-verified.log",
+        "sha256": "8c7790de3f018fb4580f18ac70e1b355a0f76f522dd73acbdaa63632feffcecc"
+      },
+      {
+        "command": "npm run test:execution-backends",
+        "exit": 0,
+        "raw_log": "/tmp/agents-start-backends-verified.log",
+        "sha256": "f2bafd7265775baccd86030b428dff533148f29cc0d9ca341a9667554d9123ad",
+        "tests": 396,
+        "pass": 396,
+        "fail": 0,
+        "cancelled": 0,
+        "skipped": 0
+      },
+      {
+        "command": "npm run test:openai-agents",
+        "exit": 0,
+        "raw_log": "/tmp/agents-start-openai-verified.log",
+        "sha256": "df13f33e24fcc24e859411425fbedfad4205aae7153d7cc41318b12888a31ead",
+        "tests": 53,
+        "pass": 53,
+        "fail": 0,
+        "cancelled": 0,
+        "skipped": 0
+      },
+      {
+        "command": "git diff --check",
+        "exit": 0,
+        "raw_log": "/tmp/agents-start-diff-verified.log",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      }
+    ],
+    "earlier_candidate": {
+      "command": "npm test before final readiness propagation",
+      "exit": 0,
+      "raw_log": "/tmp/agents-retry-source-test.log",
+      "sha256": "e5db26525d09de8c1bc56440ecdf62029dc6200a2f45898d1af9fb8a4f7c5a47",
+      "tests": 1160,
+      "pass": 1160,
+      "fail": 0,
+      "cancelled": 0,
+      "skipped": 0
+    },
+    "representative_generated_output": [
+      {
+        "label": "shared retry boundary evidence",
+        "path": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/gallivant-test-dW35el/retry-boundary-evidence.json",
+        "sha256": "ba14dad83f1ffb3912ea3affae0cfda4358110f8c03dc923f17eb1d976a76768"
+      },
+      {
+        "label": "readiness retry evidence",
+        "path": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/agents-offline-fxoTi6/provider-health.json",
+        "sha256": "16a7096d1b7a81b917397a7c0ca405d9bd14123718faa2bbd033c71aa518987f"
+      },
+      {
+        "label": "retry scheduling evidence",
+        "path": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/agents-offline-xqHvZr/retry-evidence.json",
+        "sha256": "039b99c78bb507fd6821293b5a604934a7100216cb36cb28f8251c2cabaf34b1"
+      },
+      {
+        "label": "retry scheduling evidence",
+        "path": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/agents-offline-QZzJBj/retry-evidence.json",
+        "sha256": "3d4a540d036b7dd42da4370a24218cd38011554b1aafa92b932c229cbc42edf4"
+      },
+      {
+        "label": "retry scheduling evidence",
+        "path": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/agents-offline-I4n3n1/retry-evidence.json",
+        "sha256": "c5c423524c31d24c7dd800be897fec1341e655d63f0edc5a0f54005349cf0b75"
+      },
+      {
+        "label": "SHA-256 source evidence",
+        "path": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/agents-offline-t8i0Qn/sha256-source-evidence.json",
+        "sha256": "1b484650a37aa236be9261be544bc714acc4c211962ce4516dd93eb271427246"
+      },
+      {
+        "label": "native macOS preflight; four live inputs still absent; zero provider calls",
+        "path": "/tmp/agents-retry-source-preflight.json",
+        "sha256": "121235eb8fdbcf3ee4026dc9226d7a5597d25786ca17cb1596ca6623e41dd8f7"
+      }
+    ],
+    "paid_calls": 0,
+    "official_references": [
+      "https://www.rfc-editor.org/rfc/rfc9110.html#section-10.2.3",
+      "https://git-scm.com/docs/git-rev-parse#Documentation/git-rev-parse.txt---show-object-formatstorageinputoutput"
+    ]
+  }
+}

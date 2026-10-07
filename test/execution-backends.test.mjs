@@ -1,12 +1,13 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { join } from "node:path";
+import { join, dirname } from "node:path";
 import { createHash } from "node:crypto";
 import { EventEmitter } from "node:events";
+import { createServer } from "node:net";
 import { mkdirSync, readFileSync, writeFileSync, rmSync, renameSync, symlinkSync, cpSync, statSync, lstatSync, existsSync, chmodSync, realpathSync } from "node:fs";
 import { pathToFileURL } from "node:url";
 import { makeExecution, executionLive, assertExecutionDependency } from "../lib/execution.mjs";
-import { redact, redactResultMetadata, EXECUTION_CURSOR_BYTES } from "../lib/execution_io.mjs";
+import { redact, redactResultMetadata, collectionValidationError, dispatchNotSentError, EXECUTION_CURSOR_BYTES } from "../lib/execution_io.mjs";
 import { executionRegistry, adapters, buildRun } from "../lib/harness.mjs";
 import { makeProviderHealth } from "../lib/provider_health.mjs";
 import { makeRunner, LOCAL_OUTPUT_LIMITS } from "../lib/run.mjs";
@@ -17,7 +18,8 @@ import { writeJsonAtomic, readJson } from "../lib/fs.mjs";
 import { makeState, newEntry, STATES, idSlug } from "../lib/state.mjs";
 import { routes } from "../lib/commands/serve.mjs";
 import { makeTick } from "../lib/tick.mjs";
-import { reconcileExecutionResult, verificationEnvironment } from "../lib/execution_result.mjs";
+import { reconcileExecutionResult, verificationEnvironment, checkVerificationSandbox } from "../lib/execution_result.mjs";
+import { prepareVerificationSandbox, verificationSandboxSpec, verificationRuntimeMounts, validVerificationSandbox } from "../lib/verification_sandbox.mjs";
 import { resume } from "../lib/commands/resume.mjs";
 import { acquireProcessLock } from "../lib/daemon.mjs";
 import { makeGit, GIT_PATH_LIMITS } from "../lib/git.mjs";
@@ -51,15 +53,206 @@ function remote(provider = "openai-agents", overrides = {}) {
   return { root, clock, calls, transport, capabilities, service: makeExecution(options), reopen: () => makeExecution(options), observe: patch => { observation = { ...observation, ...patch }; }, jobs };
 }
 
-test("predecessor service is required and remote selections remain unavailable", () => {
+test("invalid provider retry delays preserve finite reconciliation, health and cancellation schedules across restart", async t => {
+  const observations = [];
+  for (const retryAfterMs of [NaN, Infinity, -Infinity, "120000", -20_000]) {
+    const error = Object.assign(new Error("provider throttled"), { code: "THROTTLED", retryAfterMs });
+    let inspections = 0, cancellations = 0, probes = 0;
+    const f = remote("openai-agents", { inspect: async () => { inspections++; throw error; } });
+    const job = await f.service.submit(input), started = f.clock.now();
+    await f.service.reconcile();
+    assert.equal(f.reopen().current().execution.nextAttemptAt, started + 20_000);
+    f.clock.advance(19_999 / 60_000); await f.reopen().reconcile(); assert.equal(inspections, 1);
+    f.clock.advance(1 / 60_000); await f.reopen().reconcile(); assert.equal(inspections, 2);
+    assert.equal(f.reopen().current().id, job.id); assert.equal(f.calls.filter(v => v[0] === "submit").length, 1);
+
+    const home = tempHome(), clock = makeClock(), options = { home, clock, jitter: () => 0, probe: async () => { probes++; throw error; } };
+    await makeProviderHealth(options).refresh([["openai-agents", "test"]]);
+    assert.equal(makeProviderHealth(options).get("openai-agents", "test").nextAttemptAt, clock.now() + 20_000);
+    clock.advance(19_999 / 60_000); await makeProviderHealth(options).refresh([["openai-agents", "test"]]); assert.equal(probes, 1);
+    clock.advance(1 / 60_000); await makeProviderHealth(options).refresh([["openai-agents", "test"]]); assert.equal(probes, 2);
+
+    const stopped = remote("openai-agents", { cancel: async () => { cancellations++; throw error; } });
+    const cancelledJob = await stopped.service.submit(input);
+    await assert.rejects(stopped.service.cancel(), { code: "THROTTLED" });
+    const cancellation = stopped.reopen().state().current.execution.cancellation;
+    assert.equal(cancellation.nextAttemptAt, stopped.clock.now() + 20_000);
+    stopped.clock.advance(19_999 / 60_000); await stopped.reopen().reconcile(); assert.equal(cancellations, 1);
+    stopped.clock.advance(1 / 60_000); await stopped.reopen().reconcile(); assert.equal(cancellations, 2);
+    assert.equal(stopped.reopen().current().id, cancelledJob.id); assert.ok(stopped.reopen().state().stopped);
+    await assert.rejects(stopped.reopen().continue({ ...input, operationId: "forbidden" }), { code: "EXECUTION_STOPPED" });
+    observations.push({ invalidDelay: String(retryAfterMs), reconciliation: f.reopen().current().execution.nextAttemptAt, health: makeProviderHealth(options).get("openai-agents", "test").nextAttemptAt, cancellation: stopped.reopen().state().current.execution.cancellation.nextAttemptAt, inspections, probes, cancellations });
+  }
+  const path = join(tempHome(), "retry-boundary-evidence.json"); writeJsonAtomic(path, { kind: "offline shared retry lifecycle; no provider calls", observations });
+  t.diagnostic(`shared retry boundary evidence: ${path}`);
+});
+
+for (const provider of ["openai-agents", "codex-cloud"]) test(`${provider} fixture: proven pre-send refusal restores the prior root and allowance without ambiguity`, async () => {
+  const f = remote(provider), job = await f.service.submit(input);
+  f.observe({ state: "succeeded", costUsd: 0.2 }); await f.service.reconcile({ force: true }); await f.service.collect();
+  const before = f.reopen().state(), request = { ...input, operationId: "repair", sessionId: job.execution.sessionId };
+  const resume = f.transport.continue;
+  f.transport.continue = async () => { throw dispatchNotSentError(Object.assign(new Error("Bearer private-preflight-value"), { code: "EXECUTION_VERIFICATION_SANDBOX" })); };
+  for (let n = 0; n < 22; n++) await assert.rejects(f.reopen().continue(request), { dispatchNotSent: true });
+  const after = f.reopen().state(), { dispatchRefusals, ...unchanged } = after;
+  assert.deepEqual(unchanged, before); assert.equal(dispatchRefusals.length, 20);
+  assert.doesNotMatch(JSON.stringify(after), /private-preflight-value/);
+  for (const refusal of dispatchRefusals) assert.equal(existsSync(f.service.dirOf(refusal.runId)), false);
+  assert.equal(f.reopen().current().running, false); assert.equal(f.reopen().current().id, job.id);
+  f.transport.continue = resume;
+  const accepted = await f.reopen().continue(request);
+  assert.equal(accepted.execution.sessionId, job.execution.sessionId); assert.equal(f.calls.filter(c => c[0] === "continue").length, 1);
+  assert.equal(f.reopen().state().allowance.reservedUsd, 0.2);
+});
+
+test("an unmarked submission failure cannot release an intent merely because its error code names readiness", async () => {
+  const f = remote("openai-agents", { submit: async req => { f.jobs.set(req.idempotencyKey, { providerJobId: "paid-job", turnId: "paid-root", sessionId: "paid-session" }); throw Object.assign(new Error("reply lost"), { code: "EXECUTION_VERIFICATION_SANDBOX" }); } });
+  await assert.rejects(f.service.submit(input), { code: "EXECUTION_VERIFICATION_SANDBOX" });
+  assert.equal(f.reopen().current().execution.acceptance, "unknown"); assert.equal(f.reopen().state().allowance.reservedUsd, 0.1);
+  assert.equal(f.reopen().state().dispatchRefusals, undefined);
+  await assert.rejects(f.reopen().submit(input), { code: "EXECUTION_UNKNOWN" });
+  await f.reopen().reconcile({ force: true }); assert.equal(f.reopen().current().execution.providerJobId, "paid-job");
+});
+
+test("cancellation retry after a proven pre-send refusal still fences the restored task", async () => {
+  let reject;
+  const f = remote("openai-agents", { submit: () => new Promise((_, fail) => { reject = fail; }) });
+  const pending = f.service.submit(input); await new Promise(resolve => setImmediate(resolve));
+  await assert.rejects(f.reopen().cancel({ reason: "cancelled" }), /execution already running/);
+  reject(dispatchNotSentError(Object.assign(new Error("local host unavailable"), { code: "EXECUTION_VERIFICATION_SANDBOX" })));
+  await assert.rejects(pending, { dispatchNotSent: true }); await f.reopen().cancel({ reason: "cancelled" });
+  assert.equal(f.reopen().current(), null); assert.ok(f.reopen().state().stopped);
+  assert.equal(f.reopen().state().allowance, undefined);
+  await assert.rejects(f.reopen().submit(input), { code: "EXECUTION_STOPPED" }); assert.equal(f.calls.length, 0);
+});
+
+test("a proven unsent review correction stops actionably without moving feedback or the prior root", async () => {
+  const f = remote(), first = await f.service.submit(input);
+  f.observe({ state: "succeeded" }); await f.service.reconcile({ force: true }); await f.service.collect();
+  f.transport.continue = async () => { throw dispatchNotSentError(Object.assign(new Error("local host unavailable"), { code: "EXECUTION_VERIFICATION_SANDBOX" })); };
+  const id = "acme/widget/remote", state = makeState(f.root);
+  state.put(id, { ...newEntry({ repo: "acme/widget", branch: "work/widget", harness: "openai-agents", session: first.execution.sessionId, worktree: tempHome(), pr: 7, state: STATES.prOpen, nowIso: T0 }),
+    execution: f.service.current().execution, last: { at: T0, run: first.id, exit: 0 }, pr: 7 });
+  const cursor = structuredClone(state.get(id).cursor);
+  const gh = fakeGh({ comments: [comment({ id: 55, by: "me", at: T0, body: "/fix Apply this authorized review correction" })] });
+  const tick = makeTick({ home: f.root, config: CONFIG, state, ownLogin: "me", log: silentLog, clock: f.clock, notify: fakeNotify(), gh, git: fakeGit(),
+    credential: fakeCredential(), identity: fakeIdentity(), executionFor: f.reopen, readPrd: () => GOOD_PRD,
+    executionInputFor: async (_id, _entry, request) => ({ ...input, ...request, environment: "sandbox" }) });
+  await tick.tickEntry(id, state.get(id));
+  assert.equal(state.get(id).state, STATES.needsHuman); assert.equal(state.get(id).reason, "dispatch-refused");
+  assert.deepEqual(state.get(id).cursor, cursor); assert.equal(state.get(id).iteration, 0);
+  assert.equal(state.get(id).last.run, first.id); assert.equal(state.get(id).last.exit, 0);
+  assert.equal(f.reopen().current().id, first.id); assert.equal(f.reopen().current().running, false);
+  const refusals = f.reopen().state().dispatchRefusals.length;
+  await tick.tickEntry(id, state.get(id)); assert.equal(f.reopen().state().dispatchRefusals.length, refusals);
+});
+
+// Shared lifecycle fixtures still exercise the real native/API readiness gate;
+// only the provider's read responses and private credential are offline.
+function remoteReadinessFixture(t, ctx) {
+  const keyFile = join(ctx.home, "readiness-api-key"); writeFileSync(keyFile, "offline-readiness-key", { mode: 0o600 });
+  const selected = { account: "test", organization: "org-fixture", project: "proj-fixture", model: "fixture-model", api_key_file: keyFile,
+    environment: "openai_hosted", container_size: "small", network: { access: "disabled" }, allowance };
+  ctx.config = { ...ctx.config, harness: { ...ctx.config.harness, "openai-agents": selected } };
+  return t.mock.method(globalThis, "fetch", async (url, options) => {
+    assert.equal(options.method, "GET"); assert.equal(options.headers.Authorization, "Bearer offline-readiness-key");
+    assert.equal(options.headers["OpenAI-Project"], selected.project);
+    const route = new URL(url).pathname;
+    assert.ok([`/v1/models/${selected.model}`, "/v1/agents/sessions"].includes(route));
+    return new Response(JSON.stringify(route.includes("/models/") ? { id: selected.model } : { data: [], has_more: false }));
+  });
+}
+
+test("predecessor service is required and managed API is available while Cloud remains reserved", () => {
   assert.throws(() => assertExecutionDependency(null), { code: "EXECUTION_DEPENDENCY" });
   assertExecutionDependency(() => {});
-  assert.equal(executionRegistry["openai-agents"].available, false);
+  assert.equal(executionRegistry["openai-agents"].available, true);
   assert.equal(executionRegistry["codex-cloud"].available, false);
   for (const name of Object.keys(adapters)) assert.equal(executionRegistry[name].adapter, adapters[name]);
   const spec = buildRun({ harness: "codex", config: CONFIG, mode: "start", prompt: "offline", cwd: tempHome() });
   assert.equal(spec.cmd, CONFIG.harness.codex.bin);
   assert.ok(spec.args.includes('sandbox_mode="workspace-write"'));
+});
+
+for (const provider of ["openai-agents", "codex-cloud"]) for (const terminalState of ["succeeded", "failed"]) test(`${provider} fixture: rejected collection recovers checkpoint-first crash and preserves ${terminalState} root`, async () => {
+  const f = remote(provider, { collect: async () => { f.calls.push(["collect"]); throw collectionValidationError("invalid immutable result"); } });
+  const job = await f.service.submit(input);
+  f.observe({ state: terminalState, costUsd: 0.2, completedAt: f.clock.now() }); await f.service.reconcile({ force: true });
+  const before = readJson(join(f.root, "execution.json"));
+  await assert.rejects(f.service.collect(), { code: "EXECUTION_RESULT", collectionValidation: true });
+  const dir = f.service.dirOf(job.id), checkpoint = readJson(join(dir, "result-application.json"));
+  assert.equal(checkpoint.phase, "blocked"); assert.equal(checkpoint.reason, "result-collection-validation");
+  assert.equal(checkpoint.providerJobId, job.execution.providerJobId); assert.equal(checkpoint.turnId, job.execution.turnId);
+  assert.equal(existsSync(join(dir, "result.json")), false);
+  // A crash after checkpoint persistence must not reopen retrieval, including
+  // the older failed-root migration that repairs missing result.json records.
+  writeJsonAtomic(join(f.root, "execution.json"), before);
+  const recovered = f.reopen(), current = recovered.current(), calls = f.calls.length;
+  assert.equal(current.running, false); assert.equal(current.execution.providerState, terminalState);
+  assert.equal(current.execution.terminalState, terminalState); assert.equal(current.execution.collected, true);
+  assert.equal(current.execution.resultRejected, true); assert.equal(current.exit, terminalState === "succeeded" ? 0 : 1);
+  assert.equal(current.endedAt, f.clock.now()); assert.equal(current.completionInferred, false);
+  assert.equal(recovered.outcome(job.id).ok, false); assert.equal(recovered.outcome(job.id).cost, 0.2);
+  await recovered.reconcile({ force: true }); await assert.rejects(recovered.collect(), { code: "EXECUTION_RESULT_BLOCKED" });
+  assert.equal(f.calls.length, calls); assert.deepEqual(readJson(join(dir, "result-application.json")), checkpoint);
+  await assert.rejects(recovered.continue({ ...input, operationId: "foreign", sessionId: "foreign" }), { code: "EXECUTION_CONTINUATION" });
+  const next = await recovered.continue({ ...input, operationId: "correction", sessionId: current.execution.sessionId });
+  assert.equal(next.execution.sessionId, job.execution.sessionId); assert.notEqual(next.execution.turnId, job.execution.turnId);
+  assert.equal(f.calls.filter(c => c[0] === "submit").length, 1); assert.equal(f.calls.filter(c => c[0] === "continue").length, 1);
+});
+
+test("unmarked collection errors and foreign rejection checkpoints cannot settle the owned run", async () => {
+  const f = remote("openai-agents", { collect: async () => { throw Object.assign(new Error("retryable download"), { code: "EXECUTION_RESULT" }); } });
+  const job = await f.service.submit(input); f.observe({ state: "succeeded" }); await f.service.reconcile({ force: true });
+  await assert.rejects(f.service.collect(), { code: "EXECUTION_RESULT" });
+  assert.equal(f.service.current().running, true); assert.equal(existsSync(join(f.service.dirOf(job.id), "result-application.json")), false);
+  writeJsonAtomic(join(f.service.dirOf(job.id), "result-application.json"), { phase: "blocked", reason: "result-collection-validation",
+    taskId: "acme/widget/remote", runId: job.id, providerJobId: job.execution.providerJobId, sessionId: "foreign", turnId: job.execution.turnId, inputHead: input.inputHead });
+  assert.equal(f.reopen().current().running, true);
+  await assert.rejects(f.service.continue({ ...input, operationId: "duplicate", sessionId: job.execution.sessionId }), { code: "BUSY" });
+});
+
+test("readiness enforcement rejects failed, unproven and aborted probes and always removes scratch profiles", async () => {
+  for (const mode of ["failure", "unproven", "aborted"]) {
+    const abort = new AbortController(), paths = [];
+    const result = await checkVerificationSandbox({ signal: abort.signal, sandbox: async options => {
+      paths.push(options.worktree, options.home);
+      assert.equal(options.signal, abort.signal); assert.equal(options.env.HOME, options.home);
+      assert.equal(options.env.GH_TOKEN, undefined); assert.equal(options.env.OPENAI_API_KEY, undefined);
+      if (mode === "failure") throw new Error("private-probe-error");
+      if (mode === "aborted") abort.abort();
+      return { evidence: mode === "unproven" ? { driver: "sandbox-exec", probe: "claimed" } :
+        { version: 1, driver: "sandbox-exec", filesystem: "checkout-and-runtime", network: "disabled", probe: "passed" } };
+    } });
+    assert.equal(result.ok, false); assert.equal(result.detail, "EXECUTION_VERIFICATION_SANDBOX");
+    assert.match(result.fix, /bwrap.*namespaces/); assert.doesNotMatch(JSON.stringify(result), /private-probe-error/);
+    for (const path of paths) assert.equal(existsSync(path), false);
+  }
+});
+
+test("remote host refusal precedes checkout mutation and paid correction while unrelated PR review settles", async () => {
+  const f = remote(), home = tempHome(), state = makeState(home), notify = fakeNotify(), gh = fakeGh(), changes = [];
+  const id = "acme/widget/remote", entry = newEntry({ repo: "acme/widget", harness: "openai-agents", session: "owned-session",
+    branch: "work/remote", worktree: join(home, "missing-checkout"), pr: 1, base: "main", state: STATES.prOpen, nowIso: T0 });
+  entry.last = { run: "saved-run", exit: 0, cost: null }; state.put(id, entry);
+  state.put("acme/widget/review", newEntry({ repo: "acme/widget", harness: "codex", branch: "work/review", pr: 2, state: STATES.prOpen, nowIso: T0 }));
+  gh.prView = async (_repo, pr) => pr === 2 ? prFixture({ state: "MERGED" }) : gh.data.pr;
+  gh.data.comments = [comment({ id: 99, by: "me", at: new Date(f.clock.now()).toISOString(), body: "@gallivant fix the header" })];
+  const ctx = { home, state, config: CONFIG, clock: f.clock, gh, ownLogin: "me", log: silentLog, notify,
+    readPrd: () => null, credential: fakeCredential(), identity: fakeIdentity(),
+    git: { ...fakeGit(), exists: () => false, fromBranch: async () => changes.push("recreate"), mergeBase: async () => changes.push("merge"),
+      ensureHttpsRemote: async () => changes.push("remote") }, executionFor: task => task === id ? f.service : fakeRunner(f.clock) };
+  const descriptor = Object.getOwnPropertyDescriptor(process, "platform");
+  Object.defineProperty(process, "platform", { ...descriptor, value: "unsupported-fixture" });
+  try {
+    await assert.rejects(makeTick(ctx).startRun(id, entry, { name: "resume", prompt: "authorized correction" }), { code: "EXECUTION_VERIFICATION_SANDBOX" });
+    await makeTick(ctx).tick(); await makeTick(ctx).tick();
+    assert.equal(state.get(id).state, STATES.needsHuman); assert.equal(state.get(id).reason, "verification-sandbox-unavailable");
+    assert.equal(state.get(id).session, entry.session); assert.equal(state.get(id).pr, 1); assert.equal(state.get(id).last.run, "saved-run");
+    assert.equal(state.get(id).last.cost, null); assert.equal(state.get("acme/widget/review").state, STATES.done);
+    assert.deepEqual(changes, []); assert.equal(f.calls.length, 0); assert.equal(Object.keys(f.service.state().operations).length, 0);
+    assert.equal(notify.sent.filter(c => c[0] === "needs").length, 1);
+  } finally { Object.defineProperty(process, "platform", descriptor); }
 });
 
 test("missing predecessor module stops context startup with a dependency remedy", async () => {
@@ -2041,8 +2234,8 @@ test("interrupted verification blocks replay while lost publication replies reus
   assert.deepEqual(readJson(join(f.dir, "verification.json")), evidence);
 });
 
-test("failed remote verification survives polls and restart, settles workflow and permits explicit correction", async () => {
-  const f = await collectedArtifactFixture(), state = makeState(f.ctx.home), attempts = join(f.dir, "verify-attempts.txt");
+test("failed remote verification survives polls and restart, settles workflow and permits explicit correction", async t => {
+  const f = await collectedArtifactFixture(), state = makeState(f.ctx.home), attempts = join(f.entry.worktree, "verify-attempts.txt");
   f.ctx.readPrd = () => `# Brief\n\n## Verify\n\n- \`node -e 'require("fs").appendFileSync(${JSON.stringify(attempts)}, "x"); process.exit(2)'\`\n`;
   state.put(f.id, { ...f.entry, last: { run: f.job.id, exit: null }, execution: f.service.current().execution });
   const reviewId = "acme/widget/review";
@@ -2077,7 +2270,9 @@ test("failed remote verification survives polls and restart, settles workflow an
   assert.match(restarted.state.get(f.id).control.message, /cannot retry publication/);
   assert.throws(() => requestControl(restarted, { handle: f.id, action: "recheck" }), { code: "EXECUTION_RESULT_BLOCKED" });
   requestControl(restarted, { handle: f.id, action: "resume" });
-  await makeTick(restarted).tickEntry(f.id, restarted.state.get(f.id));
+  const probe = remoteReadinessFixture(t, restarted);
+  try { await makeTick(restarted).tickEntry(f.id, restarted.state.get(f.id)); } finally { probe.mock.restore(); }
+  assert.equal(probe.mock.callCount(), 2);
   assert.equal(restarted.state.get(f.id).control.status, "applied");
   assert.equal(f.provider.calls.filter(c => c[0] === "continue").length, 1);
   assert.equal(f.reopen().current().execution.sessionId, stopped.session);
@@ -2123,7 +2318,10 @@ test("deterministic publication rejection settles once and permits an explicit c
       assert.match(controlFailure(error), /explicitly resume.*cannot retry publication/); return true;
     });
     gh.data.pr.state = "OPEN";
-    requestControl(restarted, { handle: f.id, action: "resume" }); await makeTick(restarted).tickEntry(f.id, restarted.state.get(f.id));
+    requestControl(restarted, { handle: f.id, action: "resume" });
+    const probe = remoteReadinessFixture(t, restarted);
+    try { await makeTick(restarted).tickEntry(f.id, restarted.state.get(f.id)); } finally { probe.mock.restore(); }
+    assert.equal(probe.mock.callCount(), 2);
     assert.equal(restarted.state.get(f.id).control.status, "applied"); assert.equal(f.provider.calls.filter(call => call[0] === "continue").length, 1);
     assert.equal(f.reopen().current().execution.sessionId, f.job.execution.sessionId); assert.notEqual(restarted.state.get(f.id).last.run, f.job.id);
     assert.deepEqual(readJson(join(f.dir, "result-application.json")), checkpoint); assert.equal(readFileSync(join(f.dir, "result.json"), "utf8"), result);
@@ -2212,6 +2410,183 @@ async function nativeResultFixture() {
   return { ...f, verify: async (...args) => { f.calls.push("verify"); return execFileAsync(...args); } };
 }
 
+test("verification process helper preserves binary Git objects and binary failure diagnostics", async () => {
+  const args = ["-e", "process.stdout.write(Buffer.from([0,128,255])); process.stderr.write('binary stderr');"];
+  const result = await execFileAsync(process.execPath, args, { encoding: "buffer" });
+  assert.deepEqual(result.stdout, Buffer.from([0, 128, 255])); assert.ok(Buffer.isBuffer(result.stderr));
+  await assert.rejects(execFileAsync(process.execPath, ["-e", args[1] + "process.exit(7);"], { encoding: "buffer" }), error => {
+    assert.equal(error.code, 7); assert.deepEqual(error.stdout, result.stdout); assert.ok(Buffer.isBuffer(error.stderr)); assert.match(error.message, /binary stderr/); return true;
+  });
+});
+
+test("host-file exfiltration in artifact and pushed-branch Verify scripts is denied before publication", async t => {
+  const observations = [];
+  for (const transport of ["artifacts", "pushed-branch"]) {
+    const f = await nativeResultFixture(), outside = join(tempHome(), "operator-private"), secret = "host-file-must-not-reach-evidence";
+    writeFileSync(outside, secret);
+    const text = `console.log(require('node:fs').readFileSync(${JSON.stringify(outside)},'utf8'));\n`;
+    f.result.files = [{ path: "verify.cjs", beforeHash: null, afterHash: sha(text), text }];
+    f.ctx.readPrd = () => "# Brief\n\n## Verify\n\n- `node verify.cjs`\n";
+    if (transport === "pushed-branch") {
+      writeFileSync(join(f.entry.worktree, "verify.cjs"), text); await f.ctx.git.commitResult(f.entry.worktree, ["verify.cjs"]);
+      delete f.result.files; f.result.pushedHead = await f.ctx.git.head(f.entry.worktree);
+      f.ctx.gh.refSha = async () => f.result.pushedHead; f.ctx.gh.containsCommit = async () => true;
+      f.calls.length = 0;
+    }
+    let privateHome;
+    const verify = f.verify; f.verify = (...args) => { privateHome = args[2].env.HOME; return verify(...args); };
+    await assert.rejects(reconcileExecutionResult(f.ctx, f), { code: "EXECUTION_RESULT_BLOCKED" });
+    const evidence = readJson(join(f.dir, "verification.json")), checkpoint = readJson(join(f.dir, "result-application.json"));
+    assert.equal(checkpoint.reason, "verification-failed"); assert.notEqual(evidence.evidence[0].exit, 0);
+    assert.equal(validVerificationSandbox(evidence.evidence[0].sandbox), true);
+    assert.doesNotMatch(JSON.stringify(evidence), new RegExp(secret)); assert.equal(readFileSync(outside, "utf8"), secret);
+    assert.equal(existsSync(privateHome), false); assert.equal(f.calls.includes("push"), false); assert.equal(f.calls.includes("PR"), false);
+    const calls = [...f.calls]; await assert.rejects(reconcileExecutionResult(f.ctx, f), { code: "EXECUTION_RESULT_BLOCKED" });
+    assert.deepEqual(f.calls, calls); assert.deepEqual(readJson(join(f.dir, "verification.json")), evidence);
+    observations.push({ transport, evidence: join(f.dir, "verification.json"), checkpoint: join(f.dir, "result-application.json"), hostContentsExposed: false, published: false, privateHomeRemoved: true });
+  }
+  const path = join(tempHome(), "verification-host-file-denial.json"); writeJsonAtomic(path, { kind: "native OS enforcement with provider-controlled result fixtures", observations });
+  t.diagnostic(`native host-file denial evidence: ${path}`);
+});
+
+test("native verification permits npm and checkout tools while denying child, symlink, Git, journal and network escapes", async t => {
+  const f = await nativeResultFixture(), outside = join(tempHome(), "operator-private"), marker = "outside-secret";
+  writeFileSync(outside, marker);
+  const server = createServer(socket => { socket.destroy(); assert.fail("verification reached coordinator network"); });
+  await new Promise(resolve => server.listen(0, "127.0.0.1", resolve));
+  try {
+    const text = `const fs=require('node:fs'),assert=require('node:assert/strict'),cp=require('node:child_process'),net=require('node:net');
+const outside=${JSON.stringify(outside)},journal=${JSON.stringify(join(f.dir, "result-application.json"))};
+const denied=fn=>assert.throws(fn,e=>['EPERM','EACCES','ENOENT','EROFS'].includes(e.code));
+denied(()=>fs.readFileSync(outside)); denied(()=>fs.writeFileSync(outside,'changed')); denied(()=>fs.readFileSync(journal));
+denied(()=>fs.readFileSync('.git/config')); denied(()=>fs.writeFileSync('.git/config','changed'));
+fs.symlinkSync(outside,'escape-link'); try{denied(()=>fs.readFileSync('escape-link'));}finally{fs.unlinkSync('escape-link');}
+const child=cp.spawnSync(process.execPath,['-e',"require('node:fs').readFileSync(process.argv[1])",outside],{encoding:'utf8'});
+assert.notEqual(child.status,0); assert.equal(child.stdout,'');
+const socket=net.connect({host:'127.0.0.1',port:${server.address().port}}); socket.on('connect',()=>process.exit(41));
+socket.on('error',e=>{assert.ok(['EPERM','EACCES','ENETUNREACH','EHOSTUNREACH','ECONNREFUSED'].includes(e.code)); console.log('host-access-denied');});
+`;
+    const pkg = JSON.stringify({ scripts: { test: "node verify.cjs" } });
+    f.result.files = [{ path: "verify.cjs", beforeHash: null, afterHash: sha(text), text }, { path: "package.json", beforeHash: null, afterHash: sha(pkg), text: pkg }];
+    f.ctx.readPrd = () => "# Brief\n\n## Verify\n\n- `npm test`\n";
+    t.diagnostic(`native child/network isolation evidence: ${join(f.dir, "verification.json")}`);
+    const done = await reconcileExecutionResult(f.ctx, f);
+    assert.match(done.evidence[0].output, /host-access-denied/); assert.doesNotMatch(done.evidence[0].output, new RegExp(marker));
+    assert.equal(validVerificationSandbox(done.evidence[0].sandbox), true);
+    assert.equal(readFileSync(outside, "utf8"), marker); assert.deepEqual(f.calls, ["commit", "verify", "push", "PR"]);
+  } finally { await new Promise(resolve => server.close(resolve)); }
+});
+
+test("native verification supports Git checks with immutable current-revision metadata in normal and linked checkouts", async t => {
+  const observations = [];
+  for (const linked of [false, true]) {
+    const f = await nativeResultFixture(), original = f.entry.worktree;
+    if (linked) {
+      const path = join(tempHome(), "linked");
+      await execFileAsync("git", ["worktree", "add", "-b", "work/linked", path, "HEAD"], { cwd: original });
+      f.entry.worktree = path; f.entry.branch = f.result.branch = "work/linked";
+    }
+    const previous = f.result.inputHead;
+    const script = `const fs=require('node:fs'),assert=require('node:assert/strict'),cp=require('node:child_process');
+const dir=process.env.GIT_DIR,denied=fn=>assert.throws(fn,e=>['EPERM','EACCES','ENOENT','EROFS','EBUSY'].includes(e.code));
+assert.ok(dir); assert.match(cp.execFileSync('git',['rev-parse','HEAD'],{encoding:'utf8'}),/^[a-f0-9]{40}\\n$/);
+cp.execFileSync('git',['diff','--check']); assert.equal(cp.execFileSync('git',['status','--porcelain'],{encoding:'utf8'}),'');
+assert.doesNotMatch(fs.readFileSync(dir+'/config','utf8'),/origin|credential|include|fsmonitor/);
+for(const path of ['config','index','HEAD'])denied(()=>fs.writeFileSync(dir+'/'+path,'changed'));
+denied(()=>fs.renameSync(dir,process.env.HOME+'/replaced-git'));
+for(const path of ['hooks','logs','packed-refs','objects/info/alternates'])assert.equal(fs.existsSync(dir+'/'+path),false);
+assert.notEqual(cp.spawnSync('git',['cat-file','-e',${JSON.stringify(previous)}]).status,0);
+console.log('git-checks-passed');\n`;
+    f.result.files = [{ path: "verify.cjs", beforeHash: null, afterHash: sha(script), text: script }];
+    f.ctx.readPrd = () => "# Brief\n\n## Verify\n\n- `git diff --check`\n- `git status --porcelain`\n- `node verify.cjs`\n";
+    let gitView; const verify = f.verify; f.verify = (...args) => { gitView = args[2].env.GIT_DIR; return verify(...args); };
+    t.diagnostic(`native Git case evidence: ${join(f.dir, "verification.json")}`);
+    const done = await reconcileExecutionResult(f.ctx, f);
+    assert.ok(done.evidence.every(e => e.exit === 0 && e.head === done.head && validVerificationSandbox(e.sandbox)));
+    assert.match(done.evidence[2].output, /git-checks-passed/);
+    assert.equal(await f.ctx.git.head(f.entry.worktree), done.head);
+    assert.deepEqual(await f.ctx.git.dirty(f.entry.worktree, { strict: true }), { modified: 0, untracked: 0 });
+    assert.deepEqual(f.calls, ["commit", "verify", "verify", "verify", "push", "PR"]);
+    assert.equal(existsSync(gitView), false);
+    observations.push({ linked, head: done.head, evidence: join(f.dir, "verification.json"), originalMetadataHidden: true, gitViewImmutable: true, gitViewRemoved: true });
+  }
+  const path = join(tempHome(), "git-verification-evidence.json"); writeJsonAtomic(path, { kind: "native Git verification with provider-controlled result fixtures", observations });
+  t.diagnostic(`native Git verification evidence: ${path}`);
+});
+
+test("npm entry point supports custom Node prefixes without granting their bin directory", async t => {
+  const prefix = tempHome(), worktree = tempHome(), home = tempHome(), bin = join(prefix, "bin"), node = join(bin, "node");
+  mkdirSync(bin); cpSync(process.execPath, node);
+  const installedNpm = realpathSync(join(dirname(dirname(process.execPath)), "lib/node_modules/npm"));
+  mkdirSync(join(prefix, "lib/node_modules"), { recursive: true });
+  symlinkSync(installedNpm, join(prefix, "lib/node_modules/npm"));
+  const npmLauncher = join(bin, "npm"), npmCli = realpathSync(join(installedNpm, "bin/npm-cli.js"));
+  const mounts = verificationRuntimeMounts({ runtime: ["/bin", "/usr/bin"], extra: [node, installedNpm], npmLauncher, npmCli });
+  assert.deepEqual(mounts.slice(-3), ["--symlink", npmCli, npmLauncher]);
+  assert.ok(mounts.includes(installedNpm)); assert.ok(!mounts.includes(bin));
+  assert.equal(existsSync(npmLauncher), false); symlinkSync(mounts.at(-2), mounts.at(-1));
+  const system = verificationRuntimeMounts({ runtime: ["/usr/bin"], extra: [], npmLauncher: "/usr/bin/npm", npmCli });
+  assert.ok(!system.includes("--symlink"), "a mounted system bin retains its existing launcher");
+  writeFileSync(join(bin, "operator-private"), "must-stay-hidden");
+  writeFileSync(join(worktree, "package.json"), JSON.stringify({ scripts: { test: "node verify.cjs" } }));
+  writeFileSync(join(worktree, "verify.cjs"), `const assert=require('node:assert/strict'),fs=require('node:fs'); assert.throws(()=>fs.readFileSync(${JSON.stringify(join(bin, "operator-private"))}),e=>['EPERM','EACCES','ENOENT'].includes(e.code)); console.log('prefix-npm-tests-passed');`);
+  const spec = await prepareVerificationSandbox({ worktree, home, env: verificationEnvironment(home), node });
+  const result = await execFileAsync(spec.cmd, [...spec.args, "/bin/sh", "-c", "npm test"], { cwd: worktree, env: spec.env });
+  assert.match(result.stdout, /prefix-npm-tests-passed/); assert.equal(validVerificationSandbox(spec.evidence), true);
+  const path = join(tempHome(), "npm-prefix-evidence.json");
+  writeJsonAtomic(path, { kind: "offline Linux mount plan and actual native custom-prefix npm execution", linuxMounts: mounts, native: spec.evidence, command: "npm test", exit: 0, output: result.stdout, broaderBinRead: "denied", provider_calls: 0 });
+  t.diagnostic(`npm prefix evidence: ${path}`);
+});
+
+test("unavailable or unproven verification sandbox blocks once, preserves results and cleans its profile", async () => {
+  for (const failure of ["unavailable", "unproven"]) {
+    const f = resultFixture(); let probes = 0, privateHome;
+    f.sandbox = async ({ home }) => { probes++; privateHome = home; if (failure === "unavailable") throw new Error("install the required OS sandbox"); return { cmd: "/bin/sh", args: [], evidence: {} }; };
+    await assert.rejects(reconcileExecutionResult(f.ctx, f), { code: "EXECUTION_RESULT_BLOCKED" });
+    assert.equal(readJson(join(f.dir, "result-application.json")).reason, "verification-sandbox-unavailable");
+    assert.deepEqual(readJson(join(f.dir, "verification.json")).evidence, []); assert.equal(readFileSync(join(f.entry.worktree, "a.txt"), "utf8"), "after");
+    assert.equal(existsSync(privateHome), false); assert.deepEqual(f.calls, ["commit"]);
+    await assert.rejects(reconcileExecutionResult(f.ctx, f), { code: "EXECUTION_RESULT_BLOCKED" }); assert.equal(probes, 1);
+  }
+  const worktree = tempHome(), home = tempHome(), env = verificationEnvironment(home);
+  assert.throws(() => verificationSandboxSpec({ worktree, home, env, platform: "unsupported" }), { code: "EXECUTION_VERIFICATION_SANDBOX" });
+  assert.throws(() => verificationSandboxSpec({ worktree, home: worktree, env }), { code: "EXECUTION_VERIFICATION_SANDBOX" });
+  await assert.rejects(prepareVerificationSandbox({ worktree, home: worktree, env }), { code: "EXECUTION_VERIFICATION_SANDBOX" });
+  assert.equal(existsSync(join(worktree, "verification-git")), false);
+});
+
+test("an earlier Verify command cannot replace the sandbox policy for a later command", async t => {
+  const f = await nativeResultFixture(), outside = join(tempHome(), "operator-private"), marker = "policy-replacement-secret";
+  writeFileSync(outside, marker);
+  const text = `const fs=require('node:fs'); fs.writeFileSync(process.env.HOME+'/sandbox.sb','(version 1)(allow default)'); console.log('profile-write');`;
+  f.result.files = [{ path: "verify.cjs", beforeHash: null, afterHash: sha(text), text }];
+  f.ctx.readPrd = () => `# Brief\n\n## Verify\n\n- \`node verify.cjs\`\n- \`node -e 'console.log(require("node:fs").readFileSync(${JSON.stringify(outside)},"utf8"))'\`\n`;
+  await assert.rejects(reconcileExecutionResult(f.ctx, f), { code: "EXECUTION_RESULT_BLOCKED" });
+  const evidence = readJson(join(f.dir, "verification.json"));
+  assert.equal(evidence.evidence.length, 2); assert.equal(evidence.evidence[0].exit, 0); assert.notEqual(evidence.evidence[1].exit, 0);
+  assert.doesNotMatch(JSON.stringify(evidence), new RegExp(marker)); assert.equal(readFileSync(outside, "utf8"), marker);
+  assert.deepEqual(f.calls, ["commit", "verify", "verify"]);
+  t.diagnostic(`immutable sandbox policy evidence: ${join(f.dir, "verification.json")}`);
+});
+
+test("verification recovery rejects legacy unsandboxed evidence without replaying or pushing", async () => {
+  const f = resultFixture(); f.ctx.git.pushResult = async () => { throw new Error("lost push reply"); };
+  await assert.rejects(reconcileExecutionResult(f.ctx, f), /lost push reply/);
+  const path = join(f.dir, "verification.json"), saved = readJson(path); delete saved.evidence[0].sandbox; writeJsonAtomic(path, saved);
+  f.calls.length = 0;
+  await assert.rejects(reconcileExecutionResult(f.ctx, f), /enforced OS sandbox/);
+  assert.equal(readJson(join(f.dir, "result-application.json")).reason, "verification-evidence-unavailable");
+  assert.deepEqual(readJson(path), saved); assert.deepEqual(f.calls, []);
+});
+
+test("a stop during sandbox preparation prevents Verify dispatch and removes the private profile", async () => {
+  const f = resultFixture(); let privateHome;
+  f.sandbox = async options => { privateHome = options.home; const prepared = await prepareVerificationSandbox(options); f.entry.dispatch_stopped = true; return prepared; };
+  await assert.rejects(reconcileExecutionResult(f.ctx, f), /quarantined/);
+  assert.deepEqual(f.calls, ["commit"]); assert.equal(existsSync(privateHome), false);
+  assert.deepEqual(readJson(join(f.dir, "verification.json")).evidence, []);
+});
+
 test("verification uses a credential-free environment and removes private profiles on success and failure", async t => {
   const keys = ["GH_TOKEN", "GITHUB_TOKEN", "AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY", "AWS_SESSION_TOKEN", "OPENAI_API_KEY", "ANTHROPIC_API_KEY", "DATABASE_URL", "CUSTOM_CREDENTIAL", "SSH_AUTH_SOCK", "NPM_CONFIG_TOKEN", "HTTP_PROXY", "NODE_OPTIONS", "ENV", "BASH_ENV"];
   const inherited = Object.fromEntries(keys.map(key => [key, process.env[key]])), observations = [];
@@ -2223,8 +2598,9 @@ test("verification uses a credential-free environment and removes private profil
       f.ctx.readPrd = () => `# Brief\n\n## Verify\n\n- \`node -e '${code}'\`\n`;
       f.verify = async (shell, args, options) => {
         assert.ok(options.env); for(const key of keys) assert.equal(options.env[key], undefined);
-        assert.equal(options.env.PATH, process.env.PATH); assert.equal(options.env.NPM_CONFIG_USERCONFIG, "/dev/null");
-        assert.equal(options.env.NPM_CONFIG_GLOBALCONFIG, "/dev/null"); assert.equal(options.env.GIT_CONFIG_NOSYSTEM, "1");
+        assert.equal(options.env.PATH, [...new Set([join(realpathSync(process.execPath), ".."), "/usr/bin", "/bin"])].join(":"));
+        for (const key of ["NPM_CONFIG_USERCONFIG", "NPM_CONFIG_GLOBALCONFIG"]) { assert.ok(options.env[key].startsWith(options.env.HOME + "/")); assert.equal(readFileSync(options.env[key], "utf8"), ""); }
+        assert.notEqual(options.env.NPM_CONFIG_USERCONFIG, options.env.NPM_CONFIG_GLOBALCONFIG); assert.equal(options.env.GIT_CONFIG_NOSYSTEM, "1");
         const last = Number(options.env.GIT_CONFIG_COUNT) - 1;
         assert.equal(options.env[`GIT_CONFIG_KEY_${last}`], "credential.helper"); assert.equal(options.env[`GIT_CONFIG_VALUE_${last}`], "");
         assert.notEqual(options.env.HOME, process.env.HOME); assert.equal(statSync(options.env.HOME).mode & 0o777, 0o700);
@@ -2258,8 +2634,8 @@ function posixVerification(f, commands, startup, marker) {
   const invocations = [];
   f.ctx.readPrd = () => `# Brief\n\n## Verify\n\n${commands.map(command => `- \`${command}\``).join("\n")}\n`;
   f.verify = async (shell, args, options) => {
-    assert.equal(shell, "/bin/sh");
-    assert.deepEqual(args, ["-c", commands[invocations.length]]);
+    assert.ok(["/usr/bin/sandbox-exec", "/usr/bin/bwrap"].includes(shell));
+    assert.deepEqual(args.slice(-3), ["/bin/sh", "-c", commands[invocations.length]]);
     const { env, ...bounds } = options;
     assert.deepEqual(bounds, { cwd: f.entry.worktree, timeout: 120_000, maxBuffer: 262_144 });
     assert.ok(env); assert.equal(env.SHELL, undefined); assert.equal(env.ENV, undefined); assert.equal(env.BASH_ENV, undefined);
@@ -2413,10 +2789,10 @@ for (const mutation of ["tracked", "staged", "untracked"]) test(`verification ${
   f.ctx.readPrd = () => `# Brief\n\n## Verify\n\n- \`${command}\`\n- \`printf must-not-run\`\n`;
   await assert.rejects(reconcileExecutionResult(f.ctx, f), { code: "EXECUTION_RESULT_BLOCKED" });
   const checkpoint = readJson(join(f.dir, "result-application.json")), evidence = readJson(join(f.dir, "verification.json"));
-  assert.equal(checkpoint.phase, "blocked"); assert.equal(checkpoint.reason, "verification-dirty");
+  assert.equal(checkpoint.phase, "blocked"); assert.equal(checkpoint.reason, mutation === "staged" ? "verification-failed" : "verification-dirty");
   assert.ok(privateHome); assert.equal(existsSync(privateHome), false);
   assert.equal(await f.ctx.git.head(f.entry.worktree), checkpoint.appliedHead);
-  assert.equal(evidence.evidence.length, 1); assert.equal(evidence.evidence[0].exit, 0);
+  assert.equal(evidence.evidence.length, 1); assert.equal(evidence.evidence[0].exit === 0, mutation !== "staged");
   assert.deepEqual(f.calls, ["commit", "verify"]);
   assert.deepEqual(await f.ctx.git.dirty(f.entry.worktree, { strict: true }), mutation === "untracked" ? { modified: 0, untracked: 1 } : { modified: 1, untracked: 0 });
   assert.equal(readFileSync(join(f.entry.worktree, mutation === "untracked" ? "generated.txt" : "b.txt"), "utf8"), mutation === "untracked" ? "created" : "dirty");
@@ -2439,15 +2815,15 @@ test("pre-existing dirty files and unavailable status fail closed even with an e
   }
 });
 
-test("verification-created commits are retained and blocked instead of publishing stale evidence", async () => {
+test("verification cannot stage or commit through coordinator Git metadata", async () => {
   const f = await nativeResultFixture();
   f.ctx.readPrd = () => '# Brief\n\n## Verify\n\n- `printf changed > b.txt && git add -- b.txt && git -c user.name=Verifier -c user.email=verifier@example.test commit -m "Verification change"`\n';
   await assert.rejects(reconcileExecutionResult(f.ctx, f), { code: "EXECUTION_RESULT_BLOCKED" });
   const checkpoint = readJson(join(f.dir, "result-application.json"));
-  assert.equal(checkpoint.reason, "verification-head-changed");
-  assert.notEqual(await f.ctx.git.head(f.entry.worktree), checkpoint.appliedHead);
-  assert.deepEqual(await f.ctx.git.dirty(f.entry.worktree, { strict: true }), { modified: 0, untracked: 0 });
-  assert.equal(readJson(join(f.dir, "verification.json")).evidence[0].exit, 0);
+  assert.equal(checkpoint.reason, "verification-failed");
+  assert.equal(await f.ctx.git.head(f.entry.worktree), checkpoint.appliedHead);
+  assert.deepEqual(await f.ctx.git.dirty(f.entry.worktree, { strict: true }), { modified: 1, untracked: 0 });
+  assert.notEqual(readJson(join(f.dir, "verification.json")).evidence[0].exit, 0);
   assert.deepEqual(f.calls, ["commit", "verify"]);
 });
 
@@ -2830,12 +3206,34 @@ test("every local adapter retains recorded sessions across legacy upgrade and mi
   }
 });
 
-test("shared resume uses remote capabilities and owned sessions without a fake CLI", async () => {
+test("answer ambiguity requires a safe transport recovery method and preserves ownership, key and stop fences", async () => {
+  const f = remote(), sent = [], recovered = [];
+  f.transport.respond = async req => { sent.push(req); throw new Error("answer reply lost"); };
+  const job = await f.service.submit(input), ex = job.execution;
+  const answer = { operationId: "answer", authorized: true, sessionId: ex.sessionId, turnId: ex.turnId, callId: "call-1", answer: "approved" };
+  await assert.rejects(f.service.respond(answer));
+  await assert.rejects(f.reopen().respond(answer), { code: "EXECUTION_UNKNOWN" });
+  assert.equal(sent.length, 1); assert.equal(Object.values(f.reopen().state().answers)[0].accepted, false);
+  const foreign = makeExecution({ root: f.root, taskId: "acme/widget/remote", provider: "openai-agents", account: "foreign", transport: f.transport, capabilities: f.capabilities });
+  await assert.rejects(foreign.respond(answer), { code: "EXECUTION_OWNERSHIP" });
+  f.transport.recoverResponse = async req => { recovered.push(req); return { accepted: true }; };
+  await assert.rejects(f.reopen().respond({ ...answer, answer: "different" }), { code: "EXECUTION_CONFLICT" });
+  assert.deepEqual(await f.reopen().respond(answer), { accepted: true }); assert.equal(recovered.length, 1);
+  assert.equal(recovered[0].idempotencyKey, sent[0].idempotencyKey); assert.equal(recovered[0].providerJobId, ex.providerJobId);
+  assert.equal(recovered[0].account, "test"); assert.equal(f.reopen().current().id, job.id);
+  assert.equal(f.calls.filter(c => ["submit", "continue"].includes(c[0])).length, 1);
+  await f.reopen().cancel(); await assert.rejects(f.reopen().respond(answer), { code: "EXECUTION_STOPPED" }); assert.equal(recovered.length, 1);
+});
+
+test("shared resume uses remote capabilities and owned sessions without a fake CLI", async t => {
   const f = remote(), home = tempHome(), state = makeState(home), id = "acme/widget/remote", worktree = tempHome();
   const run = await f.service.submit(input); f.observe({ state: "succeeded" }); await f.service.reconcile({ force: true }); await f.service.collect();
   state.put(id, { ...newEntry({ repo: "acme/widget", harness: "openai-agents", session: run.execution.sessionId, branch: "work/remote", worktree, state: STATES.needsHuman, nowIso: T0 }), execution: f.service.current().execution, last: { run: run.id, exit: 0 } });
   const ctx = { home, config: CONFIG, state, clock: f.clock, gh: fakeGh(), git: fakeGit(), credential: fakeCredential(), identity: fakeIdentity(), log: silentLog, notify: fakeNotify(), executionFor: () => f.service, readPrd: () => null };
-  const resumed = await resume(ctx, { handle: id });
+  const probe = remoteReadinessFixture(t, ctx);
+  let resumed;
+  try { resumed = await resume(ctx, { handle: id }); } finally { probe.mock.restore(); }
+  assert.equal(probe.mock.callCount(), 2);
   assert.equal(resumed.attach, null); assert.equal(resumed.session, run.execution.sessionId);
   assert.equal(f.calls.filter(x => x[0] === "continue").length, 1); assert.equal(f.service.current().bin, undefined);
 });
