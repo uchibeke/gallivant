@@ -140,6 +140,15 @@ checkpoint reconciles already committed/pushed files and lost PR acknowledgement
 without applying or verifying them twice. Provider test claims are preserved as
 provider records; only coordinator-executed evidence qualifies verification.
 
+An approved successor may return only the owned result envelope, including
+`receipt`, `public-text` and explicit resume corrections.
+Its empty source manifest uses the shared writer's verified pushed-revision path
+at the exact input head, so verification and PR updates still require remote
+head/ancestry, clean checkout and current ownership. It creates no source commit;
+recovery reuses the publication checkpoint. The shared gates still decide whether
+the PR text or receipt changed and whether a round made progress. Initial
+dispatches still require deliverable file changes.
+
 ## Continuation, cancellation and recovery
 
 The qualified CLI exposes no native Cloud resume/cancel command. Every review

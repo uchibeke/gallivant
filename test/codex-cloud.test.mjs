@@ -1,10 +1,10 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { mkdtempSync, rmSync, readFileSync, writeFileSync, existsSync, chmodSync } from "node:fs";
+import { mkdtempSync, mkdirSync, rmSync, readFileSync, writeFileSync, existsSync, chmodSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
-import { gzipSync } from "node:zlib";
+import { gzipSync, gunzipSync } from "node:zlib";
 import { execFileSync } from "node:child_process";
 import { makeCloudTransport, checkCloudAccess, cloudCli } from "../lib/codex_cloud.mjs";
 import { validateCloudConfig } from "../lib/codex_cloud_config.mjs";
@@ -12,7 +12,13 @@ import { CLOUD_RESULT_PATH, cloudDiffResult } from "../lib/codex_cloud_result.mj
 import { makeExecution } from "../lib/execution.mjs";
 import { capabilitiesFor } from "../lib/harness.mjs";
 import { cloudInput } from "../lib/codex_cloud_input.mjs";
-import { makeGit } from "../lib/git.mjs";
+import { makeGit, runEnv } from "../lib/git.mjs";
+import { reconcileExecutionResult } from "../lib/execution_result.mjs";
+import { makeTick } from "../lib/tick.mjs";
+import { makeState, newEntry, STATES } from "../lib/state.mjs";
+import { receiptHash } from "../lib/deliverable.mjs";
+import { publicReviewHash } from "../lib/public_output.mjs";
+import { CONFIG, T0, fakeGh, fakeNotify, silentLog, prFixture, tempHome } from "./helpers.mjs";
 import { readJson, writeJsonAtomic } from "../lib/fs.mjs";
 import { contentHash } from "../lib/openai_agents_sources.mjs";
 const config = { bin: "/fixture/codex", account: "operator", authentication: "operator-chatgpt", mode: "trusted-worker", environment: "env-fixture", repository: "acme/widget", continuation: "successor-task", billing_source: "chatgpt-account", allowance: { remainingUsd: 1, reservedUsd: .1 } };
@@ -43,11 +49,12 @@ function fixture(t) {
   const clock = { now: () => now }, capabilities = { ...capabilitiesFor("codex-cloud"), environments: [config.environment] };
   const transport = () => makeCloudTransport({ root, taskId: "acme/widget/task", account: "operator", config, cli, clock, verification: async () => {}, verifyRemote: async () => {} });
   const service = () => makeExecution({ root, taskId: "acme/widget/task", account: "operator", provider: "codex-cloud", capabilities, transport: transport(), clock });
-  return { root, tasks, calls, cli, transport, service, advance: () => { now += 1000; }, finish: () => { [...tasks.values()].at(-1).status = "ready"; }, lost: () => { lost = true; }, paging: () => { paging = true; }, pages: () => pages, auth: value => { auth = value; }, version: value => { version = value; }, diff: value => { diff = value; } };
+  return { root, tasks, calls, cli, clock, transport, service, advance: () => { now += 1000; }, finish: () => { [...tasks.values()].at(-1).status = "ready"; }, lost: () => { lost = true; }, paging: () => { paging = true; }, pages: () => pages, auth: value => { auth = value; }, version: value => { version = value; }, diff: value => { diff = value; } };
 }
-function patch(op, overrides = {}) {
+function patch(op, overrides = {}, envelopeOnly = false) {
   const receipt = { version: 1, inputHead: op.inputHead, repo, branch, runId: op.runId, sourceHashes: {}, pr: { title: "Implement answer", body: "Observed file and test result" }, tests: [], ...overrides };
-  return `diff --git a/answer.txt b/answer.txt\nindex 3367afd..3e75765 100644\n--- a/answer.txt\n+++ b/answer.txt\n@@ -1 +1 @@\n-old\n+new\ndiff --git a/${CLOUD_RESULT_PATH} b/${CLOUD_RESULT_PATH}\nnew file mode 100644\n--- /dev/null\n+++ b/${CLOUD_RESULT_PATH}\n@@ -0,0 +1 @@\n+${JSON.stringify(receipt)}\n`;
+  const diff = `diff --git a/answer.txt b/answer.txt\nindex 3367afd..3e75765 100644\n--- a/answer.txt\n+++ b/answer.txt\n@@ -1 +1 @@\n-old\n+new\ndiff --git a/${CLOUD_RESULT_PATH} b/${CLOUD_RESULT_PATH}\nnew file mode 100644\n--- /dev/null\n+++ b/${CLOUD_RESULT_PATH}\n@@ -0,0 +1 @@\n+${JSON.stringify(receipt)}\n`;
+  return envelopeOnly ? diff.slice(diff.indexOf(`diff --git a/${CLOUD_RESULT_PATH}`)) : diff;
 }
 test("Cloud capabilities preserve defaults and refuse unsupported delegation, policy, models and attempts", () => {
   assert.equal(capabilitiesFor("codex-cloud").continuation, "successor-task");
@@ -118,6 +125,86 @@ test("Cloud collection converts diff in isolation, verifies run/base and resumes
   assert.equal(child.execution.sessionId, job.execution.sessionId); assert.notEqual(child.execution.providerJobId, job.execution.providerJobId);
   assert.equal(child.execution.effective.parentTaskId, job.execution.providerJobId); assert.equal(child.execution.effective.continuity, "successor-task");
   assert.match(f.calls.findLast(args => args[1] === "exec" && !args.includes("--help")).at(-1), /recorded decisions/);
+});
+test("Cloud envelope-only results require an owned successor and exact envelope identity", async () => {
+  const op = { ...input, runId: "owned-run", continuity: "successor-task", name: "receipt" };
+  for (const name of [undefined, "receipt", "public-text", "resume", "review"]) {
+    assert.equal((await cloudDiffResult(patch(op, {}, true), { ...op, name })).pushedHead, head);
+    await assert.rejects(cloudDiffResult(patch(op, {}, true), { ...op, name, continuity: "initial-task" }), /no deliverable file changes/);
+    for (const wrong of [{ runId: "foreign-run" }, { inputHead: "b".repeat(40) }, { sourceHashes: { "foreign.md": "wrong" } }]) {
+      await assert.rejects(cloudDiffResult(patch(op, wrong, true), { ...op, name }), error => error.collectionValidation === true);
+    }
+  }
+});
+test("Cloud envelope-only corrections share one PR, restart recovery and bounded round decisions", async t => {
+  const f = fixture(t), id = "acme/widget/task", first = await f.service().submit(input);
+  const initial = Object.values(readJson(join(f.root, "cloud.json")).operations)[0];
+  f.finish(); f.diff(patch(initial)); f.advance(); await f.service().reconcile({ force: true }); await f.service().collect();
+  const worktree = join(f.root, "checkout"); mkdirSync(worktree);
+  const native = args => execFileSync("git", args, { cwd: worktree, env: { PATH: process.env.PATH, ...runEnv() }, encoding: "utf8" }).trim();
+  native(["init", "-b", branch]); native(["remote", "add", "origin", "https://github.com/acme/widget.git"]);
+  writeFileSync(join(worktree, "answer.txt"), "old\n");
+  const git = makeGit({ config: {}, identity: async () => ({ name: "Fixture", email: "fixture@example.test" }) });
+  await git.commitResult(worktree, ["answer.txt"]);
+  const inputHead = await git.head(worktree), source = JSON.parse(gunzipSync(bytes).toString());
+  source.inputHead = inputHead;
+  const snapshot = gzipSync(Buffer.from(JSON.stringify(source)));
+  const currentInput = { ...input, inputHead, sources: { ...input.sources, inputHead, inputBranch: `${branch}-cloud-${inputHead}`, data: snapshot.toString("base64"), hash: contentHash(snapshot) } };
+  const receiptBody = met => '```work-attestations\n' + JSON.stringify({ task_id: id, output_type: "code", summary: "The approved answer source remains unchanged while the requested completion receipt is corrected and the coordinator verifies the current revision before updating the existing pull request.", criteria_attestations: [{ criterion_id: "ac-1", met, evidence: "answer.txt and coordinator-executed printf verified" }] }) + '\n```';
+  const observations = [];
+  for (const name of ["receipt", "public-text", "resume", "review"]) {
+    const child = await f.service().continue({ ...currentInput, name, operationId: name, sessionId: first.execution.sessionId, prompt: "Correct only the approved completion receipt or public PR wording; preserve the current code." });
+    const op = Object.values(readJson(join(f.root, "cloud.json")).operations).at(-1);
+    assert.equal(op.name, name); assert.equal(op.continuity, "successor-task");
+    assert.match(f.calls.findLast(args => args[1] === "exec" && !args.includes("--help")).at(-1), /do not invent unrelated edits/);
+    const beforeBody = receiptBody(["public-text", "review"].includes(name)), gh = fakeGh({ pr: prFixture({ number: 7, url: "https://github.com/acme/widget/pull/7", headRefName: branch, headRefOid: inputHead, title: "Prior wording", body: beforeBody }) });
+    f.finish(); f.diff(patch(op, { pr: { title: name === "review" ? "Prior wording" : "Correct public wording", body: receiptBody(true) } }, true)); f.advance(); await f.service().reconcile({ force: true });
+    const result = await f.service().collect();
+    assert.deepEqual(result.files, []); assert.equal(result.pushedHead, inputHead); assert.equal(result.sessionId, first.execution.sessionId);
+    const state = makeState(f.root), calls = [];
+    const entry = { ...newEntry({ prd: "brief.md", harness: "codex-cloud", repo, branch, base: "main", worktree, pr: 7, session: first.execution.sessionId, state: STATES.prOpen, nowIso: T0 }),
+      execution: f.service().current().execution, last: { run: child.id, exit: null, at: T0 },
+      cursor: { since: T0, dispatched: ["inline:pending"], fixed_sha: inputHead, receipt_hash: receiptHash(beforeBody) },
+      public_fix: name === "public-text" ? publicReviewHash(gh.data.pr, []) : null };
+    state.put(id, entry);
+    let lostReply = true;
+    Object.assign(gh, { refSha: async () => inputHead, containsCommit: async (seenRepo, seenBranch, seenHead) => {
+      assert.equal(seenRepo, repo); assert.equal(seenBranch, branch); assert.equal(seenHead, inputHead);
+      return native(["merge-base", "--is-ancestor", seenHead, "HEAD"]) === "";
+    }, publishResultPr: async data => {
+      calls.push("PR"); assert.equal(data.branch, branch); assert.equal(data.base, "main");
+      gh.data.pr.title = data.title; gh.data.pr.body = data.body;
+      if (lostReply) { lostReply = false; throw new Error("PR update reply lost"); }
+      return { number: gh.data.pr.number, url: gh.data.pr.url };
+    } });
+    const ctx = { home: f.root, state, clock: f.clock, config: CONFIG, ownLogin: "me", notify: fakeNotify(), log: silentLog, executionFor: () => f.service(), gh,
+      git: { ...git, commitResult: async () => { throw new Error("text-only correction must not commit source files"); }, pushResult: async () => calls.push("push") },
+      readPrd: () => "# Brief\n\n## Verify\n\n- `printf verified`\n" };
+    const rejectedDir = join(f.root, `${name}-stale-head`); mkdirSync(rejectedDir);
+    await assert.rejects(reconcileExecutionResult({ ...ctx, gh: { ...gh, refSha: async () => "b".repeat(40) } }, { id, entry, result, dir: rejectedDir }), /pushed result revision/);
+    assert.deepEqual(calls, []); assert.equal(readJson(join(rejectedDir, "result-application.json")).phase, "blocked");
+    await makeTick(ctx).tickEntry(id, state.get(id), { settleOnly: true });
+    const dir = f.service().dirOf(child.id), verified = readJson(join(dir, "verification.json"));
+    assert.equal(readJson(join(dir, "result-application.json")).phase, "verified"); assert.equal(state.get(id).last.exit, null);
+    assert.equal(verified.head, inputHead); assert.equal(verified.evidence.length, 1); assert.equal(verified.evidence[0].exit, 0); assert.equal(verified.evidence[0].source, "coordinator-executed");
+    const restarted = { ...ctx, state: makeState(f.root) };
+    await makeTick(restarted).tickEntry(id, restarted.state.get(id), { settleOnly: true });
+    await makeTick(restarted).tickEntry(id, restarted.state.get(id), { settleOnly: true });
+    const settled = restarted.state.get(id), checkpoint = readJson(join(dir, "result-application.json"));
+    assert.equal(settled.last.exit, 0);
+    if (name === "review") {
+      assert.equal(settled.reason, null); assert.equal(settled.state, STATES.prOpen); assert.equal(settled.iteration, 0); assert.equal(settled.round_comment ?? null, null);
+    } else {
+      assert.equal(settled.reason, null); assert.equal(settled.iteration, 1); assert.equal(settled.round_comment.kind, name === "public-text" ? name : "receipt");
+    }
+    assert.equal(settled.pr, 7); assert.equal(settled.session, first.execution.sessionId); assert.deepEqual(settled.cursor.dispatched, entry.cursor.dispatched);
+    assert.deepEqual(calls, ["push", "PR", "push", "PR"]); assert.equal(checkpoint.phase, "published"); assert.equal(checkpoint.pr, 7);
+    assert.deepEqual(readJson(join(dir, "verification.json")), verified); assert.equal(await git.head(worktree), inputHead); assert.equal(readFileSync(join(worktree, "answer.txt"), "utf8"), "old\n");
+    assert.equal(existsSync(join(worktree, CLOUD_RESULT_PATH)), false); assert.deepEqual(await git.dirty(worktree, { strict: true }), { modified: 0, untracked: 0 });
+    observations.push({ name, result, checkpoint, verification: verified, pr: { number: settled.pr, head: gh.data.pr.headRefOid, title: gh.data.pr.title, body: gh.data.pr.body }, iteration: settled.iteration, reason: settled.reason, roundKind: settled.round_comment?.kind ?? null, calls, sourceHead: inputHead, sourceHash: contentHash(readFileSync(join(worktree, "answer.txt"))) });
+  }
+  assert.equal(f.tasks.size, 5);
+  const path = join(tempHome(), "cloud-envelope-only-evidence.json"); writeJsonAtomic(path, { kind: "Offline native Git/verification and Cloud CLI-output fixture; no live Cloud inference", observations }); t.diagnostic(`Cloud envelope-only publication evidence: ${path}`);
 });
 test("Cloud native continuation is refused without demonstrated capability", async t => {
   const f = fixture(t); await assert.rejects(f.service().continue({ ...input, sessionId: "task_foreign" }), /continuation/);
