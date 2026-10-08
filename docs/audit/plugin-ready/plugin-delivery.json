@@ -18,14 +18,14 @@
       "2b4514fb27fcb493e62bfed913fffc204215f155",
       "96e81031516bdf6663dd3b97ac39b8f57022568b"
     ],
-    "testedSourceCommit": "7dd2534ca8838a2d1e4b014f50e2c795039942c8"
+    "testedSourceCommit": "0520936770d5ec09d194362ef4768e0e6e71ddb2"
   },
   "artifact": {
     "coreArtifact": "gallivant-0.2.0.tgz",
-    "coreSha256": "0fe6519ac5892f1689e15efd51e6600780c2b910f40c54372ca064b5ee044650",
+    "coreSha256": "8869517b764607604b413aae73c7222f6f8797b8ca6195c07ef28f351a377263",
     "hashes": {
       "plugin": "8753892ceb5552fc37ba011929830f4c754d717f8d8031e31fb9b4935b465e1a",
-      "runtime": "2e47e2859d75792bb7e42106efa5f63107235ba25ea83d5886fa3f3dd55a50f2",
+      "runtime": "3c594de4f015d8b62f72d4db49ee848029ca30b1982e8c1983c0f8cc2515ef5a",
       "operations": "86e62501fa7a3d6d29e26830cd43b2648b32978912d2096a8690ed2e2fab0f86"
     },
     "dependencyLockSha256": "c0f2f9bb3ad4d1bb8356c1162a8e71109534d747a5bc3182d4cce6457760c6d8",
@@ -106,7 +106,7 @@
       "lib/openai_agents_input.mjs": "3b012e8c7c51d9d007762e1f849ea3caaf7bbf9ab128a6f5c916bff195b6b83c",
       "lib/openai_agents_sources.mjs": "9d61867d9f86901b084f37d4da6c344df24a0ff71b7ab0537273aad4b18f1132",
       "lib/openai_agents.mjs": "3b67fe601cb8ad268f2d997d55e19bad4aca1f016293595036825892d1991702",
-      "lib/plugin_package.mjs": "9bf60c74d48b8a10850f4731cb358b639d9040107eae0ed5225c8aab51e6a178",
+      "lib/plugin_package.mjs": "2677d26f0960c5016ff2a2f0cf67376e9ad9dfceab1043741498194fe6385a50",
       "lib/prd.mjs": "3e8bd68d62e8e61fe3624cdcc76e27e78e079d77e25a1484aafa7f5ca6f6ffe3",
       "lib/preparation_codex.mjs": "d1fcd4d1ec49b3a086622ec2777fa231b4fbc9c0d6e13bb90702d27b785fc447",
       "lib/probe.mjs": "191639a18233649d523effbf2411d100946e6463d70f380c41aec8301bb42197",
@@ -565,12 +565,12 @@
         "tests": 1400,
         "pass": 1400,
         "fail": 0,
-        "log": "/private/tmp/pr12-cancel-host-unit.log"
+        "log": "/private/tmp/pr12-onion-unit.log"
       },
       {
         "command": "npm run lint",
         "exitCode": 0,
-        "log": "/private/tmp/pr12-cancel-host-lint.log"
+        "log": "/private/tmp/pr12-onion-lint.log"
       },
       {
         "command": "npm run test:plugin-package",
@@ -578,9 +578,9 @@
         "consumerFlowTests": 27,
         "installedConformanceTests": 435,
         "fail": 0,
-        "log": "/private/tmp/pr12-cancel-host-package.log",
-        "consumerEvidence": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/task-plugin-consumer-kQujre/evidence.json",
-        "conformanceLog": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/task-plugin-consumer-kQujre/conformance.log"
+        "log": "/private/tmp/pr12-onion-package.log",
+        "consumerEvidence": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/task-plugin-consumer-3LyLvm/evidence.json",
+        "conformanceLog": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/task-plugin-consumer-3LyLvm/conformance.log"
       },
       {
         "command": "git diff --check",
@@ -590,10 +590,10 @@
     ],
     "verifiedPayloadFiles": 141,
     "logSha256": {
-      "/private/tmp/pr12-cancel-host-unit.log": "a0ba92d3a24c22cf164489b9115c0b60afd8f85953a3d3d45f3105dfedf6d824",
-      "/private/tmp/pr12-cancel-host-lint.log": "2f32bd854b16ced20ab71be2afd3673b887efc4815c6e55ea7b941ebc5aa8a0b",
-      "/private/tmp/pr12-cancel-host-package.log": "c09c8a15ddb47c7ac5444e8ae1366239d90cca6318335c3fe5b4e32a4f2b1327",
-      "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/task-plugin-consumer-kQujre/conformance.log": "896ce92303929ad1c0acad8519d036774cc79e9d93782933a84e4d66914569f6"
+      "/private/tmp/pr12-onion-unit.log": "9cdd4caf3f68d7e712b1aec77f07df1b905133f81c50745fa0302e67ad2872c6",
+      "/private/tmp/pr12-onion-lint.log": "2f32bd854b16ced20ab71be2afd3673b887efc4815c6e55ea7b941ebc5aa8a0b",
+      "/private/tmp/pr12-onion-package.log": "63d2747a7f1d0660c61546134fdd5bac03ab220fa2fcd5cb958029c60a1da011",
+      "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/task-plugin-consumer-3LyLvm/conformance.log": "9f0ec8b1d4fb1409f8da074badf2346a2e1c5e959cb3cd310842b1154b23d4b4"
     },
     "hostEvidence": false,
     "fixturePurpose": "Deterministic unpaid installed-artifact compatibility; no actual installed host or live provider qualification",
@@ -1122,5 +1122,13 @@
     "focused": "/private/tmp/pr12-cancel-host-focused-approved.log: 48 passed",
     "initialVerification": "Sandbox denied npm cache writes and process identification; normal escalation enabled the existing tests.",
     "externalGates": "ac-5/ac-12/ac-13 remain unmet; earlier endpoint HTTP 503, unavailable hosted preparation and human-merged artifact evidence are unchanged."
+  },
+  "onionHostReview": {
+    "reviewId": 5450016167,
+    "commentId": 4213412353,
+    "implementation": "lib/plugin_package.mjs publicLocalHost",
+    "test": "test/plugin-package.test.mjs public URLs reject canonical loopbacks and aliases across every configured URL",
+    "coverage": "onion, subdomains, case and trailing dots across preflight and emission; source and installed modules",
+    "focused": "/private/tmp/pr12-onion-focused.log: passed"
   }
 }
