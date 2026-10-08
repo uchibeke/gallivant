@@ -308,3 +308,6 @@ MCP evidence responses expose bounded artifact IDs/hashes, provider test claims,
 coordinator verification observations and the PR link. Log responses expose the
 saved window range, count, gap and `nextAfter`, while raw log text and briefs remain
 in authorized UI metadata. Neither read operation starts provider reconciliation.
+
+
+CLI task mutations serialize with runtime backup and migration using the task mutation owner, while ordinary daemon operation remains available. A namespace containing `runtime-pin.json` requires the manifest-aware delivery adapter for writes; the CLI can still list and inspect it. Keep ordinary CLI tasks in an unpinned local home. Package output directories must be outside the package source root, including destinations reached through symlinked parents.

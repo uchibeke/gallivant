@@ -1,3 +1,5 @@
+import { taskCommand } from "../lib/commands/task.mjs";
+import { acquireDaemon } from "../lib/daemon.mjs";
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { join } from "node:path";
@@ -367,4 +369,40 @@ test("backup canonicalizes symlink ancestors before checking namespace separatio
   const dangling = join(root, "dangling"); symlinkSync(join(home, "absent"), dangling);
   assert.throws(() => backupRuntimeState({ home, out: join(dangling, "backup"), manifest }), { code: "ENOENT" });
   assert.equal(lstatSync(dangling).isSymbolicLink(), true);
+});
+
+
+test("CLI mutations exclude maintenance through async work and release ownership on failure", async () => {
+  for (const operation of ["prepare", "answer", "resume", "validate", "start"]) {
+    const home = tempHome(), out = join(tempHome(), "backup");
+    let release, entered;
+    const waiting = new Promise(resolve => { release = resolve; });
+    const started = new Promise(resolve => { entered = resolve; });
+    const service = { [operation]: async () => { entered(); await waiting; throw new Error("task failed"); }, list: () => ({ tasks: [] }), inspect: () => ({ taskId }) };
+    const pending = taskCommand({ home }, { args: [operation, taskId], values: {}, service });
+    await started;
+    assert.throws(() => migrateRuntimeState({ home, manifest }), /task mutation.*already|already.*task mutation/);
+    assert.equal(existsSync(join(home, "runtime-pin.json")), false);
+    assert.throws(() => backupRuntimeState({ home, out, manifest }), /task mutation.*already|already.*task mutation/);
+    assert.equal(existsSync(out), false);
+    assert.equal(existsSync(join(home, "daemon.lock")), false, "failed maintenance releases daemon ownership");
+    assert.deepEqual(await taskCommand({ home }, { args: ["list"], values: {}, service }), { tasks: [] });
+    // Ordinary daemon ownership may coexist with the CLI writer.
+    const daemon = acquireDaemon(home); daemon.release();
+    release(); await assert.rejects(pending, /task failed/);
+    assert.equal(existsSync(join(home, "task-mutation.lock")), false);
+    const liveDaemon = acquireDaemon(home);
+    try {
+      assert.equal(await taskCommand({ home }, { args: [operation, taskId], values: {}, service: { [operation]: async () => {
+        assert.equal(existsSync(join(home, "task-mutation.lock")), true); return "saved";
+      } } }), "saved");
+    } finally { liveDaemon.release(); }
+    backupRuntimeState({ home, out, manifest });
+    migrateRuntimeState({ home, manifest });
+    assert.deepEqual(await taskCommand({ home }, { args: ["inspect", taskId], values: {}, service }), { taskId });
+    let called = false;
+    await assert.rejects(taskCommand({ home }, { args: [operation, taskId], values: {}, service: { [operation]: () => { called = true; } } }), { code: "TASK_RUNTIME_PIN" });
+    assert.equal(called, false);
+    assert.equal(existsSync(join(home, "task-mutation.lock")), false);
+  }
 });

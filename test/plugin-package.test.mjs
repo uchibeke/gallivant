@@ -192,3 +192,15 @@ test("image assets must decode as bounded PNG in both preflight and emission", t
     }
   }
 });
+
+
+test("package outputs cannot enter the source root through fresh paths or symlink aliases", t => {
+  gitFixture(t);
+  const home = tempHome(), alias = join(home, "source"); symlinkSync(root, alias);
+  for (const out of [root, join(root, "templates", "release-fixture"), join(root, "fresh-output-parent", "release"), alias, join(alias, "templates", "release-fixture")]) {
+    for (const internal of [false, true]) {
+      assert.throws(() => buildPluginPackage({ ...fixture(), out, internal }), { code: "PACKAGE_OUTPUT", message: /outside the source package root/ });
+      if (![root, alias].includes(out)) assert.equal(existsSync(out), false);
+    }
+  }
+});
