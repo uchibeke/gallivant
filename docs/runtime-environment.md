@@ -89,7 +89,8 @@ failed launches, restart recovery, and refusal of agent-writable snapshots.
 `npm test` includes this file
 and all existing suites, including remote adapter tests. The runtime-portability
 workflow runs the full suite on Ubuntu and macOS with Node 22 and 24. CI installs
-Bubblewrap on Linux and selects Command Line Tools on macOS before running
+Bubblewrap and activates Ubuntu's packaged sandbox-helper AppArmor profile on
+Linux, and selects Command Line Tools on macOS before running
 `node test/verification-host.mjs`. This preflight must prove the real filesystem
 and network boundary; failing isolation never becomes an unsandboxed fallback.
 

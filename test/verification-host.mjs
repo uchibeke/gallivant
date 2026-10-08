@@ -9,6 +9,7 @@ import { execFileAsync } from "../lib/gh.mjs";
 const root = mkdtempSync(join(tmpdir(), "verification-host-"));
 const worktree = join(root, "checkout"), home = join(root, "home");
 mkdirSync(worktree); mkdirSync(home);
+console.log(JSON.stringify({ node: process.execPath, version: process.version, platform: process.platform, arch: process.arch }));
 try {
   const spec = await prepareVerificationSandbox({ worktree, home, env: { HOME: home, TMPDIR: home, GIT_CONFIG_NOSYSTEM: "1", GIT_CONFIG_GLOBAL: "/dev/null" } }, async (...args) => {
     try { return await execFileAsync(...args); }

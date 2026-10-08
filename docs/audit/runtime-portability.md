@@ -24,16 +24,21 @@ Native package selection depends on the Node process, not hardware alone.
   [runtime-portability-native.json](runtime-portability-native.json).
 - The real macOS verification sandbox preflight passed with network disabled and
   filesystem access bounded to the checkout and trusted runtime.
-- A full local run passed 1,349 of 1,350 checks. Its sole failure was the live-test
-  helper passing an extra undefined option; that was corrected and its focused
-  tests passed. A final full-suite rerun and the CI matrix are pending.
+- The corrected full local suite passed all 1,351 tests with no failures or skips.
+  The snapshot cleanup optimization subsequently passed all 12 runtime tests.
+  The final cross-platform CI matrix is still being checked.
 
 ## CI prerequisites
 
 Earlier CI runs failed native verification isolation on both platforms; Linux
 also exposed two merge fixtures lacking an explicit Git identity and the empty
 PATH regression. The fixtures now supply a synthetic identity. The workflow
-installs Bubblewrap on Linux and selects macOS Command Line Tools. A native
+installs Bubblewrap and loads Ubuntu's packaged `bwrap-userns-restrict` AppArmor
+profile on Linux, and selects macOS Command Line Tools. AppArmor remains enabled;
+only the distribution's sandbox-helper profile is activated. macOS additionally
+allows the read-only `hw.pagesize_compat` query needed by libc/Node allocation.
+This is also present in [Chromium's sandbox policy](https://chromium.googlesource.com/chromium/src/sandbox/+/db7ad29144efff68d6b986f3057d4ac128b46b07/policy/mac/common.sb).
+A native
 preflight prints the actual synthetic sandbox-probe failure before the suite,
 so missing isolation is diagnosed directly. Enforcement remains required: no
 checks are skipped and no sandbox fallback is enabled.
