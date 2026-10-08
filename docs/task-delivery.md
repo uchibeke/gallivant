@@ -311,3 +311,8 @@ in authorized UI metadata. Neither read operation starts provider reconciliation
 
 
 CLI task mutations serialize with runtime backup and migration using the task mutation owner, while ordinary daemon operation remains available. A namespace containing `runtime-pin.json` requires the manifest-aware delivery adapter for writes; the CLI can still list and inspect it. Keep ordinary CLI tasks in an unpinned local home. Package output directories must be outside the package source root, including destinations reached through symlinked parents.
+
+
+First-time runtime pinning requires an idle legacy namespace; retain the original runtime until active intake and execution are drained. All CLI registry mutations, chain writes and control requests share maintenance exclusion, including local web control requests. Pinned namespaces require the manifest-aware adapter.
+
+The filesystem delivery adapter admits at most 256 operation identities per account scope and caps its serialized store at 32 MiB. At the operation-count limit, retained operation IDs remain available for idempotent retries; new operations fail with `DELIVERY_CAPACITY` before task effects. Keep old namespaces for retries, drain their active work and archive them before provisioning a separate namespace for new work. Never route retries to a new namespace or delete receipts to free capacity. A size-limit failure during acknowledgement preserves the durable intent; inspect and reconcile that operation before authorizing another identity. Oversized legacy stores require an operator-managed archival/indexed-store migration that preserves identities; they are refused before loading into memory.

@@ -690,3 +690,20 @@ test("installed delayed delivery mutations reject migrated or missing pins befor
   assert.throws(() => createTaskDelivery({ ...w.opts, manifest: undefined }), { code: "DELIVERY_VERSION" });
   assert.throws(() => createTaskDelivery({ ...w.opts, manifest: { ...manifest, coreSha256: "invalid" } }), { code: "COORDINATOR_PIN" });
 });
+
+
+test("installed receipt capacity preserves old retries and refuses new effects", async () => {
+  let wakes = 0;
+  const w = world({ schedule: async () => { wakes++; } });
+  const first = await w.delivery.dispatch("prepare", prepare("retained"), "alice");
+  await w.opts.store.transaction(scope("alice"), async (data, save) => {
+    for (let i = 0; i < 255; i++) data.operations[`retained-${i}`] = data.operations.retained;
+    await save(data);
+  });
+  const restarted = createTaskDelivery(w.opts);
+  assert.deepEqual(await restarted.dispatch("prepare", prepare("retained"), "alice"), first);
+  const before = JSON.stringify(w.opts.store.read(scope("alice")));
+  await assert.rejects(restarted.dispatch("prepare", prepare("new-operation"), "alice"), { code: "DELIVERY_CAPACITY" });
+  assert.equal(JSON.stringify(w.opts.store.read(scope("alice"))), before);
+  assert.equal(wakes, 1);
+});

@@ -406,3 +406,39 @@ test("CLI mutations exclude maintenance through async work and release ownership
     assert.equal(existsSync(join(home, "task-mutation.lock")), false);
   }
 });
+
+
+test("active legacy namespaces cannot receive a first artifact pin", () => {
+  for (const pin of [undefined, null, false, 0]) for (const [path, data] of [
+    ["state.json", { version: 1, entries: { active: { state: "running" } } }],
+    [`tasks/${taskId}/intake.json`, { version: 1, status: "preparing", attempts: [] }],
+    ["runs/active/execution.json", { version: 1, current: null, operations: { work: { acceptance: "unknown" } } }],
+  ]) {
+    const home = tempHome(); writeJsonAtomic(join(home, path), data);
+    if (pin !== undefined) writeJsonAtomic(join(home, "runtime-pin.json"), pin);
+    assert.throws(() => migrateRuntimeState({ home, manifest }), { code: "RUNTIME_ACTIVE_PIN" });
+    assert.equal(readJson(join(home, "runtime-pin.json")), pin === undefined ? null : pin);
+    if (pin === undefined) assert.equal(existsSync(join(home, "runtime-pin.json")), false);
+    assert.equal(existsSync(join(home, "daemon.lock")), false);
+  }
+  const idle = tempHome(); migrateRuntimeState({ home: idle, manifest });
+  assert.equal(readJson(join(idle, "runtime-pin.json")).coreSha256, manifest.coreSha256);
+});
+
+test("top-level CLI mutations respect maintenance ownership and pinned namespaces", async () => {
+  const { spawnSync } = await import("node:child_process");
+  const { acquireTaskMutation } = await import("../lib/daemon.mjs");
+  const home = tempHome(); writeJsonAtomic(join(home, "config.json"), { ...CONFIG, worktrees: tempHome(), notify: null });
+  const commands = [["start", "brief.md"], ["resume", "missing"], ["register", "https://github.com/acme/widget/pull/1"], ["remove", "missing"], ["recheck", "missing"], ["say", "missing", "--note", "hello"], ["cancel", "missing"], ["chain", "plan", "brief.md"], ["chain", "plan", "--retry"], ["chain", "plan", "--cancel"]];
+  const cli = new URL("../bin/gallivant.mjs", import.meta.url).pathname;
+  const invoke = args => spawnSync(process.execPath, [cli, ...args], { env: { ...process.env, GALLIVANT_HOME: home }, encoding: "utf8", timeout: 10000 });
+  const owner = acquireTaskMutation(home);
+  try {
+    for (const args of commands) { const r = invoke(args); assert.equal(r.status, 1); assert.match(r.stderr, /task mutation already running/); }
+    assert.doesNotMatch(invoke(["chain"]).stderr, /task mutation already running/);
+    assert.equal(existsSync(join(home, "state.json")), false);
+  } finally { owner.release(); }
+  migrateRuntimeState({ home, manifest });
+  for (const args of commands) { const r = invoke(args); assert.equal(r.status, 1); assert.match(r.stderr, /manifest-aware task delivery adapter/); }
+  assert.equal(existsSync(join(home, "task-mutation.lock")), false);
+});
