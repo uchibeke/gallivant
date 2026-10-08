@@ -8,7 +8,7 @@ import { createHash } from "node:crypto";
 import { createTaskService } from "gallivant/tasks";
 import { createTaskDelivery } from "gallivant/task-delivery";
 import { createDeliveryStore } from "gallivant/task-delivery/store";
-import { CORE_VERSION, TASK_OPERATIONS, assertCompatible, uiResourceConfiguration } from "gallivant/task-delivery/contracts";
+import { CORE_VERSION, TASK_OPERATIONS, assertCompatible, uiResourceConfiguration, taskRejectionForModel } from "gallivant/task-delivery/contracts";
 import { registerTaskDelivery } from "gallivant/task-delivery/mcp";
 import { createCoordinator } from "gallivant/runtime/coordinator";
 import { createNodeCoordinator, createNodeOwnerStore, NODE_RUNTIME_REQUIREMENTS } from "gallivant/runtime/node";
@@ -1032,4 +1032,39 @@ test("installed MCP preserves settled task refusals but hides arbitrary task-cod
     assert.equal(hidden.isError, true); assert.match(hidden.content[0].text, /^DELIVERY_FAILED:/);
     assert.doesNotMatch(JSON.stringify(hidden), /private-provider-value|private\/provider\/path|TASK_INPUT/);
   } finally { await client.close(); await server.close(); }
+});
+
+test("installed preparation boundary refusals settle validate and start intents without effects", async () => {
+  for (const name of ["validate", "start"]) {
+    const w = world({ question: false });
+    const task = await w.delivery.dispatch("prepare", prepare(), "alice");
+    const { ctx, taskOptions } = w.worlds.get("alice");
+    const path = join(ctx.home, "tasks", task.taskId, "intake.json");
+    const intake = JSON.parse(readFileSync(path));
+    intake.attempts.push({ ok: true, settled: true, consumed: true, cost: 0, elapsedMs: 0 });
+    writeJsonAtomic(path, intake);
+    const before = readFileSync(path);
+    taskOptions.decideReady = async () => { throw new Error("readiness must not run"); };
+    taskOptions.dispatch = async () => { throw new Error("dispatch must not run"); };
+    const input = { ...mutate(task, `boundary-${name}`), ...(name === "start" ? { run: true } : {}) };
+    for (const delivery of [w.delivery, createTaskDelivery(w.opts)]) {
+      await assert.rejects(delivery.dispatch(name, input, "alice"), error => {
+        assert.equal(error.code, "TASK_PREPARATION_BOUNDARY");
+        assert.equal(taskRejectionForModel(error)?.code, error.code);
+        assert.match(taskRejectionForModel(error).message, /cannot authorize readiness or dispatch/);
+        return true;
+      });
+      assert.deepEqual(readFileSync(path), before);
+    }
+    const receipt = w.opts.store.read(scope("alice")).operations[input.operationId];
+    assert.equal(receipt.status, "acknowledged");
+    assert.equal(receipt.rejection.code, "TASK_PREPARATION_BOUNDARY");
+    assert.equal(receipt.wakePending, false);
+    assert.equal(ctx.state.entries().length, 0);
+    assert.equal(existsSync(join(ctx.home, "daemon.lock")), false);
+    const recovered = await w.delivery.dispatch("resume", mutate(task, "inspect-boundary-recovery"), "alice");
+    assert.equal(recovered.status, "blocked", "new operations can record the unsafe legacy preparation without dispatch");
+    assert.equal(checkRuntimeState({ home: w.root, manifest }).active, false);
+    assert.equal(checkRuntimeState({ home: ctx.home, manifest }).active, false);
+  }
 });
