@@ -5,7 +5,7 @@ import childProcess from "node:child_process";
 import { syncBuiltinESMExports } from "node:module";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { existsSync, readFileSync, writeFileSync, mkdirSync, symlinkSync } from "node:fs";
+import { existsSync, readFileSync, writeFileSync, mkdirSync, symlinkSync, readdirSync } from "node:fs";
 import { buildPluginPackage, validatePublicRelease } from "../lib/plugin_package.mjs";
 import { tempHome } from "./helpers.mjs";
 
@@ -23,9 +23,16 @@ function fixture() {
 }
 function gitFixture(t, { fail, head = sourceCommit, status = "" } = {}) {
   const original = childProcess.execFileSync, calls = [];
+  // Capture the fake selected tree before packing. Installed conformance has
+  // no Git checkout; this mock must not borrow the source checkout's files.
+  const paths = dir => readdirSync(join(root, dir), { withFileTypes: true }).flatMap(entry => {
+    const path = `${dir}/${entry.name}`;
+    return entry.isDirectory() ? paths(path) : [path];
+  });
+  const committedPaths = ["LICENSE", "README.md", "package.json", "npm-shrinkwrap.json", ...["bin", "lib", "templates", "docs"].flatMap(paths)].join("\0");
   t.mock.method(childProcess, "execFileSync", (file, args, options) => {
     if (file !== "git") return original(file, args, options);
-    if (args[0] === "ls-tree") return original(file, [...args.slice(0, -1), "HEAD"], options);
+    if (args[0] === "ls-tree") { assert.equal(args.at(-1), sourceCommit); return committedPaths; }
     if (args[0] === "show") return readFileSync(join(root, args[1].split(":").slice(1).join(":")));
     calls.push(args);
     const operation = args[0] === "status" ? "status" : args[1] === "HEAD" ? "head" : "root";
