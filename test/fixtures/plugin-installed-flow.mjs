@@ -879,3 +879,25 @@ test("installed interrupted resume and negative outcomes settle without repeatin
     assert.equal(existsSync(join(ctx.home, "daemon.lock")), false);
   }
 });
+
+test("installed intent fence prevents unrelated revisions from consuming a start request", async () => {
+  const w = world({ question: false });
+  const task = await w.delivery.dispatch("prepare", prepare(), "alice");
+  const input = { ...mutate(task, "original-start"), run: true };
+  const transaction = w.opts.store.transaction;
+  let crashed = false;
+  w.opts.store.transaction = (scope, fn) => transaction(scope, (data, save) => fn(data, async next => {
+    await save(next);
+    if (!crashed && next.operations[input.operationId]?.status === "intent") {
+      crashed = true; throw new Error("intent-only crash");
+    }
+  }));
+  await assert.rejects(w.delivery.dispatch("start", input, "alice"), /intent-only crash/);
+  const restarted = createTaskDelivery(w.opts);
+  for (const name of ["resume", "validate", "start"]) await assert.rejects(restarted.dispatch(name, { ...mutate(task, `intervening-${name}`), ...(name === "start" ? { run: true } : {}) }, "alice"), { code: "DELIVERY_PENDING" });
+  await assert.rejects(restarted.dispatch("prepare", prepare("intervening-prepare"), "alice"), { code: "DELIVERY_PENDING" });
+  const started = await restarted.dispatch("start", input, "alice");
+  assert.equal(started.status, "started");
+  assert.equal(w.worlds.get("alice").ctx.runnerFor(started.implementation.id).started.length, 1);
+  assert.equal(w.opts.store.read(scope("alice")).operations[input.operationId].status, "acknowledged");
+});

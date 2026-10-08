@@ -5,7 +5,7 @@ import childProcess from "node:child_process";
 import { syncBuiltinESMExports } from "node:module";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { existsSync, writeFileSync, mkdirSync, symlinkSync } from "node:fs";
+import { existsSync, readFileSync, writeFileSync, mkdirSync, symlinkSync } from "node:fs";
 import { buildPluginPackage, validatePublicRelease } from "../lib/plugin_package.mjs";
 import { tempHome } from "./helpers.mjs";
 
@@ -25,6 +25,7 @@ function gitFixture(t, { fail, head = sourceCommit, status = "" } = {}) {
   const original = childProcess.execFileSync, calls = [];
   t.mock.method(childProcess, "execFileSync", (file, args, options) => {
     if (file !== "git") return original(file, args, options);
+    if (args[0] === "show") return readFileSync(join(root, args[1].split(":").slice(1).join(":")));
     calls.push(args);
     const operation = args[0] === "status" ? "status" : args[1] === "HEAD" ? "head" : "root";
     if (operation === "status") assert.ok(args.includes("--no-renames"), "Git must report removed and added paths separately");
@@ -226,4 +227,17 @@ for (const change of ["payload", "head", "status-failure"]) test(`public packagi
   assert.throws(() => buildPluginPackage(input), { code: "PACKAGE_SOURCE" });
   assert.equal(packed, true);
   assert.equal(existsSync(input.out), false, "remove tarball and staged plugin on failed revalidation");
+});
+
+for (const transient of ["lib/tasks.mjs", "node_modules/smol-toml/dist/index.js"]) test(`packed transient bytes cannot inherit clean source snapshots: ${transient}`, t => {
+  gitFixture(t);
+  const original = childProcess.execFileSync;
+  t.mock.method(childProcess, "execFileSync", (file, args, options) => {
+    const result = original(file, args, options);
+    return file === "tar" && args.at(-1) === `package/${transient}` ? Buffer.concat([result, Buffer.from("\n// transient pack-time change\n")]) : result;
+  });
+  syncBuiltinESMExports();
+  const input = fixture();
+  assert.throws(() => buildPluginPackage(input), { code: "PACKAGE_SOURCE", message: /Packed.*bytes differ/ });
+  assert.equal(existsSync(input.out), false);
 });

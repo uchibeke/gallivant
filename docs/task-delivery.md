@@ -324,3 +324,7 @@ New ordinary receipts reserve 4 KiB for the compact acknowledgement and bounded 
 Interrupted resume, validation and start requests whose intake revision has advanced are settled from the current saved task view, including blocked or incomplete outcomes. Exact retries do not repeat their effects or infer approval from a later revision. Further recovery requires inspection and a new operation against that revision; unresolved intake or execution state continues to pin its artifact independently of the settled delivery receipt.
 
 Public packaging rechecks HEAD and payload changes after npm packing. A changed checkout or failed Git recheck removes the staged output and requires a rebuild; internal fixtures record late payload changes or loss of source verification without claiming release qualification.
+
+Archive payload hashes are computed from packed entries and checked against the selected Git commit. The bundled parser is bound by `templates/plugin/bundled-runtime.json`, whose file hashes and lock integrity must be refreshed and committed together when upgrading that dependency. Before/after Git status remains an additional check, not byte provenance.
+
+New delivery intents fence later ordinary mutations until the original operation settles; cancellation retains its independent reserve. This prevents unrelated revision changes from being accepted as an interrupted operation's outcome. Legacy intents without this fence cannot use revision-only recovery and remain explicit reconciliation obligations.
