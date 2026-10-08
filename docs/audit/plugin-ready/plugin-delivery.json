@@ -18,14 +18,14 @@
       "2b4514fb27fcb493e62bfed913fffc204215f155",
       "96e81031516bdf6663dd3b97ac39b8f57022568b"
     ],
-    "testedSourceCommit": "13726d32bf05b65723af2f8da9cbfa1af552718b"
+    "testedSourceCommit": "794a533f1e21a1bc05767c6e7da20fb4e7948634"
   },
   "artifact": {
     "coreArtifact": "gallivant-0.2.0.tgz",
-    "coreSha256": "38c88ddf5fd70c89269621a10cb13a47cba59fc78502db129fc87d5dacc2e6ba",
+    "coreSha256": "5c806fb1fb0bda1150c33a94578e53a3b4929f622f9b1c93b310e55ab92a6401",
     "hashes": {
       "plugin": "8753892ceb5552fc37ba011929830f4c754d717f8d8031e31fb9b4935b465e1a",
-      "runtime": "94531fc5852d83311f8c541eaa662aac3bce19d04e762ef0c02f7d7472018c9f",
+      "runtime": "29081ac2fab85e2fa36bb15b7323d0685f60c07c61a2be0bb7bd72ce06f9e7e8",
       "operations": "86e62501fa7a3d6d29e26830cd43b2648b32978912d2096a8690ed2e2fab0f86"
     },
     "dependencyLockSha256": "c0f2f9bb3ad4d1bb8356c1162a8e71109534d747a5bc3182d4cce6457760c6d8",
@@ -48,7 +48,7 @@
       "docs/openai-agents.md": "38f162e4d4918bdab372be804e1a06a6a9582493c941f07799f97324f4637db2",
       "docs/prd.md": "c018adab1b0df85f0c4fcec3a05b2b03911ded645987a21c13b61df0dcb41594",
       "docs/preparation.md": "814ad941a8291accc4036eb022edd64ed9e3a1e39f985a9f35b25f7eeae8ee9f",
-      "docs/task-delivery.md": "7a9e0c1b93ee6518232fb2567f693911639199cf42869c226456a278be48cad3",
+      "docs/task-delivery.md": "ed0c153cc71151cf2c62e160303e381dc5e0a8e57a0d458053ed7ecd9a5ef943",
       "docs/tasks.md": "ca7b8d5f332c42d0518ab9e4524c865a73ec57534d82a88392d7df93ebff6c2c",
       "lib/aport.mjs": "5c046abda8964a0439ee699bf658b9a00fdd7527884848f7fb22c3fe6c9e1d74",
       "lib/attribution.mjs": "cddb3eafe44f1dee26999a987ad9b1c62332cc9eb1ee17925cd2b961a9ccac17",
@@ -106,7 +106,7 @@
       "lib/openai_agents_input.mjs": "3b012e8c7c51d9d007762e1f849ea3caaf7bbf9ab128a6f5c916bff195b6b83c",
       "lib/openai_agents_sources.mjs": "9d61867d9f86901b084f37d4da6c344df24a0ff71b7ab0537273aad4b18f1132",
       "lib/openai_agents.mjs": "3b67fe601cb8ad268f2d997d55e19bad4aca1f016293595036825892d1991702",
-      "lib/plugin_package.mjs": "7f82d44a56e1484de661dce0a0fee6c448b290a2488a14c54446406514a6a8bb",
+      "lib/plugin_package.mjs": "f9655fa102389978a5cb7fe3baeef6226368b60c5c545f67d2bc94b0bfd3a719",
       "lib/prd.mjs": "3e8bd68d62e8e61fe3624cdcc76e27e78e079d77e25a1484aafa7f5ca6f6ffe3",
       "lib/preparation_codex.mjs": "d1fcd4d1ec49b3a086622ec2777fa231b4fbc9c0d6e13bb90702d27b785fc447",
       "lib/probe.mjs": "191639a18233649d523effbf2411d100946e6463d70f380c41aec8301bb42197",
@@ -130,7 +130,7 @@
       "lib/task_delivery_mcp.mjs": "a46bb4029534c51426727023c2695ed10f17fdf2ec10e093ad5beae41f9120ef",
       "lib/task_delivery_store.mjs": "d5ac13968be92b773ce4e530217d5ec64539f3ec1877e873ca3c56654813f450",
       "lib/task_delivery_view.mjs": "8f7a9551bc288130dcb7997b2e5941e95324fce34b4eaa24ffc786b5e092559d",
-      "lib/task_delivery.mjs": "8c9c0011e0e444fa4adbf17af3666da5633f00a19ea9b55e226c872f3a9c4f2d",
+      "lib/task_delivery.mjs": "e4c9ebc24eef9f684cbb7d8af622f0a87681bf923113b91f2982c19c5534cb83",
       "lib/task_environment.mjs": "5c61d5d5393014206f078c86084b40d263f59b7dc939c445a4ed86111e4c2b2c",
       "lib/task_prepare.mjs": "f0f27738e208f174aa89dba3a6f70f382cf7e03abe541df5d1854aed4adb9492",
       "lib/task_store.mjs": "54383d2c1893f6b805ed15b2690f38625f734f65ff7f286906829d192a65d2b4",
@@ -522,7 +522,7 @@
         "lib/harness.mjs"
       ],
       "tests": [
-        "34 installed consumer flow cases",
+        "35 installed consumer flow cases",
         "installed local/API/Cloud provider and lifecycle conformance",
         "inherited hosted bounded-preparation refusal cases"
       ],
@@ -562,25 +562,25 @@
       {
         "command": "npm test",
         "exitCode": 0,
-        "tests": 1413,
-        "pass": 1413,
+        "tests": 1416,
+        "pass": 1416,
         "fail": 0,
-        "log": "/private/tmp/pr12-cancel-recovery-unit.log"
+        "log": "/private/tmp/pr12-outcomes-unit.log"
       },
       {
         "command": "npm run lint",
         "exitCode": 0,
-        "log": "/private/tmp/pr12-cancel-recovery-lint.log"
+        "log": "/private/tmp/pr12-outcomes-lint.log"
       },
       {
         "command": "npm run test:plugin-package",
         "exitCode": 0,
-        "consumerFlowTests": 34,
-        "installedConformanceTests": 448,
+        "consumerFlowTests": 35,
+        "installedConformanceTests": 451,
         "fail": 0,
-        "log": "/private/tmp/pr12-cancel-recovery-package.log",
-        "consumerEvidence": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/task-plugin-consumer-1OeB3m/evidence.json",
-        "conformanceLog": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/task-plugin-consumer-1OeB3m/conformance.log"
+        "log": "/private/tmp/pr12-outcomes-package.log",
+        "consumerEvidence": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/task-plugin-consumer-aeZeX9/evidence.json",
+        "conformanceLog": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/task-plugin-consumer-aeZeX9/conformance.log"
       },
       {
         "command": "git diff --check",
@@ -590,10 +590,10 @@
     ],
     "verifiedPayloadFiles": 141,
     "logSha256": {
-      "/private/tmp/pr12-cancel-recovery-unit.log": "5c4335d1b01b0a7750ace6af7d28153cc67fd375f63b0df6d262e156f018c2c1",
-      "/private/tmp/pr12-cancel-recovery-lint.log": "2f32bd854b16ced20ab71be2afd3673b887efc4815c6e55ea7b941ebc5aa8a0b",
-      "/private/tmp/pr12-cancel-recovery-package.log": "35e9b231cec205df97ae05dd9f72019b48f09103e479de70097634364d169d7e",
-      "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/task-plugin-consumer-1OeB3m/conformance.log": "6da67610d88bc2246f5f24a709ac5e5e9f92484357978fc64f95bfc13da82649"
+      "/private/tmp/pr12-outcomes-unit.log": "02efa0da3d63eaa4dfad8381c55ccef852f44abd75f6406976757614db4109b7",
+      "/private/tmp/pr12-outcomes-lint.log": "2f32bd854b16ced20ab71be2afd3673b887efc4815c6e55ea7b941ebc5aa8a0b",
+      "/private/tmp/pr12-outcomes-package.log": "44d3fc6d9d95a03be5dd030f717c086a524fe02499c11e88bf3b32d8e3c664b3",
+      "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/task-plugin-consumer-aeZeX9/conformance.log": "c62633bbdf23eec86e842feba08b641685a27ee5efbb596d0e910d357e258502"
     },
     "hostEvidence": false,
     "fixturePurpose": "Deterministic unpaid installed-artifact compatibility; no actual installed host or live provider qualification",
@@ -1018,5 +1018,22 @@
     "tests": "test/fixtures/plugin-installed-flow.mjs installed cancellation retries recover crashes before registry writes and receipt acknowledgement",
     "coverage": "Crash after intent save before registry write; registry write before receipt acknowledgement; matching control in history; exact retry, signature conflict, replacement ID refusal, no duplicate dispatch, acknowledgement and ownership cleanup. Other controls retain DELIVERY_UNKNOWN ambiguity refusal.",
     "scope": "Existing deployment, hosted-flow and post-merge evidence gates remain unmet."
+  },
+  "outcomeAndPackingReview": {
+    "reviewId": 5451609504,
+    "comments": [
+      4214877486,
+      4214877497
+    ],
+    "implementation": [
+      "lib/plugin_package.mjs post-pack HEAD and status revalidation",
+      "lib/task_delivery.mjs saved-view settlement for interrupted moved revisions"
+    ],
+    "tests": [
+      "test/plugin-package.test.mjs public packaging rejects source changes during pack",
+      "test/fixtures/plugin-installed-flow.mjs installed interrupted resume and negative outcomes settle without repeating effects"
+    ],
+    "recovery": "Exact retries acknowledge current saved outcomes without repeating effects or granting stale authority; subsequent actions require a fresh revision. Pending intake and execution remain independently pinned.",
+    "cleanup": "Failed public source revalidation removes staged output; runtime ownership releases after interrupted receipt recovery."
   }
 }
