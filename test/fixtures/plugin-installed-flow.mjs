@@ -953,3 +953,31 @@ test("installed unknown readiness failures retain their intent instead of claimi
   assert.equal(w.opts.store.read(scope("alice")).operations[input.operationId].status, "intent");
   await assert.rejects(w.delivery.dispatch("validate", mutate(task, "replacement"), "alice"), { code: "DELIVERY_PENDING" });
 });
+
+
+test("installed deterministic preparation refusals settle without intake or paid effects", async () => {
+  for (const fault of ["unconfigured", "unknown", "missing-context", "secret-context", "repository"]) {
+    const w = world();
+    const bound = await w.contextFor(scope("alice"), "widget");
+    let calls = 0; bound.taskOptions.prepare = async () => { calls++; throw new Error("unexpected preparation"); };
+    const input = prepare(`rejected-${fault}`);
+    if (fault === "unconfigured") input.harness = "codex";
+    if (fault === "unknown") input.harness = "not-a-harness";
+    if (fault.endsWith("context")) {
+      bound.repository.context.invalid = "invalid.md"; input.contextIds = ["invalid"];
+      if (fault === "secret-context") writeFileSync(join(bound.repository.dir, "invalid.md"), "private-provider-value");
+    }
+    if (fault === "repository") bound.repository.repo = "other/repository";
+    await assert.rejects(w.delivery.dispatch("prepare", input, "alice"));
+    const receipt = w.opts.store.read(scope("alice")).operations[input.operationId];
+    assert.equal(receipt.status, "acknowledged"); assert.ok(receipt.rejection); assert.equal(receipt.wakePending, false);
+    await assert.rejects(createTaskDelivery(w.opts).dispatch("prepare", input, "alice"), { code: receipt.rejection.code });
+    assert.equal(calls, 0); assert.deepEqual(createTaskService(bound.ctx).list().tasks, []);
+    assert.equal(checkRuntimeState({ home: w.root, manifest }).active, false);
+    assert.equal(existsSync(join(bound.ctx.home, "daemon.lock")), false);
+    bound.repository.repo = "acme/widget";
+    bound.taskOptions.prepare = async (_ctx, task) => JSON.stringify(draftFor(task, { question: true }));
+    const corrected = await w.delivery.dispatch("prepare", prepare("corrected"), "alice");
+    assert.equal(corrected.status, "needs-input");
+  }
+});
