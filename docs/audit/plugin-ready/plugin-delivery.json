@@ -18,21 +18,21 @@
       "2b4514fb27fcb493e62bfed913fffc204215f155",
       "96e81031516bdf6663dd3b97ac39b8f57022568b"
     ],
-    "testedSourceCommit": "0e711c844b58886d40a7505115ee56d964018c78"
+    "testedSourceCommit": "39cc6829a3801cee58a715e68055926ef7853877"
   },
   "artifact": {
     "coreArtifact": "gallivant-0.2.0.tgz",
-    "coreSha256": "2f283667d9686786f2d53366250a0a46f5938ad32e0b70d7d28a418acb61869f",
+    "coreSha256": "c0a87d0ec623be82aee3f9dc65cea27ea4feeed038b16e8c55ad6c5a33e09ec9",
     "hashes": {
       "plugin": "8753892ceb5552fc37ba011929830f4c754d717f8d8031e31fb9b4935b465e1a",
-      "runtime": "c9b2204454b2f370b57fcd34297ef575b95762178fb0462156d5a046108437e2",
+      "runtime": "457e4c9ae96003c04049081240544b5cc5c7a8c88eeb97710fe2cf3827dbde70",
       "operations": "86e62501fa7a3d6d29e26830cd43b2648b32978912d2096a8690ed2e2fab0f86"
     },
     "dependencyLockSha256": "c0f2f9bb3ad4d1bb8356c1162a8e71109534d747a5bc3182d4cce6457760c6d8",
     "payloadHashes": {
       "LICENSE": "f3279adc1b8fec70bdd2a8e52c41eb2d3b4a4fa955524662bd79da541b1cef41",
       "README.md": "e5571ad571fcd34991c030e6f7a37026239cb847fe38061d611a33a1049e29ce",
-      "bin/gallivant.mjs": "bccdde0a8a53c3851c7e650b8102e7f98e97d7a16bfd25f2c232e5be78887f11",
+      "bin/gallivant.mjs": "88a20cec89e6fcbb466c9ca0bd5fd4c4e357a54aba7f51c432117f3bc701ae4a",
       "bin/package-plugin.mjs": "8a3a5555438cad17f1812e5af15aedb54c9081f8a280db519a502b78af20b5ce",
       "bin/task-delivery-state.mjs": "fb14f536b8b567f25b07eebc1dff91229a280ae60c2bbe619abb45a4bc09646b",
       "docs/app.md": "7508a7fa0ecacfe54c20da0f81069ac02218814e71773c31d7e2dcce75ea34e3",
@@ -48,7 +48,7 @@
       "docs/openai-agents.md": "38f162e4d4918bdab372be804e1a06a6a9582493c941f07799f97324f4637db2",
       "docs/prd.md": "c018adab1b0df85f0c4fcec3a05b2b03911ded645987a21c13b61df0dcb41594",
       "docs/preparation.md": "814ad941a8291accc4036eb022edd64ed9e3a1e39f985a9f35b25f7eeae8ee9f",
-      "docs/task-delivery.md": "45d4eb11cb3320e1dce5febd1d1676fae725feb45f14ab17074751d9bf34bf56",
+      "docs/task-delivery.md": "e7ffdccd0384ebfe00bea891e63d85a7c67c783332c4dddb7e01de8485a35d0f",
       "docs/tasks.md": "ca7b8d5f332c42d0518ab9e4524c865a73ec57534d82a88392d7df93ebff6c2c",
       "lib/aport.mjs": "5c046abda8964a0439ee699bf658b9a00fdd7527884848f7fb22c3fe6c9e1d74",
       "lib/attribution.mjs": "cddb3eafe44f1dee26999a987ad9b1c62332cc9eb1ee17925cd2b961a9ccac17",
@@ -65,10 +65,10 @@
       "lib/commands/ready.mjs": "916c0ba660146c28d4a64ac8dff6e1596d4ff1e0fa7d61e784ae10f92b4b67f9",
       "lib/commands/register.mjs": "93139d98b4ea777df5e64e3871cfb9ddccf0a43843751bda4170847e870f99d1",
       "lib/commands/resume.mjs": "0d5468afc5900c11dd5c48c84084af820cfaf44870ed5548b934d9217de061b7",
-      "lib/commands/serve.mjs": "c53a41d97c614ca09d7411973522b7ca4e9adf4e0bb608c61c4ed405a547135e",
+      "lib/commands/serve.mjs": "29edf0f03c0b64c27ac438dcd01837f3c1d14b068fe78b2d1e8bec18f236c771",
       "lib/commands/start.mjs": "12e7f26aff07049f9845e0842356a0e7b7b1dc2f058bfc81cb456312b6425dc4",
       "lib/commands/status.mjs": "41ededea71ae3b2bcf986511720c2a397af7abedcd96b2966674840a2800d6cc",
-      "lib/commands/task.mjs": "b2028e11673745a89f44f80c4a9a764cca13572ea84cc57514c6fdd15841d226",
+      "lib/commands/task.mjs": "12e98c60d91c3afd4796d3ef5fd19a07e489d99fbe62cc28140a22c8db1af2f0",
       "lib/commands/up.mjs": "3dcc7d297d67909b0af98dc8718666e59560a7437d888f16b2c3e3a236643834",
       "lib/commands/why.mjs": "bad1866f6f7af98640f546ff0850a057a2ac1c416cbcfae8a8c3a0cf1997e69e",
       "lib/config.mjs": "64a11002c4963648966db9a8c04f44da8cbfde81698800932d4e854bc4f1b097",
@@ -77,7 +77,7 @@
       "lib/control.mjs": "a2d922af5cd19d5ac28b4d61f55b3b56159b4fe9958fd5a9627e9fdd2c8625b4",
       "lib/coordinator.mjs": "fa6f8ea55df5f326e54fb853bf49ee48db8bb94e88f664ea315497a596584d3a",
       "lib/credential.mjs": "61ac0040b5e41ce299f59d80081fbfdd7537745453300c79d2090f6f173bc46f",
-      "lib/daemon.mjs": "be22d594af71a8d42f5844707035c155c0bfc34c2eb3a2270b89a1070f8b9648",
+      "lib/daemon.mjs": "cffbb4ec9d0608ed7ea43fd974081fcf432d71eaa49de75ce001e333a08d8a66",
       "lib/deliverable.mjs": "7d3c824ac1d8cb6032b1814cdf4e0dc156e4d6d01382bebc0ab1647e4abfb678",
       "lib/events.mjs": "776867f9a280ea179f2be8f6e570c88d468ebb5500db8864041fd29b01202e27",
       "lib/execution_input.mjs": "9fd16569f9ac9286ff4990a7bc442114ebff681bcd43972fccba033e66e02cf1",
@@ -119,7 +119,7 @@
       "lib/run.mjs": "3682818ab95bf3b27c262449aa521be094caee9c8f133e94740923ebafb91315",
       "lib/runtime_dependencies.mjs": "6d25b972c116026643f348dc55586009d2746f68b99f47d450b2a3ef35625949",
       "lib/runtime_node.mjs": "df1b43dc1ae576ff96cd9a36201f906bf8d0c04deea291ce78d754b2b2fde4cd",
-      "lib/runtime_state.mjs": "65e9de3947219a18f6b297f8c7213b651087f43588e960e0f51850fbb8918343",
+      "lib/runtime_state.mjs": "5a3308a21052fd60aaac2298b17ed233968c34a4898df6d9b081b8d0c2618d76",
       "lib/sources/index.mjs": "88e1550751e9f52c82e94085bcb77bbd2b80466c9e2192670593f12894c4a4ec",
       "lib/sources/prd.mjs": "b26425213d537d8bf640abee1046481925de30d676fdb9b6a6b9239cdc50effd",
       "lib/start_contract.mjs": "e154f36dcf54c93b4308a93d8926dca8f28358c4e41234dc684008706ea23ab9",
@@ -128,9 +128,9 @@
       "lib/task_contract.mjs": "56d440e08c228a4df27d06f9fa181ec6160e876a13dcd90fdf0416fab7c2fff4",
       "lib/task_delivery_contract.mjs": "a1362086807fb69855f2ec625e53f1cc65c35e94809b2950142eaeb67a30b2ec",
       "lib/task_delivery_mcp.mjs": "accb8029caad59af900a1ddb6cd8a39e0bfcde6053fdc33b6c49ad1eca654576",
-      "lib/task_delivery_store.mjs": "4573831285d16421d3ec7e56b78735ee10d6f8952a1b4475eed7fa1387636b0d",
+      "lib/task_delivery_store.mjs": "bfe76f31b2934e808556cb92462ef605388c53428c47515b23ee8f0851644ef5",
       "lib/task_delivery_view.mjs": "959efcb5dc78981664cf59fa202b48c8d0f0dbdb127f00714650a81fa565f2e1",
-      "lib/task_delivery.mjs": "183339af4041f98561b4b4acd55d7d21a224783ab37e77c5265c7efcc4ec1698",
+      "lib/task_delivery.mjs": "21c0cd0d7e6365a7e363d991f14791160037e0f43a96713ad0f77f5b59178e6a",
       "lib/task_environment.mjs": "5c61d5d5393014206f078c86084b40d263f59b7dc939c445a4ed86111e4c2b2c",
       "lib/task_prepare.mjs": "f0f27738e208f174aa89dba3a6f70f382cf7e03abe541df5d1854aed4adb9492",
       "lib/task_store.mjs": "54383d2c1893f6b805ed15b2690f38625f734f65ff7f286906829d192a65d2b4",
@@ -522,7 +522,7 @@
         "lib/harness.mjs"
       ],
       "tests": [
-        "29 installed consumer flow cases",
+        "30 installed consumer flow cases",
         "installed local/API/Cloud provider and lifecycle conformance",
         "inherited hosted bounded-preparation refusal cases"
       ],
@@ -562,25 +562,25 @@
       {
         "command": "npm test",
         "exitCode": 0,
-        "tests": 1405,
-        "pass": 1405,
+        "tests": 1408,
+        "pass": 1408,
         "fail": 0,
-        "log": "/private/tmp/pr12-liveness-unit.log"
+        "log": "/private/tmp/pr12-capacity-unit.log"
       },
       {
         "command": "npm run lint",
         "exitCode": 0,
-        "log": "/private/tmp/pr12-liveness-lint.log"
+        "log": "/private/tmp/pr12-capacity-lint.log"
       },
       {
         "command": "npm run test:plugin-package",
         "exitCode": 0,
-        "consumerFlowTests": 29,
-        "installedConformanceTests": 440,
+        "consumerFlowTests": 30,
+        "installedConformanceTests": 443,
         "fail": 0,
-        "log": "/private/tmp/pr12-liveness-package.log",
-        "consumerEvidence": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/task-plugin-consumer-7NDNb5/evidence.json",
-        "conformanceLog": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/task-plugin-consumer-7NDNb5/conformance.log"
+        "log": "/private/tmp/pr12-capacity-package.log",
+        "consumerEvidence": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/task-plugin-consumer-rxOcK8/evidence.json",
+        "conformanceLog": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/task-plugin-consumer-rxOcK8/conformance.log"
       },
       {
         "command": "git diff --check",
@@ -590,10 +590,10 @@
     ],
     "verifiedPayloadFiles": 141,
     "logSha256": {
-      "/private/tmp/pr12-liveness-unit.log": "4e840c9d3312ea6bb0173d669db401bd1722beac52aa2ed4b2ff7d03109b32b3",
-      "/private/tmp/pr12-liveness-lint.log": "2f32bd854b16ced20ab71be2afd3673b887efc4815c6e55ea7b941ebc5aa8a0b",
-      "/private/tmp/pr12-liveness-package.log": "27d126c4f2ce676f0170292aa35869235faa79967133bfc21316e86bb17d5507",
-      "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/task-plugin-consumer-7NDNb5/conformance.log": "6cb4190714d5f0cf65867df752cadec05032b3217b4f432ed1c958e8b2b5e68f"
+      "/private/tmp/pr12-capacity-unit.log": "6866c77e2ff51a7b4c7b3dd15037abaf045b4bb99ea51963854cd1843df49b99",
+      "/private/tmp/pr12-capacity-lint.log": "2f32bd854b16ced20ab71be2afd3673b887efc4815c6e55ea7b941ebc5aa8a0b",
+      "/private/tmp/pr12-capacity-package.log": "37254fcd2800cf2a0cab33824f8626fa1fea14467c9c56fe34edc9842217e802",
+      "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/task-plugin-consumer-rxOcK8/conformance.log": "ce1c9f29a09363a4ec05dd3c1ee3a06b05a9a91532c99d68147372327716b754"
     },
     "hostEvidence": false,
     "fixturePurpose": "Deterministic unpaid installed-artifact compatibility; no actual installed host or live provider qualification",
@@ -634,32 +634,8 @@
     "status": "Earlier follow-up evidence retained in Git history; current verification and external gates remain recorded here."
   },
   "runtimeReviewFollowup": {
-    "reviewId": 5440576822,
-    "reviewedCommit": "446734f33f5389d74cf10d083cebd46f62dd1e97",
-    "items": [
-      {
-        "commentId": 4205471640,
-        "implementation": "lib/runtime_state.mjs",
-        "tests": [
-          "test/runtime-delivery.test.mjs",
-          "test/fixtures/plugin-installed-flow.mjs"
-        ],
-        "rule": "The active artifact pin covers work before registry creation and unresolved authoritative execution, including readiness and cancellation"
-      },
-      {
-        "commentId": 4205471650,
-        "implementation": "lib/runtime_node.mjs",
-        "tests": "test/runtime-delivery.test.mjs",
-        "rule": "Restart completion is persisted only after a full successful bounded cursor sweep; partial and failed sweeps do not skip earlier or later entries"
-      }
-    ],
-    "focusedVerification": {
-      "tests": 13,
-      "pass": 13,
-      "fail": 0,
-      "log": "/tmp/plugin-delivery-runtime-focused.log"
-    },
-    "externalPrerequisites": "Previously observed unmet prerequisites retained; no unchanged live call retried and no installed-host/model-access evidence inferred from fixtures"
+    "historicalEvidence": "0e0aaec0648267fbc7bfcc6636fbf2536b287bd7:docs/audit/plugin-ready/plugin-delivery.json runtimeReviewFollowup",
+    "status": "Prior runtime review evidence retained in Git history; current tests and external gates remain recorded here."
   },
   "discoveryReviewFollowup": {
     "reviewId": 5440993864,
@@ -1130,5 +1106,27 @@
     ],
     "rule": "Runtime owners retain process exclusion without reporting daemon liveness; startup reports busy and down cannot signal maintenance",
     "initialVerification": "Installed consumer control request exposed an overbroad busy check; narrowed refusal to startup and reran required checks. Initial log: /private/tmp/pr12-liveness-package-initial.log"
+  },
+  "legacyCliReceiptReview": {
+    "reviewId": 5450734332,
+    "commentIds": [
+      4214038980,
+      4214038991,
+      4214038995
+    ],
+    "implementation": [
+      "lib/runtime_state.mjs checkRuntimeState refuses first active pin",
+      "lib/daemon.mjs acquireCliMutation shared by CLI task, registry, chain, learning and local web controls",
+      "lib/task_delivery.mjs operation admission; lib/task_delivery_store.mjs byte bounds"
+    ],
+    "tests": [
+      "test/runtime-delivery.test.mjs active legacy namespaces cannot receive a first artifact pin",
+      "test/runtime-delivery.test.mjs top-level CLI mutations respect maintenance ownership and pinned namespaces",
+      "test/task-delivery.test.mjs delivery store size limits preserve saved receipts and reject oversized legacy reads",
+      "test/fixtures/plugin-installed-flow.mjs installed receipt capacity preserves old retries and refuses new effects"
+    ],
+    "limits": "256 operation IDs; 32 MiB store; retain retries, drain/archive before new namespace; no eviction or identity reuse",
+    "migration": "docs/task-delivery.md",
+    "initialVerification": "Focused first-pin test expected undefined for missing JSON; corrected to the existing reader null sentinel, then 40 focused tests passed."
   }
 }
