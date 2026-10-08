@@ -401,3 +401,32 @@ test("daemon startup polling refuses a runtime owner acquired after the initial 
     } }), /retry daemon startup/);
   } finally { owner?.release(); }
 });
+
+
+test("ordinary daemon startup refuses pinned homes before effects and releases ownership", async () => {
+  const { acquireDaemon, acquireRuntimeOwner } = await import("../lib/daemon.mjs");
+  const { up } = await import("../lib/commands/up.mjs");
+  const { existsSync, readFileSync, writeFileSync } = await import("node:fs");
+  for (const pin of ['null', '{}', '{"version":1,"coreSha256":"candidate"}', 'invalid json']) {
+    const home = tempHome(), file = join(home, "runtime-pin.json");
+    writeFileSync(file, pin);
+    assert.throws(() => acquireDaemon(home), { code: "TASK_RUNTIME_PIN" });
+    await assert.rejects(up({ home }, { once: true }), { code: "TASK_RUNTIME_PIN" });
+    let spawned = false;
+    await assert.rejects(upInBackground({ home }, { spawnFn: () => { spawned = true; } }), { code: "TASK_RUNTIME_PIN" });
+    assert.equal(spawned, false);
+    assert.equal(existsSync(join(home, "daemon.lock")), false);
+    assert.equal(existsSync(join(home, "daemon.json")), false);
+    assert.equal(existsSync(join(home, "daemon.log")), false);
+    assert.equal(readFileSync(file, "utf8"), pin);
+    const runtime = acquireRuntimeOwner(home); runtime.release();
+  }
+  const home = tempHome();
+  await assert.rejects(upInBackground({ home }, { spawnFn: () => {
+    writeFileSync(join(home, "runtime-pin.json"), '{}');
+    return { unref() {}, exitCode: null };
+  } }), { code: "TASK_RUNTIME_PIN" });
+  assert.throws(() => acquireDaemon(home), { code: "TASK_RUNTIME_PIN" });
+  assert.equal(existsSync(join(home, "daemon.lock")), false);
+  const local = acquireDaemon(tempHome()); local.release();
+});
