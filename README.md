@@ -20,7 +20,9 @@ With Claude or Codex configured, you can also start from natural language:
 prepares an isolated, validated brief. Add `--run` to authorize
 implementation once material questions are resolved. [Task operations](docs/tasks.md)
 cover preparation adapter restrictions, stdin, resumable questions, structured
-exports and separate live qualification.
+exports and separate live qualification. [APort task delivery](docs/task-delivery.md)
+documents the versioned scoped dispatcher, durable runtime, plugin packager and
+the deployment/provider gates that remain outside an internal fixture build.
 
 ## Five-minute path
 

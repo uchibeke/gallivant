@@ -830,3 +830,27 @@ test("phase-bounded coordinator settlement cannot enter review dispatch or queue
     gh: { prView: async () => { assert.fail("a new review phase was entered"); } }, git: {}, readPrd: () => null }).tickEntry(taskId, state.get(taskId), { settleOnly: true });
   assert.equal(f.calls.length, 0); assert.equal(f.service().current(), null);
 });
+
+
+test("initial remote start caps the durable provider allowance with task metadata", async () => {
+  const { load } = await import("../lib/sources/prd.mjs");
+  const { captureStartInput } = await import("../lib/start_contract.mjs");
+  for (const budgetUsd of [0.25, 0.05]) {
+    const f = launchFixture(), request = await load(f.prdPath, f.ctx);
+    const task = { id: "task-" + "a".repeat(24), revision: 1, digest: captureStartInput(request, "main").digest,
+      deliveryAllowance: { budgetUsd, runtimeMs: 60000 } };
+    const original = structuredClone(f.ctx.config);
+    await launchAccess(f, async () => {
+      if (budgetUsd < config.allowance.reservedUsd) {
+        await assert.rejects(start(f.ctx, { request, task }), { code: "EXECUTION_ALLOWANCE" });
+        assert.equal(f.sessions.size, 0); assert.equal(f.service().state().allowance, undefined);
+      } else {
+        await start(f.ctx, { request, task });
+        assert.equal(f.service().state().allowance.totalUsd, budgetUsd);
+        assert.equal(f.service().state().allowance.reservedUsd, config.allowance.reservedUsd);
+        assert.deepEqual(f.ctx.state.get(f.id).task, { ...task, run: f.service().current().id });
+      }
+      assert.deepEqual(f.ctx.config, original);
+    });
+  }
+});

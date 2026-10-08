@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 // CLI entry. Parses arguments, builds the context, calls one command. No logic lives here.
+import { acquireCliMutation } from "../lib/daemon.mjs";
 import { parseArgs } from "node:util";
 import { makeContext } from "../lib/context.mjs";
 import { start } from "../lib/commands/start.mjs";
@@ -104,7 +105,10 @@ async function dispatch(argv) {
   if (values.help || !cmd || cmd === "help") { console.log(HELP); return 0; }
   if (cmd === "learn") {
     const ctx = makeContext({ needConfig: arg !== "setup" && (arg !== "doctor" || !!values.repo), readOnly: !!values["dry-run"] || ["list", "show", "report", "explain", "doctor"].includes(arg) });
-    const result = await learnCommand(ctx, { args: arg ? positionals.slice(1) : [], values });
+    const owner = !values["dry-run"] && !["list", "show", "report", "explain", "doctor", "setup"].includes(arg) ? acquireCliMutation(ctx.home) : null;
+    let result;
+    try { result = await learnCommand(ctx, { args: arg ? positionals.slice(1) : [], values }); }
+    finally { owner?.release(); }
     process.stdout.write(safeDisplay(result) + "\n");
     return result?.isolation?.qualified === false ? 1 : 0;
   }
@@ -134,6 +138,9 @@ async function dispatch(argv) {
     }
   }
   const ctx = makeContext();
+  const mutating = ["start", "resume", "register", "remove", "recheck", "say", "cancel"].includes(cmd) || cmd === "chain" && (positionals.length > 2 || values.cancel || values.retry);
+  const owner = mutating ? acquireCliMutation(ctx.home) : null;
+  try {
   if (cmd === "recheck" || cmd === "say" || cmd === "cancel") {
     if (!arg) throw new Error(`${cmd} needs a handle`);
     if (cmd === "say" && !values.note?.trim()) throw new Error("say needs --note with a message");
@@ -219,6 +226,7 @@ async function dispatch(argv) {
     case "remove": { if (!arg) throw new Error("remove needs a handle"); const id = resolveHandle(ctx.state.entries(), arg); ctx.state.remove(id); console.log(`${id}: removed from the registry`); return 0; }
     default: throw new Error(`unknown command "${cmd}"\n\n${HELP}`);
   }
+  } finally { owner?.release(); }
 }
 
 async function main(argv) {

@@ -442,3 +442,5 @@ runner usage, stdin bounds and clean installed-package imports/help.
 
 See [the evidence index](audit/plugin-ready/README.md) for the separate G8 live
 prerequisites, unavailable attestations and bounded qualification procedure.
+
+Direct task-service mutations acquire the namespace task-mutation owner through all asynchronous effects and release it on success or failure. They refuse artifact-pinned homes; those homes use the manifest-aware delivery adapter. CLI and delivery adapters borrow their existing live owner, checked against the same namespace, while inspect/list stay read-only.

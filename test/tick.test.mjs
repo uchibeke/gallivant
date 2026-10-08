@@ -2149,3 +2149,16 @@ test("a machine with no git identity stops the entry and names the two commands,
   assert.equal(runner.started.length, 0);
   assert.deepEqual(state.get(id).cursor, before, "nothing was consumed, which is why the stop and not a retry is the fix");
 });
+
+test("task runtime minimum records its source while tighter repository limits retain theirs", async () => {
+  for (const [repoLimit, allowance, expected, source] of [[90, 2, 2, "task"], [1, 2, 1, "repo"], [90, 90, 90, "repo"]]) {
+    const config = { ...CONFIG, repos: [{ repo: "acme/widget", run_timeout_minutes: repoLimit }] };
+    const w = world({}, { reviews: [review({ id: 1, by: BOT, bot: true, state: "CHANGES_REQUESTED", at: at(5) })] }, { config });
+    w.clock.advance(6); await w.tick.tick();
+    w.runner.state = () => ({ operations: {} });
+    w.state.update(w.id, { task: { deliveryAllowance: { budgetUsd: 5, runtimeMs: allowance * 60000 } } });
+    w.clock.advance(expected + 1); await w.tick.tick();
+    assert.equal(w.runner.current().killed, true);
+    assert.deepEqual([w.entry().timeout.limit, w.entry().timeout.source], [expected, source]);
+  }
+});
