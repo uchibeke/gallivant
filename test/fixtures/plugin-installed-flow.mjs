@@ -36,6 +36,7 @@ function world({ question = true, schedule = async () => {} } = {}) {
       const home = join(root, s.account), checkout = join(home, "checkout"); mkdirSync(checkout, { recursive: true });
       writeFileSync(join(checkout, "package.json"), JSON.stringify({ packageManager: "npm@10.0.0", scripts: { test: "node --test", lint: "node --check index.mjs" } }));
       writeFileSync(join(checkout, "AGENTS.md"), "Verify with `npm test` and `npm run lint`.\n");
+      migrateRuntimeState({ home, manifest });
       const runners = new Map(), snapshots = new Map(), sources = new Map();
       const ctx = { home, config: { ...CONFIG, home, worktrees: join(home, "worktrees"), harness: { claude: { bin: harnessBin(home, "claude"), settings: null } }, deliverable: { ...CONFIG.deliverable, evaluator: "local", enabled: false }, reviewer: null },
         state: makeState(home), log: silentLog, clock: makeClock(), ownLogin: "me", credential: fakeCredential(), identity: fakeIdentity(), notify: fakeNotify(),
@@ -49,7 +50,7 @@ function world({ question = true, schedule = async () => {} } = {}) {
     assert.equal(repositoryId, "widget"); return { ...worlds.get(s.account) };
   };
   const store = createDeliveryStore(join(root, "delivery"));
-  const opts = { store, contextFor, schedule, secretsFor: () => ["private-provider-value"], authorize: async ({ identity, requiredScope }) => {
+  const opts = { manifest, store, contextFor, schedule, secretsFor: () => ["private-provider-value"], authorize: async ({ identity, requiredScope }) => {
     if (!["alice", "bob"].includes(identity)) throw Object.assign(new Error("unauthorized"), { code: "DELIVERY_AUTHORIZATION" });
     assert.ok(["task-delivery:read", "task-delivery:write"].includes(requiredScope)); return scope(identity);
   } };
@@ -646,4 +647,40 @@ test("installed operation receipts replay reordered objects through interrupted 
   assert.equal(calls, before);
   await w.opts.store.transaction(scope("alice"), async (data, save) => { data.operations.prepare.signature = createHash("sha256").update(JSON.stringify(["prepare", input])).digest("hex"); await save(data); });
   assert.deepEqual(await w.delivery.dispatch("prepare", input, "alice"), first);
+});
+
+
+test("installed delayed delivery mutations reject migrated or missing pins before intent and effects", async () => {
+  let wakes = 0;
+  const w = world({ question: false, schedule: async () => { wakes++; } });
+  const supplied = { ...manifest }, old = createTaskDelivery({ ...w.opts, manifest: supplied });
+  const task = await old.dispatch("prepare", prepare(), "alice");
+  const { ctx } = w.worlds.get("alice"), home = ctx.home;
+  const before = JSON.stringify(w.opts.store.read(scope("alice"))), beforeWakes = wakes;
+  const intakePath = join(home, "tasks", task.taskId, "intake.json"), intake = readFileSync(intakePath);
+  const next = { ...manifest, coreSha256: "b".repeat(64) };
+  migrateRuntimeState({ home, manifest: next });
+  supplied.coreSha256 = next.coreSha256; // A caller cannot change the captured artifact.
+  for (const [name, input] of [
+    ["prepare", prepare("delayed")], ["prepare", prepare()],
+    ["answer", { ...mutate(task, "answer"), answers: { "q-r-1": "Use CSV." } }],
+    ["resume", mutate(task, "resume")], ["validate", mutate(task, "validate")],
+    ["start", { ...mutate(task, "start"), run: true }],
+    ["control", { ...mutate(task, "control"), action: "cancel" }],
+  ]) {
+    await assert.rejects(old.dispatch(name, input, "alice"), { code: "COORDINATOR_PIN" });
+    assert.equal(existsSync(join(home, "daemon.lock")), false);
+    assert.equal(JSON.stringify(w.opts.store.read(scope("alice"))), before);
+    assert.deepEqual(readFileSync(intakePath), intake);
+    assert.equal(ctx.state.entries().length, 0); assert.equal(wakes, beforeWakes);
+  }
+  assert.equal((await old.dispatch("inspect", { taskId: task.taskId }, "alice")).taskId, task.taskId);
+  rmSync(join(home, "runtime-pin.json"));
+  await assert.rejects(old.dispatch("prepare", prepare("missing-pin"), "alice"), { code: "COORDINATOR_PIN" });
+  assert.equal(JSON.stringify(w.opts.store.read(scope("alice"))), before);
+  migrateRuntimeState({ home, manifest });
+  const started = await old.dispatch("start", { ...mutate(task, "start"), run: true }, "alice");
+  assert.equal(started.status, "started");
+  assert.throws(() => createTaskDelivery({ ...w.opts, manifest: undefined }), { code: "DELIVERY_VERSION" });
+  assert.throws(() => createTaskDelivery({ ...w.opts, manifest: { ...manifest, coreSha256: "invalid" } }), { code: "COORDINATOR_PIN" });
 });

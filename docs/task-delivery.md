@@ -42,6 +42,7 @@ Command Center SSE/history, statuses and controls retain their version-1 shapes.
 import { createTaskDelivery } from 'gallivant/task-delivery';
 import { createDeliveryStore } from 'gallivant/task-delivery/store';
 const delivery = createTaskDelivery({
+  manifest: emittedRuntimeManifest, // load this installed artifact's runtime.json
   authorize: aportAuthorize, // validate OAuth/audience/region/repository on EVERY call
   contextFor: aportScopedNodeContext,
   store: createDeliveryStore('/durable/preview/delivery'),
@@ -79,6 +80,13 @@ scheduling. Backup, migration and coordinator wakes therefore refuse concurrent
 ownership; retry the same operation ID after the owner releases. The scheduler
 must enqueue a future wake, never execute a coordinator inline. Read operations
 do not acquire this owner or create provider pollers.
+The dispatcher requires its own emitted `runtime.json` as `manifest`; it captures
+that identity at construction and checks the exact installed version/digest under
+ownership on every mutation, including receipt replays. Migrate each scoped home
+before enabling requests. After migration to another artifact, retire old request
+handlers; never substitute the namespace's new pin as an old handler's manifest.
+Consumers upgrading from the earlier dispatcher signature must add this manifest
+and initialize the scoped pin. Reads do not validate or replace that pin.
 
 All mutations require operationId and expectedRevision; prepare uses revision 0.
 Preparation does not authorize implementation. Start requires `run:true` and the

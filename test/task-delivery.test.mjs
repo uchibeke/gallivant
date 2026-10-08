@@ -47,7 +47,7 @@ test("scoped list limits and truncation depend only on currently authorized task
       if (i >= 101) authorizedIds.push(id);
     }
     let repositories = ["widget"];
-    const delivery = createTaskDelivery({
+    const delivery = createTaskDelivery({ manifest: { coreVersion: CORE_VERSION, operationVersion: 1, taskVersion: 1, executionVersion: 1, coreSha256: "a".repeat(64) },
       authorize: async () => ({ tenant: "tenant", account: "alice", region: "ca", environment: "preview", scopes: ["task-delivery:read"], repositories }),
       store: { read: async () => ({ version: 1, tasks }), transaction: () => assert.fail("list cannot mutate state") },
       schedule: () => assert.fail("list cannot schedule provider reconciliation"),
@@ -79,7 +79,7 @@ test("scoped list limits and truncation depend only on currently authorized task
 
 test("capability discovery paginates only authorized repositories and reauthorizes every cursor", async () => {
   let repositories = Array.from({ length: 205 }, (_, i) => `repo-${String(i).padStart(3, "0")}`).reverse();
-  const contexts = [], delivery = createTaskDelivery({
+  const contexts = [], delivery = createTaskDelivery({ manifest: { coreVersion: CORE_VERSION, operationVersion: 1, taskVersion: 1, executionVersion: 1, coreSha256: "a".repeat(64) },
     authorize: async ({ identity }) => ({ tenant: "tenant", account: identity, region: "ca", environment: "preview", scopes: ["task-delivery:read"], repositories: identity === "alice" ? repositories : ["bob-only"] }),
     store: { read: () => assert.fail("capabilities cannot read tasks"), transaction: () => assert.fail("capabilities cannot mutate tasks") },
     schedule: () => assert.fail("capabilities cannot schedule providers"),
