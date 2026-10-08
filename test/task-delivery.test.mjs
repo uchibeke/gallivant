@@ -195,3 +195,13 @@ test("implementation artifact identities survive source saturation in task and e
     assert.equal(many.artifacts[99].id, "result-98");
   }
 });
+
+
+test("task list summaries stay compact with saturated question pages", async () => {
+  const { taskListSummary } = await import("../lib/task_delivery_view.mjs");
+  const view = { taskId: "task-" + "a".repeat(24), repo: "acme/widget", status: "needs-input", questions: Array.from({ length: 128 }, (_, i) => ({ id: `q-${i}`, text: "x".repeat(300) })) };
+  const page = Array.from({ length: 100 }, () => taskListSummary(view));
+  assert.ok(Buffer.byteLength(JSON.stringify(page)) < 65536);
+  assert.equal(page[0].questionCount, 128); assert.equal(page[0].questions, undefined);
+  assert.equal(modelSummary(view).questions.length, 128);
+});

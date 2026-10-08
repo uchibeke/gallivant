@@ -296,6 +296,9 @@ test("installed MCP without UI exposes saved questions and answers using model-v
     assert.deepEqual(JSON.parse(prepared.content[0].text), model);
     const inspected = await client.callTool({ name: "task_inspect", arguments: { taskId: model.taskId } });
     assert.deepEqual(inspected.structuredContent.questions, model.questions);
+    const listed = await client.callTool({ name: "task_list", arguments: {} });
+    assert.equal(listed.structuredContent.tasks[0].questions, undefined);
+    assert.equal(listed.structuredContent.tasks[0].questionCount, model.questions.length);
     const answer = await client.callTool({ name: "task_answer", arguments: { ...mutate(inspected.structuredContent, "model-answer"), answers: { [model.questions[0].id]: "Use CSV." } } });
     assert.equal(answer.structuredContent.status, "ready");
     assert.deepEqual(answer.structuredContent.questions, []);
@@ -762,4 +765,31 @@ test("installed MCP blocked mutations and inspection expose redacted recovery", 
     assert.deepEqual(inspected.structuredContent.recovery, model.recovery);
     assert.deepEqual(JSON.parse(prepared.content[0].text), model);
   } finally { await client.close(); await server.close(); }
+});
+
+
+test("installed acknowledgement admission precedes effects and preserves task discovery near byte capacity", async () => {
+  const w = world(); await w.contextFor(scope("alice"), "widget");
+  const bound = w.worlds.get("alice"), original = bound.taskOptions.prepare;
+  let calls = 0; bound.taskOptions.prepare = async (...args) => { calls++; return original(...args); };
+  const fill = headroom => w.opts.store.transaction(scope("alice"), (data, save) => {
+    data.padding = "";
+    data.padding = "x".repeat(32 * 1024 * 1024 - headroom - Buffer.byteLength(JSON.stringify(data, null, 2) + "\n"));
+    return save(data);
+  });
+  const input = prepare("near-limit", request + "\n" + "x".repeat(8000));
+  await fill(1000);
+  await assert.rejects(w.delivery.dispatch("prepare", input, "alice"), { code: "DELIVERY_CAPACITY" });
+  assert.equal(calls, 0); assert.equal(Object.keys(w.opts.store.read(scope("alice")).operations).length, 0);
+  await fill(6000);
+  const task = await w.delivery.dispatch("prepare", input, "alice");
+  assert.ok(Buffer.byteLength(JSON.stringify(task)) > 6000);
+  const restarted = createTaskDelivery(w.opts);
+  assert.equal((await restarted.dispatch("inspect", { taskId: task.taskId }, "alice")).taskId, task.taskId);
+  assert.equal((await restarted.dispatch("list", {}, "alice")).tasks[0].taskId, task.taskId);
+  assert.equal((await restarted.dispatch("prepare", input, "alice")).taskId, task.taskId);
+  assert.equal(calls, 1);
+  const receipt = w.opts.store.read(scope("alice")).operations[input.operationId];
+  assert.equal(receipt.result, undefined); assert.equal(receipt.acknowledgementReserve, undefined);
+  assert.equal(receipt.status, "acknowledged");
 });
