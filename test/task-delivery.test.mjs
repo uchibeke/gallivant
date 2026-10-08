@@ -171,3 +171,27 @@ test("delivery store size limits preserve saved receipts and reject oversized le
   truncateSync(file, MAX_DELIVERY_STORE_BYTES + MAX_CANCELLATION_STORE_BYTES + 1);
   assert.throws(() => store.read(scope), { code: "DELIVERY_CAPACITY" });
 });
+
+
+test("blocked model summaries expose bounded redacted recovery without raw diagnostics", () => {
+  const view = taskView({ status: "blocked", errorCode: "TASK_READINESS_DENIED", failures: Array(20).fill("secret-token " + "x".repeat(900)), nextAction: "Fix secret-token " + "y".repeat(900), readiness: { report: "private report" }, validation: { output: "private diagnostic" } }, { secrets: ["secret-token"] });
+  const summary = modelSummary(view);
+  assert.equal(summary.recovery.code, "TASK_READINESS_DENIED");
+  assert.equal(summary.recovery.reasons.length, 5);
+  assert.equal(summary.recovery.reasons[0].length, 500);
+  assert.equal(summary.recovery.nextAction.length, 500);
+  assert.doesNotMatch(JSON.stringify(summary), /secret-token|private report|private diagnostic/);
+  assert.equal(modelSummary({ status: "blocked", errorCode: "private error", failures: [{}] }).recovery.code, "TASK_BLOCKED");
+});
+
+test("implementation artifact identities survive source saturation in task and evidence views", () => {
+  for (const count of [99, 150]) {
+    const task = { artifacts: [{ id: "brief", hash: "brief-hash" }, ...Array.from({ length: count }, (_, i) => ({ id: `source-${i}`, hash: `s-${i}` }))] };
+    const view = taskView(task, { result: { files: [{ path: "output.csv", afterHash: "output-hash" }] } });
+    assert.equal(view.artifacts.length, 100);
+    assert.deepEqual(evidenceSummary(view).artifacts.slice(0, 2), [{ id: "brief", hash: "brief-hash" }, { id: "result-0", hash: "output-hash" }]);
+    const many = taskView(task, { result: { files: Array.from({ length: 150 }, (_, i) => ({ path: `out-${i}`, hash: `h-${i}` })) } });
+    assert.equal(many.artifacts.length, 100);
+    assert.equal(many.artifacts[99].id, "result-98");
+  }
+});

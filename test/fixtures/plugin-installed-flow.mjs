@@ -742,3 +742,24 @@ test("installed cancellation reserve survives full ordinary receipts and lost wa
   await assert.rejects(w.delivery.dispatch("control", { ...input, operationId: "second-cancel" }, "alice"), { code: "DELIVERY_CAPACITY" });
   await assert.rejects(w.delivery.dispatch("control", input, "bob"), { code: "DELIVERY_NOT_FOUND" });
 });
+
+
+test("installed MCP blocked mutations and inspection expose redacted recovery", async () => {
+  const w = world(); await w.contextFor(scope("alice"), "widget");
+  w.worlds.get("alice").taskOptions.prepare = async () => { throw Object.assign(new Error("Repair configuration private-provider-value"), { code: "TASK_INPUT" }); };
+  const server = new Server({ name: "blocked-flow", version: "1" }, { capabilities: { tools: {} } });
+  await registerTaskDelivery(server, { delivery: w.delivery, identityFor: async () => "alice" });
+  const client = new Client({ name: "consumer", version: "1" }), [a, b] = InMemoryTransport.createLinkedPair();
+  await server.connect(a); await client.connect(b);
+  try {
+    const prepared = await client.callTool({ name: "task_prepare", arguments: prepare() });
+    const model = prepared.structuredContent;
+    assert.equal(model.status, "blocked"); assert.equal(model.recovery.code, "TASK_INPUT");
+    assert.match(model.recovery.reasons[0], /Repair configuration/);
+    assert.match(model.recovery.nextAction, /resolve the reported failure/);
+    assert.doesNotMatch(JSON.stringify(model), /private-provider-value/);
+    const inspected = await client.callTool({ name: "task_inspect", arguments: { taskId: model.taskId } });
+    assert.deepEqual(inspected.structuredContent.recovery, model.recovery);
+    assert.deepEqual(JSON.parse(prepared.content[0].text), model);
+  } finally { await client.close(); await server.close(); }
+});
