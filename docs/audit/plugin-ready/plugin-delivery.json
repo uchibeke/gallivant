@@ -18,14 +18,14 @@
       "2b4514fb27fcb493e62bfed913fffc204215f155",
       "96e81031516bdf6663dd3b97ac39b8f57022568b"
     ],
-    "testedSourceCommit": "28e5b2702ad63a29eef7051dd5d414a2bf8e7498"
+    "testedSourceCommit": "0ad7f5a3459527642e593610055a019914a21bb4"
   },
   "artifact": {
     "coreArtifact": "gallivant-0.2.0.tgz",
-    "coreSha256": "ee434a25977779b755221a7cbc3dcda7de874b688be6e3ea35373a6a951195ba",
+    "coreSha256": "3503c76a6a02d64b1e77da703d27e40a69e30f1c694cd06d7eb119742a1e95d2",
     "hashes": {
       "plugin": "8753892ceb5552fc37ba011929830f4c754d717f8d8031e31fb9b4935b465e1a",
-      "runtime": "55d768c37368f0849301e0a491b243ea8651f62e9ad36ca9c7985fc0ceeec6ff",
+      "runtime": "81a65205002caad53ce0baa163d0b30cd273124ea22b0182dc1f2be8c4eb082b",
       "operations": "86e62501fa7a3d6d29e26830cd43b2648b32978912d2096a8690ed2e2fab0f86"
     },
     "dependencyLockSha256": "c0f2f9bb3ad4d1bb8356c1162a8e71109534d747a5bc3182d4cce6457760c6d8",
@@ -48,7 +48,7 @@
       "docs/openai-agents.md": "38f162e4d4918bdab372be804e1a06a6a9582493c941f07799f97324f4637db2",
       "docs/prd.md": "c018adab1b0df85f0c4fcec3a05b2b03911ded645987a21c13b61df0dcb41594",
       "docs/preparation.md": "814ad941a8291accc4036eb022edd64ed9e3a1e39f985a9f35b25f7eeae8ee9f",
-      "docs/task-delivery.md": "c99e76644dab88245d2a96a16651f3764320eafd2ec5cef11087bf44cad0de1e",
+      "docs/task-delivery.md": "45d4eb11cb3320e1dce5febd1d1676fae725feb45f14ab17074751d9bf34bf56",
       "docs/tasks.md": "ca7b8d5f332c42d0518ab9e4524c865a73ec57534d82a88392d7df93ebff6c2c",
       "lib/aport.mjs": "5c046abda8964a0439ee699bf658b9a00fdd7527884848f7fb22c3fe6c9e1d74",
       "lib/attribution.mjs": "cddb3eafe44f1dee26999a987ad9b1c62332cc9eb1ee17925cd2b961a9ccac17",
@@ -68,7 +68,7 @@
       "lib/commands/serve.mjs": "c53a41d97c614ca09d7411973522b7ca4e9adf4e0bb608c61c4ed405a547135e",
       "lib/commands/start.mjs": "12e7f26aff07049f9845e0842356a0e7b7b1dc2f058bfc81cb456312b6425dc4",
       "lib/commands/status.mjs": "41ededea71ae3b2bcf986511720c2a397af7abedcd96b2966674840a2800d6cc",
-      "lib/commands/task.mjs": "6acb1927df1aa6326678e4f7c4b5b0e439f10477ee24ef09df1579d7be49ef41",
+      "lib/commands/task.mjs": "b2028e11673745a89f44f80c4a9a764cca13572ea84cc57514c6fdd15841d226",
       "lib/commands/up.mjs": "363de931da37374460bf53009d8a8ca1adf99ca47130d02c4814037f78e933a9",
       "lib/commands/why.mjs": "bad1866f6f7af98640f546ff0850a057a2ac1c416cbcfae8a8c3a0cf1997e69e",
       "lib/config.mjs": "64a11002c4963648966db9a8c04f44da8cbfde81698800932d4e854bc4f1b097",
@@ -77,7 +77,7 @@
       "lib/control.mjs": "a2d922af5cd19d5ac28b4d61f55b3b56159b4fe9958fd5a9627e9fdd2c8625b4",
       "lib/coordinator.mjs": "fa6f8ea55df5f326e54fb853bf49ee48db8bb94e88f664ea315497a596584d3a",
       "lib/credential.mjs": "61ac0040b5e41ce299f59d80081fbfdd7537745453300c79d2090f6f173bc46f",
-      "lib/daemon.mjs": "89af1c374d8e81471e7db728fc4ae7ddd7ebf9b0c9e6c235a93088c61898f86e",
+      "lib/daemon.mjs": "70bcf633b18b0687dd3b113438ae0fc73daeaa35ba22ee0c8d690899c703c2a7",
       "lib/deliverable.mjs": "7d3c824ac1d8cb6032b1814cdf4e0dc156e4d6d01382bebc0ab1647e4abfb678",
       "lib/events.mjs": "776867f9a280ea179f2be8f6e570c88d468ebb5500db8864041fd29b01202e27",
       "lib/execution_input.mjs": "9fd16569f9ac9286ff4990a7bc442114ebff681bcd43972fccba033e66e02cf1",
@@ -86,7 +86,7 @@
       "lib/execution_preparation.mjs": "13360c3b30d856212cfd3769eef2f23bad10115c27d2db51c691479119d4391e",
       "lib/execution_result.mjs": "b13f5169e3fa541f5cc1f8c4e87e401436849a5864ea514231246847c71c2f41",
       "lib/execution.mjs": "7c2d2970000824dbc55fc474b0518114d7951eb4bbb5652f2e81facf7ff0e859",
-      "lib/fs.mjs": "d7eb5f7ef5b74d03bf75434db3c4b2d8017c01b7d3adbe902ad0d0ea0483176a",
+      "lib/fs.mjs": "e16a9deec34b83ddb7caeee5a889bd0bb54f4124944f5c85776067546552cf54",
       "lib/gh.mjs": "04f7b604178dc964215310fcb52cbc5363b74118e45cbaa70e30b860b9bc24b5",
       "lib/git.mjs": "fd2e6a0775f908ccacf18709a00c703c2506f1c3226b662ee0321d79133b7498",
       "lib/harness_log.mjs": "0e4d2a6214ac6bec21777b86897a12513d3f42c58e1be7e7372d9f9f0f9f4cbd",
@@ -106,7 +106,7 @@
       "lib/openai_agents_input.mjs": "3b012e8c7c51d9d007762e1f849ea3caaf7bbf9ab128a6f5c916bff195b6b83c",
       "lib/openai_agents_sources.mjs": "9d61867d9f86901b084f37d4da6c344df24a0ff71b7ab0537273aad4b18f1132",
       "lib/openai_agents.mjs": "3b67fe601cb8ad268f2d997d55e19bad4aca1f016293595036825892d1991702",
-      "lib/plugin_package.mjs": "70085ab76621040a054a103218b5178b93736fb3c37cc2b5c872e926edf1f73a",
+      "lib/plugin_package.mjs": "ce78b12f6a368f3f88c9c52737b5139c8e4935b8ead4e71db44d71db2a1dc504",
       "lib/prd.mjs": "3e8bd68d62e8e61fe3624cdcc76e27e78e079d77e25a1484aafa7f5ca6f6ffe3",
       "lib/preparation_codex.mjs": "d1fcd4d1ec49b3a086622ec2777fa231b4fbc9c0d6e13bb90702d27b785fc447",
       "lib/probe.mjs": "191639a18233649d523effbf2411d100946e6463d70f380c41aec8301bb42197",
@@ -119,7 +119,7 @@
       "lib/run.mjs": "3682818ab95bf3b27c262449aa521be094caee9c8f133e94740923ebafb91315",
       "lib/runtime_dependencies.mjs": "6d25b972c116026643f348dc55586009d2746f68b99f47d450b2a3ef35625949",
       "lib/runtime_node.mjs": "61b5a0b91403a606f42d0f39f1c2e4697903d082d4dad1d62c0381e6b79b90cb",
-      "lib/runtime_state.mjs": "e5d923fb03bd86b6dc638c9e9e52acb75917fb816a855d39197d1dc678482556",
+      "lib/runtime_state.mjs": "416193381da9b26c3e03b67176fb2266b26e4860604565f70898e5e195659cff",
       "lib/sources/index.mjs": "88e1550751e9f52c82e94085bcb77bbd2b80466c9e2192670593f12894c4a4ec",
       "lib/sources/prd.mjs": "b26425213d537d8bf640abee1046481925de30d676fdb9b6a6b9239cdc50effd",
       "lib/start_contract.mjs": "e154f36dcf54c93b4308a93d8926dca8f28358c4e41234dc684008706ea23ab9",
@@ -562,25 +562,25 @@
       {
         "command": "npm test",
         "exitCode": 0,
-        "tests": 1401,
-        "pass": 1401,
+        "tests": 1403,
+        "pass": 1403,
         "fail": 0,
-        "log": "/private/tmp/pr12-repo-host-unit.log"
+        "log": "/private/tmp/pr12-cli-output-unit.log"
       },
       {
         "command": "npm run lint",
         "exitCode": 0,
-        "log": "/private/tmp/pr12-repo-host-lint.log"
+        "log": "/private/tmp/pr12-cli-output-lint.log"
       },
       {
         "command": "npm run test:plugin-package",
         "exitCode": 0,
         "consumerFlowTests": 29,
-        "installedConformanceTests": 436,
+        "installedConformanceTests": 438,
         "fail": 0,
-        "log": "/private/tmp/pr12-repo-host-package.log",
-        "consumerEvidence": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/task-plugin-consumer-SHuTfY/evidence.json",
-        "conformanceLog": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/task-plugin-consumer-SHuTfY/conformance.log"
+        "log": "/private/tmp/pr12-cli-output-package.log",
+        "consumerEvidence": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/task-plugin-consumer-OEJA00/evidence.json",
+        "conformanceLog": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/task-plugin-consumer-OEJA00/conformance.log"
       },
       {
         "command": "git diff --check",
@@ -590,10 +590,10 @@
     ],
     "verifiedPayloadFiles": 141,
     "logSha256": {
-      "/private/tmp/pr12-repo-host-unit.log": "f87541244d3bacc965b36489b50029aa0e73aeb5d13286ec393074e8a6b7fdd2",
-      "/private/tmp/pr12-repo-host-lint.log": "2f32bd854b16ced20ab71be2afd3673b887efc4815c6e55ea7b941ebc5aa8a0b",
-      "/private/tmp/pr12-repo-host-package.log": "06998a150c6da787bf70ac1c17980f694d06a8a88668dd821013851b3f08160d",
-      "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/task-plugin-consumer-SHuTfY/conformance.log": "c464beea7d308903e4b2289ba76ab05d9695ca9f4bca193fb2976d10ee4618d0"
+      "/private/tmp/pr12-cli-output-unit.log": "eeff40b69496d380e2b7d3bc4d988bd48c9a29be251e9ce315e907556930f321",
+      "/private/tmp/pr12-cli-output-lint.log": "2f32bd854b16ced20ab71be2afd3673b887efc4815c6e55ea7b941ebc5aa8a0b",
+      "/private/tmp/pr12-cli-output-package.log": "746d4d569036ff6ca6f419a8a2c5037b21c42a5459d8ad1db870ba9a922cb8f5",
+      "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/task-plugin-consumer-OEJA00/conformance.log": "1d7cbaed030265cffb58b93913f4b82c28a69cd713595104985342e6e27bacfe"
     },
     "hostEvidence": false,
     "fixturePurpose": "Deterministic unpaid installed-artifact compatibility; no actual installed host or live provider qualification",
@@ -1037,29 +1037,8 @@
     "externalPrerequisites": "Unchanged unavailable deployment and live provider/host evidence retained; no blocked call repeated"
   },
   "canonicalBackupReviewFollowup": {
-    "reviewId": 5443970880,
-    "reviewedCommit": "c169957f1aeebdfbb99bd6489d56b04af189c99e",
-    "items": [
-      {
-        "commentId": 4208263506,
-        "implementation": "lib/runtime_state.mjs canonicalPath and backupRuntimeState",
-        "test": "test/runtime-delivery.test.mjs backup canonicalizes symlink ancestors before checking namespace separation",
-        "rule": "A backup must remain physically outside the namespace, including through existing symlink ancestors"
-      },
-      {
-        "commentId": 4208263518,
-        "implementation": "lib/plugin_package.mjs publicLocalHost",
-        "test": "test/plugin-package.test.mjs public URL matrix local namespace",
-        "rule": "Public destinations cannot use multicast DNS local names"
-      }
-    ],
-    "externalPrerequisites": "Unchanged unavailable deployment and live provider/host evidence retained; no blocked call repeated",
-    "initialVerification": {
-      "unitLog": "/tmp/plugin-path-unit-initial.log",
-      "packageLog": "/tmp/plugin-path-package-initial.log",
-      "conformanceLog": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/task-plugin-consumer-7qGAC2/conformance.log",
-      "result": "Each full suite had one obsolete dangling-symlink error expectation; corrected EEXIST to ENOENT while preserving path-content assertions; 21 focused runtime tests passed before full reruns"
-    }
+    "historicalEvidence": "96b2cdad116ab4d1434e10480a877c77f738a5a2:docs/audit/plugin-ready/plugin-delivery.json canonicalBackupReviewFollowup",
+    "status": "Prior canonical backup path implementation and test evidence retained in Git history; current verification includes these regressions."
   },
   "controlsAndAssetsReviewFollowup": {
     "historicalEvidence": "483626fe8d1f0202a8ddfdcd5210994ee8973821:docs/audit/plugin-ready/plugin-delivery.json controlsAndAssetsReviewFollowup",
@@ -1147,5 +1126,22 @@
       "test/task-delivery.test.mjs model repository identity is bounded and uses the redacted saved view",
       "test/fixtures/plugin-installed-flow.mjs installed scoped list and MCP results discover later authorized tasks and report authorized truncation"
     ]
+  },
+  "cliOutputReview": {
+    "reviewId": 5450490014,
+    "commentIds": [
+      4213820709,
+      4213820717
+    ],
+    "implementation": [
+      "lib/commands/task.mjs taskCommand acquires task mutation owner; pinned homes require delivery adapter",
+      "lib/runtime_state.mjs acquireMaintenance excludes daemon and CLI writers",
+      "lib/plugin_package.mjs buildPluginPackage uses shared canonicalPath before stage creation"
+    ],
+    "tests": [
+      "test/runtime-delivery.test.mjs CLI mutations exclude maintenance through async work and release ownership on failure",
+      "test/plugin-package.test.mjs package outputs cannot enter the source root through fresh paths or symlink aliases"
+    ],
+    "migration": "docs/task-delivery.md CLI namespace and package output requirements"
   }
 }
