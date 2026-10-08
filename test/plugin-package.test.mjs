@@ -241,3 +241,19 @@ for (const transient of ["lib/tasks.mjs", "node_modules/smol-toml/dist/index.js"
   assert.throws(() => buildPluginPackage(input), { code: "PACKAGE_SOURCE", message: /Packed.*bytes differ/ });
   assert.equal(existsSync(input.out), false);
 });
+
+for (const missing of ["node_modules/smol-toml/dist/index.js", "node_modules/smol-toml/package.json"]) test(`public packaging requires every proven bundled path: ${missing}`, t => {
+  gitFixture(t);
+  const original = childProcess.execFileSync;
+  t.mock.method(childProcess, "execFileSync", (file, args, options) => {
+    const result = original(file, args, options);
+    if (file !== "npm" || args[0] !== "pack") return result;
+    const packed = JSON.parse(result);
+    packed[0].files = packed[0].files.filter(file => file.path !== missing);
+    return JSON.stringify(packed);
+  });
+  syncBuiltinESMExports();
+  const input = fixture();
+  assert.throws(() => buildPluginPackage(input), { code: "PACKAGE_SOURCE", message: /complete committed proof/ });
+  assert.equal(existsSync(input.out), false);
+});

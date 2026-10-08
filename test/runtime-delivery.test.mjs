@@ -21,6 +21,9 @@ const remote = { transport: "remote", provider: "openai-agents", acceptance: "ac
 test("pre-registration intake and execution records retain their exact active artifact pin", async t => {
   const cases = [
     ["preparing before launch", `tasks/${taskId}/intake.json`, { status: "preparing", attempts: [] }],
+    ["ready dispatch intent before registry claim", `tasks/${taskId}/intake.json`, { status: "ready", dispatchIntent: { id: "acme/widget/task", digest: "approved" }, attempts: [] }],
+    ["blocked unknown dispatch", `tasks/${taskId}/intake.json`, { status: "blocked", dispatchIntent: { id: "acme/widget/task" }, attempts: [] }],
+    ["mismatched implementation acknowledgement", `tasks/${taskId}/intake.json`, { status: "started", dispatchIntent: { id: "acme/widget/task" }, implementation: { id: "other" }, attempts: [] }],
     ["validating", `tasks/${taskId}/intake.json`, { status: "validating", attempts: [] }],
     ["pending readiness on a ready task", `tasks/${taskId}/intake.json`, { status: "ready", readiness: { pending: true }, attempts: [] }],
     ["blocked local launch acknowledgement", `tasks/${taskId}/intake.json`, { status: "blocked", attempts: [{ settled: false, run: null }] }],
@@ -412,6 +415,7 @@ test("active legacy namespaces cannot receive a first artifact pin", () => {
   for (const pin of [undefined, null, false, 0]) for (const [path, data] of [
     ["state.json", { version: 1, entries: { active: { state: "running" } } }],
     [`tasks/${taskId}/intake.json`, { version: 1, status: "preparing", attempts: [] }],
+    [`tasks/${taskId}/intake.json`, { version: 1, status: "ready", dispatchIntent: { id: "acme/widget/task" }, attempts: [] }],
     ["runs/active/execution.json", { version: 1, current: null, operations: { work: { acceptance: "unknown" } } }],
   ]) {
     const home = tempHome(); writeJsonAtomic(join(home, path), data);
@@ -471,4 +475,12 @@ test("pending delivery receipts pin migration before intake and through wake ack
   const snapshot = tempHome();
   writeJsonAtomic(join(snapshot, "prds", "delivery", "e".repeat(64), "delivery.json"), { version: 99 });
   assert.equal(migrateRuntimeState({ home: snapshot, manifest }).active, false);
+});
+
+test("acknowledged historical dispatch intent does not permanently pin settled work", () => {
+  const home = tempHome(); migrateRuntimeState({ home, manifest });
+  writeJsonAtomic(join(home, "tasks", taskId, "intake.json"), { version: 1, status: "started", dispatchIntent: { id: "acme/widget/task" }, implementation: { id: "acme/widget/task" }, attempts: [] });
+  assert.equal(checkRuntimeState({ home, manifest }).active, false);
+  migrateRuntimeState({ home, manifest: update });
+  assert.equal(readJson(join(home, "runtime-pin.json")).coreSha256, update.coreSha256);
 });
