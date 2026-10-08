@@ -1,6 +1,7 @@
 name: Runtime portability
 on:
   push:
+    branches: [main]
   pull_request:
 permissions:
   contents: read
@@ -18,6 +19,16 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: ${{ matrix.node }}
+      - name: Install Linux verification sandbox
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes bubblewrap
+      - name: Select sandbox-supported macOS Git runtime
+        if: runner.os == 'macOS'
+        run: sudo xcode-select --switch /Library/Developer/CommandLineTools
+      - name: Verify native isolation before the suite
+        run: node test/verification-host.mjs
       - run: npm ci --ignore-scripts
       - run: npm run lint
       - run: npm test

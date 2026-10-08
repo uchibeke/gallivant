@@ -1,19 +1,42 @@
 # Node runtime and harness shells
 
+## Why this is needed
+
+A harness executable and the Node used by its Bash tools are separate choices.
+Earlier fixes made coordinator verification use a non-login POSIX shell and
+named the exact configured harness executable in each session. Neither prevented
+Claude's saved shell environment from selecting another Node installation.
+On an ARM64 Mac, that selected an x64 Node under Rosetta while the checkout had
+ARM64 native dependencies; sandbox reads also blocked the intended Node under
+the operator's version-manager directory.
+
+Native dependencies must match the Node process that installs and executes them,
+including its platform, architecture and supported ABI. Hardware architecture or
+a lockfile alone does not establish that match. Do not copy an alternative Rollup
+binary into `node_modules` or change the lockfile to hide a mismatched interpreter.
+
+## Shared runtime contract
+
 Gallivant's local implementation adapters prepend the directory containing the
 Node executable that launched Gallivant to PATH. Start and resume share this
 implementation. Executable discovery checks inherited PATH first, then the
-operator's login shell with `command -v`, then `/bin/sh`. Linux does not require
-zsh. Paths with spaces and apostrophes are shell-quoted.
+operator's login shell with `command -v`, then `/bin/sh`. Missing or empty PATH
+gets `/usr/bin:/bin` for the fallback lookup. Relative PATH entries do not grant
+executable discovery from the checkout. Linux does not require zsh. Paths with
+spaces and apostrophes are shell-quoted.
 
 Claude can rebuild PATH from a shell snapshot. Its SessionStart hook therefore
 appends the runtime path to `CLAUDE_ENV_FILE`, which Claude applies to subsequent
 Bash commands. This uses the documented
 [session environment mechanism](https://code.claude.com/docs/en/hooks#persist-environment-variables).
-The original settings and hooks are preserved; a private settings snapshot beside
-the operator's settings file is used for each dispatch. Original settings are not
-edited. Snapshot directories are named `runtime-*` and should only be removed
-after their associated processes finish.
+The original settings and hooks are preserved. Building or rebuilding a launch
+description creates no files. At actual dispatch the runner exclusively creates
+`runtime-settings.json` (0600) in its private run directory (0700), outside the
+agent checkout. Original settings are not edited. Exit and failed-launch handling
+remove owned snapshots; coordinator observation, settlement and the next launch
+also recover cleanup after a restart. Unknown process ownership or surviving tool
+processes retain the file until absence is confirmed. Tool-free preparation never
+receives this settings overlay or its hooks.
 
 PATH alone is insufficient when `blockReadsOutsideWorkingDirectories` prevents
 the shell from reaching a version-manager installation. The snapshot adds
@@ -39,13 +62,36 @@ libraries can still need operator-approved paths. Other harnesses receive the
 same initial PATH/cache contract but retain their own native shell behavior.
 Remote/cloud adapters run on another machine and are not assigned local paths.
 
+## Diagnosing a mismatch
+
+Run this in the affected harness's tool shell before installing dependencies:
+
+```sh
+command -v node npm npx pnpm
+node -p 'JSON.stringify({execPath:process.execPath,platform:process.platform,arch:process.arch,version:process.version,abi:process.versions.modules,cache:process.env.npm_config_cache})'
+```
+
+Compare the result with the selected runtime printed by the session hook. If it
+differs or a read is denied, preserve the error and fix the host runtime/access
+configuration first. Once the intended interpreter is accessible and selected,
+use the repository's documented locked install to rebuild any dependencies left
+by a different interpreter. This change does not repair existing `node_modules`
+automatically. Already-running sessions retain their launch environment; after
+installing the fix, restart the daemon and resume the same task through the normal
+controls so the next session invocation receives the new setup.
+
 ## Verification
 
 `node --test test/runtime-environment.test.mjs` exercises actual shell execution
 with a conflicting Node, all five local start/resume adapters, quoting, portable
-discovery, and preservation of security settings. `npm test` includes this file
+discovery, preservation of security settings, actual child-process cleanup,
+failed launches, restart recovery, and refusal of agent-writable snapshots.
+`npm test` includes this file
 and all existing suites, including remote adapter tests. The runtime-portability
-workflow runs the full suite on Ubuntu and macOS with Node 22 and 24.
+workflow runs the full suite on Ubuntu and macOS with Node 22 and 24. CI installs
+Bubblewrap on Linux and selects Command Line Tools on macOS before running
+`node test/verification-host.mjs`. This preflight must prove the real filesystem
+and network boundary; failing isolation never becomes an unsandboxed fallback.
 
 `GALLIVANT_RUNTIME_LIVE=yes node test/runtime-environment-live.mjs` is an opt-in
 Claude probe using configured authentication and guards. It allows one run with
