@@ -204,3 +204,26 @@ test("package outputs cannot enter the source root through fresh paths or symlin
     }
   }
 });
+
+for (const change of ["payload", "head", "status-failure"]) test(`public packaging rejects source changes during pack: ${change}`, t => {
+  gitFixture(t);
+  const original = childProcess.execFileSync;
+  let packed = false;
+  t.mock.method(childProcess, "execFileSync", (file, args, options) => {
+    if (packed && file === "git") {
+      if (change === "head" && args[0] === "rev-parse") return "b".repeat(40) + "\n";
+      if (args[0] === "status") {
+        if (change === "status-failure") throw new Error("post-pack status failed");
+        if (change === "payload") return " M lib/tasks.mjs\0";
+      }
+    }
+    const result = original(file, args, options);
+    if (file === "npm" && args[0] === "pack") packed = true;
+    return result;
+  });
+  syncBuiltinESMExports();
+  const input = fixture();
+  assert.throws(() => buildPluginPackage(input), { code: "PACKAGE_SOURCE" });
+  assert.equal(packed, true);
+  assert.equal(existsSync(input.out), false, "remove tarball and staged plugin on failed revalidation");
+});

@@ -833,3 +833,49 @@ test("installed cancellation retries recover crashes before registry writes and 
     assert.equal(existsSync(join(ctx.home, "daemon.lock")), false);
   }
 });
+
+test("installed interrupted resume and negative outcomes settle without repeating effects", async () => {
+  for (const name of ["resume", "validate", "start"]) {
+    const w = world({ question: false });
+    const task = await w.delivery.dispatch("prepare", prepare(), "alice");
+    const bound = w.worlds.get("alice"), { ctx } = bound;
+    const path = join(ctx.home, "tasks", task.taskId, "intake.json");
+    const intake = JSON.parse(readFileSync(path));
+    let effects = 0;
+    if (name === "resume") {
+      intake.status = "preparing";
+      bound.taskOptions.prepare = async (_ctx, saved) => { effects++; return JSON.stringify(draftFor(saved, { question: true })); };
+    } else if (name === "validate") {
+      intake.readiness = null;
+      bound.taskOptions.decideReady = async () => { effects++; return { ok: false, report: "fixture readiness denial" }; };
+    } else {
+      bound.taskOptions.dispatch = async () => { effects++; throw Object.assign(new Error("fixture dispatch refused"), { startUncertain: false }); };
+    }
+    writeJsonAtomic(path, intake);
+    const input = { ...mutate(task, `lost-${name}`), ...(name === "start" ? { run: true } : {}) };
+    const transaction = w.opts.store.transaction;
+    let crashed = false;
+    w.opts.store.transaction = (scope, fn) => transaction(scope, (data, save) => fn(data, async next => {
+      if (!crashed && next.operations[input.operationId]?.status === "acknowledged") {
+        crashed = true; throw new Error("outcome acknowledgement lost");
+      }
+      return save(next);
+    }));
+    await assert.rejects(w.delivery.dispatch(name, input, "alice"), /outcome acknowledgement lost/);
+    const saved = JSON.parse(readFileSync(path));
+    assert.ok(saved.revision > task.revision);
+    assert.equal(saved.status, name === "resume" ? "needs-input" : "blocked");
+    assert.equal(w.opts.store.read(scope("alice")).operations[input.operationId].status, "intent");
+    const before = readFileSync(path);
+    const recovered = await createTaskDelivery(w.opts).dispatch(name, input, "alice");
+    assert.equal(recovered.status, saved.status);
+    assert.equal(recovered.revision, saved.revision);
+    assert.equal(effects, 1);
+    assert.deepEqual(readFileSync(path), before);
+    const receipt = w.opts.store.read(scope("alice")).operations[input.operationId];
+    assert.equal(receipt.status, "acknowledged"); assert.equal(receipt.wakePending, false);
+    await createTaskDelivery(w.opts).dispatch(name, input, "alice");
+    assert.equal(effects, 1);
+    assert.equal(existsSync(join(ctx.home, "daemon.lock")), false);
+  }
+});
