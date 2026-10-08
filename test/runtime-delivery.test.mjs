@@ -6,6 +6,7 @@ import { checkRuntimeState, migrateRuntimeState, backupRuntimeState, restoreRunt
 import { createNodeCoordinator, createNodeOwnerStore } from "../lib/runtime_node.mjs";
 import { CORE_VERSION } from "../lib/task_delivery_contract.mjs";
 import { makeExecution } from "../lib/execution.mjs";
+import { cancelControl } from "../lib/control.mjs";
 import { makeState } from "../lib/state.mjs";
 import { writeJsonAtomic, readJson } from "../lib/fs.mjs";
 import { CONFIG, tempHome, makeClock, silentLog, fakeGh, fakeGit, fakeNotify } from "./helpers.mjs";
@@ -53,6 +54,40 @@ test("settled preparation, completed cancellation and collected execution allow 
   assert.equal(checkRuntimeState({ home, manifest }).active, false);
   migrateRuntimeState({ home, manifest: update });
   assert.equal(readJson(join(home, "runtime-pin.json")).coreSha256, update.coreSha256);
+});
+
+test("confirmed registry cancellations release the pin only after execution and controls settle", async () => {
+  const home = tempHome(), state = makeState(home), id = "acme/widget/cancelled";
+  migrateRuntimeState({ home, manifest });
+  writeJsonAtomic(join(home, "state.json"), { version: 1, entries: { [id]: {
+    id, state: "running", dispatch_stopped: "cancellation-requested",
+    control: { action: "cancel", status: "queued" }, last: { run: "owned" },
+  } } });
+  const ledger = join(home, "runs/cancelled/execution.json");
+  const job = { id: "owned", execution: { ...remote, providerState: "cancelled" } };
+  writeJsonAtomic(ledger, { version: 1, current: job, operations: {} });
+  let confirmed = false;
+  const ctx = { state, clock: makeClock(), log: silentLog, runnerFor: () => ({ current: () => job, cancel: async () => ({ confirmed }) }) };
+  await cancelControl(ctx, id);
+  assert.equal(state.get(id).reason, "cancellation-requested");
+  assert.throws(() => migrateRuntimeState({ home, manifest: update }), { code: "RUNTIME_ACTIVE_PIN" });
+  state.update(id, { control: { action: "cancel", status: "queued" } }); confirmed = true;
+  await cancelControl(ctx, id);
+  assert.equal(state.get(id).state, "needs-human");
+  assert.equal(state.get(id).reason, "cancelled");
+  for (const execution of [{ ...remote, providerState: "running" }, { ...remote, collected: false }, { ...remote, acceptance: "unknown" }]) {
+    writeJsonAtomic(ledger, { version: 1, current: { ...job, execution }, operations: {} });
+    assert.throws(() => migrateRuntimeState({ home, manifest: update }), { code: "RUNTIME_ACTIVE_PIN" });
+  }
+  writeJsonAtomic(ledger, { version: 1, current: job, operations: {} });
+  state.update(id, { control: { action: "recheck", status: "queued" } });
+  assert.throws(() => migrateRuntimeState({ home, manifest: update }), { code: "RUNTIME_ACTIVE_PIN" });
+  state.update(id, { control: { action: "cancel", status: "applied" } });
+  assert.equal(checkRuntimeState({ home, manifest }).active, false);
+  migrateRuntimeState({ home, manifest: update });
+  assert.equal(readJson(join(home, "runtime-pin.json")).coreSha256, update.coreSha256);
+  assert.equal(state.get(id).reason, "cancelled", "migration preserves retained cancellation history");
+  assert.equal(existsSync(join(home, "daemon.lock")), false);
 });
 
 for (const provider of ["openai-agents", "codex-cloud"]) test(`${provider} startup keyset reconciliation survives removed entries and restarts a partial sweep`, async () => {
