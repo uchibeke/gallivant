@@ -377,6 +377,31 @@ for (const provider of ["openai-agents", "codex-cloud"]) test(`${provider} insta
   await makeExecution(options).cancel(); await assert.rejects(makeExecution(options).continue({ ...input, operationId: "later" }), { code: "EXECUTION_STOPPED" }); assert.equal(paid, 1);
 });
 
+test("coordinator renews a consumed one-shot wake after a slow advance", async () => {
+  const store = createNodeOwnerStore({ home: tempHome(), durable: true });
+  let now = 0, nextWake = null, advances = 0, finish, entered;
+  const started = new Promise(resolve => { entered = resolve; });
+  const coordinator = createCoordinator({ store, intervalMs: 10, clock: { now: () => now },
+    schedule: async at => { nextWake = at; },
+    advance: async () => {
+      advances++;
+      if (advances === 1) { entered(); await new Promise(resolve => { finish = resolve; }); }
+      return advances;
+    } });
+  const first = coordinator.wake();
+  await started;
+  assert.equal(nextWake, 10);
+  now = nextWake; nextWake = null; // One-shot scheduler consumes even a rejected callback.
+  await assert.rejects(coordinator.wake(), /already running/);
+  assert.equal(nextWake, null);
+  now = 25; finish();
+  assert.equal(await first, 1);
+  assert.equal(nextWake, 35, "completion renews the wake from the current time");
+  now = nextWake; nextWake = null;
+  assert.equal(await coordinator.wake(), 2);
+  assert.equal(nextWake, 45);
+});
+
 test("coordinator persists wake before advance, excludes duplicates and rejects stale fencing", async () => {
   const home = tempHome(), store = createNodeOwnerStore({ home, durable: true });
   let finish, advances = 0, scheduled = false;

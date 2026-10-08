@@ -143,7 +143,7 @@ for (const provider of ["openai-agents", "codex-cloud"]) test(`${provider} start
   for (let i = 0; i < 3; i++) await coordinator().wake();
   assert.equal(lookups.length, 4, "a completed startup sweep returns to saved provider backoff");
   assert.equal(submits, 5, "unknown acceptance must never purchase another dispatch");
-  assert.equal(wakes, 9);
+  assert.equal(wakes, 17);
 });
 
 test("bounded chain batches ignore history and rotate durably while active chains leave the set", async () => {
@@ -300,7 +300,7 @@ test("delayed and repeated coordinator wakes revalidate the pin under ownership 
   assert.equal(readJson(join(home, "coordinator.json")).cursor, before.checkpoint.cursor);
   assert.equal(existsSync(join(home, "daemon.lock")), false);
   const current = createNodeCoordinator({ ctx, store, manifest: update, schedule: async () => { schedules++; } });
-  await current.wake(); assert.equal(schedules, before.schedules + 1);
+  await current.wake(); assert.equal(schedules, before.schedules + 2);
 });
 
 
