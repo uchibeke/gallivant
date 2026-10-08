@@ -365,12 +365,15 @@ test("partial answers retain context while unsafe, oversized or changed selectio
   assert.equal(partial.status, "needs-input"); assert.equal(partial.draft.current, false); assert.equal(calls, 1);
   assert.deepEqual(partial.questions.map(q => q.id), ["q-r-2"]);
   const store = taskStore(w.home), saved = store.read(first.taskId);
-  for (const context of [null, [1], [".env"], [".config/secret.md"], ["../secret"], ["docs/alias.md"], ["docs/binary.md"], ["docs/missing.md"], ["docs/large.md"]]) {
-    await assert.rejects(() => w.service.answer({ taskId:first.taskId, expectedRevision:partial.revision, operationId:"final-context", answers:{"q-r-2":"Reuse the formatter."}, context }), e => e.version === 1);
+  w.ctx.taskSecrets = ["selected-private-value"];
+  writeFileSync(join(w.checkout, "docs/private.md"), "selected-private-value");
+  await assert.rejects(w.service.answer({ taskId: first.taskId, expectedRevision: partial.revision, operationId: "commands", answers: { "q-r-2": "Reuse formatter." }, verifyCommands: null }), { taskEffects: "none" });
+  for (const context of [null, [1], [".env"], [".config/secret.md"], ["../secret"], ["docs/alias.md"], ["docs/binary.md"], ["docs/missing.md"], ["docs/large.md"], ["docs/private.md"]]) {
+    await assert.rejects(() => w.service.answer({ taskId:first.taskId, expectedRevision:partial.revision, operationId:"final-context", answers:{"q-r-2":"Reuse the formatter."}, context }), e => e.version === 1 && e.taskEffects === "none");
     assert.deepEqual(store.read(first.taskId), saved); assert.equal(calls, 1);
   }
   writeFileSync(join(w.checkout, "docs/one.md"), "Changed accepted context.");
-  await assert.rejects(() => w.service.answer({ taskId:first.taskId, expectedRevision:partial.revision, operationId:"changed-context", answers:{"q-r-2":"Reuse the formatter."}, context:["docs/one.md"] }), { code:"TASK_CONFLICT", version:1 });
+  await assert.rejects(() => w.service.answer({ taskId:first.taskId, expectedRevision:partial.revision, operationId:"changed-context", answers:{"q-r-2":"Reuse the formatter."}, context:["docs/one.md"] }), { code:"TASK_CONFLICT", version:1, taskEffects:"none" });
   assert.deepEqual(store.read(first.taskId), saved);
   assert.deepEqual(await w.service.answer(partialInput), partial, "duplicate partial reply does not reread changed files");
   const complete = await w.service.answer({ taskId:first.taskId, expectedRevision:partial.revision, operationId:"final-context", answers:{"q-r-2":"Reuse the formatter."}, context:["docs/two.md"] });
@@ -3476,4 +3479,36 @@ test("intake preserves base precedence without persisting a resolved default as 
   assert.equal(selected.baseSource, "flag"); assert.equal(selected.implementation.baseSource, "flag");
   const repos = JSON.parse(readFileSync(join(explicit.home, "config.json"), "utf8")).repos;
   assert.deepEqual(repos, [{ repo: "acme/widget", base: "develop" }]);
+});
+
+
+test("direct task service mutations exclude maintenance and release owners on errors", async () => {
+  const { backupRuntimeState } = await import("../lib/runtime_state.mjs");
+  const { acquireTaskMutation, acquireCliMutation } = await import("../lib/daemon.mjs");
+  const w = world();
+  let release, entered;
+  const gate = new Promise(resolve => { release = resolve; });
+  const observed = new Promise(resolve => { entered = resolve; });
+  const repoInfo = w.ctx.gh.repoInfo;
+  w.ctx.gh.repoInfo = async () => { entered(); await gate; return repoInfo(); };
+  const pending = w.service.prepare({ text: REQUEST });
+  await observed;
+  assert.throws(() => backupRuntimeState({ home: w.home, out: join(tempHome(), "backup") }), /task mutation/);
+  release(); const task = await pending;
+  assert.equal(existsSync(join(w.home, "task-mutation.lock")), false);
+  const owner = acquireTaskMutation(w.home);
+  try {
+    for (const method of ["prepare", "answer", "resume", "validate", "start"]) {
+      await assert.rejects(w.service[method]({ text: REQUEST, taskId: task.taskId, expectedRevision: task.revision }), /task mutation/);
+    }
+    assert.equal(w.service.inspect({ taskId: task.taskId }).taskId, task.taskId);
+  } finally { owner.release(); }
+  await assert.rejects(w.service.answer({ taskId: task.taskId, expectedRevision: task.revision }), /answer operation identity/);
+  assert.equal(existsSync(join(w.home, "task-mutation.lock")), false);
+  const borrowed = acquireCliMutation(w.home);
+  const bound = createTaskService(w.ctx, { mutationOwner: borrowed }); borrowed.release();
+  await assert.rejects(bound.resume({ taskId: task.taskId, expectedRevision: task.revision }), /live owner/);
+  writeFileSync(join(w.home, "runtime-pin.json"), "null");
+  await assert.rejects(w.service.resume({ taskId: task.taskId, expectedRevision: task.revision }), { code: "TASK_RUNTIME_PIN" });
+  assert.equal(existsSync(join(w.home, "task-mutation.lock")), false);
 });

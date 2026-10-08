@@ -198,7 +198,7 @@ test("installed scoped list and MCP results discover later authorized tasks and 
   // inference or dispatch; every clone has its own supported task identity.
   for (let i = 101; i < 201; i++) {
     const id = "task-" + i.toString(16).padStart(24, "0");
-    writeJsonAtomic(join(ctx.home, "tasks", id, "intake.json"), { ...intake, id }); authorized[id] = saved;
+    writeJsonAtomic(join(ctx.home, "tasks", id, "intake.json"), { ...intake, id, questions: Array.from({ length: 128 }, (_, n) => ({ id: `q-${n}`, text: "x".repeat(300) })) }); authorized[id] = saved;
   }
   const server = new Server({ name: "scoped-list-test", version: "1" }, { capabilities: { tools: {} } });
   await registerTaskDelivery(server, { delivery: w.delivery, identityFor: async () => "alice" });
@@ -210,6 +210,8 @@ test("installed scoped list and MCP results discover later authorized tasks and 
       await w.opts.store.transaction(scope("alice"), async (data, save) => { data.tasks = { ...revoked, ...owned }; await save(data); });
       const result = await client.callTool({ name: "task_list", arguments: {} });
       assert.notEqual(result.isError, true);
+      assert.deepEqual(result._meta.taskDelivery, result.structuredContent);
+      assert.ok(Buffer.byteLength(JSON.stringify(result)) < 262144);
       const expected = Object.keys(owned).sort().slice(0, 100);
       assert.deepEqual(result.structuredContent.tasks.map(view => view.taskId), expected);
       assert.ok(result.structuredContent.tasks.every(view => view.repo === intake.repo && view.pr === null));
