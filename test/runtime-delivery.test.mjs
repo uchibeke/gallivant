@@ -1,3 +1,4 @@
+import { learningStore } from "../lib/learning_store.mjs";
 import { taskCommand } from "../lib/commands/task.mjs";
 import { acquireDaemon } from "../lib/daemon.mjs";
 import { test } from "node:test";
@@ -10,7 +11,7 @@ import { CORE_VERSION } from "../lib/task_delivery_contract.mjs";
 import { makeExecution } from "../lib/execution.mjs";
 import { cancelControl } from "../lib/control.mjs";
 import { makeState } from "../lib/state.mjs";
-import { writeJsonAtomic, readJson } from "../lib/fs.mjs";
+import { writeJsonAtomic, readJson, canonicalPath } from "../lib/fs.mjs";
 import { CONFIG, tempHome, makeClock, silentLog, fakeGh, fakeGit, fakeNotify } from "./helpers.mjs";
 
 const manifest = { coreVersion: CORE_VERSION, operationVersion: 1, taskVersion: 1, executionVersion: 1, coreSha256: "a".repeat(64) };
@@ -483,4 +484,39 @@ test("acknowledged historical dispatch intent does not permanently pin settled w
   assert.equal(checkRuntimeState({ home, manifest }).active, false);
   migrateRuntimeState({ home, manifest: update });
   assert.equal(readJson(join(home, "runtime-pin.json")).coreSha256, update.coreSha256);
+});
+
+test("runtime backup preserves learning identities, trust and delivery state while excluding operation locks", async () => {
+  const home = canonicalPath(tempHome()), store = learningStore(join(home, "learning"));
+  const repo = { host: "github.com", id: "123" };
+  store.remember("acme/widget", repo, "private");
+  await store.transaction(repo, state => {
+    state.mode = "apply";
+    state.active = ["approved-profile"];
+    state.deliveries = { implementation: { profile: "approved-profile", status: "delivered" } };
+    state.checkpoint = { sequence: 1, activeDigest: "a".repeat(64) };
+  });
+  const release = store.lock();
+  const backup = join(tempHome(), "backup"), restored = join(tempHome(), "restored");
+  try {
+    assert.throws(() => backupRuntimeState({ home, out: backup, manifest }), /learning operation.*already|already.*learning operation/);
+    assert.equal(existsSync(backup), false);
+    assert.equal(existsSync(join(home, "daemon.lock")), false);
+    assert.equal(existsSync(join(home, "task-mutation.lock")), false);
+  } finally { release(); }
+  backupRuntimeState({ home, out: backup, manifest });
+  const hashes = readJson(join(backup, "backup.json")).hashes;
+  assert.ok(hashes["learning/repositories.json"]);
+  assert.equal(Object.keys(hashes).some(path => path.includes("operation.lock")), false);
+  restoreRuntimeState({ backup, out: restored, manifest });
+  const restoredStore = learningStore(join(canonicalPath(restored), "learning"));
+  assert.deepEqual(restoredStore.identities(), store.identities());
+  assert.deepEqual(restoredStore.load(repo), store.load(repo));
+  const unlock = restoredStore.lock(); unlock();
+  const envelope = readJson(join(backup, "backup.json"));
+  writeJsonAtomic(join(backup, "backup.json"), { ...envelope, hashes: { ...envelope.hashes, "learning/operation.lock": "a".repeat(64) } });
+  const rejected = join(tempHome(), "rejected");
+  assert.throws(() => restoreRuntimeState({ backup, out: rejected, manifest }), { code: "RUNTIME_STATE" });
+  assert.equal(existsSync(rejected), false);
+  assert.equal(existsSync(join(home, "learning/operation.lock")), false);
 });
