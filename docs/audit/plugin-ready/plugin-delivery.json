@@ -18,14 +18,14 @@
       "2b4514fb27fcb493e62bfed913fffc204215f155",
       "96e81031516bdf6663dd3b97ac39b8f57022568b"
     ],
-    "testedSourceCommit": "0102c0868842466498e2176bf5b456ca14e2a857"
+    "testedSourceCommit": "a5375f65cbf9da49fbf3c745434b7761ab7652b5"
   },
   "artifact": {
     "coreArtifact": "gallivant-0.2.0.tgz",
-    "coreSha256": "9bf7247d460fb3655a8d38ecb96627b504a1d9001f622ae1c78f57bfd5ddca9e",
+    "coreSha256": "99502428bac87845579f069bcb7059354763b1adcdf775a020b0d1bbfcc93580",
     "hashes": {
       "plugin": "8753892ceb5552fc37ba011929830f4c754d717f8d8031e31fb9b4935b465e1a",
-      "runtime": "0d2278defcaf7049c8d65e3fafd816ba72a5bf75ffa0ac3a7444dd571dcd0734",
+      "runtime": "092b157a0a7b0c173a2cb13f480d3372f66dd8fa0dfcbafa7decd91a637b9d78",
       "operations": "86e62501fa7a3d6d29e26830cd43b2648b32978912d2096a8690ed2e2fab0f86"
     },
     "dependencyLockSha256": "c0f2f9bb3ad4d1bb8356c1162a8e71109534d747a5bc3182d4cce6457760c6d8",
@@ -75,7 +75,7 @@
       "lib/context.mjs": "349ed15ad1c4afe16d782147d5c2eb733135461c8075b8c348bb8af438a6cb1c",
       "lib/control_contract.mjs": "adfabab7a8c63cf4a4fde40f8743e8dc0e53be99339cdd4016bab42534a861dc",
       "lib/control.mjs": "a2d922af5cd19d5ac28b4d61f55b3b56159b4fe9958fd5a9627e9fdd2c8625b4",
-      "lib/coordinator.mjs": "fa6f8ea55df5f326e54fb853bf49ee48db8bb94e88f664ea315497a596584d3a",
+      "lib/coordinator.mjs": "9f49e5a6140b73a014190d7da2ec0a258633acf5a3044abf2f44b22b25c04587",
       "lib/credential.mjs": "61ac0040b5e41ce299f59d80081fbfdd7537745453300c79d2090f6f173bc46f",
       "lib/daemon.mjs": "0e559bb0c57c0efbfe93313b72cfb91015f5e22a5512ccca4c545c96d09cab45",
       "lib/deliverable.mjs": "7d3c824ac1d8cb6032b1814cdf4e0dc156e4d6d01382bebc0ab1647e4abfb678",
@@ -523,7 +523,7 @@
         "lib/harness.mjs"
       ],
       "tests": [
-        "40 installed consumer flow cases",
+        "41 installed consumer flow cases",
         "installed local/API/Cloud provider and lifecycle conformance",
         "inherited hosted bounded-preparation refusal cases"
       ],
@@ -566,22 +566,22 @@
         "tests": 1432,
         "pass": 1432,
         "fail": 0,
-        "log": "/private/tmp/pr12-payload-final-unit.log"
+        "log": "/private/tmp/pr12-wake-unit.log"
       },
       {
         "command": "npm run lint",
         "exitCode": 0,
-        "log": "/private/tmp/pr12-payload-lint.log"
+        "log": "/private/tmp/pr12-wake-lint.log"
       },
       {
         "command": "npm run test:plugin-package",
         "exitCode": 0,
-        "consumerFlowTests": 40,
+        "consumerFlowTests": 41,
         "installedConformanceTests": 466,
         "fail": 0,
-        "log": "/private/tmp/pr12-payload-final-package.log",
-        "consumerEvidence": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/task-plugin-consumer-wl8GVv/evidence.json",
-        "conformanceLog": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/task-plugin-consumer-wl8GVv/conformance.log"
+        "log": "/private/tmp/pr12-wake-package.log",
+        "consumerEvidence": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/task-plugin-consumer-kr6u1U/evidence.json",
+        "conformanceLog": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/task-plugin-consumer-kr6u1U/conformance.log"
       },
       {
         "command": "git diff --check",
@@ -591,10 +591,10 @@
     ],
     "verifiedPayloadFiles": 142,
     "logSha256": {
-      "/private/tmp/pr12-payload-final-unit.log": "ee876817987e1f89413ec3b3da0fed57bc566985d7dbcf25d5986572c8a43b21",
-      "/private/tmp/pr12-payload-lint.log": "2f32bd854b16ced20ab71be2afd3673b887efc4815c6e55ea7b941ebc5aa8a0b",
-      "/private/tmp/pr12-payload-final-package.log": "35235f95638472abb1ac5632fb31d9949e514dd3735812e41603dd0edfe6b84f",
-      "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/task-plugin-consumer-wl8GVv/conformance.log": "344e9b70600766f5b675184ca23c9fdf52fa29edf99b353c613b33006932c526"
+      "/private/tmp/pr12-wake-unit.log": "960bf61b0f9a056ab947aa73be89e073cce7faf211f131acf712749feb46ea96",
+      "/private/tmp/pr12-wake-lint.log": "2f32bd854b16ced20ab71be2afd3673b887efc4815c6e55ea7b941ebc5aa8a0b",
+      "/private/tmp/pr12-wake-package.log": "127c9341d15f6f2ff3db641b6cd9f6af2e15c7137a250ce1716789e7fc869b89",
+      "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/task-plugin-consumer-kr6u1U/conformance.log": "d9023bc62f1b7305b2b9922f0c554db9728826b608bc56744f7a8925db478784"
     },
     "hostEvidence": false,
     "fixturePurpose": "Deterministic unpaid installed-artifact compatibility; no actual installed host or live provider qualification",
@@ -993,26 +993,18 @@
     "historicalEvidence": "eaf86867631710a9a5e0ab8c64fe550842efd88f:docs/audit/plugin-ready/plugin-delivery.json initialAllowanceAndPrepareReview"
   },
   "completePayloadAndMcpRejectionReview": {
-    "reviewId": 5459993042,
+    "historicalEvidence": "0a813bf4bdcb3d2cbdafa17cff3140efc3950f10:docs/audit/plugin-ready/plugin-delivery.json completePayloadAndMcpRejectionReview"
+  },
+  "coordinatorWakeReview": {
+    "reviewId": 5460345667,
     "comments": [
-      4221714760,
-      4221714770
+      4222009115
     ],
-    "implementation": [
-      "lib/plugin_package.mjs selected commit first-party path equality",
-      "lib/task_delivery_contract.mjs settled rejection provenance and code allowlist",
-      "lib/task_delivery.mjs acknowledged rejection creation and replay",
-      "lib/task_delivery_mcp.mjs safe task refusal response"
-    ],
+    "implementation": "lib/coordinator.mjs schedules after successful advance and current-owner assertion as well as before advance",
     "tests": [
-      "test/plugin-package.test.mjs public packaging requires every committed first-party path",
-      "test/fixtures/plugin-installed-flow.mjs installed MCP preserves settled task refusals but hides arbitrary task-coded errors"
+      "test/fixtures/plugin-installed-flow.mjs coordinator renews a consumed one-shot wake after a slow advance",
+      "test/runtime-delivery.test.mjs provider startup sweeps and delayed pin validation"
     ],
-    "coverage": "Missing runtime, CLI, skill, documentation and license entries reject clean-snapshot packaging and remove staged output. MCP preserves TASK_INPUT and TASK_NOT_READY with bounded remedies, exact replay, and hides arbitrary task-coded provider errors.",
-    "fixtureCorrection": {
-      "initialFailure": "/private/tmp/pr12-payload-package.log: Git tree mock required a checkout during installed conformance",
-      "correction": "test/plugin-package.test.mjs gitFixture snapshots its own installed fixture file set before packing",
-      "focusedEvidence": "/private/tmp/pr12-payload-installed-focused.log: 39 passed, 0 failed"
-    }
+    "coverage": "A deterministic one-shot callback is consumed during a blocked advance and rejected by real Node ownership; completion schedules from current time and the next callback advances successfully. Pre-advance eviction wake and stale-owner rejection remain intact."
   }
 }
