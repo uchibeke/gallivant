@@ -442,3 +442,33 @@ test("top-level CLI mutations respect maintenance ownership and pinned namespace
   for (const args of commands) { const r = invoke(args); assert.equal(r.status, 1); assert.match(r.stderr, /manifest-aware task delivery adapter/); }
   assert.equal(existsSync(join(home, "task-mutation.lock")), false);
 });
+
+
+test("pending delivery receipts pin migration before intake and through wake acknowledgement", () => {
+  for (const field of ["operations", "cancellations"]) for (const receipt of [{ status: "intent" }, { status: "acknowledged", wakePending: true }, { status: "unknown" }]) {
+    const home = tempHome(), path = join(home, "delivery", "d".repeat(64), "delivery.json");
+    migrateRuntimeState({ home, manifest });
+    const record = { version: 1, tasks: {}, operations: {}, [field]: { pending: receipt } };
+    writeJsonAtomic(path, record);
+    assert.equal(checkRuntimeState({ home, manifest }).active, true);
+    assert.throws(() => migrateRuntimeState({ home, manifest: update }), { code: "RUNTIME_ACTIVE_PIN" });
+    assert.equal(readJson(join(home, "runtime-pin.json")).coreSha256, manifest.coreSha256);
+    assert.deepEqual(readJson(path), record);
+    assert.equal(existsSync(join(home, "daemon.lock")), false);
+    assert.equal(existsSync(join(home, "task-mutation.lock")), false);
+    const backup = join(tempHome(), "backup"), restored = join(tempHome(), "restored");
+    backupRuntimeState({ home, out: backup, manifest });
+    restoreRuntimeState({ backup, out: restored, manifest });
+    assert.throws(() => migrateRuntimeState({ home: restored, manifest: update }), { code: "RUNTIME_ACTIVE_PIN" });
+    record[field].pending = { status: "acknowledged", wakePending: false };
+    writeJsonAtomic(path, record);
+    assert.equal(checkRuntimeState({ home, manifest }).active, false);
+    migrateRuntimeState({ home, manifest: update });
+  }
+  const legacy = tempHome();
+  writeJsonAtomic(join(legacy, "delivery", "e".repeat(64), "delivery.json"), { version: 1, operations: { pending: { status: "intent" } } });
+  assert.throws(() => migrateRuntimeState({ home: legacy, manifest }), { code: "RUNTIME_ACTIVE_PIN" });
+  const snapshot = tempHome();
+  writeJsonAtomic(join(snapshot, "prds", "delivery", "e".repeat(64), "delivery.json"), { version: 99 });
+  assert.equal(migrateRuntimeState({ home: snapshot, manifest }).active, false);
+});
