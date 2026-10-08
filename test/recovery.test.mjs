@@ -366,3 +366,38 @@ test("upInBackground gives up with the log to read when the daemon never reports
   const silent = () => ({ unref() {}, exitCode: null });   // spawns, writes nothing, never dies
   await assert.rejects(() => upInBackground({ home, log: silentLog }, { spawnFn: silent, waitMs: 60, sleep: ms => new Promise(r => setTimeout(r, ms)) }), /did not report itself/);
 });
+
+
+test("runtime ownership excludes daemon startup without claiming liveness or shutdown rights", async () => {
+  const { acquireRuntimeOwner, acquireDaemon, readDaemon } = await import("../lib/daemon.mjs");
+  const { down } = await import("../lib/commands/up.mjs");
+  const home = tempHome(), owner = acquireRuntimeOwner(home);
+  let spawned = 0;
+  try {
+    assert.equal(readDaemon(home).alive, false);
+    assert.equal(readDaemon(home).runtimeBusy, true);
+    assert.equal(down({ home }).stopped, false);
+    assert.throws(() => acquireDaemon(home), /already running/);
+    await assert.rejects(upInBackground({ home }, { spawnFn: () => { spawned++; } }), /retry daemon startup/);
+    assert.equal(spawned, 0);
+  } finally { owner.release(); }
+  let daemon;
+  try {
+    const result = await upInBackground({ home }, { spawnFn: () => {
+      spawned++; daemon = acquireDaemon(home); return { unref() {}, exitCode: null };
+    } });
+    assert.equal(spawned, 1); assert.equal(result.alive, true);
+    assert.equal(readDaemon(home).runtimeBusy, false);
+  } finally { daemon?.release(); }
+});
+
+
+test("daemon startup polling refuses a runtime owner acquired after the initial check", async () => {
+  const { acquireRuntimeOwner } = await import("../lib/daemon.mjs");
+  const home = tempHome(); let owner;
+  try {
+    await assert.rejects(upInBackground({ home }, { spawnFn: () => {
+      owner = acquireRuntimeOwner(home); return { unref() {}, exitCode: null };
+    } }), /retry daemon startup/);
+  } finally { owner?.release(); }
+});
