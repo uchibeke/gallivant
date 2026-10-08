@@ -18,14 +18,14 @@
       "2b4514fb27fcb493e62bfed913fffc204215f155",
       "96e81031516bdf6663dd3b97ac39b8f57022568b"
     ],
-    "testedSourceCommit": "0ad7f5a3459527642e593610055a019914a21bb4"
+    "testedSourceCommit": "0e711c844b58886d40a7505115ee56d964018c78"
   },
   "artifact": {
     "coreArtifact": "gallivant-0.2.0.tgz",
-    "coreSha256": "3503c76a6a02d64b1e77da703d27e40a69e30f1c694cd06d7eb119742a1e95d2",
+    "coreSha256": "2f283667d9686786f2d53366250a0a46f5938ad32e0b70d7d28a418acb61869f",
     "hashes": {
       "plugin": "8753892ceb5552fc37ba011929830f4c754d717f8d8031e31fb9b4935b465e1a",
-      "runtime": "81a65205002caad53ce0baa163d0b30cd273124ea22b0182dc1f2be8c4eb082b",
+      "runtime": "c9b2204454b2f370b57fcd34297ef575b95762178fb0462156d5a046108437e2",
       "operations": "86e62501fa7a3d6d29e26830cd43b2648b32978912d2096a8690ed2e2fab0f86"
     },
     "dependencyLockSha256": "c0f2f9bb3ad4d1bb8356c1162a8e71109534d747a5bc3182d4cce6457760c6d8",
@@ -69,7 +69,7 @@
       "lib/commands/start.mjs": "12e7f26aff07049f9845e0842356a0e7b7b1dc2f058bfc81cb456312b6425dc4",
       "lib/commands/status.mjs": "41ededea71ae3b2bcf986511720c2a397af7abedcd96b2966674840a2800d6cc",
       "lib/commands/task.mjs": "b2028e11673745a89f44f80c4a9a764cca13572ea84cc57514c6fdd15841d226",
-      "lib/commands/up.mjs": "363de931da37374460bf53009d8a8ca1adf99ca47130d02c4814037f78e933a9",
+      "lib/commands/up.mjs": "3dcc7d297d67909b0af98dc8718666e59560a7437d888f16b2c3e3a236643834",
       "lib/commands/why.mjs": "bad1866f6f7af98640f546ff0850a057a2ac1c416cbcfae8a8c3a0cf1997e69e",
       "lib/config.mjs": "64a11002c4963648966db9a8c04f44da8cbfde81698800932d4e854bc4f1b097",
       "lib/context.mjs": "349ed15ad1c4afe16d782147d5c2eb733135461c8075b8c348bb8af438a6cb1c",
@@ -77,7 +77,7 @@
       "lib/control.mjs": "a2d922af5cd19d5ac28b4d61f55b3b56159b4fe9958fd5a9627e9fdd2c8625b4",
       "lib/coordinator.mjs": "fa6f8ea55df5f326e54fb853bf49ee48db8bb94e88f664ea315497a596584d3a",
       "lib/credential.mjs": "61ac0040b5e41ce299f59d80081fbfdd7537745453300c79d2090f6f173bc46f",
-      "lib/daemon.mjs": "70bcf633b18b0687dd3b113438ae0fc73daeaa35ba22ee0c8d690899c703c2a7",
+      "lib/daemon.mjs": "be22d594af71a8d42f5844707035c155c0bfc34c2eb3a2270b89a1070f8b9648",
       "lib/deliverable.mjs": "7d3c824ac1d8cb6032b1814cdf4e0dc156e4d6d01382bebc0ab1647e4abfb678",
       "lib/events.mjs": "776867f9a280ea179f2be8f6e570c88d468ebb5500db8864041fd29b01202e27",
       "lib/execution_input.mjs": "9fd16569f9ac9286ff4990a7bc442114ebff681bcd43972fccba033e66e02cf1",
@@ -118,8 +118,8 @@
       "lib/run_log.mjs": "7d0b28731be434c6764ea400e4fe9d95ea0cc81179c9ead80d140d23153abcdb",
       "lib/run.mjs": "3682818ab95bf3b27c262449aa521be094caee9c8f133e94740923ebafb91315",
       "lib/runtime_dependencies.mjs": "6d25b972c116026643f348dc55586009d2746f68b99f47d450b2a3ef35625949",
-      "lib/runtime_node.mjs": "61b5a0b91403a606f42d0f39f1c2e4697903d082d4dad1d62c0381e6b79b90cb",
-      "lib/runtime_state.mjs": "416193381da9b26c3e03b67176fb2266b26e4860604565f70898e5e195659cff",
+      "lib/runtime_node.mjs": "df1b43dc1ae576ff96cd9a36201f906bf8d0c04deea291ce78d754b2b2fde4cd",
+      "lib/runtime_state.mjs": "65e9de3947219a18f6b297f8c7213b651087f43588e960e0f51850fbb8918343",
       "lib/sources/index.mjs": "88e1550751e9f52c82e94085bcb77bbd2b80466c9e2192670593f12894c4a4ec",
       "lib/sources/prd.mjs": "b26425213d537d8bf640abee1046481925de30d676fdb9b6a6b9239cdc50effd",
       "lib/start_contract.mjs": "e154f36dcf54c93b4308a93d8926dca8f28358c4e41234dc684008706ea23ab9",
@@ -130,7 +130,7 @@
       "lib/task_delivery_mcp.mjs": "accb8029caad59af900a1ddb6cd8a39e0bfcde6053fdc33b6c49ad1eca654576",
       "lib/task_delivery_store.mjs": "4573831285d16421d3ec7e56b78735ee10d6f8952a1b4475eed7fa1387636b0d",
       "lib/task_delivery_view.mjs": "959efcb5dc78981664cf59fa202b48c8d0f0dbdb127f00714650a81fa565f2e1",
-      "lib/task_delivery.mjs": "ed91a11e2c042dbcc008332179a7d82aabb08b6f0f56571e60e17621de7a88e8",
+      "lib/task_delivery.mjs": "183339af4041f98561b4b4acd55d7d21a224783ab37e77c5265c7efcc4ec1698",
       "lib/task_environment.mjs": "5c61d5d5393014206f078c86084b40d263f59b7dc939c445a4ed86111e4c2b2c",
       "lib/task_prepare.mjs": "f0f27738e208f174aa89dba3a6f70f382cf7e03abe541df5d1854aed4adb9492",
       "lib/task_store.mjs": "54383d2c1893f6b805ed15b2690f38625f734f65ff7f286906829d192a65d2b4",
@@ -562,25 +562,25 @@
       {
         "command": "npm test",
         "exitCode": 0,
-        "tests": 1403,
-        "pass": 1403,
+        "tests": 1405,
+        "pass": 1405,
         "fail": 0,
-        "log": "/private/tmp/pr12-cli-output-unit.log"
+        "log": "/private/tmp/pr12-liveness-unit.log"
       },
       {
         "command": "npm run lint",
         "exitCode": 0,
-        "log": "/private/tmp/pr12-cli-output-lint.log"
+        "log": "/private/tmp/pr12-liveness-lint.log"
       },
       {
         "command": "npm run test:plugin-package",
         "exitCode": 0,
         "consumerFlowTests": 29,
-        "installedConformanceTests": 438,
+        "installedConformanceTests": 440,
         "fail": 0,
-        "log": "/private/tmp/pr12-cli-output-package.log",
-        "consumerEvidence": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/task-plugin-consumer-OEJA00/evidence.json",
-        "conformanceLog": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/task-plugin-consumer-OEJA00/conformance.log"
+        "log": "/private/tmp/pr12-liveness-package.log",
+        "consumerEvidence": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/task-plugin-consumer-7NDNb5/evidence.json",
+        "conformanceLog": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/task-plugin-consumer-7NDNb5/conformance.log"
       },
       {
         "command": "git diff --check",
@@ -590,10 +590,10 @@
     ],
     "verifiedPayloadFiles": 141,
     "logSha256": {
-      "/private/tmp/pr12-cli-output-unit.log": "eeff40b69496d380e2b7d3bc4d988bd48c9a29be251e9ce315e907556930f321",
-      "/private/tmp/pr12-cli-output-lint.log": "2f32bd854b16ced20ab71be2afd3673b887efc4815c6e55ea7b941ebc5aa8a0b",
-      "/private/tmp/pr12-cli-output-package.log": "746d4d569036ff6ca6f419a8a2c5037b21c42a5459d8ad1db870ba9a922cb8f5",
-      "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/task-plugin-consumer-OEJA00/conformance.log": "1d7cbaed030265cffb58b93913f4b82c28a69cd713595104985342e6e27bacfe"
+      "/private/tmp/pr12-liveness-unit.log": "4e840c9d3312ea6bb0173d669db401bd1722beac52aa2ed4b2ff7d03109b32b3",
+      "/private/tmp/pr12-liveness-lint.log": "2f32bd854b16ced20ab71be2afd3673b887efc4815c6e55ea7b941ebc5aa8a0b",
+      "/private/tmp/pr12-liveness-package.log": "27d126c4f2ce676f0170292aa35869235faa79967133bfc21316e86bb17d5507",
+      "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/task-plugin-consumer-7NDNb5/conformance.log": "6cb4190714d5f0cf65867df752cadec05032b3217b4f432ed1c958e8b2b5e68f"
     },
     "hostEvidence": false,
     "fixturePurpose": "Deterministic unpaid installed-artifact compatibility; no actual installed host or live provider qualification",
@@ -630,32 +630,8 @@
     ]
   },
   "reviewFollowup": {
-    "reviewId": 5440273556,
-    "reviewedCommit": "cc93eb4d968d2086122f43dfcbccdf2e8e0bd9f9",
-    "items": [
-      {
-        "commentId": 4205221474,
-        "implementation": "lib/plugin_package.mjs",
-        "tests": "test/plugin-package.test.mjs",
-        "rule": "Source proof requires successful Git inspection and accounts for every changed runtime path, including files absent from the emitted payload"
-      },
-      {
-        "commentId": 4205221484,
-        "implementation": "lib/task_delivery.mjs",
-        "tests": [
-          "test/task-delivery.test.mjs",
-          "test/fixtures/plugin-installed-flow.mjs"
-        ],
-        "rule": "Discovery and truncation are computed from currently authorized records before bounded service inspection"
-      }
-    ],
-    "focusedVerification": {
-      "tests": 17,
-      "pass": 17,
-      "fail": 0,
-      "log": "/tmp/plugin-delivery-review-focused.log"
-    },
-    "externalPrerequisites": "Previously observed unmet prerequisites retained; no unchanged live call retried and no installed-host/model-access evidence inferred from fixtures"
+    "historicalEvidence": "fcf16eae8184a91017894fa550e94de773507aa1:docs/audit/plugin-ready/plugin-delivery.json reviewFollowup",
+    "status": "Earlier follow-up evidence retained in Git history; current verification and external gates remain recorded here."
   },
   "runtimeReviewFollowup": {
     "reviewId": 5440576822,
@@ -1143,5 +1119,16 @@
       "test/plugin-package.test.mjs package outputs cannot enter the source root through fresh paths or symlink aliases"
     ],
     "migration": "docs/task-delivery.md CLI namespace and package output requirements"
+  },
+  "runtimeLivenessReview": {
+    "reviewId": 5450627765,
+    "commentId": 4213943871,
+    "implementation": "lib/daemon.mjs acquireRuntimeOwner/readDaemon/assertDaemonUsable; runtime_state, runtime_node and task_delivery callers",
+    "tests": [
+      "test/recovery.test.mjs runtime ownership excludes daemon startup without claiming liveness or shutdown rights",
+      "test/recovery.test.mjs daemon startup polling refuses a runtime owner acquired after the initial check"
+    ],
+    "rule": "Runtime owners retain process exclusion without reporting daemon liveness; startup reports busy and down cannot signal maintenance",
+    "initialVerification": "Installed consumer control request exposed an overbroad busy check; narrowed refusal to startup and reran required checks. Initial log: /private/tmp/pr12-liveness-package-initial.log"
   }
 }
