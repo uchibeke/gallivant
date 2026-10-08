@@ -902,3 +902,52 @@ test("installed intent fence prevents unrelated revisions from consuming a start
   assert.equal(w.worlds.get("alice").ctx.runnerFor(started.implementation.id).started.length, 1);
   assert.equal(w.opts.store.read(scope("alice")).operations[input.operationId].status, "acknowledged");
 });
+
+test("installed pre-effect rejections settle intents and permit corrected requests", async () => {
+  for (const name of ["answer", "validate", "start"]) {
+    const w = world();
+    const task = await w.delivery.dispatch("prepare", prepare(), "alice");
+    const { ctx } = w.worlds.get("alice");
+    const path = join(ctx.home, "tasks", task.taskId, "intake.json");
+    if (name === "validate") {
+      const intake = JSON.parse(readFileSync(path)); intake.status = "preparing"; writeJsonAtomic(path, intake);
+    }
+    const input = { ...mutate(task, `invalid-${name}`), ...(name === "answer" ? { answers: { unknown: "value" } } : name === "start" ? { run: true } : {}) };
+    const expected = name === "answer" ? "TASK_INPUT" : "TASK_NOT_READY";
+    const before = readFileSync(path);
+    if (name === "answer") {
+      const transaction = w.opts.store.transaction;
+      let failed = false;
+      w.opts.store.transaction = (scope, fn) => transaction(scope, (data, save) => fn(data, async next => {
+        if (!failed && next.operations[input.operationId]?.rejection) { failed = true; throw new Error("rejection acknowledgement lost"); }
+        return save(next);
+      }));
+      await assert.rejects(w.delivery.dispatch(name, input, "alice"), /rejection acknowledgement lost/);
+      assert.equal(w.opts.store.read(scope("alice")).operations[input.operationId].status, "intent");
+    }
+    await assert.rejects(w.delivery.dispatch(name, input, "alice"), { code: expected });
+    assert.deepEqual(readFileSync(path), before);
+    const receipt = w.opts.store.read(scope("alice")).operations[input.operationId];
+    assert.equal(receipt.status, "acknowledged"); assert.equal(receipt.rejection.code, expected); assert.equal(receipt.wakePending, false);
+    assert.equal(checkRuntimeState({ home: w.root, manifest }).active, false, "settled receipts must not pin the namespace");
+    await assert.rejects(createTaskDelivery(w.opts).dispatch(name, input, "alice"), { code: expected });
+    assert.equal(existsSync(join(ctx.home, "daemon.lock")), false);
+    // Corrected input uses a fresh identity; resume restores incomplete preparation.
+    const next = name === "validate"
+      ? await w.delivery.dispatch("resume", mutate(task, "corrected"), "alice")
+      : await w.delivery.dispatch("answer", { ...mutate(task, "corrected"), answers: { "q-r-1": "Use CSV." } }, "alice");
+    assert.ok(next.revision > task.revision);
+  }
+});
+
+test("installed unknown readiness failures retain their intent instead of claiming rejection", async () => {
+  const w = world({ question: false });
+  const task = await w.delivery.dispatch("prepare", prepare(), "alice");
+  const bound = w.worlds.get("alice"), path = join(bound.ctx.home, "tasks", task.taskId, "intake.json");
+  const intake = JSON.parse(readFileSync(path)); intake.readiness = null; writeJsonAtomic(path, intake);
+  bound.taskOptions.decideReady = async () => { throw new Error("unknown provider failure"); };
+  const input = mutate(task, "unknown-validation");
+  await assert.rejects(w.delivery.dispatch("validate", input, "alice"), /unknown provider failure/);
+  assert.equal(w.opts.store.read(scope("alice")).operations[input.operationId].status, "intent");
+  await assert.rejects(w.delivery.dispatch("validate", mutate(task, "replacement"), "alice"), { code: "DELIVERY_PENDING" });
+});

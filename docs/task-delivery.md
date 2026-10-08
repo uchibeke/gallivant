@@ -328,3 +328,5 @@ Public packaging rechecks HEAD and payload changes after npm packing. A changed 
 Archive payload hashes are computed from packed entries and checked against the selected Git commit. The bundled parser is bound by `templates/plugin/bundled-runtime.json`, whose file hashes and lock integrity must be refreshed and committed together when upgrading that dependency. Before/after Git status remains an additional check, not byte provenance.
 
 New delivery intents fence later ordinary mutations until the original operation settles; cancellation retains its independent reserve. This prevents unrelated revision changes from being accepted as an interrupted operation's outcome. Legacy intents without this fence cannot use revision-only recovery and remain explicit reconciliation obligations.
+
+Explicit task-service refusals proven to precede effects are stored as compact acknowledged rejection receipts. Exact retries replay the bounded redacted code/message; corrected requests use a new identity and current revision. Unknown failures keep their intent and mutation fence rather than being classified as safe from an unchanged revision alone.
