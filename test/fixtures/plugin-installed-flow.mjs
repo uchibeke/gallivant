@@ -794,3 +794,42 @@ test("installed acknowledgement admission precedes effects and preserves task di
   assert.equal(receipt.result, undefined); assert.equal(receipt.acknowledgementReserve, undefined);
   assert.equal(receipt.status, "acknowledged");
 });
+
+
+test("installed cancellation retries recover crashes before registry writes and receipt acknowledgement", async () => {
+  for (const phase of ["intent", "acknowledgement", "history"]) {
+    const w = world({ question: false });
+    let task = await w.delivery.dispatch("prepare", prepare(), "alice");
+    task = await w.delivery.dispatch("start", { ...mutate(task, "start-cancel-crash"), run: true }, "alice");
+    const input = { ...mutate(task, "cancel-crash"), action: "cancel" };
+    const ctx = w.worlds.get("alice").ctx, id = task.implementation.id;
+    const transaction = w.opts.store.transaction;
+    let crashed = false;
+    w.opts.store.transaction = (scope, fn) => transaction(scope, (data, save) => fn(data, async next => {
+      const receipt = next.cancellations?.[input.operationId];
+      if (!crashed && receipt?.status === (phase === "intent" ? "intent" : "acknowledged")) {
+        crashed = true;
+        if (phase === "intent") await save(next);
+        throw new Error("simulated receipt crash");
+      }
+      return save(next);
+    }));
+    await assert.rejects(w.delivery.dispatch("control", input, "alice"), /simulated receipt crash/);
+    assert.equal(w.opts.store.read(scope("alice")).cancellations[input.operationId].status, "intent");
+    if (phase === "intent") assert.equal(ctx.state.get(id).control, undefined);
+    const original = ctx.state.get(id).control;
+    if (phase === "history") ctx.state.update(id, { control: { ...original, id: "later", action: "recheck", status: "applied" }, control_history: [{ ...original, status: "applied" }] });
+    const restarted = createTaskDelivery(w.opts);
+    await assert.rejects(restarted.dispatch("control", { ...input, operationId: "replacement" }, "alice"), { code: "DELIVERY_CAPACITY" });
+    await assert.rejects(restarted.dispatch("control", { ...input, note: "changed" }, "alice"), { code: "DELIVERY_CONFLICT" });
+    await restarted.dispatch("control", input, "alice");
+    const entry = ctx.state.get(id), controlId = original?.id || entry.control.id;
+    assert.equal(entry.dispatch_stopped, "cancellation-requested");
+    assert.equal(phase === "history" ? entry.control_history[0].id : entry.control.id, controlId);
+    if (phase === "history") assert.equal(entry.control.id, "later");
+    await restarted.dispatch("control", input, "alice");
+    assert.equal(ctx.runnerFor(id).started.length, 1);
+    assert.equal(w.opts.store.read(scope("alice")).cancellations[input.operationId].status, "acknowledged");
+    assert.equal(existsSync(join(ctx.home, "daemon.lock")), false);
+  }
+});
