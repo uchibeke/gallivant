@@ -654,7 +654,8 @@ test("installed operation receipts replay reordered objects through interrupted 
   await w.opts.store.transaction(scope("alice"), async (data, save) => { data.operations.answer.status = "intent"; await save(data); });
   assert.deepEqual(await w.delivery.dispatch("answer", answer, "alice"), accepted);
   assert.equal(calls, before);
-  await w.opts.store.transaction(scope("alice"), async (data, save) => { data.operations.prepare.signature = createHash("sha256").update(JSON.stringify(["prepare", input])).digest("hex"); await save(data); });
+  assert.deepEqual(await w.delivery.dispatch("prepare", input, "alice"), accepted, "compact receipts return the current task view");
+  await w.opts.store.transaction(scope("alice"), async (data, save) => { data.operations.prepare.signature = createHash("sha256").update(JSON.stringify(["prepare", input])).digest("hex"); data.operations.prepare.result = first; await save(data); });
   assert.deepEqual(await w.delivery.dispatch("prepare", input, "alice"), first);
 });
 
