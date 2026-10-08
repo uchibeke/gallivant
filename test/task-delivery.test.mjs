@@ -156,7 +156,7 @@ test("model repository identity is bounded and uses the redacted saved view", ()
 
 
 test("delivery store size limits preserve saved receipts and reject oversized legacy reads", async () => {
-  const { createDeliveryStore, scopeKey, MAX_DELIVERY_STORE_BYTES } = await import("../lib/task_delivery_store.mjs");
+  const { createDeliveryStore, scopeKey, MAX_DELIVERY_STORE_BYTES, MAX_CANCELLATION_STORE_BYTES } = await import("../lib/task_delivery_store.mjs");
   const { tempHome } = await import("./helpers.mjs");
   const { join } = await import("node:path");
   const { readFileSync, truncateSync, existsSync } = await import("node:fs");
@@ -165,7 +165,9 @@ test("delivery store size limits preserve saved receipts and reject oversized le
   const file = join(root, scopeKey(scope), "delivery.json"), before = readFileSync(file);
   await assert.rejects(store.transaction(scope, (data, save) => save({ ...data, oversized: "x".repeat(MAX_DELIVERY_STORE_BYTES) })), { code: "DELIVERY_CAPACITY" });
   assert.deepEqual(readFileSync(file), before);
+  await assert.rejects(store.transaction(scope, (data, save) => save({ ...data, cancellations: { oversized: "x".repeat(MAX_CANCELLATION_STORE_BYTES) } })), { code: "DELIVERY_CAPACITY" });
+  assert.deepEqual(readFileSync(file), before);
   assert.equal(existsSync(join(root, scopeKey(scope), "delivery.lock")), false);
-  truncateSync(file, MAX_DELIVERY_STORE_BYTES + 1);
+  truncateSync(file, MAX_DELIVERY_STORE_BYTES + MAX_CANCELLATION_STORE_BYTES + 1);
   assert.throws(() => store.read(scope), { code: "DELIVERY_CAPACITY" });
 });

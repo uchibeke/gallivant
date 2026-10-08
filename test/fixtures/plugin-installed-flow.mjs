@@ -707,3 +707,38 @@ test("installed receipt capacity preserves old retries and refuses new effects",
   assert.equal(JSON.stringify(w.opts.store.read(scope("alice"))), before);
   assert.equal(wakes, 1);
 });
+
+
+test("installed cancellation reserve survives full ordinary receipts and lost wake acknowledgements", async () => {
+  let failWake = false;
+  const w = world({ question: false, schedule: async () => { if (failWake) throw new Error("lost wake"); } });
+  let task = await w.delivery.dispatch("prepare", prepare(), "alice");
+  task = await w.delivery.dispatch("validate", mutate(task, "validate"), "alice");
+  task = await w.delivery.dispatch("start", { ...mutate(task, "start"), run: true }, "alice");
+  const input = { ...mutate(task, "safety-cancel"), action: "cancel" };
+  await w.opts.store.transaction(scope("alice"), (data, save) => {
+    for (let i = 3; i < 256; i++) data.operations[`padding-${i}`] = data.operations.prepare;
+    data.padding = "";
+    data.padding = "x".repeat(32 * 1024 * 1024 - Buffer.byteLength(JSON.stringify(data, null, 2) + "\n"));
+    return save(data);
+  });
+  await assert.rejects(w.delivery.dispatch("validate", mutate(task, "full"), "alice"), { code: "DELIVERY_CAPACITY" });
+  await assert.rejects(w.delivery.dispatch("control", { ...input, expectedRevision: -1 }, "alice"));
+  failWake = true;
+  await assert.rejects(w.delivery.dispatch("control", input, "alice"), /lost wake/);
+  const ctx = w.worlds.get("alice").ctx, id = task.implementation.id;
+  assert.equal(ctx.state.get(id).dispatch_stopped, "cancellation-requested");
+  const controlId = ctx.state.get(id).control.id;
+  failWake = false;
+  const replay = await createTaskDelivery(w.opts).dispatch("control", input, "alice");
+  assert.equal(replay.taskId, task.taskId);
+  assert.equal(ctx.state.get(id).control.id, controlId);
+  const data = w.opts.store.read(scope("alice"));
+  assert.equal(Object.keys(data.operations).length, 256);
+  assert.equal(Object.keys(data.cancellations).length, 1);
+  assert.equal(data.cancellations[input.operationId].result, undefined);
+  assert.equal(data.cancellations[input.operationId].wakePending, false);
+  await assert.rejects(w.delivery.dispatch("control", { ...input, note: "different" }, "alice"), { code: "DELIVERY_CONFLICT" });
+  await assert.rejects(w.delivery.dispatch("control", { ...input, operationId: "second-cancel" }, "alice"), { code: "DELIVERY_CAPACITY" });
+  await assert.rejects(w.delivery.dispatch("control", input, "bob"), { code: "DELIVERY_NOT_FOUND" });
+});
