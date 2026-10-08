@@ -18,14 +18,14 @@
       "2b4514fb27fcb493e62bfed913fffc204215f155",
       "96e81031516bdf6663dd3b97ac39b8f57022568b"
     ],
-    "testedSourceCommit": "3fe6bf12cb737304e6a4a9b53cd8e5f26d9877a9"
+    "testedSourceCommit": "3704b3d0673e550bf7d96b3dc5c86f68abbe3699"
   },
   "artifact": {
     "coreArtifact": "gallivant-0.2.0.tgz",
-    "coreSha256": "b1da902b8798dbd97abd22f4fe6d07b248dffee9daae7be9694f2862991e5825",
+    "coreSha256": "da65814d14c608a8b273efc0a0cc8faeac3dcf1b75afc909af6ceb97115bde94",
     "hashes": {
       "plugin": "8753892ceb5552fc37ba011929830f4c754d717f8d8031e31fb9b4935b465e1a",
-      "runtime": "2e86777dfff11af6ed42a8d9ba77387c006b30fbb23844d7d0134cd0d6340b36",
+      "runtime": "0e9e3dc0e70ecf19673535e90a5e11e2c97728c156f13386327629a95c5aee15",
       "operations": "86e62501fa7a3d6d29e26830cd43b2648b32978912d2096a8690ed2e2fab0f86"
     },
     "dependencyLockSha256": "c0f2f9bb3ad4d1bb8356c1162a8e71109534d747a5bc3182d4cce6457760c6d8",
@@ -126,7 +126,7 @@
       "lib/state.mjs": "2bcd199eb410c2a590138600c4f8b9f1aeeefea037f29f19d14ae56a9b9fa940",
       "lib/task_allowance.mjs": "8c5e73b502fc84ff51f61df947d33690c0cf4505be00d9cdd93f6ce445fa23b9",
       "lib/task_contract.mjs": "56d440e08c228a4df27d06f9fa181ec6160e876a13dcd90fdf0416fab7c2fff4",
-      "lib/task_delivery_contract.mjs": "fa2edce0e88113c6c3abb9bc36461bda2648c75aa4e4a29e10ed30353b2718ce",
+      "lib/task_delivery_contract.mjs": "6cdd7e72d430341e04cbe2cb8dbb99f3679cd83b101d27cda23926a912dd8dd9",
       "lib/task_delivery_mcp.mjs": "6f913b6446778d042a16167dd030d5decea2f38152d00538c39b409f37cc6791",
       "lib/task_delivery_store.mjs": "d5ac13968be92b773ce4e530217d5ec64539f3ec1877e873ca3c56654813f450",
       "lib/task_delivery_view.mjs": "8f7a9551bc288130dcb7997b2e5941e95324fce34b4eaa24ffc786b5e092559d",
@@ -134,7 +134,7 @@
       "lib/task_environment.mjs": "5c61d5d5393014206f078c86084b40d263f59b7dc939c445a4ed86111e4c2b2c",
       "lib/task_prepare.mjs": "f0f27738e208f174aa89dba3a6f70f382cf7e03abe541df5d1854aed4adb9492",
       "lib/task_store.mjs": "54383d2c1893f6b805ed15b2690f38625f734f65ff7f286906829d192a65d2b4",
-      "lib/tasks.mjs": "0c36e7c744aa3666b1e5f37cd54155d84c0045e0b2be955931b6623475dd43a6",
+      "lib/tasks.mjs": "99ef055a0f89c6352c553230f0c5c26dcd474fdb33246dfd51675f36ad6c7a7f",
       "lib/tick.mjs": "406ae30ff25da41a6296097e6213be7485d7ec6956dd238e158586b2e92d5dc4",
       "lib/time.mjs": "da5f6d30e5059e9b3ed45c3e4a604a3ad20fcc17449ed2ff0429aa9c7a79f146",
       "lib/tracker/assets.mjs": "10b86b3cf08e784e578d18881e28bc9f8fdebc2ab467dbc5fc338269f4a114e2",
@@ -523,7 +523,7 @@
         "lib/harness.mjs"
       ],
       "tests": [
-        "41 installed consumer flow cases",
+        "42 installed consumer flow cases",
         "installed local/API/Cloud provider and lifecycle conformance",
         "inherited hosted bounded-preparation refusal cases"
       ],
@@ -566,22 +566,22 @@
         "tests": 1435,
         "pass": 1435,
         "fail": 0,
-        "log": "/private/tmp/pr12-learning-timeout-unit.log"
+        "log": "/private/tmp/pr12-boundary-unit.log"
       },
       {
         "command": "npm run lint",
         "exitCode": 0,
-        "log": "/private/tmp/pr12-learning-timeout-lint.log"
+        "log": "/private/tmp/pr12-boundary-lint.log"
       },
       {
         "command": "npm run test:plugin-package",
         "exitCode": 0,
-        "consumerFlowTests": 41,
+        "consumerFlowTests": 42,
         "installedConformanceTests": 467,
         "fail": 0,
-        "log": "/private/tmp/pr12-learning-timeout-package.log",
-        "consumerEvidence": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/task-plugin-consumer-yVRCZu/evidence.json",
-        "conformanceLog": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/task-plugin-consumer-yVRCZu/conformance.log"
+        "log": "/private/tmp/pr12-boundary-package.log",
+        "consumerEvidence": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/task-plugin-consumer-D3VG4R/evidence.json",
+        "conformanceLog": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/task-plugin-consumer-D3VG4R/conformance.log"
       },
       {
         "command": "git diff --check",
@@ -591,10 +591,10 @@
     ],
     "verifiedPayloadFiles": 142,
     "logSha256": {
-      "/private/tmp/pr12-learning-timeout-unit.log": "0564a2d9f302c1803f370156a0d7ff0c3a45ec6036f8fc19aa8d2af604d0177a",
-      "/private/tmp/pr12-learning-timeout-lint.log": "2f32bd854b16ced20ab71be2afd3673b887efc4815c6e55ea7b941ebc5aa8a0b",
-      "/private/tmp/pr12-learning-timeout-package.log": "5907a94f056d5adf88d2d8e39d3eef0b1d1547f7a9c0f3cdbd3605fab5d24e36",
-      "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/task-plugin-consumer-yVRCZu/conformance.log": "40b7f5a964563508f0a3b7416f4421ce0837ffa45de2bdd7eb22f5d1529a0cd9"
+      "/private/tmp/pr12-boundary-unit.log": "d5fe88c7487e6d97b005d64bdfc0a6a9a45ddc460be89a03eafe834947328f79",
+      "/private/tmp/pr12-boundary-lint.log": "2f32bd854b16ced20ab71be2afd3673b887efc4815c6e55ea7b941ebc5aa8a0b",
+      "/private/tmp/pr12-boundary-package.log": "89916f3985193d4fe5fcd2734944a06fb610bdd559ae1faa4758994bde38c2a0",
+      "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/task-plugin-consumer-D3VG4R/conformance.log": "a8ec0b60d9d769b4e125a57f5609c280d44349ccd3d08ea4872cba82c7a07a89"
     },
     "hostEvidence": false,
     "fixturePurpose": "Deterministic unpaid installed-artifact compatibility; no actual installed host or live provider qualification",
@@ -999,21 +999,20 @@
     "historicalEvidence": "a2e868bf4a448d58b690bac3c987a733e9966e94:docs/audit/plugin-ready/plugin-delivery.json coordinatorWakeReview"
   },
   "learningSnapshotAndTimeoutReview": {
-    "reviewId": 5460609338,
+    "historicalEvidence": "386abd52d590df1c41607f9723f11a973aa2c796:docs/audit/plugin-ready/plugin-delivery.json learningSnapshotAndTimeoutReview"
+  },
+  "preparationBoundaryReview": {
+    "reviewId": 5460779651,
     "comments": [
-      4222229263,
-      4222229273
+      4222375848
     ],
     "implementation": [
-      "lib/runtime_state.mjs learning snapshot allowlist, maintenance operation lock and restore lock rejection",
-      "lib/tick.mjs effective task timeout source",
-      "lib/commands/why.mjs task authorization timeout remedy"
+      "lib/tasks.mjs public validate/start beforeTaskEffects boundary checks",
+      "lib/task_delivery_contract.mjs settled preparation boundary code allowlist"
     ],
     "tests": [
-      "test/runtime-delivery.test.mjs runtime backup preserves learning identities, trust and delivery state while excluding operation locks",
-      "test/tick.test.mjs task runtime minimum records its source while tighter repository limits retain theirs",
-      "test/why.test.mjs task allowance timeout explains the immutable authorization limit"
+      "test/fixtures/plugin-installed-flow.mjs installed preparation boundary refusals settle validate and start intents without effects"
     ],
-    "coverage": "Round-trip learning identity, mode, approved profile and delivery data; refuse concurrent learning writes and release maintenance owners; exclude and reject operation locks; identify the effective task runtime minimum while retaining repository source on tighter or equal limits."
+    "coverage": "Unsafe legacy preparation receipts reject before task mutation, readiness or dispatch; exact retries replay acknowledged refusals with safe remedies; a new resume records the blocked task without pending-intent deadlock; settled state does not pin migration. Shared internal checks remain unmarked because they can follow preparation effects."
   }
 }
