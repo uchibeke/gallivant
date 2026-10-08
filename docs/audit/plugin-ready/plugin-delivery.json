@@ -18,14 +18,14 @@
       "2b4514fb27fcb493e62bfed913fffc204215f155",
       "96e81031516bdf6663dd3b97ac39b8f57022568b"
     ],
-    "testedSourceCommit": "d7c2ab49546b1a8a751d66df062c27f9b2769571"
+    "testedSourceCommit": "4dba80d93b188c633f73a65c7d996ff175b193a9"
   },
   "artifact": {
     "coreArtifact": "gallivant-0.2.0.tgz",
-    "coreSha256": "44357f15a1a46651320e3aa36be1ee95541782b4c70c41a8131584cf4dd18855",
+    "coreSha256": "0e68cebffe4604b821e3f6cab79e22464743ee9da289532d4b5312b4797d21a9",
     "hashes": {
       "plugin": "8753892ceb5552fc37ba011929830f4c754d717f8d8031e31fb9b4935b465e1a",
-      "runtime": "25b4e8a0185af97f98c8b3fc3ccf65ba7ffad575ed53e7731bca64d5b4835f88",
+      "runtime": "b1414384c33d73832a903c4745bae3ed6a504dbf480daaebf2080e7ea382034d",
       "operations": "86e62501fa7a3d6d29e26830cd43b2648b32978912d2096a8690ed2e2fab0f86"
     },
     "dependencyLockSha256": "c0f2f9bb3ad4d1bb8356c1162a8e71109534d747a5bc3182d4cce6457760c6d8",
@@ -119,7 +119,7 @@
       "lib/run.mjs": "3682818ab95bf3b27c262449aa521be094caee9c8f133e94740923ebafb91315",
       "lib/runtime_dependencies.mjs": "6d25b972c116026643f348dc55586009d2746f68b99f47d450b2a3ef35625949",
       "lib/runtime_node.mjs": "df1b43dc1ae576ff96cd9a36201f906bf8d0c04deea291ce78d754b2b2fde4cd",
-      "lib/runtime_state.mjs": "5a3308a21052fd60aaac2298b17ed233968c34a4898df6d9b081b8d0c2618d76",
+      "lib/runtime_state.mjs": "7de2a1968d0a293f429a095066c4900826df3ca8a668bb5242757a6825b1a2d0",
       "lib/sources/index.mjs": "88e1550751e9f52c82e94085bcb77bbd2b80466c9e2192670593f12894c4a4ec",
       "lib/sources/prd.mjs": "b26425213d537d8bf640abee1046481925de30d676fdb9b6a6b9239cdc50effd",
       "lib/start_contract.mjs": "e154f36dcf54c93b4308a93d8926dca8f28358c4e41234dc684008706ea23ab9",
@@ -562,25 +562,25 @@
       {
         "command": "npm test",
         "exitCode": 0,
-        "tests": 1411,
-        "pass": 1411,
+        "tests": 1412,
+        "pass": 1412,
         "fail": 0,
-        "log": "/private/tmp/pr12-ack-list-unit.log"
+        "log": "/private/tmp/pr12-pending-pin-unit.log"
       },
       {
         "command": "npm run lint",
         "exitCode": 0,
-        "log": "/private/tmp/pr12-ack-list-lint.log"
+        "log": "/private/tmp/pr12-pending-pin-lint.log"
       },
       {
         "command": "npm run test:plugin-package",
         "exitCode": 0,
         "consumerFlowTests": 33,
-        "installedConformanceTests": 446,
+        "installedConformanceTests": 447,
         "fail": 0,
-        "log": "/private/tmp/pr12-ack-list-package.log",
-        "consumerEvidence": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/task-plugin-consumer-9N8G2J/evidence.json",
-        "conformanceLog": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/task-plugin-consumer-9N8G2J/conformance.log"
+        "log": "/private/tmp/pr12-pending-pin-package.log",
+        "consumerEvidence": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/task-plugin-consumer-Bgz9VY/evidence.json",
+        "conformanceLog": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/task-plugin-consumer-Bgz9VY/conformance.log"
       },
       {
         "command": "git diff --check",
@@ -590,10 +590,10 @@
     ],
     "verifiedPayloadFiles": 141,
     "logSha256": {
-      "/private/tmp/pr12-ack-list-unit.log": "54a5d35054d989bed6ca2d3571a9bbc3e31859a706aef68470a821dea3af9fc9",
-      "/private/tmp/pr12-ack-list-lint.log": "2f32bd854b16ced20ab71be2afd3673b887efc4815c6e55ea7b941ebc5aa8a0b",
-      "/private/tmp/pr12-ack-list-package.log": "3eda50e24458533b30c5e07719448fcd0303a73a65f99f766deb3e6c70f916a3",
-      "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/task-plugin-consumer-9N8G2J/conformance.log": "6c5f85dfc3e922d9b24035d7463e6b9b4f5fc7e7b27b0046bdf6c4f1458918e8"
+      "/private/tmp/pr12-pending-pin-unit.log": "6e8baf8882b8c5daea449fc0449948148a433704e35017aed120a0b4c2dff093",
+      "/private/tmp/pr12-pending-pin-lint.log": "2f32bd854b16ced20ab71be2afd3673b887efc4815c6e55ea7b941ebc5aa8a0b",
+      "/private/tmp/pr12-pending-pin-package.log": "8d3e02efe2241d801c95ed5fcdcdfa85d448fbfd6cc671b9273327973085c012",
+      "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/task-plugin-consumer-Bgz9VY/conformance.log": "a86f4a7e62f2925b8040e042fdeeb9d94822b6bcf6ab3d081dc0b37863a793cb"
     },
     "hostEvidence": false,
     "fixturePurpose": "Deterministic unpaid installed-artifact compatibility; no actual installed host or live provider qualification",
@@ -650,42 +650,8 @@
     "status": "Historical evidence preserved in Git; current verification and external gates retained here."
   },
   "validationReviewFollowup": {
-    "reviewId": 5441859780,
-    "reviewedCommit": "15e22b96979b35297d4b84eed961d569362ea1c1",
-    "items": [
-      {
-        "commentId": 4206534666,
-        "implementation": [
-          "lib/plugin_package.mjs"
-        ],
-        "tests": [
-          "test/plugin-package.test.mjs public URLs reject canonical loopbacks and aliases across every configured URL"
-        ],
-        "rule": "Public endpoint, metadata and resource URLs cannot target loopback hosts or localhost aliases"
-      },
-      {
-        "commentId": 4206534672,
-        "implementation": [
-          "lib/plugin_package.mjs"
-        ],
-        "tests": [
-          "test/plugin-package.test.mjs public asset preflight and builder share regular file, size and secret constraints"
-        ],
-        "rule": "Release preflight and artifact emission must use the same asset constraints for all configured files"
-      }
-    ],
-    "focusedVerification": {
-      "tests": 24,
-      "pass": 24,
-      "fail": 0,
-      "log": "/tmp/plugin-delivery-validation-focused-final.log"
-    },
-    "initialSandboxFailure": {
-      "log": "/tmp/plugin-delivery-validation-focused.log",
-      "error": "npm cache/log filesystem EPERM",
-      "resolution": "Same focused suite passed using supported permission escalation; no filesystem permission changes"
-    },
-    "externalPrerequisites": "Previously observed unmet prerequisites retained; no unchanged live call retried and no installed-host/model-access evidence inferred from fixtures"
+    "historicalEvidence": "ccf2e4c95c69095670f0ee8c954647051d745081:docs/audit/plugin-ready/plugin-delivery.json validationReviewFollowup",
+    "status": "Historical evidence preserved in Git; current verification and external gates retained here."
   },
   "wakeQuestionReviewFollowup": {
     "reviewId": 5442175343,
@@ -1083,5 +1049,14 @@
     "initialInstalledFailure": "Historical signature fixture lacked its saved legacy snapshot after compact receipts were introduced; restored that snapshot and separately asserted current-view replay. Initial log: /private/tmp/pr12-ack-list-package-initial.log",
     "compatibility": "Existing snapshot receipts replay; new compact receipts reauthorize and inspect current task state without repeating effects. Legacy pending intents reserve before recovery. Cancellation reserve remains separate.",
     "scope": "External deployment, hosted-flow and post-merge evidence remain unmet."
+  },
+  "pendingReceiptPinReview": {
+    "reviewId": 5451199641,
+    "commentId": 4214476738,
+    "implementation": "lib/runtime_state.mjs deliveryPath and checkRuntimeState ordinary/cancellation receipt liveness",
+    "tests": "test/runtime-delivery.test.mjs pending delivery receipts pin migration before intake and through wake acknowledgement",
+    "focusedTests": 26,
+    "coverage": "Intent and wakePending acknowledgements, unknown status, both receipt maps, same-artifact recovery, refused repinning, unchanged state, lock cleanup, backup/restore, unpinned legacy state, settled migration, snapshot path exclusion; also executed in installed conformance.",
+    "scope": "Previously recorded deployment, hosted-flow and post-merge evidence gates remain unmet."
   }
 }
