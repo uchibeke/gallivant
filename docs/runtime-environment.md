@@ -86,8 +86,8 @@ controls so the next session invocation receives the new setup.
 with a conflicting Node, all five local start/resume adapters, quoting, portable
 discovery, preservation of security settings, actual child-process cleanup,
 failed launches, restart recovery, and refusal of agent-writable snapshots.
-`npm test` includes this file
-and all existing suites, including remote adapter tests. The runtime-portability
+`npm test` includes this file and all existing suites, including remote adapter
+tests. The runtime-portability
 workflow runs the full suite on Ubuntu and macOS with Node 22 and 24. CI installs
 Bubblewrap and activates Ubuntu's packaged sandbox-helper AppArmor profile on
 Linux, and selects Command Line Tools on macOS before running

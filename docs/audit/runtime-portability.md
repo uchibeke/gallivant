@@ -26,7 +26,9 @@ Native package selection depends on the Node process, not hardware alone.
   filesystem access bounded to the checkout and trusted runtime.
 - The corrected full local suite passed all 1,351 tests with no failures or skips.
   The snapshot cleanup optimization subsequently passed all 12 runtime tests.
-  The final cross-platform CI matrix is still being checked.
+- All four [CI jobs](https://github.com/uchibeke/gallivant/actions/runs/37780950579)
+  passed on code revision `39433f5`: Ubuntu and macOS, each on Node 22 and 24.
+  Both platforms exercised the full suite after native isolation passed.
 
 ## CI prerequisites
 
@@ -43,8 +45,9 @@ preflight prints the actual synthetic sandbox-probe failure before the suite,
 so missing isolation is diagnosed directly. Enforcement remains required: no
 checks are skipped and no sandbox fallback is enabled.
 
-The matrix covers Ubuntu/macOS with Node 22/24. Its final result must be checked
-before merging; local success alone does not qualify both operating systems.
+The matrix covers Ubuntu/macOS with Node 22/24. The code revision above is green;
+future changes must keep all four jobs passing. This is native OS/runtime and
+fixture coverage, not live model qualification for every provider.
 
 ## Scope boundaries
 
