@@ -18,14 +18,14 @@
       "2b4514fb27fcb493e62bfed913fffc204215f155",
       "96e81031516bdf6663dd3b97ac39b8f57022568b"
     ],
-    "testedSourceCommit": "4dba80d93b188c633f73a65c7d996ff175b193a9"
+    "testedSourceCommit": "50962d6bccdf261ba4b03e49ada6dfd4060ecb21"
   },
   "artifact": {
     "coreArtifact": "gallivant-0.2.0.tgz",
-    "coreSha256": "0e68cebffe4604b821e3f6cab79e22464743ee9da289532d4b5312b4797d21a9",
+    "coreSha256": "b847664db948f5eae0d3bc6f8538b33f51cb02b26308b5a2ebc39716ef02d9d2",
     "hashes": {
       "plugin": "8753892ceb5552fc37ba011929830f4c754d717f8d8031e31fb9b4935b465e1a",
-      "runtime": "b1414384c33d73832a903c4745bae3ed6a504dbf480daaebf2080e7ea382034d",
+      "runtime": "f9f0a4530377530cf7fc7fabca2fb1b69268d430943a632092d848c592275f64",
       "operations": "86e62501fa7a3d6d29e26830cd43b2648b32978912d2096a8690ed2e2fab0f86"
     },
     "dependencyLockSha256": "c0f2f9bb3ad4d1bb8356c1162a8e71109534d747a5bc3182d4cce6457760c6d8",
@@ -69,7 +69,7 @@
       "lib/commands/start.mjs": "12e7f26aff07049f9845e0842356a0e7b7b1dc2f058bfc81cb456312b6425dc4",
       "lib/commands/status.mjs": "41ededea71ae3b2bcf986511720c2a397af7abedcd96b2966674840a2800d6cc",
       "lib/commands/task.mjs": "12e98c60d91c3afd4796d3ef5fd19a07e489d99fbe62cc28140a22c8db1af2f0",
-      "lib/commands/up.mjs": "3dcc7d297d67909b0af98dc8718666e59560a7437d888f16b2c3e3a236643834",
+      "lib/commands/up.mjs": "e84fbd65d764efd1d92cb9409f2832f7fda30ceecda56282020faa1f2eda6358",
       "lib/commands/why.mjs": "bad1866f6f7af98640f546ff0850a057a2ac1c416cbcfae8a8c3a0cf1997e69e",
       "lib/config.mjs": "64a11002c4963648966db9a8c04f44da8cbfde81698800932d4e854bc4f1b097",
       "lib/context.mjs": "349ed15ad1c4afe16d782147d5c2eb733135461c8075b8c348bb8af438a6cb1c",
@@ -77,7 +77,7 @@
       "lib/control.mjs": "a2d922af5cd19d5ac28b4d61f55b3b56159b4fe9958fd5a9627e9fdd2c8625b4",
       "lib/coordinator.mjs": "fa6f8ea55df5f326e54fb853bf49ee48db8bb94e88f664ea315497a596584d3a",
       "lib/credential.mjs": "61ac0040b5e41ce299f59d80081fbfdd7537745453300c79d2090f6f173bc46f",
-      "lib/daemon.mjs": "cffbb4ec9d0608ed7ea43fd974081fcf432d71eaa49de75ce001e333a08d8a66",
+      "lib/daemon.mjs": "39e767449323b797cf6ae5f272eabce3f00206daa1ed6ba0073ee1453bd07ec6",
       "lib/deliverable.mjs": "7d3c824ac1d8cb6032b1814cdf4e0dc156e4d6d01382bebc0ab1647e4abfb678",
       "lib/events.mjs": "776867f9a280ea179f2be8f6e570c88d468ebb5500db8864041fd29b01202e27",
       "lib/execution_input.mjs": "9fd16569f9ac9286ff4990a7bc442114ebff681bcd43972fccba033e66e02cf1",
@@ -562,25 +562,25 @@
       {
         "command": "npm test",
         "exitCode": 0,
-        "tests": 1412,
-        "pass": 1412,
+        "tests": 1413,
+        "pass": 1413,
         "fail": 0,
-        "log": "/private/tmp/pr12-pending-pin-unit.log"
+        "log": "/private/tmp/pr12-daemon-pin-unit.log"
       },
       {
         "command": "npm run lint",
         "exitCode": 0,
-        "log": "/private/tmp/pr12-pending-pin-lint.log"
+        "log": "/private/tmp/pr12-daemon-pin-lint.log"
       },
       {
         "command": "npm run test:plugin-package",
         "exitCode": 0,
         "consumerFlowTests": 33,
-        "installedConformanceTests": 447,
+        "installedConformanceTests": 448,
         "fail": 0,
-        "log": "/private/tmp/pr12-pending-pin-package.log",
-        "consumerEvidence": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/task-plugin-consumer-Bgz9VY/evidence.json",
-        "conformanceLog": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/task-plugin-consumer-Bgz9VY/conformance.log"
+        "log": "/private/tmp/pr12-daemon-pin-package.log",
+        "consumerEvidence": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/task-plugin-consumer-rrEmx3/evidence.json",
+        "conformanceLog": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/task-plugin-consumer-rrEmx3/conformance.log"
       },
       {
         "command": "git diff --check",
@@ -590,10 +590,10 @@
     ],
     "verifiedPayloadFiles": 141,
     "logSha256": {
-      "/private/tmp/pr12-pending-pin-unit.log": "6e8baf8882b8c5daea449fc0449948148a433704e35017aed120a0b4c2dff093",
-      "/private/tmp/pr12-pending-pin-lint.log": "2f32bd854b16ced20ab71be2afd3673b887efc4815c6e55ea7b941ebc5aa8a0b",
-      "/private/tmp/pr12-pending-pin-package.log": "8d3e02efe2241d801c95ed5fcdcdfa85d448fbfd6cc671b9273327973085c012",
-      "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/task-plugin-consumer-Bgz9VY/conformance.log": "a86f4a7e62f2925b8040e042fdeeb9d94822b6bcf6ab3d081dc0b37863a793cb"
+      "/private/tmp/pr12-daemon-pin-unit.log": "5838320464ade41b38cee4ba14dae6076d46b9617b880d507183b0fc1972db71",
+      "/private/tmp/pr12-daemon-pin-lint.log": "2f32bd854b16ced20ab71be2afd3673b887efc4815c6e55ea7b941ebc5aa8a0b",
+      "/private/tmp/pr12-daemon-pin-package.log": "00bfb0c2c5fcaa2c3ded59fb593d401c24c11236169fe067ab20853aba9e8cf2",
+      "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/task-plugin-consumer-rrEmx3/conformance.log": "f987f8582507c90bf8fcd77dd21456c8f6fcde44bda4c91724959bbb404db6cb"
     },
     "hostEvidence": false,
     "fixturePurpose": "Deterministic unpaid installed-artifact compatibility; no actual installed host or live provider qualification",
@@ -654,38 +654,8 @@
     "status": "Historical evidence preserved in Git; current verification and external gates retained here."
   },
   "wakeQuestionReviewFollowup": {
-    "reviewId": 5442175343,
-    "reviewedCommit": "9d57390d013afcd09f49f5c794d9bddea51a5f13",
-    "items": [
-      {
-        "commentId": 4206792004,
-        "implementation": [
-          "lib/runtime_node.mjs"
-        ],
-        "tests": [
-          "test/runtime-delivery.test.mjs delayed and repeated coordinator wakes revalidate the pin under ownership before effects"
-        ],
-        "rule": "A coordinator object cannot retain permission to run after its namespace artifact pin changes"
-      },
-      {
-        "commentId": 4206792015,
-        "implementation": [
-          "lib/task_delivery_view.mjs"
-        ],
-        "tests": [
-          "test/task-delivery.test.mjs model questions retain saved redacted text and IDs without private view fields",
-          "test/fixtures/plugin-installed-flow.mjs installed MCP without UI exposes saved questions and answers using model-visible fields"
-        ],
-        "rule": "Conversational clients must receive the saved question text needed to answer without the optional UI"
-      }
-    ],
-    "focusedVerification": {
-      "tests": 29,
-      "pass": 29,
-      "fail": 0,
-      "log": "/tmp/plugin-delivery-wake-focused.log"
-    },
-    "externalPrerequisites": "Previously observed unmet prerequisites retained; no unchanged live call retried and no installed-host/model-access evidence inferred from fixtures"
+    "historicalEvidence": "379ed04d4ed784ab188bff5b918e4e53dcd8be1e:docs/audit/plugin-ready/plugin-delivery.json wakeQuestionReviewFollowup",
+    "status": "Historical evidence preserved in Git; current verification and external gates retained here."
   },
   "statePathReviewFollowup": {
     "reviewId": 5442505680,
@@ -1058,5 +1028,17 @@
     "focusedTests": 26,
     "coverage": "Intent and wakePending acknowledgements, unknown status, both receipt maps, same-artifact recovery, refused repinning, unchanged state, lock cleanup, backup/restore, unpinned legacy state, settled migration, snapshot path exclusion; also executed in installed conformance.",
     "scope": "Previously recorded deployment, hosted-flow and post-merge evidence gates remain unmet."
+  },
+  "daemonPinReview": {
+    "reviewId": 5451351519,
+    "commentId": 4214634297,
+    "implementation": [
+      "lib/daemon.mjs acquireDaemon checks pin under ownership and shares assertUnpinnedHome with CLI writes",
+      "lib/commands/up.mjs upInBackground checks before spawning and while polling"
+    ],
+    "tests": "test/recovery.test.mjs ordinary daemon startup refuses pinned homes before effects and releases ownership",
+    "focusedTests": 55,
+    "coverage": "Direct acquireDaemon, foreground up, background startup and pin-after-preflight polling; invalid/falsy pin contents; unchanged pin and no health writes; lock cleanup; runtime owner retained; ordinary unpinned daemon positive control; installed conformance.",
+    "scope": "Existing deployment, hosted-flow and post-merge evidence gates remain unmet."
   }
 }
