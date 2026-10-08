@@ -895,7 +895,8 @@ test("installed intent fence prevents unrelated revisions from consuming a start
   await assert.rejects(w.delivery.dispatch("start", input, "alice"), /intent-only crash/);
   const restarted = createTaskDelivery(w.opts);
   for (const name of ["resume", "validate", "start"]) await assert.rejects(restarted.dispatch(name, { ...mutate(task, `intervening-${name}`), ...(name === "start" ? { run: true } : {}) }, "alice"), { code: "DELIVERY_PENDING" });
-  await assert.rejects(restarted.dispatch("prepare", prepare("intervening-prepare"), "alice"), { code: "DELIVERY_PENDING" });
+  const independent = await restarted.dispatch("prepare", prepare("intervening-prepare"), "alice");
+  assert.notEqual(independent.taskId, task.taskId);
   const started = await restarted.dispatch("start", input, "alice");
   assert.equal(started.status, "started");
   assert.equal(w.worlds.get("alice").ctx.runnerFor(started.implementation.id).started.length, 1);
