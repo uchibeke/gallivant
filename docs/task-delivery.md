@@ -73,6 +73,12 @@ ownership, exact request fingerprints, intent, acknowledgement and pending wake.
 This release's filesystem adapter supports one host on a durable volume. APort
 can supply another adapter only with equivalent tested transaction/ownership
 semantics. Shared physical storage alone grants no authority.
+Delivery mutations also claim the scoped home's daemon ownership lock before
+saving intent and hold it through task effects, receipt acknowledgement and wake
+scheduling. Backup, migration and coordinator wakes therefore refuse concurrent
+ownership; retry the same operation ID after the owner releases. The scheduler
+must enqueue a future wake, never execute a coordinator inline. Read operations
+do not acquire this owner or create provider pollers.
 
 All mutations require operationId and expectedRevision; prepare uses revision 0.
 Preparation does not authorize implementation. Start requires `run:true` and the

@@ -77,7 +77,12 @@ test("the actual installed packager retains its dependency lock and can rebuild 
 });
 
 test("installed scoped API prepares, answers, validates, starts once and follows canonical review/control decisions", async () => {
-  const w = world(); let task = await w.delivery.dispatch("prepare", prepare(), "alice");
+  let ownedWakes = 0;
+  const w = world({ schedule: async () => {
+    const home = w.worlds.get("alice").ctx.home;
+    assert.ok(existsSync(join(home, "daemon.lock")), "every mutation retains runtime ownership through receipt and wake");
+    ownedWakes++;
+  } }); let task = await w.delivery.dispatch("prepare", prepare(), "alice");
   assert.equal(task.status, "needs-input"); assert.equal(task.allowance.budgetUsd, 1);
   assert.equal(task.revision, (await w.delivery.dispatch("prepare", prepare(), "alice")).revision);
   const first = task;
@@ -87,6 +92,7 @@ test("installed scoped API prepares, answers, validates, starts once and follows
   task = await w.delivery.dispatch("validate", mutate(task, "validate"), "alice");
   task = await w.delivery.dispatch("start", { ...mutate(task, "start"), run: true }, "alice");
   assert.equal(task.status, "started", task.failures?.join(";"));
+  assert.equal(ownedWakes, 4);
   const again = await w.delivery.dispatch("start", { ...mutate({ ...task, revision: first.revision }, "start") , run: true }, "alice").catch(e => e);
   assert.equal(again.code, "DELIVERY_CONFLICT");
   const ctx = w.worlds.get("alice").ctx, id = task.implementation.id, runner = ctx.runnerFor(id);
@@ -128,6 +134,7 @@ test("mutation acknowledgement schedules recovery once; lost wake reply never re
   let wakes = 0;
   const w = world({ question: false, schedule: async () => { if (++wakes === 1) throw new Error("wake acknowledgement lost"); } });
   await assert.rejects(w.delivery.dispatch("prepare", prepare(), "alice"));
+  assert.equal(existsSync(join(w.worlds.get("alice").ctx.home, "daemon.lock")), false, "failed wake releases runtime ownership");
   const task = await createTaskDelivery(w.opts).dispatch("prepare", prepare(), "alice");
   assert.equal(task.status, "ready"); assert.equal(wakes, 2); assert.equal(Object.keys(w.opts.store.read(scope("alice")).tasks).length, 1);
 });
@@ -392,8 +399,8 @@ await makeExecution({root:home+'/runs',taskId:'eviction',account:'alice',provide
 });
 
 test("installed preparation and readiness callbacks pin their runtime before implementation registration", async () => {
-  for (const phase of ["preparation", "readiness"]) {
-    const w = world({ question: phase === "preparation" }); await w.contextFor(scope("alice"), "widget");
+  for (const phase of ["preparation", "answer", "readiness"]) {
+    const w = world({ question: phase !== "readiness" }); await w.contextFor(scope("alice"), "widget");
     const bound = w.worlds.get("alice"), ctx = bound.ctx;
     migrateRuntimeState({ home: ctx.home, manifest });
     let entered, release;
@@ -402,6 +409,10 @@ test("installed preparation and readiness callbacks pin their runtime before imp
     if (phase === "preparation") {
       bound.taskOptions.prepare = async (_ctx, task) => { entered(); await finished; return JSON.stringify(draftFor(task, { question: true })); };
       pending = w.delivery.dispatch("prepare", prepare(), "alice");
+    } else if (phase === "answer") {
+      const task = await w.delivery.dispatch("prepare", prepare(), "alice");
+      bound.taskOptions.prepare = async (_ctx, task) => { entered(); await finished; return JSON.stringify(draftFor(task)); };
+      pending = w.delivery.dispatch("answer", { ...mutate(task, "answer-pending"), answers: { "q-r-1": "Use CSV." } }, "alice");
     } else {
       const task = await w.delivery.dispatch("prepare", prepare(), "alice");
       const path = join(ctx.home, "tasks", task.taskId, "intake.json"), intake = JSON.parse(readFileSync(path));
@@ -414,12 +425,33 @@ test("installed preparation and readiness callbacks pin their runtime before imp
       assert.equal(ctx.state.entries().length, 0);
       assert.equal(checkRuntimeState({ home: ctx.home, manifest }).active, true);
       const pin = readFileSync(join(ctx.home, "runtime-pin.json"));
-      assert.throws(() => migrateRuntimeState({ home: ctx.home, manifest: { ...manifest, coreSha256: "b".repeat(64) } }), { code: "RUNTIME_ACTIVE_PIN" });
+      assert.throws(() => migrateRuntimeState({ home: ctx.home, manifest: { ...manifest, coreSha256: "b".repeat(64) } }), /already running/);
+      const out = join(w.root, "busy-backup");
+      assert.throws(() => backupRuntimeState({ home: ctx.home, out, manifest }), /already running/);
+      assert.equal(existsSync(out), false);
+      await w.delivery.dispatch("list", {}, "alice"); // reads stay available without ownership or provider polling
       assert.deepEqual(readFileSync(join(ctx.home, "runtime-pin.json")), pin);
     } finally { release(); await pending; }
     assert.equal(checkRuntimeState({ home: ctx.home, manifest }).active, false);
     migrateRuntimeState({ home: ctx.home, manifest: { ...manifest, coreSha256: "b".repeat(64) } });
   }
+});
+
+test("installed delivery refuses maintenance ownership before saving intent and releases failed requests", async () => {
+  const w = world(), { ctx } = await w.contextFor(scope("alice"), "widget");
+  const owner = createNodeOwnerStore({ home: ctx.home, durable: true });
+  await owner.withOwner(async () => {
+    await assert.rejects(w.delivery.dispatch("prepare", prepare(), "alice"), /already running/);
+    assert.deepEqual(w.opts.store.read(scope("alice")).operations, {});
+  });
+  assert.equal(existsSync(join(ctx.home, "daemon.lock")), false);
+  await assert.rejects(w.delivery.dispatch("prepare", { ...prepare(), contextIds: ["missing"] }, "alice"), { code: "DELIVERY_INPUT" });
+  assert.equal(existsSync(join(ctx.home, "daemon.lock")), false);
+  const task = await w.delivery.dispatch("prepare", prepare(), "alice");
+  assert.equal(task.status, "needs-input");
+  const backup = join(w.root, "settled-backup");
+  backupRuntimeState({ home: ctx.home, out: backup, manifest });
+  assert.ok(existsSync(join(backup, "backup.json")));
 });
 
 test("installed backup restores selected ledger-named and lock sources for answer recovery", async () => {
