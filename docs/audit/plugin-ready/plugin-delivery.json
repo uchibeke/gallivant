@@ -18,14 +18,14 @@
       "2b4514fb27fcb493e62bfed913fffc204215f155",
       "96e81031516bdf6663dd3b97ac39b8f57022568b"
     ],
-    "testedSourceCommit": "794a533f1e21a1bc05767c6e7da20fb4e7948634"
+    "testedSourceCommit": "4a703ea28b10f8acd898250d2312cf809ef4e217"
   },
   "artifact": {
     "coreArtifact": "gallivant-0.2.0.tgz",
-    "coreSha256": "5c806fb1fb0bda1150c33a94578e53a3b4929f622f9b1c93b310e55ab92a6401",
+    "coreSha256": "a10777d14642de7a6928a5b9ca5197526a55eec12641708c3006bf610896fbb3",
     "hashes": {
       "plugin": "8753892ceb5552fc37ba011929830f4c754d717f8d8031e31fb9b4935b465e1a",
-      "runtime": "29081ac2fab85e2fa36bb15b7323d0685f60c07c61a2be0bb7bd72ce06f9e7e8",
+      "runtime": "cba1c489d2b890d315d86d15fa1fecbc05d17018a1058a845f479e72fd1db617",
       "operations": "86e62501fa7a3d6d29e26830cd43b2648b32978912d2096a8690ed2e2fab0f86"
     },
     "dependencyLockSha256": "c0f2f9bb3ad4d1bb8356c1162a8e71109534d747a5bc3182d4cce6457760c6d8",
@@ -48,7 +48,7 @@
       "docs/openai-agents.md": "38f162e4d4918bdab372be804e1a06a6a9582493c941f07799f97324f4637db2",
       "docs/prd.md": "c018adab1b0df85f0c4fcec3a05b2b03911ded645987a21c13b61df0dcb41594",
       "docs/preparation.md": "814ad941a8291accc4036eb022edd64ed9e3a1e39f985a9f35b25f7eeae8ee9f",
-      "docs/task-delivery.md": "ed0c153cc71151cf2c62e160303e381dc5e0a8e57a0d458053ed7ecd9a5ef943",
+      "docs/task-delivery.md": "137c8f5771774367c32b39e9f517b76b31e57a87a0d7c145f622f11dec38e052",
       "docs/tasks.md": "ca7b8d5f332c42d0518ab9e4524c865a73ec57534d82a88392d7df93ebff6c2c",
       "lib/aport.mjs": "5c046abda8964a0439ee699bf658b9a00fdd7527884848f7fb22c3fe6c9e1d74",
       "lib/attribution.mjs": "cddb3eafe44f1dee26999a987ad9b1c62332cc9eb1ee17925cd2b961a9ccac17",
@@ -106,7 +106,7 @@
       "lib/openai_agents_input.mjs": "3b012e8c7c51d9d007762e1f849ea3caaf7bbf9ab128a6f5c916bff195b6b83c",
       "lib/openai_agents_sources.mjs": "9d61867d9f86901b084f37d4da6c344df24a0ff71b7ab0537273aad4b18f1132",
       "lib/openai_agents.mjs": "3b67fe601cb8ad268f2d997d55e19bad4aca1f016293595036825892d1991702",
-      "lib/plugin_package.mjs": "f9655fa102389978a5cb7fe3baeef6226368b60c5c545f67d2bc94b0bfd3a719",
+      "lib/plugin_package.mjs": "6d7e0cb27f79a97dad169bed7ab548e70c3f8a3045556eb6aee359e74f830ba3",
       "lib/prd.mjs": "3e8bd68d62e8e61fe3624cdcc76e27e78e079d77e25a1484aafa7f5ca6f6ffe3",
       "lib/preparation_codex.mjs": "d1fcd4d1ec49b3a086622ec2777fa231b4fbc9c0d6e13bb90702d27b785fc447",
       "lib/probe.mjs": "191639a18233649d523effbf2411d100946e6463d70f380c41aec8301bb42197",
@@ -130,7 +130,7 @@
       "lib/task_delivery_mcp.mjs": "a46bb4029534c51426727023c2695ed10f17fdf2ec10e093ad5beae41f9120ef",
       "lib/task_delivery_store.mjs": "d5ac13968be92b773ce4e530217d5ec64539f3ec1877e873ca3c56654813f450",
       "lib/task_delivery_view.mjs": "8f7a9551bc288130dcb7997b2e5941e95324fce34b4eaa24ffc786b5e092559d",
-      "lib/task_delivery.mjs": "e4c9ebc24eef9f684cbb7d8af622f0a87681bf923113b91f2982c19c5534cb83",
+      "lib/task_delivery.mjs": "a818bd155c994c3cb671b9440a7a2539b687000a6c4b08d6dbbdf308b7b98311",
       "lib/task_environment.mjs": "5c61d5d5393014206f078c86084b40d263f59b7dc939c445a4ed86111e4c2b2c",
       "lib/task_prepare.mjs": "f0f27738e208f174aa89dba3a6f70f382cf7e03abe541df5d1854aed4adb9492",
       "lib/task_store.mjs": "54383d2c1893f6b805ed15b2690f38625f734f65ff7f286906829d192a65d2b4",
@@ -165,6 +165,7 @@
       "package.json": "ccc154a3238dbec9f3531112db9ec1e87ccbc152ebbcf3c38144d00ecb0097cf",
       "templates/claude-settings.json": "9b7ac20389f1f4f3b64d470cbcf832e879ff478ad93fc96b09d01829401a2d3e",
       "templates/passport.gallivant.json": "6da0a81a24218588e46d3bb60a2741cbaa036cb6edaadb849256e40711794cbb",
+      "templates/plugin/bundled-runtime.json": "942c55dd8416ab44f4b6b10f38205473c46da814fecc95d7dfc21dc9b18f5cf4",
       "templates/plugin/schemas/mcp.schema.json": "6539175bfcdf43085855183e86da40ea94b166547a72b47ae9a0a390516d3acb",
       "templates/plugin/schemas/plugin.schema.json": "0a4aad95ce337878ad38802ebf0daa3fde76abe3f65400c86bcbb1ec0b3ab883",
       "templates/plugin/task-delivery.SKILL.md": "7187347f1a292e5c623809b0b924afe94cd6e14ddfe63cb052f88e3f969029bb",
@@ -522,7 +523,7 @@
         "lib/harness.mjs"
       ],
       "tests": [
-        "35 installed consumer flow cases",
+        "36 installed consumer flow cases",
         "installed local/API/Cloud provider and lifecycle conformance",
         "inherited hosted bounded-preparation refusal cases"
       ],
@@ -562,25 +563,25 @@
       {
         "command": "npm test",
         "exitCode": 0,
-        "tests": 1416,
-        "pass": 1416,
+        "tests": 1418,
+        "pass": 1418,
         "fail": 0,
-        "log": "/private/tmp/pr12-outcomes-unit.log"
+        "log": "/private/tmp/pr12-proof-unit.log"
       },
       {
         "command": "npm run lint",
         "exitCode": 0,
-        "log": "/private/tmp/pr12-outcomes-lint.log"
+        "log": "/private/tmp/pr12-proof-lint.log"
       },
       {
         "command": "npm run test:plugin-package",
         "exitCode": 0,
-        "consumerFlowTests": 35,
-        "installedConformanceTests": 451,
+        "consumerFlowTests": 36,
+        "installedConformanceTests": 453,
         "fail": 0,
-        "log": "/private/tmp/pr12-outcomes-package.log",
-        "consumerEvidence": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/task-plugin-consumer-aeZeX9/evidence.json",
-        "conformanceLog": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/task-plugin-consumer-aeZeX9/conformance.log"
+        "log": "/private/tmp/pr12-proof-package.log",
+        "consumerEvidence": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/task-plugin-consumer-e69icR/evidence.json",
+        "conformanceLog": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/task-plugin-consumer-e69icR/conformance.log"
       },
       {
         "command": "git diff --check",
@@ -588,12 +589,12 @@
         "output": "No output"
       }
     ],
-    "verifiedPayloadFiles": 141,
+    "verifiedPayloadFiles": 142,
     "logSha256": {
-      "/private/tmp/pr12-outcomes-unit.log": "02efa0da3d63eaa4dfad8381c55ccef852f44abd75f6406976757614db4109b7",
-      "/private/tmp/pr12-outcomes-lint.log": "2f32bd854b16ced20ab71be2afd3673b887efc4815c6e55ea7b941ebc5aa8a0b",
-      "/private/tmp/pr12-outcomes-package.log": "44d3fc6d9d95a03be5dd030f717c086a524fe02499c11e88bf3b32d8e3c664b3",
-      "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/task-plugin-consumer-aeZeX9/conformance.log": "c62633bbdf23eec86e842feba08b641685a27ee5efbb596d0e910d357e258502"
+      "/private/tmp/pr12-proof-unit.log": "de70ced3f08ecee885b056b13aeffb735475a53cf37d921c678393f0be9d68b2",
+      "/private/tmp/pr12-proof-lint.log": "2f32bd854b16ced20ab71be2afd3673b887efc4815c6e55ea7b941ebc5aa8a0b",
+      "/private/tmp/pr12-proof-package.log": "f2129c44487b1eace818a9f82811653757c073e7e1dee4e8e86fc901357427e0",
+      "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/task-plugin-consumer-e69icR/conformance.log": "37b772f4d5a5b66841819bf51a16c2d6da0a667f1878aa1904c5aec99a3ab47c"
     },
     "hostEvidence": false,
     "fixturePurpose": "Deterministic unpaid installed-artifact compatibility; no actual installed host or live provider qualification",
@@ -1020,20 +1021,23 @@
     "scope": "Existing deployment, hosted-flow and post-merge evidence gates remain unmet."
   },
   "outcomeAndPackingReview": {
-    "reviewId": 5451609504,
+    "historicalEvidence": "c105dc34a41cc0ecffac7219143ac902e0b54605:docs/audit/plugin-ready/plugin-delivery.json outcomeAndPackingReview"
+  },
+  "archiveAndIntentProofReview": {
+    "reviewId": 5458387126,
     "comments": [
-      4214877486,
-      4214877497
+      4220393752,
+      4220393765
     ],
     "implementation": [
-      "lib/plugin_package.mjs post-pack HEAD and status revalidation",
-      "lib/task_delivery.mjs saved-view settlement for interrupted moved revisions"
+      "lib/plugin_package.mjs archive byte hashes and selected-commit comparison",
+      "templates/plugin/bundled-runtime.json bundled parser provenance",
+      "lib/task_delivery.mjs exclusive pending intent fence"
     ],
     "tests": [
-      "test/plugin-package.test.mjs public packaging rejects source changes during pack",
-      "test/fixtures/plugin-installed-flow.mjs installed interrupted resume and negative outcomes settle without repeating effects"
+      "test/plugin-package.test.mjs packed transient bytes cannot inherit clean source snapshots",
+      "test/fixtures/plugin-installed-flow.mjs installed intent fence prevents unrelated revisions from consuming a start request"
     ],
-    "recovery": "Exact retries acknowledge current saved outcomes without repeating effects or granting stale authority; subsequent actions require a fresh revision. Pending intake and execution remain independently pinned.",
-    "cleanup": "Failed public source revalidation removes staged output; runtime ownership releases after interrupted receipt recovery."
+    "coverage": "Tracked and bundled archive mutations with clean source snapshots are refused and output removed. Intent-only start crashes fence competing ordinary mutations; exact retry starts once. Cancellation bypasses the ordinary fence. Legacy unfenced intents retain explicit ambiguity refusal."
   }
 }
