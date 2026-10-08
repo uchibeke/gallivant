@@ -18,14 +18,14 @@
       "2b4514fb27fcb493e62bfed913fffc204215f155",
       "96e81031516bdf6663dd3b97ac39b8f57022568b"
     ],
-    "testedSourceCommit": "348647b1df70694e37690e9ac8275529ed28e26a"
+    "testedSourceCommit": "772ddfba17be3e2eabd281ffb3bf2061153006d4"
   },
   "artifact": {
     "coreArtifact": "gallivant-0.2.0.tgz",
-    "coreSha256": "74c069f7d978fa18db2102796954de9e3fef8ef8823407762ace0bfbae266876",
+    "coreSha256": "b33007ee23410fd6013f6e78c02694d8d10d4d8db93a14a91cd1337d29ffce54",
     "hashes": {
       "plugin": "8753892ceb5552fc37ba011929830f4c754d717f8d8031e31fb9b4935b465e1a",
-      "runtime": "0e63c76b22d18f5cd538aa0b9a778074df2e235a039c089f0ad6edacef113109",
+      "runtime": "bd68d8014b6c524ed664ee1479d73b18a4594d9472e8f9a414a84ad077142bec",
       "operations": "86e62501fa7a3d6d29e26830cd43b2648b32978912d2096a8690ed2e2fab0f86"
     },
     "dependencyLockSha256": "c0f2f9bb3ad4d1bb8356c1162a8e71109534d747a5bc3182d4cce6457760c6d8",
@@ -48,7 +48,7 @@
       "docs/openai-agents.md": "38f162e4d4918bdab372be804e1a06a6a9582493c941f07799f97324f4637db2",
       "docs/prd.md": "c018adab1b0df85f0c4fcec3a05b2b03911ded645987a21c13b61df0dcb41594",
       "docs/preparation.md": "814ad941a8291accc4036eb022edd64ed9e3a1e39f985a9f35b25f7eeae8ee9f",
-      "docs/task-delivery.md": "137c8f5771774367c32b39e9f517b76b31e57a87a0d7c145f622f11dec38e052",
+      "docs/task-delivery.md": "9bab9b05ec9d69065e038c93ce461bdcc0e4d472dd4e754a40e9138abde26e3d",
       "docs/tasks.md": "ca7b8d5f332c42d0518ab9e4524c865a73ec57534d82a88392d7df93ebff6c2c",
       "lib/aport.mjs": "5c046abda8964a0439ee699bf658b9a00fdd7527884848f7fb22c3fe6c9e1d74",
       "lib/attribution.mjs": "cddb3eafe44f1dee26999a987ad9b1c62332cc9eb1ee17925cd2b961a9ccac17",
@@ -130,11 +130,11 @@
       "lib/task_delivery_mcp.mjs": "a46bb4029534c51426727023c2695ed10f17fdf2ec10e093ad5beae41f9120ef",
       "lib/task_delivery_store.mjs": "d5ac13968be92b773ce4e530217d5ec64539f3ec1877e873ca3c56654813f450",
       "lib/task_delivery_view.mjs": "8f7a9551bc288130dcb7997b2e5941e95324fce34b4eaa24ffc786b5e092559d",
-      "lib/task_delivery.mjs": "a818bd155c994c3cb671b9440a7a2539b687000a6c4b08d6dbbdf308b7b98311",
+      "lib/task_delivery.mjs": "5ecf7dde1696046b1f3f9b2ef9f3c353d1df192722975cb062e636e031ae69a3",
       "lib/task_environment.mjs": "5c61d5d5393014206f078c86084b40d263f59b7dc939c445a4ed86111e4c2b2c",
       "lib/task_prepare.mjs": "f0f27738e208f174aa89dba3a6f70f382cf7e03abe541df5d1854aed4adb9492",
       "lib/task_store.mjs": "54383d2c1893f6b805ed15b2690f38625f734f65ff7f286906829d192a65d2b4",
-      "lib/tasks.mjs": "ac2b2033d872b5c7480893f30f9d2fc4649d648df0d69e71e30a0ec813bda83e",
+      "lib/tasks.mjs": "187c4699b43ac78ba1051acf4b3e814300ccb3357f8c135a02349f5bd996c35f",
       "lib/tick.mjs": "ed7f456f62c299b6dd8d31b39c2b2ebc3fdf81e7d2e5ead285de66c0c4a0ff5d",
       "lib/time.mjs": "da5f6d30e5059e9b3ed45c3e4a604a3ad20fcc17449ed2ff0429aa9c7a79f146",
       "lib/tracker/assets.mjs": "10b86b3cf08e784e578d18881e28bc9f8fdebc2ab467dbc5fc338269f4a114e2",
@@ -523,7 +523,7 @@
         "lib/harness.mjs"
       ],
       "tests": [
-        "36 installed consumer flow cases",
+        "38 installed consumer flow cases",
         "installed local/API/Cloud provider and lifecycle conformance",
         "inherited hosted bounded-preparation refusal cases"
       ],
@@ -566,22 +566,22 @@
         "tests": 1424,
         "pass": 1424,
         "fail": 0,
-        "log": "/private/tmp/pr12-completeness-unit.log"
+        "log": "/private/tmp/pr12-rejections-unit.log"
       },
       {
         "command": "npm run lint",
         "exitCode": 0,
-        "log": "/private/tmp/pr12-completeness-lint.log"
+        "log": "/private/tmp/pr12-rejections-lint.log"
       },
       {
         "command": "npm run test:plugin-package",
         "exitCode": 0,
-        "consumerFlowTests": 36,
+        "consumerFlowTests": 38,
         "installedConformanceTests": 459,
         "fail": 0,
-        "log": "/private/tmp/pr12-completeness-package.log",
-        "consumerEvidence": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/task-plugin-consumer-0drKkR/evidence.json",
-        "conformanceLog": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/task-plugin-consumer-0drKkR/conformance.log"
+        "log": "/private/tmp/pr12-rejections-package.log",
+        "consumerEvidence": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/task-plugin-consumer-5Sq5HQ/evidence.json",
+        "conformanceLog": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/task-plugin-consumer-5Sq5HQ/conformance.log"
       },
       {
         "command": "git diff --check",
@@ -591,10 +591,10 @@
     ],
     "verifiedPayloadFiles": 142,
     "logSha256": {
-      "/private/tmp/pr12-completeness-unit.log": "39ec6f94d9629163e190b513c1a51f42d209ad1f6bb5708777d8afd2a787d14b",
-      "/private/tmp/pr12-completeness-lint.log": "2f32bd854b16ced20ab71be2afd3673b887efc4815c6e55ea7b941ebc5aa8a0b",
-      "/private/tmp/pr12-completeness-package.log": "40df0928044c6f064f2962ec226fb9cf7185bcf5d07dabec6ea2fa180877cb8e",
-      "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/task-plugin-consumer-0drKkR/conformance.log": "b57850c4bd72fbd6758be18a2b0cd6172203c4c9a2f59e34679f489ad2d1223e"
+      "/private/tmp/pr12-rejections-unit.log": "5d03945479056d5ca5c294e9ec4d136e48d7219736dce90c39da5924733612ec",
+      "/private/tmp/pr12-rejections-lint.log": "2f32bd854b16ced20ab71be2afd3673b887efc4815c6e55ea7b941ebc5aa8a0b",
+      "/private/tmp/pr12-rejections-package.log": "5dd99d9c9cc5db06ab42aa69cd5c5570992f3dd59b1bb6d23119529d67c3c0ad",
+      "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/task-plugin-consumer-5Sq5HQ/conformance.log": "1a8f0f71b6b3c49d0891c5966a356440e79e7a3e307a2c82d700070e836d461d"
     },
     "hostEvidence": false,
     "fixturePurpose": "Deterministic unpaid installed-artifact compatibility; no actual installed host or live provider qualification",
@@ -1027,20 +1027,19 @@
     "historicalEvidence": "efc114f135b987d425de5dd1e69101bc13845c87:docs/audit/plugin-ready/plugin-delivery.json archiveAndIntentProofReview"
   },
   "dispatchAndBundleCompletenessReview": {
-    "reviewId": 5458821662,
-    "comments": [
-      4220738192,
-      4220738206
-    ],
+    "historicalEvidence": "6803ff3da84132ae2dc357ad571b8ee14eb02dd3:docs/audit/plugin-ready/plugin-delivery.json dispatchAndBundleCompletenessReview"
+  },
+  "rejectedIntentReview": {
+    "reviewId": 5459071270,
+    "commentId": 4220929714,
     "implementation": [
-      "lib/runtime_state.mjs unresolved dispatch intent liveness",
-      "lib/plugin_package.mjs complete bundled archive path comparison"
+      "lib/tasks.mjs explicit taskEffects=none pre-effect refusals",
+      "lib/task_delivery.mjs compact acknowledged rejection replay"
     ],
     "tests": [
-      "test/runtime-delivery.test.mjs pre-registration intake and execution records retain their exact active artifact pin",
-      "test/runtime-delivery.test.mjs acknowledged historical dispatch intent does not permanently pin settled work",
-      "test/plugin-package.test.mjs public packaging requires every proven bundled path"
+      "test/fixtures/plugin-installed-flow.mjs installed pre-effect rejections settle intents and permit corrected requests",
+      "test/fixtures/plugin-installed-flow.mjs installed unknown readiness failures retain their intent instead of claiming rejection"
     ],
-    "coverage": "Ready and blocked dispatch intents, mismatched implementation, first pin, migration refusal, backup/restore and owner cleanup; acknowledged historical intent allows idle migration. Missing parser runtime and package metadata refuse packaging and remove output."
+    "coverage": "Unknown question, incomplete preparation validation, premature start, unchanged intake bytes, exact rejection replay, lost acknowledgement retry, corrected identity, receipt pin release and runtime owner cleanup. Unknown provider failures retain intent and refuse replacement identities."
   }
 }
