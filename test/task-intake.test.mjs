@@ -383,10 +383,10 @@ test("partial answers retain context while unsafe, oversized or changed selectio
   const reply = {taskId:question.taskId,expectedRevision:question.revision,operationId:"legacy-answer",answers:{"q-r-1":"Use CSV."}};
   const answered = await legacy.service.answer(reply);
   const legacySignature = contentDigest(JSON.stringify({answers:reply.answers,verifyCommands:[]}));
-  const saved = taskStore(legacy.home).read(question.taskId);
-  assert.equal(saved.operations[reply.operationId], "canonical-v1:" + legacySignature);
-  saved.operations[reply.operationId] = legacySignature;
-  taskStore(legacy.home).save(saved);
+  const legacySaved = taskStore(legacy.home).read(question.taskId);
+  assert.equal(legacySaved.operations[reply.operationId], "canonical-v1:" + legacySignature);
+  legacySaved.operations[reply.operationId] = legacySignature;
+  taskStore(legacy.home).save(legacySaved);
   assert.deepEqual(await legacy.service.answer(reply), answered);
 });
 
