@@ -49,6 +49,7 @@
     "test:execution-backends": "node --test test/execution-backends.test.mjs test/execution-preparation.test.mjs test/probe.test.mjs test/chains.test.mjs test/loop.test.mjs test/recovery.test.mjs test/review.test.mjs test/control.test.mjs test/tracker_controls.test.mjs test/tracker.test.mjs test/public_format.test.mjs test/public_output.test.mjs",
     "test:openai-agents": "node --test test/openai-agents.test.mjs",
     "test:openai-agents:live": "node test/openai-agents-live.mjs",
+    "test:openai-agents:preparation:live": "node test/openai-agents-preparation-live.mjs",
     "test:codex-cloud": "node --test test/codex-cloud.test.mjs && node --test --test-name-pattern='codex-cloud|result publication validates|verified publication recovery|failed remote verification|deterministic publication rejection|interrupted verification' test/execution-backends.test.mjs",
     "test:codex-cloud:live": "node test/codex-cloud-live.mjs",
     "test:task-intake": "node --test test/task-intake.test.mjs",

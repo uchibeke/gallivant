@@ -152,7 +152,7 @@ test("scoped selected context and preparation output cannot carry resolved crede
   assert.doesNotMatch(JSON.stringify(task), /private-provider-value/);
 });
 
-for (const provider of ["openai-agents", "codex-cloud"]) test(`${provider} inherited missing bounded preparation remains a visible production gate`, async () => {
+for (const provider of ["codex-cloud"]) test(`${provider} inherited missing bounded preparation remains a visible production gate`, async () => {
   const w = world(); await w.contextFor(scope("alice"), "widget");
   const bound = w.worlds.get("alice"); bound.ctx.config.harness[provider] = { account: "operator" }; bound.taskOptions = {};
   const task = await w.delivery.dispatch("prepare", { ...prepare(provider), harness: provider }, "alice");
@@ -160,6 +160,15 @@ for (const provider of ["openai-agents", "codex-cloud"]) test(`${provider} inher
   assert.match(task.failures.join("\n"), /preparation.*unavailable|boundary/);
   const capability = (await w.delivery.dispatch("capabilities", {}, "alice")).repositories[0].providers.find(p => p.name === provider);
   assert.equal(capability.canPrepare, false); assert.match(capability.preparationSetup, /unavailable/);
+});
+
+test("installed Agents preparation advertises its tool-free boundary separately from unverified account access", async () => {
+  const w = world(); await w.contextFor(scope("alice"), "widget");
+  w.worlds.get("alice").ctx.config.harness["openai-agents"] = { account: "operator" };
+  const capability = (await w.delivery.dispatch("capabilities", {}, "alice")).repositories[0].providers.find(p => p.name === "openai-agents");
+  assert.equal(capability.canPrepare, true);
+  assert.equal(capability.preparation.environment, "none");
+  assert.equal(capability.accountAccess, "unverified-until-setup-check");
 });
 
 test("two-account boundary rejects hostile inputs and scoped IDs on every operation", async () => {

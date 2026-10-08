@@ -7,18 +7,20 @@ import { requestFor } from "../lib/sources/index.mjs";
 import { start } from "../lib/commands/start.mjs";
 import { resume } from "../lib/commands/resume.mjs";
 import { makeTick } from "../lib/tick.mjs";
-import { acquireDaemon } from "../lib/daemon.mjs";
+import { acquireDaemon, acquireProcessLock } from "../lib/daemon.mjs";
 import { deriveEvents, makeTrust } from "../lib/events.mjs";
 const phase = process.argv.find(v => v.startsWith("--phase="))?.slice(8) || "preflight";
 const execute = process.argv.includes("--execute");
 const report = { version: 1, kind: "live", status: "unverified", phase, at: new Date().toISOString(), blockers: [], costUsd: null };
 const required = ["OPENAI_AGENTS_LIVE_HOME", "OPENAI_AGENTS_LIVE_PRD", "OPENAI_AGENTS_LIVE_REPO", "OPENAI_AGENTS_CAMPAIGN_LEDGER"];
+let campaignLock;
 for (const key of required) if (!process.env[key]) report.blockers.push(`${key} absent`);
 try { if (!report.blockers.length) {
   const home = resolve(process.env.OPENAI_AGENTS_LIVE_HOME), ledgerPath = resolve(process.env.OPENAI_AGENTS_CAMPAIGN_LEDGER);
   const within = relative(process.cwd(), ledgerPath);
   if (!within || (!within.startsWith("..") && !isAbsolute(within))) report.blockers.push("campaign ledger must be outside the repository/public package");
   else {
+    if (execute) campaignLock = acquireProcessLock(`${ledgerPath}.lock`, "Agents live campaign");
     const ctx = makeContext({ home }); const selected = ctx.config.harness["openai-agents"];
     const access = await checkAgentsAccess(selected, { signal: AbortSignal.timeout(10_000) });
     if (!access.ok) report.blockers.push(`${access.detail}: ${access.fix}`);
@@ -90,5 +92,6 @@ try { if (!report.blockers.length) {
     }
   }
 } } catch (error) { report.blockers.push(`${error.code || "LIVE_PREREQUISITES"}: verify the private configuration, selected API account/model and authorized repository; see docs/openai-agents.md`); }
+finally { campaignLock?.release(); }
 if (!execute) report.blockers.push("preflight only; no paid implementation or correction evidence collected");
 process.stdout.write(JSON.stringify(report, null, 2) + "\n"); process.exitCode = report.status === "verified" ? 0 : 1;
