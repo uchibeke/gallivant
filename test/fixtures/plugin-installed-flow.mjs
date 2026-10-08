@@ -981,3 +981,30 @@ test("installed deterministic preparation refusals settle without intake or paid
     assert.equal(corrected.status, "needs-input");
   }
 });
+
+test("installed MCP preserves settled task refusals but hides arbitrary task-coded errors", async () => {
+  const w = world(), task = await w.delivery.dispatch("prepare", prepare(), "alice");
+  const server = new Server({ name: "safe-rejections", version: "1" }, { capabilities: { tools: {} } });
+  let raw = false;
+  await registerTaskDelivery(server, { delivery: { dispatch: (...args) => {
+    if (raw) throw Object.assign(new Error("private-provider-value /private/provider/path"), { code: "TASK_INPUT" });
+    return w.delivery.dispatch(...args);
+  } }, identityFor: async () => "alice" });
+  const client = new Client({ name: "consumer", version: "1" }), [a, b] = InMemoryTransport.createLinkedPair();
+  await server.connect(a); await client.connect(b);
+  try {
+    const input = { ...mutate(task, "bad-answer"), answers: { unknown: "value" } };
+    const refused = await client.callTool({ name: "task_answer", arguments: input });
+    assert.equal(refused.isError, true); assert.match(refused.content[0].text, /^TASK_INPUT: unknown answer identifier unknown/);
+    assert.deepEqual(await client.callTool({ name: "task_answer", arguments: input }), refused);
+    const { ctx } = w.worlds.get("alice"), path = join(ctx.home, "tasks", task.taskId, "intake.json");
+    const intake = JSON.parse(readFileSync(path)); intake.status = "preparing"; writeJsonAtomic(path, intake);
+    const validation = await client.callTool({ name: "task_validate", arguments: mutate(task, "not-ready") });
+    assert.equal(validation.isError, true); assert.match(validation.content[0].text, /^TASK_NOT_READY: resume preparation with the current revision/);
+    assert.ok(validation.content[0].text.length < 550);
+    raw = true;
+    const hidden = await client.callTool({ name: "task_validate", arguments: mutate(task, "raw") });
+    assert.equal(hidden.isError, true); assert.match(hidden.content[0].text, /^DELIVERY_FAILED:/);
+    assert.doesNotMatch(JSON.stringify(hidden), /private-provider-value|private\/provider\/path|TASK_INPUT/);
+  } finally { await client.close(); await server.close(); }
+});

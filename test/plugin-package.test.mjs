@@ -25,6 +25,7 @@ function gitFixture(t, { fail, head = sourceCommit, status = "" } = {}) {
   const original = childProcess.execFileSync, calls = [];
   t.mock.method(childProcess, "execFileSync", (file, args, options) => {
     if (file !== "git") return original(file, args, options);
+    if (args[0] === "ls-tree") return original(file, [...args.slice(0, -1), "HEAD"], options);
     if (args[0] === "show") return readFileSync(join(root, args[1].split(":").slice(1).join(":")));
     calls.push(args);
     const operation = args[0] === "status" ? "status" : args[1] === "HEAD" ? "head" : "root";
@@ -255,5 +256,22 @@ for (const missing of ["node_modules/smol-toml/dist/index.js", "node_modules/smo
   syncBuiltinESMExports();
   const input = fixture();
   assert.throws(() => buildPluginPackage(input), { code: "PACKAGE_SOURCE", message: /complete committed proof/ });
+  assert.equal(existsSync(input.out), false);
+});
+
+
+for (const missing of ["lib/tasks.mjs", "bin/package-plugin.mjs", "templates/plugin/task-delivery.SKILL.md", "docs/tasks.md", "LICENSE"]) test(`public packaging requires every committed first-party path: ${missing}`, t => {
+  gitFixture(t);
+  const original = childProcess.execFileSync;
+  t.mock.method(childProcess, "execFileSync", (file, args, options) => {
+    const result = original(file, args, options);
+    if (file !== "npm" || args[0] !== "pack") return result;
+    const packed = JSON.parse(result);
+    packed[0].files = packed[0].files.filter(file => file.path !== missing);
+    return JSON.stringify(packed);
+  });
+  syncBuiltinESMExports();
+  const input = fixture();
+  assert.throws(() => buildPluginPackage(input), { code: "PACKAGE_SOURCE", message: /complete selected commit payload/ });
   assert.equal(existsSync(input.out), false);
 });
