@@ -144,3 +144,12 @@ test("model control summaries expose only bounded canonical availability", () =>
   assert.doesNotMatch(JSON.stringify(summary), /secret/);
   assert.equal(modelSummary({ controls: { cancellation: "private error" } }).cancellation, null);
 });
+
+
+test("model repository identity is bounded and uses the redacted saved view", () => {
+  const summary = modelSummary(taskView({ repo: "acme/widget" }));
+  assert.equal(summary.repo, "acme/widget");
+  assert.equal(modelSummary(taskView({ repo: "private-owner/widget" }, { secrets: ["private-owner"] })).repo.includes("private-owner"), false);
+  assert.equal(modelSummary({ repo: "r".repeat(1000) }).repo.length, 256);
+  for (const repo of [undefined, null, { secret: "hidden" }]) assert.equal(modelSummary({ repo }).repo, null);
+});

@@ -212,6 +212,12 @@ test("installed scoped list and MCP results discover later authorized tasks and 
       assert.notEqual(result.isError, true);
       const expected = Object.keys(owned).sort().slice(0, 100);
       assert.deepEqual(result.structuredContent.tasks.map(view => view.taskId), expected);
+      assert.ok(result.structuredContent.tasks.every(view => view.repo === intake.repo && view.pr === null));
+      if (expected.length) {
+        const inspected = await client.callTool({ name: "task_inspect", arguments: { taskId: expected[0] } });
+        assert.equal(inspected.structuredContent.repo, intake.repo);
+        assert.equal(JSON.parse(inspected.content[0].text).repo, intake.repo);
+      }
       assert.deepEqual(result._meta.taskDelivery.tasks.map(view => view.taskId), expected);
       assert.equal(result.structuredContent.truncated, count > 100); assert.equal(result._meta.taskDelivery.truncated, count > 100);
       if (count > 100) {

@@ -124,7 +124,7 @@ for (const control of [".npmignore", ".gitignore"]) test(`npm pack applies neste
 
 test("public URLs reject canonical loopbacks and aliases across every configured URL", t => {
   gitFixture(t);
-  for (const host of ["internal", "service.internal", "SERVICE.FOO.INTERNAL.", "alt", "service.alt", "SERVICE.FOO.ALT.", "onion", "service.onion", "SERVICE.FOO.ONION.", "home.arpa", "service.home.arpa", "SERVICE.HOME.ARPA.", "local", "api.local", "API.FOO.LOCAL.", "example", "api.foo.example", "API.FOO.EXAMPLE.", "192.0.2.1", "198.51.100.1", "203.0.113.1", "224.0.0.1", "240.0.0.1", "100.64.0.1", "198.18.0.1", "192.0.0.8", "192.88.99.2", "[2001:db8::1]", "[3fff::1]", "[ff02::1]", "[100::1]", "[2001:2::1]", "[2002::1]", "[::ffff:192.0.2.1]", "[64:ff9b::a00:1]", "10.0.0.1", "172.16.0.1", "172.31.255.255", "192.168.1.1", "169.254.169.254", "[fc00::1]", "[fdff::1]", "[fe80::1]", "[febf::1]", "[::ffff:10.0.0.1]", "[::ffff:192.168.1.1]", "[::ffff:169.254.169.254]", "0.0.0.0", "0", "0x0", "[::]", "[0:0:0:0:0:0:0:0]", "[::ffff:0.0.0.0]", "127.0.0.1", "127.9.8.7", "127.1", "2130706433", "0x7f000001", "[::1]", "[0:0:0:0:0:0:0:1]", "[::ffff:127.0.0.1]", "localhost.localdomain", "LOCALHOST.", "child.localhost", "localhost.localdomain.", "localhost6.localdomain6", "ip6-localhost", "ip6-loopback", "example.com."]) {
+  for (const host of ["intranet", "INTRANET.", "service", "internal", "service.internal", "SERVICE.FOO.INTERNAL.", "alt", "service.alt", "SERVICE.FOO.ALT.", "onion", "service.onion", "SERVICE.FOO.ONION.", "home.arpa", "service.home.arpa", "SERVICE.HOME.ARPA.", "local", "api.local", "API.FOO.LOCAL.", "example", "api.foo.example", "API.FOO.EXAMPLE.", "192.0.2.1", "198.51.100.1", "203.0.113.1", "224.0.0.1", "240.0.0.1", "100.64.0.1", "198.18.0.1", "192.0.0.8", "192.88.99.2", "[2001:db8::1]", "[3fff::1]", "[ff02::1]", "[100::1]", "[2001:2::1]", "[2002::1]", "[::ffff:192.0.2.1]", "[64:ff9b::a00:1]", "10.0.0.1", "172.16.0.1", "172.31.255.255", "192.168.1.1", "169.254.169.254", "[fc00::1]", "[fdff::1]", "[fe80::1]", "[febf::1]", "[::ffff:10.0.0.1]", "[::ffff:192.168.1.1]", "[::ffff:169.254.169.254]", "0.0.0.0", "0", "0x0", "[::]", "[0:0:0:0:0:0:0:0]", "[::ffff:0.0.0.0]", "127.0.0.1", "127.9.8.7", "127.1", "2130706433", "0x7f000001", "[::1]", "[0:0:0:0:0:0:0:1]", "[::ffff:127.0.0.1]", "localhost.localdomain", "LOCALHOST.", "child.localhost", "localhost.localdomain.", "localhost6.localdomain6", "ip6-localhost", "ip6-loopback", "example.com."]) {
     for (const field of ["endpoint", "homepage", "supportUrl", "privacyUrl", "termsUrl", "licenseUrl", "domain", "connectDomains", "resourceDomains"]) {
       const input = fixture(), url = `https://${host}`;
       if (field === "domain") input.config.resource.domain = url;
@@ -137,7 +137,7 @@ test("public URLs reject canonical loopbacks and aliases across every configured
   }
   const input = fixture();
   assert.equal(validatePublicRelease(input.config).ok, true);
-  for (const host of ["8.8.8.8", "192.0.0.9", "[2606:4700:4700::1111]", "[2001:4860:4860::8888]", "[::ffff:8.8.8.8]", "[64:ff9b::808:808]"]) {
+  for (const host of ["api.aport.io", "API.APORT.IO.", "8.8.8.8", "192.0.0.9", "[2606:4700:4700::1111]", "[2001:4860:4860::8888]", "[::ffff:8.8.8.8]", "[64:ff9b::808:808]"]) {
     input.config.endpoint = `https://${host}`;
     assert.equal(validatePublicRelease(input.config).ok, true, host);
   }
