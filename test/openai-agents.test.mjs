@@ -25,6 +25,9 @@ import { routes } from "../lib/commands/serve.mjs";
 import { checkHarness } from "../lib/probe.mjs";
 import { reconcileExecutionResult } from "../lib/execution_result.mjs";
 import { readJson, writeJsonAtomic } from "../lib/fs.mjs";
+import { createTaskService } from "../lib/tasks.mjs";
+import { taskStore } from "../lib/task_store.mjs";
+import { draftFor } from "./fixtures/task-intake.mjs";
 const config = { account: "fixture", organization: "org-fixture", project: "proj-fixture", model: "fixture-model", environment: "openai_hosted", container_size: "small", network: { access: "disabled" }, allowance: { remainingUsd: 2, reservedUsd: 0.1 } };
 const head = "a".repeat(40), initial = "original\n", changed = "corrected\n";
 const sources = { data: Buffer.from("snapshot").toString("base64"), hash: contentHash("snapshot"), hashes: { "answer.txt": contentHash(initial) }, modes: { "answer.txt": 0o644 }, inputHead: head, repo: "acme/widget", branch: "work/widget" };
@@ -38,6 +41,7 @@ function fixture() {
   const page = data => ({ data, has_more: false, last_id: data.at(-1)?.id ?? null });
   const fetcher = async (url, options) => {
     const route = new URL(url).pathname.replace("/v1", ""), search = new URL(url).searchParams;
+    assert.ok(search.getAll("order").length <= 1, "the live API rejects duplicate pagination parameters");
     const body = options.body ? JSON.parse(options.body) : null;
     calls.push({ route, method: options.method, body, key: options.headers["Idempotency-Key"] });
     assert.equal(options.headers["OpenAI-Beta"], "agents=v1"); assert.equal(options.headers["OpenAI-Project"], config.project);
@@ -52,8 +56,12 @@ function fixture() {
     if (route === `/models/${config.model}`) value = { id: config.model };
     else if (route === "/agents/sessions" && options.method === "GET") value = page([...sessions.values()]);
     else if (route === "/agents/sessions" && options.method === "POST") {
-      const session = { id: `sess-${++serial}`, metadata: body.metadata, agent: body.agent, environment: { id: `env-${serial}`, type: "openai_hosted", container_size: "small", network: config.network, packages: {} }, status: "idle", required_actions: [] };
+      const session = { id: `sess-${++serial}`, metadata: body.metadata, agent: body.agent, environment: body.environment.type === "none" ? { type: "none" } : { id: `env-${serial}`, type: "openai_hosted", container_size: "small", network: config.network, packages: {} }, status: "idle", required_actions: [] };
       sessions.set(session.id, session); value = session;
+      if (body.input) {
+        const turn = { id: `turn-${turns.size + 1}`, session_id: session.id, subagent_id: null, status: "in_progress", completed_at: null, usage: null };
+        turns.set(turn.id, turn); session.status = "running";
+      }
     } else {
       const sessionId = route.split("/")[3], session = sessions.get(sessionId);
       if (route.includes("/environments/")) value = route.endsWith("/files") ? {} : { id: route.split("/")[3], status: fixtureEnvironment };
@@ -103,6 +111,116 @@ async function unsupportedHost(fn) {
   Object.defineProperty(process, "platform", { ...descriptor, value: "unsupported-fixture" });
   try { return await fn(); } finally { Object.defineProperty(process, "platform", descriptor); }
 }
+
+const intakeInput = () => ({ kind: "intake", environment: "none", prompt: "Return requirements as JSON, using only this selected context.", allowance: config.allowance });
+async function prepareIntake(f) {
+  const input = intakeInput(), prepared = await f.service().prepare(input);
+  return { ...input, prepared, preparation: prepared.receipt, operationId: "prepare-1", name: "prepare-1" };
+}
+test("Agents native intake has no runtime/tools and collects only completed owned assistant text through shared execution", async () => {
+  const f = fixture();
+  const request = await unsupportedHost(() => prepareIntake(f));
+  assert.equal(request.prepared.boundary, "agents-text-only-v1");
+  assert.equal(f.calls.some(c => c.method === "POST"), false, "preflight purchases no turn");
+  const job = await unsupportedHost(() => f.service().submit(request));
+  const creation = f.calls.find(c => c.route === "/agents/sessions" && c.method === "POST").body;
+  assert.deepEqual(creation.environment, { type: "none" });
+  assert.deepEqual(creation.agent.tools, []);
+  assert.equal(creation.agent.multi_agent.enabled, false);
+  assert.equal(creation.input[0].content[0].text, request.prompt);
+  assert.equal(f.calls.some(c => c.method === "POST" && c.route.endsWith("/events")), false);
+  const turn = f.finish();
+  f.setItems([
+    { id: "user-message", turn_id: turn.id, type: "message", role: "user", status: "completed", content: [{ type: "input_text", text: "not output" }] },
+    { id: "assistant-message", turn_id: turn.id, type: "message", role: "assistant", phase: "final_answer", status: "completed", content: [{ type: "output_text", text: '{"summary":"A bounded draft"}' }] },
+  ]);
+  for (let i = 0; i < 2; i++) { f.clock.advance(60_000); await f.service().reconcile(); }
+  const result = await f.service().collect();
+  assert.equal(result.outcome.lastMessage, '{"summary":"A bounded draft"}');
+  assert.equal(result.outcome.ok, true);
+  assert.equal(result.outcome.cost, null);
+  assert.equal(result.sessionId, job.execution.sessionId);
+  assert.equal(f.calls.some(c => c.route.includes("/environments/") || c.route.includes("/artifacts")), false);
+  const count = f.calls.length;
+  assert.deepEqual(await f.service().collect(), result);
+  assert.equal(f.calls.length, count, "restart reuses durable collected result");
+});
+test("Agents native intake recovers a lost send acknowledgement without buying another turn", async () => {
+  const f = fixture(), request = await prepareIntake(f);
+  f.lose("/agents/sessions");
+  await assert.rejects(f.service().submit(request));
+  f.clock.advance(60_000); await f.service().reconcile();
+  assert.equal(f.service().current().execution.acceptance, "accepted");
+  assert.equal(f.calls.filter(c => c.method === "POST" && c.route === "/agents/sessions").length, 1);
+  assert.equal(f.calls.filter(c => c.method === "POST" && c.route.endsWith("/events")).length, 0);
+  assert.equal(f.sessions.size, 1);
+});
+test("Agents native intake refuses effective tool or environment escalation and unowned output", async () => {
+  for (const mutate of [s => s.agent.tools.push({ type: "web_search" }), s => { s.agent.multi_agent.enabled = true; }, s => { s.environment = { id: "env-other", type: "openai_hosted" }; }]) {
+    const f = fixture(), request = await prepareIntake(f), job = await f.service().submit(request);
+    mutate(f.sessions.get(job.execution.sessionId));
+    f.clock.advance(60_000);
+    await assert.rejects(f.transport().inspect({ providerJobId: job.execution.providerJobId, sessionId: job.execution.sessionId, turnId: job.execution.turnId }), /boundary|authority|environment|tool/i);
+  }
+  const f = fixture(), request = await prepareIntake(f), job = await f.service().submit(request), root = f.finish();
+  f.setItems([{ id: "tool-item", turn_id: root.id, type: "function_call", status: "completed", name: "unapproved" }]);
+  await assert.rejects(f.transport().collect({ providerJobId: job.execution.providerJobId, sessionId: job.execution.sessionId, turnId: root.id }), /boundary|tool|authority/i);
+});
+
+test("Agents native intake rejects unexpected effective authority and refuses changed configuration before dispatch", async () => {
+  const f = fixture(), request = await prepareIntake(f);
+  const http = { ...f.http, request: async (path, options) => {
+    const result = await f.http.request(path, options);
+    if (path === "/agents/sessions" && options?.method === "POST") result.agent.tools = [{ type: "mcp" }];
+    return result;
+  } };
+  const transport = makeAgentsTransport({ root: f.root, taskId: "acme/widget/task", account: config.account, config, http, clock: f.clock });
+  await assert.rejects(transport.submit({ ...request, runId: "intake-authority", idempotencyKey: "intake-authority" }), { code: "TASK_PREPARATION_BOUNDARY" });
+  assert.equal(f.calls.filter(c => c.method === "POST" && c.route.endsWith("/events")).length, 0);
+  const changed = makeAgentsTransport({ root: f.root, taskId: "acme/widget/task", account: config.account, config: { ...config, model: "different-model" }, http: f.http, clock: f.clock });
+  const before = f.calls.length;
+  await assert.rejects(changed.submit({ ...request, runId: "intake-changed", idempotencyKey: "intake-changed" }), { code: "TASK_PREPARATION_BOUNDARY", dispatchNotSent: true });
+  assert.equal(f.calls.length, before);
+});
+
+test("Agents native transport drives shared natural-language questions, answers and readiness across restarts", async () => {
+  const f = fixture(), checkout = join(f.root, "checkout"); mkdirSync(checkout);
+  f.clock.advance(Date.now() - f.clock.now());
+  writeFileSync(join(checkout, "package.json"), JSON.stringify({ packageManager: "npm@10", scripts: { test: "node --test", lint: "node --check index.mjs" } }));
+  const ctx = { home: f.root, log: silentLog, state: makeState(f.root),
+    config: { ...CONFIG, harness: { "openai-agents": config }, deliverable: { ...CONFIG.deliverable, evaluator: "local" } },
+    executionFor: (taskId, provider) => {
+      assert.equal(provider, "openai-agents"); const root = join(f.root, "runs", taskId);
+      return makeExecution({ root, taskId, provider, account: config.account, clock: f.clock,
+        transport: makeAgentsTransport({ root, taskId, account: config.account, config, http: f.http, clock: f.clock }) });
+    },
+    runnerFor: () => { throw Error("intake must not start a local writer"); },
+    git: { toplevel: async () => checkout }, gh: { repoInfo: async () => ({ nameWithOwner: "acme/widget", defaultBranch: "main" }) },
+  };
+  const reopen = () => createTaskService(ctx, { dispatch: async () => { throw Error("preparation cannot authorize implementation"); } });
+  let task = await reopen().prepare({ text: "Add CSV export.\nDo not add dependencies.", harness: "openai-agents" });
+  const finishDraft = () => {
+    const root = f.finish();
+    f.setItems([{ id: `answer-${root.id}`, type: "message", role: "assistant", phase: "final_answer", status: "completed", turn_id: root.id,
+      content: [{ type: "output_text", text: JSON.stringify(draftFor(taskStore(f.root).read(task.taskId), { question: true })) }] }]);
+    f.clock.advance(60_000);
+  };
+  assert.equal(task.status, "preparing"); finishDraft();
+  task = await reopen().resume({ taskId: task.taskId, expectedRevision: task.revision });
+  assert.equal(task.status, "needs-input", JSON.stringify(task.failures));
+  f.setItems([]);
+  task = await reopen().answer({ taskId: task.taskId, expectedRevision: task.revision, operationId: "answer-format", answers: { "q-r-1": "Use CSV." } });
+  assert.equal(task.status, "preparing"); finishDraft();
+  task = await reopen().resume({ taskId: task.taskId, expectedRevision: task.revision });
+  assert.equal(task.status, "ready", JSON.stringify(task.failures));
+  assert.equal(task.readiness.allow, true);
+  assert.equal(task.preparation.attempts.length, 2);
+  assert.equal(f.calls.filter(c => c.method === "POST" && c.route === "/agents/sessions").length, 2);
+  assert.deepEqual(ctx.state.entries(), []);
+  const calls = f.calls.length;
+  assert.equal(reopen().inspect({ taskId: task.taskId }).status, "ready");
+  assert.equal(f.calls.length, calls, "inspection has no provider side effects");
+});
 
 function launchFixture() {
   const f = fixture(), operator = join(f.root, "operator"), worktree = join(f.root, "worktrees/acme/widget/task");

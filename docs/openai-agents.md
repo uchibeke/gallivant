@@ -72,12 +72,23 @@ gallivant resume owner/repo/my-task --note 'Apply this authorized correction'
 Natural-language intake uses the selected provider's versioned preparation
 capability through the shared execution service for drafting, questions and
 repairs. The task service owns deterministic validation/readiness and explicit
-implementation authorization. This managed adapter has no enforced preparation
-capability, so selecting it for intake returns `TASK_PREPARATION_BOUNDARY` before
-any provider call; coding-session access does not establish limited drafting
-authority. There is no automatic provider switch. Use a hand-authored approved
-PRD with the explicit `ready`/`start` path above until this adapter supplies that
-capability. No selection changes global defaults. The same task, branch, PR and
+implementation authorization. Native preparation creates a fresh session with
+`environment: {type: "none"}`, `tools: []` and `multi_agent.enabled: false`.
+The API requires initial input for conversation-only sessions. The bounded
+selected context is sent with those explicit restrictions in the same creation
+request; the returned effective configuration is checked before adopting output.
+Lost creation replies recover by task/account/dispatch metadata and never resend
+the input. The live qualification caught this requirement on 2026-10-08; an empty
+creation request returns HTTP 400 even though hosted coding sessions allow it.
+Only the owned root's completed final answer can become a draft; tool calls,
+delegated output and changed account/model settings are refused. It reuses the
+normal durable execution receipts, cancellation, logs and lost-ack recovery.
+Preparation does not need Git, a hosted filesystem or a local verification sandbox.
+Implementation retains its existing hosted environment and sandbox requirements.
+API/model access and live task qualification remain separate from this boundary's
+authority. There is no automatic provider switch. A hand-authored approved PRD
+still uses the explicit `ready`/`start` path above. No selection changes global
+defaults. The same implementation task, branch, PR and
 session are used for review fixes, stale heads, receipt repair and base reconciliation, within
 the existing iteration limits. Each round sends the coordinator's current exact
 input head and saved brief/source snapshots. The remote repository contains that
