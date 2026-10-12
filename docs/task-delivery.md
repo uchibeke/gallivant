@@ -260,6 +260,13 @@ accessible walkthrough; it may include a video query string. Supply
 fixtures may omit the three inputs; supplied inputs are still validated. A
 correct metadata shape does not prove its cases ran or qualify the release.
 
+For a disposable sandbox portal draft, internal builds can set
+`developmentIdentity: { name: "aport-task-delivery-preview", displayName:
+"APort Tasks Preview" }`. This prevents a sandbox connection from occupying the
+canonical directory identity: changing a registered MCP server URL later is not
+a self-service update. Public validation refuses this input; use the canonical
+identity and permanent production endpoint for the actual release.
+
 The vendored portable MCP schema predates this OpenAI authentication extension.
 Validation retains the original schema bytes and adds only the documented,
 strictly validated auth overlay. The release manifest records its separate

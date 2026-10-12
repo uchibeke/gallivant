@@ -45,6 +45,23 @@ test("one builder emits registered PKCE auth and all review metadata into the ZI
   assert.equal(manifest.submissionReady, false, "metadata cannot attest actual host execution");
 });
 
+test("disposable preview identity is distinct and cannot enter a public candidate", t => {
+  gitFixture(t);
+  const input = fixture();
+  input.config.developmentIdentity = { name: "aport-task-delivery-preview", displayName: "APort Tasks Preview" };
+  assert.equal(validatePublicRelease(input.config).ok, false);
+  assert.throws(() => buildPluginPackage(input), { code: "PACKAGE_RELEASE" });
+  const manifest = buildPluginPackage({ ...input, internal: true });
+  const plugin = JSON.parse(readFileSync(join(input.out, "plugin/plugin.json")));
+  assert.equal(plugin.name, input.config.developmentIdentity.name);
+  assert.equal(plugin.extensions["com.openai"].interface.displayName, input.config.developmentIdentity.displayName);
+  assert.equal(manifest.submissionReady, false);
+  for (const identity of [{ name: "aport-task-delivery", displayName: "APort Tasks Preview" }, { name: "aport-task-delivery-preview", displayName: "APort Task Delivery" }, { name: "aport-task-delivery-preview", displayName: "APort Tasks Preview", secret: "extra" }]) {
+    const bad = fixture(); bad.config.developmentIdentity = identity;
+    assert.throws(() => buildPluginPackage({ ...bad, internal: true }), { code: "PACKAGE_CONFIG" });
+  }
+});
+
 for (const field of ["oauth", "review", "publication"]) test(`public preflight refuses omitted ${field}`, t => {
   gitFixture(t);
   const input = fixture(); delete input.config[field];
