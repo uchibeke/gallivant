@@ -396,3 +396,26 @@ Official contracts: [overview](https://developers.openai.com/api/docs/guides/age
 [events/recovery](https://developers.openai.com/api/docs/guides/agents-api/sessions/events),
 [hosted setup](https://developers.openai.com/api/docs/guides/agents-api/environments/openai-hosted),
 [files and artifacts](https://developers.openai.com/api/docs/guides/agents-api/environments/files).
+
+### Privileged Linux verification hosts
+
+The native verification probe remains mandatory before implementation or publication.
+Rootless Linux uses Bubblewrap's user namespace. A root coordinator creates private
+mount, PID, network, IPC and UTS namespaces directly, drops held and inheritable
+capabilities, and uses no-new-privileges. The probe checks both the initial process
+and a child after exec, in addition to denied filesystem access, read-only Git and
+network isolation. There is no unsandboxed fallback. A nonzero capability bounding
+set alone is not held authority; permitted/effective/inheritable/ambient sets must
+all be zero and no-new-privileges must remain enabled.
+
+Cloudflare preview rejected the nested-user-namespace `/proc` mount but passed the
+private namespace variant. Both root and rootless variants also passed in the
+actual Linux runtime image locally; removing capability dropping made the real
+isolation regression fail. Run `GALLIVANT_NATIVE_SANDBOX_TEST=1 node --test
+test/verification-linux.test.mjs` inside a namespace-capable Linux image. A Linux
+container that cannot provide these boundaries must fail qualification. This is
+not evidence of a completed remote task or a host-plugin installation.
+
+The [Bubblewrap security model](https://github.com/containers/bubblewrap#sandbox-security)
+and [Cloudflare container process boundary](https://developers.cloudflare.com/containers/api/durable-object-container/#exec)
+explain why changing user IDs alone is insufficient.
