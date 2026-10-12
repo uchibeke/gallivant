@@ -360,6 +360,14 @@ and the normal preparation boundary. A bare legacy timeout, uncertain dispatch,
 policy refusal, exhausted allowance or malformed output does not grant this retry.
 Those records remain blocked or reconcile their already-owned provider operation.
 
+The portable `prepare` and `answer` operations accept optional `verifyCommands`
+(up to 32 commands, each up to 500 characters). These are explicit owner
+selections, passed through the same supported-command and source checks as the
+CLI. Writing a command in an answer does not itself select executable authority.
+Selections are part of the operation identity; changing them requires a new
+operation on the current task revision. Preparation progress in delivery views
+uses the saved preparation attempt until implementation owns a run.
+
 `task validate` returns `TASK_NOT_READY` while preparation is incomplete, even if
 an older question-bearing draft exists. It leaves the saved revision, accepted
 answers and owned run unchanged; resume preparation with the current revision

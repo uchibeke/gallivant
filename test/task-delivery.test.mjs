@@ -4,6 +4,20 @@ import { taskExecutionConfig, taskProviderAllowance } from "../lib/task_allowanc
 import { CORE_VERSION, assertCompatible } from "../lib/task_delivery_contract.mjs";
 import { controlAvailability } from "../lib/control_contract.mjs";
 import { modelSummary, taskView, evidenceSummary, logSummary } from "../lib/task_delivery_view.mjs";
+
+test("preparation progress uses saved provider evidence until implementation takes ownership", () => {
+  const task = { status: "preparing", preparation: { attempts: [
+    { execution: { providerState: "failed", costUsd: 0.01 } },
+    { execution: { providerState: "running", observedAt: 123, costUsd: null, recoveryAction: "retain secret-token" } },
+  ] } };
+  const prepared = taskView(task, { secrets: ["secret-token"] });
+  assert.equal(prepared.progress.providerState, "running");
+  assert.equal(prepared.progress.observedAt, 123);
+  assert.equal(prepared.progress.costUsd, null);
+  assert.equal(prepared.progress.recoveryAction.includes("secret-token"), false);
+  assert.equal(taskView(task, { entry: { execution: { providerState: "succeeded" } } }).progress.providerState, "succeeded");
+  assert.equal(taskView({}).progress.providerState, null);
+});
 import { createTaskDelivery } from "../lib/task_delivery.mjs";
 
 const config = { max_budget_usd: 10, run_timeout_minutes: 30 };

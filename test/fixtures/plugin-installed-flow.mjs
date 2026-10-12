@@ -56,6 +56,23 @@ function world({ question = true, schedule = async () => {} } = {}) {
   } };
   return { root, worlds, opts, delivery: createTaskDelivery(opts), contextFor };
 }
+
+test("installed delivery forwards explicit verification selections through preparation and answers", async () => {
+  const w = world();
+  const input = { ...prepare(), verifyCommands: ["node --test"] };
+  const pending = await w.delivery.dispatch("prepare", input, "alice");
+  const bound = w.worlds.get("alice"), file = join(bound.ctx.home, "tasks", pending.taskId, "intake.json");
+  assert.deepEqual(JSON.parse(readFileSync(file)).explicitVerifyCommands, ["node --test"]);
+  const answer = { taskId: pending.taskId, expectedRevision: pending.revision, operationId: "verify-answer", answers: { "q-r-1": "Use CSV." }, verifyCommands: ["npm run lint"] };
+  const ready = await w.delivery.dispatch("answer", answer, "alice");
+  assert.equal(ready.status, "ready");
+  assert.deepEqual(JSON.parse(readFileSync(file)).explicitVerifyCommands, ["node --test", "npm run lint"]);
+  assert.equal((await w.delivery.dispatch("answer", answer, "alice")).revision, ready.revision);
+  await assert.rejects(w.delivery.dispatch("answer", { ...answer, verifyCommands: ["npm test"] }, "alice"), { code: "DELIVERY_CONFLICT" });
+  for (const commands of [Array(33).fill("node --test"), ["x".repeat(501)], [""], ["node --test", "node --test"]]) {
+    await assert.rejects(w.delivery.dispatch("prepare", { ...prepare(), operationId: "invalid-verify", verifyCommands: commands }, "alice"), { code: "DELIVERY_INPUT" });
+  }
+});
 const prepare = (operationId = "prepare", text = request) => ({ repositoryId: "widget", text, harness: "claude", allowance: { budgetUsd: 1, runtimeMs: 60000 }, operationId, expectedRevision: 0 });
 const mutate = (task, operationId) => ({ taskId: task.taskId, expectedRevision: task.revision, operationId });
 
