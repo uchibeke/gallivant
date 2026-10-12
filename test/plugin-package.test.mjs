@@ -63,6 +63,39 @@ test("disposable preview identity is distinct and cannot enter a public candidat
   }
 });
 
+test("configured listing copy is reproducible in the ZIP without changing identity or review metadata", t => {
+  gitFixture(t);
+  const input = fixture();
+  input.config.listing = {
+    longDescription: "For developers in the limited-access pilot.\nAn APort-provisioned account and repository are required.",
+    category: "Developer Tools",
+  };
+  assert.equal(validatePublicRelease(input.config).ok, true);
+  buildPluginPackage(input);
+  const plugin = JSON.parse(childProcess.execFileSync("unzip", ["-p", join(input.out, "aport-task-delivery.zip"), "plugin.json"], { encoding: "utf8" }));
+  const openai = plugin.extensions["com.openai"];
+  assert.equal(openai.interface.longDescription, input.config.listing.longDescription);
+  assert.equal(openai.interface.category, "Developer Tools");
+  assert.equal(openai.interface.displayName, "APort Task Delivery");
+  assert.deepEqual(openai.review, input.config.review);
+  assert.equal(openai.listing, undefined);
+  for (const listing of [
+    { ...input.config.listing, category: " " },
+    { ...input.config.listing, category: "Developer\nTools" },
+    { ...input.config.listing, category: "x".repeat(81) },
+    { ...input.config.listing, longDescription: " " },
+    { ...input.config.listing, longDescription: "x".repeat(4001) },
+    { ...input.config.listing, longDescription: "Unsupported\tcontrol" },
+    { ...input.config.listing, longDescription: "Bearer private_fixture_value" },
+    { ...input.config.listing, displayName: "Identity override" },
+  ]) {
+    const bad = fixture(); bad.config.listing = listing;
+    assert.equal(validatePublicRelease(bad.config).ok, false);
+    assert.throws(() => buildPluginPackage({ ...bad, internal: true }), { code: "PACKAGE_CONFIG" });
+    assert.equal(existsSync(bad.out), false);
+  }
+});
+
 for (const field of ["oauth", "review", "publication"]) test(`public preflight refuses omitted ${field}`, t => {
   gitFixture(t);
   const input = fixture(); delete input.config[field];

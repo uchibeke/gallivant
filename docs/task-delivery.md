@@ -264,6 +264,16 @@ accessible walkthrough; it may include a video query string. Supply
 fixtures may omit the three inputs; supplied inputs are still validated. A
 correct metadata shape does not prove its cases ran or qualify the release.
 
+Optional `listing: { longDescription, category }` replaces those two directory
+fields through the same builder. Describe the intended users and actual access
+limitations; use an exact category title from the publisher dashboard (for this
+repository workflow, `Developer Tools`). Descriptions allow up to 4000 characters
+and line breaks. Category titles must be one line of at most 80 characters.
+Unknown fields, credentials, blank values and unsupported controls are rejected.
+Identity, publisher, review inputs and release gates cannot be overridden here.
+Keep final listing copy in the package config rather than editing a generated ZIP.
+See [OpenAI listing metadata](https://developers.openai.com/plugins/deploy/submission#listing-metadata).
+
 For a disposable sandbox portal draft, internal builds can set
 `developmentIdentity: { name: "aport-task-delivery-preview", displayName:
 "APort Tasks Preview" }`. This prevents a sandbox connection from occupying the
