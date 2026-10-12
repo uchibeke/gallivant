@@ -1,7 +1,11 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { taskExecutionConfig, taskProviderAllowance } from "../lib/task_allowance.mjs";
-import { CORE_VERSION, assertCompatible } from "../lib/task_delivery_contract.mjs";
+import { CORE_VERSION, MAX_TASK_UI_BYTES, assertCompatible, uiResourceConfiguration } from "../lib/task_delivery_contract.mjs";
+import { registerTaskDelivery } from "../lib/task_delivery_mcp.mjs";
+import { Server } from "@modelcontextprotocol/sdk/server/index.js";
+import { Client } from "@modelcontextprotocol/sdk/client/index.js";
+import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 import { controlAvailability } from "../lib/control_contract.mjs";
 import { modelSummary, taskView, evidenceSummary, logSummary } from "../lib/task_delivery_view.mjs";
 
@@ -19,6 +23,29 @@ test("preparation progress uses saved provider evidence until implementation tak
   assert.equal(taskView({}).progress.providerState, null);
 });
 import { createTaskDelivery } from "../lib/task_delivery.mjs";
+
+test("MCP resource serves the full packaged UI under the shared UTF-8 byte limit", async () => {
+  const server = new Server({ name: "resource-limit-test", version: "1" }, { capabilities: { tools: {}, resources: {} } });
+  const client = new Client({ name: "resource-client", version: "1" });
+  const resource = uiResourceConfiguration({ uri: "ui://aport/task-delivery/v1", domain: "https://aport.io" });
+  let body = "<!doctype html>" + " ".repeat(1_300_000), authorized = true, reads = 0;
+  await registerTaskDelivery(server, {
+    delivery: { dispatch: () => assert.fail("resource reads cannot dispatch work") }, resource,
+    identityFor: async () => { if (!authorized) throw new Error("private-access-detail"); return "alice"; },
+    readResource: async identity => { assert.equal(identity, "alice"); reads++; return body; },
+  });
+  const [a, b] = InMemoryTransport.createLinkedPair(); await server.connect(a); await client.connect(b);
+  try {
+    assert.equal((await client.readResource({ uri: resource.uri })).contents[0].text, body);
+    body = "é".repeat(MAX_TASK_UI_BYTES / 2);
+    assert.equal((await client.readResource({ uri: resource.uri })).contents[0].text, body);
+    body += "x";
+    await assert.rejects(client.readResource({ uri: resource.uri }), /Task resource unavailable/);
+    const before = reads; authorized = false;
+    await assert.rejects(client.readResource({ uri: resource.uri }), error => /Task resource unavailable/.test(error.message) && !error.message.includes("private-access-detail"));
+    assert.equal(reads, before, "denied reads do not load assets");
+  } finally { await client.close(); await server.close(); }
+});
 
 const config = { max_budget_usd: 10, run_timeout_minutes: 30 };
 const task = { deliveryAllowance: { budgetUsd: 1, runtimeMs: 60000 } };
