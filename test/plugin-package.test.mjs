@@ -154,6 +154,18 @@ test("public URLs reject canonical loopbacks and aliases across every configured
   assert.equal(buildPluginPackage({ ...input, internal: true }).submissionReady, false);
 });
 
+test("the full self-contained UI uses the same bounded size in preflight and emission", t => {
+  gitFixture(t);
+  const input=fixture();
+  writeFileSync(input.config.assets.ui,'<!doctype html>'+ ' '.repeat(1_300_000));
+  assert.equal(validatePublicRelease(input.config).ok,true);
+  const manifest=buildPluginPackage({...input,internal:true});
+  assert.equal(readFileSync(join(input.out,'plugin/assets/task-ui.html')).length,1_300_015);
+  assert.equal(manifest.submissionReady,false);
+  writeFileSync(input.config.assets.ui,' '.repeat(2_000_001));
+  assert.equal(validatePublicRelease(input.config).ok,false);
+  assert.throws(()=>buildPluginPackage({...input,out:join(dirname(input.out),'too-large'),internal:true}),{code:'PACKAGE_ASSET'});
+});
 test("public asset preflight and builder share regular file, size and secret constraints", t => {
   gitFixture(t);
   for (const kind of ["missing", "directory", "symlink", "oversize", "secret"]) {
