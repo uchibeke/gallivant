@@ -19,7 +19,7 @@ function fixture() {
     config: { publisher: "APort", supportEmail: "support@aport.io", endpoint: "https://aport.io/mcp",
       homepage: "https://aport.io", supportUrl: "https://aport.io/support", privacyUrl: "https://aport.io/privacy",
       termsUrl: "https://aport.io/terms", licenseUrl: "https://aport.io/license",
-      oauth: { type: "oauth", client: { mode: "provided", clientId: "fixture_client", tokenEndpointAuthMethod: "none" }, baseScopes: ["task-delivery:read", "task-delivery:write"] },
+      oauth: { type: "oauth", client: { mode: "provided", clientId: "fixture_client", tokenEndpointAuthMethod: "none" }, baseScopes: ["tasks:read", "tasks:write", "tasks:check", "tasks:control"] },
       review: { test_cases: {
         positive: Array.from({ length: 5 }, (_, i) => ({ description: `Fixture case ${i}`, prompt: "Inspect the seeded task.", tools_triggered: "task_inspect", expected_behavior: "Return only the authorized fixture." })),
         negative: Array.from({ length: 3 }, (_, i) => ({ description: `Fixture denial ${i}`, prompt: "Read an unauthorized task." })),
@@ -38,6 +38,7 @@ test("one builder emits registered PKCE auth and all review metadata into the ZI
   const unzip = path => JSON.parse(childProcess.execFileSync("unzip", ["-p", join(input.out, "aport-task-delivery.zip"), path], { encoding: "utf8" }));
   const plugin = unzip("plugin.json"), mcp = unzip("mcp.json");
   assert.deepEqual(mcp.mcpServers["task-delivery"].extensions["com.openai"].auth, input.config.oauth);
+  assert.deepEqual(mcp.mcpServers["task-delivery"].extensions["com.openai"].auth.baseScopes, ["tasks:read", "tasks:write", "tasks:check", "tasks:control"]);
   assert.deepEqual(plugin.extensions["com.openai"].review, input.config.review);
   assert.deepEqual(plugin.extensions["com.openai"].publication, input.config.publication);
   assert.equal(plugin.extensions["com.openai"].interface.review, undefined);
@@ -79,7 +80,11 @@ test("submission inputs reject unsupported auth, unknown metadata and credential
     c => { c.oauth.client.tokenEndpointAuthMethod = "client_secret_basic"; },
     c => { c.oauth.client.mode = "dcr"; },
     c => { c.oauth.client.clientId = "https://chatgpt.com/oauth/client.json"; },
-    c => { c.oauth.baseScopes = ["task-delivery:read"]; },
+    c => { c.oauth.baseScopes = []; },
+    c => { c.oauth.baseScopes = ["tasks:read tasks:write"]; },
+    c => { c.oauth.baseScopes = ["tasks:read", "tasks:read"]; },
+    c => { c.oauth.baseScopes = ['tasks:"read']; },
+    c => { c.oauth.baseScopes = ["tasks:\\read"]; },
     c => { c.oauth.type = "none"; },
     c => { c.review.test_cases.positive.pop(); },
     c => { c.review.test_cases.negative.push(c.review.test_cases.negative[0]); },

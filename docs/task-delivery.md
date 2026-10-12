@@ -240,8 +240,12 @@ private backups, provider logs and reviewer credentials outside the output.
 Public packaging also requires `oauth`, `review`, and `publication`. The OAuth
 input deliberately matches APort's currently implemented registered public client:
 `type: "oauth"`, `client: { mode: "provided", clientId: "<registered ID>",
-tokenEndpointAuthMethod: "none" }`, and `baseScopes` containing
-`task-delivery:read` and `task-delivery:write`. Optional `authorizationUrl` and
+tokenEndpointAuthMethod: "none" }`, and `baseScopes` copied from the public
+authorization server's actual discovery/tool contract. APort's public scopes are
+`tasks:read`, `tasks:write`, `tasks:check`, and `tasks:control`; they are distinct
+from Gallivant's internal delivery scopes. The builder validates OAuth scope-token
+syntax and preserves the deployment's supplied values without translating them.
+Verify exact agreement with live discovery before connecting. Optional `authorizationUrl` and
 `tokenUrl` override discovery. Register the exact redirect URI displayed by the
 host's MCP management page in APort's `TASK_DELIVERY_CLIENTS`; do not assume the
 GitHub login callback is the host callback. No client secret belongs in this
