@@ -121,6 +121,32 @@ function fixture(provider, { question = false, repair = false, pending = false, 
     reportCompletion: (observation, result = observation) => { observationCompletion = observation; resultCompletion = result; }, stop: () => { stopped = true; lookupAvailable = true; }, resolveLookup: () => { lookupAvailable = true; } };
 }
 
+test("repair preflight retries retain validation feedback and consume no additional repair allowance", async () => {
+  for (const provider of ["codex", "gemini"]) {
+    const f = fixture(provider, { repair: true }), prepare = f.transport.prepare;
+    const prompts = [];
+    f.transport.prepare = async req => {
+      prompts.push(JSON.parse(req.prompt.split("INTAKE DATA (JSON):\n").at(-1)));
+      if (prompts.length === 2 || prompts.length === 3) throw Object.assign(new Error("transport deadline exceeded"), { code: "EXECUTION_DEADLINE" });
+      return prepare(req);
+    };
+    let result = await f.service.prepare({ text: "Add CSV export.", harness: provider, requestId: "repair-preflight-deadline" });
+    assert.equal(result.status, "blocked"); assert.equal(result.preparation.repairs, 1);
+    assert.equal(f.jobs.size, 1);
+    const feedback = prompts[1].validationFailures;
+    assert.equal(feedback.length, 1); assert.match(feedback[0], /JSON/i);
+    for (let retry = 0; retry < 2; retry++) {
+      assert.deepEqual(taskStore(f.home).read(result.taskId).preflightFailure.validationFailures, feedback);
+      result = await f.reopen().resume({ taskId: result.taskId, expectedRevision: result.revision });
+      assert.deepEqual(prompts.at(-1).validationFailures, feedback);
+      assert.equal(result.preparation.repairs, 1);
+    }
+    assert.equal(result.status, "ready"); assert.equal(f.jobs.size, 2);
+    assert.equal(taskStore(f.home).read(result.taskId).preflightFailure, undefined);
+    assert.equal(f.dispatches(), 0);
+  }
+});
+
 test("read-only preparation deadline can resume the same task without replaying a dispatch or a refusal", async () => {
   for (const provider of ["codex", "gemini"]) {
     const f = fixture(provider), prepare = f.transport.prepare;
