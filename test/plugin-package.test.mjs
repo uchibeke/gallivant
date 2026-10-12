@@ -19,8 +19,82 @@ function fixture() {
     config: { publisher: "APort", supportEmail: "support@aport.io", endpoint: "https://aport.io/mcp",
       homepage: "https://aport.io", supportUrl: "https://aport.io/support", privacyUrl: "https://aport.io/privacy",
       termsUrl: "https://aport.io/terms", licenseUrl: "https://aport.io/license",
+      oauth: { type: "oauth", client: { mode: "provided", clientId: "fixture_client", tokenEndpointAuthMethod: "none" }, baseScopes: ["task-delivery:read", "task-delivery:write"] },
+      review: { test_cases: {
+        positive: Array.from({ length: 5 }, (_, i) => ({ description: `Fixture case ${i}`, prompt: "Inspect the seeded task.", tools_triggered: "task_inspect", expected_behavior: "Return only the authorized fixture." })),
+        negative: Array.from({ length: 3 }, (_, i) => ({ description: `Fixture denial ${i}`, prompt: "Read an unauthorized task." })),
+      }, demo_recording_url: "https://aport.io/review/demo" },
+      publication: { release_notes: "Offline fixture only. No public or live qualification." },
       resource: { uri: "ui://task-delivery/app", domain: "https://aport.io" }, assets: { ui, icon: image, screenshots: [image] } } };
 }
+
+test("one builder emits registered PKCE auth and all review metadata into the ZIP", t => {
+  gitFixture(t);
+  const input = fixture();
+  input.config.oauth.authorizationUrl = "https://aport.io/api/task-delivery/oauth/authorize";
+  input.config.oauth.tokenUrl = "https://aport.io/api/task-delivery/oauth/token";
+  input.config.review.demo_recording_url = "https://www.youtube.com/watch?v=fixture";
+  const manifest = buildPluginPackage(input);
+  const unzip = path => JSON.parse(childProcess.execFileSync("unzip", ["-p", join(input.out, "aport-task-delivery.zip"), path], { encoding: "utf8" }));
+  const plugin = unzip("plugin.json"), mcp = unzip("mcp.json");
+  assert.deepEqual(mcp.mcpServers["task-delivery"].extensions["com.openai"].auth, input.config.oauth);
+  assert.deepEqual(plugin.extensions["com.openai"].review, input.config.review);
+  assert.deepEqual(plugin.extensions["com.openai"].publication, input.config.publication);
+  assert.equal(plugin.extensions["com.openai"].interface.review, undefined);
+  assert.match(manifest.submissionSchemaSha256, /^[a-f0-9]{64}$/);
+  assert.equal(manifest.submissionReady, false, "metadata cannot attest actual host execution");
+});
+
+for (const field of ["oauth", "review", "publication"]) test(`public preflight refuses omitted ${field}`, t => {
+  gitFixture(t);
+  const input = fixture(); delete input.config[field];
+  assert.equal(validatePublicRelease(input.config).ok, false);
+  assert.throws(() => buildPluginPackage(input), { code: "PACKAGE_RELEASE" });
+  assert.equal(existsSync(input.out), false);
+  const manifest = buildPluginPackage({ ...input, internal: true });
+  assert.equal(manifest.submissionReady, false, "older internal fixtures remain usable without claiming submission");
+});
+
+test("submission inputs reject unsupported auth, unknown metadata and credential smuggling", t => {
+  gitFixture(t);
+  const changes = [
+    c => { c.oauth.client.clientSecret = "not-for-package"; },
+    c => { c.oauth.client.tokenEndpointAuthMethod = "client_secret_basic"; },
+    c => { c.oauth.client.mode = "dcr"; },
+    c => { c.oauth.client.clientId = "https://chatgpt.com/oauth/client.json"; },
+    c => { c.oauth.baseScopes = ["task-delivery:read"]; },
+    c => { c.oauth.type = "none"; },
+    c => { c.review.test_cases.positive.pop(); },
+    c => { c.review.test_cases.negative.push(c.review.test_cases.negative[0]); },
+    c => { c.review.reviewer_instructions = "private access"; },
+    c => { c.review.test_credentials = "private access"; },
+    c => { c.review.test_cases.positive[0].tools_triggered = "task_cloud_exec"; },
+    c => { c.review.test_cases.negative[0].prompt = "Bearer fixture_secret_token"; },
+    c => { c.publication.release_notes = " "; },
+    c => { c.publication.countries = ["ZZ"]; },
+  ];
+  for (const change of changes) {
+    const input = fixture(); change(input.config);
+    assert.equal(validatePublicRelease(input.config).ok, false);
+    assert.throws(() => buildPluginPackage(input), { code: "PACKAGE_RELEASE" });
+    assert.throws(() => buildPluginPackage({ ...input, internal: true }), { code: "PACKAGE_CONFIG" });
+    assert.equal(existsSync(input.out), false);
+  }
+});
+
+test("auth and review URLs reject private destinations without echoing their values", t => {
+  gitFixture(t);
+  for (const field of ["authorizationUrl", "tokenUrl", "demo_recording_url", "file_attachment_urls", "expected_output_url"]) {
+    const input = fixture(), bad = "https://127.0.0.1/private-credential-value";
+    if (field.endsWith("Url")) input.config.oauth[field] = bad;
+    else if (field === "demo_recording_url") input.config.review[field] = bad;
+    else input.config.review.test_cases.positive[0][field] = field === "file_attachment_urls" ? [bad] : bad;
+    const result = validatePublicRelease(input.config);
+    assert.equal(result.ok, false, field);
+    assert.ok(result.errors.every(error => !error.includes("private-credential-value")));
+    assert.throws(() => buildPluginPackage(input), { code: "PACKAGE_RELEASE" });
+  }
+});
 function gitFixture(t, { fail, head = sourceCommit, status = "" } = {}) {
   const original = childProcess.execFileSync, calls = [];
   // Capture the fake selected tree before packing. Installed conformance has

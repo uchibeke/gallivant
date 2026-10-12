@@ -237,6 +237,36 @@ uses the same dependency lock as the source build.
 No credential headers or unrelated tree files enter the plugin. Keep input config,
 private backups, provider logs and reviewer credentials outside the output.
 
+Public packaging also requires `oauth`, `review`, and `publication`. The OAuth
+input deliberately matches APort's currently implemented registered public client:
+`type: "oauth"`, `client: { mode: "provided", clientId: "<registered ID>",
+tokenEndpointAuthMethod: "none" }`, and `baseScopes` containing
+`task-delivery:read` and `task-delivery:write`. Optional `authorizationUrl` and
+`tokenUrl` override discovery. Register the exact redirect URI displayed by the
+host's MCP management page in APort's `TASK_DELIVERY_CLIENTS`; do not assume the
+GitHub login callback is the host callback. No client secret belongs in this
+public PKCE configuration. DCR/CIMD and confidential clients are not implemented
+by this APort deployment and are not accepted by its packager.
+
+`review.test_cases` must contain exactly five `positive` and three `negative`
+cases. Every case needs `description` and `prompt`; positive cases also need
+`tools_triggered` (comma-separated actual `task_*` names) and
+`expected_behavior`. Optional `file_attachment_urls` and `expected_output_url`
+must be public HTTPS URLs. `review.demo_recording_url` must identify the actual
+accessible walkthrough; it may include a video query string. Supply
+`publication.release_notes`. The builder emits review beside `interface` under
+`extensions.com.openai`, and auth under the MCP server's
+`extensions.com.openai.auth`. Missing fields stop public preflight. Internal
+fixtures may omit the three inputs; supplied inputs are still validated. A
+correct metadata shape does not prove its cases ran or qualify the release.
+
+The vendored portable MCP schema predates this OpenAI authentication extension.
+Validation retains the original schema bytes and adds only the documented,
+strictly validated auth overlay. The release manifest records its separate
+`submissionSchemaSha256`. Do not hand-edit the emitted ZIP to add metadata or
+weaken the portable schema to admit arbitrary server fields. Reviewer credentials
+and private reviewer instructions are rejected; enter them only in the portal.
+
 The configuration shape is:
 
 ```json
@@ -274,7 +304,7 @@ fixture assets and missing screenshots with remedies. A structurally valid
 package remains `public-candidate-unqualified`, never submission-ready by itself.
 Rebuild executable/configuration changes and invalidate affected evidence.
 
-Official formats rechecked 2026-10-07: [portable packaging](https://developers.openai.com/plugins/build/plugins),
+Official formats rechecked 2026-10-12: [portable packaging](https://developers.openai.com/plugins/build/plugins),
 [UI resources](https://developers.openai.com/plugins/build/chatgpt-ui),
 [global/thread entrypoints](https://developers.openai.com/plugins/build/extensions),
 [submission](https://developers.openai.com/plugins/deploy/submission).
