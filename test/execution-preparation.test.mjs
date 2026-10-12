@@ -121,6 +121,50 @@ function fixture(provider, { question = false, repair = false, pending = false, 
     reportCompletion: (observation, result = observation) => { observationCompletion = observation; resultCompletion = result; }, stop: () => { stopped = true; lookupAvailable = true; }, resolveLookup: () => { lookupAvailable = true; } };
 }
 
+test("read-only preparation deadline can resume the same task without replaying a dispatch or a refusal", async () => {
+  for (const provider of ["codex", "gemini"]) {
+    const f = fixture(provider), prepare = f.transport.prepare;
+    let probes = 0;
+    f.transport.prepare = async req => {
+      if (++probes === 1) throw Object.assign(new Error("transport deadline exceeded"), { code: "EXECUTION_DEADLINE" });
+      return prepare(req);
+    };
+    const blocked = await f.service.prepare({ text: "Add CSV export.", harness: provider, requestId: "preflight-deadline" });
+    assert.equal(blocked.status, "blocked");
+    assert.equal(blocked.errorCode, "EXECUTION_DEADLINE");
+    assert.equal(blocked.preparation.attempts.length, 0);
+    assert.match(blocked.nextAction, /pre-submit provider check/);
+    assert.equal(f.calls.includes("submit"), false);
+    assert.equal(taskStore(f.home).read(blocked.taskId).preflightFailure.attemptCount, 0);
+    await assert.rejects(() => f.reopen().resume({ taskId: blocked.taskId, expectedRevision: blocked.revision - 1 }), { code: "TASK_CONFLICT" });
+    const ready = await f.reopen().resume({ taskId: blocked.taskId, expectedRevision: blocked.revision });
+    assert.equal(ready.status, "ready");
+    assert.equal(ready.taskId, blocked.taskId);
+    assert.equal(ready.preparation.attempts.length, 1);
+    assert.equal(f.calls.filter(c => c === "submit").length, 1);
+    assert.equal(f.dispatches(), 0);
+    assert.equal(taskStore(f.home).read(ready.taskId).preflightFailure, undefined);
+    assert.deepEqual(await f.reopen().resume({ taskId: ready.taskId, expectedRevision: ready.revision }), ready);
+    assert.equal(f.calls.filter(c => c === "submit").length, 1);
+  }
+  for (const code of ["EXECUTION_POLICY", "TASK_PREPARATION_BOUNDARY", "EXECUTION_UNKNOWN"]) {
+    const f = fixture("codex"); let probes = 0;
+    f.transport.prepare = async () => { probes++; throw Object.assign(new Error("refused"), { code }); };
+    const blocked = await f.service.prepare({ text: "Add CSV export.", harness: "codex" });
+    assert.equal(blocked.status, "blocked");
+    assert.deepEqual(await f.reopen().resume({ taskId: blocked.taskId, expectedRevision: blocked.revision }), blocked);
+    assert.equal(probes, 1);
+    assert.equal(f.jobs.size, 0);
+  }
+  // A legacy timeout alone is not proof that submission never happened.
+  const legacy = fixture("codex"), store = taskStore(legacy.home);
+  legacy.transport.prepare = async () => { throw Object.assign(new Error("deadline"), { code: "EXECUTION_DEADLINE" }); };
+  const blocked = await legacy.service.prepare({ text: "Add CSV export.", harness: "codex" });
+  const record = store.read(blocked.taskId); delete record.preflightFailure; store.save(record);
+  assert.deepEqual(await legacy.reopen().resume({ taskId: blocked.taskId, expectedRevision: blocked.revision }), legacy.service.inspect({ taskId: blocked.taskId }));
+  assert.equal(legacy.jobs.size, 0);
+});
+
 // Use existing accepted PRD selections with test-only remote capabilities. The
 // reserved production providers remain unavailable until their milestones add
 // qualified entries; readiness continues to use the unchanged canonical gate.

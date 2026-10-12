@@ -353,6 +353,13 @@ An over-budget saved-output replay cannot become a pass or another repair turn.
 Use `task resume <id> --revision <n>` to reconcile interrupted preparation or finish
 an already authorized, ready intake.
 
+An explicit resume also retries a remote preflight deadline when the saved record
+proves it happened before submission. It preserves the task, requirements,
+allowance and previous settled attempts. The retry reruns provider authorization
+and the normal preparation boundary. A bare legacy timeout, uncertain dispatch,
+policy refusal, exhausted allowance or malformed output does not grant this retry.
+Those records remain blocked or reconcile their already-owned provider operation.
+
 `task validate` returns `TASK_NOT_READY` while preparation is incomplete, even if
 an older question-bearing draft exists. It leaves the saved revision, accepted
 answers and owned run unchanged; resume preparation with the current revision
