@@ -67,6 +67,24 @@ test("explicit OAuth default scopes preserve nonempty values independently of ma
   assert.deepEqual(mcp.mcpServers["task-delivery"].extensions["com.openai"].auth.baseScopes, input.config.oauth.baseScopes);
 });
 
+test("public review cases accept fixed host controls and preserve them in the packaged metadata", t => {
+  gitFixture(t);
+  const input = fixture();
+  const controls = ["task_recheck", "task_continue", "task_message", "task_interrupt", "task_cancel"];
+  input.config.review.test_cases.positive.forEach((item, index) => { item.tools_triggered = `task_inspect, ${controls[index]}`; });
+  input.config.review.test_cases.negative[0].tools_triggered = "task_cancel";
+  assert.equal(validatePublicRelease(input.config).ok, true);
+  buildPluginPackage(input);
+  const plugin = JSON.parse(childProcess.execFileSync("unzip", ["-p", join(input.out, "aport-task-delivery.zip"), "plugin.json"], { encoding: "utf8" }));
+  assert.deepEqual(plugin.extensions["com.openai"].review, input.config.review);
+  for (const name of ["task_continue_extra", "task_interrupt_now", "task_message, unknown", "task_cancel,", "task_cloud_exec"]) {
+    const bad = fixture(); bad.config.review.test_cases.positive[0].tools_triggered = name;
+    assert.equal(validatePublicRelease(bad.config).ok, false);
+    assert.throws(() => buildPluginPackage({ ...bad, internal: true }), { code: "PACKAGE_CONFIG" });
+    assert.equal(existsSync(bad.out), false);
+  }
+});
+
 test("disposable preview identity is distinct and cannot enter a public candidate", t => {
   gitFixture(t);
   const input = fixture();

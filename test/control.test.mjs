@@ -2,7 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { mkdirSync } from "node:fs";
 import { join } from "node:path";
-import { requestControl, applyControl, cancelControl, recoverControl, interruptControl, lastMessage, controlFailure } from "../lib/control.mjs";
+import { requestControl, applyControl, cancelControl, recoverControl, interruptControl, lastMessage, controlFailure, controlPending } from "../lib/control.mjs";
 import { makeState } from "../lib/state.mjs";
 import { makeTick } from "../lib/tick.mjs";
 import { NEEDS_LABEL } from "../lib/gh.mjs";
@@ -42,6 +42,50 @@ test("recovery controls never override a stop, another run or a non-resume actio
     w.ctx.executionFor=()=>({capabilities:{transport:"remote"},current:()=>job,recover:()=>assert.fail("unauthorized recovery")});
     w.state.update(w.id,{last:{run:mode==="foreign"?"other":"owned"},dispatch_stopped:mode==="stopped"?"cancelled":null,control:{id:"r",action:mode==="message"?"message":"resume",status:"queued"}});
     const before=w.state.get(w.id);assert.equal(await recoverControl(w.ctx,w.id),false);assert.deepEqual(w.state.get(w.id),before);
+  }
+});
+
+test("recovery preflight failures settle the retained request without dispatching another run", async () => {
+  for (const mode of ["advanced", "registry-moved", "missing", "constructor", "current"]) {
+    const w = world(), request = { id: "old-request", action: "resume", status: "queued", recoveryRun: "old-run" };
+    const job = { id: mode === "advanced" ? "new-run" : "old-run", running: true, execution: { version: 1, provider: "openai-agents", transport: "remote", providerState: "status-unknown" } };
+    w.state.update(w.id, { last: { run: mode === "registry-moved" ? "new-run" : job.id }, control: request });
+    const fail = () => { throw new Error("Bearer private-recovery-failure"); };
+    w.ctx.executionFor = mode === "constructor" ? fail : () => ({
+      capabilities: { transport: "remote" },
+      current: mode === "current" ? fail : () => mode === "missing" ? null : job,
+      recover: () => assert.fail("preflight failure must not observe or submit provider work"),
+    });
+    await makeTick(w.ctx).tick();
+    const saved = makeState(w.home).get(w.id).control;
+    assert.equal(saved.id, request.id, mode); assert.equal(saved.recoveryRun, request.recoveryRun, mode);
+    assert.equal(saved.status, "failed", mode); assert.ok(saved.finished_at, mode);
+    assert.equal(controlPending(saved), false, mode);
+    assert.doesNotMatch(JSON.stringify(saved), /private-recovery-failure/);
+    assert.equal(await recoverControl(w.ctx, w.id), false, "the failed request is not replayed");
+    assert.equal(w.runner.started.length, 0, mode);
+  }
+});
+
+test("recovery preflight failure cannot overwrite a newer control", async () => {
+  const w = world(), replacement = { id: "new-request", action: "cancel", status: "queued" };
+  w.state.update(w.id, { control: { id: "old-request", action: "resume", status: "queued", recoveryRun: "old-run" } });
+  w.ctx.executionFor = () => { w.state.update(w.id, { control: replacement }); throw new Error("private error"); };
+  assert.equal(await recoverControl(w.ctx, w.id), true);
+  assert.deepEqual(w.state.get(w.id).control, replacement);
+});
+
+test("recovery preflight cannot adopt a replaced request or a changed run", async () => {
+  for (const change of ["control", "run", "stop"]) {
+    const w = world(), replacement = { id: "new-request", action: "cancel", status: "queued" };
+    w.state.update(w.id, { last: { run: "owned" }, control: { id: "old-request", action: "resume", status: "queued", recoveryRun: "owned" } });
+    w.ctx.executionFor = () => ({ capabilities: { transport: "remote" }, current: () => {
+      w.state.update(w.id, change === "control" ? { control: replacement } : change === "run" ? { last: { run: "new-run" } } : { dispatch_stopped: "cancelled" });
+      return { id: "owned", execution: { providerState: "status-unknown" } };
+    }, recover: () => assert.fail("changed ownership must not reach the provider") });
+    assert.equal(await recoverControl(w.ctx, w.id), true);
+    if (change === "control") assert.deepEqual(w.state.get(w.id).control, replacement);
+    else assert.equal(w.state.get(w.id).control.status, "failed");
   }
 });
 

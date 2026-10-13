@@ -283,11 +283,14 @@ the exact owned stream/cache evidence before retrying; never transplant sessions
 
 Configuration may override the integer `execution` limits validated by
 `lib/config.mjs`; `EXECUTION_LIMITS` is the default. Per-operation transport and
-health deadlines are 2 seconds, progress cadence 10 seconds, maximum exponential
+health deadlines are 20 seconds, progress cadence 10 seconds, maximum exponential
 backoff 5 minutes with jitter/Retry-After, concurrency 4, event pages 100 records
 and 64 KiB. Native standalone CLI version/sign-in probes keep their compatible
-20-second subprocess bound; coordinator probes additionally receive the shorter
-abort deadline. Remote standalone probes use the configured `execution.deadlineMs`
+20-second subprocess bound; coordinator probes also honor the configured
+abort deadline. The shared default includes native verification startup, which
+can exceed two seconds on a healthy host. Explicit shorter deadlines still apply,
+and timed-out submissions retain their unknown-acceptance fences. Remote standalone
+probes use the configured `execution.deadlineMs`
 for their entire serial access check, or 10 seconds when none is configured; an
 earlier caller signal is retained. The configurable transport ceiling is 120
 seconds. Snapshotting hosts may explicitly use 60 seconds when each outbound
