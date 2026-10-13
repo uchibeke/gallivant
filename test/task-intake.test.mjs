@@ -177,6 +177,20 @@ test("legacy preparation receipts do not interrupt an existing owned implementat
   const replay=await service.answer(answer);assert.equal(replay.implementation.run,started.implementation.run);
   assert.equal(w.runners.get(started.implementation.id).started.length,1);
 });
+test("explicit task resume recovers the current implementation once per revision without dispatching or replanning",async()=>{
+  const w=world(),started=await w.service.prepare({text:REQUEST,run:true});
+  const runner=w.runners.get(started.implementation.id),job=runner.current(),recoveries=[];
+  runner.current=()=>({...job,execution:{providerState:"status-unknown"}});
+  runner.recover=async input=>{recoveries.push(input);return runner.current();};
+  const before=w.calls(),count=runner.started.length;
+  w.service.inspect({taskId:started.taskId});await w.service.start({taskId:started.taskId,expectedRevision:started.revision,noDaemon:true});assert.equal(recoveries.length,0);
+  const recovered=await w.service.resume({taskId:started.taskId,expectedRevision:started.revision,noDaemon:true});
+  assert.deepEqual(recoveries,[{authorized:true,operationId:`task-resume:${started.taskId}:${started.revision}`}]);
+  assert.equal(recovered.revision,started.revision+1);assert.equal(recovered.implementation.run,started.implementation.run);assert.equal(runner.started.length,count);assert.equal(w.calls(),before);
+  await assert.rejects(w.service.resume({taskId:started.taskId,expectedRevision:started.revision,noDaemon:true}),{code:"TASK_CONFLICT"});assert.equal(recoveries.length,1);
+  runner.recover=async()=>{throw Object.assign(new Error("authorization repair required"),{code:"AGENTS_AUTH"});};
+  const blocked=await w.service.resume({taskId:started.taskId,expectedRevision:recovered.revision,noDaemon:true});assert.equal(blocked.status,"blocked");assert.equal(blocked.errorCode,"AGENTS_AUTH");assert.equal(runner.started.length,count);
+});
 function world(overrides = {}) {
   const home = tempHome(), checkout = join(home, "operator");
   mkdirSync(checkout);

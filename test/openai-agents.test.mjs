@@ -396,6 +396,45 @@ test("unresolved root identity has a three-attempt recovery circuit without rese
   assert.equal(f.calls.filter(c => c.method === "POST" && c.route.endsWith("/events")).length, 1);
   assert.match(Object.values(readJson(join(f.root, "agents.json")).operations)[0].recoveryBlocked, /three launch reconciliation failures/);
 });
+test("explicit recovery reopens only the saved observation circuit and collects an already completed expired-environment artifact", async () => {
+  const f=fixture();f.lose("/agents/sessions/sess-1/events");await assert.rejects(f.service().submit(input));
+  const root=[...f.turns.values()][0];f.turns.clear();
+  for(let i=0;i<3;i++)await f.service().reconcile({force:true});
+  const before=f.service().state(),calls=f.calls.length,dispatch=Object.values(readJson(join(f.root,"agents.json")).operations)[0];
+  f.turns.set(root.id,root);f.finish();f.setEnvironment("expired");
+  f.artifact({execution:{sessionId:dispatch.sessionId,turnId:root.id,environment:dispatch.environmentId}});
+  f.clock.advance(30*60_000);
+  await assert.rejects(f.service().recover({operationId:"resume-1"}),{code:"EXECUTION_CONTROL"});
+  await f.service().recover({operationId:"resume-1",authorized:true});
+  assert.ok(f.calls.length>calls,"explicit recovery performs one bounded authoritative observation before timeout settlement");
+  assert.ok(f.calls.slice(calls).every(c=>c.method==="GET"),"recovery sends no provider mutation");
+  const recovered=f.service().current();assert.equal(recovered.execution.providerState,"retrieving-results");
+  assert.equal(recovered.id,before.current.id);assert.equal(recovered.execution.operationId,before.current.execution.operationId);assert.equal(recovered.execution.sessionId,dispatch.sessionId);assert.equal(recovered.execution.turnId,root.id);
+  const result=await f.service().collect();assert.equal(result.files[0].text,changed);assert.equal(result.completedAt,root.completed_at*1000);
+  const allowance=f.service().state().allowance;assert.equal(allowance.reservedUsd,before.allowance.reservedUsd);assert.equal(allowance.totalUsd,before.allowance.totalUsd);assert.equal(allowance.chargedUsd,before.allowance.reservedUsd,"collection accounts for the original reservation without spending a new one");
+  assert.equal(f.calls.filter(c=>c.method==="POST"&&c.route==="/agents/sessions").length,1);assert.equal(f.calls.filter(c=>c.method==="POST"&&c.route.endsWith("/events")).length,1);
+});
+test("the same explicit recovery identity cannot repeatedly replenish a failed observation circuit", async () => {
+  const f=fixture();f.lose("/agents/sessions/sess-1/events");await assert.rejects(f.service().submit(input));f.turns.clear();
+  for(let i=0;i<3;i++)await f.service().reconcile({force:true});
+  await f.service().recover({operationId:"resume-1",authorized:true});
+  for(let i=0;i<3;i++)await f.service().reconcile({force:true});
+  const calls=f.calls.length;
+  await f.service().recover({operationId:"resume-1",authorized:true});await f.service().reconcile({force:true});assert.equal(f.calls.length,calls);
+  await f.service().recover({operationId:"resume-2",authorized:true});await f.service().reconcile({force:true});assert.ok(f.calls.length>calls);
+  assert.equal(f.calls.filter(c=>c.method==="POST"&&c.route.endsWith("/events")).length,1);
+  const saved=readJson(join(f.root,"execution.json"));const key=Object.keys(saved.current.execution.recoveryRequests)[0];saved.current.execution.recoveryRequests[key]="intent";writeJsonAtomic(join(f.root,"execution.json"),saved);
+  for(let i=0;i<3;i++)await f.service().reconcile({force:true});const after=f.calls.length;
+  await f.service().recover({operationId:"resume-1",authorized:true});await f.service().reconcile({force:true});assert.equal(f.calls.length,after,"adapter receipt also fences a crash before execution acknowledgment");
+});
+test("explicit observation recovery preserves authorization failures, terminal launch refusals and stop fences", async () => {
+  const f=fixture();await f.service().submit(input);
+  for(let i=0;i<3;i++){f.fail(401);await f.service().reconcile({force:true});}
+  const calls=f.calls.length;await assert.rejects(f.service().recover({operationId:"auth-recovery",authorized:true}),{code:"AGENTS_AUTH"});assert.equal(f.calls.length,calls);
+  const unsent=fixture();unsent.lose("/agents/sessions");await assert.rejects(unsent.service().submit(input));await unsent.service().reconcile({force:true});
+  await assert.rejects(unsent.service().recover({operationId:"unsent-recovery",authorized:true}),{code:"AGENTS_RECOVERY_REQUIRED"});
+  await f.service().cancel();await assert.rejects(f.service().recover({operationId:"stop-recovery",authorized:true}),{code:"EXECUTION_STOPPED"});
+});
 for (const status of ["failed", "cancelled"]) test(`idle session and ${status} root cannot succeed`, async () => {
   const f = fixture(); await f.service().submit(input); f.finish(status); await f.service().reconcile({ force: true });
   if (status === "failed") assert.equal((await f.service().collect()).outcome.ok, false);
