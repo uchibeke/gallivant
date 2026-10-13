@@ -46,6 +46,15 @@ test("one builder emits registered PKCE auth and all review metadata into the ZI
   assert.equal(plugin.extensions["com.openai"].interface.review, undefined);
   assert.match(manifest.submissionSchemaSha256, /^[a-f0-9]{64}$/);
   assert.equal(manifest.submissionReady, false, "metadata cannot attest actual host execution");
+  const skill = childProcess.execFileSync("unzip", ["-p", join(input.out, "aport-task-delivery.zip"), "skills/task-delivery/SKILL.md"], { encoding: "utf8" });
+  // This is the emitted instruction payload, not just the source template.
+  // The APort protocol tests independently exercise discovery and each fixed
+  // control's strict schema. Hosts reject undiscovered compatibility aliases.
+  for (const tool of ["task_recheck", "task_continue", "task_message", "task_interrupt", "task_cancel"]) assert.ok(skill.includes(tool), `missing advertised control ${tool}`);
+  assert.doesNotMatch(skill, /\btask_control\b|\btask_delivery_control\b/);
+  assert.match(skill, /do not pass action or interrupt fields/);
+  assert.match(skill, /same operationId and arguments on retries/);
+  assert.match(skill, /only tools advertised by the connected host/);
 });
 
 test("explicit OAuth default scopes preserve nonempty values independently of mandatory base scopes", t => {
