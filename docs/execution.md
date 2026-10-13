@@ -287,7 +287,13 @@ health deadlines are 2 seconds, progress cadence 10 seconds, maximum exponential
 backoff 5 minutes with jitter/Retry-After, concurrency 4, event pages 100 records
 and 64 KiB. Native standalone CLI version/sign-in probes keep their compatible
 20-second subprocess bound; coordinator probes additionally receive the shorter
-abort deadline. Health is persisted per provider **and account**. A success stops
+abort deadline. Remote standalone probes use the configured `execution.deadlineMs`
+for their entire serial access check, or 10 seconds when none is configured; an
+earlier caller signal is retained. The configurable transport ceiling is 120
+seconds. Snapshotting hosts may explicitly use 60 seconds when each outbound
+request carries several seconds of authorization and persistence latency. This
+does not increase task runtime/spend allowances or replace durable lost-reply
+reconciliation. Health is persisted per provider **and account**. A success stops
 authorizing dispatch at its saved `nextAttemptAt`, before the due refresh starts
 and while it waits for a probe worker or reply. Read-only health checks enforce
 that deadline across restart without probing or changing the saved observation.
