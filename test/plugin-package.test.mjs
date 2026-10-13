@@ -33,17 +33,29 @@ test("one builder emits registered PKCE auth and all review metadata into the ZI
   const input = fixture();
   input.config.oauth.authorizationUrl = "https://aport.io/api/task-delivery/oauth/authorize";
   input.config.oauth.tokenUrl = "https://aport.io/api/task-delivery/oauth/token";
+  input.config.oauth.defaultScopes = [];
   input.config.review.demo_recording_url = "https://www.youtube.com/watch?v=fixture";
   const manifest = buildPluginPackage(input);
   const unzip = path => JSON.parse(childProcess.execFileSync("unzip", ["-p", join(input.out, "aport-task-delivery.zip"), path], { encoding: "utf8" }));
   const plugin = unzip("plugin.json"), mcp = unzip("mcp.json");
   assert.deepEqual(mcp.mcpServers["task-delivery"].extensions["com.openai"].auth, input.config.oauth);
   assert.deepEqual(mcp.mcpServers["task-delivery"].extensions["com.openai"].auth.baseScopes, ["tasks:read", "tasks:write", "tasks:check", "tasks:control"]);
+  assert.deepEqual(mcp.mcpServers["task-delivery"].extensions["com.openai"].auth.defaultScopes, []);
   assert.deepEqual(plugin.extensions["com.openai"].review, input.config.review);
   assert.deepEqual(plugin.extensions["com.openai"].publication, input.config.publication);
   assert.equal(plugin.extensions["com.openai"].interface.review, undefined);
   assert.match(manifest.submissionSchemaSha256, /^[a-f0-9]{64}$/);
   assert.equal(manifest.submissionReady, false, "metadata cannot attest actual host execution");
+});
+
+test("explicit OAuth default scopes preserve nonempty values independently of mandatory base scopes", t => {
+  gitFixture(t);
+  const input = fixture();
+  input.config.oauth.defaultScopes = ["tasks:read"];
+  buildPluginPackage(input);
+  const mcp = JSON.parse(childProcess.execFileSync("unzip", ["-p", join(input.out, "aport-task-delivery.zip"), "mcp.json"], { encoding: "utf8" }));
+  assert.deepEqual(mcp.mcpServers["task-delivery"].extensions["com.openai"].auth.defaultScopes, ["tasks:read"]);
+  assert.deepEqual(mcp.mcpServers["task-delivery"].extensions["com.openai"].auth.baseScopes, input.config.oauth.baseScopes);
 });
 
 test("disposable preview identity is distinct and cannot enter a public candidate", t => {
@@ -118,6 +130,13 @@ test("submission inputs reject unsupported auth, unknown metadata and credential
     c => { c.oauth.baseScopes = ["tasks:read", "tasks:read"]; },
     c => { c.oauth.baseScopes = ['tasks:"read']; },
     c => { c.oauth.baseScopes = ["tasks:\\read"]; },
+    c => { c.oauth.defaultScopes = "tasks:read"; },
+    c => { c.oauth.defaultScopes = ["tasks:read tasks:write"]; },
+    c => { c.oauth.defaultScopes = ["tasks:read", "tasks:read"]; },
+    c => { c.oauth.defaultScopes = ['tasks:"read']; },
+    c => { c.oauth.defaultScopes = ["tasks:\\read"]; },
+    c => { c.oauth.defaultScopes = [""]; },
+    c => { c.oauth.defaultScopes = Array.from({ length: 33 }, (_, i) => `scope:${i}`); },
     c => { c.oauth.type = "none"; },
     c => { c.review.test_cases.positive.pop(); },
     c => { c.review.test_cases.negative.push(c.review.test_cases.negative[0]); },

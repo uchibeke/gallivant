@@ -252,6 +252,13 @@ GitHub login callback is the host callback. No client secret belongs in this
 public PKCE configuration. DCR/CIMD and confidential clients are not implemented
 by this APort deployment and are not accepted by its packager.
 
+Optional `oauth.defaultScopes` uses the same token validation as `baseScopes`,
+but permits an empty array. Per OpenAI's OAuth configuration reference, `[]`
+suppresses client/server default scopes; omitting it preserves those defaults.
+`baseScopes` remains mandatory and is included in every authorization request.
+Use the explicit empty override when all requested scopes are supplied there;
+verify the actual host authorization request after updating its package.
+
 `review.test_cases` must contain exactly five `positive` and three `negative`
 cases. Every case needs `description` and `prompt`; positive cases also need
 `tools_triggered` (comma-separated actual `task_*` names) and
