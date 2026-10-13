@@ -174,7 +174,18 @@ attempt. The supported header forms follow
 Three consecutive reconciliation or unresolved launch attempts open a circuit;
 creation recovered before any input send requires explicit inspection. Failed sessions stop
 reconnecting. Repair credentials/throttling/configuration and explicitly authorize
-`transport.resetRecovery` for a still-viable session. Failed or expired sessions
+`transport.resetRecovery` for a still-viable session. A saved authentication error
+requires a fresh read-only check of the owned session and root turn with the
+current credential before the retry block is cleared. If the session identity
+is still unknown, the check uses the session listing needed for launch recovery.
+It does not require model-catalog access or authorize new inference. A failed or
+timed-out check preserves that block and
+does not consume a reset receipt. Recovery then observes the same owned session
+and root turn; it never resends input or creates a replacement. Replaying the
+same successful reset cannot replenish its retry allowance. The operator control
+reports recovery only after observing a known provider state; prior acceptance
+alone cannot turn an unresolved observation into success. Ownership, policy,
+protocol, cancellation and terminal refusals remain enforced. Failed or expired sessions
 require saved artifact recovery and explicit replacement-session authorization;
 automatic replacement is not supported, and no old filesystem survival is claimed.
 

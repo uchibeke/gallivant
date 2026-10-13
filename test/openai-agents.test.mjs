@@ -474,10 +474,100 @@ test("the same explicit recovery identity cannot repeatedly replenish a failed o
 test("explicit observation recovery preserves authorization failures, terminal launch refusals and stop fences", async () => {
   const f=fixture();await f.service().submit(input);
   for(let i=0;i<3;i++){f.fail(401);await f.service().reconcile({force:true});}
-  const calls=f.calls.length;await assert.rejects(f.service().recover({operationId:"auth-recovery",authorized:true}),{code:"AGENTS_AUTH"});assert.equal(f.calls.length,calls);
+  const calls=f.calls.length, before=readJson(join(f.root,"agents.json"));f.fail(401);
+  await assert.rejects(f.service().recover({operationId:"auth-recovery",authorized:true}),{code:"AGENTS_AUTH"});
+  assert.ok(f.calls.length>calls,"saved authentication failures require a fresh read-only access check");
+  assert.ok(f.calls.slice(calls).every(c=>c.method==="GET"));assert.deepEqual(readJson(join(f.root,"agents.json")),before);
   const unsent=fixture();unsent.lose("/agents/sessions");await assert.rejects(unsent.service().submit(input));await unsent.service().reconcile({force:true});
   await assert.rejects(unsent.service().recover({operationId:"unsent-recovery",authorized:true}),{code:"AGENTS_RECOVERY_REQUIRED"});
   await f.service().cancel();await assert.rejects(f.service().recover({operationId:"stop-recovery",authorized:true}),{code:"EXECUTION_STOPPED"});
+});
+for (const status of [401,403]) for (const lost of [false,true]) test(`repaired ${status} access recovers ${lost?"unknown launch":"accepted run"} after restart without new input`, async () => {
+  const f=fixture();
+  if(lost){f.lose("/agents/sessions/sess-1/events");await assert.rejects(f.service().submit(input));}
+  else await f.service().submit(input);
+  for(let i=0;i<3;i++){f.fail(status);await f.service().reconcile({force:true});}
+  const before=f.service().state(),file=join(f.root,"agents.json"),op=Object.values(readJson(file).operations)[0];
+  assert.equal(op.recoveryErrorCode,"AGENTS_AUTH");assert.ok(op.recoveryBlocked);
+  const calls=f.calls.length;await f.service().reconcile({force:true});assert.equal(f.calls.length,calls,"automatic polling cannot reset the circuit");
+  const root=f.finish();f.artifact({execution:{sessionId:op.sessionId,turnId:root.id,environment:op.environmentId}});
+  f.fail({route:`/models/${config.model}`,status:403}); // Reading saved work does not require model-catalog access.
+  // Recreate both execution and transport from durable state, as after repair/restart.
+  const recovered=await f.service().recover({operationId:"credentials-repaired",authorized:true});
+  assert.equal(recovered.id,before.current.id);assert.equal(recovered.execution.providerState,"retrieving-results");
+  assert.equal(recovered.execution.sessionId,op.sessionId);assert.equal(recovered.execution.turnId,root.id);
+  assert.equal(f.calls[calls].route,`/agents/sessions/${op.sessionId}`);
+  assert.equal(f.calls.slice(calls).some(c=>c.route.startsWith("/models/")),false);
+  const saved=Object.values(readJson(file).operations)[0];assert.equal(saved.recoveryErrorCode,null);assert.equal(saved.recoveryResets.length,1);
+  const replay=f.calls.length;await f.service().recover({operationId:"credentials-repaired",authorized:true});assert.equal(f.calls.length,replay);
+  const result=await f.service().collect();assert.equal(result.files[0].text,changed);
+  assert.ok(f.calls.slice(calls).every(c=>c.method==="GET"));assert.equal(f.sessions.size,1);assert.equal(f.turns.size,1);
+  const allowance=f.service().state().allowance;assert.equal(allowance.totalUsd,before.allowance.totalUsd);assert.equal(allowance.reservedUsd,before.allowance.reservedUsd);
+});
+
+test("credential recovery access failure and late replies cannot clear the circuit or consume a reset", async () => {
+  const f=fixture();await f.service().submit(input);
+  for(let i=0;i<3;i++){f.fail(401);await f.service().reconcile({force:true});}
+  const file=join(f.root,"agents.json"),before=readJson(file);
+  f.fail({route:"/agents/sessions/sess-1/turns/turn-1",status:403});
+  await assert.rejects(f.service().recover({operationId:"same-repair",authorized:true}),{code:"AGENTS_AUTH"});
+  assert.deepEqual(readJson(file),before);
+  f.fail({route:"/agents/sessions/sess-1",status:429,retryAfter:"7"});
+  await assert.rejects(f.service().recover({operationId:"same-repair",authorized:true}),{code:"AGENTS_THROTTLED",retryAfterMs:7000});
+  assert.deepEqual(readJson(file),before);
+  const request=f.http.request;let resolve,entered;
+  const waiting=new Promise(done=>{entered=done;});
+  f.http.request=async()=>{entered();return new Promise(done=>{resolve=done;});};
+  try {
+    const failed=assert.rejects(f.service({deadlineMs:30}).recover({operationId:"same-repair",authorized:true}),{code:"EXECUTION_DEADLINE"});
+    await waiting;await failed;resolve({id:config.model});await new Promise(done=>setImmediate(done));
+    assert.deepEqual(readJson(file),before,"a late access reply has no durable reset authority");
+  } finally {f.http.request=request;}
+  const calls=f.calls.length;await f.service().recover({operationId:"same-repair",authorized:true});
+  assert.equal(f.service().current().execution.providerState,"running");assert.ok(f.calls.slice(calls).every(c=>c.method==="GET"));
+  assert.equal(Object.values(readJson(file).operations)[0].recoveryResets.length,1);
+});
+
+test("repaired credentials recover an unknown intake session without replaying its initial prompt", async () => {
+  const f=fixture(),request=await prepareIntake(f);
+  f.lose("/agents/sessions");await assert.rejects(f.service().submit(request));
+  for(let i=0;i<3;i++){f.fail(401);await f.service().reconcile({force:true});}
+  const op=Object.values(readJson(join(f.root,"agents.json")).operations)[0];assert.equal(op.sessionId,null);
+  const root=f.finish();f.setItems([{id:"draft",turn_id:root.id,type:"message",role:"assistant",phase:"final_answer",status:"completed",content:[{type:"output_text",text:"Recovered bounded draft"}]}]);
+  const calls=f.calls.length;await f.service().recover({operationId:"intake-auth-repaired",authorized:true});
+  const result=await f.service().collect();assert.equal(result.outcome.lastMessage,"Recovered bounded draft");
+  assert.ok(f.calls.slice(calls).every(c=>c.method==="GET"));assert.equal(f.sessions.size,1);assert.equal(f.turns.size,1);
+});
+
+test("a successful credential probe cannot authorize foreign ownership or weaker session policy", async () => {
+  for(const code of ["EXECUTION_OWNERSHIP","EXECUTION_POLICY"]){
+    const f=fixture(),job=await f.service().submit(input);
+    for(let i=0;i<3;i++){f.fail(401);await f.service().reconcile({force:true});}
+    const session=f.sessions.get(job.execution.sessionId);
+    if(code==="EXECUTION_OWNERSHIP")session.metadata.account="foreign";
+    else session.environment.network={access:"unrestricted"};
+    const calls=f.calls.length,before=readJson(join(f.root,"agents.json"));
+    await assert.rejects(f.service().recover({operationId:"access-restored",authorized:true}),{code});
+    assert.equal(f.service().current().execution.providerState,"status-unknown");
+    assert.deepEqual(readJson(join(f.root,"agents.json")),before,"invalid owned-session metadata cannot clear the authentication fence");
+    await assert.rejects(f.service().collect(),{code:"EXECUTION_RESULT"});
+    await assert.rejects(f.service().recover({operationId:"do-not-override",authorized:true}),{code});
+    assert.ok(f.calls.slice(calls).every(c=>c.method==="GET"));assert.equal(f.sessions.size,1);assert.equal(f.turns.size,1);
+  }
+});
+
+test("credential repair cannot reset saved policy, ownership, protocol or terminal refusals", async () => {
+  const f=fixture();await f.service().submit(input);
+  for(let i=0;i<3;i++){f.fail(401);await f.service().reconcile({force:true});}
+  const file=join(f.root,"agents.json"),before=readJson(file),key=Object.keys(before.operations)[0],calls=f.calls.length;
+  const cases=[...["AGENTS_PROTOCOL","AGENTS_ID","EXECUTION_OWNERSHIP","EXECUTION_POLICY","TASK_PREPARATION_BOUNDARY"].map(code=>({patch:{recoveryErrorCode:code},code})),
+    {patch:{sessionFailed:true},code:"AGENTS_ENVIRONMENT"},{patch:{environmentState:"expired"},code:"AGENTS_ENVIRONMENT"},
+    {patch:{recoveryBlocked:"session creation recovered before any input send"},code:"AGENTS_AUTH"}];
+  for(const [index,{patch,code}] of cases.entries()){
+    const state=structuredClone(before);Object.assign(state.operations[key],patch);writeJsonAtomic(file,state);
+    await assert.rejects(f.service().recover({operationId:`refusal-${index}`,authorized:true}),{code});
+    assert.deepEqual(readJson(file),state);assert.equal(f.calls.length,calls,"hard refusals must stop before the access probe");
+  }
 });
 for (const status of ["failed", "cancelled"]) test(`idle session and ${status} root cannot succeed`, async () => {
   const f = fixture(); await f.service().submit(input); f.finish(status); await f.service().reconcile({ force: true });

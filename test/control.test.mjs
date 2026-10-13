@@ -22,9 +22,9 @@ function world(over = {}) {
 }
 
 test("queued unknown recovery settles one bounded observation without turning into continuation", async () => {
-  for (const result of ["accepted", "unknown", "denied"]) {
+  for (const result of ["accepted", "accepted-unresolved", "unknown", "denied"]) {
     const w=world(),job={id:"owned-run",running:true,execution:{providerState:"status-unknown",acceptance:"unknown"}},calls=[];
-    const runner={capabilities:{transport:"remote"},current:()=>job,recover:async args=>{calls.push(args);if(result==="denied")throw Object.assign(new Error("private refusal"),{code:"AGENTS_AUTH"});job.execution.acceptance=result;return job;}};
+    const runner={capabilities:{transport:"remote"},current:()=>job,recover:async args=>{calls.push(args);if(result==="denied")throw Object.assign(new Error("private refusal"),{code:"AGENTS_AUTH"});job.execution.acceptance=result==="accepted-unresolved"?"accepted":result;if(result==="accepted")job.execution.providerState="running";return job;}};
     w.ctx.executionFor=()=>runner;w.state.update(w.id,{last:{run:job.id},control:{id:"same-request",action:"resume",status:"queued",note:"",interrupt:false}});
     assert.equal(await recoverControl(w.ctx,w.id),true);
     const control=w.state.get(w.id).control;
