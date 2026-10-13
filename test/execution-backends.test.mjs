@@ -53,6 +53,43 @@ function remote(provider = "openai-agents", overrides = {}) {
   return { root, clock, calls, transport, capabilities, service: makeExecution(options), reopen: () => makeExecution(options), observe: patch => { observation = { ...observation, ...patch }; }, jobs };
 }
 
+test("default transport deadline allows healthy native preparation beyond two seconds", async t => {
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  let signal, entered;
+  const preparing = new Promise(resolve => { entered = resolve; });
+  const f = remote(), submit = f.transport.submit;
+  f.transport.submit = async request => {
+    signal = request.signal; entered();
+    await new Promise(resolve => setTimeout(resolve, 5000));
+    signal.throwIfAborted(); return submit(request);
+  };
+  const pending = f.service.submit(input); await preparing;
+  t.mock.timers.tick(2000); await new Promise(resolve => setImmediate(resolve));
+  assert.equal(signal.aborted, false); assert.equal(f.jobs.size, 0);
+  t.mock.timers.tick(3000);
+  const job = await pending;
+  assert.equal(job.execution.acceptance, "accepted"); assert.equal(f.jobs.size, 1);
+});
+
+test("default transport deadline still aborts unknown submission and fences duplicate paid work", async t => {
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  let signal, entered, calls = 0;
+  const submitting = new Promise(resolve => { entered = resolve; });
+  const f = remote("openai-agents", { submit: request => {
+    calls++; signal = request.signal; entered(); return new Promise(() => {});
+  } });
+  const pending = f.service.submit(input), rejected = assert.rejects(pending, { code: "EXECUTION_DEADLINE" });
+  await submitting;
+  t.mock.timers.tick(19_999); await new Promise(resolve => setImmediate(resolve));
+  assert.equal(signal.aborted, false);
+  t.mock.timers.tick(1); await rejected;
+  assert.equal(signal.aborted, true);
+  assert.equal(f.reopen().current().execution.acceptance, "unknown");
+  assert.equal(f.reopen().state().allowance.reservedUsd, input.allowance.reservedUsd);
+  await assert.rejects(f.reopen().submit(input), { code: "EXECUTION_UNKNOWN" });
+  assert.equal(calls, 1);
+});
+
 test("invalid provider retry delays preserve finite reconciliation, health and cancellation schedules across restart", async t => {
   const observations = [];
   for (const retryAfterMs of [NaN, Infinity, -Infinity, "120000", -20_000]) {

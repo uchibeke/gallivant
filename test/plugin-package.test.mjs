@@ -19,8 +19,183 @@ function fixture() {
     config: { publisher: "APort", supportEmail: "support@aport.io", endpoint: "https://aport.io/mcp",
       homepage: "https://aport.io", supportUrl: "https://aport.io/support", privacyUrl: "https://aport.io/privacy",
       termsUrl: "https://aport.io/terms", licenseUrl: "https://aport.io/license",
+      oauth: { type: "oauth", client: { mode: "provided", clientId: "fixture_client", tokenEndpointAuthMethod: "none" }, baseScopes: ["tasks:read", "tasks:write", "tasks:check", "tasks:control"] },
+      review: { test_cases: {
+        positive: Array.from({ length: 5 }, (_, i) => ({ description: `Fixture case ${i}`, prompt: "Inspect the seeded task.", tools_triggered: "task_inspect", expected_behavior: "Return only the authorized fixture." })),
+        negative: Array.from({ length: 3 }, (_, i) => ({ description: `Fixture denial ${i}`, prompt: "Read an unauthorized task." })),
+      }, demo_recording_url: "https://aport.io/review/demo" },
+      publication: { release_notes: "Offline fixture only. No public or live qualification." },
       resource: { uri: "ui://task-delivery/app", domain: "https://aport.io" }, assets: { ui, icon: image, screenshots: [image] } } };
 }
+
+test("one builder emits registered PKCE auth and all review metadata into the ZIP", t => {
+  gitFixture(t);
+  const input = fixture();
+  input.config.oauth.authorizationUrl = "https://aport.io/api/task-delivery/oauth/authorize";
+  input.config.oauth.tokenUrl = "https://aport.io/api/task-delivery/oauth/token";
+  input.config.oauth.defaultScopes = [];
+  input.config.review.demo_recording_url = "https://www.youtube.com/watch?v=fixture";
+  const manifest = buildPluginPackage(input);
+  const unzip = path => JSON.parse(childProcess.execFileSync("unzip", ["-p", join(input.out, "aport-task-delivery.zip"), path], { encoding: "utf8" }));
+  const plugin = unzip("plugin.json"), mcp = unzip("mcp.json");
+  assert.deepEqual(mcp.mcpServers["task-delivery"].extensions["com.openai"].auth, input.config.oauth);
+  assert.deepEqual(mcp.mcpServers["task-delivery"].extensions["com.openai"].auth.baseScopes, ["tasks:read", "tasks:write", "tasks:check", "tasks:control"]);
+  assert.deepEqual(mcp.mcpServers["task-delivery"].extensions["com.openai"].auth.defaultScopes, []);
+  assert.deepEqual(plugin.extensions["com.openai"].review, input.config.review);
+  assert.deepEqual(plugin.extensions["com.openai"].publication, input.config.publication);
+  assert.equal(plugin.extensions["com.openai"].interface.review, undefined);
+  assert.match(manifest.submissionSchemaSha256, /^[a-f0-9]{64}$/);
+  assert.equal(manifest.submissionReady, false, "metadata cannot attest actual host execution");
+  const skill = childProcess.execFileSync("unzip", ["-p", join(input.out, "aport-task-delivery.zip"), "skills/task-delivery/SKILL.md"], { encoding: "utf8" });
+  // This is the emitted instruction payload, not just the source template.
+  // The APort protocol tests independently exercise discovery and each fixed
+  // control's strict schema. Hosts reject undiscovered compatibility aliases.
+  for (const tool of ["task_recheck", "task_continue", "task_message", "task_interrupt", "task_cancel"]) assert.ok(skill.includes(tool), `missing advertised control ${tool}`);
+  assert.doesNotMatch(skill, /\btask_control\b|\btask_delivery_control\b/);
+  assert.match(skill, /do not pass action or interrupt fields/);
+  assert.match(skill, /same operationId and arguments on retries/);
+  assert.match(skill, /only tools advertised by the connected host/);
+});
+
+test("explicit OAuth default scopes preserve nonempty values independently of mandatory base scopes", t => {
+  gitFixture(t);
+  const input = fixture();
+  input.config.oauth.defaultScopes = ["tasks:read"];
+  buildPluginPackage(input);
+  const mcp = JSON.parse(childProcess.execFileSync("unzip", ["-p", join(input.out, "aport-task-delivery.zip"), "mcp.json"], { encoding: "utf8" }));
+  assert.deepEqual(mcp.mcpServers["task-delivery"].extensions["com.openai"].auth.defaultScopes, ["tasks:read"]);
+  assert.deepEqual(mcp.mcpServers["task-delivery"].extensions["com.openai"].auth.baseScopes, input.config.oauth.baseScopes);
+});
+
+test("public review cases accept fixed host controls and preserve them in the packaged metadata", t => {
+  gitFixture(t);
+  const input = fixture();
+  const controls = ["task_recheck", "task_continue", "task_message", "task_interrupt", "task_cancel"];
+  input.config.review.test_cases.positive.forEach((item, index) => { item.tools_triggered = `task_inspect, ${controls[index]}`; });
+  input.config.review.test_cases.negative[0].tools_triggered = "task_cancel";
+  assert.equal(validatePublicRelease(input.config).ok, true);
+  buildPluginPackage(input);
+  const plugin = JSON.parse(childProcess.execFileSync("unzip", ["-p", join(input.out, "aport-task-delivery.zip"), "plugin.json"], { encoding: "utf8" }));
+  assert.deepEqual(plugin.extensions["com.openai"].review, input.config.review);
+  for (const name of ["task_continue_extra", "task_interrupt_now", "task_message, unknown", "task_cancel,", "task_cloud_exec"]) {
+    const bad = fixture(); bad.config.review.test_cases.positive[0].tools_triggered = name;
+    assert.equal(validatePublicRelease(bad.config).ok, false);
+    assert.throws(() => buildPluginPackage({ ...bad, internal: true }), { code: "PACKAGE_CONFIG" });
+    assert.equal(existsSync(bad.out), false);
+  }
+});
+
+test("disposable preview identity is distinct and cannot enter a public candidate", t => {
+  gitFixture(t);
+  const input = fixture();
+  input.config.developmentIdentity = { name: "aport-task-delivery-preview", displayName: "APort Tasks Preview" };
+  assert.equal(validatePublicRelease(input.config).ok, false);
+  assert.throws(() => buildPluginPackage(input), { code: "PACKAGE_RELEASE" });
+  const manifest = buildPluginPackage({ ...input, internal: true });
+  const plugin = JSON.parse(readFileSync(join(input.out, "plugin/plugin.json")));
+  assert.equal(plugin.name, input.config.developmentIdentity.name);
+  assert.equal(plugin.extensions["com.openai"].interface.displayName, input.config.developmentIdentity.displayName);
+  assert.equal(manifest.submissionReady, false);
+  for (const identity of [{ name: "aport-task-delivery", displayName: "APort Tasks Preview" }, { name: "aport-task-delivery-preview", displayName: "APort Task Delivery" }, { name: "aport-task-delivery-preview", displayName: "APort Tasks Preview", secret: "extra" }]) {
+    const bad = fixture(); bad.config.developmentIdentity = identity;
+    assert.throws(() => buildPluginPackage({ ...bad, internal: true }), { code: "PACKAGE_CONFIG" });
+  }
+});
+
+test("configured listing copy is reproducible in the ZIP without changing identity or review metadata", t => {
+  gitFixture(t);
+  const input = fixture();
+  input.config.listing = {
+    longDescription: "For developers in the limited-access pilot.\nAn APort-provisioned account and repository are required.",
+    category: "Developer Tools",
+  };
+  assert.equal(validatePublicRelease(input.config).ok, true);
+  buildPluginPackage(input);
+  const plugin = JSON.parse(childProcess.execFileSync("unzip", ["-p", join(input.out, "aport-task-delivery.zip"), "plugin.json"], { encoding: "utf8" }));
+  const openai = plugin.extensions["com.openai"];
+  assert.equal(openai.interface.longDescription, input.config.listing.longDescription);
+  assert.equal(openai.interface.category, "Developer Tools");
+  assert.equal(openai.interface.displayName, "APort Task Delivery");
+  assert.deepEqual(openai.review, input.config.review);
+  assert.equal(openai.listing, undefined);
+  for (const listing of [
+    { ...input.config.listing, category: " " },
+    { ...input.config.listing, category: "Developer\nTools" },
+    { ...input.config.listing, category: "x".repeat(81) },
+    { ...input.config.listing, longDescription: " " },
+    { ...input.config.listing, longDescription: "x".repeat(4001) },
+    { ...input.config.listing, longDescription: "Unsupported\tcontrol" },
+    { ...input.config.listing, longDescription: "Bearer private_fixture_value" },
+    { ...input.config.listing, displayName: "Identity override" },
+  ]) {
+    const bad = fixture(); bad.config.listing = listing;
+    assert.equal(validatePublicRelease(bad.config).ok, false);
+    assert.throws(() => buildPluginPackage({ ...bad, internal: true }), { code: "PACKAGE_CONFIG" });
+    assert.equal(existsSync(bad.out), false);
+  }
+});
+
+for (const field of ["oauth", "review", "publication"]) test(`public preflight refuses omitted ${field}`, t => {
+  gitFixture(t);
+  const input = fixture(); delete input.config[field];
+  assert.equal(validatePublicRelease(input.config).ok, false);
+  assert.throws(() => buildPluginPackage(input), { code: "PACKAGE_RELEASE" });
+  assert.equal(existsSync(input.out), false);
+  const manifest = buildPluginPackage({ ...input, internal: true });
+  assert.equal(manifest.submissionReady, false, "older internal fixtures remain usable without claiming submission");
+});
+
+test("submission inputs reject unsupported auth, unknown metadata and credential smuggling", t => {
+  gitFixture(t);
+  const changes = [
+    c => { c.oauth.client.clientSecret = "not-for-package"; },
+    c => { c.oauth.client.tokenEndpointAuthMethod = "client_secret_basic"; },
+    c => { c.oauth.client.mode = "dcr"; },
+    c => { c.oauth.client.clientId = "https://chatgpt.com/oauth/client.json"; },
+    c => { c.oauth.baseScopes = []; },
+    c => { c.oauth.baseScopes = ["tasks:read tasks:write"]; },
+    c => { c.oauth.baseScopes = ["tasks:read", "tasks:read"]; },
+    c => { c.oauth.baseScopes = ['tasks:"read']; },
+    c => { c.oauth.baseScopes = ["tasks:\\read"]; },
+    c => { c.oauth.defaultScopes = "tasks:read"; },
+    c => { c.oauth.defaultScopes = ["tasks:read tasks:write"]; },
+    c => { c.oauth.defaultScopes = ["tasks:read", "tasks:read"]; },
+    c => { c.oauth.defaultScopes = ['tasks:"read']; },
+    c => { c.oauth.defaultScopes = ["tasks:\\read"]; },
+    c => { c.oauth.defaultScopes = [""]; },
+    c => { c.oauth.defaultScopes = Array.from({ length: 33 }, (_, i) => `scope:${i}`); },
+    c => { c.oauth.type = "none"; },
+    c => { c.review.test_cases.positive.pop(); },
+    c => { c.review.test_cases.negative.push(c.review.test_cases.negative[0]); },
+    c => { c.review.reviewer_instructions = "private access"; },
+    c => { c.review.test_credentials = "private access"; },
+    c => { c.review.test_cases.positive[0].tools_triggered = "task_cloud_exec"; },
+    c => { c.review.test_cases.negative[0].prompt = "Bearer fixture_secret_token"; },
+    c => { c.publication.release_notes = " "; },
+    c => { c.publication.countries = ["ZZ"]; },
+  ];
+  for (const change of changes) {
+    const input = fixture(); change(input.config);
+    assert.equal(validatePublicRelease(input.config).ok, false);
+    assert.throws(() => buildPluginPackage(input), { code: "PACKAGE_RELEASE" });
+    assert.throws(() => buildPluginPackage({ ...input, internal: true }), { code: "PACKAGE_CONFIG" });
+    assert.equal(existsSync(input.out), false);
+  }
+});
+
+test("auth and review URLs reject private destinations without echoing their values", t => {
+  gitFixture(t);
+  for (const field of ["authorizationUrl", "tokenUrl", "demo_recording_url", "file_attachment_urls", "expected_output_url"]) {
+    const input = fixture(), bad = "https://127.0.0.1/private-credential-value";
+    if (field.endsWith("Url")) input.config.oauth[field] = bad;
+    else if (field === "demo_recording_url") input.config.review[field] = bad;
+    else input.config.review.test_cases.positive[0][field] = field === "file_attachment_urls" ? [bad] : bad;
+    const result = validatePublicRelease(input.config);
+    assert.equal(result.ok, false, field);
+    assert.ok(result.errors.every(error => !error.includes("private-credential-value")));
+    assert.throws(() => buildPluginPackage(input), { code: "PACKAGE_RELEASE" });
+  }
+});
 function gitFixture(t, { fail, head = sourceCommit, status = "" } = {}) {
   const original = childProcess.execFileSync, calls = [];
   // Capture the fake selected tree before packing. Installed conformance has
@@ -154,6 +329,18 @@ test("public URLs reject canonical loopbacks and aliases across every configured
   assert.equal(buildPluginPackage({ ...input, internal: true }).submissionReady, false);
 });
 
+test("the full self-contained UI uses the same bounded size in preflight and emission", t => {
+  gitFixture(t);
+  const input=fixture();
+  writeFileSync(input.config.assets.ui,'<!doctype html>'+ ' '.repeat(1_300_000));
+  assert.equal(validatePublicRelease(input.config).ok,true);
+  const manifest=buildPluginPackage({...input,internal:true});
+  assert.equal(readFileSync(join(input.out,'plugin/assets/task-ui.html')).length,1_300_015);
+  assert.equal(manifest.submissionReady,false);
+  writeFileSync(input.config.assets.ui,' '.repeat(2_000_001));
+  assert.equal(validatePublicRelease(input.config).ok,false);
+  assert.throws(()=>buildPluginPackage({...input,out:join(dirname(input.out),'too-large'),internal:true}),{code:'PACKAGE_ASSET'});
+});
 test("public asset preflight and builder share regular file, size and secret constraints", t => {
   gitFixture(t);
   for (const kind of ["missing", "directory", "symlink", "oversize", "secret"]) {

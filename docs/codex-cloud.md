@@ -102,8 +102,8 @@ saved recovery identities. Recognition does not authorize new work. An approved 
 with `harness: codex-cloud` cannot dispatch until that boundary is qualified.
 The following delivery contract is implemented and exercised by explicit offline
 fixtures; it is not a live dispatch qualification. Restricted natural-language
-preparation is not advertised for Cloud. PR #10's local preparation adapter is
-not present in this base and must be merged rather than copied into this provider.
+preparation is not advertised for Cloud. The local Codex preparation adapter does
+not supply a hosted Cloud preparation capability.
 
 Before dispatch, the isolated owned task checkout must contain only committed
 code and the approved brief/source overlays. The existing portable snapshot

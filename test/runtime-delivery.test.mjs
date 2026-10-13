@@ -19,6 +19,17 @@ const update = { ...manifest, coreSha256: "b".repeat(64) };
 const taskId = "task-" + "1".repeat(24);
 const remote = { transport: "remote", provider: "openai-agents", acceptance: "accepted", providerJobId: "owned", turnId: "root", providerState: "succeeded", collected: true };
 
+test("embedded coordinator resolves authenticated identity when plain context has no daemon ownLogin", async () => {
+  const home=tempHome(),state=makeState(home),clock=makeClock(),calls=[];
+  migrateRuntimeState({home,manifest});
+  const ctx={home,state,clock,config:CONFIG,log:silentLog,gh:{...fakeGh(),user:async()=>{calls.push("identity");return "me";}},git:fakeGit(),notify:fakeNotify()};
+  const coordinator=createNodeCoordinator({ctx,store:createNodeOwnerStore({home,durable:true}),manifest,schedule:async()=>calls.push("schedule")});
+  await coordinator.wake();
+  assert.deepEqual(calls,["schedule","identity","schedule"],"the real tick succeeds without a test-only injected login");
+  ctx.gh.user=async()=>{throw Object.assign(new Error("identity unavailable"),{code:"GH_UNAVAILABLE"});};
+  await assert.rejects(coordinator.wake(),{code:"GH_UNAVAILABLE"});
+});
+
 test("pre-registration intake and execution records retain their exact active artifact pin", async t => {
   const cases = [
     ["preparing before launch", `tasks/${taskId}/intake.json`, { status: "preparing", attempts: [] }],

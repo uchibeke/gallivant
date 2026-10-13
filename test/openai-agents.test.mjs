@@ -28,11 +28,16 @@ import { readJson, writeJsonAtomic } from "../lib/fs.mjs";
 import { createTaskService } from "../lib/tasks.mjs";
 import { taskStore } from "../lib/task_store.mjs";
 import { draftFor } from "./fixtures/task-intake.mjs";
+import { createTaskDelivery } from "../lib/task_delivery.mjs";
+import { createDeliveryStore } from "../lib/task_delivery_store.mjs";
+import { CORE_VERSION } from "../lib/task_delivery_contract.mjs";
+import { migrateRuntimeState } from "../lib/runtime_state.mjs";
+import { createNodeCoordinator, createNodeOwnerStore } from "../lib/runtime_node.mjs";
 const config = { account: "fixture", organization: "org-fixture", project: "proj-fixture", model: "fixture-model", environment: "openai_hosted", container_size: "small", network: { access: "disabled" }, allowance: { remainingUsd: 2, reservedUsd: 0.1 } };
 const head = "a".repeat(40), initial = "original\n", changed = "corrected\n";
 const sources = { data: Buffer.from("snapshot").toString("base64"), hash: contentHash("snapshot"), hashes: { "answer.txt": contentHash(initial) }, modes: { "answer.txt": 0o644 }, inputHead: head, repo: "acme/widget", branch: "work/widget" };
 const input = { operationId: "implementation", prompt: "Implement the approved brief", inputHead: head, repo: sources.repo, branch: sources.branch, base: "main", model: config.model, environment: config.environment, allowance: config.allowance, sources };
-function fixture() {
+function fixture({ taskId = "acme/widget/task" } = {}) {
   const root = mkdtempSync(join(tmpdir(), "agents-offline-")), calls = [], sessions = new Map(), turns = new Map();
   let now = 1_800_000_000_000;
   const clock = { now: () => now, advance: ms => { now += ms; } };
@@ -96,8 +101,8 @@ function fixture() {
   };
   let fixtureEnvironment = "connected";
   const http = agentsHttp({ credential: () => "offline-test-key", organization: config.organization, project: config.project, fetcher, clock });
-  const transport = () => makeAgentsTransport({ root, taskId: "acme/widget/task", account: config.account, config, http, clock });
-  const service = (limits = {}) => makeExecution({ root, taskId: "acme/widget/task", account: config.account, provider: "openai-agents", transport: transport(), capabilities: { ...capabilitiesFor("openai-agents"), models: [config.model] }, clock, limits, jitter: () => 0 });
+  const transport = () => makeAgentsTransport({ root, taskId, account: config.account, config, http, clock });
+  const service = (limits = {}) => makeExecution({ root, taskId, account: config.account, provider: "openai-agents", transport: transport(), capabilities: { ...capabilitiesFor("openai-agents"), models: [config.model] }, clock, limits, jitter: () => 0 });
   const finish = (status = "completed") => { const turn = [...turns.values()].at(-1); turn.status = status; turn.completed_at = clock.now() / 1000; sessions.get(turn.session_id).status = "idle"; return turn; };
   const artifact = job => {
     artifactBytes = null;
@@ -395,6 +400,174 @@ test("unresolved root identity has a three-attempt recovery circuit without rese
   const calls = f.calls.length; await f.service().reconcile({ force: true }); assert.equal(f.calls.length, calls);
   assert.equal(f.calls.filter(c => c.method === "POST" && c.route.endsWith("/events")).length, 1);
   assert.match(Object.values(readJson(join(f.root, "agents.json")).operations)[0].recoveryBlocked, /three launch reconciliation failures/);
+});
+test("explicit recovery reopens only the saved observation circuit and collects an already completed expired-environment artifact", async () => {
+  const f=fixture();f.lose("/agents/sessions/sess-1/events");await assert.rejects(f.service().submit(input));
+  const root=[...f.turns.values()][0];f.turns.clear();
+  for(let i=0;i<3;i++)await f.service().reconcile({force:true});
+  const before=f.service().state(),calls=f.calls.length,dispatch=Object.values(readJson(join(f.root,"agents.json")).operations)[0];
+  f.turns.set(root.id,root);f.finish();f.setEnvironment("expired");
+  f.artifact({execution:{sessionId:dispatch.sessionId,turnId:root.id,environment:dispatch.environmentId}});
+  f.clock.advance(30*60_000);
+  await assert.rejects(f.service().recover({operationId:"resume-1"}),{code:"EXECUTION_CONTROL"});
+  await f.service().recover({operationId:"resume-1",authorized:true});
+  assert.ok(f.calls.length>calls,"explicit recovery performs one bounded authoritative observation before timeout settlement");
+  assert.ok(f.calls.slice(calls).every(c=>c.method==="GET"),"recovery sends no provider mutation");
+  const recovered=f.service().current();assert.equal(recovered.execution.providerState,"retrieving-results");
+  assert.equal(recovered.id,before.current.id);assert.equal(recovered.execution.operationId,before.current.execution.operationId);assert.equal(recovered.execution.sessionId,dispatch.sessionId);assert.equal(recovered.execution.turnId,root.id);
+  const result=await f.service().collect();assert.equal(result.files[0].text,changed);assert.equal(result.completedAt,root.completed_at*1000);
+  const allowance=f.service().state().allowance;assert.equal(allowance.reservedUsd,before.allowance.reservedUsd);assert.equal(allowance.totalUsd,before.allowance.totalUsd);assert.equal(allowance.chargedUsd,before.allowance.reservedUsd,"collection accounts for the original reservation without spending a new one");
+  assert.equal(f.calls.filter(c=>c.method==="POST"&&c.route==="/agents/sessions").length,1);assert.equal(f.calls.filter(c=>c.method==="POST"&&c.route.endsWith("/events")).length,1);
+});
+for(const rearm of [false,true])test(`delivery resume control ${rearm?"explicitly rearms":"recovers"} an adopted unknown implementation through the plain-context coordinator without new input`, async () => {
+  const taskId="task-"+"7".repeat(24),id="acme/widget/"+taskId;
+  const f=fixture({taskId:id}),manifest={coreVersion:CORE_VERSION,coreSha256:"a".repeat(64),operationVersion:1,taskVersion:1,executionVersion:1};
+  migrateRuntimeState({home:f.root,manifest});
+  f.lose("/agents/sessions/sess-1/events");await assert.rejects(f.service().submit(input));
+  const root=[...f.turns.values()][0],run=f.service().current();f.turns.clear();
+  for(let i=0;i<3;i++)await f.service().reconcile({force:true});
+  const state=makeState(f.root);
+  state.put(id,{...newEntry({prd:"brief.md",harness:"openai-agents",repo:input.repo,branch:input.branch,worktree:f.root,state:"needs-human",nowIso:new Date(f.clock.now()).toISOString()}),reason:"dispatch-intent",execution:run.execution,last:{run:run.id},task:{id:taskId,digest:"approved"}});
+  const task={id:taskId,revision:12,status:"started",repo:input.repo,harness:"openai-agents",requirements:[],context:[],questions:[],attempts:[],readiness:{digest:"approved"},implementation:{id,run:run.id}};
+  const scope={tenant:"alice",account:"alice",region:"US",environment:"preview",scopes:["task-delivery:read","task-delivery:write"],repositories:["widget"]};
+  const store=createDeliveryStore(join(f.root,"delivery"));await store.transaction(scope,(data,save)=>{data.tasks[taskId]={repositoryId:"widget"};return save(data);});
+  let identities=0;
+  const ctx={home:f.root,state,clock:f.clock,config:CONFIG,log:silentLog,gh:{...fakeGh(),user:async()=>{identities++;return "me";}},git:fakeGit(),notify:fakeNotify(),coordinatorHealth:()=>({usable:true}),executionFor:()=>f.service(),readPrd:()=>null};
+  const delivery=createTaskDelivery({manifest,store,authorize:async()=>scope,contextFor:async()=>({ctx,repository:{dir:f.root,repo:input.repo},taskOptions:{store:{read:()=>task,save:value=>Object.assign(task,value),locked:async(_id,fn)=>fn()}}}),schedule:async()=>{}});
+  const request={taskId,expectedRevision:12,operationId:"resume-existing",action:"resume"};
+  await delivery.dispatch("control",request,"alice");
+  const queued=state.get(id).control;assert.equal(queued.status,"queued");assert.equal(queued.recoveryRun,run.id);
+  // Reproduce the already-queued legacy request, before recoveryRun existed.
+  const {recoveryRun,...legacy}=queued;state.update(id,{control:legacy});
+  f.turns.set(root.id,root);f.finish();f.setEnvironment("expired");
+  const dispatch=Object.values(readJson(join(f.root,"agents.json")).operations)[0];
+  f.artifact({execution:{sessionId:dispatch.sessionId,turnId:root.id,environment:dispatch.environmentId}});
+  f.clock.advance(30*60_000);const before=f.calls.length;
+  if(rearm){
+    await delivery.dispatch("resume",{taskId,expectedRevision:12,operationId:"rearm-existing"},"alice");
+    assert.equal(state.get(id).control.id,queued.id);assert.equal(state.get(id).control.recoveryRun,run.id);
+    assert.equal(state.get(id).control.status,"applied","explicit task rearm consumes only its owned observation control before wake");
+    assert.equal(f.service().current().execution.acceptance,"accepted");
+  }
+  await createNodeCoordinator({ctx,manifest,store:createNodeOwnerStore({home:f.root,durable:true}),schedule:async()=>{},maxChains:0}).wake();
+  assert.equal(identities,1,"embedded production context resolves its authenticated identity");
+  assert.equal(state.get(id).control.id,queued.id);assert.equal(state.get(id).control.status,"applied");
+  assert.equal(state.get(id).control.recoveryRun,run.id);
+  assert.ok(f.calls.slice(before).every(c=>c.method==="GET"),"owned recovery and collection buy no continuation or replacement");
+  assert.equal(f.service().current().id,run.id);assert.equal(f.service().current().execution.acceptance,"accepted");
+  assert.equal(f.service().result(run.id).files[0].text,changed,"coordinator collects the real owned artifact");
+  const count=f.calls.length;await delivery.dispatch("control",request,"alice");assert.equal(f.calls.length,count,"same API operation replays its receipt without new work");
+});
+test("the same explicit recovery identity cannot repeatedly replenish a failed observation circuit", async () => {
+  const f=fixture();f.lose("/agents/sessions/sess-1/events");await assert.rejects(f.service().submit(input));f.turns.clear();
+  for(let i=0;i<3;i++)await f.service().reconcile({force:true});
+  await f.service().recover({operationId:"resume-1",authorized:true});
+  for(let i=0;i<3;i++)await f.service().reconcile({force:true});
+  const calls=f.calls.length;
+  await f.service().recover({operationId:"resume-1",authorized:true});await f.service().reconcile({force:true});assert.equal(f.calls.length,calls);
+  await f.service().recover({operationId:"resume-2",authorized:true});await f.service().reconcile({force:true});assert.ok(f.calls.length>calls);
+  assert.equal(f.calls.filter(c=>c.method==="POST"&&c.route.endsWith("/events")).length,1);
+  const saved=readJson(join(f.root,"execution.json"));const key=Object.keys(saved.current.execution.recoveryRequests)[0];saved.current.execution.recoveryRequests[key]="intent";writeJsonAtomic(join(f.root,"execution.json"),saved);
+  for(let i=0;i<3;i++)await f.service().reconcile({force:true});const after=f.calls.length;
+  await f.service().recover({operationId:"resume-1",authorized:true});await f.service().reconcile({force:true});assert.equal(f.calls.length,after,"adapter receipt also fences a crash before execution acknowledgment");
+});
+test("explicit observation recovery preserves authorization failures, terminal launch refusals and stop fences", async () => {
+  const f=fixture();await f.service().submit(input);
+  for(let i=0;i<3;i++){f.fail(401);await f.service().reconcile({force:true});}
+  const calls=f.calls.length, before=readJson(join(f.root,"agents.json"));f.fail(401);
+  await assert.rejects(f.service().recover({operationId:"auth-recovery",authorized:true}),{code:"AGENTS_AUTH"});
+  assert.ok(f.calls.length>calls,"saved authentication failures require a fresh read-only access check");
+  assert.ok(f.calls.slice(calls).every(c=>c.method==="GET"));assert.deepEqual(readJson(join(f.root,"agents.json")),before);
+  const unsent=fixture();unsent.lose("/agents/sessions");await assert.rejects(unsent.service().submit(input));await unsent.service().reconcile({force:true});
+  await assert.rejects(unsent.service().recover({operationId:"unsent-recovery",authorized:true}),{code:"AGENTS_RECOVERY_REQUIRED"});
+  await f.service().cancel();await assert.rejects(f.service().recover({operationId:"stop-recovery",authorized:true}),{code:"EXECUTION_STOPPED"});
+});
+for (const status of [401,403]) for (const lost of [false,true]) test(`repaired ${status} access recovers ${lost?"unknown launch":"accepted run"} after restart without new input`, async () => {
+  const f=fixture();
+  if(lost){f.lose("/agents/sessions/sess-1/events");await assert.rejects(f.service().submit(input));}
+  else await f.service().submit(input);
+  for(let i=0;i<3;i++){f.fail(status);await f.service().reconcile({force:true});}
+  const before=f.service().state(),file=join(f.root,"agents.json"),op=Object.values(readJson(file).operations)[0];
+  assert.equal(op.recoveryErrorCode,"AGENTS_AUTH");assert.ok(op.recoveryBlocked);
+  const calls=f.calls.length;await f.service().reconcile({force:true});assert.equal(f.calls.length,calls,"automatic polling cannot reset the circuit");
+  const root=f.finish();f.artifact({execution:{sessionId:op.sessionId,turnId:root.id,environment:op.environmentId}});
+  f.fail({route:`/models/${config.model}`,status:403}); // Reading saved work does not require model-catalog access.
+  // Recreate both execution and transport from durable state, as after repair/restart.
+  const recovered=await f.service().recover({operationId:"credentials-repaired",authorized:true});
+  assert.equal(recovered.id,before.current.id);assert.equal(recovered.execution.providerState,"retrieving-results");
+  assert.equal(recovered.execution.sessionId,op.sessionId);assert.equal(recovered.execution.turnId,root.id);
+  assert.equal(f.calls[calls].route,`/agents/sessions/${op.sessionId}`);
+  assert.equal(f.calls.slice(calls).some(c=>c.route.startsWith("/models/")),false);
+  const saved=Object.values(readJson(file).operations)[0];assert.equal(saved.recoveryErrorCode,null);assert.equal(saved.recoveryResets.length,1);
+  const replay=f.calls.length;await f.service().recover({operationId:"credentials-repaired",authorized:true});assert.equal(f.calls.length,replay);
+  const result=await f.service().collect();assert.equal(result.files[0].text,changed);
+  assert.ok(f.calls.slice(calls).every(c=>c.method==="GET"));assert.equal(f.sessions.size,1);assert.equal(f.turns.size,1);
+  const allowance=f.service().state().allowance;assert.equal(allowance.totalUsd,before.allowance.totalUsd);assert.equal(allowance.reservedUsd,before.allowance.reservedUsd);
+});
+
+test("credential recovery access failure and late replies cannot clear the circuit or consume a reset", async () => {
+  const f=fixture();await f.service().submit(input);
+  for(let i=0;i<3;i++){f.fail(401);await f.service().reconcile({force:true});}
+  const file=join(f.root,"agents.json"),before=readJson(file);
+  f.fail({route:"/agents/sessions/sess-1/turns/turn-1",status:403});
+  await assert.rejects(f.service().recover({operationId:"same-repair",authorized:true}),{code:"AGENTS_AUTH"});
+  assert.deepEqual(readJson(file),before);
+  f.fail({route:"/agents/sessions/sess-1",status:429,retryAfter:"7"});
+  await assert.rejects(f.service().recover({operationId:"same-repair",authorized:true}),{code:"AGENTS_THROTTLED",retryAfterMs:7000});
+  assert.deepEqual(readJson(file),before);
+  const request=f.http.request;let resolve,entered;
+  const waiting=new Promise(done=>{entered=done;});
+  f.http.request=async()=>{entered();return new Promise(done=>{resolve=done;});};
+  try {
+    const failed=assert.rejects(f.service({deadlineMs:30}).recover({operationId:"same-repair",authorized:true}),{code:"EXECUTION_DEADLINE"});
+    await waiting;await failed;resolve({id:config.model});await new Promise(done=>setImmediate(done));
+    assert.deepEqual(readJson(file),before,"a late access reply has no durable reset authority");
+  } finally {f.http.request=request;}
+  const calls=f.calls.length;await f.service().recover({operationId:"same-repair",authorized:true});
+  assert.equal(f.service().current().execution.providerState,"running");assert.ok(f.calls.slice(calls).every(c=>c.method==="GET"));
+  assert.equal(Object.values(readJson(file).operations)[0].recoveryResets.length,1);
+});
+
+test("repaired credentials recover an unknown intake session without replaying its initial prompt", async () => {
+  const f=fixture(),request=await prepareIntake(f);
+  f.lose("/agents/sessions");await assert.rejects(f.service().submit(request));
+  for(let i=0;i<3;i++){f.fail(401);await f.service().reconcile({force:true});}
+  const op=Object.values(readJson(join(f.root,"agents.json")).operations)[0];assert.equal(op.sessionId,null);
+  const root=f.finish();f.setItems([{id:"draft",turn_id:root.id,type:"message",role:"assistant",phase:"final_answer",status:"completed",content:[{type:"output_text",text:"Recovered bounded draft"}]}]);
+  const calls=f.calls.length;await f.service().recover({operationId:"intake-auth-repaired",authorized:true});
+  const result=await f.service().collect();assert.equal(result.outcome.lastMessage,"Recovered bounded draft");
+  assert.ok(f.calls.slice(calls).every(c=>c.method==="GET"));assert.equal(f.sessions.size,1);assert.equal(f.turns.size,1);
+});
+
+test("a successful credential probe cannot authorize foreign ownership or weaker session policy", async () => {
+  for(const code of ["EXECUTION_OWNERSHIP","EXECUTION_POLICY"]){
+    const f=fixture(),job=await f.service().submit(input);
+    for(let i=0;i<3;i++){f.fail(401);await f.service().reconcile({force:true});}
+    const session=f.sessions.get(job.execution.sessionId);
+    if(code==="EXECUTION_OWNERSHIP")session.metadata.account="foreign";
+    else session.environment.network={access:"unrestricted"};
+    const calls=f.calls.length,before=readJson(join(f.root,"agents.json"));
+    await assert.rejects(f.service().recover({operationId:"access-restored",authorized:true}),{code});
+    assert.equal(f.service().current().execution.providerState,"status-unknown");
+    assert.deepEqual(readJson(join(f.root,"agents.json")),before,"invalid owned-session metadata cannot clear the authentication fence");
+    await assert.rejects(f.service().collect(),{code:"EXECUTION_RESULT"});
+    await assert.rejects(f.service().recover({operationId:"do-not-override",authorized:true}),{code});
+    assert.ok(f.calls.slice(calls).every(c=>c.method==="GET"));assert.equal(f.sessions.size,1);assert.equal(f.turns.size,1);
+  }
+});
+
+test("credential repair cannot reset saved policy, ownership, protocol or terminal refusals", async () => {
+  const f=fixture();await f.service().submit(input);
+  for(let i=0;i<3;i++){f.fail(401);await f.service().reconcile({force:true});}
+  const file=join(f.root,"agents.json"),before=readJson(file),key=Object.keys(before.operations)[0],calls=f.calls.length;
+  const cases=[...["AGENTS_PROTOCOL","AGENTS_ID","EXECUTION_OWNERSHIP","EXECUTION_POLICY","TASK_PREPARATION_BOUNDARY"].map(code=>({patch:{recoveryErrorCode:code},code})),
+    {patch:{sessionFailed:true},code:"AGENTS_ENVIRONMENT"},{patch:{environmentState:"expired"},code:"AGENTS_ENVIRONMENT"},
+    {patch:{recoveryBlocked:"session creation recovered before any input send"},code:"AGENTS_AUTH"}];
+  for(const [index,{patch,code}] of cases.entries()){
+    const state=structuredClone(before);Object.assign(state.operations[key],patch);writeJsonAtomic(file,state);
+    await assert.rejects(f.service().recover({operationId:`refusal-${index}`,authorized:true}),{code});
+    assert.deepEqual(readJson(file),state);assert.equal(f.calls.length,calls,"hard refusals must stop before the access probe");
+  }
 });
 for (const status of ["failed", "cancelled"]) test(`idle session and ${status} root cannot succeed`, async () => {
   const f = fixture(); await f.service().submit(input); f.finish(status); await f.service().reconcile({ force: true });
