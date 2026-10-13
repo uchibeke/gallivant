@@ -2,7 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { mkdirSync } from "node:fs";
 import { join } from "node:path";
-import { requestControl, applyControl, cancelControl, interruptControl, lastMessage, controlFailure } from "../lib/control.mjs";
+import { requestControl, applyControl, cancelControl, recoverControl, interruptControl, lastMessage, controlFailure } from "../lib/control.mjs";
 import { makeState } from "../lib/state.mjs";
 import { makeTick } from "../lib/tick.mjs";
 import { NEEDS_LABEL } from "../lib/gh.mjs";
@@ -20,6 +20,30 @@ function world(over = {}) {
     credential: fakeCredential(), identity: fakeIdentity(), readPrd: () => GOOD_PRD, ownLogin: "me" };
   return { ctx, state, id, home, runner, gh, tick: makeTick(ctx) };
 }
+
+test("queued unknown recovery settles one bounded observation without turning into continuation", async () => {
+  for (const result of ["accepted", "unknown", "denied"]) {
+    const w=world(),job={id:"owned-run",running:true,execution:{providerState:"status-unknown",acceptance:"unknown"}},calls=[];
+    const runner={capabilities:{transport:"remote"},current:()=>job,recover:async args=>{calls.push(args);if(result==="denied")throw Object.assign(new Error("private refusal"),{code:"AGENTS_AUTH"});job.execution.acceptance=result;return job;}};
+    w.ctx.executionFor=()=>runner;w.state.update(w.id,{last:{run:job.id},control:{id:"same-request",action:"resume",status:"queued",note:"",interrupt:false}});
+    assert.equal(await recoverControl(w.ctx,w.id),true);
+    const control=w.state.get(w.id).control;
+    assert.equal(control.id,"same-request");assert.equal(control.recoveryRun,job.id);
+    assert.equal(control.status,result==="accepted"?"applied":"failed");assert.equal(calls.length,1);
+    assert.deepEqual(calls[0],{authorized:true,operationId:"control-recovery:same-request"});
+    assert.equal(await recoverControl(w.ctx,w.id),false);assert.equal(calls.length,1);
+    assert.equal(JSON.stringify(control).includes("private refusal"),false);
+  }
+});
+
+test("recovery controls never override a stop, another run or a non-resume action", async () => {
+  for(const mode of ["stopped","foreign","message","known-running"]){
+    const w=world(),job={id:"owned",running:true,execution:{providerState:mode==="known-running"?"running":"status-unknown"}};
+    w.ctx.executionFor=()=>({capabilities:{transport:"remote"},current:()=>job,recover:()=>assert.fail("unauthorized recovery")});
+    w.state.update(w.id,{last:{run:mode==="foreign"?"other":"owned"},dispatch_stopped:mode==="stopped"?"cancelled":null,control:{id:"r",action:mode==="message"?"message":"resume",status:"queued"}});
+    const before=w.state.get(w.id);assert.equal(await recoverControl(w.ctx,w.id),false);assert.deepEqual(w.state.get(w.id),before);
+  }
+});
 
 test("legacy control cancellation verifies cessation instead of trusting the kill return", async () => {
   for (const remaining of ["running", "missing", "different", "stopped"]) {
