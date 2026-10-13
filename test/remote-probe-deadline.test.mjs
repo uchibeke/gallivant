@@ -39,10 +39,17 @@ test('serial access deadline is aggregate and numeric DOMException23 becomes a s
 });
 test('an earlier caller abort is preserved and a late model reply cannot authorize further reads',async t=>{
   const f=delayedAccess(t),controller=new AbortController();let resolve;
-  const http={request:async(_path,{signal})=>{assert.equal(signal,controller.signal);return new Promise(done=>{resolve=done;});},page:async()=>{assert.fail('no follow-up after abort');}};
+  let effective;
+  const http={request:async(_path,{signal})=>{effective=signal;return new Promise(done=>{resolve=done;});},page:async()=>{assert.fail('no follow-up after abort');}};
   const pending=checkSignIn('openai-agents',{execution:{deadlineMs:60000},harness:{'openai-agents':provider}},{http,signal:controller.signal});await flush();
   controller.abort();resolve({id:provider.model});
-  const result=await pending;assert.equal(result.ok,false);assert.equal(result.detail,'EXECUTION_ABORTED');assert.deepEqual(f.deadlines,[]);
+  const result=await pending;assert.equal(result.ok,false);assert.equal(result.detail,'EXECUTION_ABORTED');assert.equal(effective.reason,controller.signal.reason);assert.deepEqual(f.deadlines,[60000]);
+});
+test('a longer caller signal cannot extend the configured aggregate deadline',async t=>{
+  const f=delayedAccess(t),controller=new AbortController();
+  const pending=checkSignIn('openai-agents',{execution:{deadlineMs:10000},harness:{'openai-agents':provider}},{http:f.http,signal:controller.signal});await flush();
+  await f.advance(6000);await f.advance(4000);
+  assert.equal((await pending).detail,'EXECUTION_DEADLINE');assert.equal(controller.signal.aborted,false);
 });
 test('standalone Agents access remains bounded without changing local or task allowance defaults',async t=>{
   const f=delayedAccess(t);const pending=checkAgentsAccess(provider,{http:f.http});await flush();await f.advance(10000);
