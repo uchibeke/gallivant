@@ -102,6 +102,14 @@ artifact, deployment or non-GitHub adapter is advertised. See [task milestones](
 for evidence, cancellation and legacy behavior. The policy never grants merge
 permission or changes the allowance.
 
+New natural-language publication clauses use the core's versioned exact-source
+ownership contract. `completion.obligations` exposes their pending/fulfilled state
+and matching coordinator evidence. `TASK_DELIVERY_SCOPE` is a before-effects
+clarification refusal, durably acknowledged on the exact operation identity; it
+must not be retried with changed text under that same identity. Ask the owner to
+clarify the complete request and then use a new preparation identity. See
+[natural-language ownership](tasks.md) for supported syntax and limitations.
+
 All mutations require operationId and expectedRevision; prepare uses revision 0.
 Preparation does not authorize implementation. Start requires `run:true` and the
 current exact readiness decision. Answers bind saved question IDs. Stable keys

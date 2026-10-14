@@ -5,6 +5,28 @@ selected harness's configured model and provider settings. This
 can use inference even when you only prepare; it does not start implementation or
 open a pull request without execution authorization.
 
+For a new request such as “Implement CSV and JSON export, test both, and open one
+pull request for review,” Gallivant preserves the original text and records exact
+source spans assigning only the affirmative publication clause to the coordinator.
+All remaining implementation requirements and prohibitions stay in the provider's
+acceptance criteria. The generated brief's **Coordinator delivery contract** is
+part of both initial approval and ongoing change detection. Its publication
+obligation is fulfilled only by matching canonical repository, PR, base, head and
+completion-gate evidence; a provider statement cannot fulfill it.
+
+This first recognizer supports one unqualified `open/create/raise/submit` review-PR
+clause outside quoted text/code. It is not a general natural-language permission
+parser. Conditions, approval prerequisites, destination qualifiers, multiple PRs
+and delivery-only requests return `TASK_DELIVERY_SCOPE` before inference. Some
+implementation-only uses of conditional language in a publication-bearing request
+also need clarification; the recognizer deliberately does not guess their scope.
+Clarify the complete task with the owner and submit it under a new operation ID;
+never delete a condition just to pass validation. Answers may refine implementation
+but cannot silently replace publication ownership or add a publication prerequisite.
+Selecting `integrated` still grants no merge authority. Existing saved tasks,
+approved criteria, false attestations and exact operation retries retain their
+original semantics; this change does not repair historical results.
+
 Preparation uses a capability on the selected harness adapter, through the same
 execution service for drafting, questions and repairs. Gallivant owns deterministic
 validation/readiness and explicit implementation authorization. The examples

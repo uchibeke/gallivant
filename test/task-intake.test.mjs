@@ -7,7 +7,7 @@ import { PassThrough } from "node:stream";
 import { createTaskService } from "../lib/tasks.mjs";
 import { createTaskDelivery } from "../lib/task_delivery.mjs";
 import { createDeliveryStore } from "../lib/task_delivery_store.mjs";
-import { CORE_VERSION } from "../lib/task_delivery_contract.mjs";
+import { CORE_VERSION, taskRejectionForModel } from "../lib/task_delivery_contract.mjs";
 import { migrateRuntimeState } from "../lib/runtime_state.mjs";
 import { taskStore } from "../lib/task_store.mjs";
 import { ready } from "../lib/commands/ready.mjs";
@@ -42,6 +42,65 @@ function offlineRunnerService(ctx) {
 }
 
 const REQUEST = "Add CSV export for the widget table.\nDo not add dependencies.";
+const GREETING_REQUEST = 'In greeting.mjs, improve greeting(name): trim surrounding whitespace for string names; return "Hello, friend!" for an empty or whitespace-only string; preserve "Hello, Ada!" for "Ada"; reject non-string input with TypeError. Add native Node tests covering normal, trimmed, empty, whitespace-only and non-string inputs. Update README briefly with usage. Run node --test. Open one pull request for review; do not merge, release, modify workflows, add dependencies, or access other repositories. Scope: aporthq/task-delivery-onboarding-qualification only.';
+test("ordinary paragraph separates coordinator publication without dropping owner scope", async () => {
+  const w = world();
+  const prepared = await w.service.prepare({ text: GREETING_REQUEST, verifyCommands: ["node --test"], completion: { target: "delivery_ready" } });
+  assert.equal(prepared.status, "ready");
+  const saved = taskStore(w.home).read(prepared.taskId);
+  assert.equal(saved.original, GREETING_REQUEST);
+  assert.ok(saved.output.criteria.length > 0);
+  assert.doesNotMatch(JSON.stringify(saved.output.criteria), /Open one pull request for review/);
+  assert.match(JSON.stringify(saved.output.criteria), /do not merge, release, modify workflows, add dependencies/);
+  assert.match(prepared.draft.text, /Coordinator delivery contract/);
+  const legacy = { ...saved, requirements: [{ id: "r-1", text: GREETING_REQUEST }] }; delete legacy.ownerDelivery; delete legacy.completion;
+  const legacyOutput = parseDraft(JSON.stringify(draftFor(legacy)), legacy);
+  assert.match(legacyOutput.criteria[0].text, /Open one pull request for review/);
+  assert.doesNotMatch(renderDraft(legacy, legacyOutput), /Coordinator delivery contract/);
+  const started = await w.service.start({ taskId: prepared.taskId, expectedRevision: prepared.revision, run: true, noDaemon: true });
+  assert.deepEqual(w.ctx.state.get(started.implementation.id).task.ownerDelivery, saved.ownerDelivery);
+  assert.equal(started.completion.obligations[0].status, "pending");
+});
+
+test("publication ambiguity is a durable acknowledged no-effects refusal and exact retry", async () => {
+  const w = world(), scope = { tenant: "alice", account: "alice", environment: "preview", region: "US", scopes: ["task-delivery:read", "task-delivery:write"], repositories: ["widget"] };
+  const manifest = { coreVersion: CORE_VERSION, coreSha256: "a".repeat(64), operationVersion: 1, taskVersion: 1, executionVersion: 1 };
+  migrateRuntimeState({ home: w.home, manifest });
+  const store = createDeliveryStore(join(w.home, "delivery")); let calls = 0;
+  const delivery = createTaskDelivery({ manifest, authorize: async () => scope, store,
+    contextFor: async () => ({ ctx: w.ctx, repository: { dir: w.checkout, repo: "acme/widget" }, taskOptions: { prepare: async () => { calls++; assert.fail("refusal cannot spend"); } } }), schedule: () => assert.fail("refusal cannot schedule") });
+  const args = { repositoryId: "widget", text: "Implement export. Wait for my confirmation. Open a PR for review.", harness: "codex", allowance: { budgetUsd: 1, runtimeMs: 60000 }, operationId: "clarify-publication", expectedRevision: 0 };
+  for (let i = 0; i < 2; i++) await assert.rejects(delivery.dispatch("prepare", args, "alice"), error => {
+    assert.equal(error.code, "TASK_DELIVERY_SCOPE"); assert.equal(taskRejectionForModel(error)?.code, "TASK_DELIVERY_SCOPE"); return true;
+  });
+  const data = store.read(scope), receipts = Object.values(data.operations);
+  assert.equal(receipts.length, 1); assert.equal(receipts[0].status, "acknowledged");
+  assert.equal(receipts[0].rejection.code, "TASK_DELIVERY_SCOPE");
+  assert.equal(calls, 0); assert.equal(w.ctx.state.entries().length, 0);
+});
+
+test("a conflicting delivery answer leaves its question, revision and preparation budget untouched", async () => {
+  const w = world({ prepare: async (_ctx, task) => JSON.stringify(draftFor(task, { question: true })) });
+  const first = await w.service.prepare({ text: "Implement export. Open a PR for review." });
+  assert.equal(first.status, "needs-input");
+  const before = taskStore(w.home).read(first.taskId);
+  await assert.rejects(w.service.answer({ taskId: first.taskId, expectedRevision: first.revision, operationId: "change-publication", answers: { "q-r-1": "Do not open a PR until I approve the change" } }), { code: "TASK_DELIVERY_SCOPE", taskEffects: "none" });
+  assert.deepEqual(taskStore(w.home).read(first.taskId), before);
+});
+
+test("distinct assertions mapped to one owner paragraph retain every authoritative requirement", async () => {
+  const text = "Implement CSV and JSON export. Preserve the filtered rows in both formats.";
+  const w = world({ prepare: async (_ctx, task) => {
+    const draft = draftFor(task); draft.criteria = [{ id: "ac-1", text: "CSV works." }, { id: "ac-2", text: "JSON works." }];
+    draft.mapping[0].criteria = ["ac-1", "ac-2"]; return JSON.stringify(draft);
+  } });
+  const result = await w.service.prepare({ text });
+  const saved = taskStore(w.home).read(result.taskId);
+  assert.equal(saved.output.criteria.length, 1);
+  assert.match(saved.output.criteria[0].text, /CSV and JSON export/);
+  assert.match(saved.output.criteria[0].text, /Preserve the filtered rows in both formats/);
+  assert.deepEqual(saved.output.mapping[0].criteria, ["ac-1"]);
+});
 const providerFile = key => key === "AWS_CONFIG_FILE" ? "[default]\nregion = fixture-region\n" : key === "AWS_SHARED_CREDENTIALS_FILE" ? "[default]\naws_access_key_id = provider-id\naws_secret_access_key = provider-secret\n" : `fixture:${key}`;
 
 test("completion target is creation-only, survives canonical start and conflicts on changed retry input", async () => {

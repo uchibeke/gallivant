@@ -26,6 +26,11 @@ the user to format a special prompt. Preserve every constraint and prohibition,
 show the separated delivery goal with the prepared brief, and ask a focused
 clarification if mixed prose cannot be separated without changing meaning.
 Never rewrite an existing false attestation or drop an inconvenient requirement.
+The core preserves exact source ownership for supported publication clauses.
+If TASK_DELIVERY_SCOPE is returned, ask the owner to clarify the whole request;
+preserve prerequisites and prohibitions, and use a new preparation identity after
+clarification. Do not treat that refusal as permission to remove a condition or
+silently move a changed publication instruction into an implementation answer.
 
 After the user authorizes implementation, call task_start with run true, a stable
 operationId and the current revision. Return the task handle promptly. Subsequent

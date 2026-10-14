@@ -6,6 +6,7 @@ import { makeTick } from "../lib/tick.mjs";
 import { completionPolicy, completionView, COMPLETION_CAPABILITIES } from "../lib/task_completion.mjs";
 import { TASK_OPERATIONS } from "../lib/task_delivery_contract.mjs";
 import { taskView, modelSummary, taskListSummary, capabilitySummary } from "../lib/task_delivery_view.mjs";
+import { ownerDelivery } from "../lib/owner_delivery.mjs";
 import { CONFIG, T0, at, makeClock, fakeGh, fakeRunner, fakeGit, fakeNotify, seededState, prFixture, review, inline, checkRun, silentLog, STATES, GOOD_PRD, fakeCredential, fakeIdentity } from "./helpers.mjs";
 
 const BOT = "chatgpt-codex-connector[bot]";
@@ -42,6 +43,22 @@ test("delivery-ready fulfills at the canonical gate; integrated waits for observ
     Object.assign(w.gh.data.pr, { state: "MERGED", mergedAt: at(6), mergeCommit: { oid: "merge-sha" } }); w.clock.advance(2); await w.tick.tick();
     assert.equal(w.entry().state, STATES.done); assert.equal(w.view().status, "fulfilled"); assert.equal(w.view().evidence.integration.mergeCommit, "merge-sha"); assert.equal(w.runner.started.length, 0);
     const view = taskView({ completion: w.view() }); assert.deepEqual(modelSummary(view).completion, w.view()); assert.deepEqual(taskListSummary(view).completion, w.view());
+  });
+});
+test("source-owned publication joins actual canonical gate evidence without changing a false provider receipt", async t => {
+  for (const met of [true, false]) await t.test(String(met), async t => {
+    const owner = ownerDelivery("Implement CSV export and preserve the empty state. Open one pull request for review.");
+    const w = world(t, "delivery_ready", { task: { id: "task-fixture", completion: completionPolicy(), ownerDelivery: owner } });
+    if (!met) w.gh.data.pr.body = w.gh.data.pr.body.replace(/"met":true/g, '"met":false');
+    const originalBody = w.gh.data.pr.body;
+    await w.tick.tick();
+    assert.equal(w.view().obligations[0].status, met ? "fulfilled" : "pending");
+    assert.equal(w.view().status === "fulfilled", met);
+    if (met) assert.equal(w.view().obligations[0].evidence.head, "a1b2c3d");
+    else {
+      const criteria = body => JSON.parse(body.match(/```work-attestations\n([\s\S]+?)\n```/)[1]).criteria_attestations;
+      assert.deepEqual(criteria(w.gh.data.pr.body), criteria(originalBody), "false attestations cannot be rewritten by ownership separation; existing task-ID/session binding may still update metadata");
+    }
   });
 });
 test("closed, early and stale merges retain observed evidence without claiming fulfillment", async t => {
