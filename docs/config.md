@@ -360,8 +360,8 @@ No file. Git's own `GIT_CONFIG_COUNT` with numbered `GIT_CONFIG_KEY_n`/`GIT_CONF
 
 | Key | Value |
 |---|---|
-| `user.name` | `gallivant` |
-| `user.email` | `gallivant@users.noreply.github.com` |
+| `user.name` | Your Git-configured name, resolved by the coordinator for each run |
+| `user.email` | Your Git-configured email, resolved by the coordinator for each run |
 | `push.default` | `current` |
 | `credential.helper` | a shell snippet that prints `GH_TOKEN` as the password, and prints nothing when there is no `GH_TOKEN` |
 

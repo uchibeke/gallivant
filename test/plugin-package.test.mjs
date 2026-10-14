@@ -204,7 +204,7 @@ function gitFixture(t, { fail, head = sourceCommit, status = "" } = {}) {
     const path = `${dir}/${entry.name}`;
     return entry.isDirectory() ? paths(path) : [path];
   });
-  const committedPaths = ["LICENSE", "README.md", "package.json", "npm-shrinkwrap.json", ...["bin", "lib", "templates", "docs"].flatMap(paths)].join("\0");
+  const committedPaths = ["LICENSE", "README.md", "CONTRIBUTING.md", "SECURITY.md", "package.json", "npm-shrinkwrap.json", ...["bin", "lib", "templates", "docs"].flatMap(paths)].join("\0");
   t.mock.method(childProcess, "execFileSync", (file, args, options) => {
     if (file !== "git") return original(file, args, options);
     if (args[0] === "ls-tree") { assert.equal(args.at(-1), sourceCommit); return committedPaths; }
@@ -454,7 +454,7 @@ for (const missing of ["node_modules/smol-toml/dist/index.js", "node_modules/smo
 });
 
 
-for (const missing of ["lib/tasks.mjs", "bin/package-plugin.mjs", "templates/plugin/task-delivery.SKILL.md", "docs/tasks.md", "LICENSE"]) test(`public packaging requires every committed first-party path: ${missing}`, t => {
+for (const missing of ["lib/tasks.mjs", "bin/package-plugin.mjs", "templates/plugin/task-delivery.SKILL.md", "docs/tasks.md", "LICENSE", "CONTRIBUTING.md", "SECURITY.md"]) test(`public packaging requires every committed first-party path: ${missing}`, t => {
   gitFixture(t);
   const original = childProcess.execFileSync;
   t.mock.method(childProcess, "execFileSync", (file, args, options) => {

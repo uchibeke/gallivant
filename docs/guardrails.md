@@ -18,9 +18,9 @@ Unattended runs act with your GitHub identity on your code. Each guarantee below
 | Guarantee | Control | APort's part |
 |---|---|---|
 | Filesystem access is bounded | Claude: the Bash sandbox in the Gallivant settings file. Codex: `workspace-write`, with boundary-crossing commands reviewed by Codex's automatic reviewer. An approved command runs outside that sandbox; the reviewer is a decision, not filesystem isolation. | Denies Write and Edit tool calls outside `allowed_paths`. Does not see `echo x > ~/.zshrc` inside a Bash command. |
-| Reads of secrets are restricted | The sandboxes and each harness's denied reads; Codex's automatic reviewer checks escalation requests for credential probing. This is not a guarantee about an approved command running outside the sandbox. | Denies Read and Grep calls on `.env*`, `.ssh`, `.aws`, `*.pem`, `*.key` and the passport's `blocked_paths`. Does not see `cat .env` inside Bash. |
+| Reads of secrets are restricted | The sandboxes and each harness's denied reads; Codex's automatic reviewer checks escalation requests for credential probing. This is not a guarantee about an approved command running outside the sandbox. | Applies default sensitive-file restrictions and `data.file.read.blocked_patterns` to represented file reads. Directory enumeration and unrepresentable calls can be refused. Does not see `cat .env` inside Bash. |
 | Network limited | Claude: `sandbox.network.allowedDomains`, with the macOS certificate-service exception described below. Codex: none once `network_access=true`, which `git push` needs. | Denies WebFetch and WebSearch outside `allowed_domains`. Does not see `curl` inside Bash. |
-| No push to the default branch, no force push | A GitHub ruleset on each repo: no deletion, no force push, pull request required, no bypass actors. `doctor` prints the call. Sessions are also told not to rebase, because keeping a branch on its base is the daemon's job and it does it with a merge commit, which needs no force. | `blocked_patterns` substring-matches `push --force`, `push origin main` and the like. Best effort; APort does not parse refspecs. |
+| No push to the default branch, no force push | A GitHub ruleset on each repo: no deletion, no force push, pull request required, no bypass actors. `doctor` prints the call. Sessions are also told not to rebase, because keeping a branch on its base is the daemon's job and it does it with a merge commit, which needs no force. | `blocked_patterns` checks command text using word-boundary/glob matching for single words and literal matching for phrases such as `push --force`. Best effort; APort does not parse refspecs. |
 | Blast radius of a successful injection | Optional but recommended: a fine-grained PAT limited to the participating repos with no Workflows permission (`github_token_file`). By default runs act as your own login, which reaches every repo it can. Either way the credential is resolved by the daemon and handed to the run in its environment, so `~/.git-credentials`, the keychain and `~/.config/gh` stay out of a run's path. | An audit log of every tool call, for reconstruction. |
 | Runaway spend | `--max-budget-usd` on Claude runs, `run_timeout_minutes` on both (per repository, else the global; default 720, a catch for a wedged session rather than a spend limit), `max_iterations` per PR. | none |
 | No harness attribution in the history | A `commit-msg` hook in each checkout's `.git/hooks`, written at clone time and on every reuse. A message with a `Co-Authored-By:` trailer naming a harness or its vendor, or a "Generated with" / robot line, exits non-zero and no commit object is created. One mechanism for all five harnesses, because it fires on whoever runs `git commit`. | none |
@@ -148,9 +148,21 @@ On boot, `up` registers only PRs authored by the token's login, with same-repo h
 
 `templates/passport.gallivant.json`: capabilities for file read and write, command execution, web fetch and subagent creation. `allowed_commands` is `["*"]` on purpose: a restrictive list denies any command containing `&&`, `;` or `|`, so the first `git add -A && git commit` of every run would fail. Write `allowed_paths` is the worktrees root.
 
-`blocked_paths` cover `~/.claude`, `~/.codex`, `~/.config/opencode`, `~/.gallivant` and `~/.aport` in **both** directions. Blocking writes stops a run editing the rules it is held to. Blocking reads stops it learning them: `~/.claude/settings.json` is the sandbox definition, `~/.aport` holds the passport and the audit trail, and `~/.codex` and `~/.claude` hold harness credentials. An injected run that can Read or Grep those knows where the boundary is and what sits behind it, which is the first move before trying to get around it.
+`data.file.write.blocked_paths` and `data.file.read.blocked_patterns` cover
+`~/.claude`, `~/.codex`, `~/.config/opencode`, `~/.gallivant` and `~/.aport`.
+These are different policy fields: the local read evaluator does not enforce
+`blocked_paths`. Existing local passports copied from older templates must move
+their read list to `blocked_patterns`; rerun `doctor` afterward. The directories
+hold credentials and operator-owned rules, so the represented read and write
+tools need both restrictions. Shell commands remain subject to the separate
+sandbox and command policy, as described above.
 
-That template is the **local-mode default**, and it is the passport `doctor` checks: it reads `data.file.write` and `data.file.read` on `<aport dir>/passport.json` and fails the check, naming the paths, when either list is short. A **hosted** passport is a different thing. Its limits live in the aport.io dashboard and are whatever the operator set there; `doctor` prints the agent id and what the limits should say, but it cannot read them and cannot change them. If you run hosted, copy the two `blocked_paths` lists out of the template into the dashboard yourself.
+That template is the **local-mode default**, and `doctor` checks both policy
+fields on `<aport dir>/passport.json`, naming missing restrictions. A **hosted**
+passport has limits in the APort dashboard; `doctor` reports the configured
+identity but cannot inspect or change those limits. Configure and verify the
+hosted read/write policies separately rather than treating a local check as proof
+of hosted enforcement.
 
 ## What a session is told it may not do
 
