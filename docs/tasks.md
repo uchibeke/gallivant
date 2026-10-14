@@ -56,6 +56,14 @@ This first recognizer supports one unqualified `open/create/raise/submit` review
 clause outside quoted text/code. It is not a general natural-language permission
 parser. Conditions, approval prerequisites, destination qualifiers, multiple PRs
 and delivery-only requests return `TASK_DELIVERY_SCOPE` before inference.
+New tasks default to review-PR delivery even without an explicit publication
+clause. Initial restrictions such as “Keep the change local,” “Do not push,”
+“Return a patch only” or “Wait for my approval” therefore also require
+clarification before planning or task effects; local-only delivery is not a
+supported target. Quoted examples and ordinary product terms such as “branch
+sorting” or “patch renderer” remain implementation text. A “do not merge”
+restriction remains compatible with review-PR delivery, which grants no merge
+authority.
 Unsupported positive forms such as “Publish the changes for review,” “Send a PR”
 and “Open a pull-request” also refuse; they never become provider acceptance
 criteria. The conservative vocabulary check can also stop implementation-only
