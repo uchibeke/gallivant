@@ -83,3 +83,11 @@ configuration. New dispatch is unavailable until a supported interface proves th
 selected environment's connected repository; read access and GitHub ref access
 cannot establish that mapping. Owned-task inspection/recovery remains available.
 Real native attempt IDs and live qualification remain unmet.
+
+## Task delivery package
+
+[M5 audit](plugin-delivery.md), [bounded evidence index](plugin-delivery.json) and
+[installed package contract](../../task-delivery.md) cover the scoped dispatcher,
+durable Node coordinator and combined plugin builder. Pages deployment, full
+hosted preparation flows and the human-merged artifact pin remain unqualified.
+The existing APort integration and all M6 live/host/publisher gates are retained.

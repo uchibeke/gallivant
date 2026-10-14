@@ -681,3 +681,15 @@ test("Cloud adapter and operator instructions ship in a clean installed package 
   const cliHelp = execFileSync(process.execPath, [join(root, "package/bin/gallivant.mjs"), "--help"], { encoding: "utf8" });
   assert.match(cliHelp, /start/);
 });
+
+
+test("Cloud input caps task allowance and rejects excessive reservations", async t => {
+  const { git, ctx, entry } = sourceFixture(t);
+  entry.task = { deliveryAllowance: { budgetUsd: 0.25, runtimeMs: 60000 } };
+  const before = structuredClone(ctx.config);
+  const delivered = await cloudInput(ctx, "task", entry, { ...input, inputHead: git("rev-parse", "HEAD") });
+  assert.deepEqual(delivered.allowance, { remainingUsd: 0.25, reservedUsd: config.allowance.reservedUsd });
+  entry.task.deliveryAllowance.budgetUsd = 0.05;
+  await assert.rejects(cloudInput(ctx, "task", entry, { ...input, inputHead: delivered.inputHead }), { code: "EXECUTION_ALLOWANCE" });
+  assert.deepEqual(ctx.config, before);
+});

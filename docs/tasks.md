@@ -353,6 +353,21 @@ An over-budget saved-output replay cannot become a pass or another repair turn.
 Use `task resume <id> --revision <n>` to reconcile interrupted preparation or finish
 an already authorized, ready intake.
 
+An explicit resume also retries a remote preflight deadline when the saved record
+proves it happened before submission. It preserves the task, requirements,
+allowance and previous settled attempts. The retry reruns provider authorization
+and the normal preparation boundary. A bare legacy timeout, uncertain dispatch,
+policy refusal, exhausted allowance or malformed output does not grant this retry.
+Those records remain blocked or reconcile their already-owned provider operation.
+
+The portable `prepare` and `answer` operations accept optional `verifyCommands`
+(up to 32 commands, each up to 500 characters). These are explicit owner
+selections, passed through the same supported-command and source checks as the
+CLI. Writing a command in an answer does not itself select executable authority.
+Selections are part of the operation identity; changing them requires a new
+operation on the current task revision. Preparation progress in delivery views
+uses the saved preparation attempt until implementation owns a run.
+
 `task validate` returns `TASK_NOT_READY` while preparation is incomplete, even if
 an older question-bearing draft exists. It leaves the saved revision, accepted
 answers and owned run unchanged; resume preparation with the current revision
@@ -442,3 +457,5 @@ runner usage, stdin bounds and clean installed-package imports/help.
 
 See [the evidence index](audit/plugin-ready/README.md) for the separate G8 live
 prerequisites, unavailable attestations and bounded qualification procedure.
+
+Direct task-service mutations acquire the namespace task-mutation owner through all asynchronous effects and release it on success or failure. They refuse artifact-pinned homes; those homes use the manifest-aware delivery adapter. CLI and delivery adapters borrow their existing live owner, checked against the same namespace, while inspect/list stay read-only.

@@ -20,7 +20,9 @@ With Claude or Codex configured, you can also start from natural language:
 prepares an isolated, validated brief. Add `--run` to authorize
 implementation once material questions are resolved. [Task operations](docs/tasks.md)
 cover preparation adapter restrictions, stdin, resumable questions, structured
-exports and separate live qualification.
+exports and separate live qualification. [APort task delivery](docs/task-delivery.md)
+documents the versioned scoped dispatcher, durable runtime, plugin packager and
+the deployment/provider gates that remain outside an internal fixture build.
 
 ## Five-minute path
 
@@ -72,7 +74,7 @@ PRD (status: ready)  →  gallivant start  →  session in its own checkout  →
       resume the session with the feedback  →  push  →  ask the reviewer again  →  round += 1
               │
               ├── checks green and reviewer clear   →  ready-for-human, one notification
-              └── 3 rounds, conflict, no push, silence  →  needs-human, one notification, `gallivant why`
+              └── round limit, conflict, no push, silence  →  needs-human, one notification, `gallivant why`
 ```
 
 ## Commands
@@ -114,7 +116,7 @@ See [chains](docs/chains.md) for editing the queued plan, recovery and cancellat
 
 ## Status
 
-Version 0.1. Five implemented adapters, the review and CI loop, recovery from GitHub, ntfy notifications, the local tracker with recovery controls, and sequential PRD chains gated on human merges. Adapter implementation does not establish access through a provider subscription. The [latest audit](docs/audit/harness-live-validation.md) distinguishes production evidence, blocked live attempts and fixtures, including the configured Claude binary (2.1.263) versus the older PATH binary (2.1.177). Gemini, OpenCode and Goose are not yet verified for unattended coding and same-session Git pushes on this machine.
+Version 0.2. Five local CLI adapters plus the hosted adapters described below, the review and CI loop, recovery from GitHub, ntfy notifications, the local tracker with recovery controls, and sequential PRD chains gated on human merges. The default review limit is 30 rounds, configurable with `max_iterations`. Adapter implementation does not establish access through a provider subscription. The [latest audit](docs/audit/harness-live-validation.md) distinguishes production evidence, blocked live attempts and fixtures, including the configured Claude binary (2.1.263) versus the older PATH binary (2.1.177). Gemini, OpenCode and Goose are not yet verified for unattended coding and same-session Git pushes on this machine.
 
 After resolving the documented blockers, repeat the opt-in live suite from a source checkout with `npm run test:live-harnesses -- --live`. The report also gives exact commands for the named Goose and OpenCode Console BYOK batches; these connections are separate from Zen/Go subscriptions. DeepSeek is excluded from new calls; Tencent remains deferred. The suite uses existing settings, performs sequential bounded model calls, and keeps raw logs privately outside the repository. `npm test` never runs this suite. These disposable local-remote tests do not prove GitHub review/completion behavior: the next step is an authorized Gallivant PRD through PR creation, review/CI-triggered continuation and the completion gate, as described in the report.
 

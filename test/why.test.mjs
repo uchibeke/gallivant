@@ -226,3 +226,10 @@ test("a stopped entry names the write that would not land, so `stuck` is never a
   assert.match(out, /PR #143 block write failed 5 ticks in a row: HTTP 403/);
   assert.doesNotMatch(out, /waiting on GitHub/, "the counter is cleared by the stop, so nothing says it is still retrying");
 });
+
+test("task allowance timeout explains the immutable authorization limit", () => {
+  const w = world({ entry: { state: STATES.needsHuman, reason: "timeout", timeout: { limit: 2, source: "task", ran_minutes: 3 } } });
+  const out = why(w.ctx, { handle: "widget#142" });
+  assert.match(out, /remaining authorized task runtime allowance/);
+  assert.match(out, /Raising repository or global timeouts cannot extend the saved task allowance/);
+});

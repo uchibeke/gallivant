@@ -72,12 +72,23 @@ gallivant resume owner/repo/my-task --note 'Apply this authorized correction'
 Natural-language intake uses the selected provider's versioned preparation
 capability through the shared execution service for drafting, questions and
 repairs. The task service owns deterministic validation/readiness and explicit
-implementation authorization. This managed adapter has no enforced preparation
-capability, so selecting it for intake returns `TASK_PREPARATION_BOUNDARY` before
-any provider call; coding-session access does not establish limited drafting
-authority. There is no automatic provider switch. Use a hand-authored approved
-PRD with the explicit `ready`/`start` path above until this adapter supplies that
-capability. No selection changes global defaults. The same task, branch, PR and
+implementation authorization. Native preparation creates a fresh session with
+`environment: {type: "none"}`, `tools: []` and `multi_agent.enabled: false`.
+The API requires initial input for conversation-only sessions. The bounded
+selected context is sent with those explicit restrictions in the same creation
+request; the returned effective configuration is checked before adopting output.
+Lost creation replies recover by task/account/dispatch metadata and never resend
+the input. The live qualification caught this requirement on 2026-10-08; an empty
+creation request returns HTTP 400 even though hosted coding sessions allow it.
+Only the owned root's completed final answer can become a draft; tool calls,
+delegated output and changed account/model settings are refused. It reuses the
+normal durable execution receipts, cancellation, logs and lost-ack recovery.
+Preparation does not need Git, a hosted filesystem or a local verification sandbox.
+Implementation retains its existing hosted environment and sandbox requirements.
+API/model access and live task qualification remain separate from this boundary's
+authority. There is no automatic provider switch. A hand-authored approved PRD
+still uses the explicit `ready`/`start` path above. No selection changes global
+defaults. The same implementation task, branch, PR and
 session are used for review fixes, stale heads, receipt repair and base reconciliation, within
 the existing iteration limits. Each round sends the coordinator's current exact
 input head and saved brief/source snapshots. The remote repository contains that
@@ -96,16 +107,11 @@ review dispatch use the same source check, and preparation rechecks both status
 and HEAD before accepting the portable snapshot. No unfinished file is discarded
 or silently uploaded.
 The task CLI (`gallivant task 'Implement the approved request' --harness openai-agents`)
-reports that missing capability. [The shared intake workflow](tasks.md) always
-retains the selected provider for preparation, clarification and repairs; a
-different selection requires an explicit operator choice. The restricted native
-Codex preparation adapter is supplied separately by
-[`uchibeke/gallivant#10`](https://github.com/uchibeke/gallivant/pull/10)
-at `39dec7c787a503956f18b745d92a13166d287c45`. It remains open and absent from this
-selected base as of 2026-10-06. Merge the reviewed adapter into the base, then let
-the coordinator sync this branch; this API milestone does not copy its adapter.
-Its native 0.160.0 loopback-provider boundary qualification is separate from live
-inference access and does not qualify managed preparation.
+uses the managed preparation capability described above. [The shared intake
+workflow](tasks.md) retains the selected provider for preparation, clarification
+and repairs; a different selection requires an explicit operator choice. Local
+Codex preparation uses its separately qualified native boundary. Neither path's
+preparation evidence establishes hosted implementation or review-loop completion.
 
 The shared execution boundary also exposes scoped question answers:
 
@@ -140,7 +146,7 @@ there is no terminal question waiter or arbitrary shell executor.
 
 Only the single coordinator performs provider I/O. Tracker/status reads saved
 state. Existing `execution.deadlineMs`, `progressMs`, concurrency and capped
-backoff apply (defaults: 2 seconds per operation, 10 seconds between polls,
+backoff apply (defaults: 20 seconds per operation, 10 seconds between polls,
 maximum 5 minutes backoff). A stream connects before each send/reconciliation,
 buffers while authoritative session/root-turn/items are read, and closes within
 the bounded operation. Closing a stream never cancels work. Root turns alone
@@ -168,7 +174,18 @@ attempt. The supported header forms follow
 Three consecutive reconciliation or unresolved launch attempts open a circuit;
 creation recovered before any input send requires explicit inspection. Failed sessions stop
 reconnecting. Repair credentials/throttling/configuration and explicitly authorize
-`transport.resetRecovery` for a still-viable session. Failed or expired sessions
+`transport.resetRecovery` for a still-viable session. A saved authentication error
+requires a fresh read-only check of the owned session and root turn with the
+current credential before the retry block is cleared. If the session identity
+is still unknown, the check uses the session listing needed for launch recovery.
+It does not require model-catalog access or authorize new inference. A failed or
+timed-out check preserves that block and
+does not consume a reset receipt. Recovery then observes the same owned session
+and root turn; it never resends input or creates a replacement. Replaying the
+same successful reset cannot replenish its retry allowance. The operator control
+reports recovery only after observing a known provider state; prior acceptance
+alone cannot turn an unresolved observation into success. Ownership, policy,
+protocol, cancellation and terminal refusals remain enforced. Failed or expired sessions
 require saved artifact recovery and explicit replacement-session authorization;
 automatic replacement is not supported, and no old filesystem survival is claimed.
 
@@ -385,3 +402,26 @@ Official contracts: [overview](https://developers.openai.com/api/docs/guides/age
 [events/recovery](https://developers.openai.com/api/docs/guides/agents-api/sessions/events),
 [hosted setup](https://developers.openai.com/api/docs/guides/agents-api/environments/openai-hosted),
 [files and artifacts](https://developers.openai.com/api/docs/guides/agents-api/environments/files).
+
+### Privileged Linux verification hosts
+
+The native verification probe remains mandatory before implementation or publication.
+Rootless Linux uses Bubblewrap's user namespace. A root coordinator creates private
+mount, PID, network, IPC and UTS namespaces directly, drops held and inheritable
+capabilities, and uses no-new-privileges. The probe checks both the initial process
+and a child after exec, in addition to denied filesystem access, read-only Git and
+network isolation. There is no unsandboxed fallback. A nonzero capability bounding
+set alone is not held authority; permitted/effective/inheritable/ambient sets must
+all be zero and no-new-privileges must remain enabled.
+
+Cloudflare preview rejected the nested-user-namespace `/proc` mount but passed the
+private namespace variant. Both root and rootless variants also passed in the
+actual Linux runtime image locally; removing capability dropping made the real
+isolation regression fail. Run `GALLIVANT_NATIVE_SANDBOX_TEST=1 node --test
+test/verification-linux.test.mjs` inside a namespace-capable Linux image. A Linux
+container that cannot provide these boundaries must fail qualification. This is
+not evidence of a completed remote task or a host-plugin installation.
+
+The [Bubblewrap security model](https://github.com/containers/bubblewrap#sandbox-security)
+and [Cloudflare container process boundary](https://developers.cloudflare.com/containers/api/durable-object-container/#exec)
+explain why changing user IDs alone is insufficient.

@@ -1,0 +1,1018 @@
+{
+  "format": 1,
+  "task_id": "task-bef5af8133f729845bd7fefb",
+  "milestone": "M5",
+  "publisher": "APort",
+  "releaseApproved": false,
+  "submissionReady": false,
+  "classification": "internal-development-fixture; not-installed-host-evidence",
+  "date": "2026-10-08",
+  "source": {
+    "base": "96e81031516bdf6663dd3b97ac39b8f57022568b",
+    "sourceVerified": true,
+    "uncommittedPayload": [],
+    "mergedM5": false,
+    "predecessorMerges": [
+      "7df07ac08f382b2274df26ef2b58b8c390e5bb68",
+      "7936830977bcb4615de418b9dd5c4d655501297b",
+      "2b4514fb27fcb493e62bfed913fffc204215f155",
+      "96e81031516bdf6663dd3b97ac39b8f57022568b"
+    ],
+    "testedSourceCommit": "3704b3d0673e550bf7d96b3dc5c86f68abbe3699"
+  },
+  "artifact": {
+    "coreArtifact": "gallivant-0.2.0.tgz",
+    "coreSha256": "da65814d14c608a8b273efc0a0cc8faeac3dcf1b75afc909af6ceb97115bde94",
+    "hashes": {
+      "plugin": "8753892ceb5552fc37ba011929830f4c754d717f8d8031e31fb9b4935b465e1a",
+      "runtime": "0e9e3dc0e70ecf19673535e90a5e11e2c97728c156f13386327629a95c5aee15",
+      "operations": "86e62501fa7a3d6d29e26830cd43b2648b32978912d2096a8690ed2e2fab0f86"
+    },
+    "dependencyLockSha256": "c0f2f9bb3ad4d1bb8356c1162a8e71109534d747a5bc3182d4cce6457760c6d8",
+    "payloadHashes": {
+      "LICENSE": "f3279adc1b8fec70bdd2a8e52c41eb2d3b4a4fa955524662bd79da541b1cef41",
+      "README.md": "e5571ad571fcd34991c030e6f7a37026239cb847fe38061d611a33a1049e29ce",
+      "bin/gallivant.mjs": "88a20cec89e6fcbb466c9ca0bd5fd4c4e357a54aba7f51c432117f3bc701ae4a",
+      "bin/package-plugin.mjs": "8a3a5555438cad17f1812e5af15aedb54c9081f8a280db519a502b78af20b5ce",
+      "bin/task-delivery-state.mjs": "fb14f536b8b567f25b07eebc1dff91229a280ae60c2bbe619abb45a4bc09646b",
+      "docs/app.md": "7508a7fa0ecacfe54c20da0f81069ac02218814e71773c31d7e2dcce75ea34e3",
+      "docs/architecture.md": "f7c5dc61a4ac05f1be90c2cc115d68acbbaabb189388d296717a2452bed1c7e7",
+      "docs/chains.md": "8c08ce8c8de49b513fd7f8b15d8af0b21e1e8b75938d934a1830d3f3bde1b814",
+      "docs/codex-cloud.md": "138e9e15bd33d0e4d4aca291244ef99e32b0586ac4eb8da593de9488be1a3e2e",
+      "docs/commands.md": "e0e91e3c4c2ca35aa60dcbfdfb35524714ad2e955f46d6d4e0811e304b45dda2",
+      "docs/config.md": "3a956336bd5fc7dad0a0caa41058954da4dc7fc1b23efb18c41200974833a5db",
+      "docs/execution.md": "5c8a431549d63ae4b2f6f721c9ef70cbd720fb882bce5e4591cf17757001ebde",
+      "docs/guardrails.md": "d4dd7ece3b9e943c503866b8ca1b93901ea4fecde521b72fe98bd8afc97cffa4",
+      "docs/install.md": "5087cb207e20c31ef39d955fd8536184f86113d61348e955f380e30172705a85",
+      "docs/learning.md": "7d28f975424af6cc566a7c27348cc295cb493cfdfd0f028d9111e926bb3cb9ce",
+      "docs/openai-agents.md": "38f162e4d4918bdab372be804e1a06a6a9582493c941f07799f97324f4637db2",
+      "docs/prd.md": "c018adab1b0df85f0c4fcec3a05b2b03911ded645987a21c13b61df0dcb41594",
+      "docs/preparation.md": "814ad941a8291accc4036eb022edd64ed9e3a1e39f985a9f35b25f7eeae8ee9f",
+      "docs/task-delivery.md": "9bab9b05ec9d69065e038c93ce461bdcc0e4d472dd4e754a40e9138abde26e3d",
+      "docs/tasks.md": "927ada2f9757a879f1f730cf0a3485d8cc4d2b62b413c2275d49c24fa207545e",
+      "lib/aport.mjs": "5c046abda8964a0439ee699bf658b9a00fdd7527884848f7fb22c3fe6c9e1d74",
+      "lib/attribution.mjs": "cddb3eafe44f1dee26999a987ad9b1c62332cc9eb1ee17925cd2b961a9ccac17",
+      "lib/block.mjs": "bd644a1564d6d3dcf3edad1ad1f931fa5f3e4246a041f20acbbb04c88c07c665",
+      "lib/capabilities.mjs": "d2241ccd7ab613811ea6173e93c9951cecc0b36a52fd1949a93c66cac08a9f26",
+      "lib/chains.mjs": "6b3daeeebbb20a9ebff6349a6c9e82351e540036fe7d88253d144938263be3d8",
+      "lib/codex_cloud_config.mjs": "3f22485817b7cb90678b79bbf7252e378f87e39b87f5b139f42a48f4df52425c",
+      "lib/codex_cloud_input.mjs": "d28e63480c5759af19d48131bfaafa37aaaa9a4ba4d20bdf62a45886bb65b331",
+      "lib/codex_cloud_result.mjs": "88ebb5214020b847f195c38f99d11be573e53c1770500242521736667fd15b0d",
+      "lib/codex_cloud.mjs": "169de9f2db33237aca3984888b175d26f5c7a2dc791997c54d20aedda771131a",
+      "lib/commands/doctor.mjs": "6a1c916f1a3626ba7656123792adf9ba3fdbd963cb64a3641437e337e4f18997",
+      "lib/commands/learn.mjs": "4ee8273d03f7322b6f5af94681cc022e07a36046c79524343ab2f351e1a53e04",
+      "lib/commands/new.mjs": "e1bc49c5e3d28c085d458de3e379d6d4b05bf6eedbf54cb2808d778419546170",
+      "lib/commands/ready.mjs": "916c0ba660146c28d4a64ac8dff6e1596d4ff1e0fa7d61e784ae10f92b4b67f9",
+      "lib/commands/register.mjs": "93139d98b4ea777df5e64e3871cfb9ddccf0a43843751bda4170847e870f99d1",
+      "lib/commands/resume.mjs": "0d5468afc5900c11dd5c48c84084af820cfaf44870ed5548b934d9217de061b7",
+      "lib/commands/serve.mjs": "29edf0f03c0b64c27ac438dcd01837f3c1d14b068fe78b2d1e8bec18f236c771",
+      "lib/commands/start.mjs": "47c65e350afccf631c74e6ccca16e08c1c4cac84f71d8c2e17e0150df68a2120",
+      "lib/commands/status.mjs": "41ededea71ae3b2bcf986511720c2a397af7abedcd96b2966674840a2800d6cc",
+      "lib/commands/task.mjs": "05eb44a57832960e8dd9ea339250fc2c2053b07471b4edf0ed413d4ec1fcef94",
+      "lib/commands/up.mjs": "e84fbd65d764efd1d92cb9409f2832f7fda30ceecda56282020faa1f2eda6358",
+      "lib/commands/why.mjs": "ab11e6178f2716118c13d03f67e9dea7f7eab94ebb6c213adc6818ff6b6c1040",
+      "lib/config.mjs": "64a11002c4963648966db9a8c04f44da8cbfde81698800932d4e854bc4f1b097",
+      "lib/context.mjs": "349ed15ad1c4afe16d782147d5c2eb733135461c8075b8c348bb8af438a6cb1c",
+      "lib/control_contract.mjs": "adfabab7a8c63cf4a4fde40f8743e8dc0e53be99339cdd4016bab42534a861dc",
+      "lib/control.mjs": "a2d922af5cd19d5ac28b4d61f55b3b56159b4fe9958fd5a9627e9fdd2c8625b4",
+      "lib/coordinator.mjs": "9f49e5a6140b73a014190d7da2ec0a258633acf5a3044abf2f44b22b25c04587",
+      "lib/credential.mjs": "61ac0040b5e41ce299f59d80081fbfdd7537745453300c79d2090f6f173bc46f",
+      "lib/daemon.mjs": "0e559bb0c57c0efbfe93313b72cfb91015f5e22a5512ccca4c545c96d09cab45",
+      "lib/deliverable.mjs": "7d3c824ac1d8cb6032b1814cdf4e0dc156e4d6d01382bebc0ab1647e4abfb678",
+      "lib/events.mjs": "776867f9a280ea179f2be8f6e570c88d468ebb5500db8864041fd29b01202e27",
+      "lib/execution_input.mjs": "9fd16569f9ac9286ff4990a7bc442114ebff681bcd43972fccba033e66e02cf1",
+      "lib/execution_io.mjs": "b63df0d51bb54700e74cd9804fb5a77ca2c2bfcac4070484082bf1272eb6d7d5",
+      "lib/execution_journal.mjs": "ae4773b26f024f8d53ce57d2aba2172454b75680bf0f6934f1b77c455eec12f2",
+      "lib/execution_preparation.mjs": "13360c3b30d856212cfd3769eef2f23bad10115c27d2db51c691479119d4391e",
+      "lib/execution_result.mjs": "b13f5169e3fa541f5cc1f8c4e87e401436849a5864ea514231246847c71c2f41",
+      "lib/execution.mjs": "7c2d2970000824dbc55fc474b0518114d7951eb4bbb5652f2e81facf7ff0e859",
+      "lib/fs.mjs": "e16a9deec34b83ddb7caeee5a889bd0bb54f4124944f5c85776067546552cf54",
+      "lib/gh.mjs": "04f7b604178dc964215310fcb52cbc5363b74118e45cbaa70e30b860b9bc24b5",
+      "lib/git.mjs": "fd2e6a0775f908ccacf18709a00c703c2506f1c3226b662ee0321d79133b7498",
+      "lib/harness_log.mjs": "0e4d2a6214ac6bec21777b86897a12513d3f42c58e1be7e7372d9f9f0f9f4cbd",
+      "lib/harness.mjs": "39768ce71cdc4502cae2e976be76d93671f8e8d7b4113c94f5048b9a2f31a16a",
+      "lib/hash.mjs": "32636b4251c725981360c0eba661e27f693422780a5c7bf9801eeaa733067143",
+      "lib/identity.mjs": "01c56e4b70e60c48cf6f5200d6913cd7725ce36939acbe9af8d1d5c0a11ccd6e",
+      "lib/learning_data.mjs": "0eeb455a4e8b1a45a3f349a9a5d5953e3c83d2701815d599b166ef4033f6817a",
+      "lib/learning_input.mjs": "27f20a6cdfe5e9c0a607ac4faff0896f0ccfafadb503476bf06eec29635e88de",
+      "lib/learning_qualification.mjs": "c9c2d1ce1e6ed8285e70913dbb6fd62cf05865d317e57e893fe2df600bbc8999",
+      "lib/learning_signer.mjs": "3ddfa5e2ccc7bd18c3ea27d3870e5444522b18eb4eef07674535e43e4de9c1a1",
+      "lib/learning_store.mjs": "6343231897a714a4b646c98bd945e0fcfb89df42dabc538020e163eb3f8484f1",
+      "lib/learning.mjs": "ddc2777b72cef19e22313a05265a4816d8f6876de1f0c84860cf0ce83a5781ad",
+      "lib/log.mjs": "f0dbc3360fde0fdf724e098156c56ef4554289f24af857eea05c09af6334bcfe",
+      "lib/notify.mjs": "9b989ec3ac9ff61a6ff440f78a3e03a260d1aa95d429d95a5a2dc49d3f84d332",
+      "lib/openai_agents_config.mjs": "7d9db1b55e3c0f71ada076811eb11baf9cfb0becdfed10f6a86ec6ecbfa69dc7",
+      "lib/openai_agents_http.mjs": "addca807057cd4b999cc6d67324de798c00fd455c962df23b135fed4b90f7206",
+      "lib/openai_agents_input.mjs": "3b012e8c7c51d9d007762e1f849ea3caaf7bbf9ab128a6f5c916bff195b6b83c",
+      "lib/openai_agents_sources.mjs": "9d61867d9f86901b084f37d4da6c344df24a0ff71b7ab0537273aad4b18f1132",
+      "lib/openai_agents.mjs": "3b67fe601cb8ad268f2d997d55e19bad4aca1f016293595036825892d1991702",
+      "lib/plugin_package.mjs": "663e0cdea5602dba659e70103cadae381a7adce112ced3282f7d751c162bee1b",
+      "lib/prd.mjs": "3e8bd68d62e8e61fe3624cdcc76e27e78e079d77e25a1484aafa7f5ca6f6ffe3",
+      "lib/preparation_codex.mjs": "d1fcd4d1ec49b3a086622ec2777fa231b4fbc9c0d6e13bb90702d27b785fc447",
+      "lib/probe.mjs": "191639a18233649d523effbf2411d100946e6463d70f380c41aec8301bb42197",
+      "lib/prompt.mjs": "e1c09b06350397feb038c6cae75b798d2970fff5c7b9c03289e2d14e8b390be2",
+      "lib/provider_health.mjs": "1250697922c7eb08f2d0c874286cbc49f13ae85c734ae3fb0eeb1d4b17ec0f41",
+      "lib/public_output.mjs": "108f886c9fdc7fd46ba72fd67d7d9efc8780d033a2a6cc1b27bdff0a3ab4d296",
+      "lib/public-format.mjs": "3ce61b55236639417271b2326343a859020f5a6640d0eccb7e6f7fa53d7e4789",
+      "lib/repository_files.mjs": "f7f1da09a1d8bb1986954ea4c5ec0b92f8da16e991fb4e50eb0322c36dc5a823",
+      "lib/run_log.mjs": "7d0b28731be434c6764ea400e4fe9d95ea0cc81179c9ead80d140d23153abcdb",
+      "lib/run.mjs": "3682818ab95bf3b27c262449aa521be094caee9c8f133e94740923ebafb91315",
+      "lib/runtime_dependencies.mjs": "6d25b972c116026643f348dc55586009d2746f68b99f47d450b2a3ef35625949",
+      "lib/runtime_node.mjs": "df1b43dc1ae576ff96cd9a36201f906bf8d0c04deea291ce78d754b2b2fde4cd",
+      "lib/runtime_state.mjs": "3c483ec6e73725783edb734e7759dfcfe668e96e1feb6eceee3b04b50c5e7e79",
+      "lib/sources/index.mjs": "88e1550751e9f52c82e94085bcb77bbd2b80466c9e2192670593f12894c4a4ec",
+      "lib/sources/prd.mjs": "b26425213d537d8bf640abee1046481925de30d676fdb9b6a6b9239cdc50effd",
+      "lib/start_contract.mjs": "e154f36dcf54c93b4308a93d8926dca8f28358c4e41234dc684008706ea23ab9",
+      "lib/state.mjs": "2bcd199eb410c2a590138600c4f8b9f1aeeefea037f29f19d14ae56a9b9fa940",
+      "lib/task_allowance.mjs": "8c5e73b502fc84ff51f61df947d33690c0cf4505be00d9cdd93f6ce445fa23b9",
+      "lib/task_contract.mjs": "56d440e08c228a4df27d06f9fa181ec6160e876a13dcd90fdf0416fab7c2fff4",
+      "lib/task_delivery_contract.mjs": "6cdd7e72d430341e04cbe2cb8dbb99f3679cd83b101d27cda23926a912dd8dd9",
+      "lib/task_delivery_mcp.mjs": "6f913b6446778d042a16167dd030d5decea2f38152d00538c39b409f37cc6791",
+      "lib/task_delivery_store.mjs": "d5ac13968be92b773ce4e530217d5ec64539f3ec1877e873ca3c56654813f450",
+      "lib/task_delivery_view.mjs": "8f7a9551bc288130dcb7997b2e5941e95324fce34b4eaa24ffc786b5e092559d",
+      "lib/task_delivery.mjs": "35bbcde01a592cfd53dce8d1a70eb098557353017821cc29373aa2577106a718",
+      "lib/task_environment.mjs": "5c61d5d5393014206f078c86084b40d263f59b7dc939c445a4ed86111e4c2b2c",
+      "lib/task_prepare.mjs": "f0f27738e208f174aa89dba3a6f70f382cf7e03abe541df5d1854aed4adb9492",
+      "lib/task_store.mjs": "54383d2c1893f6b805ed15b2690f38625f734f65ff7f286906829d192a65d2b4",
+      "lib/tasks.mjs": "99ef055a0f89c6352c553230f0c5c26dcd474fdb33246dfd51675f36ad6c7a7f",
+      "lib/tick.mjs": "406ae30ff25da41a6296097e6213be7485d7ec6956dd238e158586b2e92d5dc4",
+      "lib/time.mjs": "da5f6d30e5059e9b3ed45c3e4a604a3ad20fcc17449ed2ff0429aa9c7a79f146",
+      "lib/tracker/assets.mjs": "10b86b3cf08e784e578d18881e28bc9f8fdebc2ab467dbc5fc338269f4a114e2",
+      "lib/tracker/pages.mjs": "ceb768dd4e78931749ffd78918d37fb8a82805907d219e0bfe80c1478654d9e7",
+      "lib/tracker/runs.mjs": "5f6c8ca8a579512955fce1dd37701543c1bdbd4869b09058bc1211563cdfd7c1",
+      "lib/tracker/stream.mjs": "9ec51d5e852899b04718598ead5a0231b6f4817f5b54935a3f18ca153d943dc1",
+      "lib/verification_sandbox.mjs": "afb289b9641bee6e95102f9c899fd99274bfe07f6f0b4db21e0002e1dc309a7d",
+      "node_modules/smol-toml/dist/date.d.ts": "c7ad3531c131f2b5b246b2d208b75c5403475ad155b7661fa2d673104b806791",
+      "node_modules/smol-toml/dist/date.js": "ef924a2a42c7f16761e7098c3ed8e04195ecbcb02d5c369db0aee76f251a409c",
+      "node_modules/smol-toml/dist/error.d.ts": "02e33cdc5ca75f517f44b31070640be0fe6d0169dd91c266d02a1e2a71e064ac",
+      "node_modules/smol-toml/dist/error.js": "76f8e47f5fc57273748242d59570656d7c921a80bceb2291ca5a4d7a723e9f29",
+      "node_modules/smol-toml/dist/extract.js": "b964c8f39c737172295b31b9ee61b49e513ff12788e119ddfdbb68c448054c12",
+      "node_modules/smol-toml/dist/index.cjs": "09ce310a8bcc1bb5c7dc2813c88b4bfbbeb685e4c186a9631ff54da7e85c880f",
+      "node_modules/smol-toml/dist/index.d.ts": "b4556819c2ed0cd4016d05a6bfd7d4773c0b5ffb39c8ed547796ce4a1093d9b8",
+      "node_modules/smol-toml/dist/index.js": "dc8e0afc74477e514f5cb8492b587560c1d7d68cec03a994cc8bc4af99c8da2a",
+      "node_modules/smol-toml/dist/parse.d.ts": "2b230dc984b6e51b545bfe222f9965cc2ff434164ed9428bec415c5e508a9854",
+      "node_modules/smol-toml/dist/parse.js": "195e33ea068bf6f3acb5b3342792ac4aa954bba7e751519ba869c00da395ecdb",
+      "node_modules/smol-toml/dist/primitive.js": "be47fe90bf9a410af0b9204b6b34617f4b38e57f08198b10cb024a0272eb5936",
+      "node_modules/smol-toml/dist/stringify.d.ts": "628a6a55714fcf4a4eb0e59866ab1e5cc67c1b9e0cfc8524ccc8d6b5ee24ad7c",
+      "node_modules/smol-toml/dist/stringify.js": "c717d95456426dc8a0b07c9d03a4e434d5dea8254fca24e5fd93a22de3bcd44c",
+      "node_modules/smol-toml/dist/struct.js": "736742cfa645bbd08bc5396c5f7ddbea5c3b7ac5d61fe86031846f5769131deb",
+      "node_modules/smol-toml/dist/util.d.ts": "e6b1d3eecb240dc71d0dc28d1beee69cefd6ee014507c822909be0a7117517e0",
+      "node_modules/smol-toml/dist/util.js": "6327e40efd957128da15867c3a32293950a925570b457b1b78c735452cebc08e",
+      "node_modules/smol-toml/LICENSE": "fa5659948374d4f555594f47f6da073b40dc503e921aeeece30df4362b3051a5",
+      "node_modules/smol-toml/package.json": "0e35bde6992fef675058596ea0e94c2d3ca65e5f9b73a326d94208be6210f192",
+      "node_modules/smol-toml/README.md": "bcaaa3befbd5bc5373cc6d80f4502afbe83179f96dcf9a336c43deb7ffa24c65",
+      "npm-shrinkwrap.json": "c0f2f9bb3ad4d1bb8356c1162a8e71109534d747a5bc3182d4cce6457760c6d8",
+      "package.json": "ccc154a3238dbec9f3531112db9ec1e87ccbc152ebbcf3c38144d00ecb0097cf",
+      "templates/claude-settings.json": "9b7ac20389f1f4f3b64d470cbcf832e879ff478ad93fc96b09d01829401a2d3e",
+      "templates/passport.gallivant.json": "6da0a81a24218588e46d3bb60a2741cbaa036cb6edaadb849256e40711794cbb",
+      "templates/plugin/bundled-runtime.json": "942c55dd8416ab44f4b6b10f38205473c46da814fecc95d7dfc21dc9b18f5cf4",
+      "templates/plugin/schemas/mcp.schema.json": "6539175bfcdf43085855183e86da40ea94b166547a72b47ae9a0a390516d3acb",
+      "templates/plugin/schemas/plugin.schema.json": "0a4aad95ce337878ad38802ebf0daa3fde76abe3f65400c86bcbb1ec0b3ab883",
+      "templates/plugin/task-delivery.SKILL.md": "7187347f1a292e5c623809b0b924afe94cd6e14ddfe63cb052f88e3f969029bb",
+      "templates/prd.md": "21c23e38b4276d6a514d90e6577ffdfa9200c65b24e2e4d0b231311d4f642e25",
+      "templates/tracker/tracker.css": "821d04fdc6a300784237ceb174071b475d9585e9617f8919975845656d256e84",
+      "templates/tracker/tracker.js": "488ea4ca10c561df94bb1e26a36c045dc0c16203b82400e10b581e21247b1d56"
+    },
+    "schemaHashes": {
+      "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json": "0a4aad95ce337878ad38802ebf0daa3fde76abe3f65400c86bcbb1ec0b3ab883",
+      "https://agent-plugins.org/schemas/1.0.0/mcp.schema.json": "6539175bfcdf43085855183e86da40ea94b166547a72b47ae9a0a390516d3acb"
+    },
+    "assetHashes": {
+      "assets/task-ui.html": "ba2ab2fc59712c824bebbd0aa464c56d0d4d1003df0aaf18f20fec0e53f1b9d3",
+      "plugin.json": "16141b6f9914731d6f8290f4dfad56206d3d0bb0472682a38102c855955eb6e9",
+      "mcp.json": "56dc30d030898ad1280ca1cd15705bb106b1db06c794e36a24fc9acf0a26c0f2",
+      "LICENSE": "f3279adc1b8fec70bdd2a8e52c41eb2d3b4a4fa955524662bd79da541b1cef41",
+      "skills/task-delivery/SKILL.md": "7187347f1a292e5c623809b0b924afe94cd6e14ddfe63cb052f88e3f969029bb"
+    },
+    "fixtureEndpoint": "https://example.com/task-delivery/mcp",
+    "resource": {
+      "uri": "ui://task-delivery/app",
+      "mimeType": "text/html;profile=mcp-app",
+      "toolMeta": {
+        "ui": {
+          "resourceUri": "ui://task-delivery/app"
+        },
+        "openai/ui": {
+          "entrypoints": [
+            {
+              "type": "global"
+            },
+            {
+              "type": "thread"
+            }
+          ]
+        }
+      },
+      "resourceMeta": {
+        "ui": {
+          "domain": "https://example.com",
+          "csp": {
+            "connectDomains": [
+              "https://example.com"
+            ],
+            "resourceDomains": []
+          }
+        }
+      }
+    }
+  },
+  "contracts": {
+    "coreVersion": "0.2.0",
+    "operationVersion": 1,
+    "taskVersion": 1,
+    "executionVersion": 1,
+    "exports": {
+      ".": "./lib/tasks.mjs",
+      "./tasks": "./lib/tasks.mjs",
+      "./context": "./lib/context.mjs",
+      "./execution": "./lib/execution.mjs",
+      "./execution-result": "./lib/execution_result.mjs",
+      "./capabilities": "./lib/capabilities.mjs",
+      "./task-delivery": "./lib/task_delivery.mjs",
+      "./task-delivery/contracts": "./lib/task_delivery_contract.mjs",
+      "./task-delivery/views": "./lib/task_delivery_view.mjs",
+      "./task-delivery/store": "./lib/task_delivery_store.mjs",
+      "./task-delivery/mcp": "./lib/task_delivery_mcp.mjs",
+      "./runtime/coordinator": "./lib/coordinator.mjs",
+      "./runtime/node": "./lib/runtime_node.mjs",
+      "./runtime/state": "./lib/runtime_state.mjs",
+      "./providers/openai-agents": "./lib/openai_agents.mjs",
+      "./providers/codex-cloud": "./lib/codex_cloud.mjs",
+      "./plugin-package": "./lib/plugin_package.mjs",
+      "./lib/*": "./lib/*",
+      "./package.json": "./package.json",
+      "./runtime/node/dependencies": "./lib/runtime_dependencies.mjs"
+    },
+    "scopes": [
+      "task-delivery:read",
+      "task-delivery:write"
+    ],
+    "mapping": "lib/task_delivery_contract.mjs#TASK_OPERATIONS"
+  },
+  "interfaces": {
+    "store": "read(scope); transaction(scope, async (data, save) => result); save commits durable intent/acknowledgement",
+    "owner": "withOwner(async owner); monotonic fence; synchronous assertCurrent/checkpoint/saveCheckpoint; single durable host; no live-owner lease expiry",
+    "scheduling": "schedule(scope) enqueues mutation wake; coordinator schedule(nextWakeTime) persists before canonical makeTick; no UI poller",
+    "credentials": "APort validated scope and isolated contextFor; resolved secretsFor values stay outside tool input/model/UI; production authorization belongs to APort",
+    "runtimeRequirements": {
+      "runtime": "node>=22",
+      "store": "durable single-host volume",
+      "replicas": 1,
+      "dependencies": [
+        "git",
+        "gh",
+        "isolated verification sandbox",
+        "configured provider transports"
+      ],
+      "pagesRemedy": "Keep Pages for OAuth/MCP/UI. Route authorized operations through an authenticated binding to one Node 22 coordinator with Git/gh, durable volume and external wake-up scheduling. Codex Cloud additionally needs the pinned CLI and its trusted operator account; environment repository verification remains blocked. Evaluate an existing Node-capable runtime or Cloudflare Container before provisioning; do not add a mandatory Worker."
+    }
+  },
+  "handoff": {
+    "existingJob": "aporthq/agent-passport/aport-task-delivery-mcp",
+    "existingMergedPr": "https://github.com/aporthq/agent-passport/pull/414",
+    "contract": "docs/task-delivery.md",
+    "commands": "docs/task-delivery.md#build-configure-upgrade-and-rollback",
+    "assetInputs": [
+      "built shared APort UI HTML <=256KiB",
+      "owner-selected PNG icon",
+      "authentic host screenshots",
+      "exact ui:// URI and HTTPS/CSP origins",
+      "owner-selected support/product/privacy/terms/license metadata"
+    ],
+    "action": "After human merge, rebuild clean M5 source and pin its actual digest/contracts in the existing integration; reconcile its Pages-to-Node runtime binding. No replacement job/brief/UI."
+  },
+  "preflight": {
+    "endpoint": {
+      "url": "https://aport.io/api/task-delivery/mcp",
+      "observedStatus": 503,
+      "deployedExecutionVerified": false
+    },
+    "agents": {
+      "credentialPresent": false,
+      "modelAccessVerified": false,
+      "environmentAccessVerified": false
+    },
+    "cloud": {
+      "pinnedCliList": {
+        "tasks": [],
+        "cursor": null
+      },
+      "modelAccessVerified": false,
+      "environmentRepositoryVerified": false,
+      "newDispatchAvailable": false
+    },
+    "host": {
+      "browserCaptureInventoryAvailable": true,
+      "taskDeliveryInstalledToolsAvailable": false,
+      "actualSidebarPanelVerified": false
+    },
+    "aportPassport": {
+      "configuredAgentId": false,
+      "configuredApiKey": false,
+      "completionDecisionVerified": false
+    },
+    "paidProviderCalls": 0
+  },
+  "m6MandatoryGates": [
+    "human-merged M5 artifact/contracts pin in existing APort integration",
+    "actual deployed scoped OAuth/audience/region/repository/tool scans",
+    "actual Pages authenticated runtime binding, durable restart and scheduling",
+    "both hosted providers' enforced preparation, exact authorized model/environment access, implementation and correction PRs",
+    "Cloud environment-to-repository proof; public delegation only if demonstrated, otherwise trusted operator mode",
+    "actual fresh-account sidebar/panel/reconnect/account isolation and built shared UI",
+    "restricted reviewer access under existing shared campaign allowance",
+    "authentic screenshots/demo and working owner-selected legal/support pages",
+    "eligible APort publisher/project/org/domain verification",
+    "bounded G9 release kit with five positive and three negative cases"
+  ],
+  "criteria": [
+    {
+      "criterion_id": "ac-1",
+      "met": true,
+      "implementation": [
+        "lib/tasks.mjs",
+        "lib/openai_agents.mjs",
+        "lib/codex_cloud.mjs",
+        "package.json"
+      ],
+      "tests": [
+        "test/fixtures/plugin-installed-flow.mjs: installed documented imports preserve both providers",
+        "test/execution-preparation.test.mjs"
+      ],
+      "evidence": "Base 96e81031516bdf6663dd3b97ac39b8f57022568b contains M1–M4; transports and task service are reused"
+    },
+    {
+      "criterion_id": "ac-2",
+      "met": true,
+      "implementation": [
+        "package.json#exports",
+        "lib/tasks.mjs",
+        "lib/commands/task.mjs"
+      ],
+      "tests": [
+        "test/fixtures/plugin-installed-flow.mjs: installed imports and scoped API full local task/review/control flow"
+      ],
+      "evidence": "Actual tarball is installed in a clean consumer with NODE_PATH empty; documented imports resolve inside node_modules"
+    },
+    {
+      "criterion_id": "ac-3",
+      "met": true,
+      "implementation": [
+        "lib/task_delivery_contract.mjs",
+        "lib/task_delivery.mjs",
+        "lib/task_delivery_store.mjs",
+        "lib/task_delivery_mcp.mjs"
+      ],
+      "tests": [
+        "installed real MCP SDK dispatch/resource case",
+        "installed revision conflict, duplicate operation, __proto__ and lost-wake cases",
+        "test/task-delivery.test.mjs: scoped list limits and truncation depend only on currently authorized tasks",
+        "test/task-delivery.test.mjs and installed MCP: 205 repository keyset traversal, per-page reauthorization, revoked cursor, empty/exact-limit boundaries and invalid cursor refusal",
+        "test/task-delivery.test.mjs task list continuation after deleted cursor and revoked access; test/fixtures/plugin-installed-flow.mjs installed MCP 101-task pagination and cross-account cursor isolation"
+      ],
+      "evidence": "One TASK_OPERATIONS mapping; persisted scoped intent/signature/acknowledgement and per-call authorization"
+    },
+    {
+      "criterion_id": "ac-4",
+      "met": true,
+      "implementation": [
+        "lib/coordinator.mjs",
+        "lib/runtime_node.mjs",
+        "lib/execution.mjs"
+      ],
+      "tests": [
+        "installed process eviction case",
+        "installed duplicate owner and stale fence case",
+        "installed API/Cloud unknown-acceptance restart cases",
+        "test/runtime-delivery.test.mjs: both hosted transports force every startup batch, restart a nonzero-cursor sweep, preserve failed-advance checkpoints and never resubmit unknown intent",
+        "test/runtime-delivery.test.mjs: 36 retained history records and 25 active chains rotate in bounded batches across reconstructed coordinators, shrinking active sets and cancellations; entry startup still covers every batch",
+        "test/runtime-delivery.test.mjs: chain review cadence survives fast wakes, process restart, failed advances and GitHub failures while entry reconciliation continues; cancelled suffix cannot re-poll a visited prefix",
+        "test/runtime-delivery.test.mjs: delayed and repeated coordinator wakes revalidate the artifact pin under ownership before scheduling or task effects, release ownership on refusal and allow the matching runtime",
+        "test/runtime-delivery.test.mjs: both hosted startup keyset reconciliation cases remove the saved entry key between bounded wakes, retain forced reconciliation, restart safely and never resubmit"
+      ],
+      "evidence": "Killed native fixture owner is recovered; unresolved provider intent retains exactly one paid-work spy write"
+    },
+    {
+      "criterion_id": "ac-5",
+      "met": false,
+      "implementation": [
+        "lib/runtime_node.mjs#NODE_RUNTIME_REQUIREMENTS",
+        "docs/task-delivery.md"
+      ],
+      "tests": [
+        "installed actual Node imports and bounded canonical coordinator",
+        "browser bundle rejects node:child_process; portable modules bundle"
+      ],
+      "evidence": "2026-10-07 existing APort endpoint HTTP 503; actual Pages runtime/binding execution unavailable",
+      "remedy": "Keep Pages OAuth/MCP/UI; bind authenticated operations to one Node 22 durable coordinator and external scheduler, then demonstrate actual imports and bounded execution on deployment"
+    },
+    {
+      "criterion_id": "ac-6",
+      "met": true,
+      "implementation": [
+        "lib/task_delivery_view.mjs",
+        "lib/control_contract.mjs",
+        "lib/task_delivery_contract.mjs#uiResourceConfiguration",
+        "lib/task_delivery_mcp.mjs"
+      ],
+      "tests": [
+        "installed evidence/log/current PR/control flow",
+        "real SDK emitted resource fixture with global/thread metadata",
+        "inherited read-only tracker/provider projection conformance",
+        "test/fixtures/plugin-installed-flow.mjs: installed MCP capability model/text summaries supply repository and harness for task_prepare, preserve cost/control setup and schedule no provider work",
+        "test/task-delivery.test.mjs redacted question projection; test/fixtures/plugin-installed-flow.mjs installed MCP without UI asks and answers using only model-visible saved questions",
+        "test/task-delivery.test.mjs bounded redacted evidence/log summaries; test/fixtures/plugin-installed-flow.mjs installed MCP artifact/test observations and log-window metadata without raw model payloads"
+      ],
+      "evidence": "Saved views and bounded logs use cached current/result observations; no UI reconciliation call or provider poller"
+    },
+    {
+      "criterion_id": "ac-7",
+      "met": true,
+      "implementation": [
+        "lib/task_delivery.mjs",
+        "lib/task_delivery_store.mjs",
+        "lib/tasks.mjs",
+        "lib/task_delivery_mcp.mjs"
+      ],
+      "tests": [
+        "installed two-account foreign operations and hostile paths/endpoints",
+        "installed selected-context/output credential refusals",
+        "MCP tool/resource error secret exclusion",
+        "test/fixtures/plugin-installed-flow.mjs: installed scoped list and MCP results discover later authorized tasks and report authorized truncation"
+      ],
+      "evidence": "All requests reauthorize; schemas exclude paths/endpoints/credentials; scoped ownership and server-side redaction remain mandatory"
+    },
+    {
+      "criterion_id": "ac-8",
+      "met": true,
+      "implementation": [
+        "lib/commands/task.mjs",
+        "lib/control.mjs",
+        "lib/tasks.mjs",
+        "lib/runtime_state.mjs"
+      ],
+      "tests": [
+        "npm test",
+        "installed lifecycle/control/recovery/provider conformance",
+        "packed CLI --help test",
+        "test/chains.test.mjs: fast progress ticks retain chain review cadence, bound outage retries and reconcile on restart; ordinary daemon defaults remain unchanged"
+      ],
+      "evidence": "Version-1 registry/task/run/source shapes retained; optional SDK import is lazy; existing CLI/tracker suites pass"
+    },
+    {
+      "criterion_id": "ac-9",
+      "met": true,
+      "implementation": [
+        "lib/plugin_package.mjs",
+        "bin/package-plugin.mjs",
+        "templates/plugin/",
+        "npm-shrinkwrap.json"
+      ],
+      "tests": [
+        "test/plugin-package.mjs: two-build exact hashes and extracted payload hash audit",
+        "installed packager rebuild with retained shrinkwrap",
+        "test/plugin-package.test.mjs: source and installed Git root/HEAD/status failure, internal proof, source mismatch and modified/deleted/renamed payload cleanup regressions",
+        "test/plugin-package.test.mjs: untracked, ignored and deleted npm packaging controls refuse public output; actual npm pack proves nested ignore controls omit exports"
+      ],
+      "evidence": "One combined ZIP and npm runtime artifact; source/contracts/export/lock/payload/schema/asset SHA-256 manifests; LICENSE exact byte comparison"
+    },
+    {
+      "criterion_id": "ac-10",
+      "met": true,
+      "implementation": [
+        "lib/plugin_package.mjs#validatePublicRelease",
+        "bin/package-plugin.mjs"
+      ],
+      "tests": [
+        "test/plugin-package.mjs: missing metadata/example endpoint/built assets/public refusal",
+        "secret asset refusal removes partial output",
+        "test/plugin-package.test.mjs: source and installed Git root/HEAD/status failure, internal proof, source mismatch and modified/deleted/renamed payload cleanup regressions",
+        "test/plugin-package.test.mjs: internal packaging records npm controls without claiming public qualification",
+        "test/plugin-package.test.mjs: public URLs reject canonical loopbacks and aliases across every configured URL; asset preflight and builder share regular-file, size and secret constraints; CLI exits unsuccessfully for missing screenshots",
+        "test/plugin-package.test.mjs public URL matrix rejects canonical IPv4/IPv6 unspecified addresses and alternate spellings across all public URL fields",
+        "test/plugin-package.test.mjs private/link-local IPv4, IPv6 and mapped equivalents rejected across public URL fields"
+      ],
+      "evidence": "Internal classification and submissionReady:false emitted; public configuration errors are actionable"
+    },
+    {
+      "criterion_id": "ac-11",
+      "met": true,
+      "implementation": [
+        "lib/runtime_state.mjs",
+        "lib/task_delivery_contract.mjs#assertCompatible",
+        "bin/task-delivery-state.mjs"
+      ],
+      "tests": [
+        "installed synthetic 0.2.1 artifact install and 0.2.0 rollback",
+        "active runtime digest refusal",
+        "major/schema mismatch refusal",
+        "ancestor symlink/hash backup refusal",
+        "test/runtime-delivery.test.mjs: pre-registration preparation/readiness/cancellation/execution pins across check/migrate/backup/restore and idle updates",
+        "test/fixtures/plugin-installed-flow.mjs: installed preparation and readiness callbacks pin their runtime before implementation registration",
+        "test/runtime-delivery.test.mjs: idle backup requires old artifact, restore checks copied pin before output, invalid pins fail and legacy state remains compatible; installed patch rollback starts the restored coordinator",
+        "test/runtime-delivery.test.mjs canonical ledgers only, retained source lockfiles and exact process-lock exclusions; test/fixtures/plugin-installed-flow.mjs restored selected ledger-named/lock sources permit answer recovery"
+      ],
+      "evidence": "Intake and provider identity bytes preserved through actual installs and matching private backup restore; no active-job replacement"
+    },
+    {
+      "criterion_id": "ac-12",
+      "met": false,
+      "implementation": [
+        "test/plugin-package.mjs",
+        "test/fixtures/plugin-installed-flow.mjs",
+        "lib/harness.mjs"
+      ],
+      "tests": [
+        "42 installed consumer flow cases",
+        "installed local/API/Cloud provider and lifecycle conformance",
+        "inherited hosted bounded-preparation refusal cases"
+      ],
+      "evidence": "Clean actual artifacts and SDK/resource fixtures pass; both production hosted preparation capabilities are null, so complete hosted natural-language flows remain unavailable",
+      "remedy": "Implement and qualify an enforced native hosted preparation boundary without overriding capability gates; retain Cloud environment/repository block and obtain authorized exact model/environment access before full flow qualification"
+    },
+    {
+      "criterion_id": "ac-13",
+      "met": false,
+      "implementation": [
+        "docs/task-delivery.md",
+        "docs/audit/plugin-ready/plugin-delivery.json"
+      ],
+      "tests": [
+        "installed export/digest manifest",
+        "existing APort PR #414 lookup"
+      ],
+      "evidence": "https://github.com/aporthq/agent-passport/pull/414 is merged; this M5 branch candidate is not human-merged",
+      "remedy": "Human-review and merge M5; rebuild from that clean commit; pin the emitted digest/exports/contracts in the existing APort integration and reconcile its deployment"
+    },
+    {
+      "criterion_id": "ac-14",
+      "met": true,
+      "implementation": [
+        "docs/audit/plugin-ready/plugin-delivery.md",
+        "docs/audit/plugin-ready/plugin-delivery.json",
+        "docs/task-delivery.md"
+      ],
+      "tests": [
+        "all criterion pointers and final command summaries recorded in bounded index"
+      ],
+      "evidence": "Explicit unmet attestations and M6 deployed-runtime/live-provider/actual-host/publisher gates; APort publisher; no release approval"
+    }
+  ],
+  "verification": {
+    "commands": [
+      {
+        "command": "npm test",
+        "exitCode": 0,
+        "tests": 1435,
+        "pass": 1435,
+        "fail": 0,
+        "log": "/private/tmp/pr12-boundary-unit.log"
+      },
+      {
+        "command": "npm run lint",
+        "exitCode": 0,
+        "log": "/private/tmp/pr12-boundary-lint.log"
+      },
+      {
+        "command": "npm run test:plugin-package",
+        "exitCode": 0,
+        "consumerFlowTests": 42,
+        "installedConformanceTests": 467,
+        "fail": 0,
+        "log": "/private/tmp/pr12-boundary-package.log",
+        "consumerEvidence": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/task-plugin-consumer-D3VG4R/evidence.json",
+        "conformanceLog": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/task-plugin-consumer-D3VG4R/conformance.log"
+      },
+      {
+        "command": "git diff --check",
+        "exitCode": 0,
+        "output": "No output"
+      }
+    ],
+    "verifiedPayloadFiles": 142,
+    "logSha256": {
+      "/private/tmp/pr12-boundary-unit.log": "d5fe88c7487e6d97b005d64bdfc0a6a9a45ddc460be89a03eafe834947328f79",
+      "/private/tmp/pr12-boundary-lint.log": "2f32bd854b16ced20ab71be2afd3673b887efc4815c6e55ea7b941ebc5aa8a0b",
+      "/private/tmp/pr12-boundary-package.log": "89916f3985193d4fe5fcd2734944a06fb610bdd559ae1faa4758994bde38c2a0",
+      "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/task-plugin-consumer-D3VG4R/conformance.log": "a8ec0b60d9d769b4e125a57f5609c280d44349ccd3d08ea4872cba82c7a07a89"
+    },
+    "hostEvidence": false,
+    "fixturePurpose": "Deterministic unpaid installed-artifact compatibility; no actual installed host or live provider qualification",
+    "generatedOutputReview": [
+      "plugin.json and mcp.json validated against unchanged official portable schemas",
+      "ZIP has exactly LICENSE, fixture HTML, plugin.json, mcp.json, thin SKILL.md",
+      "Repeated builds match plugin/core/runtime/operation hashes",
+      "Every extracted runtime payload hash matches manifest; current source matches all 112 payload hashes",
+      "Installed builder uses published npm-shrinkwrap; fixture remains submissionReady:false"
+    ],
+    "sourceReviewRegressions": [
+      "stable control retries recognize current/history and refuse unknown interrupted receipt",
+      "scoped allowances persist across start/resume/fix and reject unknown local cost/duration",
+      "current-run UI/log projection and cached provider reads",
+      "serialized request secret rejection includes answer keys; selected context/output and MCP resource errors exclude credentials",
+      "backup root/ancestor symlink and all-hash preflight; private backup modes; active artifact pins",
+      "partial package output cleanup; exact emitted license; publishable dependency shrinkwrap",
+      "Git root/HEAD/status errors fail closed for public candidates; failed internal status leaves sourceVerified:false; source mismatch remains explicit",
+      "same runtime payload policy detects modified/deleted/renamed files; no-renames status retains both paths; failed candidates remove owned partial output",
+      "repository authorization precedes list cap and truncated count; 0/1/100/101 authorized records after 101 revoked records; actual installed MCP summary/UI metadata agree and reads schedule no work",
+      "active artifact pin includes preparing/validating intake, pending readiness, unsettled attempts and cancellations; canonical executionLive covers unknown acceptance and uncollected results",
+      "matching active backups/restores preserve identities; mismatched migration/backup refuses before pin/output changes; settled records still permit idle compatible updates",
+      "startup process identity remains pending across every bounded entry batch; new processes reset a nonzero cursor; failed advances retain checkpoint and release ownership; completed sweeps restore normal backoff without duplicate submission",
+      "capability discovery uses one optional cursor schema, bounded authorized keyset pages and explicit nextCursor/truncated fields; every page reauthorizes without store writes, provider probes or wake-ups",
+      "MCP model/text and UI capabilities retain authorized repository identity and configured harness setup, preparation, cost and controls through a public-field projection",
+      "active chain windows exclude done/cancelled/stopped history and rotate by durable name cursor; shrinking sets, restart and failure do not lose continuation or starve entry batches",
+      "canonical makeTick chain deadline is restored and checkpointed by the Node wrapper only after a successful chain pass; pending batches finish without revisiting a cancelled suffix; disabled/skipped chain passes preserve cursor/deadline and fast entry reconciliation continues",
+      "Backup and restore bind the copied runtime pin to the envelope artifact before output; locks release on refusal. Public source verification includes untracked, ignored and deleted npm controls and hidden payload directories; internal fixtures record them and failed builds remove partial output.",
+      "Public URL checks cover endpoint, metadata and all resource origins after URL canonicalization; preflight and emission share asset validation for every screenshot, UI and icon, including failure cleanup and CLI exit status.",
+      "The Node owner adapter revalidates pin identity before the portable schedule/advance envelope on every callback; model projections include only saved redacted question IDs/text across task responses and list summaries.",
+      "Runtime ledger recognition follows taskStore/context.executionFor canonical paths, including actual cloud.json; backup skips only owned intake/execution/publication/delivery lock paths and recovery directories, retaining selected repository snapshots verbatim.",
+      "Entry windows sort and continue by persisted key, commit only after successful advance and safely replay legacy numeric checkpoints; shared public URL validation rejects unspecified IPv4/IPv6 and mapped forms.",
+      "Evidence/log MCP projections explicitly allow bounded observed fields and exclude raw payloads; list keysets reauthorize on every page and expose continuation to model/text/UI; public URL checks reject private and link-local numeric hosts and mapped forms."
+    ]
+  },
+  "reviewFollowup": {
+    "historicalEvidence": "fcf16eae8184a91017894fa550e94de773507aa1:docs/audit/plugin-ready/plugin-delivery.json reviewFollowup",
+    "status": "Earlier follow-up evidence retained in Git history; current verification and external gates remain recorded here."
+  },
+  "runtimeReviewFollowup": {
+    "historicalEvidence": "0e0aaec0648267fbc7bfcc6636fbf2536b287bd7:docs/audit/plugin-ready/plugin-delivery.json runtimeReviewFollowup",
+    "status": "Prior runtime review evidence retained in Git history; current tests and external gates remain recorded here."
+  },
+  "discoveryReviewFollowup": {
+    "historicalEvidence": "f5104676f94f919551c1a59530f8d29f9b3ed13b:docs/audit/plugin-ready/plugin-delivery.json discoveryReviewFollowup",
+    "status": "Historical evidence preserved in Git; current verification and external gates retained here."
+  },
+  "cadenceReviewFollowup": {
+    "historicalEvidence": "1367d5f225e43168bb2ff005d8da326fda48aade:docs/audit/plugin-ready/plugin-delivery.json cadenceReviewFollowup",
+    "status": "Historical evidence preserved in Git; current verification and external gates retained here."
+  },
+  "backupReviewFollowup": {
+    "historicalEvidence": "79c894fe33f23253071350885148d53a75a2d475:docs/audit/plugin-ready/plugin-delivery.json backupReviewFollowup",
+    "status": "Historical evidence preserved in Git; current verification and external gates retained here."
+  },
+  "validationReviewFollowup": {
+    "historicalEvidence": "ccf2e4c95c69095670f0ee8c954647051d745081:docs/audit/plugin-ready/plugin-delivery.json validationReviewFollowup",
+    "status": "Historical evidence preserved in Git; current verification and external gates retained here."
+  },
+  "wakeQuestionReviewFollowup": {
+    "historicalEvidence": "379ed04d4ed784ab188bff5b918e4e53dcd8be1e:docs/audit/plugin-ready/plugin-delivery.json wakeQuestionReviewFollowup",
+    "status": "Historical evidence preserved in Git; current verification and external gates retained here."
+  },
+  "statePathReviewFollowup": {
+    "historicalEvidence": "1c5485d3433c0774c148c023baf46be855c2dcd8:docs/audit/plugin-ready/plugin-delivery.json statePathReviewFollowup",
+    "status": "Historical evidence preserved in Git; current verification and external gates retained here."
+  },
+  "entryKeysetReviewFollowup": {
+    "reviewId": 5442844014,
+    "reviewedCommit": "bd53fe333559b91fa56811d6ecb00acb6293a214",
+    "items": [
+      {
+        "commentId": 4207337329,
+        "implementation": [
+          "lib/runtime_node.mjs"
+        ],
+        "tests": [
+          "test/runtime-delivery.test.mjs both hosted startup keyset reconciliation survives removed entries and restarts a partial sweep"
+        ],
+        "rule": "Removing processed entries cannot skip the remaining startup reconciliation window"
+      },
+      {
+        "commentId": 4207337345,
+        "implementation": [
+          "lib/plugin_package.mjs"
+        ],
+        "tests": [
+          "test/plugin-package.test.mjs public URLs reject canonical loopbacks and aliases across every configured URL, including unspecified IPv4/IPv6 variants"
+        ],
+        "rule": "Public endpoints and resource origins must reject unspecified wildcard destinations"
+      }
+    ],
+    "focusedVerification": {
+      "tests": 43,
+      "pass": 43,
+      "fail": 0,
+      "log": "/tmp/plugin-delivery-keyset-focused.log"
+    },
+    "externalPrerequisites": "Previously observed unmet prerequisites retained; no unchanged live call retried and no installed-host/model-access evidence inferred from fixtures"
+  },
+  "evidenceListReviewFollowup": {
+    "historicalEvidence": "eaf86867631710a9a5e0ab8c64fe550842efd88f:docs/audit/plugin-ready/plugin-delivery.json evidenceListReviewFollowup"
+  },
+  "bindingHostReviewFollowup": {
+    "reviewId": 5443503659,
+    "reviewedCommit": "2efa7ff42eded325ea3e47b4a91b8a8748b42f1c",
+    "items": [
+      {
+        "commentId": 4207872651,
+        "implementation": "lib/task_delivery.mjs getContext",
+        "test": "test/fixtures/plugin-installed-flow.mjs installed delivery never narrows cached account bindings",
+        "rule": "Adapter-owned bindings and account limits must remain unchanged across reads, successful preparation and allowance rejection"
+      },
+      {
+        "commentId": 4207872666,
+        "implementation": "lib/plugin_package.mjs globalIpv4/globalIpv6",
+        "test": "test/plugin-package.test.mjs public URL matrix and global-address positive controls",
+        "rule": "Public numeric endpoints must identify global destinations; classify canonical IPv4, IPv6 and embedded IPv4 consistently"
+      }
+    ],
+    "initialFocusedAttempt": {
+      "log": "/tmp/plugin-global-focused.log",
+      "result": "Sandbox npm cache/log writes unavailable; required full source and installed suites rerun with approved permissions"
+    },
+    "externalPrerequisites": "Unchanged unavailable deployment and live provider/host evidence retained; no blocked call repeated"
+  },
+  "repositoryRestoreReviewFollowup": {
+    "reviewId": 5443760856,
+    "reviewedCommit": "67cc4ce91e63a6f29c4dda1a7dc9c76e04969cd0",
+    "items": [
+      {
+        "commentId": 4208086887,
+        "disposition": "Not reproduced: native non-recursive mkdirSync rejects existing paths before the cleanup block",
+        "test": "test/runtime-delivery.test.mjs restore and backup refuse existing outputs without modifying their contents"
+      },
+      {
+        "commentId": 4208086903,
+        "implementation": "lib/task_delivery_contract.mjs REPOSITORY_ID_SCHEMA; lib/task_delivery.mjs scope validation",
+        "test": "test/fixtures/plugin-installed-flow.mjs installed discovered repository IDs work for preparation and capability cursors",
+        "rule": "Every advertised repository ID must be accepted by preparation and discovery cursor schemas; unsupported adapter IDs fail closed"
+      },
+      {
+        "commentId": 4208086908,
+        "implementation": "lib/plugin_package.mjs publicLocalHost",
+        "test": "test/plugin-package.test.mjs public URL matrix .example namespace",
+        "rule": "Reserved example names cannot qualify public destinations"
+      }
+    ],
+    "initialFocusedAttempt": {
+      "log": "/tmp/plugin-repo-focused.log",
+      "result": "Sandbox process identity unavailable; full suites run with approved native process permissions"
+    },
+    "externalPrerequisites": "Unchanged unavailable deployment and live provider/host evidence retained; no blocked call repeated"
+  },
+  "canonicalBackupReviewFollowup": {
+    "historicalEvidence": "96b2cdad116ab4d1434e10480a877c77f738a5a2:docs/audit/plugin-ready/plugin-delivery.json canonicalBackupReviewFollowup",
+    "status": "Prior canonical backup path implementation and test evidence retained in Git history; current verification includes these regressions."
+  },
+  "controlsAndAssetsReviewFollowup": {
+    "historicalEvidence": "483626fe8d1f0202a8ddfdcd5210994ee8973821:docs/audit/plugin-ready/plugin-delivery.json controlsAndAssetsReviewFollowup",
+    "status": "Prior control projection and PNG validation implementation and regression evidence retained in Git history; current artifact verification remains above.",
+    "gateFalsePositive": {
+      "path": "npm-shrinkwrap.json",
+      "entry": "node_modules/safer-buffer.integrity",
+      "line": 1536,
+      "disposition": "Flagged sequence occurs inside legitimate dependency integrity; preserved unchanged. Gate owner must distinguish checksum data from placeholder prose."
+    }
+  },
+  "canonicalOperationReviewFollowup": {
+    "reviewId": 5449648639,
+    "commentId": 4213075674,
+    "evidence": "Commit 12e0650 records canonical signatures, legacy replay compatibility, regression tests and all failed/interrupted verification attempts; current runtime and installed suites above include those regressions."
+  },
+  "cancellationAndHostReview": {
+    "reviewId": 5449899041,
+    "comments": [
+      4213307607,
+      4213307615
+    ],
+    "rules": [
+      "Confirmed, dispatch-stopped cancellations may release an idle artifact pin; unresolved controls, intake and execution remain pinned.",
+      "Public URL fields reject home.arpa and subdomains after case and trailing-dot normalization."
+    ],
+    "tests": [
+      "test/runtime-delivery.test.mjs confirmed registry cancellations release the pin only after execution and controls settle",
+      "test/plugin-package.test.mjs public URLs reject canonical loopbacks and aliases across every configured URL"
+    ],
+    "focused": "/private/tmp/pr12-cancel-host-focused-approved.log: 48 passed",
+    "initialVerification": "Sandbox denied npm cache writes and process identification; normal escalation enabled the existing tests.",
+    "externalGates": "ac-5/ac-12/ac-13 remain unmet; earlier endpoint HTTP 503, unavailable hosted preparation and human-merged artifact evidence are unchanged."
+  },
+  "onionHostReview": {
+    "reviewId": 5450016167,
+    "commentId": 4213412353,
+    "implementation": "lib/plugin_package.mjs publicLocalHost",
+    "test": "test/plugin-package.test.mjs public URLs reject canonical loopbacks and aliases across every configured URL",
+    "coverage": "onion, subdomains, case and trailing dots across preflight and emission; source and installed modules",
+    "focused": "/private/tmp/pr12-onion-focused.log: passed"
+  },
+  "runtimeOwnerReview": {
+    "reviewId": 5450093464,
+    "comments": [
+      4213477774,
+      4213477779
+    ],
+    "implementation": [
+      "lib/task_delivery.mjs acquireDaemon/finally release",
+      "lib/plugin_package.mjs alt suffix"
+    ],
+    "tests": [
+      "test/fixtures/plugin-installed-flow.mjs installed preparation and readiness callbacks pin their runtime before implementation registration",
+      "installed delivery refuses maintenance ownership before saving intent and releases failed requests",
+      "test/plugin-package.test.mjs public URL preflight/emission matrix"
+    ],
+    "contract": "docs/task-delivery.md ownership, same-ID retry and enqueue-only scheduler"
+  },
+  "internalHostReview": {
+    "reviewId": 5450171576,
+    "commentId": 4213550796,
+    "evidence": "test/plugin-package.test.mjs public URL matrix: internal, subdomains, case/trailing dots; installed preflight/emission; ICANN 2024.07.29.06"
+  },
+  "deliveryPinReview": {
+    "reviewId": 5450247222,
+    "commentId": 4213619424,
+    "implementation": "lib/runtime_state.mjs runtimePinManifest/assertRuntimePin shared by delivery mutations and coordinator wakes",
+    "test": "test/fixtures/plugin-installed-flow.mjs installed delayed delivery mutations reject migrated or missing pins before intent and effects",
+    "coverage": "All mutation names, acknowledged replay, immutable captured manifest, missing pin, unchanged receipts/intake/registry/scheduler, lock cleanup and same-ID recovery",
+    "migration": "docs/task-delivery.md requires emitted manifest and scoped pin initialization; prior dispatcher callers must add both"
+  },
+  "repositorySummaryHostReview": {
+    "reviewId": 5450334556,
+    "commentIds": [
+      4213698317,
+      4213698324
+    ],
+    "implementation": [
+      "lib/plugin_package.mjs publicLocalHost",
+      "lib/task_delivery_view.mjs modelSummary"
+    ],
+    "tests": [
+      "test/plugin-package.test.mjs public URLs reject canonical loopbacks and aliases across every configured URL",
+      "test/task-delivery.test.mjs model repository identity is bounded and uses the redacted saved view",
+      "test/fixtures/plugin-installed-flow.mjs installed scoped list and MCP results discover later authorized tasks and report authorized truncation"
+    ]
+  },
+  "cliOutputReview": {
+    "reviewId": 5450490014,
+    "commentIds": [
+      4213820709,
+      4213820717
+    ],
+    "implementation": [
+      "lib/commands/task.mjs taskCommand acquires task mutation owner; pinned homes require delivery adapter",
+      "lib/runtime_state.mjs acquireMaintenance excludes daemon and CLI writers",
+      "lib/plugin_package.mjs buildPluginPackage uses shared canonicalPath before stage creation"
+    ],
+    "tests": [
+      "test/runtime-delivery.test.mjs CLI mutations exclude maintenance through async work and release ownership on failure",
+      "test/plugin-package.test.mjs package outputs cannot enter the source root through fresh paths or symlink aliases"
+    ],
+    "migration": "docs/task-delivery.md CLI namespace and package output requirements"
+  },
+  "runtimeLivenessReview": {
+    "reviewId": 5450627765,
+    "commentId": 4213943871,
+    "implementation": "lib/daemon.mjs acquireRuntimeOwner/readDaemon/assertDaemonUsable; runtime_state, runtime_node and task_delivery callers",
+    "tests": [
+      "test/recovery.test.mjs runtime ownership excludes daemon startup without claiming liveness or shutdown rights",
+      "test/recovery.test.mjs daemon startup polling refuses a runtime owner acquired after the initial check"
+    ],
+    "rule": "Runtime owners retain process exclusion without reporting daemon liveness; startup reports busy and down cannot signal maintenance",
+    "initialVerification": "Installed consumer control request exposed an overbroad busy check; narrowed refusal to startup and reran required checks. Initial log: /private/tmp/pr12-liveness-package-initial.log"
+  },
+  "legacyCliReceiptReview": {
+    "reviewId": 5450734332,
+    "commentIds": [
+      4214038980,
+      4214038991,
+      4214038995
+    ],
+    "implementation": [
+      "lib/runtime_state.mjs checkRuntimeState refuses first active pin",
+      "lib/daemon.mjs acquireCliMutation shared by CLI task, registry, chain, learning and local web controls",
+      "lib/task_delivery.mjs operation admission; lib/task_delivery_store.mjs byte bounds"
+    ],
+    "tests": [
+      "test/runtime-delivery.test.mjs active legacy namespaces cannot receive a first artifact pin",
+      "test/runtime-delivery.test.mjs top-level CLI mutations respect maintenance ownership and pinned namespaces",
+      "test/task-delivery.test.mjs delivery store size limits preserve saved receipts and reject oversized legacy reads",
+      "test/fixtures/plugin-installed-flow.mjs installed receipt capacity preserves old retries and refuses new effects"
+    ],
+    "limits": "256 operation IDs; 32 MiB store; retain retries, drain/archive before new namespace; no eviction or identity reuse",
+    "migration": "docs/task-delivery.md",
+    "initialVerification": "Focused first-pin test expected undefined for missing JSON; corrected to the existing reader null sentinel, then 40 focused tests passed."
+  },
+  "cancellationCapacityReview": {
+    "reviewId": 5450876015,
+    "commentId": 4214168931,
+    "implementation": [
+      "lib/task_delivery.mjs separate per-task cancellation receipts and retry scheduling",
+      "lib/task_delivery_store.mjs independent ordinary and cancellation byte budgets"
+    ],
+    "tests": [
+      "test/fixtures/plugin-installed-flow.mjs installed cancellation reserve survives full ordinary receipts and lost wake acknowledgements",
+      "test/task-delivery.test.mjs delivery store size limits preserve saved receipts and reject oversized legacy reads"
+    ],
+    "limits": "256 ordinary IDs / 32 MiB plus 256 compact cancellation IDs / 1 MiB; one cancellation per task; replay returns current authorized view; no receipt eviction",
+    "initialVerification": "Sandbox process identity check required normal escalation. Initial installed regression expected a boolean dispatch fence; corrected to the existing cancellation-requested sentinel."
+  },
+  "viewDnsReview": {
+    "reviewId": 5451026271,
+    "commentIds": [
+      4214308137,
+      4214308139,
+      4214308142
+    ],
+    "implementation": [
+      "lib/tasks.mjs saved errorCode projection",
+      "lib/task_delivery_view.mjs bounded recovery and brief/result/source artifact priority",
+      "lib/plugin_package.mjs normalized DNS label validation shared by all public URL inputs"
+    ],
+    "tests": [
+      "test/task-delivery.test.mjs blocked model summaries expose bounded redacted recovery without raw diagnostics",
+      "test/task-delivery.test.mjs implementation artifact identities survive source saturation in task and evidence views",
+      "test/fixtures/plugin-installed-flow.mjs installed MCP blocked mutations and inspection expose redacted recovery",
+      "test/plugin-package.test.mjs public URLs reject canonical loopbacks and aliases across every configured URL"
+    ],
+    "focusedTests": 44,
+    "scope": "No live host, model access or deployment evidence claimed; existing external gates unchanged."
+  },
+  "acknowledgementListReview": {
+    "reviewId": 5451106432,
+    "commentIds": [
+      4214383046,
+      4214383051
+    ],
+    "implementation": [
+      "lib/task_delivery.mjs reserves 4 KiB before ordinary effects and saves compact task acknowledgements",
+      "lib/task_delivery_view.mjs taskListSummary; lib/task_delivery_mcp.mjs list-only projection"
+    ],
+    "tests": [
+      "test/fixtures/plugin-installed-flow.mjs installed acknowledgement admission precedes effects and preserves task discovery near byte capacity",
+      "test/fixtures/plugin-installed-flow.mjs installed MCP without UI exposes saved questions and answers using model-visible fields",
+      "test/task-delivery.test.mjs task list summaries stay compact with saturated question pages"
+    ],
+    "focusedTests": 18,
+    "initialInstalledFailure": "Historical signature fixture lacked its saved legacy snapshot after compact receipts were introduced; restored that snapshot and separately asserted current-view replay. Initial log: /private/tmp/pr12-ack-list-package-initial.log",
+    "compatibility": "Existing snapshot receipts replay; new compact receipts reauthorize and inspect current task state without repeating effects. Legacy pending intents reserve before recovery. Cancellation reserve remains separate.",
+    "scope": "External deployment, hosted-flow and post-merge evidence remain unmet."
+  },
+  "pendingReceiptPinReview": {
+    "reviewId": 5451199641,
+    "commentId": 4214476738,
+    "implementation": "lib/runtime_state.mjs deliveryPath and checkRuntimeState ordinary/cancellation receipt liveness",
+    "tests": "test/runtime-delivery.test.mjs pending delivery receipts pin migration before intake and through wake acknowledgement",
+    "focusedTests": 26,
+    "coverage": "Intent and wakePending acknowledgements, unknown status, both receipt maps, same-artifact recovery, refused repinning, unchanged state, lock cleanup, backup/restore, unpinned legacy state, settled migration, snapshot path exclusion; also executed in installed conformance.",
+    "scope": "Previously recorded deployment, hosted-flow and post-merge evidence gates remain unmet."
+  },
+  "daemonPinReview": {
+    "reviewId": 5451351519,
+    "commentId": 4214634297,
+    "implementation": [
+      "lib/daemon.mjs acquireDaemon checks pin under ownership and shares assertUnpinnedHome with CLI writes",
+      "lib/commands/up.mjs upInBackground checks before spawning and while polling"
+    ],
+    "tests": "test/recovery.test.mjs ordinary daemon startup refuses pinned homes before effects and releases ownership",
+    "focusedTests": 55,
+    "coverage": "Direct acquireDaemon, foreground up, background startup and pin-after-preflight polling; invalid/falsy pin contents; unchanged pin and no health writes; lock cleanup; runtime owner retained; ordinary unpinned daemon positive control; installed conformance.",
+    "scope": "Existing deployment, hosted-flow and post-merge evidence gates remain unmet."
+  },
+  "cancellationRecoveryReview": {
+    "reviewId": 5451459582,
+    "commentId": 4214742823,
+    "implementation": "lib/task_delivery.mjs cancellation intent retry uses canonical requestControl with deterministic request identity",
+    "tests": "test/fixtures/plugin-installed-flow.mjs installed cancellation retries recover crashes before registry writes and receipt acknowledgement",
+    "coverage": "Crash after intent save before registry write; registry write before receipt acknowledgement; matching control in history; exact retry, signature conflict, replacement ID refusal, no duplicate dispatch, acknowledgement and ownership cleanup. Other controls retain DELIVERY_UNKNOWN ambiguity refusal.",
+    "scope": "Existing deployment, hosted-flow and post-merge evidence gates remain unmet."
+  },
+  "outcomeAndPackingReview": {
+    "historicalEvidence": "c105dc34a41cc0ecffac7219143ac902e0b54605:docs/audit/plugin-ready/plugin-delivery.json outcomeAndPackingReview"
+  },
+  "archiveAndIntentProofReview": {
+    "historicalEvidence": "efc114f135b987d425de5dd1e69101bc13845c87:docs/audit/plugin-ready/plugin-delivery.json archiveAndIntentProofReview"
+  },
+  "dispatchAndBundleCompletenessReview": {
+    "historicalEvidence": "6803ff3da84132ae2dc357ad571b8ee14eb02dd3:docs/audit/plugin-ready/plugin-delivery.json dispatchAndBundleCompletenessReview"
+  },
+  "rejectedIntentReview": {
+    "historicalEvidence": "2774a5548d3264b0cb173f91a5e49b8490723398:docs/audit/plugin-ready/plugin-delivery.json rejectedIntentReview"
+  },
+  "serviceOwnershipReview": {
+    "historicalEvidence": "add1fa04ecb02c4aa2ffa25b8a416d409cfa4f03:docs/audit/plugin-ready/plugin-delivery.json serviceOwnershipReview"
+  },
+  "initialAllowanceAndPrepareReview": {
+    "historicalEvidence": "eaf86867631710a9a5e0ab8c64fe550842efd88f:docs/audit/plugin-ready/plugin-delivery.json initialAllowanceAndPrepareReview"
+  },
+  "completePayloadAndMcpRejectionReview": {
+    "historicalEvidence": "0a813bf4bdcb3d2cbdafa17cff3140efc3950f10:docs/audit/plugin-ready/plugin-delivery.json completePayloadAndMcpRejectionReview"
+  },
+  "coordinatorWakeReview": {
+    "historicalEvidence": "a2e868bf4a448d58b690bac3c987a733e9966e94:docs/audit/plugin-ready/plugin-delivery.json coordinatorWakeReview"
+  },
+  "learningSnapshotAndTimeoutReview": {
+    "historicalEvidence": "386abd52d590df1c41607f9723f11a973aa2c796:docs/audit/plugin-ready/plugin-delivery.json learningSnapshotAndTimeoutReview"
+  },
+  "preparationBoundaryReview": {
+    "reviewId": 5460779651,
+    "comments": [
+      4222375848
+    ],
+    "implementation": [
+      "lib/tasks.mjs public validate/start beforeTaskEffects boundary checks",
+      "lib/task_delivery_contract.mjs settled preparation boundary code allowlist"
+    ],
+    "tests": [
+      "test/fixtures/plugin-installed-flow.mjs installed preparation boundary refusals settle validate and start intents without effects"
+    ],
+    "coverage": "Unsafe legacy preparation receipts reject before task mutation, readiness or dispatch; exact retries replay acknowledged refusals with safe remedies; a new resume records the blocked task without pending-intent deadlock; settled state does not pin migration. Shared internal checks remain unmarked because they can follow preparation effects."
+  }
+}

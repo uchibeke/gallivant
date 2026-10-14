@@ -1,12 +1,47 @@
 {
   "name": "gallivant",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Write a PRD, mark it ready, go outside. Keeps coding-agent pull requests moving through review and CI without you.",
   "type": "module",
-  "bin": { "gallivant": "bin/gallivant.mjs" },
-  "exports": { ".": "./lib/tasks.mjs", "./tasks": "./lib/tasks.mjs", "./context": "./lib/context.mjs", "./execution": "./lib/execution.mjs", "./execution-result": "./lib/execution_result.mjs", "./lib/*": "./lib/*", "./package.json": "./package.json" },
-  "files": ["bin", "lib", "templates", "README.md", "LICENSE", "docs/*.md"],
-  "engines": { "node": ">=22" },
+  "bin": {
+    "gallivant": "bin/gallivant.mjs",
+    "task-delivery-package": "bin/package-plugin.mjs",
+    "task-delivery-state": "bin/task-delivery-state.mjs"
+  },
+  "exports": {
+    ".": "./lib/tasks.mjs",
+    "./tasks": "./lib/tasks.mjs",
+    "./context": "./lib/context.mjs",
+    "./execution": "./lib/execution.mjs",
+    "./execution-result": "./lib/execution_result.mjs",
+    "./capabilities": "./lib/capabilities.mjs",
+    "./task-delivery": "./lib/task_delivery.mjs",
+    "./task-delivery/contracts": "./lib/task_delivery_contract.mjs",
+    "./task-delivery/views": "./lib/task_delivery_view.mjs",
+    "./task-delivery/store": "./lib/task_delivery_store.mjs",
+    "./task-delivery/mcp": "./lib/task_delivery_mcp.mjs",
+    "./runtime/coordinator": "./lib/coordinator.mjs",
+    "./runtime/node": "./lib/runtime_node.mjs",
+    "./runtime/state": "./lib/runtime_state.mjs",
+    "./providers/openai-agents": "./lib/openai_agents.mjs",
+    "./providers/codex-cloud": "./lib/codex_cloud.mjs",
+    "./plugin-package": "./lib/plugin_package.mjs",
+    "./lib/*": "./lib/*",
+    "./package.json": "./package.json",
+    "./runtime/node/dependencies": "./lib/runtime_dependencies.mjs"
+  },
+  "files": [
+    "bin",
+    "lib",
+    "templates",
+    "README.md",
+    "LICENSE",
+    "docs/*.md",
+    "npm-shrinkwrap.json"
+  ],
+  "engines": {
+    "node": ">=22"
+  },
   "scripts": {
     "test": "node --test test/*.test.mjs",
     "test:learning": "node --test test/learning.test.mjs test/learning-openssh.test.mjs test/learning-dispatch.test.mjs",
@@ -14,15 +49,46 @@
     "test:execution-backends": "node --test test/execution-backends.test.mjs test/execution-preparation.test.mjs test/probe.test.mjs test/chains.test.mjs test/loop.test.mjs test/recovery.test.mjs test/review.test.mjs test/control.test.mjs test/tracker_controls.test.mjs test/tracker.test.mjs test/public_format.test.mjs test/public_output.test.mjs",
     "test:openai-agents": "node --test test/openai-agents.test.mjs",
     "test:openai-agents:live": "node test/openai-agents-live.mjs",
+    "test:openai-agents:preparation:live": "node test/openai-agents-preparation-live.mjs",
     "test:codex-cloud": "node --test test/codex-cloud.test.mjs && node --test --test-name-pattern='codex-cloud|result publication validates|verified publication recovery|failed remote verification|deterministic publication rejection|interrupted verification' test/execution-backends.test.mjs",
     "test:codex-cloud:live": "node test/codex-cloud-live.mjs",
     "test:task-intake": "node --test test/task-intake.test.mjs",
     "test:live-harnesses": "node test/live-harnesses.mjs",
-    "lint": "node --check bin/gallivant.mjs && for f in lib/*.mjs lib/*/*.mjs; do node --check \"$f\" || exit 1; done"
+    "test:plugin-package": "node test/plugin-package.mjs",
+    "package:plugin": "node bin/package-plugin.mjs",
+    "lint": "node --check bin/gallivant.mjs && node --check bin/package-plugin.mjs && node --check bin/task-delivery-state.mjs && for f in lib/*.mjs lib/*/*.mjs; do node --check \"$f\" || exit 1; done"
   },
-  "keywords": ["claude-code", "codex", "pull-request", "autonomous", "agent", "aport"],
+  "keywords": [
+    "claude-code",
+    "codex",
+    "pull-request",
+    "autonomous",
+    "agent",
+    "aport"
+  ],
   "license": "Apache-2.0",
-  "repository": { "type": "git", "url": "https://github.com/uchibeke/gallivant.git" },
-  "dependencies": { "smol-toml": "1.9.0" },
-  "bundledDependencies": ["smol-toml"]
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/uchibeke/gallivant.git"
+  },
+  "dependencies": {
+    "ajv": "8.20.0",
+    "pngjs": "7.0.0",
+    "smol-toml": "1.9.0"
+  },
+  "peerDependencies": {
+    "@modelcontextprotocol/sdk": "1.32.1"
+  },
+  "peerDependenciesMeta": {
+    "@modelcontextprotocol/sdk": {
+      "optional": true
+    }
+  },
+  "devDependencies": {
+    "@modelcontextprotocol/sdk": "1.32.1",
+    "esbuild": "0.28.2"
+  },
+  "bundledDependencies": [
+    "smol-toml"
+  ]
 }
