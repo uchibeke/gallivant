@@ -259,6 +259,12 @@ manifest and must be migrated before enabling its coordinator.
 Verify store consistency before switching bindings. Keep old runtime artifacts
 and credential bindings available for rollback; do not merge/upgrade live jobs.
 
+A qualified `delivery_ready` handoff releases its runtime pin even while its
+retained registry state is `ready-for-human`. Pending controls, live or uncollected
+execution, unresolved intake/receipts and active chains still prevent migration.
+Legacy tasks, `integrated` tasks awaiting merge and unresolved `needs-human` work
+retain their pins; the scheduling pause alone does not make a namespace idle.
+
 Package config supplies publisher `APort`, exact endpoint, `resource` configuration,
 owner-selected support email/product/support/privacy/terms/license URLs and explicit
 asset paths (`assets.ui`, `assets.icon`, `assets.screenshots`). The emitted combined
