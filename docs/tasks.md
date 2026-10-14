@@ -16,13 +16,27 @@ completion-gate evidence; a provider statement cannot fulfill it.
 
 This first recognizer supports one unqualified `open/create/raise/submit` review-PR
 clause outside quoted text/code. It is not a general natural-language permission
-parser. Conditions, approval prerequisites, destination qualifiers, multiple PRs
-and delivery-only requests return `TASK_DELIVERY_SCOPE` before inference. Unquoted
-publication mentions outside that grammar also require clarification; they never
-become impossible provider obligations. Some
-implementation-only uses of conditional language in a publication-bearing request,
-or lifecycle/artifact words such as “local,” “review,” “push,” “diff” or “patch” in later answers, also need
-clarification; the recognizer deliberately does not guess their scope.
+parser. Conditional or negated publication clauses, owner approval prerequisites,
+destination qualifiers, multiple PRs and delivery-only requests return
+`TASK_DELIVERY_SCOPE` before inference. Unsupported publication actions also
+require clarification; they never become impossible provider obligations.
+Initial requests and later answers share the same bounded directive checks.
+Local-only, no-push, task-hold or patch-only directions cannot silently fall back
+to the default review-PR workflow.
+
+Implementation subjects such as a PR status badge, pull-request template,
+published articles, local storage, commit SHA, diff viewer or branch selection
+remain ordinary requirements. Technical conditions also remain implementation
+scope: `If name is empty, return friend. Open a PR for review.` and the answer
+`Commit the database transaction after validation.` are supported. By contrast,
+`Wait for my approval. Open a PR for review.` requires clarification before work.
+Local conditions attached to publication are still refused; the parser does not
+guess that a comma or semicolon ended a prohibition or approval requirement.
+
+Keep every feature requirement and restriction, and state publication separately
+when needed. Quoted literal labels/code remain implementation data. If local-only
+or patch-only output is required, do not authorize this review-PR workflow or
+remove the restriction to bypass clarification.
 Clarify the complete task with the owner and submit it under a new operation ID;
 never delete a condition just to pass validation. Answers may refine implementation
 but cannot silently replace publication ownership or add a publication prerequisite.
@@ -237,6 +251,10 @@ records GitHub's observed head, merge commit and timestamps. It is observational
 evidence, not a provider's self-report or a newly signed completion credential.
 Legacy tasks retain their workflow behavior and receive no invented evidence.
 A skipped completion gate cannot claim a fulfilled target.
+A qualified, stopped handoff can release its artifact pin for a compatible idle
+runtime update. Pending controls, live/uncollected execution, unresolved receipts,
+intake or chains still block migration independently; evidence and saved intent
+are preserved without rewriting the historical workflow state.
 
 Keep implementation acceptance separate from coordinator publication. For example,
 a host can prepare a greeting change with the complete behavior, native Node test,

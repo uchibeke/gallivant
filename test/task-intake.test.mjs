@@ -79,6 +79,41 @@ test("publication ambiguity is a durable acknowledged no-effects refusal and exa
   assert.equal(calls, 0); assert.equal(w.ctx.state.entries().length, 0);
 });
 
+test("initial local-only instructions are acknowledged before preparation, readiness or provider work", async () => {
+  const w = world(), scope = { tenant: "alice", account: "alice", environment: "preview", region: "US", scopes: ["task-delivery:read", "task-delivery:write"], repositories: ["widget"] };
+  const manifest = { coreVersion: CORE_VERSION, coreSha256: "a".repeat(64), operationVersion: 1, taskVersion: 1, executionVersion: 1 };
+  migrateRuntimeState({ home: w.home, manifest });
+  const store = createDeliveryStore(join(w.home, "delivery")); let calls = 0;
+  const delivery = createTaskDelivery({ manifest, authorize: async () => scope, store,
+    contextFor: async () => ({ ctx: w.ctx, repository: { dir: w.checkout, repo: "acme/widget" }, taskOptions: {
+      prepare: async () => { calls++; assert.fail("local-only refusal cannot spend on preparation"); },
+      decideReady: () => assert.fail("local-only refusal cannot evaluate readiness"),
+    } }), schedule: () => assert.fail("local-only refusal cannot schedule") });
+  for (const [index, text] of ["Implement export. Keep the change local.", "Implement export. Do not push.", "Implement export. Return a patch only.", "Implement export, keep the change local, and open a PR for review."].entries()) {
+    const args = { repositoryId: "widget", text, harness: "codex", allowance: { budgetUsd: 1, runtimeMs: 60000 }, operationId: "local-only-" + index, expectedRevision: 0 };
+    for (let i = 0; i < 2; i++) await assert.rejects(delivery.dispatch("prepare", args, "alice"), error => {
+      assert.equal(error.code, "TASK_DELIVERY_SCOPE"); assert.equal(taskRejectionForModel(error)?.code, "TASK_DELIVERY_SCOPE"); return true;
+    });
+  }
+  const receipts = Object.values(store.read(scope).operations);
+  assert.equal(receipts.length, 4); assert.ok(receipts.every(receipt => receipt.status === "acknowledged" && receipt.rejection.code === "TASK_DELIVERY_SCOPE"));
+  assert.equal(calls, 0); assert.deepEqual(w.ctx.state.entries(), []);
+});
+
+test("implementation lifecycle nouns reach ordinary preparation without changing delivery authority", async () => {
+  let calls = 0;
+  const w = world({ prepare: async (_ctx, task) => { calls++; return JSON.stringify(draftFor(task)); } });
+  for (const text of ["Add local storage.", "Add a review dashboard.", "Display commit SHA in diagnostics.", "Fix the diff viewer.", "Add branch selection."]) {
+    const prepared = await w.service.prepare({ text });
+    assert.equal(prepared.status, "ready", text);
+    const saved = taskStore(w.home).read(prepared.taskId);
+    assert.equal(saved.original, text);
+    assert.ok(saved.output.criteria.some(criterion => criterion.text.includes(text)), "the implementation noun remains authoritative");
+    assert.equal(saved.completion.target, "delivery_ready");
+  }
+  assert.equal(calls, 5);
+});
+
 test("a conflicting delivery answer leaves its question, revision and preparation budget untouched", async () => {
   const w = world({ prepare: async (_ctx, task) => JSON.stringify(draftFor(task, { question: true })) });
   const first = await w.service.prepare({ text: "Implement export. Open a PR for review." });
@@ -104,6 +139,25 @@ test("an implicit review workflow refuses delivery changes before effects but ac
   assert.deepEqual(w.ctx.state.entries(), []);
   const answered = await w.service.answer({ taskId: first.taskId, expectedRevision: first.revision, operationId: "product-refinement", answers: { "q-r-1": "Use JSON only." } });
   assert.match(answered.draft.text, /Use JSON only/);
+});
+
+test("technical conditions and PR feature subjects survive actual preparation and answers", async () => {
+  for (const text of ["If name is empty, return friend. Open a PR for review.", "Update the pull request template to require changelog entries.", "Fix parsing of PR titles.", "Add a list of published articles."]) {
+    const w = world(), prepared = await w.service.prepare({ text });
+    assert.equal(prepared.status, "ready", text);
+    const saved = taskStore(w.home).read(prepared.taskId);
+    assert.equal(saved.original, text);
+    assert.ok(saved.output.criteria.some(criterion => criterion.text.includes(text.split(". Open a PR")[0])), "original behavior remains provider scope");
+  }
+  for (const answer of ["Use local time for display.", "Preserve branch sorting order.", "Commit the database transaction after validation.", "Update the pull request template to require changelog entries."]) {
+    const w = world({ prepare: async (_ctx, task) => JSON.stringify(draftFor(task, { question: true })) });
+    const first = await w.service.prepare({ text: REQUEST });
+    assert.equal(first.status, "needs-input");
+    const answered = await w.service.answer({ taskId: first.taskId, expectedRevision: first.revision, operationId: "technical-answer", answers: { "q-r-1": answer } });
+    assert.ok(answered.draft.text.includes(answer), answer);
+  }
+  const w = world({ prepare: async () => assert.fail("owner approval prerequisite cannot spend") });
+  await assert.rejects(w.service.prepare({ text: "Wait for my approval. Open a PR for review." }), { code: "TASK_DELIVERY_SCOPE", taskEffects: "none" });
 });
 
 test("publication punctuation and courtesy never become planner requirements", async () => {

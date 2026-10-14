@@ -27,6 +27,36 @@ test("quoted/code examples never create publication authority", () => {
     assert.equal(ownerDelivery(source), null);
 });
 
+test("initial requests cannot contradict the default publication workflow", () => {
+  for (const instruction of ["Keep the change local", "Do not push", "Don't commit", "Return a patch only", "Show diff only", "Wait for my review", "Pause the task", "Withhold the changes"]) {
+    for (const source of ["Implement export. " + instruction + ".", "Implement export, " + instruction + ", and open a PR for review."])
+      assert.throws(() => ownerDelivery(source), { code: "TASK_DELIVERY_SCOPE" }, source);
+  }
+  assert.equal(ownerDelivery('Render the literal labels "local", "patch" and "review".'), null);
+  assert.ok(ownerDelivery('Render "Keep the change local". Open a PR for review.'));
+});
+
+test("implementation nouns are not lifecycle instructions in initial requests or answers", () => {
+  const task = { completion: { version: 1, target: "delivery_ready" } };
+  for (const source of ["Add local storage.", "Keep local storage working.", "Add a review dashboard.", "Display commit SHA in diagnostics.", "Fix the diff viewer.", "Add branch selection.", "Implement export. Scope: aporthq/task-delivery-onboarding-qualification only."]) {
+    assert.equal(ownerDelivery(source), null, source);
+    assert.doesNotThrow(() => assertDeliveryAnswer(task, source), source);
+    assert.ok(ownerDelivery(source.replace(/ Scope:.*$/, "") + " Open a PR for review."), source);
+  }
+});
+
+test("publication subjects and technical conditions remain implementation scope", () => {
+  const task = { completion: { version: 1, target: "delivery_ready" } };
+  for (const source of ["Add a PR status badge.", "Build a pull-request dashboard.", "Update the pull request template to require changelog entries.", "Fix parsing of PR titles.", "Add a list of published articles.", "Use local time for display.", "Preserve branch sorting order.", "Commit the database transaction after validation."]) {
+    assert.equal(ownerDelivery(source), null, source);
+    assert.doesNotThrow(() => assertDeliveryAnswer(task, source), source);
+  }
+  const text = "If name is empty, return friend. Open a PR for review.";
+  assert.equal(ownerImplementation(ownerDelivery(text)).join("").trim(), "If name is empty, return friend.");
+  for (const source of ["Wait for my approval. Open a PR for review.", "Implement export. Do not proceed until I approve.", "Implement export. My approval is required.", "Implement export. My approval is required. Open a PR.", "Implement export. Publish the changes.", "Implement export. Send a PR for review.", "Implement export. Open a pull-request.", "Implement export. Only if tests pass open a PR."]) assert.throws(() => ownerDelivery(source), { code: "TASK_DELIVERY_SCOPE" }, source);
+  for (const answer of ["Wait for my approval.", "Do not proceed until I approve.", "My confirmation is required.", "Skip publication.", "No PR should be created.", "Send it for review."]) assert.throws(() => assertDeliveryAnswer(task, answer), { code: "TASK_DELIVERY_SCOPE" }, answer);
+});
+
 test("ambiguous, conditional, qualified and delivery-only requests refuse before planning", () => {
   for (const source of [
     "Please open one pull request for review.", "Open a PR.", "Open a PR; do not merge or release.",

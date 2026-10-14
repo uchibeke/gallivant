@@ -73,6 +73,46 @@ test("settled preparation, completed cancellation and collected execution allow 
   assert.equal(readJson(join(home, "runtime-pin.json")).coreSha256, update.coreSha256);
 });
 
+test("qualified handoff releases the runtime pin only after every independent owner is idle", async t => {
+  const id = "acme/widget/finished", head = "c".repeat(40);
+  const ready = () => ({ state: "ready-for-human", repo: "acme/widget", base: "main", pr: 3, cursor: { fixed_sha: head },
+    task: { completion: { version: 1, target: "delivery_ready" } },
+    completionEvidence: { delivery: { repository: "acme/widget", base: "main", pr: 3, head, gate: { allow: true } } } });
+  for (const scenario of ["idle", "queued", "applying", "running", "uncollected", "legacy", "integrated", "unknown-policy", "missing-proof", "missing-repository", "missing-base", "mismatched-proof", "malformed-owner", "receipt", "intake", "ledger", "start", "chain", "paused", "done-control"]) await t.test(scenario, () => {
+    const home = tempHome(); migrateRuntimeState({ home, manifest });
+    const entry = ready(), state = { version: 1, entries: { [id]: entry } };
+    if (["queued", "applying"].includes(scenario)) entry.control = { action: "recheck", status: scenario };
+    if (scenario === "running") entry.execution = { ...remote, providerState: "running", collected: false };
+    if (scenario === "uncollected") entry.execution = { ...remote, collected: false };
+    if (scenario === "legacy") delete entry.task;
+    if (scenario === "integrated") entry.task.completion.target = "integrated";
+    if (scenario === "unknown-policy") entry.task.completion.version = 2;
+    if (scenario === "missing-proof") delete entry.completionEvidence;
+    if (scenario === "missing-repository") { delete entry.repo; delete entry.completionEvidence.delivery.repository; }
+    if (scenario === "missing-base") { delete entry.base; delete entry.completionEvidence.delivery.base; }
+    if (scenario === "mismatched-proof") entry.completionEvidence.delivery.pr = 4;
+    if (scenario === "malformed-owner") entry.task.ownerDelivery = { version: 1, source: "broken" };
+    if (scenario === "paused") { entry.state = "needs-human"; entry.reason = "budget"; }
+    if (scenario === "done-control") { entry.state = "done"; entry.control = { action: "recheck", status: "queued" }; }
+    if (scenario === "start") state.starts = { another: { status: "pending" } };
+    if (scenario === "chain") state.chains = { another: { status: "active" } };
+    writeJsonAtomic(join(home, "state.json"), state);
+    if (scenario === "receipt") writeJsonAtomic(join(home, "delivery", "d".repeat(64), "delivery.json"), { version: 1, operations: { pending: { status: "intent" } } });
+    if (scenario === "intake") writeJsonAtomic(join(home, "tasks", taskId, "intake.json"), { version: 1, status: "preparing", attempts: [] });
+    if (scenario === "ledger") writeJsonAtomic(join(home, "runs", "finished", "execution.json"), { version: 1, current: { execution: { ...remote, collected: false } }, operations: {} });
+    const before = readFileSync(join(home, "state.json")), pin = readFileSync(join(home, "runtime-pin.json"));
+    assert.equal(checkRuntimeState({ home, manifest }).active, scenario !== "idle");
+    if (scenario === "idle") {
+      migrateRuntimeState({ home, manifest: update });
+      assert.equal(readJson(join(home, "runtime-pin.json")).coreSha256, update.coreSha256);
+    } else {
+      assert.throws(() => migrateRuntimeState({ home, manifest: update }), { code: "RUNTIME_ACTIVE_PIN" });
+      assert.deepEqual(readFileSync(join(home, "runtime-pin.json")), pin);
+    }
+    assert.deepEqual(readFileSync(join(home, "state.json")), before, "migration never rewrites delivery evidence or control intent");
+  });
+});
+
 test("confirmed registry cancellations release the pin only after execution and controls settle", async () => {
   const home = tempHome(), state = makeState(home), id = "acme/widget/cancelled";
   migrateRuntimeState({ home, manifest });
