@@ -21,8 +21,9 @@ function world(t, target = "integrated", overrides = {}) {
   const gh = fakeGh({ pr: prFixture({ body: "Adds export.\n" + receipt, statusCheckRollup: [checkRun({ name: "test", conclusion: "SUCCESS" })] }),
     reviews: [review({ id: 2, by: BOT, bot: true, at: at(3), body: "**Reviewed commit:** `a1b2c3d`" })] });
   const runner = fakeRunner(clock), notify = fakeNotify();
-  const tick = makeTick({ config: { ...CONFIG, deliverable: { ...CONFIG.deliverable, evaluator: "local" } }, state, gh, git: fakeGit(), notify, log: silentLog, clock, ownLogin: "me", runnerFor: () => runner, readPrd: () => GOOD_PRD, credential: fakeCredential(), identity: fakeIdentity() });
-  return { state, id, clock, gh, runner, notify, tick, entry: () => state.get(id), view: () => completionView(null, state.get(id)) };
+  const deps = { config: { ...CONFIG, deliverable: { ...CONFIG.deliverable, evaluator: "local" } }, state, gh, git: fakeGit(), notify, log: silentLog, clock, ownLogin: "me", runnerFor: () => runner, readPrd: () => GOOD_PRD, credential: fakeCredential(), identity: fakeIdentity() };
+  const tick = makeTick(deps);
+  return { state, id, clock, gh, runner, notify, tick, deps, entry: () => state.get(id), view: () => completionView(null, state.get(id)) };
 }
 test("completion schemas advertise only supported portable milestones and never merge authority", () => {
   assert.deepEqual(completionPolicy(), { version: 1, target: "delivery_ready" });
@@ -44,6 +45,32 @@ test("fulfilled delivery-ready stops automatic provider/GitHub observation and l
   w.runner.reconcile = async () => assert.fail("fulfilled delivery target must not poll the provider");
   await w.tick.tick(); await w.tick.tickEntry(w.id, w.entry());
   assert.deepEqual(w.entry(), saved); assert.equal(w.runner.started.length, 0);
+});
+test("qualified handoff cannot stop live or uncollected execution, but settled history can", async t => {
+  const w = world(t, "delivery_ready"); await w.tick.tick();
+  const settled = { version: 1, provider: "openai-agents", transport: "remote", acceptance: "accepted", providerJobId: "job", turnId: "turn", providerState: "succeeded", collected: true };
+  for (const change of [{ providerState: "running" }, { collected: false }, { acceptance: "unknown" }, { turnId: null }]) {
+    const entry = { ...w.entry(), execution: { ...settled, ...change } };
+    assert.equal(coordinatorEntryActive(entry), true);
+    assert.equal(completionView(null, entry).status, "pending");
+  }
+  assert.equal(coordinatorEntryActive({ ...w.entry(), execution: settled }), false);
+});
+test("ledger ahead of qualified registry is reconciled before handoff stops without another dispatch", async t => {
+  const w = world(t, "delivery_ready"); await w.tick.tick();
+  w.state.update(w.id, { last: { ...w.entry().last, run: "owned-run", exit: 0 } });
+  const current = { id: "owned-run", running: true, execution: { version: 1, provider: "openai-agents", transport: "remote", acceptance: "accepted", providerJobId: "job", turnId: "turn", providerState: "running", collected: false } };
+  let reconciled = 0;
+  w.runner.current = () => structuredClone(current);
+  w.runner.reconcile = async () => { reconciled++; current.running = false; current.execution.providerState = "succeeded"; current.execution.collected = true; };
+  w.gh.prView = async () => assert.fail("settled handoff cannot read late feedback or dispatch another fix");
+  const tick = makeTick({ ...w.deps, executionFor: () => w.runner });
+  await tick.tick();
+  assert.equal(reconciled, 1, "the saved ledger must not be filtered using stale registry proof");
+  assert.equal(w.entry().execution.collected, true);
+  assert.equal(w.view().monitoring, false);
+  assert.equal(w.runner.started.length, 0);
+  await tick.tick(); assert.equal(reconciled, 1, "historical settled execution does not keep polling");
 });
 test("delivery-ready fulfills at the canonical gate; integrated waits for observed external merge without another run", async t => {
   for (const target of ["delivery_ready", "integrated"]) await t.test(target, async t => {

@@ -63,7 +63,8 @@ Local-only, no-push, task-hold or patch-only directions cannot silently fall bac
 to the default review-PR workflow.
 
 Implementation subjects such as a PR status badge, pull-request template,
-published articles, local storage, commit SHA, diff viewer or branch selection
+published articles, a publish button, a command to publish docs, local storage,
+commit SHA, diff viewer or branch selection
 remain ordinary requirements. Technical conditions also remain implementation
 scope: `If name is empty, return friend. Open a PR for review.` and the answer
 `Commit the database transaction after validation.` are supported. By contrast,
@@ -72,7 +73,9 @@ Local conditions attached to publication are still refused; the parser does not
 guess that a comma or semicolon ended a prohibition or approval requirement.
 
 Keep every feature requirement and restriction, and state publication separately
-when needed. Quoted literal labels/code remain implementation data. If local-only
+when needed. Quoted literal labels/code remain implementation data, including
+paired typographic single/double quotes; unmatched typographic quotes do not hide
+instructions. If local-only
 or patch-only output is required, do not authorize this review-PR workflow or
 remove the restriction to bypass clarification.
 Clarify the complete task with the owner and submit it under a new operation ID;
@@ -277,7 +280,9 @@ clients should render those choices instead of maintaining a separate list.
 The target is immutable for a saved request. Changed retry input conflicts.
 
 `delivery_ready` is fulfilled when the current pull request passes Gallivant's
-existing checks, reviewer and completion gate. Automatic observation and fixing
+existing checks, reviewer and completion gate and its owned execution is settled.
+The saved execution ledger is checked even when the task registry has not caught
+up; pending collection keeps the target pending. Automatic observation and fixing
 then stop at that saved handoff; later review comments do not authorize more work.
 An explicit existing recheck/resume control reopens the normal workflow.
 `integrated` keeps the existing coordinator watching that qualified delivery until

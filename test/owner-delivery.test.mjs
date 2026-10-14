@@ -27,6 +27,21 @@ test("quoted/code examples never create publication authority", () => {
     assert.equal(ownerDelivery(source), null);
 });
 
+test("publish feature subjects and paired typographic examples remain implementation scope", () => {
+  const task = { completion: { version: 1, target: "delivery_ready" } };
+  for (const source of ["Add a publish button.", "Add a command to publish docs.", "Render “Open a PR” in help.", "Document ‘Do not push’.", "Document ‘the user’s Open a PR instruction’.", "Preserve the user’s publish option."]) {
+    assert.equal(ownerDelivery(source), null, source);
+    assert.doesNotThrow(() => assertDeliveryAnswer(task, source), source);
+    const text = "😀 " + source + " Open a PR for review.", contract = ownerDelivery(text);
+    assert.equal(contract.spans.map(span => text.slice(span.start, span.end)).join(""), text);
+    assert.equal(ownerImplementation(contract).join(""), "😀 " + source + " ");
+  }
+  for (const source of ["Publish the changes.", "Please publish the changes.", "Please automatically publish changes.", "Implement export, then publish it.", "Do not publish anything.", "Do not ever publish anything.", "Never automatically publish changes.", "Only publish after approval.", "Render “Open a PR” in help. Do not push.", "Render “Open a PR\" in help.", "Document ‘Do not push.", "Don’t publish anything."]) {
+    assert.throws(() => ownerDelivery(source), { code: "TASK_DELIVERY_SCOPE" }, source);
+    assert.throws(() => assertDeliveryAnswer(task, source), { code: "TASK_DELIVERY_SCOPE" }, source);
+  }
+});
+
 test("initial requests cannot contradict the default publication workflow", () => {
   for (const instruction of ["Keep the change local", "Do not push", "Don't commit", "Return a patch only", "Show diff only", "Wait for my review", "Pause the task", "Withhold the changes"]) {
     for (const source of ["Implement export. " + instruction + ".", "Implement export, " + instruction + ", and open a PR for review."])
