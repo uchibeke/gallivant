@@ -84,8 +84,20 @@ test("a conflicting delivery answer leaves its question, revision and preparatio
   const first = await w.service.prepare({ text: "Implement export. Open a PR for review." });
   assert.equal(first.status, "needs-input");
   const before = taskStore(w.home).read(first.taskId);
-  await assert.rejects(w.service.answer({ taskId: first.taskId, expectedRevision: first.revision, operationId: "change-publication", answers: { "q-r-1": "Do not open a PR until I approve the change" } }), { code: "TASK_DELIVERY_SCOPE", taskEffects: "none" });
-  assert.deepEqual(taskStore(w.home).read(first.taskId), before);
+  for (const answer of ["Do not open a PR until I approve the change", "Do not publish anything", "Skip publication", "Keep the change local", "Do not send it for review"]) {
+    await assert.rejects(w.service.answer({ taskId: first.taskId, expectedRevision: first.revision, operationId: "change-publication", answers: { "q-r-1": answer } }), { code: "TASK_DELIVERY_SCOPE", taskEffects: "none" });
+    assert.deepEqual(taskStore(w.home).read(first.taskId), before);
+  }
+});
+
+test("publication punctuation and courtesy never become planner requirements", async () => {
+  for (const text of ["Implement CSV export. Open a PR for review.", "Implement CSV export.\nPlease open a PR for review.\nDo not merge."]) {
+    const w = world(), result = await w.service.prepare({ text }), saved = taskStore(w.home).read(result.taskId);
+    assert.equal(result.status, "ready");
+    assert.ok(saved.requirements.every(r => /[\p{L}\p{N}]/u.test(r.text)));
+    assert.ok(saved.requirements.every(r => !/^[.;]|\bPlease\s*$/i.test(r.text)));
+    assert.equal(saved.requirements.length, text.includes("Do not merge") ? 2 : 1);
+  }
 });
 
 test("distinct assertions mapped to one owner paragraph retain every authoritative requirement", async () => {

@@ -18,8 +18,9 @@ This first recognizer supports one unqualified `open/create/raise/submit` review
 clause outside quoted text/code. It is not a general natural-language permission
 parser. Conditions, approval prerequisites, destination qualifiers, multiple PRs
 and delivery-only requests return `TASK_DELIVERY_SCOPE` before inference. Some
-implementation-only uses of conditional language in a publication-bearing request
-also need clarification; the recognizer deliberately does not guess their scope.
+implementation-only uses of conditional language in a publication-bearing request,
+or delivery-control words such as “local” or “review” in later answers, also need
+clarification; the recognizer deliberately does not guess their scope.
 Clarify the complete task with the owner and submit it under a new operation ID;
 never delete a condition just to pass validation. Answers may refine implementation
 but cannot silently replace publication ownership or add a publication prerequisite.

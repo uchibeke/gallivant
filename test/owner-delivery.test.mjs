@@ -43,10 +43,20 @@ test("ambiguous, conditional, qualified and delivery-only requests refuse before
 
 test("new answers cannot silently override existing publication ownership", () => {
   const task = { ownerDelivery: ownerDelivery("Implement export. Open a PR for review.") };
-  for (const answer of ["Do not open a PR until I approve the change", "Wait for my confirmation first.", "Only publish after permission."])
+  for (const answer of ["Do not open a PR until I approve the change", "Wait for my confirmation first.", "Only publish after permission.", "Do not publish anything", "Skip publication", "Keep the change local", "Do not send it for review"])
     assert.throws(() => assertDeliveryAnswer(task, answer), { code: "TASK_DELIVERY_SCOPE" });
   assert.doesNotThrow(() => assertDeliveryAnswer(task, "Use CSV and preserve the existing dependency declarations."));
   assert.doesNotThrow(() => assertDeliveryAnswer(task, 'The label is "Open a PR".'));
+});
+
+test("publication owns its terminator and courtesy prefix, never a punctuation-only provider requirement", () => {
+  for (const source of ["Implement export. Open a PR for review.", "Implement export. Open a PR; do not merge.", "Implement export.\nPlease open a PR for review.\nDo not merge."]) {
+    const contract = ownerDelivery(source), implementation = ownerImplementation(contract);
+    assert.equal(contract.spans.map(s => source.slice(s.start, s.end)).join(""), source);
+    assert.ok(implementation.every(s => !s.trim() || /[\p{L}\p{N}]/u.test(s)), JSON.stringify(implementation));
+    assert.ok(implementation.every(s => !/^[.;]/.test(s.trim())), JSON.stringify(implementation));
+    assert.ok(implementation.every(s => !/\bPlease\s*$/i.test(s.trim())), JSON.stringify(implementation));
+  }
 });
 
 test("typed ownership is validated and included in the ongoing PRD fingerprint; legacy contract is unchanged", () => {
