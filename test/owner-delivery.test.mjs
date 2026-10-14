@@ -50,6 +50,35 @@ test("unsupported positive publication forms require clarification instead of pr
   assert.throws(() => assertDeliveryAnswer({}, "Do not publish publicly."), { code: "TASK_DELIVERY_SCOPE" });
 });
 
+test("initial delivery restrictions cannot become implementation criteria under the default review target", () => {
+  for (const restriction of ["Keep the change local", "Keep this local", "Keep changes local-only", "Leave these edits uncommitted", "Do not push", "Don't run git push", "Never commit",
+    "Return a patch only", "Show only a diff", "Only return a patch", "Just return a diff", "Do not send it for review", "Pause delivery", "Hold the change for my approval", "Wait for my approval"]) {
+    for (const text of [`Implement CSV export. ${restriction}.`, `Implement CSV export. Open a PR for review. ${restriction}.`])
+      assert.throws(() => ownerDelivery(text), { code: "TASK_DELIVERY_SCOPE" }, text);
+    assert.throws(() => assertDeliveryAnswer({ completion: { version: 1, target: "delivery_ready" } }, restriction), { code: "TASK_DELIVERY_SCOPE" });
+  }
+  for (const text of ['Document "Keep the change local", "Do not push" and `Return a patch only`.',
+    "Implement branch sorting. Update the patch renderer. Cache local timezone offsets."])
+    assert.equal(ownerDelivery(text), null);
+  assert.ok(ownerDelivery("Implement branch sorting. Update the patch renderer. Open a PR for review."));
+});
+
+test("new-request delivery restrictions do not reinterpret exact saved ownership versions", () => {
+  const source = "Implement CSV export. Open a PR for review. Keep the change local.";
+  const start = source.indexOf("Open"), end = source.indexOf(" Keep");
+  for (const version of [1, 2]) {
+    const saved = { version, offsets: "utf16", source, spans: [
+      { start: 0, end: start, owner: "implementation" },
+      { start, end, owner: "coordinator", kind: "pull_request" },
+      { start: end, end: source.length, owner: "implementation" },
+    ] };
+    const before = structuredClone(saved);
+    assert.equal(validateOwnerDelivery(saved), saved);
+    assert.deepEqual(saved, before);
+  }
+  assert.throws(() => ownerDelivery(source), { code: "TASK_DELIVERY_SCOPE" });
+});
+
 test("new answers cannot silently override existing publication ownership", () => {
   const task = { ownerDelivery: ownerDelivery("Implement export. Open a PR for review.") };
   for (const answer of ["Do not open a PR until I approve the change", "Wait for my confirmation first.", "Only publish after permission.", "Do not publish anything", "Skip publication", "Keep the change local", "Do not send it for review", "Show diff only", "Do not push", "Return a patch without publishing", "Hold the change for my approval"])

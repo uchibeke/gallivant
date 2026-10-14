@@ -89,6 +89,27 @@ test("unsupported publication directives refuse before preparation or saved task
   }
 });
 
+test("initial local-only and withheld delivery instructions refuse before planning or task effects", async () => {
+  const w = world({ prepare: async () => assert.fail("delivery restrictions cannot invoke preparation") });
+  for (const restriction of ["Keep the change local", "Keep this local", "Keep changes local-only", "Do not push", "Return a patch only", "Only return a patch", "Just return a diff", "Do not send it for review", "Wait for my approval"])
+    for (const text of [`Implement CSV export. ${restriction}.`, `Implement CSV export. Open a PR for review. ${restriction}.`]) {
+      await assert.rejects(w.service.prepare({ text, run: true }), { code: "TASK_DELIVERY_SCOPE", taskEffects: "none" });
+      assert.deepEqual(w.service.list().tasks, []);
+      assert.deepEqual(w.ctx.state.entries(), []);
+    }
+  assert.equal(w.daemonCalls(), 0);
+});
+
+test("quoted delivery examples and ordinary product vocabulary remain implementation requirements", async () => {
+  for (const text of ['Document "Keep the change local", "Do not push" and `Return a patch only`.',
+    "Implement branch sorting. Update the patch renderer. Cache local timezone offsets."]) {
+    const w = world(), result = await w.service.prepare({ text });
+    assert.equal(result.status, "ready");
+    assert.deepEqual(result.requirements.map(r => r.text), [text]);
+    assert.deepEqual(w.ctx.state.entries(), []);
+  }
+});
+
 test("a conflicting delivery answer leaves its question, revision and preparation budget untouched", async () => {
   const w = world({ prepare: async (_ctx, task) => JSON.stringify(draftFor(task, { question: true })) });
   const first = await w.service.prepare({ text: "Implement export. Open a PR for review." });
