@@ -136,6 +136,22 @@ test("technical feature objects and application consent are not delivery control
     for (const act of [() => ownerDelivery(text), () => assertDeliveryAnswer(task, text)]) assert.throws(act, { code: "TASK_DELIVERY_SCOPE" }, text);
 });
 
+test("negative coordination retains nor, correlative and comma-list Git restrictions", () => {
+  const task = { completion: { version: 1, target: "delivery_ready" } };
+  for (const connector of [" nor ", ", nor ", ", ", " but "]) {
+    const rejected = "Do not commit the database transaction" + connector + "push changes.";
+    const technical = "Do not commit the database transaction" + connector + "push duplicate items onto the queue.";
+    for (const act of [() => ownerDelivery("Implement export. " + rejected), () => assertDeliveryAnswer(task, rejected)])
+      assert.throws(act, { code: "TASK_DELIVERY_SCOPE" }, rejected);
+    assert.equal(ownerDelivery(technical), null);
+    assert.doesNotThrow(() => assertDeliveryAnswer(task, technical));
+  }
+  for (const text of ["Neither commit the database transaction nor push changes.", "Neither commit the database transaction nor run git push.", "Do not commit the database transaction nor silently push changes."])
+    for (const act of [() => ownerDelivery(text), () => assertDeliveryAnswer(task, text)]) assert.throws(act, { code: "TASK_DELIVERY_SCOPE" }, text);
+  const text = "Neither commit the database transaction nor push duplicate items onto the queue.";
+  assert.equal(ownerDelivery(text), null); assert.doesNotThrow(() => assertDeliveryAnswer(task, text));
+});
+
 test("independent statement restrictions do not qualify later publication", () => {
   for (const separator of ["; ", "\n", ". ", "! "]) {
     const source = "Implement export" + separator + "do not change the API" + separator + "open a PR for review.";

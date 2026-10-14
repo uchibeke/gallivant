@@ -206,7 +206,7 @@ test("technical conditions and PR feature subjects survive actual preparation an
 test("literal boundaries and delivery-specific contexts survive actual intake and answers", async () => {
   const accepted = ["Create a PR template for this repository.", "Open a PR details dialog.", "Submit a PR review form.",
     "Do not commit the database transaction when validation fails.", "Avoid pushing duplicate items onto the queue.",
-    "Require user confirmation before deleting an account.", "Ask for user permission before accessing the camera.", "Require user confirmation before committing the database transaction.", "Require user confirmation before creating a PR template.", "Do not commit the database transaction or push duplicate items onto the queue."];
+    "Require user confirmation before deleting an account.", "Ask for user permission before accessing the camera.", "Require user confirmation before committing the database transaction.", "Require user confirmation before creating a PR template.", "Do not commit the database transaction or push duplicate items onto the queue.", "Neither commit the database transaction nor push duplicate items onto the queue."];
   for (const text of accepted) {
     const w = world(), prepared = await w.service.prepare({ text });
     assert.equal(prepared.status, "ready", text);
@@ -217,13 +217,13 @@ test("literal boundaries and delivery-specific contexts survive actual intake an
     assert.ok(answered.draft.text.includes(text));
   }
   const w = world({ prepare: async () => assert.fail("malformed literal restriction cannot spend") });
-  for (const text of ["Implement export. 'Do not push.", 'Implement export. "Do not push.', "Implement export. `Do not push.", "Implement export. ```Do not push.", "Implement export. Do not commit the database transaction or push any changes.", "Implement export. Avoid pushing duplicate items onto the queue and committing changes.", "Implement export. Do not:\n\nopen a PR.", "Require user confirmation before git push.", "Require user permission before running git push.", "Never automatically push changes.", "Do not silently commit changes.", "Do not commit the database transaction or silently push changes."]) {
+  for (const text of ["Implement export. 'Do not push.", 'Implement export. "Do not push.', "Implement export. `Do not push.", "Implement export. ```Do not push.", "Implement export. Do not commit the database transaction or push any changes.", "Implement export. Avoid pushing duplicate items onto the queue and committing changes.", "Implement export. Do not:\n\nopen a PR.", "Require user confirmation before git push.", "Require user permission before running git push.", "Never automatically push changes.", "Do not silently commit changes.", "Do not commit the database transaction or silently push changes.", "Do not commit the database transaction nor push changes.", "Neither commit the database transaction nor push changes.", "Do not commit the database transaction, push changes."]) {
     await assert.rejects(w.service.prepare({ text }), { code: "TASK_DELIVERY_SCOPE", taskEffects: "none" });
     assert.deepEqual(w.service.list().tasks, []);
   }
   const a = world({ prepare: async (_ctx, task) => JSON.stringify(draftFor(task, { question: true })) });
   const first = await a.service.prepare({ text: REQUEST }), before = taskStore(a.home).read(first.taskId);
-  for (const answer of ["'Do not push.", '"Do not push.', "`Do not push.", "```Do not push.", "Do not commit the database transaction or push any changes.", "Avoid pushing duplicate items onto the queue and committing changes.", "Do not:\n\nopen a PR.", "Require user confirmation before git push.", "Require user permission before running git push.", "Never automatically push changes.", "Do not silently commit changes.", "Do not commit the database transaction or silently push changes."]) {
+  for (const answer of ["'Do not push.", '"Do not push.', "`Do not push.", "```Do not push.", "Do not commit the database transaction or push any changes.", "Avoid pushing duplicate items onto the queue and committing changes.", "Do not:\n\nopen a PR.", "Require user confirmation before git push.", "Require user permission before running git push.", "Never automatically push changes.", "Do not silently commit changes.", "Do not commit the database transaction or silently push changes.", "Do not commit the database transaction nor push changes.", "Neither commit the database transaction nor push changes.", "Do not commit the database transaction, push changes."]) {
     await assert.rejects(a.service.answer({ taskId: first.taskId, expectedRevision: first.revision, operationId: "unmatched-literal", answers: { "q-r-1": answer } }), { code: "TASK_DELIVERY_SCOPE", taskEffects: "none" });
     assert.deepEqual(taskStore(a.home).read(first.taskId), before);
   }
