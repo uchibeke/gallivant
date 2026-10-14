@@ -89,13 +89,24 @@ test("standalone tracker starts once, verifies its home/port and stops without a
     assert.equal((await fetch(`http://127.0.0.1:${port}/`)).status, 200);
     await assert.rejects(trackerInBackground(ctx, { port: await freePort() }), /already uses port/);
     const other = fixture();
-    await assert.rejects(trackerInBackground(other, { port, waitMs: 2000 }), /failed to start/);
+    // The failed child can exit between ps and signal-0 on Linux. Either
+    // diagnostic refuses the unrelated listener; neither permits reuse/signals.
+    await assert.rejects(trackerInBackground(other, { port, waitMs: 2000 }), /failed to start|process identity cannot be verified/);
     assert.equal(readTracker(ctx.home).pid, first.pid);
+    assert.equal((await fetch(`http://127.0.0.1:${port}/`)).status, 200);
   } finally {
     assert.equal(stopTracker(ctx).stopped, true);
     for (let i = 0; i < 50 && readTracker(ctx.home)?.alive; i++) await new Promise(r => setTimeout(r, 50));
     assert.equal(readTracker(ctx.home), null);
   }
+});
+
+test("an unverifiable live tracker owner is neither replaced nor stopped", async () => {
+  const ctx = fixture();
+  writeJsonAtomic(join(ctx.home, "tracker.lock"), { pid: process.pid, identity: "unknown-fixture", instance: "unverified" });
+  await assert.rejects(trackerInBackground(ctx, { spawnFn: () => assert.fail("must not replace an unverified process") }), /process identity cannot be verified/);
+  assert.equal(stopTracker(ctx).unverified, true);
+  assert.equal(readTracker(ctx.home).pid, process.pid);
 });
 
 test("foreground ownership releases on close; pinned runtime homes cannot start standalone trackers", async () => {
