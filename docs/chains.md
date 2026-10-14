@@ -7,6 +7,12 @@ receipt, `ready-for-human`, and a finished agent session are progress toward tha
 This lets you approve a multi-hour or multi-day plan once, then review meaningful milestones as they arrive. It does
 not promise uninterrupted execution while you are unavailable: a dependent chain waits for your merge. Put cohesive
 implementation steps inside one PRD to keep the number of integration decisions manageable.
+Research and documentation milestones work the same way when their outputs live
+in the repository and have concrete verification. Natural-language task intake
+can prepare individual briefs, but `chain` itself takes ready PRD paths; it does
+not infer dependencies from chat or queue unfinished intake sessions. Hosted and
+local implementations retain the same human merge gate, and the coordinator must
+remain running to observe it.
 
 ## Queue a plan
 

@@ -13,17 +13,47 @@ the same session-identity checks as submission. This does not qualify an otherwi
 unsupported learning profile.
 See [learning](learning.md) for limits, recovery and actual missing qualification.
 
-Unattended runs act with your GitHub identity on your code. Each guarantee below names the control that provides it. APort is installed on both harnesses from day one, and this page is honest about what it enforces today and what it does not.
+Unattended runs act with your GitHub identity on your repository. Controls depend
+on the execution provider: local Claude and Codex have the sandbox/hook setup
+described below; Gemini, OpenCode and Goose retain their native permission models
+and do not inherit those guarantees merely because an adapter exists. Hosted
+Agents has a separate sandbox/artifact-publication boundary described next.
+The APort pre-tool hook and deliverable-completion gate are separate controls.
+
+## Hosted execution and preparation
+
+Hosted Agents receives the approved source snapshot and configured network/package
+policy, not the coordinator's GitHub/API credentials, private context directories
+or local hook files. The coordinator checks ownership, input revision, artifact
+paths/hashes and mandatory Verify results before publishing with its own scoped
+GitHub credential. Native sandboxed verification must qualify on the coordinator
+host; it never falls back to running repository commands unrestricted.
+Provider success is not a completion verdict. See [execution](execution.md) and
+[Agents setup](openai-agents.md) for the exact contract and remaining live gates.
+
+A remote provider is refused when the task requires a local policy it cannot
+enforce. Codex Cloud currently refuses all new dispatch because the selected
+Cloud environment cannot be verified against the intended repository. Neither a
+completion receipt nor a manual UI observation substitutes for that binding.
+
+Natural-language preparation uses a narrower boundary than implementation:
+Claude tools-off, isolated Codex profile or Agents text-only/no-environment.
+Selected text grants no implementation authority. Unknown or unsupported
+preparation capabilities fail closed. See [preparation](preparation.md).
+
+## Local execution controls
+
+This table describes local Claude/Codex setup unless another provider is named.
 
 | Guarantee | Control | APort's part |
 |---|---|---|
 | Filesystem access is bounded | Claude: the Bash sandbox in the Gallivant settings file. Codex: `workspace-write`, with boundary-crossing commands reviewed by Codex's automatic reviewer. An approved command runs outside that sandbox; the reviewer is a decision, not filesystem isolation. | Denies Write and Edit tool calls outside `allowed_paths`. Does not see `echo x > ~/.zshrc` inside a Bash command. |
-| Reads of secrets are restricted | The sandboxes and each harness's denied reads; Codex's automatic reviewer checks escalation requests for credential probing. This is not a guarantee about an approved command running outside the sandbox. | Denies Read and Grep calls on `.env*`, `.ssh`, `.aws`, `*.pem`, `*.key` and the passport's `blocked_paths`. Does not see `cat .env` inside Bash. |
+| Reads of secrets are restricted | The sandboxes and each harness's denied reads; Codex's automatic reviewer checks escalation requests for credential probing. This is not a guarantee about an approved command running outside the sandbox. | Applies default sensitive-file restrictions and `data.file.read.blocked_patterns` to represented file reads. Directory enumeration and unrepresentable calls can be refused. Does not see `cat .env` inside Bash. |
 | Network limited | Claude: `sandbox.network.allowedDomains`, with the macOS certificate-service exception described below. Codex: none once `network_access=true`, which `git push` needs. | Denies WebFetch and WebSearch outside `allowed_domains`. Does not see `curl` inside Bash. |
-| No push to the default branch, no force push | A GitHub ruleset on each repo: no deletion, no force push, pull request required, no bypass actors. `doctor` prints the call. Sessions are also told not to rebase, because keeping a branch on its base is the daemon's job and it does it with a merge commit, which needs no force. | `blocked_patterns` substring-matches `push --force`, `push origin main` and the like. Best effort; APort does not parse refspecs. |
+| No push to the default branch, no force push | A GitHub ruleset on each repo: no deletion, no force push, pull request required, no bypass actors. `doctor` prints the call. Sessions are also told not to rebase, because keeping a branch on its base is the daemon's job and it does it with a merge commit, which needs no force. | `blocked_patterns` checks command text using word-boundary/glob matching for single words and literal matching for phrases such as `push --force`. Best effort; APort does not parse refspecs. |
 | Blast radius of a successful injection | Optional but recommended: a fine-grained PAT limited to the participating repos with no Workflows permission (`github_token_file`). By default runs act as your own login, which reaches every repo it can. Either way the credential is resolved by the daemon and handed to the run in its environment, so `~/.git-credentials`, the keychain and `~/.config/gh` stay out of a run's path. | An audit log of every tool call, for reconstruction. |
-| Runaway spend | `--max-budget-usd` on Claude runs, `run_timeout_minutes` on both (per repository, else the global; default 720, a catch for a wedged session rather than a spend limit), `max_iterations` per PR. | none |
-| No harness attribution in the history | A `commit-msg` hook in each checkout's `.git/hooks`, written at clone time and on every reuse. A message with a `Co-Authored-By:` trailer naming a harness or its vendor, or a "Generated with" / robot line, exits non-zero and no commit object is created. One mechanism for all five harnesses, because it fires on whoever runs `git commit`. | none |
+| Runtime and dispatch bounds | Claude's `--max-budget-usd`, `run_timeout_minutes` for local runs (per repository or global; default 720), and `max_iterations` per PR. Other local harnesses have no native dollar hard cap. Remote reservations bound further dispatch, not provider billing. | none |
+| No harness attribution in the history | A `commit-msg` hook in each checkout's `.git/hooks`, written at clone time and on every reuse. A message with a `Co-Authored-By:` trailer naming a harness or its vendor, or a "Generated with" / robot line, exits non-zero and no commit object is created. The hook applies to local commits regardless of which harness invoked Git; hosted results also pass coordinator public-output validation. | none |
 | Commits are yours, not a bot's | `user.name` and `user.email` in the run env, on git's command line where no repo can override them, resolved per run from your own git config by the daemon. No identity on the machine means the run is refused before it is spawned. | none |
 
 ## Codex Git writes need automatic approval
@@ -73,7 +103,7 @@ APort's pre-tool policy and Gallivant's deliverable-completion gate remain separ
 
 ## How a run gets a GitHub credential
 
-The run's Git credential helper does not read a credential store. The daemon resolves a credential and puts it in the run's environment as `GH_TOKEN`, where a git credential helper carried in the same environment reads it. No file outside the worktree is named, so sandboxed Git does not need the keychain, the Linux secret service, `~/.git-credentials` or `~/.config/gh`. Agent runs also set `GH_CONFIG_DIR` inside the private clone so the GitHub CLI can use that token without loading the operator's personal config; this applies to start, resume and fix rounds. Order and details are in [config.md](config.md#github-credentials).
+For local CLI implementation, the run's Git credential helper does not read a credential store. The daemon resolves a credential and puts it in the run's environment as `GH_TOKEN`, where a git credential helper carried in the same environment reads it. No file outside the worktree is named, so sandboxed Git does not need the keychain, the Linux secret service, `~/.git-credentials` or `~/.config/gh`. Agent runs also set `GH_CONFIG_DIR` inside the private clone so the GitHub CLI can use that token without loading the operator's personal config; this applies to start, resume and fix rounds. Order and details are in [config.md](config.md#github-credentials).
 
 What bounds the credential, and what does not:
 
@@ -84,7 +114,9 @@ What bounds the credential, and what does not:
 - **The run's git config reaches nothing outside the worktree.** The four settings a run needs, credential helper included, travel in the environment as git's own `GIT_CONFIG_COUNT` pairs. `GIT_CONFIG_NOSYSTEM=1` drops git's system file, which on a Mac with the Xcode command line tools sets `credential.helper = osxkeychain`; without it a run had a path to your keychain whatever else was configured.
 - **What it does not bound.** The credential is in the environment of a process the agent controls, so a successful injection can read it and use it for anything the token permits. That is also true of a token file the run could read, and of a credential helper the run could invoke; the environment is not worse, it is the same exposure with one fewer copy on disk. Nor does the run's git config bound it: a run owns its worktree, so it can add its own `credential.helper` to `.git/config`, which git consults first because that key is multi-valued. That was equally true when the helper lived in a global file. The controls that actually bound it are the token's own scope, which is why a fine-grained PAT limited to the participating repos is the recommendation, and the GitHub ruleset, which stops a push to the default branch whatever the token permits. Transport is not a control; scope and the ruleset are.
 
-A run that cannot get a credential does not start. Spending a budget on work that then cannot be pushed is a failure mode, not a safe default.
+A local run that cannot get a credential does not start. Hosted publication
+resolves that credential only in the coordinator; it is not copied into the hosted
+sandbox. Spending a budget on work that cannot be published is not a useful default.
 
 `doctor`'s `run git push` line checks the credential transport. It runs `git ls-remote` against the first configured repository with the run's environment and `HOME` pointed at a path that does not exist. It does not run inside Codex's sandbox or prove Git write access. On failure it prints git's own words: the message git prints when it has no credential names `~/.git-credentials`, which is not always the file it failed on.
 
@@ -94,7 +126,19 @@ Before a PR can be ready for a human, the daemon evaluates a completion receipt 
 
 ## What reaches a prompt
 
-Only reviews and comments by `trusted_authors` and the configured reviewer bot. Comments edited after posting, comments created while a run was in progress, the daemon's own comments, and the harness's thread replies are skipped. Failing checks are named with their run id; the harness fetches the log itself, so the daemon never handles log text. Everything quoted into a prompt sits inside a four-backtick fence with internal fences neutralised and a 4,000-character cap. That is hygiene, not a control: assume an injection will sometimes succeed, and rely on the table above to bound what it can do.
+GitHub feedback is filtered by `trusted_authors`, the configured reviewer bot
+and the shared event cursor. Ordinary issue comments trigger work only through a
+recognized fix command. The daemon's marked comments and the harness's own thread
+replies are excluded. Editing an old comment does not make it new: creation time,
+not edit time, governs the cursor. Feedback received during a run is handled under
+the same deduplication and head/receipt rules; receipt-only corrections preserve
+pending feedback rather than discarding it.
+
+Failing checks are named with their run ID; local harnesses fetch their logs.
+Quoted GitHub text uses a four-backtick fence with internal fences neutralized
+and a 4,000-character cap. This is prompt hygiene, not an injection guarantee;
+provider permissions, token scope and repository rules remain the authority
+boundary.
 
 ## Extra read directories are a widening, not a feature
 
@@ -130,6 +174,7 @@ What each harness does with the list:
 | Codex | Refused. `--add-dir` makes a directory **writable**, and the only read permission Codex documents is `disk-full-read-access`, the whole disk. Giving a run the entire filesystem to read in order to hand it one directory is worse than the problem; the run fails with that explanation instead. |
 | Gemini CLI | Refused, for the same shape of reason. `--include-directories` adds to the *workspace*, and Gemini's own file-system tool reference says every file tool, `write_file` included, operates inside the workspace root. There is no read-only spelling. |
 | opencode, goose | No directory flag exists, so the list has no effect. The run proceeds unchanged rather than failing over a setting the CLI cannot honour, and `gallivant doctor` says so per harness when you have a list configured. |
+| Hosted providers | Private local `context_paths` are refused. Supply authorized portable repository documents through the supported source snapshot instead. |
 
 Nothing here escalates quietly. A harness that cannot do what was asked either refuses the run or reports that the
 setting did nothing. In the daemon a refusal stops that entry with the reason `context-paths`, since the same
@@ -148,9 +193,21 @@ On boot, `up` registers only PRs authored by the token's login, with same-repo h
 
 `templates/passport.gallivant.json`: capabilities for file read and write, command execution, web fetch and subagent creation. `allowed_commands` is `["*"]` on purpose: a restrictive list denies any command containing `&&`, `;` or `|`, so the first `git add -A && git commit` of every run would fail. Write `allowed_paths` is the worktrees root.
 
-`blocked_paths` cover `~/.claude`, `~/.codex`, `~/.config/opencode`, `~/.gallivant` and `~/.aport` in **both** directions. Blocking writes stops a run editing the rules it is held to. Blocking reads stops it learning them: `~/.claude/settings.json` is the sandbox definition, `~/.aport` holds the passport and the audit trail, and `~/.codex` and `~/.claude` hold harness credentials. An injected run that can Read or Grep those knows where the boundary is and what sits behind it, which is the first move before trying to get around it.
+`data.file.write.blocked_paths` and `data.file.read.blocked_patterns` cover
+`~/.claude`, `~/.codex`, `~/.config/opencode`, `~/.gallivant` and `~/.aport`.
+These are different policy fields: the local read evaluator does not enforce
+`blocked_paths`. Existing local passports copied from older templates must move
+their read list to `blocked_patterns`; rerun `doctor` afterward. The directories
+hold credentials and operator-owned rules, so the represented read and write
+tools need both restrictions. Shell commands remain subject to the separate
+sandbox and command policy, as described above.
 
-That template is the **local-mode default**, and it is the passport `doctor` checks: it reads `data.file.write` and `data.file.read` on `<aport dir>/passport.json` and fails the check, naming the paths, when either list is short. A **hosted** passport is a different thing. Its limits live in the aport.io dashboard and are whatever the operator set there; `doctor` prints the agent id and what the limits should say, but it cannot read them and cannot change them. If you run hosted, copy the two `blocked_paths` lists out of the template into the dashboard yourself.
+That template is the **local-mode default**, and `doctor` checks both policy
+fields on `<aport dir>/passport.json`, naming missing restrictions. A **hosted**
+passport has limits in the APort dashboard; `doctor` reports the configured
+identity but cannot inspect or change those limits. Configure and verify the
+hosted read/write policies separately rather than treating a local check as proof
+of hosted enforcement.
 
 ## What a session is told it may not do
 
@@ -189,8 +246,8 @@ The message body is a separate problem with a separate mechanism. Harnesses add 
 a live pull request carried one on all four of its commits. That is a **hook**, not a line in the prompt, because a
 prompt is a request a session can forget and forgetting it is exactly how those commits happened. `commit-msg` in each
 checkout's `.git/hooks` matches the trailer and the "Generated with" line, prints which line is the problem and what to
-do, and exits non-zero, so git creates no commit object at all. One mechanism covers all five harnesses and the sixth
-nobody has written, because it fires on whatever process runs `git commit`.
+do, and exits non-zero, so git creates no commit object at all. The same hook covers local CLI commits because it fires on whatever process
+runs `git commit`; coordinator publication validates hosted output separately.
 
 `.git/hooks` rather than a directory inside the checkout. A relative `core.hooksPath` would also work and would keep the
 run env free of absolute paths, but it puts a directory in the working tree, where it shows up as untracked in
@@ -198,9 +255,13 @@ run env free of absolute paths, but it puts a directory in the working tree, whe
 that makes a clean tree look dirty is one the first session wanting a clean `git status` would trade away. `.git/hooks` is
 git's own default, needs no config, sits outside the working tree, and dies with the clone.
 
-**The gap, stated rather than papered over: a PR body cannot be reached this way.** `gh pr create` is a network call with
-nothing local in its path, so no hook sees it. That half is a rule in the prompt, which is a request and not a control.
-If a "Generated with" line reaches a PR body, the rule was ignored and nothing local caught it.
+The Git hook does not intercept `gh pr create`. Public-output validation is a
+separate control: coordinator GitHub writes validate public text, hosted artifacts
+are checked before publication, and the review loop checks existing PR text before
+readiness. A local agent's direct GitHub call can therefore create text that later
+needs correction; the prompt alone is not a pre-write boundary on that call.
+Neutral status labels and encoded recovery metadata preserve tracking without
+promotional attribution. See [public output](commands.md#public-formatting-and-compatibility).
 
 ## Reading a denial
 
@@ -216,15 +277,21 @@ The audit line for that decision names the pattern and carries no path. The deni
 
 ## Codex
 
-APort's Codex hook is beta. It fails closed on `apply_patch` payloads that touch more than one file and on `Glob`, `List` and `LS`, and those are pre-evaluation denials. In enforce mode a Codex fix run would stall on its first real edit, so Gallivant documents warn mode for Codex. On Codex the bounds are the seatbelt, the token and the ruleset; APort is an audit trail and a warning. The fix belongs in `aport-agent-guardrails` (evaluate each path of a multi-file patch, allow the listing tools); Codex moves to enforce when it lands.
+The current setup guide and `doctor` recommend warn mode for the Codex hook based
+on recorded unsupported multi-file `apply_patch` and listing-tool behavior.
+Warn mode can downgrade policy denials, but adapter failures may still block calls
+before policy evaluation. Verify the installed guardrail version and actual audit
+records before changing enforcement. Local sandbox permissions, reviewed escalation,
+token scope and GitHub rules remain separate controls; a hook warning is not proof
+that a tool call was denied. The historical findings are linked below.
 
 ## Known limits
 
-- The daemon runs as your user on the Mac. The sandbox, the token scope and the ruleset are what stand between an escaped run and your home directory. On a Linux box, run it as a dedicated user.
+- The coordinator runs as its OS user on macOS or Linux. Sandboxes, token scope and repository rules constrain worker actions; they do not isolate an arbitrary same-user process from all coordinator state. A dedicated OS user can narrow that host exposure.
 - Codex `network_access=true` removes the network boundary inside the checkout. Accepted on day one; the token scope and the ruleset bound what a push can do.
 - `context_paths` widens what a run can read and therefore what an injected run can leak. The refusals above stop the worst of it; the narrowness of the paths you choose is the rest.
-- Run logs hold everything the harness printed, including tool inputs. They are mode 600 under a mode 700 directory and never served. Delete `~/.gallivant/runs` whenever you like.
+- Logs may contain sensitive tool inputs. Private provider diagnostics are separate from the redacted projections served by the tracker, but redaction is not a guarantee that all sensitive application data is removed. Protect the Gallivant home and tracker access. Do not delete active run directories: ownership journals, acceptance records and evidence are required for safe recovery. Back up matching state before retention cleanup or migration; see [execution storage](execution.md#journal-projections-and-retention).
 
 ## Follow-ups filed against APort
 
-Listed at the end of `docs/audit/DECISIONS.md`: multi-file `apply_patch` in the Codex hook, `git push` refspec parsing, control-plane paths blocked by default, a non-interactive local passport install, and a Repository Guard slice that blocks pushes rather than reporting merges.
+The historical [decision record](https://github.com/uchibeke/gallivant/blob/main/docs/audit/DECISIONS.md) lists: multi-file `apply_patch` in the Codex hook, `git push` refspec parsing, control-plane paths blocked by default, a non-interactive local passport install, and a Repository Guard slice that blocks pushes rather than reporting merges.

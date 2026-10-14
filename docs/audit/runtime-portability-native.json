@@ -1,0 +1,15 @@
+{
+  "recorded_at": "2026-10-08T03:17:17.908944+00:00",
+  "platform": "darwin",
+  "architecture": "arm64",
+  "node_version": "22.22.0",
+  "provider": "claude",
+  "probe": "one real Bash tool call with original guards and a $2 ceiling",
+  "selected_node_matches": true,
+  "checkout_cache_matches": true,
+  "runtime_hook_observed": true,
+  "exit": 0,
+  "result": "success",
+  "owned_settings_remaining": 0,
+  "scope": "Native runtime selection only; not a provider-wide or Linux live qualification."
+}

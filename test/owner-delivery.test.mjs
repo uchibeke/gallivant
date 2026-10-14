@@ -2,7 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { ownerDelivery, ownerImplementation, validateOwnerDelivery, ownerDeliveryFromPrd, assertDeliveryAnswer } from "../lib/owner_delivery.mjs";
 import { completionView } from "../lib/task_completion.mjs";
-import { parsePrd, prdFingerprint, contractOf } from "../lib/prd.mjs";
+import { parsePrd, prdFingerprint, contractOf, contractDiff, check } from "../lib/prd.mjs";
 import { GOOD_PRD } from "./helpers.mjs";
 
 test("ownership partitions exact Unicode source and removes only affirmative publication", () => {
@@ -57,6 +57,15 @@ test("publication subjects and technical conditions remain implementation scope"
   for (const answer of ["Wait for my approval.", "Do not proceed until I approve.", "My confirmation is required.", "Skip publication.", "No PR should be created.", "Send it for review."]) assert.throws(() => assertDeliveryAnswer(task, answer), { code: "TASK_DELIVERY_SCOPE" }, answer);
 });
 
+test("publication-subject conditions and standalone gates remain owner controls", () => {
+  const task = { completion: { version: 1, target: "delivery_ready" } };
+  for (const clause of ["Publication only after tests pass.", "PR only after approval.", "Publishing requires approval.", "Only after tests pass.", "Keep changes only local."]) {
+    assert.throws(() => ownerDelivery("Implement export. " + clause), { code: "TASK_DELIVERY_SCOPE" }, clause);
+    assert.throws(() => ownerDelivery("Implement export. Open a PR. " + clause), { code: "TASK_DELIVERY_SCOPE" }, clause);
+    assert.throws(() => assertDeliveryAnswer(task, clause), { code: "TASK_DELIVERY_SCOPE" }, clause);
+  }
+});
+
 test("ambiguous, conditional, qualified and delivery-only requests refuse before planning", () => {
   for (const source of [
     "Please open one pull request for review.", "Open a PR.", "Open a PR; do not merge or release.",
@@ -70,6 +79,43 @@ test("ambiguous, conditional, qualified and delivery-only requests refuse before
     "Implement export. Open a PR. Open another PR.",
     "Implement export. Publish the changes for review.", "Implement export. Send a PR for review.", "Implement export. Open a pull-request.",
   ]) assert.throws(() => ownerDelivery(source), { code: "TASK_DELIVERY_SCOPE" }, source);
+});
+
+test("unsupported positive publication forms require clarification instead of provider criteria", () => {
+  for (const clause of ["Publish the changes for review", "Send a PR for review", "Open a pull-request", "Publish the changes", "Prepare the PR", "Open pull-requests"])
+    assert.throws(() => ownerDelivery(`Implement export. ${clause}.`), { code: "TASK_DELIVERY_SCOPE" }, clause);
+  assert.equal(ownerDelivery('Render "Publish the changes for review" and `Open a pull-request` in help.'), null);
+  assert.throws(() => assertDeliveryAnswer({}, "Open a pull-request"), { code: "TASK_DELIVERY_SCOPE" });
+  assert.throws(() => assertDeliveryAnswer({}, "Do not publish publicly."), { code: "TASK_DELIVERY_SCOPE" });
+});
+
+test("initial delivery restrictions cannot become implementation criteria under the default review target", () => {
+  for (const restriction of ["Keep the change local", "Keep this local", "Keep changes local-only", "Leave these edits uncommitted", "Do not push", "Don't run git push", "Never commit",
+    "Return a patch only", "Show only a diff", "Only return a patch", "Just return a diff", "Do not send it for review", "Pause delivery", "Hold the change for my approval", "Wait for my approval"]) {
+    for (const text of [`Implement CSV export. ${restriction}.`, `Implement CSV export. Open a PR for review. ${restriction}.`])
+      assert.throws(() => ownerDelivery(text), { code: "TASK_DELIVERY_SCOPE" }, text);
+    assert.throws(() => assertDeliveryAnswer({ completion: { version: 1, target: "delivery_ready" } }, restriction), { code: "TASK_DELIVERY_SCOPE" });
+  }
+  for (const text of ['Document "Keep the change local", "Do not push" and `Return a patch only`.',
+    "Implement branch sorting. Update the patch renderer. Cache local timezone offsets."])
+    assert.equal(ownerDelivery(text), null);
+  assert.ok(ownerDelivery("Implement branch sorting. Update the patch renderer. Open a PR for review."));
+});
+
+test("new-request delivery restrictions do not reinterpret exact saved ownership versions", () => {
+  const source = "Implement CSV export. Open a PR for review. Keep the change local.";
+  const start = source.indexOf("Open"), end = source.indexOf(" Keep");
+  for (const version of [1, 2]) {
+    const saved = { version, offsets: "utf16", source, spans: [
+      { start: 0, end: start, owner: "implementation" },
+      { start, end, owner: "coordinator", kind: "pull_request" },
+      { start: end, end: source.length, owner: "implementation" },
+    ] };
+    const before = structuredClone(saved);
+    assert.equal(validateOwnerDelivery(saved), saved);
+    assert.deepEqual(saved, before);
+  }
+  assert.throws(() => ownerDelivery(source), { code: "TASK_DELIVERY_SCOPE" });
 });
 
 test("new answers cannot silently override existing publication ownership", () => {
@@ -89,6 +135,53 @@ test("publication owns its terminator and courtesy prefix, never a punctuation-o
     assert.ok(implementation.every(s => !s.trim() || /[\p{L}\p{N}]/u.test(s)), JSON.stringify(implementation));
     assert.ok(implementation.every(s => !/^[.;]/.test(s.trim())), JSON.stringify(implementation));
     assert.ok(implementation.every(s => !/\bPlease\s*$/i.test(s.trim())), JSON.stringify(implementation));
+  }
+});
+
+test("publication owns recognized connectors without changing implementation text or exact source coverage", () => {
+  for (const connector of [", and ", ", and then ", ", then ", ", ", " and ", " and then ", " then ", ", AND THEN "]) {
+    const implementation = 'Implement CSV and JSON export for the café label "and then"';
+    const source = `${implementation}${connector}open a PR for review; do not merge or add dependencies.`;
+    const contract = ownerDelivery(source);
+    assert.deepEqual(ownerImplementation(contract), [implementation, " do not merge or add dependencies."], connector);
+    assert.equal(contract.version, 2);
+    assert.equal(contract.spans.map(span => source.slice(span.start, span.end)).join(""), source);
+    assert.equal(contract.spans.find(span => span.owner === "coordinator").start, implementation.length);
+    assert.equal(validateOwnerDelivery(contract), contract);
+  }
+  for (const source of ["Implement export only if approved, and open a PR.", "Do not merge, and then open a PR.", "Implement export, and open a PR after approval.",
+    'Implement export, "preserve CSV headers" open a PR for review.', 'Implement export and "literal" open a PR for review.',
+    "Implement export,\nand open a PR for review.", "Implement export, and\nopen a PR for review.", "Implement export, and then\nPlease open a PR for review."])
+    assert.throws(() => ownerDelivery(source), { code: "TASK_DELIVERY_SCOPE" });
+});
+
+test("saved version-one ownership remains exact and cannot authorize forged connector ranges", () => {
+  const source = "Implement CSV export, and open a PR for review.";
+  const split = source.indexOf("open");
+  const legacy = { version: 1, offsets: "utf16", source, spans: [
+    { start: 0, end: split, owner: "implementation" },
+    { start: split, end: source.length, owner: "coordinator", kind: "pull_request" },
+  ] };
+  const before = structuredClone(legacy);
+  assert.equal(validateOwnerDelivery(legacy), legacy);
+  assert.deepEqual(ownerImplementation(legacy), ["Implement CSV export, and "]);
+  assert.deepEqual(legacy, before);
+  const corrected = ownerDelivery(source);
+  assert.deepEqual(ownerImplementation(corrected), ["Implement CSV export"]);
+  for (const value of [{ ...corrected, version: 1 }, { ...legacy, version: 2 }, { ...corrected, version: 3 }])
+    assert.throws(() => validateOwnerDelivery(value), { code: "TASK_DELIVERY_SCOPE" });
+  for (const original of [legacy, corrected]) {
+    const forged = structuredClone(original); forged.spans[0].end--; forged.spans[1].start--;
+    assert.throws(() => validateOwnerDelivery(forged), { code: "TASK_DELIVERY_SCOPE" });
+  }
+  for (const source of ['Implement export, "preserve CSV headers" open a PR for review.', "Implement export,\nand open a PR for review.", "Implement export, and\nopen a PR for review."]) {
+    const split = source.indexOf("open");
+    const prior = { version: 1, offsets: "utf16", source, spans: [
+      { start: 0, end: split, owner: "implementation" },
+      { start: split, end: source.length, owner: "coordinator", kind: "pull_request" },
+    ] };
+    assert.equal(validateOwnerDelivery(prior), prior);
+    assert.deepEqual(ownerImplementation(prior), [source.slice(0, split)]);
   }
 });
 
@@ -112,6 +205,22 @@ test("typed ownership is validated and included in the ongoing PRD fingerprint; 
   assert.notEqual(prdFingerprint(current), prdFingerprint(legacy));
   assert.notEqual(prdFingerprint(current), prdFingerprint(parsePrd(GOOD_PRD + section.replace('"pull_request"', '"merge"'), 'docs/prds/example.md')));
   assert.throws(() => ownerDeliveryFromPrd(parsePrd(GOOD_PRD + section + section, "docs/prds/example.md")), { code: "TASK_DELIVERY_SCOPE" });
+});
+
+test("CRLF preserves ownership validation and fingerprint without weakening malformed-contract checks", () => {
+  const contract = ownerDelivery('Preserve the café greeting.\r\nOpen a PR for review.');
+  const section = `\n## Coordinator delivery contract\n\n\`\`\`json\n${JSON.stringify(contract, null, 2)}\n\`\`\`\n`;
+  const lf = GOOD_PRD + section, crlf = lf.replaceAll("\n", "\r\n");
+  const parsed = parsePrd(crlf, "docs/prds/example.md"), original = parsePrd(lf, parsed.path);
+  assert.deepEqual(ownerDeliveryFromPrd(parsed), contract);
+  assert.equal(check(parsed).ok, true);
+  assert.equal(prdFingerprint(parsed), prdFingerprint(original));
+  assert.deepEqual(contractDiff(original, parsed), []);
+  // Formatting normalization must not change the original request's escaped bytes.
+  const changedSource = parsePrd(lf.replace('\\r\\n', '\\n'), parsed.path);
+  assert.notEqual(prdFingerprint(changedSource), prdFingerprint(original));
+  for (const malformed of [crlf + section.replaceAll("\n", "\r\n"), crlf + "Unexpected trailing text", crlf.replace('"pull_request"', '"merge"')])
+    assert.throws(() => ownerDeliveryFromPrd(parsePrd(malformed, parsed.path)), { code: "TASK_DELIVERY_SCOPE" });
 });
 
 test("publication is fulfilled only by matching canonical delivery proof, never provider output", () => {

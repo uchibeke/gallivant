@@ -114,6 +114,37 @@ test("implementation lifecycle nouns reach ordinary preparation without changing
   assert.equal(calls, 5);
 });
 
+test("unsupported publication directives refuse before preparation or saved task effects", async () => {
+  const w = world({ prepare: async () => assert.fail("ambiguous delivery cannot invoke preparation") });
+  const before = w.service.list();
+  for (const clause of ["Publish the changes for review", "Send a PR for review", "Open a pull-request", "Publication only after tests pass", "PR only after approval", "Publishing requires approval", "Only after tests pass"]) {
+    await assert.rejects(w.service.prepare({ text: `Implement export. ${clause}.` }), { code: "TASK_DELIVERY_SCOPE", taskEffects: "none" });
+    assert.deepEqual(w.service.list(), before);
+    assert.deepEqual(w.ctx.state.entries(), []);
+  }
+});
+
+test("initial local-only and withheld delivery instructions refuse before planning or task effects", async () => {
+  const w = world({ prepare: async () => assert.fail("delivery restrictions cannot invoke preparation") });
+  for (const restriction of ["Keep the change local", "Keep this local", "Keep changes local-only", "Do not push", "Return a patch only", "Only return a patch", "Just return a diff", "Do not send it for review", "Wait for my approval"])
+    for (const text of [`Implement CSV export. ${restriction}.`, `Implement CSV export. Open a PR for review. ${restriction}.`]) {
+      await assert.rejects(w.service.prepare({ text, run: true }), { code: "TASK_DELIVERY_SCOPE", taskEffects: "none" });
+      assert.deepEqual(w.service.list().tasks, []);
+      assert.deepEqual(w.ctx.state.entries(), []);
+    }
+  assert.equal(w.daemonCalls(), 0);
+});
+
+test("quoted delivery examples and ordinary product vocabulary remain implementation requirements", async () => {
+  for (const text of ['Document "Keep the change local", "Do not push" and `Return a patch only`.',
+    "Implement branch sorting. Update the patch renderer. Cache local timezone offsets."]) {
+    const w = world(), result = await w.service.prepare({ text });
+    assert.equal(result.status, "ready");
+    assert.deepEqual(result.requirements.map(r => r.text), [text]);
+    assert.deepEqual(w.ctx.state.entries(), []);
+  }
+});
+
 test("a conflicting delivery answer leaves its question, revision and preparation budget untouched", async () => {
   const w = world({ prepare: async (_ctx, task) => JSON.stringify(draftFor(task, { question: true })) });
   const first = await w.service.prepare({ text: "Implement export. Open a PR for review." });
@@ -168,6 +199,58 @@ test("publication punctuation and courtesy never become planner requirements", a
     assert.ok(saved.requirements.every(r => !/^[.;]|\bPlease\s*$/i.test(r.text)));
     assert.equal(saved.requirements.length, text.includes("Do not merge") ? 2 : 1);
   }
+});
+
+test("publication connectors never enter newly prepared provider criteria or stories", async () => {
+  for (const connector of [", and ", ", and then ", ", then ", ", ", " and ", " and then ", " then "]) {
+    const text = `Implement CSV and JSON export${connector}open a PR for review; do not merge or add dependencies.`;
+    const w = world(), prepared = await w.service.prepare({ text }), saved = taskStore(w.home).read(prepared.taskId);
+    assert.equal(prepared.status, "ready", connector);
+    assert.deepEqual(saved.requirements.map(r => r.text), ["Implement CSV and JSON export", "do not merge or add dependencies."]);
+    const executable = prepared.draft.text.split("## User stories\n")[1].split("## Verify\n")[0];
+    assert.match(executable, /"Implement CSV and JSON export"/);
+    assert.doesNotMatch(executable, /open a PR|export,|export and|export then/);
+    assert.match(executable, /do not merge or add dependencies/);
+    assert.equal(saved.ownerDelivery.version, 2);
+    const started = await w.service.start({ taskId: prepared.taskId, expectedRevision: prepared.revision, run: true, noDaemon: true });
+    assert.deepEqual(w.ctx.state.get(started.implementation.id).task.ownerDelivery, saved.ownerDelivery);
+  }
+});
+
+test("ambiguous quoted or multiline publication connectors refuse before preparation effects", async () => {
+  const w = world({ prepare: async () => assert.fail("ambiguous connector cannot invoke preparation") });
+  for (const text of ['Implement export, "preserve CSV headers" open a PR for review.', "Implement export,\nand open a PR for review.", "Implement export, and\nopen a PR for review."]) {
+    await assert.rejects(w.service.prepare({ text }), { code: "TASK_DELIVERY_SCOPE", taskEffects: "none" });
+    assert.deepEqual(w.service.list().tasks, []);
+    assert.deepEqual(w.ctx.state.entries(), []);
+  }
+});
+
+test("saved version-one connector ownership replays and starts without rewriting approved scope", async () => {
+  const text = "Implement CSV export, and open a PR for review.", split = text.indexOf("open");
+  const legacy = { version: 1, offsets: "utf16", source: text, spans: [
+    { start: 0, end: split, owner: "implementation" },
+    { start: split, end: text.length, owner: "coordinator", kind: "pull_request" },
+  ] };
+  // Seed the exact version-one accepted contract and provider requirements,
+  // as a saved intake from the previous canonical boundary would contain.
+  const w = world({ prepare: async (_ctx, task) => {
+    task.ownerDelivery = structuredClone(legacy);
+    task.requirements = [{ id: "r-1", text: "Implement CSV export, and" }];
+    return JSON.stringify(draftFor(task));
+  } });
+  const input = { text, requestId: "saved-connector-contract" };
+  const prepared = await w.service.prepare(input), store = taskStore(w.home), before = store.read(prepared.taskId);
+  assert.equal(prepared.status, "ready");
+  assert.deepEqual(await w.service.prepare(input), prepared);
+  assert.deepEqual(store.read(prepared.taskId), before);
+  const started = await w.service.start({ taskId: prepared.taskId, expectedRevision: prepared.revision, run: true, noDaemon: true });
+  const after = store.read(prepared.taskId);
+  assert.deepEqual(after.ownerDelivery, legacy);
+  assert.deepEqual(after.requirements, before.requirements);
+  assert.equal(after.draft.hash, before.draft.hash);
+  assert.deepEqual(after.readiness, before.readiness);
+  assert.deepEqual(w.ctx.state.get(started.implementation.id).task.ownerDelivery, legacy);
 });
 
 test("inline publication connectors never become authoritative planner requirements", async () => {
@@ -257,19 +340,31 @@ test("new task criteria collapse identical owner coverage without dropping const
 });
 
 test("documented CLI and structured preparation examples select an accepted adapter", () => {
+  const guides = ["docs/tasks.md", "README.md", "docs/install.md", "docs/openai-agents.md"];
+  const examples = [];
+  for (const guide of guides) {
+    const text = readFileSync(new URL(`../${guide}`, import.meta.url), "utf8");
+    const commands = [...text.matchAll(/```sh\n([\s\S]*?)\n```/g)]
+      .flatMap(match => match[1].replace(/\\\n\s*/g, " ").split("\n"))
+      .filter(command => /(?:^|\|)\s*gallivant task (?:["']|--stdin)/.test(command));
+    assert.ok(commands.length, `${guide} must provide a preparation example`);
+    examples.push(...commands.map(command => ({ command, harness: command.match(/--harness\s+([\w-]+)/)?.[1] })));
+  }
+  assert.ok(examples.some(({ command }) => command.includes("--stdin")), "check stdin preparation too");
   const docs = readFileSync(new URL("../docs/tasks.md", import.meta.url), "utf8");
-  const readme = readFileSync(new URL("../README.md", import.meta.url), "utf8");
-  const cli = docs.match(/```sh\n([\s\S]*?)\n```/)[1].replace(/\\\n\s*/g, " ").split("\n");
-  assert.equal(cli.length, 2, "check both text and stdin preparation examples");
-  const examples = [...cli, readme.match(/`(gallivant task [^`]+)`/)[1]].map(command => ({
-    command, harness: command.match(/--harness\s+(\w+)/)?.[1],
-  }));
   const structured = docs.match(/await tasks\.prepare\(\{([\s\S]*?)\n\}\);/)[1];
   examples.push({ command: "tasks.prepare", harness: structured.match(/harness:\s*'([^']+)'/)?.[1] });
   for (const { command, harness } of examples) {
     assert.ok(harness, `${command} must explicitly select a configured preparation adapter`);
-    const spec = buildPreparationRun({ harness, config: CONFIG, mode: "start", session: "6f1c2d3e-1111-4111-8111-111111111111", prompt: "draft", cwd: "/tmp/fixture" });
-    assert.equal(spec.boundary, PREPARATION_BOUNDARY, command);
+    const capability = capabilitiesFor(harness);
+    assert.ok(capability.available && capability.preparation, command);
+    if (capability.transport === "cli") {
+      const spec = buildPreparationRun({ harness, config: CONFIG, mode: "start", session: "6f1c2d3e-1111-4111-8111-111111111111", prompt: "draft", cwd: "/tmp/fixture" });
+      assert.equal(spec.boundary, capability.preparation.boundary, command);
+    } else {
+      assert.equal(capability.preparation.environment, "none", command);
+      assert.equal(capability.preparation.authority, "text-only", command);
+    }
   }
 });
 
@@ -716,8 +811,8 @@ test("falsely mapped planner behavior cannot enter owner-derived criteria or sto
     let r = await (cli ? taskCommand(w.ctx, { args: ["prepare", REQUEST], values: { run: true, context: input.context }, service: w.service }) : w.service.prepare(input));
     if (phase === "answer") {
       assert.equal(r.status, "needs-input"); assert.deepEqual(w.ctx.state.entries(), []);
-      // Publication restrictions now require explicit scope clarification. This
-      // test concerns hostile planner prose, so keep its answer in product scope.
+      // This test exercises owner-derived implementation constraints. Publication
+      // changes require clarification and are covered by the refusal tests above.
       const answer = "Use JSON only.\nDo not expose credentials.";
       r = await (cli ? taskCommand(w.ctx, { args: ["answer", r.taskId], values: { revision: String(r.revision), "request-id": "derived-answer", answer: ["q-r-1=" + answer] }, service: w.service }) : w.service.answer({ taskId: r.taskId, expectedRevision: r.revision, operationId: "derived-answer", answers: { "q-r-1": answer } }));
       assert.match(r.draft.text, /Use JSON only/); assert.match(r.draft.text, /Do not expose credentials/);

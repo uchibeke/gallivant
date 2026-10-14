@@ -12,7 +12,10 @@ import { doctor, renderDoctor } from "../lib/commands/doctor.mjs";
 import { ready } from "../lib/commands/ready.mjs";
 import { newPrd } from "../lib/commands/new.mjs";
 import { resume } from "../lib/commands/resume.mjs";
-import { serve, DEFAULT_PORT } from "../lib/commands/serve.mjs";
+import { startServices } from "../lib/commands/start_services.mjs";
+import { trackerPort, stopTracker } from "../lib/tracker_process.mjs";
+import { init } from "../lib/commands/init.mjs";
+import { VERSION } from "../lib/fs.mjs";
 import { hasConfig } from "../lib/config.mjs";
 import { resolveHandle } from "../lib/state.mjs";
 import { requestControl } from "../lib/control.mjs";
@@ -22,8 +25,11 @@ import { TASK_VERSION } from "../lib/tasks.mjs";
 import { learnCommand } from "../lib/commands/learn.mjs";
 import { safeDisplay } from "../lib/learning_data.mjs";
 
-const HELP = `gallivant: write a PRD, mark it ready, go outside.
+const HELP = `gallivant: give an agent a task, let the review loop run, go outside.
 
+  gallivant init [--harness codex|claude] [--worktrees <directory>]
+                                         create a private config; never overwrite settings or sign in for you
+  gallivant --version                    print the installed version
   gallivant doctor [--send] [--probe]   install checklist and health probe
   gallivant learn [--repo owner/repo] [--since YYYY-MM-DD] [--until YYYY-MM-DD] [--dry-run]
                                          bounded historical feedback collection; independent coding cursor
@@ -42,18 +48,18 @@ const HELP = `gallivant: write a PRD, mark it ready, go outside.
                                          write a starting PRD into docs/prds/ of the repo you are in
   gallivant task [prepare] "<request>" [--stdin] [--dir <checkout>] [--repo <owner/repo>]
                 [--base <branch>] [--harness <name>] [--context <file>] [--request-id <id>] [--run] [--json]
-                [--completion-target delivery_ready|integrated]
+                [--completion-target delivery_ready|integrated] [--verify <command>] [--no-daemon]
                                          prepare an isolated brief; --run authorizes its exact ready revision
-                                         Claude preparation disables tools; other adapters stop until isolated
-                                         preparation support exists. Hand-authored ready/start remains available
+                                         Claude, Codex and OpenAI Agents support isolated preparation.
+                                         Other local harnesses use written PRDs; Codex Cloud dispatch is unavailable
   gallivant task answer <task-id> --revision <n> --request-id <answer-id> --answer <question-id=text>
-                                         resume saved questions; --answer and --context may repeat
+                                         resume saved questions; --answer, --context and --verify may repeat
   gallivant task inspect <task-id> [--json] | task list [--json]
   gallivant task resume|validate|start <task-id> --revision <n> [--run] [--no-daemon] [--json]
                                          shared versioned operations; start needs prior or --run authorization
   gallivant ready <prd.md> [--check]     check the PRD against the contract; flip it to ready when it passes
-  gallivant start <prd.md> [--no-daemon] [--base <branch>]
-                                         start a session for a ready PRD, and bring the daemon up to watch it.
+  gallivant start [prd.md] [--no-daemon] [--no-server] [--no-open] [--port 8791] [--base <branch>]
+                                         start the daemon and dashboard, then open it; optionally start a ready PRD
                                          --base sets the branch the PR targets and remembers it for this repository
   gallivant register <pr-url> [--harness <name>] [--session <id>] [--worktree <dir>]
                                          watch a hand-made PR; on an existing entry, reset it
@@ -62,9 +68,10 @@ const HELP = `gallivant: write a PRD, mark it ready, go outside.
   gallivant chain [<name>] [--cancel | --retry [--resnapshot]]
                                          inspect chains, stop future work, or retry after fixing a blocker
   gallivant up [--once]                  the daemon: recover from GitHub, then tick every poll_seconds
-  gallivant down                         stop the daemon. A run already spawned keeps going
+  gallivant down                         stop the daemon and standalone dashboard; active runs keep going
   gallivant status [--all] [--json]      needs-you, running, daemon health
-  gallivant serve [--port 8791]          local tracker: live logs, PR recheck and session updates
+  gallivant serve [--port 8791] [--no-open] [--no-daemon] [--foreground]
+                                         same startup as start without a PRD; foreground keeps the tracker attached
   gallivant why <handle>                 why a PR stopped; handle is <repo>#<pr>, a PRD path, or the id
   gallivant resume <handle> [--note "..."] [--resnapshot] [--fresh-session]
                                          put a stopped entry back to work in the session that was doing it;
@@ -80,7 +87,8 @@ Config: $GALLIVANT_HOME/config.json (default ~/.gallivant). Run doctor for the f
 
 const OPTIONS = {
   check: { type: "boolean" }, once: { type: "boolean" }, all: { type: "boolean" }, json: { type: "boolean" },
-  send: { type: "boolean" }, probe: { type: "boolean" }, help: { type: "boolean", short: "h" },
+  send: { type: "boolean" }, probe: { type: "boolean" }, help: { type: "boolean", short: "h" }, version: { type: "boolean", short: "v" },
+  "no-server": { type: "boolean" }, "no-open": { type: "boolean" }, foreground: { type: "boolean" }, worktrees: { type: "string" },
   "no-daemon": { type: "boolean" }, note: { type: "string" }, resnapshot: { type: "boolean" }, "fresh-session": { type: "boolean" }, interrupt: { type: "boolean" },
   base: { type: "string" }, harness: { type: "string" }, session: { type: "string" }, worktree: { type: "string" }, dir: { type: "string" }, port: { type: "string" },
   cancel: { type: "boolean" }, retry: { type: "boolean" },
@@ -93,18 +101,22 @@ const OPTIONS = {
   "key-path": { type: "string" }, "ssh-keygen": { type: "string" }, "learning-budget": { type: "string" },
 };
 
-const portOf = v => {
-  if (v === undefined) return DEFAULT_PORT;
-  const n = Number(v);
-  if (!Number.isInteger(n) || n < 1 || n > 65535) throw new Error(`--port takes a port number, not "${v}"`);
-  return n;
-};
-
 async function dispatch(argv) {
   const options = argv[0] === "learn" ? { ...OPTIONS, run: { type: "string" } } : OPTIONS;
   const { values, positionals } = parseArgs({ args: argv, options, allowPositionals: true });
   const [cmd, arg] = positionals;
+  if (values.version) { console.log(VERSION); return 0; }
   if (values.help || !cmd || cmd === "help") { console.log(HELP); return 0; }
+  if (cmd === "init") {
+    const r = await init({ harness: values.harness, worktrees: values.worktrees });
+    console.log(`Created ${r.file}\nHarness: ${r.harness}\nWorktrees: ${r.config.worktrees}\n\nNext: gallivant doctor\nComplete the harness guardrail and repository setup before starting work:\n  https://github.com/uchibeke/gallivant/blob/main/docs/install.md\nPackaged templates:\n  ${r.templates.passport}\n  ${r.templates.sandbox}`);
+    return 0;
+  }
+  if (values.foreground && cmd !== "serve") throw new Error("--foreground is available only with serve");
+  if (values.foreground && values["no-server"]) throw new Error("--foreground cannot be combined with --no-server");
+  // Validate before a PRD can dispatch paid work.
+  const serviceOptions = { port: ["start", "serve"].includes(cmd) ? trackerPort(values.port) : undefined,
+    noDaemon: values["no-daemon"], noServer: values["no-server"], noOpen: values["no-open"], foreground: values.foreground };
   if (cmd === "learn") {
     const ctx = makeContext({ needConfig: arg !== "setup" && (arg !== "doctor" || !!values.repo), readOnly: !!values["dry-run"] || ["list", "show", "report", "explain", "doctor"].includes(arg) });
     const owner = !values["dry-run"] && !["list", "show", "report", "explain", "doctor", "setup"].includes(arg) ? acquireCliMutation(ctx.home) : null;
@@ -173,38 +185,32 @@ async function dispatch(argv) {
       } else if (operation) console.log("Saved. Run gallivant up to dispatch the chain.");
       return 0;
     }
-    case "start": {
-      if (!arg) throw new Error("start needs a PRD path");
-      const r = await start(ctx, { path: arg, base: values.base });
-      console.log(`${r.id}: started in ${r.worktree} on ${r.branch} -> ${r.base} (run ${r.run})`);
-      // Where the base came from, said once, because a base that is not the repository's default is the thing an
-      // operator most wants confirmed before a session opens a pull request with it.
-      if (r.baseSource === "flag") console.log(`Base branch ${r.base} remembered for this repository; later starts here need no --base.`);
-      else if (r.baseSource === "config") console.log(`Base branch ${r.base} comes from repos in config.json.`);
-      // `start` spawns the session; the daemon is what notices the PR, dispatches fixes and reaches ready. Without it
-      // the session opens a pull request nobody looks at again, which is a silent stall rather than an error, so the
-      // daemon comes up here rather than being a second command in a second terminal that an operator can forget.
-      // `--no-daemon` is for the case where one is about to be run in the foreground.
-      if (values["no-daemon"]) console.log("\nNo daemon started. Nothing watches the pull request until you run: gallivant up");
-      else {
-        try {
-          const d = await upInBackground(ctx);
-          console.log(d ? `\nDaemon running in the background (pid ${d.pid}). Watch it with: gallivant status` : "\nDaemon already running.");
-        } catch (e) { console.log(`\nThe session started, but the daemon did not: ${e.message}\nRun it yourself so the pull request is watched:\n  gallivant up`); }
+    case "start":
+    case "serve": {
+      if (cmd === "serve" && arg) throw new Error("serve does not take a PRD; use gallivant start <prd.md>");
+      if (cmd === "start" && arg) {
+        const r = await start(ctx, { path: arg, base: values.base });
+        console.log(`${r.id}: started in ${r.worktree} on ${r.branch} -> ${r.base} (run ${r.run})`);
+        if (r.baseSource === "flag") console.log(`Base branch ${r.base} remembered for this repository; later starts here need no --base.`);
+        else if (r.baseSource === "config") console.log(`Base branch ${r.base} comes from repos in config.json.`);
       }
-      return 0;
+      const services = await startServices(ctx, serviceOptions);
+      for (const message of services.messages) console.log(message);
+      for (const error of services.errors) console.error(error);
+      return services.errors.length ? 1 : 0;
     }
     case "register": { if (!arg) throw new Error("register needs a PR URL"); const r = await register(ctx, { url: arg, harness: values.harness, session: values.session, worktree: values.worktree }); console.log(`${r.id}: watching PR #${r.pr} with ${r.harness}`); return 0; }
     case "up": await up(ctx, { once: values.once }); return 0;
     case "down": {
+      const tracker = stopTracker(ctx);
       const r = down(ctx);
-      if (!r.stopped) { console.error(`error: ${r.why}`); return 1; }
-      console.log(`daemon ${r.pid} stopping (up since ${r.startedAt}). A run already spawned keeps going; the next \`gallivant up\` settles it.`);
+      if (tracker.stopped) console.log(`Tracker ${tracker.pid} stopping.`);
+      if (!r.stopped && !tracker.stopped) { console.error(`${r.why}; ${tracker.why}`); return 1; }
+      if (r.stopped) console.log(`Daemon ${r.pid} stopping. Active runs keep going; gallivant start resumes monitoring.`);
+      if (tracker.unverified) { console.error(tracker.why); return 1; }
       return 0;
     }
     case "status": { const r = status(ctx, { all: values.all, json: values.json }); console.log(r.text); return r.exitCode; }
-    // Never resolves: the server holds the process open until it is interrupted.
-    case "serve": { const port = portOf(values.port); await serve(ctx, { port }); console.log(`gallivant serve: http://127.0.0.1:${port}  this machine only. Ctrl-C to stop.`); return new Promise(() => {}); }
     case "new": {
       if (!arg) throw new Error("new needs a name, for example: gallivant new widget-export");
       const r = await newPrd(ctx, { name: arg, harness: values.harness, dir: values.dir });

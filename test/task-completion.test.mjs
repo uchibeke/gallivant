@@ -180,3 +180,16 @@ test("malformed owner proof cannot suppress work or prevent another entry from a
   const results = await w.tick.tick();
   assert.ok(results.some(result => result.id === otherId && result.ok), "an independent task must still advance");
 });
+
+
+test("missing or empty repository and base identities cannot qualify handoff or suppress work", async t => {
+  const w = world(t, "delivery_ready"); await w.tick.tick();
+  for (const [entryField, proofField] of [["repo", "repository"], ["base", "base"]]) {
+    for (const value of [undefined, null, "", "   ", 17]) {
+      const broken = structuredClone(w.entry());
+      broken[entryField] = value; broken.completionEvidence.delivery[proofField] = value;
+      assert.equal(completionView(null, broken).status, "unverified", `${entryField}: ${value}`);
+      assert.equal(coordinatorEntryActive(broken), true, `${entryField}: ${value}`);
+    }
+  }
+});

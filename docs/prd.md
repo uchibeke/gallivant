@@ -7,13 +7,26 @@ Candidate/repository instructions are not learning approval authority. See
 collection-only qualification status; an incomplete implementation receipt must
 keep unmet criteria false.
 
-A PRD is the whole brief a session gets, and the only thing you write by hand. So the rules are strict, there is no override flag, and `gallivant start` refuses a PRD that has not passed `gallivant ready`.
+A PRD is the structured brief for one repository deliverable. Write it yourself,
+or let [natural-language intake](tasks.md) prepare it from a request. Both paths
+must pass the same rules before implementation; there is no validation override.
+The agent also receives the repository and any explicitly selected source files,
+permissions and review feedback.
+
+The deliverable need not be code. A research report, documentation update or
+content package can use this contract when its outputs live in the repository.
+For example, specify a report with cited sources, a fixed comparison table and
+no changes to existing code. Verify its required files/schema/link checks using
+commands the repository actually provides, plus `git diff --check`. Formatting
+checks alone do not prove research accuracy; acceptance evidence and review still
+need to establish the requested outcome. Account operations, publishing to an
+external service and deployments are not implied by a repository task.
 
 ```bash
 gallivant new widget-export     # from anywhere inside the repo the work belongs to
 # write it
 gallivant ready path/to/repo/docs/prds/widget-export.md --check   # the checklist, nothing written
-gallivant ready path/to/repo/docs/prds/widget-export.md           # flips status to ready and commits the file
+gallivant ready path/to/repo/docs/prds/widget-export.md           # records readiness and updates the file; does not commit
 gallivant start path/to/repo/docs/prds/widget-export.md
 ```
 
@@ -21,9 +34,9 @@ gallivant start path/to/repo/docs/prds/widget-export.md
 
 | Rule | Passes when |
 |---|---|
-| path | The file is `docs/prds/<id>.md` in the target repo, `<id>` lowercase letters, digits and dashes. The id becomes the branch `gallivant/<id>`. |
-| frontmatter | A `---` block with `status: draft` or `ready`, and `harness: claude` or `codex`. |
-| title | Exactly one H1, 8 to 80 characters. It becomes the PR title. |
+| path | The file is `docs/prds/<id>.md` in the target repo, `<id>` lowercase letters, digits and dashes. New runs use branch `work/<id>`; existing legacy branches remain readable. |
+| frontmatter | A `---` block with `status: draft` or `ready`, and a registered `harness` ID. Registration does not guarantee dispatch availability; see [support](../README.md#harness-support). |
+| title | Exactly one H1, 8 to 80 characters. It supplies the PR title, subject to public-output validation. |
 | problem | `## Problem` has at least 40 words. Who hurts, when, and what changes when this ships. |
 | stories | Every bullet under `## User stories` reads `As a <who>, I want <what>, so that <why>`. At least one. |
 | criteria | Every bullet under `## Acceptance criteria` contains Given, When and Then. At least one per user story. A criterion may run over indented continuation lines. |
@@ -38,7 +51,7 @@ gallivant start path/to/repo/docs/prds/widget-export.md
 
 ## Optional frontmatter
 
-Three keys beyond `status` and `harness` are read if present:
+These keys beyond `status` and `harness` are read if present:
 
 - `aport_decision` is written by `gallivant ready`, the receipt of the decision that made the PRD ready. It is not
   part of the rules.
@@ -88,7 +101,12 @@ The checker does not read files. It takes a Request, which is what a source prod
 { id, repo, title, body, harness, status, source: { kind, url, author }, raw }
 ```
 
-The only source today is the PRD file, under `lib/sources/prd.mjs`. It parses the frontmatter, takes the id from the filename, and asks git which checkout the file is in, so `repo` arrives as `owner/name` on the Request rather than being worked out later by `start`. Nothing about writing or checking a PRD changes because of this.
+The repository-file source lives under `lib/sources/prd.mjs`. It parses
+frontmatter, takes the ID from the filename and resolves the repository.
+Natural-language intake additionally drafts a PRD with owner requirement mappings,
+then uses this same checker/readiness path. Intake is an implemented entry point,
+not a second completion system. Other source proposals in `docs/prds` and
+`docs/design` are specifications, not necessarily implemented transports.
 
 What it buys is that the rules are the rules. `path` is the one rule that depends on where a brief lives rather than on what it says, and it declares that in its own data (`kinds: ["prd"]`); every other rule has no scope and applies to any Request. A source that has no path is not reported as failing a rule about filenames, and it is held to all ten of the others. That is the extension point: a brief arriving some other way is an adapter plus somewhere to record its verdict, not a second gate with its own drift.
 
@@ -104,13 +122,17 @@ file in your checkout are two files, and until this existed nothing compared the
 the run finished against criteria nobody was asking for and the PR arrived satisfying a document that had changed.
 
 So the two are compared, and what happens depends on what you changed. The comparison is in the contract's own terms:
-the acceptance criteria, the Verify commands, the `harness`, `context_paths` and `sources`. Those five are what the gate judges,
-what the prompts carry and what decides where a session may read. Nothing else about the file is part of it.
+the acceptance criteria, Verify commands, `harness`, `context_paths`, `sources`,
+and the **Coordinator delivery contract** when present. The ownership section
+keeps a natural-language publication instruction separate from provider work.
+It is validated and fingerprinted too; malformed edits cannot be silently ignored.
+Physical LF/CRLF formatting changes are equivalent, while the JSON-escaped original
+request bytes remain exact.
 
 | What you changed | What happens |
 |---|---|
-| Anything outside those four: the Problem prose, a reworded story, a new Out of scope bullet | Nothing stops. The snapshot follows your edit so later prompts carry your current wording, the log says it happened, and you are not told. Stopping a run to ask about a typo fix would be worse than useless. |
-| A criterion, a Verify command, the harness, `context_paths`, `sources` | The entry stops with `prd-changed` before the gate runs, and `gallivant why` names each difference. |
+| Anything outside those contract fields: the Problem prose, a reworded story, a new Out of scope bullet | Nothing stops. The snapshot follows your edit so later prompts carry your current wording, the log says it happened, and you are not told. Stopping a run to ask about a typo fix would be worse than useless. |
+| A criterion, a Verify command, the harness, `context_paths`, `sources` or coordinator delivery ownership | The entry stops with `prd-changed` before the gate runs, and `gallivant why` names each difference. |
 | The ORDER of two criteria, without changing a word of either | Also `prd-changed`. Criteria are numbered by position, and the receipt on the open PR attests `ac-1` and `ac-2` by those numbers, so swapping two of them leaves the receipt attesting each criterion with the other's evidence. |
 | The file no longer passes the contract | `prd-illegal`. Fix the file and `gallivant ready` it again; it cannot become the brief the gate judges as it stands. |
 | The file is gone from your checkout | `prd-gone`. Restore it, or `gallivant remove` the entry. |
@@ -155,7 +177,12 @@ entries with no record of where your copy lives, so there is nothing to compare 
 
 ## What the session receives
 
-The full PRD text, quoted as data, with the branch, the base branch, the Verify commands and the rule that it must open exactly one PR and never touch the default branch. After a fix round it receives the reviewer's findings the same way, plus the Verify commands again.
+The session receives the full PRD as data, the branch/base, selected sources,
+Verify commands and scope constraints. Local execution asks the agent to deliver
+one PR without changing the base branch. Hosted execution returns artifacts;
+the coordinator verifies and publishes them with its own GitHub credentials.
+Review fixes return to the same session with current findings and checks. The
+[execution guide](execution.md) describes the ownership boundaries.
 
 ## The completion receipt
 
@@ -164,7 +191,7 @@ Passing the contract gets a PRD started. Getting the PR to `ready-for-human` nee
 Each Acceptance criteria bullet becomes a criterion with a stable id, `ac-1`, `ac-2`, in order. The session is told, at start and on every fix round, to end the PR body with a receipt:
 
 ````markdown
-```gallivant-attestations
+```work-attestations
 {
   "task_id": "widget/widget-export",
   "output_type": "code",

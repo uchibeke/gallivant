@@ -94,6 +94,12 @@ supported `targets`. The shared prepare schema accepts only
 `completion: { target: 'delivery_ready' | 'integrated' }`; the selected policy is
 persisted through intake and implementation ownership. Task, list, model and
 evidence projections expose `completion` from saved coordinator observations.
+For `delivery_ready`, a qualified saved handoff stops automatic observation and
+fixes. Explicit queued controls reopen the normal workflow. `integrated` and
+legacy runs retain monitoring. Host schedulers use the exported
+`coordinatorEntryActive` predicate instead of treating every `ready-for-human`
+entry as active; the predicate requires matching repository, PR, base, head and
+gate proof. Read `completion.monitoring` for the saved view's monitoring status.
 Use `completion.status`, not a provider success or a terminal PR state, to report
 fulfillment. `awaiting_integration` means the qualified PR is still being watched;
 `blocked` or `unverified` requires attention. Both targets use the GitHub PR
@@ -204,15 +210,20 @@ Agents API credentials, exact model/environment access and inference/compute
 allowance must be supplied by the authorized account; no subscription entitlement
 is inferred. Both transports remain exported and covered by installed fixtures.
 
-The inherited registry currently declares **no bounded natural-language
-preparation for either hosted provider**. Their `canPrepare:false` and setup
-remedy are exposed per configured repository. A task selecting either provider
-retains a blocked preparation record with no paid call; it cannot gain readiness
-from an invented tool-free mode. The installed full intake/review flow uses the
-existing supported local preparation boundary. Separate installed API/Cloud
-transport suites exercise implementation/recovery/publication and the hosted
-preparation refusal. Full hosted natural-language flows remain unqualified until
-an enforced provider preparation adapter and its account access are available.
+The current registry declares bounded natural-language preparation for
+`openai-agents`: `agents-text-only-v1`, authority `text-only`, environment `none`.
+Its creation request disables tools and delegation; effective session and output
+checks enforce that boundary. Claude and Codex have their own registered local
+preparation boundaries. Codex Cloud, Gemini, OpenCode and Goose expose
+`canPrepare:false` with a remedy; selecting them for preparation cannot silently
+fall back to another provider or gain implementation authority.
+
+Capability responses describe this implementation, not account entitlement or a
+completed live workflow. Installed fixtures cover shared API/Cloud transport,
+recovery and publication; preparation qualification and live account prerequisites
+remain explicit in [preparation](preparation.md), [Agents setup](openai-agents.md)
+and [Cloud availability](codex-cloud.md). The package can be integrated through
+MCP or the scoped operation API, but is not itself a deployed multi-tenant service.
 
 ## Build, configure, upgrade and rollback
 
@@ -247,6 +258,12 @@ artifact. Unpinned legacy state can be backed up with an explicit compatible
 manifest and must be migrated before enabling its coordinator.
 Verify store consistency before switching bindings. Keep old runtime artifacts
 and credential bindings available for rollback; do not merge/upgrade live jobs.
+
+A qualified `delivery_ready` handoff releases its runtime pin even while its
+retained registry state is `ready-for-human`. Pending controls, live or uncollected
+execution, unresolved intake/receipts and active chains still prevent migration.
+Legacy tasks, `integrated` tasks awaiting merge and unresolved `needs-human` work
+retain their pins; the scheduling pause alone does not make a namespace idle.
 
 Package config supplies publisher `APort`, exact endpoint, `resource` configuration,
 owner-selected support email/product/support/privacy/terms/license URLs and explicit

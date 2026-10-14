@@ -1,10 +1,18 @@
 # Execution transport contract
 
-This foundation reuses the intake task service, registry claims, isolated checkout
-and canonical PR lifecycle. Startup refuses a missing intake predecessor with
-`EXECUTION_DEPENDENCY`; merge that predecessor into the selected base. It does not
-recreate intake or introduce another review engine. The approved brief is
-[the execution PRD](prds/hosted-codex-harnesses.md).
+Gallivant runs local CLI harnesses and a hosted Agents API through one execution
+boundary, task service, registry, isolated checkout and PR lifecycle. The
+coordinator still runs on your machine or a Node host you operate; choosing a
+hosted harness does not host Gallivant's daemon for you. Repository outputs can
+be code, documentation, research or other verifiable artifacts. Start with a
+[natural-language task](tasks.md) or an approved [PRD](prd.md).
+
+The execution layer reuses registry claims and the canonical PR lifecycle.
+`assertExecutionDependency` refuses a runtime assembled without the shared intake
+service (`EXECUTION_DEPENDENCY`); normal installations include it. Consumers must
+use a compatible complete package instead of recreating intake or a second review
+engine. The original approved implementation brief is
+[the execution PRD](https://github.com/uchibeke/gallivant/blob/main/docs/prds/hosted-codex-harnesses.md).
 
 ## Availability and capabilities
 
@@ -16,12 +24,12 @@ continuation, observability, cancellation/interrupt, and cost/hard-cap support.
 Mandatory policy, model and environment choices are checked before dispatch;
 unsupported choices refuse execution without falling back or changing defaults.
 Preparation is an optional versioned capability of that same selected provider.
-The existing Claude tools-off policy is declared by its adapter; task lifecycle
-code contains no Claude-only name gate. This base lacks a Codex preparation
-capability; its separately qualified adapter is awaiting integration as described
-in the [handoff](#next-milestone-handoff). Other native adapters likewise need an
-enforced limited-authority capability. A private HOME or a version/sign-in probe
-does not qualify one.
+Claude's tools-off policy, Codex's isolated preparation profile and Agents API's
+text-only `environment:none` policy are registered by their adapters; task
+lifecycle code contains no Claude-only name gate. Gemini, OpenCode and Goose
+currently support implementation from a ready PRD but have no enforced preparation
+capability. A private HOME or a version/sign-in probe does not qualify one. See
+[preparation](preparation.md) for boundaries and measured qualification.
 
 `openai-agents` has an implemented managed REST transport; see
 [account/environment setup and verification](openai-agents.md). `codex-cloud`
@@ -31,7 +39,7 @@ see [Cloud setup and recovery](codex-cloud.md). Offline fixtures
 exercise shared lifecycle behavior; they do not certify live account/model access
 or installed-plugin behavior. The separately opt-in Agents campaign retains unmet
 live prerequisites explicitly. Existing intake qualification blockers remain in
-[the intake evidence](audit/plugin-ready/README.md).
+[the intake evidence](https://github.com/uchibeke/gallivant/blob/main/docs/audit/plugin-ready/README.md).
 
 ## Exported boundary
 
@@ -720,12 +728,12 @@ returns the saved PR without executing commands again.
    resolve that version error before restarting; redispatch is not a migration.
 
 Run `npm run test:execution-backends` for focused G3/G3a/G6 fixture coverage and the
-full Verify set for regressions. [The foundation evidence](audit/plugin-ready/execution-foundation.json)
+full Verify set for regressions. [The foundation evidence](https://github.com/uchibeke/gallivant/blob/main/docs/audit/plugin-ready/execution-foundation.json)
 is an offline G8 receipt, with live-provider status explicitly unqualified.
-The [shared preparation follow-up](audit/plugin-ready/execution-preparation.json)
+The [shared preparation follow-up](https://github.com/uchibeke/gallivant/blob/main/docs/audit/plugin-ready/execution-preparation.json)
 records the owner correction, final verification and source/output review.
 
-## Next milestone handoff
+## Integration boundary and recorded milestone handoff
 
 M3/M4 and APort must consume these shared preparation/submit/inspection/result/
 control operations and the existing task service, without copying a runner or
@@ -752,12 +760,17 @@ installed-plugin behavior. Preserve the operator's model/provider defaults,
 limited preparation authority, bounded attempts and execution consent. Carry
 unmet live qualification evidence forward rather than substituting fixtures.
 
-The single M5/M6 connected execution successor is
+The original M5/M6 handoff identified the following connected execution successor.
+This is a recorded integration plan, not evidence that the external deployment
+is live or its gates have passed. Check the linked PR and the consumer's current
+release evidence before an installation:
+
+The connected execution successor is
 [`aporthq/agent-passport#417`](https://github.com/aporthq/agent-passport/pull/417),
 with canonical PRD `docs/prds/aport-task-delivery-workflow-integration.md` and job
 identity `aporthq/agent-passport/aport-task-delivery-workflow-integration`. It
-preserves the original T0–T9 requirements and stays draft until the actual M5
-portable artifact exists. M6 must reuse it, pin the artifact's version, commit,
+preserves the original T0–T9 requirements; the recorded plan requires the actual
+M5 portable artifact before its integration gate can pass. M6 must reuse it, pin the artifact's version, commit,
 integrity and actual exports, connect existing APort authentication, regional
 storage and shared UI to this task service and single coordinator, and qualify the
 full workflow. No second runner, duplicate foundation job or other-repository

@@ -1,5 +1,14 @@
 # Codex Cloud execution
 
+**This is Codex Cloud, not local Codex or Claude Code.** New Cloud dispatch is
+disabled because Gallivant cannot verify which repository the selected Cloud
+environment is connected to through the supported CLI interface. Sending work
+without that binding could target a different repository. Local `codex` and
+`claude` execution remain available; API-backed `openai-agents` is a separate
+implemented integration. See the [support table](../README.md#harness-support).
+There is no bypass flag; enabling this adapter requires a supported verification
+interface and qualification of the full repository/account boundary.
+
 `codex-cloud` implements the experimental Codex CLI transport through the shared
 task, execution journal, polling, GitHub gates and result writer. **New dispatch
 is unavailable:** the pinned CLI cannot prove which repository is connected to

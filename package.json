@@ -1,7 +1,7 @@
 {
   "name": "gallivant",
   "version": "0.2.0",
-  "description": "Write a PRD, mark it ready, go outside. Keeps coding-agent pull requests moving through review and CI without you.",
+  "description": "Turn repository tasks into reviewed pull requests with local or hosted agents, acceptance checks and a persistent review loop.",
   "type": "module",
   "bin": {
     "gallivant": "bin/gallivant.mjs",
@@ -36,14 +36,21 @@
     "templates",
     "README.md",
     "LICENSE",
+    "CONTRIBUTING.md",
+    "SECURITY.md",
     "docs/*.md",
     "npm-shrinkwrap.json"
   ],
   "engines": {
     "node": ">=22"
   },
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org"
+  },
   "scripts": {
     "test": "node --test test/*.test.mjs",
+    "test:install": "node test/install-package.mjs",
     "test:learning": "node --test test/learning.test.mjs test/learning-openssh.test.mjs test/learning-dispatch.test.mjs",
     "test:learning:live": "node test/learning-live.mjs",
     "test:execution-backends": "node --test test/execution-backends.test.mjs test/execution-preparation.test.mjs test/probe.test.mjs test/chains.test.mjs test/loop.test.mjs test/recovery.test.mjs test/review.test.mjs test/control.test.mjs test/tracker_controls.test.mjs test/tracker.test.mjs test/public_format.test.mjs test/public_output.test.mjs",

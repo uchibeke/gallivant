@@ -1,0 +1,60 @@
+# Runtime portability verification
+
+## Review fixes
+
+Both review findings were reproduced and addressed: executable lookup now supplies
+an absolute fallback PATH on Linux, and speculative `buildRun()` calls no longer
+create settings files. The runner owns each actual snapshot and cleans it after
+confirmed process exit, failed launch or recovered settlement. Unknown process
+ownership retains the file. Snapshot creation inside a checkout, including through
+a symlink, is refused.
+
+The wording now distinguishes the previously fixed coordinator verification shell
+and exact harness executable from this fix for Node inside harness tool shells.
+Native package selection depends on the Node process, not hardware alone.
+
+## Current verification
+
+- 92 focused tests passed, including shell restoration, all five local adapters on
+  start/resume, quoting, empty/missing PATH, preservation of guards, tool-free
+  preparation, actual snapshot cleanup, launch failures and restart recovery.
+- A native Claude Bash probe passed on macOS ARM64 / Node 22.22.0 with existing
+  guards and a $2 ceiling. It selected the launching Node and checkout-local npm
+  cache. No owned settings file remained after exit. Sanitized evidence is in
+  [runtime-portability-native.json](runtime-portability-native.json).
+- The real macOS verification sandbox preflight passed with network disabled and
+  filesystem access bounded to the checkout and trusted runtime.
+- The corrected full local suite passed all 1,351 tests with no failures or skips.
+  The snapshot cleanup optimization subsequently passed all 12 runtime tests.
+- All four [CI jobs](https://github.com/uchibeke/gallivant/actions/runs/37780950579)
+  passed on code revision `39433f5`: Ubuntu and macOS, each on Node 22 and 24.
+  Both platforms exercised the full suite after native isolation passed.
+
+## CI prerequisites
+
+Earlier CI runs failed native verification isolation on both platforms; Linux
+also exposed two merge fixtures lacking an explicit Git identity and the empty
+PATH regression. The fixtures now supply a synthetic identity. The workflow
+installs Bubblewrap and loads Ubuntu's packaged `bwrap-userns-restrict` AppArmor
+profile on Linux, and selects macOS Command Line Tools. AppArmor remains enabled;
+only the distribution's sandbox-helper profile is activated. macOS additionally
+allows the read-only `hw.pagesize_compat` query needed by libc/Node allocation.
+This is also present in [Chromium's sandbox policy](https://chromium.googlesource.com/chromium/src/sandbox/+/db7ad29144efff68d6b986f3057d4ac128b46b07/policy/mac/common.sb).
+A native
+preflight prints the actual synthetic sandbox-probe failure before the suite,
+so missing isolation is diagnosed directly. Enforcement remains required: no
+checks are skipped and no sandbox fallback is enabled.
+
+The matrix covers Ubuntu/macOS with Node 22/24. The code revision above is green;
+future changes must keep all four jobs passing. This is native OS/runtime and
+fixture coverage, not live model qualification for every provider.
+
+## Scope boundaries
+
+No agent-passport implementation files changed. No dependency lockfiles were
+rewritten to install a different architecture. No global Claude permissions
+were removed. The runtime grant is read-only, retains existing denies, and
+does not grant network destinations or general home-directory access.
+
+Remote providers retain their remote environments. A native Linux tool-shell
+session and native sessions for other local harnesses remain unverified.
