@@ -116,6 +116,16 @@ test("publication punctuation and courtesy never become planner requirements", a
   }
 });
 
+test("inline publication connectors never become authoritative planner requirements", async () => {
+  for (const connector of [", and ", " and then ", " then "]) {
+    const original = "Implement CSV export" + connector + "open a PR for review.";
+    const w = world(), result = await w.service.prepare({ text: original }), saved = taskStore(w.home).read(result.taskId);
+    assert.equal(result.status, "ready"); assert.equal(saved.original, original);
+    assert.deepEqual(saved.requirements.map(r => r.text), ["Implement CSV export"]);
+    assert.ok(saved.output.criteria.every(c => !/export[, ]+(?:and|then)/i.test(c.text)));
+  }
+});
+
 test("distinct assertions mapped to one owner paragraph retain every authoritative requirement", async () => {
   const text = "Implement CSV and JSON export. Preserve the filtered rows in both formats.";
   const w = world({ prepare: async (_ctx, task) => {
