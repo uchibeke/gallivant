@@ -27,10 +27,225 @@ test("quoted/code examples never create publication authority", () => {
     assert.equal(ownerDelivery(source), null);
 });
 
+test("publish feature subjects and paired typographic examples remain implementation scope", () => {
+  const task = { completion: { version: 1, target: "delivery_ready" } };
+  for (const source of ["Add a publish button.", "Add a command to publish docs.", "Render “Open a PR” in help.", "Document ‘Do not push’.", "Document ‘the user’s Open a PR instruction’.", "Preserve the user’s publish option."]) {
+    assert.equal(ownerDelivery(source), null, source);
+    assert.doesNotThrow(() => assertDeliveryAnswer(task, source), source);
+    const text = "😀 " + source + " Open a PR for review.", contract = ownerDelivery(text);
+    assert.equal(contract.spans.map(span => text.slice(span.start, span.end)).join(""), text);
+    assert.equal(ownerImplementation(contract).join(""), "😀 " + source + " ");
+  }
+  for (const source of ["Publish the changes.", "Please publish the changes.", "Please automatically publish changes.", "Implement export, then publish it.", "Do not publish anything.", "Do not ever publish anything.", "Never automatically publish changes.", "Only publish after approval.", "Render “Open a PR” in help. Do not push.", "Render “Open a PR\" in help.", "Document ‘Do not push.", "Don’t publish anything."]) {
+    assert.throws(() => ownerDelivery(source), { code: "TASK_DELIVERY_SCOPE" }, source);
+    assert.throws(() => assertDeliveryAnswer(task, source), { code: "TASK_DELIVERY_SCOPE" }, source);
+  }
+});
+
+test("quoted contractions and supported exclamation boundaries preserve exact owner scope", () => {
+  const task = { completion: { version: 1, target: "delivery_ready" } };
+  for (const source of ["Document 'We're waiting; do not push' in help.", "Document ‘We're waiting; do not push’ in help."]) {
+    assert.equal(ownerDelivery(source), null);
+    assert.doesNotThrow(() => assertDeliveryAnswer(task, source));
+    assert.throws(() => ownerDelivery(source + " Do not push."), { code: "TASK_DELIVERY_SCOPE" });
+  }
+  for (const source of ["Implement CSV export! Open a PR for review.", "Implement CSV export. Open a PR for review! Do not merge.", "Implement CSV export! and open a PR for review! Do not merge."]) {
+    const contract = ownerDelivery(source);
+    assert.equal(contract.spans.map(span => source.slice(span.start, span.end)).join(""), source);
+    assert.equal(validateOwnerDelivery(contract), contract);
+    assert.match(ownerImplementation(contract).join(""), /Implement CSV export/);
+    assert.doesNotMatch(ownerImplementation(contract).join(""), /open a PR/i);
+  }
+  const savedSource = "Implement CSV export! and open a PR for review!";
+  for (const version of [1, 2]) {
+    const split = savedSource.indexOf(version === 1 ? "open" : " and");
+    const saved = { version, offsets: "utf16", source: savedSource, spans: [
+      { start: 0, end: split, owner: "implementation" },
+      { start: split, end: savedSource.length, owner: "coordinator", kind: "pull_request" },
+    ] };
+    assert.equal(validateOwnerDelivery(saved), saved, "previously supported connector spans stay immutable");
+  }
+  for (const source of ["Use JSON! Publish the changes.", "Implement CSV! Do not ever publish changes.", "Implement CSV! Only after my approval.", "Implement CSV! Open a PR only if I approve."])
+    for (const action of [() => ownerDelivery(source), () => assertDeliveryAnswer(task, source)]) assert.throws(action, { code: "TASK_DELIVERY_SCOPE" }, source);
+});
+
+test("unclosed literal delimiters cannot hide workflow restrictions", () => {
+  const task = { completion: { version: 1, target: "delivery_ready" } };
+  for (const delimiter of ["'", '"', "`", "```", "‘", "“"]) {
+    const text = "Implement export. " + delimiter + "Do not push.";
+    assert.throws(() => ownerDelivery(text), { code: "TASK_DELIVERY_SCOPE" }, text);
+    assert.throws(() => assertDeliveryAnswer(task, text), { code: "TASK_DELIVERY_SCOPE" }, text);
+  }
+  for (const text of ["Document 'We\'re waiting; do not push' in help.", "Document `Do not push` in help.", "Document this code:\n```\nRender `Do not push` in help.\n```", 'Document "Do not push" in help.']) {
+    assert.equal(ownerDelivery(text), null);
+    assert.doesNotThrow(() => assertDeliveryAnswer(task, text));
+  }
+});
+
+test("saved unclosed-literal ownership remains exact while fresh requests refuse", () => {
+  for (const suffix of [" 'Do not push.", " `Open a PR."]) {
+    const source = "Implement export. Open a PR." + suffix;
+    const start = source.indexOf("Open"), end = source.indexOf(suffix);
+    for (const version of [1, 2]) {
+      const saved = { version, offsets: "utf16", source, spans: [
+        { start: 0, end: start, owner: "implementation" },
+        { start, end, owner: "coordinator", kind: "pull_request" },
+        { start: end, end: source.length, owner: "implementation" },
+      ] };
+      const before = structuredClone(saved);
+      assert.equal(validateOwnerDelivery(saved), saved);
+      assert.deepEqual(saved, before);
+    }
+    assert.throws(() => ownerDelivery(source), { code: "TASK_DELIVERY_SCOPE" });
+  }
+});
+
+test("historical malformed mixed backticks refuse without changing saved records", () => {
+  // Produced and accepted by 2bf8268: its single-character scanner exposed the
+  // apparent publication after the unmatched mixed delimiter run.
+  const source = "Implement export. ` code ``` Open a PR. ";
+  const saved = { version: 2, offsets: "utf16", source, spans: [
+    { start: 0, end: 29, owner: "implementation" },
+    { start: 29, end: 39, owner: "coordinator", kind: "pull_request" },
+    { start: 39, end: 40, owner: "implementation" },
+  ] };
+  const before = structuredClone(saved);
+  assert.throws(() => validateOwnerDelivery(saved), { code: "TASK_DELIVERY_SCOPE" });
+  assert.deepEqual(saved, before);
+  assert.throws(() => ownerDelivery(source), { code: "TASK_DELIVERY_SCOPE" });
+});
+
+test("technical feature objects and application consent are not delivery controls", () => {
+  const task = { completion: { version: 1, target: "delivery_ready" } };
+  for (const text of [
+    "Create a PR template for this repository.", "Open a PR details dialog.", "Submit a PR review form.",
+    "Create a pull request status component.", "Do not commit the database transaction when validation fails.",
+    "Avoid pushing duplicate items onto the queue.", "Never push an item onto the stack twice.",
+    "Require user confirmation before deleting an account.", "Ask for user permission before accessing the camera.", "User consent is required before deleting an account.", "Require confirmation before deleting an account.", "Require user confirmation before creating a PR template.", "Require user confirmation before committing the database transaction.", "Do not commit the database transaction or push duplicate items onto the queue.", "Do not silently commit the database transaction.",
+  ]) {
+    assert.equal(ownerDelivery(text), null, text);
+    assert.doesNotThrow(() => assertDeliveryAnswer(task, text), text);
+    const source = text + " Open a PR for review.", contract = ownerDelivery(source);
+    assert.equal(ownerImplementation(contract).join(""), text + " ");
+    assert.equal(contract.spans.map(span => source.slice(span.start, span.end)).join(""), source);
+    for (const restriction of ["Do not push.", "Wait for my approval.", "Publication only after approval."])
+      for (const act of [() => ownerDelivery(text + " " + restriction), () => assertDeliveryAnswer(task, text + " " + restriction)])
+        assert.throws(act, { code: "TASK_DELIVERY_SCOPE" }, text + " " + restriction);
+  }
+  for (const text of ["Create a PR tomorrow.", "Open a PR against release.", "Submit a PR when I approve.", "Do not commit the changes.", "Never automatically push changes.", "Do not silently commit changes.", "Do not commit the database transaction or silently push changes.", "Avoid pushing commits to the remote.", "Never run git push.", "Require my confirmation before proceeding.", "Ask for user permission before publishing.", "Require user confirmation before git push.", "Require user permission before running git push.", "Do not commit the database transaction or push any changes.", "Avoid pushing duplicate items onto the queue and committing changes."])
+    for (const act of [() => ownerDelivery(text), () => assertDeliveryAnswer(task, text)]) assert.throws(act, { code: "TASK_DELIVERY_SCOPE" }, text);
+});
+
+test("negative coordination retains nor, correlative and comma-list Git restrictions", () => {
+  const task = { completion: { version: 1, target: "delivery_ready" } };
+  for (const connector of [" nor ", ", nor ", ", ", " but "]) {
+    const rejected = "Do not commit the database transaction" + connector + "push changes.";
+    const technical = "Do not commit the database transaction" + connector + "push duplicate items onto the queue.";
+    for (const act of [() => ownerDelivery("Implement export. " + rejected), () => assertDeliveryAnswer(task, rejected)])
+      assert.throws(act, { code: "TASK_DELIVERY_SCOPE" }, rejected);
+    assert.equal(ownerDelivery(technical), null);
+    assert.doesNotThrow(() => assertDeliveryAnswer(task, technical));
+  }
+  for (const text of ["Neither commit the database transaction nor push changes.", "Neither commit the database transaction nor run git push.", "Do not commit the database transaction nor silently push changes."])
+    for (const act of [() => ownerDelivery(text), () => assertDeliveryAnswer(task, text)]) assert.throws(act, { code: "TASK_DELIVERY_SCOPE" }, text);
+  const text = "Neither commit the database transaction nor push duplicate items onto the queue.";
+  assert.equal(ownerDelivery(text), null); assert.doesNotThrow(() => assertDeliveryAnswer(task, text));
+});
+
+test("independent statement restrictions do not qualify later publication", () => {
+  for (const separator of ["; ", "\n", ". ", "! "]) {
+    const source = "Implement export" + separator + "do not change the API" + separator + "open a PR for review.";
+    const contract = ownerDelivery(source);
+    assert.equal(contract.spans.map(span => source.slice(span.start, span.end)).join(""), source);
+    assert.match(ownerImplementation(contract).join(""), /do not change the API/);
+    assert.doesNotMatch(ownerImplementation(contract).join(""), /open a PR/);
+  }
+  for (const source of ["Implement export; do not: open a PR.", "Implement export; do not:\nopen a PR.", "Implement export; do not:\n\nopen a PR.", "Implement export; only if tests pass:\n\nopen a PR.", "Implement export; only if tests pass:\nopen a PR.", "Implement export; do not merge, open a PR.", "Implement export; only after approval open a PR.", "Implement export; wait for my approval; open a PR."])
+    assert.throws(() => ownerDelivery(source), { code: "TASK_DELIVERY_SCOPE" }, source);
+});
+
+test("negative coordination retains workflow restrictions without rejecting technical operations", () => {
+  const task = { completion: { version: 1, target: "delivery_ready" } };
+  const restrictions = [
+    "Do not commit the database transaction nor push changes.",
+    "Do not commit the database transaction, nor silently run git push.",
+    "Do not commit the database transaction, nor should you push changes.",
+    "Do not commit the database transaction, nor may we automatically publish changes.",
+    "Do not commit the database transaction, nor should you silently run git push.",
+    "Avoid pushing duplicate items onto the queue nor committing changes.",
+    "Do not commit the database transaction nor push duplicate items onto the queue nor push changes.",
+    "Neither commit the database transaction nor push changes.",
+    "Do not commit the database transaction nor publish changes.",
+    "Neither publish changes nor push them.",
+    "Do not commit the database transaction; nor push changes.",
+    "Require user confirmation before committing the database transaction nor pushing changes.",
+  ];
+  for (const text of restrictions) {
+    for (const prefix of ["Implement export. ", "Implement export. Open a PR for review. "])
+      assert.throws(() => ownerDelivery(prefix + text), { code: "TASK_DELIVERY_SCOPE" }, prefix + text);
+    assert.throws(() => assertDeliveryAnswer(task, text), { code: "TASK_DELIVERY_SCOPE" }, text);
+  }
+  for (const text of [
+    "Do not commit the database transaction nor push duplicate items onto the queue.",
+    "Neither commit the database transaction nor push duplicate items onto the queue.",
+    "Do not commit the database transaction, nor should you push duplicate items onto the queue.",
+    "Do not commit the database transaction and the push button should remain disabled.",
+    "Do not commit the database transaction nor push duplicate items onto the queue nor commit the SQL transaction.",
+    "Require user confirmation before committing the database transaction nor pushing duplicate items onto the queue.",
+    'Document "Do not commit the database transaction nor push changes" in help.',
+    "Document ‘Neither commit nor push changes’ in help.",
+  ]) {
+    assert.equal(ownerDelivery(text), null, text);
+    assert.doesNotThrow(() => assertDeliveryAnswer(task, text), text);
+    const source = text + " Open a PR for review.", contract = ownerDelivery(source);
+    assert.equal(ownerImplementation(contract).join(""), text + " ");
+    assert.equal(contract.spans.map(span => source.slice(span.start, span.end)).join(""), source);
+  }
+});
+
+test("initial requests cannot contradict the default publication workflow", () => {
+  for (const instruction of ["Keep the change local", "Do not push", "Don't commit", "Return a patch only", "Show diff only", "Wait for my review", "Pause the task", "Withhold the changes"]) {
+    for (const source of ["Implement export. " + instruction + ".", "Implement export, " + instruction + ", and open a PR for review."])
+      assert.throws(() => ownerDelivery(source), { code: "TASK_DELIVERY_SCOPE" }, source);
+  }
+  assert.equal(ownerDelivery('Render the literal labels "local", "patch" and "review".'), null);
+  assert.ok(ownerDelivery('Render "Keep the change local". Open a PR for review.'));
+});
+
+test("implementation nouns are not lifecycle instructions in initial requests or answers", () => {
+  const task = { completion: { version: 1, target: "delivery_ready" } };
+  for (const source of ["Add local storage.", "Keep local storage working.", "Add a review dashboard.", "Display commit SHA in diagnostics.", "Fix the diff viewer.", "Add branch selection.", "Implement export. Scope: aporthq/task-delivery-onboarding-qualification only."]) {
+    assert.equal(ownerDelivery(source), null, source);
+    assert.doesNotThrow(() => assertDeliveryAnswer(task, source), source);
+    assert.ok(ownerDelivery(source.replace(/ Scope:.*$/, "") + " Open a PR for review."), source);
+  }
+});
+
+test("publication subjects and technical conditions remain implementation scope", () => {
+  const task = { completion: { version: 1, target: "delivery_ready" } };
+  for (const source of ["Add a PR status badge.", "Build a pull-request dashboard.", "Update the pull request template to require changelog entries.", "Fix parsing of PR titles.", "Add a list of published articles.", "Use local time for display.", "Preserve branch sorting order.", "Commit the database transaction after validation."]) {
+    assert.equal(ownerDelivery(source), null, source);
+    assert.doesNotThrow(() => assertDeliveryAnswer(task, source), source);
+  }
+  const text = "If name is empty, return friend. Open a PR for review.";
+  assert.equal(ownerImplementation(ownerDelivery(text)).join("").trim(), "If name is empty, return friend.");
+  for (const source of ["Wait for my approval. Open a PR for review.", "Implement export. Do not proceed until I approve.", "Implement export. My approval is required.", "Implement export. My approval is required. Open a PR.", "Implement export. Publish the changes.", "Implement export. Send a PR for review.", "Implement export. Open a pull-request.", "Implement export. Only if tests pass open a PR."]) assert.throws(() => ownerDelivery(source), { code: "TASK_DELIVERY_SCOPE" }, source);
+  for (const answer of ["Wait for my approval.", "Do not proceed until I approve.", "My confirmation is required.", "Skip publication.", "No PR should be created.", "Send it for review."]) assert.throws(() => assertDeliveryAnswer(task, answer), { code: "TASK_DELIVERY_SCOPE" }, answer);
+});
+
+test("publication-subject conditions and standalone gates remain owner controls", () => {
+  const task = { completion: { version: 1, target: "delivery_ready" } };
+  for (const clause of ["Publication only after tests pass.", "PR only after approval.", "Publishing requires approval.", "Only after tests pass.", "Keep changes only local."]) {
+    assert.throws(() => ownerDelivery("Implement export. " + clause), { code: "TASK_DELIVERY_SCOPE" }, clause);
+    assert.throws(() => ownerDelivery("Implement export. Open a PR. " + clause), { code: "TASK_DELIVERY_SCOPE" }, clause);
+    assert.throws(() => assertDeliveryAnswer(task, clause), { code: "TASK_DELIVERY_SCOPE" }, clause);
+  }
+});
+
 test("ambiguous, conditional, qualified and delivery-only requests refuse before planning", () => {
   for (const source of [
     "Please open one pull request for review.", "Open a PR.", "Open a PR; do not merge or release.",
-    "Implement export. Do not: open a PR.", "Implement export. Do not merge; open a PR.",
+    "Implement export. Do not: open a PR.", "Implement export. Do not merge, open a PR.",
     "Implement export. No PR should be created.", "Implement export. Do not publish anything.",
     "Implement export. Only if tests pass open a PR.",
     "Wait for my explicit confirmation before proceeding. Open a PR for review.",
@@ -48,6 +263,35 @@ test("unsupported positive publication forms require clarification instead of pr
   assert.equal(ownerDelivery('Render "Publish the changes for review" and `Open a pull-request` in help.'), null);
   assert.throws(() => assertDeliveryAnswer({}, "Open a pull-request"), { code: "TASK_DELIVERY_SCOPE" });
   assert.throws(() => assertDeliveryAnswer({}, "Do not publish publicly."), { code: "TASK_DELIVERY_SCOPE" });
+});
+
+test("initial delivery restrictions cannot become implementation criteria under the default review target", () => {
+  for (const restriction of ["Keep the change local", "Keep this local", "Keep changes local-only", "Leave these edits uncommitted", "Do not push", "Don't run git push", "Never commit",
+    "Return a patch only", "Show only a diff", "Only return a patch", "Just return a diff", "Do not send it for review", "Pause delivery", "Hold the change for my approval", "Wait for my approval"]) {
+    for (const text of [`Implement CSV export. ${restriction}.`, `Implement CSV export. Open a PR for review. ${restriction}.`])
+      assert.throws(() => ownerDelivery(text), { code: "TASK_DELIVERY_SCOPE" }, text);
+    assert.throws(() => assertDeliveryAnswer({ completion: { version: 1, target: "delivery_ready" } }, restriction), { code: "TASK_DELIVERY_SCOPE" });
+  }
+  for (const text of ['Document "Keep the change local", "Do not push" and `Return a patch only`.',
+    "Implement branch sorting. Update the patch renderer. Cache local timezone offsets."])
+    assert.equal(ownerDelivery(text), null);
+  assert.ok(ownerDelivery("Implement branch sorting. Update the patch renderer. Open a PR for review."));
+});
+
+test("new-request delivery restrictions do not reinterpret exact saved ownership versions", () => {
+  const source = "Implement CSV export. Open a PR for review. Keep the change local.";
+  const start = source.indexOf("Open"), end = source.indexOf(" Keep");
+  for (const version of [1, 2]) {
+    const saved = { version, offsets: "utf16", source, spans: [
+      { start: 0, end: start, owner: "implementation" },
+      { start, end, owner: "coordinator", kind: "pull_request" },
+      { start: end, end: source.length, owner: "implementation" },
+    ] };
+    const before = structuredClone(saved);
+    assert.equal(validateOwnerDelivery(saved), saved);
+    assert.deepEqual(saved, before);
+  }
+  assert.throws(() => ownerDelivery(source), { code: "TASK_DELIVERY_SCOPE" });
 });
 
 test("new answers cannot silently override existing publication ownership", () => {

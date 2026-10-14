@@ -54,16 +54,35 @@ new requests use version two.
 
 This first recognizer supports one unqualified `open/create/raise/submit` review-PR
 clause outside quoted text/code. It is not a general natural-language permission
-parser. Conditions, approval prerequisites, destination qualifiers, multiple PRs
-and delivery-only requests return `TASK_DELIVERY_SCOPE` before inference.
-Unsupported positive forms such as “Publish the changes for review,” “Send a PR”
-and “Open a pull-request” also refuse; they never become provider acceptance
-criteria. The conservative vocabulary check can also stop implementation-only
-requests such as “Document PR labels.” Quote literal text or clarify its intended
-scope; do not remove real publication conditions to get past the gate. Some
-implementation-only uses of conditional language in a publication-bearing request,
-or lifecycle/artifact words such as “local,” “review,” “push,” “diff” or “patch” in later answers, also need
-clarification; the recognizer deliberately does not guess their scope.
+parser. Conditional or negated publication clauses, owner approval prerequisites,
+destination qualifiers, multiple PRs and delivery-only requests return
+`TASK_DELIVERY_SCOPE` before inference. Unsupported publication actions also
+require clarification; they never become impossible provider obligations.
+Initial requests and later answers share the same bounded directive checks.
+Local-only, no-push, task-hold or patch-only directions cannot silently fall back
+to the default review-PR workflow.
+
+Implementation subjects such as a PR status badge, pull-request template,
+published articles, a publish button, a command to publish docs, local storage,
+commit SHA, diff viewer or branch selection
+remain ordinary requirements. Technical conditions also remain implementation
+scope: `If name is empty, return friend. Open a PR for review.` and the answer
+`Commit the database transaction after validation.` are supported. By contrast,
+`Wait for my approval. Open a PR for review.` requires clarification before work.
+Negative coordination preserves each action's scope: “Do not commit the database
+transaction nor push changes” still forbids delivery. Combining only technical
+operations, such as a database transaction and inserting items into a queue,
+remains implementation scope; `neither … nor …` follows the same distinction.
+Modal forms such as “nor should you push” retain the prohibition too.
+Local conditions attached to publication are still refused; the parser does not
+guess that a comma or semicolon ended a prohibition or approval requirement.
+
+Keep every feature requirement and restriction, and state publication separately
+when needed. Quoted literal labels/code remain implementation data, including
+paired typographic single/double quotes; unmatched typographic quotes do not hide
+instructions. If local-only
+or patch-only output is required, do not authorize this review-PR workflow or
+remove the restriction to bypass clarification.
 Clarify the complete task with the owner and submit it under a new operation ID;
 never delete a condition just to pass validation. Answers may refine implementation
 but cannot silently replace publication ownership or add a publication prerequisite.
@@ -266,7 +285,9 @@ clients should render those choices instead of maintaining a separate list.
 The target is immutable for a saved request. Changed retry input conflicts.
 
 `delivery_ready` is fulfilled when the current pull request passes Gallivant's
-existing checks, reviewer and completion gate. Automatic observation and fixing
+existing checks, reviewer and completion gate and its owned execution is settled.
+The saved execution ledger is checked even when the task registry has not caught
+up; pending collection keeps the target pending. Automatic observation and fixing
 then stop at that saved handoff; later review comments do not authorize more work.
 An explicit existing recheck/resume control reopens the normal workflow.
 `integrated` keeps the existing coordinator watching that qualified delivery until
@@ -284,6 +305,10 @@ records GitHub's observed head, merge commit and timestamps. It is observational
 evidence, not a provider's self-report or a newly signed completion credential.
 Legacy tasks retain their workflow behavior and receive no invented evidence.
 A skipped completion gate cannot claim a fulfilled target.
+A qualified, stopped handoff can release its artifact pin for a compatible idle
+runtime update. Pending controls, live/uncollected execution, unresolved receipts,
+intake or chains still block migration independently; evidence and saved intent
+are preserved without rewriting the historical workflow state.
 
 Keep implementation acceptance separate from coordinator publication. For example,
 a host can prepare a greeting change with the complete behavior, native Node test,
