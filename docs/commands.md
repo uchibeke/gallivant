@@ -2,6 +2,15 @@
 
 Handles: every command that takes one accepts `<repo>#<pr>` (short name or `owner/name`), the registry id `<repo>/<prd id>`, or a PRD path. Bare PR numbers are refused because they are ambiguous across repos.
 
+## `gallivant init [--harness codex|claude] [--worktrees <directory>]`
+
+Create a private config from your authenticated GitHub login and the selected
+installed harness (Codex by default). Creates a separate checkouts directory,
+disables optional notifications initially, and prints the packaged template paths.
+Existing configs are refused, never replaced. Does not change credentials, global
+harness settings, reviewer installation or repository rules. Follow `doctor` and
+[installation](install.md) next. `--version` prints the installed package version.
+
 ## `gallivant doctor [--send] [--probe]`
 
 The install checklist and the health probe, one line per check, each failure with the exact command or file that fixes it. With no config it prints a complete config built from this machine. `--send` posts a test notification. `--probe` runs a real Claude session in a temp directory and confirms a write inside is allowed and a write outside is denied. Exit code 1 while anything fails.
@@ -15,8 +24,9 @@ their identity using `--revision`, `--request-id` and repeated `--answer id=text
 `task inspect`, `list`, `resume`, `validate` and `start` expose the same versioned
 operations to CLI and in-process clients. Preparation uses inference but starts
 implementation only with explicit `--run` authorization and exact readiness.
-Currently preparation accepts only configured Claude with all tools disabled;
-select it with `--harness claude`. Other adapters return
+Configured Claude uses tool-free preparation; Codex 0.160.0+ uses its isolated
+preparation profile. Hosted providers require their own registered preparation
+capability and access checks. Unsupported adapters return
 `TASK_PREPARATION_BOUNDARY` without an automatic fallback.
 See [task operations](tasks.md) for examples, source delivery and stopping rules.
 
@@ -43,7 +53,10 @@ contract, because a starting point that passed it would be a starting point nobo
 
 The only way a PRD becomes ready. Runs every rule of [the contract](prd.md), prints the checklist, asks APort to decide readiness against a per-PRD passport built from those rules when configured, and flips `status: draft` to `ready` (recording the decision id as `aport_decision`) only on an allow. It does not commit the file. `--check` reads only the brief and its sources: it skips runtime config, credentials and hosted recording, and writes nothing. Hosted recording prints a progress message and has a 15-second request timeout. Exit code 1 while anything fails.
 
-## `gallivant start <prd.md> [--no-daemon] [--base <branch>]`
+## `gallivant start [prd.md] [--no-daemon] [--no-server] [--no-open] [--port 8791] [--base <branch>]`
+
+With no PRD, ensure the daemon and dashboard are running and open the dashboard.
+With a PRD, submit that task first, then use exactly the same service startup:
 
 1. Reads the PRD into a Request (see [the contract](prd.md)), which names the target repository: the checkout the file itself is in, so the PRD has to live inside the repo it describes. Runs the full contract on it and refuses on the first failing rule. There is no override flag.
 2. Requires `status: ready`, which only `gallivant ready` sets.
@@ -65,6 +78,19 @@ case where you are about to run `gallivant up` in the foreground yourself.
 
 A daemon started this way is detached, so it outlives the terminal that ran `start`, and its output goes to
 `~/.gallivant/daemon.log`. A second `start` does not add a second daemon.
+
+The dashboard also runs detached, writes `tracker.log`, and opens in the default
+browser. `--no-open` leaves it running without opening a tab; `--no-server` skips
+dashboard startup and opening. These flags do not stop services already running.
+A headless machine prints the URL. Process identity, instance, code and port are
+checked before reusing a tracker; a port owned by another app/home is refused.
+To change a running tracker's port, `gallivant down`, then `gallivant start --port N`.
+If service startup fails after dispatch, the command reports the partial failure
+with exit code 1. Retry `gallivant start` without a PRD, not the original submission.
+
+`gallivant down` stops the verified daemon and standalone tracker. Existing agent
+processes continue; restart monitoring with `gallivant start`. Embedded trackers
+are owned by their host and are not stopped by this command.
 
 ## `gallivant chain [<name> [<first.md> <next.md> ...]] [--base <branch>]`
 
@@ -150,7 +176,14 @@ Sections are in the order needs-you, running; `--all` adds done. The first line 
 Chain progress is shown alongside runs. `gallivant chain <name>` shows the full ordered plan and explains which
 milestone or merge it is waiting for. Unstarted milestones have no agent run yet.
 
-## `gallivant serve [--port 8791]`
+## `gallivant serve [--port 8791] [--no-open] [--no-daemon] [--foreground]`
+
+Uses the same service startup as `start` without a PRD: daemon, dashboard, browser.
+Use `--foreground` to keep the tracker attached to this terminal; Ctrl-C stops
+that tracker, while the daemon and active agent sessions continue. For an existing
+supervisor that manages the daemon separately, use
+`gallivant serve --foreground --no-open --no-daemon`. The exported `serve()` and
+`mount()` APIs retain their server-only behavior for embedding.
 
 A local web page showing every entry and every run, with the log of a run tailing live. One place to look instead of `status`, `why` and `tail -f` in three terminals. It is meant to sit in an iframe in a dashboard, so it assumes no viewport size and never navigates the top-level window.
 

@@ -1,0 +1,41 @@
+name: Runtime portability
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_call:
+permissions:
+  contents: read
+jobs:
+  test:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+        node: [22, 24]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+      - name: Install Linux verification sandbox
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes bubblewrap apparmor-profiles
+          sudo install -m 644 /usr/share/apparmor/extra-profiles/bwrap-userns-restrict /etc/apparmor.d/bwrap-userns-restrict
+          sudo apparmor_parser -r /etc/apparmor.d/bwrap-userns-restrict
+      - name: Select sandbox-supported macOS Git runtime
+        if: runner.os == 'macOS'
+        run: sudo xcode-select --switch /Library/Developer/CommandLineTools
+      - name: Verify native isolation before the suite
+        run: node test/verification-host.mjs
+      - name: Explain macOS sandbox preflight failure
+        if: failure() && runner.os == 'macOS'
+        run: sudo log show --last 2m --style compact --predicate 'eventMessage CONTAINS "Sandbox:"'
+      - run: npm ci --ignore-scripts
+      - run: npm run lint
+      - run: npm test
+      - run: npm run test:install

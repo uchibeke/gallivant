@@ -289,7 +289,7 @@ function gitWorld({ conflict = false } = {}) {
   // The base moves on, touching the same file when a conflict is wanted.
   writeFileSync(join(origin, "shared.txt"), conflict ? "base version\n" : "one\ntwo\n");
   git(["add", "."], origin); git(["commit", "-qm", "base two"], origin);
-  const g = makeGit({ config: { home, worktrees: join(home, "wt") } });
+  const g = makeGit({ config: { home, worktrees: join(home, "wt") }, identity: async () => ({ name: "t", email: "t@e" }) });
   return { home, origin, clone, git, g, head: () => git(["rev-parse", "HEAD"], clone), status: () => git(["status", "--porcelain"], clone) };
 }
 

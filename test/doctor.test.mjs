@@ -3,7 +3,12 @@
 // check that passes on an unprotected default branch is worse than no check: it reports a control that is not there.
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { protectsDefaultBranch, claudeSandboxCheck } from "../lib/commands/doctor.mjs";
+import { protectsDefaultBranch, claudeSandboxCheck, hasRepositoryWriteScope } from "../lib/commands/doctor.mjs";
+
+test("doctor accepts public-only repository scope without requiring private repository access", () => {
+  for (const scopes of [null, "repo", "read:org, public_repo, user:email"]) assert.equal(hasRepositoryWriteScope(scopes), true);
+  for (const scopes of ["", "read:user, user:email", "repo:status", "repo:invite", "not_repo"]) assert.equal(hasRepositoryWriteScope(scopes), false);
+});
 
 test("doctor reports macOS gh certificate failures without weakening Linux settings or modifying the input", () => {
   const settings = { sandbox: { enabled: true, autoAllowBashIfSandboxed: true, network: { allowedDomains: ["api.github.com"] } } };
@@ -118,7 +123,7 @@ const pathsFor = extra => [...CONTROL_PLANE.map(c => `${c}/**`), ...extra];
 const passport = (over = {}) => ({
   limits: {
     "data.file.write": { allowed_paths: [`${WORKTREES}/**`], blocked_paths: pathsFor(["**/.env"]) },
-    "data.file.read": { blocked_paths: pathsFor(["**/.env", "**/auth.json"]) },
+    "data.file.read": { blocked_patterns: pathsFor(["**/.env", "**/auth.json"]) },
     ...over,
   },
 });
@@ -129,10 +134,10 @@ test("a passport that blocks the control plane for writes and reads alike passes
 
 test("a passport that blocks the control plane for writes only is reported, because reads of it are an injection's first move", () => {
   // The shipped template's old read list: `.env`, opencode, gallivant, ssh, aws, and one file inside ~/.codex.
-  const readOnlyEnv = passport({ "data.file.read": { blocked_paths: ["**/.env", "**/.env.*", expand("~/.codex/auth.json"), expand("~/.config/opencode") + "/**", expand("~/.gallivant") + "/**", expand("~/.ssh/**"), "**/auth.json"] } });
+  const readOnlyEnv = passport({ "data.file.read": { blocked_patterns: ["**/.env", "**/.env.*", expand("~/.codex/auth.json"), expand("~/.config/opencode") + "/**", expand("~/.gallivant") + "/**", expand("~/.ssh/**"), "**/auth.json"] } });
   const gaps = passportGaps(readOnlyEnv, WORKTREES);
   assert.equal(gaps.length, 1);
-  assert.match(gaps[0], /^data\.file\.read blocked_paths missing /);
+  assert.match(gaps[0], /^data\.file\.read blocked_patterns missing /);
   assert.match(gaps[0], /~\/\.claude/);
   assert.match(gaps[0], /~\/\.aport/);
   assert.match(gaps[0], /~\/\.codex/, "one file inside ~/.codex is not the directory");
@@ -142,7 +147,7 @@ test("a missing write block, a missing worktrees root and a missing read block a
   assert.deepEqual(passportGaps({ limits: {} }, WORKTREES), [
     "data.file.write allowed_paths does not contain the worktrees root",
     `data.file.write blocked_paths missing ${CONTROL_PLANE.join(", ")}`,
-    `data.file.read blocked_paths missing ${CONTROL_PLANE.join(", ")}`,
+    `data.file.read blocked_patterns missing ${CONTROL_PLANE.join(", ")}`,
   ]);
   assert.deepEqual(passportGaps(null, WORKTREES).length, 3, "no passport at all is every gap, not a crash");
 });
@@ -151,6 +156,11 @@ test("the shipped template passes its own check once its placeholders are filled
   const url = new URL("../templates/passport.gallivant.json", import.meta.url);
   const filled = readFileSync(url, "utf8").replaceAll("{{home}}", expand("~")).replaceAll("{{worktrees}}", WORKTREES);
   assert.deepEqual(passportGaps(JSON.parse(filled), WORKTREES), [], "doctor's fix instructions tell the operator to copy this file, so it has to pass");
+});
+
+test("legacy read blocked_paths cannot falsely pass a policy that evaluates blocked_patterns", () => {
+  const old = passport({ "data.file.read": { blocked_paths: pathsFor([]) } });
+  assert.deepEqual(passportGaps(old, WORKTREES), [`data.file.read blocked_patterns missing ${CONTROL_PLANE.join(", ")}`]);
 });
 
 // The credential checks. The old `github token` check asked the OPERATOR's `gh` whether it was authenticated and

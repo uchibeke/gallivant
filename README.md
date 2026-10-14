@@ -1,137 +1,145 @@
 # Gallivant
 
-Write a PRD, mark it ready, go outside.
+**Write a PRD, mark it ready, go outside.**
 
-Gallivant starts a coding-agent session for a PRD, and then keeps the pull request moving on its own: it watches for reviewer findings, human review comments and failed checks, resumes the session that opened the PR to fix them, pushes, asks the reviewer to look again, and stops with one notification when the PR is ready for a person or stuck.
+Gallivant keeps coding-agent pull requests moving while you do something else.
+It starts work in a separate checkout, watches reviews and CI, and resumes the
+same agent session to address feedback. You come back to a PR ready for your
+review, or a specific reason it needs your help. You decide what gets merged.
 
-It implements adapters for Claude Code, Codex, Gemini CLI, OpenCode and Goose, with [APort](https://github.com/aporthq/aport-agent-guardrails) hooks on Claude Code and Codex. Claude/Codex have production evidence; the current Gemini, OpenCode and Goose coding probes have blocked or failed results from native permissions, provider setup, and live-test defects. See the [version/provider support matrix and live evidence](docs/audit/harness-live-validation.md) before selecting a harness. The loop resumes the recorded session that opened the PR. Every PR carries the harness and session id in its body, so the loop can be rebuilt from GitHub after local state is lost.
+- **Keep the context.** Fix rounds resume the session that did the work.
+- **Know what is happening.** A local dashboard shows runs, logs and blockers;
+  send a correction, resume a stopped run or recheck a PR from there.
+- **Plan beyond one task.** Chain PRDs; each successor starts after you merge
+  the preceding PR into its planned base.
+- **Check the outcome.** The PRD's acceptance criteria, verification commands,
+  reviewer findings and CI determine readiness.
+- **Use your tools.** Claude Code and Codex are the recommended starting points.
+  GitHub access uses `gh`; no GitHub App, database or webhook server is required.
 
-Node 22, `gh` for all GitHub access, ntfy for notifications. One bundled TOML parser preserves Codex configuration during isolated preparation. No GitHub App, webhook server or database.
+## Get started
 
-Repository review learning adds bounded collection and exact candidate review through
-`gallivant learn`. Approved-memory signing and activation are tested with disposable
-OpenSSH keys, but production learning remains **UNQUALIFIED and collection only**:
-installed worker/extractor isolation still needs implementation and live qualification.
-Learning defaults off, requires human review, and cannot change task or completion
-gates. See [learning](docs/learning.md) and its [qualification record](docs/audit/learning-qualification.md).
+You need **macOS or Linux, Node 22+, Git, GitHub CLI, jq**, and a signed-in
+**Codex CLI or Claude Code**. Model usage is billed by your harness/provider;
+Gallivant does not include inference credits. See the [installation guide](docs/install.md)
+for supported versions, guardrails and repository permissions.
 
-With Claude or Codex configured, you can also start from natural language:
-`gallivant task "Add CSV export without new dependencies" --harness claude`
-prepares an isolated, validated brief. Add `--run` to authorize
-implementation once material questions are resolved. [Task operations](docs/tasks.md)
-cover preparation adapter restrictions, stdin, resumable questions, structured
-exports and separate live qualification. [APort task delivery](docs/task-delivery.md)
-documents the versioned scoped dispatcher, durable runtime, plugin packager and
-the deployment/provider gates that remain outside an internal fixture build.
+Until the first npm release is published, install from source:
 
-## Five-minute path
-
-```bash
-git clone https://github.com/uchibeke/gallivant && cd gallivant
-npm link                               # puts `gallivant` on your PATH; see Install below for the alternatives
-gallivant doctor                       # prints the config to write, from your machine's values
-# write ~/.gallivant/config.json, then follow each FAIL line until doctor passes
-cd path/to/your/repo                   # every command below works from anywhere inside it
-gallivant new your-prd                 # writes docs/prds/your-prd.md from the packaged template
-gallivant ready docs/prds/your-prd.md  # the contract; flips it to ready when it passes
-gallivant start docs/prds/your-prd.md  # runs the session and brings the daemon up to watch it
-gallivant status                       # what needs you, what is running, whether the daemon is alive
+```sh
+git clone https://github.com/uchibeke/gallivant.git
+cd gallivant
+npm ci --ignore-scripts
+npm link
+gallivant --version
 ```
 
-## Install
+The repository must be public for this to work without repository access.
+After the first registry release, the same CLI installs with `npm install -g gallivant`.
+The [release guide](docs/releasing.md) tracks that publication step.
 
-Use Node 22 or newer. npm installs the locked TOML parser; packed releases include
-it. Run `npm ci` before running directly from a fresh source checkout.
+Create your local configuration, then complete the checks in the installation guide:
 
-```bash
-npm link                    # from the clone: a symlink into your node bin directory. Undo with `npm unlink -g gallivant`.
-npm i -g .                  # a copy rather than a link, so edits to the clone do not take effect until you rerun it
-npm i -g github:uchibeke/gallivant   # straight from the repository, no clone
+```sh
+gh auth status
+codex login status
+gallivant init --harness codex       # or --harness claude
+gallivant doctor
 ```
 
-`npm link` is the one to use while the tool is still changing, because the command always runs the working tree. If
-you would rather not touch your global node directory at all, `alias gallivant="node ~/path/to/gallivant/bin/gallivant.mjs"`
-in your shell profile does the same job.
+`init` records the selected harness, your GitHub login and a separate checkouts
+directory. It never overwrites an existing config, signs you in or changes
+global agent settings. `doctor` explains missing prerequisites. Set up the
+[harness guardrails and repository rules](docs/install.md) before unattended work.
 
-Check it with `gallivant --help` from a directory that is not the clone. If the shell cannot find it, your npm
-global bin is not on PATH: `npm prefix -g` names the directory, and its `bin` subdirectory is what has to be there.
+Then, inside the repository you want to change:
 
-Gallivant is not published to the npm registry. It reads `~/.gallivant/config.json` wherever it runs from, so the
-command works in any directory and always acts on the same registry.
-
-The full setup, including the scoped token, the branch ruleset and the APort installs, is in [docs/install.md](docs/install.md). It takes about an hour the first time.
-
-## How the loop runs
-
-```
-PRD (status: ready)  →  gallivant start  →  session in its own checkout  →  PR opened
-                                                                              │
-              ┌───────────────────────────────────────────────────────────────┘
-              ▼
-      tick every 2 minutes: reviewer review, trusted inline comment, failed check, /fix
-              │
-              ▼
-      resume the session with the feedback  →  push  →  ask the reviewer again  →  round += 1
-              │
-              ├── checks green and reviewer clear   →  ready-for-human, one notification
-              └── round limit, conflict, no push, silence  →  needs-human, one notification, `gallivant why`
+```sh
+cd /path/to/your/repository
+gallivant new add-csv-export
+# Edit docs/prds/add-csv-export.md: describe the work and its acceptance tests.
+gallivant ready docs/prds/add-csv-export.md --check
+gallivant ready docs/prds/add-csv-export.md
+gallivant start docs/prds/add-csv-export.md
 ```
 
-## Commands
+`start` launches the task, ensures the background daemon and local dashboard are
+running, and opens the dashboard at **http://127.0.0.1:8791** when a browser is
+available. It returns to your shell. Closing the browser does not stop the work.
 
-| Command | What it does |
-|---|---|
-| `gallivant doctor [--send] [--probe]` | Install checklist and health probe. Every failing line prints its fix. |
-| `gallivant ready <prd.md> [--check]` | Check a PRD against [the contract](docs/prd.md); flip it to ready only when every rule passes. |
-| `gallivant start <prd.md>` | Start a session for a ready PRD in its own checkout. Refuses anything that fails the contract. |
-| `gallivant chain <name> <first.md> <next.md> ...` | Queue ready PRDs in order. Start each successor only after you merge the preceding PR. |
-| `gallivant register <pr-url>` | Watch a PR you opened by hand, or reset a stopped one. |
-| `gallivant up` | The daemon. Recovers from GitHub on boot, then ticks. |
-| `gallivant status [--all] [--json]` | What needs you, what is running, whether the daemon is alive. |
-| `gallivant serve [--port 8791]` | Local tracker with every run, live logs, PR recheck and session updates. |
-| `gallivant recheck <handle>` | Recheck a stopped PR without resetting its round budget. |
-| `gallivant say <handle> --note "..."` | Queue an update for the same session after its active run finishes. |
-| `gallivant why <repo>#<pr>` | Why a PR stopped, what was dispatched, what the harness last said. |
-| `gallivant remove <repo>#<pr>` | Forget an entry. The PR and the checkout are left alone. |
+```sh
+gallivant start                     # reopen the dashboard and ensure services are up
+gallivant start task.md --no-open    # dashboard runs; do not open a browser
+gallivant start task.md --no-server  # task + daemon only
+gallivant serve --port 8792          # same service startup, without starting a new task
+gallivant status
+gallivant down                      # stop monitoring/dashboard; active agent runs continue
+```
 
-The PRD contract is in [docs/prd.md](docs/prd.md). Details in [docs/commands.md](docs/commands.md), config keys in [docs/config.md](docs/config.md), what the guardrails do and do not cover in [docs/guardrails.md](docs/guardrails.md), and the module map in [docs/architecture.md](docs/architecture.md). The product spec is [SPEC.md](SPEC.md); the audit that shaped it is under `docs/audit/`.
+If a service fails after the task starts, retry `gallivant start` **without the
+PRD path**. The existing task stays recorded; there is no need to submit it again.
 
-## Plan a sequence
+## How it works
 
-Gallivant automates the work; a human accepts each milestone into the base branch. Prepare two or more ready PRDs
-in the same repository, then queue them once:
+```text
+ready PRD → isolated checkout → agent implements → pull request
+                                                   ↓
+               resume same session ← review or CI feedback
+                       ↓
+                   verify + push → review again
+                                       ↓
+                          ready for your review / needs help
+```
+
+Gallivant never merges PRs. The default review allowance is 30 rounds; limits,
+repeated non-progress and unrecoverable failures stop for you. The daemon must
+remain running, and the machine must remain awake and online. Optional ntfy
+notifications tell you when a run is ready or needs attention.
+
+For longer plans:
 
 ```sh
 gallivant chain launch docs/prds/foundation.md docs/prds/integration.md docs/prds/launch.md
 gallivant chain launch
 ```
 
-The existing daemon starts the first PRD and handles its implementation, checks and review. You merge its PR; the
-daemon confirms that merge on the planned base and starts the next PRD from the updated base. Closing a PR without
-merging stops the chain. Gallivant never merges for you, and marking a run ready does not unlock its successor.
+The daemon starts the first ready brief and waits for your merge before starting
+the next. [Chains](docs/chains.md) explains gates, cancellation and recovery.
 
-A multi-day plan can wait while you are away from a merge decision. Make each PRD a cohesive, reviewable milestone
-so small implementation steps do not each demand approval. Independent work can still run alongside a chain.
-See [chains](docs/chains.md) for editing the queued plan, recovery and cancellation.
+## Support and boundaries
 
-## Status
+With Claude configured, you can also prepare a brief from a request:
+`gallivant task "Add CSV export without new dependencies" --harness claude`.
+Review its questions and validated brief before authorizing implementation with
+`--run`. See [task preparation](docs/tasks.md) for Codex and hosted support.
 
-Version 0.2. Five local CLI adapters plus the hosted adapters described below, the review and CI loop, recovery from GitHub, ntfy notifications, the local tracker with recovery controls, and sequential PRD chains gated on human merges. The default review limit is 30 rounds, configurable with `max_iterations`. Adapter implementation does not establish access through a provider subscription. The [latest audit](docs/audit/harness-live-validation.md) distinguishes production evidence, blocked live attempts and fixtures, including the configured Claude binary (2.1.263) versus the older PATH binary (2.1.177). Gemini, OpenCode and Goose are not yet verified for unattended coding and same-session Git pushes on this machine.
+Claude Code and Codex have live usage evidence. Gemini CLI, OpenCode and Goose
+have adapters and automated coverage, but are **not yet qualified end to end for
+unattended coding**. See the [harness evidence](https://github.com/uchibeke/gallivant/blob/main/docs/audit/harness-live-validation.md).
 
-After resolving the documented blockers, repeat the opt-in live suite from a source checkout with `npm run test:live-harnesses -- --live`. The report also gives exact commands for the named Goose and OpenCode Console BYOK batches; these connections are separate from Zen/Go subscriptions. DeepSeek is excluded from new calls; Tencent remains deferred. The suite uses existing settings, performs sequential bounded model calls, and keeps raw logs privately outside the repository. `npm test` never runs this suite. These disposable local-remote tests do not prove GitHub review/completion behavior: the next step is an authorized Gallivant PRD through PR creation, review/CI-triggered continuation and the completion gate, as described in the report.
+Natural-language [task preparation](docs/tasks.md), explicit
+[hosted Agents API](docs/openai-agents.md) execution and [Codex Cloud](docs/codex-cloud.md)
+have separate capability and access requirements. Hosted adapters are not a
+promise that a particular subscription can run unattended jobs. Repository
+[review learning](docs/learning.md) is experimental and collection only in production;
+automatic application of learned rules is not qualified.
 
-Not yet: mid-turn message delivery, Telegram, GitHub-issue input, cursor-agent (its event stream is unverified), or a service installer. See the milestones in the PRD.
+Runs use your GitHub identity. Prefer a fine-grained token restricted to selected
+repositories, protect base branches with GitHub rulesets, and review the
+[security boundaries](docs/guardrails.md). APort pre-tool hooks and task-completion
+verification are separate controls. Automatic approval is not equivalent to an
+operating-system sandbox; review the permissions you give a run.
 
-Apache-2.0.
+## Documentation
 
-Managed coding sessions through the Agents API are available as an explicit
-`openai-agents` selection. See [account/environment setup, recovery and verification](docs/openai-agents.md). Live qualification is separately opt-in and remains unverified when access prerequisites are absent.
+| Need | Guide |
+| --- | --- |
+| Install and run your first task | [Getting started](docs/install.md) |
+| Write a useful brief | [PRD contract](docs/prd.md) |
+| Commands, messages and recovery | [Commands](docs/commands.md) |
+| Models, credentials, limits and notifications | [Configuration](docs/config.md) |
+| Sandbox and permission boundaries | [Guardrails](docs/guardrails.md) |
+| Package and publish a release | [Releasing](docs/releasing.md) |
+| Contribute or report a vulnerability | [Contributing](CONTRIBUTING.md) · [Security](SECURITY.md) |
 
-`codex-cloud` uses the supported Codex 0.160.0 Cloud CLI on a trusted operator
-worker, with new dispatch unavailable until a supported interface verifies the
-selected environment's connected repository. Owned-task inspection and recovery
-remain available; offline fixtures cover approved snapshots, successor corrections
-and one task/PR. See
-[Cloud setup, supported controls and recovery](docs/codex-cloud.md). Native
-continuation/cancellation and delegated public authentication are unavailable;
-live qualification remains unverified.
+Apache-2.0. [License](LICENSE).

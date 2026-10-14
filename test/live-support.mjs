@@ -97,7 +97,7 @@ export async function launchLiveTurn({ report, entry, phase, attempt, deadline, 
     checkpoint();
     return null;
   }
-  const job = await runner.start(`${phase}-${attempt}`, spec.cmd, spec.args, { cwd: entry.cwd, env });
+  const job = await runner.start(`${phase}-${attempt}`, spec.cmd, spec.args, { cwd: entry.cwd, env, ...(spec.runtimeSettings ? { runtimeSettings: spec.runtimeSettings } : {}) });
   record.startedAt = startedAt;
   return { job, record, startedAt, limit };
 }
