@@ -1,5 +1,12 @@
 # Node runtime and harness shells
 
+This contract covers local implementation through Claude, Codex, Gemini,
+OpenCode and Goose, plus the coordinator's local tooling. Hosted Agents compute
+uses its configured environment/packages instead; local paths are not uploaded
+as runtime grants. Preparation has a separate limited-authority
+[boundary](preparation.md). For setup start with [installation](install.md), then
+use this guide when a harness shell selects a different Node or package manager.
+
 ## Why this is needed
 
 A harness executable and the Node used by its Bash tools are separate choices.

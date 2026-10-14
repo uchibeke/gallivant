@@ -1,5 +1,37 @@
 # Natural-language tasks
 
+Start here when you know the outcome but do not want to hand-write a PRD. The
+output can be code, a research report, documentation or content; it must belong
+to a GitHub repository and have verifiable acceptance criteria. Preparation
+produces the same structured contract used by written briefs.
+
+After [setup](install.md), run inside the target checkout:
+
+```sh
+gallivant task "Explain the existing backup and restore commands in docs/operations.md. Change documentation only." \
+  --harness codex --verify 'git diff --check'
+```
+
+Inspect the returned draft or answer its questions, then use its printed `Next`
+action to authorize implementation. Add `--run` to the original request when you
+want implementation to start automatically once the brief is ready. This is
+execution authorization, including after clarification answers. It is not a
+merge, deployment or release approval. To open the dashboard after dispatch,
+run `gallivant start` with no PRD path.
+
+| Selected harness | Preparation boundary |
+| --- | --- |
+| `claude` | Local restricted mode with tools, MCP and skills disabled |
+| `codex` (0.160.0+) | Local restricted native tool/filesystem capability |
+| `openai-agents` | API text-only session, no environment, tools or delegation |
+| `gemini`, `opencode`, `goose` | No preparation adapter; use a written PRD for implementation |
+| `codex-cloud` | No preparation adapter; new implementation dispatch is also disabled |
+
+Use `--harness` explicitly when configuring multiple adapters. Configuration
+selects the sole configured harness if there is exactly one; otherwise the
+fallback is `claude`, not the first key in the file. See
+[preparation qualification](preparation.md) and [hosted setup](openai-agents.md).
+
 `gallivant task` turns text into an isolated, reviewable PRD. Preparation uses the
 selected harness's configured model and provider settings. This
 can use inference even when you only prepare; it does not start implementation or
@@ -17,7 +49,12 @@ completion-gate evidence; a provider statement cannot fulfill it.
 This first recognizer supports one unqualified `open/create/raise/submit` review-PR
 clause outside quoted text/code. It is not a general natural-language permission
 parser. Conditions, approval prerequisites, destination qualifiers, multiple PRs
-and delivery-only requests return `TASK_DELIVERY_SCOPE` before inference. Some
+and delivery-only requests return `TASK_DELIVERY_SCOPE` before inference.
+Unsupported positive forms such as “Publish the changes for review,” “Send a PR”
+and “Open a pull-request” also refuse; they never become provider acceptance
+criteria. The conservative vocabulary check can also stop implementation-only
+requests such as “Document PR labels.” Quote literal text or clarify its intended
+scope; do not remove real publication conditions to get past the gate. Some
 implementation-only uses of conditional language in a publication-bearing request,
 or lifecycle/artifact words such as “local,” “review,” “push,” “diff” or “patch” in later answers, also need
 clarification; the recognizer deliberately does not guess their scope.
@@ -40,7 +77,9 @@ select Claude; `--harness codex` uses Codex
 0.160.0 or newer. Claude removes its tools. Codex removes external and execution
 tools and uses a filesystem profile that grants no project or credential access
 to any remaining tool. Only the bounded context in the prompt is available.
-Model/provider defaults remain selected. Other adapters return
+Model/provider defaults remain selected. `openai-agents` uses the text-only API
+boundary described above and retains its explicit account/model. Gemini,
+OpenCode, Goose and Codex Cloud return
 `TASK_PREPARATION_BOUNDARY` until their preparation capability is implemented;
 there is no automatic fallback. See [qualification](preparation.md).
 
@@ -54,7 +93,9 @@ cat request.txt | gallivant task --stdin --dir /path/to/checkout --harness claud
 The repository resolves from the checkout using the existing Git/GitHub helpers.
 `--repo` asserts its identity; it must match that checkout. Base precedence is the
 usual explicit flag, repository configuration, then default branch. Harness
-selection uses the explicit flag or the first configured harness, as `new` does.
+selection uses the explicit flag, the sole configured harness, or `claude` when
+there are multiple configured harnesses. `new` currently selects the first
+configured harness; use an explicit selection to avoid relying on either default.
 Selected context consists of explicit repository files. Root `AGENTS.md`, common
 build manifests, supported text lockfiles and instructions above selected files
 are included automatically. Package-script inference uses `packageManager` first,
@@ -178,6 +219,9 @@ Claude with restricted mode, an empty built-in tool set, denial of every tool,
 an empty strict MCP configuration and disabled skills/commands. Selected context
 is already in the prompt, so planning needs no file, shell or network tools.
 Codex uses the restricted native capability described in [preparation](preparation.md).
+These local environment/profile details do not describe hosted preparation:
+`openai-agents` uses its selected API account and a text-only remote session,
+without a host credential profile or workspace.
 Gemini, OpenCode and Goose preparation return
 `TASK_PREPARATION_BOUNDARY` before probes, profile copying or model launch because
 their current adapters have no established preparation read/write boundary or
@@ -243,9 +287,9 @@ overrides those constraints.
 
 New completion-aware drafts consolidate criteria with identical requirement
 coverage, preserving all immutable owner fragments and their mappings. Existing
-approved drafts and false attestations are never rewritten. Automatic splitting
-of a mixed implementation/publication sentence is not supported: a host must
-clarify ambiguous ownership rather than silently drop a requirement. The generated
+approved drafts and false attestations are never rewritten. Only the supported affirmative publication clauses can be separated from mixed
+implementation/publication text. A host must clarify unsupported or ambiguous
+ownership rather than silently drop a requirement. The generated
 Delivery target section explains which milestones the coordinator observes.
 
 The result includes contract `version: 1`, a durable `taskId`, a state `revision`,
@@ -473,8 +517,10 @@ usual human-review and configured limit boundaries; it never merges automaticall
 
 ## Structured clients
 
-These exports are local, trusted, in-process operations. A future transport must
-bind its own account/repository authorization; this module is not a public server.
+These exports are local, trusted, in-process operations. The implemented
+[task-delivery dispatcher and MCP integration](task-delivery.md) add scoped
+account/repository authorization for host applications. The task module by itself
+is not an authenticated public server.
 Importing it reads no user configuration and starts no daemon or network work.
 Creating the usual context is an explicit caller action.
 
@@ -524,7 +570,7 @@ clear/ambiguous/conflicting input, hostile context, repair preservation, real
 readiness denials, stale revisions, duplicate/uncertain dispatch, source delivery,
 runner usage, stdin bounds and clean installed-package imports/help.
 
-See [the evidence index](audit/plugin-ready/README.md) for the separate G8 live
+See [the evidence index](https://github.com/uchibeke/gallivant/blob/main/docs/audit/plugin-ready/README.md) for the separate G8 live
 prerequisites, unavailable attestations and bounded qualification procedure.
 
 Direct task-service mutations acquire the namespace task-mutation owner through all asynchronous effects and release it on success or failure. They refuse artifact-pinned homes; those homes use the manifest-aware delivery adapter. CLI and delivery adapters borrow their existing live owner, checked against the same namespace, while inspect/list stay read-only.

@@ -204,15 +204,20 @@ Agents API credentials, exact model/environment access and inference/compute
 allowance must be supplied by the authorized account; no subscription entitlement
 is inferred. Both transports remain exported and covered by installed fixtures.
 
-The inherited registry currently declares **no bounded natural-language
-preparation for either hosted provider**. Their `canPrepare:false` and setup
-remedy are exposed per configured repository. A task selecting either provider
-retains a blocked preparation record with no paid call; it cannot gain readiness
-from an invented tool-free mode. The installed full intake/review flow uses the
-existing supported local preparation boundary. Separate installed API/Cloud
-transport suites exercise implementation/recovery/publication and the hosted
-preparation refusal. Full hosted natural-language flows remain unqualified until
-an enforced provider preparation adapter and its account access are available.
+The current registry declares bounded natural-language preparation for
+`openai-agents`: `agents-text-only-v1`, authority `text-only`, environment `none`.
+Its creation request disables tools and delegation; effective session and output
+checks enforce that boundary. Claude and Codex have their own registered local
+preparation boundaries. Codex Cloud, Gemini, OpenCode and Goose expose
+`canPrepare:false` with a remedy; selecting them for preparation cannot silently
+fall back to another provider or gain implementation authority.
+
+Capability responses describe this implementation, not account entitlement or a
+completed live workflow. Installed fixtures cover shared API/Cloud transport,
+recovery and publication; preparation qualification and live account prerequisites
+remain explicit in [preparation](preparation.md), [Agents setup](openai-agents.md)
+and [Cloud availability](codex-cloud.md). The package can be integrated through
+MCP or the scoped operation API, but is not itself a deployed multi-tenant service.
 
 ## Build, configure, upgrade and rollback
 

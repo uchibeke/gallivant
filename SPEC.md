@@ -1,5 +1,14 @@
 # Gallivant specification
 
+> **Reading this specification:** this is the original product specification,
+> including later design amendments and unimplemented milestones. It is not the
+> current installation or support guide. Use [the documentation index](docs/README.md)
+> and [current support matrix](README.md#harness-support) for shipped behavior.
+> Plain-language intake, hosted Agents execution and dashboard controls now exist;
+> Codex Cloud dispatch and learned-rule activation still have explicit gates.
+> Historical dependency counts, recovery shortcuts and proposed model-routing
+> sections below must not be used as current operating instructions.
+
 This is the product specification: what Gallivant is, how the loop works, and the acceptance criteria the
 implementation is audited against (see [docs/audit/PRD-COMPLIANCE.md](docs/audit/PRD-COMPLIANCE.md)).
 

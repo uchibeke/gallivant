@@ -9,15 +9,19 @@ while apply and key setup refuse before activation. Key paths are separate expli
 operator paths, and OpenSSH is pinned outside worker writes. See [learning](learning.md)
 for the CLI, bounds, separate extraction allowance and backup/rotation limitations.
 
-`~/.gallivant/config.json`, mode 600. `gallivant doctor` prints a complete one from your machine when the file is missing. Set `GALLIVANT_HOME` to use another directory.
+`~/.gallivant/config.json`, mode 600. `gallivant init` creates a local Codex or
+Claude configuration; `gallivant doctor` prints a suggested configuration when
+none exists. Set `GALLIVANT_HOME` to use another directory. Hosted providers need
+explicit configuration; they are not discovered from local executable paths.
+See [installation](install.md) for the first-run sequence.
 
 | Key | Default | Meaning |
 |---|---|---|
 | `poll_seconds` | 120 | Tick interval. Minimum 30. |
 | `max_iterations` | 30 | Automatic fix-round allowance per PR. A pushed fix or changed completion receipt consumes a round. At the cap, further automatic work stops with `needs-human`. Explicit operator resumes can exceed the cap; their progress still counts. |
 | `checks_grace_minutes` | 5 | A head younger than this with no checks reported is not green yet; GitHub shows an empty check list for the first seconds after a push. A head older than this with no checks at all counts as green. |
-| `run_timeout_minutes` | 720 | A run older than this is killed (SIGKILL) and the PR stops with `timeout`. It is a catch for a wedged session, not a spend limit; see below. Overridable per repository. |
-| `max_budget_usd` | 5 | Passed to Claude runs as `--max-budget-usd`. Codex has no equivalent; the timeout bounds it. |
+| `run_timeout_minutes` | 720 | Local runs exceeding this time are killed; remote execution uses provider cancellation/reconciliation where supported and preserves unknown ownership. It is a runtime allowance, not a provider billing cap. Overridable per repository; see below and [execution](execution.md). |
+| `max_budget_usd` | 5 | Passed to Claude as `--max-budget-usd` and used in task preparation/authorization accounting. Other local harnesses have no equivalent enforced dollar cap. Hosted dispatch also requires its explicit provider allowance; reservations are not a billing hard cap. |
 | `rereview_minutes` | 6 | If the reviewer has not reviewed this long after a request, the request is posted once more. |
 | `stall_hours` | 6 | If the reviewer still has not reviewed, the PR stops with `reviewer-silent`. |
 | `trusted_authors` | required | GitHub logins whose reviews and comments may start a run. Everyone else is ignored. Your own login belongs here. |
@@ -27,12 +31,15 @@ for the CLI, bounds, separate extraction allowance and backup/rotation limitatio
 | `worktrees` | required | Directory for per-PRD checkouts. Must be outside the Gallivant home. |
 | `github_token_file` | null | Null means the credential is resolved from the environment or from `gh`, so whichever way you are logged in already works. Set it to the path of a fine-grained PAT to narrow what a run can reach; it then wins over both of the others. See [GitHub credentials](#github-credentials). |
 | `context_paths` | [] | Directories a run may READ in addition to its own checkout: a sibling repository, a folder of design notes. Absolute or `~`-prefixed, and each must exist. Writes do not widen. Your home directory, the Gallivant home, `~/.claude`, `~/.codex`, `~/.config/opencode` and `~/.aport` are refused, as is any parent of them. Claude Code renders each as `--add-dir <dir>`; Codex and Gemini CLI refuse the run rather than escalate; opencode and goose have no such flag and ignore it. Read [guardrails.md](guardrails.md#extra-read-directories-are-a-widening-not-a-feature) before setting it: whatever a run reads can leave in a commit or a PR body. |
-| `harness` | discovered | Omit it and Gallivant uses whichever harnesses it finds on your PATH, so one installed harness is a complete install. Name one and only that one is used, which is what you want when two versions are installed or a harness is deliberately out of play. |
+| `harness` | local discovery | Omit it to discover local CLI harnesses on PATH. Explicit entries select the available providers and disable discovery; hosted entries always require explicit configuration. With exactly one configured harness it is the default; otherwise task intake falls back to `claude`. `new` currently selects the first configured entry. Select `--harness` or the PRD's `harness:` explicitly when several are configured. |
 | `harness.claude` | | `{ bin, settings }`. `bin` is the absolute path to `claude`; `settings` is the Gallivant settings file with the APort hook and sandbox. |
 | `harness.codex` | | `{ bin }`. |
 | `harness.gemini` | | `{ bin }`. |
 | `harness.opencode` | | `{ bin }`. |
 | `harness.goose` | | `{ bin }`. |
+| `harness.openai-agents` | absent | Explicit account, organization, project, model, API credential, hosted environment, network policy and allowance. See [Agents setup](openai-agents.md). |
+| `harness.codex-cloud` | absent | Recognized for configuration/recovery, but new dispatch is unavailable. See [Cloud blocker](codex-cloud.md). |
+| `execution` | bounded defaults | Transport/probe deadlines, progress cadence, concurrency, backoff and event limits. See [execution scheduling](execution.md#scheduling-and-limits). |
 | `repos` | [] | The repositories Gallivant watches, appended by `start` and `register` and read by `up` to recover from GitHub. Each entry is either `"owner/name"` or an object: `{ "repo": "owner/name", "base": "staging", "run_timeout_minutes": 90 }`. Both object keys are optional. See below. |
 
 The default allows 30 rounds as an upper allowance for unattended review. It is not a target or a promise of completion:
@@ -48,16 +55,33 @@ of related code paths before pushing and return control to the daemon for subseq
 help reduce repeated narrow fixes; the existing tests, reviewer and completion gate still decide readiness. A run is
 ready for human review only when its actual criteria pass; more allowance does not authorize fabricating evidence.
 
-Five harnesses are supported: Claude Code, Codex, Gemini CLI, opencode and goose. A harness can join when it does
-three things: start a run non-interactively, resume that specific session by id rather than "the latest", and emit
-a machine-readable stream the outcome can be read from. All five do, and each one's resume was checked by
-round-trip on 2026-09-25: a number written in one process came back when a second process resumed that session id.
+## Execution providers
 
-`cursor-agent` is the one that has the flags but is still out. `--print --output-format stream-json`, `--resume
-<chatId>` and `create-chat` cover the contract, but it is not signed in on the author's machine, so a headless run
-draws the interactive sign-in screen and exits non-zero. Nobody has seen its event stream, and writing an adapter
-against an unseen stream would be a guess. The blocker is a login, not a missing capability. The reasoning is kept
-next to the adapters in `lib/harness.mjs`.
+Gallivant has five local CLI adapters (Claude Code, Codex, Gemini CLI, OpenCode,
+Goose) and the hosted `openai-agents` adapter. `codex-cloud` is recognized but
+unavailable for new dispatch: the pinned CLI cannot establish the selected
+Cloud environment's connected repository. Local Codex and Claude are enabled;
+this is a separate Cloud transport restriction, not a disabled local harness.
+
+Natural-language preparation is available through Claude, Codex 0.160.0+ and
+OpenAI Agents. Other local adapters implement ready PRDs. The capability registry
+in `lib/harness.mjs` is shared by configuration, probes, task clients and the
+tracker; account/model access is checked separately. Hosted setup is documented
+in [openai-agents.md](openai-agents.md) and [codex-cloud.md](codex-cloud.md).
+
+Local adapters start non-interactively, resume an exact session and emit a
+machine-readable stream. Earlier session-memory round trips established that
+narrow contract; they did not establish successful repository implementation.
+[The live support matrix](https://github.com/uchibeke/gallivant/blob/main/docs/audit/harness-live-validation.md) records actual
+provider/model cases and blocked phases. Do not infer full live qualification
+from adapter or fixture coverage. A hosted harness moves agent compute to the
+provider; the coordinator, local verification and GitHub publication still need
+an awake machine or a continuously running Node host.
+
+`cursor-agent` has no registered adapter. The earlier local exploration did not
+qualify its event stream and unattended permissions; it is not a supported choice.
+Provider/model selection for local harnesses remains in each harness's own
+configuration; Gallivant does not add a general per-task local model router.
 
 ## The base branch
 
@@ -104,8 +128,11 @@ was deleted after it was configured is reported before the next start rather tha
 
 ## How long a run may take
 
-`run_timeout_minutes` bounds one run. Past it the run is SIGKILLed and the entry stops with `timeout`. It resolves the
-same way `base` does, and for the same reason:
+For a local implementation run, `run_timeout_minutes` bounds its process lifetime;
+expiry terminates the owned process group. Remote work has no local process to
+kill: its provider capabilities determine cancellation, and unresolved ownership
+remains fenced. See [execution controls](execution.md#scheduling-and-limits).
+The limit resolves in this order:
 
 1. `run_timeout_minutes` on the repository's `repos` entry: `{ "repo": "acme/big", "run_timeout_minutes": 120 }`.
 2. The global `run_timeout_minutes`.
@@ -115,8 +142,10 @@ and `pnpm build`, at about 2m30s each, cannot do the same work in the same budge
 in nine seconds, and an operator with both has no single number that is right for either.
 
 **This is not a spend limit.** It catches a session that is genuinely wedged: spinning on a command that never returns,
-waiting on a prompt that will never come, looping. What bounds spend is `max_iterations` and `max_budget_usd`, and they
-are the right tools because they can tell an expensive round from a stuck one. A clock cannot.
+waiting on a prompt that will never come, looping. `max_iterations` bounds automatic
+rounds and Claude's `max_budget_usd` bounds that CLI's spend. Other local adapters
+lack a dollar hard cap; hosted reservations bound new dispatch authorization,
+not provider billing. Configure the provider's own spending controls as well.
 
 The default was 30 and is now 720, twelve hours. Two runs are the argument. One review round was killed at 31.2 minutes
 against the 30-minute limit with its work finished: it had verified four review findings against the code, created a
@@ -126,12 +155,14 @@ matching the recorded baseline). Its last tool call wrote the commit message, an
 message and running `git commit`, so none of it was committed and the entry reported `reason: timeout` as though the
 session had failed. The healthy run before it took 7.3 hours and exited 0.
 
-So any default under about eight hours can cut a run like the second one, which makes 30, 45 and 180 the same error at
-different scales: a limit set near the cost of real work. Twelve hours is "longer than any legitimate run", which is what
-this knob is supposed to be.
+These observations explain the twelve-hour default; they do not guarantee every
+legitimate task finishes inside it. Set a shorter or longer limit for the repository
+when its verification and expected workload justify one.
 
-The tradeoff is real and is deliberate: a wedged session now burns up to twelve hours before the daemon stops it. That is
-a spend question and `max_budget_usd` is its control. There is no second clock.
+The tradeoff is deliberate: a wedged session can consume time and provider usage
+until stopped. Only Claude's native budget flag provides the local dollar cap
+listed above; other providers need their own account controls. Raising the runtime
+limit does not resolve missing access, failed verification or an exhausted budget.
 
 The validation floor is 1, so an operator who deliberately wants a short timeout can set one, per repository or globally.
 

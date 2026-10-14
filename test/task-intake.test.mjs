@@ -79,6 +79,16 @@ test("publication ambiguity is a durable acknowledged no-effects refusal and exa
   assert.equal(calls, 0); assert.equal(w.ctx.state.entries().length, 0);
 });
 
+test("unsupported publication directives refuse before preparation or saved task effects", async () => {
+  const w = world({ prepare: async () => assert.fail("ambiguous delivery cannot invoke preparation") });
+  const before = w.service.list();
+  for (const clause of ["Publish the changes for review", "Send a PR for review", "Open a pull-request"]) {
+    await assert.rejects(w.service.prepare({ text: `Implement export. ${clause}.` }), { code: "TASK_DELIVERY_SCOPE", taskEffects: "none" });
+    assert.deepEqual(w.service.list(), before);
+    assert.deepEqual(w.ctx.state.entries(), []);
+  }
+});
+
 test("a conflicting delivery answer leaves its question, revision and preparation budget untouched", async () => {
   const w = world({ prepare: async (_ctx, task) => JSON.stringify(draftFor(task, { question: true })) });
   const first = await w.service.prepare({ text: "Implement export. Open a PR for review." });
@@ -177,19 +187,31 @@ test("new task criteria collapse identical owner coverage without dropping const
 });
 
 test("documented CLI and structured preparation examples select an accepted adapter", () => {
+  const guides = ["docs/tasks.md", "README.md", "docs/install.md", "docs/openai-agents.md"];
+  const examples = [];
+  for (const guide of guides) {
+    const text = readFileSync(new URL(`../${guide}`, import.meta.url), "utf8");
+    const commands = [...text.matchAll(/```sh\n([\s\S]*?)\n```/g)]
+      .flatMap(match => match[1].replace(/\\\n\s*/g, " ").split("\n"))
+      .filter(command => /(?:^|\|)\s*gallivant task (?:["']|--stdin)/.test(command));
+    assert.ok(commands.length, `${guide} must provide a preparation example`);
+    examples.push(...commands.map(command => ({ command, harness: command.match(/--harness\s+([\w-]+)/)?.[1] })));
+  }
+  assert.ok(examples.some(({ command }) => command.includes("--stdin")), "check stdin preparation too");
   const docs = readFileSync(new URL("../docs/tasks.md", import.meta.url), "utf8");
-  const readme = readFileSync(new URL("../README.md", import.meta.url), "utf8");
-  const cli = docs.match(/```sh\n([\s\S]*?)\n```/)[1].replace(/\\\n\s*/g, " ").split("\n");
-  assert.equal(cli.length, 2, "check both text and stdin preparation examples");
-  const examples = [...cli, readme.match(/`(gallivant task [^`]+)`/)[1]].map(command => ({
-    command, harness: command.match(/--harness\s+(\w+)/)?.[1],
-  }));
   const structured = docs.match(/await tasks\.prepare\(\{([\s\S]*?)\n\}\);/)[1];
   examples.push({ command: "tasks.prepare", harness: structured.match(/harness:\s*'([^']+)'/)?.[1] });
   for (const { command, harness } of examples) {
     assert.ok(harness, `${command} must explicitly select a configured preparation adapter`);
-    const spec = buildPreparationRun({ harness, config: CONFIG, mode: "start", session: "6f1c2d3e-1111-4111-8111-111111111111", prompt: "draft", cwd: "/tmp/fixture" });
-    assert.equal(spec.boundary, PREPARATION_BOUNDARY, command);
+    const capability = capabilitiesFor(harness);
+    assert.ok(capability.available && capability.preparation, command);
+    if (capability.transport === "cli") {
+      const spec = buildPreparationRun({ harness, config: CONFIG, mode: "start", session: "6f1c2d3e-1111-4111-8111-111111111111", prompt: "draft", cwd: "/tmp/fixture" });
+      assert.equal(spec.boundary, capability.preparation.boundary, command);
+    } else {
+      assert.equal(capability.preparation.environment, "none", command);
+      assert.equal(capability.preparation.authority, "text-only", command);
+    }
   }
 });
 
@@ -636,9 +658,11 @@ test("falsely mapped planner behavior cannot enter owner-derived criteria or sto
     let r = await (cli ? taskCommand(w.ctx, { args: ["prepare", REQUEST], values: { run: true, context: input.context }, service: w.service }) : w.service.prepare(input));
     if (phase === "answer") {
       assert.equal(r.status, "needs-input"); assert.deepEqual(w.ctx.state.entries(), []);
-      const answer = "Use JSON only.\nDo not publish publicly.";
+      // This test exercises owner-derived implementation constraints. Publication
+      // changes require clarification and are covered by the refusal tests above.
+      const answer = "Use JSON only.\nDo not expose credentials.";
       r = await (cli ? taskCommand(w.ctx, { args: ["answer", r.taskId], values: { revision: String(r.revision), "request-id": "derived-answer", answer: ["q-r-1=" + answer] }, service: w.service }) : w.service.answer({ taskId: r.taskId, expectedRevision: r.revision, operationId: "derived-answer", answers: { "q-r-1": answer } }));
-      assert.match(r.draft.text, /Use JSON only/); assert.match(r.draft.text, /Do not publish publicly/);
+      assert.match(r.draft.text, /Use JSON only/); assert.match(r.draft.text, /Do not expose credentials/);
       const executable = r.draft.text.split("## User stories\n")[1].split("## Verify\n")[0];
       assert.match(executable, /clarified requirement r-1: "Add CSV export for the widget table\."/);
       assert.match(executable, /The answer governs any conflict with that requirement\./);

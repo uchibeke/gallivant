@@ -1,7 +1,7 @@
 {
   "name": "gallivant",
   "version": "0.2.0",
-  "description": "Write a PRD, mark it ready, go outside. Keeps coding-agent pull requests moving through review and CI without you.",
+  "description": "Turn repository tasks into reviewed pull requests with local or hosted agents, acceptance checks and a persistent review loop.",
   "type": "module",
   "bin": {
     "gallivant": "bin/gallivant.mjs",

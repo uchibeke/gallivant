@@ -5,7 +5,12 @@ config; `gallivant doctor` checks the prerequisites and prints a fix for each
 missing item. Setup time depends on whether your harness and GitHub are already
 configured. No model call is needed to install the CLI or validate a hand-written PRD.
 
-Requirements: macOS or Linux, Node 22 or newer, `gh` signed in, `jq`, and at least one of Claude Code (2.1.263 or newer) or Codex CLI (0.158.0 or newer) signed in.
+Requirements shared by the coordinator: macOS or Linux, Node 22 or newer, Git,
+`gh` signed in, and `jq`. For the recommended local path, use signed-in Claude
+Code 2.1.263+ or Codex CLI 0.160.0+ (Codex implementation accepts 0.158.0+, but
+plain-language preparation needs 0.160.0+). Hosted OpenAI Agents execution has a
+separate setup below and needs no local Codex or Claude binary. See the
+[capability matrix](../README.md#harness-support) before choosing another harness.
 
 ## 1. The command
 
@@ -24,8 +29,9 @@ path above (the repository needs to be public for anonymous access).
 If the shell cannot find the command afterwards,
 the `bin` directory under `npm prefix -g` is not on your PATH.
 
-Everything below works from any directory, because Gallivant reads `~/.gallivant/config.json` rather than anything
-in the current folder.
+Global configuration lives in `~/.gallivant/config.json`. Task commands still
+need a target checkout: run inside it, pass `--dir` for natural-language tasks, or
+pass the PRD path for a written brief.
 
 ## 2. Sign in and create config
 
@@ -53,11 +59,67 @@ another supported bot, or explicitly set `"reviewer": null` to use CI and truste
 human feedback. Without a configured review bot, the default loop waits for a
 review that cannot arrive.
 
+### Hosted Agents API instead of a local CLI
+
+`init --harness` currently supports only `codex` and `claude`. For a hosted-only
+installation, create the config manually; do not install a local agent just to
+satisfy `init`. Create `~/.gallivant` privately, save the following as
+`~/.gallivant/config.json` with mode `600`, and replace the example account,
+project, model, repository, username and API-key path with your authorized values:
+
+```json
+{
+  "trusted_authors": ["YOUR_GITHUB_LOGIN"],
+  "worktrees": "~/.gallivant-worktrees",
+  "repos": ["YOUR_OWNER/YOUR_REPO"],
+  "harness": {
+    "openai-agents": {
+      "account": "my-service-account",
+      "organization": "org-selected",
+      "project": "proj-selected",
+      "api_key_file": "/absolute/path/to/private/agents-key",
+      "model": "YOUR_AUTHORIZED_MODEL",
+      "environment": "openai_hosted",
+      "container_size": "small",
+      "network": { "access": "disabled" },
+      "allowance": { "remainingUsd": 1, "reservedUsd": 0.2 }
+    }
+  },
+  "notify": null
+}
+```
+
+Keep existing config keys if you are adding this adapter to an existing install.
+The allowance is an illustrative local reservation, not a provider-enforced
+spend cap. API inference and hosted compute use API billing, independently of a
+ChatGPT subscription. Read the [Agents API guide](openai-agents.md) for scoped
+API permissions, packages, restricted networking and cancellation limitations.
+
+Run `gallivant doctor` before starting. Hosted results are verified locally in an
+OS sandbox: macOS needs `sandbox-exec` and Command Line Tools; Linux needs
+`/usr/bin/bwrap` and the supported namespaces. Missing sandbox support blocks
+execution/publication. Read-only account probes do not prove inference entitlement
+or a successful full lifecycle. Local APort hooks are not installed into hosted
+sessions; mandatory local-only policies cause a refusal.
+
+Use `--harness openai-agents` with `gallivant task`, or `harness: openai-agents`
+in your PRD. Keep the coordinator machine awake and online even though the agent
+runs remotely. **Codex Cloud is a different adapter:** its new dispatch is
+currently disabled because repository ownership of the selected environment
+cannot be verified. See [the Cloud gate](codex-cloud.md); local Codex and Claude
+remain available.
+
 ## 3. GitHub auth
 
 By default Gallivant uses the login you already have, however you set it up. Nothing to configure beyond `gh auth status` passing. There is no file to copy for this: every git setting a run needs, the credential helper included, is passed in the run's environment.
 
-A run is sandboxed, so it cannot read your macOS keychain, your Linux secret service, or `~/.git-credentials`. The daemon is not sandboxed, so it does the credential lookup and passes the result to the run as `GH_TOKEN`, where a helper carried in the same environment reads it. The token is never an argument, so `ps` cannot show it, and nothing writes it to a file.
+For local CLI runs, the coordinator resolves GitHub credentials before launching
+the harness. Supported sandbox settings restrict native credential-store access,
+so the run receives `GH_TOKEN` and an environment-carried Git helper. Sandbox
+coverage differs by harness; see [guardrails](guardrails.md). The token is not
+placed in command arguments or persisted by Gallivant, but the child process
+can read it. For hosted Agents execution, GitHub credentials stay with the local
+coordinator, which verifies and publishes returned artifacts.
 
 Earlier versions asked you to write `~/.gallivant/gitconfig` and pointed `GIT_CONFIG_GLOBAL` at it. That file is no longer read by anything, so if you have one you can delete it. Two things were wrong with it, and the second is the worse one. Its helper called `gh auth git-credential`, which asks `gh` to read stores a sandbox denies. And the file itself sat outside the worktree, so a sandboxed run could not read it at all: every git command, `git status` included, failed with `unable to access '/Users/you/.gallivant/gitconfig': Operation not permitted`, while git's fallback message blamed `~/.git-credentials` and sent two debugging sessions after the wrong file. `doctor`'s `run git push` line now runs a real `git ls-remote` with the run's own environment and no readable `HOME`, and prints whatever git says.
 
@@ -78,7 +140,8 @@ cat > ~/.gallivant/gh-token
 # config.json: "github_token_file": "~/.gallivant/gh-token"
 ```
 
-With the file set it wins over both of the other two, so a token you deliberately narrowed is never quietly replaced by a wider one. `doctor` reports which source a run would use, whether the token is classic or fine-grained, and whether it can actually push to each repo in `repos`.
+With the file set it wins over both of the other two, so a token you deliberately narrowed is never quietly replaced by a wider one. `doctor` reports which source a run would use, whether the token is classic or fine-grained, and repository access and protection checks. Its Git credential-transport check uses
+`git ls-remote`; a successful read does not by itself prove push permission.
 
 A `gh` logged in to an enterprise host is the one case this does not resolve for you. Gallivant asks `gh` for the host the remote names, but if `gh` has no login for that host, use `github_token_file`: a github.com token will not authenticate `github.acme.com`, and Gallivant says so rather than sending the wrong one.
 
@@ -143,33 +206,52 @@ Git metadata writes and escalations, the scoped token and the ruleset. Gallivant
 sets the approval mode on start and resume. A denial must be diagnosed, not
 bypassed. See [guardrails.md](guardrails.md#codex-git-writes-need-automatic-approval).
 
-## 8. First PRD
+## 8. First task
 
-A PRD is a markdown file in the target repo, by convention under `docs/prds/`, with a flat frontmatter block:
+You can deliver code, documentation, research or content, provided the outcome
+is a repository change with concrete acceptance criteria and checks. You do not
+need to write a PRD by hand.
 
-```markdown
----
-status: ready
-harness: claude
----
+### From plain language
 
-# Widget export
+Inside the target repository:
 
-## Problem
-## User stories
-## Acceptance criteria
-## Verify
-- `npm test`
-## Out of scope
+```sh
+gallivant task "Document how to run the existing tests in CONTRIBUTING.md. Use the commands already defined in the repository. Change documentation only." \
+  --harness codex --verify 'git diff --check'
 ```
 
-Run `gallivant new <name>` inside the repository the work belongs to; it writes `docs/prds/<name>.md` from the packaged template. Every section has rules, listed in [prd.md](prd.md); `gallivant ready` checks them and `start` refuses a PRD that fails any.
+Choose `claude` or `openai-agents` instead when configured. This first command
+uses inference to prepare a brief but does not start implementation. Inspect the
+returned draft and assumptions. If it needs answers, use its printed question
+IDs and `Next` action. Once ready, substitute your returned ID and revision:
 
-```bash
-gallivant ready path/to/repo/docs/prds/widget-export.md
-gallivant start path/to/repo/docs/prds/widget-export.md
+```sh
+gallivant task start TASK_ID --revision REVISION --run
+gallivant start
+```
+
+Alternatively, add `--run` to the original `task` request to authorize
+implementation as soon as preparation and any clarifications succeed. The task
+service starts the daemon; `gallivant start` with no path also opens the dashboard.
+Read [task operations](tasks.md) for selected context, revisions, recovery and costs.
+
+### From a written brief
+
+```sh
+gallivant new widget-export --harness codex
+# Fill in docs/prds/widget-export.md, including every required section.
+gallivant ready docs/prds/widget-export.md --check
+gallivant ready docs/prds/widget-export.md
+gallivant start docs/prds/widget-export.md
 gallivant status
 ```
+
+`new` writes a complete template. Fill in its Problem, User stories, Acceptance
+criteria, Verify, Where to look and Out of scope sections. Empty section headings
+are not a runnable brief. [The PRD contract](prd.md) explains the rules and
+noncoding verification. `ready --check` is a local, read-only validation;
+`ready` records readiness and updates the file without committing it.
 
 `start` starts the background daemon and dashboard and opens the browser when
 available. Do not run a second `up`. `--no-open` suppresses browser launch;
@@ -203,7 +285,7 @@ Watch `gallivant status` after the start run ends: the entry moves from `impleme
 |---|---|
 | `~/.gallivant/config.json` | your config, mode 600 |
 | `~/.gallivant/state.json` | the registry; preserve it and its snapshots for exact local recovery |
-| `~/.gallivant/runs/<entry>/<run>/` | `job.json`, `job.log` (the harness stream), `cmd.json` |
+| `~/.gallivant/runs/<entry>/<run>/` | `job.json`, `job.log` (provider output), local `cmd.json` or hosted execution/artifact records |
 | `~/.gallivant/daemon.json` | daemon health, read by `status` |
 | `~/.gallivant/tracker.json`, `tracker.lock`, `tracker.log` | standalone dashboard ownership, port and output |
 | `~/.gallivant/errors.log` | every warning and error |

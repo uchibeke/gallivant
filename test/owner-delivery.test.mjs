@@ -2,7 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { ownerDelivery, ownerImplementation, validateOwnerDelivery, ownerDeliveryFromPrd, assertDeliveryAnswer } from "../lib/owner_delivery.mjs";
 import { completionView } from "../lib/task_completion.mjs";
-import { parsePrd, prdFingerprint, contractOf } from "../lib/prd.mjs";
+import { parsePrd, prdFingerprint, contractOf, contractDiff, check } from "../lib/prd.mjs";
 import { GOOD_PRD } from "./helpers.mjs";
 
 test("ownership partitions exact Unicode source and removes only affirmative publication", () => {
@@ -41,6 +41,14 @@ test("ambiguous, conditional, qualified and delivery-only requests refuse before
   ]) assert.throws(() => ownerDelivery(source), { code: "TASK_DELIVERY_SCOPE" }, source);
 });
 
+test("unsupported positive publication forms require clarification instead of provider criteria", () => {
+  for (const clause of ["Publish the changes for review", "Send a PR for review", "Open a pull-request", "Publish the changes", "Prepare the PR", "Open pull-requests"])
+    assert.throws(() => ownerDelivery(`Implement export. ${clause}.`), { code: "TASK_DELIVERY_SCOPE" }, clause);
+  assert.equal(ownerDelivery('Render "Publish the changes for review" and `Open a pull-request` in help.'), null);
+  assert.throws(() => assertDeliveryAnswer({}, "Open a pull-request"), { code: "TASK_DELIVERY_SCOPE" });
+  assert.throws(() => assertDeliveryAnswer({}, "Do not publish publicly."), { code: "TASK_DELIVERY_SCOPE" });
+});
+
 test("new answers cannot silently override existing publication ownership", () => {
   const task = { ownerDelivery: ownerDelivery("Implement export. Open a PR for review.") };
   for (const answer of ["Do not open a PR until I approve the change", "Wait for my confirmation first.", "Only publish after permission.", "Do not publish anything", "Skip publication", "Keep the change local", "Do not send it for review", "Show diff only", "Do not push", "Return a patch without publishing", "Hold the change for my approval"])
@@ -68,6 +76,22 @@ test("typed ownership is validated and included in the ongoing PRD fingerprint; 
   assert.notEqual(prdFingerprint(current), prdFingerprint(legacy));
   assert.notEqual(prdFingerprint(current), prdFingerprint(parsePrd(GOOD_PRD + section.replace('"pull_request"', '"merge"'), 'docs/prds/example.md')));
   assert.throws(() => ownerDeliveryFromPrd(parsePrd(GOOD_PRD + section + section, "docs/prds/example.md")), { code: "TASK_DELIVERY_SCOPE" });
+});
+
+test("CRLF preserves ownership validation and fingerprint without weakening malformed-contract checks", () => {
+  const contract = ownerDelivery('Preserve the café greeting.\r\nOpen a PR for review.');
+  const section = `\n## Coordinator delivery contract\n\n\`\`\`json\n${JSON.stringify(contract, null, 2)}\n\`\`\`\n`;
+  const lf = GOOD_PRD + section, crlf = lf.replaceAll("\n", "\r\n");
+  const parsed = parsePrd(crlf, "docs/prds/example.md"), original = parsePrd(lf, parsed.path);
+  assert.deepEqual(ownerDeliveryFromPrd(parsed), contract);
+  assert.equal(check(parsed).ok, true);
+  assert.equal(prdFingerprint(parsed), prdFingerprint(original));
+  assert.deepEqual(contractDiff(original, parsed), []);
+  // Formatting normalization must not change the original request's escaped bytes.
+  const changedSource = parsePrd(lf.replace('\\r\\n', '\\n'), parsed.path);
+  assert.notEqual(prdFingerprint(changedSource), prdFingerprint(original));
+  for (const malformed of [crlf + section.replaceAll("\n", "\r\n"), crlf + "Unexpected trailing text", crlf.replace('"pull_request"', '"merge"')])
+    assert.throws(() => ownerDeliveryFromPrd(parsePrd(malformed, parsed.path)), { code: "TASK_DELIVERY_SCOPE" });
 });
 
 test("publication is fulfilled only by matching canonical delivery proof, never provider output", () => {

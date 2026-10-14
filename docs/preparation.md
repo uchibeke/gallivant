@@ -8,7 +8,21 @@ Questions and validation repairs return through that same adapter and durable
 runner. Gallivant owns requirements, revisions, readiness and execution consent.
 The model does not certify its own PRD or launch implementation while drafting.
 APort must call these shared task operations, rather than generate PRDs or launch
-a provider itself. Remote adapters supply the same preparation capability.
+a provider itself. Preparation and implementation are separate capabilities:
+
+| Provider | Natural-language preparation | Implementation |
+| --- | --- | --- |
+| Claude Code | Tools disabled | Local checkout |
+| Codex | Isolated native profile, Codex 0.160.0+ | Local checkout |
+| OpenAI Agents API | Text only, no tools or environment | Hosted sandbox |
+| Gemini CLI, OpenCode, Goose | Unavailable; use `new` → `ready` → `start` | Local checkout |
+| Codex Cloud | Unavailable | New dispatch blocked on environment/repository verification |
+
+An adapter's presence does not prove the configured account can use its selected
+model. Check [local live evidence](https://github.com/uchibeke/gallivant/blob/main/docs/audit/harness-live-validation.md),
+[Agents setup](openai-agents.md) and the [Cloud blocker](codex-cloud.md).
+Preparation consumes inference, but grants no implementation consent. Selected
+repository text is context; it cannot authorize tools or publication.
 
 The canonical adapter registry owns preparation boundaries. Claude uses its
 tools-off mode. Codex 0.160.0 uses an isolated permission profile, no approvals,
@@ -20,7 +34,15 @@ can override the V1 `features.multi_agent` switch. Some model catalogs still
 expose apply_patch; the sandbox denies its file access. No preparation tool receives project or
 credential filesystem grants. Selected source text is supplied in the prompt.
 
-The task-private config snapshot is parsed with bundled smol-toml. Model and
+The following isolation details apply to local Codex preparation. Agents API
+preparation instead sets `environment: {type: "none"}`, `tools: []` and
+`multi_agent.enabled: false` on session creation, verifies the effective session,
+and accepts only the owned root turn's final text. It sends no local filesystem,
+GitHub or implementation credentials. Unsupported effective configuration or tool
+output fails closed; [the managed transport](openai-agents.md#task-and-command-use)
+records its recovery and live qualification limits.
+
+The Codex task-private config snapshot is parsed with bundled smol-toml. Model and
 provider settings are retained; legacy sandbox settings are removed because they
 override permission profiles. Legacy `notify` commands are removed from the private
 snapshot and disabled explicitly; turning off hooks alone does not disable them.
@@ -70,7 +92,7 @@ permission fallbacks, without editing the machine's administrator policy.
 This proves native CLI/configuration behavior with a fixture provider,
 not live provider eligibility or a completed APort/ChatGPT workflow.
 
-The [PR #10 context and side-effect audit](audit/preparation-context-boundary.md)
+The [PR #10 context and side-effect audit](https://github.com/uchibeke/gallivant/blob/main/docs/audit/preparation-context-boundary.md)
 records the source-backed findings, regression coverage and trust limits.
 
 Official configuration references:
@@ -78,9 +100,10 @@ Official configuration references:
 [configuration](https://learn.chatgpt.com/docs/config-file/config-reference).
 Re-run native qualification when upgrading the CLI or adding tool capabilities.
 
-APort's connected execution continuation is
+The recorded cross-repository integration handoff names
 [`aporthq/agent-passport#417`](https://github.com/aporthq/agent-passport/pull/417),
 with job identity `aporthq/agent-passport/aport-task-delivery-workflow-integration`.
-M6 should reuse that single continuation after the actual M5 portable package
-is available. The merged APort foundation still lacks workflow integration;
-this preparation adapter does not change that deployment state.
+The handoff calls for reusing that continuation after the actual portable package
+is available. This document qualifies the preparation boundary; it does not
+establish the current deployment state of APort or a completed connected workflow.
+Check the linked integration's release evidence separately.
