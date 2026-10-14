@@ -117,6 +117,16 @@ test("saved version-one ownership remains exact and cannot authorize forged conn
   }
 });
 
+test("publication owns only its recognized coordinating connector and delimiter", () => {
+  for (const connector of [", and ", ", and then ", " and ", " and then ", ", then ", " then ", ", "]) {
+    const source = "Implement CSV export and test both formats" + connector + "open a PR for review.";
+    const contract = ownerDelivery(source);
+    assert.equal(ownerImplementation(contract).join(""), "Implement CSV export and test both formats", connector);
+    assert.equal(contract.spans.map(s => source.slice(s.start, s.end)).join(""), source);
+    assert.equal(source.slice(contract.spans.at(-1).start), connector + "open a PR for review.", connector);
+  }
+});
+
 test("typed ownership is validated and included in the ongoing PRD fingerprint; legacy contract is unchanged", () => {
   const contract = ownerDelivery("Implement export. Open a PR for review.");
   const section = `\n## Coordinator delivery contract\n\n\`\`\`json\n${JSON.stringify(contract)}\n\`\`\`\n`;
