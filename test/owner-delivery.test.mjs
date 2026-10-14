@@ -69,6 +69,85 @@ test("quoted contractions and supported exclamation boundaries preserve exact ow
     for (const action of [() => ownerDelivery(source), () => assertDeliveryAnswer(task, source)]) assert.throws(action, { code: "TASK_DELIVERY_SCOPE" }, source);
 });
 
+test("unclosed literal delimiters cannot hide workflow restrictions", () => {
+  const task = { completion: { version: 1, target: "delivery_ready" } };
+  for (const delimiter of ["'", '"', "`", "```", "‘", "“"]) {
+    const text = "Implement export. " + delimiter + "Do not push.";
+    assert.throws(() => ownerDelivery(text), { code: "TASK_DELIVERY_SCOPE" }, text);
+    assert.throws(() => assertDeliveryAnswer(task, text), { code: "TASK_DELIVERY_SCOPE" }, text);
+  }
+  for (const text of ["Document 'We\'re waiting; do not push' in help.", "Document `Do not push` in help.", "Document this code:\n```\nRender `Do not push` in help.\n```", 'Document "Do not push" in help.']) {
+    assert.equal(ownerDelivery(text), null);
+    assert.doesNotThrow(() => assertDeliveryAnswer(task, text));
+  }
+});
+
+test("saved unclosed-literal ownership remains exact while fresh requests refuse", () => {
+  for (const suffix of [" 'Do not push.", " `Open a PR."]) {
+    const source = "Implement export. Open a PR." + suffix;
+    const start = source.indexOf("Open"), end = source.indexOf(suffix);
+    for (const version of [1, 2]) {
+      const saved = { version, offsets: "utf16", source, spans: [
+        { start: 0, end: start, owner: "implementation" },
+        { start, end, owner: "coordinator", kind: "pull_request" },
+        { start: end, end: source.length, owner: "implementation" },
+      ] };
+      const before = structuredClone(saved);
+      assert.equal(validateOwnerDelivery(saved), saved);
+      assert.deepEqual(saved, before);
+    }
+    assert.throws(() => ownerDelivery(source), { code: "TASK_DELIVERY_SCOPE" });
+  }
+});
+
+test("historical malformed mixed backticks refuse without changing saved records", () => {
+  // Produced and accepted by 2bf8268: its single-character scanner exposed the
+  // apparent publication after the unmatched mixed delimiter run.
+  const source = "Implement export. ` code ``` Open a PR. ";
+  const saved = { version: 2, offsets: "utf16", source, spans: [
+    { start: 0, end: 29, owner: "implementation" },
+    { start: 29, end: 39, owner: "coordinator", kind: "pull_request" },
+    { start: 39, end: 40, owner: "implementation" },
+  ] };
+  const before = structuredClone(saved);
+  assert.throws(() => validateOwnerDelivery(saved), { code: "TASK_DELIVERY_SCOPE" });
+  assert.deepEqual(saved, before);
+  assert.throws(() => ownerDelivery(source), { code: "TASK_DELIVERY_SCOPE" });
+});
+
+test("technical feature objects and application consent are not delivery controls", () => {
+  const task = { completion: { version: 1, target: "delivery_ready" } };
+  for (const text of [
+    "Create a PR template for this repository.", "Open a PR details dialog.", "Submit a PR review form.",
+    "Create a pull request status component.", "Do not commit the database transaction when validation fails.",
+    "Avoid pushing duplicate items onto the queue.", "Never push an item onto the stack twice.",
+    "Require user confirmation before deleting an account.", "Ask for user permission before accessing the camera.", "User consent is required before deleting an account.", "Require confirmation before deleting an account.", "Require user confirmation before creating a PR template.", "Require user confirmation before committing the database transaction.", "Do not commit the database transaction or push duplicate items onto the queue.", "Do not silently commit the database transaction.",
+  ]) {
+    assert.equal(ownerDelivery(text), null, text);
+    assert.doesNotThrow(() => assertDeliveryAnswer(task, text), text);
+    const source = text + " Open a PR for review.", contract = ownerDelivery(source);
+    assert.equal(ownerImplementation(contract).join(""), text + " ");
+    assert.equal(contract.spans.map(span => source.slice(span.start, span.end)).join(""), source);
+    for (const restriction of ["Do not push.", "Wait for my approval.", "Publication only after approval."])
+      for (const act of [() => ownerDelivery(text + " " + restriction), () => assertDeliveryAnswer(task, text + " " + restriction)])
+        assert.throws(act, { code: "TASK_DELIVERY_SCOPE" }, text + " " + restriction);
+  }
+  for (const text of ["Create a PR tomorrow.", "Open a PR against release.", "Submit a PR when I approve.", "Do not commit the changes.", "Never automatically push changes.", "Do not silently commit changes.", "Do not commit the database transaction or silently push changes.", "Avoid pushing commits to the remote.", "Never run git push.", "Require my confirmation before proceeding.", "Ask for user permission before publishing.", "Require user confirmation before git push.", "Require user permission before running git push.", "Do not commit the database transaction or push any changes.", "Avoid pushing duplicate items onto the queue and committing changes."])
+    for (const act of [() => ownerDelivery(text), () => assertDeliveryAnswer(task, text)]) assert.throws(act, { code: "TASK_DELIVERY_SCOPE" }, text);
+});
+
+test("independent statement restrictions do not qualify later publication", () => {
+  for (const separator of ["; ", "\n", ". ", "! "]) {
+    const source = "Implement export" + separator + "do not change the API" + separator + "open a PR for review.";
+    const contract = ownerDelivery(source);
+    assert.equal(contract.spans.map(span => source.slice(span.start, span.end)).join(""), source);
+    assert.match(ownerImplementation(contract).join(""), /do not change the API/);
+    assert.doesNotMatch(ownerImplementation(contract).join(""), /open a PR/);
+  }
+  for (const source of ["Implement export; do not: open a PR.", "Implement export; do not:\nopen a PR.", "Implement export; do not:\n\nopen a PR.", "Implement export; only if tests pass:\n\nopen a PR.", "Implement export; only if tests pass:\nopen a PR.", "Implement export; do not merge, open a PR.", "Implement export; only after approval open a PR.", "Implement export; wait for my approval; open a PR."])
+    assert.throws(() => ownerDelivery(source), { code: "TASK_DELIVERY_SCOPE" }, source);
+});
+
 test("initial requests cannot contradict the default publication workflow", () => {
   for (const instruction of ["Keep the change local", "Do not push", "Don't commit", "Return a patch only", "Show diff only", "Wait for my review", "Pause the task", "Withhold the changes"]) {
     for (const source of ["Implement export. " + instruction + ".", "Implement export, " + instruction + ", and open a PR for review."])
@@ -111,7 +190,7 @@ test("publication-subject conditions and standalone gates remain owner controls"
 test("ambiguous, conditional, qualified and delivery-only requests refuse before planning", () => {
   for (const source of [
     "Please open one pull request for review.", "Open a PR.", "Open a PR; do not merge or release.",
-    "Implement export. Do not: open a PR.", "Implement export. Do not merge; open a PR.",
+    "Implement export. Do not: open a PR.", "Implement export. Do not merge, open a PR.",
     "Implement export. No PR should be created.", "Implement export. Do not publish anything.",
     "Implement export. Only if tests pass open a PR.",
     "Wait for my explicit confirmation before proceeding. Open a PR for review.",

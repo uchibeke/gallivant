@@ -116,6 +116,19 @@ must not be retried with changed text under that same identity. Ask the owner to
 clarify the complete request and then use a new preparation identity. See
 [natural-language ownership](tasks.md) for supported syntax and limitations.
 
+Literal examples must have matching quote/backtick delimiters in new requests and
+answers. Saved ownership contracts keep their approved spans and historical
+unclosed-literal handling. Malformed mixed backtick runs that previously exposed a
+publication clause can fail validation under the corrected scanner; their records
+are not rewritten. The owner must clarify a new request rather than automatically
+continuing publication from that malformed contract. PR-modified UI/document objects, database transactions, data
+structure operations and product-user consent are implementation requirements;
+unqualified Git directions, owner approval and publication conditions remain
+workflow controls. Only those concrete technical objects are excluded: unrelated
+or coordinated restrictions remain visible. Statement separators end independent
+constraints, while an unfinished colon prefix keeps its scope across blank lines.
+This is a bounded grammar, not a general natural-language authorization model.
+
 All mutations require operationId and expectedRevision; prepare uses revision 0.
 Preparation does not authorize implementation. Start requires `run:true` and the
 current exact readiness decision. Answers bind saved question IDs. Stable keys
