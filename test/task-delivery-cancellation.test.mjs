@@ -3,14 +3,14 @@ import assert from "node:assert/strict";
 import { join } from "node:path";
 import { createTaskDelivery } from "../lib/task_delivery.mjs";
 import { createDeliveryStore } from "../lib/task_delivery_store.mjs";
-import { CORE_VERSION } from "../lib/task_delivery_contract.mjs";
+import { CORE_VERSION, taskRejectionForModel } from "../lib/task_delivery_contract.mjs";
 import { makeExecution } from "../lib/execution.mjs";
 import { executionRegistry } from "../lib/harness.mjs";
 import { makeState } from "../lib/state.mjs";
 import { migrateRuntimeState } from "../lib/runtime_state.mjs";
 import { tempHome, makeClock, silentLog } from "./helpers.mjs";
 
-async function fixture({ lostSubmit = false, lostCancel = false } = {}) {
+async function fixture({ lostSubmit = false, lostCancel = false, allowMutations = false } = {}) {
   const home = tempHome(), clock = makeClock(), state = makeState(home), calls = [], tasks = new Map();
   const scope = { tenant: "alice", account: "alice", region: "US", environment: "preview", scopes: ["task-delivery:read", "task-delivery:write"], repositories: ["widget"] };
   const manifest = { coreVersion: CORE_VERSION, coreSha256: "a".repeat(64), operationVersion: 1, taskVersion: 1, executionVersion: 1 };
@@ -43,7 +43,7 @@ async function fixture({ lostSubmit = false, lostCancel = false } = {}) {
   let authorized = true, schedules = 0;
   const delivery = () => createTaskDelivery({ manifest, store,
     authorize: async ({ identity, operation }) => {
-      if (!authorized || identity !== "alice" || !["control", "inspect"].includes(operation)) throw Object.assign(new Error("controls disabled"), { code: "DELIVERY_AUTHORIZATION" });
+      if (!authorized || identity !== "alice" || !(allowMutations ? ["answer", "validate", "start", "resume", "control", "inspect"] : ["control", "inspect"]).includes(operation)) throw Object.assign(new Error("controls disabled"), { code: "DELIVERY_AUTHORIZATION" });
       return scope;
     }, contextFor: async () => ({ ctx, repository: { dir: home, repo: "acme/widget" }, taskOptions: { store: { read: id => tasks.get(id) } } }),
     schedule: async () => { schedules++; },
@@ -97,4 +97,48 @@ test("failed durable stop cannot authorize ordinary provider reconciliation", as
   await assert.rejects(f.delivery().dispatch("control", f.input, "alice"), /stop storage unavailable/);
   assert.equal(f.store.read(f.scope).cancellations[f.input.operationId].status, "intent");
   assert.equal(f.calls.length, 2);
+});
+
+test("stale delivery mutations retain settled refusals across restore without effects or identity rebinding", async () => {
+  const f = await fixture({ allowMutations: true }), originalCalls = f.calls.length;
+  for (const operation of ["answer", "validate", "start", "resume", "control"]) {
+    const input = { taskId: f.taskId, expectedRevision: 2, operationId: "stale-" + operation,
+      ...(operation === "answer" ? { answers: { "q-1": "All columns" } } : operation === "start" ? { run: true } : operation === "control" ? { action: "cancel" } : {}) };
+    for (let restored = 0; restored < 2; restored++) await assert.rejects(f.delivery().dispatch(operation, input, "alice"), error => {
+      assert.equal(error.code, "DELIVERY_CONFLICT"); assert.equal(taskRejectionForModel(error)?.code, "DELIVERY_CONFLICT"); return true;
+    });
+    const saved = f.store.read(f.scope), receipt = (operation === "control" ? saved.cancellations : saved.operations)[input.operationId];
+    assert.equal(receipt.status, "acknowledged"); assert.equal(receipt.wakePending, false); assert.equal(receipt.rejection.code, "DELIVERY_CONFLICT");
+    await assert.rejects(f.delivery().dispatch(operation, { ...input, expectedRevision: 1 }, "alice"), error => {
+      assert.equal(error.code, "DELIVERY_CONFLICT"); assert.equal(taskRejectionForModel(error), null); return true;
+    });
+  }
+  assert.equal(f.calls.length, originalCalls); assert.equal(f.schedules(), 0);
+});
+
+test("a durably refused cancellation leaves its identity retained and allows a fresh current-revision cancellation", async () => {
+  const f = await fixture();
+  const stale = { ...f.input, expectedRevision: 2, operationId: "stale-cancel" };
+  await assert.rejects(f.delivery().dispatch("control", stale, "alice"), error => taskRejectionForModel(error)?.code === "DELIVERY_CONFLICT");
+  assert.equal((await f.delivery().dispatch("control", f.input, "alice")).cancellationPending, true);
+  assert.equal(f.calls.filter(c => c.name === "cancel").length, 1);
+  const receipts = f.store.read(f.scope).cancellations;
+  assert.equal(receipts[stale.operationId].rejection.code, "DELIVERY_CONFLICT"); assert.equal(receipts[f.input.operationId].status, "acknowledged");
+  await assert.rejects(f.delivery().dispatch("control", { ...f.input, operationId: "another-cancel" }, "alice"), { code: "DELIVERY_CAPACITY" });
+  await assert.rejects(f.delivery().dispatch("control", stale, "alice"), error => taskRejectionForModel(error)?.code === "DELIVERY_CONFLICT");
+  assert.equal(f.calls.filter(c => c.name === "cancel").length, 1);
+});
+
+test("failed refusal persistence never claims settlement or consumes cancellation authority", async () => {
+  const f = await fixture(), transaction = f.store.transaction;
+  f.store.transaction = (scope, fn) => transaction(scope, (data, save) => fn(data, value => {
+    if (Object.values(value.cancellations || {}).some(receipt => receipt.rejection)) throw new Error("durable storage unavailable");
+    return save(value);
+  }));
+  await assert.rejects(f.delivery().dispatch("control", { ...f.input, expectedRevision: 2 }, "alice"), error => {
+    assert.match(error.message, /durable storage unavailable/); assert.equal(taskRejectionForModel(error), null); return true;
+  });
+  assert.equal(f.store.read(f.scope).cancellations, undefined); assert.equal(f.calls.filter(c => c.name === "cancel").length, 0);
+  f.store.transaction = transaction;
+  assert.equal((await f.delivery().dispatch("control", f.input, "alice")).cancellationPending, true);
 });
