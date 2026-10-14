@@ -51,7 +51,8 @@ const delivery = createTaskDelivery({
 });
 const task = await delivery.dispatch('prepare', {
   repositoryId: 'widget', harness: 'openai-agents',
-  text: 'Describe the requested work and its constraints.',
+  text: 'Describe the requested implementation and its constraints.',
+  completion: { target: 'delivery_ready' }, // optional; default shown
   allowance: { budgetUsd: 1, runtimeMs: 60000 },
   operationId: 'request-1', expectedRevision: 0,
 }, authenticatedIdentity);
@@ -87,6 +88,19 @@ before enabling requests. After migration to another artifact, retire old reques
 handlers; never substitute the namespace's new pin as an old handler's manifest.
 Consumers upgrading from the earlier dispatcher signature must add this manifest
 and initialize the scoped pin. Reads do not validate or replace that pin.
+
+Capability responses expose `repositories[].completion` with `defaultTarget` and
+supported `targets`. The shared prepare schema accepts only
+`completion: { target: 'delivery_ready' | 'integrated' }`; the selected policy is
+persisted through intake and implementation ownership. Task, list, model and
+evidence projections expose `completion` from saved coordinator observations.
+Use `completion.status`, not a provider success or a terminal PR state, to report
+fulfillment. `awaiting_integration` means the qualified PR is still being watched;
+`blocked` or `unverified` requires attention. Both targets use the GitHub PR
+observation adapter today. The milestone names are portable, but no additional
+artifact, deployment or non-GitHub adapter is advertised. See [task milestones](tasks.md#choose-the-delivery-milestone)
+for evidence, cancellation and legacy behavior. The policy never grants merge
+permission or changes the allowance.
 
 All mutations require operationId and expectedRevision; prepare uses revision 0.
 Preparation does not authorize implementation. Start requires `run:true` and the

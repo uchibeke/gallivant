@@ -16,6 +16,17 @@ inference costs but does not authorize implementation. Ask the saved questions,
 then call task_answer with their IDs, a new operationId and the saved revision.
 Preserve explicit requirements and any readiness denial. Inspect stale revisions.
 
+Read the repository's completion capabilities and select the creation-only
+completion.target: delivery_ready for a qualified reviewable delivery, or
+integrated when the user wants monitoring through an external merge. An omitted
+target defaults to delivery_ready. This field owns the PR/review/merge lifecycle;
+do not duplicate coordinator publication as a provider implementation criterion.
+Organize the user's implementation requirements clearly yourself; do not require
+the user to format a special prompt. Preserve every constraint and prohibition,
+show the separated delivery goal with the prepared brief, and ask a focused
+clarification if mixed prose cannot be separated without changing meaning.
+Never rewrite an existing false attestation or drop an inconvenient requirement.
+
 After the user authorizes implementation, call task_start with run true, a stable
 operationId and the current revision. Return the task handle promptly. Subsequent
 task_inspect, task_logs and task_evidence calls read saved observations. They do
@@ -35,7 +46,10 @@ future dispatch while remote compute continues. Never claim remote cancellation
 from a stopped submission client.
 
 Keep task identity across reconnects and review corrections. Report observed
-tests, artifacts and the pull request. Stop at ready-for-human or needs-human;
+tests, artifacts and the pull request. Use completion.status and its canonical
+evidence to describe fulfillment; awaiting_integration means the existing
+coordinator keeps watching without authorizing a merge. A closed, unmerged PR
+does not fulfill the target. Surface needs-human or unverified observations;
 never merge, publish, request credentials or infer completion from provider status.
 The UI receives the full saved view through tool metadata; do not mirror raw logs,
 briefs or private diagnostics into model context. Use authorized artifact IDs.
