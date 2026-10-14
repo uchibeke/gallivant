@@ -5,6 +5,10 @@ import { mkdirSync, readFileSync, writeFileSync, existsSync, rmSync, symlinkSync
 import { spawnSync, execFileSync } from "node:child_process";
 import { PassThrough } from "node:stream";
 import { createTaskService } from "../lib/tasks.mjs";
+import { createTaskDelivery } from "../lib/task_delivery.mjs";
+import { createDeliveryStore } from "../lib/task_delivery_store.mjs";
+import { CORE_VERSION } from "../lib/task_delivery_contract.mjs";
+import { migrateRuntimeState } from "../lib/runtime_state.mjs";
 import { taskStore } from "../lib/task_store.mjs";
 import { ready } from "../lib/commands/ready.mjs";
 import { start } from "../lib/commands/start.mjs";
@@ -39,6 +43,67 @@ function offlineRunnerService(ctx) {
 
 const REQUEST = "Add CSV export for the widget table.\nDo not add dependencies.";
 const providerFile = key => key === "AWS_CONFIG_FILE" ? "[default]\nregion = fixture-region\n" : key === "AWS_SHARED_CREDENTIALS_FILE" ? "[default]\naws_access_key_id = provider-id\naws_secret_access_key = provider-secret\n" : `fixture:${key}`;
+
+test("completion target is creation-only, survives canonical start and conflicts on changed retry input", async () => {
+  const w = world();
+  const input = { text: REQUEST, requestId: "completion-target", completion: { target: "integrated" } };
+  const prepared = await w.service.prepare(input);
+  assert.equal(prepared.status, "ready"); assert.equal(prepared.completion.target, "integrated"); assert.equal(prepared.completion.status, "pending");
+  assert.match(prepared.draft.text, /## Delivery target/); assert.match(prepared.draft.text, /grants no merge or release authority/);
+  assert.deepEqual(await w.service.prepare(input), prepared);
+  await assert.rejects(w.service.prepare({ ...input, completion: { target: "delivery_ready" } }), { code: "TASK_CONFLICT" });
+  const started = await w.service.start({ taskId: prepared.taskId, expectedRevision: prepared.revision, run: true, noDaemon: true });
+  assert.equal(started.status, "started"); assert.deepEqual(w.ctx.state.get(started.implementation.id).task.completion, { version: 1, target: "integrated" });
+  assert.equal(w.service.inspect({ taskId: prepared.taskId }).completion.target, "integrated");
+  const entry = w.ctx.state.get(started.implementation.id);
+  w.ctx.state.update(started.implementation.id, { task: { ...entry.task, completion: { version: 1, target: "delivery_ready" } } });
+  w.ctx.runnerFor = () => assert.fail("changed completion ownership must fail before recovery I/O");
+  await assert.rejects(w.service.resume({ taskId: started.taskId, expectedRevision: started.revision }), { code: "TASK_CONFLICT" });
+
+  const other = world(); for (const completion of [{ target: "released" }, { target: "integrated", merge: true }]) await assert.rejects(other.service.prepare({ text: REQUEST, completion }), { code: "TASK_INPUT" });
+  assert.equal(other.calls(), 0); assert.equal(other.ctx.state.entries().length, 0);
+});
+
+test("scoped delivery API carries the selected milestone through durable prepare/start and saved projections", async () => {
+  const w = world(), scope = { tenant: "alice", account: "alice", environment: "preview", region: "US", scopes: ["task-delivery:read", "task-delivery:write"], repositories: ["widget"] };
+  const manifest = { coreVersion: CORE_VERSION, coreSha256: "a".repeat(64), operationVersion: 1, taskVersion: 1, executionVersion: 1 };
+  migrateRuntimeState({ home: w.home, manifest });
+  let scheduled = 0;
+  const delivery = createTaskDelivery({ manifest, authorize: async () => scope, store: createDeliveryStore(join(w.home, "delivery")),
+    contextFor: async () => ({ ctx: w.ctx, repository: { dir: w.checkout, repo: "acme/widget" }, taskOptions: { prepare: async (_ctx, task) => JSON.stringify(draftFor(task)) } }), schedule: async () => { scheduled++; } });
+  const caps = await delivery.dispatch("capabilities", {}, "alice");
+  assert.deepEqual(caps.repositories[0].completion.targets.map(t => t.id), ["delivery_ready", "integrated"]);
+  const input = { repositoryId: "widget", text: REQUEST, harness: "codex", completion: { target: "integrated" }, allowance: { budgetUsd: 1, runtimeMs: 60000 }, operationId: "owner-selected-merge", expectedRevision: 0 };
+  const prepared = await delivery.dispatch("prepare", input, "alice");
+  assert.equal(prepared.status, "ready"); assert.equal(prepared.completion.target, "integrated");
+  assert.deepEqual(await delivery.dispatch("prepare", input, "alice"), prepared);
+  await assert.rejects(delivery.dispatch("prepare", { ...input, completion: { target: "delivery_ready" } }, "alice"), { code: "DELIVERY_CONFLICT" });
+  const start = { taskId: prepared.taskId, expectedRevision: prepared.revision, operationId: "approved-start", run: true };
+  const started = await delivery.dispatch("start", start, "alice");
+  assert.equal(started.status, "started"); assert.equal(started.completion.target, "integrated");
+  assert.deepEqual(w.ctx.state.get(started.implementation.id).task.completion, { version: 1, target: "integrated" });
+  assert.equal((await delivery.dispatch("inspect", { taskId: prepared.taskId }, "alice")).completion.target, "integrated");
+  assert.equal((await delivery.dispatch("list", {}, "alice")).tasks[0].completion.target, "integrated");
+  assert.deepEqual(await delivery.dispatch("start", start, "alice"), started);
+  assert.equal(w.runners.size, 1); assert.ok(scheduled > 0);
+});
+
+test("new task criteria collapse identical owner coverage without dropping constraints or rewriting legacy drafts", async () => {
+  const text = 'Improve greeting(name) and test whitespace/non-string inputs. Do not merge, release, modify workflows, add dependencies or access other repositories.';
+  const w = world({ prepare: async (_ctx, task) => {
+    const draft = draftFor(task); draft.criteria = Array.from({ length: 9 }, (_, i) => ({ id: `ac-${i + 1}`, text: "Planner wording cannot replace the exact owner requirement." }));
+    draft.mapping[0].criteria = draft.criteria.map(c => c.id); return JSON.stringify(draft);
+  } });
+  const prepared = await w.service.prepare({ text, completion: { target: "delivery_ready" } });
+  assert.equal(prepared.status, "ready"); const saved = taskStore(w.home).read(prepared.taskId);
+  assert.equal(saved.output.criteria.length, 1); assert.deepEqual(saved.output.mapping[0].criteria, ["ac-1"]);
+  assert.equal(saved.original, text); assert.equal(saved.requirements[0].text, text); assert.match(saved.output.criteria[0].text, /Do not merge, release, modify workflows/);
+  const many = { ...saved.output, criteria: Array.from({ length: 9 }, (_, i) => ({ id: `ac-${i + 1}`, text: "Owner requirement" })), mapping: [{ requirementId: "r-1", criteria: Array.from({ length: 9 }, (_, i) => `ac-${i + 1}`) }] };
+  assert.equal(parseDraft(JSON.stringify(many), saved).criteria.length, 1);
+  const legacy = { ...saved }; delete legacy.completion;
+  assert.equal(parseDraft(JSON.stringify(many), legacy).criteria.length, 9);
+  assert.doesNotMatch(renderDraft(legacy, many), /## Delivery target/);
+});
 
 test("documented CLI and structured preparation examples select an accepted adapter", () => {
   const docs = readFileSync(new URL("../docs/tasks.md", import.meta.url), "utf8");

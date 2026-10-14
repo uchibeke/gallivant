@@ -179,6 +179,47 @@ recorded by the adapter, alongside provider errors and the run-log path. Reopeni
 or recovering that failed attempt preserves the report without another planning
 turn, readiness decision or implementation dispatch.
 
+## Choose the delivery milestone
+
+Select the target when preparing a task, using `--completion-target integrated`
+or the structured `completion: { target: 'integrated' }` field. Omission selects
+`delivery_ready`. Capability discovery supplies supported targets and labels;
+clients should render those choices instead of maintaining a separate list.
+The target is immutable for a saved request. Changed retry input conflicts.
+
+`delivery_ready` is fulfilled when the current pull request passes Gallivant's
+existing checks, reviewer and completion gate. `integrated` keeps the existing
+coordinator watching that qualified delivery until GitHub reports it merged.
+Neither choice grants permission to merge, release or deploy. A new head or
+blocking feedback uses the existing review loop; no parallel runner is created.
+Closing without merging is blocked. An early merge, stale receipt/head/base,
+missing merge proof or changed checks/review is unverified, not fulfilled.
+Cancellation keeps its existing authority and stops further dispatch.
+
+Saved results include `completion.target`, `status`, `reason`, `monitoring` and
+`evidence`. Delivery evidence records the exact head, base, receipt hash, check
+count, reviewer verdict and completion-gate source/decision ID. Integration
+records GitHub's observed head, merge commit and timestamps. It is observational
+evidence, not a provider's self-report or a newly signed completion credential.
+Legacy tasks retain their workflow behavior and receive no invented evidence.
+A skipped completion gate cannot claim a fulfilled target.
+
+Keep implementation acceptance separate from coordinator publication. For example,
+a host can prepare a greeting change with the complete behavior, native Node test,
+README and scope constraints in `text`, plus `completion: { target: 'delivery_ready' }`
+for the pull-request lifecycle. A chat host should organize the owner's prose and
+show the complete brief and selected target for review; the owner need not learn a
+special input format. Preserve explicit prohibitions such as no merge, release,
+workflow edits, new dependencies or access to other repositories. The target never
+overrides those constraints.
+
+New completion-aware drafts consolidate criteria with identical requirement
+coverage, preserving all immutable owner fragments and their mappings. Existing
+approved drafts and false attestations are never rewritten. Automatic splitting
+of a mixed implementation/publication sentence is not supported: a host must
+clarify ambiguous ownership rather than silently drop a requirement. The generated
+Delivery target section explains which milestones the coordinator observes.
+
 The result includes contract `version: 1`, a durable `taskId`, a state `revision`,
 original input, requirements, answers, assumptions, requirement mapping, draft
 path/text/hash, source hashes, readiness evidence, preparation usage, artifacts and

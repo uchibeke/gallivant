@@ -42,6 +42,7 @@ const HELP = `gallivant: write a PRD, mark it ready, go outside.
                                          write a starting PRD into docs/prds/ of the repo you are in
   gallivant task [prepare] "<request>" [--stdin] [--dir <checkout>] [--repo <owner/repo>]
                 [--base <branch>] [--harness <name>] [--context <file>] [--request-id <id>] [--run] [--json]
+                [--completion-target delivery_ready|integrated]
                                          prepare an isolated brief; --run authorizes its exact ready revision
                                          Claude preparation disables tools; other adapters stop until isolated
                                          preparation support exists. Hand-authored ready/start remains available
@@ -85,6 +86,7 @@ const OPTIONS = {
   cancel: { type: "boolean" }, retry: { type: "boolean" },
   run: { type: "boolean" }, stdin: { type: "boolean" }, repo: { type: "string" }, revision: { type: "string" },
   "request-id": { type: "string" }, context: { type: "string", multiple: true },
+  "completion-target": { type: "string" },
   answer: { type: "string", multiple: true }, verify: { type: "string", multiple: true },
   since: { type: "string" }, until: { type: "string" }, "dry-run": { type: "boolean" },
   mode: { type: "string" }, status: { type: "string" }, from: { type: "string" }, reason: { type: "string" },
