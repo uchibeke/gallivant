@@ -235,6 +235,41 @@ test("literal boundaries and delivery-specific contexts survive actual intake an
   }
 });
 
+test("negative coordination refuses before intake effects and preserves pending answers", async () => {
+  const initial = world({ prepare: async () => assert.fail("withheld delivery cannot invoke preparation") });
+  let calls = 0;
+  const pending = world({ prepare: async (_ctx, task) => { calls++; return JSON.stringify(draftFor(task, { question: true })); } });
+  const first = await pending.service.prepare({ text: REQUEST }), before = taskStore(pending.home).read(first.taskId), beforeCalls = calls;
+  for (const answer of ["Do not commit the database transaction nor push changes.",
+    "Neither commit the database transaction nor silently run git push.",
+    "Do not commit the database transaction nor publish changes.",
+    "Do not commit the database transaction; nor push changes.",
+    "Require user confirmation before committing the database transaction nor pushing changes."]) {
+    await assert.rejects(initial.service.prepare({ text: "Implement export. " + answer, run: true }), { code: "TASK_DELIVERY_SCOPE", taskEffects: "none" });
+    assert.deepEqual(initial.service.list().tasks, []);
+    assert.deepEqual(initial.ctx.state.entries(), []);
+    await assert.rejects(pending.service.answer({ taskId: first.taskId, expectedRevision: first.revision, operationId: "negative-coordination", answers: { "q-r-1": answer } }),
+      { code: "TASK_DELIVERY_SCOPE", taskEffects: "none" });
+    assert.deepEqual(taskStore(pending.home).read(first.taskId), before, "failed answers preserve questions, revision and allowance");
+    assert.equal(calls, beforeCalls);
+  }
+  assert.equal(initial.daemonCalls(), 0); assert.equal(pending.daemonCalls(), 0);
+  assert.deepEqual(pending.ctx.state.entries(), []);
+  for (const text of ["Do not commit the database transaction nor push duplicate items onto the queue.",
+    "Neither commit the database transaction nor push duplicate items onto the queue.",
+    'Document "Do not commit the database transaction nor push changes" in help.']) {
+    const w = world(), prepared = await w.service.prepare({ text });
+    assert.equal(prepared.status, "ready", text);
+    const saved = taskStore(w.home).read(prepared.taskId);
+    assert.deepEqual(saved.requirements.map(requirement => requirement.text), [text]);
+    assert.ok(saved.output.criteria.some(criterion => criterion.text.includes(JSON.stringify(text))), text);
+    const a = world({ prepare: async (_ctx, task) => JSON.stringify(draftFor(task, { question: true })) });
+    const question = await a.service.prepare({ text: REQUEST });
+    const answered = await a.service.answer({ taskId: question.taskId, expectedRevision: question.revision, operationId: "technical-coordination", answers: { "q-r-1": text } });
+    assert.ok(answered.draft.text.includes(JSON.stringify(text)), text);
+  }
+});
+
 test("publication punctuation and courtesy never become planner requirements", async () => {
   for (const text of ["Implement CSV export. Open a PR for review.", "Implement CSV export.\nPlease open a PR for review.\nDo not merge."]) {
     const w = world(), result = await w.service.prepare({ text }), saved = taskStore(w.home).read(result.taskId);

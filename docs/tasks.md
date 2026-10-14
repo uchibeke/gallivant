@@ -69,6 +69,10 @@ remain ordinary requirements. Technical conditions also remain implementation
 scope: `If name is empty, return friend. Open a PR for review.` and the answer
 `Commit the database transaction after validation.` are supported. By contrast,
 `Wait for my approval. Open a PR for review.` requires clarification before work.
+Negative coordination preserves each action's scope: “Do not commit the database
+transaction nor push changes” still forbids delivery. Combining only technical
+operations, such as a database transaction and inserting items into a queue,
+remains implementation scope; `neither … nor …` follows the same distinction.
 Local conditions attached to publication are still refused; the parser does not
 guess that a comma or semicolon ended a prohibition or approval requirement.
 

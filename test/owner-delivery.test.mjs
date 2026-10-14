@@ -148,6 +148,40 @@ test("independent statement restrictions do not qualify later publication", () =
     assert.throws(() => ownerDelivery(source), { code: "TASK_DELIVERY_SCOPE" }, source);
 });
 
+test("negative coordination retains workflow restrictions without rejecting technical operations", () => {
+  const task = { completion: { version: 1, target: "delivery_ready" } };
+  const restrictions = [
+    "Do not commit the database transaction nor push changes.",
+    "Do not commit the database transaction, nor silently run git push.",
+    "Avoid pushing duplicate items onto the queue nor committing changes.",
+    "Do not commit the database transaction nor push duplicate items onto the queue nor push changes.",
+    "Neither commit the database transaction nor push changes.",
+    "Do not commit the database transaction nor publish changes.",
+    "Neither publish changes nor push them.",
+    "Do not commit the database transaction; nor push changes.",
+    "Require user confirmation before committing the database transaction nor pushing changes.",
+  ];
+  for (const text of restrictions) {
+    for (const prefix of ["Implement export. ", "Implement export. Open a PR for review. "])
+      assert.throws(() => ownerDelivery(prefix + text), { code: "TASK_DELIVERY_SCOPE" }, prefix + text);
+    assert.throws(() => assertDeliveryAnswer(task, text), { code: "TASK_DELIVERY_SCOPE" }, text);
+  }
+  for (const text of [
+    "Do not commit the database transaction nor push duplicate items onto the queue.",
+    "Neither commit the database transaction nor push duplicate items onto the queue.",
+    "Do not commit the database transaction nor push duplicate items onto the queue nor commit the SQL transaction.",
+    "Require user confirmation before committing the database transaction nor pushing duplicate items onto the queue.",
+    'Document "Do not commit the database transaction nor push changes" in help.',
+    "Document ‘Neither commit nor push changes’ in help.",
+  ]) {
+    assert.equal(ownerDelivery(text), null, text);
+    assert.doesNotThrow(() => assertDeliveryAnswer(task, text), text);
+    const source = text + " Open a PR for review.", contract = ownerDelivery(source);
+    assert.equal(ownerImplementation(contract).join(""), text + " ");
+    assert.equal(contract.spans.map(span => source.slice(span.start, span.end)).join(""), source);
+  }
+});
+
 test("initial requests cannot contradict the default publication workflow", () => {
   for (const instruction of ["Keep the change local", "Do not push", "Don't commit", "Return a patch only", "Show diff only", "Wait for my review", "Pause the task", "Withhold the changes"]) {
     for (const source of ["Implement export. " + instruction + ".", "Implement export, " + instruction + ", and open a PR for review."])
