@@ -246,3 +246,40 @@ test("task list summaries stay compact with saturated question pages", async () 
   assert.equal(page[0].questionCount, 128); assert.equal(page[0].questions, undefined);
   assert.equal(modelSummary(view).questions.length, 128);
 });
+
+test("actual evidence dispatcher and MCP preserve serialized completion observations without effects", async () => {
+  const taskId = "task-" + "a".repeat(24), entryId = "acme/widget/" + taskId;
+  const task = { id: taskId, revision: 1, status: "started", repo: "acme/widget", harness: "codex", requirements: [], context: [], questions: [], attempts: [], failures: [],
+    completion: { version: 1, target: "integrated" }, implementation: { id: entryId } };
+  const entry = { state: "ready-for-human", repo: "acme/widget", pr: 1, cursor: { fixed_sha: "a".repeat(40) },
+    task: { completion: task.completion }, completionEvidence: { delivery: { head: "a".repeat(40), base: "main", receiptHash: "b".repeat(64), observedAt: "2026-10-14T12:00:00Z", gate: { allow: true, source: "local", decisionId: null } } } };
+  let authorized = true, reads = 0;
+  const delivery = createTaskDelivery({ manifest: { coreVersion: CORE_VERSION, operationVersion: 1, taskVersion: 1, executionVersion: 1, coreSha256: "a".repeat(64) },
+    authorize: async () => ({ tenant: "tenant", account: "alice", region: "CA", environment: "preview", scopes: ["task-delivery:read"], repositories: authorized ? ["widget"] : [] }),
+    store: { read: () => ({ version: 1, tasks: { [taskId]: { repositoryId: "widget" } } }), transaction: () => assert.fail("evidence cannot mutate") },
+    schedule: () => assert.fail("evidence cannot schedule"),
+    contextFor: async () => ({ ctx: { home: "/scoped-home", state: { get: () => entry, startClaim: () => null }, runnerFor: () => ({ current: () => null }) }, repository: { dir: "/checkout", repo: "acme/widget" }, taskOptions: { store: { read: () => { reads++; return task; } } } }),
+  });
+  const server = new Server({ name: "evidence-server", version: "1" }, { capabilities: { tools: {} } });
+  const client = new Client({ name: "evidence-client", version: "1" });
+  await registerTaskDelivery(server, { delivery, identityFor: async () => "alice" });
+  const [a, b] = InMemoryTransport.createLinkedPair(); await server.connect(a); await client.connect(b);
+  try {
+    for (const integrated of [false, true]) {
+      if (integrated) { entry.state = "done"; entry.completionEvidence.integration = { qualified: true, state: "MERGED", head: "a".repeat(40), mergeCommit: "c".repeat(40), observedAt: "2026-10-14T12:01:00Z" }; }
+      const expected = JSON.parse(JSON.stringify((await delivery.dispatch("inspect", { taskId }, "alice")).completion));
+      assert.equal(expected.status, integrated ? "fulfilled" : "awaiting_integration");
+      const evidence = JSON.parse(JSON.stringify(await delivery.dispatch("evidence", { taskId }, "alice")));
+      assert.deepEqual(evidence.completion, expected);
+      const reply = JSON.parse(JSON.stringify(await client.callTool({ name: "task_evidence", arguments: { taskId } })));
+      assert.deepEqual(reply.structuredContent.completion, expected);
+      assert.deepEqual(reply._meta.taskDelivery.completion, expected);
+      assert.deepEqual(JSON.parse(reply.content[0].text).completion, expected);
+      assert.equal(reply.structuredContent.completion.target, "integrated");
+      assert.equal(reply.structuredContent.completion.evidence.delivery.receiptHash, "b".repeat(64));
+    }
+    const before = reads; authorized = false;
+    const denied = await client.callTool({ name: "task_evidence", arguments: { taskId } });
+    assert.equal(denied.isError, true); assert.equal(denied.structuredContent, undefined); assert.equal(denied._meta, undefined); assert.equal(reads, before);
+  } finally { await client.close(); await server.close(); }
+});
