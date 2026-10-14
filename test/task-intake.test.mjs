@@ -126,6 +126,58 @@ test("publication punctuation and courtesy never become planner requirements", a
   }
 });
 
+test("publication connectors never enter newly prepared provider criteria or stories", async () => {
+  for (const connector of [", and ", ", and then ", ", then ", ", ", " and ", " and then ", " then "]) {
+    const text = `Implement CSV and JSON export${connector}open a PR for review; do not merge or add dependencies.`;
+    const w = world(), prepared = await w.service.prepare({ text }), saved = taskStore(w.home).read(prepared.taskId);
+    assert.equal(prepared.status, "ready", connector);
+    assert.deepEqual(saved.requirements.map(r => r.text), ["Implement CSV and JSON export", "do not merge or add dependencies."]);
+    const executable = prepared.draft.text.split("## User stories\n")[1].split("## Verify\n")[0];
+    assert.match(executable, /"Implement CSV and JSON export"/);
+    assert.doesNotMatch(executable, /open a PR|export,|export and|export then/);
+    assert.match(executable, /do not merge or add dependencies/);
+    assert.equal(saved.ownerDelivery.version, 2);
+    const started = await w.service.start({ taskId: prepared.taskId, expectedRevision: prepared.revision, run: true, noDaemon: true });
+    assert.deepEqual(w.ctx.state.get(started.implementation.id).task.ownerDelivery, saved.ownerDelivery);
+  }
+});
+
+test("ambiguous quoted or multiline publication connectors refuse before preparation effects", async () => {
+  const w = world({ prepare: async () => assert.fail("ambiguous connector cannot invoke preparation") });
+  for (const text of ['Implement export, "preserve CSV headers" open a PR for review.', "Implement export,\nand open a PR for review.", "Implement export, and\nopen a PR for review."]) {
+    await assert.rejects(w.service.prepare({ text }), { code: "TASK_DELIVERY_SCOPE", taskEffects: "none" });
+    assert.deepEqual(w.service.list().tasks, []);
+    assert.deepEqual(w.ctx.state.entries(), []);
+  }
+});
+
+test("saved version-one connector ownership replays and starts without rewriting approved scope", async () => {
+  const text = "Implement CSV export, and open a PR for review.", split = text.indexOf("open");
+  const legacy = { version: 1, offsets: "utf16", source: text, spans: [
+    { start: 0, end: split, owner: "implementation" },
+    { start: split, end: text.length, owner: "coordinator", kind: "pull_request" },
+  ] };
+  // Seed the exact version-one accepted contract and provider requirements,
+  // as a saved intake from the previous canonical boundary would contain.
+  const w = world({ prepare: async (_ctx, task) => {
+    task.ownerDelivery = structuredClone(legacy);
+    task.requirements = [{ id: "r-1", text: "Implement CSV export, and" }];
+    return JSON.stringify(draftFor(task));
+  } });
+  const input = { text, requestId: "saved-connector-contract" };
+  const prepared = await w.service.prepare(input), store = taskStore(w.home), before = store.read(prepared.taskId);
+  assert.equal(prepared.status, "ready");
+  assert.deepEqual(await w.service.prepare(input), prepared);
+  assert.deepEqual(store.read(prepared.taskId), before);
+  const started = await w.service.start({ taskId: prepared.taskId, expectedRevision: prepared.revision, run: true, noDaemon: true });
+  const after = store.read(prepared.taskId);
+  assert.deepEqual(after.ownerDelivery, legacy);
+  assert.deepEqual(after.requirements, before.requirements);
+  assert.equal(after.draft.hash, before.draft.hash);
+  assert.deepEqual(after.readiness, before.readiness);
+  assert.deepEqual(w.ctx.state.get(started.implementation.id).task.ownerDelivery, legacy);
+});
+
 test("distinct assertions mapped to one owner paragraph retain every authoritative requirement", async () => {
   const text = "Implement CSV and JSON export. Preserve the filtered rows in both formats.";
   const w = world({ prepare: async (_ctx, task) => {

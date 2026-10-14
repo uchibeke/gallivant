@@ -70,6 +70,53 @@ test("publication owns its terminator and courtesy prefix, never a punctuation-o
   }
 });
 
+test("publication owns recognized connectors without changing implementation text or exact source coverage", () => {
+  for (const connector of [", and ", ", and then ", ", then ", ", ", " and ", " and then ", " then ", ", AND THEN "]) {
+    const implementation = 'Implement CSV and JSON export for the café label "and then"';
+    const source = `${implementation}${connector}open a PR for review; do not merge or add dependencies.`;
+    const contract = ownerDelivery(source);
+    assert.deepEqual(ownerImplementation(contract), [implementation, " do not merge or add dependencies."], connector);
+    assert.equal(contract.version, 2);
+    assert.equal(contract.spans.map(span => source.slice(span.start, span.end)).join(""), source);
+    assert.equal(contract.spans.find(span => span.owner === "coordinator").start, implementation.length);
+    assert.equal(validateOwnerDelivery(contract), contract);
+  }
+  for (const source of ["Implement export only if approved, and open a PR.", "Do not merge, and then open a PR.", "Implement export, and open a PR after approval.",
+    'Implement export, "preserve CSV headers" open a PR for review.', 'Implement export and "literal" open a PR for review.',
+    "Implement export,\nand open a PR for review.", "Implement export, and\nopen a PR for review.", "Implement export, and then\nPlease open a PR for review."])
+    assert.throws(() => ownerDelivery(source), { code: "TASK_DELIVERY_SCOPE" });
+});
+
+test("saved version-one ownership remains exact and cannot authorize forged connector ranges", () => {
+  const source = "Implement CSV export, and open a PR for review.";
+  const split = source.indexOf("open");
+  const legacy = { version: 1, offsets: "utf16", source, spans: [
+    { start: 0, end: split, owner: "implementation" },
+    { start: split, end: source.length, owner: "coordinator", kind: "pull_request" },
+  ] };
+  const before = structuredClone(legacy);
+  assert.equal(validateOwnerDelivery(legacy), legacy);
+  assert.deepEqual(ownerImplementation(legacy), ["Implement CSV export, and "]);
+  assert.deepEqual(legacy, before);
+  const corrected = ownerDelivery(source);
+  assert.deepEqual(ownerImplementation(corrected), ["Implement CSV export"]);
+  for (const value of [{ ...corrected, version: 1 }, { ...legacy, version: 2 }, { ...corrected, version: 3 }])
+    assert.throws(() => validateOwnerDelivery(value), { code: "TASK_DELIVERY_SCOPE" });
+  for (const original of [legacy, corrected]) {
+    const forged = structuredClone(original); forged.spans[0].end--; forged.spans[1].start--;
+    assert.throws(() => validateOwnerDelivery(forged), { code: "TASK_DELIVERY_SCOPE" });
+  }
+  for (const source of ['Implement export, "preserve CSV headers" open a PR for review.', "Implement export,\nand open a PR for review.", "Implement export, and\nopen a PR for review."]) {
+    const split = source.indexOf("open");
+    const prior = { version: 1, offsets: "utf16", source, spans: [
+      { start: 0, end: split, owner: "implementation" },
+      { start: split, end: source.length, owner: "coordinator", kind: "pull_request" },
+    ] };
+    assert.equal(validateOwnerDelivery(prior), prior);
+    assert.deepEqual(ownerImplementation(prior), [source.slice(0, split)]);
+  }
+});
+
 test("typed ownership is validated and included in the ongoing PRD fingerprint; legacy contract is unchanged", () => {
   const contract = ownerDelivery("Implement export. Open a PR for review.");
   const section = `\n## Coordinator delivery contract\n\n\`\`\`json\n${JSON.stringify(contract)}\n\`\`\`\n`;
