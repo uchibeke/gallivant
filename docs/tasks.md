@@ -27,9 +27,8 @@ run `gallivant start` with no PRD path.
 | `gemini`, `opencode`, `goose` | No preparation adapter; use a written PRD for implementation |
 | `codex-cloud` | No preparation adapter; new implementation dispatch is also disabled |
 
-Use `--harness` explicitly when configuring multiple adapters. Configuration
-selects the sole configured harness if there is exactly one; otherwise the
-fallback is `claude`, not the first key in the file. See
+Use `--harness` explicitly when configuring multiple adapters. Task intake
+otherwise selects the first configured harness. See
 [preparation qualification](preparation.md) and [hosted setup](openai-agents.md).
 
 `gallivant task` turns text into an isolated, reviewable PRD. Preparation uses the
@@ -94,9 +93,8 @@ cat request.txt | gallivant task --stdin --dir /path/to/checkout --harness claud
 The repository resolves from the checkout using the existing Git/GitHub helpers.
 `--repo` asserts its identity; it must match that checkout. Base precedence is the
 usual explicit flag, repository configuration, then default branch. Harness
-selection uses the explicit flag, the sole configured harness, or `claude` when
-there are multiple configured harnesses. `new` currently selects the first
-configured harness; use an explicit selection to avoid relying on either default.
+selection uses the explicit flag or the first configured harness, as `new` does.
+Use an explicit selection when several adapters are configured.
 Selected context consists of explicit repository files. Root `AGENTS.md`, common
 build manifests, supported text lockfiles and instructions above selected files
 are included automatically. Package-script inference uses `packageManager` first,
