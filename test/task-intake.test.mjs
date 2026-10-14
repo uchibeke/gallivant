@@ -79,6 +79,18 @@ test("publication ambiguity is a durable acknowledged no-effects refusal and exa
   assert.equal(calls, 0); assert.equal(w.ctx.state.entries().length, 0);
 });
 
+test("supported exclamation clauses prepare without leaking publication into implementation criteria", async () => {
+  for (const text of ["Implement CSV export! Open a PR for review.", "Implement CSV export. Open a PR for review! Do not merge."]) {
+    const w = world(), prepared = await w.service.prepare({ text });
+    assert.equal(prepared.status, "ready");
+    const saved = taskStore(w.home).read(prepared.taskId);
+    assert.equal(saved.original, text);
+    assert.ok(saved.output.criteria.every(criterion => !/Open a PR/i.test(criterion.text)));
+    assert.ok(saved.output.criteria.some(criterion => /Implement CSV export/.test(criterion.text)));
+    if (text.includes("Do not merge")) assert.ok(saved.output.criteria.some(criterion => /Do not merge/.test(criterion.text)));
+  }
+});
+
 test("initial local-only instructions are acknowledged before preparation, readiness or provider work", async () => {
   const w = world(), scope = { tenant: "alice", account: "alice", environment: "preview", region: "US", scopes: ["task-delivery:read", "task-delivery:write"], repositories: ["widget"] };
   const manifest = { coreVersion: CORE_VERSION, coreSha256: "a".repeat(64), operationVersion: 1, taskVersion: 1, executionVersion: 1 };
@@ -162,7 +174,7 @@ test("an implicit review workflow refuses delivery changes before effects but ac
   assert.equal(first.status, "needs-input");
   const before = taskStore(w.home).read(first.taskId);
   assert.equal(before.ownerDelivery, undefined);
-  for (const answer of ["Use JSON only.\nDo not publish publicly.", "Keep the change local", "Do not push", "Show diff only", "Wait for my approval"]) {
+  for (const answer of ["Use JSON only.\nDo not publish publicly.", "Use JSON! Publish the changes.", "Keep the change local", "Do not push", "Show diff only", "Wait for my approval"]) {
     await assert.rejects(w.service.answer({ taskId: first.taskId, expectedRevision: first.revision, operationId: "withhold-publication",
       answers: { "q-r-1": answer } }), { code: "TASK_DELIVERY_SCOPE", taskEffects: "none" });
     assert.deepEqual(taskStore(w.home).read(first.taskId), before);
@@ -173,14 +185,14 @@ test("an implicit review workflow refuses delivery changes before effects but ac
 });
 
 test("technical conditions and PR feature subjects survive actual preparation and answers", async () => {
-  for (const text of ["If name is empty, return friend. Open a PR for review.", "Update the pull request template to require changelog entries.", "Fix parsing of PR titles.", "Add a list of published articles.", "Add a publish button.", "Add a command to publish docs.", "Render “Open a PR” in help.", "Document ‘Do not push’."]) {
+  for (const text of ["If name is empty, return friend. Open a PR for review.", "Update the pull request template to require changelog entries.", "Fix parsing of PR titles.", "Add a list of published articles.", "Add a publish button.", "Add a command to publish docs.", "Render “Open a PR” in help.", "Document ‘Do not push’.", "Document 'We're waiting; do not push' in help."]) {
     const w = world(), prepared = await w.service.prepare({ text });
     assert.equal(prepared.status, "ready", text);
     const saved = taskStore(w.home).read(prepared.taskId);
     assert.equal(saved.original, text);
     assert.ok(saved.output.criteria.some(criterion => criterion.text.includes(text.split(". Open a PR")[0])), "original behavior remains provider scope");
   }
-  for (const answer of ["Use local time for display.", "Preserve branch sorting order.", "Commit the database transaction after validation.", "Update the pull request template to require changelog entries.", "Add a publish button.", "Add a command to publish docs.", "Render “Open a PR” in help.", "Document ‘Do not push’."]) {
+  for (const answer of ["Use local time for display.", "Preserve branch sorting order.", "Commit the database transaction after validation.", "Update the pull request template to require changelog entries.", "Add a publish button.", "Add a command to publish docs.", "Render “Open a PR” in help.", "Document ‘Do not push’.", "Document 'We're waiting; do not push' in help."]) {
     const w = world({ prepare: async (_ctx, task) => JSON.stringify(draftFor(task, { question: true })) });
     const first = await w.service.prepare({ text: REQUEST });
     assert.equal(first.status, "needs-input");

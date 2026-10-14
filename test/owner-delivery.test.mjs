@@ -42,6 +42,33 @@ test("publish feature subjects and paired typographic examples remain implementa
   }
 });
 
+test("quoted contractions and supported exclamation boundaries preserve exact owner scope", () => {
+  const task = { completion: { version: 1, target: "delivery_ready" } };
+  for (const source of ["Document 'We're waiting; do not push' in help.", "Document ‘We're waiting; do not push’ in help."]) {
+    assert.equal(ownerDelivery(source), null);
+    assert.doesNotThrow(() => assertDeliveryAnswer(task, source));
+    assert.throws(() => ownerDelivery(source + " Do not push."), { code: "TASK_DELIVERY_SCOPE" });
+  }
+  for (const source of ["Implement CSV export! Open a PR for review.", "Implement CSV export. Open a PR for review! Do not merge.", "Implement CSV export! and open a PR for review! Do not merge."]) {
+    const contract = ownerDelivery(source);
+    assert.equal(contract.spans.map(span => source.slice(span.start, span.end)).join(""), source);
+    assert.equal(validateOwnerDelivery(contract), contract);
+    assert.match(ownerImplementation(contract).join(""), /Implement CSV export/);
+    assert.doesNotMatch(ownerImplementation(contract).join(""), /open a PR/i);
+  }
+  const savedSource = "Implement CSV export! and open a PR for review!";
+  for (const version of [1, 2]) {
+    const split = savedSource.indexOf(version === 1 ? "open" : " and");
+    const saved = { version, offsets: "utf16", source: savedSource, spans: [
+      { start: 0, end: split, owner: "implementation" },
+      { start: split, end: savedSource.length, owner: "coordinator", kind: "pull_request" },
+    ] };
+    assert.equal(validateOwnerDelivery(saved), saved, "previously supported connector spans stay immutable");
+  }
+  for (const source of ["Use JSON! Publish the changes.", "Implement CSV! Do not ever publish changes.", "Implement CSV! Only after my approval.", "Implement CSV! Open a PR only if I approve."])
+    for (const action of [() => ownerDelivery(source), () => assertDeliveryAnswer(task, source)]) assert.throws(action, { code: "TASK_DELIVERY_SCOPE" }, source);
+});
+
 test("initial requests cannot contradict the default publication workflow", () => {
   for (const instruction of ["Keep the change local", "Do not push", "Don't commit", "Return a patch only", "Show diff only", "Wait for my review", "Pause the task", "Withhold the changes"]) {
     for (const source of ["Implement export. " + instruction + ".", "Implement export, " + instruction + ", and open a PR for review."])
