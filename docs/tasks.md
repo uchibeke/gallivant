@@ -19,11 +19,16 @@ clause outside quoted text/code. It is not a general natural-language permission
 parser. Conditions, approval prerequisites, destination qualifiers, multiple PRs
 and delivery-only requests return `TASK_DELIVERY_SCOPE` before inference. Some
 implementation-only uses of conditional language in a publication-bearing request,
-or delivery-control words such as “local” or “review” in later answers, also need
+or lifecycle/artifact words such as “local,” “review,” “push,” “diff” or “patch” in later answers, also need
 clarification; the recognizer deliberately does not guess their scope.
 Clarify the complete task with the owner and submit it under a new operation ID;
 never delete a condition just to pass validation. Answers may refine implementation
 but cannot silently replace publication ownership or add a publication prerequisite.
+There is no typed delivery-amendment operation yet. The supported answer boundary
+conservatively refuses recognized lifecycle/artifact language; it does not claim
+to understand every possible paraphrase. Review the complete saved owner contract
+before authorizing implementation, and clarify conflicting delivery intent instead
+of treating a model's interpretation as permission.
 Selecting `integrated` still grants no merge authority. Existing saved tasks,
 approved criteria, false attestations and exact operation retries retain their
 original semantics; this change does not repair historical results.

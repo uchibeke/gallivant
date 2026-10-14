@@ -84,7 +84,7 @@ test("a conflicting delivery answer leaves its question, revision and preparatio
   const first = await w.service.prepare({ text: "Implement export. Open a PR for review." });
   assert.equal(first.status, "needs-input");
   const before = taskStore(w.home).read(first.taskId);
-  for (const answer of ["Do not open a PR until I approve the change", "Do not publish anything", "Skip publication", "Keep the change local", "Do not send it for review"]) {
+  for (const answer of ["Do not open a PR until I approve the change", "Do not publish anything", "Skip publication", "Keep the change local", "Do not send it for review", "Show diff only", "Do not push", "Return a patch without publishing"]) {
     await assert.rejects(w.service.answer({ taskId: first.taskId, expectedRevision: first.revision, operationId: "change-publication", answers: { "q-r-1": answer } }), { code: "TASK_DELIVERY_SCOPE", taskEffects: "none" });
     assert.deepEqual(taskStore(w.home).read(first.taskId), before);
   }

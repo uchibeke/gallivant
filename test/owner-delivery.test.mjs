@@ -43,7 +43,7 @@ test("ambiguous, conditional, qualified and delivery-only requests refuse before
 
 test("new answers cannot silently override existing publication ownership", () => {
   const task = { ownerDelivery: ownerDelivery("Implement export. Open a PR for review.") };
-  for (const answer of ["Do not open a PR until I approve the change", "Wait for my confirmation first.", "Only publish after permission.", "Do not publish anything", "Skip publication", "Keep the change local", "Do not send it for review"])
+  for (const answer of ["Do not open a PR until I approve the change", "Wait for my confirmation first.", "Only publish after permission.", "Do not publish anything", "Skip publication", "Keep the change local", "Do not send it for review", "Show diff only", "Do not push", "Return a patch without publishing", "Hold the change for my approval"])
     assert.throws(() => assertDeliveryAnswer(task, answer), { code: "TASK_DELIVERY_SCOPE" });
   assert.doesNotThrow(() => assertDeliveryAnswer(task, "Use CSV and preserve the existing dependency declarations."));
   assert.doesNotThrow(() => assertDeliveryAnswer(task, 'The label is "Open a PR".'));
