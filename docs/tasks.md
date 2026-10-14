@@ -45,6 +45,13 @@ part of both initial approval and ongoing change detection. Its publication
 obligation is fulfilled only by matching canonical repository, PR, base, head and
 completion-gate evidence; a provider statement cannot fulfill it.
 
+New ownership contracts also include a same-statement connector such as `, and`,
+`and then` or `then` in the publication span, so it cannot become a dangling
+implementation requirement. Connectors split across lines or containing quoted
+implementation text need clarification. Previously approved version-one
+contracts keep their original spans, criteria and fingerprints on retry;
+new requests use version two.
+
 This first recognizer supports one unqualified `open/create/raise/submit` review-PR
 clause outside quoted text/code. It is not a general natural-language permission
 parser. Conditions, approval prerequisites, destination qualifiers, multiple PRs
