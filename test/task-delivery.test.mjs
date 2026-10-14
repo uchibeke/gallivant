@@ -251,8 +251,8 @@ test("actual evidence dispatcher and MCP preserve serialized completion observat
   const taskId = "task-" + "a".repeat(24), entryId = "acme/widget/" + taskId;
   const task = { id: taskId, revision: 1, status: "started", repo: "acme/widget", harness: "codex", requirements: [], context: [], questions: [], attempts: [], failures: [],
     completion: { version: 1, target: "integrated" }, implementation: { id: entryId } };
-  const entry = { state: "ready-for-human", repo: "acme/widget", pr: 1, cursor: { fixed_sha: "a".repeat(40) },
-    task: { completion: task.completion }, completionEvidence: { delivery: { head: "a".repeat(40), base: "main", receiptHash: "b".repeat(64), observedAt: "2026-10-14T12:00:00Z", gate: { allow: true, source: "local", decisionId: null } } } };
+  const entry = { state: "ready-for-human", repo: "acme/widget", base: "main", pr: 1, cursor: { fixed_sha: "a".repeat(40) },
+    task: { completion: task.completion }, completionEvidence: { delivery: { repository: "acme/widget", pr: 1, head: "a".repeat(40), base: "main", receiptHash: "b".repeat(64), observedAt: "2026-10-14T12:00:00Z", gate: { allow: true, source: "local", decisionId: null } } } };
   let authorized = true, reads = 0;
   const delivery = createTaskDelivery({ manifest: { coreVersion: CORE_VERSION, operationVersion: 1, taskVersion: 1, executionVersion: 1, coreSha256: "a".repeat(64) },
     authorize: async () => ({ tenant: "tenant", account: "alice", region: "CA", environment: "preview", scopes: ["task-delivery:read"], repositories: authorized ? ["widget"] : [] }),
@@ -265,10 +265,12 @@ test("actual evidence dispatcher and MCP preserve serialized completion observat
   await registerTaskDelivery(server, { delivery, identityFor: async () => "alice" });
   const [a, b] = InMemoryTransport.createLinkedPair(); await server.connect(a); await client.connect(b);
   try {
-    for (const integrated of [false, true]) {
+    for (const observation of ["mismatched-proof", "ready", "integrated"]) {
+      const integrated = observation === "integrated";
+      entry.completionEvidence.delivery.pr = observation === "mismatched-proof" ? 2 : 1;
       if (integrated) { entry.state = "done"; entry.completionEvidence.integration = { qualified: true, state: "MERGED", head: "a".repeat(40), mergeCommit: "c".repeat(40), observedAt: "2026-10-14T12:01:00Z" }; }
       const expected = JSON.parse(JSON.stringify((await delivery.dispatch("inspect", { taskId }, "alice")).completion));
-      assert.equal(expected.status, integrated ? "fulfilled" : "awaiting_integration");
+      assert.equal(expected.status, observation === "mismatched-proof" ? "unverified" : integrated ? "fulfilled" : "awaiting_integration");
       const evidence = JSON.parse(JSON.stringify(await delivery.dispatch("evidence", { taskId }, "alice")));
       assert.deepEqual(evidence.completion, expected);
       const reply = JSON.parse(JSON.stringify(await client.callTool({ name: "task_evidence", arguments: { taskId } })));

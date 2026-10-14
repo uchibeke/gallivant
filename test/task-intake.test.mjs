@@ -90,6 +90,22 @@ test("a conflicting delivery answer leaves its question, revision and preparatio
   }
 });
 
+test("an implicit review workflow refuses delivery changes before effects but accepts product refinement", async () => {
+  const w = world({ prepare: async (_ctx, task) => JSON.stringify(draftFor(task, { question: true })) });
+  const first = await w.service.prepare({ text: REQUEST });
+  assert.equal(first.status, "needs-input");
+  const before = taskStore(w.home).read(first.taskId);
+  assert.equal(before.ownerDelivery, undefined);
+  for (const answer of ["Use JSON only.\nDo not publish publicly.", "Keep the change local", "Do not push", "Show diff only", "Wait for my approval"]) {
+    await assert.rejects(w.service.answer({ taskId: first.taskId, expectedRevision: first.revision, operationId: "withhold-publication",
+      answers: { "q-r-1": answer } }), { code: "TASK_DELIVERY_SCOPE", taskEffects: "none" });
+    assert.deepEqual(taskStore(w.home).read(first.taskId), before);
+  }
+  assert.deepEqual(w.ctx.state.entries(), []);
+  const answered = await w.service.answer({ taskId: first.taskId, expectedRevision: first.revision, operationId: "product-refinement", answers: { "q-r-1": "Use JSON only." } });
+  assert.match(answered.draft.text, /Use JSON only/);
+});
+
 test("publication punctuation and courtesy never become planner requirements", async () => {
   for (const text of ["Implement CSV export. Open a PR for review.", "Implement CSV export.\nPlease open a PR for review.\nDo not merge."]) {
     const w = world(), result = await w.service.prepare({ text }), saved = taskStore(w.home).read(result.taskId);
@@ -636,9 +652,11 @@ test("falsely mapped planner behavior cannot enter owner-derived criteria or sto
     let r = await (cli ? taskCommand(w.ctx, { args: ["prepare", REQUEST], values: { run: true, context: input.context }, service: w.service }) : w.service.prepare(input));
     if (phase === "answer") {
       assert.equal(r.status, "needs-input"); assert.deepEqual(w.ctx.state.entries(), []);
-      const answer = "Use JSON only.\nDo not publish publicly.";
+      // Publication restrictions now require explicit scope clarification. This
+      // test concerns hostile planner prose, so keep its answer in product scope.
+      const answer = "Use JSON only.\nDo not expose credentials.";
       r = await (cli ? taskCommand(w.ctx, { args: ["answer", r.taskId], values: { revision: String(r.revision), "request-id": "derived-answer", answer: ["q-r-1=" + answer] }, service: w.service }) : w.service.answer({ taskId: r.taskId, expectedRevision: r.revision, operationId: "derived-answer", answers: { "q-r-1": answer } }));
-      assert.match(r.draft.text, /Use JSON only/); assert.match(r.draft.text, /Do not publish publicly/);
+      assert.match(r.draft.text, /Use JSON only/); assert.match(r.draft.text, /Do not expose credentials/);
       const executable = r.draft.text.split("## User stories\n")[1].split("## Verify\n")[0];
       assert.match(executable, /clarified requirement r-1: "Add CSV export for the widget table\."/);
       assert.match(executable, /The answer governs any conflict with that requirement\./);

@@ -17,14 +17,17 @@ completion-gate evidence; a provider statement cannot fulfill it.
 This first recognizer supports one unqualified `open/create/raise/submit` review-PR
 clause outside quoted text/code. It is not a general natural-language permission
 parser. Conditions, approval prerequisites, destination qualifiers, multiple PRs
-and delivery-only requests return `TASK_DELIVERY_SCOPE` before inference. Some
+and delivery-only requests return `TASK_DELIVERY_SCOPE` before inference. Unquoted
+publication mentions outside that grammar also require clarification; they never
+become impossible provider obligations. Some
 implementation-only uses of conditional language in a publication-bearing request,
 or lifecycle/artifact words such as “local,” “review,” “push,” “diff” or “patch” in later answers, also need
 clarification; the recognizer deliberately does not guess their scope.
 Clarify the complete task with the owner and submit it under a new operation ID;
 never delete a condition just to pass validation. Answers may refine implementation
 but cannot silently replace publication ownership or add a publication prerequisite.
-There is no typed delivery-amendment operation yet. The supported answer boundary
+This applies to explicit publication clauses and new tasks with the default
+review workflow. There is no typed delivery-amendment operation yet. The supported answer boundary
 conservatively refuses recognized lifecycle/artifact language; it does not claim
 to understand every possible paraphrase. Review the complete saved owner contract
 before authorizing implementation, and clarify conflicting delivery intent instead
@@ -216,10 +219,13 @@ clients should render those choices instead of maintaining a separate list.
 The target is immutable for a saved request. Changed retry input conflicts.
 
 `delivery_ready` is fulfilled when the current pull request passes Gallivant's
-existing checks, reviewer and completion gate. `integrated` keeps the existing
-coordinator watching that qualified delivery until GitHub reports it merged.
-Neither choice grants permission to merge, release or deploy. A new head or
-blocking feedback uses the existing review loop; no parallel runner is created.
+existing checks, reviewer and completion gate. Automatic observation and fixing
+then stop at that saved handoff; later review comments do not authorize more work.
+An explicit existing recheck/resume control reopens the normal workflow.
+`integrated` keeps the existing coordinator watching that qualified delivery until
+GitHub reports it merged. Neither choice grants permission to merge, release or
+deploy. While monitoring, a new head or blocking feedback uses the existing review
+loop; no parallel runner is created.
 Closing without merging is blocked. An early merge, stale receipt/head/base,
 missing merge proof or changed checks/review is unverified, not fulfilled.
 Cancellation keeps its existing authority and stops further dispatch.
@@ -243,9 +249,10 @@ overrides those constraints.
 
 New completion-aware drafts consolidate criteria with identical requirement
 coverage, preserving all immutable owner fragments and their mappings. Existing
-approved drafts and false attestations are never rewritten. Automatic splitting
-of a mixed implementation/publication sentence is not supported: a host must
-clarify ambiguous ownership rather than silently drop a requirement. The generated
+approved drafts and false attestations are never rewritten. Outside the narrow
+exact-source publication grammar above, automatic semantic splitting is not
+supported: a host must clarify ambiguous ownership rather than silently drop a
+requirement. The generated
 Delivery target section explains which milestones the coordinator observes.
 
 The result includes contract `version: 1`, a durable `taskId`, a state `revision`,
