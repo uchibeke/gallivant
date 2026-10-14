@@ -94,6 +94,12 @@ supported `targets`. The shared prepare schema accepts only
 `completion: { target: 'delivery_ready' | 'integrated' }`; the selected policy is
 persisted through intake and implementation ownership. Task, list, model and
 evidence projections expose `completion` from saved coordinator observations.
+For `delivery_ready`, a qualified saved handoff stops automatic observation and
+fixes. Explicit queued controls reopen the normal workflow. `integrated` and
+legacy runs retain monitoring. Host schedulers use the exported
+`coordinatorEntryActive` predicate instead of treating every `ready-for-human`
+entry as active; the predicate requires matching repository, PR, base, head and
+gate proof. Read `completion.monitoring` for the saved view's monitoring status.
 Use `completion.status`, not a provider success or a terminal PR state, to report
 fulfillment. `awaiting_integration` means the qualified PR is still being watched;
 `blocked` or `unverified` requires attention. Both targets use the GitHub PR

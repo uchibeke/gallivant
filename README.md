@@ -151,9 +151,11 @@ written brief ───────────┘                              
 Acceptance evidence, verification, CI and reviewer findings determine readiness.
 Gallivant never merges PRs. The default review allowance is 30 rounds; limits,
 repeated non-progress and unrecoverable failures stop for you. Optional ntfy
-notifications report readiness and blockers. A task can target `delivery_ready`
-or keep watching for a human merge with `integrated`; neither authorizes merging,
-releasing or deploying.
+notifications report readiness and blockers. Natural-language tasks default to `delivery_ready`: automatic observation and
+fixes stop once that handoff is qualified. Recheck, resume or message the run to
+explicitly reopen work. Choose `integrated` to keep watching for a human merge.
+Existing written-PRD runs retain their monitoring behavior. Neither target
+authorizes merging, releasing or deploying.
 
 For a longer plan:
 

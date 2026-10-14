@@ -38,6 +38,7 @@ test("ambiguous, conditional, qualified and delivery-only requests refuse before
     "Implement export. Open a PR against release.", "Implement export. Open a PR in other/repo.",
     "Implement export. Open a PR and release it.", "Implement export. Explain how to open a PR.",
     "Implement export. Open a PR. Open another PR.",
+    "Implement export. Publish the changes for review.", "Implement export. Send a PR for review.", "Implement export. Open a pull-request.",
   ]) assert.throws(() => ownerDelivery(source), { code: "TASK_DELIVERY_SCOPE" }, source);
 });
 
@@ -55,6 +56,8 @@ test("new answers cannot silently override existing publication ownership", () =
     assert.throws(() => assertDeliveryAnswer(task, answer), { code: "TASK_DELIVERY_SCOPE" });
   assert.doesNotThrow(() => assertDeliveryAnswer(task, "Use CSV and preserve the existing dependency declarations."));
   assert.doesNotThrow(() => assertDeliveryAnswer(task, 'The label is "Open a PR".'));
+  assert.throws(() => assertDeliveryAnswer({ completion: { version: 1, target: "delivery_ready" } }, "Keep the change local"), { code: "TASK_DELIVERY_SCOPE" });
+  assert.doesNotThrow(() => assertDeliveryAnswer({}, "Keep the change local"), "legacy tasks without a completion contract retain their answer behavior");
 });
 
 test("publication owns its terminator and courtesy prefix, never a punctuation-only provider requirement", () => {
@@ -73,6 +76,7 @@ test("typed ownership is validated and included in the ongoing PRD fingerprint; 
   const legacy = parsePrd(GOOD_PRD, "docs/prds/example.md"), current = parsePrd(GOOD_PRD + section, "docs/prds/example.md");
   assert.equal(Object.hasOwn(contractOf(legacy), "ownerDelivery"), false);
   assert.deepEqual(ownerDeliveryFromPrd(current), contract);
+  assert.deepEqual(ownerDeliveryFromPrd(parsePrd((GOOD_PRD + section).replace(/\n/g, "\r\n"), "docs/prds/example.md")), contract);
   assert.notEqual(prdFingerprint(current), prdFingerprint(legacy));
   assert.notEqual(prdFingerprint(current), prdFingerprint(parsePrd(GOOD_PRD + section.replace('"pull_request"', '"merge"'), 'docs/prds/example.md')));
   assert.throws(() => ownerDeliveryFromPrd(parsePrd(GOOD_PRD + section + section, "docs/prds/example.md")), { code: "TASK_DELIVERY_SCOPE" });

@@ -61,7 +61,8 @@ clarification; the recognizer deliberately does not guess their scope.
 Clarify the complete task with the owner and submit it under a new operation ID;
 never delete a condition just to pass validation. Answers may refine implementation
 but cannot silently replace publication ownership or add a publication prerequisite.
-There is no typed delivery-amendment operation yet. The supported answer boundary
+This applies to explicit publication clauses and new tasks with the default
+review workflow. There is no typed delivery-amendment operation yet. The supported answer boundary
 conservatively refuses recognized lifecycle/artifact language; it does not claim
 to understand every possible paraphrase. Review the complete saved owner contract
 before authorizing implementation, and clarify conflicting delivery intent instead
@@ -260,10 +261,13 @@ clients should render those choices instead of maintaining a separate list.
 The target is immutable for a saved request. Changed retry input conflicts.
 
 `delivery_ready` is fulfilled when the current pull request passes Gallivant's
-existing checks, reviewer and completion gate. `integrated` keeps the existing
-coordinator watching that qualified delivery until GitHub reports it merged.
-Neither choice grants permission to merge, release or deploy. A new head or
-blocking feedback uses the existing review loop; no parallel runner is created.
+existing checks, reviewer and completion gate. Automatic observation and fixing
+then stop at that saved handoff; later review comments do not authorize more work.
+An explicit existing recheck/resume control reopens the normal workflow.
+`integrated` keeps the existing coordinator watching that qualified delivery until
+GitHub reports it merged. Neither choice grants permission to merge, release or
+deploy. While monitoring, a new head or blocking feedback uses the existing review
+loop; no parallel runner is created.
 Closing without merging is blocked. An early merge, stale receipt/head/base,
 missing merge proof or changed checks/review is unverified, not fulfilled.
 Cancellation keeps its existing authority and stops further dispatch.
@@ -287,7 +291,8 @@ overrides those constraints.
 
 New completion-aware drafts consolidate criteria with identical requirement
 coverage, preserving all immutable owner fragments and their mappings. Existing
-approved drafts and false attestations are never rewritten. Only the supported affirmative publication clauses can be separated from mixed
+approved drafts and false attestations are never rewritten. Only supported
+affirmative publication clauses can be separated from mixed
 implementation/publication text. A host must clarify unsupported or ambiguous
 ownership rather than silently drop a requirement. The generated
 Delivery target section explains which milestones the coordinator observes.

@@ -72,6 +72,14 @@ templates/               passport, Claude sandbox settings, PRD, tracker/{tracke
 
 ## Design rules
 
+New intake tasks targeting `delivery_ready` stop automatic observation and fixing
+at the qualified saved handoff. Explicit queued recheck/resume/message controls
+reopen the workflow. `integrated` targets and legacy written-PRD runs retain
+monitoring. `completionStopsAutomation` and the exported `coordinatorEntryActive`
+keep core and host schedulers aligned. The review transitions below apply while
+an entry is monitored; malformed or incomplete delivery proof cannot mark it
+finished or suppress work.
+
 Harness implementation and demonstrated support are separate. The [live support matrix](https://github.com/uchibeke/gallivant/blob/main/docs/audit/harness-live-validation.md)
 records installed versions, provider/model combinations, permission boundaries, budget controls and blocked phases.
 Claude/Codex have existing production evidence; Gemini, OpenCode and Goose currently have blocked or failed coding attempts,
