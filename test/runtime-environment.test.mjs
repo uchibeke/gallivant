@@ -4,7 +4,7 @@ import { mkdtempSync, writeFileSync, readFileSync, mkdirSync, symlinkSync, realp
 import { tmpdir } from "node:os";
 import { join, dirname } from "node:path";
 import { execFileSync } from "node:child_process";
-import { runtimeEnvironment, sessionExports, claudeRuntimeSettings, shellQuote, runtimeReadPaths, RUNTIME_SETTINGS_FILE } from "../lib/runtime-environment.mjs";
+import { runtimeEnvironment, prepareRuntimeCache, sessionExports, claudeRuntimeSettings, shellQuote, runtimeReadPaths, RUNTIME_SETTINGS_FILE } from "../lib/runtime-environment.mjs";
 import { findExecutable } from "../lib/executable.mjs";
 import { buildRun, buildPreparationRun, assertSafeArgv, assertSafeEnv } from "../lib/harness.mjs";
 import { makeRunner } from "../lib/run.mjs";
@@ -59,6 +59,56 @@ test("portable executable discovery uses PATH without requiring zsh", () => {
   }
 });
 
+test("portable fallback ignores login profiles while a selected shell retains version-manager discovery", t => {
+  const dir = mkdtempSync(join(tmpdir(), "runtime-profile-"));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  const marker = join(dir, "profile-read");
+  writeFileSync(join(dir, ".profile"), `echo read > ${shellQuote(marker)}\nexit 44\n`);
+  for (const shell of [undefined, "/does-not-exist", "/bin/sh"]) {
+    assert.equal(realpathSync(findExecutable("sh", { HOME: dir, PATH: "", SHELL: shell })), realpathSync("/bin/sh"));
+    assert.equal(existsSync(marker), false);
+  }
+  const shell = join(dir, "login-shell"), executable = join(dir, "fixture-cli");
+  symlinkSync(process.execPath, executable);
+  writeFileSync(shell, `#!/bin/sh\n[ "$1" = "-lc" ] || exit 1\nprintf '%s\\n' ${shellQuote(executable)}\n`, { mode: 0o755 });
+  assert.equal(findExecutable("fixture-cli", { HOME: dir, PATH: "/usr/bin:/bin", SHELL: shell }), executable);
+});
+
+test("checkout cache survives a real offline npm ci and stays out of Git changes", t => {
+  const cwd = mkdtempSync(join(tmpdir(), "runtime-cache-"));
+  t.after(() => rmSync(cwd, { recursive: true, force: true }));
+  const env = { ...process.env, ...runtimeEnvironment(process.env, process.execPath, cwd), NPM_CONFIG_USERCONFIG: "/dev/null" };
+  prepareRuntimeCache(cwd, env);
+  prepareRuntimeCache(cwd, env);
+  const sentinel = join(env.NPM_CONFIG_CACHE, "cached-data");
+  writeFileSync(sentinel, "retained");
+  writeFileSync(join(cwd, "package.json"), JSON.stringify({ name: "offline-cache-fixture", version: "1.0.0" }));
+  writeFileSync(join(cwd, "package-lock.json"), JSON.stringify({ name: "offline-cache-fixture", version: "1.0.0", lockfileVersion: 3, packages: { "": { name: "offline-cache-fixture", version: "1.0.0" } } }));
+  mkdirSync(join(cwd, "node_modules", "stale"), { recursive: true });
+  writeFileSync(join(cwd, "node_modules", "stale", "old"), "removed");
+  execFileSync("npm", ["ci", "--offline", "--ignore-scripts", "--no-audit", "--no-fund"], { cwd, env, stdio: "pipe", timeout: 30_000 });
+  assert.equal(existsSync(join(cwd, "node_modules", "stale")), false);
+  assert.equal(readFileSync(sentinel, "utf8"), "retained");
+  execFileSync("git", ["init", "--quiet"], { cwd, stdio: "pipe" });
+  assert.equal(execFileSync("git", ["ls-files", "--others", "--exclude-standard", "--", ".cache/"], { cwd, encoding: "utf8" }), "");
+});
+
+test("cache preparation refuses symlinks and preserves existing ignore rules", t => {
+  const cwd = mkdtempSync(join(tmpdir(), "runtime-cache-boundary-"));
+  t.after(() => rmSync(cwd, { recursive: true, force: true }));
+  const env = runtimeEnvironment({}, process.execPath, cwd);
+  const outside = join(cwd, "outside"); mkdirSync(outside);
+  symlinkSync(outside, join(cwd, ".cache"));
+  assert.throws(() => prepareRuntimeCache(cwd, env), /symlink/);
+  assert.deepEqual(readdirSync(outside), []);
+  rmSync(join(cwd, ".cache"));
+  prepareRuntimeCache(cwd, env);
+  const ignore = join(env.NPM_CONFIG_CACHE, ".gitignore");
+  writeFileSync(ignore, "keep existing rules\n");
+  assert.throws(() => prepareRuntimeCache(cwd, env), { code: "EEXIST" });
+  assert.equal(readFileSync(ignore, "utf8"), "keep existing rules\n");
+});
+
 test("every local adapter receives identical runtime environment on start and resume", () => {
   const dir = mkdtempSync(join(tmpdir(), "runtime-adapters-"));
   const settings = join(dir, "settings.json");
@@ -67,7 +117,7 @@ test("every local adapter receives identical runtime environment on start and re
     for (const mode of ["start", "resume"]) {
       const spec = buildRun({ harness, mode, config: { max_budget_usd: 2, harness: { [harness]: { bin: `/bin/${harness}`, settings } } }, session: "11111111-1111-4111-8111-111111111111", cwd: dir, prompt: "test" });
       assert.equal(spec.env.PATH.split(":")[0], dirname(process.execPath), `${harness} ${mode}`);
-      assert.equal(spec.env.NPM_CONFIG_CACHE, join(dir, "node_modules/.cache/gallivant/npm"));
+      assert.equal(spec.env.NPM_CONFIG_CACHE, join(dir, ".cache/gallivant/npm"));
       assert.equal(spec.env.npm_config_cache, spec.env.NPM_CONFIG_CACHE);
       assertSafeArgv(spec.args); assertSafeEnv(spec.env);
       assert.equal(spec.cmd, `/bin/${harness}`);
@@ -120,6 +170,7 @@ for (const mode of ["start", "resume"]) test(`actual ${mode} owns a private snap
   const spec = buildRun({ harness: "claude", mode, config: { max_budget_usd: 2, harness: { claude: { bin, settings } } }, session: "11111111-1111-4111-8111-111111111111", cwd, prompt: "fixture" });
   const runner = makeRunner(join(dir, "runs"));
   const job = await runner.start(mode, spec.cmd, spec.args, { cwd, env: spec.env, runtimeSettings: spec.runtimeSettings });
+  assert.equal(readFileSync(join(spec.env.NPM_CONFIG_CACHE, ".gitignore"), "utf8"), "*\n");
   t.after(() => { try { process.kill(job.pid, "SIGKILL"); } catch {} });
   await until(() => runner.lines(job.id).length);
   const observed = JSON.parse(runner.lines(job.id)[0]), snapshot = join(runner.dirOf(job.id), RUNTIME_SETTINGS_FILE);

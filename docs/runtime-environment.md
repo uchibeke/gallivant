@@ -20,7 +20,8 @@ binary into `node_modules` or change the lockfile to hide a mismatched interpret
 Gallivant's local implementation adapters prepend the directory containing the
 Node executable that launched Gallivant to PATH. Start and resume share this
 implementation. Executable discovery checks inherited PATH first, then the
-operator's login shell with `command -v`, then `/bin/sh`. Missing or empty PATH
+operator's login shell with `command -v`, then non-login `/bin/sh -c`. The fallback
+does not source login profiles, which may contain shell-specific syntax. Missing or empty PATH
 gets `/usr/bin:/bin` for the fallback lookup. Relative PATH entries do not grant
 executable discovery from the checkout. Linux does not require zsh. Paths with
 spaces and apostrophes are shell-quoted.
@@ -55,7 +56,10 @@ a different Node version must explicitly provision that toolchain; this change
 does not infer one from untrusted repository files or run a version manager.
 
 npm's upper- and lower-case cache variables point to
-`node_modules/.cache/gallivant/npm` inside the checkout. The existing npm user
+`.cache/gallivant/npm` inside the checkout, outside the directory that `npm ci`
+removes. Actual dispatch creates an ignore file inside that cache so cache files
+do not become repository changes; it refuses symlink paths and conflicting ignore
+files. Building a launch description remains free of filesystem writes. The existing npm user
 config isolation is retained. This does not grant access to home caches or copy
 registry tokens. A custom package manager or native runtime with additional
 libraries can still need operator-approved paths. Other harnesses receive the

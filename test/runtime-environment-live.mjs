@@ -29,6 +29,6 @@ const result = runner.read(job.id);
 const events = runner.lines(job.id).flatMap(line => { try { return [JSON.parse(line)]; } catch { return []; } });
 const outputs = events.flatMap(event => event.message?.content || []).filter(item => item.type === "tool_result");
 const observed = outputs.flatMap(item => { try { return [JSON.parse(item.content)]; } catch { return []; } }).find(item => item.execPath);
-const expected = { execPath: process.execPath, arch: process.arch, cache: join(cwd, "node_modules/.cache/gallivant/npm") };
+const expected = { execPath: process.execPath, arch: process.arch, cache: join(cwd, ".cache/gallivant/npm") };
 process.stdout.write(JSON.stringify({ expected, observed, hooks: events.filter(e => e.type === "system" && e.subtype === "hook_response").map(e => ({output:e.output,stdout:e.stdout,stderr:e.stderr})), exit: result.exit, error: result.error, result: events.findLast(e => e.type === "result")?.subtype }, null, 2) + "\n");
 if (result.exit !== 0 || !observed || observed.execPath !== expected.execPath || observed.arch !== expected.arch || observed.cache !== expected.cache) process.exitCode = 1;
