@@ -19,6 +19,48 @@ const update = { ...manifest, coreSha256: "b".repeat(64) };
 const taskId = "task-" + "1".repeat(24);
 const remote = { transport: "remote", provider: "openai-agents", acceptance: "accepted", providerJobId: "owned", turnId: "root", providerState: "succeeded", collected: true };
 
+test("qualified handoffs release artifact pins while unresolved work still retains them", () => {
+  const id = "acme/widget/review", repo = "acme/widget", head = "approved-head";
+  const ready = { id, repo, pr: 17, base: "main", state: "ready-for-human", cursor: { fixed_sha: head },
+    task: { completion: { version: 1, target: "delivery_ready" } },
+    completionEvidence: { delivery: { repository: repo, pr: 17, base: "main", head, gate: { allow: true } } } };
+  const home = tempHome(); migrateRuntimeState({ home, manifest });
+  writeJsonAtomic(join(home, "state.json"), { version: 1, entries: { [id]: ready } });
+  assert.equal(checkRuntimeState({ home, manifest }).active, false);
+  const backup = join(tempHome(), "backup"), restored = join(tempHome(), "restored");
+  backupRuntimeState({ home, out: backup, manifest });
+  assert.equal(restoreRuntimeState({ backup, out: restored, manifest }).active, false);
+  for (const root of [home, restored]) {
+    migrateRuntimeState({ home: root, manifest: update });
+    assert.equal(readJson(join(root, "runtime-pin.json")).coreSha256, update.coreSha256);
+    assert.deepEqual(readJson(join(root, "state.json")).entries[id], ready, "migration preserves completion evidence");
+  }
+  const unresolved = [
+    ["integrated target", entry => { entry.task.completion.target = "integrated"; }],
+    ["legacy task", entry => { delete entry.task; }],
+    ["missing evidence", entry => { delete entry.completionEvidence; }],
+    ["stale evidence", entry => { entry.completionEvidence.delivery.head = "old-head"; }],
+    ["malformed ownership", entry => { entry.task.ownerDelivery = { version: 99 }; }],
+    ["queued recheck", entry => { entry.control = { action: "recheck", status: "queued" }; }],
+    ["applying message", entry => { entry.control = { action: "message", status: "applying" }; }],
+    ["live provider", entry => { entry.execution = { ...remote, providerState: "running" }; }],
+    ["uncollected result", entry => { entry.execution = { ...remote, collected: false }; }],
+    ["unknown acceptance", entry => { entry.execution = { ...remote, acceptance: "unknown" }; }],
+    ["blocked task", entry => { entry.state = "needs-human"; entry.reason = "review-required"; }],
+    ["done with pending control", entry => { entry.state = "done"; entry.control = { action: "resume", status: "queued" }; }],
+    ["done with live provider", entry => { entry.state = "done"; entry.execution = { ...remote, providerState: "running" }; }],
+  ];
+  for (const [name, change] of unresolved) {
+    const root = tempHome(), entry = structuredClone(ready); change(entry);
+    migrateRuntimeState({ home: root, manifest });
+    writeJsonAtomic(join(root, "state.json"), { version: 1, entries: { [id]: entry } });
+    assert.equal(checkRuntimeState({ home: root, manifest }).active, true, name);
+    assert.throws(() => migrateRuntimeState({ home: root, manifest: update }), { code: "RUNTIME_ACTIVE_PIN" }, name);
+    assert.equal(readJson(join(root, "runtime-pin.json")).coreSha256, manifest.coreSha256, name);
+    assert.deepEqual(readJson(join(root, "state.json")).entries[id], entry, name);
+  }
+});
+
 test("embedded coordinator resolves authenticated identity when plain context has no daemon ownLogin", async () => {
   const home=tempHome(),state=makeState(home),clock=makeClock(),calls=[];
   migrateRuntimeState({home,manifest});
