@@ -258,6 +258,7 @@ test("negative coordination refuses before intake effects and preserves pending 
   assert.deepEqual(pending.ctx.state.entries(), []);
   for (const text of ["Do not commit the database transaction nor push duplicate items onto the queue.",
     "Do not commit the database transaction, nor should you push duplicate items onto the queue.",
+    "Do not commit the database transaction and the push button should remain disabled.",
     "Neither commit the database transaction nor push duplicate items onto the queue.",
     'Document "Do not commit the database transaction nor push changes" in help.']) {
     const w = world(), prepared = await w.service.prepare({ text });

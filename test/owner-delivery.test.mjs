@@ -189,6 +189,7 @@ test("negative coordination retains workflow restrictions without rejecting tech
     "Do not commit the database transaction nor push duplicate items onto the queue.",
     "Neither commit the database transaction nor push duplicate items onto the queue.",
     "Do not commit the database transaction, nor should you push duplicate items onto the queue.",
+    "Do not commit the database transaction and the push button should remain disabled.",
     "Do not commit the database transaction nor push duplicate items onto the queue nor commit the SQL transaction.",
     "Require user confirmation before committing the database transaction nor pushing duplicate items onto the queue.",
     'Document "Do not commit the database transaction nor push changes" in help.',
