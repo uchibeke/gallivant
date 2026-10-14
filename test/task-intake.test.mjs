@@ -241,6 +241,7 @@ test("negative coordination refuses before intake effects and preserves pending 
   const pending = world({ prepare: async (_ctx, task) => { calls++; return JSON.stringify(draftFor(task, { question: true })); } });
   const first = await pending.service.prepare({ text: REQUEST }), before = taskStore(pending.home).read(first.taskId), beforeCalls = calls;
   for (const answer of ["Do not commit the database transaction nor push changes.",
+    "Do not commit the database transaction, nor should you push changes.",
     "Neither commit the database transaction nor silently run git push.",
     "Do not commit the database transaction nor publish changes.",
     "Do not commit the database transaction; nor push changes.",
@@ -256,6 +257,7 @@ test("negative coordination refuses before intake effects and preserves pending 
   assert.equal(initial.daemonCalls(), 0); assert.equal(pending.daemonCalls(), 0);
   assert.deepEqual(pending.ctx.state.entries(), []);
   for (const text of ["Do not commit the database transaction nor push duplicate items onto the queue.",
+    "Do not commit the database transaction, nor should you push duplicate items onto the queue.",
     "Neither commit the database transaction nor push duplicate items onto the queue.",
     'Document "Do not commit the database transaction nor push changes" in help.']) {
     const w = world(), prepared = await w.service.prepare({ text });

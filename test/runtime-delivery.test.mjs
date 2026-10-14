@@ -49,6 +49,8 @@ test("qualified handoffs release artifact pins while unresolved work still retai
     ["blocked task", entry => { entry.state = "needs-human"; entry.reason = "review-required"; }],
     ["done with pending control", entry => { entry.state = "done"; entry.control = { action: "resume", status: "queued" }; }],
     ["done with live provider", entry => { entry.state = "done"; entry.execution = { ...remote, providerState: "running" }; }],
+    ["pending learning audit", entry => { entry.learning_deliveries = { pending: { key: "advice", runId: "old-run" } }; }],
+    ["done with pending learning audit", entry => { entry.state = "done"; entry.learning_deliveries = { pending: { key: "advice", runId: "old-run" } }; }],
   ];
   for (const [name, change] of unresolved) {
     const root = tempHome(), entry = structuredClone(ready); change(entry);

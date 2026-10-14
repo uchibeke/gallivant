@@ -169,6 +169,9 @@ test("negative coordination retains workflow restrictions without rejecting tech
   const restrictions = [
     "Do not commit the database transaction nor push changes.",
     "Do not commit the database transaction, nor silently run git push.",
+    "Do not commit the database transaction, nor should you push changes.",
+    "Do not commit the database transaction, nor may we automatically publish changes.",
+    "Do not commit the database transaction, nor should you silently run git push.",
     "Avoid pushing duplicate items onto the queue nor committing changes.",
     "Do not commit the database transaction nor push duplicate items onto the queue nor push changes.",
     "Neither commit the database transaction nor push changes.",
@@ -185,6 +188,7 @@ test("negative coordination retains workflow restrictions without rejecting tech
   for (const text of [
     "Do not commit the database transaction nor push duplicate items onto the queue.",
     "Neither commit the database transaction nor push duplicate items onto the queue.",
+    "Do not commit the database transaction, nor should you push duplicate items onto the queue.",
     "Do not commit the database transaction nor push duplicate items onto the queue nor commit the SQL transaction.",
     "Require user confirmation before committing the database transaction nor pushing duplicate items onto the queue.",
     'Document "Do not commit the database transaction nor push changes" in help.',

@@ -73,6 +73,7 @@ Negative coordination preserves each action's scope: “Do not commit the databa
 transaction nor push changes” still forbids delivery. Combining only technical
 operations, such as a database transaction and inserting items into a queue,
 remains implementation scope; `neither … nor …` follows the same distinction.
+Modal forms such as “nor should you push” retain the prohibition too.
 Local conditions attached to publication are still refused; the parser does not
 guess that a comma or semicolon ended a prohibition or approval requirement.
 

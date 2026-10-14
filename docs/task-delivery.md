@@ -275,6 +275,10 @@ and credential bindings available for rollback; do not merge/upgrade live jobs.
 A qualified `delivery_ready` handoff releases its runtime pin even while its
 retained registry state is `ready-for-human`. Pending controls, live or uncollected
 execution, unresolved intake/receipts and active chains still prevent migration.
+Pending learning delivery audits also retain the pin and keep coordinator wake-ups
+active. They retry separately after handoff without polling the settled provider,
+reopening PR review or launching another agent turn; a successful audit drains
+the saved outbox and releases that remaining work.
 Legacy tasks, `integrated` tasks awaiting merge and unresolved `needs-human` work
 retain their pins; the scheduling pause alone does not make a namespace idle.
 
