@@ -148,7 +148,7 @@ test("application merge evidence cannot reclassify branch refs or revision targe
         assert.throws(() => ownerDelivery(text), { code: "TASK_DELIVERY_SCOPE" }, text);
         assert.throws(() => assertDeliveryAnswer({}, text), { code: "TASK_DELIVERY_SCOPE" }, text);
       }
-  for (const text of ["Merge invoices from the main table.", "Tell the agent to merge files from the archive directory."]) {
+  for (const text of ["Merge invoices from the main table.", "Tell the agent to merge files from the archive directory.", "Merge head counts into the database.", "Merge invoices with tag metadata.", "Merge files from revision metadata."]) {
     assert.equal(ownerDelivery(text), null, text);
     assert.doesNotThrow(() => assertDeliveryAnswer({}, text), text);
   }
