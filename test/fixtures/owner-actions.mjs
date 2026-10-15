@@ -102,6 +102,8 @@ export const workflowRequests = [
   "Do not publish the document and dispatch receipts to S3.",
   "Implement export. Do not publish the document and duplicate reports to S3. Open a PR for review.",
   "Do not publish the document and signal events to Kafka.",
+  "Implement export. Do not publish the document and give reports to S3. Open a PR for review.",
+  "Do not publish the document and apply records to S3.",
   "Do not publish privately plus traces to S3.",
   "Do not publish events in addition to push changes.",
   "Do not publish events in addition to the final changes.",

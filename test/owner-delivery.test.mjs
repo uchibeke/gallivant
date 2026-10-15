@@ -73,7 +73,7 @@ test("application noun phrases share destinations without qualifying workflow ob
 
 test("unknown coordinated actions cannot borrow a later destination", () => {
   for (const connector of ["and", "or", "nor", "as well as", "along with", "together with", "in addition to", "not to mention", "besides", "plus"]) {
-    for (const action of ["forward reports", "relay records", "dispatch receipts", "route documents", "mirror snapshots", "transmit records", "frobnicate widgets", "carefully forward reports", "you forwarded reports", "please relay reports", "never relay reports", "forward", "duplicate reports", "signal events", "parallel transfers", "mimic records", "derive reports", "supply records", "multiply records", "embed records", "feed records", "bleed records"]) {
+    for (const action of ["forward reports", "relay records", "dispatch receipts", "route documents", "mirror snapshots", "transmit records", "frobnicate widgets", "carefully forward reports", "you forwarded reports", "please relay reports", "never relay reports", "forward", "duplicate reports", "signal events", "parallel transfers", "mimic records", "derive reports", "supply records", "multiply records", "embed records", "feed records", "bleed records", "give reports", "apply records", "seal reports", "seed records", "frobnical reports", "frobnive records", "frobned reports", "frobnly records", "comment", "process", "bypass"]) {
       const text = `Do not publish the document ${connector} ${action} to S3.`;
       for (const source of [text, `Implement export. ${text} Open a PR for review.`])
         assert.throws(() => ownerDelivery(source), { code: "TASK_DELIVERY_SCOPE" }, source);
@@ -127,6 +127,7 @@ test("new action controls do not reinterpret previously approved ownership spans
     "Require user consent before publishing duplicate events and please push changes.",
     "Do not publish the document and forward reports to S3.",
     "Do not publish the document and duplicate reports to S3.",
+    "Do not publish the document and give reports to S3.",
   ]) {
     const source = "Implement export. Open a PR for review. " + instruction;
     const start = source.indexOf("Open"), end = source.indexOf(" " + instruction);

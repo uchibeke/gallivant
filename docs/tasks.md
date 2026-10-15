@@ -106,6 +106,9 @@ objects retain an open vocabulary.
 Verb/adjective ambiguities such as “duplicate reports” cannot supply a shared
 destination without a noun marker. Write “metrics and the duplicate reports to
 S3,” or put the destination directly on each application operation.
+Modifier recognition is intentionally bounded: word endings do not establish a
+noun phrase (for example, “give” and “apply” are verbs). An unfamiliar modifier
+requires a direct application destination instead of a guessed shared scope.
 A later data object cannot qualify a workflow object such as “the solution.”
 Coordinated transfer actions such as “upload reports” or “copy files” start their
 own scope; their destinations cannot qualify an earlier publication prohibition.
