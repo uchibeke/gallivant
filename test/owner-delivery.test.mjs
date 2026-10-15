@@ -200,6 +200,9 @@ test("publication grammar rejects past status, preserves business approval rules
     "Creating a pull request should notify the author.",
     "Making PRs should update the task list.",
     "Submitting a PR should show a confirmation page.",
+    "The button opens a PR.",
+    "Clicking submit creates a pull request.",
+    "The service raises PRs when a check completes.",
     "Make a pull request API.",
   ]) {
     assert.equal(ownerDelivery(source), null, source);
