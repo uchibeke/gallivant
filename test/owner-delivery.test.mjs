@@ -65,6 +65,7 @@ test("ownership partitions exact Unicode source and removes only affirmative pub
 test("publication restrictions use action/object shape rather than a verb whitelist", () => {
   for (const source of [
     "Implement export. Make a pull request for review.",
+    "Implement export. Submit a PR for review.",
     "Implement export. Please make one new PR for review.",
   ]) {
     const contract = ownerDelivery(source);
@@ -76,9 +77,12 @@ test("publication restrictions use action/object shape rather than a verb whitel
     "Implement export. Do not make a pull request.",
     "Implement export. Avoid making a PR.",
     "Implement export. Do not generate any PR.",
+    "Implement export. Do not generate a PR for review.",
     "Implement export. Never produce a new pull request.",
     "Implement export. Open a PR titled export support.",
     "Implement export. Open PRs simultaneously.",
+    "Implement export. Make PRs only after tests pass.",
+    "Implement export. Make PRs subject to my approval.",
     "Implement export. Make two PRs for review.",
     "Implement export. Make multiple PRs.",
     "Make two PRs for review.",
@@ -139,6 +143,8 @@ test("publication grammar rejects past status, preserves business approval rules
     "Do not include any PR numbers in release notes.",
     "Do not display a PR number in the error message.",
     "Do not generate a PR number in the error message.",
+    "Do not generate a PR preview for draft changes.",
+    "Do not generate a PR description automatically.",
     "Add a PR client.",
     "Make a PR client.",
     "Make a PR parser.",
