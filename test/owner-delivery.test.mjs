@@ -78,8 +78,52 @@ test("publication restrictions use action/object shape rather than a verb whitel
     "Implement export. Do not generate any PR.",
     "Implement export. Never produce a new pull request.",
   ]) assert.throws(() => ownerDelivery(source), { code: "TASK_DELIVERY_SCOPE" }, source);
+  for (const source of ["Implement export. Open pull requests for review.", "Implement export. Make PRs for review."])
+    assert.throws(() => ownerDelivery(source), { code: "TASK_DELIVERY_SCOPE" }, source);
   assert.throws(() => ownerDelivery("I made a PR already."), { code: "TASK_DELIVERY_SCOPE" });
   for (const source of ["Add a PR template.", "Document ‘make a PR’ in help."]) assert.equal(ownerDelivery(source), null, source);
+});
+
+test("publication grammar rejects past status, preserves business approval rules, and keeps feature nouns in legacy scope", () => {
+  const task = { completion: { version: 1, target: "delivery_ready" } };
+  for (const source of [
+    "Implement export. Created a PR.",
+    "Implement export. Opened a PR.",
+    "Implement export. Submitted a PR.",
+  ]) {
+    assert.throws(() => ownerDelivery(source), { code: "TASK_DELIVERY_SCOPE" }, source);
+    assert.throws(() => assertDeliveryAnswer(task, source), { code: "TASK_DELIVERY_SCOPE" }, source);
+  }
+  for (const source of [
+    "Continue implementation after I approve the change.",
+    "Run the migration after I approve the change.",
+    "Implement export. Continue implementation after I approve the change.",
+  ]) {
+    assert.throws(() => ownerDelivery(source), { code: "TASK_DELIVERY_SCOPE" }, source);
+    assert.throws(() => assertDeliveryAnswer(task, source), { code: "TASK_DELIVERY_SCOPE" }, source);
+  }
+  for (const source of [
+    "If we approve a refund, send the customer an email.",
+    "If I approve the purchase, show a confirmation page.",
+    "Do not include any PR numbers in release notes.",
+    "Do not display a PR number in the error message.",
+    "Do not generate a PR number in the error message.",
+    "Add a PR client.",
+    "Make a PR client.",
+  ]) {
+    assert.equal(ownerDelivery(source), null, source);
+    assert.doesNotThrow(() => assertDeliveryAnswer(task, source), source);
+  }
+
+  const source = "Make a PR client. Open a PR for review.";
+  const start = source.indexOf("Open");
+  for (const version of [1, 2]) {
+    const saved = { version, offsets: "utf16", source, spans: [
+      { start: 0, end: start, owner: "implementation" },
+      { start, end: source.length, owner: "coordinator", kind: "pull_request" },
+    ] };
+    assert.equal(validateOwnerDelivery(saved), saved, `legacy v${version} implementation text must not be reclassified as delivery authority`);
+  }
 });
 
 test("quoted/code examples never create publication authority", () => {
@@ -434,7 +478,7 @@ test("publication owns recognized connectors without changing implementation tex
     const source = `${implementation}${connector}open a PR for review; do not merge or add dependencies.`;
     const contract = ownerDelivery(source);
     assert.deepEqual(ownerImplementation(contract), [implementation, " do not merge or add dependencies."], connector);
-    assert.equal(contract.version, 2);
+    assert.equal(contract.version, 3);
     assert.equal(contract.spans.map(span => source.slice(span.start, span.end)).join(""), source);
     assert.equal(contract.spans.find(span => span.owner === "coordinator").start, implementation.length);
     assert.equal(validateOwnerDelivery(contract), contract);
@@ -458,7 +502,7 @@ test("saved version-one ownership remains exact and cannot authorize forged conn
   assert.deepEqual(legacy, before);
   const corrected = ownerDelivery(source);
   assert.deepEqual(ownerImplementation(corrected), ["Implement CSV export"]);
-  for (const value of [{ ...corrected, version: 1 }, { ...legacy, version: 2 }, { ...corrected, version: 3 }])
+  for (const value of [{ ...corrected, version: 1 }, { ...legacy, version: 2 }])
     assert.throws(() => validateOwnerDelivery(value), { code: "TASK_DELIVERY_SCOPE" });
   for (const original of [legacy, corrected]) {
     const forged = structuredClone(original); forged.spans[0].end--; forged.spans[1].start--;
