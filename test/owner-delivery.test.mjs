@@ -141,8 +141,17 @@ test("application merge evidence cannot reclassify branch refs or revision targe
       assert.throws(() => assertDeliveryAnswer({}, text), { code: "TASK_DELIVERY_SCOPE" }, text);
     }
   }
-  for (const text of ["Merge invoices into main.", "Merge accounts with the PR.", "Merge files into origin/main."])
-    assert.throws(() => ownerDelivery(text), { code: "TASK_DELIVERY_SCOPE" }, text);
+  for (const direction of ["from", "to", "into", "onto", "with"])
+    for (const target of ["main", "origin/main", "feature/foo", "the PR", "HEAD~1"])
+      for (const lead of ["Merge invoices", "Tell the agent to merge files"]) {
+        const text = `${lead} ${direction} ${target}.`;
+        assert.throws(() => ownerDelivery(text), { code: "TASK_DELIVERY_SCOPE" }, text);
+        assert.throws(() => assertDeliveryAnswer({}, text), { code: "TASK_DELIVERY_SCOPE" }, text);
+      }
+  for (const text of ["Merge invoices from the main table.", "Tell the agent to merge files from the archive directory."]) {
+    assert.equal(ownerDelivery(text), null, text);
+    assert.doesNotThrow(() => assertDeliveryAnswer({}, text), text);
+  }
   for (const text of ["Merge invoices into the main table.", "Tell the agent to merge database rows before saving.", "Merge custom widgets.", "Merge configuration.", "I forbid you to commit the database transaction before validation.", "I forbid the agent to merge the PR."]) {
     assert.equal(ownerDelivery(text), null, text);
     assert.doesNotThrow(() => assertDeliveryAnswer({}, text), text);
