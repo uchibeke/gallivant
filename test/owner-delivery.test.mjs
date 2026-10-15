@@ -60,6 +60,17 @@ test("negative modals share workflow controls without rejecting their applicatio
   }
 });
 
+test("open-vocabulary application lists share destinations without qualifying workflow objects", () => {
+  for (const connector of ["and", "or", "nor", "as well as", "along with", "together with", "in addition to", "not to mention", "besides", "plus"]) {
+    const text = `Do not publish metrics ${connector} regional traces to S3.`;
+    assert.equal(ownerDelivery(text), null, text);
+    assert.doesNotThrow(() => assertDeliveryAnswer({}, text), text);
+    const workflow = `Do not publish the solution ${connector} upload reports to S3.`;
+    assert.throws(() => ownerDelivery(workflow), { code: "TASK_DELIVERY_SCOPE" }, workflow);
+    assert.throws(() => assertDeliveryAnswer({}, workflow), { code: "TASK_DELIVERY_SCOPE" }, workflow);
+  }
+});
+
 test("new action controls do not reinterpret previously approved ownership spans", () => {
   for (const instruction of ["Please merge it.", "Do not create a branch.", "Require user consent before delivering changes.", "Require user consent before committing the database transaction and creating a branch.", "Do not publish events or changes.", "Do not deliver notifications or the changes.", "Do not publish notifications to GitHub.", "Do not publish changes for review and deliver reports to S3.", "A PR can't be created."]) {
     const source = "Implement export. Open a PR for review. " + instruction;

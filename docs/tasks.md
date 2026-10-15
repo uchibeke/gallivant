@@ -96,8 +96,9 @@ Destinations apply to their own action: a later report upload cannot qualify an
 earlier restriction on publishing changes. Git metadata used by an application
 operation is distinct from publishing to a Git repository.
 Unrecognized coordinated wording ends destination scope; qualified application
-objects such as “invoices and tax reports” can share a destination. A later data
-object cannot qualify an earlier unknown object such as “the solution.”
+objects such as “invoices and tax reports” or “metrics plus traces” can share an
+explicit application destination without a vocabulary entry for each domain noun.
+A later data object cannot qualify a workflow object such as “the solution.”
 Ordinary leading elisions such as `'90s` and `'tis` remain implementation text even
 when a later possessive apostrophe follows. Use double quotes or backticks to quote
 an entire example beginning with an elision. Saved ownership versions one through
