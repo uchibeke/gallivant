@@ -93,7 +93,7 @@ test("publication verbs retain titles and related feature metadata without maski
 });
 
 test("publication gerund prohibitions refuse without classifying descriptive gerunds as commands", () => {
-  for (const lead of ["You are forbidden from", "We are prohibited from", "Refrain from", "Abstain from", "Avoid", "Never allow", "Do not permit", "Stop", "Skip", "Without"])
+  for (const lead of ["You are forbidden from", "We are prohibited from", "Refrain from", "Abstain from", "Avoid", "Never allow", "Do not permit", "Stop", "Skip", "Without", "I forbid you from", "We prohibit the agent from", "Prevent the agent from", "Policy forbids the worker from", "You must prevent the coding agent from"])
     for (const action of ["opening", "creating", "raising", "submitting", "sending", "preparing", "making", "generating", "producing", "starting", "beginning", "filing", "issuing", "publishing", "delivering", "drafting"])
       for (const object of ["a PR", "any GitHub PRs"]) {
         const text = `${lead} ${action} ${object}.`;
@@ -107,6 +107,17 @@ test("publication gerund prohibitions refuse without classifying descriptive ger
   for (const text of ["Document the procedure for opening a PR.", "Add help for creating a PR.", "Do not log API keys while opening a PR.", "Avoid the automatic opening of the PR-title editor."]) {
     assert.equal(ownerDelivery(text), null, text);
     assert.doesNotThrow(() => assertDeliveryAnswer({}, text), text);
+  }
+});
+
+test("explicit PR fixtures remain data without exempting real Git or PR objects", () => {
+  for (const text of ["Generate a synthetic GitHub PR fixture for tests.", "Create a mock pull request object for parser tests.", "Produce a normalized PR record for the API.", "Do not create mock PR objects for invalid input.", "Generate a serialized PR payload.", "Create a PR example for the guide."]) {
+    assert.equal(ownerDelivery(text), null, text);
+    assert.doesNotThrow(() => assertDeliveryAnswer({}, text), text);
+  }
+  for (const text of ["Do not create commit objects.", "Do not generate branch objects.", "Do not create PR objects.", "Generate a mock fixture. Do not create PR objects.", "Generate a mock fixture and do not create PR objects.", "Create a mock PR object, but do not push changes."]) {
+    assert.throws(() => ownerDelivery(text), { code: "TASK_DELIVERY_SCOPE" }, text);
+    assert.throws(() => assertDeliveryAnswer({}, text), { code: "TASK_DELIVERY_SCOPE" }, text);
   }
 });
 
@@ -194,6 +205,8 @@ test("new action controls do not reinterpret previously approved ownership spans
     "Do not create automated pull requests.",
     "You are forbidden from opening a PR.",
     "Refrain from opening a pull request.",
+    "I forbid you from opening a PR.",
+    "We prohibit the agent from opening any GitHub PRs.",
   ]) {
     const source = "Implement export. Open a PR for review. " + instruction;
     const start = source.indexOf("Open"), end = source.indexOf(" " + instruction);
@@ -572,7 +585,7 @@ test("publication owns recognized connectors without changing implementation tex
     const source = `${implementation}${connector}open a PR for review; do not merge or add dependencies.`;
     const contract = ownerDelivery(source);
     assert.deepEqual(ownerImplementation(contract), [implementation, " do not merge or add dependencies."], connector);
-    assert.equal(contract.version, 4);
+    assert.equal(contract.version, 5);
     assert.equal(contract.spans.map(span => source.slice(span.start, span.end)).join(""), source);
     assert.equal(contract.spans.find(span => span.owner === "coordinator").start, implementation.length);
     assert.equal(validateOwnerDelivery(contract), contract);
@@ -596,7 +609,7 @@ test("saved version-one ownership remains exact and cannot authorize forged conn
   assert.deepEqual(legacy, before);
   const corrected = ownerDelivery(source);
   assert.deepEqual(ownerImplementation(corrected), ["Implement CSV export"]);
-  for (const value of [{ ...corrected, version: 1 }, { ...legacy, version: 2 }, { ...corrected, version: 5 }])
+  for (const value of [{ ...corrected, version: 1 }, { ...legacy, version: 2 }, { ...corrected, version: 99 }])
     assert.throws(() => validateOwnerDelivery(value), { code: "TASK_DELIVERY_SCOPE" });
   for (const original of [legacy, corrected]) {
     const forged = structuredClone(original); forged.spans[0].end--; forged.spans[1].start--;
@@ -613,10 +626,10 @@ test("saved version-one ownership remains exact and cannot authorize forged conn
   }
 });
 
-test("version-four elisions retain following requirements without changing historical literal spans", () => {
+test("elisions retain following requirements without changing historical literal spans", () => {
   for (const text of ["Support '90s date formats.", "Preserve 'tis and 'em in the sample.", "Preserve '90s and 'tis in the sample."]) {
     const source = text + " Open a PR for review.", contract = ownerDelivery(source);
-    assert.equal(contract.version, 4);
+    assert.equal(contract.version, 5);
     assert.deepEqual(ownerImplementation(contract), [text + " "]);
     assert.throws(() => ownerDelivery(text + " Do not push."), { code: "TASK_DELIVERY_SCOPE" });
     assert.throws(() => assertDeliveryAnswer({}, text + " Please merge it."), { code: "TASK_DELIVERY_SCOPE" });
@@ -640,6 +653,28 @@ test("version-four elisions retain following requirements without changing histo
   ] };
   assert.equal(validateOwnerDelivery(v3), v3, "version-three accepted spans retain the old elision interpretation");
   assert.throws(() => ownerDelivery(priorSource), { code: "TASK_DELIVERY_SCOPE" });
+});
+
+test("version-five feature boundaries cannot hide another line's publication and preserve saved version four", () => {
+  for (const separator of ["\n", "\r\n", "\r"]) for (const text of [`Do not create a PR${separator}body.`, `Generate mock data${separator}Do not create PR objects.`]) {
+    assert.throws(() => ownerDelivery(text), { code: "TASK_DELIVERY_SCOPE" }, text);
+    assert.throws(() => assertDeliveryAnswer({}, text), { code: "TASK_DELIVERY_SCOPE" }, text);
+  }
+  const source = "Implement export. Open a PR\nTitle output.", current = ownerDelivery(source);
+  assert.equal(current.version, 5);
+  assert.equal(validateOwnerDelivery(current), current);
+  assert.deepEqual(ownerImplementation(current), ["Implement export. ", "\nTitle output."]);
+  assert.throws(() => validateOwnerDelivery({ ...current, version: 4 }), { code: "TASK_DELIVERY_SCOPE" });
+  // Pinned against the previous module: its feature matcher consumed the first
+  // PR across a newline and assigned only the final PR to the coordinator.
+  const priorSource = "Implement export. Open a PR\nTitle output. Open a PR for review.";
+  const split = priorSource.lastIndexOf("Open"), prior = { version: 4, offsets: "utf16", source: priorSource, spans: [
+    { start: 0, end: split, owner: "implementation" },
+    { start: split, end: priorSource.length, owner: "coordinator", kind: "pull_request" },
+  ] };
+  assert.equal(validateOwnerDelivery(prior), prior);
+  assert.throws(() => ownerDelivery(priorSource), { code: "TASK_DELIVERY_SCOPE" });
+  assert.throws(() => validateOwnerDelivery({ ...prior, version: 5 }), { code: "TASK_DELIVERY_SCOPE" });
 });
 
 test("publication owns only its recognized coordinating connector and delimiter", () => {

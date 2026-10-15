@@ -49,7 +49,11 @@ New ownership contracts also include a same-statement connector such as `, and`,
 `and then` or `then` in the publication span, so it cannot become a dangling
 implementation requirement. Connectors split across lines or containing quoted
 implementation text need clarification. Previously approved contracts keep their
-original spans, criteria and fingerprints on retry; new requests use version four.
+original spans, criteria and fingerprints on retry; new requests use version five.
+Version five keeps feature metadata and synthetic-object qualifiers within one
+line, so a following line beginning with “title” or “body” cannot hide an earlier
+PR instruction. Saved versions one through four retain their approved feature
+interpretation and exact source spans.
 
 This first recognizer supports one unqualified `open/create/raise/submit` review-PR
 clause outside quoted text/code. It is not a general natural-language permission
@@ -144,11 +148,16 @@ PR creation.
 Prohibition forms such as “refrain from opening a PR” and “forbidden from creating
 any PRs” also require clarification. Describing the procedure for opening a PR
 does not itself request publication.
+Active subjects also retain the restriction: “I forbid you from opening a PR” and
+“prevent the agent from opening a PR” require clarification.
 Generating PR titles, bodies, labels and other feature metadata also remains
 implementation scope; those objects do not authorize creating the PR itself.
 Possessive forms such as “the PR's body” and “the pull requests’ titles” follow
 the same rule and retain their exact original text in implementation requirements.
 Hyphenated metadata compounds such as “PR-title” and “pull-request-body” do too.
+PR fixtures and explicitly synthetic representations (such as a mock PR object or
+a normalized PR record) are implementation data. Bare PR objects and actual Git
+commit/branch objects do not gain that exception.
 Local conditions attached to publication are still refused; the parser does not
 guess that a comma or semicolon ended a prohibition or approval requirement.
 

@@ -356,10 +356,20 @@ test("publication connectors never enter newly prepared provider criteria or sto
     assert.match(executable, /"Implement CSV and JSON export"/);
     assert.doesNotMatch(executable, /open a PR|export,|export and|export then/);
     assert.match(executable, /do not merge or add dependencies/);
-    assert.equal(saved.ownerDelivery.version, 4);
+    assert.equal(saved.ownerDelivery.version, 5);
     const started = await w.service.start({ taskId: prepared.taskId, expectedRevision: prepared.revision, run: true, noDaemon: true });
     assert.deepEqual(w.ctx.state.get(started.implementation.id).task.ownerDelivery, saved.ownerDelivery);
   }
+});
+
+test("action object boundaries preserve version-five publication before newline metadata", async () => {
+  const text = "Implement CSV export. Open a PR\nTitle output must include the document name.";
+  const w = world(), prepared = await w.service.prepare({ text }), saved = taskStore(w.home).read(prepared.taskId);
+  assert.equal(prepared.status, "ready");
+  assert.equal(saved.ownerDelivery.version, 5);
+  assert.deepEqual(saved.requirements.map(r => r.text), ["Implement CSV export.", "Title output must include the document name."]);
+  const started = await w.service.start({ taskId: prepared.taskId, expectedRevision: prepared.revision, run: true, noDaemon: true });
+  assert.deepEqual(w.ctx.state.get(started.implementation.id).task.ownerDelivery, saved.ownerDelivery);
 });
 
 test("ambiguous quoted or multiline publication connectors refuse before preparation effects", async () => {
