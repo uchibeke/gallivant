@@ -62,6 +62,23 @@ test("ownership partitions exact Unicode source and removes only affirmative pub
   }
 });
 
+test("make and making use the publication action/object grammar", () => {
+  for (const source of [
+    "Implement export. Make a pull request for review.",
+    "Implement export. Please make one new PR for review.",
+  ]) {
+    const contract = ownerDelivery(source);
+    assert.equal(contract.spans.map(span => source.slice(span.start, span.end)).join(""), source);
+    assert.equal(ownerImplementation(contract).join(""), "Implement export. ");
+    assert.deepEqual(contract.spans.filter(span => span.owner === "coordinator").map(span => span.kind), ["pull_request"]);
+  }
+  for (const source of [
+    "Implement export. Do not make a pull request.",
+    "Implement export. Avoid making a PR.",
+  ]) assert.throws(() => ownerDelivery(source), { code: "TASK_DELIVERY_SCOPE" }, source);
+  for (const source of ["Add a PR template.", "Document ‘make a PR’ in help."]) assert.equal(ownerDelivery(source), null, source);
+});
+
 test("quoted/code examples never create publication authority", () => {
   for (const source of ['Render "Open one pull request for review" in help.', "Render `Open a PR` in help.", "Show 'Open a PR' in the example.", "Document this example:\n```\nOpen a PR\n```"])
     assert.equal(ownerDelivery(source), null);
