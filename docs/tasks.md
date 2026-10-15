@@ -58,6 +58,9 @@ natural-language permission parser. Conditional or negated publication clauses
 (including a refusal ending in “ever” or “this time”), terminal timing such as
 “ASAP”, owner approval prerequisites, destination qualifiers, multiple PRs and
 open-ended requirements such as “obligatory” or “compulsory” return
+Multiple object modifiers and named recipients, including non-ASCII names, are
+detected as publication intent; unsupported forms clarify rather than becoming
+implementation instructions.
 `TASK_DELIVERY_SCOPE` before inference. Broader construction verbs such as
 `send`, `prepare`, `generate`, `produce`, `publish` and `file` are recognized
 as publication intent, but require clarification unless they match the supported
@@ -91,6 +94,8 @@ refers back to that approved object: “After I approve the invoice, mark it pai
 This uses the sentence relationship rather than an allowlist of transaction
 nouns or outcome verbs. A separate implementation action after the approval
 still requires clarification.
+Ordinary approval modifiers such as “explicitly” and “personally” remain part
+of the approval condition and cannot be masked as implementation scope.
 Parenthetical application context does not change a declarative subject:
 “The service, when enabled, creates a PR” remains product behavior.
 An implementation may consist entirely of a prohibition, such as “Do not log API
