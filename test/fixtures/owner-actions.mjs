@@ -15,6 +15,7 @@ export const workflowRequests = [
   "We will be required to merge the PR.",
   "Run git merge main.",
   "Merge customer records and the PR.",
+  "Merge customer records and the approved PR.",
   "Merge customer records, branches and streams.",
   "Do not create any commits.",
   "Do not create a new branch.",
@@ -38,6 +39,7 @@ export const workflowRequests = [
   "Do not deliver notifications twice or create a branch.",
   "Do not publish events or changes.",
   "Do not publish events and PRs.",
+  "Do not publish events and the final changes.",
   "Do not deliver notifications or the changes.",
   "Do not create duplicate users nor make commits.",
   "Do not create duplicate users or commits.",
@@ -57,6 +59,10 @@ export const workflowRequests = [
   "Do not publish changes for review and deliver reports to S3.",
   "Do not publish changes for review, then publish reports to S3.",
   "Do not publish changes for review and store reports to S3.",
+  "Implement export. Do not publish the solution for review and upload reports to S3.",
+  "Do not publish the solution for review and copy reports to S3.",
+  "Do not publish the solution for review and store reports to S3.",
+  "Do not publish the solution and synchronize reports to S3.",
   "Do not publish changes to S3.",
   "Do not deliver the changes and publish records to Kafka.",
   "Do not publish events to Kafka and GitHub.",
@@ -66,6 +72,9 @@ export const workflowRequests = [
 ];
 
 export const applicationRequests = [
+  "Add support for '90s date formats.",
+  "Preserve 'tis in the sample.",
+  "Preserve '90s and 'tis in the sample.",
   "Do not publish duplicate events to the message bus.",
   "Do not deliver notifications twice.",
   "Do not deliver reports twice.",

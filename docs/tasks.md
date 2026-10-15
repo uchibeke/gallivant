@@ -48,9 +48,9 @@ completion-gate evidence; a provider statement cannot fulfill it.
 New ownership contracts also include a same-statement connector such as `, and`,
 `and then` or `then` in the publication span, so it cannot become a dangling
 implementation requirement. Connectors split across lines or containing quoted
-implementation text need clarification. Previously approved version-one
-contracts keep their original spans, criteria and fingerprints on retry;
-new requests use version two.
+implementation text need clarification. Previously approved version-one and
+version-two contracts keep their original spans, criteria and fingerprints on
+retry; new requests use version three.
 
 This first recognizer supports one unqualified `open/create/raise/submit` review-PR
 clause outside quoted text/code. It is not a general natural-language permission
@@ -96,6 +96,10 @@ override that boundary.
 Destinations apply to their own action: a later report upload cannot qualify an
 earlier restriction on publishing changes. Git metadata used by an application
 operation is distinct from publishing to a Git repository.
+Unrecognized coordinated wording ends destination scope; only explicit noun lists
+share a destination. Ordinary leading elisions such as `'90s` and `'tis` remain
+implementation text. New requests record ownership version three; saved versions
+one and two keep their original literal interpretation and exact source spans.
 Negative coordination preserves each action's scope: “Do not commit the database
 transaction nor push changes” still forbids delivery. Combining only technical
 operations, such as a database transaction and inserting items into a queue,

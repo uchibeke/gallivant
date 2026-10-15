@@ -203,12 +203,15 @@ Before wake-up, migrate/pin the exact runtime artifact. Supply the emitted
 The coordinator refuses a different active-job digest. Compatible patches keep
 task/provider/brief identities; drain jobs before staging a different artifact.
 No running code is silently upgraded. The public API's pre-1.0 compatibility
-window is `0.2.x`, with wire schemas all `1`; other versions need migration.
+window is `0.2.x`, with operation/task/execution wire schemas all `1`; other
+versions need migration.
 
 The portable contracts/views/wake envelope have no Node dependencies. The complete
 task service and both transport implementations still require Node filesystem,
-child processes, Git/gh and isolated verification. Browser-target import rejection
-is measured by `test:plugin-package`, separately from actual Node execution. This
+child processes, Git/gh and isolated verification. `npm test` bundles the portable
+entries for browsers and checks their shared liveness predicates. The installed
+artifact check (`test:plugin-package`) repeats those bundles and confirms the full
+Node runtime rejects a browser target, separately from actual Node execution. This
 is **not** a tested Workers-native workflow runtime or deployed Pages endpoint.
 The smallest remedy: keep existing Pages OAuth/MCP/UI; connect its authenticated
 runtime binding to one Node 22 coordinator with a durable volume and external

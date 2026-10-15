@@ -356,7 +356,7 @@ test("publication connectors never enter newly prepared provider criteria or sto
     assert.match(executable, /"Implement CSV and JSON export"/);
     assert.doesNotMatch(executable, /open a PR|export,|export and|export then/);
     assert.match(executable, /do not merge or add dependencies/);
-    assert.equal(saved.ownerDelivery.version, 2);
+    assert.equal(saved.ownerDelivery.version, 3);
     const started = await w.service.start({ taskId: prepared.taskId, expectedRevision: prepared.revision, run: true, noDaemon: true });
     assert.deepEqual(w.ctx.state.get(started.implementation.id).task.ownerDelivery, saved.ownerDelivery);
   }
