@@ -84,9 +84,15 @@ agent, model and provider subjects remain workflow instructions and are rejected
 when they condition publication. An owner prerequisite such as
 `Wait for my approval. Open a PR for review.` still requires clarification.
 Implementation work gated on approval is rejected even when that approval names
-a purchase or refund. Only the established complete transaction rules (such as
-approving a refund before emailing a customer) stay implementation requirements;
-mixing implementation work into that statement removes the exception.
+a purchase or refund. Complete transaction rules such as approving a refund
+before emailing a customer stay implementation requirements. The grammar also
+preserves a rule with an unfamiliar business object and result when the result
+refers back to that approved object: “After I approve the invoice, mark it paid.”
+This uses the sentence relationship rather than an allowlist of transaction
+nouns or outcome verbs. A separate implementation action after the approval
+still requires clarification.
+Parenthetical application context does not change a declarative subject:
+“The service, when enabled, creates a PR” remains product behavior.
 An implementation may consist entirely of a prohibition, such as “Do not log API
 keys in error responses.” That requirement remains in the acceptance criteria.
 Application operations such as publishing events to a message bus, delivering
