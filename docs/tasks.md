@@ -107,6 +107,9 @@ transaction nor push changes” still forbids delivery. Combining only technical
 operations, such as a database transaction and inserting items into a queue,
 remains implementation scope; `neither … nor …` follows the same distinction.
 Modal forms such as “nor should you push” retain the prohibition too.
+This includes “cannot,” contracted modals such as “can't” or “shouldn't,” and
+permission wording such as “aren't allowed to push.” “In addition to,” “besides,”
+and other supported coordination phrases keep the same action boundary.
 Local conditions attached to publication are still refused; the parser does not
 guess that a comma or semicolon ended a prohibition or approval requirement.
 

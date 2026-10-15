@@ -45,11 +45,26 @@ test("positive merge auxiliary sequences refuse while negative and application c
   assert.equal(ownerDelivery("Implement import. We will have to merge customer records before saving."), null);
 });
 
+test("negative modals share workflow controls without rejecting their application counterparts", () => {
+  for (const modal of ["cannot", "can not", "can't", "could not", "couldn’t", "must not", "mustn't", "should not", "shouldn't", "will not", "won't", "would not", "wouldn't", "shall not", "shan't", "may not", "might not", "mightn't", "are not allowed to", "aren't permitted to"]) {
+    for (const action of ["push changes", "commit changes", "create branches", "generate commits"]) {
+      const text = `You ${modal} ${action}.`;
+      assert.throws(() => ownerDelivery(text), { code: "TASK_DELIVERY_SCOPE" }, text);
+      assert.throws(() => assertDeliveryAnswer({}, text), { code: "TASK_DELIVERY_SCOPE" }, text);
+    }
+    for (const action of ["publish duplicate events to Kafka", "commit the database transaction", "create duplicate user records"]) {
+      const text = `You ${modal} ${action}.`;
+      assert.equal(ownerDelivery(text), null, text);
+      assert.doesNotThrow(() => assertDeliveryAnswer({}, text), text);
+    }
+  }
+});
+
 test("new action controls do not reinterpret previously approved ownership spans", () => {
-  for (const instruction of ["Please merge it.", "Do not create a branch.", "Require user consent before delivering changes.", "Require user consent before committing the database transaction and creating a branch.", "Do not publish events or changes.", "Do not deliver notifications or the changes.", "Do not publish notifications to GitHub.", "Do not publish changes for review and deliver reports to S3."]) {
+  for (const instruction of ["Please merge it.", "Do not create a branch.", "Require user consent before delivering changes.", "Require user consent before committing the database transaction and creating a branch.", "Do not publish events or changes.", "Do not deliver notifications or the changes.", "Do not publish notifications to GitHub.", "Do not publish changes for review and deliver reports to S3.", "A PR can't be created."]) {
     const source = "Implement export. Open a PR for review. " + instruction;
     const start = source.indexOf("Open"), end = source.indexOf(" " + instruction);
-    for (const version of [1, 2]) {
+    for (const version of [1, 2, 3, 4]) {
       const saved = { version, offsets: "utf16", source, spans: [
         { start: 0, end: start, owner: "implementation" },
         { start, end, owner: "coordinator", kind: "pull_request" },
