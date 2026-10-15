@@ -49,6 +49,8 @@ export const workflowRequests = [
   "Merge feature/foo.",
   "Merge invoices from origin/main.",
   "Tell the agent to merge files from feature/foo.",
+  "Tell the agent to merge files from revision HEAD~1.",
+  "Merge invoices from tag v1.2.3.",
   "I forbid you to commit changes.",
   "I forbid the agent to push changes.",
   "Do not create a PR\nbody.",
