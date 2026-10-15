@@ -200,6 +200,13 @@ test("application merge evidence cannot reclassify branch refs or revision targe
       assert.doesNotThrow(() => assertDeliveryAnswer({}, text), text);
       assert.throws(() => ownerDelivery(`${text} Merge invoices from tag main.`), { code: "TASK_DELIVERY_SCOPE" });
     }
+  for (const connector of ["and", "or", "nor", ",", "as well as", "along with", "plus"])
+    for (const operand of ["tag main", "revision HEAD~1", "SHA abcd"])
+      for (const lead of ["Merge invoices", "Tell the agent to merge files"]) {
+        const text = `${lead} using MongoDB ObjectId 507f1f77bcf86cd799439011 ${connector} ${operand}.`;
+        assert.throws(() => ownerDelivery(text), { code: "TASK_DELIVERY_SCOPE" }, text);
+        assert.throws(() => assertDeliveryAnswer({}, text), { code: "TASK_DELIVERY_SCOPE" }, text);
+      }
   for (const location of ["/tmp/input.json", "./input.json", "../input.json", "~/input.json", "https://example.com/input.json", "file:///tmp/input.json", "s3://bucket/input.json", "C:\\input.json", "(/tmp/input.json)", "<https://example.com/input.json>", "[~/input.json]", "{s3://bucket/input.json}"])
     for (const lead of ["Merge JSON files", "Tell the agent to merge JSON files"]) {
       const text = `${lead} from ${location}.`;

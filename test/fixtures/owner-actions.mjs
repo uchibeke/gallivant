@@ -67,6 +67,8 @@ export const workflowRequests = [
   "Tell the agent to merge files from OID(abcde).",
   "Merge invoices from tag: main.",
   "Tell the agent to merge files using ref:HEAD.",
+  "Merge invoices using MongoDB ObjectId 507f1f77bcf86cd799439011 and tag main.",
+  "Merge invoices using checksum 507f1f77bcf86cd799439011 and revision HEAD~1.",
   "I forbid you to commit changes.",
   "I forbid the agent to push changes.",
   "Do not create a PR\nbody.",
