@@ -242,6 +242,20 @@ test("negative implementation requirements remain authoritative without a positi
   }
   for (const source of ["Open a PR; do not merge or release.", "Open a PR. Please do not merge.", "Open a PR. And do not merge or deploy."])
     assert.throws(() => ownerDelivery(source), { code: "TASK_DELIVERY_SCOPE" });
+  // Previously accepted technical scope and contraction-only records retain
+  // their canonical spans; relaxing negative requirements cannot invalidate them.
+  for (const source of ["Scope: Do not commit the database transaction. Open a PR for review.", "Open a PR; don't merge."]) {
+    const separator = source.indexOf("; "), end = separator < 0 ? source.length : separator + 1;
+    const start = source.indexOf("Open");
+    for (const version of [1, 2]) {
+      const saved = { version, offsets: "utf16", source, spans: [
+        ...(start ? [{ start: 0, end: start, owner: "implementation" }] : []),
+        { start, end, owner: "coordinator", kind: "pull_request" },
+        ...(end < source.length ? [{ start: end, end: source.length, owner: "implementation" }] : []),
+      ] };
+      assert.equal(validateOwnerDelivery(saved), saved);
+    }
+  }
 });
 
 test("implementation nouns are not lifecycle instructions in initial requests or answers", () => {
