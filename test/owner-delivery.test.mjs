@@ -81,6 +81,11 @@ test("publication restrictions use action/object shape rather than a verb whitel
     "Implement export. Never produce a new pull request.",
     "Implement export. Do not generate a PR at all.",
     "Do not produce a PR under any circumstances.",
+    "Implement export. Open PRs without merging.",
+    "Implement export. Prepare a PR without merging.",
+    "Creating a PR is forbidden.",
+    "Making a PR is not allowed.",
+    "Creating a PR is forbidden. Open a PR for review.",
     "Implement export. Open a PR titled export support.",
     "Implement export. Open a draft PR for review.",
     "Implement export. Do not create a draft PR.",
@@ -186,6 +191,8 @@ test("publication grammar rejects past status, preserves business approval rules
     "Make a PR-friendly report.",
     "Make the PR's title editable.",
     "Generate the PR's title from the branch name.",
+    "Generate a report for a PR.",
+    "Create a summary for a pull request.",
     "Create a dashboard that lists PRs.",
     "Generate a report with PR statistics.",
     "Opening a PR should show a dialog.",
@@ -199,6 +206,16 @@ test("publication grammar rejects past status, preserves business approval rules
     assert.doesNotThrow(() => assertDeliveryAnswer(task, source), source);
   }
   for (const source of ["A PR is forbidden.", "PR is not allowed.", "Pull requests are forbidden."]) {
+    assert.throws(() => ownerDelivery(source), { code: "TASK_DELIVERY_SCOPE" }, source);
+    assert.throws(() => assertDeliveryAnswer(task, source), { code: "TASK_DELIVERY_SCOPE" }, source);
+  }
+  for (const source of [
+    "Creating a PR is forbidden.",
+    "Making a PR is not allowed.",
+    "Creating a PR is forbidden. Open a PR for review.",
+    "Implement export. Open PRs without merging.",
+    "Implement export. Prepare a PR without merging.",
+  ]) {
     assert.throws(() => ownerDelivery(source), { code: "TASK_DELIVERY_SCOPE" }, source);
     assert.throws(() => assertDeliveryAnswer(task, source), { code: "TASK_DELIVERY_SCOPE" }, source);
   }
