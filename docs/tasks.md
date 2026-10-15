@@ -103,6 +103,9 @@ phrase such as “forward reports” is not assumed to be a noun phrase merely b
 its verb is absent from the action vocabulary. For ambiguous application wording,
 state the destination on each action or use separate sentences; direct application
 objects retain an open vocabulary.
+Verb/adjective ambiguities such as “duplicate reports” cannot supply a shared
+destination without a noun marker. Write “metrics and the duplicate reports to
+S3,” or put the destination directly on each application operation.
 A later data object cannot qualify a workflow object such as “the solution.”
 Coordinated transfer actions such as “upload reports” or “copy files” start their
 own scope; their destinations cannot qualify an earlier publication prohibition.
