@@ -110,20 +110,28 @@ test("publication grammar rejects past status, preserves business approval rules
     "Do not generate a PR number in the error message.",
     "Add a PR client.",
     "Make a PR client.",
+    "Make a PR parser.",
   ]) {
     assert.equal(ownerDelivery(source), null, source);
     assert.doesNotThrow(() => assertDeliveryAnswer(task, source), source);
   }
 
-  const source = "Make a PR client. Open a PR for review.";
-  const start = source.indexOf("Open");
-  for (const version of [1, 2]) {
-    const saved = { version, offsets: "utf16", source, spans: [
-      { start: 0, end: start, owner: "implementation" },
-      { start, end: source.length, owner: "coordinator", kind: "pull_request" },
-    ] };
-    assert.equal(validateOwnerDelivery(saved), saved, `legacy v${version} implementation text must not be reclassified as delivery authority`);
+  for (const implementation of ["Make a PR client. ", "Make a PR parser. "]) {
+    const source = implementation + "Open a PR for review.";
+    const start = source.indexOf("Open");
+    for (const version of [1, 2]) {
+      const saved = { version, offsets: "utf16", source, spans: [
+        { start: 0, end: start, owner: "implementation" },
+        { start, end: source.length, owner: "coordinator", kind: "pull_request" },
+      ] };
+      assert.equal(validateOwnerDelivery(saved), saved, `legacy v${version} implementation text must not be reclassified as delivery authority`);
+    }
   }
+  const contradictory = "Implement export. Do not generate a PR. Open a PR for review.", publication = contradictory.lastIndexOf("Open");
+  assert.throws(() => validateOwnerDelivery({ version: 3, offsets: "utf16", source: contradictory, spans: [
+    { start: 0, end: publication, owner: "implementation" },
+    { start: publication, end: contradictory.length, owner: "coordinator", kind: "pull_request" },
+  ] }), { code: "TASK_DELIVERY_SCOPE" }, "v3 validation must enforce its current restriction grammar");
 });
 
 test("quoted/code examples never create publication authority", () => {
