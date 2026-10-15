@@ -122,7 +122,7 @@ test("qualified restrictions use the same action lead while data merges require 
 });
 
 test("prohibition leads protect all workflow actions and unknown first application verbs", () => {
-  for (const prefix of ["Refrain from", "I forbid you from", "We prohibit the agent from", "Prevent the worker from", "You are banned from"])
+  for (const prefix of ["Refrain from", "I forbid you from", "We prohibit the agent from", "Prevent the worker from", "You are banned from", "I forbid you to", "I forbid the agent to"])
     for (const action of ["pushing changes", "committing changes", "creating branches"]) {
       const text = `${prefix} ${action}.`;
       assert.throws(() => ownerDelivery(text), { code: "TASK_DELIVERY_SCOPE" }, text);
@@ -132,6 +132,21 @@ test("prohibition leads protect all workflow actions and unknown first applicati
     assert.throws(() => ownerDelivery(text), { code: "TASK_DELIVERY_SCOPE" }, text);
   for (const text of ["Refrain from committing the database transaction before validation.", "I forbid you from creating duplicate users.", "Do not even publish duplicate events to Kafka.", "Do not log API keys or commit the database transaction before validation.", "Do not log API keys while creating branches."])
     assert.equal(ownerDelivery(text), null, text);
+});
+
+test("application merge evidence cannot reclassify branch refs or revision targets", () => {
+  for (const target of ["main", "master", "develop", "staging", "dev", "release", "HEAD", "origin/main", "feature/foo", "refs/heads/topic", "HEAD~1", "main^", "deadbeef", "v1.2.3", "untyped-target"]) {
+    for (const text of [`Merge ${target}.`, `Tell the agent to merge ${target}.`, `Merge ${target} into release.`]) {
+      assert.throws(() => ownerDelivery(text), { code: "TASK_DELIVERY_SCOPE" }, text);
+      assert.throws(() => assertDeliveryAnswer({}, text), { code: "TASK_DELIVERY_SCOPE" }, text);
+    }
+  }
+  for (const text of ["Merge invoices into main.", "Merge accounts with the PR.", "Merge files into origin/main."])
+    assert.throws(() => ownerDelivery(text), { code: "TASK_DELIVERY_SCOPE" }, text);
+  for (const text of ["Merge invoices into the main table.", "Tell the agent to merge database rows before saving.", "Merge custom widgets.", "Merge configuration.", "I forbid you to commit the database transaction before validation.", "I forbid the agent to merge the PR."]) {
+    assert.equal(ownerDelivery(text), null, text);
+    assert.doesNotThrow(() => assertDeliveryAnswer({}, text), text);
+  }
 });
 
 test("publication quantifiers cannot conceal PR restrictions or authorize multiple deliveries", () => {

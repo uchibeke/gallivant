@@ -161,10 +161,15 @@ the same restriction. Nominal prohibitions such as “PR creation is prohibited�
 also require clarification. Application-data merges retain open object names,
 including invoices, database rows, accounts and files; workflow PR/branch objects
 and mixed data/workflow lists remain outside merge authority.
+Bare branches and ref-shaped targets (`main`, `feature/foo`, `origin/main`, Git
+revisions) are workflow merges. Application merges need named data evidence;
+“merge invoices into the main table” retains that application context.
 The same prohibition leads apply to push, commit and branch creation, including
 “refrain from pushing” and “I forbid you from committing.” A negative application
 clause cannot hide a coordinated workflow restriction, as in “do not log keys or
 commit changes”; independent statements and technical conditions retain scope.
+Infinitive complements such as “I forbid the agent to push changes” follow the
+same rule as “forbid the agent from pushing changes.”
 Generating PR titles, bodies, labels and other feature metadata also remains
 implementation scope; those objects do not authorize creating the PR itself.
 Possessive forms such as “the PR's body” and “the pull requests’ titles” follow
