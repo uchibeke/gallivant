@@ -97,6 +97,9 @@ test("publication grammar rejects past status, preserves business approval rules
   for (const source of [
     "Continue implementation after I approve the change.",
     "Run the migration after I approve the change.",
+    "Deploy the service after I approve the change.",
+    "Apply the patch after I approve the change.",
+    "Finish the implementation after I approve the change.",
     "Implement export. Continue implementation after I approve the change.",
   ]) {
     assert.throws(() => ownerDelivery(source), { code: "TASK_DELIVERY_SCOPE" }, source);
@@ -105,12 +108,16 @@ test("publication grammar rejects past status, preserves business approval rules
   for (const source of [
     "If we approve a refund, send the customer an email.",
     "If I approve the purchase, show a confirmation page.",
+    "If I approve the purchase, apply the discount.",
+    "If I approve the support request, finish the checkout.",
     "Do not include any PR numbers in release notes.",
     "Do not display a PR number in the error message.",
     "Do not generate a PR number in the error message.",
     "Add a PR client.",
     "Make a PR client.",
     "Make a PR parser.",
+    "Make a PR checker.",
+    "Make a pull request API.",
   ]) {
     assert.equal(ownerDelivery(source), null, source);
     assert.doesNotThrow(() => assertDeliveryAnswer(task, source), source);
@@ -148,9 +155,9 @@ test("publication grammar rejects past status, preserves business approval rules
   ] }), { code: "TASK_DELIVERY_SCOPE" }, "v3 must enforce current approval prerequisites when imported");
 });
 
-test("adjectival PR feature requirements remain implementation scope", () => {
+test("PR feature requirements remain implementation scope without enumerating feature nouns", () => {
   const task = { completion: { version: 1, target: "delivery_ready" } };
-  for (const feature of ["Make PRs searchable in the dashboard.", "Make pull requests visible to administrators.", "Make PRs easier to find."]) {
+  for (const feature of ["Make PRs searchable in the dashboard.", "Make pull requests visible to administrators.", "Make PRs easier to find.", "Make a PR checker.", "Make a pull request API."]) {
     assert.equal(ownerDelivery(feature), null, feature);
     assert.doesNotThrow(() => assertDeliveryAnswer(task, feature), feature);
     const source = feature + " Open a PR for review.", contract = ownerDelivery(source);
