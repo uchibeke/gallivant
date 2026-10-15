@@ -67,9 +67,11 @@ test("delegated merge requests refuse while negative constraints and data merges
       assert.throws(() => ownerDelivery(text), { code: "TASK_DELIVERY_SCOPE" }, text);
       assert.throws(() => assertDeliveryAnswer({}, text), { code: "TASK_DELIVERY_SCOPE" }, text);
     }
-    const technical = `${lead} merge duplicate contacts before saving.`;
-    assert.equal(ownerDelivery(technical), null, technical);
-    assert.doesNotThrow(() => assertDeliveryAnswer({}, technical), technical);
+    for (const object of ["duplicate contacts", "invoices", "database rows", "accounts", "files", "custom widgets"]) {
+      const technical = `${lead} merge ${object} before saving.`;
+      assert.equal(ownerDelivery(technical), null, technical);
+      assert.doesNotThrow(() => assertDeliveryAnswer({}, technical), technical);
+    }
   }
   for (const text of ["I do not require you to merge the PR.", "Don't tell the agent to merge it.", "Never have the agent merge the PR.", "Let's not merge the PR.", "Require a merge summary in the UI."]) {
     assert.equal(ownerDelivery(text), null, text);
@@ -79,7 +81,7 @@ test("delegated merge requests refuse while negative constraints and data merges
 
 test("passive publication prohibitions cover equivalent terminal adjectives", () => {
   for (const adjective of ["forbidden", "prohibited", "disallowed", "banned"]) {
-    for (const text of [`Opening a PR is ${adjective}.`, `Publishing is ${adjective}.`, `PRs are ${adjective}.`]) {
+    for (const text of [`Opening a PR is ${adjective}.`, `Publishing is ${adjective}.`, `PRs are ${adjective}.`, `PR creation is ${adjective}.`, `The PR's creation is ${adjective}.`, `PRs’ submission is ${adjective}.`]) {
       assert.throws(() => ownerDelivery(text), { code: "TASK_DELIVERY_SCOPE" }, text);
       assert.throws(() => assertDeliveryAnswer({}, text), { code: "TASK_DELIVERY_SCOPE" }, text);
     }
@@ -88,7 +90,7 @@ test("passive publication prohibitions cover equivalent terminal adjectives", ()
 });
 
 test("incomplete restriction prefixes retain scope across lines without inheriting complete constraints", () => {
-  for (const prefix of ["Do not", "Never", "Don't", "You must not", "You cannot", "You aren't allowed to", "We are not permitted to", "Do not allow the agent to", "No more"]) {
+  for (const prefix of ["Do not", "Never", "Don't", "You must not", "You cannot", "You aren't allowed to", "We are not permitted to", "Do not allow the agent to", "No more", "Do not under any circumstances", "Never in any case", "Don't for any reason whatsoever", "You must not at any time", "Do not ever under any circumstances"]) {
     for (const separator of ["\n", "\n\n", "\r\n"]) {
       const text = `Implement export. ${prefix}${separator}Open a PR.`;
       assert.throws(() => ownerDelivery(text), { code: "TASK_DELIVERY_SCOPE" }, text);
@@ -96,7 +98,7 @@ test("incomplete restriction prefixes retain scope across lines without inheriti
     }
   }
   assert.throws(() => ownerDelivery("Do not\nopening a PR."), { code: "TASK_DELIVERY_SCOPE" });
-  for (const text of ["Do not change API\nOpen a PR for review.", "Implement export. Do not merge.\nOpen a PR.", "Never log credentials\nOpen a PR."])
+  for (const text of ["Do not change API\nOpen a PR for review.", "Implement export. Do not merge.\nOpen a PR.", "Never log credentials\nOpen a PR.", "Do not under any circumstances change API\nOpen a PR."])
     assert.equal(validateOwnerDelivery(ownerDelivery(text)).version, 5, text);
   // Fresh checks do not reinterpret a record approved before this restriction
   // check. Its exact source/ownership still replay under the saved grammar.
@@ -106,6 +108,30 @@ test("incomplete restriction prefixes retain scope across lines without inheriti
     { start: split, end: source.length, owner: "coordinator", kind: "pull_request" },
   ] };
   assert.equal(validateOwnerDelivery(prior), prior);
+});
+
+test("qualified restrictions use the same action lead while data merges require a named object", () => {
+  for (const qualifier of ["under any circumstances", "in any case", "at any time", "for any reason whatsoever", "by any means"])
+    for (const action of ["push changes", "commit changes", "create branches"]) {
+      const text = `Do not ${qualifier} ${action}.`;
+      assert.throws(() => ownerDelivery(text), { code: "TASK_DELIVERY_SCOPE" }, text);
+      assert.throws(() => assertDeliveryAnswer({}, text), { code: "TASK_DELIVERY_SCOPE" }, text);
+    }
+  for (const text of ["Merge.", "Merge all.", "Merge now please.", "Merge privately please.", "Merge invoices and the PR.", "Tell the agent to merge files and the approved PR."])
+    assert.throws(() => ownerDelivery(text), { code: "TASK_DELIVERY_SCOPE" }, text);
+});
+
+test("prohibition leads protect all workflow actions and unknown first application verbs", () => {
+  for (const prefix of ["Refrain from", "I forbid you from", "We prohibit the agent from", "Prevent the worker from", "You are banned from"])
+    for (const action of ["pushing changes", "committing changes", "creating branches"]) {
+      const text = `${prefix} ${action}.`;
+      assert.throws(() => ownerDelivery(text), { code: "TASK_DELIVERY_SCOPE" }, text);
+      assert.throws(() => assertDeliveryAnswer({}, text), { code: "TASK_DELIVERY_SCOPE" }, text);
+    }
+  for (const text of ["Do not even push changes.", "Do not even once commit changes.", "Do not log API keys or commit changes.", "Do not fetch credentials and create branches."])
+    assert.throws(() => ownerDelivery(text), { code: "TASK_DELIVERY_SCOPE" }, text);
+  for (const text of ["Refrain from committing the database transaction before validation.", "I forbid you from creating duplicate users.", "Do not even publish duplicate events to Kafka.", "Do not log API keys or commit the database transaction before validation.", "Do not log API keys while creating branches."])
+    assert.equal(ownerDelivery(text), null, text);
 });
 
 test("publication quantifiers cannot conceal PR restrictions or authorize multiple deliveries", () => {
@@ -257,6 +283,8 @@ test("new action controls do not reinterpret previously approved ownership spans
     "We prohibit the agent from opening any GitHub PRs.",
     "I require you to merge the PR.",
     "Opening a PR is prohibited.",
+    "PR creation is prohibited.",
+    "The PR's creation is banned.",
   ]) {
     const source = "Implement export. Open a PR for review. " + instruction;
     const start = source.indexOf("Open"), end = source.indexOf(" " + instruction);

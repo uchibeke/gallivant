@@ -156,6 +156,15 @@ merge” and “tell the agent to merge,” cannot grant merge authority.
 An incomplete prefix such as “Do not” retains scope across line breaks and blank
 lines. A complete implementation constraint such as “Do not change the API” can
 still precede a separate affirmative PR instruction.
+Multiword qualifiers such as “under any circumstances” or “for any reason” retain
+the same restriction. Nominal prohibitions such as “PR creation is prohibited”
+also require clarification. Application-data merges retain open object names,
+including invoices, database rows, accounts and files; workflow PR/branch objects
+and mixed data/workflow lists remain outside merge authority.
+The same prohibition leads apply to push, commit and branch creation, including
+“refrain from pushing” and “I forbid you from committing.” A negative application
+clause cannot hide a coordinated workflow restriction, as in “do not log keys or
+commit changes”; independent statements and technical conditions retain scope.
 Generating PR titles, bodies, labels and other feature metadata also remains
 implementation scope; those objects do not authorize creating the PR itself.
 Possessive forms such as “the PR's body” and “the pull requests’ titles” follow
