@@ -79,12 +79,26 @@ test("publication restrictions use action/object shape rather than a verb whitel
     "Implement export. Do not generate any PR.",
     "Implement export. Do not generate a PR for review.",
     "Implement export. Never produce a new pull request.",
+    "Implement export. Do not generate a PR at all.",
+    "Do not produce a PR under any circumstances.",
     "Implement export. Open a PR titled export support.",
+    "Implement export. Open a draft PR for review.",
+    "Implement export. Do not create a draft PR.",
     "Implement export. Open PRs simultaneously.",
     "Implement export. Make PRs only after tests pass.",
     "Implement export. Make PRs subject to my approval.",
+    "Implement export. Make PRs once tests pass.",
+    "Implement export. Make PRs at the end.",
+    "Implement export. Make PRs mandatory before release.",
+    "Implement export. Make PRs prohibited until reviewed.",
+    "Implement export. Make PRs contingent on approval.",
+    "Implement export. Make PRs xylophonic before release.",
     "Implement export. Make two PRs for review.",
+    "Implement export. Make six PRs for review.",
+    "Implement export. Make a dozen PRs.",
     "Implement export. Make multiple PRs.",
+    "Implement export. Make the team a PR for review.",
+    "Implement export. Create John a pull request for review.",
     "Make two PRs for review.",
     "Make multiple PRs.",
   ]) assert.throws(() => ownerDelivery(source), { code: "TASK_DELIVERY_SCOPE" }, source);
@@ -115,12 +129,22 @@ test("publication grammar rejects past status, preserves business approval rules
     "Apply the patch after I approve the change.",
     "Finish the implementation after I approve the change.",
     "Build the feature after I approve the plan.",
+    "Create the widget after I approve the code.",
+    "Generate output after I approve.",
+    "Ship the branch after I approve the output.",
     "Build the widget after I approve the plan.",
     "Add tests after I approve the plan.",
     "Build the widget after I approve the code.",
     "Update the branch after I approve the output.",
     "Fix the deployment after I approve the release plan.",
     "Refactor the parser after I approve the design.",
+    "Write the documentation after I approve the documentation.",
+    "Refactor the parser after I approve the refactor.",
+    "Refactor after I approve.",
+    "Test after I approve.",
+    "Write after I approve.",
+    "Update the service after I have approved.",
+    "After I have approved, update the service.",
     "Build the feature after I approve it.",
     "After I approve it, build the feature.",
     "Update the service after I approve.",
@@ -153,6 +177,11 @@ test("publication grammar rejects past status, preserves business approval rules
     "Make a PR client.",
     "Make a PR parser.",
     "Make a PR checker.",
+    "Make a PR validator.",
+    "Make a PR editor.",
+    "Create a PR validator.",
+    "Make a PR-ready changelog.",
+    "Make a PR-friendly report.",
     "Make a pull request API.",
   ]) {
     assert.equal(ownerDelivery(source), null, source);
@@ -210,6 +239,15 @@ test("publication grammar rejects past status, preserves business approval rules
     { start: gatedPublication, end: gateStart, owner: "coordinator", kind: "pull_request" },
     { start: gateStart, end: gated.length, owner: "implementation" },
   ] }), { code: "TASK_DELIVERY_SCOPE" }, "v3 must enforce current approval prerequisites when imported");
+
+  for (const control of ["Do not push.", "Keep the change local."]) {
+    const source = `Implement export. Open a PR for review. ${control}`, start = source.indexOf("Open"), end = source.indexOf(". ", start) + 1;
+    assert.throws(() => validateOwnerDelivery({ version: 3, offsets: "utf16", source, spans: [
+      { start: 0, end: start, owner: "implementation" },
+      { start, end, owner: "coordinator", kind: "pull_request" },
+      { start: end, end: source.length, owner: "implementation" },
+    ] }), { code: "TASK_DELIVERY_SCOPE" }, `v3 validation must enforce delivery controls: ${control}`);
+  }
 });
 
 test("PR feature requirements remain implementation scope without enumerating feature nouns", () => {
@@ -648,7 +686,7 @@ test("saved v1/v2 contracts retain the published v0.2.0 producer grammar", () =>
     }
   }
   for (const source of ["Implement export. Make two PRs for review.", "Implement export. Make me a PR for review."]) {
-    const start = source.indexOf("Implement export. ");
+    const start = source.indexOf("Make ");
     for (const version of [1, 2]) {
       const saved = { version, offsets: "utf16", source, spans: [
         { start: 0, end: start, owner: "implementation" },
