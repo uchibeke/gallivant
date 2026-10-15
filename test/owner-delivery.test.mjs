@@ -129,6 +129,10 @@ test("publication grammar rejects past status, preserves business approval rules
     assert.throws(() => ownerDelivery(source), { code: "TASK_DELIVERY_SCOPE" }, source);
     assert.throws(() => assertDeliveryAnswer(task, source), { code: "TASK_DELIVERY_SCOPE" }, source);
   }
+  for (const source of ["The model creates a PR when tests pass.", "The provider creates a PR when tests pass."]) {
+    assert.throws(() => ownerDelivery(source), { code: "TASK_DELIVERY_SCOPE" }, source);
+    assert.throws(() => assertDeliveryAnswer(task, source), { code: "TASK_DELIVERY_SCOPE" }, source);
+  }
   for (const source of [
     "Continue implementation after I approve the change.",
     "Run the migration after I approve the change.",
@@ -140,6 +144,12 @@ test("publication grammar rejects past status, preserves business approval rules
     "Generate output after I approve.",
     "Ship the branch after I approve the output.",
     "Build the widget after I approve the plan.",
+    "Build the widget after I permit it.",
+    "Build the widget after I agree.",
+    "Build the widget after I review it.",
+    "Refine the implementation after I approve the purchase.",
+    "Polish the code after I approve the refund.",
+    "Build the widget after I approve the purchase, then send a receipt.",
     "Add tests after I approve the plan.",
     "Build the widget after I approve the code.",
     "Update the branch after I approve the output.",
@@ -203,7 +213,18 @@ test("publication grammar rejects past status, preserves business approval rules
     "The button opens a PR.",
     "The button opens a PR only after tests pass.",
     "Clicking submit creates a pull request.",
+    "The button sends a PR for review.",
+    "Clicking submit generates a PR.",
     "The service raises PRs when a check completes.",
+    "The application submits a PR when requested.",
+    "The service prepares a PR when a check completes.",
+    "The application makes a PR available after checks.",
+    "The application made a PR available yesterday.",
+    "The application files a PR when tests pass.",
+    "The application filed a PR after the checks passed.",
+    "The tool produces a PR on success.",
+    "The application publishes a PR after approval.",
+    "The CLI sent a PR after a check completed.",
     "The CLI creates a PR when the command runs.",
     "The webhook handler creates a PR when invoked.",
     "Build the tests without a synthetic PR fixture.",
@@ -226,7 +247,12 @@ test("publication grammar rejects past status, preserves business approval rules
     "Implement export. Prepare a PR without merging.",
     "Implement export. Do not create a PR please.",
     "Implement export. Do not create a PR whatsoever.",
+    "Implement export. Do not create a pull request ever.",
+    "Do not create a PR this time.",
+    "Create a PR ASAP.",
     "Create a PR and assign me.",
+    "Please create a PR and assign me.",
+    "Please send a PR for review.",
     "Prepare a PR via GitHub.",
     "Send a PR through GitHub.",
     "The coordinator creates a PR only after tests pass.",
@@ -251,6 +277,8 @@ test("publication grammar rejects past status, preserves business approval rules
     "Implement export. Make PRs await code review.",
     "Implement export. Make pull requests forbidden.",
     "Implement export. Make PRs required before release.",
+    "Implement export. Make PRs obligatory.",
+    "Implement export. Make PRs compulsory.",
   ]) assert.throws(() => ownerDelivery(source), { code: "TASK_DELIVERY_SCOPE" }, source);
 
   for (const implementation of ["Make a PR client. ", "Make a PR parser. "]) {
@@ -568,7 +596,7 @@ test("publication subjects and technical conditions remain implementation scope"
   assert.equal(ownerImplementation(ownerDelivery(text)).join("").trim(), "If name is empty, return friend.");
   for (const source of ["Wait for my approval. Open a PR for review.", "Implement export. Do not proceed until I approve.", "Implement export. My approval is required.", "Implement export. My approval is required. Open a PR.", "Implement export. Publish the changes.", "Implement export. Send a PR for review.", "Implement export. Open a pull-request.", "Implement export. Only if tests pass open a PR."]) assert.throws(() => ownerDelivery(source), { code: "TASK_DELIVERY_SCOPE" }, source);
   for (const source of ["If I approve the change, continue with implementation.", "After I approve the change, run the migration."]) assert.throws(() => ownerDelivery(source), { code: "TASK_DELIVERY_SCOPE" }, source);
-  for (const answer of ["Wait for my approval.", "Do not proceed until I approve.", "My confirmation is required.", "Skip publication.", "No PR should be created.", "Send it for review."]) assert.throws(() => assertDeliveryAnswer(task, answer), { code: "TASK_DELIVERY_SCOPE" }, answer);
+  for (const answer of ["Wait for my approval.", "Do not proceed until I approve.", "My confirmation is required.", "Skip publication.", "No PR should be created.", "Send it for review.", "Do not create a pull request ever."]) assert.throws(() => assertDeliveryAnswer(task, answer), { code: "TASK_DELIVERY_SCOPE" }, answer);
 });
 
 test("publication-subject conditions and standalone gates remain owner controls", () => {

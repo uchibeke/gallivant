@@ -52,13 +52,17 @@ implementation text need clarification. Previously approved version-one
 contracts keep their original spans, criteria and fingerprints on retry;
 new requests use version two.
 
-This first recognizer supports one unqualified `open/create/raise/submit` review-PR
-clause outside quoted text/code. It is not a general natural-language permission
-parser. Conditional or negated publication clauses, owner approval prerequisites,
-destination qualifiers, multiple PRs and delivery-only requests return
-`TASK_DELIVERY_SCOPE` before inference. Unsupported publication actions also
-require clarification; they never become impossible provider obligations.
-Initial requests and later answers share the same bounded directive checks.
+The supported affirmative clause is one unqualified `open/create/raise/submit/make`
+review-PR instruction outside quoted text or code. This is not a general
+natural-language permission parser. Conditional or negated publication clauses
+(including a refusal ending in “ever” or “this time”), terminal timing such as
+“ASAP”, owner approval prerequisites, destination qualifiers, multiple PRs and
+open-ended requirements such as “obligatory” or “compulsory” return
+`TASK_DELIVERY_SCOPE` before inference. Broader construction verbs such as
+`send`, `prepare`, `generate`, `produce`, `publish` and `file` are recognized
+as publication intent, but require clarification unless they match the supported
+contract. They never become impossible provider obligations. Initial requests
+and later answers share the same bounded directive checks.
 Local-only, no-push, task-hold or patch-only directions cannot silently fall back
 to the default review-PR workflow. Preference wording such as “I don't want a PR”
 or “We don't need a pull request” also requires clarification.
@@ -73,7 +77,16 @@ commit SHA, diff viewer or branch selection
 remain ordinary requirements. Technical conditions also remain implementation
 scope: `If name is empty, return friend. Open a PR for review.` and the answer
 `Commit the database transaction after validation.` are supported. By contrast,
-`Wait for my approval. Open a PR for review.` requires clarification before work.
+`The button sends a PR for review.` and `Clicking submit generates a PR.` are
+declarative application behavior, not coordinator delivery commands; this
+distinction covers the recognized publication verb families while coordinator
+agent, model and provider subjects remain workflow instructions and are rejected
+when they condition publication. An owner prerequisite such as
+`Wait for my approval. Open a PR for review.` still requires clarification.
+Implementation work gated on approval is rejected even when that approval names
+a purchase or refund. Only the established complete transaction rules (such as
+approving a refund before emailing a customer) stay implementation requirements;
+mixing implementation work into that statement removes the exception.
 An implementation may consist entirely of a prohibition, such as “Do not log API
 keys in error responses.” That requirement remains in the acceptance criteria.
 Application operations such as publishing events to a message bus, delivering
