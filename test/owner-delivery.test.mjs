@@ -212,6 +212,38 @@ test("initial requests cannot contradict the default publication workflow", () =
   assert.ok(ownerDelivery('Render "Keep the change local". Open a PR for review.'));
 });
 
+test("publication preferences and fresh legacy answers cannot waive delivery restrictions", () => {
+  for (const text of ["I don't want a PR.", "We don't need a pull request.", "I do not want a PR.", "We have no need for a PR.", "I don’t require a pull request."]) {
+    assert.throws(() => ownerDelivery("Implement export. " + text), { code: "TASK_DELIVERY_SCOPE" }, text);
+    for (const task of [{}, { completion: { version: 1, target: "delivery_ready" } }])
+      assert.throws(() => assertDeliveryAnswer(task, text), { code: "TASK_DELIVERY_SCOPE" }, text);
+  }
+  for (const text of ["Do not push.", "Keep the change local.", "Wait for my confirmation."])
+    assert.throws(() => assertDeliveryAnswer({}, text), { code: "TASK_DELIVERY_SCOPE" }, text);
+  for (const text of ['Document "I don’t want a PR" in help.', "We don't need a pull request template."])
+    assert.equal(ownerDelivery(text), null);
+  const source = "Implement export. Open a PR for review. I don't want a PR.";
+  for (const version of [1, 2]) {
+    const saved = { version, offsets: "utf16", source, spans: [
+      { start: 0, end: source.indexOf("Open"), owner: "implementation" },
+      { start: source.indexOf("Open"), end: source.indexOf(" I don't"), owner: "coordinator", kind: "pull_request" },
+      { start: source.indexOf(" I don't"), end: source.length, owner: "implementation" },
+    ] };
+    assert.equal(validateOwnerDelivery(saved), saved, "historical ownership stays canonical");
+  }
+  assert.throws(() => ownerDelivery(source), { code: "TASK_DELIVERY_SCOPE" });
+});
+
+test("negative implementation requirements remain authoritative without a positive lead sentence", () => {
+  for (const text of ["Do not log API keys in error responses.", "Never expose credentials in diagnostics.", "No API keys in logs."]) {
+    const source = text + " Open a PR for review.", contract = ownerDelivery(source);
+    assert.equal(ownerImplementation(contract).join(""), text + " ");
+    assert.equal(contract.spans.map(span => source.slice(span.start, span.end)).join(""), source);
+  }
+  for (const source of ["Open a PR; do not merge or release.", "Open a PR. Please do not merge.", "Open a PR. And do not merge or deploy."])
+    assert.throws(() => ownerDelivery(source), { code: "TASK_DELIVERY_SCOPE" });
+});
+
 test("implementation nouns are not lifecycle instructions in initial requests or answers", () => {
   const task = { completion: { version: 1, target: "delivery_ready" } };
   for (const source of ["Add local storage.", "Keep local storage working.", "Add a review dashboard.", "Display commit SHA in diagnostics.", "Fix the diff viewer.", "Add branch selection.", "Implement export. Scope: aporthq/task-delivery-onboarding-qualification only."]) {
@@ -301,7 +333,7 @@ test("new answers cannot silently override existing publication ownership", () =
   assert.doesNotThrow(() => assertDeliveryAnswer(task, "Use CSV and preserve the existing dependency declarations."));
   assert.doesNotThrow(() => assertDeliveryAnswer(task, 'The label is "Open a PR".'));
   assert.throws(() => assertDeliveryAnswer({ completion: { version: 1, target: "delivery_ready" } }, "Keep the change local"), { code: "TASK_DELIVERY_SCOPE" });
-  assert.doesNotThrow(() => assertDeliveryAnswer({}, "Keep the change local"), "legacy tasks without a completion contract retain their answer behavior");
+  assert.throws(() => assertDeliveryAnswer({}, "Keep the change local"), { code: "TASK_DELIVERY_SCOPE" }, "new legacy answers obey the actual review-PR workflow");
 });
 
 test("publication owns its terminator and courtesy prefix, never a punctuation-only provider requirement", () => {

@@ -60,7 +60,8 @@ destination qualifiers, multiple PRs and delivery-only requests return
 require clarification; they never become impossible provider obligations.
 Initial requests and later answers share the same bounded directive checks.
 Local-only, no-push, task-hold or patch-only directions cannot silently fall back
-to the default review-PR workflow.
+to the default review-PR workflow. Preference wording such as “I don't want a PR”
+or “We don't need a pull request” also requires clarification.
 
 Implementation subjects such as a PR status badge, pull-request template,
 published articles, a publish button, a command to publish docs, local storage,
@@ -69,6 +70,8 @@ remain ordinary requirements. Technical conditions also remain implementation
 scope: `If name is empty, return friend. Open a PR for review.` and the answer
 `Commit the database transaction after validation.` are supported. By contrast,
 `Wait for my approval. Open a PR for review.` requires clarification before work.
+An implementation may consist entirely of a prohibition, such as “Do not log API
+keys in error responses.” That requirement remains in the acceptance criteria.
 Negative coordination preserves each action's scope: “Do not commit the database
 transaction nor push changes” still forbids delivery. Combining only technical
 operations, such as a database transaction and inserting items into a queue,
@@ -86,8 +89,10 @@ remove the restriction to bypass clarification.
 Clarify the complete task with the owner and submit it under a new operation ID;
 never delete a condition just to pass validation. Answers may refine implementation
 but cannot silently replace publication ownership or add a publication prerequisite.
-This applies to explicit publication clauses and new tasks with the default
-review workflow. There is no typed delivery-amendment operation yet. The supported answer boundary
+This applies to explicit publication clauses, the default review workflow and new
+answers to older saved tasks without completion metadata. Exact previously
+accepted answer retries still replay their saved receipt. There is no typed
+delivery-amendment operation yet. The supported answer boundary
 conservatively refuses recognized lifecycle/artifact language; it does not claim
 to understand every possible paraphrase. Review the complete saved owner contract
 before authorizing implementation, and clarify conflicting delivery intent instead

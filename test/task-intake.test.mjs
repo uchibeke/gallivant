@@ -273,6 +273,43 @@ test("negative coordination refuses before intake effects and preserves pending 
   }
 });
 
+test("publication preferences and new legacy answers refuse before effects while negative requirements prepare", async () => {
+  const initial = world({ prepare: async () => assert.fail("publication refusal cannot spend") });
+  for (const text of ["I don't want a PR.", "We don't need a pull request."])
+    await assert.rejects(initial.service.prepare({ text: "Implement export. " + text, run: true }), { code: "TASK_DELIVERY_SCOPE", taskEffects: "none" });
+  assert.deepEqual(initial.service.list().tasks, []); assert.deepEqual(initial.ctx.state.entries(), []);
+  const w = world({ prepare: async (_ctx, task) => JSON.stringify(draftFor(task, { question: true })) });
+  const first = await w.service.prepare({ text: REQUEST }), store = taskStore(w.home), legacy = store.read(first.taskId);
+  delete legacy.completion; delete legacy.ownerDelivery; store.save(legacy);
+  for (const answer of ["Do not push.", "Keep the change local.", "Wait for my approval.", "I don't want a PR."])
+    await assert.rejects(w.service.answer({ taskId: first.taskId, expectedRevision: first.revision, operationId: "new-legacy-answer", answers: { "q-r-1": answer } }),
+      { code: "TASK_DELIVERY_SCOPE", taskEffects: "none" });
+  assert.deepEqual(store.read(first.taskId), legacy);
+  const input = { taskId: first.taskId, expectedRevision: first.revision, operationId: "legacy-technical-answer", answers: { "q-r-1": "Never expose credentials in diagnostics." } };
+  const answered = await w.service.answer(input);
+  const accepted = store.read(first.taskId);
+  assert.deepEqual(await w.service.answer(input), answered);
+  assert.deepEqual(store.read(first.taskId), accepted, "exact legacy retry preserves the accepted record");
+  // Model a pre-guard record whose already accepted answer would now refuse.
+  // Its exact operation receipt must replay without inference or rewriting it.
+  const oldInput = { ...input, answers: { "q-r-1": "Keep the change local." } };
+  const historical = JSON.parse(JSON.stringify(accepted).replaceAll("Never expose credentials in diagnostics.", "Keep the change local."));
+  historical.operations[input.operationId] = contentDigest(JSON.stringify({ answers: oldInput.answers, verifyCommands: [] }));
+  store.save(historical);
+  const oldResult = w.service.inspect({ taskId: first.taskId }), calls = w.calls();
+  assert.deepEqual(await w.service.answer(oldInput), oldResult);
+  assert.deepEqual(store.read(first.taskId), historical);
+  assert.equal(w.calls(), calls, "historical receipt replay cannot spend or replan");
+  await assert.rejects(w.service.answer({ ...oldInput, answers: { "q-r-1": "Do not push." } }), { code: "TASK_CONFLICT" });
+  for (const text of ["Do not log API keys in error responses.", "Never expose credentials in diagnostics."]) {
+    const p = world(), result = await p.service.prepare({ text: text + " Open a PR for review." });
+    assert.equal(result.status, "ready");
+    const saved = taskStore(p.home).read(result.taskId);
+    assert.deepEqual(saved.requirements.map(requirement => requirement.text), [text]);
+    assert.ok(saved.output.criteria.some(criterion => criterion.text.includes(JSON.stringify(text))));
+  }
+});
+
 test("publication punctuation and courtesy never become planner requirements", async () => {
   for (const text of ["Implement CSV export. Open a PR for review.", "Implement CSV export.\nPlease open a PR for review.\nDo not merge."]) {
     const w = world(), result = await w.service.prepare({ text }), saved = taskStore(w.home).read(result.taskId);
