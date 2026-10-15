@@ -201,7 +201,7 @@ test("application merge evidence cannot reclassify branch refs or revision targe
       assert.throws(() => ownerDelivery(`${text} Merge invoices from tag main.`), { code: "TASK_DELIVERY_SCOPE" });
     }
   for (const connector of ["and", "or", "nor", ",", "as well as", "along with", "plus"])
-    for (const operand of ["tag main", "also tag main", "another tag main", "one more tag main", "also the branch topic", "revision HEAD~1", "SHA abcd"])
+    for (const operand of ["tag main", "also tag main", "another tag main", "one more tag main", "also the branch topic", "the other tag main", "an additional ref HEAD", "revision HEAD~1", "SHA abcd"])
       for (const lead of ["Merge invoices", "Tell the agent to merge files"]) {
         const text = `${lead} using MongoDB ObjectId 507f1f77bcf86cd799439011 ${connector} ${operand}.`;
         assert.throws(() => ownerDelivery(text), { code: "TASK_DELIVERY_SCOPE" }, text);

@@ -185,6 +185,8 @@ export const workflowRequests = [
 ];
 
 export const applicationRequests = [
+  "Merge invoices using customer tag metadata.",
+  "Merge JSON files using source reference data.",
   "Merge invoices using MongoDB ObjectId 507f1f77bcf86cd799439011.",
   "Merge JSON files from (/tmp/input.json).",
   "Merge JSON files from <https://example.com/input.json>.",
