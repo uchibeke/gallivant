@@ -173,6 +173,8 @@ export const workflowRequests = [
 ];
 
 export const applicationRequests = [
+  "Merge JSON files from (/tmp/input.json).",
+  "Merge JSON files from <https://example.com/input.json>.",
   "Merge JSON files from /tmp/input.json.",
   "Merge invoices using UUID 123e4567-e89b-12d3-a456-426614174000.",
   "Merge invoices using INV-deadbeef-US.",

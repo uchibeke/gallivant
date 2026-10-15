@@ -164,7 +164,7 @@ test("application merge evidence cannot reclassify branch refs or revision targe
       assert.equal(ownerDelivery(text), null, text);
       assert.doesNotThrow(() => assertDeliveryAnswer({}, text), text);
     }
-  for (const location of ["/tmp/input.json", "./input.json", "../input.json", "~/input.json", "https://example.com/input.json", "file:///tmp/input.json", "s3://bucket/input.json", "C:\\input.json"])
+  for (const location of ["/tmp/input.json", "./input.json", "../input.json", "~/input.json", "https://example.com/input.json", "file:///tmp/input.json", "s3://bucket/input.json", "C:\\input.json", "(/tmp/input.json)", "<https://example.com/input.json>", "[~/input.json]", "{s3://bucket/input.json}"])
     for (const lead of ["Merge JSON files", "Tell the agent to merge JSON files"]) {
       const text = `${lead} from ${location}.`;
       assert.equal(ownerDelivery(text), null, text);
