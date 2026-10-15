@@ -147,6 +147,21 @@ test("application merge evidence cannot reclassify branch refs or revision targe
       assert.throws(() => ownerDelivery(text), { code: "TASK_DELIVERY_SCOPE" }, text);
       assert.throws(() => assertDeliveryAnswer({}, text), { code: "TASK_DELIVERY_SCOPE" }, text);
     }
+  for (const qualifier of ["SHA", "SHA-1", "SHA-256", "OID", "hash", "changeset"])
+    for (const separator of [" ", ":", "=", "-"])
+      for (const hash of ["abcd", "abcde", "abcdef", "deadbeef"])
+        for (const lead of ["Merge invoices", "Tell the agent to merge files"]) {
+          const text = `${lead} using ${qualifier}${separator}${hash}.`;
+          assert.throws(() => ownerDelivery(text), { code: "TASK_DELIVERY_SCOPE" }, text);
+          assert.throws(() => assertDeliveryAnswer({}, text), { code: "TASK_DELIVERY_SCOPE" }, text);
+        }
+  for (const qualifier of ["tag", "ref", "branch", "revision", "head"])
+    for (const separator of [":", ": ", "=", " = "])
+      for (const lead of ["Merge invoices", "Tell the agent to merge files"]) {
+        const text = `${lead} from ${qualifier}${separator}main.`;
+        assert.throws(() => ownerDelivery(text), { code: "TASK_DELIVERY_SCOPE" }, text);
+        assert.throws(() => assertDeliveryAnswer({}, text), { code: "TASK_DELIVERY_SCOPE" }, text);
+      }
   for (const [open, close] of [["(", ")"], ["[", "]"], ["{", "}"], ["<", ">"]])
     for (const ref of ["main", "HEAD", "the main", "tag metadata", "revision metrics", "SHA deadbeef"])
       for (const lead of ["Merge invoices", "Tell the agent to merge files"]) {
@@ -177,6 +192,13 @@ test("application merge evidence cannot reclassify branch refs or revision targe
       const text = `${lead} using UUID ${id}.`;
       assert.equal(ownerDelivery(text), null, text);
       assert.doesNotThrow(() => assertDeliveryAnswer({}, text), text);
+    }
+  for (const qualifier of ["MongoDB ObjectId", "ObjectId", "checksum", "digest", "ObjectId:", "checksum="])
+    for (const lead of ["Merge invoices", "Tell the agent to merge files"]) {
+      const text = `${lead} using ${qualifier} 507f1f77bcf86cd799439011.`;
+      assert.equal(ownerDelivery(text), null, text);
+      assert.doesNotThrow(() => assertDeliveryAnswer({}, text), text);
+      assert.throws(() => ownerDelivery(`${text} Merge invoices from tag main.`), { code: "TASK_DELIVERY_SCOPE" });
     }
   for (const location of ["/tmp/input.json", "./input.json", "../input.json", "~/input.json", "https://example.com/input.json", "file:///tmp/input.json", "s3://bucket/input.json", "C:\\input.json", "(/tmp/input.json)", "<https://example.com/input.json>", "[~/input.json]", "{s3://bucket/input.json}"])
     for (const lead of ["Merge JSON files", "Tell the agent to merge JSON files"]) {

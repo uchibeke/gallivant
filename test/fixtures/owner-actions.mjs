@@ -63,6 +63,10 @@ export const workflowRequests = [
   "Merge invoices from [HEAD].",
   "Merge invoices from tag(main).",
   "Merge invoices from ref{HEAD}.",
+  "Merge invoices using SHA abcd.",
+  "Tell the agent to merge files from OID(abcde).",
+  "Merge invoices from tag: main.",
+  "Tell the agent to merge files using ref:HEAD.",
   "I forbid you to commit changes.",
   "I forbid the agent to push changes.",
   "Do not create a PR\nbody.",
@@ -177,6 +181,7 @@ export const workflowRequests = [
 ];
 
 export const applicationRequests = [
+  "Merge invoices using MongoDB ObjectId 507f1f77bcf86cd799439011.",
   "Merge JSON files from (/tmp/input.json).",
   "Merge JSON files from <https://example.com/input.json>.",
   "Merge JSON files from /tmp/input.json.",
