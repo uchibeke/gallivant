@@ -201,8 +201,12 @@ test("publication grammar rejects past status, preserves business approval rules
     "Making PRs should update the task list.",
     "Submitting a PR should show a confirmation page.",
     "The button opens a PR.",
+    "The button opens a PR only after tests pass.",
     "Clicking submit creates a pull request.",
     "The service raises PRs when a check completes.",
+    "Build the tests without a synthetic PR fixture.",
+    "Display whether a PR is optional in settings.",
+    "Show the PR mandatory field in metadata.",
     "Make a pull request API.",
   ]) {
     assert.equal(ownerDelivery(source), null, source);
@@ -218,6 +222,8 @@ test("publication grammar rejects past status, preserves business approval rules
     "Creating a PR is forbidden. Open a PR for review.",
     "Implement export. Open PRs without merging.",
     "Implement export. Prepare a PR without merging.",
+    "The coordinator creates a PR only after tests pass.",
+    "The agent opens a pull request when the tests pass.",
   ]) {
     assert.throws(() => ownerDelivery(source), { code: "TASK_DELIVERY_SCOPE" }, source);
     assert.throws(() => assertDeliveryAnswer(task, source), { code: "TASK_DELIVERY_SCOPE" }, source);
