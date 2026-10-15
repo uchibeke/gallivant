@@ -60,6 +60,54 @@ test("negative modals share workflow controls without rejecting their applicatio
   }
 });
 
+test("delegated merge requests refuse while negative constraints and data merges remain requirements", () => {
+  for (const lead of ["I require you to", "We request you to", "I would like the agent to", "Have the agent", "Tell the agent to", "Instruct the assistant to", "Ask the agent to", "Make sure the agent", "Let's", "Make the agent", "Get the agent to", "I demand that you", "We mandate that you", "I authorize you to", "Assign the agent to"]) {
+    for (const action of ["merge the PR", "merge it", "squash-merge the PR"]) {
+      const text = `${lead} ${action}.`;
+      assert.throws(() => ownerDelivery(text), { code: "TASK_DELIVERY_SCOPE" }, text);
+      assert.throws(() => assertDeliveryAnswer({}, text), { code: "TASK_DELIVERY_SCOPE" }, text);
+    }
+    const technical = `${lead} merge duplicate contacts before saving.`;
+    assert.equal(ownerDelivery(technical), null, technical);
+    assert.doesNotThrow(() => assertDeliveryAnswer({}, technical), technical);
+  }
+  for (const text of ["I do not require you to merge the PR.", "Don't tell the agent to merge it.", "Never have the agent merge the PR.", "Let's not merge the PR.", "Require a merge summary in the UI."]) {
+    assert.equal(ownerDelivery(text), null, text);
+    assert.doesNotThrow(() => assertDeliveryAnswer({}, text), text);
+  }
+});
+
+test("passive publication prohibitions cover equivalent terminal adjectives", () => {
+  for (const adjective of ["forbidden", "prohibited", "disallowed", "banned"]) {
+    for (const text of [`Opening a PR is ${adjective}.`, `Publishing is ${adjective}.`, `PRs are ${adjective}.`]) {
+      assert.throws(() => ownerDelivery(text), { code: "TASK_DELIVERY_SCOPE" }, text);
+      assert.throws(() => assertDeliveryAnswer({}, text), { code: "TASK_DELIVERY_SCOPE" }, text);
+    }
+    assert.equal(ownerDelivery(`PR titles are ${adjective} in empty input fixtures.`), null);
+  }
+});
+
+test("incomplete restriction prefixes retain scope across lines without inheriting complete constraints", () => {
+  for (const prefix of ["Do not", "Never", "Don't", "You must not", "You cannot", "You aren't allowed to", "We are not permitted to", "Do not allow the agent to", "No more"]) {
+    for (const separator of ["\n", "\n\n", "\r\n"]) {
+      const text = `Implement export. ${prefix}${separator}Open a PR.`;
+      assert.throws(() => ownerDelivery(text), { code: "TASK_DELIVERY_SCOPE" }, text);
+      assert.throws(() => assertDeliveryAnswer({}, text), { code: "TASK_DELIVERY_SCOPE" }, text);
+    }
+  }
+  assert.throws(() => ownerDelivery("Do not\nopening a PR."), { code: "TASK_DELIVERY_SCOPE" });
+  for (const text of ["Do not change API\nOpen a PR for review.", "Implement export. Do not merge.\nOpen a PR.", "Never log credentials\nOpen a PR."])
+    assert.equal(validateOwnerDelivery(ownerDelivery(text)).version, 5, text);
+  // Fresh checks do not reinterpret a record approved before this restriction
+  // check. Its exact source/ownership still replay under the saved grammar.
+  const source = "Implement export. Do not\nOpen a PR.", split = source.indexOf("Open");
+  const prior = { version: 5, offsets: "utf16", source, spans: [
+    { start: 0, end: split, owner: "implementation" },
+    { start: split, end: source.length, owner: "coordinator", kind: "pull_request" },
+  ] };
+  assert.equal(validateOwnerDelivery(prior), prior);
+});
+
 test("publication quantifiers cannot conceal PR restrictions or authorize multiple deliveries", () => {
   for (const verb of ["open", "create", "raise", "submit", "send", "prepare", "make", "generate", "produce", "start", "begin", "file", "issue", "publish", "deliver", "draft"]) {
     for (const quantifier of ["any", "any new", "any more", "all", "each", "every", "some", "multiple", "several", "additional", "further", "more", "other", "no", "zero", "two", "3", "even one", "up any", "any GitHub", "automated", "an experimental review", "confidential", "any of these experimental", "one of the review"]) {
@@ -207,6 +255,8 @@ test("new action controls do not reinterpret previously approved ownership spans
     "Refrain from opening a pull request.",
     "I forbid you from opening a PR.",
     "We prohibit the agent from opening any GitHub PRs.",
+    "I require you to merge the PR.",
+    "Opening a PR is prohibited.",
   ]) {
     const source = "Implement export. Open a PR for review. " + instruction;
     const start = source.indexOf("Open"), end = source.indexOf(" " + instruction);

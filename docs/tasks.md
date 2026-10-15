@@ -150,14 +150,20 @@ any PRs” also require clarification. Describing the procedure for opening a PR
 does not itself request publication.
 Active subjects also retain the restriction: “I forbid you from opening a PR” and
 “prevent the agent from opening a PR” require clarification.
+Passive equivalents such as “opening a PR is prohibited/disallowed/banned” do too.
+Explicit merge delegation, including “I require you to merge,” “have the agent
+merge” and “tell the agent to merge,” cannot grant merge authority.
+An incomplete prefix such as “Do not” retains scope across line breaks and blank
+lines. A complete implementation constraint such as “Do not change the API” can
+still precede a separate affirmative PR instruction.
 Generating PR titles, bodies, labels and other feature metadata also remains
 implementation scope; those objects do not authorize creating the PR itself.
 Possessive forms such as “the PR's body” and “the pull requests’ titles” follow
 the same rule and retain their exact original text in implementation requirements.
 Hyphenated metadata compounds such as “PR-title” and “pull-request-body” do too.
 PR fixtures and explicitly synthetic representations (such as a mock PR object or
-a normalized PR record) are implementation data. Bare PR objects and actual Git
-commit/branch objects do not gain that exception.
+a normalized PR record, fake PR object or dummy/stub payload) are implementation
+data. Bare PR objects and actual Git commit/branch objects do not gain that exception.
 Local conditions attached to publication are still refused; the parser does not
 guess that a comma or semicolon ended a prohibition or approval requirement.
 
