@@ -132,6 +132,32 @@ test("publication grammar rejects past status, preserves business approval rules
     { start: 0, end: publication, owner: "implementation" },
     { start: publication, end: contradictory.length, owner: "coordinator", kind: "pull_request" },
   ] }), { code: "TASK_DELIVERY_SCOPE" }, "v3 validation must enforce its current restriction grammar");
+
+  const malformedLiteral = 'Implement export. Open a PR for review. "Do not push', malformedStart = malformedLiteral.indexOf("Open"), malformedEnd = malformedLiteral.indexOf(' "Do not push');
+  assert.throws(() => validateOwnerDelivery({ version: 3, offsets: "utf16", source: malformedLiteral, spans: [
+    { start: 0, end: malformedStart, owner: "implementation" },
+    { start: malformedStart, end: malformedEnd, owner: "coordinator", kind: "pull_request" },
+    { start: malformedEnd, end: malformedLiteral.length, owner: "implementation" },
+  ] }), { code: "TASK_DELIVERY_SCOPE" }, "v3 must reject malformed literals even when imported as a saved contract");
+
+  const gated = "Implement export. Open a PR for review. Require owner approval before delivering changes.", gatedPublication = gated.indexOf("Open"), gateStart = gated.indexOf(" Require");
+  assert.throws(() => validateOwnerDelivery({ version: 3, offsets: "utf16", source: gated, spans: [
+    { start: 0, end: gatedPublication, owner: "implementation" },
+    { start: gatedPublication, end: gateStart, owner: "coordinator", kind: "pull_request" },
+    { start: gateStart, end: gated.length, owner: "implementation" },
+  ] }), { code: "TASK_DELIVERY_SCOPE" }, "v3 must enforce current approval prerequisites when imported");
+});
+
+test("adjectival PR feature requirements remain implementation scope", () => {
+  const task = { completion: { version: 1, target: "delivery_ready" } };
+  for (const feature of ["Make PRs searchable in the dashboard.", "Make pull requests visible to administrators.", "Make PRs easier to find."]) {
+    assert.equal(ownerDelivery(feature), null, feature);
+    assert.doesNotThrow(() => assertDeliveryAnswer(task, feature), feature);
+    const source = feature + " Open a PR for review.", contract = ownerDelivery(source);
+    assert.equal(ownerImplementation(contract).join(""), feature + " ");
+    assert.equal(contract.spans.map(span => source.slice(span.start, span.end)).join(""), source);
+  }
+  assert.throws(() => ownerDelivery("Implement export. Make PRs for review."), { code: "TASK_DELIVERY_SCOPE" });
 });
 
 test("quoted/code examples never create publication authority", () => {
