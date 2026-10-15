@@ -60,6 +60,24 @@ test("negative modals share workflow controls without rejecting their applicatio
   }
 });
 
+test("publication quantifiers cannot conceal PR restrictions or authorize multiple deliveries", () => {
+  for (const verb of ["open", "create", "raise", "submit", "send", "prepare", "make", "generate", "produce", "start", "begin", "file", "issue", "publish", "deliver", "draft"]) {
+    for (const quantifier of ["any", "any new", "any more", "all", "each", "every", "some", "multiple", "several", "additional", "further", "more", "other", "no", "zero", "two", "3", "even one", "up any"]) {
+      for (const object of ["PR", "PRs", "pull request", "pull requests"]) {
+        const text = `Do not ${verb} ${quantifier} ${object}.`;
+        assert.throws(() => ownerDelivery(text), { code: "TASK_DELIVERY_SCOPE" }, text);
+        assert.throws(() => assertDeliveryAnswer({}, text), { code: "TASK_DELIVERY_SCOPE" }, text);
+      }
+    }
+  }
+  for (const text of ["Open any PR.", "Create multiple pull requests.", "Submit 2 PRs."])
+    assert.throws(() => ownerDelivery(text), { code: "TASK_DELIVERY_SCOPE" }, text);
+  for (const text of ["Do not open any PR templates.", "Don't submit any pull request descriptions.", "Do not create any more PR forms."]) {
+    assert.equal(ownerDelivery(text), null, text);
+    assert.doesNotThrow(() => assertDeliveryAnswer({}, text), text);
+  }
+});
+
 test("application noun phrases share destinations without qualifying workflow objects", () => {
   for (const connector of ["and", "or", "nor", "as well as", "along with", "together with", "in addition to", "not to mention", "besides", "plus"]) {
     const text = `Do not publish metrics ${connector} regional traces to S3.`;
@@ -136,6 +154,10 @@ test("new action controls do not reinterpret previously approved ownership spans
     "Do not publish the document and email to S3.",
     "Do not publish metrics plus log entries to S3.",
     "Do not publish metrics plus download links to S3.",
+    "Do not open any pull requests.",
+    "Don't submit any PRs.",
+    "Do not make any PRs.",
+    "Never generate additional pull requests.",
   ]) {
     const source = "Implement export. Open a PR for review. " + instruction;
     const start = source.indexOf("Open"), end = source.indexOf(" " + instruction);

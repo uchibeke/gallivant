@@ -134,6 +134,10 @@ Modal forms such as “nor should you push” retain the prohibition too.
 This includes “cannot,” contracted modals such as “can't” or “shouldn't,” and
 permission wording such as “aren't allowed to push.” “In addition to,” “besides,”
 and other supported coordination phrases keep the same action boundary.
+PR quantifiers such as “any,” “more,” “multiple” and numeric counts also retain
+their delivery meaning: “Don't submit any PRs” requires clarification, while
+“Don't submit any PR descriptions” remains an implementation requirement. Only
+the supported affirmative single-PR clause can create a publication obligation.
 Local conditions attached to publication are still refused; the parser does not
 guess that a comma or semicolon ended a prohibition or approval requirement.
 
