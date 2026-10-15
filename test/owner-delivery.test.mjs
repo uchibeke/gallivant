@@ -142,7 +142,7 @@ test("application merge evidence cannot reclassify branch refs or revision targe
     }
   }
   for (const direction of ["from", "to", "into", "onto", "on", "via", "through", "using", "in", "at", "for", "with", "against"])
-    for (const target of ["main", "origin/main", "feature/foo", "the PR", "HEAD~1", "revision HEAD~1", "tag v1.2.3", "the branch topic", "Git ref refs/heads/topic", "remote branch custom", "commit deadbeef", "tag metadata", "revision metrics", "branch records", "head feature/foo", "head HEAD~1", "head refs/heads/topic", "SHA deadbeef", "OID deadbeef", "SHA-1 deadbeef", "hash deadbeef", "changeset deadbeef", "selected source deadbeef", "selected source feature/foo", "selected source (deadbeef)", "selected source [deadbeef]", "selected source {deadbeef}", "selected source <deadbeef>"])
+    for (const target of ["main", "origin/main", "feature/foo", "the PR", "HEAD~1", "revision HEAD~1", "tag v1.2.3", "the branch topic", "Git ref refs/heads/topic", "remote branch custom", "commit deadbeef", "tag metadata", "revision metrics", "branch records", "head feature/foo", "head HEAD~1", "head refs/heads/topic", "SHA deadbeef", "OID deadbeef", "SHA-1 deadbeef", "hash deadbeef", "changeset deadbeef", "selected source deadbeef", "selected source feature/foo", "selected source (deadbeef)", "selected source [deadbeef]", "selected source {deadbeef}", "selected source <deadbeef>", "SHA(deadbeef)", "OID[deadbeef]", "hash{deadbeef}", "changeset<deadbeef>", "SHA:deadbeef", "OID=deadbeef"])
       for (const lead of ["Merge invoices", "Tell the agent to merge files"]) {
         const text = `${lead} ${direction} ${target}.`;
         assert.throws(() => ownerDelivery(text), { code: "TASK_DELIVERY_SCOPE" }, text);
