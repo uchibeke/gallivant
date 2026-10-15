@@ -71,8 +71,34 @@ test("open-vocabulary application lists share destinations without qualifying wo
   }
 });
 
+test("coordinated transfer verbs cannot lend destinations to earlier workflow prohibitions", () => {
+  const verbs = ["upload", "uploading", "copy", "copying", "store", "storing", "save", "saving", "move", "moving", "write", "writing", "send", "sending", "fetch", "fetching", "download", "downloading", "sync", "syncing", "synchronize", "synchronizing", "transfer", "transferring", "persist", "persisting", "record", "recording", "emit", "emitting", "export", "exporting", "import", "importing", "archive", "archiving", "collect", "collecting", "back up", "backing up", "log", "logging", "ship", "shipping"];
+  for (const connector of ["and", "plus", "in addition to"]) for (const verb of verbs) {
+    const text = `Do not publish the artifact ${connector} ${verb} reports to S3.`;
+    assert.throws(() => ownerDelivery(text), { code: "TASK_DELIVERY_SCOPE" }, text);
+    assert.throws(() => assertDeliveryAnswer({}, text), { code: "TASK_DELIVERY_SCOPE" }, text);
+  }
+  for (const lead of ["please", "you need to", "you must not", "you aren't allowed to"]) {
+    const text = `Do not publish the artifact and ${lead} upload reports to S3.`;
+    assert.throws(() => ownerDelivery(text), { code: "TASK_DELIVERY_SCOPE" }, text);
+    assert.throws(() => assertDeliveryAnswer({}, text), { code: "TASK_DELIVERY_SCOPE" }, text);
+  }
+  for (const noun of ["task", "solution", "deliverable", "fix", "update", "modification", "revision", "feature", "work item", "output", "result", "code", "patch", "branch", "PR"]) {
+    const text = `Do not publish the ${noun} and metrics to S3.`;
+    assert.throws(() => ownerDelivery(text), { code: "TASK_DELIVERY_SCOPE" }, text);
+    assert.throws(() => assertDeliveryAnswer({}, text), { code: "TASK_DELIVERY_SCOPE" }, text);
+  }
+});
+
 test("new action controls do not reinterpret previously approved ownership spans", () => {
-  for (const instruction of ["Please merge it.", "Do not create a branch.", "Require user consent before delivering changes.", "Require user consent before committing the database transaction and creating a branch.", "Do not publish events or changes.", "Do not deliver notifications or the changes.", "Do not publish notifications to GitHub.", "Do not publish changes for review and deliver reports to S3.", "A PR can't be created."]) {
+  for (const instruction of [
+    "Please merge it.", "Do not create a branch.", "Require user consent before delivering changes.",
+    "Require user consent before committing the database transaction and creating a branch.",
+    "Do not publish events or changes.", "Do not deliver notifications or the changes.",
+    "Do not publish notifications to GitHub.", "Do not publish changes for review and deliver reports to S3.",
+    "A PR can't be created.", "Do not publish monthly tasks to S3.",
+    "Require user consent before publishing duplicate events and please push changes.",
+  ]) {
     const source = "Implement export. Open a PR for review. " + instruction;
     const start = source.indexOf("Open"), end = source.indexOf(" " + instruction);
     for (const version of [1, 2, 3, 4]) {

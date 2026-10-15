@@ -99,6 +99,8 @@ Unrecognized coordinated wording ends destination scope; qualified application
 objects such as “invoices and tax reports” or “metrics plus traces” can share an
 explicit application destination without a vocabulary entry for each domain noun.
 A later data object cannot qualify a workflow object such as “the solution.”
+Coordinated transfer actions such as “upload reports” or “copy files” start their
+own scope; their destinations cannot qualify an earlier publication prohibition.
 Ordinary leading elisions such as `'90s` and `'tis` remain implementation text even
 when a later possessive apostrophe follows. Use double quotes or backticks to quote
 an entire example beginning with an elision. Saved ownership versions one through
