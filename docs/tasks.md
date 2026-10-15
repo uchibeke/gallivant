@@ -164,6 +164,11 @@ and mixed data/workflow lists remain outside merge authority.
 Bare branches and ref-shaped targets (`main`, `feature/foo`, `origin/main`, Git
 revisions) are workflow merges. Application merges need named data evidence;
 “merge invoices into the main table” retains that application context.
+Explicit Git-qualified single-token operands remain ambiguous even when the token
+is a data word: “merge invoices from tag metadata” requires clarification because
+`metadata` can be a tag name. For application data, name its type explicitly, for
+example “merge invoices with tag metadata records.” “Merge head counts into the
+database” remains an application operation.
 The same prohibition leads apply to push, commit and branch creation, including
 “refrain from pushing” and “I forbid you from committing.” A negative application
 clause cannot hide a coordinated workflow restriction, as in “do not log keys or
