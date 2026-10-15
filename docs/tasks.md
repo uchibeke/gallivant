@@ -93,6 +93,9 @@ repeated delivery (“do not deliver reports twice”) or “delivery of files.�
 commands, Git destinations and restrictions on the task's changes remain workflow
 controls. An unknown noun alone, as in “do not publish the solution,” does not
 override that boundary.
+Destinations apply to their own action: a later report upload cannot qualify an
+earlier restriction on publishing changes. Git metadata used by an application
+operation is distinct from publishing to a Git repository.
 Negative coordination preserves each action's scope: “Do not commit the database
 transaction nor push changes” still forbids delivery. Combining only technical
 operations, such as a database transaction and inserting items into a queue,

@@ -42,10 +42,11 @@ test("positive merge auxiliary sequences refuse while negative and application c
     }
   }
   assert.equal(ownerDelivery("We need you to merge duplicate contacts before saving."), null);
+  assert.equal(ownerDelivery("Implement import. We will have to merge customer records before saving."), null);
 });
 
 test("new action controls do not reinterpret previously approved ownership spans", () => {
-  for (const instruction of ["Please merge it.", "Do not create a branch.", "Require user consent before delivering changes.", "Require user consent before committing the database transaction and creating a branch.", "Do not publish events or changes.", "Do not deliver notifications or the changes.", "Do not publish notifications to GitHub."]) {
+  for (const instruction of ["Please merge it.", "Do not create a branch.", "Require user consent before delivering changes.", "Require user consent before committing the database transaction and creating a branch.", "Do not publish events or changes.", "Do not deliver notifications or the changes.", "Do not publish notifications to GitHub.", "Do not publish changes for review and deliver reports to S3."]) {
     const source = "Implement export. Open a PR for review. " + instruction;
     const start = source.indexOf("Open"), end = source.indexOf(" " + instruction);
     for (const version of [1, 2]) {
