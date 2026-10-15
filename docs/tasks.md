@@ -106,6 +106,12 @@ objects retain an open vocabulary.
 Verb/adjective ambiguities such as “duplicate reports” cannot supply a shared
 destination without a noun marker. Write “metrics and the duplicate reports to
 S3,” or put the destination directly on each application operation.
+The same applies to bare “email,” which can be an action: use “the email” when
+sharing another object's destination, or state its application destination directly.
+Likewise, “log entries” and “download links” can be commands or noun compounds;
+use “the log entries” and “the download links” in shared-destination noun lists.
+These conservative checks apply to new requests and answers. Saved ownership
+contracts retain their approved source spans and interpretation.
 Modifier recognition is intentionally bounded: word endings do not establish a
 noun phrase (for example, “give” and “apply” are verbs). An unfamiliar modifier
 requires a direct application destination instead of a guessed shared scope.
@@ -113,7 +119,7 @@ A later data object cannot qualify a workflow object such as “the solution.”
 Coordinated transfer actions such as “upload reports” or “copy files” start their
 own scope; their destinations cannot qualify an earlier publication prohibition.
 This includes negative leads such as “never upload” and “avoid uploading.” Data
-noun lists such as “metrics plus archived reports,” “log entries” or “download
+noun lists such as “metrics plus archived reports,” “the log entries” or “the download
 links” can still share a destination; explicit action leads such as “please
 download links” start a separate action.
 Ordinary leading elisions such as `'90s` and `'tis` remain implementation text even

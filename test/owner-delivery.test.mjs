@@ -73,7 +73,7 @@ test("application noun phrases share destinations without qualifying workflow ob
 
 test("unknown coordinated actions cannot borrow a later destination", () => {
   for (const connector of ["and", "or", "nor", "as well as", "along with", "together with", "in addition to", "not to mention", "besides", "plus"]) {
-    for (const action of ["forward reports", "relay records", "dispatch receipts", "route documents", "mirror snapshots", "transmit records", "frobnicate widgets", "carefully forward reports", "you forwarded reports", "please relay reports", "never relay reports", "forward", "duplicate reports", "signal events", "parallel transfers", "mimic records", "derive reports", "supply records", "multiply records", "embed records", "feed records", "bleed records", "give reports", "apply records", "seal reports", "seed records", "frobnical reports", "frobnive records", "frobned reports", "frobnly records", "comment", "process", "bypass"]) {
+    for (const action of ["forward reports", "relay records", "dispatch receipts", "route documents", "mirror snapshots", "transmit records", "frobnicate widgets", "carefully forward reports", "you forwarded reports", "please relay reports", "never relay reports", "forward", "duplicate reports", "signal events", "parallel transfers", "mimic records", "derive reports", "supply records", "multiply records", "embed records", "feed records", "bleed records", "give reports", "apply records", "seal reports", "seed records", "frobnical reports", "frobnive records", "frobned reports", "frobnly records", "comment", "process", "bypass", "email"]) {
       const text = `Do not publish the document ${connector} ${action} to S3.`;
       for (const source of [text, `Implement export. ${text} Open a PR for review.`])
         assert.throws(() => ownerDelivery(source), { code: "TASK_DELIVERY_SCOPE" }, source);
@@ -82,7 +82,7 @@ test("unknown coordinated actions cannot borrow a later destination", () => {
   }
   // The conservative shared-destination grammar does not restrict direct
   // application objects, including domain compounds or unfamiliar mass nouns.
-  for (const text of ["Do not publish widget latency to S3.", "Do not publish customer telemetry to S3.", "Do not publish widgets and the gizmo to S3.", "Do not publish duplicate reports to S3.", "Do not publish metrics and the duplicate reports to S3.", "Do not publish metrics plus the parallel transfers to S3."]) {
+  for (const text of ["Do not publish widget latency to S3.", "Do not publish customer telemetry to S3.", "Do not publish widgets and the gizmo to S3.", "Do not publish duplicate reports to S3.", "Do not publish metrics and the duplicate reports to S3.", "Do not publish metrics plus the parallel transfers to S3.", "Do not publish metrics and the email to S3.", "Do not publish email to S3."]) {
     assert.equal(ownerDelivery(text), null, text);
     assert.doesNotThrow(() => assertDeliveryAnswer({}, text), text);
   }
@@ -100,13 +100,18 @@ test("coordinated transfer verbs cannot lend destinations to earlier workflow pr
     assert.throws(() => ownerDelivery(text), { code: "TASK_DELIVERY_SCOPE" }, text);
     assert.throws(() => assertDeliveryAnswer({}, text), { code: "TASK_DELIVERY_SCOPE" }, text);
   }
-  for (const object of ["archived reports", "uploaded files", "downloaded receipts", "stored logs", "copied records", "sent messages", "log entries", "download links", "upload URLs"]) {
+  for (const object of ["archived reports", "uploaded files", "downloaded receipts", "stored logs", "copied records", "sent messages", "the log entries", "the download links", "the upload URLs"]) {
     const text = `Do not publish metrics plus ${object} to S3.`;
     assert.equal(ownerDelivery(text), null, text);
     assert.doesNotThrow(() => assertDeliveryAnswer({}, text), text);
   }
-  for (const action of ["please download links", "never log entries", "avoid uploading files"]) {
+  for (const action of ["please download links", "never log entries", "avoid uploading files", "download links", "log entries", "upload URLs"]) {
     const text = `Do not publish the document and ${action} to S3.`;
+    assert.throws(() => ownerDelivery(text), { code: "TASK_DELIVERY_SCOPE" }, text);
+    assert.throws(() => assertDeliveryAnswer({}, text), { code: "TASK_DELIVERY_SCOPE" }, text);
+  }
+  for (const object of ["log entries", "download links", "upload URLs", "email"]) {
+    const text = `Do not publish metrics plus ${object} to S3.`;
     assert.throws(() => ownerDelivery(text), { code: "TASK_DELIVERY_SCOPE" }, text);
     assert.throws(() => assertDeliveryAnswer({}, text), { code: "TASK_DELIVERY_SCOPE" }, text);
   }
@@ -128,6 +133,9 @@ test("new action controls do not reinterpret previously approved ownership spans
     "Do not publish the document and forward reports to S3.",
     "Do not publish the document and duplicate reports to S3.",
     "Do not publish the document and give reports to S3.",
+    "Do not publish the document and email to S3.",
+    "Do not publish metrics plus log entries to S3.",
+    "Do not publish metrics plus download links to S3.",
   ]) {
     const source = "Implement export. Open a PR for review. " + instruction;
     const start = source.indexOf("Open"), end = source.indexOf(" " + instruction);
