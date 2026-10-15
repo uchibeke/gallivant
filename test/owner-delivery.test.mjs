@@ -100,6 +100,12 @@ test("publication grammar rejects past status, preserves business approval rules
     "Deploy the service after I approve the change.",
     "Apply the patch after I approve the change.",
     "Finish the implementation after I approve the change.",
+    "Build the feature after I approve the plan.",
+    "Build the feature after I approve it.",
+    "After I approve it, build the feature.",
+    "Update the service after I approve the change.",
+    "Fix the bug after I approve the plan.",
+    "After I approve the plan, build the feature.",
     "Implement export. Continue implementation after I approve the change.",
   ]) {
     assert.throws(() => ownerDelivery(source), { code: "TASK_DELIVERY_SCOPE" }, source);
@@ -121,6 +127,10 @@ test("publication grammar rejects past status, preserves business approval rules
   ]) {
     assert.equal(ownerDelivery(source), null, source);
     assert.doesNotThrow(() => assertDeliveryAnswer(task, source), source);
+  }
+  for (const source of ["A PR is forbidden.", "PR is not allowed.", "Pull requests are forbidden."]) {
+    assert.throws(() => ownerDelivery(source), { code: "TASK_DELIVERY_SCOPE" }, source);
+    assert.throws(() => assertDeliveryAnswer(task, source), { code: "TASK_DELIVERY_SCOPE" }, source);
   }
 
   for (const implementation of ["Make a PR client. ", "Make a PR parser. "]) {
