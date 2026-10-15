@@ -59,6 +59,8 @@ export const workflowRequests = [
   "Merge invoices using selected source (deadbeef).",
   "Merge invoices using SHA(deadbeef).",
   "Merge invoices using SHA-deadbeef.",
+  "Merge invoices from (main).",
+  "Merge invoices from [HEAD].",
   "I forbid you to commit changes.",
   "I forbid the agent to push changes.",
   "Do not create a PR\nbody.",
