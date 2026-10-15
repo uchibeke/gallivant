@@ -71,6 +71,7 @@ export const workflowRequests = [
   "Merge invoices using checksum 507f1f77bcf86cd799439011 and revision HEAD~1.",
   "Merge invoices using MongoDB ObjectId 507f1f77bcf86cd799439011 and also tag main.",
   "Merge invoices using MongoDB ObjectId 507f1f77bcf86cd799439011 and another tag main.",
+  "Merge invoices using MongoDB ObjectId 507f1f77bcf86cd799439011 and one additional tag main.",
   "I forbid you to commit changes.",
   "I forbid the agent to push changes.",
   "Do not create a PR\nbody.",
