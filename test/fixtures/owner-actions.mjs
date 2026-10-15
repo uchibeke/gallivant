@@ -58,6 +58,7 @@ export const workflowRequests = [
   "Merge files from OID deadbeef.",
   "Merge invoices using selected source (deadbeef).",
   "Merge invoices using SHA(deadbeef).",
+  "Merge invoices using SHA-deadbeef.",
   "I forbid you to commit changes.",
   "I forbid the agent to push changes.",
   "Do not create a PR\nbody.",
@@ -172,6 +173,7 @@ export const workflowRequests = [
 ];
 
 export const applicationRequests = [
+  "Merge JSON files from /tmp/input.json.",
   "Merge invoices using UUID 123e4567-e89b-12d3-a456-426614174000.",
   "Merge invoices using INV-deadbeef-US.",
   "Add support for '90s date formats.",

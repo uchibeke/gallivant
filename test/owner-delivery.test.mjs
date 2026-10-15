@@ -141,6 +141,12 @@ test("application merge evidence cannot reclassify branch refs or revision targe
       assert.throws(() => assertDeliveryAnswer({}, text), { code: "TASK_DELIVERY_SCOPE" }, text);
     }
   }
+  for (const ref of ["SHA-deadbeef", "OID-deadbeef", "hash-deadbeef", "changeset-deadbeef", "SHA-1-deadbeef"])
+    for (const lead of ["Merge invoices", "Tell the agent to merge files"]) {
+      const text = `${lead} using ${ref}.`;
+      assert.throws(() => ownerDelivery(text), { code: "TASK_DELIVERY_SCOPE" }, text);
+      assert.throws(() => assertDeliveryAnswer({}, text), { code: "TASK_DELIVERY_SCOPE" }, text);
+    }
   for (const direction of ["from", "to", "into", "onto", "on", "via", "through", "using", "in", "at", "for", "with", "against"])
     for (const target of ["main", "origin/main", "feature/foo", "the PR", "HEAD~1", "revision HEAD~1", "tag v1.2.3", "the branch topic", "Git ref refs/heads/topic", "remote branch custom", "commit deadbeef", "tag metadata", "revision metrics", "branch records", "head feature/foo", "head HEAD~1", "head refs/heads/topic", "SHA deadbeef", "OID deadbeef", "SHA-1 deadbeef", "hash deadbeef", "changeset deadbeef", "selected source deadbeef", "selected source feature/foo", "selected source (deadbeef)", "selected source [deadbeef]", "selected source {deadbeef}", "selected source <deadbeef>", "SHA(deadbeef)", "OID[deadbeef]", "hash{deadbeef}", "changeset<deadbeef>", "SHA:deadbeef", "OID=deadbeef"])
       for (const lead of ["Merge invoices", "Tell the agent to merge files"]) {
@@ -155,6 +161,12 @@ test("application merge evidence cannot reclassify branch refs or revision targe
   for (const id of ["123e4567-e89b-12d3-a456-426614174000", "INV-deadbeef-US", "INV_deadbeef_US", "invoiceDeadbeefRecord"])
     for (const lead of ["Merge invoices", "Tell the agent to merge files"]) {
       const text = `${lead} using UUID ${id}.`;
+      assert.equal(ownerDelivery(text), null, text);
+      assert.doesNotThrow(() => assertDeliveryAnswer({}, text), text);
+    }
+  for (const location of ["/tmp/input.json", "./input.json", "../input.json", "~/input.json", "https://example.com/input.json", "file:///tmp/input.json", "s3://bucket/input.json", "C:\\input.json"])
+    for (const lead of ["Merge JSON files", "Tell the agent to merge JSON files"]) {
+      const text = `${lead} from ${location}.`;
       assert.equal(ownerDelivery(text), null, text);
       assert.doesNotThrow(() => assertDeliveryAnswer({}, text), text);
     }
