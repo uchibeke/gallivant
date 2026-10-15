@@ -169,6 +169,9 @@ is a data word: “merge invoices from tag metadata” requires clarification be
 `metadata` can be a tag name. For application data, name its type explicitly, for
 example “merge invoices with tag metadata records.” “Merge head counts into the
 database” remains an application operation.
+Quantity words do not resolve that ambiguity: “two extra tag names” and “three
+further reference fields” still require clarification. Use an explicit data type,
+such as “two extra tag name records” or “three further reference field records.”
 The same prohibition leads apply to push, commit and branch creation, including
 “refrain from pushing” and “I forbid you from committing.” A negative application
 clause cannot hide a coordinated workflow restriction, as in “do not log keys or

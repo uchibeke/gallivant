@@ -1,4 +1,6 @@
 export const workflowRequests = [
+  "Merge invoices using two extra tag names.",
+  "Merge invoices using three further reference fields.",
   "Add '90s support. Do not push changes until users' approval.",
   "Preserve 'tis in help. Never commit without users' approval.",
   "You cannot push changes.",
@@ -186,6 +188,8 @@ export const workflowRequests = [
 ];
 
 export const applicationRequests = [
+  "Merge invoices using two extra tag name records.",
+  "Merge invoices using three further reference field records.",
   "Merge invoices using customer tag metadata.",
   "Merge JSON files using source reference data.",
   "Merge invoices using MongoDB ObjectId 507f1f77bcf86cd799439011.",
