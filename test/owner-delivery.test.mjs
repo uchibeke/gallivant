@@ -78,8 +78,18 @@ test("coordinated transfer verbs cannot lend destinations to earlier workflow pr
     assert.throws(() => ownerDelivery(text), { code: "TASK_DELIVERY_SCOPE" }, text);
     assert.throws(() => assertDeliveryAnswer({}, text), { code: "TASK_DELIVERY_SCOPE" }, text);
   }
-  for (const lead of ["please", "you need to", "you must not", "you aren't allowed to"]) {
-    const text = `Do not publish the artifact and ${lead} upload reports to S3.`;
+  for (const lead of ["please", "you need to", "you must not", "you aren't allowed to", "never", "avoid", "prevent", "without", "skip", "do not", "don't", "cannot"]) {
+    const text = `Do not publish the document and ${lead} upload reports to S3.`;
+    assert.throws(() => ownerDelivery(text), { code: "TASK_DELIVERY_SCOPE" }, text);
+    assert.throws(() => assertDeliveryAnswer({}, text), { code: "TASK_DELIVERY_SCOPE" }, text);
+  }
+  for (const object of ["archived reports", "uploaded files", "downloaded receipts", "stored logs", "copied records", "sent messages", "log entries", "download links", "upload URLs"]) {
+    const text = `Do not publish metrics plus ${object} to S3.`;
+    assert.equal(ownerDelivery(text), null, text);
+    assert.doesNotThrow(() => assertDeliveryAnswer({}, text), text);
+  }
+  for (const action of ["please download links", "never log entries", "avoid uploading files"]) {
+    const text = `Do not publish the document and ${action} to S3.`;
     assert.throws(() => ownerDelivery(text), { code: "TASK_DELIVERY_SCOPE" }, text);
     assert.throws(() => assertDeliveryAnswer({}, text), { code: "TASK_DELIVERY_SCOPE" }, text);
   }

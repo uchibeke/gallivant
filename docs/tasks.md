@@ -101,6 +101,10 @@ explicit application destination without a vocabulary entry for each domain noun
 A later data object cannot qualify a workflow object such as “the solution.”
 Coordinated transfer actions such as “upload reports” or “copy files” start their
 own scope; their destinations cannot qualify an earlier publication prohibition.
+This includes negative leads such as “never upload” and “avoid uploading.” Data
+noun lists such as “metrics plus archived reports,” “log entries” or “download
+links” can still share a destination; explicit action leads such as “please
+download links” start a separate action.
 Ordinary leading elisions such as `'90s` and `'tis` remain implementation text even
 when a later possessive apostrophe follows. Use double quotes or backticks to quote
 an entire example beginning with an elision. Saved ownership versions one through
