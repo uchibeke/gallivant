@@ -77,6 +77,8 @@ test("publication restrictions use action/object shape rather than a verb whitel
     "Implement export. Avoid making a PR.",
     "Implement export. Do not generate any PR.",
     "Implement export. Never produce a new pull request.",
+    "Implement export. Open a PR titled export support.",
+    "Implement export. Open PRs simultaneously.",
   ]) assert.throws(() => ownerDelivery(source), { code: "TASK_DELIVERY_SCOPE" }, source);
   for (const source of ["Implement export. Open pull requests for review.", "Implement export. Make PRs for review."])
     assert.throws(() => ownerDelivery(source), { code: "TASK_DELIVERY_SCOPE" }, source);
@@ -103,6 +105,9 @@ test("publication grammar rejects past status, preserves business approval rules
     "Build the feature after I approve the plan.",
     "Build the feature after I approve it.",
     "After I approve it, build the feature.",
+    "Update the service after I approve.",
+    "Build the feature after my approval.",
+    "Fix the bug once I consent.",
     "Update the service after I approve the change.",
     "Fix the bug after I approve the plan.",
     "After I approve the plan, build the feature.",
