@@ -103,6 +103,8 @@ test("publication grammar rejects past status, preserves business approval rules
     "Apply the patch after I approve the change.",
     "Finish the implementation after I approve the change.",
     "Build the feature after I approve the plan.",
+    "Build the widget after I approve the plan.",
+    "Add tests after I approve the plan.",
     "Build the feature after I approve it.",
     "After I approve it, build the feature.",
     "Update the service after I approve.",
@@ -121,6 +123,9 @@ test("publication grammar rejects past status, preserves business approval rules
     "If I approve the purchase, show a confirmation page.",
     "If I approve the purchase, apply the discount.",
     "If I approve the support request, finish the checkout.",
+    "Apply the discount after I approve the purchase.",
+    "Send the customer an email after I approve the refund.",
+    "Show a confirmation page after I approve the purchase.",
     "Do not include any PR numbers in release notes.",
     "Do not display a PR number in the error message.",
     "Do not generate a PR number in the error message.",
@@ -583,6 +588,25 @@ test("publication owns only its recognized coordinating connector and delimiter"
     assert.equal(contract.spans.map(s => source.slice(s.start, s.end)).join(""), source);
     assert.equal(source.slice(contract.spans.at(-1).start), connector + "open a PR for review.", connector);
   }
+});
+
+test("saved v1/v2 contracts retain inflected publication verbs and plural PR objects", () => {
+  for (const source of [
+    "Implement export. Open pull requests for review.",
+    "Implement export. Opening a PR for review.",
+  ]) {
+    const start = source.indexOf(source.includes("Opening") ? "Opening" : "Open");
+    for (const version of [1, 2]) {
+      const saved = { version, offsets: "utf16", source, spans: [
+        { start: 0, end: start, owner: "implementation" },
+        { start, end: source.length, owner: "coordinator", kind: "pull_request" },
+      ] };
+      assert.equal(validateOwnerDelivery(saved), saved, `historical v${version} grammar: ${source}`);
+    }
+  }
+  assert.throws(() => ownerDelivery("Implement export. Open pull requests for review."),
+    { code: "TASK_DELIVERY_SCOPE" },
+    "new intake still requires clarification for a plural publication directive");
 });
 
 test("typed ownership is validated and included in the ongoing PRD fingerprint; legacy contract is unchanged", () => {
