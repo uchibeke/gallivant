@@ -79,10 +79,18 @@ test("publication restrictions use action/object shape rather than a verb whitel
     "Implement export. Never produce a new pull request.",
     "Implement export. Open a PR titled export support.",
     "Implement export. Open PRs simultaneously.",
+    "Implement export. Make two PRs for review.",
+    "Implement export. Make multiple PRs.",
+    "Make two PRs for review.",
+    "Make multiple PRs.",
   ]) assert.throws(() => ownerDelivery(source), { code: "TASK_DELIVERY_SCOPE" }, source);
   for (const source of ["Implement export. Open pull requests for review.", "Implement export. Make PRs for review."])
     assert.throws(() => ownerDelivery(source), { code: "TASK_DELIVERY_SCOPE" }, source);
   assert.throws(() => ownerDelivery("I made a PR already."), { code: "TASK_DELIVERY_SCOPE" });
+  const indirect = "Implement export. Make me a PR for review.";
+  const indirectContract = ownerDelivery(indirect);
+  assert.equal(ownerImplementation(indirectContract).join(""), "Implement export. ");
+  assert.equal(indirect.slice(indirectContract.spans.at(-1).start), "Make me a PR for review.");
   for (const source of ["Add a PR template.", "Document ‘make a PR’ in help."]) assert.equal(ownerDelivery(source), null, source);
 });
 
@@ -126,6 +134,8 @@ test("publication grammar rejects past status, preserves business approval rules
     "Apply the discount after I approve the purchase.",
     "Send the customer an email after I approve the refund.",
     "Show a confirmation page after I approve the purchase.",
+    "Send a receipt after I approve the expense.",
+    "Notify the user once I approve the loan.",
     "Do not include any PR numbers in release notes.",
     "Do not display a PR number in the error message.",
     "Do not generate a PR number in the error message.",
@@ -141,6 +151,17 @@ test("publication grammar rejects past status, preserves business approval rules
   for (const source of ["A PR is forbidden.", "PR is not allowed.", "Pull requests are forbidden."]) {
     assert.throws(() => ownerDelivery(source), { code: "TASK_DELIVERY_SCOPE" }, source);
     assert.throws(() => assertDeliveryAnswer(task, source), { code: "TASK_DELIVERY_SCOPE" }, source);
+  }
+  for (const source of [
+    "Make PRs private in the dashboard.",
+    "Make PRs collapsible.",
+    "Make pull requests read-only for guests.",
+  ]) {
+    assert.equal(ownerDelivery(source), null, source);
+    assert.doesNotThrow(() => assertDeliveryAnswer(task, source), source);
+  }
+  for (const source of ["Implement export. Make PRs simultaneously.", "Implement export. Make PRs titled export support."]) {
+    assert.throws(() => ownerDelivery(source), { code: "TASK_DELIVERY_SCOPE" }, source);
   }
 
   for (const implementation of ["Make a PR client. ", "Make a PR parser. "]) {
@@ -590,18 +611,34 @@ test("publication owns only its recognized coordinating connector and delimiter"
   }
 });
 
-test("saved v1/v2 contracts retain inflected publication verbs and plural PR objects", () => {
+test("saved v1/v2 contracts retain the published v0.2.0 producer grammar", () => {
+  // The v0.2.0 runtime shipped with source commit 04c59178 and emitted v1/v2
+  // contracts using open\\w*, creat\\w*, and pull requests? in its producer.
+  // Preserve those exact saved spans; new intake remains deliberately stricter.
   for (const source of [
     "Implement export. Open pull requests for review.",
     "Implement export. Opening a PR for review.",
+    "Implement export. Opened a PR for review.",
+    "Implement export. Created a PR for review.",
+    "Implement export. Make PRs for review.",
   ]) {
-    const start = source.indexOf(source.includes("Opening") ? "Opening" : "Open");
+    const start = source.search(/(?:Open(?:ing|ed)?|Created|Make)\b/);
     for (const version of [1, 2]) {
       const saved = { version, offsets: "utf16", source, spans: [
         { start: 0, end: start, owner: "implementation" },
         { start, end: source.length, owner: "coordinator", kind: "pull_request" },
       ] };
       assert.equal(validateOwnerDelivery(saved), saved, `historical v${version} grammar: ${source}`);
+    }
+  }
+  for (const source of ["Implement export. Make two PRs for review.", "Implement export. Make me a PR for review."]) {
+    const start = source.indexOf("Implement export. ");
+    for (const version of [1, 2]) {
+      const saved = { version, offsets: "utf16", source, spans: [
+        { start: 0, end: start, owner: "implementation" },
+        { start, end: source.length, owner: "coordinator", kind: "pull_request" },
+      ] };
+      assert.throws(() => validateOwnerDelivery(saved), { code: "TASK_DELIVERY_SCOPE" }, `legacy producer did not accept: ${source}`);
     }
   }
   assert.throws(() => ownerDelivery("Implement export. Open pull requests for review."),
