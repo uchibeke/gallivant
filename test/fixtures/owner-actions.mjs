@@ -172,6 +172,8 @@ export const workflowRequests = [
 ];
 
 export const applicationRequests = [
+  "Merge invoices using UUID 123e4567-e89b-12d3-a456-426614174000.",
+  "Merge invoices using INV-deadbeef-US.",
   "Add support for '90s date formats.",
   "Preserve 'tis in the sample.",
   "Preserve '90s and 'tis in the sample.",

@@ -152,6 +152,12 @@ test("application merge evidence cannot reclassify branch refs or revision targe
     assert.equal(ownerDelivery(text), null, text);
     assert.doesNotThrow(() => assertDeliveryAnswer({}, text), text);
   }
+  for (const id of ["123e4567-e89b-12d3-a456-426614174000", "INV-deadbeef-US", "INV_deadbeef_US", "invoiceDeadbeefRecord"])
+    for (const lead of ["Merge invoices", "Tell the agent to merge files"]) {
+      const text = `${lead} using UUID ${id}.`;
+      assert.equal(ownerDelivery(text), null, text);
+      assert.doesNotThrow(() => assertDeliveryAnswer({}, text), text);
+    }
   for (const text of ["Merge invoices into the main table.", "Tell the agent to merge database rows before saving.", "Merge custom widgets.", "Merge configuration.", "I forbid you to commit the database transaction before validation.", "I forbid the agent to merge the PR."]) {
     assert.equal(ownerDelivery(text), null, text);
     assert.doesNotThrow(() => assertDeliveryAnswer({}, text), text);
