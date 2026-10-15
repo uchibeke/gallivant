@@ -78,6 +78,20 @@ test("publication quantifiers cannot conceal PR restrictions or authorize multip
   }
 });
 
+test("publication verbs retain titles and related feature metadata without masking later controls", () => {
+  for (const verb of ["Generate", "Produce", "Make", "Draft", "Prepare", "Create"]) {
+    for (const object of ["a PR title", "PR titles", "a pull request body", "PR bodies", "PR labels", "PR comments", "PR discussions", "PR reviews", "PR feedback", "PR diffs", "PR checks", "PR status", "PR statuses"]) {
+      for (const text of [`${verb} ${object} from the change summary.`, `Do not ${verb.toLowerCase()} ${object} for empty input.`]) {
+        assert.equal(ownerDelivery(text), null, text);
+        assert.doesNotThrow(() => assertDeliveryAnswer({}, text), text);
+        const controlled = text + " Do not push changes.";
+        assert.throws(() => ownerDelivery(controlled), { code: "TASK_DELIVERY_SCOPE" }, controlled);
+        assert.throws(() => assertDeliveryAnswer({}, controlled), { code: "TASK_DELIVERY_SCOPE" }, controlled);
+      }
+    }
+  }
+});
+
 test("application noun phrases share destinations without qualifying workflow objects", () => {
   for (const connector of ["and", "or", "nor", "as well as", "along with", "together with", "in addition to", "not to mention", "besides", "plus"]) {
     const text = `Do not publish metrics ${connector} regional traces to S3.`;
