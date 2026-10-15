@@ -140,6 +140,8 @@ their delivery meaning: “Don't submit any PRs” requires clarification, while
 the supported affirmative single-PR clause can create a publication obligation.
 Generating PR titles, bodies, labels and other feature metadata also remains
 implementation scope; those objects do not authorize creating the PR itself.
+Possessive forms such as “the PR's body” and “the pull requests’ titles” follow
+the same rule and retain their exact original text in implementation requirements.
 Local conditions attached to publication are still refused; the parser does not
 guess that a comma or semicolon ended a prohibition or approval requirement.
 

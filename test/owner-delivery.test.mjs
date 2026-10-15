@@ -80,7 +80,7 @@ test("publication quantifiers cannot conceal PR restrictions or authorize multip
 
 test("publication verbs retain titles and related feature metadata without masking later controls", () => {
   for (const verb of ["Generate", "Produce", "Make", "Draft", "Prepare", "Create"]) {
-    for (const object of ["a PR title", "PR titles", "a pull request body", "PR bodies", "PR labels", "PR comments", "PR discussions", "PR reviews", "PR feedback", "PR diffs", "PR checks", "PR status", "PR statuses"]) {
+    for (const object of ["a PR title", "PR titles", "a pull request body", "PR bodies", "PR labels", "PR comments", "PR discussions", "PR reviews", "PR feedback", "PR diffs", "PR checks", "PR status", "PR statuses", "a pull request's title", "the PR's body", "the PR’s title", "the PRs' bodies", "the pull requests’ titles", "a commit's message", "the branches' reports"]) {
       for (const text of [`${verb} ${object} from the change summary.`, `Do not ${verb.toLowerCase()} ${object} for empty input.`]) {
         assert.equal(ownerDelivery(text), null, text);
         assert.doesNotThrow(() => assertDeliveryAnswer({}, text), text);
