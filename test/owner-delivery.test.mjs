@@ -28,7 +28,7 @@ test("application publishing, delivery and merge requirements remain exact provi
 });
 
 test("new action controls do not reinterpret previously approved ownership spans", () => {
-  for (const instruction of ["Please merge it.", "Do not create a branch.", "Require user consent before delivering changes.", "Require user consent before committing the database transaction and creating a branch."]) {
+  for (const instruction of ["Please merge it.", "Do not create a branch.", "Require user consent before delivering changes.", "Require user consent before committing the database transaction and creating a branch.", "Do not publish events or changes.", "Do not deliver notifications or the changes.", "Do not publish notifications to GitHub."]) {
     const source = "Implement export. Open a PR for review. " + instruction;
     const start = source.indexOf("Open"), end = source.indexOf(" " + instruction);
     for (const version of [1, 2]) {

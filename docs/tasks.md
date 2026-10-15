@@ -66,6 +66,8 @@ Explicit workflow merge or auto-merge requests, and prohibitions on creating
 commits or branches, also return `TASK_DELIVERY_SCOPE` before preparation or a new
 answer is saved. The review-PR workflow needs a branch and commits and grants no
 merge authority. “Do not merge” remains a valid constraint.
+This includes subject-led requests such as “You need to merge it” and passive
+prohibitions such as “Commits are not allowed.”
 
 Implementation subjects such as a PR status badge, pull-request template,
 published articles, a publish button, a command to publish docs, local storage,
@@ -83,6 +85,11 @@ including application-user consent requirements. A technical operation cannot hi
 a later workflow restriction: “Do not deliver notifications twice or create a
 branch” still requires clarification. Quoted examples and merge-button/status
 features do not authorize an actual merge.
+Technical context can also come from a transport (“publish records to Kafka”),
+repeated delivery (“do not deliver reports twice”) or “delivery of files.” Bare
+commands, Git destinations and restrictions on the task's changes remain workflow
+controls. An unknown noun alone, as in “do not publish the solution,” does not
+override that boundary.
 Negative coordination preserves each action's scope: “Do not commit the database
 transaction nor push changes” still forbids delivery. Combining only technical
 operations, such as a database transaction and inserting items into a queue,
