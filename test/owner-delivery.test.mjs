@@ -27,6 +27,23 @@ test("application publishing, delivery and merge requirements remain exact provi
   }
 });
 
+test("positive merge auxiliary sequences refuse while negative and application counterparts remain requirements", () => {
+  for (const subject of ["You", "We", "The agent"]) {
+    for (const lead of ["need to", "will need to", "will have to", "will be required to", "need you to", "should please", "are expected to"])
+      for (const action of ["merge the PR.", "enable auto-merge."]) {
+        const text = `${subject} ${lead} ${action}`;
+        assert.throws(() => ownerDelivery("Implement export. " + text), { code: "TASK_DELIVERY_SCOPE" }, text);
+        assert.throws(() => assertDeliveryAnswer({}, text), { code: "TASK_DELIVERY_SCOPE" }, text);
+      }
+    for (const lead of ["will not have to", "do not need to", "are not required to", "must never"]) {
+      const text = `${subject} ${lead} merge the PR.`;
+      assert.equal(ownerDelivery(text), null, text);
+      assert.doesNotThrow(() => assertDeliveryAnswer({}, text), text);
+    }
+  }
+  assert.equal(ownerDelivery("We need you to merge duplicate contacts before saving."), null);
+});
+
 test("new action controls do not reinterpret previously approved ownership spans", () => {
   for (const instruction of ["Please merge it.", "Do not create a branch.", "Require user consent before delivering changes.", "Require user consent before committing the database transaction and creating a branch.", "Do not publish events or changes.", "Do not deliver notifications or the changes.", "Do not publish notifications to GitHub."]) {
     const source = "Implement export. Open a PR for review. " + instruction;

@@ -67,7 +67,9 @@ commits or branches, also return `TASK_DELIVERY_SCOPE` before preparation or a n
 answer is saved. The review-PR workflow needs a branch and commits and grants no
 merge authority. “Do not merge” remains a valid constraint.
 This includes subject-led requests such as “You need to merge it” and passive
-prohibitions such as “Commits are not allowed.”
+or nominal prohibitions such as “Commits are not allowed” and “Commit creation is
+forbidden.” Compound feature objects such as commit messages and branch reports
+remain implementation requirements.
 
 Implementation subjects such as a PR status badge, pull-request template,
 published articles, a publish button, a command to publish docs, local storage,
@@ -85,7 +87,8 @@ including application-user consent requirements. A technical operation cannot hi
 a later workflow restriction: “Do not deliver notifications twice or create a
 branch” still requires clarification. Quoted examples and merge-button/status
 features do not authorize an actual merge.
-Technical context can also come from a transport (“publish records to Kafka”),
+Technical context can also come from a transport (“publish records to Kafka” or
+“deliver reports to S3”),
 repeated delivery (“do not deliver reports twice”) or “delivery of files.” Bare
 commands, Git destinations and restrictions on the task's changes remain workflow
 controls. An unknown noun alone, as in “do not publish the solution,” does not
