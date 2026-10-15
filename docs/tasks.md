@@ -138,10 +138,17 @@ PR quantifiers such as “any,” “more,” “multiple” and numeric counts 
 their delivery meaning: “Don't submit any PRs” requires clarification, while
 “Don't submit any PR descriptions” remains an implementation requirement. Only
 the supported affirmative single-PR clause can create a publication obligation.
+Qualifiers such as “GitHub,” “automated” or “experimental” cannot hide that PR
+object. Reference phrases such as “generate a report about the PR” do not request
+PR creation.
+Prohibition forms such as “refrain from opening a PR” and “forbidden from creating
+any PRs” also require clarification. Describing the procedure for opening a PR
+does not itself request publication.
 Generating PR titles, bodies, labels and other feature metadata also remains
 implementation scope; those objects do not authorize creating the PR itself.
 Possessive forms such as “the PR's body” and “the pull requests’ titles” follow
 the same rule and retain their exact original text in implementation requirements.
+Hyphenated metadata compounds such as “PR-title” and “pull-request-body” do too.
 Local conditions attached to publication are still refused; the parser does not
 guess that a comma or semicolon ended a prohibition or approval requirement.
 

@@ -62,7 +62,7 @@ test("negative modals share workflow controls without rejecting their applicatio
 
 test("publication quantifiers cannot conceal PR restrictions or authorize multiple deliveries", () => {
   for (const verb of ["open", "create", "raise", "submit", "send", "prepare", "make", "generate", "produce", "start", "begin", "file", "issue", "publish", "deliver", "draft"]) {
-    for (const quantifier of ["any", "any new", "any more", "all", "each", "every", "some", "multiple", "several", "additional", "further", "more", "other", "no", "zero", "two", "3", "even one", "up any"]) {
+    for (const quantifier of ["any", "any new", "any more", "all", "each", "every", "some", "multiple", "several", "additional", "further", "more", "other", "no", "zero", "two", "3", "even one", "up any", "any GitHub", "automated", "an experimental review", "confidential", "any of these experimental", "one of the review"]) {
       for (const object of ["PR", "PRs", "pull request", "pull requests"]) {
         const text = `Do not ${verb} ${quantifier} ${object}.`;
         assert.throws(() => ownerDelivery(text), { code: "TASK_DELIVERY_SCOPE" }, text);
@@ -80,7 +80,7 @@ test("publication quantifiers cannot conceal PR restrictions or authorize multip
 
 test("publication verbs retain titles and related feature metadata without masking later controls", () => {
   for (const verb of ["Generate", "Produce", "Make", "Draft", "Prepare", "Create"]) {
-    for (const object of ["a PR title", "PR titles", "a pull request body", "PR bodies", "PR labels", "PR comments", "PR discussions", "PR reviews", "PR feedback", "PR diffs", "PR checks", "PR status", "PR statuses", "a pull request's title", "the PR's body", "the PR’s title", "the PRs' bodies", "the pull requests’ titles", "a commit's message", "the branches' reports"]) {
+    for (const object of ["a PR title", "PR titles", "a pull request body", "PR bodies", "PR labels", "PR comments", "PR discussions", "PR reviews", "PR feedback", "PR diffs", "PR checks", "PR status", "PR statuses", "a pull request's title", "the PR's body", "the PR’s title", "the PRs' bodies", "the pull requests’ titles", "a commit's message", "the branches' reports", "a PR-title template", "a pull-request-body template", "a report about the PR", "reports referencing the PR", "a summary of the PR", "a document describing the PR"]) {
       for (const text of [`${verb} ${object} from the change summary.`, `Do not ${verb.toLowerCase()} ${object} for empty input.`]) {
         assert.equal(ownerDelivery(text), null, text);
         assert.doesNotThrow(() => assertDeliveryAnswer({}, text), text);
@@ -89,6 +89,24 @@ test("publication verbs retain titles and related feature metadata without maski
         assert.throws(() => assertDeliveryAnswer({}, controlled), { code: "TASK_DELIVERY_SCOPE" }, controlled);
       }
     }
+  }
+});
+
+test("publication gerund prohibitions refuse without classifying descriptive gerunds as commands", () => {
+  for (const lead of ["You are forbidden from", "We are prohibited from", "Refrain from", "Abstain from", "Avoid", "Never allow", "Do not permit", "Stop", "Skip", "Without"])
+    for (const action of ["opening", "creating", "raising", "submitting", "sending", "preparing", "making", "generating", "producing", "starting", "beginning", "filing", "issuing", "publishing", "delivering", "drafting"])
+      for (const object of ["a PR", "any GitHub PRs"]) {
+        const text = `${lead} ${action} ${object}.`;
+        assert.throws(() => ownerDelivery(text), { code: "TASK_DELIVERY_SCOPE" }, text);
+        assert.throws(() => assertDeliveryAnswer({}, text), { code: "TASK_DELIVERY_SCOPE" }, text);
+      }
+  for (const text of ["Avoid the automatic opening of any GitHub PRs.", "You are forbidden from the opening of a PR."]) {
+    assert.throws(() => ownerDelivery(text), { code: "TASK_DELIVERY_SCOPE" }, text);
+    assert.throws(() => assertDeliveryAnswer({}, text), { code: "TASK_DELIVERY_SCOPE" }, text);
+  }
+  for (const text of ["Document the procedure for opening a PR.", "Add help for creating a PR.", "Do not log API keys while opening a PR.", "Avoid the automatic opening of the PR-title editor."]) {
+    assert.equal(ownerDelivery(text), null, text);
+    assert.doesNotThrow(() => assertDeliveryAnswer({}, text), text);
   }
 });
 
@@ -172,6 +190,10 @@ test("new action controls do not reinterpret previously approved ownership spans
     "Don't submit any PRs.",
     "Do not make any PRs.",
     "Never generate additional pull requests.",
+    "Do not open any GitHub PRs.",
+    "Do not create automated pull requests.",
+    "You are forbidden from opening a PR.",
+    "Refrain from opening a pull request.",
   ]) {
     const source = "Implement export. Open a PR for review. " + instruction;
     const start = source.indexOf("Open"), end = source.indexOf(" " + instruction);
