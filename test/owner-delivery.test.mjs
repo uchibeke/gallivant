@@ -4,6 +4,46 @@ import { ownerDelivery, ownerImplementation, validateOwnerDelivery, ownerDeliver
 import { completionView } from "../lib/task_completion.mjs";
 import { parsePrd, prdFingerprint, contractOf, contractDiff, check } from "../lib/prd.mjs";
 import { GOOD_PRD } from "./helpers.mjs";
+import { workflowRequests, applicationRequests } from "./fixtures/owner-actions.mjs";
+
+test("merge and Git artifact instructions cannot alter new-task delivery authority", () => {
+  for (const text of workflowRequests) {
+    for (const prefix of ["", "Implement export. Open a PR for review. "])
+      assert.throws(() => ownerDelivery(prefix + text), { code: "TASK_DELIVERY_SCOPE" }, prefix + text);
+    for (const task of [{}, { completion: { version: 1, target: "delivery_ready" } }])
+      assert.throws(() => assertDeliveryAnswer(task, text), { code: "TASK_DELIVERY_SCOPE" }, text);
+  }
+});
+
+test("application publishing, delivery and merge requirements remain exact provider scope", () => {
+  for (const text of applicationRequests) {
+    assert.equal(ownerDelivery(text), null, text);
+    assert.doesNotThrow(() => assertDeliveryAnswer({}, text), text);
+    const source = text + " Open a PR for review.", contract = ownerDelivery(source);
+    assert.equal(ownerImplementation(contract).join(""), text + " ", text);
+    assert.equal(contract.spans.map(span => source.slice(span.start, span.end)).join(""), source);
+    for (const restriction of ["Do not push.", "Please merge it.", "Do not create a branch."])
+      assert.throws(() => ownerDelivery(text + " " + restriction), { code: "TASK_DELIVERY_SCOPE" }, text + restriction);
+  }
+});
+
+test("new action controls do not reinterpret previously approved ownership spans", () => {
+  for (const instruction of ["Please merge it.", "Do not create a branch.", "Require user consent before delivering changes.", "Require user consent before committing the database transaction and creating a branch."]) {
+    const source = "Implement export. Open a PR for review. " + instruction;
+    const start = source.indexOf("Open"), end = source.indexOf(" " + instruction);
+    for (const version of [1, 2]) {
+      const saved = { version, offsets: "utf16", source, spans: [
+        { start: 0, end: start, owner: "implementation" },
+        { start, end, owner: "coordinator", kind: "pull_request" },
+        { start: end, end: source.length, owner: "implementation" },
+      ] };
+      const before = structuredClone(saved);
+      assert.equal(validateOwnerDelivery(saved), saved, instruction);
+      assert.deepEqual(saved, before);
+    }
+    assert.throws(() => ownerDelivery(source), { code: "TASK_DELIVERY_SCOPE" }, instruction);
+  }
+});
 
 test("ownership partitions exact Unicode source and removes only affirmative publication", () => {
   for (const source of [

@@ -25,6 +25,7 @@ import { makeState } from "../lib/state.mjs";
 import { writeJsonAtomic } from "../lib/fs.mjs";
 import { contentDigest, captureStartInput } from "../lib/start_contract.mjs";
 import { draftFor } from "./fixtures/task-intake.mjs";
+import { workflowRequests, applicationRequests } from "./fixtures/owner-actions.mjs";
 import { tempHome, CONFIG, GOOD_PRD, harnessBin, fakeCredential, fakeIdentity, silentLog, fakeRunner, makeClock, codexLines, claudeResultLines, geminiLines, opencodeLines, gooseLines } from "./helpers.mjs";
 
 // Exercise durable runner/environment logic using disposable Node executables,
@@ -269,6 +270,31 @@ test("negative coordination refuses before intake effects and preserves pending 
     const a = world({ prepare: async (_ctx, task) => JSON.stringify(draftFor(task, { question: true })) });
     const question = await a.service.prepare({ text: REQUEST });
     const answered = await a.service.answer({ taskId: question.taskId, expectedRevision: question.revision, operationId: "technical-coordination", answers: { "q-r-1": text } });
+    assert.ok(answered.draft.text.includes(JSON.stringify(text)), text);
+  }
+});
+
+test("action object boundaries reject workflow changes before effects and retain application requirements", async () => {
+  const initial = world({ prepare: async () => assert.fail("workflow conflict cannot spend") });
+  const pending = world({ prepare: async (_ctx, task) => JSON.stringify(draftFor(task, { question: true })) });
+  const first = await pending.service.prepare({ text: REQUEST }), before = taskStore(pending.home).read(first.taskId), calls = pending.calls();
+  for (const text of workflowRequests) {
+    await assert.rejects(initial.service.prepare({ text, run: true }), { code: "TASK_DELIVERY_SCOPE", taskEffects: "none" }, text);
+    await assert.rejects(pending.service.answer({ taskId: first.taskId, expectedRevision: first.revision, operationId: "action-object", answers: { "q-r-1": text } }),
+      { code: "TASK_DELIVERY_SCOPE", taskEffects: "none" }, text);
+    assert.deepEqual(taskStore(pending.home).read(first.taskId), before);
+  }
+  assert.equal(pending.calls(), calls); assert.equal(initial.daemonCalls(), 0); assert.equal(pending.daemonCalls(), 0);
+  assert.deepEqual(initial.service.list().tasks, []); assert.deepEqual(initial.ctx.state.entries(), []); assert.deepEqual(pending.ctx.state.entries(), []);
+  for (const text of applicationRequests) {
+    const w = world(), prepared = await w.service.prepare({ text: text + " Open a PR for review." });
+    assert.equal(prepared.status, "ready", text);
+    const saved = taskStore(w.home).read(prepared.taskId);
+    assert.deepEqual(saved.requirements.map(requirement => requirement.text), [text]);
+    assert.ok(saved.output.criteria.some(criterion => criterion.text.includes(JSON.stringify(text))), text);
+    const a = world({ prepare: async (_ctx, task) => JSON.stringify(draftFor(task, { question: true })) });
+    const question = await a.service.prepare({ text: REQUEST });
+    const answered = await a.service.answer({ taskId: question.taskId, expectedRevision: question.revision, operationId: "application-action", answers: { "q-r-1": text } });
     assert.ok(answered.draft.text.includes(JSON.stringify(text)), text);
   }
 });

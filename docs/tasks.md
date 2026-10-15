@@ -62,6 +62,10 @@ Initial requests and later answers share the same bounded directive checks.
 Local-only, no-push, task-hold or patch-only directions cannot silently fall back
 to the default review-PR workflow. Preference wording such as “I don't want a PR”
 or “We don't need a pull request” also requires clarification.
+Explicit workflow merge or auto-merge requests, and prohibitions on creating
+commits or branches, also return `TASK_DELIVERY_SCOPE` before preparation or a new
+answer is saved. The review-PR workflow needs a branch and commits and grants no
+merge authority. “Do not merge” remains a valid constraint.
 
 Implementation subjects such as a PR status badge, pull-request template,
 published articles, a publish button, a command to publish docs, local storage,
@@ -72,6 +76,13 @@ scope: `If name is empty, return friend. Open a PR for review.` and the answer
 `Wait for my approval. Open a PR for review.` requires clarification before work.
 An implementation may consist entirely of a prohibition, such as “Do not log API
 keys in error responses.” That requirement remains in the acceptance criteria.
+Application operations such as publishing events to a message bus, delivering
+notifications, creating user records or merging duplicate contacts also remain
+implementation scope. This distinction applies to initial text and later answers,
+including application-user consent requirements. A technical operation cannot hide
+a later workflow restriction: “Do not deliver notifications twice or create a
+branch” still requires clarification. Quoted examples and merge-button/status
+features do not authorize an actual merge.
 Negative coordination preserves each action's scope: “Do not commit the database
 transaction nor push changes” still forbids delivery. Combining only technical
 operations, such as a database transaction and inserting items into a queue,
