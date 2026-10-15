@@ -117,6 +117,10 @@ test("publication grammar rejects past status, preserves business approval rules
     "Build the feature after I approve the plan.",
     "Build the widget after I approve the plan.",
     "Add tests after I approve the plan.",
+    "Build the widget after I approve the code.",
+    "Update the branch after I approve the output.",
+    "Fix the deployment after I approve the release plan.",
+    "Refactor the parser after I approve the design.",
     "Build the feature after I approve it.",
     "After I approve it, build the feature.",
     "Update the service after I approve.",
@@ -169,6 +173,12 @@ test("publication grammar rejects past status, preserves business approval rules
   for (const source of ["Implement export. Make PRs simultaneously.", "Implement export. Make PRs titled export support."]) {
     assert.throws(() => ownerDelivery(source), { code: "TASK_DELIVERY_SCOPE" }, source);
   }
+  for (const source of [
+    "Implement export. Make PRs require tests to pass.",
+    "Implement export. Make PRs await code review.",
+    "Implement export. Make pull requests forbidden.",
+    "Implement export. Make PRs required before release.",
+  ]) assert.throws(() => ownerDelivery(source), { code: "TASK_DELIVERY_SCOPE" }, source);
 
   for (const implementation of ["Make a PR client. ", "Make a PR parser. "]) {
     const source = implementation + "Open a PR for review.";
