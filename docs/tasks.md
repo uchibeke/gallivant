@@ -95,9 +95,14 @@ override that boundary.
 Destinations apply to their own action: a later report upload cannot qualify an
 earlier restriction on publishing changes. Git metadata used by an application
 operation is distinct from publishing to a Git repository.
-Unrecognized coordinated wording ends destination scope; qualified application
-objects such as “invoices and tax reports” or “metrics plus traces” can share an
-explicit application destination without a vocabulary entry for each domain noun.
+Unrecognized coordinated wording ends destination scope. Shared destinations
+require noun-phrase evidence: determiners, recognized modifiers/compounds or bare
+plural/data nouns. This supports “invoices and tax reports,” “metrics plus traces”
+and “widgets and the gizmo” without enumerating every domain noun. An unknown
+phrase such as “forward reports” is not assumed to be a noun phrase merely because
+its verb is absent from the action vocabulary. For ambiguous application wording,
+state the destination on each action or use separate sentences; direct application
+objects retain an open vocabulary.
 A later data object cannot qualify a workflow object such as “the solution.”
 Coordinated transfer actions such as “upload reports” or “copy files” start their
 own scope; their destinations cannot qualify an earlier publication prohibition.

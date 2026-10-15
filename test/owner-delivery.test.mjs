@@ -60,7 +60,7 @@ test("negative modals share workflow controls without rejecting their applicatio
   }
 });
 
-test("open-vocabulary application lists share destinations without qualifying workflow objects", () => {
+test("application noun phrases share destinations without qualifying workflow objects", () => {
   for (const connector of ["and", "or", "nor", "as well as", "along with", "together with", "in addition to", "not to mention", "besides", "plus"]) {
     const text = `Do not publish metrics ${connector} regional traces to S3.`;
     assert.equal(ownerDelivery(text), null, text);
@@ -69,6 +69,21 @@ test("open-vocabulary application lists share destinations without qualifying wo
     assert.throws(() => ownerDelivery(workflow), { code: "TASK_DELIVERY_SCOPE" }, workflow);
     assert.throws(() => assertDeliveryAnswer({}, workflow), { code: "TASK_DELIVERY_SCOPE" }, workflow);
   }
+});
+
+test("unknown coordinated actions cannot borrow a later destination", () => {
+  for (const connector of ["and", "or", "nor", "as well as", "along with", "together with", "in addition to", "not to mention", "besides", "plus"]) {
+    for (const action of ["forward reports", "relay records", "dispatch receipts", "route documents", "mirror snapshots", "transmit records", "frobnicate widgets", "carefully forward reports", "you forwarded reports", "please relay reports", "never relay reports", "forward"]) {
+      const text = `Do not publish the document ${connector} ${action} to S3.`;
+      for (const source of [text, `Implement export. ${text} Open a PR for review.`])
+        assert.throws(() => ownerDelivery(source), { code: "TASK_DELIVERY_SCOPE" }, source);
+      assert.throws(() => assertDeliveryAnswer({}, text), { code: "TASK_DELIVERY_SCOPE" }, text);
+    }
+  }
+  // The conservative shared-destination grammar does not restrict direct
+  // application objects, including domain compounds or unfamiliar mass nouns.
+  for (const text of ["Do not publish widget latency to S3.", "Do not publish customer telemetry to S3.", "Do not publish widgets and the gizmo to S3."])
+    assert.equal(ownerDelivery(text), null, text);
 });
 
 test("coordinated transfer verbs cannot lend destinations to earlier workflow prohibitions", () => {
@@ -108,6 +123,7 @@ test("new action controls do not reinterpret previously approved ownership spans
     "Do not publish notifications to GitHub.", "Do not publish changes for review and deliver reports to S3.",
     "A PR can't be created.", "Do not publish monthly tasks to S3.",
     "Require user consent before publishing duplicate events and please push changes.",
+    "Do not publish the document and forward reports to S3.",
   ]) {
     const source = "Implement export. Open a PR for review. " + instruction;
     const start = source.indexOf("Open"), end = source.indexOf(" " + instruction);
