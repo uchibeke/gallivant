@@ -62,7 +62,7 @@ test("ownership partitions exact Unicode source and removes only affirmative pub
   }
 });
 
-test("make and making use the publication action/object grammar", () => {
+test("publication restrictions use action/object shape rather than a verb whitelist", () => {
   for (const source of [
     "Implement export. Make a pull request for review.",
     "Implement export. Please make one new PR for review.",
@@ -75,6 +75,8 @@ test("make and making use the publication action/object grammar", () => {
   for (const source of [
     "Implement export. Do not make a pull request.",
     "Implement export. Avoid making a PR.",
+    "Implement export. Do not generate any PR.",
+    "Implement export. Never produce a new pull request.",
   ]) assert.throws(() => ownerDelivery(source), { code: "TASK_DELIVERY_SCOPE" }, source);
   assert.throws(() => ownerDelivery("I made a PR already."), { code: "TASK_DELIVERY_SCOPE" });
   for (const source of ["Add a PR template.", "Document ‘make a PR’ in help."]) assert.equal(ownerDelivery(source), null, source);
@@ -189,6 +191,13 @@ test("technical feature objects and application consent are not delivery control
     for (const restriction of ["Do not push.", "Wait for my approval.", "Publication only after approval."])
       for (const act of [() => ownerDelivery(text + " " + restriction), () => assertDeliveryAnswer(task, text + " " + restriction)])
         assert.throws(act, { code: "TASK_DELIVERY_SCOPE" }, text + " " + restriction);
+  }
+  for (const source of [
+    "If we approve a refund, send the customer an email.",
+    "If I approve the purchase, show a confirmation page.",
+  ]) {
+    assert.equal(ownerDelivery(source), null, source);
+    assert.doesNotThrow(() => assertDeliveryAnswer(task, source), source);
   }
   for (const text of ["Create a PR tomorrow.", "Open a PR against release.", "Submit a PR when I approve.", "Do not commit the changes.", "Never automatically push changes.", "Do not silently commit changes.", "Do not commit the database transaction or silently push changes.", "Avoid pushing commits to the remote.", "Never run git push.", "Require my confirmation before proceeding.", "Ask for user permission before publishing.", "Require user confirmation before git push.", "Require user permission before running git push.", "Do not commit the database transaction or push any changes.", "Avoid pushing duplicate items onto the queue and committing changes."])
     for (const act of [() => ownerDelivery(text), () => assertDeliveryAnswer(task, text)]) assert.throws(act, { code: "TASK_DELIVERY_SCOPE" }, text);
@@ -334,6 +343,7 @@ test("publication subjects and technical conditions remain implementation scope"
   const text = "If name is empty, return friend. Open a PR for review.";
   assert.equal(ownerImplementation(ownerDelivery(text)).join("").trim(), "If name is empty, return friend.");
   for (const source of ["Wait for my approval. Open a PR for review.", "Implement export. Do not proceed until I approve.", "Implement export. My approval is required.", "Implement export. My approval is required. Open a PR.", "Implement export. Publish the changes.", "Implement export. Send a PR for review.", "Implement export. Open a pull-request.", "Implement export. Only if tests pass open a PR."]) assert.throws(() => ownerDelivery(source), { code: "TASK_DELIVERY_SCOPE" }, source);
+  for (const source of ["If I approve the change, continue with implementation.", "After I approve the change, run the migration."]) assert.throws(() => ownerDelivery(source), { code: "TASK_DELIVERY_SCOPE" }, source);
   for (const answer of ["Wait for my approval.", "Do not proceed until I approve.", "My confirmation is required.", "Skip publication.", "No PR should be created.", "Send it for review."]) assert.throws(() => assertDeliveryAnswer(task, answer), { code: "TASK_DELIVERY_SCOPE" }, answer);
 });
 
