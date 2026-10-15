@@ -424,7 +424,7 @@ test("publication owns recognized connectors without changing implementation tex
     const source = `${implementation}${connector}open a PR for review; do not merge or add dependencies.`;
     const contract = ownerDelivery(source);
     assert.deepEqual(ownerImplementation(contract), [implementation, " do not merge or add dependencies."], connector);
-    assert.equal(contract.version, 3);
+    assert.equal(contract.version, 4);
     assert.equal(contract.spans.map(span => source.slice(span.start, span.end)).join(""), source);
     assert.equal(contract.spans.find(span => span.owner === "coordinator").start, implementation.length);
     assert.equal(validateOwnerDelivery(contract), contract);
@@ -448,7 +448,7 @@ test("saved version-one ownership remains exact and cannot authorize forged conn
   assert.deepEqual(legacy, before);
   const corrected = ownerDelivery(source);
   assert.deepEqual(ownerImplementation(corrected), ["Implement CSV export"]);
-  for (const value of [{ ...corrected, version: 1 }, { ...legacy, version: 2 }, { ...corrected, version: 4 }])
+  for (const value of [{ ...corrected, version: 1 }, { ...legacy, version: 2 }, { ...corrected, version: 5 }])
     assert.throws(() => validateOwnerDelivery(value), { code: "TASK_DELIVERY_SCOPE" });
   for (const original of [legacy, corrected]) {
     const forged = structuredClone(original); forged.spans[0].end--; forged.spans[1].start--;
@@ -465,15 +465,15 @@ test("saved version-one ownership remains exact and cannot authorize forged conn
   }
 });
 
-test("version-three elisions retain following requirements without changing historical literal spans", () => {
+test("version-four elisions retain following requirements without changing historical literal spans", () => {
   for (const text of ["Support '90s date formats.", "Preserve 'tis and 'em in the sample.", "Preserve '90s and 'tis in the sample."]) {
     const source = text + " Open a PR for review.", contract = ownerDelivery(source);
-    assert.equal(contract.version, 3);
+    assert.equal(contract.version, 4);
     assert.deepEqual(ownerImplementation(contract), [text + " "]);
     assert.throws(() => ownerDelivery(text + " Do not push."), { code: "TASK_DELIVERY_SCOPE" });
     assert.throws(() => assertDeliveryAnswer({}, text + " Please merge it."), { code: "TASK_DELIVERY_SCOPE" });
   }
-  for (const text of ["Document '90s do not push' in help.", "Document 'tis time; do not push' in help."])
+  for (const text of ['Document "\'90s do not push" in help.', 'Document "\'tis time; do not push" in help.'])
     assert.equal(ownerDelivery(text), null, "complete quotations remain literal examples");
   const source = "Implement export. Open a PR. Preserve 'tis in the sample.";
   for (const version of [1, 2]) {
@@ -484,6 +484,14 @@ test("version-three elisions retain following requirements without changing hist
     ] };
     assert.equal(validateOwnerDelivery(saved), saved);
   }
+  const priorSource = "Add '90s support. Open a PR. Respect users' approval. Implement export. Open a PR for review.";
+  const start = priorSource.lastIndexOf("Open");
+  const v3 = { version: 3, offsets: "utf16", source: priorSource, spans: [
+    { start: 0, end: start, owner: "implementation" },
+    { start, end: priorSource.length, owner: "coordinator", kind: "pull_request" },
+  ] };
+  assert.equal(validateOwnerDelivery(v3), v3, "version-three accepted spans retain the old elision interpretation");
+  assert.throws(() => ownerDelivery(priorSource), { code: "TASK_DELIVERY_SCOPE" });
 });
 
 test("publication owns only its recognized coordinating connector and delimiter", () => {
