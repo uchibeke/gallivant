@@ -76,6 +76,7 @@ test("make and making use the publication action/object grammar", () => {
     "Implement export. Do not make a pull request.",
     "Implement export. Avoid making a PR.",
   ]) assert.throws(() => ownerDelivery(source), { code: "TASK_DELIVERY_SCOPE" }, source);
+  assert.throws(() => ownerDelivery("I made a PR already."), { code: "TASK_DELIVERY_SCOPE" });
   for (const source of ["Add a PR template.", "Document ‘make a PR’ in help."]) assert.equal(ownerDelivery(source), null, source);
 });
 
