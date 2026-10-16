@@ -70,6 +70,8 @@ test("new publication predicates, actors, adverbs and approval gates fail closed
     "Have John create a PR for review.",
     "Let John create a PR for review.",
     "Ship it after I approve the code.",
+    "Implement export after I explicitly approve.",
+    "After I personally approve, implement export.",
     "After I have approved, update the service.",
     "After I've approved, update the service.",
     "Once we have approved, continue.",
