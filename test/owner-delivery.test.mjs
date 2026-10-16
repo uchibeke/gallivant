@@ -959,7 +959,7 @@ test("publication-subject conditions and standalone gates remain owner controls"
   }
 });
 
-test("product publication behavior ends at adversative clauses and accepts parenthetical triggers", () => {
+test("product publication behavior stays inside its clause and parentheticals cannot hide controls", () => {
   const task = { completion: { version: 1, target: "delivery_ready" } };
   for (const source of [
     "The webhook handler, when invoked, creates a PR after validation.",
@@ -969,6 +969,8 @@ test("product publication behavior ends at adversative clauses and accepts paren
     assert.doesNotThrow(() => assertDeliveryAnswer(task, source), source);
   }
   for (const source of [
+    "The webhook handler, although PRs must not be published, creates a PR after validation.",
+    "The webhook handler, while opening PRs is forbidden, creates a PR after validation.",
     "The webhook handler creates a PR when invoked, yet PRs must not be published.",
     "The button creates a PR after tests pass, while opening pull requests is forbidden.",
     "The webhook handler creates a PR when invoked, although PRs are not allowed.",
@@ -1086,6 +1088,20 @@ test("saved version-one ownership remains exact and cannot authorize forged conn
     const forged = structuredClone(original); forged.spans[0].end--; forged.spans[1].start--;
     assert.throws(() => validateOwnerDelivery(forged), { code: "TASK_DELIVERY_SCOPE" });
   }
+  for (const version of [1, 2]) {
+    const source = "Implement export. Do not Open a PR.", start = source.indexOf("Open a PR");
+    const forged = { version, offsets: "utf16", source, spans: [
+      { start: 0, end: start, owner: "implementation" },
+      { start, end: source.length, owner: "coordinator", kind: "pull_request" },
+    ] };
+    assert.throws(() => validateOwnerDelivery(forged), { code: "TASK_DELIVERY_SCOPE" }, `v${version} cannot split a prohibition from its PR directive`);
+  }
+  const priorApprovalSource = "Build the widget after I approved it, and Open a PR for review.", priorApprovalStart = priorApprovalSource.indexOf("Open a PR");
+  const priorApproval = { version: 1, offsets: "utf16", source: priorApprovalSource, spans: [
+    { start: 0, end: priorApprovalStart, owner: "implementation" },
+    { start: priorApprovalStart, end: priorApprovalSource.length, owner: "coordinator", kind: "pull_request" },
+  ] };
+  assert.equal(validateOwnerDelivery(priorApproval), priorApproval, "an approval gate on historical implementation text stays in its original scope");
   for (const source of ['Implement export, "preserve CSV headers" open a PR for review.', "Implement export,\nand open a PR for review.", "Implement export, and\nopen a PR for review."]) {
     const split = source.indexOf("open");
     const prior = { version: 1, offsets: "utf16", source, spans: [
