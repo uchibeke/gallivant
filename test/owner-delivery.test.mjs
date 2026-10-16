@@ -148,6 +148,9 @@ test("PR-shaped application features stay implementation requirements while real
   const makeContract = ownerDelivery("Implement export. Make a PR for review.");
   assert.equal(makeContract.version, 5);
   assert.deepEqual(ownerImplementation(makeContract), ["Implement export. "]);
+  const makeMeContract = ownerDelivery("Implement export. Make me a PR for review.");
+  assert.equal(makeMeContract.version, 5);
+  assert.deepEqual(ownerImplementation(makeMeContract), ["Implement export. "]);
   for (const text of [
     "Create an actual PR in the integration test.",
     "Create a real PR in the test.",
