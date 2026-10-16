@@ -66,6 +66,9 @@ test("new publication predicates, actors, adverbs and approval gates fail closed
     "Implement export. Submitted a PR for review.",
     "The LLM creates a PR when tests pass.",
     "The AI creates a PR after tests pass.",
+    "Ensure the team creates a PR for review.",
+    "Have John create a PR for review.",
+    "Let John create a PR for review.",
     "Ship it after I approve the code.",
     "After I have approved, update the service.",
     "After I've approved, update the service.",
@@ -124,6 +127,9 @@ test("PR-shaped application features stay implementation requirements while real
     assert.equal(ownerDelivery(text), null, text);
     assert.doesNotThrow(() => assertDeliveryAnswer({}, text), text);
   }
+  const makeContract = ownerDelivery("Implement export. Make a PR for review.");
+  assert.equal(makeContract.version, 5);
+  assert.deepEqual(ownerImplementation(makeContract), ["Implement export. "]);
   for (const text of [
     "Create an actual PR in the integration test.",
     "Create a real PR in the test.",

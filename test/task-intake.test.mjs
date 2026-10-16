@@ -318,6 +318,7 @@ test("latest publication review cases fail before task effects without rejecting
     "Package it after I approve the code.",
     "After I have approved, update the service.",
     "Make the team a PR for review.",
+    "Ensure the team creates a PR for review.",
     "Create John a pull request for review.",
     "Do not create a PR please.",
     "Do not create a PR whatsoever.",
@@ -421,8 +422,8 @@ test("publication preferences and new legacy answers refuse before effects while
   }
 });
 
-test("publication punctuation and courtesy never become planner requirements", async () => {
-  for (const text of ["Implement CSV export. Open a PR for review.", "Implement CSV export.\nPlease open a PR for review.\nDo not merge."]) {
+test("publication punctuation and supported make wording never become planner requirements", async () => {
+  for (const text of ["Implement CSV export. Open a PR for review.", "Implement CSV export. Make a PR for review.", "Implement CSV export.\nPlease open a PR for review.\nDo not merge."]) {
     const w = world(), result = await w.service.prepare({ text }), saved = taskStore(w.home).read(result.taskId);
     assert.equal(result.status, "ready");
     assert.ok(saved.requirements.every(r => /[\p{L}\p{N}]/u.test(r.text)));
