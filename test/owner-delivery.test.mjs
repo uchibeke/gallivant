@@ -31,7 +31,6 @@ test("synthetic pull requests in test fixtures are not delivery requests", () =>
   for (const text of [
     "Generate a dummy PR in the unit test.",
     "Create a fabricated pull request for the test fixture.",
-    "Generate a test PR in the unit test.",
     "Create a synthetic review PR in integration tests.",
   ]) {
     assert.equal(ownerDelivery(text), null, text);
@@ -41,6 +40,7 @@ test("synthetic pull requests in test fixtures are not delivery requests", () =>
     "Generate a public PR for review in the unit test.",
     "Create a fabricated pull request for review in the test fixture.",
     "Create a PR in the unit test.",
+    "Generate a test PR in the unit test.",
   ]) {
     assert.throws(() => ownerDelivery(text), { code: "TASK_DELIVERY_SCOPE" }, text);
     assert.throws(() => assertDeliveryAnswer({}, text), { code: "TASK_DELIVERY_SCOPE" }, text);

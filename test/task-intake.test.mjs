@@ -317,6 +317,7 @@ test("latest publication review cases fail before task effects without rejecting
     "The AI creates a PR after tests pass.",
     "The developer creates a PR after tests pass.",
     "The team creates a PR after tests pass.",
+    "The button creates a PR after tests pass, and PRs should not be published.",
     "Open a GitHub PR after tests pass.",
     "Create a legitimate PR in integration tests.",
     "Generate a dummy PR? Then add unit tests.",
@@ -349,6 +350,7 @@ test("latest publication review cases fail before task effects without rejecting
     "Create a JSON PR in integration tests.",
     "Create a serialized PR in integration tests.",
     "If I approve the purchase, apply the discount. Implement export after I approve the code.",
+    "If I approve the invoice, email the customer and wait until the owner approves.",
   ];
   const initial = world({ prepare: async () => assert.fail("ambiguous publication cannot invoke preparation") });
   const pending = world({ prepare: async (_ctx, task) => JSON.stringify(draftFor(task, { question: true })) });
@@ -394,6 +396,8 @@ test("latest publication review cases fail before task effects without rejecting
     "When I have approved the comment, display it.",
     "Generate a dummy PR in the unit test.",
     "Create a fabricated pull request for the test fixture.",
+    "The button creates a PR after tests pass and retries when tests fail.",
+    "If I approve the invoice, email the customer and apply the discount.",
   ];
   for (const text of productRequirements) {
     const w = world(), prepared = await w.service.prepare({ text });
