@@ -190,6 +190,8 @@ export const workflowRequests = [
 ];
 
 export const applicationRequests = [
+  "Merge invoices with tags.",
+  "Merge customer records with references.",
   "Merge invoices using two extra tag name records.",
   "Merge invoices using three further reference field records.",
   "Merge invoices using customer tag metadata.",
