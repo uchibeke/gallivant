@@ -162,6 +162,13 @@ test("application merge evidence cannot reclassify branch refs or revision targe
         assert.throws(() => ownerDelivery(text), { code: "TASK_DELIVERY_SCOPE" }, text);
         assert.throws(() => assertDeliveryAnswer({}, text), { code: "TASK_DELIVERY_SCOPE" }, text);
       }
+  for (const qualifier of ["tag", "ref", "branch", "revision", "head"])
+    for (const wording of ["named", "called", "known as", "identified as", "with the name"])
+      for (const lead of ["Merge invoices", "Tell the agent to merge files"]) {
+        const text = `${lead} from a ${qualifier} ${wording} main.`;
+        assert.throws(() => ownerDelivery(text), { code: "TASK_DELIVERY_SCOPE" }, text);
+        assert.throws(() => assertDeliveryAnswer({}, text), { code: "TASK_DELIVERY_SCOPE" }, text);
+      }
   for (const [open, close] of [["(", ")"], ["[", "]"], ["{", "}"], ["<", ">"]])
     for (const ref of ["main", "HEAD", "the main", "tag metadata", "revision metrics", "SHA deadbeef"])
       for (const lead of ["Merge invoices", "Tell the agent to merge files"]) {

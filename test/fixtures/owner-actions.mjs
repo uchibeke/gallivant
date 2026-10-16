@@ -1,4 +1,6 @@
 export const workflowRequests = [
+  "Merge invoices from a tag named main.",
+  "Merge invoices from ref named HEAD.",
   "Merge invoices using two extra tag names.",
   "Merge invoices using three further reference fields.",
   "Add '90s support. Do not push changes until users' approval.",
