@@ -58,6 +58,7 @@ natural-language permission parser. Conditional or negated publication clauses
 (including a refusal ending in “ever” or “this time”), terminal timing such as
 “ASAP”, owner approval prerequisites, destination qualifiers, multiple PRs and
 open-ended requirements such as “obligatory” or “compulsory” return
+`TASK_DELIVERY_SCOPE` before inference.
 Multiple object modifiers and named recipients, including non-ASCII names, are
 detected as publication intent; unsupported forms clarify rather than becoming
 implementation instructions.
@@ -68,8 +69,14 @@ remain product behavior when followed by an application requirement. An approval
 of a business object does not make subsequent editing work a product rule: for
 example, proofreading or polishing a referenced artifact after approval still
 requires clarification.
-`TASK_DELIVERY_SCOPE` before inference. Broader construction verbs such as
-`send`, `prepare`, `generate`, `produce`, `publish` and `file` are recognized
+Policy questions framed as “whether PRs are optional/required” are product
+metadata requirements. Causative directions such as “Have John create a PR” or
+“Ensure the team creates a PR” remain visible for clarification. A labeled fake,
+mock, sample or synthetic PR is treated as test data only when the same statement
+also names a test or fixture context; without that context, publication intent
+still requires clarification.
+Broader construction verbs such as `send`, `prepare`, `generate`, `produce`,
+`publish` and `file` are recognized
 as publication intent, but require clarification unless they match the supported
 contract. They never become impossible provider obligations. Initial requests
 and later answers share the same bounded directive checks.

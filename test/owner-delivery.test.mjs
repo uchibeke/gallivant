@@ -105,6 +105,7 @@ test("publication restrictions use action/object shape rather than a verb whitel
     "Implement export. Make a dozen PRs.",
     "Implement export. Make dozens of PRs for review.",
     "Implement export. Make a pair of PRs.",
+    "Implement export. Generate a fake PR for review.",
     "Implement export. Make twenty-three PRs for review.",
     "Implement export. Make one hundred and six PRs.",
     "Implement export. Make multiple PRs.",
@@ -135,7 +136,13 @@ test("publication grammar rejects past status, preserves business approval rules
     assert.throws(() => ownerDelivery(source), { code: "TASK_DELIVERY_SCOPE" }, source);
     assert.throws(() => assertDeliveryAnswer(task, source), { code: "TASK_DELIVERY_SCOPE" }, source);
   }
-  for (const source of ["The model creates a PR when tests pass.", "The provider creates a PR when tests pass."]) {
+  for (const source of [
+    "The model creates a PR when tests pass.",
+    "The provider creates a PR when tests pass.",
+    "Ensure the team creates a PR for review.",
+    "Have John create a PR for review.",
+    "Let John create a PR for review.",
+  ]) {
     assert.throws(() => ownerDelivery(source), { code: "TASK_DELIVERY_SCOPE" }, source);
     assert.throws(() => assertDeliveryAnswer(task, source), { code: "TASK_DELIVERY_SCOPE" }, source);
   }
@@ -217,6 +224,13 @@ test("publication grammar rejects past status, preserves business approval rules
     "Create a summary for a pull request.",
     "Create a dashboard that lists PRs.",
     "Generate a report with PR statistics.",
+    "Document whether PRs are optional in settings.",
+    "Read whether PRs are optional in settings.",
+    "Return whether PRs are optional in settings.",
+    "Validate whether PRs are optional in settings.",
+    "Persist whether PRs are optional in settings.",
+    "Generate a fake PR in the unit test.",
+    "Create a mock PR fixture in tests.",
     "Opening a PR should show a dialog.",
     "Opening a PR for review should show a dialog.",
     "Generating a PR for review should populate the title.",
