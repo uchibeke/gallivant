@@ -130,6 +130,7 @@ test("PR-shaped application features stay implementation requirements while real
     "Generate a daily report summarizing PRs.",
     "The application created a PR when a check completes.",
     "The application submitted a PR when requested.",
+    "The application publishes a PR after approval.",
     "Create a report summarizing pull requests.",
     "Do not generate a PR number in the error message.",
     "Do not generate a PR preview for draft changes.",
