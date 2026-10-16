@@ -1,4 +1,6 @@
 export const workflowRequests = [
+  "Merge invoices from tag—main.",
+  "Tell the agent to merge files using ref—HEAD.",
   "Merge invoices from a tag named main.",
   "Merge invoices from ref named HEAD.",
   "Merge invoices using two extra tag names.",

@@ -148,7 +148,7 @@ test("application merge evidence cannot reclassify branch refs or revision targe
       assert.throws(() => assertDeliveryAnswer({}, text), { code: "TASK_DELIVERY_SCOPE" }, text);
     }
   for (const qualifier of ["SHA", "SHA-1", "SHA-256", "OID", "hash", "changeset"])
-    for (const separator of [" ", ":", "=", "-"])
+    for (const separator of [" ", ":", "=", "-", "‐", "‑", "‒", "–", "—", "―"])
       for (const hash of ["abcd", "abcde", "abcdef", "deadbeef"])
         for (const lead of ["Merge invoices", "Tell the agent to merge files"]) {
           const text = `${lead} using ${qualifier}${separator}${hash}.`;
@@ -156,7 +156,7 @@ test("application merge evidence cannot reclassify branch refs or revision targe
           assert.throws(() => assertDeliveryAnswer({}, text), { code: "TASK_DELIVERY_SCOPE" }, text);
         }
   for (const qualifier of ["tag", "ref", "branch", "revision", "head"])
-    for (const separator of [":", ": ", "=", " = "])
+    for (const separator of [":", ": ", "=", " = ", "-", "‐", "‑", "‒", "–", "—", "―"])
       for (const lead of ["Merge invoices", "Tell the agent to merge files"]) {
         const text = `${lead} from ${qualifier}${separator}main.`;
         assert.throws(() => ownerDelivery(text), { code: "TASK_DELIVERY_SCOPE" }, text);
