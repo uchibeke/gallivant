@@ -100,6 +100,7 @@ test("new publication predicates, actors, adverbs and approval gates fail closed
     "Create a PR and assign me.",
     "Do not create a PR whatsoever.",
     "Do not create a PR going forward.",
+    "Create a PR visible to outsiders.",
   ]) assert.throws(() => ownerDelivery(text), { code: "TASK_DELIVERY_SCOPE" }, text);
   for (const text of ["After I have approved, update the service.", "After I've approved, update the service.", "Once we have approved, continue."]) {
     assert.throws(() => assertDeliveryAnswer({}, text), { code: "TASK_DELIVERY_SCOPE" }, text);
@@ -149,6 +150,7 @@ test("new publication predicates, actors, adverbs and approval gates fail closed
     "If I approve the support request, finish the implementation.",
     "Build the widget after I approve the purchase.",
     "Build the widget after I approve the purchase, then send a receipt.",
+    "If I approve the invoice, email the customer yet wait until the owner approves.",
     "Add tests after I approve the plan.",
     "Fix the bug after I approve the plan.",
     "Implement export after I approve the code, and if I approve the purchase, apply the discount.",
@@ -272,6 +274,17 @@ test("PR-shaped application features stay implementation requirements while real
   }
 });
 
+test("application publication conditions stop before colon and dash clauses", () => {
+  for (const text of [
+    "The button creates a PR after tests pass: PRs must not be published.",
+    "The button creates a PR after tests pass — PRs must not be published.",
+    "The button creates a PR after tests pass - PRs must not be published.",
+  ]) {
+    assert.throws(() => ownerDelivery(text), { code: "TASK_DELIVERY_SCOPE" }, text);
+    assert.throws(() => assertDeliveryAnswer({}, text), { code: "TASK_DELIVERY_SCOPE" }, text);
+  }
+});
+
 test("saved version-two contracts retain their original approval and PR-policy grammar", () => {
   for (const source of [
     "Build the widget after I approved it. Open a PR for review.",
@@ -306,6 +319,7 @@ test("saved v3 and v4 contracts preserve indirect PR recipients accepted by thei
   for (const version of [3, 4]) for (const action of [
     "Make me a PR for review.",
     "Create us a pull request for review.",
+    "Submit a PR for review.",
   ]) {
     const source = `Build the widget. ${action}`;
     const start = source.indexOf(action);
@@ -1184,11 +1198,15 @@ test("elisions retain following requirements without changing historical literal
   const possessiveElision = "'cause we should not create a PR for users' safety.";
   assert.throws(() => ownerDelivery(possessiveElision), { code: "TASK_DELIVERY_SCOPE" }, possessiveElision);
   assert.throws(() => assertDeliveryAnswer({}, possessiveElision), { code: "TASK_DELIVERY_SCOPE" }, possessiveElision);
+  const smartPossessiveElision = "‘cause we should not create a PR for users’ safety.";
+  assert.throws(() => ownerDelivery(smartPossessiveElision), { code: "TASK_DELIVERY_SCOPE" }, smartPossessiveElision);
+  assert.throws(() => assertDeliveryAnswer({}, smartPossessiveElision), { code: "TASK_DELIVERY_SCOPE" }, smartPossessiveElision);
   const quotedElision = "Add a validation test for the exact string 'cause we should not create a PR'.";
   assert.equal(ownerDelivery(quotedElision), null);
   assert.doesNotThrow(() => assertDeliveryAnswer({}, quotedElision));
   const quotedElisionWithTail = "Add a validation test for the exact string 'cause we should not create a PR' in the help text.";
   assert.equal(ownerDelivery(quotedElisionWithTail), null);
+  assert.equal(ownerDelivery("Add a validation test for the exact string ‘cause we should not create a PR’ in the help text."), null);
   const priorSource = "Add '90s support. Open a PR. Respect users' approval. Implement export. Open a PR for review.";
   const start = priorSource.lastIndexOf("Open");
   const v3 = { version: 3, offsets: "utf16", source: priorSource, spans: [

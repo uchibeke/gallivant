@@ -362,7 +362,12 @@ test("latest publication review cases fail before task effects without rejecting
     "Do not create a PR going forward.",
     "'cause we should not create a PR, label the button 'Ready'.",
     "'cause we should not create a PR for users' safety.",
+    "‘cause we should not create a PR for users’ safety.",
     "Do not create a PR visible to outsiders.",
+    "Create a PR visible to outsiders.",
+    "The button creates a PR after tests pass: PRs must not be published.",
+    "The button creates a PR after tests pass — PRs must not be published.",
+    "The button creates a PR after tests pass - PRs must not be published.",
     "John should create a PR for review.",
     "The team must create a PR for review.",
     "Create an actual PR in the integration test.",
@@ -372,6 +377,7 @@ test("latest publication review cases fail before task effects without rejecting
     "Create a serialized PR in integration tests.",
     "If I approve the purchase, apply the discount. Implement export after I approve the code.",
     "If I approve the invoice, email the customer and wait until the owner approves.",
+    "If I approve the invoice, email the customer yet wait until the owner approves.",
   ];
   const initial = world({ prepare: async () => assert.fail("ambiguous publication cannot invoke preparation") });
   const pending = world({ prepare: async (_ctx, task) => JSON.stringify(draftFor(task, { question: true })) });
