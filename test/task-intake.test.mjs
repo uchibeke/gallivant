@@ -316,6 +316,7 @@ test("latest publication review cases fail before task effects without rejecting
     "Ship it after I approve the code.",
     "Release it after I approve the implementation.",
     "Package it after I approve the code.",
+    "After I have approved, update the service.",
     "Make the team a PR for review.",
     "Create John a pull request for review.",
     "Do not create a PR please.",

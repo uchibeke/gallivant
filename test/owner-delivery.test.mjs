@@ -67,6 +67,9 @@ test("new publication predicates, actors, adverbs and approval gates fail closed
     "The LLM creates a PR when tests pass.",
     "The AI creates a PR after tests pass.",
     "Ship it after I approve the code.",
+    "After I have approved, update the service.",
+    "After I've approved, update the service.",
+    "Once we have approved, continue.",
     "Release it after I approve the implementation.",
     "Package it after I approve the code.",
     "Implement export. Make the team a PR for review.",
@@ -75,6 +78,9 @@ test("new publication predicates, actors, adverbs and approval gates fail closed
     "Do not create a PR whatsoever.",
     "Do not create a PR going forward.",
   ]) assert.throws(() => ownerDelivery(text), { code: "TASK_DELIVERY_SCOPE" }, text);
+  for (const text of ["After I have approved, update the service.", "After I've approved, update the service.", "Once we have approved, continue."]) {
+    assert.throws(() => assertDeliveryAnswer({}, text), { code: "TASK_DELIVERY_SCOPE" }, text);
+  }
 
   // Policy fields describing this product's PR behavior remain implementation
   // requirements, regardless of the verb used to expose the field.
@@ -166,6 +172,14 @@ test("saved version-two contracts retain their original approval and PR-policy g
       { start: split, end: source.length, owner: "coordinator", kind: "pull_request" },
     ] };
     assert.throws(() => ownerDelivery(source), { code: "TASK_DELIVERY_SCOPE" }, `new request: ${source}`);
+    assert.equal(validateOwnerDelivery(saved), saved, `historical contract: ${source}`);
+  }
+  for (const action of ["Opening a PR for review.", "Open pull requests for review.", "Make PRs for review."]) {
+    const source = `Build the widget. ${action}`, split = source.indexOf(action);
+    const saved = { version: 2, offsets: "utf16", source, spans: [
+      { start: 0, end: split, owner: "implementation" },
+      { start: split, end: source.length, owner: "coordinator", kind: "pull_request" },
+    ] };
     assert.equal(validateOwnerDelivery(saved), saved, `historical contract: ${source}`);
   }
 });
