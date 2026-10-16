@@ -61,6 +61,9 @@ test("new publication predicates, actors, adverbs and approval gates fail closed
     "Open PRs whenever tests pass.",
     "Create a PR provided that tests pass.",
     "Make PRs so long as tests pass.",
+    "Implement export. Created a PR for review.",
+    "Implement export. Opened a PR for review.",
+    "Implement export. Submitted a PR for review.",
     "The LLM creates a PR when tests pass.",
     "The AI creates a PR after tests pass.",
     "Ship it after I approve the code.",
@@ -103,6 +106,8 @@ test("PR-shaped application features stay implementation requirements while real
     "Make the PR's title editable.",
     "Generate the PR's title from the branch name.",
     "Generate a daily report summarizing PRs.",
+    "The application created a PR when a check completes.",
+    "The application submitted a PR when requested.",
     "Create a report summarizing pull requests.",
     "Generate a dashboard listing PRs.",
     "Create a list of PRs in the dashboard.",
@@ -153,6 +158,15 @@ test("saved version-two contracts retain their original approval and PR-policy g
       { start: split, end: source.length, owner: "coordinator", kind: "pull_request" },
     ] };
     assert.equal(validateOwnerDelivery(saved), saved, source);
+  }
+  for (const verb of ["Created", "Opened", "Submitted", "Made"]) {
+    const source = `Build the widget. ${verb} a PR for review.`, split = source.indexOf(`${verb} a PR`);
+    const saved = { version: 2, offsets: "utf16", source, spans: [
+      { start: 0, end: split, owner: "implementation" },
+      { start: split, end: source.length, owner: "coordinator", kind: "pull_request" },
+    ] };
+    assert.throws(() => ownerDelivery(source), { code: "TASK_DELIVERY_SCOPE" }, `new request: ${source}`);
+    assert.equal(validateOwnerDelivery(saved), saved, `historical contract: ${source}`);
   }
 });
 
