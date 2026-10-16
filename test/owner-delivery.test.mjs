@@ -134,6 +134,8 @@ test("PR-shaped application features stay implementation requirements while real
     "Create an actual PR in the integration test.",
     "Create a real PR in the test.",
     "Create a number of PRs for review.",
+    "Make one hundred and six PRs for review.",
+    "Submit 1,024 pull requests for review.",
     "Make dozens of PRs for review.",
     "Make a pair of PRs.",
     "Make a handful of PRs.",
@@ -512,7 +514,7 @@ test("coordinated transfer verbs cannot lend destinations to earlier workflow pr
   }
 });
 
-test("new action controls do not reinterpret previously approved ownership spans", () => {
+test("saved v1/v2 ownership spans remain exact under later delivery-control grammar", () => {
   for (const instruction of [
     "Please merge it.", "Do not create a branch.", "Require user consent before delivering changes.",
     "Require user consent before committing the database transaction and creating a branch.",
@@ -543,7 +545,7 @@ test("new action controls do not reinterpret previously approved ownership spans
   ]) {
     const source = "Implement export. Open a PR for review. " + instruction;
     const start = source.indexOf("Open"), end = source.indexOf(" " + instruction);
-    for (const version of [1, 2, 3, 4]) {
+    for (const version of [1, 2]) {
       const saved = { version, offsets: "utf16", source, spans: [
         { start: 0, end: start, owner: "implementation" },
         { start, end, owner: "coordinator", kind: "pull_request" },
@@ -554,6 +556,31 @@ test("new action controls do not reinterpret previously approved ownership spans
       assert.deepEqual(saved, before);
     }
     assert.throws(() => ownerDelivery(source), { code: "TASK_DELIVERY_SCOPE" }, instruction);
+  }
+});
+
+test("v3/v4 saved spans preserve historical controls but refuse publication contradictions", () => {
+  for (const version of [3, 4]) {
+    for (const instruction of ["Please merge it.", "Do not create a branch.", "Require user consent before delivering changes.", "Do not publish monthly tasks to S3."]) {
+      const source = `Implement export. Open a PR for review. ${instruction}`, start = source.indexOf("Open"), end = source.indexOf(` ${instruction}`);
+      const saved = { version, offsets: "utf16", source, spans: [
+        { start: 0, end: start, owner: "implementation" },
+        { start, end, owner: "coordinator", kind: "pull_request" },
+        { start: end, end: source.length, owner: "implementation" },
+      ] };
+      assert.equal(validateOwnerDelivery(saved), saved, `historical v${version}: ${instruction}`);
+    }
+    const source = "Implement export. Do not generate a PR. Open a PR for review.", start = source.lastIndexOf("Open");
+    const saved = { version, offsets: "utf16", source, spans: [
+      { start: 0, end: start, owner: "implementation" },
+      { start, end: source.length, owner: "coordinator", kind: "pull_request" },
+    ] };
+    assert.throws(() => validateOwnerDelivery(saved), { code: "TASK_DELIVERY_SCOPE" }, `historical v${version} contradiction`);
+    const many = "Implement export. Make one hundred and six PRs. Open a PR for review.", publication = many.lastIndexOf("Open");
+    assert.throws(() => validateOwnerDelivery({ version, offsets: "utf16", source: many, spans: [
+      { start: 0, end: publication, owner: "implementation" },
+      { start: publication, end: many.length, owner: "coordinator", kind: "pull_request" },
+    ] }), { code: "TASK_DELIVERY_SCOPE" }, `historical v${version} quantified contradiction`);
   }
 });
 

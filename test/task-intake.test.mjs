@@ -326,6 +326,8 @@ test("latest publication review cases fail before task effects without rejecting
     "Create a PR anyone can see.",
     "Create a PR everyone can review.",
     "Create a number of PRs for review.",
+    "Make one hundred and six PRs for review.",
+    "Submit 1,024 pull requests for review.",
     "Make a handful of PRs.",
     "Create a series of PRs.",
     "Create a plethora of PRs.",
