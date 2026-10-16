@@ -139,6 +139,8 @@ test("publication grammar rejects past status, preserves business approval rules
   for (const source of [
     "The model creates a PR when tests pass.",
     "The provider creates a PR when tests pass.",
+    "Codex should create a PR for review.",
+    "Claude must open a PR.",
     "Ensure the team creates a PR for review.",
     "Have John create a PR for review.",
     "Let John create a PR for review.",
@@ -284,6 +286,7 @@ test("publication grammar rejects past status, preserves business approval rules
     "Implement export. Do not create a PR whatsoever.",
     "Implement export. Do not create a pull request ever.",
     "Implement export. Do not create a PR anymore.",
+    "Do not create a PR going forward.",
     "Never create PRs henceforth.",
     "Do not create a PR this time.",
     "Create a PR ASAP.",

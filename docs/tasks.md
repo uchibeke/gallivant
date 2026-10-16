@@ -71,7 +71,9 @@ example, proofreading or polishing a referenced artifact after approval still
 requires clarification.
 Policy questions framed as “whether PRs are optional/required” are product
 metadata requirements. Causative directions such as “Have John create a PR” or
-“Ensure the team creates a PR” remain visible for clarification. A labeled fake,
+“Ensure the team creates a PR” remain visible for clarification. Named coding
+agents such as Codex and Claude are treated like other workflow actors, not as
+application subjects. A labeled fake,
 mock, sample or synthetic PR is treated as test data only when the same sentence
 also names a test or fixture context, before or after the PR phrase; without that
 context, publication intent still requires clarification.
