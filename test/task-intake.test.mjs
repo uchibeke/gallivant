@@ -7,6 +7,7 @@ import { PassThrough } from "node:stream";
 import { createTaskService } from "../lib/tasks.mjs";
 import { createTaskDelivery } from "../lib/task_delivery.mjs";
 import { createDeliveryStore } from "../lib/task_delivery_store.mjs";
+import { ownerDelivery, validateOwnerDelivery, assertDeliveryAnswer } from "../lib/owner_delivery.mjs";
 import { CORE_VERSION, taskRejectionForModel } from "../lib/task_delivery_contract.mjs";
 import { migrateRuntimeState } from "../lib/runtime_state.mjs";
 import { taskStore } from "../lib/task_store.mjs";
@@ -207,6 +208,7 @@ test("technical conditions and PR feature subjects survive actual preparation an
 test("literal boundaries and delivery-specific contexts survive actual intake and answers", async () => {
   const accepted = ["Create a PR template for this repository.", "Open a PR details dialog.", "Submit a PR review form.",
     "Do not commit the database transaction when validation fails.", "Avoid pushing duplicate items onto the queue.",
+    "Do not generate the report and commit the database transaction.",
     "Require user confirmation before deleting an account.", "Ask for user permission before accessing the camera.", "Require user confirmation before committing the database transaction.", "Require user confirmation before creating a PR template.", "Do not commit the database transaction or push duplicate items onto the queue.", "Neither commit the database transaction nor push duplicate items onto the queue."];
   for (const text of accepted) {
     const w = world(), prepared = await w.service.prepare({ text });
@@ -313,6 +315,11 @@ test("latest publication review cases fail before task effects without rejecting
     "Submitted a PR for review.",
     "The LLM creates a PR when tests pass.",
     "The AI creates a PR after tests pass.",
+    "The developer creates a PR after tests pass.",
+    "The team creates a PR after tests pass.",
+    "Open a GitHub PR after tests pass.",
+    "Create a legitimate PR in integration tests.",
+    "Generate a dummy PR? Then add unit tests.",
     "Ship it after I approve the code.",
     "Release it after I approve the implementation.",
     "Package it after I approve the code.",
@@ -338,6 +345,10 @@ test("latest publication review cases fail before task effects without rejecting
     "The team must create a PR for review.",
     "Create an actual PR in the integration test.",
     "Create a real PR in the test.",
+    "Create a test PR in integration tests.",
+    "Create a JSON PR in integration tests.",
+    "Create a serialized PR in integration tests.",
+    "If I approve the purchase, apply the discount. Implement export after I approve the code.",
   ];
   const initial = world({ prepare: async () => assert.fail("ambiguous publication cannot invoke preparation") });
   const pending = world({ prepare: async (_ctx, task) => JSON.stringify(draftFor(task, { question: true })) });
@@ -360,6 +371,7 @@ test("latest publication review cases fail before task effects without rejecting
   assert.equal(pending.daemonCalls(), 0);
 
   const productRequirements = [
+    "Add a unit test that creates a dummy PR fixture.",
     "The button opens a PR.",
     "Clicking submit creates a pull request.",
     "Make PRs searchable in the dashboard.",
@@ -369,6 +381,14 @@ test("latest publication review cases fail before task effects without rejecting
     "Generate a daily report summarizing PRs.",
     "Create a list of PRs in the dashboard.",
     "Create a collection of PRs for the dashboard.",
+    "Create a graph of PRs in the dashboard.",
+    "Create a chart of PRs.",
+    "Create a map of PRs for analytics.",
+    "Create a view of PRs.",
+    "Create a grid of PRs.",
+    "Create a group of PRs.",
+    "Create an index of PRs.",
+    "Generate an index of pull requests for search.",
     "Document whether PRs are optional in settings.",
     "After I have approved the invoice, mark it paid.",
     "When I have approved the comment, display it.",
@@ -385,6 +405,57 @@ test("latest publication review cases fail before task effects without rejecting
       operationId: "reviewed-product-requirement", answers: { "q-r-1": text } });
     assert.ok(answered.draft.text.includes(JSON.stringify(text)), text);
   }
+});
+
+test("latest review cases preserve delivery intent, literal boundaries and saved producer grammar", () => {
+  for (const source of [
+    "Implement export. Open a GitHub PR after tests pass.",
+    "Create a legitimate PR in integration tests.",
+    "Create an authentic PR in integration tests.",
+    "Create an experimental PR in unit tests.",
+    "Generate a dummy PR? Then add unit tests.",
+  ]) assert.throws(() => ownerDelivery(source), { code: "TASK_DELIVERY_SCOPE" }, source);
+
+  for (const source of [
+    "Generate a dummy PR in the unit test.",
+    "Generate a synthetic PR in the unit test.",
+    "Create a mock PR fixture in tests.",
+    "For tests, create a mock PR.",
+    "In the unit test, generate a fake PR.",
+  ]) assert.equal(ownerDelivery(source), null, source);
+
+  const quoted = "Add a validation test for the exact string 'cause we should not create a PR'.";
+  assert.equal(ownerDelivery(quoted), null);
+  assert.doesNotThrow(() => assertDeliveryAnswer({}, quoted));
+
+  const database = "Do not generate the report and commit the database transaction.";
+  assert.equal(ownerDelivery(database), null);
+  assert.doesNotThrow(() => assertDeliveryAnswer({}, database));
+  assert.throws(() => ownerDelivery("Do not generate the report and commit the code."), { code: "TASK_DELIVERY_SCOPE" });
+  assert.throws(() => assertDeliveryAnswer({}, "Do not generate the report and commit the code."), { code: "TASK_DELIVERY_SCOPE" });
+
+  const mixedApproval = "If I approve the purchase, apply the discount. Implement export after I approve the code.";
+  assert.throws(() => ownerDelivery(mixedApproval), { code: "TASK_DELIVERY_SCOPE" });
+  assert.throws(() => assertDeliveryAnswer({}, mixedApproval), { code: "TASK_DELIVERY_SCOPE" });
+  assert.equal(ownerDelivery("If I approve the purchase, apply the discount."), null);
+  assert.doesNotThrow(() => assertDeliveryAnswer({}, "If I approve the purchase, apply the discount."));
+
+  const savedSource = "Implement export. Open another PR for review.";
+  const start = savedSource.indexOf("Open another");
+  assert.throws(() => ownerDelivery(savedSource), { code: "TASK_DELIVERY_SCOPE" }, "v5 intake remains stricter than stored v3/v4 contracts");
+  for (const version of [3, 4]) {
+    const saved = { version, offsets: "utf16", source: savedSource, spans: [
+      { start: 0, end: start, owner: "implementation" },
+      { start, end: savedSource.length, owner: "coordinator", kind: "pull_request" },
+    ] };
+    assert.equal(validateOwnerDelivery(saved), saved, `saved v${version}`);
+  }
+  const unsupportedSource = "Implement export. Open a draft PR for review.";
+  const unsupportedStart = unsupportedSource.indexOf("Open");
+  for (const version of [3, 4]) assert.throws(() => validateOwnerDelivery({ version, offsets: "utf16", source: unsupportedSource, spans: [
+    { start: 0, end: unsupportedStart, owner: "implementation" },
+    { start: unsupportedStart, end: unsupportedSource.length, owner: "coordinator", kind: "pull_request" },
+  ] }), { code: "TASK_DELIVERY_SCOPE" }, `v${version} still rejects unsupported qualifiers`);
 });
 
 test("publication preferences and new legacy answers refuse before effects while negative requirements prepare", async () => {
