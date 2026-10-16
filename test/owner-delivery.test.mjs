@@ -959,6 +959,25 @@ test("publication-subject conditions and standalone gates remain owner controls"
   }
 });
 
+test("product publication behavior ends at adversative clauses and accepts parenthetical triggers", () => {
+  const task = { completion: { version: 1, target: "delivery_ready" } };
+  for (const source of [
+    "The webhook handler, when invoked, creates a PR after validation.",
+    "The application, once configured, opens a PR when the command runs.",
+  ]) {
+    assert.equal(ownerDelivery(source), null, source);
+    assert.doesNotThrow(() => assertDeliveryAnswer(task, source), source);
+  }
+  for (const source of [
+    "The webhook handler creates a PR when invoked, yet PRs must not be published.",
+    "The button creates a PR after tests pass, while opening pull requests is forbidden.",
+    "The webhook handler creates a PR when invoked, although PRs are not allowed.",
+  ]) {
+    assert.throws(() => ownerDelivery(source), { code: "TASK_DELIVERY_SCOPE" }, source);
+    assert.throws(() => assertDeliveryAnswer(task, source), { code: "TASK_DELIVERY_SCOPE" }, source);
+  }
+});
+
 test("ambiguous, conditional, qualified and delivery-only requests refuse before planning", () => {
   for (const source of [
     "Please open one pull request for review.", "Open a PR.", "Open a PR; do not merge or release.",
