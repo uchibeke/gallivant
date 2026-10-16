@@ -100,6 +100,9 @@ merge authority. “Do not merge” remains a valid constraint.
 This includes subject-led requests such as “You need to merge it” and passive
 or nominal prohibitions such as “Commits are not allowed” and “Commit creation is
 forbidden.” Compound feature objects such as commit messages and branch reports
+remain implementation requirements. Passive branch wording is treated as a Git
+restriction when it names a bare branch artifact or supplies repository context;
+domain phrases such as “empty branches in the syntax tree” and “bank branches”
 remain implementation requirements.
 
 Implementation subjects such as a PR status badge, pull-request template,
@@ -110,13 +113,17 @@ scope: `If name is empty, return friend. Open a PR for review.` and the answer
 `Commit the database transaction after validation.` are supported. By contrast,
 `The button sends a PR for review.` and `Clicking submit generates a PR.` are
 declarative application behavior, not coordinator delivery commands; this
-distinction covers the recognized publication verb families while coordinator
-agent, model and provider subjects remain workflow instructions and are rejected
-when they condition publication. An owner prerequisite such as
+distinction covers the recognized publication verb families. For conditional
+publication clauses, only clearly named product surfaces (such as a button, form,
+service or page) are treated as declarative app behavior; unknown people, roles and
+automation subjects remain visible and require clarification. An owner prerequisite
+such as
 `Wait for my approval. Open a PR for review.` still requires clarification.
 Implementation work gated on approval is rejected even when that approval names
 a purchase or refund. Complete transaction rules such as approving a refund
-before emailing a customer stay implementation requirements. The grammar also
+before emailing a customer stay implementation requirements, including leading
+conditions such as “After the owner approves the invoice, send a receipt” and
+“Provided the owner approves the invoice, send a confirmation.” The grammar also
 preserves a rule with an unfamiliar business object and result when the result
 refers back to that approved object: “After I approve the invoice, mark it paid.”
 This uses the sentence relationship rather than an allowlist of transaction

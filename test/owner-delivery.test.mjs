@@ -127,6 +127,11 @@ test("new publication predicates, actors, adverbs and approval gates fail closed
     "Approve the refund before emailing the customer.",
     "After I have approved the invoice, mark it paid.",
     "When I have approved the comment, display it.",
+    "After the owner approves the invoice, send a receipt.",
+    "Provided the owner approves the invoice, send a confirmation.",
+    "Provided that the owner approves the invoice, send a confirmation.",
+    "Send a receipt after the owner approves the invoice.",
+    "Send a confirmation provided the owner approves the invoice.",
   ]) {
     assert.equal(ownerDelivery(text), null, text);
     assert.doesNotThrow(() => assertDeliveryAnswer({}, text), text);
@@ -144,6 +149,24 @@ test("new publication predicates, actors, adverbs and approval gates fail closed
     "Add tests after I approve the plan.",
     "Fix the bug after I approve the plan.",
   ]) assert.throws(() => ownerDelivery(text), { code: "TASK_DELIVERY_SCOPE" }, text);
+});
+
+test("passive branch restrictions require repository context", () => {
+  for (const text of [
+    "Empty branches are not allowed in the syntax tree.",
+    "Bank branches are not allowed to be created without an address.",
+  ]) {
+    assert.equal(ownerDelivery(text), null, text);
+    assert.doesNotThrow(() => assertDeliveryAnswer({}, text), text);
+  }
+  for (const text of [
+    "Git branches are not allowed.",
+    "Repository branches are forbidden.",
+    "Branches are not allowed in the repository.",
+  ]) {
+    assert.throws(() => ownerDelivery(text), { code: "TASK_DELIVERY_SCOPE" }, text);
+    assert.throws(() => assertDeliveryAnswer({}, text), { code: "TASK_DELIVERY_SCOPE" }, text);
+  }
 });
 
 test("PR-shaped application features stay implementation requirements while real delivery remains visible", () => {
@@ -616,6 +639,19 @@ test("saved v1/v2 ownership spans remain exact under later delivery-control gram
 
 test("v3/v4 saved spans preserve historical controls but refuse publication contradictions", () => {
   for (const version of [3, 4]) {
+    for (const clause of [
+      "Open a single new PR for review.",
+      "Opens a PR for review.",
+      "Opening a PR for review.",
+      "Makes another new PR for review.",
+    ]) {
+      const source = `Implement export. ${clause}`, start = source.indexOf(clause);
+      const saved = { version, offsets: "utf16", source, spans: [
+        { start: 0, end: start, owner: "implementation" },
+        { start, end: source.length, owner: "coordinator", kind: "pull_request" },
+      ] };
+      assert.equal(validateOwnerDelivery(saved), saved, `historical v${version}: ${clause}`);
+    }
     for (const instruction of ["Please merge it.", "Do not create a branch.", "Require user consent before delivering changes.", "Do not publish monthly tasks to S3."]) {
       const source = `Implement export. Open a PR for review. ${instruction}`, start = source.indexOf("Open"), end = source.indexOf(` ${instruction}`);
       const saved = { version, offsets: "utf16", source, spans: [
