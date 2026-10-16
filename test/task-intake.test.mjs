@@ -20,6 +20,7 @@ import { runEnv, RUN_GIT_CONFIG, makeGit } from "../lib/git.mjs";
 import { prepareTurn } from "../lib/task_prepare.mjs";
 import { preparationEnvironment } from "../lib/task_environment.mjs";
 import { parseDraft, renderDraft, collectCommands, draftPrompt, MAX_INPUT_BYTES, MAX_PREPARATION_PROMPT_BYTES } from "../lib/task_contract.mjs";
+import { MAX_ANSWER_BYTES, MAX_ANSWER_COUNT } from "../lib/task_limits.mjs";
 import { buildRun, buildPreparationRun, PREPARATION_BOUNDARY, capabilitiesFor } from "../lib/harness.mjs";
 import { parseSourcesMeta } from "../lib/config.mjs";
 import { makeState } from "../lib/state.mjs";
@@ -168,6 +169,35 @@ test("a conflicting delivery answer leaves its question, revision and preparatio
     await assert.rejects(w.service.answer({ taskId: first.taskId, expectedRevision: first.revision, operationId: "change-publication", answers: { "q-r-1": answer } }), { code: "TASK_DELIVERY_SCOPE", taskEffects: "none" });
     assert.deepEqual(taskStore(w.home).read(first.taskId), before);
   }
+});
+
+test("answer batches enforce aggregate bytes and item limits before parsing or mutating", async () => {
+  let calls = 0;
+  const w = world({ prepare: async (_ctx, task) => { calls++; return JSON.stringify(draftFor(task, { question: true })); } });
+  const first = await w.service.prepare({ text: "Implement export. Open a PR for review." });
+  assert.equal(first.status, "needs-input");
+  const store = taskStore(w.home), saved = store.read(first.taskId);
+  const tooMany = Object.fromEntries(Array.from({ length: MAX_ANSWER_COUNT + 1 }, (_, index) => [`q-r-${index + 1}`, "Use CSV."]));
+  await assert.rejects(w.service.answer({ taskId: first.taskId, expectedRevision: first.revision, operationId: "answer-count-limit", answers: tooMany }), error => {
+    assert.equal(error.code, "TASK_INPUT"); assert.equal(error.taskEffects, "none"); return true;
+  });
+  const half = Math.floor(MAX_ANSWER_BYTES / 2) + 16;
+  await assert.rejects(w.service.answer({ taskId: first.taskId, expectedRevision: first.revision, operationId: "answer-byte-limit", answers: {
+    "q-r-1": "x".repeat(half), "q-r-2": `${"y".repeat(half)} Do not publish publicly`,
+  } }), error => {
+    assert.equal(error.code, "TASK_INPUT"); assert.equal(error.taskEffects, "none"); return true;
+  });
+  assert.deepEqual(store.read(first.taskId), saved);
+  assert.equal(calls, 1, "over-limit answers are rejected before owner-text parsing or another preparation turn");
+  assert.deepEqual(w.ctx.state.entries(), []);
+  await w.service.answer({ taskId: first.taskId, expectedRevision: first.revision, operationId: "answer-replay", answers: { "q-r-1": "Use CSV." } });
+  const accepted = store.read(first.taskId);
+  await assert.rejects(w.service.answer({ taskId: first.taskId, expectedRevision: first.revision, operationId: "answer-replay", answers: { "q-r-1": null } }), error => {
+    assert.equal(error.code, "TASK_CONFLICT", "an idempotency-key reuse is checked before semantic answer validation");
+    assert.equal(error.taskEffects, "none"); return true;
+  });
+  assert.deepEqual(store.read(first.taskId), accepted);
+  assert.equal(calls, 2);
 });
 
 test("an implicit review workflow refuses delivery changes before effects but accepts product refinement", async () => {

@@ -32,6 +32,8 @@ test("synthetic pull requests in test fixtures are not delivery requests", () =>
     "Generate a dummy PR in the unit test.",
     "Create a fabricated pull request for the test fixture.",
     "Create a synthetic review PR in integration tests.",
+    "Create an example PR in tests.",
+    "Generate a fixture PR for tests.",
   ]) {
     assert.equal(ownerDelivery(text), null, text);
     assert.doesNotThrow(() => assertDeliveryAnswer({}, text), text);
@@ -101,7 +103,12 @@ test("new publication predicates, actors, adverbs and approval gates fail closed
     "Do not create a PR whatsoever.",
     "Do not create a PR going forward.",
     "Create a PR visible to outsiders.",
+    "Do not generate a PR visible to outsiders.",
+    "Produce a PR public to everyone.",
   ]) assert.throws(() => ownerDelivery(text), { code: "TASK_DELIVERY_SCOPE" }, text);
+  const longOrdinaryAnswer = "Create ".repeat(4500);
+  assert.equal(Buffer.byteLength(longOrdinaryAnswer), 31500);
+  assert.equal(ownerDelivery(longOrdinaryAnswer), null, "large ordinary text without an approval condition stays implementation scope");
   for (const text of ["After I have approved, update the service.", "After I've approved, update the service.", "Once we have approved, continue."]) {
     assert.throws(() => assertDeliveryAnswer({}, text), { code: "TASK_DELIVERY_SCOPE" }, text);
   }
@@ -147,6 +154,8 @@ test("new publication predicates, actors, adverbs and approval gates fail closed
     "If I approve the purchase, create a widget.",
     "Create the widget after I approve the purchase.",
     "Make a new dashboard after I approve the comment.",
+    "Create the account page after I approve the invoice.",
+    "After I approve the purchase, generate the customer dashboard.",
     "If I approve the support request, finish the implementation.",
     "Build the widget after I approve the purchase.",
     "Build the widget after I approve the purchase, then send a receipt.",
@@ -285,6 +294,25 @@ test("application publication conditions stop before colon and dash clauses", ()
   }
 });
 
+test("business approval masking stops at colon and dash before a later owner gate", () => {
+  for (const text of [
+    "If I approve the invoice, email the customer: wait until the owner approves.",
+    "If I approve the invoice, email the customer — wait until the owner approves.",
+    "If I approve the invoice, email the customer - wait until the owner approves.",
+  ]) {
+    assert.throws(() => ownerDelivery(text), { code: "TASK_DELIVERY_SCOPE" }, text);
+    assert.throws(() => assertDeliveryAnswer({}, text), { code: "TASK_DELIVERY_SCOPE" }, text);
+  }
+  for (const text of [
+    "If the tax is calculated: the owner approves the payment. Implement export.",
+    "If the tax is calculated — the owner approves the payment. Implement export.",
+    "If the tax is calculated - the owner approves the payment. Implement export.",
+  ]) {
+    assert.equal(ownerDelivery(text), null, text);
+    assert.doesNotThrow(() => assertDeliveryAnswer({}, text), text);
+  }
+});
+
 test("saved version-two contracts retain their original approval and PR-policy grammar", () => {
   for (const source of [
     "Build the widget after I approved it. Open a PR for review.",
@@ -296,7 +324,7 @@ test("saved version-two contracts retain their original approval and PR-policy g
     ] };
     assert.equal(validateOwnerDelivery(saved), saved, source);
   }
-  for (const verb of ["Created", "Opened", "Submitted", "Made"]) {
+  for (const verb of ["Created", "Opened", "Submitted", "Made", "Creates", "Opens", "Raises", "Submits"]) {
     const source = `Build the widget. ${verb} a PR for review.`, split = source.indexOf(`${verb} a PR`);
     const saved = { version: 2, offsets: "utf16", source, spans: [
       { start: 0, end: split, owner: "implementation" },
@@ -313,6 +341,22 @@ test("saved version-two contracts retain their original approval and PR-policy g
     ] };
     assert.equal(validateOwnerDelivery(saved), saved, `historical contract: ${source}`);
   }
+
+  const suffixSource = "Implement export. Open a PR after my approval.";
+  const suffixStart = suffixSource.indexOf("Open a PR"), suffixEnd = suffixStart + "Open a PR".length;
+  const truncated = { version: 2, offsets: "utf16", source: suffixSource, spans: [
+    { start: 0, end: suffixStart, owner: "implementation" },
+    { start: suffixStart, end: suffixEnd, owner: "coordinator", kind: "pull_request" },
+    { start: suffixEnd, end: suffixSource.length, owner: "implementation" },
+  ] };
+  assert.throws(() => validateOwnerDelivery(truncated), { code: "TASK_DELIVERY_SCOPE" }, "saved publication span cannot leave its approval qualifier in implementation ownership");
+});
+
+test("new business approval rules validate with the same v5 predicates used at intake", () => {
+  const source = "If I approve the purchase, apply the discount. Implement export. Open a PR for review.";
+  const contract = ownerDelivery(source);
+  assert.equal(contract.version, 5);
+  assert.equal(validateOwnerDelivery(contract), contract);
 });
 
 test("saved v3 and v4 contracts preserve indirect PR recipients accepted by their producer", () => {
@@ -494,7 +538,7 @@ test("application merge evidence cannot reclassify branch refs or revision targe
         assert.throws(() => ownerDelivery(text), { code: "TASK_DELIVERY_SCOPE" }, text);
         assert.throws(() => assertDeliveryAnswer({}, text), { code: "TASK_DELIVERY_SCOPE" }, text);
       }
-  for (const text of ["Merge invoices from the main table.", "Tell the agent to merge files from the archive directory.", "Merge head counts into the database.", "Merge invoices with tag metadata records.", "Merge files from revision metadata tables.", "Merge hash maps into the database.", "Merge hash tables before saving.", "Merge changeset records into the database."]) {
+  for (const text of ["Merge invoices from the main table.", "Tell the agent to merge files from the archive directory.", "Merge head counts into the database.", "Merge invoices with tag metadata records.", "Merge files from revision metadata tables.", "Merge hash maps into the database.", "Merge hash tables before saving.", "Merge changeset records into the database.", "Merge arrays and validate them."]) {
     assert.equal(ownerDelivery(text), null, text);
     assert.doesNotThrow(() => assertDeliveryAnswer({}, text), text);
   }
@@ -1201,6 +1245,9 @@ test("elisions retain following requirements without changing historical literal
   const smartPossessiveElision = "‘cause we should not create a PR for users’ safety.";
   assert.throws(() => ownerDelivery(smartPossessiveElision), { code: "TASK_DELIVERY_SCOPE" }, smartPossessiveElision);
   assert.throws(() => assertDeliveryAnswer({}, smartPossessiveElision), { code: "TASK_DELIVERY_SCOPE" }, smartPossessiveElision);
+  const repeatedElisions = `${"'cause ".repeat(4500)}we should not create a PR.`;
+  assert.throws(() => ownerDelivery(repeatedElisions), { code: "TASK_DELIVERY_SCOPE" }, "repeated unclosed elisions cannot hide a trailing prohibition");
+  assert.throws(() => assertDeliveryAnswer({}, repeatedElisions), { code: "TASK_DELIVERY_SCOPE" }, "answer validation preserves the trailing prohibition after repeated elisions");
   const quotedElision = "Add a validation test for the exact string 'cause we should not create a PR'.";
   assert.equal(ownerDelivery(quotedElision), null);
   assert.doesNotThrow(() => assertDeliveryAnswer({}, quotedElision));
