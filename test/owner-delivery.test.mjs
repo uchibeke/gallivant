@@ -119,6 +119,7 @@ test("new publication predicates, actors, adverbs and approval gates fail closed
     "If I approve the purchase, apply the patch.",
     "If I approve the support request, finish the implementation.",
     "Build the widget after I approve the purchase.",
+    "Add tests after I approve the plan.",
   ]) assert.throws(() => ownerDelivery(text), { code: "TASK_DELIVERY_SCOPE" }, text);
 });
 
