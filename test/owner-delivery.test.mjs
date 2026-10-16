@@ -98,6 +98,7 @@ test("new publication predicates, actors, adverbs and approval gates fail closed
     "If a customer approves the refund, send the customer an email.",
     "If we approve a refund, send the customer an email.",
     "If I approve the purchase, show a confirmation page.",
+    "If I approve the purchase, apply the discount.",
     "Approve the refund before emailing the customer.",
     "After I have approved the invoice, mark it paid.",
     "When I have approved the comment, display it.",
@@ -109,6 +110,7 @@ test("new publication predicates, actors, adverbs and approval gates fail closed
     "If I approve the purchase, continue with implementation.",
     "If we approve a refund, deploy the service.",
     "If I approve the code, send an email.",
+    "If I approve the purchase, apply the patch.",
   ]) assert.throws(() => ownerDelivery(text), { code: "TASK_DELIVERY_SCOPE" }, text);
 });
 
