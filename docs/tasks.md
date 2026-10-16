@@ -75,6 +75,11 @@ metadata requirements. Causative directions such as “Have John create a PR” 
 mock, sample or synthetic PR is treated as test data only when the same statement
 also names a test or fixture context; without that context, publication intent
 still requires clarification.
+Leading command adverbs such as “Kindly,” “Now,” and “Immediately” do not turn
+an imperative publication command into application behavior. Terminal temporal
+restrictions such as “anymore,” “henceforth,” “from now on,” “going forward,”
+and “no longer” remain attached to the publication target and fail closed when
+they prohibit or qualify publication.
 Broader construction verbs such as `send`, `prepare`, `generate`, `produce`,
 `publish` and `file` are recognized
 as publication intent, but require clarification unless they match the supported

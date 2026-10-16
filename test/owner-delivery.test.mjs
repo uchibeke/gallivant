@@ -142,6 +142,9 @@ test("publication grammar rejects past status, preserves business approval rules
     "Ensure the team creates a PR for review.",
     "Have John create a PR for review.",
     "Let John create a PR for review.",
+    "Kindly create a PR for review.",
+    "Now create a PR for review.",
+    "Immediately create a PR for review.",
   ]) {
     assert.throws(() => ownerDelivery(source), { code: "TASK_DELIVERY_SCOPE" }, source);
     assert.throws(() => assertDeliveryAnswer(task, source), { code: "TASK_DELIVERY_SCOPE" }, source);
@@ -278,6 +281,8 @@ test("publication grammar rejects past status, preserves business approval rules
     "Implement export. Do not create a PR please.",
     "Implement export. Do not create a PR whatsoever.",
     "Implement export. Do not create a pull request ever.",
+    "Implement export. Do not create a PR anymore.",
+    "Never create PRs henceforth.",
     "Do not create a PR this time.",
     "Create a PR ASAP.",
     "Create a PR and assign me.",
