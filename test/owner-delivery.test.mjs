@@ -130,6 +130,8 @@ test("new publication predicates, actors, adverbs and approval gates fail closed
     "After the owner approves the invoice, send a receipt.",
     "Provided the owner approves the invoice, send a confirmation.",
     "Provided that the owner approves the invoice, send a confirmation.",
+    "Validate the cart, and if I approve the purchase, apply the discount.",
+    "When checkout completes, if I approve the purchase, send a receipt.",
     "Send a receipt after the owner approves the invoice.",
     "Send a confirmation provided the owner approves the invoice.",
   ]) {
@@ -149,6 +151,7 @@ test("new publication predicates, actors, adverbs and approval gates fail closed
     "Build the widget after I approve the purchase, then send a receipt.",
     "Add tests after I approve the plan.",
     "Fix the bug after I approve the plan.",
+    "Implement export after I approve the code, and if I approve the purchase, apply the discount.",
   ]) assert.throws(() => ownerDelivery(text), { code: "TASK_DELIVERY_SCOPE" }, text);
 });
 
@@ -197,12 +200,29 @@ test("PR-shaped application features stay implementation requirements while real
     "Generate a dashboard listing PRs.",
     "Create a list of PRs in the dashboard.",
     "Create a collection of PRs for the dashboard.",
+    "Create a graph of PRs in the dashboard.",
+    "Create a chart of PRs.",
+    "Create a map of PRs for analytics.",
+    "Create a view of PRs.",
+    "Create a grid of PRs.",
+    "Create a group of PRs.",
+    "Create an index of PRs.",
+    "Generate an index of pull requests for search.",
     "Document whether PRs are optional in settings.",
   ];
   for (const text of features) {
     assert.equal(ownerDelivery(text), null, text);
     assert.doesNotThrow(() => assertDeliveryAnswer({}, text), text);
   }
+  for (const text of [
+    "Implement endpoint updates. Create an API PR for review.",
+    "Implement endpoint updates. Create a report PR for review.",
+    "Implement endpoint updates. Create a dashboard PR for review.",
+  ]) {
+    assert.throws(() => ownerDelivery(text), { code: "TASK_DELIVERY_SCOPE" }, text);
+    assert.throws(() => assertDeliveryAnswer({}, text), { code: "TASK_DELIVERY_SCOPE" }, text);
+  }
+  assert.equal(ownerDelivery("Create a report about the PR."), null);
   const makeContract = ownerDelivery("Implement export. Make a PR for review.");
   assert.equal(makeContract.version, 5);
   assert.deepEqual(ownerImplementation(makeContract), ["Implement export. "]);
@@ -213,6 +233,7 @@ test("PR-shaped application features stay implementation requirements while real
     "Create an actual PR in the integration test.",
     "Create a real PR in the test.",
     "Create a number of PRs for review.",
+    "Create any number of PRs for review.",
     "Make one hundred and six PRs for review.",
     "Submit 1,024 pull requests for review.",
     "Make dozens of PRs for review.",
@@ -222,6 +243,10 @@ test("PR-shaped application features stay implementation requirements while real
     "Create a plethora of PRs.",
     "Make a multitude of PRs for review.",
     "Create a truckload of PRs.",
+    "Create a lot of PRs.",
+    "Create a bunch of PRs.",
+    "Create loads of PRs.",
+    "Create tons of PRs.",
     "John should create a PR for review.",
     "The team must create a PR for review.",
     "Do not create a PR anyone can see.",
@@ -268,6 +293,21 @@ test("saved version-two contracts retain their original approval and PR-policy g
       { start: split, end: source.length, owner: "coordinator", kind: "pull_request" },
     ] };
     assert.equal(validateOwnerDelivery(saved), saved, `historical contract: ${source}`);
+  }
+});
+
+test("saved v3 and v4 contracts preserve indirect PR recipients accepted by their producer", () => {
+  for (const version of [3, 4]) for (const action of [
+    "Make me a PR for review.",
+    "Create us a pull request for review.",
+  ]) {
+    const source = `Build the widget. ${action}`;
+    const start = source.indexOf(action);
+    const saved = { version, offsets: "utf16", source, spans: [
+      { start: 0, end: start, owner: "implementation" },
+      { start, end: source.length, owner: "coordinator", kind: "pull_request" },
+    ] };
+    assert.equal(validateOwnerDelivery(saved), saved, `historical v${version} contract: ${source}`);
   }
 });
 
@@ -1132,6 +1172,12 @@ test("elisions retain following requirements without changing historical literal
     ] };
     assert.equal(validateOwnerDelivery(saved), saved);
   }
+  const elisionAndPolicy = "'cause we should not create a PR, label the button 'Ready'.";
+  assert.throws(() => ownerDelivery(elisionAndPolicy), { code: "TASK_DELIVERY_SCOPE" }, elisionAndPolicy);
+  assert.throws(() => assertDeliveryAnswer({}, elisionAndPolicy), { code: "TASK_DELIVERY_SCOPE" }, elisionAndPolicy);
+  const quotedElision = "Add a validation test for the exact string 'cause we should not create a PR'.";
+  assert.equal(ownerDelivery(quotedElision), null);
+  assert.doesNotThrow(() => assertDeliveryAnswer({}, quotedElision));
   const priorSource = "Add '90s support. Open a PR. Respect users' approval. Implement export. Open a PR for review.";
   const start = priorSource.lastIndexOf("Open");
   const v3 = { version: 3, offsets: "utf16", source: priorSource, spans: [
