@@ -323,6 +323,7 @@ test("latest publication review cases fail before task effects without rejecting
     "If I approve the invoice, email the customer as well as wait until the owner approves.",
     "If I approve the invoice, email the customer along with wait until the owner approves.",
     "If I approve the invoice, email the customer plus wait until the owner approves.",
+    "Build the widget after I approve the purchase, then send a receipt.",
     "The maintainer creates a PR after tests pass.",
     "The contractor opens a PR when checks pass.",
     "The CI creates a PR after tests pass.",
