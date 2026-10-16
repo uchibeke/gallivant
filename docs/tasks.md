@@ -48,9 +48,12 @@ completion-gate evidence; a provider statement cannot fulfill it.
 New ownership contracts also include a same-statement connector such as `, and`,
 `and then` or `then` in the publication span, so it cannot become a dangling
 implementation requirement. Connectors split across lines or containing quoted
-implementation text need clarification. Previously approved version-one
-contracts keep their original spans, criteria and fingerprints on retry;
-new requests use version two.
+implementation text need clarification. Previously approved contracts keep their
+original spans, criteria and fingerprints on retry; new requests use version five.
+Version five keeps feature metadata and synthetic-object qualifiers within one
+line, so a following line beginning with “title” or “body” cannot hide an earlier
+PR instruction. Saved versions one through four retain their approved feature
+interpretation and exact source spans.
 
 The supported affirmative clause is one unqualified `open/create/raise/submit/make`
 review-PR instruction outside quoted text or code. This is not a general
@@ -94,6 +97,10 @@ Explicit workflow merge or auto-merge requests, and prohibitions on creating
 commits or branches, also return `TASK_DELIVERY_SCOPE` before preparation or a new
 answer is saved. The review-PR workflow needs a branch and commits and grants no
 merge authority. “Do not merge” remains a valid constraint.
+This includes subject-led requests such as “You need to merge it” and passive
+or nominal prohibitions such as “Commits are not allowed” and “Commit creation is
+forbidden.” Compound feature objects such as commit messages and branch reports
+remain implementation requirements.
 
 Implementation subjects such as a PR status badge, pull-request template,
 published articles, a publish button, a command to publish docs, local storage,
@@ -128,11 +135,102 @@ including application-user consent requirements. A technical operation cannot hi
 a later workflow restriction: “Do not deliver notifications twice or create a
 branch” still requires clarification. Quoted examples and merge-button/status
 features do not authorize an actual merge.
+Technical context can also come from a transport (“publish records to Kafka” or
+“deliver reports to S3”),
+repeated delivery (“do not deliver reports twice”) or “delivery of files.” Bare
+commands, Git destinations and restrictions on the task's changes remain workflow
+controls. An unknown noun alone, as in “do not publish the solution,” does not
+override that boundary.
+Destinations apply to their own action: a later report upload cannot qualify an
+earlier restriction on publishing changes. Git metadata used by an application
+operation is distinct from publishing to a Git repository.
+Unrecognized coordinated wording ends destination scope. Shared destinations
+require noun-phrase evidence: determiners, recognized modifiers/compounds or bare
+plural/data nouns. This supports “invoices and tax reports,” “metrics plus traces”
+and “widgets and the gizmo” without enumerating every domain noun. An unknown
+phrase such as “forward reports” is not assumed to be a noun phrase merely because
+its verb is absent from the action vocabulary. For ambiguous application wording,
+state the destination on each action or use separate sentences; direct application
+objects retain an open vocabulary.
+Verb/adjective ambiguities such as “duplicate reports” cannot supply a shared
+destination without a noun marker. Write “metrics and the duplicate reports to
+S3,” or put the destination directly on each application operation.
+The same applies to bare “email,” which can be an action: use “the email” when
+sharing another object's destination, or state its application destination directly.
+Likewise, “log entries” and “download links” can be commands or noun compounds;
+use “the log entries” and “the download links” in shared-destination noun lists.
+These conservative checks apply to new requests and answers. Saved ownership
+contracts retain their approved source spans and interpretation.
+Modifier recognition is intentionally bounded: word endings do not establish a
+noun phrase (for example, “give” and “apply” are verbs). An unfamiliar modifier
+requires a direct application destination instead of a guessed shared scope.
+A later data object cannot qualify a workflow object such as “the solution.”
+Coordinated transfer actions such as “upload reports” or “copy files” start their
+own scope; their destinations cannot qualify an earlier publication prohibition.
+This includes negative leads such as “never upload” and “avoid uploading.” Data
+noun lists such as “metrics plus archived reports,” “the log entries” or “the download
+links” can still share a destination; explicit action leads such as “please
+download links” start a separate action.
+Ordinary leading elisions such as `'90s` and `'tis` remain implementation text even
+when a later possessive apostrophe follows. Use double quotes or backticks to quote
+an entire example beginning with an elision. Saved ownership versions one through
+three keep their original literal interpretation and exact source spans.
 Negative coordination preserves each action's scope: “Do not commit the database
 transaction nor push changes” still forbids delivery. Combining only technical
 operations, such as a database transaction and inserting items into a queue,
 remains implementation scope; `neither … nor …` follows the same distinction.
 Modal forms such as “nor should you push” retain the prohibition too.
+This includes “cannot,” contracted modals such as “can't” or “shouldn't,” and
+permission wording such as “aren't allowed to push.” “In addition to,” “besides,”
+and other supported coordination phrases keep the same action boundary.
+PR quantifiers such as “any,” “more,” “multiple” and numeric counts also retain
+their delivery meaning: “Don't submit any PRs” requires clarification, while
+“Don't submit any PR descriptions” remains an implementation requirement. Only
+the supported affirmative single-PR clause can create a publication obligation.
+Qualifiers such as “GitHub,” “automated” or “experimental” cannot hide that PR
+object. Reference phrases such as “generate a report about the PR” do not request
+PR creation.
+Prohibition forms such as “refrain from opening a PR” and “forbidden from creating
+any PRs” also require clarification. Describing the procedure for opening a PR
+does not itself request publication.
+Active subjects also retain the restriction: “I forbid you from opening a PR” and
+“prevent the agent from opening a PR” require clarification.
+Passive equivalents such as “opening a PR is prohibited/disallowed/banned” do too.
+Explicit merge delegation, including “I require you to merge,” “have the agent
+merge” and “tell the agent to merge,” cannot grant merge authority.
+An incomplete prefix such as “Do not” retains scope across line breaks and blank
+lines. A complete implementation constraint such as “Do not change the API” can
+still precede a separate affirmative PR instruction.
+Multiword qualifiers such as “under any circumstances” or “for any reason” retain
+the same restriction. Nominal prohibitions such as “PR creation is prohibited”
+also require clarification. Application-data merges retain open object names,
+including invoices, database rows, accounts and files; workflow PR/branch objects
+and mixed data/workflow lists remain outside merge authority.
+Bare branches and ref-shaped targets (`main`, `feature/foo`, `origin/main`, Git
+revisions) are workflow merges. Application merges need named data evidence;
+“merge invoices into the main table” retains that application context.
+Explicit Git-qualified single-token operands remain ambiguous even when the token
+is a data word: “merge invoices from tag metadata” requires clarification because
+`metadata` can be a tag name. For application data, name its type explicitly, for
+example “merge invoices with tag metadata records.” “Merge head counts into the
+database” remains an application operation.
+Quantity words do not resolve that ambiguity: “two extra tag names” and “three
+further reference fields” still require clarification. Use an explicit data type,
+such as “two extra tag name records” or “three further reference field records.”
+The same prohibition leads apply to push, commit and branch creation, including
+“refrain from pushing” and “I forbid you from committing.” A negative application
+clause cannot hide a coordinated workflow restriction, as in “do not log keys or
+commit changes”; independent statements and technical conditions retain scope.
+Infinitive complements such as “I forbid the agent to push changes” follow the
+same rule as “forbid the agent from pushing changes.”
+Generating PR titles, bodies, labels and other feature metadata also remains
+implementation scope; those objects do not authorize creating the PR itself.
+Possessive forms such as “the PR's body” and “the pull requests’ titles” follow
+the same rule and retain their exact original text in implementation requirements.
+Hyphenated metadata compounds such as “PR-title” and “pull-request-body” do too.
+PR fixtures and explicitly synthetic representations (such as a mock PR object or
+a normalized PR record, fake PR object or dummy/stub payload) are implementation
+data. Bare PR objects and actual Git commit/branch objects do not gain that exception.
 Local conditions attached to publication are still refused; the parser does not
 guess that a comma or semicolon ended a prohibition or approval requirement.
 

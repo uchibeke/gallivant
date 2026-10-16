@@ -27,11 +27,489 @@ test("application publishing, delivery and merge requirements remain exact provi
   }
 });
 
+test("synthetic pull requests in test fixtures are not delivery requests", () => {
+  for (const text of [
+    "Generate a dummy PR in the unit test.",
+    "Create a fabricated pull request for the test fixture.",
+    "Generate a test PR in the unit test.",
+    "Create a synthetic review PR in integration tests.",
+  ]) {
+    assert.equal(ownerDelivery(text), null, text);
+    assert.doesNotThrow(() => assertDeliveryAnswer({}, text), text);
+  }
+  for (const text of [
+    "Generate a public PR for review in the unit test.",
+    "Create a fabricated pull request for review in the test fixture.",
+    "Create a PR in the unit test.",
+  ]) {
+    assert.throws(() => ownerDelivery(text), { code: "TASK_DELIVERY_SCOPE" }, text);
+    assert.throws(() => assertDeliveryAnswer({}, text), { code: "TASK_DELIVERY_SCOPE" }, text);
+  }
+  const mixed = "Generate a dummy PR in the unit test. Open a PR for review.";
+  const contract = ownerDelivery(mixed);
+  assert.equal(ownerImplementation(contract).join(""), "Generate a dummy PR in the unit test. ");
+  assert.equal(contract.spans.at(-1).owner, "coordinator");
+  assert.throws(() => assertDeliveryAnswer({}, "Generate a dummy PR in the unit test. Open a PR for review."), { code: "TASK_DELIVERY_SCOPE" });
+});
+
+test("new publication predicates, actors, adverbs and approval gates fail closed", () => {
+  for (const text of [
+    "Create a PR ASAP.",
+    "Do not create a PR this time.",
+    "Make PRs obligatory.",
+    "Make PRs compulsory.",
+    "Open PRs whenever tests pass.",
+    "Create a PR provided that tests pass.",
+    "Make PRs so long as tests pass.",
+    "The LLM creates a PR when tests pass.",
+    "The AI creates a PR after tests pass.",
+    "Ship it after I approve the code.",
+    "Release it after I approve the implementation.",
+    "Package it after I approve the code.",
+    "Implement export. Make the team a PR for review.",
+    "Create John a pull request for review.",
+    "Create a PR and assign me.",
+    "Do not create a PR whatsoever.",
+    "Do not create a PR going forward.",
+  ]) assert.throws(() => ownerDelivery(text), { code: "TASK_DELIVERY_SCOPE" }, text);
+
+  // Policy fields describing this product's PR behavior remain implementation
+  // requirements, regardless of the verb used to expose the field.
+  for (const verb of ["Document", "Read", "Return", "Validate", "Persist"])
+    assert.equal(ownerDelivery(`${verb} whether PRs are optional in settings.`), null);
+
+  // The structural check must not turn a business approval rule into an owner
+  // authorization gate simply because it mentions an approval.
+  for (const text of [
+    "If a customer approves the refund, send the customer an email.",
+    "Approve the refund before emailing the customer.",
+    "After I have approved the invoice, mark it paid.",
+    "When I have approved the comment, display it.",
+  ]) {
+    assert.equal(ownerDelivery(text), null, text);
+    assert.doesNotThrow(() => assertDeliveryAnswer({}, text), text);
+  }
+});
+
+test("PR-shaped application features stay implementation requirements while real delivery remains visible", () => {
+  const features = [
+    "The button opens a PR.",
+    "Clicking submit creates a pull request.",
+    "Make PRs searchable in the dashboard.",
+    "Make pull requests visible to administrators.",
+    "Make a PR checker.",
+    "Make a pull request API.",
+    "Make the PR optional field editable.",
+    "Make the PR's title editable.",
+    "Generate the PR's title from the branch name.",
+    "Generate a daily report summarizing PRs.",
+    "Create a report summarizing pull requests.",
+    "Generate a dashboard listing PRs.",
+    "Create a list of PRs in the dashboard.",
+    "Create a collection of PRs for the dashboard.",
+    "Document whether PRs are optional in settings.",
+  ];
+  for (const text of features) {
+    assert.equal(ownerDelivery(text), null, text);
+    assert.doesNotThrow(() => assertDeliveryAnswer({}, text), text);
+  }
+  for (const text of [
+    "Create an actual PR in the integration test.",
+    "Create a real PR in the test.",
+    "Create a number of PRs for review.",
+    "Make dozens of PRs for review.",
+    "Make a pair of PRs.",
+    "Make a handful of PRs.",
+    "Create a series of PRs.",
+    "Create a plethora of PRs.",
+    "Make a multitude of PRs for review.",
+    "Create a truckload of PRs.",
+    "John should create a PR for review.",
+    "The team must create a PR for review.",
+    "Do not create a PR anyone can see.",
+    "Create a PR everyone can review.",
+  ]) {
+    assert.throws(() => ownerDelivery(text), { code: "TASK_DELIVERY_SCOPE" }, text);
+    assert.throws(() => assertDeliveryAnswer({}, text), { code: "TASK_DELIVERY_SCOPE" }, text);
+  }
+  for (const text of [
+    "For tests, create a mock PR.",
+    "In the unit test, generate a fake PR.",
+    "Generate a dummy PR in the unit test.",
+    "Create a fabricated pull request for the test fixture.",
+  ]) {
+    assert.equal(ownerDelivery(text), null, text);
+    assert.doesNotThrow(() => assertDeliveryAnswer({}, text), text);
+  }
+});
+
+test("saved version-two contracts retain their original approval and PR-policy grammar", () => {
+  for (const source of [
+    "Build the widget after I approved it. Open a PR for review.",
+    "Document whether PRs are optional in settings. Open a PR for review.",
+  ]) {
+    const split = source.lastIndexOf("Open a PR"), saved = { version: 2, offsets: "utf16", source, spans: [
+      { start: 0, end: split, owner: "implementation" },
+      { start: split, end: source.length, owner: "coordinator", kind: "pull_request" },
+    ] };
+    assert.equal(validateOwnerDelivery(saved), saved, source);
+  }
+});
+
+test("positive merge auxiliary sequences refuse while negative and application counterparts remain requirements", () => {
+  for (const subject of ["You", "We", "The agent"]) {
+    for (const lead of ["need to", "will need to", "will have to", "will be required to", "need you to", "should please", "are expected to"])
+      for (const action of ["merge the PR.", "enable auto-merge."]) {
+        const text = `${subject} ${lead} ${action}`;
+        assert.throws(() => ownerDelivery("Implement export. " + text), { code: "TASK_DELIVERY_SCOPE" }, text);
+        assert.throws(() => assertDeliveryAnswer({}, text), { code: "TASK_DELIVERY_SCOPE" }, text);
+      }
+    for (const lead of ["will not have to", "do not need to", "are not required to", "must never"]) {
+      const text = `${subject} ${lead} merge the PR.`;
+      assert.equal(ownerDelivery(text), null, text);
+      assert.doesNotThrow(() => assertDeliveryAnswer({}, text), text);
+    }
+  }
+  assert.equal(ownerDelivery("We need you to merge duplicate contacts before saving."), null);
+  assert.equal(ownerDelivery("Implement import. We will have to merge customer records before saving."), null);
+});
+
+test("negative modals share workflow controls without rejecting their application counterparts", () => {
+  for (const modal of ["cannot", "can not", "can't", "could not", "couldn’t", "must not", "mustn't", "should not", "shouldn't", "will not", "won't", "would not", "wouldn't", "shall not", "shan't", "may not", "might not", "mightn't", "are not allowed to", "aren't permitted to"]) {
+    for (const action of ["push changes", "commit changes", "create branches", "generate commits"]) {
+      const text = `You ${modal} ${action}.`;
+      assert.throws(() => ownerDelivery(text), { code: "TASK_DELIVERY_SCOPE" }, text);
+      assert.throws(() => assertDeliveryAnswer({}, text), { code: "TASK_DELIVERY_SCOPE" }, text);
+    }
+    for (const action of ["publish duplicate events to Kafka", "commit the database transaction", "create duplicate user records"]) {
+      const text = `You ${modal} ${action}.`;
+      assert.equal(ownerDelivery(text), null, text);
+      assert.doesNotThrow(() => assertDeliveryAnswer({}, text), text);
+    }
+  }
+});
+
+test("delegated merge requests refuse while negative constraints and data merges remain requirements", () => {
+  for (const lead of ["I require you to", "We request you to", "I would like the agent to", "Have the agent", "Tell the agent to", "Instruct the assistant to", "Ask the agent to", "Make sure the agent", "Let's", "Make the agent", "Get the agent to", "I demand that you", "We mandate that you", "I authorize you to", "Assign the agent to"]) {
+    for (const action of ["merge the PR", "merge it", "squash-merge the PR"]) {
+      const text = `${lead} ${action}.`;
+      assert.throws(() => ownerDelivery(text), { code: "TASK_DELIVERY_SCOPE" }, text);
+      assert.throws(() => assertDeliveryAnswer({}, text), { code: "TASK_DELIVERY_SCOPE" }, text);
+    }
+    for (const object of ["duplicate contacts", "invoices", "database rows", "accounts", "files", "custom widgets"]) {
+      const technical = `${lead} merge ${object} before saving.`;
+      assert.equal(ownerDelivery(technical), null, technical);
+      assert.doesNotThrow(() => assertDeliveryAnswer({}, technical), technical);
+    }
+  }
+  for (const text of ["I do not require you to merge the PR.", "Don't tell the agent to merge it.", "Never have the agent merge the PR.", "Let's not merge the PR.", "Require a merge summary in the UI."]) {
+    assert.equal(ownerDelivery(text), null, text);
+    assert.doesNotThrow(() => assertDeliveryAnswer({}, text), text);
+  }
+});
+
+test("passive publication prohibitions cover equivalent terminal adjectives", () => {
+  for (const adjective of ["forbidden", "prohibited", "disallowed", "banned"]) {
+    for (const text of [`Opening a PR is ${adjective}.`, `Publishing is ${adjective}.`, `PRs are ${adjective}.`, `PR creation is ${adjective}.`, `The PR's creation is ${adjective}.`, `PRs’ submission is ${adjective}.`]) {
+      assert.throws(() => ownerDelivery(text), { code: "TASK_DELIVERY_SCOPE" }, text);
+      assert.throws(() => assertDeliveryAnswer({}, text), { code: "TASK_DELIVERY_SCOPE" }, text);
+    }
+    assert.equal(ownerDelivery(`PR titles are ${adjective} in empty input fixtures.`), null);
+  }
+});
+
+test("incomplete restriction prefixes retain scope across lines without inheriting complete constraints", () => {
+  for (const prefix of ["Do not", "Never", "Don't", "You must not", "You cannot", "You aren't allowed to", "We are not permitted to", "Do not allow the agent to", "No more", "Do not under any circumstances", "Never in any case", "Don't for any reason whatsoever", "You must not at any time", "Do not ever under any circumstances"]) {
+    for (const separator of ["\n", "\n\n", "\r\n"]) {
+      const text = `Implement export. ${prefix}${separator}Open a PR.`;
+      assert.throws(() => ownerDelivery(text), { code: "TASK_DELIVERY_SCOPE" }, text);
+      assert.throws(() => assertDeliveryAnswer({}, text), { code: "TASK_DELIVERY_SCOPE" }, text);
+    }
+  }
+  assert.throws(() => ownerDelivery("Do not\nopening a PR."), { code: "TASK_DELIVERY_SCOPE" });
+  for (const text of ["Do not change API\nOpen a PR for review.", "Implement export. Do not merge.\nOpen a PR.", "Never log credentials\nOpen a PR.", "Do not under any circumstances change API\nOpen a PR."])
+    assert.equal(validateOwnerDelivery(ownerDelivery(text)).version, 5, text);
+  // Fresh checks do not reinterpret a record approved before this restriction
+  // check. Its exact source/ownership still replay under the saved grammar.
+  const source = "Implement export. Do not\nOpen a PR.", split = source.indexOf("Open");
+  const prior = { version: 5, offsets: "utf16", source, spans: [
+    { start: 0, end: split, owner: "implementation" },
+    { start: split, end: source.length, owner: "coordinator", kind: "pull_request" },
+  ] };
+  assert.equal(validateOwnerDelivery(prior), prior);
+});
+
+test("qualified restrictions use the same action lead while data merges require a named object", () => {
+  for (const qualifier of ["under any circumstances", "in any case", "at any time", "for any reason whatsoever", "by any means"])
+    for (const action of ["push changes", "commit changes", "create branches"]) {
+      const text = `Do not ${qualifier} ${action}.`;
+      assert.throws(() => ownerDelivery(text), { code: "TASK_DELIVERY_SCOPE" }, text);
+      assert.throws(() => assertDeliveryAnswer({}, text), { code: "TASK_DELIVERY_SCOPE" }, text);
+    }
+  for (const text of ["Merge.", "Merge all.", "Merge now please.", "Merge privately please.", "Merge invoices and the PR.", "Tell the agent to merge files and the approved PR."])
+    assert.throws(() => ownerDelivery(text), { code: "TASK_DELIVERY_SCOPE" }, text);
+});
+
+test("prohibition leads protect all workflow actions and unknown first application verbs", () => {
+  for (const prefix of ["Refrain from", "I forbid you from", "We prohibit the agent from", "Prevent the worker from", "You are banned from", "I forbid you to", "I forbid the agent to"])
+    for (const action of ["pushing changes", "committing changes", "creating branches"]) {
+      const text = `${prefix} ${action}.`;
+      assert.throws(() => ownerDelivery(text), { code: "TASK_DELIVERY_SCOPE" }, text);
+      assert.throws(() => assertDeliveryAnswer({}, text), { code: "TASK_DELIVERY_SCOPE" }, text);
+    }
+  for (const text of ["Do not even push changes.", "Do not even once commit changes.", "Do not log API keys or commit changes.", "Do not fetch credentials and create branches."])
+    assert.throws(() => ownerDelivery(text), { code: "TASK_DELIVERY_SCOPE" }, text);
+  for (const text of ["Refrain from committing the database transaction before validation.", "I forbid you from creating duplicate users.", "Do not even publish duplicate events to Kafka.", "Do not log API keys or commit the database transaction before validation.", "Do not log API keys while creating branches."])
+    assert.equal(ownerDelivery(text), null, text);
+});
+
+test("application merge evidence cannot reclassify branch refs or revision targets", () => {
+  for (const target of ["main", "master", "develop", "staging", "dev", "release", "HEAD", "origin/main", "feature/foo", "refs/heads/topic", "HEAD~1", "main^", "deadbeef", "v1.2.3", "untyped-target"]) {
+    for (const text of [`Merge ${target}.`, `Tell the agent to merge ${target}.`, `Merge ${target} into release.`]) {
+      assert.throws(() => ownerDelivery(text), { code: "TASK_DELIVERY_SCOPE" }, text);
+      assert.throws(() => assertDeliveryAnswer({}, text), { code: "TASK_DELIVERY_SCOPE" }, text);
+    }
+  }
+  for (const ref of ["SHA-deadbeef", "OID-deadbeef", "hash-deadbeef", "changeset-deadbeef", "SHA-1-deadbeef"])
+    for (const lead of ["Merge invoices", "Tell the agent to merge files"]) {
+      const text = `${lead} using ${ref}.`;
+      assert.throws(() => ownerDelivery(text), { code: "TASK_DELIVERY_SCOPE" }, text);
+      assert.throws(() => assertDeliveryAnswer({}, text), { code: "TASK_DELIVERY_SCOPE" }, text);
+    }
+  for (const qualifier of ["SHA", "SHA-1", "SHA-256", "SHA‐1", "SHA‑1", "SHA‒1", "SHA–1", "SHA—1", "SHA―1", "SHA‐256", "SHA‑256", "SHA‒256", "SHA–256", "SHA—256", "SHA―256", "OID", "hash", "changeset"])
+    for (const separator of [" ", ":", "=", "-", "‐", "‑", "‒", "–", "—", "―"])
+      for (const hash of ["abcd", "abcde", "abcdef", "deadbeef"])
+        for (const lead of ["Merge invoices", "Tell the agent to merge files"]) {
+          const text = `${lead} using ${qualifier}${separator}${hash}.`;
+          assert.throws(() => ownerDelivery(text), { code: "TASK_DELIVERY_SCOPE" }, text);
+          assert.throws(() => assertDeliveryAnswer({}, text), { code: "TASK_DELIVERY_SCOPE" }, text);
+        }
+  for (const qualifier of ["tag", "ref", "branch", "revision", "head"])
+    for (const separator of [":", ": ", "=", " = ", "-", "‐", "‑", "‒", "–", "—", "―"])
+      for (const lead of ["Merge invoices", "Tell the agent to merge files"]) {
+        const text = `${lead} from ${qualifier}${separator}main.`;
+        assert.throws(() => ownerDelivery(text), { code: "TASK_DELIVERY_SCOPE" }, text);
+        assert.throws(() => assertDeliveryAnswer({}, text), { code: "TASK_DELIVERY_SCOPE" }, text);
+      }
+  for (const qualifier of ["tag", "ref", "branch", "revision", "head"])
+    for (const wording of ["named", "called", "known as", "identified as", "with the name"])
+      for (const lead of ["Merge invoices", "Tell the agent to merge files"]) {
+        const text = `${lead} from a ${qualifier} ${wording} main.`;
+        assert.throws(() => ownerDelivery(text), { code: "TASK_DELIVERY_SCOPE" }, text);
+        assert.throws(() => assertDeliveryAnswer({}, text), { code: "TASK_DELIVERY_SCOPE" }, text);
+      }
+  for (const [open, close] of [["(", ")"], ["[", "]"], ["{", "}"], ["<", ">"]])
+    for (const ref of ["main", "HEAD", "the main", "tag metadata", "revision metrics", "SHA deadbeef"])
+      for (const lead of ["Merge invoices", "Tell the agent to merge files"]) {
+        const text = `${lead} from ${open}${ref}${close}.`;
+        assert.throws(() => ownerDelivery(text), { code: "TASK_DELIVERY_SCOPE" }, text);
+        assert.throws(() => assertDeliveryAnswer({}, text), { code: "TASK_DELIVERY_SCOPE" }, text);
+      }
+  for (const [open, close] of [["(", ")"], ["[", "]"], ["{", "}"], ["<", ">"]])
+    for (const qualifier of ["tag", "ref", "branch", "revision", "head"])
+      for (const lead of ["Merge invoices", "Tell the agent to merge files"]) {
+        const text = `${lead} from ${qualifier}${open}main${close}.`;
+        assert.throws(() => ownerDelivery(text), { code: "TASK_DELIVERY_SCOPE" }, text);
+        assert.throws(() => assertDeliveryAnswer({}, text), { code: "TASK_DELIVERY_SCOPE" }, text);
+      }
+  for (const direction of ["from", "to", "into", "onto", "on", "via", "through", "using", "in", "at", "for", "with", "against"])
+    for (const target of ["main", "origin/main", "feature/foo", "the PR", "HEAD~1", "revision HEAD~1", "tag v1.2.3", "the branch topic", "Git ref refs/heads/topic", "remote branch custom", "commit deadbeef", "tag metadata", "revision metrics", "branch records", "head feature/foo", "head HEAD~1", "head refs/heads/topic", "SHA deadbeef", "OID deadbeef", "SHA-1 deadbeef", "hash deadbeef", "changeset deadbeef", "selected source deadbeef", "selected source feature/foo", "selected source (deadbeef)", "selected source [deadbeef]", "selected source {deadbeef}", "selected source <deadbeef>", "SHA(deadbeef)", "OID[deadbeef]", "hash{deadbeef}", "changeset<deadbeef>", "SHA:deadbeef", "OID=deadbeef"])
+      for (const lead of ["Merge invoices", "Tell the agent to merge files"]) {
+        const text = `${lead} ${direction} ${target}.`;
+        assert.throws(() => ownerDelivery(text), { code: "TASK_DELIVERY_SCOPE" }, text);
+        assert.throws(() => assertDeliveryAnswer({}, text), { code: "TASK_DELIVERY_SCOPE" }, text);
+      }
+  for (const text of ["Merge invoices from the main table.", "Tell the agent to merge files from the archive directory.", "Merge head counts into the database.", "Merge invoices with tag metadata records.", "Merge files from revision metadata tables.", "Merge hash maps into the database.", "Merge hash tables before saving.", "Merge changeset records into the database."]) {
+    assert.equal(ownerDelivery(text), null, text);
+    assert.doesNotThrow(() => assertDeliveryAnswer({}, text), text);
+  }
+  for (const id of ["123e4567-e89b-12d3-a456-426614174000", "INV-deadbeef-US", "INV_deadbeef_US", "invoiceDeadbeefRecord"])
+    for (const lead of ["Merge invoices", "Tell the agent to merge files"]) {
+      const text = `${lead} using UUID ${id}.`;
+      assert.equal(ownerDelivery(text), null, text);
+      assert.doesNotThrow(() => assertDeliveryAnswer({}, text), text);
+    }
+  for (const qualifier of ["MongoDB ObjectId", "ObjectId", "checksum", "digest", "ObjectId:", "checksum="])
+    for (const lead of ["Merge invoices", "Tell the agent to merge files"]) {
+      const text = `${lead} using ${qualifier} 507f1f77bcf86cd799439011.`;
+      assert.equal(ownerDelivery(text), null, text);
+      assert.doesNotThrow(() => assertDeliveryAnswer({}, text), text);
+      assert.throws(() => ownerDelivery(`${text} Merge invoices from tag main.`), { code: "TASK_DELIVERY_SCOPE" });
+    }
+  for (const connector of ["and", "or", "nor", ",", "as well as", "along with", "plus"])
+    for (const operand of ["tag main", "also tag main", "another tag main", "one more tag main", "one additional tag main", "two extra tag main", "three further tag main", "2 additional tag main", "also the branch topic", "the other tag main", "an additional ref HEAD", "revision HEAD~1", "SHA abcd"])
+      for (const lead of ["Merge invoices", "Tell the agent to merge files"]) {
+        const text = `${lead} using MongoDB ObjectId 507f1f77bcf86cd799439011 ${connector} ${operand}.`;
+        assert.throws(() => ownerDelivery(text), { code: "TASK_DELIVERY_SCOPE" }, text);
+        assert.throws(() => assertDeliveryAnswer({}, text), { code: "TASK_DELIVERY_SCOPE" }, text);
+      }
+  for (const location of ["/tmp/input.json", "./input.json", "../input.json", "~/input.json", "https://example.com/input.json", "file:///tmp/input.json", "s3://bucket/input.json", "C:\\input.json", "(/tmp/input.json)", "<https://example.com/input.json>", "[~/input.json]", "{s3://bucket/input.json}"])
+    for (const lead of ["Merge JSON files", "Tell the agent to merge JSON files"]) {
+      const text = `${lead} from ${location}.`;
+      assert.equal(ownerDelivery(text), null, text);
+      assert.doesNotThrow(() => assertDeliveryAnswer({}, text), text);
+    }
+  for (const text of ["Merge invoices into the main table.", "Tell the agent to merge database rows before saving.", "Merge custom widgets.", "Merge configuration.", "I forbid you to commit the database transaction before validation.", "I forbid the agent to merge the PR."]) {
+    assert.equal(ownerDelivery(text), null, text);
+    assert.doesNotThrow(() => assertDeliveryAnswer({}, text), text);
+  }
+});
+
+test("publication quantifiers cannot conceal PR restrictions or authorize multiple deliveries", () => {
+  for (const verb of ["open", "create", "raise", "submit", "send", "prepare", "make", "generate", "produce", "start", "begin", "file", "issue", "publish", "deliver", "draft"]) {
+    for (const quantifier of ["any", "any new", "any more", "all", "each", "every", "some", "multiple", "several", "additional", "further", "more", "other", "no", "zero", "two", "3", "even one", "up any", "any GitHub", "automated", "an experimental review", "confidential", "any of these experimental", "one of the review"]) {
+      for (const object of ["PR", "PRs", "pull request", "pull requests"]) {
+        const text = `Do not ${verb} ${quantifier} ${object}.`;
+        assert.throws(() => ownerDelivery(text), { code: "TASK_DELIVERY_SCOPE" }, text);
+        assert.throws(() => assertDeliveryAnswer({}, text), { code: "TASK_DELIVERY_SCOPE" }, text);
+      }
+    }
+  }
+  for (const text of ["Open any PR.", "Create multiple pull requests.", "Submit 2 PRs."])
+    assert.throws(() => ownerDelivery(text), { code: "TASK_DELIVERY_SCOPE" }, text);
+  for (const text of ["Do not open any PR templates.", "Don't submit any pull request descriptions.", "Do not create any more PR forms."]) {
+    assert.equal(ownerDelivery(text), null, text);
+    assert.doesNotThrow(() => assertDeliveryAnswer({}, text), text);
+  }
+});
+
+test("publication verbs retain titles and related feature metadata without masking later controls", () => {
+  for (const verb of ["Generate", "Produce", "Make", "Draft", "Prepare", "Create"]) {
+    for (const object of ["a PR title", "PR titles", "a pull request body", "PR bodies", "PR labels", "PR comments", "PR discussions", "PR reviews", "PR feedback", "PR diffs", "PR checks", "PR status", "PR statuses", "a pull request's title", "the PR's body", "the PR’s title", "the PRs' bodies", "the pull requests’ titles", "a commit's message", "the branches' reports", "a PR-title template", "a pull-request-body template", "a report about the PR", "reports referencing the PR", "a summary of the PR", "a document describing the PR"]) {
+      for (const text of [`${verb} ${object} from the change summary.`, `Do not ${verb.toLowerCase()} ${object} for empty input.`]) {
+        assert.equal(ownerDelivery(text), null, text);
+        assert.doesNotThrow(() => assertDeliveryAnswer({}, text), text);
+        const controlled = text + " Do not push changes.";
+        assert.throws(() => ownerDelivery(controlled), { code: "TASK_DELIVERY_SCOPE" }, controlled);
+        assert.throws(() => assertDeliveryAnswer({}, controlled), { code: "TASK_DELIVERY_SCOPE" }, controlled);
+      }
+    }
+  }
+});
+
+test("publication gerund prohibitions refuse without classifying descriptive gerunds as commands", () => {
+  for (const lead of ["You are forbidden from", "We are prohibited from", "Refrain from", "Abstain from", "Avoid", "Never allow", "Do not permit", "Stop", "Skip", "Without", "I forbid you from", "We prohibit the agent from", "Prevent the agent from", "Policy forbids the worker from", "You must prevent the coding agent from"])
+    for (const action of ["opening", "creating", "raising", "submitting", "sending", "preparing", "making", "generating", "producing", "starting", "beginning", "filing", "issuing", "publishing", "delivering", "drafting"])
+      for (const object of ["a PR", "any GitHub PRs"]) {
+        const text = `${lead} ${action} ${object}.`;
+        assert.throws(() => ownerDelivery(text), { code: "TASK_DELIVERY_SCOPE" }, text);
+        assert.throws(() => assertDeliveryAnswer({}, text), { code: "TASK_DELIVERY_SCOPE" }, text);
+      }
+  for (const text of ["Avoid the automatic opening of any GitHub PRs.", "You are forbidden from the opening of a PR."]) {
+    assert.throws(() => ownerDelivery(text), { code: "TASK_DELIVERY_SCOPE" }, text);
+    assert.throws(() => assertDeliveryAnswer({}, text), { code: "TASK_DELIVERY_SCOPE" }, text);
+  }
+  for (const text of ["Document the procedure for opening a PR.", "Add help for creating a PR.", "Do not log API keys while opening a PR.", "Avoid the automatic opening of the PR-title editor."]) {
+    assert.equal(ownerDelivery(text), null, text);
+    assert.doesNotThrow(() => assertDeliveryAnswer({}, text), text);
+  }
+});
+
+test("explicit PR fixtures remain data without exempting real Git or PR objects", () => {
+  for (const text of ["Generate a synthetic GitHub PR fixture for tests.", "Create a mock pull request object for parser tests.", "Produce a normalized PR record for the API.", "Do not create mock PR objects for invalid input.", "Generate a serialized PR payload.", "Create a PR example for the guide."]) {
+    assert.equal(ownerDelivery(text), null, text);
+    assert.doesNotThrow(() => assertDeliveryAnswer({}, text), text);
+  }
+  for (const text of ["Do not create commit objects.", "Do not generate branch objects.", "Do not create PR objects.", "Generate a mock fixture. Do not create PR objects.", "Generate a mock fixture and do not create PR objects.", "Create a mock PR object, but do not push changes."]) {
+    assert.throws(() => ownerDelivery(text), { code: "TASK_DELIVERY_SCOPE" }, text);
+    assert.throws(() => assertDeliveryAnswer({}, text), { code: "TASK_DELIVERY_SCOPE" }, text);
+  }
+});
+
+test("application noun phrases share destinations without qualifying workflow objects", () => {
+  for (const connector of ["and", "or", "nor", "as well as", "along with", "together with", "in addition to", "not to mention", "besides", "plus"]) {
+    const text = `Do not publish metrics ${connector} regional traces to S3.`;
+    assert.equal(ownerDelivery(text), null, text);
+    assert.doesNotThrow(() => assertDeliveryAnswer({}, text), text);
+    const workflow = `Do not publish the solution ${connector} upload reports to S3.`;
+    assert.throws(() => ownerDelivery(workflow), { code: "TASK_DELIVERY_SCOPE" }, workflow);
+    assert.throws(() => assertDeliveryAnswer({}, workflow), { code: "TASK_DELIVERY_SCOPE" }, workflow);
+  }
+});
+
+test("unknown coordinated actions cannot borrow a later destination", () => {
+  for (const connector of ["and", "or", "nor", "as well as", "along with", "together with", "in addition to", "not to mention", "besides", "plus"]) {
+    for (const action of ["forward reports", "relay records", "dispatch receipts", "route documents", "mirror snapshots", "transmit records", "frobnicate widgets", "carefully forward reports", "you forwarded reports", "please relay reports", "never relay reports", "forward", "duplicate reports", "signal events", "parallel transfers", "mimic records", "derive reports", "supply records", "multiply records", "embed records", "feed records", "bleed records", "give reports", "apply records", "seal reports", "seed records", "frobnical reports", "frobnive records", "frobned reports", "frobnly records", "comment", "process", "bypass", "email"]) {
+      const text = `Do not publish the document ${connector} ${action} to S3.`;
+      for (const source of [text, `Implement export. ${text} Open a PR for review.`])
+        assert.throws(() => ownerDelivery(source), { code: "TASK_DELIVERY_SCOPE" }, source);
+      assert.throws(() => assertDeliveryAnswer({}, text), { code: "TASK_DELIVERY_SCOPE" }, text);
+    }
+  }
+  // The conservative shared-destination grammar does not restrict direct
+  // application objects, including domain compounds or unfamiliar mass nouns.
+  for (const text of ["Do not publish widget latency to S3.", "Do not publish customer telemetry to S3.", "Do not publish widgets and the gizmo to S3.", "Do not publish duplicate reports to S3.", "Do not publish metrics and the duplicate reports to S3.", "Do not publish metrics plus the parallel transfers to S3.", "Do not publish metrics and the email to S3.", "Do not publish email to S3."]) {
+    assert.equal(ownerDelivery(text), null, text);
+    assert.doesNotThrow(() => assertDeliveryAnswer({}, text), text);
+  }
+});
+
+test("coordinated transfer verbs cannot lend destinations to earlier workflow prohibitions", () => {
+  const verbs = ["upload", "uploading", "copy", "copying", "store", "storing", "save", "saving", "move", "moving", "write", "writing", "send", "sending", "fetch", "fetching", "download", "downloading", "sync", "syncing", "synchronize", "synchronizing", "transfer", "transferring", "persist", "persisting", "record", "recording", "emit", "emitting", "export", "exporting", "import", "importing", "archive", "archiving", "collect", "collecting", "back up", "backing up", "log", "logging", "ship", "shipping"];
+  for (const connector of ["and", "plus", "in addition to"]) for (const verb of verbs) {
+    const text = `Do not publish the artifact ${connector} ${verb} reports to S3.`;
+    assert.throws(() => ownerDelivery(text), { code: "TASK_DELIVERY_SCOPE" }, text);
+    assert.throws(() => assertDeliveryAnswer({}, text), { code: "TASK_DELIVERY_SCOPE" }, text);
+  }
+  for (const lead of ["please", "you need to", "you must not", "you aren't allowed to", "never", "avoid", "prevent", "without", "skip", "do not", "don't", "cannot"]) {
+    const text = `Do not publish the document and ${lead} upload reports to S3.`;
+    assert.throws(() => ownerDelivery(text), { code: "TASK_DELIVERY_SCOPE" }, text);
+    assert.throws(() => assertDeliveryAnswer({}, text), { code: "TASK_DELIVERY_SCOPE" }, text);
+  }
+  for (const object of ["archived reports", "uploaded files", "downloaded receipts", "stored logs", "copied records", "sent messages", "the log entries", "the download links", "the upload URLs"]) {
+    const text = `Do not publish metrics plus ${object} to S3.`;
+    assert.equal(ownerDelivery(text), null, text);
+    assert.doesNotThrow(() => assertDeliveryAnswer({}, text), text);
+  }
+  for (const action of ["please download links", "never log entries", "avoid uploading files", "download links", "log entries", "upload URLs"]) {
+    const text = `Do not publish the document and ${action} to S3.`;
+    assert.throws(() => ownerDelivery(text), { code: "TASK_DELIVERY_SCOPE" }, text);
+    assert.throws(() => assertDeliveryAnswer({}, text), { code: "TASK_DELIVERY_SCOPE" }, text);
+  }
+  for (const object of ["log entries", "download links", "upload URLs", "email"]) {
+    const text = `Do not publish metrics plus ${object} to S3.`;
+    assert.throws(() => ownerDelivery(text), { code: "TASK_DELIVERY_SCOPE" }, text);
+    assert.throws(() => assertDeliveryAnswer({}, text), { code: "TASK_DELIVERY_SCOPE" }, text);
+  }
+  for (const noun of ["task", "solution", "deliverable", "fix", "update", "modification", "revision", "feature", "work item", "output", "result", "code", "patch", "branch", "PR"]) {
+    const text = `Do not publish the ${noun} and metrics to S3.`;
+    assert.throws(() => ownerDelivery(text), { code: "TASK_DELIVERY_SCOPE" }, text);
+    assert.throws(() => assertDeliveryAnswer({}, text), { code: "TASK_DELIVERY_SCOPE" }, text);
+  }
+});
+
 test("new action controls do not reinterpret previously approved ownership spans", () => {
-  for (const instruction of ["Please merge it.", "Do not create a branch.", "Require user consent before delivering changes.", "Require user consent before committing the database transaction and creating a branch."]) {
+  for (const instruction of [
+    "Please merge it.", "Do not create a branch.", "Require user consent before delivering changes.",
+    "Require user consent before committing the database transaction and creating a branch.",
+    "Do not publish events or changes.", "Do not deliver notifications or the changes.",
+    "Do not publish notifications to GitHub.", "Do not publish changes for review and deliver reports to S3.",
+    "A PR can't be created.", "Do not publish monthly tasks to S3.",
+    "Require user consent before publishing duplicate events and please push changes.",
+    "Do not publish the document and forward reports to S3.",
+    "Do not publish the document and duplicate reports to S3.",
+    "Do not publish the document and give reports to S3.",
+    "Do not publish the document and email to S3.",
+    "Do not publish metrics plus log entries to S3.",
+    "Do not publish metrics plus download links to S3.",
+    "Do not open any pull requests.",
+    "Don't submit any PRs.",
+    "Do not make any PRs.",
+    "Never generate additional pull requests.",
+    "Do not open any GitHub PRs.",
+    "Do not create automated pull requests.",
+    "You are forbidden from opening a PR.",
+    "Refrain from opening a pull request.",
+    "I forbid you from opening a PR.",
+    "We prohibit the agent from opening any GitHub PRs.",
+    "I require you to merge the PR.",
+    "Opening a PR is prohibited.",
+    "PR creation is prohibited.",
+    "The PR's creation is banned.",
+  ]) {
     const source = "Implement export. Open a PR for review. " + instruction;
     const start = source.indexOf("Open"), end = source.indexOf(" " + instruction);
-    for (const version of [1, 2]) {
+    for (const version of [1, 2, 3, 4]) {
       const saved = { version, offsets: "utf16", source, spans: [
         { start: 0, end: start, owner: "implementation" },
         { start, end, owner: "coordinator", kind: "pull_request" },
@@ -60,330 +538,6 @@ test("ownership partitions exact Unicode source and removes only affirmative pub
     const forged = structuredClone(contract); forged.spans[0].end--;
     assert.throws(() => validateOwnerDelivery(forged), { code: "TASK_DELIVERY_SCOPE" });
   }
-});
-
-test("publication restrictions use action/object shape rather than a verb whitelist", () => {
-  for (const source of [
-    "Implement export. Make a pull request for review.",
-    "Implement export. Submit a PR for review.",
-    "Implement export. Please make one new PR for review.",
-  ]) {
-    const contract = ownerDelivery(source);
-    assert.equal(contract.spans.map(span => source.slice(span.start, span.end)).join(""), source);
-    assert.equal(ownerImplementation(contract).join(""), "Implement export. ");
-    assert.deepEqual(contract.spans.filter(span => span.owner === "coordinator").map(span => span.kind), ["pull_request"]);
-  }
-  for (const source of [
-    "Implement export. Do not make a pull request.",
-    "Implement export. Avoid making a PR.",
-    "Implement export. Do not generate any PR.",
-    "Implement export. Do not generate a PR for review.",
-    "Implement export. Never produce a new pull request.",
-    "Implement export. Do not generate a PR at all.",
-    "Do not produce a PR under any circumstances.",
-    "Implement export. Open PRs without merging.",
-    "Implement export. Prepare a PR without merging.",
-    "Generate a public PR for review in the unit test.",
-    "Creating a PR is forbidden.",
-    "Making a PR is not allowed.",
-    "Creating a PR is forbidden. Open a PR for review.",
-    "Implement export. Open a PR titled export support.",
-    "Implement export. Open a draft PR for review.",
-    "Implement export. Do not create a draft PR.",
-    "Implement export. Create a private draft PR for review.",
-    "Do not create a private draft PR.",
-    "Implement export. Open PRs simultaneously.",
-    "Implement export. Make PRs only after tests pass.",
-    "Implement export. Make PRs subject to my approval.",
-    "Implement export. Make PRs once tests pass.",
-    "Open PRs whenever tests pass.",
-    "Create a PR provided that tests pass.",
-    "Make PRs so long as tests pass.",
-    "Implement export. Make PRs at the end.",
-    "Implement export. Make PRs mandatory before release.",
-    "Implement export. Make PRs prohibited until reviewed.",
-    "Implement export. Make PRs contingent on approval.",
-    "Implement export. Make PRs xylophonic before release.",
-    "Implement export. Make two PRs for review.",
-    "Implement export. Make six PRs for review.",
-    "Implement export. Make a dozen PRs.",
-    "Implement export. Make dozens of PRs for review.",
-    "Implement export. Make a pair of PRs.",
-    "Implement export. Generate a fake PR for review.",
-    "Implement export. Make twenty-three PRs for review.",
-    "Implement export. Make one hundred and six PRs.",
-    "Implement export. Make multiple PRs.",
-    "Implement export. Make the team a PR for review.",
-    "Implement export. Create John a pull request for review.",
-    "Implement export. Create José a PR for review.",
-    "Create Åsa a pull request.",
-    "Make two PRs for review.",
-    "Make multiple PRs.",
-  ]) assert.throws(() => ownerDelivery(source), { code: "TASK_DELIVERY_SCOPE" }, source);
-  for (const source of ["Implement export. Open pull requests for review.", "Implement export. Make PRs for review."])
-    assert.throws(() => ownerDelivery(source), { code: "TASK_DELIVERY_SCOPE" }, source);
-  assert.throws(() => ownerDelivery("I made a PR already."), { code: "TASK_DELIVERY_SCOPE" });
-  const indirect = "Implement export. Make me a PR for review.";
-  const indirectContract = ownerDelivery(indirect);
-  assert.equal(ownerImplementation(indirectContract).join(""), "Implement export. ");
-  assert.equal(indirect.slice(indirectContract.spans.at(-1).start), "Make me a PR for review.");
-  for (const source of ["Add a PR template.", "Document ‘make a PR’ in help."]) assert.equal(ownerDelivery(source), null, source);
-});
-
-test("publication grammar rejects past status, preserves business approval rules, and keeps feature nouns in legacy scope", () => {
-  const task = { completion: { version: 1, target: "delivery_ready" } };
-  for (const source of [
-    "Implement export. Created a PR.",
-    "Implement export. Opened a PR.",
-    "Implement export. Submitted a PR.",
-  ]) {
-    assert.throws(() => ownerDelivery(source), { code: "TASK_DELIVERY_SCOPE" }, source);
-    assert.throws(() => assertDeliveryAnswer(task, source), { code: "TASK_DELIVERY_SCOPE" }, source);
-  }
-  for (const source of [
-    "The model creates a PR when tests pass.",
-    "The provider creates a PR when tests pass.",
-    "The LLM creates a PR when tests pass.",
-    "The AI creates a PR after tests pass.",
-    "Codex should create a PR for review.",
-    "Claude must open a PR.",
-    "Ensure the team creates a PR for review.",
-    "Have John create a PR for review.",
-    "Let John create a PR for review.",
-    "Kindly create a PR for review.",
-    "Now create a PR for review.",
-    "Immediately create a PR for review.",
-  ]) {
-    assert.throws(() => ownerDelivery(source), { code: "TASK_DELIVERY_SCOPE" }, source);
-    assert.throws(() => assertDeliveryAnswer(task, source), { code: "TASK_DELIVERY_SCOPE" }, source);
-  }
-  for (const source of [
-    "Continue implementation after I approve the change.",
-    "Run the migration after I approve the change.",
-    "Deploy the service after I approve the change.",
-    "Apply the patch after I approve the change.",
-    "Finish the implementation after I approve the change.",
-    "Build the feature after I approve the plan.",
-    "Create the widget after I approve the code.",
-    "Generate output after I approve.",
-    "Ship the branch after I approve the output.",
-    "Build the widget after I approve the plan.",
-    "Ship it after I approve the code.",
-    "Release it after I approve the implementation.",
-    "Package it after I approve the code.",
-    "Build the widget after I permit it.",
-    "Build the widget after I agree.",
-    "Build the widget after I review it.",
-    "Implement export after I explicitly approve.",
-    "After I personally approve, implement export.",
-    "Refine the implementation after I approve the purchase.",
-    "Polish the code after I approve the refund.",
-    "After I approve the documentation, proofread it.",
-    "Polish it after I approve the design.",
-    "Build the widget after I approve the purchase, then send a receipt.",
-    "Add tests after I approve the plan.",
-    "Build the widget after I approve the code.",
-    "Update the branch after I approve the output.",
-    "Fix the deployment after I approve the release plan.",
-    "Refactor the parser after I approve the design.",
-    "Write the documentation after I approve the documentation.",
-    "Refactor the parser after I approve the refactor.",
-    "Refactor after I approve.",
-    "Test after I approve.",
-    "Write after I approve.",
-    "Update the service after I have approved.",
-    "After I have approved, update the service.",
-    "Build the feature after I approve it.",
-    "After I approve it, build the feature.",
-    "Update the service after I approve.",
-    "Build the feature after my approval.",
-    "Fix the bug once I consent.",
-    "Update the service after I approve the change.",
-    "Fix the bug after I approve the plan.",
-    "After I approve the plan, build the feature.",
-    "Implement export. Continue implementation after I approve the change.",
-  ]) {
-    assert.throws(() => ownerDelivery(source), { code: "TASK_DELIVERY_SCOPE" }, source);
-    assert.throws(() => assertDeliveryAnswer(task, source), { code: "TASK_DELIVERY_SCOPE" }, source);
-  }
-  for (const source of [
-    "If we approve a refund, send the customer an email.",
-    "If I approve the purchase, show a confirmation page.",
-    "If I approve the purchase, apply the discount.",
-    "If I approve the support request, finish the checkout.",
-    "Apply the discount after I approve the purchase.",
-    "Send the customer an email after I approve the refund.",
-    "Show a confirmation page after I approve the purchase.",
-    "Send a receipt after I approve the expense.",
-    "Notify the user once I approve the loan.",
-    "After I have approved the invoice, mark it paid.",
-    "When I have approved the comment, display it.",
-    "Do not include any PR numbers in release notes.",
-    "Do not display a PR number in the error message.",
-    "Do not generate a PR number in the error message.",
-    "Do not generate a PR preview for draft changes.",
-    "Do not generate a PR description automatically.",
-    "Add a PR client.",
-    "Make a PR client.",
-    "Make a PR parser.",
-    "Make a PR checker.",
-    "Make a PR validator.",
-    "Make a PR editor.",
-    "Create a PR validator.",
-    "Make a PR-ready changelog.",
-    "Make a PR-friendly report.",
-    "Make the PR's title editable.",
-    "Generate the PR's title from the branch name.",
-    "Generate a report for a PR.",
-    "Create a summary for a pull request.",
-    "Create a dashboard that lists PRs.",
-    "Generate a report with PR statistics.",
-    "Document whether PRs are optional in settings.",
-    "Read whether PRs are optional in settings.",
-    "Return whether PRs are optional in settings.",
-    "Validate whether PRs are optional in settings.",
-    "Persist whether PRs are optional in settings.",
-    "Generate a fake PR in the unit test.",
-    "Create a mock PR fixture in tests.",
-    "Generate a dummy PR in the unit test.",
-    "Generate a test PR in the unit test.",
-    "Create a fabricated pull request for the test fixture.",
-    "For tests, create a mock PR.",
-    "In the unit test, generate a fake PR.",
-    "Opening a PR should show a dialog.",
-    "Opening a PR for review should show a dialog.",
-    "Generating a PR for review should populate the title.",
-    "Preparing a PR for review should run checks.",
-    "Creating a pull request should notify the author.",
-    "Making PRs should update the task list.",
-    "Submitting a PR should show a confirmation page.",
-    "The button opens a PR.",
-    "The button opens a PR only after tests pass.",
-    "The button, when clicked, opens a PR.",
-    "The service, when enabled, creates a PR.",
-    "Clicking submit creates a pull request.",
-    "The button sends a PR for review.",
-    "Clicking submit generates a PR.",
-    "The service raises PRs when a check completes.",
-    "The application submits a PR when requested.",
-    "The service prepares a PR when a check completes.",
-    "The application makes a PR available after checks.",
-    "The application made a PR available yesterday.",
-    "The application files a PR when tests pass.",
-    "The application filed a PR after the checks passed.",
-    "The tool produces a PR on success.",
-    "The application publishes a PR after approval.",
-    "The CLI sent a PR after a check completed.",
-    "The CLI creates a PR when the command runs.",
-    "The webhook handler creates a PR when invoked.",
-    "Build the tests without a synthetic PR fixture.",
-    "Display whether a PR is optional in settings.",
-    "Show the PR mandatory field in metadata.",
-    "Make a pull request API.",
-  ]) {
-    assert.equal(ownerDelivery(source), null, source);
-    assert.doesNotThrow(() => assertDeliveryAnswer(task, source), source);
-  }
-  for (const source of ["A PR is forbidden.", "PR is not allowed.", "Pull requests are forbidden."]) {
-    assert.throws(() => ownerDelivery(source), { code: "TASK_DELIVERY_SCOPE" }, source);
-    assert.throws(() => assertDeliveryAnswer(task, source), { code: "TASK_DELIVERY_SCOPE" }, source);
-  }
-  for (const source of [
-    "Creating a PR is forbidden.",
-    "Making a PR is not allowed.",
-    "Creating a PR is forbidden. Open a PR for review.",
-    "Implement export. Open PRs without merging.",
-    "Implement export. Prepare a PR without merging.",
-    "Implement export. Do not create a PR please.",
-    "Implement export. Do not create a PR whatsoever.",
-    "Implement export. Do not create a pull request ever.",
-    "Implement export. Do not create a PR anymore.",
-    "Do not create a PR going forward.",
-    "Never create PRs henceforth.",
-    "Do not create a PR this time.",
-    "Create a PR ASAP.",
-    "Create a PR and assign me.",
-    "Please create a PR and assign me.",
-    "Please send a PR for review.",
-    "Prepare a PR via GitHub.",
-    "Send a PR through GitHub.",
-    "The coordinator creates a PR only after tests pass.",
-    "The agent opens a pull request when the tests pass.",
-  ]) {
-    assert.throws(() => ownerDelivery(source), { code: "TASK_DELIVERY_SCOPE" }, source);
-    assert.throws(() => assertDeliveryAnswer(task, source), { code: "TASK_DELIVERY_SCOPE" }, source);
-  }
-  for (const source of [
-    "Make PRs private in the dashboard.",
-    "Make PRs collapsible.",
-    "Make pull requests read-only for guests.",
-  ]) {
-    assert.equal(ownerDelivery(source), null, source);
-    assert.doesNotThrow(() => assertDeliveryAnswer(task, source), source);
-  }
-  for (const source of ["Implement export. Make PRs simultaneously.", "Implement export. Make PRs titled export support."]) {
-    assert.throws(() => ownerDelivery(source), { code: "TASK_DELIVERY_SCOPE" }, source);
-  }
-  for (const source of [
-    "Implement export. Make PRs require tests to pass.",
-    "Implement export. Make PRs await code review.",
-    "Implement export. Make pull requests forbidden.",
-    "Implement export. Make PRs required before release.",
-    "Implement export. Make PRs obligatory.",
-    "Implement export. Make PRs compulsory.",
-  ]) assert.throws(() => ownerDelivery(source), { code: "TASK_DELIVERY_SCOPE" }, source);
-
-  for (const implementation of ["Make a PR client. ", "Make a PR parser. "]) {
-    const source = implementation + "Open a PR for review.";
-    const start = source.indexOf("Open");
-    for (const version of [1, 2]) {
-      const saved = { version, offsets: "utf16", source, spans: [
-        { start: 0, end: start, owner: "implementation" },
-        { start, end: source.length, owner: "coordinator", kind: "pull_request" },
-      ] };
-      assert.equal(validateOwnerDelivery(saved), saved, `legacy v${version} implementation text must not be reclassified as delivery authority`);
-    }
-  }
-  const contradictory = "Implement export. Do not generate a PR. Open a PR for review.", publication = contradictory.lastIndexOf("Open");
-  assert.throws(() => validateOwnerDelivery({ version: 3, offsets: "utf16", source: contradictory, spans: [
-    { start: 0, end: publication, owner: "implementation" },
-    { start: publication, end: contradictory.length, owner: "coordinator", kind: "pull_request" },
-  ] }), { code: "TASK_DELIVERY_SCOPE" }, "v3 validation must enforce its current restriction grammar");
-
-  const malformedLiteral = 'Implement export. Open a PR for review. "Do not push', malformedStart = malformedLiteral.indexOf("Open"), malformedEnd = malformedLiteral.indexOf(' "Do not push');
-  assert.throws(() => validateOwnerDelivery({ version: 3, offsets: "utf16", source: malformedLiteral, spans: [
-    { start: 0, end: malformedStart, owner: "implementation" },
-    { start: malformedStart, end: malformedEnd, owner: "coordinator", kind: "pull_request" },
-    { start: malformedEnd, end: malformedLiteral.length, owner: "implementation" },
-  ] }), { code: "TASK_DELIVERY_SCOPE" }, "v3 must reject malformed literals even when imported as a saved contract");
-
-  const gated = "Implement export. Open a PR for review. Require owner approval before delivering changes.", gatedPublication = gated.indexOf("Open"), gateStart = gated.indexOf(" Require");
-  assert.throws(() => validateOwnerDelivery({ version: 3, offsets: "utf16", source: gated, spans: [
-    { start: 0, end: gatedPublication, owner: "implementation" },
-    { start: gatedPublication, end: gateStart, owner: "coordinator", kind: "pull_request" },
-    { start: gateStart, end: gated.length, owner: "implementation" },
-  ] }), { code: "TASK_DELIVERY_SCOPE" }, "v3 must enforce current approval prerequisites when imported");
-
-  for (const control of ["Do not push.", "Keep the change local."]) {
-    const source = `Implement export. Open a PR for review. ${control}`, start = source.indexOf("Open"), end = source.indexOf(". ", start) + 1;
-    assert.throws(() => validateOwnerDelivery({ version: 3, offsets: "utf16", source, spans: [
-      { start: 0, end: start, owner: "implementation" },
-      { start, end, owner: "coordinator", kind: "pull_request" },
-      { start: end, end: source.length, owner: "implementation" },
-    ] }), { code: "TASK_DELIVERY_SCOPE" }, `v3 validation must enforce delivery controls: ${control}`);
-  }
-});
-
-test("PR feature requirements remain implementation scope without enumerating feature nouns", () => {
-  const task = { completion: { version: 1, target: "delivery_ready" } };
-  for (const feature of ["Make PRs searchable in the dashboard.", "Make pull requests visible to administrators.", "Make PRs easier to find.", "Make a PR checker.", "Make a pull request API."]) {
-    assert.equal(ownerDelivery(feature), null, feature);
-    assert.doesNotThrow(() => assertDeliveryAnswer(task, feature), feature);
-    const source = feature + " Open a PR for review.", contract = ownerDelivery(source);
-    assert.equal(ownerImplementation(contract).join(""), feature + " ");
-    assert.equal(contract.spans.map(span => source.slice(span.start, span.end)).join(""), source);
-  }
-  assert.throws(() => ownerDelivery("Implement export. Make PRs for review."), { code: "TASK_DELIVERY_SCOPE" });
 });
 
 test("quoted/code examples never create publication authority", () => {
@@ -495,13 +649,6 @@ test("technical feature objects and application consent are not delivery control
     for (const restriction of ["Do not push.", "Wait for my approval.", "Publication only after approval."])
       for (const act of [() => ownerDelivery(text + " " + restriction), () => assertDeliveryAnswer(task, text + " " + restriction)])
         assert.throws(act, { code: "TASK_DELIVERY_SCOPE" }, text + " " + restriction);
-  }
-  for (const source of [
-    "If we approve a refund, send the customer an email.",
-    "If I approve the purchase, show a confirmation page.",
-  ]) {
-    assert.equal(ownerDelivery(source), null, source);
-    assert.doesNotThrow(() => assertDeliveryAnswer(task, source), source);
   }
   for (const text of ["Create a PR tomorrow.", "Open a PR against release.", "Submit a PR when I approve.", "Do not commit the changes.", "Never automatically push changes.", "Do not silently commit changes.", "Do not commit the database transaction or silently push changes.", "Avoid pushing commits to the remote.", "Never run git push.", "Require my confirmation before proceeding.", "Ask for user permission before publishing.", "Require user confirmation before git push.", "Require user permission before running git push.", "Do not commit the database transaction or push any changes.", "Avoid pushing duplicate items onto the queue and committing changes."])
     for (const act of [() => ownerDelivery(text), () => assertDeliveryAnswer(task, text)]) assert.throws(act, { code: "TASK_DELIVERY_SCOPE" }, text);
@@ -647,8 +794,7 @@ test("publication subjects and technical conditions remain implementation scope"
   const text = "If name is empty, return friend. Open a PR for review.";
   assert.equal(ownerImplementation(ownerDelivery(text)).join("").trim(), "If name is empty, return friend.");
   for (const source of ["Wait for my approval. Open a PR for review.", "Implement export. Do not proceed until I approve.", "Implement export. My approval is required.", "Implement export. My approval is required. Open a PR.", "Implement export. Publish the changes.", "Implement export. Send a PR for review.", "Implement export. Open a pull-request.", "Implement export. Only if tests pass open a PR."]) assert.throws(() => ownerDelivery(source), { code: "TASK_DELIVERY_SCOPE" }, source);
-  for (const source of ["If I approve the change, continue with implementation.", "After I approve the change, run the migration."]) assert.throws(() => ownerDelivery(source), { code: "TASK_DELIVERY_SCOPE" }, source);
-  for (const answer of ["Wait for my approval.", "Do not proceed until I approve.", "My confirmation is required.", "Skip publication.", "No PR should be created.", "Send it for review.", "Do not create a pull request ever."]) assert.throws(() => assertDeliveryAnswer(task, answer), { code: "TASK_DELIVERY_SCOPE" }, answer);
+  for (const answer of ["Wait for my approval.", "Do not proceed until I approve.", "My confirmation is required.", "Skip publication.", "No PR should be created.", "Send it for review."]) assert.throws(() => assertDeliveryAnswer(task, answer), { code: "TASK_DELIVERY_SCOPE" }, answer);
 });
 
 test("publication-subject conditions and standalone gates remain owner controls", () => {
@@ -738,7 +884,7 @@ test("publication owns recognized connectors without changing implementation tex
     const source = `${implementation}${connector}open a PR for review; do not merge or add dependencies.`;
     const contract = ownerDelivery(source);
     assert.deepEqual(ownerImplementation(contract), [implementation, " do not merge or add dependencies."], connector);
-    assert.equal(contract.version, 3);
+    assert.equal(contract.version, 5);
     assert.equal(contract.spans.map(span => source.slice(span.start, span.end)).join(""), source);
     assert.equal(contract.spans.find(span => span.owner === "coordinator").start, implementation.length);
     assert.equal(validateOwnerDelivery(contract), contract);
@@ -762,7 +908,7 @@ test("saved version-one ownership remains exact and cannot authorize forged conn
   assert.deepEqual(legacy, before);
   const corrected = ownerDelivery(source);
   assert.deepEqual(ownerImplementation(corrected), ["Implement CSV export"]);
-  for (const value of [{ ...corrected, version: 1 }, { ...legacy, version: 2 }])
+  for (const value of [{ ...corrected, version: 1 }, { ...legacy, version: 2 }, { ...corrected, version: 99 }])
     assert.throws(() => validateOwnerDelivery(value), { code: "TASK_DELIVERY_SCOPE" });
   for (const original of [legacy, corrected]) {
     const forged = structuredClone(original); forged.spans[0].end--; forged.spans[1].start--;
@@ -779,6 +925,57 @@ test("saved version-one ownership remains exact and cannot authorize forged conn
   }
 });
 
+test("elisions retain following requirements without changing historical literal spans", () => {
+  for (const text of ["Support '90s date formats.", "Preserve 'tis and 'em in the sample.", "Preserve '90s and 'tis in the sample."]) {
+    const source = text + " Open a PR for review.", contract = ownerDelivery(source);
+    assert.equal(contract.version, 5);
+    assert.deepEqual(ownerImplementation(contract), [text + " "]);
+    assert.throws(() => ownerDelivery(text + " Do not push."), { code: "TASK_DELIVERY_SCOPE" });
+    assert.throws(() => assertDeliveryAnswer({}, text + " Please merge it."), { code: "TASK_DELIVERY_SCOPE" });
+  }
+  for (const text of ['Document "\'90s do not push" in help.', 'Document "\'tis time; do not push" in help.'])
+    assert.equal(ownerDelivery(text), null, "complete quotations remain literal examples");
+  const source = "Implement export. Open a PR. Preserve 'tis in the sample.";
+  for (const version of [1, 2]) {
+    const saved = { version, offsets: "utf16", source, spans: [
+      { start: 0, end: 18, owner: "implementation" },
+      { start: 18, end: 28, owner: "coordinator", kind: "pull_request" },
+      { start: 28, end: source.length, owner: "implementation" },
+    ] };
+    assert.equal(validateOwnerDelivery(saved), saved);
+  }
+  const priorSource = "Add '90s support. Open a PR. Respect users' approval. Implement export. Open a PR for review.";
+  const start = priorSource.lastIndexOf("Open");
+  const v3 = { version: 3, offsets: "utf16", source: priorSource, spans: [
+    { start: 0, end: start, owner: "implementation" },
+    { start, end: priorSource.length, owner: "coordinator", kind: "pull_request" },
+  ] };
+  assert.equal(validateOwnerDelivery(v3), v3, "version-three accepted spans retain the old elision interpretation");
+  assert.throws(() => ownerDelivery(priorSource), { code: "TASK_DELIVERY_SCOPE" });
+});
+
+test("version-five feature boundaries cannot hide another line's publication and preserve saved version four", () => {
+  for (const separator of ["\n", "\r\n", "\r"]) for (const text of [`Do not create a PR${separator}body.`, `Generate mock data${separator}Do not create PR objects.`]) {
+    assert.throws(() => ownerDelivery(text), { code: "TASK_DELIVERY_SCOPE" }, text);
+    assert.throws(() => assertDeliveryAnswer({}, text), { code: "TASK_DELIVERY_SCOPE" }, text);
+  }
+  const source = "Implement export. Open a PR\nTitle output.", current = ownerDelivery(source);
+  assert.equal(current.version, 5);
+  assert.equal(validateOwnerDelivery(current), current);
+  assert.deepEqual(ownerImplementation(current), ["Implement export. ", "\nTitle output."]);
+  assert.throws(() => validateOwnerDelivery({ ...current, version: 4 }), { code: "TASK_DELIVERY_SCOPE" });
+  // Pinned against the previous module: its feature matcher consumed the first
+  // PR across a newline and assigned only the final PR to the coordinator.
+  const priorSource = "Implement export. Open a PR\nTitle output. Open a PR for review.";
+  const split = priorSource.lastIndexOf("Open"), prior = { version: 4, offsets: "utf16", source: priorSource, spans: [
+    { start: 0, end: split, owner: "implementation" },
+    { start: split, end: priorSource.length, owner: "coordinator", kind: "pull_request" },
+  ] };
+  assert.equal(validateOwnerDelivery(prior), prior);
+  assert.throws(() => ownerDelivery(priorSource), { code: "TASK_DELIVERY_SCOPE" });
+  assert.throws(() => validateOwnerDelivery({ ...prior, version: 5 }), { code: "TASK_DELIVERY_SCOPE" });
+});
+
 test("publication owns only its recognized coordinating connector and delimiter", () => {
   for (const connector of [", and ", ", and then ", " and ", " and then ", ", then ", " then ", ", "]) {
     const source = "Implement CSV export and test both formats" + connector + "open a PR for review.";
@@ -787,43 +984,6 @@ test("publication owns only its recognized coordinating connector and delimiter"
     assert.equal(contract.spans.map(s => source.slice(s.start, s.end)).join(""), source);
     assert.equal(source.slice(contract.spans.at(-1).start), connector + "open a PR for review.", connector);
   }
-});
-
-test("saved v1/v2 contracts retain the published v0.2.0 producer grammar", () => {
-  // The v0.2.0 runtime shipped with source commit 04c59178 and emitted v1/v2
-  // contracts using open\\w*, creat\\w*, and pull requests? in its producer.
-  // Preserve those exact saved spans; new intake remains deliberately stricter.
-  for (const source of [
-    "Implement export. Open pull requests for review.",
-    "Implement export. Opening a PR for review.",
-    "Implement export. Opened a PR for review.",
-    "Implement export. Created a PR for review.",
-    "Implement export. Make PRs for review.",
-    "Build the widget after I approved it. Open a PR for review.",
-    "Document whether PRs are optional in settings. Open a PR for review.",
-  ]) {
-    const start = source.search(/(?:Open(?:ing|ed)?|Created|Make)\b/);
-    for (const version of [1, 2]) {
-      const saved = { version, offsets: "utf16", source, spans: [
-        { start: 0, end: start, owner: "implementation" },
-        { start, end: source.length, owner: "coordinator", kind: "pull_request" },
-      ] };
-      assert.equal(validateOwnerDelivery(saved), saved, `historical v${version} grammar: ${source}`);
-    }
-  }
-  for (const source of ["Implement export. Make two PRs for review.", "Implement export. Make me a PR for review."]) {
-    const start = source.indexOf("Make ");
-    for (const version of [1, 2]) {
-      const saved = { version, offsets: "utf16", source, spans: [
-        { start: 0, end: start, owner: "implementation" },
-        { start, end: source.length, owner: "coordinator", kind: "pull_request" },
-      ] };
-      assert.throws(() => validateOwnerDelivery(saved), { code: "TASK_DELIVERY_SCOPE" }, `legacy producer did not accept: ${source}`);
-    }
-  }
-  assert.throws(() => ownerDelivery("Implement export. Open pull requests for review."),
-    { code: "TASK_DELIVERY_SCOPE" },
-    "new intake still requires clarification for a plural publication directive");
 });
 
 test("typed ownership is validated and included in the ongoing PRD fingerprint; legacy contract is unchanged", () => {

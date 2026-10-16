@@ -299,6 +299,87 @@ test("action object boundaries reject workflow changes before effects and retain
   }
 });
 
+test("latest publication review cases fail before task effects without rejecting product requirements", async () => {
+  const unsafe = [
+    "Create a PR ASAP.",
+    "Do not create a PR this time.",
+    "Make PRs obligatory.",
+    "Make PRs compulsory.",
+    "Open PRs whenever tests pass.",
+    "Create a PR provided that tests pass.",
+    "Make PRs so long as tests pass.",
+    "The LLM creates a PR when tests pass.",
+    "The AI creates a PR after tests pass.",
+    "Ship it after I approve the code.",
+    "Release it after I approve the implementation.",
+    "Package it after I approve the code.",
+    "Make the team a PR for review.",
+    "Create John a pull request for review.",
+    "Do not create a PR please.",
+    "Do not create a PR whatsoever.",
+    "Create a PR and assign me.",
+    "Create a PR anyone can see.",
+    "Create a PR everyone can review.",
+    "Create a number of PRs for review.",
+    "Make a handful of PRs.",
+    "Create a series of PRs.",
+    "Create a plethora of PRs.",
+    "Make a multitude of PRs for review.",
+    "Create a truckload of PRs.",
+    "Do not create a PR going forward.",
+    "John should create a PR for review.",
+    "The team must create a PR for review.",
+    "Create an actual PR in the integration test.",
+    "Create a real PR in the test.",
+  ];
+  const initial = world({ prepare: async () => assert.fail("ambiguous publication cannot invoke preparation") });
+  const pending = world({ prepare: async (_ctx, task) => JSON.stringify(draftFor(task, { question: true })) });
+  const first = await pending.service.prepare({ text: REQUEST });
+  const before = taskStore(pending.home).read(first.taskId), calls = pending.calls();
+  for (const [index, clause] of unsafe.entries()) {
+    const text = `Implement export. ${clause}`;
+    await assert.rejects(initial.service.prepare({ text, run: true }), { code: "TASK_DELIVERY_SCOPE", taskEffects: "none" }, text);
+    await assert.rejects(pending.service.answer({ taskId: first.taskId, expectedRevision: first.revision,
+      operationId: `reviewed-publication-${index}`, answers: { "q-r-1": clause } }),
+    { code: "TASK_DELIVERY_SCOPE", taskEffects: "none" }, clause);
+    assert.deepEqual(taskStore(pending.home).read(first.taskId), before, clause);
+  }
+  assert.deepEqual(initial.service.list().tasks, []);
+  assert.deepEqual(initial.ctx.state.entries(), []);
+  assert.deepEqual(pending.ctx.state.entries(), []);
+  assert.equal(initial.calls(), 0);
+  assert.equal(initial.daemonCalls(), 0);
+  assert.equal(pending.calls(), calls);
+  assert.equal(pending.daemonCalls(), 0);
+
+  const productRequirements = [
+    "The button opens a PR.",
+    "Clicking submit creates a pull request.",
+    "Make PRs searchable in the dashboard.",
+    "Make a pull request API.",
+    "Make the PR optional field editable.",
+    "Generate the PR's title from the branch name.",
+    "Generate a daily report summarizing PRs.",
+    "Create a list of PRs in the dashboard.",
+    "Create a collection of PRs for the dashboard.",
+    "Document whether PRs are optional in settings.",
+    "After I have approved the invoice, mark it paid.",
+    "When I have approved the comment, display it.",
+    "Generate a dummy PR in the unit test.",
+    "Create a fabricated pull request for the test fixture.",
+  ];
+  for (const text of productRequirements) {
+    const w = world(), prepared = await w.service.prepare({ text });
+    assert.equal(prepared.status, "ready", text);
+    assert.deepEqual(taskStore(w.home).read(prepared.taskId).requirements.map(item => item.text), [text], text);
+    const a = world({ prepare: async (_ctx, task) => JSON.stringify(draftFor(task, { question: true })) });
+    const question = await a.service.prepare({ text: REQUEST });
+    const answered = await a.service.answer({ taskId: question.taskId, expectedRevision: question.revision,
+      operationId: "reviewed-product-requirement", answers: { "q-r-1": text } });
+    assert.ok(answered.draft.text.includes(JSON.stringify(text)), text);
+  }
+});
+
 test("publication preferences and new legacy answers refuse before effects while negative requirements prepare", async () => {
   const initial = world({ prepare: async () => assert.fail("publication refusal cannot spend") });
   for (const text of ["I don't want a PR.", "We don't need a pull request."])
@@ -356,10 +437,20 @@ test("publication connectors never enter newly prepared provider criteria or sto
     assert.match(executable, /"Implement CSV and JSON export"/);
     assert.doesNotMatch(executable, /open a PR|export,|export and|export then/);
     assert.match(executable, /do not merge or add dependencies/);
-    assert.equal(saved.ownerDelivery.version, 3);
+    assert.equal(saved.ownerDelivery.version, 5);
     const started = await w.service.start({ taskId: prepared.taskId, expectedRevision: prepared.revision, run: true, noDaemon: true });
     assert.deepEqual(w.ctx.state.get(started.implementation.id).task.ownerDelivery, saved.ownerDelivery);
   }
+});
+
+test("action object boundaries preserve version-five publication before newline metadata", async () => {
+  const text = "Implement CSV export. Open a PR\nTitle output must include the document name.";
+  const w = world(), prepared = await w.service.prepare({ text }), saved = taskStore(w.home).read(prepared.taskId);
+  assert.equal(prepared.status, "ready");
+  assert.equal(saved.ownerDelivery.version, 5);
+  assert.deepEqual(saved.requirements.map(r => r.text), ["Implement CSV export.", "Title output must include the document name."]);
+  const started = await w.service.start({ taskId: prepared.taskId, expectedRevision: prepared.revision, run: true, noDaemon: true });
+  assert.deepEqual(w.ctx.state.get(started.implementation.id).task.ownerDelivery, saved.ownerDelivery);
 });
 
 test("ambiguous quoted or multiline publication connectors refuse before preparation effects", async () => {
