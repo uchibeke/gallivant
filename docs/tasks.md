@@ -61,6 +61,13 @@ open-ended requirements such as “obligatory” or “compulsory” return
 Multiple object modifiers and named recipients, including non-ASCII names, are
 detected as publication intent; unsupported forms clarify rather than becoming
 implementation instructions.
+Count phrases such as “dozens of PRs” and “a pair of PRs” are also detected as
+multiple-publication requests. Declarative feature subjects cover the recognized
+publication gerunds, including “generating” and “preparing a PR for review”; they
+remain product behavior when followed by an application requirement. An approval
+of a business object does not make subsequent editing work a product rule: for
+example, proofreading or polishing a referenced artifact after approval still
+requires clarification.
 `TASK_DELIVERY_SCOPE` before inference. Broader construction verbs such as
 `send`, `prepare`, `generate`, `produce`, `publish` and `file` are recognized
 as publication intent, but require clarification unless they match the supported
