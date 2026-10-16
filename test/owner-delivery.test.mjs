@@ -94,6 +94,8 @@ test("new publication predicates, actors, adverbs and approval gates fail closed
   // authorization gate simply because it mentions an approval.
   for (const text of [
     "If a customer approves the refund, send the customer an email.",
+    "If we approve a refund, send the customer an email.",
+    "If I approve the purchase, show a confirmation page.",
     "Approve the refund before emailing the customer.",
     "After I have approved the invoice, mark it paid.",
     "When I have approved the comment, display it.",
@@ -101,6 +103,11 @@ test("new publication predicates, actors, adverbs and approval gates fail closed
     assert.equal(ownerDelivery(text), null, text);
     assert.doesNotThrow(() => assertDeliveryAnswer({}, text), text);
   }
+  for (const text of [
+    "If I approve the purchase, continue with implementation.",
+    "If we approve a refund, deploy the service.",
+    "If I approve the code, send an email.",
+  ]) assert.throws(() => ownerDelivery(text), { code: "TASK_DELIVERY_SCOPE" }, text);
 });
 
 test("PR-shaped application features stay implementation requirements while real delivery remains visible", () => {
@@ -118,6 +125,8 @@ test("PR-shaped application features stay implementation requirements while real
     "The application created a PR when a check completes.",
     "The application submitted a PR when requested.",
     "Create a report summarizing pull requests.",
+    "Do not generate a PR number in the error message.",
+    "Do not generate a PR preview for draft changes.",
     "Generate a dashboard listing PRs.",
     "Create a list of PRs in the dashboard.",
     "Create a collection of PRs for the dashboard.",
