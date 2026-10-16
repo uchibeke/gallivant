@@ -1,4 +1,6 @@
 export const workflowRequests = [
+  "Merge invoices using SHA‑1‑abcd.",
+  "Merge files using SHA–256:abcde.",
   "Merge invoices from tag—main.",
   "Tell the agent to merge files using ref—HEAD.",
   "Merge invoices from a tag named main.",

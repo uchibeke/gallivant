@@ -147,7 +147,7 @@ test("application merge evidence cannot reclassify branch refs or revision targe
       assert.throws(() => ownerDelivery(text), { code: "TASK_DELIVERY_SCOPE" }, text);
       assert.throws(() => assertDeliveryAnswer({}, text), { code: "TASK_DELIVERY_SCOPE" }, text);
     }
-  for (const qualifier of ["SHA", "SHA-1", "SHA-256", "OID", "hash", "changeset"])
+  for (const qualifier of ["SHA", "SHA-1", "SHA-256", "SHA‐1", "SHA‑1", "SHA‒1", "SHA–1", "SHA—1", "SHA―1", "SHA‐256", "SHA‑256", "SHA‒256", "SHA–256", "SHA—256", "SHA―256", "OID", "hash", "changeset"])
     for (const separator of [" ", ":", "=", "-", "‐", "‑", "‒", "–", "—", "―"])
       for (const hash of ["abcd", "abcde", "abcdef", "deadbeef"])
         for (const lead of ["Merge invoices", "Tell the agent to merge files"]) {
