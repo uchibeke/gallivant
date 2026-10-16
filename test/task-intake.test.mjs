@@ -361,6 +361,8 @@ test("latest publication review cases fail before task effects without rejecting
     "Create a truckload of PRs.",
     "Do not create a PR going forward.",
     "'cause we should not create a PR, label the button 'Ready'.",
+    "'cause we should not create a PR for users' safety.",
+    "Do not create a PR visible to outsiders.",
     "John should create a PR for review.",
     "The team must create a PR for review.",
     "Create an actual PR in the integration test.",

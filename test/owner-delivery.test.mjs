@@ -179,6 +179,7 @@ test("PR-shaped application features stay implementation requirements while real
     "Clicking submit creates a pull request.",
     "Make PRs searchable in the dashboard.",
     "Make pull requests visible to administrators.",
+    "Make PRs visible to administrators.",
     "Make a PR checker.",
     "Make a pull request API.",
     "Make PRs easier to find.",
@@ -223,6 +224,11 @@ test("PR-shaped application features stay implementation requirements while real
     assert.throws(() => assertDeliveryAnswer({}, text), { code: "TASK_DELIVERY_SCOPE" }, text);
   }
   assert.equal(ownerDelivery("Create a report about the PR."), null);
+  for (const text of ["Do not create a PR visible to outsiders.", "Do not create a PR private from the owner."]) {
+    assert.throws(() => ownerDelivery(text), { code: "TASK_DELIVERY_SCOPE" }, text);
+    assert.throws(() => assertDeliveryAnswer({}, text), { code: "TASK_DELIVERY_SCOPE" }, text);
+  }
+  assert.equal(ownerDelivery("Do not generate a PR number in the error message."), null);
   const makeContract = ownerDelivery("Implement export. Make a PR for review.");
   assert.equal(makeContract.version, 5);
   assert.deepEqual(ownerImplementation(makeContract), ["Implement export. "]);
@@ -1175,9 +1181,14 @@ test("elisions retain following requirements without changing historical literal
   const elisionAndPolicy = "'cause we should not create a PR, label the button 'Ready'.";
   assert.throws(() => ownerDelivery(elisionAndPolicy), { code: "TASK_DELIVERY_SCOPE" }, elisionAndPolicy);
   assert.throws(() => assertDeliveryAnswer({}, elisionAndPolicy), { code: "TASK_DELIVERY_SCOPE" }, elisionAndPolicy);
+  const possessiveElision = "'cause we should not create a PR for users' safety.";
+  assert.throws(() => ownerDelivery(possessiveElision), { code: "TASK_DELIVERY_SCOPE" }, possessiveElision);
+  assert.throws(() => assertDeliveryAnswer({}, possessiveElision), { code: "TASK_DELIVERY_SCOPE" }, possessiveElision);
   const quotedElision = "Add a validation test for the exact string 'cause we should not create a PR'.";
   assert.equal(ownerDelivery(quotedElision), null);
   assert.doesNotThrow(() => assertDeliveryAnswer({}, quotedElision));
+  const quotedElisionWithTail = "Add a validation test for the exact string 'cause we should not create a PR' in the help text.";
+  assert.equal(ownerDelivery(quotedElisionWithTail), null);
   const priorSource = "Add '90s support. Open a PR. Respect users' approval. Implement export. Open a PR for review.";
   const start = priorSource.lastIndexOf("Open");
   const v3 = { version: 3, offsets: "utf16", source: priorSource, spans: [
