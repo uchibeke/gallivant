@@ -72,9 +72,9 @@ requires clarification.
 Policy questions framed as “whether PRs are optional/required” are product
 metadata requirements. Causative directions such as “Have John create a PR” or
 “Ensure the team creates a PR” remain visible for clarification. A labeled fake,
-mock, sample or synthetic PR is treated as test data only when the same statement
-also names a test or fixture context; without that context, publication intent
-still requires clarification.
+mock, sample or synthetic PR is treated as test data only when the same sentence
+also names a test or fixture context, before or after the PR phrase; without that
+context, publication intent still requires clarification.
 Leading command adverbs such as “Kindly,” “Now,” and “Immediately” do not turn
 an imperative publication command into application behavior. Terminal temporal
 restrictions such as “anymore,” “henceforth,” “from now on,” “going forward,”

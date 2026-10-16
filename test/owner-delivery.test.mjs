@@ -234,6 +234,8 @@ test("publication grammar rejects past status, preserves business approval rules
     "Persist whether PRs are optional in settings.",
     "Generate a fake PR in the unit test.",
     "Create a mock PR fixture in tests.",
+    "For tests, create a mock PR.",
+    "In the unit test, generate a fake PR.",
     "Opening a PR should show a dialog.",
     "Opening a PR for review should show a dialog.",
     "Generating a PR for review should populate the title.",
