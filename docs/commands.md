@@ -25,12 +25,19 @@ their identity using `--revision`, `--request-id` and repeated `--answer id=text
 operations to CLI and in-process clients. Preparation uses inference but starts
 implementation only with explicit `--run` authorization and exact readiness.
 Configured Claude uses tool-free preparation; Codex 0.160.0+ uses its isolated
-preparation profile. Hosted providers require their own registered preparation
-capability and access checks. Unsupported adapters return
-`TASK_PREPARATION_BOUNDARY` without an automatic fallback.
+preparation profile; `openai-agents` uses a text-only session with no tools or
+execution environment. All require their configured provider/model access.
+Gemini, OpenCode and Goose can implement ready PRDs but cannot prepare them;
+unsupported preparation returns `TASK_PREPARATION_BOUNDARY` without fallback.
+Codex Cloud also refuses new implementation dispatch until its environment can be
+bound to the intended repository. See [provider setup](config.md#execution-providers).
+
+Requests can produce code, documentation, research or other repository artifacts.
+A natural-language task still becomes an explicit, validated delivery contract;
+it does not require the user to write a PRD first.
 See [task operations](tasks.md) for examples, source delivery and stopping rules.
 
-One line per repository in `repos` names the base branch its pull requests will target and where that answer came from,
+`doctor` prints one line per repository in `repos` naming the base branch its pull requests will target and where that answer came from,
 so a repository whose work should go to `staging` while nothing is configured is visible before a session opens a pull
 request against `main`. A configured base that GitHub does not have is a failure here, with the fix. See [the base
 branch](config.md#the-base-branch).
@@ -51,17 +58,25 @@ contract, because a starting point that passed it would be a starting point nobo
 
 ## `gallivant ready <prd.md> [--check]`
 
-The only way a PRD becomes ready. Runs every rule of [the contract](prd.md), prints the checklist, asks APort to decide readiness against a per-PRD passport built from those rules when configured, and flips `status: draft` to `ready` (recording the decision id as `aport_decision`) only on an allow. It does not commit the file. `--check` reads only the brief and its sources: it skips runtime config, credentials and hosted recording, and writes nothing. Hosted recording prints a progress message and has a 15-second request timeout. Exit code 1 while anything fails.
+The explicit-file entry point to the shared readiness gate. Runs every rule of [the contract](prd.md), prints the checklist, asks APort to decide readiness against a per-PRD passport built from those rules when configured, and flips `status: draft` to `ready` (recording the decision id as `aport_decision`) only on an allow. It does not commit the file. `--check` reads only the brief and its sources: it skips runtime config, credentials and hosted recording, and writes nothing. Hosted recording prints a progress message and has a 15-second request timeout. Exit code 1 while anything fails.
 
 ## `gallivant start [prd.md] [--no-daemon] [--no-server] [--no-open] [--port 8791] [--base <branch>]`
 
 With no PRD, ensure the daemon and dashboard are running and open the dashboard.
-With a PRD, submit that task first, then use exactly the same service startup:
+With a PRD, submit that task first, then use exactly the same service startup.
+The sequence below describes local CLI implementation. Hosted Agents execution
+uses the same validation, snapshot, checkout and review ownership, but dispatches
+through its transport: the coordinator verifies and publishes returned artifacts.
+It sends no GitHub credential or local harness settings to the hosted sandbox.
+[The execution contract](execution.md) covers durable remote dispatch and recovery.
+Codex Cloud currently refuses new dispatch before starting work.
+
+Local task submission:
 
 1. Reads the PRD into a Request (see [the contract](prd.md)), which names the target repository: the checkout the file itself is in, so the PRD has to live inside the repo it describes. Runs the full contract on it and refuses on the first failing rule. There is no override flag.
-2. Requires `status: ready`, which only `gallivant ready` sets.
-3. Checks the harness named in the PRD is signed in. If not, the entry is recorded as `needs-human` with reason `not-signed-in` and nothing else happens.
-4. Builds the run specification: the prompt, the session id, and the argv the harness will be spawned with, including the read-only `context_paths`. This happens before the clone, because it is the last step that can refuse and the clone is the only one that leaves something behind. A harness that cannot grant those directories as read-only is refused here, with nothing cloned and nothing registered, so rerunning `start` after fixing the config works rather than failing on a leftover worktree.
+2. Requires `status: ready`, produced by the shared readiness path (`gallivant ready` or validated task intake).
+3. Checks the selected harness version and sign-in before cloning or dispatch. A failed check refuses startup with its setup remedy; no model call is made.
+4. Builds the run specification: the prompt, the session id, and the argv the harness will be spawned with, including the read-only `context_paths`. This validation happens before the clone, so unsupported local permissions do not leave a new checkout. A harness that cannot grant those directories as read-only is refused here, with nothing cloned and nothing registered, so rerunning `start` after fixing the config works rather than failing on a leftover worktree.
 5. Works out the base branch: the pull request this will open targets it, and the new branch is cut from it. `--base` wins, then the base configured for this repository in `repos`, then the repository's default branch, which is the fallback and what an operator who configures nothing gets. A `--base` is written into `repos` so it is typed once per repository. A base that GitHub does not have fails here, before anything is cloned: left to `gh pr create --base` it would fail after the run had implemented the brief and spent the budget. See [the base branch](config.md#the-base-branch).
 6. Clones the repo into `<worktrees>/<repo>/<prd id>` (partial clone, blobs on demand) on a new branch `work/<prd id>` cut from that base, fetched first so the cut is from the current base rather than a stale local ref. Your own checkout is never touched.
 7. Saves the daemon's own copy of the PRD and each carried `sources` file under `~/.gallivant/prds/`. Fix rounds and the completion gate read these snapshots, so a session cannot rewrite its own brief. Records where your copy lives, plus a fingerprint of the contract, for later comparison: see [editing the brief after the work has started](prd.md#editing-the-brief-after-the-work-has-started).
@@ -199,8 +214,8 @@ JSON for scripts and for a dashboard's own widgets: `/api/status` (the same mode
 
 Two things to know about it:
 
-- **GET is read-only; run controls require a local POST.** The run page groups Recheck PR and Resume agent separately from the message composer and its Send message button. These enqueue one request in the existing registry; the daemon applies it after any active run settles. The write requires a loopback peer, a loopback Host matching the serving port, an exact same-origin request and a per-server CSRF token. Mounted trackers keep the host's authentication, and remote readers do not receive controls.
-- **It binds to 127.0.0.1 and has no password.** That is the same boundary as the CLI: anything that can reach it can already read `~/.gallivant`. Do not put it behind a tunnel or a reverse proxy that answers on a public address, because the pages show branch names, local paths and whatever the agent printed.
+- **GET is read-only; run controls require a local POST.** The run page groups Recheck PR, Resume agent and Cancel task separately from the message composer and its Send message button. These enqueue one request in the existing registry; the daemon applies it after any active run settles. The write requires a loopback peer, a loopback Host matching the serving port, an exact same-origin request and a per-server CSRF token. Mounted trackers keep the host's authentication, and remote readers do not receive controls.
+- **It binds to 127.0.0.1 and has no password.** Loopback is a local-machine boundary, not account authentication or isolation from other local processes. Do not expose it through an unauthenticated tunnel or public proxy: pages show repository state, local paths and agent output.
 
 ### Rechecking and updating a run
 
@@ -213,7 +228,7 @@ gallivant say agent-passport#396 --note "The external blocker is resolved; conti
 
 Recheck returns the entry to watching without resetting its iteration count or check dispatch markers. The existing loop reads checks, review and the completion gate again. It does not rerun GitHub Actions or override a failed check. Unchanged failures stop again without spending another fixer round. To deliberately reset a spent round budget, use `register`.
 
-**Resume agent** continues the same session on its current instructions. **Send message** and `say` deliver your correction to that session, including after an agent has finished and its PR is ready for human review. A closed or merged PR requires a follow-up PRD. Both use the existing resume path and preserve the approved brief, permissions and review budget. Uncommitted files and the index stay intact; only the automatic base merge is deferred when the tree is dirty. The agent must inspect partial work, commit only its task changes, then fetch and merge the intended base into its task branch before rerunning verification and pushing. It must preserve unrelated edits and carried instructions, stopping if they prevent that merge. This never authorizes merging the PR or writing to its base. Replacing a changed brief or carried files still requires an explicit `resume --resnapshot`. Every existing replacement file, including ignored files absent from Git status, must match either the previous snapshot or the newly accepted bytes; conflicting session edits stop the resnapshot before any file or snapshot is replaced.
+**Resume agent** continues the same session on its current instructions. **Send message** and `say` deliver your correction to that session, including after an agent has finished and its PR is ready for human review. A closed or merged PR requires a follow-up PRD. Both use the existing resume path and preserve the approved brief, permissions and review budget. Local CLI resumes preserve uncommitted files and the index; the automatic base merge is deferred when the tree is dirty. The agent must inspect partial work, commit only its task changes, then fetch and merge the intended base into its task branch before rerunning verification and pushing. It must preserve unrelated edits and carried instructions, stopping if they prevent that merge. This never authorizes merging the PR or writing to its base. Replacing a changed brief or carried files still requires an explicit `resume --resnapshot`. Every existing replacement file, including ignored files absent from Git status, must match either the previous snapshot or the newly accepted bytes; conflicting session edits stop the resnapshot before any file or snapshot is replaced.
 
 During a run, messages queue until it finishes by default. Select **Interrupt the active run to apply this message**, or use:
 
@@ -226,6 +241,13 @@ At the next daemon check, Gallivant records the active run's descendants, includ
 The fixed buttons never send or discard the composer's draft. Messages are limited to 4,000 characters and one outstanding request per entry. Requests survive restarts and show queued, applying, applied or failed on the page and in `gallivant why`. The registry retains the previous 20 requests; **Last submitted message → Edit and resend** recovers a message even after another fixed action. Failed delivery restores it into an empty composer without overwriting a newer draft. A request interrupted while applying is not automatically replayed, because it might already have started a run.
 
 A live daemon running older code is refused before a request is saved, by both the CLI and the UI. Restart it with `gallivant down && gallivant up`, then submit again; active agent runs survive that restart. The daemon must be running and its health probes must pass. CLI requests start it unless `--no-daemon` is used; the UI saves the request and waits. With the default poll interval, pickup takes up to about two minutes plus probe/GitHub response time; queued delivery also waits for the active run. After upgrading, restart the daemon and the process serving the tracker, including Command Center if mounted there, to load the new controls. No Telegram transport is implemented by these controls.
+
+Hosted Agents uses the same task/session controls but requires a clean source
+snapshot before implementation resumes. Commit intended unfinished edits on the
+owned task branch first; only exact approved brief/carried-source overlays can
+remain uncommitted. It refuses `AGENTS_DIRTY_SOURCE` rather than dropping or
+silently uploading work. Hosted cancellation is confirmed through the provider;
+Agents does not expose local-process interrupt. See [Agents recovery](openai-agents.md).
 
 ### Runs from other tools
 

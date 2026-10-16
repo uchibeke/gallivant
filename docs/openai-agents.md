@@ -1,14 +1,25 @@
-# Managed coding sessions through OpenAI Agents API
+# Hosted task sessions through OpenAI Agents API
 
-This adapter runs the managed Codex Agents API in an OpenAI-hosted sandbox. The
+Use `openai-agents` to run repository tasks through the managed Codex Agents API
+in an OpenAI-hosted sandbox. The adapter supports natural-language preparation
+and implementation, including research or documentation delivered as repository
+files. It is separate from local `codex` and the unavailable `codex-cloud`
+adapter. Account eligibility and full live lifecycle qualification are distinct
+from the implemented capability; see the evidence section below.
+
+The coordinator still runs on your machine or an explicitly provisioned server;
+it must stay awake and online to verify artifacts, publish and advance reviews.
+This adapter is not a hosted Gallivant service. The
 existing task service, coordinator, dispatch journal, PR writer and review rules
 remain the owners of work. Node 22+, local Git/gh for publication, and Agents REST
 beta `OpenAI-Beta: agents=v1` are required. No OpenAI SDK or local Codex binary is
 used by this transport. The REST schema was checked against official documentation
 on 2026-10-06; beta compatibility must be rechecked before upgrading.
 
-Install the package with `npm install -g .`, or use `node bin/gallivant.mjs` from
-this checkout. Configure one explicit account in the existing config file:
+Follow [installation](install.md#hosted-agents-api-instead-of-a-local-cli) for the
+complete source/package setup and a hosted-only config. `init --harness` currently
+sets up only the local `codex` or `claude` path. Add this explicit account to your
+existing config's `harness` object:
 
 ```json
 {
@@ -63,10 +74,18 @@ A ready PRD selects `harness: openai-agents`. Use the existing commands:
 ```sh
 gallivant doctor
 gallivant start docs/prds/my-task.md --base main
-gallivant up
 gallivant status
 gallivant why owner/repo/my-task
 gallivant resume owner/repo/my-task --note 'Apply this authorized correction'
+```
+
+`start` also ensures the daemon/dashboard and opens a browser. For plain-language
+entry, prepare and inspect a brief first, then follow the returned next action:
+
+```sh
+gallivant task "Document the existing test commands in CONTRIBUTING.md. Change documentation only." \
+  --harness openai-agents --verify 'git diff --check'
+# Add --run to authorize implementation once the brief passes readiness.
 ```
 
 Natural-language intake uses the selected provider's versioned preparation
@@ -381,18 +400,22 @@ turn/environment IDs, restart and observed usage. It remains unverified until bo
 phases pass. Installed plugin/browser qualification belongs to the later release
 milestone; no plugin or browser surface is required for this REST adapter.
 
-The current audit records missing live credentials/configuration. Supply the exact
-prerequisites above to obtain live evidence. M6 still owns final release qualification.
+The 2026-10-06 implementation audit recorded missing live credentials/configuration;
+that is historical evidence, not a diagnosis of your current account. The later
+preparation-only live result described above does not qualify hosted implementation,
+publication and review correction. Use the exact prerequisites above to record
+those phases; fixture passes alone are not end-to-end qualification.
 
-M5/M6 must reuse the single connected execution successor
+The original M5/M6 integration handoff points to
 [`aporthq/agent-passport#417`](https://github.com/aporthq/agent-passport/pull/417),
-canonical PRD `docs/prds/aport-task-delivery-workflow-integration.md`, job identity
-`aporthq/agent-passport/aport-task-delivery-workflow-integration`. It preserves the
-original T0–T9 requirements and remains draft until the actual M5 portable artifact
-is available. M6 must pin that artifact's version, commit, integrity and actual
-exports, connect existing APort authentication, regional storage and shared UI to
-the shared task service/coordinator, and qualify the full workflow. These are
-handoff requirements, not work implemented in this repository; do not create a
+merged on 2026-10-09. Its canonical brief is
+`docs/prds/aport-task-delivery-workflow-integration.md` in that repository, with
+job identity `aporthq/agent-passport/aport-task-delivery-workflow-integration`.
+The handoff required pinning the portable artifact's version, commit, integrity
+and exports and connecting APort authentication, regional storage and UI to the
+shared task service/coordinator. A merged integration PR alone does not establish
+installed-host qualification or a deployed public service. Preserve the existing
+T0–T9 evidence and release gates; do not create a
 second runner or another foundation job. Missing API and installed-host evidence
 remain separate unmet gates.
 

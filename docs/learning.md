@@ -14,9 +14,9 @@ configuration boolean, hash, file mode, approval flag or TTY enables application
 Setup, extraction and apply refuse that missing prerequisite. Fixture qualification
 in tests is dependency injection, never a production enrollment mechanism.
 
-The normative [architecture](plans/review-feedback-learning.md) describes the full
+The normative [architecture](https://github.com/uchibeke/gallivant/blob/main/docs/plans/review-feedback-learning.md) describes the full
 delivery contract. Several implementation requirements remain outstanding; the
-[qualification record](audit/learning-qualification.md) distinguishes tested behavior
+[qualification record](https://github.com/uchibeke/gallivant/blob/main/docs/audit/learning-qualification.md) distinguishes tested behavior
 from those gaps. This release makes no effectiveness claim.
 
 ## Collection and review on Linux and macOS
@@ -134,7 +134,7 @@ an operator configuration option. List/show/report/explain cannot launch paid wo
 Restricted task preparation now supplies shared native tool/context controls that
 a future extraction adapter can reuse. It does not connect the learning extractor
 or qualify ordinary coding workers, signing authority or control routes. The
-[merged-boundary assessment](audit/learning-qualification.md#merged-preparation-boundary-assessment)
+[merged-boundary assessment](https://github.com/uchibeke/gallivant/blob/main/docs/audit/learning-qualification.md#merged-preparation-boundary-assessment)
 records the reusable pieces, remaining integration work and external qualification
 requirements. Preparation fixture results do not enable production learning.
 
@@ -303,7 +303,8 @@ requires interactive creation/enrollment of a temporary encrypted key, exact app
 context consumption by a process enclosed in that same profile, and signed retirement.
 All keys/state are deleted afterward and no paid inference runs. Production stays
 UNQUALIFIED even after that disposable ceremony: installed worker launch/control
-integration is still outstanding. Actual ceremony evidence was unavailable in this session.
+integration is still outstanding. The recorded qualification audit does not supply
+a successful production enrollment or live approval/delivery ceremony.
 
 On macOS, `sandbox_apply: Operation not permitted` means the host cannot create the
 required nested sandbox from that execution surface. Run the probe from an operator

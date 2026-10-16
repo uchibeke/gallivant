@@ -1,9 +1,214 @@
 # Natural-language tasks
 
+Start here when you know the outcome but do not want to hand-write a PRD. The
+output can be code, a research report, documentation or content; it must belong
+to a GitHub repository and have verifiable acceptance criteria. Preparation
+produces the same structured contract used by written briefs.
+
+After [setup](install.md), run inside the target checkout:
+
+```sh
+gallivant task "Explain the existing backup and restore commands in docs/operations.md. Change documentation only." \
+  --harness codex --verify 'git diff --check'
+```
+
+Inspect the returned draft or answer its questions, then use its printed `Next`
+action to authorize implementation. Add `--run` to the original request when you
+want implementation to start automatically once the brief is ready. This is
+execution authorization, including after clarification answers. It is not a
+merge, deployment or release approval. To open the dashboard after dispatch,
+run `gallivant start` with no PRD path.
+
+| Selected harness | Preparation boundary |
+| --- | --- |
+| `claude` | Local restricted mode with tools, MCP and skills disabled |
+| `codex` (0.160.0+) | Local restricted native tool/filesystem capability |
+| `openai-agents` | API text-only session, no environment, tools or delegation |
+| `gemini`, `opencode`, `goose` | No preparation adapter; use a written PRD for implementation |
+| `codex-cloud` | No preparation adapter; new implementation dispatch is also disabled |
+
+Use `--harness` explicitly when configuring multiple adapters. Task intake
+otherwise selects the first configured harness. See
+[preparation qualification](preparation.md) and [hosted setup](openai-agents.md).
+
 `gallivant task` turns text into an isolated, reviewable PRD. Preparation uses the
 selected harness's configured model and provider settings. This
 can use inference even when you only prepare; it does not start implementation or
 open a pull request without execution authorization.
+
+For a new request such as “Implement CSV and JSON export, test both, and open one
+pull request for review,” Gallivant preserves the original text and records exact
+source spans assigning only the affirmative publication clause to the coordinator.
+All remaining implementation requirements and prohibitions stay in the provider's
+acceptance criteria. The generated brief's **Coordinator delivery contract** is
+part of both initial approval and ongoing change detection. Its publication
+obligation is fulfilled only by matching canonical repository, PR, base, head and
+completion-gate evidence; a provider statement cannot fulfill it.
+
+New ownership contracts also include a same-statement connector such as `, and`,
+`and then` or `then` in the publication span, so it cannot become a dangling
+implementation requirement. Connectors split across lines or containing quoted
+implementation text need clarification. Previously approved contracts keep their
+original spans, criteria and fingerprints on retry; new requests use version five.
+Version five keeps feature metadata and synthetic-object qualifiers within one
+line, so a following line beginning with “title” or “body” cannot hide an earlier
+PR instruction. Saved versions one through four retain their approved feature
+interpretation and exact source spans.
+
+This first recognizer supports one unqualified `open/create/raise/submit` review-PR
+clause outside quoted text/code. It is not a general natural-language permission
+parser. Conditional or negated publication clauses, owner approval prerequisites,
+destination qualifiers, multiple PRs and delivery-only requests return
+`TASK_DELIVERY_SCOPE` before inference. Unsupported publication actions also
+require clarification; they never become impossible provider obligations.
+Initial requests and later answers share the same bounded directive checks.
+Local-only, no-push, task-hold or patch-only directions cannot silently fall back
+to the default review-PR workflow. Preference wording such as “I don't want a PR”
+or “We don't need a pull request” also requires clarification.
+Explicit workflow merge or auto-merge requests, and prohibitions on creating
+commits or branches, also return `TASK_DELIVERY_SCOPE` before preparation or a new
+answer is saved. The review-PR workflow needs a branch and commits and grants no
+merge authority. “Do not merge” remains a valid constraint.
+This includes subject-led requests such as “You need to merge it” and passive
+or nominal prohibitions such as “Commits are not allowed” and “Commit creation is
+forbidden.” Compound feature objects such as commit messages and branch reports
+remain implementation requirements.
+
+Implementation subjects such as a PR status badge, pull-request template,
+published articles, a publish button, a command to publish docs, local storage,
+commit SHA, diff viewer or branch selection
+remain ordinary requirements. Technical conditions also remain implementation
+scope: `If name is empty, return friend. Open a PR for review.` and the answer
+`Commit the database transaction after validation.` are supported. By contrast,
+`Wait for my approval. Open a PR for review.` requires clarification before work.
+An implementation may consist entirely of a prohibition, such as “Do not log API
+keys in error responses.” That requirement remains in the acceptance criteria.
+Application operations such as publishing events to a message bus, delivering
+notifications, creating user records or merging duplicate contacts also remain
+implementation scope. This distinction applies to initial text and later answers,
+including application-user consent requirements. A technical operation cannot hide
+a later workflow restriction: “Do not deliver notifications twice or create a
+branch” still requires clarification. Quoted examples and merge-button/status
+features do not authorize an actual merge.
+Technical context can also come from a transport (“publish records to Kafka” or
+“deliver reports to S3”),
+repeated delivery (“do not deliver reports twice”) or “delivery of files.” Bare
+commands, Git destinations and restrictions on the task's changes remain workflow
+controls. An unknown noun alone, as in “do not publish the solution,” does not
+override that boundary.
+Destinations apply to their own action: a later report upload cannot qualify an
+earlier restriction on publishing changes. Git metadata used by an application
+operation is distinct from publishing to a Git repository.
+Unrecognized coordinated wording ends destination scope. Shared destinations
+require noun-phrase evidence: determiners, recognized modifiers/compounds or bare
+plural/data nouns. This supports “invoices and tax reports,” “metrics plus traces”
+and “widgets and the gizmo” without enumerating every domain noun. An unknown
+phrase such as “forward reports” is not assumed to be a noun phrase merely because
+its verb is absent from the action vocabulary. For ambiguous application wording,
+state the destination on each action or use separate sentences; direct application
+objects retain an open vocabulary.
+Verb/adjective ambiguities such as “duplicate reports” cannot supply a shared
+destination without a noun marker. Write “metrics and the duplicate reports to
+S3,” or put the destination directly on each application operation.
+The same applies to bare “email,” which can be an action: use “the email” when
+sharing another object's destination, or state its application destination directly.
+Likewise, “log entries” and “download links” can be commands or noun compounds;
+use “the log entries” and “the download links” in shared-destination noun lists.
+These conservative checks apply to new requests and answers. Saved ownership
+contracts retain their approved source spans and interpretation.
+Modifier recognition is intentionally bounded: word endings do not establish a
+noun phrase (for example, “give” and “apply” are verbs). An unfamiliar modifier
+requires a direct application destination instead of a guessed shared scope.
+A later data object cannot qualify a workflow object such as “the solution.”
+Coordinated transfer actions such as “upload reports” or “copy files” start their
+own scope; their destinations cannot qualify an earlier publication prohibition.
+This includes negative leads such as “never upload” and “avoid uploading.” Data
+noun lists such as “metrics plus archived reports,” “the log entries” or “the download
+links” can still share a destination; explicit action leads such as “please
+download links” start a separate action.
+Ordinary leading elisions such as `'90s` and `'tis` remain implementation text even
+when a later possessive apostrophe follows. Use double quotes or backticks to quote
+an entire example beginning with an elision. Saved ownership versions one through
+three keep their original literal interpretation and exact source spans.
+Negative coordination preserves each action's scope: “Do not commit the database
+transaction nor push changes” still forbids delivery. Combining only technical
+operations, such as a database transaction and inserting items into a queue,
+remains implementation scope; `neither … nor …` follows the same distinction.
+Modal forms such as “nor should you push” retain the prohibition too.
+This includes “cannot,” contracted modals such as “can't” or “shouldn't,” and
+permission wording such as “aren't allowed to push.” “In addition to,” “besides,”
+and other supported coordination phrases keep the same action boundary.
+PR quantifiers such as “any,” “more,” “multiple” and numeric counts also retain
+their delivery meaning: “Don't submit any PRs” requires clarification, while
+“Don't submit any PR descriptions” remains an implementation requirement. Only
+the supported affirmative single-PR clause can create a publication obligation.
+Qualifiers such as “GitHub,” “automated” or “experimental” cannot hide that PR
+object. Reference phrases such as “generate a report about the PR” do not request
+PR creation.
+Prohibition forms such as “refrain from opening a PR” and “forbidden from creating
+any PRs” also require clarification. Describing the procedure for opening a PR
+does not itself request publication.
+Active subjects also retain the restriction: “I forbid you from opening a PR” and
+“prevent the agent from opening a PR” require clarification.
+Passive equivalents such as “opening a PR is prohibited/disallowed/banned” do too.
+Explicit merge delegation, including “I require you to merge,” “have the agent
+merge” and “tell the agent to merge,” cannot grant merge authority.
+An incomplete prefix such as “Do not” retains scope across line breaks and blank
+lines. A complete implementation constraint such as “Do not change the API” can
+still precede a separate affirmative PR instruction.
+Multiword qualifiers such as “under any circumstances” or “for any reason” retain
+the same restriction. Nominal prohibitions such as “PR creation is prohibited”
+also require clarification. Application-data merges retain open object names,
+including invoices, database rows, accounts and files; workflow PR/branch objects
+and mixed data/workflow lists remain outside merge authority.
+Bare branches and ref-shaped targets (`main`, `feature/foo`, `origin/main`, Git
+revisions) are workflow merges. Application merges need named data evidence;
+“merge invoices into the main table” retains that application context.
+Explicit Git-qualified single-token operands remain ambiguous even when the token
+is a data word: “merge invoices from tag metadata” requires clarification because
+`metadata` can be a tag name. For application data, name its type explicitly, for
+example “merge invoices with tag metadata records.” “Merge head counts into the
+database” remains an application operation.
+Quantity words do not resolve that ambiguity: “two extra tag names” and “three
+further reference fields” still require clarification. Use an explicit data type,
+such as “two extra tag name records” or “three further reference field records.”
+The same prohibition leads apply to push, commit and branch creation, including
+“refrain from pushing” and “I forbid you from committing.” A negative application
+clause cannot hide a coordinated workflow restriction, as in “do not log keys or
+commit changes”; independent statements and technical conditions retain scope.
+Infinitive complements such as “I forbid the agent to push changes” follow the
+same rule as “forbid the agent from pushing changes.”
+Generating PR titles, bodies, labels and other feature metadata also remains
+implementation scope; those objects do not authorize creating the PR itself.
+Possessive forms such as “the PR's body” and “the pull requests’ titles” follow
+the same rule and retain their exact original text in implementation requirements.
+Hyphenated metadata compounds such as “PR-title” and “pull-request-body” do too.
+PR fixtures and explicitly synthetic representations (such as a mock PR object or
+a normalized PR record, fake PR object or dummy/stub payload) are implementation
+data. Bare PR objects and actual Git commit/branch objects do not gain that exception.
+Local conditions attached to publication are still refused; the parser does not
+guess that a comma or semicolon ended a prohibition or approval requirement.
+
+Keep every feature requirement and restriction, and state publication separately
+when needed. Quoted literal labels/code remain implementation data, including
+paired typographic single/double quotes; unmatched typographic quotes do not hide
+instructions. If local-only
+or patch-only output is required, do not authorize this review-PR workflow or
+remove the restriction to bypass clarification.
+Clarify the complete task with the owner and submit it under a new operation ID;
+never delete a condition just to pass validation. Answers may refine implementation
+but cannot silently replace publication ownership or add a publication prerequisite.
+This applies to explicit publication clauses, the default review workflow and new
+answers to older saved tasks without completion metadata. Exact previously
+accepted answer retries still replay their saved receipt. There is no typed
+delivery-amendment operation yet. The supported answer boundary
+conservatively refuses recognized lifecycle/artifact language; it does not claim
+to understand every possible paraphrase. Review the complete saved owner contract
+before authorizing implementation, and clarify conflicting delivery intent instead
+of treating a model's interpretation as permission.
+Selecting `integrated` still grants no merge authority. Existing saved tasks,
+approved criteria, false attestations and exact operation retries retain their
+original semantics; this change does not repair historical results.
 
 Preparation uses a capability on the selected harness adapter, through the same
 execution service for drafting, questions and repairs. Gallivant owns deterministic
@@ -12,7 +217,9 @@ select Claude; `--harness codex` uses Codex
 0.160.0 or newer. Claude removes its tools. Codex removes external and execution
 tools and uses a filesystem profile that grants no project or credential access
 to any remaining tool. Only the bounded context in the prompt is available.
-Model/provider defaults remain selected. Other adapters return
+Model/provider defaults remain selected. `openai-agents` uses the text-only API
+boundary described above and retains its explicit account/model. Gemini,
+OpenCode, Goose and Codex Cloud return
 `TASK_PREPARATION_BOUNDARY` until their preparation capability is implemented;
 there is no automatic fallback. See [qualification](preparation.md).
 
@@ -27,6 +234,7 @@ The repository resolves from the checkout using the existing Git/GitHub helpers.
 `--repo` asserts its identity; it must match that checkout. Base precedence is the
 usual explicit flag, repository configuration, then default branch. Harness
 selection uses the explicit flag or the first configured harness, as `new` does.
+Use an explicit selection when several adapters are configured.
 Selected context consists of explicit repository files. Root `AGENTS.md`, common
 build manifests, supported text lockfiles and instructions above selected files
 are included automatically. Package-script inference uses `packageManager` first,
@@ -150,6 +358,9 @@ Claude with restricted mode, an empty built-in tool set, denial of every tool,
 an empty strict MCP configuration and disabled skills/commands. Selected context
 is already in the prompt, so planning needs no file, shell or network tools.
 Codex uses the restricted native capability described in [preparation](preparation.md).
+These local environment/profile details do not describe hosted preparation:
+`openai-agents` uses its selected API account and a text-only remote session,
+without a host credential profile or workspace.
 Gemini, OpenCode and Goose preparation return
 `TASK_PREPARATION_BOUNDARY` before probes, profile copying or model launch because
 their current adapters have no established preparation read/write boundary or
@@ -188,10 +399,15 @@ clients should render those choices instead of maintaining a separate list.
 The target is immutable for a saved request. Changed retry input conflicts.
 
 `delivery_ready` is fulfilled when the current pull request passes Gallivant's
-existing checks, reviewer and completion gate. `integrated` keeps the existing
-coordinator watching that qualified delivery until GitHub reports it merged.
-Neither choice grants permission to merge, release or deploy. A new head or
-blocking feedback uses the existing review loop; no parallel runner is created.
+existing checks, reviewer and completion gate and its owned execution is settled.
+The saved execution ledger is checked even when the task registry has not caught
+up; pending collection keeps the target pending. Automatic observation and fixing
+then stop at that saved handoff; later review comments do not authorize more work.
+An explicit existing recheck/resume control reopens the normal workflow.
+`integrated` keeps the existing coordinator watching that qualified delivery until
+GitHub reports it merged. Neither choice grants permission to merge, release or
+deploy. While monitoring, a new head or blocking feedback uses the existing review
+loop; no parallel runner is created.
 Closing without merging is blocked. An early merge, stale receipt/head/base,
 missing merge proof or changed checks/review is unverified, not fulfilled.
 Cancellation keeps its existing authority and stops further dispatch.
@@ -203,6 +419,10 @@ records GitHub's observed head, merge commit and timestamps. It is observational
 evidence, not a provider's self-report or a newly signed completion credential.
 Legacy tasks retain their workflow behavior and receive no invented evidence.
 A skipped completion gate cannot claim a fulfilled target.
+A qualified, stopped handoff can release its artifact pin for a compatible idle
+runtime update. Pending controls, live/uncollected execution, unresolved receipts,
+intake or chains still block migration independently; evidence and saved intent
+are preserved without rewriting the historical workflow state.
 
 Keep implementation acceptance separate from coordinator publication. For example,
 a host can prepare a greeting change with the complete behavior, native Node test,
@@ -215,9 +435,10 @@ overrides those constraints.
 
 New completion-aware drafts consolidate criteria with identical requirement
 coverage, preserving all immutable owner fragments and their mappings. Existing
-approved drafts and false attestations are never rewritten. Automatic splitting
-of a mixed implementation/publication sentence is not supported: a host must
-clarify ambiguous ownership rather than silently drop a requirement. The generated
+approved drafts and false attestations are never rewritten. Only supported
+affirmative publication clauses can be separated from mixed
+implementation/publication text. A host must clarify unsupported or ambiguous
+ownership rather than silently drop a requirement. The generated
 Delivery target section explains which milestones the coordinator observes.
 
 The result includes contract `version: 1`, a durable `taskId`, a state `revision`,
@@ -445,8 +666,10 @@ usual human-review and configured limit boundaries; it never merges automaticall
 
 ## Structured clients
 
-These exports are local, trusted, in-process operations. A future transport must
-bind its own account/repository authorization; this module is not a public server.
+These exports are local, trusted, in-process operations. The implemented
+[task-delivery dispatcher and MCP integration](task-delivery.md) add scoped
+account/repository authorization for host applications. The task module by itself
+is not an authenticated public server.
 Importing it reads no user configuration and starts no daemon or network work.
 Creating the usual context is an explicit caller action.
 
@@ -496,7 +719,7 @@ clear/ambiguous/conflicting input, hostile context, repair preservation, real
 readiness denials, stale revisions, duplicate/uncertain dispatch, source delivery,
 runner usage, stdin bounds and clean installed-package imports/help.
 
-See [the evidence index](audit/plugin-ready/README.md) for the separate G8 live
+See [the evidence index](https://github.com/uchibeke/gallivant/blob/main/docs/audit/plugin-ready/README.md) for the separate G8 live
 prerequisites, unavailable attestations and bounded qualification procedure.
 
 Direct task-service mutations acquire the namespace task-mutation owner through all asynchronous effects and release it on success or failure. They refuse artifact-pinned homes; those homes use the manifest-aware delivery adapter. CLI and delivery adapters borrow their existing live owner, checked against the same namespace, while inspect/list stay read-only.

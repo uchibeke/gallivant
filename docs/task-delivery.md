@@ -94,6 +94,12 @@ supported `targets`. The shared prepare schema accepts only
 `completion: { target: 'delivery_ready' | 'integrated' }`; the selected policy is
 persisted through intake and implementation ownership. Task, list, model and
 evidence projections expose `completion` from saved coordinator observations.
+For `delivery_ready`, a qualified saved handoff stops automatic observation and
+fixes. Explicit queued controls reopen the normal workflow. `integrated` and
+legacy runs retain monitoring. Host schedulers use the exported
+`coordinatorEntryActive` predicate instead of treating every `ready-for-human`
+entry as active; the predicate requires matching repository, PR, base, head and
+gate proof. Read `completion.monitoring` for the saved view's monitoring status.
 Use `completion.status`, not a provider success or a terminal PR state, to report
 fulfillment. `awaiting_integration` means the qualified PR is still being watched;
 `blocked` or `unverified` requires attention. Both targets use the GitHub PR
@@ -101,6 +107,27 @@ observation adapter today. The milestone names are portable, but no additional
 artifact, deployment or non-GitHub adapter is advertised. See [task milestones](tasks.md#choose-the-delivery-milestone)
 for evidence, cancellation and legacy behavior. The policy never grants merge
 permission or changes the allowance.
+
+New natural-language publication clauses use the core's versioned exact-source
+ownership contract. `completion.obligations` exposes their pending/fulfilled state
+and matching coordinator evidence. `TASK_DELIVERY_SCOPE` is a before-effects
+clarification refusal, durably acknowledged on the exact operation identity; it
+must not be retried with changed text under that same identity. Ask the owner to
+clarify the complete request and then use a new preparation identity. See
+[natural-language ownership](tasks.md) for supported syntax and limitations.
+
+Literal examples must have matching quote/backtick delimiters in new requests and
+answers. Saved ownership contracts keep their approved spans and historical
+unclosed-literal handling. Malformed mixed backtick runs that previously exposed a
+publication clause can fail validation under the corrected scanner; their records
+are not rewritten. The owner must clarify a new request rather than automatically
+continuing publication from that malformed contract. PR-modified UI/document objects, database transactions, data
+structure operations and product-user consent are implementation requirements;
+unqualified Git directions, owner approval and publication conditions remain
+workflow controls. Only those concrete technical objects are excluded: unrelated
+or coordinated restrictions remain visible. Statement separators end independent
+constraints, while an unfinished colon prefix keeps its scope across blank lines.
+This is a bounded grammar, not a general natural-language authorization model.
 
 All mutations require operationId and expectedRevision; prepare uses revision 0.
 Preparation does not authorize implementation. Start requires `run:true` and the
@@ -176,12 +203,15 @@ Before wake-up, migrate/pin the exact runtime artifact. Supply the emitted
 The coordinator refuses a different active-job digest. Compatible patches keep
 task/provider/brief identities; drain jobs before staging a different artifact.
 No running code is silently upgraded. The public API's pre-1.0 compatibility
-window is `0.2.x`, with wire schemas all `1`; other versions need migration.
+window is `0.2.x`, with operation/task/execution wire schemas all `1`; other
+versions need migration.
 
 The portable contracts/views/wake envelope have no Node dependencies. The complete
 task service and both transport implementations still require Node filesystem,
-child processes, Git/gh and isolated verification. Browser-target import rejection
-is measured by `test:plugin-package`, separately from actual Node execution. This
+child processes, Git/gh and isolated verification. `npm test` bundles the portable
+entries for browsers and checks their shared liveness predicates. The installed
+artifact check (`test:plugin-package`) repeats those bundles and confirms the full
+Node runtime rejects a browser target, separately from actual Node execution. This
 is **not** a tested Workers-native workflow runtime or deployed Pages endpoint.
 The smallest remedy: keep existing Pages OAuth/MCP/UI; connect its authenticated
 runtime binding to one Node 22 coordinator with a durable volume and external
@@ -196,15 +226,20 @@ Agents API credentials, exact model/environment access and inference/compute
 allowance must be supplied by the authorized account; no subscription entitlement
 is inferred. Both transports remain exported and covered by installed fixtures.
 
-The inherited registry currently declares **no bounded natural-language
-preparation for either hosted provider**. Their `canPrepare:false` and setup
-remedy are exposed per configured repository. A task selecting either provider
-retains a blocked preparation record with no paid call; it cannot gain readiness
-from an invented tool-free mode. The installed full intake/review flow uses the
-existing supported local preparation boundary. Separate installed API/Cloud
-transport suites exercise implementation/recovery/publication and the hosted
-preparation refusal. Full hosted natural-language flows remain unqualified until
-an enforced provider preparation adapter and its account access are available.
+The current registry declares bounded natural-language preparation for
+`openai-agents`: `agents-text-only-v1`, authority `text-only`, environment `none`.
+Its creation request disables tools and delegation; effective session and output
+checks enforce that boundary. Claude and Codex have their own registered local
+preparation boundaries. Codex Cloud, Gemini, OpenCode and Goose expose
+`canPrepare:false` with a remedy; selecting them for preparation cannot silently
+fall back to another provider or gain implementation authority.
+
+Capability responses describe this implementation, not account entitlement or a
+completed live workflow. Installed fixtures cover shared API/Cloud transport,
+recovery and publication; preparation qualification and live account prerequisites
+remain explicit in [preparation](preparation.md), [Agents setup](openai-agents.md)
+and [Cloud availability](codex-cloud.md). The package can be integrated through
+MCP or the scoped operation API, but is not itself a deployed multi-tenant service.
 
 ## Build, configure, upgrade and rollback
 
@@ -239,6 +274,16 @@ artifact. Unpinned legacy state can be backed up with an explicit compatible
 manifest and must be migrated before enabling its coordinator.
 Verify store consistency before switching bindings. Keep old runtime artifacts
 and credential bindings available for rollback; do not merge/upgrade live jobs.
+
+A qualified `delivery_ready` handoff releases its runtime pin even while its
+retained registry state is `ready-for-human`. Pending controls, live or uncollected
+execution, unresolved intake/receipts and active chains still prevent migration.
+Pending learning delivery audits also retain the pin and keep coordinator wake-ups
+active. They retry separately after handoff without polling the settled provider,
+reopening PR review or launching another agent turn; a successful audit drains
+the saved outbox and releases that remaining work.
+Legacy tasks, `integrated` tasks awaiting merge and unresolved `needs-human` work
+retain their pins; the scheduling pause alone does not make a namespace idle.
 
 Package config supplies publisher `APort`, exact endpoint, `resource` configuration,
 owner-selected support email/product/support/privacy/terms/license URLs and explicit

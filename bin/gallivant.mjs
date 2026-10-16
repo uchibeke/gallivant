@@ -25,7 +25,7 @@ import { TASK_VERSION } from "../lib/tasks.mjs";
 import { learnCommand } from "../lib/commands/learn.mjs";
 import { safeDisplay } from "../lib/learning_data.mjs";
 
-const HELP = `gallivant: write a PRD, mark it ready, go outside.
+const HELP = `gallivant: give an agent a task, let the review loop run, go outside.
 
   gallivant init [--harness codex|claude] [--worktrees <directory>]
                                          create a private config; never overwrite settings or sign in for you
@@ -48,12 +48,12 @@ const HELP = `gallivant: write a PRD, mark it ready, go outside.
                                          write a starting PRD into docs/prds/ of the repo you are in
   gallivant task [prepare] "<request>" [--stdin] [--dir <checkout>] [--repo <owner/repo>]
                 [--base <branch>] [--harness <name>] [--context <file>] [--request-id <id>] [--run] [--json]
-                [--completion-target delivery_ready|integrated]
+                [--completion-target delivery_ready|integrated] [--verify <command>] [--no-daemon]
                                          prepare an isolated brief; --run authorizes its exact ready revision
-                                         Claude/Codex use isolated preparation; other providers require a
-                                         registered preparation capability. Hand-authored ready/start is available
+                                         Claude, Codex and OpenAI Agents support isolated preparation.
+                                         Other local harnesses use written PRDs; Codex Cloud dispatch is unavailable
   gallivant task answer <task-id> --revision <n> --request-id <answer-id> --answer <question-id=text>
-                                         resume saved questions; --answer and --context may repeat
+                                         resume saved questions; --answer, --context and --verify may repeat
   gallivant task inspect <task-id> [--json] | task list [--json]
   gallivant task resume|validate|start <task-id> --revision <n> [--run] [--no-daemon] [--json]
                                          shared versioned operations; start needs prior or --run authorization
