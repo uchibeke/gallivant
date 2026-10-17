@@ -345,6 +345,32 @@ test("business approval rules do not mask unclassified coordinated implementatio
   assert.doesNotThrow(() => assertDeliveryAnswer({}, supportedBusinessSequence));
 });
 
+test("synthetic PR fixtures cannot hide a coordinated live publication", () => {
+  for (const source of [
+    "For tests, create a fake PR and a real PR.",
+    "For tests, create a fake pull request and a live pull request for review.",
+  ]) {
+    assert.throws(() => ownerDelivery(source), { code: "TASK_DELIVERY_SCOPE" }, source);
+    assert.throws(() => assertDeliveryAnswer({}, source), { code: "TASK_DELIVERY_SCOPE" }, source);
+  }
+  const fixtures = "For tests, create a fake PR and a fake pull request fixture.";
+  assert.equal(ownerDelivery(fixtures), null);
+  assert.doesNotThrow(() => assertDeliveryAnswer({}, fixtures));
+});
+
+test("business approval exemptions do not mask technical implementation objects", () => {
+  for (const source of [
+    "If I approve the migration proposal, generate the database migration.",
+    "If I approve the code proposal, record the repository commit.",
+  ]) {
+    assert.throws(() => ownerDelivery(source), { code: "TASK_DELIVERY_SCOPE" }, source);
+    assert.throws(() => assertDeliveryAnswer({}, source), { code: "TASK_DELIVERY_SCOPE" }, source);
+  }
+  const businessOutcome = "If I approve the purchase, generate a customer receipt.";
+  assert.equal(ownerDelivery(businessOutcome), null);
+  assert.doesNotThrow(() => assertDeliveryAnswer({}, businessOutcome));
+});
+
 test("publication controls remain visible beside PR feature predicates and qualifiers", () => {
   for (const source of [
     "Implement endpoint updates. Create an API PR for review.",
