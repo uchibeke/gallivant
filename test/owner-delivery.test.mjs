@@ -313,6 +313,25 @@ test("business approval masking stops at colon and dash before a later owner gat
   }
 });
 
+test("conditioned approval after many coordinated business actions stays visible", () => {
+  const source = `If I approve x, email y ${"and x ".repeat(4000)}and if tests pass the owner approves it`;
+  assert.ok(source.length < 32 * 1024);
+  assert.throws(() => ownerDelivery(source), { code: "TASK_DELIVERY_SCOPE" });
+  assert.throws(() => assertDeliveryAnswer({}, source), { code: "TASK_DELIVERY_SCOPE" });
+});
+
+test("publication controls remain visible beside PR feature predicates and qualifiers", () => {
+  for (const source of [
+    "Implement endpoint updates. Create an API PR for review.",
+    "Implement report generation. Create a report PR for review.",
+    "Implement dashboard updates. Create a dashboard PR for review.",
+    "Do not create a PR visible to outsiders.",
+  ]) {
+    assert.throws(() => ownerDelivery(source), { code: "TASK_DELIVERY_SCOPE" }, source);
+    assert.throws(() => assertDeliveryAnswer({}, source), { code: "TASK_DELIVERY_SCOPE" }, source);
+  }
+});
+
 test("saved version-two contracts retain their original approval and PR-policy grammar", () => {
   for (const source of [
     "Build the widget after I approved it. Open a PR for review.",
@@ -1199,6 +1218,15 @@ test("saved version-one ownership remains exact and cannot authorize forged conn
       { start, end: source.length, owner: "coordinator", kind: "pull_request" },
     ] };
     assert.throws(() => validateOwnerDelivery(forged), { code: "TASK_DELIVERY_SCOPE" }, `v${version} cannot split a prohibition from its PR directive`);
+  }
+  for (const version of [1, 2]) {
+    const source = "Implement export. Open a PR after my approval.", start = source.indexOf("Open a PR"), end = start + "Open a PR".length;
+    const forged = { version, offsets: "utf16", source, spans: [
+      { start: 0, end: start, owner: "implementation" },
+      { start, end, owner: "coordinator", kind: "pull_request" },
+      { start: end, end: source.length, owner: "implementation" },
+    ] };
+    assert.throws(() => validateOwnerDelivery(forged), { code: "TASK_DELIVERY_SCOPE" }, `v${version} cannot leave an approval qualifier outside the coordinator span`);
   }
   const priorApprovalSource = "Build the widget after I approved it, and Open a PR for review.", priorApprovalStart = priorApprovalSource.indexOf("Open a PR");
   const priorApproval = { version: 1, offsets: "utf16", source: priorApprovalSource, spans: [
