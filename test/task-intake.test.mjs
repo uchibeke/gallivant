@@ -20,7 +20,7 @@ import { runEnv, RUN_GIT_CONFIG, makeGit } from "../lib/git.mjs";
 import { prepareTurn } from "../lib/task_prepare.mjs";
 import { preparationEnvironment } from "../lib/task_environment.mjs";
 import { parseDraft, renderDraft, collectCommands, draftPrompt, MAX_INPUT_BYTES, MAX_PREPARATION_PROMPT_BYTES } from "../lib/task_contract.mjs";
-import { MAX_ANSWER_BYTES, MAX_ANSWER_COUNT } from "../lib/task_limits.mjs";
+import { MAX_ANSWER_BYTES, MAX_ANSWER_COUNT, MAX_LEGACY_ANSWER_BATCH_BYTES } from "../lib/task_limits.mjs";
 import { buildRun, buildPreparationRun, PREPARATION_BOUNDARY, capabilitiesFor } from "../lib/harness.mjs";
 import { parseSourcesMeta } from "../lib/config.mjs";
 import { makeState } from "../lib/state.mjs";
@@ -177,19 +177,57 @@ test("answer batches enforce aggregate bytes and item limits before parsing or m
   const first = await w.service.prepare({ text: "Implement export. Open a PR for review." });
   assert.equal(first.status, "needs-input");
   const store = taskStore(w.home), saved = store.read(first.taskId);
-  const tooMany = Object.fromEntries(Array.from({ length: MAX_ANSWER_COUNT + 1 }, (_, index) => [`q-r-${index + 1}`, "Use CSV."]));
+  let tooManyReads = 0;
+  const tooMany = Object.fromEntries(Array.from({ length: MAX_ANSWER_COUNT + 1 }, (_, index) => [`q-r-${index + 1}`, index ? "Use CSV." : null]));
+  Object.defineProperty(tooMany, "q-r-1", { enumerable: true, get() { tooManyReads++; return "Use CSV."; } });
   await assert.rejects(w.service.answer({ taskId: first.taskId, expectedRevision: first.revision, operationId: "answer-count-limit", answers: tooMany }), error => {
     assert.equal(error.code, "TASK_INPUT"); assert.equal(error.taskEffects, "none"); return true;
   });
+  assert.equal(tooManyReads, 0, "the question-count cap runs before reading any answer values");
   const half = Math.floor(MAX_ANSWER_BYTES / 2) + 16;
   await assert.rejects(w.service.answer({ taskId: first.taskId, expectedRevision: first.revision, operationId: "answer-byte-limit", answers: {
     "q-r-1": "x".repeat(half), "q-r-2": `${"y".repeat(half)} Do not publish publicly`,
   } }), error => {
+    assert.equal(error.code, "TASK_INPUT"); assert.match(error.message, /answer batch exceeds .* total UTF-8 bytes/); assert.equal(error.taskEffects, "none"); return true;
+  });
+  let oversizedReads = 0;
+  const oversizedAccessor = {};
+  Object.defineProperty(oversizedAccessor, "q-r-3", { enumerable: true, get() {
+    oversizedReads++;
+    return "x".repeat(MAX_ANSWER_BYTES + 1);
+  } });
+  await assert.rejects(w.service.answer({ taskId: first.taskId, expectedRevision: first.revision, operationId: "answer-byte-limit-before-hash", answers: oversizedAccessor }), error => {
     assert.equal(error.code, "TASK_INPUT"); assert.equal(error.taskEffects, "none"); return true;
   });
+  assert.equal(oversizedReads, 1, "the aggregate byte cap runs before canonical request hashing reads answer values again");
   assert.deepEqual(store.read(first.taskId), saved);
   assert.equal(calls, 1, "over-limit answers are rejected before owner-text parsing or another preparation turn");
   assert.deepEqual(w.ctx.state.entries(), []);
+  const legacyHalf = Math.floor(MAX_ANSWER_BYTES / 2) + 32;
+  const legacyOversizedAnswers = { "q-r-1": "x".repeat(legacyHalf), "q-r-2": "y".repeat(legacyHalf) };
+  assert.ok(Object.entries(legacyOversizedAnswers).reduce((bytes, [id, value]) => bytes + Buffer.byteLength(id) + Buffer.byteLength(value), 0) > MAX_ANSWER_BYTES);
+  const legacyOperationId = "legacy-oversized-answer-replay";
+  const legacySignature = contentDigest(JSON.stringify({ answers: legacyOversizedAnswers, verifyCommands: [] }));
+  saved.operations[legacyOperationId] = legacySignature;
+  store.save(saved);
+  const legacyReplay = await w.service.answer({ taskId: first.taskId, expectedRevision: first.revision, operationId: legacyOperationId, answers: legacyOversizedAnswers });
+  assert.equal(legacyReplay.taskId, first.taskId, "an exact previously accepted operation remains replayable across the new batch bound");
+  await assert.rejects(w.service.answer({ taskId: first.taskId, expectedRevision: first.revision, operationId: legacyOperationId, answers: { "q-r-1": "y".repeat(legacyHalf), "q-r-2": "x".repeat(legacyHalf) } }), error => {
+    assert.equal(error.code, "TASK_CONFLICT", "a prior operation ID cannot authorize changed over-limit input");
+    assert.equal(error.taskEffects, "none"); return true;
+  });
+  let oversizedReplayReads = 0;
+  const oversizedReplay = {};
+  Object.defineProperty(oversizedReplay, "q-r-1", { enumerable: true, get() {
+    oversizedReplayReads++;
+    return "x".repeat(MAX_LEGACY_ANSWER_BATCH_BYTES + 1);
+  } });
+  await assert.rejects(w.service.answer({ taskId: first.taskId, expectedRevision: first.revision, operationId: legacyOperationId, answers: oversizedReplay }), error => {
+    assert.equal(error.code, "TASK_INPUT", "legacy retries are capped at the largest batch previous per-answer limits could accept");
+    assert.equal(error.taskEffects, "none"); return true;
+  });
+  assert.equal(oversizedReplayReads, 1, "oversized retries are rejected before canonical hashing reads answer values again");
+  assert.deepEqual(store.read(first.taskId), saved);
   await w.service.answer({ taskId: first.taskId, expectedRevision: first.revision, operationId: "answer-replay", answers: { "q-r-1": "Use CSV." } });
   const accepted = store.read(first.taskId);
   await assert.rejects(w.service.answer({ taskId: first.taskId, expectedRevision: first.revision, operationId: "answer-replay", answers: { "q-r-1": null } }), error => {

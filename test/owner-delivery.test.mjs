@@ -412,6 +412,31 @@ test("positive merge auxiliary sequences refuse while negative and application c
   assert.equal(ownerDelivery("Implement import. We will have to merge customer records before saving."), null);
 });
 
+test("generic policy modifiers cannot mask imperative merge actions", () => {
+  for (const text of [
+    "Merge mergeable PRs.",
+    "Merge selectable commits.",
+    "Please merge mergeable PRs.",
+    "Tell the agent to merge selectable commits.",
+    "After tests pass, merge mergeable PRs.",
+  ]) {
+    assert.throws(() => ownerDelivery(text), { code: "TASK_DELIVERY_SCOPE" }, text);
+    assert.throws(() => assertDeliveryAnswer({}, text), { code: "TASK_DELIVERY_SCOPE" }, text);
+  }
+  for (const text of [
+    "Make PRs mergeable.",
+    "PRs should be mergeable.",
+    "Mergeable PRs are visible.",
+    "Document whether PRs are mergeable.",
+    "Build a settings page that lists mergeable PRs.",
+    "Show whether commits are selectable.",
+  ]) {
+    assert.equal(ownerDelivery(text), null, text);
+    assert.doesNotThrow(() => assertDeliveryAnswer({}, text), text);
+  }
+  assert.throws(() => ownerDelivery(`${"context ".repeat(80)} and merge mergeable PRs.`), { code: "TASK_DELIVERY_SCOPE" });
+});
+
 test("negative modals share workflow controls without rejecting their application counterparts", () => {
   for (const modal of ["cannot", "can not", "can't", "could not", "couldn’t", "must not", "mustn't", "should not", "shouldn't", "will not", "won't", "would not", "wouldn't", "shall not", "shan't", "may not", "might not", "mightn't", "are not allowed to", "aren't permitted to"]) {
     for (const action of ["push changes", "commit changes", "create branches", "generate commits"]) {
