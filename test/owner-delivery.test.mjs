@@ -334,12 +334,25 @@ test("conditioned approval after many coordinated business actions stays visible
   assert.throws(() => assertDeliveryAnswer({}, source), { code: "TASK_DELIVERY_SCOPE" });
 });
 
+test("business approval rules do not mask unclassified coordinated implementation work", () => {
+  for (const action of ["proofread", "polish", "edit"]) {
+    const source = `If I approve the article, email the customer and ${action} the article.`;
+    assert.throws(() => ownerDelivery(source), { code: "TASK_DELIVERY_SCOPE" }, source);
+    assert.throws(() => assertDeliveryAnswer({}, source), { code: "TASK_DELIVERY_SCOPE" }, source);
+  }
+  const supportedBusinessSequence = "If I approve the invoice, email the customer and apply the discount.";
+  assert.equal(ownerDelivery(supportedBusinessSequence), null);
+  assert.doesNotThrow(() => assertDeliveryAnswer({}, supportedBusinessSequence));
+});
+
 test("publication controls remain visible beside PR feature predicates and qualifiers", () => {
   for (const source of [
     "Implement endpoint updates. Create an API PR for review.",
     "Implement report generation. Create a report PR for review.",
     "Implement dashboard updates. Create a dashboard PR for review.",
     "Do not create a PR visible to outsiders.",
+    "Create a PR shareable with outsiders.",
+    "Generate a PR discoverable by everyone.",
   ]) {
     assert.throws(() => ownerDelivery(source), { code: "TASK_DELIVERY_SCOPE" }, source);
     assert.throws(() => assertDeliveryAnswer({}, source), { code: "TASK_DELIVERY_SCOPE" }, source);
@@ -423,6 +436,45 @@ test("saved ownership versions reapply delivery and approval controls outside th
   for (const version of [1, 2, 3, 4, 5]) assert.doesNotThrow(() => validateOwnerDelivery({ ...safe, version }), `safe saved v${version}`);
 });
 
+test("historical publication spans cannot leave timing, destination or condition qualifiers in implementation scope", () => {
+  for (const version of [1, 2, 3, 4]) for (const qualifier of [" tomorrow", " against release", " to GitHub", " when tests pass"]) {
+    const source = `Implement export. Open a PR${qualifier}.`, start = source.indexOf("Open a PR"), end = start + "Open a PR".length;
+    const saved = { version, offsets: "utf16", source, spans: [
+      { start: 0, end: start, owner: "implementation" },
+      { start, end, owner: "coordinator", kind: "pull_request" },
+      { start: end, end: source.length, owner: "implementation" },
+    ] };
+    assert.throws(() => validateOwnerDelivery(saved), { code: "TASK_DELIVERY_SCOPE" }, `v${version}: ${source}`);
+  }
+  for (const version of [1, 2, 3, 4]) {
+    const source = "Implement export. Open a PR; when tests pass.", start = source.indexOf("Open a PR"), end = start + "Open a PR;".length;
+    const saved = { version, offsets: "utf16", source, spans: [
+      { start: 0, end: start, owner: "implementation" },
+      { start, end, owner: "coordinator", kind: "pull_request" },
+      { start: end, end: source.length, owner: "implementation" },
+    ] };
+    assert.throws(() => validateOwnerDelivery(saved), { code: "TASK_DELIVERY_SCOPE" }, `v${version}: semicolon qualifier remains outside coordinator ownership`);
+  }
+  for (const version of [1, 2, 3, 4]) for (const suffix of ["Tomorrow", "against release", "to GitHub", "when tests pass", "and when tests pass"]) {
+    const source = `Implement export. Open a PR. ${suffix}.`, start = source.indexOf("Open a PR."), end = start + "Open a PR.".length;
+    const saved = { version, offsets: "utf16", source, spans: [
+      { start: 0, end: start, owner: "implementation" },
+      { start, end, owner: "coordinator", kind: "pull_request" },
+      { start: end, end: source.length, owner: "implementation" },
+    ] };
+    assert.throws(() => validateOwnerDelivery(saved), { code: "TASK_DELIVERY_SCOPE" }, `v${version}: sentence-delimited ${suffix} qualifier remains outside coordinator ownership`);
+  }
+  for (const version of [1, 2, 3, 4]) {
+    const source = "Implement export. Open a PR. To make it usable, add UI tests.", start = source.indexOf("Open a PR."), end = start + "Open a PR.".length;
+    const saved = { version, offsets: "utf16", source, spans: [
+      { start: 0, end: start, owner: "implementation" },
+      { start, end, owner: "coordinator", kind: "pull_request" },
+      { start: end, end: source.length, owner: "implementation" },
+    ] };
+    assert.doesNotThrow(() => validateOwnerDelivery(saved), `v${version}: implementation continuation is preserved`);
+  }
+});
+
 test("positive merge auxiliary sequences refuse while negative and application counterparts remain requirements", () => {
   for (const subject of ["You", "We", "The agent"]) {
     for (const lead of ["need to", "will need to", "will have to", "will be required to", "need you to", "should please", "are expected to"])
@@ -481,6 +533,11 @@ test("repeated application publication actions have bounded destination parsing"
   const source = `${Array(1100).fill("publish messages to queue").join(", ")}.`;
   assert.ok(Buffer.byteLength(source) < 32 * 1024);
   assert.equal(ownerDelivery(source), null);
+  const delayedGitDestination = `publish messages ${"with context ".repeat(180)}to GitHub.`;
+  assert.ok(Buffer.byteLength(delayedGitDestination) > 2048);
+  assert.ok(Buffer.byteLength(delayedGitDestination) < 32 * 1024);
+  assert.throws(() => ownerDelivery(delayedGitDestination), { code: "TASK_DELIVERY_SCOPE" });
+  assert.throws(() => assertDeliveryAnswer({}, delayedGitDestination), { code: "TASK_DELIVERY_SCOPE" });
 });
 
 test("negative modals share workflow controls without rejecting their application counterparts", () => {
@@ -1349,6 +1406,13 @@ test("elisions retain following requirements without changing historical literal
   const smartPossessiveElision = "‘cause we should not create a PR for users’ safety.";
   assert.throws(() => ownerDelivery(smartPossessiveElision), { code: "TASK_DELIVERY_SCOPE" }, smartPossessiveElision);
   assert.throws(() => assertDeliveryAnswer({}, smartPossessiveElision), { code: "TASK_DELIVERY_SCOPE" }, smartPossessiveElision);
+  for (const source of [
+    "'cause we should not create a PR for customers' and admins' safety.",
+    "‘cause we should not create a PR for customers’ and admins’ safety.",
+  ]) {
+    assert.throws(() => ownerDelivery(source), { code: "TASK_DELIVERY_SCOPE" }, source);
+    assert.throws(() => assertDeliveryAnswer({}, source), { code: "TASK_DELIVERY_SCOPE" }, source);
+  }
   const repeatedElisions = `${"'cause ".repeat(4500)}we should not create a PR.`;
   assert.throws(() => ownerDelivery(repeatedElisions), { code: "TASK_DELIVERY_SCOPE" }, "repeated unclosed elisions cannot hide a trailing prohibition");
   assert.throws(() => assertDeliveryAnswer({}, repeatedElisions), { code: "TASK_DELIVERY_SCOPE" }, "answer validation preserves the trailing prohibition after repeated elisions");
