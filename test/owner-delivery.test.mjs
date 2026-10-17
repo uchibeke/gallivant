@@ -66,6 +66,30 @@ test("repeated fixture clauses stay bounded and a live repository target stays v
   assert.throws(() => assertDeliveryAnswer({}, live), { code: "TASK_DELIVERY_SCOPE" });
 });
 
+test("publication fixture masking cannot hide coordinated live PRs", () => {
+  for (const connector of ["plus", "as well as", "along with", "together with", "in addition to", "not to mention", "besides"]) {
+    const source = `For tests, create a fake PR ${connector} a real PR.`;
+    assert.throws(() => ownerDelivery(source), { code: "TASK_DELIVERY_SCOPE" }, source);
+    assert.throws(() => assertDeliveryAnswer({}, source), { code: "TASK_DELIVERY_SCOPE" }, source);
+  }
+  assert.equal(ownerDelivery("For tests, create a fake PR plus a synthetic PR fixture."), null);
+});
+
+test("merge commands remain visible when branch names look like feature predicates", () => {
+  for (const source of ["Merge mergeable branches.", "Squash-merge selectable branches.", "Merge only mergeable branches."]) {
+    assert.throws(() => ownerDelivery(source), { code: "TASK_DELIVERY_SCOPE" }, source);
+    assert.throws(() => assertDeliveryAnswer({}, source), { code: "TASK_DELIVERY_SCOPE" }, source);
+  }
+  assert.equal(ownerDelivery("Add a mergeable branch selector."), null);
+  assert.equal(ownerDelivery("Add a squash-merge settings panel."), null);
+});
+
+test("large repeated feature-object clauses stay within the supported request size", () => {
+  const source = Array(1638).fill("Make PRs mergeable.").join(" ");
+  assert.ok(Buffer.byteLength(source) < 32 * 1024);
+  assert.equal(ownerDelivery(source), null);
+});
+
 test("new publication predicates, actors, adverbs and approval gates fail closed", () => {
   for (const text of [
     "Create a PR ASAP.",
