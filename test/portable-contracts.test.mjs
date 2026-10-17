@@ -12,6 +12,8 @@ test("answer tool description exposes the canonical answer batch limits", () => 
   const answer = TASK_OPERATIONS.find(operation => operation.name === "answer");
   assert.match(answer.description, new RegExp(`${MAX_ANSWER_COUNT} answers`));
   assert.match(answer.description, new RegExp(`${MAX_ANSWER_BYTES} combined UTF-8 bytes`));
+  assert.match(answer.description, /verification commands/);
+  assert.equal(answer.inputSchema.properties.verifyCommands.maxItems, 32);
   assert.equal(answer.inputSchema.properties.answers.maxProperties, MAX_ANSWER_COUNT);
   assert.equal(answer.inputSchema.properties.answers.additionalProperties.maxLength, MAX_ANSWER_CHARACTERS);
 });

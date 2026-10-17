@@ -34,6 +34,7 @@ test("synthetic pull requests in test fixtures are not delivery requests", () =>
     "Create a synthetic review PR in integration tests.",
     "Create an example PR in tests.",
     "Generate a fixture PR for tests.",
+    "Create one hundred mock PR fixtures for unit tests.",
   ]) {
     assert.equal(ownerDelivery(text), null, text);
     assert.doesNotThrow(() => assertDeliveryAnswer({}, text), text);
@@ -43,6 +44,8 @@ test("synthetic pull requests in test fixtures are not delivery requests", () =>
     "Create a fabricated pull request for review in the test fixture.",
     "Create a PR in the unit test.",
     "Generate a test PR in the unit test.",
+    "For tests, create one hundred mock PRs on GitHub.",
+    "For tests, create a fake PR on GitHub.",
   ]) {
     assert.throws(() => ownerDelivery(text), { code: "TASK_DELIVERY_SCOPE" }, text);
     assert.throws(() => assertDeliveryAnswer({}, text), { code: "TASK_DELIVERY_SCOPE" }, text);
@@ -52,6 +55,15 @@ test("synthetic pull requests in test fixtures are not delivery requests", () =>
   assert.equal(ownerImplementation(contract).join(""), "Generate a dummy PR in the unit test. ");
   assert.equal(contract.spans.at(-1).owner, "coordinator");
   assert.throws(() => assertDeliveryAnswer({}, "Generate a dummy PR in the unit test. Open a PR for review."), { code: "TASK_DELIVERY_SCOPE" });
+});
+
+test("repeated fixture clauses stay bounded and a live repository target stays visible", () => {
+  const fixtures = Array(1100).fill("For tests, create a fake PR").join(", ") + ".";
+  assert.ok(Buffer.byteLength(fixtures) < 32 * 1024);
+  assert.equal(ownerDelivery(fixtures), null);
+  const live = "For tests, create one hundred mock PRs on GitHub.";
+  assert.throws(() => ownerDelivery(live), { code: "TASK_DELIVERY_SCOPE" });
+  assert.throws(() => assertDeliveryAnswer({}, live), { code: "TASK_DELIVERY_SCOPE" });
 });
 
 test("new publication predicates, actors, adverbs and approval gates fail closed", () => {
@@ -160,10 +172,12 @@ test("new publication predicates, actors, adverbs and approval gates fail closed
     "Build the widget after I approve the purchase.",
     "Build the widget after I approve the purchase, then send a receipt.",
     "If I approve the invoice, email the customer yet wait until the owner approves.",
+    "If I approve the invoice, email the customer, wait until the owner approves.",
     "Add tests after I approve the plan.",
     "Fix the bug after I approve the plan.",
     "Implement export after I approve the code, and if I approve the purchase, apply the discount.",
   ]) assert.throws(() => ownerDelivery(text), { code: "TASK_DELIVERY_SCOPE" }, text);
+  assert.equal(ownerDelivery("If I approve the invoice, email the customer, apply the discount."), null);
 });
 
 test("passive branch restrictions require repository context", () => {
@@ -394,6 +408,21 @@ test("saved v3 and v4 contracts preserve indirect PR recipients accepted by thei
   }
 });
 
+test("saved ownership versions reapply delivery and approval controls outside the PR span", () => {
+  const source = "Implement export. Open a PR for review. Wait for my approval.";
+  const publicationStart = source.indexOf("Open a PR for review.");
+  const publicationEnd = publicationStart + "Open a PR for review.".length;
+  const spans = [
+    { start: 0, end: publicationStart, owner: "implementation" },
+    { start: publicationStart, end: publicationEnd, owner: "coordinator", kind: "pull_request" },
+    { start: publicationEnd, end: source.length, owner: "implementation" },
+  ];
+  for (const version of [1, 2, 3, 4, 5])
+    assert.throws(() => validateOwnerDelivery({ version, offsets: "utf16", source, spans }), { code: "TASK_DELIVERY_SCOPE" }, `saved v${version}`);
+  const safe = ownerDelivery("Implement export. Open a PR for review.");
+  for (const version of [1, 2, 3, 4, 5]) assert.doesNotThrow(() => validateOwnerDelivery({ ...safe, version }), `safe saved v${version}`);
+});
+
 test("positive merge auxiliary sequences refuse while negative and application counterparts remain requirements", () => {
   for (const subject of ["You", "We", "The agent"]) {
     for (const lead of ["need to", "will need to", "will have to", "will be required to", "need you to", "should please", "are expected to"])
@@ -416,6 +445,8 @@ test("generic policy modifiers cannot mask imperative merge actions", () => {
   for (const text of [
     "Merge mergeable PRs.",
     "Merge selectable commits.",
+    "Squash-merge mergeable PRs.",
+    "Rebase-merge selectable commits.",
     "Please merge mergeable PRs.",
     "Tell the agent to merge selectable commits.",
     "After tests pass, merge mergeable PRs.",
@@ -435,6 +466,21 @@ test("generic policy modifiers cannot mask imperative merge actions", () => {
     assert.doesNotThrow(() => assertDeliveryAnswer({}, text), text);
   }
   assert.throws(() => ownerDelivery(`${"context ".repeat(80)} and merge mergeable PRs.`), { code: "TASK_DELIVERY_SCOPE" });
+});
+
+test("coordinated application actions are scanned once without hiding Git controls", () => {
+  const ordinary = `Do not create x ${"and commit a database transaction ".repeat(100)}`;
+  assert.equal(ownerDelivery(ordinary), null);
+  const gated = `${"If I approve x, email y, ".repeat(1000)}wait until the owner approves.`;
+  assert.ok(Buffer.byteLength(gated) < 32 * 1024);
+  assert.throws(() => ownerDelivery(gated), { code: "TASK_DELIVERY_SCOPE" });
+  assert.throws(() => assertDeliveryAnswer({}, gated), { code: "TASK_DELIVERY_SCOPE" });
+});
+
+test("repeated application publication actions have bounded destination parsing", () => {
+  const source = `${Array(1100).fill("publish messages to queue").join(", ")}.`;
+  assert.ok(Buffer.byteLength(source) < 32 * 1024);
+  assert.equal(ownerDelivery(source), null);
 });
 
 test("negative modals share workflow controls without rejecting their application counterparts", () => {
@@ -687,6 +733,10 @@ test("application noun phrases share destinations without qualifying workflow ob
     const workflow = `Do not publish the solution ${connector} upload reports to S3.`;
     assert.throws(() => ownerDelivery(workflow), { code: "TASK_DELIVERY_SCOPE" }, workflow);
     assert.throws(() => assertDeliveryAnswer({}, workflow), { code: "TASK_DELIVERY_SCOPE" }, workflow);
+  }
+  for (const text of ["Generate pull request models for the API.", "Produce PR records for the database.", "Create a PR schema for reporting."]) {
+    assert.equal(ownerDelivery(text), null, text);
+    assert.doesNotThrow(() => assertDeliveryAnswer({}, text), text);
   }
 });
 
@@ -941,6 +991,7 @@ test("technical feature objects and application consent are not delivery control
     "Create a pull request status component.", "Do not commit the database transaction when validation fails.",
     "Avoid pushing duplicate items onto the queue.", "Never push an item onto the stack twice.",
     "Require user confirmation before deleting an account.", "Ask for user permission before accessing the camera.", "User consent is required before deleting an account.", "Require confirmation before deleting an account.", "Require user confirmation before creating a PR template.", "Require user confirmation before committing the database transaction.", "Do not commit the database transaction or push duplicate items onto the queue.", "Do not silently commit the database transaction.",
+    "Do not generate reports and commit them to the database.",
   ]) {
     assert.equal(ownerDelivery(text), null, text);
     assert.doesNotThrow(() => assertDeliveryAnswer(task, text), text);
@@ -951,7 +1002,7 @@ test("technical feature objects and application consent are not delivery control
       for (const act of [() => ownerDelivery(text + " " + restriction), () => assertDeliveryAnswer(task, text + " " + restriction)])
         assert.throws(act, { code: "TASK_DELIVERY_SCOPE" }, text + " " + restriction);
   }
-  for (const text of ["Create a PR tomorrow.", "Open a PR against release.", "Submit a PR when I approve.", "Do not commit the changes.", "Never automatically push changes.", "Do not silently commit changes.", "Do not commit the database transaction or silently push changes.", "Avoid pushing commits to the remote.", "Never run git push.", "Require my confirmation before proceeding.", "Ask for user permission before publishing.", "Require user confirmation before git push.", "Require user permission before running git push.", "Do not commit the database transaction or push any changes.", "Avoid pushing duplicate items onto the queue and committing changes."])
+  for (const text of ["Create a PR tomorrow.", "Open a PR against release.", "Submit a PR when I approve.", "Do not commit the changes.", "Never automatically push changes.", "Do not silently commit changes.", "Do not commit the database transaction or silently push changes.", "Avoid pushing commits to the remote.", "Never run git push.", "Require my confirmation before proceeding.", "Ask for user permission before publishing.", "Require user confirmation before git push.", "Require user permission before running git push.", "Do not commit the database transaction or push any changes.", "Avoid pushing duplicate items onto the queue and committing changes.", "Do not generate reports and commit them to GitHub."])
     for (const act of [() => ownerDelivery(text), () => assertDeliveryAnswer(task, text)]) assert.throws(act, { code: "TASK_DELIVERY_SCOPE" }, text);
 });
 
