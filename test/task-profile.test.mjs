@@ -13,7 +13,7 @@ import { fragments, parseDraft, renderDraft, draftPrompt, MAX_INPUT_BYTES } from
 import { check, parsePrd, contractOf } from "../lib/prd.mjs";
 import { validate as validateConfig, merge as mergeConfig } from "../lib/config.mjs";
 import { makeGit } from "../lib/git.mjs";
-import { profileRequests } from "./fixtures/task-profile-requests.mjs";
+import { profileRequests } from "../templates/plugin/task-profile-requests.mjs";
 import { draftFor } from "./fixtures/task-intake.mjs";
 import { currentContract, savedContract, contractDrift } from "../scripts/task-intake-contract.mjs";
 import { tempHome, CONFIG } from "./helpers.mjs";
@@ -183,6 +183,9 @@ test("the model route records usage-derived cost, labels unknown billing honestl
   assert.equal(body.max_tokens, 6000); assert.equal(body.tools, undefined); assert.equal(body.functions, undefined); assert.equal(body.model, "fixture-model");
   assert.equal(calls[0].init.headers.Authorization, "Bearer sk-fixture-secret-000000");
   const attempt = task.attempts[0];
+  // The reservation bounds the complete billed request, not only the user prompt.
+  assert.ok(attempt.estimate.inputTokens >= Buffer.byteLength(calls[0].init.body) + 64, "system message, framing fields and protocol margin are inside the bound");
+  assert.ok(attempt.estimate.inputTokens > Buffer.byteLength(body.messages[1].content) + Buffer.byteLength(body.messages[0].content));
   assert.equal(attempt.route, "model"); assert.equal(isModelRouteReceipt(attempt.receipt), true); assert.deepEqual(attempt.receipt.tools, []);
   assert.deepEqual(attempt.usage, { inputTokens: 1200, outputTokens: 800 });
   assert.equal(attempt.cost, estimateUsd(validateIntakeModelConfig(ROUTE).budget, 1200, 800)); assert.equal(attempt.spend.status, "reported");
@@ -351,7 +354,10 @@ test("the vendored validator and fixture corpus are pinned byte-for-byte with th
   assert.deepEqual(contractDrift(), [], "run npm run contract:intake -- --write after reviewing a validator change");
   assert.equal(saved.profileVersion, PROFILE_VERSION); assert.equal(saved.validator, "lib/task_profile.mjs");
   assert.equal(saved.files["lib/task_profile.mjs"], sha(readFileSync(new URL("../lib/task_profile.mjs", import.meta.url))));
-  assert.equal(current.files["test/fixtures/task-profile-requests.mjs"], saved.files["test/fixtures/task-profile-requests.mjs"]);
+  assert.equal(current.files["templates/plugin/task-profile-requests.mjs"], saved.files["templates/plugin/task-profile-requests.mjs"]);
+  // Both pinned files live under packaged paths, so the published artifact carries the exact corpus.
+  const packaged = JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8")).files;
+  for (const path of Object.keys(saved.files)) assert.ok(packaged.some(entry => path === entry || path.startsWith(entry + "/")), `${path} is inside the package allowlist`);
   assert.match(saved.upgrade, /task-intake-vendor-sync/);
   // The vendored validator loads on its own: no imports, so the pinned hash covers every rule it applies.
   const source = readFileSync(new URL("../lib/task_profile.mjs", import.meta.url), "utf8");

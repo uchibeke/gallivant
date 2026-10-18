@@ -28,7 +28,7 @@ import { writeJsonAtomic } from "../lib/fs.mjs";
 import { contentDigest, captureStartInput } from "../lib/start_contract.mjs";
 import { draftFor } from "./fixtures/task-intake.mjs";
 import { workflowRequests, applicationRequests } from "./fixtures/owner-actions.mjs";
-import { profileRequests } from "./fixtures/task-profile-requests.mjs";
+import { profileRequests } from "../templates/plugin/task-profile-requests.mjs";
 import { DELIVERY_CAPABILITIES, PROFILE_VERSION } from "../lib/task_profile.mjs";
 import { modelSummary } from "../lib/task_delivery_view.mjs";
 import { tempHome, CONFIG, GOOD_PRD, harnessBin, fakeCredential, fakeIdentity, silentLog, fakeRunner, makeClock, codexLines, claudeResultLines, geminiLines, opencodeLines, gooseLines } from "./helpers.mjs";
@@ -3926,7 +3926,9 @@ test("the request corpus is traceable and the typed profile controls every exter
 });
 
 test("a profile conflict pauses before any harness run until the owner resolves it, then the answer is mapped and approval is fresh", async () => {
-  const w = world();
+  // The planner reads the owner's reply literally: a restated prohibition the
+  // profile already honours is a covered `restrict` reading.
+  const w = world({ prepare: async (_ctx, task) => JSON.stringify(draftFor(task, { delivery: { "a-q-delivery-r-2-1": { action: "restrict", prohibits: ["deploy", "release"] } } })) });
   const prepared = await w.service.prepare({ text: "Implement export.\nDeploy to production after merge.", run: true });
   assert.equal(prepared.status, "needs-input"); assert.deepEqual(prepared.questions.map(q => q.id), ["q-delivery-r-2"]);
   assert.equal(prepared.readiness, null); assert.deepEqual(w.ctx.state.entries(), []); assert.equal(w.daemonCalls(), 0);
@@ -3955,13 +3957,17 @@ test("a profile conflict pauses before any harness run until the owner resolves 
   assert.equal(old.status, "needs-input");
   const resumed = await legacy.service.answer({ taskId: old.taskId, expectedRevision: old.revision, operationId: "legacy-answer", answers: { "q-r-1": "Use CSV." } });
   assert.equal(resumed.status, "started"); assert.equal(legacy.ctx.state.get(resumed.implementation.id).task.deliveryProfile, undefined);
-  // Insisting on the action in the answer re-raises the clarification instead of granting it.
-  const again = world({ prepare: async (_ctx, task) => JSON.stringify(draftFor(task, { delivery: task.answers["q-delivery-r-1"] ? { "a-q-delivery-r-1-1": { action: "merge" } } : { "r-1": { action: "merge" } } })) });
-  const first = await again.service.prepare({ text: "Merge the PR." });
-  assert.equal(first.status, "needs-input");
-  const pushed = await again.service.answer({ taskId: first.taskId, expectedRevision: first.revision, operationId: "insist", answers: { "q-delivery-r-1": "Yes, merge it anyway." } });
-  assert.equal(pushed.status, "needs-input"); assert.deepEqual(pushed.questions.map(q => q.id), ["q-delivery-a-q-delivery-r-1-1"]);
-  assert.deepEqual(again.ctx.state.entries(), []);
+  // Insisting on the action in the answer re-raises the clarification instead of granting it,
+  // whether the planner tags the reply or leaves its escalating vocabulary untagged.
+  for (const tagged of [true, false]) {
+    const again = world({ prepare: async (_ctx, task) => JSON.stringify(draftFor(task, { delivery: task.answers["q-delivery-r-1"] ? (tagged ? { "a-q-delivery-r-1-1": { action: "merge" } } : {}) : { "r-1": { action: "merge" } } })) });
+    const first = await again.service.prepare({ text: "Merge the PR." });
+    assert.equal(first.status, "needs-input");
+    const pushed = await again.service.answer({ taskId: first.taskId, expectedRevision: first.revision, operationId: "insist", answers: { "q-delivery-r-1": "Yes, merge it anyway." } });
+    assert.equal(pushed.status, "needs-input", `tagged=${tagged}`); assert.deepEqual(pushed.questions.map(q => q.id), ["q-delivery-a-q-delivery-r-1-1"]);
+    assert.equal(pushed.readiness, null); assert.deepEqual(again.ctx.state.entries(), []);
+    await assert.rejects(again.service.start({ taskId: first.taskId, expectedRevision: pushed.revision, run: true }), { code: "TASK_NOT_READY" });
+  }
 });
 
 test("typed delivery inputs refuse merge, deployment and unknown routes before effects and conflict on changed retry input", async () => {

@@ -65,11 +65,14 @@ spans are masked, so literal examples do not count. The screen grants nothing:
   the brief and in the review: the clause is treated as product behaviour and
   the profile is unchanged.
 
-The owner's reply to a delivery question is an explicit statement about that
-clause. It is mapped like any answer and is not screened again, but a reply that
-the planner reads as asking for an uncovered action raises a new question for
-the reply itself. Insisting cannot expand the profile; prepare a new task with a
-different typed profile instead.
+The owner's reply to a delivery question is screened like any other clause.
+A reply that the planner reads as asking for an uncovered action, or that
+carries escalating vocabulary the planner leaves untagged, raises the same
+question for the reply itself. A reply that restates a prohibition the profile
+already honours ("no deployment by this task") maps to criteria once the planner
+tags it as a covered `restrict` reading; insisting on an uncovered action
+cannot expand the profile. Prepare a new task with a different typed profile
+instead.
 
 ## The review
 
@@ -136,8 +139,10 @@ environment variable at call time and is never written to disk or returned by
 any view. Ceilings are absolute: at most three calls per task, 50,000 input and
 6,000 output tokens per call, and a $0.10 allowance. Configuration can lower
 them and cannot raise them. Before each call the route bounds input tokens at
-one token per UTF-8 byte of the prompt (the byte-level fallback worst case, so
-emoji and rare scripts cannot slip under the ceiling), prices that bound plus
+one token per UTF-8 byte of the complete serialized request (system message,
+prompt and framing fields, plus a fixed margin for protocol tokens), the
+byte-level fallback worst case, so emoji and rare scripts cannot slip under the
+ceiling. It prices that bound plus
 the output limit at the configured list prices, and refuses to start the call
 when the result does not fit the remaining allowance. Reported usage above
 either ceiling rejects the draft after the call, and usage that is negative,
@@ -187,10 +192,12 @@ to the free-text contract.
 loads alone and its hash covers every rule it applies) and is the file Agent
 Passport vendors. Its copy of the completion conditions is checked against the
 coordinator schema by the focused suite. `templates/plugin/task-intake-contract.json` pins its exact
-bytes, the fixture corpus and the profile schema version. `npm run lint` fails
-when the pin is stale; `npm run contract:intake -- --write` refreshes it after a
-reviewed change. The plugin builder refuses to package when the packed validator
-differs from the pin and records `intakeContract` in `runtime.json`. The
+bytes, the fixture corpus at `templates/plugin/task-profile-requests.mjs` and the
+profile schema version. Both pinned files ship in the published package, so a
+consumer can run the exact promised corpus. `npm run lint` fails when the pin is
+stale; `npm run contract:intake -- --write` refreshes it after a reviewed change.
+The plugin builder refuses to package when either packed file differs from the
+pin and records `intakeContract` in `runtime.json`. The
 downstream `task-intake-vendor-sync` work in `aporthq/agent-passport` must pin
 the published package, regenerate its bundled validator from these bytes and
 run the same corpus before either repository's change is approved.
