@@ -57,6 +57,10 @@ artifact or capture pointer. Keep those underlying records accessible to the
 reviewer. This validator checks consistency and completeness of recorded evidence;
 it cannot authenticate a narrated observation or replace actually performing it.
 Never manufacture a record to make a gate pass.
+Current, correctly bound live `failed` and `blocked` outcomes retain those statuses
+in checks and blockers, even if the attempt stopped before collecting every case.
+Outdated bindings remain `stale`; fixture, offline and future observations remain
+`unverified`.
 
 Core hashes cover the packed bytes and lock; tool hashes cover operations and
 schemas; plugin hashes cover exact ZIP bytes; deployment hashes cover revision,
@@ -65,6 +69,11 @@ configuration and endpoint. An affected binding becomes `stale` and appears in
 source payload files and the current tracked payload inventory. New, removed,
 modified or uncommitted executable/packaging inputs require a rebuild. Audit-only
 record changes outside the package payload do not invalidate unchanged artifacts.
+The manifest also records `handoffHashes` for listing, release notes, review cases,
+START-HERE and RUNTIME. Validation rehashes those files and the staged plugin files
+using the builder's `assetHashes`. Older manifests without complete handoff hashes
+require rebuilding. Treat the manifest as the immutable trust anchor; only
+`evidence.json` and `qualification.json` are intentionally mutable release records.
 
 `codeMerged`, `submitted`, `approved` and `published` each require their own
 `{at, pointer, identity}` record. `liveQualified` and `submissionReady` are derived

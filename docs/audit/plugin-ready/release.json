@@ -64,6 +64,54 @@
       {
         "command": "npm test",
         "exit": 0,
+        "passed": 1721,
+        "skipped": 1,
+        "log": "/tmp/release-review-full.log",
+        "logSha256": "b5efc570159b14893ad4b9f625b620016b9f2fc9853efe8db7e788da7abdb613"
+      },
+      {
+        "command": "npm run lint",
+        "exit": 0,
+        "passed": null,
+        "skipped": 0,
+        "log": "/tmp/release-review-lint.log",
+        "logSha256": "cdc63b4e335e51146cdac6c8a99d5817150951621af8d0329a1bcd947f9b2c14"
+      },
+      {
+        "command": "npm run test:execution-backends",
+        "exit": 0,
+        "passed": 418,
+        "skipped": 0,
+        "log": "/tmp/release-review-backends.log",
+        "logSha256": "bd32bd9ab035d1cde91224ea4be21160176cff976c3cdde0ea1bdca6ac199fd7"
+      },
+      {
+        "command": "npm run test:plugin-package",
+        "exit": 0,
+        "passed": 577,
+        "skipped": 0,
+        "log": "/tmp/release-review-plugin.log",
+        "logSha256": "a22905eaa3a9e5fcfd4f36100465918e146867b8d501259e85eda5e00d6db315"
+      },
+      {
+        "command": "npm run test:release-package",
+        "exit": 0,
+        "passed": 9,
+        "skipped": 0,
+        "log": "/tmp/release-review-package.log",
+        "logSha256": "b168c9fcf8b2b1ad0731d03a61add18020b17431b991fa74fe2240da7413de55"
+      },
+      {
+        "command": "git diff --check",
+        "exit": 0
+      }
+    ],
+    "installedConformanceLog": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/task-plugin-consumer-8NxFLf/conformance.log",
+    "installedEvidence": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/task-plugin-consumer-8NxFLf/evidence.json",
+    "previousChecks": [
+      {
+        "command": "npm test",
+        "exit": 0,
         "passed": 1720,
         "skipped": 1,
         "log": "/tmp/release-full-tests-host.log",
@@ -106,8 +154,7 @@
         "exit": 0
       }
     ],
-    "installedConformanceLog": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/task-plugin-consumer-ks8hyk/conformance.log",
-    "installedEvidence": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/task-plugin-consumer-ks8hyk/evidence.json"
+    "previousInstalledEvidence": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/task-plugin-consumer-ks8hyk/evidence.json"
   },
   "criteria": {
     "ac-1": {
@@ -156,7 +203,7 @@
     },
     "ac-12": {
       "met": true,
-      "evidence": "test/release-package.test.mjs: evidence invalidation, record-only changes and payload tampering; /tmp/release-package-final.log"
+      "evidence": "test/release-package.test.mjs: scoped invalidation, all handoff/staged-asset tampering and installed validator regressions; /tmp/release-review-package.log"
     },
     "ac-13": {
       "met": false,
@@ -165,6 +212,21 @@
     "ac-14": {
       "met": false,
       "evidence": "docs/audit/plugin-ready/release.md"
+    }
+  },
+  "reviewFollowup": {
+    "reviewedCommit": "c7f2887e0184e688425860b86d59868c656003ee",
+    "review": 5565501708,
+    "inlineComments": [
+      4309183863,
+      4309183867
+    ],
+    "representativeOutput": "/tmp/release-review-output.json",
+    "classification": "offline regression verification; live prerequisites unchanged",
+    "sourceHashes": {
+      "lib/release_package.mjs": "44dec3d0beafd3c2b041e968589a602afe60cc2023b9a5b0a8ae35666d61fe20",
+      "test/release-package.test.mjs": "2fbc574d3b28dcead33638865da25d7e1d050b759390ce610bfcf82649bf940a",
+      "docs/release-qualification.md": "af804ddb756f2940ac8f23da7214f46519602e58f48baafda2d1de98d9ae6fc4"
     }
   }
 }

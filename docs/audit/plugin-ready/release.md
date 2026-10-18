@@ -67,10 +67,34 @@ probe, which passed `sandbox-exec` filesystem/network enforcement. Required suit
 were then rerun with that host capability and the product's isolation intact.
 The index records final outcomes; initial failed logs are retained separately.
 
-Final offline checks passed: 1,720 full-suite passes (one existing skip), 418
+Initial offline checks passed: 1,720 full-suite passes (one existing skip), 418
 backend passes, 43 installed flows plus 534 installed conformance checks, eight
 release checks including a fresh tarball-installed validator, lint and whitespace.
 The record validator uses the existing canonical JSON helper, so key reordering
 and audit-only changes do not unnecessarily invalidate unchanged candidates.
 These results do not qualify the live release; twelve acceptance criteria remain
 unmet as recorded in the evidence index.
+
+PR #23 review follow-up: both reported defects were reproduced and corrected in
+the shared release validator. The candidate integrity rule now covers all five
+handoff files and the sibling staged plugin assets, in addition to the existing
+archives and schemas. The builder records handoff hashes only after writing those
+files and retains its existing failed-assembly cleanup. Manifests without the
+required hashes stop with a rebuild remedy. Only evidence/qualification records
+remain mutable; the manifest remains the trust anchor.
+
+The observation rule now preserves current bound live failures and blocks in both
+checks and blockers, including incomplete attempts. Stale bindings take precedence;
+future, offline and fixture observations cannot count as live outcomes. Regression
+coverage checks alteration, truncation, deletion, missing hashes, mutable records,
+both CLI callers and a freshly installed tarball. The representative generated
+manifest and START-HERE inspected at `/tmp/release-review-output.json` are explicitly
+an internal offline fixture with `needs-human` status, not live release evidence.
+The existing external dependencies and twelve unmet criteria remain unchanged;
+no unchanged blocked provider or host calls were retried.
+
+Follow-up verification passed: `npm test` (1,721 passes, one existing skip),
+`npm run lint`, `npm run test:execution-backends` (418 passes),
+`npm run test:plugin-package` (43 installed flows and 534 conformance checks),
+`npm run test:release-package` (nine passes), and `git diff --check`. The evidence
+index preserves prior logs and records the new log hashes and tested source hashes.

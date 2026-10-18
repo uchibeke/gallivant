@@ -53,6 +53,30 @@ test('evidence invalidation is scoped to actual candidate changes', () => {
   assert.equal(evaluateRelease({ ...input, evidence }).checks.integration.status, 'stale');
 });
 
+test('current bound live failures and blocks retain their outcomes', () => {
+  for (const status of ['failed', 'blocked']) {
+    const input = candidate(), evidence = observed(input);
+    evidence.checks.host.status = status;
+    evidence.checks.host.observations = { installedCandidate: 'audit/host.json#attempt' };
+    const result = evaluateRelease({ ...input, evidence });
+    assert.equal(result.checks.host.status, status);
+    assert.equal(result.blockers.find(b => b.id === 'host').status, status);
+    assert.equal(result.states.liveQualified, false);
+    assert.equal(result.states.submissionReady, false);
+    assert.ok(result.rerun.includes('host'));
+    for (const kind of ['offline', 'fixture']) {
+      evidence.checks.host.kind = kind;
+      assert.equal(evaluateRelease({ ...input, evidence }).checks.host.status, 'unverified');
+    }
+    evidence.checks.host.kind = 'live';
+    evidence.checks.host.at = '2999-01-01';
+    assert.equal(evaluateRelease({ ...input, evidence }).checks.host.status, 'unverified');
+    evidence.checks.host.at = '2026-10-01';
+    input.manifest.hashes.plugin = hash('changed plugin');
+    assert.equal(evaluateRelease({ ...input, evidence }).checks.host.status, 'stale');
+  }
+});
+
 test('record-only changes preserve qualification and never infer publication', () => {
   const input = candidate(), evidence = observed(input);
   input.manifest.sourceCommit = 'new audit-only commit';
@@ -98,7 +122,32 @@ test('payload verification rejects tampering, source additions and symlinks', t 
   for (const [file, key] of [['core.tgz', null], ['aport-task-delivery.zip', 'plugin'], ['runtime.json', 'runtime'], ['operations.json', 'operations']]) {
     writeFileSync(join(out, file), file); if (key) manifest.hashes[key] = hash(file); else manifest.coreSha256 = hash(file);
   }
+  const handoffFiles = ['listing.md', 'release-notes.md', 'review-cases.json', 'START-HERE.md', 'RUNTIME.md'];
+  manifest.handoffHashes = Object.fromEntries(handoffFiles.map(file => {
+    writeFileSync(join(out, file), file); return [file, hash(file)];
+  }));
+  mkdirSync(join(out, 'plugin'));
+  writeFileSync(join(out, 'plugin/plugin.json'), 'plugin');
+  manifest.assetHashes = { 'plugin.json': hash('plugin') };
   manifest.payloadHashes = { 'lib/core.mjs': hash(readFileSync(join(source, 'lib/core.mjs'))) };
+  assert.equal(verifyReleasePayload(out, manifest, { sourceRoot: source }), true);
+  for (const file of [...handoffFiles, 'plugin/plugin.json']) {
+    const original = readFileSync(join(out, file));
+    for (const replacement of ['tampered', '']) {
+      writeFileSync(join(out, file), replacement);
+      assert.throws(() => verifyReleasePayload(out, manifest, { sourceRoot: source }), /Candidate bytes changed/);
+    }
+    rmSync(join(out, file));
+    assert.throws(() => verifyReleasePayload(out, manifest, { sourceRoot: source }), /ENOENT/);
+    writeFileSync(join(out, file), original);
+  }
+  for (const file of handoffFiles) {
+    const incomplete = structuredClone(manifest); delete incomplete.handoffHashes[file];
+    assert.throws(() => verifyReleasePayload(out, incomplete, { sourceRoot: source }), /Candidate bytes changed/);
+  }
+  const legacy = structuredClone(manifest); delete legacy.handoffHashes;
+  assert.throws(() => verifyReleasePayload(out, legacy, { sourceRoot: source }), /Incomplete handoff hashes/);
+  for (const file of ['evidence.json', 'qualification.json']) writeFileSync(join(out, file), '{"updated":true}');
   assert.equal(verifyReleasePayload(out, manifest, { sourceRoot: source }), true);
   writeFileSync(join(source, 'lib/new.mjs'), '// newly introduced code');
   assert.throws(() => verifyReleasePayload(out, manifest, { sourceRoot: source }), /Uncommitted/);
@@ -139,6 +188,10 @@ test('release assembly reuses the packager and keeps evidence outside the public
   assert.equal(built.manifest.release.states.submissionReady, false);
   for (const file of ['START-HERE.md', 'manifest.json', 'evidence.json', 'qualification.json', 'listing.md', 'release-notes.md', 'review-cases.json', 'RUNTIME.md', 'runtime.json', built.manifest.coreArtifact]) assert.ok(readFileSync(join(out, file)).length);
   assert.match(readFileSync(join(out, 'START-HERE.md'), 'utf8'), /Offline checks are not live qualification/);
+  assert.deepEqual(Object.keys(built.manifest.handoffHashes).sort(), ['RUNTIME.md', 'START-HERE.md', 'listing.md', 'release-notes.md', 'review-cases.json']);
+  for (const [file, expected] of Object.entries(built.manifest.handoffHashes)) assert.equal(hash(readFileSync(join(out, file))), expected);
+  for (const [file, expected] of Object.entries(built.manifest.assetHashes)) assert.equal(hash(readFileSync(join(out, 'plugin', file))), expected);
+  assert.deepEqual(readReleaseJson(join(out, 'manifest.json')), built.manifest);
   const contents = execFileSync('unzip', ['-Z1', join(out, 'aport-task-delivery.zip')], { encoding: 'utf8' });
   assert.match(contents, /skills\/task-delivery\/SKILL.md/);
   assert.doesNotMatch(contents, /evidence|qualification|reviewer|credential/);
@@ -151,6 +204,18 @@ test('release assembly reuses the packager and keeps evidence outside the public
     { cwd: consumer, encoding: 'utf8', env: { ...process.env, NODE_PATH: '' } });
   assert.deepEqual(JSON.parse(installed).identity, built.evaluation.identity);
   assert.equal(JSON.parse(installed).status, 'needs-human');
+
+  writeFileSync(join(out, 'START-HERE.md'), 'truncated');
+  for (const args of [['bin/release-package.mjs', '--mode', 'validate'], ['bin/release-live.mjs', '--host'], ['bin/release-live.mjs', '--backend', 'openai-agents']]) {
+    const result = spawnSync(process.execPath, [...args, '--out', out], { encoding: 'utf8' });
+    assert.equal(result.status, 1);
+    assert.match(result.stderr, /Candidate bytes changed: START-HERE.md/);
+  }
+  const installedVerification = spawnSync(process.execPath, ['--input-type=module', '-e',
+    `import {verifyReleasePayload} from 'gallivant/lib/release_package.mjs'; verifyReleasePayload(${JSON.stringify(out)}, ${JSON.stringify(built.manifest)});`],
+    { cwd: consumer, encoding: 'utf8', env: { ...process.env, NODE_PATH: '' } });
+  assert.equal(installedVerification.status, 1);
+  assert.match(installedVerification.stderr, /Candidate bytes changed: START-HERE.md/);
 
   assert.throws(() => assembleRelease({ config, sourceCommit, coreVersion: '0.2.0', out, internal: true, deployment }), /empty bounded/);
   assert.ok(readFileSync(join(out, 'manifest.json')).length, 'occupied output must survive');
