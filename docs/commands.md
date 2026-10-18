@@ -13,6 +13,10 @@ harness settings, reviewer installation or repository rules. Follow `doctor` and
 
 ## `gallivant doctor [--send] [--probe]`
 
+`gallivant doctor --network <https-origin> [--json]` runs standalone, bounded
+DNS/HTTPS diagnostics without loading config or credentials. Local sign-in checks
+do not prove API connectivity. See [network recovery](network-recovery.md).
+
 The install checklist and the health probe, one line per check, each failure with the exact command or file that fixes it. With no config it prints a complete config built from this machine. `--send` posts a test notification. `--probe` runs a real Claude session in a temp directory and confirms a write inside is allowed and a write outside is denied. Exit code 1 while anything fails.
 
 ## `gallivant task [prepare] "request" [--stdin] [--run] [--json]`
@@ -219,7 +223,7 @@ Two things to know about it:
 
 ### Rechecking and updating a run
 
-`needs-human` stops normal review and check processing. GitHub labels may trigger a repository's workflows, but they do not restart Gallivant. After resolving the cause, use **Recheck PR** on `/run?id=...`, or:
+`needs-human` stops normal review and check processing. GitHub labels may trigger a repository's workflows, but they do not restart Gallivant. For a resolved review/CI blocker use **Recheck PR** on `/run?id=...`, or:
 
 ```sh
 gallivant recheck agent-passport#396
@@ -227,6 +231,12 @@ gallivant say agent-passport#396 --note "The external blocker is resolved; conti
 ```
 
 Recheck returns the entry to watching without resetting its iteration count or check dispatch markers. The existing loop reads checks, review and the completion gate again. It does not rerun GitHub Actions or override a failed check. Unchanged failures stop again without spending another fixer round. To deliberately reset a spent round budget, use `register`.
+
+An agent execution failure requires **Resume agent**, not Recheck. Recognized
+temporary connection failures have [bounded automatic recovery](network-recovery.md);
+status shows their next attempt. Recheck refuses to clear that failure or its
+recovery budget. Authentication, policy and uncertain-launch failures still need
+operator intervention. Existing stopped jobs require one explicit resume after upgrade.
 
 **Resume agent** continues the same session on its current instructions. **Send message** and `say` deliver your correction to that session, including after an agent has finished and its PR is ready for human review. A closed or merged PR requires a follow-up PRD. Both use the existing resume path and preserve the approved brief, permissions and review budget. Local CLI resumes preserve uncommitted files and the index; the automatic base merge is deferred when the tree is dirty. The agent must inspect partial work, commit only its task changes, then fetch and merge the intended base into its task branch before rerunning verification and pushing. It must preserve unrelated edits and carried instructions, stopping if they prevent that merge. This never authorizes merging the PR or writing to its base. Replacing a changed brief or carried files still requires an explicit `resume --resnapshot`. Every existing replacement file, including ignored files absent from Git status, must match either the previous snapshot or the newly accepted bytes; conflicting session edits stop the resnapshot before any file or snapshot is replaced.
 

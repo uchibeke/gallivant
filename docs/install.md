@@ -1,5 +1,15 @@
 # Install
 
+For DNS errors or stalled provider calls, see [network diagnosis and recovery](network-recovery.md).
+The diagnostic command works before configuration or login, on Linux and macOS.
+
+Linux installations need process inspection through `ps` with `lstart`, `command`,
+PID and process-group fields (normally the `procps`/`procps-ng` package). Minimal
+containers may omit it. Keep process inspection available: uncertain ownership
+blocks safe restart rather than allowing overlapping agents. The CI baseline is
+Ubuntu with Node 22/24; other distributions must also satisfy their harness and
+sandbox prerequisites.
+
 Start with one harness and one repository. `gallivant init` creates your local
 config; `gallivant doctor` checks the prerequisites and prints a fix for each
 missing item. Setup time depends on whether your harness and GitHub are already

@@ -46,6 +46,11 @@ gallivant --version
 Anonymous installation requires a public repository. After the first registry
 release, use `npm install -g gallivant`. See [release readiness](docs/releasing.md).
 
+Temporary network failures have bounded, same-session recovery. Status separates
+local sign-in from API connectivity, and `gallivant doctor --network <https-origin>`
+diagnoses DNS/HTTPS on Linux and macOS. See [network recovery](docs/network-recovery.md)
+for retry limits and troubleshooting.
+
 Create your local configuration:
 
 ```sh
