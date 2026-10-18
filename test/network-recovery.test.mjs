@@ -234,3 +234,14 @@ test("recovery state retains the error code without copying credential-bearing f
   assert.equal(w.entry().network_retry.code, "ENOTFOUND");
   assert.doesNotMatch(JSON.stringify(w.entry()), /secret-value|proxy\.invalid/);
 });
+
+test("cancellation arriving during retry preparation prevents the replacement launch", async () => {
+  const w = world(); await w.fail();
+  w.ctx.credential = async options => {
+    w.state.update(w.id, { dispatch_stopped: "cancellation-requested" });
+    return fakeCredential()(options);
+  };
+  w.clock.advance(1); await w.tick();
+  assert.equal(w.runner.started.length, 1);
+  assert.equal(w.entry().dispatch_stopped, "cancellation-requested");
+});
