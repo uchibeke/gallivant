@@ -71,7 +71,8 @@ punctuation ends one, but conjunctions and an introductory colon after the
 control ("Do not: open a pull request") do not. The screen grants nothing:
 
 - Escalating terms (merge, deploy, release, approval, wait, local-only) or a
-  control word such as "do not", "until" or "unless" next to any delivery term
+  control word such as "do not", "until", "unless", "out of scope" or
+  "exclude" next to any delivery term
   raise the same `q-delivery-<clause>` question when the planner left the
   clause untagged.
 - Ordinary vocabulary ("Add a PR status badge") becomes a visible assumption in
@@ -151,7 +152,9 @@ public HTTPS URL without credentials. The API key is read from the named
 environment variable at call time and is never written to disk or returned by
 any view. Ceilings are absolute: at most three calls per task, 50,000 input and
 6,000 output tokens per call, and a $0.10 allowance. Configuration can lower
-them and cannot raise them. Before each call the route bounds input tokens at
+them and cannot raise them. The task's runtime allowance bounds each call too:
+the deadline is capped to the remaining runtime, and less than one second
+remaining refuses before the request. Before each call the route bounds input tokens at
 one token per UTF-8 byte of the complete serialized request (system message,
 prompt and framing fields, plus a fixed margin for protocol tokens), the
 byte-level fallback worst case, so emoji and rare scripts cannot slip under the
@@ -189,7 +192,10 @@ instead of evaluating rules the recorded tree does not contain. A tree path the
 index no longer holds (a staged deletion) is excluded as unverified and a
 staged addition is never listed; the listing therefore always describes the
 recorded revision. It is bounded to 400 paths and 16 KiB in the prompt; its
-digest covers the complete approved listing at that revision. File contents reach the planner only through
+digest covers the complete approved listing at that revision. The revision and
+the ignore files are rechecked after the listings are read, so a concurrent
+edit between the reads makes the snapshot unavailable instead of pairing the
+recorded revision with another state. File contents reach the planner only through
 explicitly selected `--context` documents, which are screened for credential
 material. If the snapshot cannot be collected safely, the task records
 `repositoryContext.status: "unavailable"` with the reason, and nothing is

@@ -84,6 +84,11 @@ test("the delivery screen is deterministic over the fixture corpus and masks lit
   assert.ok(deliveryScreen('"Open a pull request" is forbidden for this change.').controlled.includes("pull_request"));
   assert.equal(deliveryScreen('Opening a `pull request` is not allowed; label it "merge later".').controlled.includes("pull_request"), true);
   assert.equal(maskLiterals('Show "do not merge" and "open a PR" labels.'), "Show " + " ".repeat(14) + " and " + " ".repeat(11) + " labels.");
+  for (const text of ["Opening a pull request is out of scope.", "A merge is outside the scope of this task.", "Exclude deployment from this work."]) {
+    const screen = deliveryScreen(text);
+    assert.equal(screen.tier, "question", text); assert.ok(screen.controlled.length, `${text} → ${JSON.stringify(screen)}`);
+  }
+  assert.deepEqual(unaccountedTerms(deliveryScreen("Opening a pull request is out of scope."), { action: "pull_request" }), ["pull_request"]);
   for (const text of ["Leave the changes uncommitted.", "Leave all changes unpublished.", "Keep the branch unpushed and unmerged."]) {
     const screen = deliveryScreen(text);
     assert.equal(screen.tier, "question", text); assert.ok(screen.terms.includes("local"), text);
@@ -262,6 +267,14 @@ test("the model route stops before a call that would exceed its limits and rejec
   const capped = taskFor("Add CSV export.", { commandCandidates: ["npm test"], allowance: { budgetUsd: 0.0001, runtimeMs: 1000 } });
   await assert.rejects(prepareModelTurn({ config: { intake_model: ROUTE }, env: key, fetch: ok }, capped, memoryStore(), []), { code: "TASK_ALLOWANCE" });
   assert.equal(calls, 0);
+  // The remaining task runtime bounds the call's deadline, and too little remaining runtime refuses before the request.
+  const spent = taskFor("Add CSV export.", { commandCandidates: ["npm test"], allowance: { budgetUsd: 5, runtimeMs: 1500 }, attempts: [{ route: "model", settled: true, consumed: true, ok: true, elapsedMs: 1000, cost: 0.001 }] });
+  await assert.rejects(prepareModelTurn({ config: {}, env: key, fetch: ok }, spent, memoryStore(), []), e => e.code === "TASK_ALLOWANCE" && /500 ms left, below the 1000 ms/.test(e.message));
+  assert.equal(calls, 0); assert.equal(spent.attempts.length, 1);
+  const shortRun = taskFor("Add CSV export.", { commandCandidates: ["npm test"], allowance: { budgetUsd: 5, runtimeMs: 4000 }, attempts: [{ route: "model", settled: true, consumed: true, ok: true, elapsedMs: 1000, cost: 0.001 }] });
+  await prepareModelTurn({ config: {}, env: key, fetch: ok }, shortRun, memoryStore(), []);
+  assert.equal(shortRun.attempts[1].timeoutMs, 3000, "the deadline is capped to the remaining runtime rather than the configured timeout"); assert.equal(shortRun.attempts[1].deadline - shortRun.attempts[1].startedAt, 3000);
+  calls = 0;
   // Truncated output is rejected with a bounded error; the call is still recorded with its usage.
   const truncated = taskFor("Add CSV export.", { commandCandidates: ["npm test"] });
   await assert.rejects(prepareModelTurn({ config: { intake_model: ROUTE }, env: key, fetch: async () => response({ choices: [{ message: { content: "{" }, finish_reason: "length" }], usage: { prompt_tokens: 10, completion_tokens: 6000 } }) }, truncated, memoryStore(), []), e => e.code === "TASK_MODEL_ROUTE" && /incomplete/.test(e.message));
@@ -353,7 +366,14 @@ test("repository snapshots are read-only, bounded, exclude private and ignored p
   const snapshot = await repositorySnapshot(git, "/checkout");
   assert.equal(snapshot.status, "collected"); assert.equal(snapshot.revision, revision); assert.equal(snapshot.readOnly, true);
   assert.deepEqual(treeRequests, [revision], "the listing is enumerated from the recorded revision's tree");
-  assert.deepEqual(ruleRequests, [revision], "ignore rules are compared against the recorded revision");
+  assert.deepEqual(ruleRequests, [revision, revision], "ignore rules are compared against the recorded revision before and after enumeration");
+  // A .gitignore edit or a moved HEAD between the reads makes the collected state inconsistent: nothing is listed.
+  let ruleCalls = 0;
+  const racedRules = await repositorySnapshot({ ...git, ignoreRuleChanges: async () => ruleCalls++ === 0 ? [] : [".gitignore"] }, "/checkout");
+  assert.equal(racedRules.status, "unavailable"); assert.match(racedRules.reason, /changed while the snapshot was being collected/); assert.deepEqual(racedRules.paths, []);
+  let revisionCalls = 0;
+  const racedHead = await repositorySnapshot({ ...git, revision: async () => revisionCalls++ === 0 ? revision : "b".repeat(40) }, "/checkout");
+  assert.equal(racedHead.status, "unavailable"); assert.match(racedHead.reason, /changed while the snapshot was being collected/);
   // An edited or untracked .gitignore means the rules in force are not the recorded revision's: nothing is listed or guessed.
   const diverged = await repositorySnapshot({ ...git, ignoreRuleChanges: async () => [".gitignore", "docs/.gitignore"] }, "/checkout");
   assert.equal(diverged.status, "unavailable"); assert.match(diverged.reason, /2 \.gitignore file\(s\) differ from the recorded revision/); assert.deepEqual(diverged.paths, []); assert.equal(diverged.digest, null);
