@@ -4,7 +4,7 @@ import { join } from "node:path";
 import { mkdirSync, writeFileSync, readFileSync } from "node:fs";
 import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import { deliveryProfile, validateDeliveryProfile, stableProfile, deliveryScreen, maskLiterals, validateDeliveryTag, profileCovers, unaccountedTerms, deliveryQuestion, deliveryProfileFromPrd, profileView, DELIVERY_CAPABILITIES, PROFILE_VERSION, COMPLETION_CONDITIONS } from "../lib/task_profile.mjs";
+import { deliveryProfile, validateDeliveryProfile, stableProfile, deliveryScreen, maskLiterals, statements, validateDeliveryTag, profileCovers, unaccountedTerms, deliveryQuestion, deliveryProfileFromPrd, profileView, DELIVERY_CAPABILITIES, PROFILE_VERSION, COMPLETION_CONDITIONS } from "../lib/task_profile.mjs";
 import { intakeModelProblems, validateIntakeModelConfig, intakeModelRoute, intakeModelRouteSummary, pinnedModelRoute, savedModelRoute, MODEL_ROUTE_CEILINGS } from "../lib/task_model_config.mjs";
 import { COMPLETION_SCHEMA } from "../lib/task_completion.mjs";
 import { prepareModelTurn, isModelRouteReceipt, estimateTokens, estimateUsd } from "../lib/task_model_route.mjs";
@@ -70,6 +70,14 @@ test("the delivery screen is deterministic over the fixture corpus and masks lit
   }
   assert.equal(maskLiterals('Keep "do not push" and `merge main` and “deploy” visible?'), 'Keep ' + " ".repeat(13) + ' and ' + " ".repeat(12) + ' and ' + " ".repeat(8) + ' visible?');
   assert.equal(deliveryScreen('"Unmatched quote hides nothing: merge it').tier, "question");
+  // Emphasis directly after a control phrase is the control's target, not an example, and an introductory colon does not end the statement.
+  for (const text of ['Do not "open a pull request" for this.', "Do not `open a pull request` for this.", "Do not: open a pull request.", "Do not -- open a pull request.", 'Never “merge the PR”.']) {
+    const screen = deliveryScreen(text);
+    assert.equal(screen.tier, "question", text); assert.ok(screen.controlled.includes(/merge/.test(text) ? "merge" : "pull_request"), `${text} → ${JSON.stringify(screen)}`);
+  }
+  assert.equal(maskLiterals('Do not "open a pull request".'), 'Do not "open a pull request".');
+  assert.equal(maskLiterals('Keep the literal "open a pull request" text.'), "Keep the literal " + " ".repeat(21) + " text.");
+  assert.deepEqual(statements("Do not: open a PR. Then: run tests; stop"), ["Do not: open a PR", " Then", " run tests", " stop"]);
   assert.deepEqual(deliveryScreen(""), { terms: [], controlled: [], controls: [], tier: "none" });
   assert.deepEqual(deliveryScreen(42), { terms: [], controlled: [], controls: [], tier: "none" });
 });

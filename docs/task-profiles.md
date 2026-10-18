@@ -62,7 +62,11 @@ profile:
 Independently of the planner, a deterministic screen looks for delivery
 vocabulary in each clause (pull request, merge, deploy, release, publish, push,
 commit, branch, approval, review, wait, local-only). Paired quotes and code
-spans are masked, so literal examples do not count. The screen grants nothing:
+spans are masked, so literal examples do not count, except a span that directly
+follows a control phrase (`Do not "open a pull request"`), which is the
+control's target. Control words bind within a statement: sentence and clause
+punctuation ends one, but conjunctions and an introductory colon after the
+control ("Do not: open a pull request") do not. The screen grants nothing:
 
 - Escalating terms (merge, deploy, release, approval, wait, local-only) or a
   control word such as "do not", "until" or "unless" next to any delivery term
