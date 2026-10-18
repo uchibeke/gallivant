@@ -1,0 +1,157 @@
+import { test } from 'node:test';
+import assert from 'node:assert/strict';
+import { mkdtempSync, writeFileSync, mkdirSync, rmSync, symlinkSync, readFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { PNG } from 'pngjs';
+import { createHash } from 'node:crypto';
+import { execFileSync, spawnSync } from 'node:child_process';
+import { RELEASE_CHECKS, releaseIdentity, evaluateRelease, releasePreflight, verifyReleasePayload, readReleaseJson, assembleRelease } from '../lib/release_package.mjs';
+const hash = value => createHash('sha256').update(value).digest('hex');
+function candidate() {
+  const manifest = { classification: 'public-candidate-unqualified', sourceVerified: true, uncommittedPayload: [], coreSha256: hash('core'), dependencyLockSha256: hash('lock'), hashes: { plugin: hash('plugin'), operations: hash('tools'), runtime: hash('runtime') }, schemaHashes: {}, payloadHashes: {}, endpoint: 'https://aport.io/api/task-delivery/mcp' };
+  const deployment = { revision: 'observed-revision', configurationSha256: hash('config'), endpoint: manifest.endpoint };
+  return { manifest, deployment };
+}
+function observed(input) {
+  const identity = releaseIdentity(input.manifest, input.deployment);
+  return { version: 1, checks: Object.fromEntries(Object.entries(RELEASE_CHECKS).map(([id, rule]) => [id, {
+    kind: 'live', status: 'passed', at: '2026-10-01T00:00:00Z', bindings: Object.fromEntries(rule.scopes.map(scope => [scope, identity[scope]])),
+    observations: Object.fromEntries(rule.cases.map(name => [name, `audit/${id}.json#${name}`])),
+  }])), states: { codeMerged: { at: '2026-10-01T00:00:00Z', pointer: 'audit/merge.json', identity } } };
+}
+
+test('missing evidence and fixtures never qualify a release', () => {
+  const input = candidate();
+  let result = evaluateRelease(input);
+  assert.equal(result.status, 'needs-human');
+  assert.equal(result.rerun.length, Object.keys(RELEASE_CHECKS).length);
+  for (const kind of ['fixture', 'offline', 'live']) {
+    const evidence = observed(input);
+    evidence.checks.host.kind = kind;
+    if (kind === 'live') delete evidence.checks.host.observations.correction;
+    assert.equal(evaluateRelease({ ...input, evidence }).states.submissionReady, false);
+  }
+  input.manifest.classification = 'internal-development-fixture; not-installed-host-evidence';
+  assert.equal(evaluateRelease({ ...input, evidence: observed(input) }).states.liveQualified, false);
+});
+
+test('evidence invalidation is scoped to actual candidate changes', () => {
+  const input = candidate(), evidence = observed(input);
+  assert.equal(evaluateRelease({ ...input, evidence }).status, 'submission-ready');
+  input.manifest.hashes.plugin = hash('edited screenshot or skill');
+  let result = evaluateRelease({ ...input, evidence });
+  assert.equal(result.checks.host.status, 'stale');
+  assert.equal(result.checks.agents.status, 'passed');
+  assert.equal(result.checks.cloud.status, 'passed');
+  assert.equal(result.checks.scans.status, 'stale');
+  input.deployment.revision = 'new-revision';
+  result = evaluateRelease({ ...input, evidence });
+  assert.equal(result.checks.agents.status, 'stale');
+  assert.equal(result.checks.integration.status, 'passed');
+  input.manifest.coreSha256 = hash('new code');
+  assert.equal(evaluateRelease({ ...input, evidence }).checks.integration.status, 'stale');
+});
+
+test('record-only changes preserve qualification and never infer publication', () => {
+  const input = candidate(), evidence = observed(input);
+  input.manifest.sourceCommit = 'new audit-only commit';
+  input.deployment = Object.fromEntries(Object.entries(input.deployment).reverse());
+  const result = evaluateRelease({ ...input, evidence });
+  assert.equal(result.status, 'submission-ready');
+  for (const state of ['submitted', 'approved', 'published']) assert.equal(result.states[state], false);
+  delete evidence.states;
+  assert.equal(evaluateRelease({ ...input, evidence }).status, 'needs-human');
+});
+
+test('malformed, private, future and boolean observations fail closed', () => {
+  const input = candidate();
+  for (const edit of [e => { e.version = 2; }, e => { e.reviewer_instructions = 'private'; }, e => { e.checks.host.secret = 'private'; }, e => { e.states.published = true; }, e => { e.states.codeMerged.identity.core = 'Bearer private_test_secret'; }]) {
+    const evidence = observed(input); edit(evidence);
+    assert.throws(() => evaluateRelease({ ...input, evidence }));
+  }
+  for (const value of [true, '', 'Bearer private_test_secret']) {
+    const evidence = observed(input); evidence.checks.host.observations.panel = value;
+    assert.throws(() => evaluateRelease({ ...input, evidence }), /Invalid host observation/);
+  }
+  const evidence = observed(input); evidence.checks.host.at = '2999-01-01';
+  assert.equal(evaluateRelease({ ...input, evidence }).checks.host.status, 'unverified');
+});
+
+test('preflight keeps known setup and reports concrete missing prerequisites', () => {
+  const result = releasePreflight({}, { target: 'audit/target.json' });
+  assert.equal(result.status, 'needs-human');
+  assert.equal(result.submissionReady, false);
+  assert.ok(!result.blockers.some(b => b.id === 'target'));
+  assert.ok(result.blockers.some(b => b.id === 'executionAllowance' && b.next.includes('shared USD 10')));
+  assert.throws(() => releasePreflight({}, { apiKey: 'private' }));
+});
+
+test('payload verification rejects tampering, source additions and symlinks', t => {
+  const dir = mkdtempSync(join(tmpdir(), 'release-test-')); t.after(() => rmSync(dir, { recursive: true, force: true }));
+  const source = join(dir, 'source'), out = join(dir, 'out'); mkdirSync(source); mkdirSync(out); mkdirSync(join(source, 'lib'));
+  writeFileSync(join(source, 'lib/core.mjs'), 'export const version = 1;');
+  execFileSync('git', ['init', '-q', source]);
+  execFileSync('git', ['add', '.'], { cwd: source });
+  execFileSync('git', ['-c', 'user.name=Test', '-c', 'user.email=test@localhost', '-c', 'commit.gpgsign=false', 'commit', '-qm', 'Fixture'], { cwd: source });
+  const { manifest } = candidate(); manifest.coreArtifact = 'core.tgz';
+  for (const [file, key] of [['core.tgz', null], ['aport-task-delivery.zip', 'plugin'], ['runtime.json', 'runtime'], ['operations.json', 'operations']]) {
+    writeFileSync(join(out, file), file); if (key) manifest.hashes[key] = hash(file); else manifest.coreSha256 = hash(file);
+  }
+  manifest.payloadHashes = { 'lib/core.mjs': hash(readFileSync(join(source, 'lib/core.mjs'))) };
+  assert.equal(verifyReleasePayload(out, manifest, { sourceRoot: source }), true);
+  writeFileSync(join(source, 'lib/new.mjs'), '// newly introduced code');
+  assert.throws(() => verifyReleasePayload(out, manifest, { sourceRoot: source }), /Uncommitted/);
+  execFileSync('git', ['add', '.'], { cwd: source });
+  execFileSync('git', ['-c', 'user.name=Test', '-c', 'user.email=test@localhost', '-c', 'commit.gpgsign=false', 'commit', '-qm', 'Additional fixture'], { cwd: source });
+  assert.throws(() => verifyReleasePayload(out, manifest, { sourceRoot: source }), /paths changed/);
+  writeFileSync(join(out, 'aport-task-delivery.zip'), 'tampered');
+  assert.throws(() => verifyReleasePayload(out, manifest, { sourceRoot: source }), /bytes changed/);
+  rmSync(join(out, 'core.tgz')); symlinkSync(join(out, 'runtime.json'), join(out, 'core.tgz'));
+  assert.throws(() => verifyReleasePayload(out, manifest, { sourceRoot: source }), /symlinks/);
+  manifest.coreArtifact = '../secret';
+  assert.throws(() => verifyReleasePayload(out, manifest, { sourceRoot: source }), /Unsafe/);
+});
+
+test('bounded JSON and opt-in commands cannot silently start live work', t => {
+  const dir = mkdtempSync(join(tmpdir(), 'release-json-')); t.after(() => rmSync(dir, { recursive: true, force: true }));
+  const file = join(dir, 'record.json'); writeFileSync(file, ' '.repeat(1048577));
+  assert.throws(() => readReleaseJson(file), /1 MiB/);
+  for (const args of [[], ['--host'], ['--execute', '--backend', 'openai-agents']]) {
+    const result = spawnSync(process.execPath, ['bin/release-live.mjs', ...args], { encoding: 'utf8' });
+    assert.equal(result.status, 1); assert.match(result.stderr, /no live action/);
+  }
+});
+
+// Actual emitted artifacts remain explicitly labeled fixtures in this offline test.
+test('release assembly reuses the packager and keeps evidence outside the public ZIP', t => {
+  const dir = mkdtempSync(join(tmpdir(), 'release-assembly-')); t.after(() => rmSync(dir, { recursive: true, force: true }));
+  const ui = join(dir, 'ui.html'), icon = join(dir, 'icon.png');
+  writeFileSync(ui, '<html>Offline fixture</html>');
+  writeFileSync(icon, PNG.sync.write(new PNG({ width: 1, height: 1 })));
+  const config = { publisher: 'APort', fixture: true, endpoint: 'https://aport.io/api/task-delivery/mcp', resource: { uri: 'ui://task-delivery/app', domain: 'https://aport.io' }, assets: { ui, icon, screenshots: [icon] } };
+  const sourceCommit = execFileSync('git', ['rev-parse', 'HEAD'], { encoding: 'utf8' }).trim();
+  const { deployment } = candidate();
+  const out = join(dir, 'release');
+  const built = assembleRelease({ config, sourceCommit, coreVersion: '0.2.0', out, internal: true, deployment });
+  assert.equal(built.evaluation.status, 'needs-human');
+  assert.deepEqual(built.manifest.release.deployment, deployment);
+  assert.equal(built.manifest.release.states.submissionReady, false);
+  for (const file of ['START-HERE.md', 'manifest.json', 'evidence.json', 'qualification.json', 'listing.md', 'release-notes.md', 'review-cases.json', 'RUNTIME.md', 'runtime.json', built.manifest.coreArtifact]) assert.ok(readFileSync(join(out, file)).length);
+  assert.match(readFileSync(join(out, 'START-HERE.md'), 'utf8'), /Offline checks are not live qualification/);
+  const contents = execFileSync('unzip', ['-Z1', join(out, 'aport-task-delivery.zip')], { encoding: 'utf8' });
+  assert.match(contents, /skills\/task-delivery\/SKILL.md/);
+  assert.doesNotMatch(contents, /evidence|qualification|reviewer|credential/);
+  const consumer = join(dir, 'consumer'); mkdirSync(consumer);
+  writeFileSync(join(consumer, 'package.json'), '{"private":true,"type":"module"}');
+  execFileSync('npm', ['install', '--ignore-scripts', '--omit=dev', '--no-audit', '--no-fund', join(out, built.manifest.coreArtifact)], { cwd: consumer, stdio: 'pipe' });
+  // Import only the installed tarball, including its final release validator bytes.
+  const installed = execFileSync(process.execPath, ['--input-type=module', '-e',
+    `import {evaluateRelease} from 'gallivant/lib/release_package.mjs'; console.log(JSON.stringify(evaluateRelease(${JSON.stringify({ manifest: built.manifest, deployment })})));`],
+    { cwd: consumer, encoding: 'utf8', env: { ...process.env, NODE_PATH: '' } });
+  assert.deepEqual(JSON.parse(installed).identity, built.evaluation.identity);
+  assert.equal(JSON.parse(installed).status, 'needs-human');
+
+  assert.throws(() => assembleRelease({ config, sourceCommit, coreVersion: '0.2.0', out, internal: true, deployment }), /empty bounded/);
+  assert.ok(readFileSync(join(out, 'manifest.json')).length, 'occupied output must survive');
+});

@@ -1,0 +1,170 @@
+{
+  "version": 1,
+  "classification": "partial-release-preparation; not-live-qualified",
+  "observedAt": "2026-10-18",
+  "sourceAtStart": "f0652e4722ae0261fb24378f074c908664858f19",
+  "implementation": [
+    "lib/release_package.mjs",
+    "bin/release-package.mjs",
+    "bin/release-live.mjs",
+    "test/release-package.test.mjs",
+    "docs/release-qualification.md"
+  ],
+  "live": {
+    "status": "unverified",
+    "paidCalls": 0,
+    "deploymentRevision": null,
+    "exactCandidateInstalled": false,
+    "campaignRemainingUsd": null,
+    "integration": {
+      "foundationPr": 414,
+      "foundationState": "done",
+      "base": "staging",
+      "connectedRuntimePr": 425,
+      "successorJobObserved": false,
+      "contractBlob": "2c5fe33191f4179516e655ca16dac5f32bcd93b6"
+    },
+    "nativePreview": {
+      "authorizedRepository": "aporthq/task-delivery-onboarding-qualification",
+      "agentsConfigured": true,
+      "agentsAccountModelAccess": "unverified-until-setup-check",
+      "cloudAvailable": false,
+      "existingTaskId": "task-7cc1e513da80002d0f211601",
+      "existingTaskRevision": 6,
+      "existingTaskStatus": "blocked/cancelled",
+      "observedUsageUsd": null
+    },
+    "http": [
+      {
+        "url": "https://aport.io/api/task-delivery/mcp",
+        "method": "GET",
+        "status": 405
+      },
+      {
+        "url": "https://aport.io/.well-known/oauth-protected-resource/api/task-delivery/mcp",
+        "method": "GET",
+        "status": 200
+      }
+    ],
+    "localG8Preflight": {
+      "agents": "OPENAI_AGENTS_LIVE_HOME, OPENAI_AGENTS_LIVE_PRD, OPENAI_AGENTS_LIVE_REPO, OPENAI_AGENTS_CAMPAIGN_LEDGER absent",
+      "cloud": "CODEX_CLOUD_LIVE_HOME, CODEX_CLOUD_LIVE_PRD, CODEX_CLOUD_LIVE_REPO, CODEX_CLOUD_CAMPAIGN_LEDGER absent"
+    },
+    "browserCapture": "Chrome and ChatGPT available; exact candidate and fresh reviewer account not qualified"
+  },
+  "offline": {
+    "status": "passed",
+    "initialHostFailures": [
+      "/tmp/release-full-tests.log",
+      "/tmp/release-backends.log",
+      "/tmp/release-plugin.log"
+    ],
+    "approvedHostProbe": "sandbox-exec filesystem/network enforcement passed; process identity readable",
+    "checks": [
+      {
+        "command": "npm test",
+        "exit": 0,
+        "passed": 1720,
+        "skipped": 1,
+        "log": "/tmp/release-full-tests-host.log",
+        "logSha256": "21dd94eef1fd877218b2c3d9694f49abae0a87277b295cbf1e35063ea7ffd785"
+      },
+      {
+        "command": "npm run lint",
+        "exit": 0,
+        "passed": null,
+        "skipped": 0,
+        "log": "/tmp/release-lint-final.log",
+        "logSha256": "cdc63b4e335e51146cdac6c8a99d5817150951621af8d0329a1bcd947f9b2c14"
+      },
+      {
+        "command": "npm run test:execution-backends",
+        "exit": 0,
+        "passed": 418,
+        "skipped": 0,
+        "log": "/tmp/release-backends-host.log",
+        "logSha256": "0cf61f07c119757387499b1090a7c7c6638ee3e3ecc6f02d620fd8fe28b37a0a"
+      },
+      {
+        "command": "npm run test:plugin-package",
+        "exit": 0,
+        "passed": 577,
+        "skipped": 0,
+        "log": "/tmp/release-plugin-host.log",
+        "logSha256": "49cc33d10b8b3d36f13646cbe259b529443349a80fbae18ff0f6155becd5c2ab"
+      },
+      {
+        "command": "npm run test:release-package",
+        "exit": 0,
+        "passed": 8,
+        "skipped": 0,
+        "log": "/tmp/release-package-final.log",
+        "logSha256": "32d27739c190fa39b71b2ead2f4aed4a9b2e533fd2c9934627bff46da58dfaf7"
+      },
+      {
+        "command": "git diff --check",
+        "exit": 0
+      }
+    ],
+    "installedConformanceLog": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/task-plugin-consumer-ks8hyk/conformance.log",
+    "installedEvidence": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/task-plugin-consumer-ks8hyk/evidence.json"
+  },
+  "criteria": {
+    "ac-1": {
+      "met": true,
+      "evidence": "lib/release_package.mjs assembleRelease; bin/release-live.mjs delegates existing G8 scripts; merged M5 PR #12"
+    },
+    "ac-2": {
+      "met": false,
+      "evidence": "docs/audit/plugin-ready/release.md"
+    },
+    "ac-3": {
+      "met": false,
+      "evidence": "docs/audit/plugin-ready/release.md"
+    },
+    "ac-4": {
+      "met": false,
+      "evidence": "docs/audit/plugin-ready/release.md"
+    },
+    "ac-5": {
+      "met": false,
+      "evidence": "docs/audit/plugin-ready/release.md"
+    },
+    "ac-6": {
+      "met": false,
+      "evidence": "docs/audit/plugin-ready/release.md"
+    },
+    "ac-7": {
+      "met": false,
+      "evidence": "docs/audit/plugin-ready/release.md"
+    },
+    "ac-8": {
+      "met": false,
+      "evidence": "docs/audit/plugin-ready/release.md"
+    },
+    "ac-9": {
+      "met": false,
+      "evidence": "docs/audit/plugin-ready/release.md"
+    },
+    "ac-10": {
+      "met": false,
+      "evidence": "docs/audit/plugin-ready/release.md"
+    },
+    "ac-11": {
+      "met": false,
+      "evidence": "docs/audit/plugin-ready/release.md"
+    },
+    "ac-12": {
+      "met": true,
+      "evidence": "test/release-package.test.mjs: evidence invalidation, record-only changes and payload tampering; /tmp/release-package-final.log"
+    },
+    "ac-13": {
+      "met": false,
+      "evidence": "docs/audit/plugin-ready/release.md"
+    },
+    "ac-14": {
+      "met": false,
+      "evidence": "docs/audit/plugin-ready/release.md"
+    }
+  }
+}
