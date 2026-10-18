@@ -196,7 +196,13 @@ test("the model route records usage-derived cost, labels unknown billing honestl
   // The reservation bounds the complete billed request, not only the user prompt.
   assert.ok(attempt.estimate.inputTokens >= Buffer.byteLength(calls[0].init.body) + 64, "system message, framing fields and protocol margin are inside the bound");
   assert.ok(attempt.estimate.inputTokens > Buffer.byteLength(body.messages[1].content) + Buffer.byteLength(body.messages[0].content));
-  assert.equal(attempt.route, "model"); assert.equal(isModelRouteReceipt(attempt.receipt), true); assert.deepEqual(attempt.receipt.tools, []);
+  assert.equal(attempt.route, "model"); assert.equal(isModelRouteReceipt(attempt.receipt), true); assert.equal(isModelRouteReceipt(attempt.receipt, task), true); assert.deepEqual(attempt.receipt.tools, []);
+  // The receipt is bound to this task and its pinned route: a foreign task, route or model cannot replay it.
+  assert.equal(isModelRouteReceipt(attempt.receipt, { ...task, id: "task-" + "1".repeat(24) }), false);
+  assert.equal(isModelRouteReceipt(attempt.receipt, { ...task, route: "harness" }), false);
+  assert.equal(isModelRouteReceipt(attempt.receipt, { ...task, modelRoute: { ...task.modelRoute, model: "other-model" } }), false);
+  const foreign = taskFor("Add CSV export.", { id: "task-" + "2".repeat(24), commandCandidates: ["npm test"], attempts: [{ ...structuredClone(attempt), consumed: false }] });
+  await assert.rejects(prepareModelTurn({ config: {}, env: ctx.env, fetch: async () => { throw new Error("must not call"); } }, foreign, memoryStore(), []), e => e.code === "TASK_PREPARATION_BOUNDARY" && /this task's text-only model route/.test(e.message));
   assert.deepEqual(attempt.usage, { inputTokens: 1200, outputTokens: 800 });
   assert.equal(attempt.cost, estimateUsd(validateIntakeModelConfig(ROUTE).budget, 1200, 800)); assert.equal(attempt.spend.status, "reported");
   assert.match(attempt.spend.basis, /not a provider invoice/);

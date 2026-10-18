@@ -3860,7 +3860,8 @@ const MODEL_ROUTE = { adapter: "openai-chat", model: "fixture-model", endpoint: 
   budget: { max_calls: 3, max_input_tokens: 50000, max_output_tokens: 6000, allowance_usd: 0.1, input_usd_per_million: 1, output_usd_per_million: 10 }, timeout_ms: 5000 };
 const modelReply = (home, status = 200) => async () => {
   // The intent is persisted before the request, so the fixture planner can read the saved task.
-  const task = taskStore(home).list().at(-1);
+  // The in-flight attempt is persisted before the request, so the task being drafted is the one with an unsettled model attempt.
+  const tasks = taskStore(home).list(), task = tasks.find(t => t.attempts.some(a => a.route === "model" && !a.settled)) || tasks.at(-1);
   const body = { choices: [{ message: { content: JSON.stringify(draftFor(task)) }, finish_reason: "stop" }], usage: { prompt_tokens: 900, completion_tokens: 400 } };
   return { ok: status < 300, status, headers: { get: () => null }, text: async () => JSON.stringify(body), body: { cancel: async () => {} } };
 };
@@ -4005,6 +4006,21 @@ test("the model route drafts through the configured text-only endpoint when the 
   assert.equal(prepared.cost.status, "reported"); assert.ok(prepared.cost.usd > 0 && prepared.cost.usd < 0.1);
   assert.equal(prepared.preparation.attempts[0].receipt.boundary, "aport-model-text-only-v1"); assert.equal(prepared.preparation.attempts[0].spend.status, "reported");
   assert.equal(prepared.review.modelRoute.model, "fixture-model"); assert.equal(prepared.readiness.allow, true);
+  assert.equal(prepared.preparation.attempts[0].receipt.taskId, `intake/${prepared.taskId}`);
+  // A model attempt restored from another task carries a foreign receipt: it cannot validate, start or replay here.
+  const other = await service.prepare({ text: "Add JSON export.", requestId: "other-task" });
+  assert.equal(other.status, "ready"); assert.equal(calls, 2);
+  const modelStore = taskStore(w.home), pristine = modelStore.read(prepared.taskId), victim = modelStore.read(prepared.taskId), donor = modelStore.read(other.taskId);
+  victim.attempts = [structuredClone(donor.attempts[0])]; modelStore.save(victim);
+  for (const operation of [
+    () => service.validate({ taskId: prepared.taskId, expectedRevision: prepared.revision }),
+    () => service.start({ taskId: prepared.taskId, expectedRevision: prepared.revision, run: true }),
+  ]) await assert.rejects(operation, { code: "TASK_PREPARATION_BOUNDARY" });
+  victim.attempts[0].consumed = false; victim.status = "preparing"; modelStore.save(victim);
+  const replayed = await service.resume({ taskId: prepared.taskId, expectedRevision: prepared.revision });
+  assert.equal(replayed.status, "blocked"); assert.equal(replayed.errorCode, "TASK_PREPARATION_BOUNDARY"); assert.match(replayed.failures[0], /this task's text-only model route/);
+  assert.equal(calls, 2, "a foreign receipt never buys a new call or replays its message"); assert.deepEqual(w.ctx.state.entries(), []);
+  modelStore.save(pristine); // Restore the untouched record for the replay and validation checks below.
   // Later turns run against the route pinned at creation: a changed or removed configuration cannot swap the route under the draft.
   const asked = world(); asked.ctx.config.harness = { gemini: { bin: harnessBin(asked.home, "gemini") } }; asked.ctx.config.intake_model = MODEL_ROUTE; asked.ctx.env.FIXTURE_MODEL_KEY = "sk-fixture-key-777777";
   const urls = [], models = [];
@@ -4030,12 +4046,12 @@ test("the model route drafts through the configured text-only endpoint when the 
   assert.equal(stalled.status, "blocked"); assert.equal(stalled.errorCode, "TASK_MODEL_ROUTE"); assert.match(stalled.failures[0], /export FIXTURE_MODEL_KEY/); assert.equal(unkeyedCalls, 1);
   assert.match(prepared.draft.text, /^---\nstatus: ready\nharness: gemini\n/);
   assert.doesNotMatch(JSON.stringify(taskStore(w.home).read(prepared.taskId)), /sk-fixture/);
-  assert.deepEqual(await service.prepare({ text: REQUEST, requestId: "model-route" }), prepared); assert.equal(calls, 1);
+  assert.deepEqual(await service.prepare({ text: REQUEST, requestId: "model-route" }), prepared); assert.equal(calls, 2, "the replay and the second task's single call");
   assert.equal((await service.validate({ taskId: prepared.taskId, expectedRevision: prepared.revision })).status, "ready");
   assert.deepEqual(w.ctx.state.entries(), []);
   // Explicitly selecting the harness route keeps the existing boundary refusal; nothing is fetched.
   const harnessOnly = await service.prepare({ text: REQUEST, requestId: "harness-only", route: "harness" });
-  assert.equal(harnessOnly.status, "blocked"); assert.equal(harnessOnly.errorCode, "TASK_PREPARATION_BOUNDARY"); assert.equal(calls, 1);
+  assert.equal(harnessOnly.status, "blocked"); assert.equal(harnessOnly.errorCode, "TASK_PREPARATION_BOUNDARY"); assert.equal(calls, 2, "nothing was fetched for the harness-only task");
   // Exhausting the three-call ceiling blocks with an actionable message and no further request.
   const noisy = world(); noisy.ctx.config.harness = { gemini: { bin: harnessBin(noisy.home, "gemini") } }; noisy.ctx.config.intake_model = MODEL_ROUTE; noisy.ctx.env.FIXTURE_MODEL_KEY = "sk-fixture-key-555555";
   let noisyCalls = 0;
