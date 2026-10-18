@@ -97,13 +97,13 @@ test("the delivery screen is deterministic over the fixture corpus and masks lit
   assert.deepEqual(statements("Do not: open a PR. Then: run tests; stop"), ["Do not: open a PR", " Then", " run tests", " stop"]);
   assert.deepEqual(deliveryScreen(""), { terms: [], controlled: [], escalated: [], controls: [], tier: "none" });
   assert.deepEqual(deliveryScreen(42), { terms: [], controlled: [], escalated: [], controls: [], tier: "none" });
-  // A leading publish instruction escalates; publish inside a feature noun phrase stays an assumption.
-  for (const text of ["Publish this package to npm.", "Implement export. Then publish it to the registry.", "Please publish the docs site."]) {
+  // A bare publish verb anywhere escalates; publish as a noun modifier or a feature infinitive stays an assumption.
+  for (const text of ["Publish this package to npm.", "Implement export. Then publish it to the registry.", "Please publish the docs site.", "Implement the feature and publish the package to npm.", "After implementation, publish the package.", "Could you publish the package?"]) {
     const screen = deliveryScreen(text);
     assert.equal(screen.tier, "question", text); assert.deepEqual(screen.escalated, ["publish"], text);
     assert.deepEqual(unaccountedTerms(screen, { action: "pull_request" }), ["publish"], text);
   }
-  for (const text of ["Add a publish button.", "Add a command to publish docs.", "The button publishes the report."]) assert.equal(deliveryScreen(text).tier, "assumption", text);
+  for (const text of ["Add a publish button.", "Add a command to publish docs.", "The button publishes the report.", "Add a list of published articles.", "Show the publish status on the page."]) assert.equal(deliveryScreen(text).tier, "assumption", text);
 });
 
 test("planner delivery tags are validated and compared with the profile without granting anything", () => {

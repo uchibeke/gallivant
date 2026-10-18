@@ -49,6 +49,8 @@ export const profileRequests = [
   { kind: "contradictory", text: "Implement export and leave all changes unpublished.", screen: { tier: "question", terms: ["local"] }, tag: null, outcome: "needs-input" },
   { kind: "contradictory", text: "Implement export. Publish this package to npm.", screen: { tier: "question", terms: ["publish"] }, tag: null, outcome: "needs-input", note: "a leading publish instruction escalates; the profile never publishes anywhere" },
   { kind: "adversarial", text: "Publish the package to npm after tests pass.", screen: { tier: "question", terms: ["publish"] }, tag: { action: "pull_request" }, outcome: "needs-input", note: "a pull_request tag cannot speak for an escalated publication" },
+  { kind: "adversarial", text: "Implement the feature and publish the package to npm.", screen: { tier: "question", terms: ["publish"] }, tag: { action: "pull_request" }, outcome: "needs-input", note: "a publish verb after a conjunction escalates too" },
+  { kind: "indirect", text: "Could you publish the package once it works?", screen: { tier: "question", terms: ["publish"] }, tag: null, outcome: "needs-input", note: "a question-form publication request still escalates" },
   // feature
   { kind: "feature", text: "Add a PR status badge to the dashboard.", screen: { tier: "assumption", terms: ["pull_request"] }, tag: null, outcome: "ready" },
   { kind: "feature", text: "Display commit SHA in diagnostics.", screen: { tier: "assumption", terms: ["commit"] }, tag: null, outcome: "ready" },
