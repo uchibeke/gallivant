@@ -10,14 +10,16 @@ For a recognized terminal connection error, Gallivant waits 1, 5, then 15 minute
 before up to three automatic resumes, on the next daemon tick after each deadline.
 It preserves the session, checkout, pending work, review cursors and approved brief.
 The normal resume preflight, permissions, dirty-work preservation and completion
-gates still apply. Connection failures do not count as completed review rounds.
+gates still apply. A connection failure with no published progress does not count
+as a completed review round. A run that pushed before failing is accounted for
+normally and returns to review/CI monitoring; it cannot evade the round budget.
 Retries may incur provider charges, subject to existing per-run and task allowances;
 the retry budget is separate from `max_iterations`.
 
 Counts and deadlines survive daemon restarts. No retry starts after the one-hour
 recovery window expires; an already-started run retains its normal runtime limit.
 Exhaustion stops with `provider-network-exhausted` and notifies the operator.
-Success resets the consecutive failure streak. A manually authorized Resume
+Success or reconciled published progress resets the consecutive failure streak. A manually authorized Resume
 starts a new streak after normal preflight.
 
 Only short terminal errors containing `ENOTFOUND`, `EAI_AGAIN`, `ECONNRESET`,

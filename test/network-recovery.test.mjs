@@ -9,7 +9,7 @@ import { model, render } from "../lib/commands/status.mjs";
 import { why } from "../lib/commands/why.mjs";
 import { runPage } from "../lib/tracker/pages.mjs";
 import { networkFailure, needsAgentResume } from "../lib/network_recovery.mjs";
-import { CONFIG, T0, at, makeClock, fakeGh, fakeRunner, fakeGit, fakeNotify, seededState, claudeResultLines, silentLog, STATES, tempHome, fakeCredential, fakeIdentity, harnessBin } from "./helpers.mjs";
+import { CONFIG, T0, at, makeClock, fakeGh, fakeRunner, fakeGit, fakeNotify, seededState, claudeResultLines, silentLog, STATES, tempHome, fakeCredential, fakeIdentity, harnessBin, checkRun } from "./helpers.mjs";
 
 const ERROR = "API Error: Can't reach the API server — check your internet or DNS (ENOTFOUND)";
 function world(over = {}) {
@@ -186,4 +186,32 @@ test("malformed persisted retry schedules stop rather than becoming an unbounded
   w.restart(); await w.tick();
   assert.equal(w.entry().reason, "network-recovery-unverified");
   assert.equal(w.runner.started.length, 1);
+});
+
+test("a push followed by a network error counts its round before any recovery and respects the cap", async () => {
+  const w = world({ iteration: CONFIG.max_iterations - 1 });
+  w.ctx.gh.data.pr.headRefOid = "b2c3d4e";
+  w.ctx.gh.data.pr.statusCheckRollup = [checkRun({ name: "test", conclusion: "FAILURE" })];
+  await w.fail();
+  assert.equal(w.entry().iteration, CONFIG.max_iterations);
+  assert.equal(w.entry().cursor.fixed_sha, "b2c3d4e");
+  assert.equal(w.entry().reason, "iterations");
+  assert.equal(w.entry().network_retry, null);
+  assert.ok(w.ctx.gh.calls.some(c => c[0] === "comment"));
+  w.clock.advance(60); w.restart(); await w.tick();
+  assert.equal(w.runner.started.length, 1);
+  assert.equal(w.entry().iteration, CONFIG.max_iterations);
+});
+
+test("a recovery that publishes progress clears its streak and accounts for the pushed head once", async () => {
+  const w = world(); await w.fail();
+  w.clock.advance(1); await w.tick();
+  w.ctx.gh.data.pr.headRefOid = "b2c3d4e";
+  await w.fail();
+  assert.equal(w.entry().iteration, 1);
+  assert.equal(w.entry().network_retry, null);
+  assert.equal(w.entry().cursor.fixed_sha, "b2c3d4e");
+  await w.tick();
+  assert.equal(w.entry().iteration, 1);
+  assert.equal(w.runner.started.length, 2);
 });
