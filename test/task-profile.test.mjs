@@ -306,14 +306,19 @@ test("the model route enforces the response limit while streaming and keeps its 
 
 test("repository snapshots are read-only, bounded, exclude private and ignored paths and report unavailability", async () => {
   const revision = "a".repeat(40);
-  const git = { revision: async () => revision, trackedPaths: async () => ["src/app.mjs", ".env", "config/credentials.json", "keys/id_rsa", "build/out.js", "docs/a.md", "deploy.pem", "xy"], ignoredTrackedPaths: async () => ["build/out.js"] };
+  const tree = ["src/app.mjs", ".env", "config/credentials.json", "keys/id_rsa", "build/out.js", "docs/a.md", "deploy.pem", "x\u0001y", "docs/removed.md"];
+  const treeRequests = [];
+  // The index holds a staged addition (not in the tree, never listed) and lacks a staged deletion (in the tree, excluded as unverified).
+  const git = { revision: async () => revision, treePaths: async (_dir, rev) => { treeRequests.push(rev); return tree; }, indexPaths: async () => [...tree.filter(p => p !== "docs/removed.md"), "docs/staged-new.md"], ignoredTrackedPaths: async () => ["build/out.js"] };
   const snapshot = await repositorySnapshot(git, "/checkout");
   assert.equal(snapshot.status, "collected"); assert.equal(snapshot.revision, revision); assert.equal(snapshot.readOnly, true);
+  assert.deepEqual(treeRequests, [revision], "the listing is enumerated from the recorded revision's tree");
   assert.deepEqual(snapshot.paths, ["docs/a.md", "src/app.mjs"]);
-  assert.deepEqual(snapshot.counts, { tracked: 8, ignored: 1, private: 5, listed: 2, truncated: 0 });
+  assert.deepEqual(snapshot.counts, { tracked: 9, ignored: 1, private: 5, unverified: 1, listed: 2, truncated: 0 });
   assert.equal(snapshot.digest, sha(JSON.stringify({ revision, paths: ["docs/a.md", "src/app.mjs"] })));
   assert.notEqual((await repositorySnapshot({ ...git, revision: async () => "b".repeat(40) }, "/checkout")).digest, snapshot.digest, "the digest is pinned to the revision");
-  const many = await repositorySnapshot({ ...git, trackedPaths: async () => Array.from({ length: 1000 }, (_, i) => `src/file-${String(i).padStart(4, "0")}.mjs`), ignoredTrackedPaths: async () => [] }, "/checkout");
+  const bulk = Array.from({ length: 1000 }, (_, i) => `src/file-${String(i).padStart(4, "0")}.mjs`);
+  const many = await repositorySnapshot({ ...git, treePaths: async () => bulk, indexPaths: async () => bulk, ignoredTrackedPaths: async () => [] }, "/checkout");
   assert.equal(many.paths.length, REPOSITORY_CONTEXT_LIMITS.paths); assert.equal(many.counts.truncated, 1000 - REPOSITORY_CONTEXT_LIMITS.paths);
   for (const broken of [{}, { ...git, revision: async () => { throw new Error("fatal: not a git repository token=abc"); } }, { ...git, revision: async () => "HEAD" }]) {
     const result = await repositorySnapshot(broken, "/checkout", { secrets: ["abc"] });

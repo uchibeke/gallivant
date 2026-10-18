@@ -47,7 +47,10 @@ profile:
 
 - A covered reading (the profile already does exactly that, or the clause only
   forbids effects the profile never performs) is recorded in the mapping. The
-  clause still keeps its implementation content in the criteria.
+  clause still keeps its implementation content in the criteria. A tag speaks
+  only for the terms it names: an escalating term it leaves out ("open a PR and
+  deploy it"), or an effect term it leaves out under a control word ("open a PR;
+  do not push to main"), keeps the screen's own clarification.
 - An uncovered reading becomes the deterministic question `q-delivery-<clause>`.
   Preparation pauses with `needs-input`; no readiness decision or implementation
   starts until the owner answers.
@@ -165,10 +168,13 @@ call.
 ## Repository context
 
 Preparation collects a read-only snapshot of the selected checkout: the HEAD
-revision and the tracked path listing with ignored and private paths removed
-(`.env`, credential, key and agent-configuration locations). The listing is
-bounded to 400 paths and 16 KiB in the prompt; its digest covers the complete
-approved listing at that revision. File contents reach the planner only through
+revision and the path listing of that commit's tree, with ignored and private
+paths removed (`.env`, credential, key and agent-configuration locations). The
+checkout's ignore rules are evaluated through the index, so a tree path the
+index no longer holds (a staged deletion) is excluded as unverified and a
+staged addition is never listed; the listing therefore always describes the
+recorded revision. It is bounded to 400 paths and 16 KiB in the prompt; its
+digest covers the complete approved listing at that revision. File contents reach the planner only through
 explicitly selected `--context` documents, which are screened for credential
 material. If the snapshot cannot be collected safely, the task records
 `repositoryContext.status: "unavailable"` with the reason, and nothing is

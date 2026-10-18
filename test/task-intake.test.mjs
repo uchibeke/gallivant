@@ -4089,6 +4089,15 @@ test("historical tasks keep their interpretation while unsupported saved profile
     () => w.service.prepare({ text: REQUEST, requestId: "historical" }),
   ]) await assert.rejects(operation, e => e.code === "TASK_PROFILE_UNSUPPORTED" && e.taskEffects === "none" && /prepare a new task/.test(e.message));
   assert.deepEqual(store.read(prepared.taskId), saved); assert.deepEqual(w.ctx.state.entries(), []);
+  // An exact answer-operation replay is a mutation too: it fails closed before resuming preparation or dispatch.
+  const replayed = world({ prepare: async (_ctx, task) => JSON.stringify(draftFor(task, { question: true })) });
+  const asked = await replayed.service.prepare({ text: REQUEST, requestId: "historical-answer", run: true });
+  const reply = { taskId: asked.taskId, expectedRevision: asked.revision, operationId: "historical-reply", answers: { "q-r-1": "Use CSV." } };
+  assert.equal((await replayed.service.answer(reply)).status, "ready");
+  const replayStore = taskStore(replayed.home), answeredRecord = replayStore.read(asked.taskId);
+  answeredRecord.deliveryProfile = { ...answeredRecord.deliveryProfile, version: PROFILE_VERSION + 1 }; answeredRecord.status = "preparing"; answeredRecord.runAuthorized = true; replayStore.save(answeredRecord);
+  await assert.rejects(replayed.service.answer(reply), e => e.code === "TASK_PROFILE_UNSUPPORTED" && e.taskEffects === "none");
+  assert.deepEqual(replayStore.read(asked.taskId), answeredRecord); assert.deepEqual(replayed.ctx.state.entries(), []);
   const manifest = { coreVersion: CORE_VERSION, coreSha256: "b".repeat(64), operationVersion: 1, taskVersion: 1, executionVersion: 1 };
   assert.equal(migrateRuntimeState({ home: w.home, manifest }).active, false, "an unsupported saved profile does not pin an idle namespace");
   // A task saved before typed profiles existed keeps its workflow-default interpretation and can still be controlled.
