@@ -2,7 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { checkGh, checkHarness, probeAll, probeFix, allOk } from "../lib/probe.mjs";
+import { checkGh, checkHarness, checkSignIn, checkVersion, probeAll, probeFix, allOk } from "../lib/probe.mjs";
 import { up } from "../lib/commands/up.mjs";
 import { makeState, newEntry, STATES } from "../lib/state.mjs";
 import { makeGh } from "../lib/gh.mjs";
@@ -56,7 +56,7 @@ test("daemon fences an old Codex account while GitHub review continues", async (
   // This case asserts version refusal and independent review progress, not
   // subprocess scheduling under full-suite load. Match the standalone native
   // probe budget; deterministic bounded-deadline/outage cases live in the
-  // execution-backends suite. Production's coordinator default stays 2 seconds.
+  // execution-backends suite. Readiness has its own bounded startup budget.
   await up({
     home, state, config: { ...CONFIG, execution: { deadlineMs: 20_000 }, repos: [], harness: { codex: { bin: harnessBin(home, "codex", { version: "0.155.1" }) } } },
     gh: fakeGh({ pr: { state: "MERGED" } }), log: silentLog, notify,
@@ -134,7 +134,50 @@ test("a slow GitHub health probe aborts at the bound without occupying the progr
   assert.equal(f.health().probes.gh.detail, "EXECUTION_DEADLINE");
   finish(); await flush(); assert.equal(f.health().probes.gh.ok, false);
   await f.advance(10_000); assert.equal(calls, 2); assert.ok(f.progress() >= 2);
-  assert.ok(f.notify.sent.some(n => n[1] === "gh not ready" && /gh auth login/.test(n[2])));
+  assert.ok(f.notify.sent.some(n => n[1] === "gh not ready" && /timed out/.test(n[2])));
+  assert.ok(f.notify.sent.filter(n => n[1] === "gh not ready").every(n => !/gh auth login/.test(n[2])));
+});
+
+test("timeout and pending health never diagnose missing authentication", () => {
+  for (const provider of ["gh", "claude", "codex", "openai-agents"]) {
+    for (const detail of ["EXECUTION_DEADLINE", "EXECUTION_ABORTED", "provider/account check pending", "provider/account health refresh pending; awaiting the coordinator's next probe", "provider/account health is stale; awaiting the coordinator's next probe"]) {
+      assert.doesNotMatch(probeFix(provider, { ok: false, detail }), /login|authenticate|API key/);
+    }
+  }
+  assert.equal(probeFix("codex", { detail: "EXECUTION_DEADLINE", fix: "provider-specific remedy" }), "provider-specific remedy");
+});
+
+test("cancelled local readiness is refused without suggesting login or an upgrade", async () => {
+  const home = tempHome(), config = { harness: { codex: { bin: harnessBin(home, "codex") } } };
+  const controller = new AbortController(); controller.abort();
+  for (const probe of [checkVersion, checkSignIn, checkHarness]) {
+    const result = await probe("codex", config, { signal: controller.signal });
+    assert.equal(result.ok, false);
+    assert.equal(result.detail, "EXECUTION_ABORTED");
+    assert.match(result.fix, /cancelled/);
+    assert.doesNotMatch(result.fix, /login|install codex/);
+  }
+});
+
+test("failed sign-in diagnostics redact credential-shaped output and preserve the authentication remedy", async () => {
+  const home = tempHome(), config = { harness: { codex: { bin: harnessBin(home, "codex", { signedIn: false, signInOutput: "authentication failed: Bearer fixture-secret" }) } } };
+  const result = await checkHarness("codex", config);
+  assert.equal(result.ok, false);
+  assert.equal(result.detail, "authentication failed: Bearer [redacted]");
+  assert.equal(result.fix, "codex login");
+});
+
+test("direct GitHub timeouts retain their remedy instead of claiming revoked credentials", async () => {
+  for (const fields of [{ code: "EXECUTION_DEADLINE" }, { code: "ABORT_ERR" }, { killed: true }, { name: "TimeoutError" }]) {
+    const result = await checkGh({ user: async () => { throw Object.assign(new Error("private subprocess output"), fields); } });
+    assert.equal(result.ok, false);
+    assert.match(result.detail, /^EXECUTION_(DEADLINE|ABORTED)$/);
+    assert.doesNotMatch(probeFix("gh", result), /login|revoked/);
+    assert.doesNotMatch(JSON.stringify(result), /private subprocess output/);
+  }
+  const auth = await checkGh({ user: async () => { throw new Error("HTTP 401: Bad credentials"); } });
+  assert.equal(auth.detail, "HTTP 401: Bad credentials");
+  assert.match(probeFix("gh", auth), /gh auth login/);
 });
 
 test("GitHub user probes forward cancellation and refuse a delayed credential reply after abort", async () => {

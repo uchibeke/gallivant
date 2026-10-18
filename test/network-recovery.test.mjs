@@ -274,3 +274,25 @@ test("recovery deadline is enforced after asynchronous dispatch preparation", as
   assert.equal(w.runner.started.length, 1);
   assert.equal(w.entry().reason, "provider-network-exhausted");
 });
+
+for (const action of ["resume", "message"]) test(`operator ${action} queued during automatic preparation wins without a duplicate launch`, async () => {
+  const w = world(); await w.fail();
+  const session = w.entry().session;
+  w.ctx.credential = async options => {
+    w.state.update(w.id, { control: { id: "operator-request", action, status: "queued", at: T0,
+      note: action === "message" ? "Preserve the existing publication dates" : "", interrupt: false } });
+    return fakeCredential()(options);
+  };
+  w.clock.advance(1); await w.tick();
+  assert.equal(w.runner.started.length, 1);
+  assert.equal(w.entry().control.status, "queued");
+  assert.equal(w.entry().network_retry, null);
+  w.ctx.credential = fakeCredential();
+  await w.tick();
+  assert.equal(w.runner.started.length, 2);
+  assert.equal(w.entry().control.status, "applied");
+  assert.equal(w.entry().session, session);
+  if (action === "message") assert.match(w.runner.started[1].args.at(-1), /Preserve the existing publication dates/);
+  await w.tick();
+  assert.equal(w.runner.started.length, 2);
+});

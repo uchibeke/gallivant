@@ -18,13 +18,14 @@ the retry budget is separate from `max_iterations`.
 
 Counts and deadlines survive daemon restarts. The window begins when the terminal
 failure is observed, before GitHub reconciliation; a simultaneous GitHub outage
-cannot extend it. Published progress must still be reconciled before retrying. No retry starts after the one-hour
-recovery window expires; an already-started run retains its normal runtime limit.
+cannot extend it. Published progress must still be reconciled before retrying.
+No retry starts after the one-hour recovery window expires; an already-started
+run retains its normal runtime limit.
 The shared completion projection keeps pending retries monitored, so embedded
 hosts continue waking the coordinator instead of treating the task as paused.
 Exhaustion stops with `provider-network-exhausted` and notifies the operator.
-Success or reconciled published progress resets the consecutive failure streak. A manually authorized Resume
-starts a new streak after normal preflight.
+Success or reconciled published progress resets the consecutive failure streak.
+A manually authorized Resume starts a new streak after normal preflight.
 
 Only short terminal errors containing `ENOTFOUND`, `EAI_AGAIN`, `ECONNRESET`,
 `ECONNREFUSED` or `ETIMEDOUT` qualify. Missing results, unknown errors, authentication
@@ -42,6 +43,13 @@ and Goose report only that the binary runs, with authentication unchecked.
 clear a failed agent or pending network recovery. **Resume agent** continues the
 session after you repair its prerequisites. Upgrades do not silently restart old
 stopped jobs; resume those explicitly once.
+
+Readiness checks use a bounded 20-second coordinator deadline by default; an
+explicit `execution.deadlineMs` overrides it. A timeout or cancelled check leaves
+dispatch blocked until a successful refresh, but does not prove credentials are
+invalid. The remedy is to inspect host load/connectivity and retry the check,
+rather than automatically logging in or reinstalling the CLI. Pending refreshes
+are reported as pending checks.
 
 ## Portable diagnosis
 
