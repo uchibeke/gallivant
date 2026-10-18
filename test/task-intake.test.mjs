@@ -3998,6 +3998,29 @@ test("the model route drafts through the configured text-only endpoint when the 
   assert.equal(prepared.cost.status, "reported"); assert.ok(prepared.cost.usd > 0 && prepared.cost.usd < 0.1);
   assert.equal(prepared.preparation.attempts[0].receipt.boundary, "aport-model-text-only-v1"); assert.equal(prepared.preparation.attempts[0].spend.status, "reported");
   assert.equal(prepared.review.modelRoute.model, "fixture-model"); assert.equal(prepared.readiness.allow, true);
+  // Later turns run against the route pinned at creation: a changed or removed configuration cannot swap the route under the draft.
+  const asked = world(); asked.ctx.config.harness = { gemini: { bin: harnessBin(asked.home, "gemini") } }; asked.ctx.config.intake_model = MODEL_ROUTE; asked.ctx.env.FIXTURE_MODEL_KEY = "sk-fixture-key-777777";
+  const urls = [], models = [];
+  asked.ctx.fetch = async (url, init) => { urls.push(url); models.push(JSON.parse(init.body).model); const task = taskStore(asked.home).list().at(-1); const out = draftFor(task, { question: true }); const body = { choices: [{ message: { content: JSON.stringify(out) }, finish_reason: "stop" }], usage: { prompt_tokens: 50, completion_tokens: 50 } }; return { ok: true, status: 200, headers: { get: () => null }, text: async () => JSON.stringify(body), body: { cancel: async () => {} } }; };
+  const askedService = createTaskService(asked.ctx);
+  const first = await askedService.prepare({ text: REQUEST });
+  assert.equal(first.status, "needs-input"); assert.equal(first.modelRoute.model, "fixture-model");
+  const digestBefore = first.review.digest;
+  asked.ctx.config.intake_model = { ...MODEL_ROUTE, model: "other-model", endpoint: "https://api.other-provider.com/v1/chat/completions" };
+  const answered = await askedService.answer({ taskId: first.taskId, expectedRevision: first.revision, operationId: "pinned-route-answer", answers: { "q-r-1": "Use CSV." } });
+  assert.equal(answered.status, "ready"); assert.deepEqual(urls, [MODEL_ROUTE.endpoint, MODEL_ROUTE.endpoint]); assert.deepEqual(models, ["fixture-model", "fixture-model"]);
+  assert.equal(answered.modelRoute.model, "fixture-model"); assert.equal(answered.review.modelRoute.endpointHost, "api.example-provider.com"); assert.notEqual(answered.review.digest, digestBefore);
+  assert.doesNotMatch(JSON.stringify(answered), /other-provider|other-model/);
+  delete asked.ctx.config.intake_model;
+  assert.equal((await askedService.validate({ taskId: first.taskId, expectedRevision: answered.revision })).status, "ready", "validation of a pinned-route draft needs no live configuration");
+  // Without the pinned route's credential the next turn stops with the exact remedy and no request.
+  const unkeyed = world(); unkeyed.ctx.config.harness = { gemini: { bin: harnessBin(unkeyed.home, "gemini") } }; unkeyed.ctx.config.intake_model = MODEL_ROUTE; unkeyed.ctx.env.FIXTURE_MODEL_KEY = "sk-fixture-key-888888";
+  let unkeyedCalls = 0;
+  unkeyed.ctx.fetch = async () => { unkeyedCalls++; const task = taskStore(unkeyed.home).list().at(-1); const body = { choices: [{ message: { content: JSON.stringify(draftFor(task, { question: true })) }, finish_reason: "stop" }], usage: { prompt_tokens: 5, completion_tokens: 5 } }; return { ok: true, status: 200, headers: { get: () => null }, text: async () => JSON.stringify(body), body: { cancel: async () => {} } }; };
+  const unkeyedService = createTaskService(unkeyed.ctx), pending = await unkeyedService.prepare({ text: REQUEST });
+  assert.equal(pending.status, "needs-input"); delete unkeyed.ctx.env.FIXTURE_MODEL_KEY;
+  const stalled = await unkeyedService.answer({ taskId: pending.taskId, expectedRevision: pending.revision, operationId: "no-key", answers: { "q-r-1": "Use CSV." } });
+  assert.equal(stalled.status, "blocked"); assert.equal(stalled.errorCode, "TASK_MODEL_ROUTE"); assert.match(stalled.failures[0], /export FIXTURE_MODEL_KEY/); assert.equal(unkeyedCalls, 1);
   assert.match(prepared.draft.text, /^---\nstatus: ready\nharness: gemini\n/);
   assert.doesNotMatch(JSON.stringify(taskStore(w.home).read(prepared.taskId)), /sk-fixture/);
   assert.deepEqual(await service.prepare({ text: REQUEST, requestId: "model-route" }), prepared); assert.equal(calls, 1);

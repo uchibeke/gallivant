@@ -4,8 +4,9 @@ import { join } from "node:path";
 import { mkdirSync, writeFileSync, readFileSync } from "node:fs";
 import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import { deliveryProfile, validateDeliveryProfile, stableProfile, deliveryScreen, maskLiterals, validateDeliveryTag, profileCovers, deliveryQuestion, deliveryProfileFromPrd, profileView, DELIVERY_CAPABILITIES, PROFILE_VERSION } from "../lib/task_profile.mjs";
-import { intakeModelProblems, validateIntakeModelConfig, intakeModelRoute, intakeModelRouteSummary, MODEL_ROUTE_CEILINGS } from "../lib/task_model_config.mjs";
+import { deliveryProfile, validateDeliveryProfile, stableProfile, deliveryScreen, maskLiterals, validateDeliveryTag, profileCovers, deliveryQuestion, deliveryProfileFromPrd, profileView, DELIVERY_CAPABILITIES, PROFILE_VERSION, COMPLETION_CONDITIONS } from "../lib/task_profile.mjs";
+import { intakeModelProblems, validateIntakeModelConfig, intakeModelRoute, intakeModelRouteSummary, pinnedModelRoute, savedModelRoute, MODEL_ROUTE_CEILINGS } from "../lib/task_model_config.mjs";
+import { COMPLETION_SCHEMA } from "../lib/task_completion.mjs";
 import { prepareModelTurn, isModelRouteReceipt, estimateTokens, estimateUsd } from "../lib/task_model_route.mjs";
 import { repositorySnapshot, REPOSITORY_CONTEXT_LIMITS } from "../lib/task_repository_context.mjs";
 import { fragments, parseDraft, renderDraft, draftPrompt, MAX_INPUT_BYTES } from "../lib/task_contract.mjs";
@@ -21,10 +22,13 @@ const PROFILE = { version: 1, action: "pull_request", target: { kind: "github-pu
 const ROUTE = { adapter: "openai-chat", model: "fixture-model", endpoint: "https://api.example-provider.com/v1/chat/completions", credential_env: "FIXTURE_MODEL_KEY",
   budget: { max_calls: 3, max_input_tokens: 50000, max_output_tokens: 6000, allowance_usd: 0.1, input_usd_per_million: 1, output_usd_per_million: 10 }, timeout_ms: 5000 };
 const sha = value => createHash("sha256").update(value).digest("hex");
+// Tasks pin their route selection at creation; later turns run against it.
+const pinned = config => pinnedModelRoute(validateIntakeModelConfig(config));
+const withRoute = (task, config) => Object.assign(task, { modelRoute: pinned(config) });
 
 function taskFor(text, overrides = {}) {
   const requirements = fragments(text);
-  return { id: "task-" + "0".repeat(24), original: text, requirements, answers: {}, questionHistory: {}, questionMappings: {}, context: [{ path: "package.json", text: JSON.stringify({ scripts: { test: "node --test" }, packageManager: "npm@10.0.0" }), hash: "x" }],
+  return { id: "task-" + "0".repeat(24), original: text, requirements, answers: {}, questionHistory: {}, questionMappings: {}, context: [{ path: "package.json", text: JSON.stringify({ scripts: { test: "node --test" }, packageManager: "npm@10.0.0" }), hash: "x" }], modelRoute: pinned(ROUTE),
     explicitVerifyCommands: [], attempts: [], allowance: { budgetUsd: 5, runtimeMs: 60_000 }, repo: "acme/widget", base: "main", harness: "gemini", route: "model", deliveryProfile: PROFILE, completion: { version: 1, target: "delivery_ready" }, ...overrides };
 }
 const memoryStore = () => { const saves = []; return { saves, save: task => saves.push(structuredClone(task)) }; };
@@ -206,11 +210,11 @@ test("the model route stops before a call that would exceed its limits and rejec
   // Input token ceiling, checked before the request.
   const big = taskFor("Add CSV export.", { commandCandidates: ["npm test"] });
   big.context = [{ path: "docs/big.md", text: "word ".repeat(16_000), hash: "h" }];
-  await assert.rejects(prepareModelTurn({ config: { intake_model: { ...ROUTE, budget: { ...ROUTE.budget, max_input_tokens: 20_000 } } }, env: key, fetch: ok }, big, memoryStore(), []), e => e.code === "TASK_INPUT" && /input limit is 20000/.test(e.message));
+  await assert.rejects(prepareModelTurn({ config: {}, env: key, fetch: ok }, withRoute(big, { ...ROUTE, budget: { ...ROUTE.budget, max_input_tokens: 20_000 } }), memoryStore(), []), e => e.code === "TASK_INPUT" && /input limit is 20000/.test(e.message));
   assert.equal(calls, 0);
   // Allowance pre-check: the estimate for one call exceeds what is left, so nothing is started and billing uncertainty is stated.
   const pricey = taskFor("Add CSV export.", { commandCandidates: ["npm test"] });
-  await assert.rejects(prepareModelTurn({ config: { intake_model: { ...ROUTE, budget: { ...ROUTE.budget, allowance_usd: 0.05, output_usd_per_million: 10 } } }, env: key, fetch: ok }, pricey, memoryStore(), []), e => e.code === "TASK_ALLOWANCE" && /the call was not started/.test(e.message) && /not provider invoices/.test(e.message));
+  await assert.rejects(prepareModelTurn({ config: {}, env: key, fetch: ok }, withRoute(pricey, { ...ROUTE, budget: { ...ROUTE.budget, allowance_usd: 0.05, output_usd_per_million: 10 } }), memoryStore(), []), e => e.code === "TASK_ALLOWANCE" && /the call was not started/.test(e.message) && /not provider invoices/.test(e.message));
   assert.equal(calls, 0); assert.deepEqual(pricey.attempts, []);
   // The task's own allowance also bounds the route.
   const capped = taskFor("Add CSV export.", { commandCandidates: ["npm test"], allowance: { budgetUsd: 0.0001, runtimeMs: 1000 } });
@@ -237,11 +241,16 @@ test("the model route stops before a call that would exceed its limits and rejec
   assert.equal(await prepareModelTurn({ config: { intake_model: ROUTE }, env: key, fetch: ok }, replay, memoryStore(), []), draft);
   assert.equal(calls, 1);
   // Disabled configuration is an actionable refusal, not a silent fallback.
-  await assert.rejects(prepareModelTurn({ config: {}, env: key, fetch: ok }, taskFor("Add CSV export."), memoryStore(), []), e => e.code === "TASK_MODEL_ROUTE" && /no model call was made/.test(e.message));
+  await assert.rejects(prepareModelTurn({ config: {}, env: key, fetch: ok }, taskFor("Add CSV export.", { modelRoute: undefined }), memoryStore(), []), e => e.code === "TASK_MODEL_ROUTE" && /no pinned model route/.test(e.message) && /no model call was made/.test(e.message));
+  // A pinned route cannot carry budgets above the ceilings or run without its named credential.
+  assert.throws(() => savedModelRoute({ ...pinned(ROUTE), budget: { ...pinned(ROUTE).budget, maxCalls: 9 } }), { code: "TASK_MODEL_ROUTE" });
+  await assert.rejects(prepareModelTurn({ config: { intake_model: ROUTE }, env: {}, fetch: ok }, taskFor("Add CSV export."), memoryStore(), []), e => e.code === "TASK_MODEL_ROUTE" && /export FIXTURE_MODEL_KEY/.test(e.message));
+  assert.equal(calls, 1);
   // The Anthropic request shape is text-only too.
   const anthropic = taskFor("Add CSV export.", { commandCandidates: ["npm test"] });
   let seen;
-  await prepareModelTurn({ config: { intake_model: { ...ROUTE, adapter: "anthropic-messages", endpoint: "https://api.example-provider.com/v1/messages" } }, env: key, fetch: async (url, init) => { seen = { url, init }; return response({ content: [{ type: "text", text: draft }], stop_reason: "end_turn", usage: { input_tokens: 5, output_tokens: 7 } }); } }, anthropic, memoryStore(), []);
+  withRoute(anthropic, { ...ROUTE, adapter: "anthropic-messages", endpoint: "https://api.example-provider.com/v1/messages" });
+  await prepareModelTurn({ config: {}, env: key, fetch: async (url, init) => { seen = { url, init }; return response({ content: [{ type: "text", text: draft }], stop_reason: "end_turn", usage: { input_tokens: 5, output_tokens: 7 } }); } }, anthropic, memoryStore(), []);
   assert.equal(seen.init.headers["x-api-key"], "sk-fixture-key-333333"); assert.equal(seen.init.headers["anthropic-version"], "2023-06-01");
   const anthropicBody = JSON.parse(seen.init.body);
   assert.equal(anthropicBody.tools, undefined); assert.equal(anthropicBody.max_tokens, 6000);
@@ -251,8 +260,14 @@ test("the model route stops before a call that would exceed its limits and rejec
   assert.equal(estimateTokens("abcdef"), 6); assert.equal(estimateTokens("🚀".repeat(10)), 40); assert.equal(estimateTokens("日本語"), 9);
   const emoji = taskFor("Add CSV export.", { commandCandidates: ["npm test"] });
   emoji.context = [{ path: "docs/emoji.md", text: "🚀".repeat(6_000), hash: "h" }];
-  await assert.rejects(prepareModelTurn({ config: { intake_model: { ...ROUTE, budget: { ...ROUTE.budget, max_input_tokens: 20_000 } } }, env: key, fetch: ok }, emoji, memoryStore(), []), e => e.code === "TASK_INPUT" && /input limit is 20000/.test(e.message));
+  await assert.rejects(prepareModelTurn({ config: {}, env: key, fetch: ok }, withRoute(emoji, { ...ROUTE, budget: { ...ROUTE.budget, max_input_tokens: 20_000 } }), memoryStore(), []), e => e.code === "TASK_INPUT" && /input limit is 20000/.test(e.message));
   assert.equal(calls, 1);
+  // Negative or malformed usage is a malformed response: it never becomes a spend record that could offset the allowance.
+  for (const usage of [{ prompt_tokens: -900, completion_tokens: 10 }, { prompt_tokens: 10, completion_tokens: -50_000 }, { prompt_tokens: 1.5, completion_tokens: 2 }, { prompt_tokens: "10", completion_tokens: 10 }]) {
+    const negative = taskFor("Add CSV export.", { commandCandidates: ["npm test"] });
+    await assert.rejects(prepareModelTurn({ config: {}, env: key, fetch: async () => response({ choices: [{ message: { content: draft }, finish_reason: "stop" }], usage }) }, negative, memoryStore(), []), e => e.code === "TASK_MODEL_ROUTE" && /usage is malformed/.test(e.message));
+    assert.equal(negative.attempts[0].ok, false); assert.equal(negative.attempts[0].cost, null); assert.equal(negative.attempts[0].spend.status, "unknown"); assert.ok(negative.attempts[0].reservedUsd > 0);
+  }
   // Reported input usage above the ceiling is rejected even when the byte bound passed.
   const overInput = taskFor("Add CSV export.", { commandCandidates: ["npm test"] });
   await assert.rejects(prepareModelTurn({ config: { intake_model: ROUTE }, env: key, fetch: async () => response({ choices: [{ message: { content: draft }, finish_reason: "stop" }], usage: { prompt_tokens: 50_001, completion_tokens: 10 } }) }, overInput, memoryStore(), []), /reported 50001 input tokens, above the configured limit/);
@@ -280,7 +295,8 @@ test("the model route enforces the response limit while streaming and keeps its 
   const stalled = new ReadableStream({ pull() { return new Promise(() => {}); }, cancel() { stalledCancelled = true; } });
   const hung = taskFor("Add CSV export.", { commandCandidates: ["npm test"] });
   const startedAt = Date.now();
-  await assert.rejects(prepareModelTurn({ config: { intake_model: { ...ROUTE, timeout_ms: 1000 } }, env: key, fetch: async () => new Response(stalled, { status: 200 }) }, hung, memoryStore(), []), e => e.code === "TASK_MODEL_ROUTE" && /did not complete within 1000 ms/.test(e.message));
+  withRoute(hung, { ...ROUTE, timeout_ms: 1000 });
+  await assert.rejects(prepareModelTurn({ config: {}, env: key, fetch: async () => new Response(stalled, { status: 200 }) }, hung, memoryStore(), []), e => e.code === "TASK_MODEL_ROUTE" && /did not complete within 1000 ms/.test(e.message));
   assert.ok(Date.now() - startedAt < 5000, "the stalled body was abandoned at the deadline"); assert.equal(stalledCancelled, true);
   assert.equal(hung.attempts[0].settled, true); assert.equal(hung.attempts[0].spend.status, "unknown");
 });
@@ -337,4 +353,8 @@ test("the vendored validator and fixture corpus are pinned byte-for-byte with th
   assert.equal(saved.files["lib/task_profile.mjs"], sha(readFileSync(new URL("../lib/task_profile.mjs", import.meta.url))));
   assert.equal(current.files["test/fixtures/task-profile-requests.mjs"], saved.files["test/fixtures/task-profile-requests.mjs"]);
   assert.match(saved.upgrade, /task-intake-vendor-sync/);
+  // The vendored validator loads on its own: no imports, so the pinned hash covers every rule it applies.
+  const source = readFileSync(new URL("../lib/task_profile.mjs", import.meta.url), "utf8");
+  assert.doesNotMatch(source, /^\s*import\s/m); assert.doesNotMatch(source, /\brequire\(/);
+  assert.deepEqual([...COMPLETION_CONDITIONS], COMPLETION_SCHEMA.properties.target.enum, "the self-contained copy of the completion conditions matches the coordinator schema");
 });

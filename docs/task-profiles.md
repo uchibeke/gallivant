@@ -140,10 +140,18 @@ one token per UTF-8 byte of the prompt (the byte-level fallback worst case, so
 emoji and rare scripts cannot slip under the ceiling), prices that bound plus
 the output limit at the configured list prices, and refuses to start the call
 when the result does not fit the remaining allowance. Reported usage above
-either ceiling rejects the draft after the call. The response body is read
-under the same deadline as the request and cancelled at one megabyte, so a
-stalled or oversized provider reply cannot hang the task lock or buffer without
-bound. Reported usage replaces the reservation; missing usage leaves
+either ceiling rejects the draft after the call, and usage that is negative,
+fractional or non-numeric is treated as a malformed response rather than a
+spend record. The response body is read under the same deadline as the request
+and cancelled at one megabyte, so a stalled or oversized provider reply cannot
+hang the task lock or buffer without bound.
+
+A task pins the complete route selection (adapter, model, endpoint, budget,
+timeout and the credential variable name) when it is created. Later turns,
+including answers and repairs, run against that pinned selection and the
+review digest covers it, so changing or removing `intake_model` affects new
+tasks only. The credential itself is still read from the environment on every
+call; if the named variable is missing the turn stops with the export remedy. Reported usage replaces the reservation; missing usage leaves
 the reservation as the spend bound with `spend.status: "unknown"`. These are
 estimates from list prices, not provider invoices. Truncated, over-limit,
 malformed or empty responses are rejected with a bounded error and count as a
@@ -175,8 +183,10 @@ to the free-text contract.
 
 ## Agent Passport packaging
 
-`lib/task_profile.mjs` is portable (no Node dependencies) and is the file Agent
-Passport vendors. `templates/plugin/task-intake-contract.json` pins its exact
+`lib/task_profile.mjs` is self-contained (no imports at all, so the vendored copy
+loads alone and its hash covers every rule it applies) and is the file Agent
+Passport vendors. Its copy of the completion conditions is checked against the
+coordinator schema by the focused suite. `templates/plugin/task-intake-contract.json` pins its exact
 bytes, the fixture corpus and the profile schema version. `npm run lint` fails
 when the pin is stale; `npm run contract:intake -- --write` refreshes it after a
 reviewed change. The plugin builder refuses to package when the packed validator
