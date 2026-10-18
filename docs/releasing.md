@@ -2,7 +2,7 @@
 
 The package name is `gallivant`; the executable is `gallivant`. The repository is
 `uchibeke/gallivant`. The first public release is pending: the npm registry check
-on 2026-10-14 returned 404, and the repository was private. Do not announce an
+on 2026-10-18 returned 404, and the repository was private. Do not announce an
 available npm install until publication and the consumer smoke check pass.
 
 ## One-time launch setup
