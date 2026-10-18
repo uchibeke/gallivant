@@ -70,7 +70,9 @@ as "leave the changes uncommitted" or "unpublished" count as local-only. Control
 punctuation ends one, but conjunctions and an introductory colon after the
 control ("Do not: open a pull request") do not. The screen grants nothing:
 
-- Escalating terms (merge, deploy, release, approval, wait, local-only) or a
+- Escalating terms (merge, deploy, release, approval, wait, local-only, and
+  publish when it is a statement's leading instruction such as "Publish this
+  package to npm" rather than a feature noun such as "a publish button") or a
   control word such as "do not", "until", "unless", "out of scope" or
   "exclude" next to any delivery term
   raise the same `q-delivery-<clause>` question when the planner left the

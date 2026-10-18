@@ -95,8 +95,15 @@ test("the delivery screen is deterministic over the fixture corpus and masks lit
   }
   assert.equal(maskLiterals('Keep the literal "open a pull request" text.'), "Keep the literal " + " ".repeat(21) + " text.");
   assert.deepEqual(statements("Do not: open a PR. Then: run tests; stop"), ["Do not: open a PR", " Then", " run tests", " stop"]);
-  assert.deepEqual(deliveryScreen(""), { terms: [], controlled: [], controls: [], tier: "none" });
-  assert.deepEqual(deliveryScreen(42), { terms: [], controlled: [], controls: [], tier: "none" });
+  assert.deepEqual(deliveryScreen(""), { terms: [], controlled: [], escalated: [], controls: [], tier: "none" });
+  assert.deepEqual(deliveryScreen(42), { terms: [], controlled: [], escalated: [], controls: [], tier: "none" });
+  // A leading publish instruction escalates; publish inside a feature noun phrase stays an assumption.
+  for (const text of ["Publish this package to npm.", "Implement export. Then publish it to the registry.", "Please publish the docs site."]) {
+    const screen = deliveryScreen(text);
+    assert.equal(screen.tier, "question", text); assert.deepEqual(screen.escalated, ["publish"], text);
+    assert.deepEqual(unaccountedTerms(screen, { action: "pull_request" }), ["publish"], text);
+  }
+  for (const text of ["Add a publish button.", "Add a command to publish docs.", "The button publishes the report."]) assert.equal(deliveryScreen(text).tier, "assumption", text);
 });
 
 test("planner delivery tags are validated and compared with the profile without granting anything", () => {
@@ -354,6 +361,14 @@ test("the model route enforces the response limit while streaming and keeps its 
   await assert.rejects(prepareModelTurn({ config: {}, env: key, fetch: async () => new Response(stalled, { status: 200 }) }, hung, memoryStore(), []), e => e.code === "TASK_MODEL_ROUTE" && /did not complete within 1000 ms/.test(e.message));
   assert.ok(Date.now() - startedAt < 5000, "the stalled body was abandoned at the deadline"); assert.equal(stalledCancelled, true);
   assert.equal(hung.attempts[0].settled, true); assert.equal(hung.attempts[0].spend.status, "unknown");
+  // A complete JSON prefix followed by a stream that never closes is cancelled at the deadline and must not be accepted as a draft.
+  const prefix = new TextEncoder().encode(JSON.stringify({ choices: [{ message: { content: draft }, finish_reason: "stop" }], usage: { prompt_tokens: 20, completion_tokens: 30 } }));
+  let prefixSent = false, openCancelled = false;
+  const openEnded = new ReadableStream({ pull(controller) { if (!prefixSent) { prefixSent = true; controller.enqueue(prefix); return; } return new Promise(() => {}); }, cancel() { openCancelled = true; } });
+  const dangling = taskFor("Add CSV export.", { commandCandidates: ["npm test"] });
+  withRoute(dangling, { ...ROUTE, timeout_ms: 1000 });
+  await assert.rejects(prepareModelTurn({ config: {}, env: key, fetch: async () => new Response(openEnded, { status: 200 }) }, dangling, memoryStore(), []), e => e.code === "TASK_MODEL_ROUTE" && /did not complete within 1000 ms/.test(e.message));
+  assert.equal(openCancelled, true); assert.equal(dangling.attempts[0].ok, false); assert.equal(dangling.attempts[0].message, undefined);
 });
 
 test("repository snapshots are read-only, bounded, exclude private and ignored paths and report unavailability", async () => {

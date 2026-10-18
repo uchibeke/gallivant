@@ -47,6 +47,8 @@ export const profileRequests = [
   { kind: "contradictory", text: "Implement export. Opening a pull request is out of scope.", screen: { tier: "question", terms: ["pull_request"] }, tag: null, outcome: "needs-input" },
   { kind: "contradictory", text: "Implement export. Leave the changes uncommitted.", screen: { tier: "question", terms: ["local"] }, tag: null, outcome: "needs-input", note: "an un- restriction reads as local-only even without a planner tag" },
   { kind: "contradictory", text: "Implement export and leave all changes unpublished.", screen: { tier: "question", terms: ["local"] }, tag: null, outcome: "needs-input" },
+  { kind: "contradictory", text: "Implement export. Publish this package to npm.", screen: { tier: "question", terms: ["publish"] }, tag: null, outcome: "needs-input", note: "a leading publish instruction escalates; the profile never publishes anywhere" },
+  { kind: "adversarial", text: "Publish the package to npm after tests pass.", screen: { tier: "question", terms: ["publish"] }, tag: { action: "pull_request" }, outcome: "needs-input", note: "a pull_request tag cannot speak for an escalated publication" },
   // feature
   { kind: "feature", text: "Add a PR status badge to the dashboard.", screen: { tier: "assumption", terms: ["pull_request"] }, tag: null, outcome: "ready" },
   { kind: "feature", text: "Display commit SHA in diagnostics.", screen: { tier: "assumption", terms: ["commit"] }, tag: null, outcome: "ready" },
