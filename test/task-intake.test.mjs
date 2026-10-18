@@ -30,7 +30,7 @@ import { draftFor } from "./fixtures/task-intake.mjs";
 import { workflowRequests, applicationRequests } from "./fixtures/owner-actions.mjs";
 import { profileRequests } from "../templates/plugin/task-profile-requests.mjs";
 import { DELIVERY_CAPABILITIES, PROFILE_VERSION } from "../lib/task_profile.mjs";
-import { modelSummary } from "../lib/task_delivery_view.mjs";
+import { modelSummary, capabilitySummary } from "../lib/task_delivery_view.mjs";
 import { tempHome, CONFIG, GOOD_PRD, harnessBin, fakeCredential, fakeIdentity, silentLog, fakeRunner, makeClock, codexLines, claudeResultLines, geminiLines, opencodeLines, gooseLines } from "./helpers.mjs";
 
 // Exercise durable runner/environment logic using disposable Node executables,
@@ -3928,6 +3928,7 @@ test("the request corpus is traceable and the typed profile controls every exter
 test("a profile conflict pauses before any harness run until the owner resolves it, then the answer is mapped and approval is fresh", async () => {
   // The planner reads the owner's reply literally: a restated prohibition the
   // profile already honours is a covered `restrict` reading.
+  // The reply carries a control word ("No"), so a prohibition reading can speak for its deploy and release terms.
   const w = world({ prepare: async (_ctx, task) => JSON.stringify(draftFor(task, { delivery: { "a-q-delivery-r-2-1": { action: "restrict", prohibits: ["deploy", "release"] } } })) });
   const prepared = await w.service.prepare({ text: "Implement export.\nDeploy to production after merge.", run: true });
   assert.equal(prepared.status, "needs-input"); assert.deepEqual(prepared.questions.map(q => q.id), ["q-delivery-r-2"]);
@@ -3936,7 +3937,7 @@ test("a profile conflict pauses before any harness run until the owner resolves 
   assert.deepEqual(prepared.review.requirementMap[1].conflict.screen.terms, ["merge", "deploy"]);
   await assert.rejects(w.service.start({ taskId: prepared.taskId, expectedRevision: prepared.revision, run: true }), { code: "TASK_NOT_READY" });
   assert.equal((await w.service.validate({ taskId: prepared.taskId, expectedRevision: prepared.revision })).status, "needs-input");
-  const answered = await w.service.answer({ taskId: prepared.taskId, expectedRevision: prepared.revision, operationId: "clarify-deploy", answers: { "q-delivery-r-2": "Deployment is done by the release team; this task only implements export." } });
+  const answered = await w.service.answer({ taskId: prepared.taskId, expectedRevision: prepared.revision, operationId: "clarify-deploy", answers: { "q-delivery-r-2": "No deployment or release by this task; it only implements export." } });
   // The earlier --run consent covered the revision the owner saw. The answered
   // revision is returned for review and needs its own explicit start.
   assert.equal(answered.status, "ready"); assert.equal(answered.approval, null); assert.equal(taskStore(w.home).read(prepared.taskId).runAuthorized, false);
@@ -3947,7 +3948,7 @@ test("a profile conflict pauses before any harness run until the owner resolves 
   const saved = taskStore(w.home).read(prepared.taskId);
   const mapping = saved.output.mapping.find(m => m.requirementId === "r-2");
   assert.equal(mapping.resolvedBy, "q-delivery-r-2"); assert.equal(mapping.screen.tier, "clarified"); assert.deepEqual(mapping.criteria, ["ac-2"]);
-  assert.match(answered.draft.text, /clarified by answer q-delivery-r-2/); assert.match(answered.draft.text, /Deployment is done by the release team/);
+  assert.match(answered.draft.text, /clarified by answer q-delivery-r-2/); assert.match(answered.draft.text, /No deployment or release by this task/);
   assert.equal(answered.requirements.at(-1).source.of, "answer:q-delivery-r-2");
   assert.deepEqual(w.ctx.state.get(started.implementation.id).task.deliveryProfile, TYPED_PROFILE);
   assert.equal(w.runners.get(started.implementation.id).started.length, 1);
@@ -4052,6 +4053,11 @@ test("the delivery dispatcher accepts typed profiles and routes, exposes them to
     contextFor: async () => ({ ctx: w.ctx, repository: { dir: w.checkout, repo: "acme/widget" }, taskOptions: { prepare: async (_ctx, task) => JSON.stringify(draftFor(task)) } }), schedule: async () => {} });
   const caps = await delivery.dispatch("capabilities", {}, "alice");
   assert.deepEqual(caps.repositories[0].delivery, DELIVERY_CAPABILITIES); assert.equal(caps.repositories[0].modelRoute.enabled, false); assert.equal(caps.repositories[0].modelRoute.endpoint, undefined);
+  // The bounded model projection carries the same discovery fields, so a client can build a prepare call from it.
+  const discovered = capabilitySummary(caps).repositories[0];
+  assert.deepEqual(discovered.delivery, DELIVERY_CAPABILITIES); assert.deepEqual(discovered.routes, ["harness", "model"]);
+  assert.deepEqual(discovered.modelRoute, { enabled: false, adapter: null, model: null, budget: null, ceilings: caps.repositories[0].modelRoute.ceilings, tools: [], reason: caps.repositories[0].modelRoute.reason });
+  assert.doesNotMatch(JSON.stringify(discovered), /https?:\/\/|endpointHost|credentialEnv|FIXTURE_MODEL_KEY/);
   const base = { repositoryId: "widget", text: REQUEST, harness: "codex", allowance: { budgetUsd: 1, runtimeMs: 60000 }, expectedRevision: 0 };
   for (const [operationId, input] of [["bad-route", { route: "shell" }], ["extra", { delivery: { action: "pull_request", grant: "merge" } }], ["unknown-action", { delivery: { action: "publish" } }]]) {
     await assert.rejects(delivery.dispatch("prepare", { ...base, ...input, operationId }, "alice"), { code: "DELIVERY_INPUT" });

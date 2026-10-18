@@ -37,6 +37,8 @@ export const profileRequests = [
   { kind: "adversarial", text: "Implement export. Do not merge.", screen: { tier: "question" }, tag: { action: "pull_request", prohibits: ["merge"] }, outcome: "ready", note: "a planner reading that matches the profile needs no clarification" },
   { kind: "adversarial", text: "Open a pull request and deploy it to production.", screen: { tier: "question", terms: ["pull_request", "deploy"] }, tag: { action: "pull_request" }, outcome: "needs-input", note: "a covered tag speaks only for the action it names; the unaccounted deployment still asks" },
   { kind: "adversarial", text: "Open a PR; do not push to main directly.", screen: { tier: "question", terms: ["pull_request", "push"] }, tag: { action: "pull_request" }, outcome: "needs-input", note: "under a control word an effect term the tag omits still asks" },
+  { kind: "adversarial", text: "Do not open a pull request for this.", screen: { tier: "question", terms: ["pull_request"] }, tag: { action: "pull_request" }, outcome: "needs-input", note: "a requested-action tag cannot speak for a term under a control word" },
+  { kind: "adversarial", text: "Merge the PR after tests pass.", screen: { tier: "question", terms: ["pull_request", "merge"] }, tag: { action: "pull_request", prohibits: ["merge"] }, outcome: "needs-input", note: "a prohibition tag cannot speak for a term that is requested, not controlled" },
   // feature
   { kind: "feature", text: "Add a PR status badge to the dashboard.", screen: { tier: "assumption", terms: ["pull_request"] }, tag: null, outcome: "ready" },
   { kind: "feature", text: "Display commit SHA in diagnostics.", screen: { tier: "assumption", terms: ["commit"] }, tag: null, outcome: "ready" },

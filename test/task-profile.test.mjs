@@ -4,7 +4,7 @@ import { join } from "node:path";
 import { mkdirSync, writeFileSync, readFileSync } from "node:fs";
 import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import { deliveryProfile, validateDeliveryProfile, stableProfile, deliveryScreen, maskLiterals, validateDeliveryTag, profileCovers, deliveryQuestion, deliveryProfileFromPrd, profileView, DELIVERY_CAPABILITIES, PROFILE_VERSION, COMPLETION_CONDITIONS } from "../lib/task_profile.mjs";
+import { deliveryProfile, validateDeliveryProfile, stableProfile, deliveryScreen, maskLiterals, validateDeliveryTag, profileCovers, unaccountedTerms, deliveryQuestion, deliveryProfileFromPrd, profileView, DELIVERY_CAPABILITIES, PROFILE_VERSION, COMPLETION_CONDITIONS } from "../lib/task_profile.mjs";
 import { intakeModelProblems, validateIntakeModelConfig, intakeModelRoute, intakeModelRouteSummary, pinnedModelRoute, savedModelRoute, MODEL_ROUTE_CEILINGS } from "../lib/task_model_config.mjs";
 import { COMPLETION_SCHEMA } from "../lib/task_completion.mjs";
 import { prepareModelTurn, isModelRouteReceipt, estimateTokens, estimateUsd } from "../lib/task_model_route.mjs";
@@ -70,8 +70,8 @@ test("the delivery screen is deterministic over the fixture corpus and masks lit
   }
   assert.equal(maskLiterals('Keep "do not push" and `merge main` and “deploy” visible?'), 'Keep ' + " ".repeat(13) + ' and ' + " ".repeat(12) + ' and ' + " ".repeat(8) + ' visible?');
   assert.equal(deliveryScreen('"Unmatched quote hides nothing: merge it').tier, "question");
-  assert.deepEqual(deliveryScreen(""), { terms: [], controls: [], tier: "none" });
-  assert.deepEqual(deliveryScreen(42), { terms: [], controls: [], tier: "none" });
+  assert.deepEqual(deliveryScreen(""), { terms: [], controlled: [], controls: [], tier: "none" });
+  assert.deepEqual(deliveryScreen(42), { terms: [], controlled: [], controls: [], tier: "none" });
 });
 
 test("planner delivery tags are validated and compared with the profile without granting anything", () => {
@@ -86,6 +86,16 @@ test("planner delivery tags are validated and compared with the profile without 
     const coverage = profileCovers(PROFILE, tag);
     assert.equal(coverage.covered, false, JSON.stringify(tag)); assert.ok(coverage.reason);
   }
+  // A requested action speaks only for terms outside a control word; a prohibition only for terms under one.
+  const unaccounted = (text, tag) => unaccountedTerms(deliveryScreen(text), tag);
+  assert.deepEqual(unaccounted("Do not open a pull request.", { action: "pull_request" }), ["pull_request"]);
+  assert.deepEqual(unaccounted("Do not open a pull request.", { action: "restrict", prohibits: ["pull_request"] }), []);
+  assert.deepEqual(unaccounted("Merge the PR.", { action: "pull_request", prohibits: ["merge"] }), ["merge"]);
+  assert.deepEqual(unaccounted("Merge the PR.", { action: "merge" }), []);
+  assert.deepEqual(unaccounted("Open a PR for review; do not merge it.", { action: "pull_request", prohibits: ["merge"] }), []);
+  // "do not push" also reads as local-only output, an escalating term no pull_request tag can speak for.
+  assert.deepEqual(unaccounted("Do not push and open a PR.", { action: "pull_request", prohibits: ["push"] }), ["pull_request", "local"], "a control word binds across a conjunction");
+  assert.deepEqual(deliveryScreen("Open a PR for review; do not merge it.").controlled, ["merge"]);
   const requirement = { id: "r-3", text: "Merge it." };
   assert.deepEqual(deliveryQuestion(PROFILE, requirement), deliveryQuestion(PROFILE, requirement));
   assert.equal(deliveryQuestion(PROFILE, requirement).id, "q-delivery-r-3");
@@ -190,6 +200,9 @@ test("the model route records usage-derived cost, labels unknown billing honestl
   assert.deepEqual(attempt.usage, { inputTokens: 1200, outputTokens: 800 });
   assert.equal(attempt.cost, estimateUsd(validateIntakeModelConfig(ROUTE).budget, 1200, 800)); assert.equal(attempt.spend.status, "reported");
   assert.match(attempt.spend.basis, /not a provider invoice/);
+  // Valid reported usage releases the pre-call reservation, so the allowance that follows this call is the reported spend, not the ceiling held during the call.
+  assert.equal(attempt.reservedUsd, null); assert.ok(attempt.spend.releasedReservationUsd > attempt.cost); assert.equal(attempt.estimate.usd, attempt.spend.releasedReservationUsd);
+  assert.equal(task.attempts.reduce((sum, a) => sum + Math.max(a.cost ?? 0, a.reservedUsd ?? 0), 0), attempt.cost, "the implementation allowance subtracts the reported cost only");
   assert.doesNotMatch(JSON.stringify(task) + JSON.stringify(store.saves), /sk-fixture-secret/);
   assert.ok(store.saves.length >= 2, "intent is persisted before the request and settled after it");
   assert.equal(store.saves[0].attempts[0].settled, false);
@@ -309,16 +322,21 @@ test("repository snapshots are read-only, bounded, exclude private and ignored p
   const tree = ["src/app.mjs", ".env", "config/credentials.json", "keys/id_rsa", "build/out.js", "docs/a.md", "deploy.pem", "x\u0001y", "docs/removed.md"];
   const treeRequests = [];
   // The index holds a staged addition (not in the tree, never listed) and lacks a staged deletion (in the tree, excluded as unverified).
-  const git = { revision: async () => revision, treePaths: async (_dir, rev) => { treeRequests.push(rev); return tree; }, indexPaths: async () => [...tree.filter(p => p !== "docs/removed.md"), "docs/staged-new.md"], ignoredTrackedPaths: async () => ["build/out.js"] };
+  const ruleRequests = [];
+  const git = { revision: async () => revision, treePaths: async (_dir, rev) => { treeRequests.push(rev); return tree; }, indexPaths: async () => [...tree.filter(p => p !== "docs/removed.md"), "docs/staged-new.md"], ignoredTrackedPaths: async () => ["build/out.js"], ignoreRuleChanges: async (_dir, rev) => { ruleRequests.push(rev); return []; } };
   const snapshot = await repositorySnapshot(git, "/checkout");
   assert.equal(snapshot.status, "collected"); assert.equal(snapshot.revision, revision); assert.equal(snapshot.readOnly, true);
   assert.deepEqual(treeRequests, [revision], "the listing is enumerated from the recorded revision's tree");
+  assert.deepEqual(ruleRequests, [revision], "ignore rules are compared against the recorded revision");
+  // An edited or untracked .gitignore means the rules in force are not the recorded revision's: nothing is listed or guessed.
+  const diverged = await repositorySnapshot({ ...git, ignoreRuleChanges: async () => [".gitignore", "docs/.gitignore"] }, "/checkout");
+  assert.equal(diverged.status, "unavailable"); assert.match(diverged.reason, /2 \.gitignore file\(s\) differ from the recorded revision/); assert.deepEqual(diverged.paths, []); assert.equal(diverged.digest, null);
   assert.deepEqual(snapshot.paths, ["docs/a.md", "src/app.mjs"]);
   assert.deepEqual(snapshot.counts, { tracked: 9, ignored: 1, private: 5, unverified: 1, listed: 2, truncated: 0 });
   assert.equal(snapshot.digest, sha(JSON.stringify({ revision, paths: ["docs/a.md", "src/app.mjs"] })));
   assert.notEqual((await repositorySnapshot({ ...git, revision: async () => "b".repeat(40) }, "/checkout")).digest, snapshot.digest, "the digest is pinned to the revision");
   const bulk = Array.from({ length: 1000 }, (_, i) => `src/file-${String(i).padStart(4, "0")}.mjs`);
-  const many = await repositorySnapshot({ ...git, treePaths: async () => bulk, indexPaths: async () => bulk, ignoredTrackedPaths: async () => [] }, "/checkout");
+  const many = await repositorySnapshot({ ...git, treePaths: async () => bulk, indexPaths: async () => bulk, ignoredTrackedPaths: async () => [], ignoreRuleChanges: async () => [] }, "/checkout");
   assert.equal(many.paths.length, REPOSITORY_CONTEXT_LIMITS.paths); assert.equal(many.counts.truncated, 1000 - REPOSITORY_CONTEXT_LIMITS.paths);
   for (const broken of [{}, { ...git, revision: async () => { throw new Error("fatal: not a git repository token=abc"); } }, { ...git, revision: async () => "HEAD" }]) {
     const result = await repositorySnapshot(broken, "/checkout", { secrets: ["abc"] });

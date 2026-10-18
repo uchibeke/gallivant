@@ -48,9 +48,13 @@ profile:
 - A covered reading (the profile already does exactly that, or the clause only
   forbids effects the profile never performs) is recorded in the mapping. The
   clause still keeps its implementation content in the criteria. A tag speaks
-  only for the terms it names: an escalating term it leaves out ("open a PR and
-  deploy it"), or an effect term it leaves out under a control word ("open a PR;
-  do not push to main"), keeps the screen's own clarification.
+  only for the terms it names, and only in the right sense: a requested action
+  speaks for terms outside a control word, a prohibition for terms under one
+  (control words bind within a statement, across conjunctions). So "do not open
+  a pull request" tagged as a `pull_request` action, "merge the PR" tagged with
+  a `merge` prohibition, an escalating term the tag leaves out ("open a PR and
+  deploy it") and an effect term it leaves out under a control word ("open a
+  PR; do not push to main") all keep the screen's own clarification.
 - An uncovered reading becomes the deterministic question `q-delivery-<clause>`.
   Preparation pauses with `needs-input`; no readiness decision or implementation
   starts until the owner answers.
@@ -159,8 +163,10 @@ timeout and the credential variable name) when it is created. Later turns,
 including answers and repairs, run against that pinned selection and the
 review digest covers it, so changing or removing `intake_model` affects new
 tasks only. The credential itself is still read from the environment on every
-call; if the named variable is missing the turn stops with the export remedy. Reported usage replaces the reservation; missing usage leaves
-the reservation as the spend bound with `spend.status: "unknown"`. These are
+call; if the named variable is missing the turn stops with the export remedy. Reported usage replaces and releases the reservation, so the
+implementation allowance that follows subtracts the reported spend rather than
+the ceiling held during the call; missing usage leaves the reservation as the
+spend bound with `spend.status: "unknown"`. These are
 estimates from list prices, not provider invoices. Truncated, over-limit,
 malformed or empty responses are rejected with a bounded error and count as a
 call.
@@ -170,7 +176,10 @@ call.
 Preparation collects a read-only snapshot of the selected checkout: the HEAD
 revision and the path listing of that commit's tree, with ignored and private
 paths removed (`.env`, credential, key and agent-configuration locations). The
-checkout's ignore rules are evaluated through the index, so a tree path the
+checkout's in-tree `.gitignore` files decide ignores (local and global exclude
+files do not), and they must match the recorded revision: an edited or
+untracked `.gitignore` makes the snapshot unavailable with the files named,
+instead of evaluating rules the recorded tree does not contain. A tree path the
 index no longer holds (a staged deletion) is excluded as unverified and a
 staged addition is never listed; the listing therefore always describes the
 recorded revision. It is bounded to 400 paths and 16 KiB in the prompt; its
