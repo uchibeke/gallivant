@@ -34,6 +34,19 @@ test("supported harnesses pass only when signed in, and authentication failures 
   }
 });
 
+test("each local harness reports only the strength of its actual readiness probe", async () => {
+  for (const [harness, scope, wording] of [["claude", "local-sign-in", "signed-in"], ["codex", "local-sign-in", "signed-in"], ["opencode", "local-credentials", "credentials present"], ["gemini", "local-binary", "installed"], ["goose", "local-binary", "installed"]]) {
+    const home = tempHome();
+    const config = { harness: { [harness]: { bin: harnessBin(home, harness, harness === "opencode" ? { signInOutput: "1 credential" } : {}) } } };
+    const probe = (await probeAll({ config, gh: fakeGh() }))[harness];
+    assert.equal(probe.ok, true, harness);
+    assert.equal(probe.scope, scope, harness);
+    assert.equal(probe.apiConnectivity, "unchecked", harness);
+    assert.ok(probe.detail.includes(wording), harness);
+    if (scope === "local-binary") assert.doesNotMatch(probe.detail, /signed-in/);
+  }
+});
+
 test("daemon fences an old Codex account while GitHub review continues", async () => {
   const home = tempHome();
   const state = makeState(home);

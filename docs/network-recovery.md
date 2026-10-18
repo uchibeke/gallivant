@@ -30,7 +30,9 @@ never resubmits an ambiguously accepted remote operation.
 
 Status, the dashboard and `gallivant why <handle>` show the error, retry count and
 deadline. “Signed-in (API unchecked)” means the local version/login checks passed;
-it does not prove inference access. **Recheck PR** refreshes review and CI; it cannot
+it does not prove inference access. OpenCode reports credential presence; Gemini
+and Goose report only that the binary runs, with authentication unchecked.
+**Recheck PR** refreshes review and CI; it cannot
 clear a failed agent or pending network recovery. **Resume agent** continues the
 session after you repair its prerequisites. Upgrades do not silently restart old
 stopped jobs; resume those explicitly once.
