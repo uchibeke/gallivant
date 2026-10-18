@@ -79,6 +79,11 @@ test("the delivery screen is deterministic over the fixture corpus and masks lit
   assert.equal(maskLiterals('Please do not ever "open a pull request".'), 'Please do not ever "open a pull request".');
   assert.ok(deliveryScreen('Please do not ever "open a pull request" for this.').controlled.includes("pull_request"));
   assert.equal(maskLiterals('Add a test; keep the "do not merge" label text.'), 'Add a test; keep the ' + " ".repeat(14) + ' label text.', "a span in an uncontrolled statement is still an example");
+  // A control after the span governs it too, and a control inside another example never counts.
+  assert.equal(maskLiterals('"Open a pull request" is forbidden.'), '"Open a pull request" is forbidden.');
+  assert.ok(deliveryScreen('"Open a pull request" is forbidden for this change.').controlled.includes("pull_request"));
+  assert.equal(deliveryScreen('Opening a `pull request` is not allowed; label it "merge later".').controlled.includes("pull_request"), true);
+  assert.equal(maskLiterals('Show "do not merge" and "open a PR" labels.'), "Show " + " ".repeat(14) + " and " + " ".repeat(11) + " labels.");
   for (const text of ["Leave the changes uncommitted.", "Leave all changes unpublished.", "Keep the branch unpushed and unmerged."]) {
     const screen = deliveryScreen(text);
     assert.equal(screen.tier, "question", text); assert.ok(screen.terms.includes("local"), text);

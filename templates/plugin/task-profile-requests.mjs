@@ -42,6 +42,7 @@ export const profileRequests = [
   { kind: "adversarial", text: 'Do not "open a pull request" for this change.', screen: { tier: "question", terms: ["pull_request"] }, tag: { action: "pull_request" }, outcome: "needs-input", note: "emphasis quotes after a control phrase are its target, not an example" },
   { kind: "adversarial", text: "Do not: open a pull request.", screen: { tier: "question", terms: ["pull_request"] }, tag: { action: "pull_request" }, outcome: "needs-input", note: "an introductory colon does not sever the control" },
   { kind: "adversarial", text: 'Please do not ever "open a pull request" for this change.', screen: { tier: "question", terms: ["pull_request"] }, tag: { action: "pull_request" }, outcome: "needs-input", note: "a modifier between the control and its quoted target does not hide the target" },
+  { kind: "adversarial", text: '"Open a pull request" is forbidden for this change.', screen: { tier: "question", terms: ["pull_request"] }, tag: { action: "pull_request" }, outcome: "needs-input", note: "a control after the quoted target governs it too" },
   { kind: "contradictory", text: "Implement export. Leave the changes uncommitted.", screen: { tier: "question", terms: ["local"] }, tag: null, outcome: "needs-input", note: "an un- restriction reads as local-only even without a planner tag" },
   { kind: "contradictory", text: "Implement export and leave all changes unpublished.", screen: { tier: "question", terms: ["local"] }, tag: null, outcome: "needs-input" },
   // feature
