@@ -88,7 +88,11 @@ route, draft hash, selected sources, repository snapshot and allowance:
 
 `task start --run` on the current revision records `approval` with that digest.
 Answers clear readiness and approval, so a changed material input requires a
-new review before the existing run path is callable. A saved approval whose
+new review before the existing run path is callable. For typed tasks this also
+revokes a `--run` given at preparation: that consent covered the revision the
+owner saw, so an answered intake returns `ready` and needs its own
+`task start --run`. Tasks saved before typed profiles keep their documented
+persisted authorization. A saved approval whose
 digest no longer matches returns `TASK_CONFLICT` instead of dispatching. The
 approved profile and approval travel into the implementation entry and are
 checked again on reconciliation, so retries resume the same dispatch rather than
@@ -131,10 +135,15 @@ public HTTPS URL without credentials. The API key is read from the named
 environment variable at call time and is never written to disk or returned by
 any view. Ceilings are absolute: at most three calls per task, 50,000 input and
 6,000 output tokens per call, and a $0.10 allowance. Configuration can lower
-them and cannot raise them. Before each call the route estimates the cost from
-the prompt size, the output limit and the configured list prices; if the
-estimate does not fit the remaining allowance the call is not started and the
-message says so. Reported usage replaces the reservation; missing usage leaves
+them and cannot raise them. Before each call the route bounds input tokens at
+one token per UTF-8 byte of the prompt (the byte-level fallback worst case, so
+emoji and rare scripts cannot slip under the ceiling), prices that bound plus
+the output limit at the configured list prices, and refuses to start the call
+when the result does not fit the remaining allowance. Reported usage above
+either ceiling rejects the draft after the call. The response body is read
+under the same deadline as the request and cancelled at one megabyte, so a
+stalled or oversized provider reply cannot hang the task lock or buffer without
+bound. Reported usage replaces the reservation; missing usage leaves
 the reservation as the spend bound with `spend.status: "unknown"`. These are
 estimates from list prices, not provider invoices. Truncated, over-limit,
 malformed or empty responses are rejected with a bounded error and count as a

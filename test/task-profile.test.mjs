@@ -246,7 +246,43 @@ test("the model route stops before a call that would exceed its limits and rejec
   const anthropicBody = JSON.parse(seen.init.body);
   assert.equal(anthropicBody.tools, undefined); assert.equal(anthropicBody.max_tokens, 6000);
   assert.deepEqual(anthropic.attempts[0].usage, { inputTokens: 5, outputTokens: 7 });
-  assert.ok(estimateTokens("abcdef") >= 2);
+  // The pre-call bound is one token per UTF-8 byte, so emoji and rare scripts
+  // cannot slip under the ceiling or the spend reservation.
+  assert.equal(estimateTokens("abcdef"), 6); assert.equal(estimateTokens("🚀".repeat(10)), 40); assert.equal(estimateTokens("日本語"), 9);
+  const emoji = taskFor("Add CSV export.", { commandCandidates: ["npm test"] });
+  emoji.context = [{ path: "docs/emoji.md", text: "🚀".repeat(6_000), hash: "h" }];
+  await assert.rejects(prepareModelTurn({ config: { intake_model: { ...ROUTE, budget: { ...ROUTE.budget, max_input_tokens: 20_000 } } }, env: key, fetch: ok }, emoji, memoryStore(), []), e => e.code === "TASK_INPUT" && /input limit is 20000/.test(e.message));
+  assert.equal(calls, 1);
+  // Reported input usage above the ceiling is rejected even when the byte bound passed.
+  const overInput = taskFor("Add CSV export.", { commandCandidates: ["npm test"] });
+  await assert.rejects(prepareModelTurn({ config: { intake_model: ROUTE }, env: key, fetch: async () => response({ choices: [{ message: { content: draft }, finish_reason: "stop" }], usage: { prompt_tokens: 50_001, completion_tokens: 10 } }) }, overInput, memoryStore(), []), /reported 50001 input tokens, above the configured limit/);
+  assert.equal(overInput.attempts[0].ok, false);
+});
+
+test("the model route enforces the response limit while streaming and keeps its deadline over a stalled body", async () => {
+  const draft = JSON.stringify(draftFor(taskFor("Add CSV export.", { commandCandidates: ["npm test"] })));
+  const key = { FIXTURE_MODEL_KEY: "sk-fixture-key-666666" };
+  // A chunked body with no Content-Length is cancelled once the limit is crossed, before it is buffered.
+  let pulls = 0, cancelled = false;
+  const chunk = new Uint8Array(256 * 1024).fill(32);
+  const endless = new ReadableStream({ pull(controller) { pulls++; controller.enqueue(chunk); }, cancel() { cancelled = true; } });
+  const big = taskFor("Add CSV export.", { commandCandidates: ["npm test"] });
+  await assert.rejects(prepareModelTurn({ config: { intake_model: ROUTE }, env: key, fetch: async () => new Response(endless, { status: 200 }) }, big, memoryStore(), []), /exceeds the bounded limit/);
+  assert.ok(pulls <= 6, `the reader stopped after ${pulls} chunks`); assert.equal(cancelled, true); assert.equal(big.attempts[0].spend.status, "unknown");
+  // A well-formed streamed body still parses, with the usage it carries.
+  const encoded = new TextEncoder().encode(JSON.stringify({ choices: [{ message: { content: draft }, finish_reason: "stop" }], usage: { prompt_tokens: 20, completion_tokens: 30 } }));
+  const streamed = taskFor("Add CSV export.", { commandCandidates: ["npm test"] });
+  const parts = [encoded.subarray(0, 100), encoded.subarray(100)];
+  await prepareModelTurn({ config: { intake_model: ROUTE }, env: key, fetch: async () => new Response(new ReadableStream({ pull(controller) { if (parts.length) controller.enqueue(parts.shift()); else controller.close(); } }), { status: 200 }) }, streamed, memoryStore(), []);
+  assert.deepEqual(streamed.attempts[0].usage, { inputTokens: 20, outputTokens: 30 }); assert.equal(streamed.attempts[0].message, draft);
+  // Headers arrive promptly but the body never completes: the configured timeout aborts the read and settles the attempt.
+  let stalledCancelled = false;
+  const stalled = new ReadableStream({ pull() { return new Promise(() => {}); }, cancel() { stalledCancelled = true; } });
+  const hung = taskFor("Add CSV export.", { commandCandidates: ["npm test"] });
+  const startedAt = Date.now();
+  await assert.rejects(prepareModelTurn({ config: { intake_model: { ...ROUTE, timeout_ms: 1000 } }, env: key, fetch: async () => new Response(stalled, { status: 200 }) }, hung, memoryStore(), []), e => e.code === "TASK_MODEL_ROUTE" && /did not complete within 1000 ms/.test(e.message));
+  assert.ok(Date.now() - startedAt < 5000, "the stalled body was abandoned at the deadline"); assert.equal(stalledCancelled, true);
+  assert.equal(hung.attempts[0].settled, true); assert.equal(hung.attempts[0].spend.status, "unknown");
 });
 
 test("repository snapshots are read-only, bounded, exclude private and ignored paths and report unavailability", async () => {

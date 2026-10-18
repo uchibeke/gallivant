@@ -48,6 +48,11 @@ function offlineRunnerService(ctx) {
 }
 
 const REQUEST = "Add CSV export for the widget table.\nDo not add dependencies.";
+// Typed tasks revoke a preparation-time --run once an answer changes the
+// revision; the owner approves the answered revision with an explicit start.
+const approveStart = (w, r, cli = false, service = w.service) => cli
+  ? taskCommand(w.ctx, { args: ["start", r.taskId], values: { revision: String(r.revision), run: true }, service })
+  : service.start({ taskId: r.taskId, expectedRevision: r.revision, run: true });
 const GREETING_REQUEST = 'In greeting.mjs, improve greeting(name): trim surrounding whitespace for string names; return "Hello, friend!" for an empty or whitespace-only string; preserve "Hello, Ada!" for "Ada"; reject non-string input with TypeError. Add native Node tests covering normal, trimmed, empty, whitespace-only and non-string inputs. Update README briefly with usage. Run node --test. Open one pull request for review; do not merge, release, modify workflows, add dependencies, or access other repositories. Scope: aporthq/task-delivery-onboarding-qualification only.';
 test("implementation lifecycle nouns reach ordinary preparation without changing delivery authority", async () => {
   let calls = 0;
@@ -451,7 +456,7 @@ test("legacy preparation receipts do not interrupt an existing owned implementat
   const w=world({prepare:async (_ctx,task)=>JSON.stringify(draftFor(task,{question:true}))});
   const first=await w.service.prepare({text:REQUEST,run:true});
   const answer={taskId:first.taskId,expectedRevision:first.revision,operationId:"owned-answer",answers:{"q-r-1":"Use CSV."}};
-  const started=await w.service.answer(answer),store=taskStore(w.home),task=store.read(first.taskId);
+  const answered=await w.service.answer(answer),started=await approveStart(w,answered),store=taskStore(w.home),task=store.read(first.taskId);
   task.attempts=[{settled:true,consumed:true,ok:true,run:"legacy",cost:0.5}];task.status="ready";store.save(task);
   const service=createTaskService(w.ctx),resumed=await service.resume({taskId:first.taskId,expectedRevision:task.revision});
   assert.equal(resumed.status,"started");assert.equal(resumed.implementation.run,started.implementation.run);
@@ -539,9 +544,12 @@ test("conflicting constraints stay visible and answers resume the same identity,
   assert.match(first.draft.text, /unresolved q-r-1/);
   const answer = { taskId: first.taskId, expectedRevision: first.revision, answers: { "q-r-1": "Use CSV only; JSON is excluded." }, operationId: "conflict-answer" };
   const second = await w.service.answer(answer);
-  assert.equal(second.taskId, first.taskId); assert.equal(second.status, "started");
+  // The answer changed the revision the owner authorized, so it returns ready for review rather than dispatching.
+  assert.equal(second.taskId, first.taskId); assert.equal(second.status, "ready"); assert.equal(taskStore(w.home).read(first.taskId).runAuthorized, false);
   assert.match(second.draft.text, /clarified by answer q-r-1/); assert.match(second.draft.text, /Use CSV only; JSON is excluded/);
-  assert.equal((await w.service.answer(answer)).implementation.run, second.implementation.run); assert.equal(calls, 2);
+  const started = await w.service.start({ taskId: second.taskId, expectedRevision: second.revision, run: true });
+  assert.equal(started.status, "started");
+  assert.equal((await w.service.answer(answer)).implementation.run, started.implementation.run); assert.equal(calls, 2);
   await assert.rejects(() => w.service.answer({ ...answer, operationId: "stale" }), { code: "TASK_CONFLICT" });
   await assert.rejects(() => w.service.answer({ ...answer, answers: { "q-r-1": "Use JSON." } }), { code: "TASK_CONFLICT" });
 });
@@ -554,7 +562,8 @@ test("prototype-sensitive operation IDs persist and replay through CLI, restart,
     const store=taskStore(w.home),unresolved=store.read(first.taskId);
     const input={taskId:first.taskId,expectedRevision:first.revision,answers:{"q-r-1":"Use CSV."},operationId};
     const invoke=(service,reply)=>cli?taskCommand(w.ctx,{args:["answer",reply.taskId],values:{revision:String(reply.expectedRevision),"request-id":reply.operationId,answer:Object.entries(reply.answers).map(([key,value])=>`${key}=${value}`)},service}):service.answer(reply);
-    const accepted=await invoke(w.service,input);assert.equal(accepted.status,phase==="started"?"started":"ready");
+    const accepted=await invoke(w.service,input);assert.equal(accepted.status,"ready");
+    if(phase==="started")assert.equal((await approveStart(w,accepted,cli)).status,"started");
     const saved=store.read(first.taskId);assert.equal(Object.hasOwn(saved.operations,operationId),true);
     assert.deepEqual(Object.keys(saved.operations),[operationId]);assert.equal(Object.getPrototypeOf(saved.operations),Object.prototype);
     assert.equal(saved.operations[operationId],"canonical-v1:"+contentDigest(JSON.stringify({answers:input.answers,verifyCommands:[]})));
@@ -603,6 +612,7 @@ test("CLI and structured answers pin additional context, carry instructions and 
     const input = { taskId: r.taskId, expectedRevision: r.revision, answers: { "q-r-1": "Use CSV and the selected export documents." }, context: Object.keys(documents), operationId: "context-answer" };
     const invoke = input => cli ? taskCommand(w.ctx, { args: ["answer", input.taskId], service: w.service, values: { revision: String(input.expectedRevision), "request-id": input.operationId, answer: Object.entries(input.answers).map(([k,v]) => `${k}=${v}`), context: input.context } }) : w.service.answer(input);
     r = await invoke(input);
+    assert.equal(r.status, "ready"); r = await approveStart(w, r, cli);
     assert.equal(r.version, 1); assert.equal(r.taskId, first.taskId); assert.equal(r.status, "started");
     assert.equal(plans.length, 2); assert.equal(w.ctx.state.entries().length, 1); assert.equal(w.daemonCalls(), 1);
     assert.equal(check(parsePrd(r.draft.text, r.draft.path)).ok, true);
@@ -743,6 +753,7 @@ test("unmapped hostile criteria are repaired before CLI and structured initial o
       const input = { taskId: r.taskId, expectedRevision: r.revision, operationId: "scope-answer", answers: { "q-r-1": "Use CSV only." } };
       answer = () => cli ? taskCommand(w.ctx, { args: ["answer", input.taskId], values: { revision: String(input.expectedRevision), "request-id": input.operationId, answer: ["q-r-1=Use CSV only."] }, service: w.service }) : w.service.answer(input);
       r = await answer();
+      assert.equal(r.status, "ready"); r = await approveStart(w, r, cli);
     }
     assert.equal(r.status, "started"); assert.equal(r.preparation.repairs, 1); assert.equal(calls, invalidTurn + 1); assert.equal(decisions, 1);
     assert.ok(!r.draft.text.includes(extra)); assert.match(r.draft.text, /Do not add dependencies/);
@@ -785,6 +796,7 @@ test("falsely mapped planner behavior cannot enter owner-derived criteria or sto
       // changes require clarification and are covered by the refusal tests above.
       const answer = "Use JSON only.\nDo not expose credentials.";
       r = await (cli ? taskCommand(w.ctx, { args: ["answer", r.taskId], values: { revision: String(r.revision), "request-id": "derived-answer", answer: ["q-r-1=" + answer] }, service: w.service }) : w.service.answer({ taskId: r.taskId, expectedRevision: r.revision, operationId: "derived-answer", answers: { "q-r-1": answer } }));
+      assert.equal(r.status, "ready", r.failures.join("\n")); r = await approveStart(w, r, cli);
       assert.match(r.draft.text, /Use JSON only/); assert.match(r.draft.text, /Do not expose credentials/);
       const executable = r.draft.text.split("## User stories\n")[1].split("## Verify\n")[0];
       assert.match(executable, /clarified requirement r-1: "Add CSV export for the widget table\."/);
@@ -920,6 +932,7 @@ test("unlinked hostile stories are repaired before initial and answered CLI or s
     if (phase === "answer") {
       assert.equal(r.status, "needs-input");
       r = await (cli ? taskCommand(w.ctx, { args: ["answer", r.taskId], values: { revision: String(r.revision), "request-id": "story-answer", answer: ["q-r-1=Use CSV only."] }, service: w.service }) : w.service.answer({ taskId: r.taskId, expectedRevision: r.revision, operationId: "story-answer", answers: { "q-r-1": "Use CSV only." } }));
+      assert.equal(r.status, "ready"); r = await approveStart(w, r, cli);
     }
     assert.equal(r.status, "started"); assert.equal(r.preparation.repairs, 1); assert.ok(failures);
     assert.equal(turns, phase === "initial" ? 2 : 3); assert.doesNotMatch(r.draft.text, /deployment to production/);
@@ -1087,11 +1100,12 @@ test("questions own exactly their unresolved mappings and repairs cannot clarify
   assert.deepEqual(taskStore(w.home).read(first.taskId).questionMappings, { "q-r-1": ["r-1"] });
   const input = { taskId: first.taskId, expectedRevision: first.revision, operationId: "scoped-answer", answers: { "q-r-1": "Use CSV." } };
   const answered = await w.service.answer(input);
-  assert.equal(answered.status, "started"); assert.equal(answered.preparation.repairs, 2); assert.equal(calls, 4);
+  assert.equal(answered.status, "ready"); assert.equal(answered.preparation.repairs, 2); assert.equal(calls, 4);
   assert.match(answered.draft.text, /Explicit requirement r-2: "Do not add dependencies\."/);
   assert.equal(answered.mapping.find(m => m.requirementId === "r-2").resolvedBy, undefined);
-  assert.equal((await w.service.answer(input)).implementation.run, answered.implementation.run); assert.equal(calls, 4);
-  assert.equal(w.runners.get(answered.implementation.id).started.length, 1);
+  const started = await w.service.start({ taskId: answered.taskId, expectedRevision: answered.revision, run: true });
+  assert.equal((await w.service.answer(input)).implementation.run, started.implementation.run); assert.equal(calls, 4);
+  assert.equal(w.runners.get(started.implementation.id).started.length, 1);
 });
 
 test("omitted clarification tags retain saved answer precedence through CLI and structured answers and repairs", async t => {
@@ -1107,7 +1121,9 @@ test("omitted clarification tags retain saved answer precedence through CLI and 
     const input = { taskId: first.taskId, expectedRevision: first.revision, operationId: "omitted-clarification", answers: { "q-r-1": "Use JSON only; CSV is excluded." } };
     const answer = () => cli ? taskCommand(w.ctx, { args: ["answer", input.taskId], values: { revision: String(input.expectedRevision), "request-id": input.operationId, answer: ["q-r-1=" + input.answers["q-r-1"]] }, service: w.service }) : w.service.answer(input);
     const r = await answer();
-    assert.equal(r.status, "started", r.failures.join("\n")); assert.equal(r.preparation.repairs, repair ? 1 : 0); assert.equal(calls, repair ? 3 : 2);
+    assert.equal(r.status, "ready", r.failures.join("\n")); assert.equal(r.preparation.repairs, repair ? 1 : 0); assert.equal(calls, repair ? 3 : 2);
+    const started = await w.service.start({ taskId: r.taskId, expectedRevision: r.revision, run: true });
+    assert.equal(started.status, "started");
     assert.equal(r.mapping.find(m => m.requirementId === "r-1").resolvedBy, "q-r-1");
     assert.equal(r.mapping.find(m => m.requirementId === "r-2").resolvedBy, undefined);
     const executable = r.draft.text.split("## User stories\n")[1].split("## Verify\n")[0];
@@ -1119,7 +1135,7 @@ test("omitted clarification tags retain saved answer precedence through CLI and 
     assert.equal(renderDraft(saved, omitted), renderDraft(saved, saved.output));
     assert.deepEqual(parseDraft(JSON.stringify(omitted), saved), saved.output);
     assert.equal(check(parsePrd(r.draft.text, r.draft.path)).ok, true);
-    assert.equal((await answer()).implementation.run, r.implementation.run); assert.equal(w.runners.get(r.implementation.id).started.length, 1);
+    assert.equal((await answer()).implementation.run, started.implementation.run); assert.equal(w.runners.get(started.implementation.id).started.length, 1);
     if (!cli && repair) {
       const record = join(w.home, "saved-clarification-fixture.json");
       writeJsonAtomic(record, { live: false, model_calls: 0, result: r, output: saved.output, calls, dispatches: 1 });
@@ -1146,7 +1162,9 @@ test("successive question-owned answers remain in accepted order even when plann
     const second = await w.service.answer({ taskId: first.taskId, expectedRevision: first.revision, operationId: "first-format", answers: { "q-first": "Use JSON only." } });
     assert.equal(second.status, "needs-input"); assert.equal(second.questions[0].id, "q-later"); assert.deepEqual(w.ctx.state.entries(), []);
     const r = await w.service.answer({ taskId: first.taskId, expectedRevision: second.revision, operationId: "later-format", answers: { "q-later": "Use CSV only instead of JSON." } });
-    assert.equal(r.status, "started", r.failures.join("\n")); assert.equal(r.preparation.repairs, 0);
+    assert.equal(r.status, "ready", r.failures.join("\n")); assert.equal(r.preparation.repairs, 0);
+    const started = await w.service.start({ taskId: r.taskId, expectedRevision: r.revision, run: true });
+    assert.equal(started.status, "started");
     const output = taskStore(w.home).read(r.taskId).output, criterion = output.criteria[0].text;
     assert.ok(criterion.indexOf('answer q-first: "Use JSON only."') < criterion.indexOf('answer q-later: "Use CSV only instead of JSON."'));
     assert.match(criterion, /Later answers govern conflicts with earlier answers\./);
@@ -1156,7 +1174,7 @@ test("successive question-owned answers remain in accepted order even when plann
     assert.equal(r.mapping.find(m => m.requirementId === "a-q-first-1").resolvedBy, "q-later");
     assert.equal(r.mapping.find(m => m.requirementId === "r-2").resolvedBy, undefined);
     assert.match(output.criteria[1].text, /Explicit requirement r-2: "Do not add dependencies\."/);
-    assert.equal(w.runners.get(r.implementation.id).started.length, 1); assert.equal(calls, 3);
+    assert.equal(w.runners.get(started.implementation.id).started.length, 1); assert.equal(calls, 3);
   }
 });
 
@@ -1215,7 +1233,8 @@ test("combined and partial answer footprints fail atomically before context read
     await assert.rejects(() => invoke(input), e => e.code === "TASK_INPUT" && /minimum generated brief.*words.*1500/.test(e.message));
     assert.deepEqual(store.read(r.taskId), before); assert.equal(calls, 1); assert.deepEqual(w.ctx.state.entries(), []);
     const corrected = { ...input, context: [], answers: { ...input.answers, [id]: partial ? "Keep dependencies unchanged." : "Use CSV only." } };
-    const accepted = await invoke(corrected); assert.equal(accepted.status, "started", accepted.failures.join("\n"));
+    const answered = await invoke(corrected); assert.equal(answered.status, "ready", answered.failures.join("\n"));
+    const accepted = await approveStart(w, answered, cli); assert.equal(accepted.status, "started");
     assert.equal((await invoke(corrected)).implementation.run, accepted.implementation.run); assert.equal(calls, 2);
     assert.equal(w.runners.get(accepted.implementation.id).started.length, 1);
   }
@@ -1658,7 +1677,8 @@ test("explicit argument-bearing Verify answers retain CLI parity, pinned manifes
     assert.equal(first.status,"needs-input"); assert.ok(!first.verifyCommands.some(v=>v.command===command));
     const input={taskId:first.taskId,expectedRevision:first.revision,operationId:"explicit-check-arguments",answers:{"q-r-1":"Use CSV and keep dependencies unchanged."},verifyCommands:[command]};
     const invoke=()=>cli ? taskCommand(w.ctx,{args:["answer",first.taskId],values:{revision:String(first.revision),"request-id":input.operationId,answer:[`q-r-1=${input.answers["q-r-1"]}`],verify:[command]},service:w.service}) : w.service.answer(input);
-    const started=await invoke();
+    const answered=await invoke(); assert.equal(answered.status,"ready");
+    const started=await approveStart(w,answered,cli);
     assert.equal(started.status,"started"); assert.equal(started.taskId,first.taskId); assert.match(started.draft.text,/Do not add dependencies/);
     assert.deepEqual(started.verifyCommands.find(v=>v.command===command).sources,["go.mod"]);
     assert.match(started.draft.text,/`go test -race \.\/\.\.\.`/);
@@ -1696,7 +1716,8 @@ test("unbound Maven and dotnet instructions cannot authorize Verify through repa
       const question=await owner.service.prepare({text:REQUEST,run:true});assert.equal(question.status,"needs-input");assert.deepEqual(question.verifyCommands,[]);
       const input={taskId:question.taskId,expectedRevision:question.revision,operationId:"owner-build-check",answers:{"q-r-1":`Use CSV, keep dependencies unchanged and verify with ${command}.`},context:[manifest],verifyCommands:[command]};
       const invoke=()=>cli?taskCommand(owner.ctx,{args:["answer",question.taskId],values:{revision:String(question.revision),"request-id":input.operationId,answer:[`q-r-1=${input.answers["q-r-1"]}`],context:input.context,verify:input.verifyCommands},service:owner.service}):owner.service.answer(input);
-      const accepted=await invoke();assert.equal(accepted.status,"started");assert.equal(accepted.taskId,question.taskId);assert.match(accepted.draft.text,/Do not add dependencies/);
+      const answered=await invoke();assert.equal(answered.status,"ready");
+      const accepted=await approveStart(owner,answered,cli);assert.equal(accepted.status,"started");assert.equal(accepted.taskId,question.taskId);assert.match(accepted.draft.text,/Do not add dependencies/);
       assert.equal(readFileSync(join(accepted.implementation.worktree,manifest),"utf8"),text);assert.equal(owner.sources.get(`${accepted.implementation.id}:${manifest}`),text);
       assert.equal((await invoke()).implementation.run,accepted.implementation.run);assert.equal(owner.runners.get(accepted.implementation.id).started.length,1);
     }
@@ -1794,11 +1815,12 @@ test("answer-time lockfiles establish manager evidence without reviving cached i
   const store=taskStore(w.home), legacy=store.read(r.taskId); delete legacy.explicitVerifyCommands; legacy.commandCandidates=["npm test","npm publish"]; store.save(legacy);
   const lock="pnpm-lock.yaml", contents="accepted pnpm lock\n";writeFileSync(join(w.checkout,lock),contents);
   const input={taskId:r.taskId,expectedRevision:r.revision,operationId:"manager-context",answers:{"q-r-1":"Use CSV with pnpm tests."},context:[lock]};
-  const answered=await w.service.answer(input); assert.equal(answered.status,"started"); assert.equal(answered.taskId,r.taskId);
+  const answered=await w.service.answer(input); assert.equal(answered.status,"ready"); assert.equal(answered.taskId,r.taskId);
   assert.deepEqual(answered.verifyCommands,[{command:"pnpm run test",sources:["package.json",lock]}]);
-  assert.equal(readFileSync(join(answered.implementation.worktree,lock),"utf8"),contents);
-  writeFileSync(join(w.checkout,lock),"changed"); assert.equal((await w.service.answer(input)).implementation.run,answered.implementation.run);
-  assert.equal(w.runners.get(answered.implementation.id).started.length,1);
+  const started=await w.service.start({taskId:r.taskId,expectedRevision:answered.revision,run:true}); assert.equal(started.status,"started");
+  assert.equal(readFileSync(join(started.implementation.worktree,lock),"utf8"),contents);
+  writeFileSync(join(w.checkout,lock),"changed"); assert.equal((await w.service.answer(input)).implementation.run,started.implementation.run);
+  assert.equal(w.runners.get(started.implementation.id).started.length,1);
   assert.deepEqual(store.read(r.taskId).explicitVerifyCommands,[]);
 });
 
@@ -1941,7 +1963,8 @@ test("source paths with boundary quotes fail CLI and structured selection before
     }
     const path='docs/format"quoted".md',text="CSV columns remain stable.\n";writeFileSync(join(w.checkout,path),text);
     const input={taskId:first.taskId,expectedRevision:first.revision,operationId:"internal-quotes",answers:{"q-r-1":"Use CSV and the selected format document."},context:[path]};
-    const accepted=cli?await taskCommand(w.ctx,{args:["answer",first.taskId],values:{revision:String(first.revision),"request-id":input.operationId,answer:[`q-r-1=${input.answers["q-r-1"]}`],context:input.context},service:w.service}):await w.service.answer(input);
+    const answered=cli?await taskCommand(w.ctx,{args:["answer",first.taskId],values:{revision:String(first.revision),"request-id":input.operationId,answer:[`q-r-1=${input.answers["q-r-1"]}`],context:input.context},service:w.service}):await w.service.answer(input);
+    assert.equal(answered.status,"ready");const accepted=await approveStart(w,answered,cli);
     assert.equal(accepted.status,"started");assert.ok(parsePrd(accepted.draft.text,accepted.draft.path).meta.sources.includes(path));assert.equal(readFileSync(join(accepted.implementation.worktree,path),"utf8"),text);
     assert.equal(w.runners.get(accepted.implementation.id).started.length,1);assert.match(accepted.draft.text,/Do not add dependencies/);assert.equal(saved.revision,first.revision);
     t.diagnostic(`Internal-quote fixture draft: ${accepted.draft.path}`);
@@ -1970,7 +1993,8 @@ test("raw boundary whitespace is refused before preparation or answers can selec
     for (const path of files) { mkdirSync(dirname(join(w.checkout, path)), { recursive: true }); writeFileSync(join(w.checkout, path), `CSV columns from ${path}.\n`); }
     const input = { taskId: first.taskId, expectedRevision: first.revision, operationId: "internal-space-answer", answers: { "q-r-1": "Use CSV and the selected format documents." }, context: files };
     const invoke = () => cli ? taskCommand(w.ctx, { args: ["answer", first.taskId], values: { revision: String(first.revision), "request-id": input.operationId, answer: [`q-r-1=${input.answers["q-r-1"]}`], context: files }, service: w.service }) : w.service.answer(input);
-    const accepted = await invoke(); assert.equal(accepted.status, "started"); assert.equal(accepted.taskId, first.taskId); assert.match(accepted.draft.text, /Do not add dependencies/);
+    const answered = await invoke(); assert.equal(answered.status, "ready");
+    const accepted = await approveStart(w, answered, cli); assert.equal(accepted.status, "started"); assert.equal(accepted.taskId, first.taskId); assert.match(accepted.draft.text, /Do not add dependencies/);
     for (const path of files) {
       assert.ok(parsePrd(accepted.draft.text, accepted.draft.path).meta.sources.includes(path));
       assert.equal(readFileSync(join(accepted.implementation.worktree, path), "utf8"), `CSV columns from ${path}.\n`);
@@ -2111,6 +2135,16 @@ async function readyReplayFixture({ operation, cli, run = true, noDaemon = false
       assert.equal(interrupted.status, "needs-input");
       reply = { taskId: interrupted.taskId, expectedRevision: interrupted.revision, operationId: "ready-answer", answers: { "q-r-1": "Use CSV only." } };
       interrupted = await answer(w.service);
+      if (run) {
+        // The answer produced a revision the owner had not authorized; the
+        // crash now happens on the explicit start of that reviewed revision.
+        assert.equal(interrupted.status, "ready"); assert.equal(store.read(interrupted.taskId).runAuthorized, false);
+        // An explicit start throws the fixture crash instead of recording a blocked turn; shape it like the prepare path's result.
+        try {
+          interrupted = await (cli ? taskCommand(w.ctx, { args: ["start", interrupted.taskId], values: { revision: String(interrupted.revision), run: true, "no-daemon": noDaemon }, service: w.service })
+            : w.service.start({ taskId: interrupted.taskId, expectedRevision: interrupted.revision, run: true, noDaemon }));
+        } catch (error) { interrupted = { status: "blocked", failures: [error.message], taskId: reply.taskId }; }
+      }
     }
   } finally { w.ctx.state.get = get; }
   if (run) {
@@ -2263,7 +2297,7 @@ test("CLI and structured validation refuse interrupted final-answer drafts while
     const recovered = phase === "lost-ack"
       ? await (cli ? taskCommand(w.ctx, { args: ["answer", before.id], values: { revision: String(w.answer.expectedRevision), "request-id": w.answer.operationId, answer: ["q-r-1=Use CSV only."] }, service }) : service.answer(w.answer))
       : await (cli ? taskCommand(w.ctx, { args: ["resume", before.id], values: { revision: String(before.revision) }, service }) : service.resume({ taskId: before.id, expectedRevision: before.revision }));
-    assert.equal(recovered.status, run ? "started" : "ready"); assert.equal(recovered.taskId, before.id);
+    assert.equal(recovered.status, "ready"); assert.equal(recovered.taskId, before.id);
     assert.equal(recovered.draft.current, true); assert.notEqual(recovered.draft.path, before.draft.path);
     assert.match(recovered.draft.text, /clarified by answer q-r-1/); assert.match(recovered.draft.text, /Use CSV only/); assert.match(recovered.draft.text, /Do not add dependencies/);
     assert.equal(check(parsePrd(recovered.draft.text, recovered.draft.path)).ok, true);
@@ -2271,13 +2305,16 @@ test("CLI and structured validation refuse interrupted final-answer drafts while
     assert.equal(recovered.preparation.attempts[0].settled, true); assert.equal(recovered.preparation.attempts[0].cost, 0.37);
     assert.deepEqual(recovered.preparation.attempts[0].usage, [{ input_tokens: 12, output_tokens: 5 }]);
     assert.equal(w.store.read(before.id).attempts[0].consumed, true); assert.equal(owned.runner.current().running, false);
-    assert.equal(owned.starts(), 0); assert.equal(decisions, 1); assert.equal(daemonCalls, run ? 1 : 0);
+    assert.equal(owned.starts(), 0); assert.equal(decisions, 1); assert.equal(daemonCalls, 0);
+    // The recovered answer revoked the preparation-time --run; dispatch needs an explicit approval of this revision.
+    const started = run ? await approveStart(w, recovered, cli, service) : null;
+    if (run) assert.equal(started.status, "started");
     const replay = await service.answer(w.answer);
-    assert.deepEqual(replay, service.inspect({ taskId: before.id })); assert.equal(replay.revision, recovered.revision);
-    const validated = await service.validate({ taskId: before.id, expectedRevision: recovered.revision });
-    assert.equal(validated.status, recovered.status); assert.equal(decisions, 1); assert.equal(owned.starts(), 0);
-    assert.equal(w.ctx.state.entries().length, run ? 1 : 0);
-    if (run) assert.equal(w.runners.get(recovered.implementation.id).started.length, 1);
+    assert.deepEqual(replay, service.inspect({ taskId: before.id })); assert.equal(replay.revision, run ? started.revision : recovered.revision);
+    const validated = await service.validate({ taskId: before.id, expectedRevision: replay.revision });
+    assert.equal(validated.status, run ? "started" : "ready"); assert.equal(decisions, 1); assert.equal(owned.starts(), 0);
+    assert.equal(w.ctx.state.entries().length, run ? 1 : 0); assert.equal(daemonCalls, run ? 1 : 0);
+    if (run) assert.equal(w.runners.get(started.implementation.id).started.length, 1);
     if (!cli && !run && phase === "completed") {
       const evidence = join(w.home, "validate-recovery-fixture.json");
       writeFileSync(evidence, JSON.stringify({ live: false, model_calls: 0, checkpoint: before, refusal: { code: "TASK_NOT_READY", version: 1, saved_state_unchanged: true }, recovered, replay, decisions, daemonCalls, new_preparation_launches: owned.starts() }, null, 2) + "\n");
@@ -3898,15 +3935,26 @@ test("a profile conflict pauses before any harness run until the owner resolves 
   await assert.rejects(w.service.start({ taskId: prepared.taskId, expectedRevision: prepared.revision, run: true }), { code: "TASK_NOT_READY" });
   assert.equal((await w.service.validate({ taskId: prepared.taskId, expectedRevision: prepared.revision })).status, "needs-input");
   const answered = await w.service.answer({ taskId: prepared.taskId, expectedRevision: prepared.revision, operationId: "clarify-deploy", answers: { "q-delivery-r-2": "Deployment is done by the release team; this task only implements export." } });
-  // --run authorization persists through the clarification and dispatches once the exact revision validates.
-  assert.equal(answered.status, "started"); assert.equal(answered.approval.revision, answered.revision - 1 >= 0 ? answered.approval.revision : null);
+  // The earlier --run consent covered the revision the owner saw. The answered
+  // revision is returned for review and needs its own explicit start.
+  assert.equal(answered.status, "ready"); assert.equal(answered.approval, null); assert.equal(taskStore(w.home).read(prepared.taskId).runAuthorized, false);
+  assert.deepEqual(w.ctx.state.entries(), []); assert.equal(w.daemonCalls(), 0);
+  assert.match(answered.nextAction, /review the draft, then start with explicit run authorization/);
+  const started = await w.service.start({ taskId: prepared.taskId, expectedRevision: answered.revision, run: true });
+  assert.equal(started.status, "started"); assert.equal(started.approval.revision, answered.revision); assert.equal(started.approval.digest, answered.review.digest);
   const saved = taskStore(w.home).read(prepared.taskId);
   const mapping = saved.output.mapping.find(m => m.requirementId === "r-2");
   assert.equal(mapping.resolvedBy, "q-delivery-r-2"); assert.equal(mapping.screen.tier, "clarified"); assert.deepEqual(mapping.criteria, ["ac-2"]);
   assert.match(answered.draft.text, /clarified by answer q-delivery-r-2/); assert.match(answered.draft.text, /Deployment is done by the release team/);
   assert.equal(answered.requirements.at(-1).source.of, "answer:q-delivery-r-2");
-  assert.deepEqual(w.ctx.state.get(answered.implementation.id).task.deliveryProfile, TYPED_PROFILE);
-  assert.equal(w.runners.get(answered.implementation.id).started.length, 1);
+  assert.deepEqual(w.ctx.state.get(started.implementation.id).task.deliveryProfile, TYPED_PROFILE);
+  assert.equal(w.runners.get(started.implementation.id).started.length, 1);
+  // A task saved before typed profiles existed keeps its documented persisted --run authorization.
+  const legacy = world({ prepare: async (_ctx, task) => { delete task.deliveryProfile; delete task.route; delete task.repositoryContext; return JSON.stringify(draftFor(task, { question: true })); } });
+  const old = await legacy.service.prepare({ text: REQUEST, run: true });
+  assert.equal(old.status, "needs-input");
+  const resumed = await legacy.service.answer({ taskId: old.taskId, expectedRevision: old.revision, operationId: "legacy-answer", answers: { "q-r-1": "Use CSV." } });
+  assert.equal(resumed.status, "started"); assert.equal(legacy.ctx.state.get(resumed.implementation.id).task.deliveryProfile, undefined);
   // Insisting on the action in the answer re-raises the clarification instead of granting it.
   const again = world({ prepare: async (_ctx, task) => JSON.stringify(draftFor(task, { delivery: task.answers["q-delivery-r-1"] ? { "a-q-delivery-r-1-1": { action: "merge" } } : { "r-1": { action: "merge" } } })) });
   const first = await again.service.prepare({ text: "Merge the PR." });
