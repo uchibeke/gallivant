@@ -8,6 +8,7 @@ import { applyControl } from "../lib/control.mjs";
 import { model, render } from "../lib/commands/status.mjs";
 import { why } from "../lib/commands/why.mjs";
 import { runPage } from "../lib/tracker/pages.mjs";
+import { completionView, coordinatorEntryActive } from "../lib/task_completion.mjs";
 import { networkFailure, needsAgentResume } from "../lib/network_recovery.mjs";
 import { CONFIG, T0, at, makeClock, fakeGh, fakeRunner, fakeGit, fakeNotify, seededState, claudeResultLines, silentLog, STATES, tempHome, fakeCredential, fakeIdentity, harnessBin, checkRun } from "./helpers.mjs";
 
@@ -23,12 +24,12 @@ function world(over = {}) {
   let tick = makeTick(ctx);
   return { ctx, clock, state, id, runner, git, entry: () => state.get(id),
     restart: () => { tick = makeTick(ctx); }, tick: () => tick.tick(),
-    async fail() {
+    async fail(text = ERROR) {
       if (!runner.current()) {
         const result = await tick.startRun(id, state.get(id), { name: "test", prompt: "Implement the saved task" });
         state.update(id, { last: { at: T0, run: result.job.id, exit: null, event: "test" } });
       }
-      runner.finish(claudeResultLines({ ok: false, text: ERROR }));
+      runner.finish(claudeResultLines({ ok: false, text }));
       await tick.tick();
     } };
 }
@@ -214,4 +215,22 @@ test("a recovery that publishes progress clears its streak and accounts for the 
   await w.tick();
   assert.equal(w.entry().iteration, 1);
   assert.equal(w.runner.started.length, 2);
+});
+
+test("embedded hosts continue waking pending network recovery and stop at exhaustion or cancellation", async () => {
+  const w = world(); await w.fail();
+  assert.equal(completionView(null, w.entry()).status, "pending");
+  assert.equal(completionView(null, w.entry()).monitoring, true);
+  assert.equal(coordinatorEntryActive(w.entry()), true);
+  const stopped = { ...w.entry(), reason: "provider-network-exhausted", network_retry: { ...w.entry().network_retry, phase: "exhausted" } };
+  assert.equal(completionView(null, stopped).status, "blocked");
+  assert.equal(coordinatorEntryActive(stopped), false);
+  assert.equal(coordinatorEntryActive({ ...w.entry(), dispatch_stopped: "cancelled" }), false);
+});
+
+test("recovery state retains the error code without copying credential-bearing failure text", async () => {
+  const w = world();
+  await w.fail("API Error: getaddrinfo ENOTFOUND https://user:secret-value@proxy.invalid");
+  assert.equal(w.entry().network_retry.code, "ENOTFOUND");
+  assert.doesNotMatch(JSON.stringify(w.entry()), /secret-value|proxy\.invalid/);
 });

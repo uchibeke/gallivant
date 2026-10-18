@@ -18,6 +18,8 @@ the retry budget is separate from `max_iterations`.
 
 Counts and deadlines survive daemon restarts. No retry starts after the one-hour
 recovery window expires; an already-started run retains its normal runtime limit.
+The shared completion projection keeps pending retries monitored, so embedded
+hosts continue waking the coordinator instead of treating the task as paused.
 Exhaustion stops with `provider-network-exhausted` and notifies the operator.
 Success or reconciled published progress resets the consecutive failure streak. A manually authorized Resume
 starts a new streak after normal preflight.
