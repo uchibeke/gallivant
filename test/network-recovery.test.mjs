@@ -245,3 +245,32 @@ test("cancellation arriving during retry preparation prevents the replacement la
   assert.equal(w.runner.started.length, 1);
   assert.equal(w.entry().dispatch_stopped, "cancellation-requested");
 });
+
+for (const initial of [false, true]) test(`GitHub outage cannot reset the recovery deadline (${initial ? "initial" : "fix"} run)`, async () => {
+  const w = world(initial ? { pr: null, state: STATES.running } : {});
+  const method = initial ? "prListByHead" : "prView";
+  const read = w.ctx.gh[method];
+  w.ctx.gh[method] = async () => { throw new Error("GitHub unavailable"); };
+  await w.fail();
+  assert.equal(w.entry().network_retry.first_at, T0);
+  assert.equal(w.entry().network_retry.phase, "reconciling");
+  assert.equal(w.entry().last.exit, null);
+  w.restart(); w.clock.advance(120); await w.tick();
+  assert.equal(w.entry().network_retry.first_at, T0);
+  assert.equal(w.runner.started.length, 1);
+  w.ctx.gh[method] = read;
+  await w.tick();
+  assert.equal(w.entry().reason, "provider-network-exhausted");
+  assert.equal(w.runner.started.length, 1);
+});
+
+test("recovery deadline is enforced after asynchronous dispatch preparation", async () => {
+  const w = world(); await w.fail();
+  w.ctx.credential = async options => {
+    w.clock.advance(60);
+    return fakeCredential()(options);
+  };
+  w.clock.advance(1); await w.tick();
+  assert.equal(w.runner.started.length, 1);
+  assert.equal(w.entry().reason, "provider-network-exhausted");
+});

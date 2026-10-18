@@ -16,7 +16,9 @@ normally and returns to review/CI monitoring; it cannot evade the round budget.
 Retries may incur provider charges, subject to existing per-run and task allowances;
 the retry budget is separate from `max_iterations`.
 
-Counts and deadlines survive daemon restarts. No retry starts after the one-hour
+Counts and deadlines survive daemon restarts. The window begins when the terminal
+failure is observed, before GitHub reconciliation; a simultaneous GitHub outage
+cannot extend it. Published progress must still be reconciled before retrying. No retry starts after the one-hour
 recovery window expires; an already-started run retains its normal runtime limit.
 The shared completion projection keeps pending retries monitored, so embedded
 hosts continue waking the coordinator instead of treating the task as paused.
