@@ -98,3 +98,22 @@ Follow-up verification passed: `npm test` (1,721 passes, one existing skip),
 `npm run test:plugin-package` (43 installed flows and 534 conformance checks),
 `npm run test:release-package` (nine passes), and `git diff --check`. The evidence
 index preserves prior logs and records the new log hashes and tested source hashes.
+
+The next inline finding, review `5565591959` / comment `4309251693`, identified a
+mutable qualification snapshot embedded in immutable START-HERE bytes. Those
+instructions now direct the operator to fresh `release:validate` output and its
+current blockers. The sibling default release notes also avoid a frozen pending
+verdict. Both command callers already recompute qualification from current evidence;
+the saved qualification and manifest state fields are documented as assembly
+snapshots. Hash verification, output ownership and failed-assembly cleanup are
+unchanged. Regression coverage advances synthetic evidence from missing to passing
+while preserving the generated instructions and their hashes; emitted artifacts
+remain labeled fixtures. The representative output inspected for this change is
+`/tmp/release-start-output.json`. No external prerequisite changed and no live
+qualification was claimed.
+
+Verification for the instructions fix passed all six required commands: 1,721
+full-suite passes with one existing skip, 418 backend passes, 43 installed flows
+and 534 conformance checks, nine release checks, lint and whitespace. Current
+logs and source hashes are in `handoffInstructionsReview` and `offline.checks`
+in the evidence index; earlier verification records remain available.

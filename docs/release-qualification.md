@@ -74,6 +74,12 @@ START-HERE and RUNTIME. Validation rehashes those files and the staged plugin fi
 using the builder's `assetHashes`. Older manifests without complete handoff hashes
 require rebuilding. Treat the manifest as the immutable trust anchor; only
 `evidence.json` and `qualification.json` are intentionally mutable release records.
+START-HERE and the default release notes contain stable instructions, not a saved
+readiness verdict or blocker list. Run `release:validate` after evidence updates
+and before handoff; its returned `status`, `checks`, `blockers`, `rerun` and `states`
+reflect current evidence. Validation does not rewrite `qualification.json`.
+The saved qualification results and `manifest.release.states` describe assembly
+time; the validator reads the saved deployment but recomputes qualification.
 
 `codeMerged`, `submitted`, `approved` and `published` each require their own
 `{at, pointer, identity}` record. `liveQualified` and `submissionReady` are derived

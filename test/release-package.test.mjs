@@ -188,6 +188,31 @@ test('release assembly reuses the packager and keeps evidence outside the public
   assert.equal(built.manifest.release.states.submissionReady, false);
   for (const file of ['START-HERE.md', 'manifest.json', 'evidence.json', 'qualification.json', 'listing.md', 'release-notes.md', 'review-cases.json', 'RUNTIME.md', 'runtime.json', built.manifest.coreArtifact]) assert.ok(readFileSync(join(out, file)).length);
   assert.match(readFileSync(join(out, 'START-HERE.md'), 'utf8'), /Offline checks are not live qualification/);
+  const startHere = readFileSync(join(out, 'START-HERE.md'), 'utf8');
+  const notes = readFileSync(join(out, 'release-notes.md'), 'utf8');
+  assert.doesNotMatch(startHere, /Status:|needs-human|submission-ready/);
+  for (const blocker of built.evaluation.blockers) assert.ok(!startHere.includes(blocker.next));
+  assert.match(startHere, /Run npm run release:validate/);
+  assert.match(startHere, /latest evidence.json/);
+  assert.match(startHere, /does not refresh the saved qualification.json/);
+  assert.match(startHere, /Follow only the current blockers/);
+  assert.doesNotMatch(notes, /Unqualified|live gates remain pending/);
+  assert.match(notes, /release:validate/);
+  // Synthetic evaluator inputs exercise changing qualification without relabeling
+  // the emitted fixture manifest or claiming any live observation.
+  const qualificationInput = { manifest: { ...built.manifest, classification: 'public-candidate-unqualified', sourceVerified: true, uncommittedPayload: [] }, deployment };
+  const readyEvidence = observed(qualificationInput);
+  for (const [evidence, expected] of [[{ version: 1, checks: {} }, 'needs-human'], [readyEvidence, 'submission-ready']]) {
+    writeFileSync(join(out, 'evidence.json'), JSON.stringify(evidence));
+    const current = evaluateRelease({ ...qualificationInput, evidence: readReleaseJson(join(out, 'evidence.json')) });
+    assert.equal(current.status, expected);
+    assert.equal(readFileSync(join(out, 'START-HERE.md'), 'utf8'), startHere);
+    assert.equal(hash(startHere), built.manifest.handoffHashes['START-HERE.md']);
+    assert.equal(readFileSync(join(out, 'release-notes.md'), 'utf8'), notes);
+  }
+  writeFileSync(join(out, 'evidence.json'), JSON.stringify({ version: 1, checks: {} }));
+  assert.match(readReleaseJson(join(out, 'manifest.json')).classification, /internal-development-fixture/);
+  assert.equal(readReleaseJson(join(out, 'qualification.json')).status, 'needs-human', 'saved results are a snapshot, not the current evaluation');
   assert.deepEqual(Object.keys(built.manifest.handoffHashes).sort(), ['RUNTIME.md', 'START-HERE.md', 'listing.md', 'release-notes.md', 'review-cases.json']);
   for (const [file, expected] of Object.entries(built.manifest.handoffHashes)) assert.equal(hash(readFileSync(join(out, file))), expected);
   for (const [file, expected] of Object.entries(built.manifest.assetHashes)) assert.equal(hash(readFileSync(join(out, 'plugin', file))), expected);
