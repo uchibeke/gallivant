@@ -76,6 +76,13 @@ test("the delivery screen is deterministic over the fixture corpus and masks lit
     assert.equal(screen.tier, "question", text); assert.ok(screen.controlled.includes(/merge/.test(text) ? "merge" : "pull_request"), `${text} → ${JSON.stringify(screen)}`);
   }
   assert.equal(maskLiterals('Do not "open a pull request".'), 'Do not "open a pull request".');
+  assert.equal(maskLiterals('Please do not ever "open a pull request".'), 'Please do not ever "open a pull request".');
+  assert.ok(deliveryScreen('Please do not ever "open a pull request" for this.').controlled.includes("pull_request"));
+  assert.equal(maskLiterals('Add a test; keep the "do not merge" label text.'), 'Add a test; keep the ' + " ".repeat(14) + ' label text.', "a span in an uncontrolled statement is still an example");
+  for (const text of ["Leave the changes uncommitted.", "Leave all changes unpublished.", "Keep the branch unpushed and unmerged."]) {
+    const screen = deliveryScreen(text);
+    assert.equal(screen.tier, "question", text); assert.ok(screen.terms.includes("local"), text);
+  }
   assert.equal(maskLiterals('Keep the literal "open a pull request" text.'), "Keep the literal " + " ".repeat(21) + " text.");
   assert.deepEqual(statements("Do not: open a PR. Then: run tests; stop"), ["Do not: open a PR", " Then", " run tests", " stop"]);
   assert.deepEqual(deliveryScreen(""), { terms: [], controlled: [], controls: [], tier: "none" });

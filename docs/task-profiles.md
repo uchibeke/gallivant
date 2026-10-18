@@ -62,9 +62,10 @@ profile:
 Independently of the planner, a deterministic screen looks for delivery
 vocabulary in each clause (pull request, merge, deploy, release, publish, push,
 commit, branch, approval, review, wait, local-only). Paired quotes and code
-spans are masked, so literal examples do not count, except a span that directly
-follows a control phrase (`Do not "open a pull request"`), which is the
-control's target. Control words bind within a statement: sentence and clause
+spans are masked, so literal examples do not count, except a span inside a
+statement that a control phrase already governs (`Please do not ever "open a
+pull request"`), which is read as the control's target. Restriction forms such
+as "leave the changes uncommitted" or "unpublished" count as local-only. Control words bind within a statement: sentence and clause
 punctuation ends one, but conjunctions and an introductory colon after the
 control ("Do not: open a pull request") do not. The screen grants nothing:
 

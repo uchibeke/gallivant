@@ -41,6 +41,9 @@ export const profileRequests = [
   { kind: "adversarial", text: "Merge the PR after tests pass.", screen: { tier: "question", terms: ["pull_request", "merge"] }, tag: { action: "pull_request", prohibits: ["merge"] }, outcome: "needs-input", note: "a prohibition tag cannot speak for a term that is requested, not controlled" },
   { kind: "adversarial", text: 'Do not "open a pull request" for this change.', screen: { tier: "question", terms: ["pull_request"] }, tag: { action: "pull_request" }, outcome: "needs-input", note: "emphasis quotes after a control phrase are its target, not an example" },
   { kind: "adversarial", text: "Do not: open a pull request.", screen: { tier: "question", terms: ["pull_request"] }, tag: { action: "pull_request" }, outcome: "needs-input", note: "an introductory colon does not sever the control" },
+  { kind: "adversarial", text: 'Please do not ever "open a pull request" for this change.', screen: { tier: "question", terms: ["pull_request"] }, tag: { action: "pull_request" }, outcome: "needs-input", note: "a modifier between the control and its quoted target does not hide the target" },
+  { kind: "contradictory", text: "Implement export. Leave the changes uncommitted.", screen: { tier: "question", terms: ["local"] }, tag: null, outcome: "needs-input", note: "an un- restriction reads as local-only even without a planner tag" },
+  { kind: "contradictory", text: "Implement export and leave all changes unpublished.", screen: { tier: "question", terms: ["local"] }, tag: null, outcome: "needs-input" },
   // feature
   { kind: "feature", text: "Add a PR status badge to the dashboard.", screen: { tier: "assumption", terms: ["pull_request"] }, tag: null, outcome: "ready" },
   { kind: "feature", text: "Display commit SHA in diagnostics.", screen: { tier: "assumption", terms: ["commit"] }, tag: null, outcome: "ready" },
