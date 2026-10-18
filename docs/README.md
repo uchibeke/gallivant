@@ -14,6 +14,7 @@ requirements and checks.
 | --- | --- |
 | Install, configure access and complete a first task | [Getting started](install.md) |
 | Describe work, answer questions, inspect a draft and authorize execution | [Natural-language tasks](tasks.md) |
+| Choose the typed delivery profile, planner route and review a prepared task | [Typed delivery profiles](task-profiles.md) |
 | Write a brief with acceptance criteria, source files and verification commands | [PRD contract](prd.md) |
 | Find commands, monitor progress, message or resume a run | [Commands](commands.md) |
 | Configure repositories, credentials, harnesses and execution limits | [Configuration](config.md) |

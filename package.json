@@ -59,11 +59,12 @@
     "test:openai-agents:preparation:live": "node test/openai-agents-preparation-live.mjs",
     "test:codex-cloud": "node --test test/codex-cloud.test.mjs && node --test --test-name-pattern='codex-cloud|result publication validates|verified publication recovery|failed remote verification|deterministic publication rejection|interrupted verification' test/execution-backends.test.mjs",
     "test:codex-cloud:live": "node test/codex-cloud-live.mjs",
-    "test:task-intake": "node --test test/task-intake.test.mjs",
+    "test:task-intake": "node --test test/task-intake.test.mjs test/task-profile.test.mjs",
+    "contract:intake": "node scripts/task-intake-contract.mjs",
     "test:live-harnesses": "node test/live-harnesses.mjs",
     "test:plugin-package": "node test/plugin-package.mjs",
     "package:plugin": "node bin/package-plugin.mjs",
-    "lint": "node --check bin/gallivant.mjs && node --check bin/package-plugin.mjs && node --check bin/task-delivery-state.mjs && for f in lib/*.mjs lib/*/*.mjs; do node --check \"$f\" || exit 1; done"
+    "lint": "node --check bin/gallivant.mjs && node --check bin/package-plugin.mjs && node --check bin/task-delivery-state.mjs && for f in lib/*.mjs lib/*/*.mjs scripts/*.mjs; do node --check \"$f\" || exit 1; done && node scripts/task-intake-contract.mjs --check"
   },
   "keywords": [
     "claude-code",

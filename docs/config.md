@@ -40,6 +40,7 @@ See [installation](install.md) for the first-run sequence.
 | `harness.openai-agents` | absent | Explicit account, organization, project, model, API credential, hosted environment, network policy and allowance. See [Agents setup](openai-agents.md). |
 | `harness.codex-cloud` | absent | Recognized for configuration/recovery, but new dispatch is unavailable. See [Cloud blocker](codex-cloud.md). |
 | `execution` | bounded defaults | Transport/probe deadlines, progress cadence, concurrency, backoff and event limits. See [execution scheduling](execution.md#scheduling-and-limits). |
+| `intake_model` | absent | The APort-funded planner route for natural-language intake: `{ adapter, model, endpoint, credential_env, budget, timeout_ms }`. The key is read from the named environment variable at call time. Budget ceilings are three calls, 50,000 input and 6,000 output tokens per call and a $0.10 allowance; configuration can lower them only. See [typed delivery profiles](task-profiles.md#configuring-the-model-route). |
 | `repos` | [] | The repositories Gallivant watches, appended by `start` and `register` and read by `up` to recover from GitHub. Each entry is either `"owner/name"` or an object: `{ "repo": "owner/name", "base": "staging", "run_timeout_minutes": 90 }`. Both object keys are optional. See below. |
 
 The default allows 30 rounds as an upper allowance for unattended review. It is not a target or a promise of completion:

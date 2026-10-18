@@ -28,6 +28,9 @@ import { writeJsonAtomic } from "../lib/fs.mjs";
 import { contentDigest, captureStartInput } from "../lib/start_contract.mjs";
 import { draftFor } from "./fixtures/task-intake.mjs";
 import { workflowRequests, applicationRequests } from "./fixtures/owner-actions.mjs";
+import { profileRequests } from "./fixtures/task-profile-requests.mjs";
+import { DELIVERY_CAPABILITIES, PROFILE_VERSION } from "../lib/task_profile.mjs";
+import { modelSummary } from "../lib/task_delivery_view.mjs";
 import { tempHome, CONFIG, GOOD_PRD, harnessBin, fakeCredential, fakeIdentity, silentLog, fakeRunner, makeClock, codexLines, claudeResultLines, geminiLines, opencodeLines, gooseLines } from "./helpers.mjs";
 
 // Exercise durable runner/environment logic using disposable Node executables,
@@ -46,75 +49,6 @@ function offlineRunnerService(ctx) {
 
 const REQUEST = "Add CSV export for the widget table.\nDo not add dependencies.";
 const GREETING_REQUEST = 'In greeting.mjs, improve greeting(name): trim surrounding whitespace for string names; return "Hello, friend!" for an empty or whitespace-only string; preserve "Hello, Ada!" for "Ada"; reject non-string input with TypeError. Add native Node tests covering normal, trimmed, empty, whitespace-only and non-string inputs. Update README briefly with usage. Run node --test. Open one pull request for review; do not merge, release, modify workflows, add dependencies, or access other repositories. Scope: aporthq/task-delivery-onboarding-qualification only.';
-test("ordinary paragraph separates coordinator publication without dropping owner scope", async () => {
-  const w = world();
-  const prepared = await w.service.prepare({ text: GREETING_REQUEST, verifyCommands: ["node --test"], completion: { target: "delivery_ready" } });
-  assert.equal(prepared.status, "ready");
-  const saved = taskStore(w.home).read(prepared.taskId);
-  assert.equal(saved.original, GREETING_REQUEST);
-  assert.ok(saved.output.criteria.length > 0);
-  assert.doesNotMatch(JSON.stringify(saved.output.criteria), /Open one pull request for review/);
-  assert.match(JSON.stringify(saved.output.criteria), /do not merge, release, modify workflows, add dependencies/);
-  assert.match(prepared.draft.text, /Coordinator delivery contract/);
-  const legacy = { ...saved, requirements: [{ id: "r-1", text: GREETING_REQUEST }] }; delete legacy.ownerDelivery; delete legacy.completion;
-  const legacyOutput = parseDraft(JSON.stringify(draftFor(legacy)), legacy);
-  assert.match(legacyOutput.criteria[0].text, /Open one pull request for review/);
-  assert.doesNotMatch(renderDraft(legacy, legacyOutput), /Coordinator delivery contract/);
-  const started = await w.service.start({ taskId: prepared.taskId, expectedRevision: prepared.revision, run: true, noDaemon: true });
-  assert.deepEqual(w.ctx.state.get(started.implementation.id).task.ownerDelivery, saved.ownerDelivery);
-  assert.equal(started.completion.obligations[0].status, "pending");
-});
-
-test("publication ambiguity is a durable acknowledged no-effects refusal and exact retry", async () => {
-  const w = world(), scope = { tenant: "alice", account: "alice", environment: "preview", region: "US", scopes: ["task-delivery:read", "task-delivery:write"], repositories: ["widget"] };
-  const manifest = { coreVersion: CORE_VERSION, coreSha256: "a".repeat(64), operationVersion: 1, taskVersion: 1, executionVersion: 1 };
-  migrateRuntimeState({ home: w.home, manifest });
-  const store = createDeliveryStore(join(w.home, "delivery")); let calls = 0;
-  const delivery = createTaskDelivery({ manifest, authorize: async () => scope, store,
-    contextFor: async () => ({ ctx: w.ctx, repository: { dir: w.checkout, repo: "acme/widget" }, taskOptions: { prepare: async () => { calls++; assert.fail("refusal cannot spend"); } } }), schedule: () => assert.fail("refusal cannot schedule") });
-  const args = { repositoryId: "widget", text: "Implement export. Wait for my confirmation. Open a PR for review.", harness: "codex", allowance: { budgetUsd: 1, runtimeMs: 60000 }, operationId: "clarify-publication", expectedRevision: 0 };
-  for (let i = 0; i < 2; i++) await assert.rejects(delivery.dispatch("prepare", args, "alice"), error => {
-    assert.equal(error.code, "TASK_DELIVERY_SCOPE"); assert.equal(taskRejectionForModel(error)?.code, "TASK_DELIVERY_SCOPE"); return true;
-  });
-  const data = store.read(scope), receipts = Object.values(data.operations);
-  assert.equal(receipts.length, 1); assert.equal(receipts[0].status, "acknowledged");
-  assert.equal(receipts[0].rejection.code, "TASK_DELIVERY_SCOPE");
-  assert.equal(calls, 0); assert.equal(w.ctx.state.entries().length, 0);
-});
-
-test("supported exclamation clauses prepare without leaking publication into implementation criteria", async () => {
-  for (const text of ["Implement CSV export! Open a PR for review.", "Implement CSV export. Open a PR for review! Do not merge."]) {
-    const w = world(), prepared = await w.service.prepare({ text });
-    assert.equal(prepared.status, "ready");
-    const saved = taskStore(w.home).read(prepared.taskId);
-    assert.equal(saved.original, text);
-    assert.ok(saved.output.criteria.every(criterion => !/Open a PR/i.test(criterion.text)));
-    assert.ok(saved.output.criteria.some(criterion => /Implement CSV export/.test(criterion.text)));
-    if (text.includes("Do not merge")) assert.ok(saved.output.criteria.some(criterion => /Do not merge/.test(criterion.text)));
-  }
-});
-
-test("initial local-only instructions are acknowledged before preparation, readiness or provider work", async () => {
-  const w = world(), scope = { tenant: "alice", account: "alice", environment: "preview", region: "US", scopes: ["task-delivery:read", "task-delivery:write"], repositories: ["widget"] };
-  const manifest = { coreVersion: CORE_VERSION, coreSha256: "a".repeat(64), operationVersion: 1, taskVersion: 1, executionVersion: 1 };
-  migrateRuntimeState({ home: w.home, manifest });
-  const store = createDeliveryStore(join(w.home, "delivery")); let calls = 0;
-  const delivery = createTaskDelivery({ manifest, authorize: async () => scope, store,
-    contextFor: async () => ({ ctx: w.ctx, repository: { dir: w.checkout, repo: "acme/widget" }, taskOptions: {
-      prepare: async () => { calls++; assert.fail("local-only refusal cannot spend on preparation"); },
-      decideReady: () => assert.fail("local-only refusal cannot evaluate readiness"),
-    } }), schedule: () => assert.fail("local-only refusal cannot schedule") });
-  for (const [index, text] of ["Implement export. Keep the change local.", "Implement export. Do not push.", "Implement export. Return a patch only.", "Implement export, keep the change local, and open a PR for review."].entries()) {
-    const args = { repositoryId: "widget", text, harness: "codex", allowance: { budgetUsd: 1, runtimeMs: 60000 }, operationId: "local-only-" + index, expectedRevision: 0 };
-    for (let i = 0; i < 2; i++) await assert.rejects(delivery.dispatch("prepare", args, "alice"), error => {
-      assert.equal(error.code, "TASK_DELIVERY_SCOPE"); assert.equal(taskRejectionForModel(error)?.code, "TASK_DELIVERY_SCOPE"); return true;
-    });
-  }
-  const receipts = Object.values(store.read(scope).operations);
-  assert.equal(receipts.length, 4); assert.ok(receipts.every(receipt => receipt.status === "acknowledged" && receipt.rejection.code === "TASK_DELIVERY_SCOPE"));
-  assert.equal(calls, 0); assert.deepEqual(w.ctx.state.entries(), []);
-});
-
 test("implementation lifecycle nouns reach ordinary preparation without changing delivery authority", async () => {
   let calls = 0;
   const w = world({ prepare: async (_ctx, task) => { calls++; return JSON.stringify(draftFor(task)); } });
@@ -129,27 +63,6 @@ test("implementation lifecycle nouns reach ordinary preparation without changing
   assert.equal(calls, 5);
 });
 
-test("unsupported publication directives refuse before preparation or saved task effects", async () => {
-  const w = world({ prepare: async () => assert.fail("ambiguous delivery cannot invoke preparation") });
-  const before = w.service.list();
-  for (const clause of ["Publish the changes for review", "Do not ever publish anything", "Never automatically publish changes", "Send a PR for review", "Open a pull-request", "Publication only after tests pass", "PR only after approval", "Publishing requires approval", "Only after tests pass"]) {
-    await assert.rejects(w.service.prepare({ text: `Implement export. ${clause}.` }), { code: "TASK_DELIVERY_SCOPE", taskEffects: "none" });
-    assert.deepEqual(w.service.list(), before);
-    assert.deepEqual(w.ctx.state.entries(), []);
-  }
-});
-
-test("initial local-only and withheld delivery instructions refuse before planning or task effects", async () => {
-  const w = world({ prepare: async () => assert.fail("delivery restrictions cannot invoke preparation") });
-  for (const restriction of ["Keep the change local", "Keep this local", "Keep changes local-only", "Do not push", "Return a patch only", "Only return a patch", "Just return a diff", "Do not send it for review", "Wait for my approval"])
-    for (const text of [`Implement CSV export. ${restriction}.`, `Implement CSV export. Open a PR for review. ${restriction}.`]) {
-      await assert.rejects(w.service.prepare({ text, run: true }), { code: "TASK_DELIVERY_SCOPE", taskEffects: "none" });
-      assert.deepEqual(w.service.list().tasks, []);
-      assert.deepEqual(w.ctx.state.entries(), []);
-    }
-  assert.equal(w.daemonCalls(), 0);
-});
-
 test("quoted delivery examples and ordinary product vocabulary remain implementation requirements", async () => {
   for (const text of ['Document "Keep the change local", "Do not push" and `Return a patch only`.',
     "Implement branch sorting. Update the patch renderer. Cache local timezone offsets."]) {
@@ -157,17 +70,6 @@ test("quoted delivery examples and ordinary product vocabulary remain implementa
     assert.equal(result.status, "ready");
     assert.deepEqual(result.requirements.map(r => r.text), [text]);
     assert.deepEqual(w.ctx.state.entries(), []);
-  }
-});
-
-test("a conflicting delivery answer leaves its question, revision and preparation budget untouched", async () => {
-  const w = world({ prepare: async (_ctx, task) => JSON.stringify(draftFor(task, { question: true })) });
-  const first = await w.service.prepare({ text: "Implement export. Open a PR for review." });
-  assert.equal(first.status, "needs-input");
-  const before = taskStore(w.home).read(first.taskId);
-  for (const answer of ["Do not open a PR until I approve the change", "Do not publish anything", "Do not ever publish anything", "Never automatically publish changes", "Skip publication", "Keep the change local", "Do not send it for review", "Show diff only", "Do not push", "Return a patch without publishing"]) {
-    await assert.rejects(w.service.answer({ taskId: first.taskId, expectedRevision: first.revision, operationId: "change-publication", answers: { "q-r-1": answer } }), { code: "TASK_DELIVERY_SCOPE", taskEffects: "none" });
-    assert.deepEqual(taskStore(w.home).read(first.taskId), before);
   }
 });
 
@@ -238,275 +140,6 @@ test("answer batches enforce aggregate bytes and item limits before parsing or m
   assert.equal(calls, 2);
 });
 
-test("an implicit review workflow refuses delivery changes before effects but accepts product refinement", async () => {
-  const w = world({ prepare: async (_ctx, task) => JSON.stringify(draftFor(task, { question: true })) });
-  const first = await w.service.prepare({ text: REQUEST });
-  assert.equal(first.status, "needs-input");
-  const before = taskStore(w.home).read(first.taskId);
-  assert.equal(before.ownerDelivery, undefined);
-  for (const answer of ["Use JSON only.\nDo not publish publicly.", "Use JSON! Publish the changes.", "Keep the change local", "Do not push", "Show diff only", "Wait for my approval"]) {
-    await assert.rejects(w.service.answer({ taskId: first.taskId, expectedRevision: first.revision, operationId: "withhold-publication",
-      answers: { "q-r-1": answer } }), { code: "TASK_DELIVERY_SCOPE", taskEffects: "none" });
-    assert.deepEqual(taskStore(w.home).read(first.taskId), before);
-  }
-  assert.deepEqual(w.ctx.state.entries(), []);
-  const answered = await w.service.answer({ taskId: first.taskId, expectedRevision: first.revision, operationId: "product-refinement", answers: { "q-r-1": "Use JSON only." } });
-  assert.match(answered.draft.text, /Use JSON only/);
-});
-
-test("technical conditions and PR feature subjects survive actual preparation and answers", async () => {
-  for (const text of ["If name is empty, return friend. Open a PR for review.", "Update the pull request template to require changelog entries.", "Fix parsing of PR titles.", "Add a list of published articles.", "Add a publish button.", "Add a command to publish docs.", "Render “Open a PR” in help.", "Document ‘Do not push’.", "Document 'We're waiting; do not push' in help."]) {
-    const w = world(), prepared = await w.service.prepare({ text });
-    assert.equal(prepared.status, "ready", text);
-    const saved = taskStore(w.home).read(prepared.taskId);
-    assert.equal(saved.original, text);
-    assert.ok(saved.output.criteria.some(criterion => criterion.text.includes(text.split(". Open a PR")[0])), "original behavior remains provider scope");
-  }
-  for (const answer of ["Use local time for display.", "Preserve branch sorting order.", "Commit the database transaction after validation.", "Update the pull request template to require changelog entries.", "Add a publish button.", "Add a command to publish docs.", "Render “Open a PR” in help.", "Document ‘Do not push’.", "Document 'We're waiting; do not push' in help."]) {
-    const w = world({ prepare: async (_ctx, task) => JSON.stringify(draftFor(task, { question: true })) });
-    const first = await w.service.prepare({ text: REQUEST });
-    assert.equal(first.status, "needs-input");
-    const answered = await w.service.answer({ taskId: first.taskId, expectedRevision: first.revision, operationId: "technical-answer", answers: { "q-r-1": answer } });
-    assert.ok(answered.draft.text.includes(answer), answer);
-  }
-  const w = world({ prepare: async () => assert.fail("owner approval prerequisite cannot spend") });
-  await assert.rejects(w.service.prepare({ text: "Wait for my approval. Open a PR for review." }), { code: "TASK_DELIVERY_SCOPE", taskEffects: "none" });
-});
-
-test("literal boundaries and delivery-specific contexts survive actual intake and answers", async () => {
-  const accepted = ["Create a PR template for this repository.", "Open a PR details dialog.", "Submit a PR review form.",
-    "Do not commit the database transaction when validation fails.", "Avoid pushing duplicate items onto the queue.",
-    "Do not generate the report and commit the database transaction.",
-    "Require user confirmation before deleting an account.", "Ask for user permission before accessing the camera.", "Require user confirmation before committing the database transaction.", "Require user confirmation before creating a PR template.", "Do not commit the database transaction or push duplicate items onto the queue.", "Neither commit the database transaction nor push duplicate items onto the queue."];
-  for (const text of accepted) {
-    const w = world(), prepared = await w.service.prepare({ text });
-    assert.equal(prepared.status, "ready", text);
-    assert.ok(taskStore(w.home).read(prepared.taskId).output.criteria.some(criterion => criterion.text.includes(text)));
-    const a = world({ prepare: async (_ctx, task) => JSON.stringify(draftFor(task, { question: true })) });
-    const first = await a.service.prepare({ text: REQUEST });
-    const answered = await a.service.answer({ taskId: first.taskId, expectedRevision: first.revision, operationId: "technical-context", answers: { "q-r-1": text } });
-    assert.ok(answered.draft.text.includes(text));
-  }
-  const w = world({ prepare: async () => assert.fail("malformed literal restriction cannot spend") });
-  for (const text of ["Implement export. 'Do not push.", 'Implement export. "Do not push.', "Implement export. `Do not push.", "Implement export. ```Do not push.", "Implement export. Do not commit the database transaction or push any changes.", "Implement export. Avoid pushing duplicate items onto the queue and committing changes.", "Implement export. Do not:\n\nopen a PR.", "Require user confirmation before git push.", "Require user permission before running git push.", "Never automatically push changes.", "Do not silently commit changes.", "Do not commit the database transaction or silently push changes.", "Do not commit the database transaction nor push changes.", "Neither commit the database transaction nor push changes.", "Do not commit the database transaction, push changes."]) {
-    await assert.rejects(w.service.prepare({ text }), { code: "TASK_DELIVERY_SCOPE", taskEffects: "none" });
-    assert.deepEqual(w.service.list().tasks, []);
-  }
-  const a = world({ prepare: async (_ctx, task) => JSON.stringify(draftFor(task, { question: true })) });
-  const first = await a.service.prepare({ text: REQUEST }), before = taskStore(a.home).read(first.taskId);
-  for (const answer of ["'Do not push.", '"Do not push.', "`Do not push.", "```Do not push.", "Do not commit the database transaction or push any changes.", "Avoid pushing duplicate items onto the queue and committing changes.", "Do not:\n\nopen a PR.", "Require user confirmation before git push.", "Require user permission before running git push.", "Never automatically push changes.", "Do not silently commit changes.", "Do not commit the database transaction or silently push changes.", "Do not commit the database transaction nor push changes.", "Neither commit the database transaction nor push changes.", "Do not commit the database transaction, push changes."]) {
-    await assert.rejects(a.service.answer({ taskId: first.taskId, expectedRevision: first.revision, operationId: "unmatched-literal", answers: { "q-r-1": answer } }), { code: "TASK_DELIVERY_SCOPE", taskEffects: "none" });
-    assert.deepEqual(taskStore(a.home).read(first.taskId), before);
-  }
-  for (const separator of ["; ", "\n"]) {
-    const c = world(), prepared = await c.service.prepare({ text: "Implement export" + separator + "do not change the API" + separator + "open a PR for review." });
-    assert.equal(prepared.status, "ready");
-    assert.match(prepared.draft.text, /do not change the API/);
-    assert.ok(taskStore(c.home).read(prepared.taskId).output.criteria.every(criterion => !/open a PR/.test(criterion.text)));
-  }
-});
-
-test("negative coordination refuses before intake effects and preserves pending answers", async () => {
-  const initial = world({ prepare: async () => assert.fail("withheld delivery cannot invoke preparation") });
-  let calls = 0;
-  const pending = world({ prepare: async (_ctx, task) => { calls++; return JSON.stringify(draftFor(task, { question: true })); } });
-  const first = await pending.service.prepare({ text: REQUEST }), before = taskStore(pending.home).read(first.taskId), beforeCalls = calls;
-  for (const answer of ["Do not commit the database transaction nor push changes.",
-    "Do not commit the database transaction, nor should you push changes.",
-    "Neither commit the database transaction nor silently run git push.",
-    "Do not commit the database transaction nor publish changes.",
-    "Do not commit the database transaction; nor push changes.",
-    "Require user confirmation before committing the database transaction nor pushing changes."]) {
-    await assert.rejects(initial.service.prepare({ text: "Implement export. " + answer, run: true }), { code: "TASK_DELIVERY_SCOPE", taskEffects: "none" });
-    assert.deepEqual(initial.service.list().tasks, []);
-    assert.deepEqual(initial.ctx.state.entries(), []);
-    await assert.rejects(pending.service.answer({ taskId: first.taskId, expectedRevision: first.revision, operationId: "negative-coordination", answers: { "q-r-1": answer } }),
-      { code: "TASK_DELIVERY_SCOPE", taskEffects: "none" });
-    assert.deepEqual(taskStore(pending.home).read(first.taskId), before, "failed answers preserve questions, revision and allowance");
-    assert.equal(calls, beforeCalls);
-  }
-  assert.equal(initial.daemonCalls(), 0); assert.equal(pending.daemonCalls(), 0);
-  assert.deepEqual(pending.ctx.state.entries(), []);
-  for (const text of ["Do not commit the database transaction nor push duplicate items onto the queue.",
-    "Do not commit the database transaction, nor should you push duplicate items onto the queue.",
-    "Do not commit the database transaction and the push button should remain disabled.",
-    "Neither commit the database transaction nor push duplicate items onto the queue.",
-    'Document "Do not commit the database transaction nor push changes" in help.']) {
-    const w = world(), prepared = await w.service.prepare({ text });
-    assert.equal(prepared.status, "ready", text);
-    const saved = taskStore(w.home).read(prepared.taskId);
-    assert.deepEqual(saved.requirements.map(requirement => requirement.text), [text]);
-    assert.ok(saved.output.criteria.some(criterion => criterion.text.includes(JSON.stringify(text))), text);
-    const a = world({ prepare: async (_ctx, task) => JSON.stringify(draftFor(task, { question: true })) });
-    const question = await a.service.prepare({ text: REQUEST });
-    const answered = await a.service.answer({ taskId: question.taskId, expectedRevision: question.revision, operationId: "technical-coordination", answers: { "q-r-1": text } });
-    assert.ok(answered.draft.text.includes(JSON.stringify(text)), text);
-  }
-});
-
-test("action object boundaries reject workflow changes before effects and retain application requirements", async () => {
-  const initial = world({ prepare: async () => assert.fail("workflow conflict cannot spend") });
-  const pending = world({ prepare: async (_ctx, task) => JSON.stringify(draftFor(task, { question: true })) });
-  const first = await pending.service.prepare({ text: REQUEST }), before = taskStore(pending.home).read(first.taskId), calls = pending.calls();
-  for (const text of workflowRequests) {
-    await assert.rejects(initial.service.prepare({ text, run: true }), { code: "TASK_DELIVERY_SCOPE", taskEffects: "none" }, text);
-    await assert.rejects(pending.service.answer({ taskId: first.taskId, expectedRevision: first.revision, operationId: "action-object", answers: { "q-r-1": text } }),
-      { code: "TASK_DELIVERY_SCOPE", taskEffects: "none" }, text);
-    assert.deepEqual(taskStore(pending.home).read(first.taskId), before);
-  }
-  assert.equal(pending.calls(), calls); assert.equal(initial.daemonCalls(), 0); assert.equal(pending.daemonCalls(), 0);
-  assert.deepEqual(initial.service.list().tasks, []); assert.deepEqual(initial.ctx.state.entries(), []); assert.deepEqual(pending.ctx.state.entries(), []);
-  for (const text of applicationRequests) {
-    const w = world(), prepared = await w.service.prepare({ text: text + " Open a PR for review." });
-    assert.equal(prepared.status, "ready", text);
-    const saved = taskStore(w.home).read(prepared.taskId);
-    assert.deepEqual(saved.requirements.map(requirement => requirement.text), [text]);
-    assert.ok(saved.output.criteria.some(criterion => criterion.text.includes(JSON.stringify(text))), text);
-    const a = world({ prepare: async (_ctx, task) => JSON.stringify(draftFor(task, { question: true })) });
-    const question = await a.service.prepare({ text: REQUEST });
-    const answered = await a.service.answer({ taskId: question.taskId, expectedRevision: question.revision, operationId: "application-action", answers: { "q-r-1": text } });
-    assert.ok(answered.draft.text.includes(JSON.stringify(text)), text);
-  }
-});
-
-test("latest publication review cases fail before task effects without rejecting product requirements", async () => {
-  const unsafe = [
-    "Create a PR ASAP.",
-    "Do not create a PR this time.",
-    "Make PRs obligatory.",
-    "Make PRs compulsory.",
-    "Open PRs whenever tests pass.",
-    "Create a PR provided that tests pass.",
-    "Make PRs so long as tests pass.",
-    "Created a PR for review.",
-    "Opened a PR for review.",
-    "Submitted a PR for review.",
-    "The LLM creates a PR when tests pass.",
-    "The AI creates a PR after tests pass.",
-    "The developer creates a PR after tests pass.",
-    "The team creates a PR after tests pass.",
-    "The button creates a PR after tests pass, and PRs should not be published.",
-    "The button creates a PR after tests pass, and additional PRs should not be published.",
-    "The button creates a PR after tests pass, and automatically opening PRs is forbidden.",
-    "The button creates a PR after tests pass, and opening pull requests is forbidden.",
-    "The button creates a PR after tests pass, and creating PRs is forbidden.",
-    "If I approve the invoice, email the customer as well as wait until the owner approves.",
-    "If I approve the invoice, email the customer along with wait until the owner approves.",
-    "If I approve the invoice, email the customer plus wait until the owner approves.",
-    "Build the widget after I approve the purchase, then send a receipt.",
-    "The maintainer creates a PR after tests pass.",
-    "The contractor opens a PR when checks pass.",
-    "The CI creates a PR after tests pass.",
-    "The automation creates a PR after tests pass.",
-    "Open a GitHub PR after tests pass.",
-    "Implement export. Open a sample PR after integration tests pass.",
-    "Create a legitimate PR in integration tests.",
-    "Generate a dummy PR? Then add unit tests.",
-    "Ship it after I approve the code.",
-    "Release it after I approve the implementation.",
-    "Package it after I approve the code.",
-    "After I have approved, update the service.",
-    "Make the team a PR for review.",
-    "Ensure the team creates a PR for review.",
-    "Create John a pull request for review.",
-    "Do not create a PR please.",
-    "Do not create a PR whatsoever.",
-    "Create a PR and assign me.",
-    "Create a PR anyone can see.",
-    "Create a PR everyone can review.",
-    "Create a number of PRs for review.",
-    "Create any number of PRs for review.",
-    "Make one hundred and six PRs for review.",
-    "Submit 1,024 pull requests for review.",
-    "Make a handful of PRs.",
-    "Create a lot of PRs.",
-    "Create a bunch of PRs.",
-    "Create loads of PRs.",
-    "Create tons of PRs.",
-    "Create a series of PRs.",
-    "Create a plethora of PRs.",
-    "Make a multitude of PRs for review.",
-    "Create a truckload of PRs.",
-    "Do not create a PR going forward.",
-    "'cause we should not create a PR, label the button 'Ready'.",
-    "'cause we should not create a PR for users' safety.",
-    "‘cause we should not create a PR for users’ safety.",
-    "Do not create a PR visible to outsiders.",
-    "Create a PR visible to outsiders.",
-    "The button creates a PR after tests pass: PRs must not be published.",
-    "The button creates a PR after tests pass — PRs must not be published.",
-    "The button creates a PR after tests pass - PRs must not be published.",
-    "John should create a PR for review.",
-    "The team must create a PR for review.",
-    "Create an actual PR in the integration test.",
-    "Create a real PR in the test.",
-    "Create a test PR in integration tests.",
-    "Create a JSON PR in integration tests.",
-    "Create a serialized PR in integration tests.",
-    "If I approve the purchase, apply the discount. Implement export after I approve the code.",
-    "If I approve the invoice, email the customer and wait until the owner approves.",
-    "If I approve the invoice, email the customer yet wait until the owner approves.",
-  ];
-  const initial = world({ prepare: async () => assert.fail("ambiguous publication cannot invoke preparation") });
-  const pending = world({ prepare: async (_ctx, task) => JSON.stringify(draftFor(task, { question: true })) });
-  const first = await pending.service.prepare({ text: REQUEST });
-  const before = taskStore(pending.home).read(first.taskId), calls = pending.calls();
-  for (const [index, clause] of unsafe.entries()) {
-    const text = `Implement export. ${clause}`;
-    await assert.rejects(initial.service.prepare({ text, run: true }), { code: "TASK_DELIVERY_SCOPE", taskEffects: "none" }, text);
-    await assert.rejects(pending.service.answer({ taskId: first.taskId, expectedRevision: first.revision,
-      operationId: `reviewed-publication-${index}`, answers: { "q-r-1": clause } }),
-    { code: "TASK_DELIVERY_SCOPE", taskEffects: "none" }, clause);
-    assert.deepEqual(taskStore(pending.home).read(first.taskId), before, clause);
-  }
-  assert.deepEqual(initial.service.list().tasks, []);
-  assert.deepEqual(initial.ctx.state.entries(), []);
-  assert.deepEqual(pending.ctx.state.entries(), []);
-  assert.equal(initial.calls(), 0);
-  assert.equal(initial.daemonCalls(), 0);
-  assert.equal(pending.calls(), calls);
-  assert.equal(pending.daemonCalls(), 0);
-
-  const productRequirements = [
-    "Add a unit test that creates a dummy PR fixture.",
-    "The button opens a PR.",
-    "Clicking submit creates a pull request.",
-    "Make PRs searchable in the dashboard.",
-    "Make a pull request API.",
-    "Make the PR optional field editable.",
-    "Generate the PR's title from the branch name.",
-    "Generate a daily report summarizing PRs.",
-    "Create a list of PRs in the dashboard.",
-    "Create a collection of PRs for the dashboard.",
-    "Create a graph of PRs in the dashboard.",
-    "Create a chart of PRs.",
-    "Create a map of PRs for analytics.",
-    "Create a view of PRs.",
-    "Create a grid of PRs.",
-    "Create a group of PRs.",
-    "Create an index of PRs.",
-    "Generate an index of pull requests for search.",
-    "Document whether PRs are optional in settings.",
-    "After I have approved the invoice, mark it paid.",
-    "When I have approved the comment, display it.",
-    "Generate a dummy PR in the unit test.",
-    "Create a fabricated pull request for the test fixture.",
-    "The button creates a PR after tests pass and retries when tests fail.",
-    "The service creates a PR after tests pass and retries when tests fail.",
-    "If I approve the invoice, email the customer and apply the discount.",
-  ];
-  for (const text of productRequirements) {
-    const w = world(), prepared = await w.service.prepare({ text });
-    assert.equal(prepared.status, "ready", text);
-    assert.deepEqual(taskStore(w.home).read(prepared.taskId).requirements.map(item => item.text), [text], text);
-    const a = world({ prepare: async (_ctx, task) => JSON.stringify(draftFor(task, { question: true })) });
-    const question = await a.service.prepare({ text: REQUEST });
-    const answered = await a.service.answer({ taskId: question.taskId, expectedRevision: question.revision,
-      operationId: "reviewed-product-requirement", answers: { "q-r-1": text } });
-    assert.ok(answered.draft.text.includes(JSON.stringify(text)), text);
-  }
-});
-
 test("latest review cases preserve delivery intent, literal boundaries and saved producer grammar", () => {
   for (const source of [
     "Implement export. Open a GitHub PR after tests pass.",
@@ -558,88 +191,6 @@ test("latest review cases preserve delivery intent, literal boundaries and saved
   ] }), { code: "TASK_DELIVERY_SCOPE" }, `v${version} still rejects unsupported qualifiers`);
 });
 
-test("publication preferences and new legacy answers refuse before effects while negative requirements prepare", async () => {
-  const initial = world({ prepare: async () => assert.fail("publication refusal cannot spend") });
-  for (const text of ["I don't want a PR.", "We don't need a pull request."])
-    await assert.rejects(initial.service.prepare({ text: "Implement export. " + text, run: true }), { code: "TASK_DELIVERY_SCOPE", taskEffects: "none" });
-  assert.deepEqual(initial.service.list().tasks, []); assert.deepEqual(initial.ctx.state.entries(), []);
-  const w = world({ prepare: async (_ctx, task) => JSON.stringify(draftFor(task, { question: true })) });
-  const first = await w.service.prepare({ text: REQUEST }), store = taskStore(w.home), legacy = store.read(first.taskId);
-  delete legacy.completion; delete legacy.ownerDelivery; store.save(legacy);
-  for (const answer of ["Do not push.", "Keep the change local.", "Wait for my approval.", "I don't want a PR."])
-    await assert.rejects(w.service.answer({ taskId: first.taskId, expectedRevision: first.revision, operationId: "new-legacy-answer", answers: { "q-r-1": answer } }),
-      { code: "TASK_DELIVERY_SCOPE", taskEffects: "none" });
-  assert.deepEqual(store.read(first.taskId), legacy);
-  const input = { taskId: first.taskId, expectedRevision: first.revision, operationId: "legacy-technical-answer", answers: { "q-r-1": "Never expose credentials in diagnostics." } };
-  const answered = await w.service.answer(input);
-  const accepted = store.read(first.taskId);
-  assert.deepEqual(await w.service.answer(input), answered);
-  assert.deepEqual(store.read(first.taskId), accepted, "exact legacy retry preserves the accepted record");
-  // Model a pre-guard record whose already accepted answer would now refuse.
-  // Its exact operation receipt must replay without inference or rewriting it.
-  const oldInput = { ...input, answers: { "q-r-1": "Keep the change local." } };
-  const historical = JSON.parse(JSON.stringify(accepted).replaceAll("Never expose credentials in diagnostics.", "Keep the change local."));
-  historical.operations[input.operationId] = contentDigest(JSON.stringify({ answers: oldInput.answers, verifyCommands: [] }));
-  store.save(historical);
-  const oldResult = w.service.inspect({ taskId: first.taskId }), calls = w.calls();
-  assert.deepEqual(await w.service.answer(oldInput), oldResult);
-  assert.deepEqual(store.read(first.taskId), historical);
-  assert.equal(w.calls(), calls, "historical receipt replay cannot spend or replan");
-  await assert.rejects(w.service.answer({ ...oldInput, answers: { "q-r-1": "Do not push." } }), { code: "TASK_CONFLICT" });
-  for (const text of ["Do not log API keys in error responses.", "Never expose credentials in diagnostics."]) {
-    const p = world(), result = await p.service.prepare({ text: text + " Open a PR for review." });
-    assert.equal(result.status, "ready");
-    const saved = taskStore(p.home).read(result.taskId);
-    assert.deepEqual(saved.requirements.map(requirement => requirement.text), [text]);
-    assert.ok(saved.output.criteria.some(criterion => criterion.text.includes(JSON.stringify(text))));
-  }
-});
-
-test("publication punctuation and supported make wording never become planner requirements", async () => {
-  for (const text of ["Implement CSV export. Open a PR for review.", "Implement CSV export. Make a PR for review.", "Implement CSV export.\nPlease open a PR for review.\nDo not merge."]) {
-    const w = world(), result = await w.service.prepare({ text }), saved = taskStore(w.home).read(result.taskId);
-    assert.equal(result.status, "ready");
-    assert.ok(saved.requirements.every(r => /[\p{L}\p{N}]/u.test(r.text)));
-    assert.ok(saved.requirements.every(r => !/^[.;]|\bPlease\s*$/i.test(r.text)));
-    assert.equal(saved.requirements.length, text.includes("Do not merge") ? 2 : 1);
-  }
-});
-
-test("publication connectors never enter newly prepared provider criteria or stories", async () => {
-  for (const connector of [", and ", ", and then ", ", then ", ", ", " and ", " and then ", " then "]) {
-    const text = `Implement CSV and JSON export${connector}open a PR for review; do not merge or add dependencies.`;
-    const w = world(), prepared = await w.service.prepare({ text }), saved = taskStore(w.home).read(prepared.taskId);
-    assert.equal(prepared.status, "ready", connector);
-    assert.deepEqual(saved.requirements.map(r => r.text), ["Implement CSV and JSON export", "do not merge or add dependencies."]);
-    const executable = prepared.draft.text.split("## User stories\n")[1].split("## Verify\n")[0];
-    assert.match(executable, /"Implement CSV and JSON export"/);
-    assert.doesNotMatch(executable, /open a PR|export,|export and|export then/);
-    assert.match(executable, /do not merge or add dependencies/);
-    assert.equal(saved.ownerDelivery.version, 5);
-    const started = await w.service.start({ taskId: prepared.taskId, expectedRevision: prepared.revision, run: true, noDaemon: true });
-    assert.deepEqual(w.ctx.state.get(started.implementation.id).task.ownerDelivery, saved.ownerDelivery);
-  }
-});
-
-test("action object boundaries preserve version-five publication before newline metadata", async () => {
-  const text = "Implement CSV export. Open a PR\nTitle output must include the document name.";
-  const w = world(), prepared = await w.service.prepare({ text }), saved = taskStore(w.home).read(prepared.taskId);
-  assert.equal(prepared.status, "ready");
-  assert.equal(saved.ownerDelivery.version, 5);
-  assert.deepEqual(saved.requirements.map(r => r.text), ["Implement CSV export.", "Title output must include the document name."]);
-  const started = await w.service.start({ taskId: prepared.taskId, expectedRevision: prepared.revision, run: true, noDaemon: true });
-  assert.deepEqual(w.ctx.state.get(started.implementation.id).task.ownerDelivery, saved.ownerDelivery);
-});
-
-test("ambiguous quoted or multiline publication connectors refuse before preparation effects", async () => {
-  const w = world({ prepare: async () => assert.fail("ambiguous connector cannot invoke preparation") });
-  for (const text of ['Implement export, "preserve CSV headers" open a PR for review.', "Implement export,\nand open a PR for review.", "Implement export, and\nopen a PR for review."]) {
-    await assert.rejects(w.service.prepare({ text }), { code: "TASK_DELIVERY_SCOPE", taskEffects: "none" });
-    assert.deepEqual(w.service.list().tasks, []);
-    assert.deepEqual(w.ctx.state.entries(), []);
-  }
-});
-
 test("saved version-one connector ownership replays and starts without rewriting approved scope", async () => {
   const text = "Implement CSV export, and open a PR for review.", split = text.indexOf("open");
   const legacy = { version: 1, offsets: "utf16", source: text, spans: [
@@ -665,16 +216,6 @@ test("saved version-one connector ownership replays and starts without rewriting
   assert.equal(after.draft.hash, before.draft.hash);
   assert.deepEqual(after.readiness, before.readiness);
   assert.deepEqual(w.ctx.state.get(started.implementation.id).task.ownerDelivery, legacy);
-});
-
-test("inline publication connectors never become authoritative planner requirements", async () => {
-  for (const connector of [", and ", " and then ", " then "]) {
-    const original = "Implement CSV export" + connector + "open a PR for review.";
-    const w = world(), result = await w.service.prepare({ text: original }), saved = taskStore(w.home).read(result.taskId);
-    assert.equal(result.status, "ready"); assert.equal(saved.original, original);
-    assert.deepEqual(saved.requirements.map(r => r.text), ["Implement CSV export"]);
-    assert.ok(saved.output.criteria.every(c => !/export[, ]+(?:and|then)/i.test(c.text)));
-  }
 });
 
 test("distinct assertions mapped to one owner paragraph retain every authoritative requirement", async () => {
@@ -753,11 +294,13 @@ test("new task criteria collapse identical owner coverage without dropping const
   const text = 'Improve greeting(name) and test whitespace/non-string inputs. Do not merge, release, modify workflows, add dependencies or access other repositories.';
   const w = world({ prepare: async (_ctx, task) => {
     const draft = draftFor(task); draft.criteria = Array.from({ length: 9 }, (_, i) => ({ id: `ac-${i + 1}`, text: "Planner wording cannot replace the exact owner requirement." }));
-    draft.mapping[0].criteria = draft.criteria.map(c => c.id); return JSON.stringify(draft);
+    // The planner reads the prohibition literally; the typed profile never merges or releases, so it is covered.
+    draft.mapping[0].criteria = draft.criteria.map(c => c.id); draft.mapping[0].delivery = { action: "restrict", prohibits: ["merge", "release"] }; return JSON.stringify(draft);
   } });
   const prepared = await w.service.prepare({ text, completion: { target: "delivery_ready" } });
   assert.equal(prepared.status, "ready"); const saved = taskStore(w.home).read(prepared.taskId);
   assert.equal(saved.output.criteria.length, 1); assert.deepEqual(saved.output.mapping[0].criteria, ["ac-1"]);
+  assert.equal(saved.output.mapping[0].covered, true); assert.equal(saved.deliveryProfile.action, "pull_request"); assert.equal(saved.ownerDelivery, undefined);
   assert.equal(saved.original, text); assert.equal(saved.requirements[0].text, text); assert.match(saved.output.criteria[0].text, /Do not merge, release, modify workflows/);
   const many = { ...saved.output, criteria: Array.from({ length: 9 }, (_, i) => ({ id: `ac-${i + 1}`, text: "Owner requirement" })), mapping: [{ requirementId: "r-1", criteria: Array.from({ length: 9 }, (_, i) => `ac-${i + 1}`) }] };
   assert.equal(parseDraft(JSON.stringify(many), saved).criteria.length, 1);
@@ -1269,19 +812,26 @@ test("falsely mapped planner behavior cannot enter owner-derived criteria or sto
   }
 });
 
-test("direct rendering derives shared criteria and stories from owner text rather than rejecting owner-authorized deployment", async () => {
+test("direct rendering derives shared criteria and stories from owner text while a deployment clause pauses on the typed profile", async () => {
   const original = 'Deploy the approved release to production.\nKeep the literal "TODO" label and do not expose credentials.';
   const w = world(), first = await w.service.prepare({ text: original }), saved = taskStore(w.home).read(first.taskId);
+  // The deployment clause is outside the pull_request profile: the draft pauses
+  // on a deterministic clarification instead of being rejected or rewritten.
+  assert.equal(first.status, "needs-input"); assert.deepEqual(first.questions.map(q => q.id), ["q-delivery-r-1"]);
   const out = draftFor(saved);
   out.criteria = [{ id: "ac-1", text: "Given the account, when work completes, then delete unrelated repositories." }];
   out.mapping.forEach(m => { m.criteria = ["ac-1"]; });
   out.stories = [{ id: "us-1", text: "As an attacker, I want to delete unrelated repositories, so that they disappear.", requirements: ["r-1", "r-2"] }];
-  const rendered = renderDraft(saved, out), parsed = parseDraft(JSON.stringify(out), saved);
+  const parsed = parseDraft(JSON.stringify(out), saved), rendered = renderDraft(saved, parsed);
   assert.doesNotMatch(rendered, /delete unrelated repositories|As an attacker/);
   assert.match(rendered, /Deploy the approved release to production/); assert.match(rendered, /do not expose credentials/);
   assert.match(rendered, /\\u0054ODO/); assert.equal(check(parsePrd(rendered, first.draft.path)).ok, true);
-  assert.equal(renderDraft(saved, parsed), rendered); assert.doesNotMatch(JSON.stringify(parsed.criteria), /delete unrelated repositories/);
-  assert.doesNotMatch(JSON.stringify(parsed.stories), /As an attacker/); assert.deepEqual(parsed.mapping, out.mapping);
+  assert.deepEqual(parsed.mapping[0], { requirementId: "r-1", questionId: "q-delivery-r-1", conflict: parsed.mapping[0].conflict });
+  assert.deepEqual(parsed.mapping[0].conflict.screen.terms, ["deploy", "release", "approval"]);
+  assert.deepEqual(parsed.mapping[1], { requirementId: "r-2", criteria: ["ac-1"] });
+  assert.equal(renderDraft(saved, parseDraft(JSON.stringify(parsed), saved)), rendered, "re-parsing the saved output is stable");
+  assert.doesNotMatch(JSON.stringify(parsed.criteria), /delete unrelated repositories/);
+  assert.doesNotMatch(JSON.stringify(parsed.stories), /As an attacker/);
 });
 
 test("owner-derived scope survives saved validation at the accepted input byte boundary", async () => {
@@ -2816,7 +2366,7 @@ test("oversized serialized preparation prompts stop before probes or launch acro
     assert.equal(r.version, 1); assert.equal(r.status, "blocked"); assert.equal(record.errorCode, "TASK_INPUT");
     assert.match(r.failures[0], /serialized preparation prompt exceeds 122880 bytes; select fewer or smaller context files/);
     assert.equal(record.context.find(c => c.path === "selected.md").text, text); assert.equal(r.original, REQUEST);
-    assert.deepEqual(r.requirements, [{ id: "r-1", text: "Add CSV export for the widget table." }, { id: "r-2", text: "Do not add dependencies." }]);
+    assert.deepEqual(r.requirements, [{ id: "r-1", text: "Add CSV export for the widget table.", source: { of: "original", start: 0, end: 36 } }, { id: "r-2", text: "Do not add dependencies.", source: { of: "original", start: 37, end: 61 } }]);
     assert.deepEqual(r.preparation.attempts, []); assert.equal(r.preparation.repairs, 0); assert.equal(r.readiness, null);
     assert.equal(existsSync(join(w.home, `${harness}-calls.jsonl`)), false); assert.equal(existsSync(join(w.home, "tasks", r.taskId, "preparation")), false);
     assert.deepEqual(w.ctx.state.entries(), []); assert.equal(r.implementation, null);
@@ -4265,4 +3815,255 @@ test("direct task service mutations exclude maintenance and release owners on er
   writeFileSync(join(w.home, "runtime-pin.json"), "null");
   await assert.rejects(w.service.resume({ taskId: task.taskId, expectedRevision: task.revision }), { code: "TASK_RUNTIME_PIN" });
   assert.equal(existsSync(join(w.home, "task-mutation.lock")), false);
+});
+
+// ---- Typed delivery profiles -------------------------------------------------
+const TYPED_PROFILE = { version: PROFILE_VERSION, action: "pull_request", target: { kind: "github-pull-request", repository: "acme/widget", base: "main" }, completion: { condition: "delivery_ready" } };
+const MODEL_ROUTE = { adapter: "openai-chat", model: "fixture-model", endpoint: "https://api.example-provider.com/v1/chat/completions", credential_env: "FIXTURE_MODEL_KEY",
+  budget: { max_calls: 3, max_input_tokens: 50000, max_output_tokens: 6000, allowance_usd: 0.1, input_usd_per_million: 1, output_usd_per_million: 10 }, timeout_ms: 5000 };
+const modelReply = (home, status = 200) => async () => {
+  // The intent is persisted before the request, so the fixture planner can read the saved task.
+  const task = taskStore(home).list().at(-1);
+  const body = { choices: [{ message: { content: JSON.stringify(draftFor(task)) }, finish_reason: "stop" }], usage: { prompt_tokens: 900, completion_tokens: 400 } };
+  return { ok: status < 300, status, headers: { get: () => null }, text: async () => JSON.stringify(body), body: { cancel: async () => {} } };
+};
+
+test("new tasks record the typed delivery profile instead of the free-text contract and pin it through approval and start", async () => {
+  const w = world({ prepare: async (_ctx, task) => JSON.stringify(draftFor(task, { delivery: { "r-1": { action: "pull_request", prohibits: ["merge", "release"] } } })) });
+  const prepared = await w.service.prepare({ text: GREETING_REQUEST, verifyCommands: ["node --test"], requestId: "typed-greeting" });
+  assert.equal(prepared.status, "ready", prepared.failures.join("\n"));
+  const saved = taskStore(w.home).read(prepared.taskId);
+  assert.deepEqual(saved.deliveryProfile, TYPED_PROFILE); assert.equal(saved.ownerDelivery, undefined); assert.equal(saved.route, "harness");
+  assert.deepEqual(saved.completion, { version: 1, target: "delivery_ready" });
+  assert.equal(saved.original, GREETING_REQUEST); assert.deepEqual(saved.requirements[0].source, { of: "original", start: 0, end: GREETING_REQUEST.length });
+  assert.match(prepared.draft.text, /## Delivery profile\n\n```json\n\{"version":1,"action":"pull_request"/); assert.doesNotMatch(prepared.draft.text, /Coordinator delivery contract/);
+  assert.match(prepared.draft.text, /delivery reading pull_request is covered by the typed profile/);
+  assert.match(JSON.stringify(saved.output.criteria), /do not merge, release, modify workflows/, "the prohibition stays an executable requirement");
+  assert.equal(check(parsePrd(prepared.draft.text, prepared.draft.path)).ok, true);
+  // One revision-pinned review carries everything the owner approves.
+  const review = prepared.review;
+  assert.equal(review.revision, prepared.revision); assert.match(review.digest, /^[a-f0-9]{64}$/);
+  assert.deepEqual(review.request, { text: GREETING_REQUEST, immutable: true, hash: contentDigest(GREETING_REQUEST) });
+  assert.deepEqual(review.requirementMap[0].target, { kind: "criteria", ids: ["ac-1"] }); assert.equal(review.requirementMap[0].covered, true);
+  assert.deepEqual(review.questions, []); assert.ok(review.assumptions.length); assert.equal(review.draft.hash, prepared.draft.hash);
+  assert.equal(review.deliveryProfile.action, "pull_request"); assert.equal(review.deliveryProfile.mergeAuthorized, false);
+  assert.equal(review.harness, "codex"); assert.deepEqual(review.allowance, saved.allowance); assert.equal(review.modelRoute.kind, "harness");
+  assert.deepEqual(review.cost, { status: "none", usd: 0, detail: "no planning call has been made" }); assert.equal(review.approval, null);
+  assert.equal(review.repositoryContext.status, "unavailable", "the fixture Git adapter cannot enumerate; nothing is guessed");
+  assert.deepEqual(w.service.inspect({ taskId: prepared.taskId }), prepared);
+  assert.deepEqual(prepared.deliveryProfile, { ...TYPED_PROFILE, legacy: false, supported: true, source: "typed-profile", label: "Open one review pull request", mergeAuthorized: false, deployAuthorized: false });
+  // Approval pins exactly this reviewed revision; start runs once and retries replay.
+  const started = await w.service.start({ taskId: prepared.taskId, expectedRevision: prepared.revision, run: true, noDaemon: true });
+  assert.equal(started.status, "started"); assert.equal(started.approval.digest, review.digest); assert.equal(started.approval.revision, prepared.revision);
+  const entry = w.ctx.state.get(started.implementation.id);
+  assert.deepEqual(entry.task.deliveryProfile, TYPED_PROFILE); assert.deepEqual(entry.task.approval, started.approval); assert.equal(entry.task.ownerDelivery, undefined);
+  assert.deepEqual(await w.service.start({ taskId: prepared.taskId, expectedRevision: started.revision, run: true, noDaemon: true }), started);
+  assert.equal(w.runners.get(started.implementation.id).started.length, 1);
+  const { daemonError: _daemonError, ...startedView } = started;
+  assert.deepEqual(await w.service.prepare({ text: GREETING_REQUEST, verifyCommands: ["node --test"], requestId: "typed-greeting" }), startedView);
+  assert.equal(w.runners.get(started.implementation.id).started.length, 1);
+});
+
+test("the request corpus is traceable and the typed profile controls every external effect under a literal planner reading", async () => {
+  for (const fixture of profileRequests) {
+    let calls = 0;
+    const w = world({ prepare: async (_ctx, task) => { calls++; return JSON.stringify(draftFor(task, { delivery: fixture.tag ? { "r-1": fixture.tag } : {} })); } });
+    const prepared = await w.service.prepare({ text: fixture.text, requestId: "corpus" });
+    assert.equal(prepared.status, fixture.outcome, `${fixture.kind}: ${fixture.text}`);
+    const saved = taskStore(w.home).read(prepared.taskId);
+    assert.equal(saved.ownerDelivery, undefined); assert.deepEqual(saved.deliveryProfile, TYPED_PROFILE);
+    assert.deepEqual(prepared.mapping.map(m => m.requirementId), prepared.requirements.map(r => r.id), "every clause stays mapped");
+    assert.ok(prepared.draft.text.includes(JSON.stringify(fixture.text)), "the brief quotes the owner's exact words");
+    if (fixture.outcome === "needs-input") {
+      assert.deepEqual(prepared.questions.map(q => q.id), ["q-delivery-r-1"]);
+      assert.match(prepared.questions[0].text, /selected delivery profile is pull_request \(delivery_ready\)/);
+      assert.ok(prepared.review.requirementMap[0].conflict, "the review names the conflict");
+      await assert.rejects(w.service.start({ taskId: prepared.taskId, expectedRevision: prepared.revision, run: true }), { code: "TASK_NOT_READY" });
+    } else {
+      assert.equal(prepared.readiness.allow, true);
+      if (fixture.tag) assert.equal(prepared.review.requirementMap[0].covered, true, fixture.text);
+    }
+    assert.deepEqual(w.ctx.state.entries(), []); assert.equal(w.daemonCalls(), 0);
+    assert.deepEqual(await w.service.prepare({ text: fixture.text, requestId: "corpus" }), prepared); assert.equal(calls, 1);
+  }
+});
+
+test("a profile conflict pauses before any harness run until the owner resolves it, then the answer is mapped and approval is fresh", async () => {
+  const w = world();
+  const prepared = await w.service.prepare({ text: "Implement export.\nDeploy to production after merge.", run: true });
+  assert.equal(prepared.status, "needs-input"); assert.deepEqual(prepared.questions.map(q => q.id), ["q-delivery-r-2"]);
+  assert.equal(prepared.readiness, null); assert.deepEqual(w.ctx.state.entries(), []); assert.equal(w.daemonCalls(), 0);
+  assert.deepEqual(prepared.review.requirementMap[1].target, { kind: "question", id: "q-delivery-r-2" });
+  assert.deepEqual(prepared.review.requirementMap[1].conflict.screen.terms, ["merge", "deploy"]);
+  await assert.rejects(w.service.start({ taskId: prepared.taskId, expectedRevision: prepared.revision, run: true }), { code: "TASK_NOT_READY" });
+  assert.equal((await w.service.validate({ taskId: prepared.taskId, expectedRevision: prepared.revision })).status, "needs-input");
+  const answered = await w.service.answer({ taskId: prepared.taskId, expectedRevision: prepared.revision, operationId: "clarify-deploy", answers: { "q-delivery-r-2": "Deployment is done by the release team; this task only implements export." } });
+  // --run authorization persists through the clarification and dispatches once the exact revision validates.
+  assert.equal(answered.status, "started"); assert.equal(answered.approval.revision, answered.revision - 1 >= 0 ? answered.approval.revision : null);
+  const saved = taskStore(w.home).read(prepared.taskId);
+  const mapping = saved.output.mapping.find(m => m.requirementId === "r-2");
+  assert.equal(mapping.resolvedBy, "q-delivery-r-2"); assert.equal(mapping.screen.tier, "clarified"); assert.deepEqual(mapping.criteria, ["ac-2"]);
+  assert.match(answered.draft.text, /clarified by answer q-delivery-r-2/); assert.match(answered.draft.text, /Deployment is done by the release team/);
+  assert.equal(answered.requirements.at(-1).source.of, "answer:q-delivery-r-2");
+  assert.deepEqual(w.ctx.state.get(answered.implementation.id).task.deliveryProfile, TYPED_PROFILE);
+  assert.equal(w.runners.get(answered.implementation.id).started.length, 1);
+  // Insisting on the action in the answer re-raises the clarification instead of granting it.
+  const again = world({ prepare: async (_ctx, task) => JSON.stringify(draftFor(task, { delivery: task.answers["q-delivery-r-1"] ? { "a-q-delivery-r-1-1": { action: "merge" } } : { "r-1": { action: "merge" } } })) });
+  const first = await again.service.prepare({ text: "Merge the PR." });
+  assert.equal(first.status, "needs-input");
+  const pushed = await again.service.answer({ taskId: first.taskId, expectedRevision: first.revision, operationId: "insist", answers: { "q-delivery-r-1": "Yes, merge it anyway." } });
+  assert.equal(pushed.status, "needs-input"); assert.deepEqual(pushed.questions.map(q => q.id), ["q-delivery-a-q-delivery-r-1-1"]);
+  assert.deepEqual(again.ctx.state.entries(), []);
+});
+
+test("typed delivery inputs refuse merge, deployment and unknown routes before effects and conflict on changed retry input", async () => {
+  const w = world();
+  for (const delivery of [{ action: "merge" }, { action: "deploy" }, { action: "pull_request", completion: "shipped" }, { action: "pull_request", merge: true }, "pull_request"]) {
+    await assert.rejects(w.service.prepare({ text: REQUEST, delivery }), { code: "TASK_INPUT", taskEffects: "none" });
+  }
+  await assert.rejects(w.service.prepare({ text: REQUEST, route: "shell" }), { code: "TASK_INPUT", taskEffects: "none" });
+  await assert.rejects(w.service.prepare({ text: REQUEST, route: "model" }), e => e.code === "TASK_MODEL_ROUTE" && e.taskEffects === "none" && /intake_model is not configured/.test(e.message));
+  await assert.rejects(w.service.prepare({ text: REQUEST, delivery: { action: "pull_request", completion: "integrated" }, completion: { target: "delivery_ready" } }), { code: "TASK_INPUT", taskEffects: "none" });
+  assert.deepEqual(w.service.list().tasks, []); assert.equal(w.calls(), 0);
+  const input = { text: REQUEST, delivery: { action: "pull_request", completion: "integrated" }, requestId: "typed-integrated" };
+  const prepared = await w.service.prepare(input);
+  assert.equal(prepared.status, "ready"); assert.equal(prepared.completion.target, "integrated"); assert.equal(prepared.deliveryProfile.completion.condition, "integrated");
+  assert.deepEqual(await w.service.prepare(input), prepared);
+  await assert.rejects(w.service.prepare({ ...input, delivery: { action: "pull_request" } }), { code: "TASK_CONFLICT" });
+  await assert.rejects(w.service.prepare({ ...input, route: "harness" }), { code: "TASK_CONFLICT" });
+  const capabilities = w.service.capabilities();
+  assert.deepEqual(capabilities.delivery, DELIVERY_CAPABILITIES); assert.deepEqual(capabilities.routes, ["harness", "model"]); assert.equal(capabilities.modelRoute.enabled, false);
+});
+
+test("the model route drafts through the configured text-only endpoint when the selected harness cannot prepare", async () => {
+  const w = world();
+  w.ctx.config.harness = { gemini: { bin: harnessBin(w.home, "gemini") } };
+  w.ctx.config.intake_model = MODEL_ROUTE; w.ctx.env.FIXTURE_MODEL_KEY = "sk-fixture-key-444444";
+  let calls = 0;
+  w.ctx.fetch = async (...args) => { calls++; return modelReply(w.home)(...args); };
+  const service = createTaskService(w.ctx);
+  assert.equal(service.capabilities().modelRoute.enabled, true); assert.doesNotMatch(JSON.stringify(service.capabilities()), /sk-fixture|FIXTURE_MODEL_KEY|chat\/completions/);
+  const prepared = await service.prepare({ text: REQUEST, requestId: "model-route" });
+  assert.equal(prepared.status, "ready", prepared.failures.join("\n")); assert.equal(prepared.route, "model"); assert.equal(prepared.harness, "gemini");
+  assert.equal(prepared.modelRoute.kind, "model"); assert.equal(prepared.modelRoute.adapter, "openai-chat"); assert.equal(prepared.modelRoute.endpointHost, "api.example-provider.com");
+  assert.equal(prepared.modelRoute.calls, 1); assert.deepEqual(prepared.modelRoute.usage, { inputTokens: 900, outputTokens: 400 }); assert.deepEqual(prepared.modelRoute.tools, []);
+  assert.equal(prepared.cost.status, "reported"); assert.ok(prepared.cost.usd > 0 && prepared.cost.usd < 0.1);
+  assert.equal(prepared.preparation.attempts[0].receipt.boundary, "aport-model-text-only-v1"); assert.equal(prepared.preparation.attempts[0].spend.status, "reported");
+  assert.equal(prepared.review.modelRoute.model, "fixture-model"); assert.equal(prepared.readiness.allow, true);
+  assert.match(prepared.draft.text, /^---\nstatus: ready\nharness: gemini\n/);
+  assert.doesNotMatch(JSON.stringify(taskStore(w.home).read(prepared.taskId)), /sk-fixture/);
+  assert.deepEqual(await service.prepare({ text: REQUEST, requestId: "model-route" }), prepared); assert.equal(calls, 1);
+  assert.equal((await service.validate({ taskId: prepared.taskId, expectedRevision: prepared.revision })).status, "ready");
+  assert.deepEqual(w.ctx.state.entries(), []);
+  // Explicitly selecting the harness route keeps the existing boundary refusal; nothing is fetched.
+  const harnessOnly = await service.prepare({ text: REQUEST, requestId: "harness-only", route: "harness" });
+  assert.equal(harnessOnly.status, "blocked"); assert.equal(harnessOnly.errorCode, "TASK_PREPARATION_BOUNDARY"); assert.equal(calls, 1);
+  // Exhausting the three-call ceiling blocks with an actionable message and no further request.
+  const noisy = world(); noisy.ctx.config.harness = { gemini: { bin: harnessBin(noisy.home, "gemini") } }; noisy.ctx.config.intake_model = MODEL_ROUTE; noisy.ctx.env.FIXTURE_MODEL_KEY = "sk-fixture-key-555555";
+  let noisyCalls = 0;
+  noisy.ctx.fetch = async () => { noisyCalls++; const task = taskStore(noisy.home).list().at(-1); const bad = draftFor(task); bad.mapping = []; return { ok: true, status: 200, headers: { get: () => null }, text: async () => JSON.stringify({ choices: [{ message: { content: JSON.stringify(bad) }, finish_reason: "stop" }], usage: { prompt_tokens: 10, completion_tokens: 10 } }), body: { cancel: async () => {} } }; };
+  const blocked = await createTaskService(noisy.ctx).prepare({ text: REQUEST });
+  assert.equal(blocked.status, "blocked"); assert.equal(noisyCalls, 3); assert.equal(blocked.errorCode, "TASK_ALLOWANCE"); assert.match(blocked.failures[0], /allows 3 calls/);
+  assert.equal(blocked.cost.status, "reported"); assert.deepEqual(noisy.ctx.state.entries(), []);
+});
+
+test("the delivery dispatcher accepts typed profiles and routes, exposes them to discovery, views and model summaries, and rejects unsupported actions by schema", async () => {
+  const w = world(), scope = { tenant: "alice", account: "alice", environment: "preview", region: "US", scopes: ["task-delivery:read", "task-delivery:write"], repositories: ["widget"] };
+  const manifest = { coreVersion: CORE_VERSION, coreSha256: "a".repeat(64), operationVersion: 1, taskVersion: 1, executionVersion: 1 };
+  migrateRuntimeState({ home: w.home, manifest });
+  const delivery = createTaskDelivery({ manifest, authorize: async () => scope, store: createDeliveryStore(join(w.home, "delivery")),
+    contextFor: async () => ({ ctx: w.ctx, repository: { dir: w.checkout, repo: "acme/widget" }, taskOptions: { prepare: async (_ctx, task) => JSON.stringify(draftFor(task)) } }), schedule: async () => {} });
+  const caps = await delivery.dispatch("capabilities", {}, "alice");
+  assert.deepEqual(caps.repositories[0].delivery, DELIVERY_CAPABILITIES); assert.equal(caps.repositories[0].modelRoute.enabled, false); assert.equal(caps.repositories[0].modelRoute.endpoint, undefined);
+  const base = { repositoryId: "widget", text: REQUEST, harness: "codex", allowance: { budgetUsd: 1, runtimeMs: 60000 }, expectedRevision: 0 };
+  for (const [operationId, input] of [["bad-route", { route: "shell" }], ["extra", { delivery: { action: "pull_request", grant: "merge" } }], ["unknown-action", { delivery: { action: "publish" } }]]) {
+    await assert.rejects(delivery.dispatch("prepare", { ...base, ...input, operationId }, "alice"), { code: "DELIVERY_INPUT" });
+  }
+  // Recognised but unsupported actions pass the schema so the owner receives the actionable control/authorization remedy as a durable no-effects receipt.
+  for (const action of ["merge", "deploy"]) await assert.rejects(delivery.dispatch("prepare", { ...base, delivery: { action }, operationId: `typed-${action}` }, "alice"), error => {
+    assert.equal(error.code, "TASK_INPUT"); assert.match(taskRejectionForModel(error)?.message || "", /explicit supported .* control and authorization/); return true;
+  });
+  assert.deepEqual(w.ctx.state.entries(), []);
+  const prepared = await delivery.dispatch("prepare", { ...base, delivery: { action: "pull_request", completion: "integrated" }, route: "harness", operationId: "typed-prepare" }, "alice");
+  assert.equal(prepared.status, "ready");
+  assert.deepEqual(prepared.deliveryProfile, { ...TYPED_PROFILE, completion: { condition: "integrated" }, legacy: false, supported: true, source: "typed-profile", label: "Open one review pull request", mergeAuthorized: false, deployAuthorized: false });
+  assert.equal(prepared.route, "harness"); assert.equal(prepared.review.revision, prepared.revision); assert.equal(prepared.review.draft.text, prepared.brief.text);
+  assert.equal(prepared.approval, null); assert.equal(prepared.repositoryContext.status, "unavailable");
+  const summary = modelSummary(prepared);
+  assert.deepEqual(summary.deliveryProfile, { version: 1, action: "pull_request", completion: "integrated", legacy: false, supported: true });
+  assert.deepEqual(summary.review, { revision: prepared.revision, digest: prepared.review.digest, openQuestions: 0, approved: false });
+  assert.equal(summary.cost.status, "none");
+  const started = await delivery.dispatch("start", { taskId: prepared.taskId, expectedRevision: prepared.revision, operationId: "typed-start", run: true }, "alice");
+  assert.equal(started.status, "started"); assert.equal(started.approval.digest, prepared.review.digest);
+  assert.deepEqual(w.ctx.state.get(started.implementation.id).task.deliveryProfile, { ...TYPED_PROFILE, completion: { condition: "integrated" } });
+  assert.equal(modelSummary(started).review.approved, true);
+});
+
+test("historical tasks keep their interpretation while unsupported saved profiles fail closed without stranding the namespace", async () => {
+  const w = world(), prepared = await w.service.prepare({ text: REQUEST, requestId: "historical" }), store = taskStore(w.home);
+  const saved = store.read(prepared.taskId); saved.deliveryProfile = { ...saved.deliveryProfile, version: PROFILE_VERSION + 1 }; store.save(saved);
+  const inspected = w.service.inspect({ taskId: prepared.taskId });
+  assert.equal(inspected.deliveryProfile.supported, false); assert.equal(inspected.deliveryProfile.error.code, "TASK_PROFILE_UNSUPPORTED");
+  assert.equal(w.service.list().tasks.length, 1, "read-only inspection and export still work");
+  for (const operation of [
+    () => w.service.validate({ taskId: prepared.taskId, expectedRevision: prepared.revision }),
+    () => w.service.start({ taskId: prepared.taskId, expectedRevision: prepared.revision, run: true }),
+    () => w.service.resume({ taskId: prepared.taskId, expectedRevision: prepared.revision }),
+    () => w.service.prepare({ text: REQUEST, requestId: "historical" }),
+  ]) await assert.rejects(operation, e => e.code === "TASK_PROFILE_UNSUPPORTED" && e.taskEffects === "none" && /prepare a new task/.test(e.message));
+  assert.deepEqual(store.read(prepared.taskId), saved); assert.deepEqual(w.ctx.state.entries(), []);
+  const manifest = { coreVersion: CORE_VERSION, coreSha256: "b".repeat(64), operationVersion: 1, taskVersion: 1, executionVersion: 1 };
+  assert.equal(migrateRuntimeState({ home: w.home, manifest }).active, false, "an unsupported saved profile does not pin an idle namespace");
+  // A task saved before typed profiles existed keeps its workflow-default interpretation and can still be controlled.
+  // Seed the shape an intake saved before typed profiles existed: no profile, route or snapshot, and a brief without the profile section.
+  const legacy = world({ prepare: async (_ctx, task) => { delete task.deliveryProfile; delete task.route; delete task.repositoryContext; return JSON.stringify(draftFor(task)); } });
+  const old = await legacy.service.prepare({ text: REQUEST, requestId: "legacy" });
+  assert.doesNotMatch(old.draft.text, /## Delivery profile/);
+  const view = legacy.service.inspect({ taskId: old.taskId });
+  assert.equal(view.deliveryProfile.legacy, true); assert.equal(view.deliveryProfile.source, "completion-target"); assert.equal(view.route, "harness");
+  const started = await legacy.service.start({ taskId: old.taskId, expectedRevision: old.revision, run: true, noDaemon: true });
+  assert.equal(started.status, "started"); assert.equal(legacy.ctx.state.get(started.implementation.id).task.deliveryProfile, undefined);
+});
+
+test("malformed planner delivery output is repaired within bounds and never falls back to free-text authorization", async () => {
+  const w = world({ prepare: async (_ctx, task) => { const out = draftFor(task); out.mapping[0].delivery = { action: "grant_all" }; return JSON.stringify(out); } });
+  const blocked = await w.service.prepare({ text: "Implement export and merge the PR.", run: true });
+  assert.equal(blocked.status, "blocked"); assert.equal(blocked.preparation.repairs, 3); assert.match(blocked.failures[0], /delivery tag action must be one of/);
+  assert.equal(blocked.readiness, null); assert.equal(taskStore(w.home).read(blocked.taskId).ownerDelivery, undefined); assert.deepEqual(w.ctx.state.entries(), []); assert.equal(w.daemonCalls(), 0);
+  let calls = 0;
+  const forged = world({ prepare: async (_ctx, task) => { calls++; const out = draftFor(task); if (calls === 1) { out.questions = [{ id: "q-delivery-r-1", text: "Merge?", requirements: ["r-1"] }]; out.mapping[0] = { requirementId: "r-1", questionId: "q-delivery-r-1" }; } return JSON.stringify(out); } });
+  const repaired = await forged.service.prepare({ text: REQUEST });
+  assert.equal(repaired.status, "ready"); assert.equal(repaired.preparation.repairs, 1); assert.equal(calls, 2);
+  const dropped = world({ prepare: async (_ctx, task) => { const out = draftFor(task); out.mapping = out.mapping.filter(m => m.requirementId !== "r-2"); return JSON.stringify(out); } });
+  const omitted = await dropped.service.prepare({ text: "Implement export.\nDo not merge." });
+  assert.equal(omitted.status, "blocked"); assert.match(omitted.failures[0], /unmapped explicit requirements: r-2/); assert.deepEqual(dropped.ctx.state.entries(), []);
+});
+
+test("a stale approval digest or changed material input requires review again before the run path is callable", async () => {
+  const w = world(), prepared = await w.service.prepare({ text: REQUEST }), store = taskStore(w.home);
+  const saved = store.read(prepared.taskId);
+  saved.runAuthorized = true; saved.approval = { revision: saved.revision, digest: "0".repeat(64), draftHash: saved.draft.hash, readinessDigest: saved.readiness.digest, at: new Date().toISOString() }; store.save(saved);
+  await assert.rejects(w.service.start({ taskId: prepared.taskId, expectedRevision: prepared.revision, run: true, noDaemon: true }), e => e.code === "TASK_CONFLICT" && /approved review revision changed/.test(e.message));
+  assert.deepEqual(w.ctx.state.entries(), []); assert.equal(store.read(prepared.taskId).status, "ready");
+  const asked = world({ prepare: async (_ctx, task) => JSON.stringify(draftFor(task, { question: true })) });
+  const first = await asked.service.prepare({ text: REQUEST });
+  assert.equal(first.status, "needs-input"); assert.equal(first.readiness, null);
+  const answered = await asked.service.answer({ taskId: first.taskId, expectedRevision: first.revision, operationId: "answer", answers: { "q-r-1": "Use CSV." } });
+  assert.equal(answered.status, "ready"); assert.equal(answered.approval, null); assert.notEqual(answered.review.digest, first.review.digest, "material input changes the review digest");
+  await assert.rejects(asked.service.start({ taskId: first.taskId, expectedRevision: first.revision, run: true }), { code: "TASK_CONFLICT" });
+  const started = await asked.service.start({ taskId: first.taskId, expectedRevision: answered.revision, run: true, noDaemon: true });
+  assert.equal(started.status, "started"); assert.equal(started.approval.digest, answered.review.digest);
+});
+
+test("CLI typed-profile flags reach the service, refuse unsupported actions and render the review", async () => {
+  const w = world();
+  const r = await taskCommand(w.ctx, { args: ["prepare", "Add export."], values: { delivery: "pull_request", "completion-target": "integrated", route: "harness", "request-id": "cli-typed" }, service: w.service });
+  assert.equal(r.status, "ready"); assert.equal(r.deliveryProfile.completion.condition, "integrated"); assert.equal(r.route, "harness");
+  const text = renderTask(r);
+  assert.match(text, /Delivery profile: pull_request → acme\/widget@main, completion integrated \(v1\); no merge or deployment authority/);
+  assert.match(text, /Planner route: harness codex; calls 0; cost none/); assert.match(text, /Review: revision \d+, digest [a-f0-9]{12}, 1 clauses mapped, 0 open question\(s\), not yet approved/);
+  assert.match(text, /Repository context: unavailable/);
+  await assert.rejects(taskCommand(w.ctx, { args: ["prepare", "Add export."], values: { delivery: "merge" }, service: w.service }), { code: "TASK_INPUT" });
+  await assert.rejects(taskCommand(w.ctx, { args: ["answer", r.taskId], values: { route: "model", revision: String(r.revision), "request-id": "x", answer: ["q=y"] }, service: w.service }), { code: "TASK_INPUT" });
+  await assert.rejects(taskCommand(w.ctx, { args: ["validate", r.taskId], values: { delivery: "pull_request", revision: String(r.revision) }, service: w.service }), { code: "TASK_INPUT" });
 });

@@ -36,6 +36,11 @@ Requests can produce code, documentation, research or other repository artifacts
 A natural-language task still becomes an explicit, validated delivery contract;
 it does not require the user to write a PRD first.
 See [task operations](tasks.md) for examples, source delivery and stopping rules.
+`--delivery pull_request` selects the typed delivery profile that alone authorizes
+external actions for new tasks, `--completion-target` sets its completion
+condition, and `--route harness|model` chooses the planner route. The result's
+`review` object is the revision-pinned view an owner approves with `task start
+--run`. See [typed delivery profiles](task-profiles.md).
 
 `doctor` prints one line per repository in `repos` naming the base branch its pull requests will target and where that answer came from,
 so a repository whose work should go to `staging` while nothing is configured is visible before a session opens a pull

@@ -186,6 +186,7 @@ unattended work. Never treat automatic approval as an OS sandbox.
 | --- | --- |
 | Install and run your first task | [Getting started](docs/install.md) |
 | Start from a request, answer questions, inspect results | [Natural-language tasks](docs/tasks.md) |
+| Select the typed delivery profile and planner route for a request | [Typed delivery profiles](docs/task-profiles.md) |
 | Write a brief or define noncoding acceptance checks | [PRD contract](docs/prd.md) |
 | Use API-backed hosted execution | [OpenAI Agents](docs/openai-agents.md) |
 | Dashboard messages, controls and recovery | [Dashboard](docs/app.md) · [Commands](docs/commands.md) |
