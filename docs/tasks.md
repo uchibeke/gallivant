@@ -706,7 +706,9 @@ if (result.status === 'needs-input') {
 }
 if (result.status === 'ready') {
   result = await tasks.validate({ taskId: result.taskId, expectedRevision: result.revision });
-  result = await tasks.start({ taskId: result.taskId, expectedRevision: result.revision, run: true });
+  if (result.status === 'ready' && result.readiness?.allow) {
+    result = await tasks.start({ taskId: result.taskId, expectedRevision: result.revision, run: true });
+  }
 }
 console.log(TASK_VERSION, tasks.inspect({ taskId: result.taskId }));
 ```

@@ -132,8 +132,7 @@ Use a clean test account/home and the [getting-started guide](install.md) for on
 small real PR. Confirm implementation, feedback-driven continuation, CI and the
 completion receipt; automated installation checks use fixtures and do not prove
 paid-provider access. Recheck anonymous GitHub access and all README links.
-Then change the README's primary installation command to `npm install -g gallivant`
-and remove its pending-release note. Announcement drafts are in [launch.md](launch.md).
+Announcement drafts are in [launch.md](launch.md).
 
 For local validation without publishing: `npm run lint`, `npm test`, and
 `npm run test:install`. The last command packs and installs under a disposable

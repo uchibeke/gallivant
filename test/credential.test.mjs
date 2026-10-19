@@ -16,7 +16,8 @@ import {
   resolveCredential, resolveCredentialFor, SOURCES, describe as describeCredential,
   hostFromRemote, isDotCom, tokenFromEnv, tokenFromGh, noCredentialMessage,
 } from "../lib/credential.mjs";
-import { runEnv, RUN_GIT_CONFIG } from "../lib/git.mjs";
+import { makeGh } from "../lib/gh.mjs";
+import { makeGit, runEnv, RUN_GIT_CONFIG } from "../lib/git.mjs";
 import { resumePrompt } from "../lib/prompt.mjs";
 import { CONFIG, tempHome } from "./helpers.mjs";
 
@@ -214,11 +215,29 @@ test("gh answers last, which is what makes any login work regardless of how the 
   assert.deepEqual(calls, [["gh", "auth", "token"]]);
 });
 
-test("an empty or whitespace-only token file is not a credential, so it falls through rather than pushing with nothing", async () => {
-  const { exec } = ghExec();
-  const blank = await resolveCredential(withTokenFile("   \n  "), { env: {}, exec });
-  assert.equal(blank.token, "t-from-gh");
-  assert.equal(blank.source, SOURCES.gh);
+test("a missing, unreadable or blank configured token file never widens to ambient credentials", async () => {
+  const root = tempHome();
+  const configurations = [withTokenFile(""), withTokenFile("   \n  "),
+    { ...CONFIG, github_token_file: join(root, "missing-token") },
+    // A directory produces a portable filesystem read error, including in root-run CI.
+    { ...CONFIG, github_token_file: root }];
+  for (const config of configurations) {
+    const { calls, exec } = ghExec("t-broader-login");
+    const credential = () => resolveCredential(config, { env: { GH_TOKEN: "t-broader-env", GITHUB_TOKEN: "t-other-env" }, exec });
+    const refusal = error => {
+      assert.equal(error.code, "NO_CREDENTIAL");
+      assert.equal(error.reason, "configured-token-file-unavailable");
+      assert.match(error.message, /configured github_token_file/);
+      assert.match(error.message, /No fallback credential was used/);
+      assert.doesNotMatch(error.message, /t-broader|t-other/);
+      return true;
+    };
+    await assert.rejects(credential(), refusal);
+    const forbiddenExec = async () => assert.fail("GitHub/Git must not execute with ambient credentials");
+    await assert.rejects(makeGh({ credential, exec: forbiddenExec }).user(), refusal);
+    await assert.rejects(makeGit({ config, credential, exec: forbiddenExec }).head(root), refusal);
+    assert.deepEqual(calls, [], "gh auth token must not be queried after an explicit credential source fails");
+  }
 });
 
 test("a run refuses to start when neither the file, the environment nor gh can answer", async () => {
