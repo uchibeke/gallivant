@@ -272,6 +272,27 @@ test("subordinating clauses after product PR conditions retain delivery controls
   }
 });
 
+test("product-condition tails retain later publication directives", () => {
+  for (const connector of ["provided that", "assuming that", "as long as"])
+    for (const publication of ["you open another PR", "we generate a new pull request", "you submit a PR for review", "have the team create a PR"]) {
+      const source = `The button creates a PR after tests pass ${connector} ${publication}.`;
+      assert.throws(() => ownerDelivery(source), { code: "TASK_DELIVERY_SCOPE" }, source);
+      assert.throws(() => assertDeliveryAnswer({}, source), { code: "TASK_DELIVERY_SCOPE" }, source);
+    }
+  for (const source of [
+    "The button creates a PR after tests pass provided that the form is valid.",
+    "The button creates a PR after tests pass provided that you create a PR template.",
+    "The button creates a PR after tests pass provided that you generate a daily report about PRs.",
+  ]) {
+    assert.equal(ownerDelivery(source), null, source);
+    assert.doesNotThrow(() => assertDeliveryAnswer({}, source), source);
+    const original = source + " Open a PR for review.", contract = ownerDelivery(original);
+    assert.equal(validateOwnerDelivery(contract), contract, source);
+    assert.equal(ownerImplementation(contract).join(""), source + " ", source);
+    assert.equal(contract.spans.map(span => original.slice(span.start, span.end)).join(""), original, source);
+  }
+});
+
 test("passive merge controls recognize shared negative modals before product masking", () => {
   for (const control of ["cannot", "can't", "can’t", "couldn't", "couldn’t", "mustn't", "shouldn't", "won't", "wouldn't", "isn't", "aren't", "might not", "would not", "must never"])
     for (const restriction of [`Changes ${control} be merged.`, `Work ${control} be merged.`])
@@ -917,6 +938,27 @@ test("method gerunds retain approval gates and validate their own business objec
     const source = `If I approve the support request, complete the request ${destination}.`;
     assert.equal(ownerDelivery(source), null, source);
     assert.doesNotThrow(() => assertDeliveryAnswer({}, source), source);
+  }
+});
+
+test("finite nominal clauses after method prepositions retain approval gates", () => {
+  for (const connector of ["on condition that", "on the condition that", "in case", "in case that", "by agreement that", "via the assurance that"])
+    for (const action of ["you proofread the article", "our senior editor proofreads the article", "the article is proofread", "you email the customer"])
+      for (const source of [
+        `If I approve the invoice, email the customer ${connector} ${action}.`,
+        `Email the customer ${connector} ${action} after I approve the invoice.`,
+      ]) {
+        assert.throws(() => ownerDelivery(source), { code: "TASK_DELIVERY_SCOPE" }, source);
+        assert.throws(() => assertDeliveryAnswer({}, source), { code: "TASK_DELIVERY_SCOPE" }, source);
+      }
+  for (const destination of ["on the invoice", "in the customer portal", "via the customer account", "by Alice King", "in case-sensitive mode", "in case‑sensitive mode", 'with a label "in case you proofread the article"']) {
+    const source = `If I approve the invoice, email the customer ${destination}.`;
+    assert.equal(ownerDelivery(source), null, source);
+    assert.doesNotThrow(() => assertDeliveryAnswer({}, source), source);
+    const original = source + " Open a PR for review.", contract = ownerDelivery(original);
+    assert.equal(validateOwnerDelivery(contract), contract, source);
+    assert.equal(ownerImplementation(contract).join(""), source + " ", source);
+    assert.equal(contract.spans.map(span => original.slice(span.start, span.end)).join(""), original, source);
   }
 });
 
