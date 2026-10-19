@@ -89,9 +89,9 @@ test("standalone tracker starts once, verifies its home/port and stops without a
     assert.equal((await fetch(`http://127.0.0.1:${port}/`)).status, 200);
     await assert.rejects(trackerInBackground(ctx, { port: await freePort() }), /already uses port/);
     const other = fixture();
-    // The failed child can exit between ps and signal-0 on Linux. Either
-    // diagnostic refuses the unrelated listener; neither permits reuse/signals.
-    await assert.rejects(trackerInBackground(other, { port, waitMs: 2000 }), /failed to start|process identity cannot be verified/);
+    // The failed child can exit between ps and signal-0, or a reader can see
+    // its new lock before JSON is written. Each diagnostic refuses ownership.
+    await assert.rejects(trackerInBackground(other, { port, waitMs: 2000 }), /failed to start|process identity cannot be verified|tracker\.lock is not valid JSON/);
     assert.equal(readTracker(ctx.home).pid, first.pid);
     assert.equal((await fetch(`http://127.0.0.1:${port}/`)).status, 200);
   } finally {

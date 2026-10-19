@@ -440,6 +440,8 @@ test("latest publication review cases fail before task effects without rejecting
     "The button creates a PR after tests pass even though PRs must not be published.",
     "The button creates a PR after tests pass since PRs must not be published.",
     "The button creates a PR after tests pass given that PRs must not be published.",
+    "The button creates a PR after tests pass since changes must not be merged.",
+    "Changes must not be merged.",
     "If I approve the Terraform plan, apply it.",
     "Apply it after I approve the Terraform plan.",
     "If I approve the article, email the customer as well as proofread the article.",
@@ -450,6 +452,7 @@ test("latest publication review cases fail before task effects without rejecting
     "If I approve the invoice, email the customer once you proofread the article.",
     "If I approve the invoice, email the customer until our team proofreads the article.",
     "If I approve the invoice, email the customer when proofreading the article.",
+    "If I approve the invoice, email the customer as soon as you proofread the article.",
     "For tests, create a fake PR fixture alongside a real PR.",
     "For tests, create both fake and real PRs.",
     "For tests, create a fake PR fixture + a real PR.",
@@ -517,6 +520,7 @@ test("latest publication review cases fail before task effects without rejecting
     "The service creates a PR after tests pass and retries when tests fail.",
     "The button creates a PR after tests pass where the user can inspect it.",
     "The button creates a PR after tests pass since the queue is ready.",
+    "The button creates a PR after tests pass since the queue is ready for merging.",
     "For tests, create a fake PR alongside a synthetic PR fixture.",
     "For tests, create a fake PR fixture versus a synthetic PR fixture.",
     "For tests, create a fake PR fixture before uploading logs to GitHub.",
@@ -532,6 +536,7 @@ test("latest publication review cases fail before task effects without rejecting
     "If I approve the invoice, email the customer after our team emails the customer.",
     "If I approve the invoice, email the customer once you apply the discount.",
     "If I approve the invoice, email the customer until the payment clears.",
+    "If I approve the invoice, email the customer as soon as you apply the discount.",
     "If I approve the invoice, email the customer as well as apply the discount.",
   ];
   for (const text of productRequirements) {

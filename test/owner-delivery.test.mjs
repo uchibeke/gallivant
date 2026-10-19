@@ -163,6 +163,16 @@ test("subordinating clauses after product PR conditions retain delivery controls
   assert.throws(() => ownerDelivery(laterCondition), { code: "TASK_DELIVERY_SCOPE" });
   assert.throws(() => assertDeliveryAnswer({}, laterCondition), { code: "TASK_DELIVERY_SCOPE" });
   for (const source of [
+    "The button creates a PR after tests pass since changes must not be merged.",
+    "The button creates a PR after tests pass since work must not be merged.",
+    "The button creates a PR after tests pass since we must keep changes local.",
+    "The button creates a PR after tests pass since my approval is required.",
+    "Changes must not be merged.",
+  ]) {
+    assert.throws(() => ownerDelivery(source), { code: "TASK_DELIVERY_SCOPE" }, source);
+    assert.throws(() => assertDeliveryAnswer({}, source), { code: "TASK_DELIVERY_SCOPE" }, source);
+  }
+  for (const source of [
     "The button creates a PR after tests pass where the user can inspect it.",
     "The button creates a PR after tests pass even though retries are enabled.",
     "The button creates a PR after tests pass since the queue is ready.",
@@ -501,6 +511,9 @@ test("business approval rules keep temporal implementation actions visible", () 
     "If I approve the invoice, email the customer while Alice proofreads the article.",
     "If I approve the invoice, email the customer once our team proofreads the invoice.",
     "If I approve the invoice, email the customer until Alice proofreads the article.",
+    "If I approve the invoice, email the customer as soon as you proofread the article.",
+    "If I approve the invoice, email the customer as soon as our team proofreads the invoice.",
+    "If I approve the invoice, email the customer as soon as proofreading the article.",
   ]) {
     assert.throws(() => ownerDelivery(source), { code: "TASK_DELIVERY_SCOPE" }, source);
     assert.throws(() => assertDeliveryAnswer({}, source), { code: "TASK_DELIVERY_SCOPE" }, source);
@@ -512,6 +525,8 @@ test("business approval rules keep temporal implementation actions visible", () 
     "If I approve the invoice, email the customer once you apply the discount.",
     "If I approve the invoice, email the customer until the payment clears.",
     "If I approve the invoice, email the customer when our team emails the customer.",
+    "If I approve the invoice, email the customer as soon as you apply the discount.",
+    "If I approve the invoice, email the customer as soon as the payment clears.",
   ]) {
     assert.equal(ownerDelivery(source), null, source);
     assert.doesNotThrow(() => assertDeliveryAnswer({}, source), source);
