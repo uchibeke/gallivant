@@ -35,7 +35,7 @@ gallivant start path/to/repo/docs/prds/widget-export.md
 | Rule | Passes when |
 |---|---|
 | path | The file is `docs/prds/<id>.md` in the target repo, `<id>` lowercase letters, digits and dashes. New runs use branch `work/<id>`; existing legacy branches remain readable. |
-| frontmatter | A `---` block with `status: draft` or `ready`, and a registered `harness` ID. Registration does not guarantee dispatch availability; see [support](../README.md#harness-support). |
+| frontmatter | A `---` block with `status: draft` or `ready`. If supplied, `harness` must be a registered ID; omission uses `claude`. Set it explicitly to make the runtime choice clear. Registration does not guarantee dispatch availability; see [support](../README.md#harness-support). |
 | title | Exactly one H1, 8 to 80 characters. It supplies the PR title, subject to public-output validation. |
 | problem | `## Problem` has at least 40 words. Who hurts, when, and what changes when this ships. |
 | stories | Every bullet under `## User stories` reads `As a <who>, I want <what>, so that <why>`. At least one. |
@@ -43,11 +43,11 @@ gallivant start path/to/repo/docs/prds/widget-export.md
 | verify | `## Verify` lists at least one command, in backticks or a code block, that the session must run green before opening the PR. No `sudo`, no `rm -rf`, no piped installers. |
 | look | `## Where to look` names files or directories to start from, or a single bullet `none`. |
 | scope | `## Out of scope` has at least one bullet. |
-| placeholders | No `TODO`, `TBD`, `FIXME`, `???`, `lorem ipsum` or `<angle-bracket>` text anywhere in the body. The template's placeholders must all be replaced. |
-| size | Under 1,500 words. A PRD is one pull request. Split anything bigger. |
+| placeholders | No `TODO`, `TBD`, `FIXME`, `???`, `lorem ipsum` or unfinished `<angle-bracket>` placeholders in the body. Recognized inline HTML tags are allowed. Replace every template placeholder. |
+| size | At most 1,500 body words. A PRD is one pull request. Split anything bigger. |
 | sources | Every file named in `sources` exists, is readable text, and is inside the repository. Only checked on a brief that names any. |
 
-`ready --check` prints every rule with ok or FAIL and, for a failure, what to change. `start` runs the same checks again and stops on the first failure, so editing a PRD after marking it ready cannot sneak a bad one through.
+`ready --check` prints every rule with ok or FAIL and, for a failure, what to change. `start` runs the same checks again and refuses a brief with any failing rule, so editing a PRD after marking it ready cannot sneak a bad one through.
 
 ## Optional frontmatter
 
@@ -95,7 +95,10 @@ These keys beyond `status` and `harness` are read if present:
 
 ## One gate, one implementation
 
-The checker does not read files. It takes a Request, which is what a source produces after reading whatever you typed:
+The checker takes a Request, which is what a source produces after reading your
+input. Its structure rules inspect that request; its `sources` rule also reads
+the declared repository files to verify their containment, readability and text
+format. No provider call is needed for `ready --check`.
 
 ```
 { id, repo, title, body, harness, status, source: { kind, url, author }, raw }
@@ -108,7 +111,10 @@ then uses this same checker/readiness path. Intake is an implemented entry point
 not a second completion system. Other source proposals in `docs/prds` and
 `docs/design` are specifications, not necessarily implemented transports.
 
-What it buys is that the rules are the rules. `path` is the one rule that depends on where a brief lives rather than on what it says, and it declares that in its own data (`kinds: ["prd"]`); every other rule has no scope and applies to any Request. A source that has no path is not reported as failing a rule about filenames, and it is held to all ten of the others. That is the extension point: a brief arriving some other way is an adapter plus somewhere to record its verdict, not a second gate with its own drift.
+`path` and `sources` depend on the repository-file source and declare
+`kinds: ["prd"]`. The other ten rules apply to every Request. A future non-file
+source would use those shared rules and explicitly implement any additional
+source-specific checks; it would not need a separate readiness gate.
 
 ## Ready is an APort decision
 
@@ -149,7 +155,7 @@ gallivant resume widget#142 --resnapshot       # the edit is the brief; the sess
 # or put the brief back the way it was, and the next tick carries on where it left off
 ```
 
-`--resnapshot` is the only thing that replaces a snapshot that already exists, and it is loud about it: a warning in
+`--resnapshot` is the explicit way to adopt a changed contract into an existing snapshot, and it is loud about it: a warning in
 `errors.log` naming the file, who asked and every difference, and a resume prompt that tells the session what moved and
 to reread the brief rather than trust what it remembers. Work already done against a criterion that has not changed
 still stands, which is the whole reason this is a resume and not a restart.
@@ -232,7 +238,7 @@ APort's deny names one problem at a time (evaluation stops at the first failing 
 Both gates send a `meta` object inside the context they already send:
 
 ```json
-"meta": { "framework": "codex", "gallivant_version": "0.1.0" }
+"meta": { "framework": "codex", "gallivant_version": "0.2.0" }
 ```
 
 `framework` is the harness that did the work, or that the brief names for a readiness decision. `gallivant_version` is the release that asked. A machine running Claude Code and Codex against one passport otherwise produces decisions nobody can tell apart afterwards, and the OAP decision object is closed (`additionalProperties: false`), so the request context is where this belongs. No specification change was needed: the policy packs leave `additionalProperties` unset, which in JSON Schema already permits extra properties, and the hosted validator's context schemas are `.unknown(true)`. An older verifier ignores the field.

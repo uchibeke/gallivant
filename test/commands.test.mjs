@@ -4,6 +4,7 @@ import assert from "node:assert/strict";
 import { join, relative, dirname } from "node:path";
 import { mkdirSync, readFileSync, writeFileSync, statSync, existsSync, rmSync } from "node:fs";
 import { makeGit } from "../lib/git.mjs";
+import { resolveCredential } from "../lib/credential.mjs";
 import { makeTick } from "../lib/tick.mjs";
 import { start } from "../lib/commands/start.mjs";
 import { register } from "../lib/commands/register.mjs";
@@ -83,6 +84,21 @@ test("start refuses when no credential can be resolved, so nothing is cloned, re
   assert.deepEqual(cloned, [], "nothing was cloned");
   assert.deepEqual(Object.keys(w.ctx.state.entries()), [], "nothing was recorded, so a later start is not blocked by a half-made entry");
   assert.equal(w.snapshots.size, 0, "no snapshot was taken for a run that never happened");
+});
+
+test("start refuses a failed configured token file before cloning or spending a run despite ambient credentials", async () => {
+  const w = startWorld(), runner = fakeRunner(makeClock());
+  w.ctx.config.github_token_file = join(w.home, "missing-token");
+  w.ctx.credential = () => resolveCredential(w.ctx.config, {
+    env: { GH_TOKEN: "t-broader-env" },
+    exec: async () => assert.fail("a selected-file failure must not ask gh for another credential"),
+  });
+  w.ctx.git.create = async () => assert.fail("must not clone after credential refusal");
+  w.ctx.runnerFor = () => runner;
+  await assert.rejects(() => start(w.ctx, { path: w.prdPath }), { code: "NO_CREDENTIAL", reason: "configured-token-file-unavailable" });
+  assert.deepEqual(w.ctx.state.entries(), []);
+  assert.equal(w.snapshots.size, 0);
+  assert.equal(runner.started.length, 0);
 });
 
 test("hand-authored start releases a known stale-worktree refusal before cloning and retries after correction", async () => {

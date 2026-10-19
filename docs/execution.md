@@ -31,6 +31,25 @@ currently support implementation from a ready PRD but have no enforced preparati
 capability. A private HOME or a version/sign-in probe does not qualify one. See
 [preparation](preparation.md) for boundaries and measured qualification.
 
+Availability means an implemented adapter can be selected; it is not a claim
+that every provider/model has passed a live task. The recorded qualification is:
+
+| Harness | Continuation and controls | Qualification and limits |
+| --- | --- | --- |
+| Claude Code, local Codex | Native session; cancel and interrupt | Production/local Git evidence exists. Claude alone supplies a native dollar cap; Codex reports unknown dollar cost. Their permission settings differ; see [guardrails](guardrails.md). |
+| Gemini CLI, OpenCode, Goose | Native session; cancel and interrupt | Adapters and fixtures exist, but the recorded coding campaign did not qualify a complete start/resume or GitHub review lifecycle for these combinations. Native permissions can block headless work; Gallivant adds no OS sandbox to these three. |
+| OpenAI Agents API | Native session; cancel, no interrupt | Hosted preparation and implementation are implemented. Preparation-only live evidence does not qualify hosted implementation/publication/review correction; the separate campaign retains those gates. |
+| Codex Cloud | Successor task; no native cancel or interrupt | New dispatch is unavailable. Offline transport tests and owned-task recovery do not qualify environment/repository binding or live execution. |
+
+Local adapters use the provider/model selected in the native harness settings;
+Gallivant does not supply a generic per-task local model router. A model that is
+listed or a stored credential is not proof of model access, credits or permission
+for unattended work. Agents requires an explicit authorized model; Cloud refuses
+model overrides. Unknown dollar cost stays unknown, and remote reservations limit
+future dispatch rather than provider billing. See the
+[dated local campaign](https://github.com/uchibeke/gallivant/blob/main/docs/audit/harness-live-validation.md)
+and each hosted guide for the exact evidence and remaining prerequisites.
+
 `openai-agents` has an implemented managed REST transport; see
 [account/environment setup and verification](openai-agents.md). `codex-cloud`
 has an implemented CLI transport but remains unavailable for new dispatch until
