@@ -84,7 +84,7 @@ test("the delivery screen is deterministic over the fixture corpus and masks lit
   assert.ok(deliveryScreen('"Open a pull request" is forbidden for this change.').controlled.includes("pull_request"));
   assert.equal(deliveryScreen('Opening a `pull request` is not allowed; label it "merge later".').controlled.includes("pull_request"), true);
   assert.equal(maskLiterals('Show "do not merge" and "open a PR" labels.'), "Show " + " ".repeat(14) + " and " + " ".repeat(11) + " labels.");
-  for (const text of ["Opening a pull request is out of scope.", "A merge is outside the scope of this task.", "Exclude deployment from this work."]) {
+  for (const text of ["Opening a pull request is out of scope.", "A merge is outside the scope of this task.", "Exclude deployment from this work.", "Implement the change, except opening a pull request.", "Do everything except create a PR.", "Do the implementation, other than opening a PR.", "Everything apart from the PR is yours.", "Implement it but not the pull request."]) {
     const screen = deliveryScreen(text);
     assert.equal(screen.tier, "question", text); assert.ok(screen.controlled.length, `${text} → ${JSON.stringify(screen)}`);
   }
