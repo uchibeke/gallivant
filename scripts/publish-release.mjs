@@ -7,7 +7,9 @@ import { pathToFileURL } from "node:url";
 export async function publishRelease(version, { request = fetch, read = readFileSync, run = execFileSync } = {}) {
   if (!/^\d+\.\d+\.\d+$/.test(version || "")) throw new Error("Invalid release version");
   const packageName = JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8")).name;
-  const file = `dist/${packageName.replace(/^@/, "").replace("/", "-")}-${version}.tgz`;
+  // npm treats a bare owner/name-like argument as a GitHub repository spec.
+  // Make the tarball an explicit relative file path before passing it to npm.
+  const file = `./dist/${packageName.replace(/^@/, "").replace("/", "-")}-${version}.tgz`;
   const integrity = `sha512-${createHash("sha512").update(read(file)).digest("base64")}`;
   const response = await request(`https://registry.npmjs.org/${encodeURIComponent(packageName)}/${version}`, { signal: AbortSignal.timeout(15_000) });
   if (response.ok) {
