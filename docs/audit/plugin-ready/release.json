@@ -64,17 +64,17 @@
       {
         "command": "npm test",
         "exit": 0,
-        "passed": 1721,
+        "passed": 1722,
         "skipped": 1,
-        "log": "/tmp/release-start-full.log",
-        "logSha256": "2438a6bcbe4bc143ca7ad7a0a2a6f368b0968fa1c2d1bba5c3c6184dac8ef4b8"
+        "log": "/tmp/release-runtime-full.log",
+        "logSha256": "a5ff852b60523074cfe82025fc3d30b6016d43c0a6c4b48f6a98619ad11bf499"
       },
       {
         "command": "npm run lint",
         "exit": 0,
         "passed": null,
         "skipped": 0,
-        "log": "/tmp/release-start-lint.log",
+        "log": "/tmp/release-runtime-lint.log",
         "logSha256": "cdc63b4e335e51146cdac6c8a99d5817150951621af8d0329a1bcd947f9b2c14"
       },
       {
@@ -82,32 +82,32 @@
         "exit": 0,
         "passed": 418,
         "skipped": 0,
-        "log": "/tmp/release-start-backends.log",
-        "logSha256": "4643788d561322111971428be4bab902a881a4bb60abfa6ad23aabc60e28fb07"
+        "log": "/tmp/release-runtime-backends.log",
+        "logSha256": "79f9e19c3001c749c3cd1fcf875599b84b42d4069e1a845cfdd5d52b54a67ba5"
       },
       {
         "command": "npm run test:plugin-package",
         "exit": 0,
         "passed": 577,
         "skipped": 0,
-        "log": "/tmp/release-start-plugin.log",
-        "logSha256": "30c868b4cba930262427c52d0d49606d7433e12e582ba8ebb530e97d0cdc01f8"
+        "log": "/tmp/release-runtime-plugin.log",
+        "logSha256": "9a19e8dcb98cedfcbe900255188d5921592bebc30ec53010af26cd5862fefb3f"
       },
       {
         "command": "npm run test:release-package",
         "exit": 0,
-        "passed": 9,
+        "passed": 10,
         "skipped": 0,
-        "log": "/tmp/release-start-package.log",
-        "logSha256": "1398cbf51d87879019c8283a475e5b9f6e15fabbd4aad632e99957a57f55cb2b"
+        "log": "/tmp/release-runtime-package.log",
+        "logSha256": "c771dc123266ed9e4d193314393387263cd9a43b6db6ddc2b6890a67968b61d2"
       },
       {
         "command": "git diff --check",
         "exit": 0
       }
     ],
-    "installedConformanceLog": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/task-plugin-consumer-3D5El7/conformance.log",
-    "installedEvidence": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/task-plugin-consumer-3D5El7/evidence.json",
+    "installedConformanceLog": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/task-plugin-consumer-CfTHlU/conformance.log",
+    "installedEvidence": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/task-plugin-consumer-CfTHlU/evidence.json",
     "previousChecks": [
       {
         "command": "npm test",
@@ -205,6 +205,56 @@
         ],
         "installedConformanceLog": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/task-plugin-consumer-8NxFLf/conformance.log",
         "installedEvidence": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/task-plugin-consumer-8NxFLf/evidence.json"
+      },
+      {
+        "checks": [
+          {
+            "command": "npm test",
+            "exit": 0,
+            "passed": 1721,
+            "skipped": 1,
+            "log": "/tmp/release-start-full.log",
+            "logSha256": "2438a6bcbe4bc143ca7ad7a0a2a6f368b0968fa1c2d1bba5c3c6184dac8ef4b8"
+          },
+          {
+            "command": "npm run lint",
+            "exit": 0,
+            "passed": null,
+            "skipped": 0,
+            "log": "/tmp/release-start-lint.log",
+            "logSha256": "cdc63b4e335e51146cdac6c8a99d5817150951621af8d0329a1bcd947f9b2c14"
+          },
+          {
+            "command": "npm run test:execution-backends",
+            "exit": 0,
+            "passed": 418,
+            "skipped": 0,
+            "log": "/tmp/release-start-backends.log",
+            "logSha256": "4643788d561322111971428be4bab902a881a4bb60abfa6ad23aabc60e28fb07"
+          },
+          {
+            "command": "npm run test:plugin-package",
+            "exit": 0,
+            "passed": 577,
+            "skipped": 0,
+            "log": "/tmp/release-start-plugin.log",
+            "logSha256": "30c868b4cba930262427c52d0d49606d7433e12e582ba8ebb530e97d0cdc01f8"
+          },
+          {
+            "command": "npm run test:release-package",
+            "exit": 0,
+            "passed": 9,
+            "skipped": 0,
+            "log": "/tmp/release-start-package.log",
+            "logSha256": "1398cbf51d87879019c8283a475e5b9f6e15fabbd4aad632e99957a57f55cb2b"
+          },
+          {
+            "command": "git diff --check",
+            "exit": 0
+          }
+        ],
+        "installedConformanceLog": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/task-plugin-consumer-3D5El7/conformance.log",
+        "installedEvidence": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/task-plugin-consumer-3D5El7/evidence.json"
       }
     ]
   },
@@ -255,7 +305,7 @@
     },
     "ac-12": {
       "met": true,
-      "evidence": "test/release-package.test.mjs: scoped invalidation, immutable handoff hashes and evidence-only qualification updates; /tmp/release-start-package.log"
+      "evidence": "test/release-package.test.mjs: runtime configuration changes invalidate deployment-dependent evidence only; actual resource-only rebuild and runtime/manifest mismatch regressions; /tmp/release-runtime-package.log"
     },
     "ac-13": {
       "met": false,
@@ -291,6 +341,18 @@
       "lib/release_package.mjs": "65ff2555fcd5acdb3f02e0e9f1646d6804f507c89b3620884700e06b0a582e7a",
       "test/release-package.test.mjs": "f11c241d9e9c60acdbd4f45b86c79327505f847c16b0be3f6179566191127aef",
       "docs/release-qualification.md": "ffad245a75c6f1b95ad2d6cb31f1f0ae15c6369cc133b53e9bf065c33299e4c2"
+    }
+  },
+  "runtimeIdentityReview": {
+    "reviewedCommit": "7615b87e5e10c23a7b4b210be59779e6f26c39df",
+    "review": 5565683094,
+    "inlineComment": 4309299683,
+    "representativeOutput": "/tmp/release-runtime-output.json",
+    "classification": "offline regression verification; live prerequisites unchanged",
+    "sourceHashes": {
+      "lib/release_package.mjs": "4aed8e90a199b252e2792d03ae3e5b41c2edd42e31c37107bec53a9f2c376dde",
+      "test/release-package.test.mjs": "a93f68ac6553b64c13470ab568726cd2944fc90a0999d05fdd9ecff266694ee5",
+      "docs/release-qualification.md": "413b42b9a08e4a8b56a6bfd5e2e2dd6d16edb2d1f2447575a061f03819fc9dc0"
     }
   }
 }

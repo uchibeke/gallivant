@@ -77,6 +77,44 @@ test('current bound live failures and blocks retain their outcomes', () => {
   }
 });
 
+test('runtime configuration changes invalidate deployment-dependent evidence only', () => {
+  const input = candidate();
+  input.manifest.resource = { uri: 'ui://task-delivery/app', domain: 'https://aport.io', connectDomains: [], resourceDomains: [] };
+  input.manifest.requirements = { node: '>=22' };
+  input.manifest.exports = { '.': './lib/index.mjs' };
+  Object.assign(input.manifest, { coreVersion: '0.2.0', operationVersion: 1, taskVersion: 1, executionVersion: 1 });
+  const evidence = observed(input), identity = releaseIdentity(input.manifest, input.deployment);
+  const changes = [
+    m => { m.resource.uri = 'ui://task-delivery/next'; },
+    m => { m.resource.domain = 'https://app.aport.io'; },
+    m => { m.resource.connectDomains = ['https://api.aport.io']; },
+    m => { m.resource.resourceDomains = ['https://assets.aport.io']; },
+    m => { m.requirements.node = '>=24'; },
+    m => { m.exports['.'] = './lib/next.mjs'; },
+    ...['coreVersion', 'operationVersion', 'taskVersion', 'executionVersion'].map(key => m => { m[key] = 'next'; }),
+  ];
+  for (const change of changes) {
+    const manifest = structuredClone(input.manifest); change(manifest);
+    const result = evaluateRelease({ manifest, deployment: input.deployment, evidence });
+    for (const scope of ['core', 'tools', 'plugin']) assert.equal(result.identity[scope], identity[scope]);
+    assert.notEqual(result.identity.deployment, identity.deployment);
+    assert.equal(result.checks.integration.status, 'passed');
+    const affected = Object.keys(RELEASE_CHECKS).filter(id => id !== 'integration');
+    assert.deepEqual(result.rerun, affected);
+    for (const id of affected) assert.equal(result.checks[id].status, 'stale', id);
+    assert.equal(result.status, 'needs-human');
+    assert.equal(result.states.codeMerged, false);
+    assert.equal(result.states.liveQualified, false);
+    assert.equal(result.states.submissionReady, false);
+  }
+  // Runtime serialization/provenance changes do not change functional settings.
+  input.manifest.sourceCommit = 'audit-only commit';
+  input.manifest.hashes.runtime = hash('runtime serialized with new provenance');
+  input.manifest.resource = Object.fromEntries(Object.entries(input.manifest.resource).reverse());
+  assert.deepEqual(releaseIdentity(input.manifest, input.deployment), identity);
+  assert.equal(evaluateRelease({ ...input, evidence }).status, 'submission-ready');
+});
+
 test('record-only changes preserve qualification and never infer publication', () => {
   const input = candidate(), evidence = observed(input);
   input.manifest.sourceCommit = 'new audit-only commit';
@@ -120,7 +158,8 @@ test('payload verification rejects tampering, source additions and symlinks', t 
   execFileSync('git', ['-c', 'user.name=Test', '-c', 'user.email=test@localhost', '-c', 'commit.gpgsign=false', 'commit', '-qm', 'Fixture'], { cwd: source });
   const { manifest } = candidate(); manifest.coreArtifact = 'core.tgz';
   for (const [file, key] of [['core.tgz', null], ['aport-task-delivery.zip', 'plugin'], ['runtime.json', 'runtime'], ['operations.json', 'operations']]) {
-    writeFileSync(join(out, file), file); if (key) manifest.hashes[key] = hash(file); else manifest.coreSha256 = hash(file);
+    const bytes = key === 'runtime' ? '{}' : file;
+    writeFileSync(join(out, file), bytes); if (key) manifest.hashes[key] = hash(bytes); else manifest.coreSha256 = hash(bytes);
   }
   const handoffFiles = ['listing.md', 'release-notes.md', 'review-cases.json', 'START-HERE.md', 'RUNTIME.md'];
   manifest.handoffHashes = Object.fromEntries(handoffFiles.map(file => {
@@ -131,6 +170,10 @@ test('payload verification rejects tampering, source additions and symlinks', t 
   manifest.assetHashes = { 'plugin.json': hash('plugin') };
   manifest.payloadHashes = { 'lib/core.mjs': hash(readFileSync(join(source, 'lib/core.mjs'))) };
   assert.equal(verifyReleasePayload(out, manifest, { sourceRoot: source }), true);
+  const changedRuntime = JSON.stringify({ resource: { uri: 'ui://task-delivery/changed' } });
+  writeFileSync(join(out, 'runtime.json'), changedRuntime);
+  assert.throws(() => verifyReleasePayload(out, { ...manifest, hashes: { ...manifest.hashes, runtime: hash(changedRuntime) } }, { sourceRoot: source }), /Runtime configuration differs/);
+  writeFileSync(join(out, 'runtime.json'), '{}');
   for (const file of [...handoffFiles, 'plugin/plugin.json']) {
     const original = readFileSync(join(out, file));
     for (const replacement of ['tampered', '']) {
@@ -217,6 +260,15 @@ test('release assembly reuses the packager and keeps evidence outside the public
   for (const [file, expected] of Object.entries(built.manifest.handoffHashes)) assert.equal(hash(readFileSync(join(out, file))), expected);
   for (const [file, expected] of Object.entries(built.manifest.assetHashes)) assert.equal(hash(readFileSync(join(out, 'plugin', file))), expected);
   assert.deepEqual(readReleaseJson(join(out, 'manifest.json')), built.manifest);
+  const changed = assembleRelease({ config: { ...config, resource: { ...config.resource, uri: 'ui://task-delivery/next' } }, sourceCommit, coreVersion: '0.2.0', out: join(dir, 'changed-resource'), internal: true, deployment });
+  assert.equal(changed.manifest.coreSha256, built.manifest.coreSha256);
+  assert.equal(changed.manifest.hashes.plugin, built.manifest.hashes.plugin);
+  assert.equal(changed.manifest.hashes.operations, built.manifest.hashes.operations);
+  assert.notEqual(changed.manifest.hashes.runtime, built.manifest.hashes.runtime);
+  assert.notEqual(changed.evaluation.identity.deployment, built.evaluation.identity.deployment);
+  const stale = evaluateRelease({ manifest: changed.manifest, deployment, evidence: observed({ manifest: built.manifest, deployment }) });
+  for (const id of Object.keys(RELEASE_CHECKS).filter(id => id !== 'integration')) assert.equal(stale.checks[id].status, 'stale', id);
+  assert.equal(stale.states.submissionReady, false);
   const contents = execFileSync('unzip', ['-Z1', join(out, 'aport-task-delivery.zip')], { encoding: 'utf8' });
   assert.match(contents, /skills\/task-delivery\/SKILL.md/);
   assert.doesNotMatch(contents, /evidence|qualification|reviewer|credential/);

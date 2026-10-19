@@ -117,3 +117,28 @@ full-suite passes with one existing skip, 418 backend passes, 43 installed flows
 and 534 conformance checks, nine release checks, lint and whitespace. Current
 logs and source hashes are in `handoffInstructionsReview` and `offline.checks`
 in the evidence index; earlier verification records remain available.
+
+Review `5565683094` / comment `4309299683` found resource-only runtime changes
+missing from qualification bindings. The deployment identity now includes canonical
+resource configuration, runtime requirements, exports and contract versions.
+Payload validation compares those fields with the hashed runtime JSON using the
+same projection. All deployment-dependent checks become stale when those settings
+change; independent integration evidence remains reusable. Audit-only provenance
+and serialization changes do not invalidate functional configuration evidence.
+Existing records using the earlier deployment digest require requalification.
+
+Regression coverage exercises URI, domain, both CSP origin lists, requirements,
+exports and contract versions; it also rejects a runtime/manifest mismatch despite
+an updated file checksum. Two actual fixture builds reproduce the reported case:
+unchanged core, ZIP, operations and supplied deployment, changed runtime bytes and
+deployment identity. Representative generated output was inspected at
+`/tmp/release-runtime-output.json`. Both CLI callers use the shared identity and
+payload checks; owner-state bindings also become stale. Assembly cleanup and
+immutable handoff hashing remain unchanged. These are offline observations; the
+external prerequisites and twelve unmet release criteria remain unchanged.
+
+Runtime-binding verification passed all six required commands: 1,722 full-suite
+passes with one existing skip, 418 backend passes, 43 installed flows and 534
+conformance checks, ten release tests, lint and whitespace. The latest source
+hashes and command logs are recorded in `runtimeIdentityReview` and `offline.checks`;
+previous verification records remain preserved.

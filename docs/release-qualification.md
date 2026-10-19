@@ -64,7 +64,14 @@ Outdated bindings remain `stale`; fixture, offline and future observations remai
 
 Core hashes cover the packed bytes and lock; tool hashes cover operations and
 schemas; plugin hashes cover exact ZIP bytes; deployment hashes cover revision,
-configuration and endpoint. An affected binding becomes `stale` and appears in
+configuration, endpoint and the runtime's resource settings, requirements, exports
+and contract versions. Resource URI/domain/CSP changes therefore invalidate every
+deployment-dependent check even when the archive, ZIP and deployment record are
+unchanged. Runtime serialization and source-provenance-only changes do not alter
+this canonical configuration identity. Payload validation also checks that these
+settings match the hashed `runtime.json`. Records using the earlier deployment digest
+must be requalified; the independent integration check remains reusable.
+An affected binding becomes `stale` and appears in
 `rerun`; independent checks remain reusable. Validation also rehashes archives,
 source payload files and the current tracked payload inventory. New, removed,
 modified or uncommitted executable/packaging inputs require a rebuild. Audit-only
