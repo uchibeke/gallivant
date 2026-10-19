@@ -123,6 +123,25 @@ test("the delivery screen is deterministic over the fixture corpus and masks lit
     assert.deepEqual(unaccountedTerms(screen, { action: "pull_request" }), ["publish"], text);
   }
   for (const text of ["Add a publish button.", "Add a command to publish docs.", "The button publishes the report.", "Add a list of published articles.", "Show the publish status on the page."]) assert.equal(deliveryScreen(text).tier, "assumption", text);
+  // Package submission, store uploads and registry tool commands are publication; a feature infinitive or descriptive form is not.
+  for (const text of ["Submit the package to npm.", "Implement export. Then upload the build to the App Store.", "Push the image to Docker Hub after tests pass.", "Run gem push once the gem builds.", "Post the release to PyPI.", "Run twine upload when done."]) {
+    const screen = deliveryScreen(text);
+    assert.equal(screen.tier, "question", text); assert.ok(screen.escalated.includes("publish"), `${text} → ${JSON.stringify(screen)}`);
+    assert.ok(unaccountedTerms(screen, { action: "pull_request" }).includes("publish"), text);
+    assert.equal(unaccountedTerms(screen, { action: "publish" }).includes("publish"), false, text);
+  }
+  for (const text of ["Add a form to submit packages to the registry.", "Add a button that uploads files to the marketplace.", "Submit the form to the server.", "Upload avatars to S3."]) assert.equal(deliveryScreen(text).escalated.includes("publish"), false, text);
+  // Approval escalates when the statement waits on someone's decision, not when it names an approval feature.
+  for (const text of ["Wait for my approval before opening a PR.", "Get sign-off before opening a PR.", "Open a PR once approved.", "Implement export; it needs approval before merging.", "Approve the plan first."]) {
+    const screen = deliveryScreen(text);
+    assert.equal(screen.tier, "question", text); assert.ok(screen.escalated.includes("approval"), `${text} → ${JSON.stringify(screen)}`);
+    assert.ok(unaccountedTerms(screen, { action: "pull_request" }).includes("approval"), text);
+    assert.equal(unaccountedTerms(screen, { action: "wait_for_approval" }).includes("approval"), false, text);
+  }
+  for (const text of ["Add an approval workflow to the admin UI.", "Show the approval status column.", "List approved expenses on the dashboard.", "Add a button to approve comments.", "Send approval notifications by email."]) {
+    const screen = deliveryScreen(text);
+    assert.equal(screen.tier, "assumption", text); assert.deepEqual(screen.terms, ["approval"], text); assert.deepEqual(screen.escalated, [], text);
+  }
   // Shipping, rollout and go-live wording, and a production destination, read as deployment.
   for (const text of ["Ship this change to production.", "Roll this out to production.", "Implement export, then roll it out.", "Go live with the new pricing page.", "Promote the build to staging.", "Ship it."]) {
     const screen = deliveryScreen(text);

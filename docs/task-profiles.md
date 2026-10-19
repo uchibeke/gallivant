@@ -74,13 +74,18 @@ punctuation ends one, but conjunctions and an introductory colon after the
 control ("Do not: open a pull request") do not. The screen grants nothing:
 
 - Escalating terms (merge, deploy including shipping, rollout, go-live and
-  "to production" wording, release, approval, wait, local-only, a write aimed
+  "to production" wording, release, wait, local-only, a write aimed
   at the base branch or at skipping the pull request such as "push directly
-  to main", and
+  to main",
   publish whenever it appears as a bare verb such as "Publish this package to
-  npm", "and publish the package" or "could you publish it", rather than as a
+  npm", "and publish the package" or "could you publish it", or as a package
+  or build submission to a registry or store such as "submit the package to
+  npm", "upload the build to the App Store" or "run gem push", rather than as a
   noun modifier such as "a publish button" or a feature infinitive such as
-  "a command to publish docs") or a
+  "a command to publish docs", and approval whenever the statement waits on
+  someone's decision such as "wait for my approval", "get sign-off" or "once
+  approved", rather than an approval feature such as "an approval workflow",
+  "the approval status column" or "a button to approve comments") or a
   control word such as "do not", "until", "unless", "out of scope",
   "exclude", "except", "other than", "but not", "disallowed", "isn't
   allowed", "not permitted", "stop before", "pause before" or an owner
