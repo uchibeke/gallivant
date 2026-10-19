@@ -74,12 +74,20 @@ test("repeated fixture clauses stay bounded and a live repository target stays v
   for (const text of ["For tests, create a fake PR fixture and upload logs to GitHub.", "For tests, create a fake PR fixture, then upload logs to GitHub.",
     "For tests, create a fake PR fixture before uploading logs to GitHub.",
     "For tests, create a fake PR fixture after uploading logs to GitHub.",
-    "For tests, create a fake PR fixture while uploading logs to GitHub."]) {
+    "For tests, create a fake PR fixture while uploading logs to GitHub.",
+    "For tests, create a fake PR fixture and upload logs via GitHub.",
+    "For tests, create a fake PR fixture using a local GitHub mock."]) {
     assert.equal(ownerDelivery(text), null, text);
     assert.doesNotThrow(() => assertDeliveryAnswer({}, text), text);
   }
-  for (const text of ["For tests, create a fake PR on GitHub.", "For tests, create a fake PR against the upstream repository.", "For tests, create a fake PR fixture and a mock PR on GitHub."])
+  for (const text of ["For tests, create a fake PR on GitHub.", "For tests, create a fake PR against the upstream repository.", "For tests, create a fake PR fixture and a mock PR on GitHub.",
+    "For tests, create a fake PR fixture via GitHub.",
+    "For tests, create a fake PR fixture through GitHub.",
+    "For tests, create a fake PR fixture using GitHub.",
+    "For tests, create a fake PR fixture and open it via GitHub."]) {
     assert.throws(() => ownerDelivery(text), { code: "TASK_DELIVERY_SCOPE" }, text);
+    assert.throws(() => assertDeliveryAnswer({}, text), { code: "TASK_DELIVERY_SCOPE" }, text);
+  }
 });
 
 test("publication fixture masking cannot hide coordinated live PRs", () => {
@@ -523,6 +531,10 @@ test("business approval rules keep temporal implementation actions visible", () 
     "If I approve the invoice, email the customer as our team proofreads the invoice.",
     "If I approve the invoice, email the customer as proofreading the article.",
     "If I approve the invoice, email the customer by the time our team proofreads the invoice.",
+    "If I approve the invoice, email the customer after the article is proofread.",
+    "If I approve the invoice, email the customer before the invoice is proofread.",
+    "If I approve the invoice, email the customer by the time the article has been edited.",
+    "If I approve the invoice, email the customer when the article gets edited.",
   ]) {
     assert.throws(() => ownerDelivery(source), { code: "TASK_DELIVERY_SCOPE" }, source);
     assert.throws(() => assertDeliveryAnswer({}, source), { code: "TASK_DELIVERY_SCOPE" }, source);
@@ -539,6 +551,9 @@ test("business approval rules keep temporal implementation actions visible", () 
     "If I approve the invoice, email the customer as you apply the discount.",
     "If I approve the invoice, email the customer as the payment clears.",
     "If I approve the invoice, email the customer by the time you apply the discount.",
+    "If I approve the invoice, email the customer after the discount is applied.",
+    "If I approve the invoice, email the customer once the receipt is sent.",
+    "If I approve the invoice, email the customer after the receipt gets sent.",
   ]) {
     assert.equal(ownerDelivery(source), null, source);
     assert.doesNotThrow(() => assertDeliveryAnswer({}, source), source);
