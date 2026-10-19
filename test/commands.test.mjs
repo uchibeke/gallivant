@@ -342,6 +342,7 @@ test("register without --worktree clones from the branch as before, with no chec
   const r = await register(w.ctx, { url: w.url });
   assert.equal(verified, false, "the path register chose itself needs no verification");
   assert.match(r.worktree, /worktrees\/acme\/widget\/widget-export$/);
+  assert.equal(w.ctx.state.get(r.id).execution_epoch, undefined, "a fresh PR without a prior provider uses the original ledger");
 });
 
 test("register refuses a pending start before touching its checkout or PR", async () => {
@@ -457,6 +458,45 @@ test("a harness change drops another harness's session even when both use UUIDs"
   await assert.rejects(() => register(typed.ctx, { url: typed.url, worktree: "/checkouts/widget", harness: "opencode", session: "6f1c2d3e-1111-4111-8111-111111111111" }),
     /is not a opencode session id; nothing was registered/);
   assert.deepEqual(typed.calls.filter(x => x[0] === "setBody"), [], "and nothing was written for a session that was refused");
+});
+
+test("cross-harness reset fences unsettled execution and records a separate ledger epoch", async () => {
+  const w = registerWorld(registerGit());
+  const id = "acme/widget/widget-export", run = "run-previous-claude";
+  w.ctx.gh.prView = async () => ({ ...prFixture({ headRefName: "gallivant/widget-export", createdAt: T0 }), body: BLOCK() });
+  const prior = {
+    ...newEntry({ prd: "docs/prds/widget-export.md", harness: "claude", session: "6f1c2d3e-1111-4111-8111-111111111111", repo: "acme/widget", branch: "gallivant/widget-export", worktree: "/checkouts/widget", pr: 142, state: STATES.needsHuman, nowIso: T0 }),
+    last: { run, exit: null }, iteration: 3,
+  };
+  w.ctx.state.put(id, prior);
+  await assert.rejects(() => register(w.ctx, { url: w.url, harness: "codex" }), /previous run is not settled/);
+  assert.deepEqual(w.calls, [], "no PR write precedes the settlement check");
+  w.ctx.state.update(id, { last: { run, exit: 1 } });
+  const ledger = { current: { id: run, exit: 1, execution: { collected: true } }, stopped: null };
+  w.ctx.executionFor = () => ({ root: join(w.ctx.home, "runs", "widget-export"), account: "operator", state: () => ledger,
+    current: () => ({ id: run, running: false }) });
+  w.ctx.runnerFor = () => ({ current: () => ({ id: run, running: false }) });
+  const changed = await register(w.ctx, { url: w.url, harness: "codex" });
+  const saved = w.ctx.state.get(changed.id);
+  assert.equal(saved.execution_epoch, 1);
+  assert.equal(saved.execution_handoff.from, "claude");
+  assert.equal(saved.execution_handoff.to, "codex");
+  assert.equal(saved.session, null);
+  assert.equal(saved.iteration, 0, "register retains its documented reset semantics");
+  assert.equal(saved.last.run, run, "the settled old run remains recorded for inspection");
+
+  const codexRun = "run-new-codex";
+  w.ctx.state.update(id, { session: "7f1c2d3e-1111-4111-8111-111111111111", last: { run: codexRun, exit: 0 },
+    execution: { version: 1, provider: "codex", account: "operator", providerState: "succeeded", collected: true } });
+  const codexLedger = { current: { id: codexRun, exit: 0, execution: { collected: true } }, stopped: null };
+  w.ctx.executionFor = () => ({ root: join(w.ctx.home, "runs", "widget-export"), account: "operator", state: () => codexLedger,
+    current: () => ({ id: codexRun, running: false }) });
+  w.ctx.runnerFor = () => ({ current: () => ({ id: codexRun, running: false }) });
+  const back = await register(w.ctx, { url: w.url, harness: "claude" });
+  const returned = w.ctx.state.get(back.id);
+  assert.equal(returned.execution_epoch, 2, "switching back must not reopen Claude's original ledger");
+  assert.equal(returned.execution_handoff.from, "codex");
+  assert.equal(returned.session, null, "the new Claude epoch starts a fresh session too");
 });
 
 test("registering with no identity override migrates only the legacy block", async () => {
