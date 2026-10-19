@@ -687,6 +687,38 @@ test("business approval rules keep temporal implementation actions visible", () 
   }
 });
 
+test("temporal approval gerunds retain modifiers without hiding implementation", () => {
+  for (const connector of ["before", "after", "while", "once", "until", "when", "as soon as", "by the time", "as"])
+    for (const modifier of ["carefully", "very carefully", "not carefully"]) {
+      for (const source of [
+        `If I approve the invoice, email the customer ${connector} ${modifier} proofreading the article.`,
+        `Email the customer ${connector} ${modifier} proofreading the article after I approve the invoice.`,
+        `If I approve the invoice, email the customer ${connector} ${modifier} proofreading the invoice.`,
+        `If I approve the invoice, email the report ${connector} ${modifier} applying the discount.`,
+      ]) {
+        assert.throws(() => ownerDelivery(source), { code: "TASK_DELIVERY_SCOPE" }, source);
+        assert.throws(() => assertDeliveryAnswer({}, source), { code: "TASK_DELIVERY_SCOPE" }, source);
+      }
+      const source = `If I approve the invoice, email the customer ${connector} ${modifier} applying the discount.`;
+      assert.equal(ownerDelivery(source), null, source);
+      assert.doesNotThrow(() => assertDeliveryAnswer({}, source), source);
+      const contract = ownerDelivery(source + " Open a PR for review.");
+      assert.equal(validateOwnerDelivery(contract), contract, source);
+      assert.equal(ownerImplementation(contract).join(""), source + " ", source);
+    }
+  const laterAction = "If I approve the invoice, email the customer after carefully emailing the customer before proofreading the article.";
+  assert.throws(() => ownerDelivery(laterAction), { code: "TASK_DELIVERY_SCOPE" });
+  assert.throws(() => assertDeliveryAnswer({}, laterAction), { code: "TASK_DELIVERY_SCOPE" });
+  for (const source of [
+    "If I approve the invoice, email the customer after the recurring payment clears.",
+    "If I approve the invoice, email the customer after Alice King emails the customer.",
+    "If I approve the invoice, email the customer after the recurring payment is processed.",
+  ]) {
+    assert.equal(ownerDelivery(source), null, source);
+    assert.doesNotThrow(() => assertDeliveryAnswer({}, source), source);
+  }
+});
+
 test("temporal approval actors include modifiers before their role", () => {
   for (const actor of ["our senior editor", "the experienced reviewer", "their very experienced editors"]) {
     const source = `If I approve the invoice, email the customer after ${actor} proofreads the article.`;
