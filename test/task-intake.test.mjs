@@ -254,6 +254,40 @@ test("answer batches enforce aggregate bytes and item limits before parsing or m
   assert.equal(calls, 2);
 });
 
+test("non-string answers stop before serialization and preserve saved retries", async () => {
+  let calls = 0, serializationCalls = 0, payloadReads = 0;
+  const w = world({ prepare: async (_ctx, task) => { calls++; return JSON.stringify(draftFor(task, { question: true })); } });
+  const first = await w.service.prepare({ text: REQUEST }), store = taskStore(w.home), initial = store.read(first.taskId);
+  const object = Object.defineProperty({}, "payload", { enumerable: true, get() { payloadReads++; return "x".repeat(MAX_ANSWER_BYTES * 4); } });
+  const custom = { toJSON() { serializationCalls++; return "Use CSV."; } };
+  const cyclic = {}; cyclic.self = cyclic;
+  const invalid = [object, custom, cyclic, [custom], new String("Use CSV."), null, undefined, 42, true, 1n, Symbol("answer"), () => "Use CSV."];
+  for (const [index, value] of invalid.entries()) {
+    await assert.rejects(w.service.answer({ taskId: first.taskId, expectedRevision: first.revision, operationId: `non-text-${index}`, answers: { "q-r-1": value } }), { code: "TASK_INPUT", taskEffects: "none" });
+    assert.equal(serializationCalls, 0);
+    assert.equal(payloadReads, 0);
+    assert.deepEqual(store.read(first.taskId), initial);
+    assert.equal(calls, 1);
+  }
+  const answers = { "q-r-1": "Use CSV." }, operationId = "text-answer";
+  const accepted = await w.service.answer({ taskId: first.taskId, expectedRevision: first.revision, operationId, answers });
+  const saved = store.read(first.taskId);
+  saved.operations["legacy-text-answer"] = contentDigest(JSON.stringify({ answers, verifyCommands: [] }));
+  store.save(saved);
+  for (const id of [operationId, "legacy-text-answer"]) {
+    for (const value of invalid) {
+      await assert.rejects(w.service.answer({ taskId: first.taskId, expectedRevision: first.revision, operationId: id, answers: { "q-r-1": value } }), { code: "TASK_CONFLICT", taskEffects: "none" });
+      assert.equal(serializationCalls, 0);
+      assert.equal(payloadReads, 0);
+      assert.deepEqual(store.read(first.taskId), saved);
+    }
+    assert.deepEqual(await w.service.answer({ taskId: first.taskId, expectedRevision: first.revision, operationId: id, answers }), accepted);
+  }
+  assert.equal(calls, 2);
+  assert.deepEqual(w.ctx.state.entries(), []);
+  assert.equal(w.daemonCalls(), 0);
+});
+
 test("answer accessors and proxies share one bounded snapshot through persistence and replay", async t => {
   for (const kind of ["accessor", "proxy"]) await t.test(kind, async () => {
     let calls = 0;
@@ -513,6 +547,9 @@ test("latest publication review cases fail before task effects without rejecting
     "If I approve the invoice, email the customer after you proofread the article.",
     "If I approve the invoice, email the customer after our team proofreads the invoice.",
     "If I approve the invoice, email the customer once you proofread the article.",
+    "If I approve the invoice, email the customer whenever you proofread the invoice.",
+    "Email the customer whenever carefully proofreading the invoice after I approve the invoice.",
+    "If I approve the invoice, email the customer whenever the invoice is proofread.",
     "If I approve the invoice, email the customer until our team proofreads the article.",
     "If I approve the invoice, email the customer when proofreading the article.",
     "If I approve the invoice, email the customer as soon as you proofread the article.",
@@ -665,6 +702,8 @@ test("latest publication review cases fail before task effects without rejecting
     "If I approve the invoice, email the customer after the recurring payment clears.",
     "If I approve the invoice, email the customer after our team emails the customer.",
     "If I approve the invoice, email the customer once you apply the discount.",
+    "If I approve the invoice, email the customer whenever you apply the discount.",
+    "If I approve the invoice, email the customer whenever the discount is applied.",
     "If I approve the invoice, email the customer until the payment clears.",
     "If I approve the invoice, email the customer as soon as you apply the discount.",
     "If I approve the invoice, email the customer as you apply the discount.",
