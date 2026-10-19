@@ -409,13 +409,17 @@ test("business approval exemptions do not mask technical implementation objects"
     "If I approve the proposal, apply the Kubernetes manifest.",
     "Apply the Terraform plan after I approve the proposal.",
     "If I approve the plan, send the report.",
+    "If I approve the proposal, create the payment SDK.",
+    "If I approve the proposal, generate the customer API.",
+    "Create the payment SDK after I approve the proposal.",
   ]) {
     assert.throws(() => ownerDelivery(source), { code: "TASK_DELIVERY_SCOPE" }, source);
     assert.throws(() => assertDeliveryAnswer({}, source), { code: "TASK_DELIVERY_SCOPE" }, source);
   }
-  const businessOutcome = "If I approve the purchase, generate a customer receipt.";
-  assert.equal(ownerDelivery(businessOutcome), null);
-  assert.doesNotThrow(() => assertDeliveryAnswer({}, businessOutcome));
+  for (const businessOutcome of ["If I approve the purchase, generate a customer receipt.", "If I approve the purchase, show a confirmation page.", "If a customer approves the refund, send the customer an email."]) {
+    assert.equal(ownerDelivery(businessOutcome), null, businessOutcome);
+    assert.doesNotThrow(() => assertDeliveryAnswer({}, businessOutcome), businessOutcome);
+  }
 });
 
 test("publication controls remain visible beside PR feature predicates and qualifiers", () => {
@@ -590,6 +594,9 @@ test("generic policy modifiers cannot mask imperative merge actions", () => {
     "Please merge mergeable PRs.",
     "Tell the agent to merge selectable commits.",
     "After tests pass, merge mergeable PRs.",
+    "Do not commit reviewable changes.",
+    "Never commit mergeable changes.",
+    "Implement export. Do not commit editable files.",
   ]) {
     assert.throws(() => ownerDelivery(text), { code: "TASK_DELIVERY_SCOPE" }, text);
     assert.throws(() => assertDeliveryAnswer({}, text), { code: "TASK_DELIVERY_SCOPE" }, text);
@@ -601,6 +608,8 @@ test("generic policy modifiers cannot mask imperative merge actions", () => {
     "Document whether PRs are mergeable.",
     "Build a settings page that lists mergeable PRs.",
     "Show whether commits are selectable.",
+    "Add a commit selectable field.",
+    "Document the commit editable flag.",
   ]) {
     assert.equal(ownerDelivery(text), null, text);
     assert.doesNotThrow(() => assertDeliveryAnswer({}, text), text);
