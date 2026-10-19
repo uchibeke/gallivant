@@ -80,13 +80,21 @@ test("repeated fixture clauses stay bounded and a live repository target stays v
 });
 
 test("publication fixture masking cannot hide coordinated live PRs", () => {
-  for (const connector of ["plus", "as well as", "along with", "alongside", "together with", "in addition to", "not to mention", "besides"]) {
+  for (const connector of ["plus", "as well as", "along with", "alongside", "together with", "in addition to", "not to mention", "besides", "versus", "vs", "vs.", "compared with", "compared to"]) {
     const source = `For tests, create a fake PR ${connector} a real PR.`;
     assert.throws(() => ownerDelivery(source), { code: "TASK_DELIVERY_SCOPE" }, source);
     assert.throws(() => assertDeliveryAnswer({}, source), { code: "TASK_DELIVERY_SCOPE" }, source);
   }
   assert.equal(ownerDelivery("For tests, create a fake PR plus a synthetic PR fixture."), null);
   assert.equal(ownerDelivery("For tests, create a fake PR alongside a synthetic PR fixture."), null);
+  for (const connector of ["versus", "vs", "vs.", "compared with", "compared to"]) {
+    const source = `For tests, create a fake PR fixture ${connector} a synthetic PR fixture.`;
+    assert.equal(ownerDelivery(source), null, source);
+    assert.doesNotThrow(() => assertDeliveryAnswer({}, source), source);
+  }
+  const liveDestination = "For tests, create a fake PR fixture vs. a mock PR on GitHub.";
+  assert.throws(() => ownerDelivery(liveDestination), { code: "TASK_DELIVERY_SCOPE" });
+  assert.throws(() => assertDeliveryAnswer({}, liveDestination), { code: "TASK_DELIVERY_SCOPE" });
 });
 
 test("subordinating clauses after product PR conditions retain delivery controls", () => {

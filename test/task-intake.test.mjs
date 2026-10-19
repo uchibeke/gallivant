@@ -445,6 +445,8 @@ test("latest publication review cases fail before task effects without rejecting
     "If I approve the article, email the customer as well as proofread the article.",
     "If I approve the article, email the customer in addition to proofread the article.",
     "For tests, create a fake PR fixture alongside a real PR.",
+    "For tests, create a fake PR fixture versus a real PR.",
+    "For tests, create a fake PR fixture vs. a real PR.",
     "John should create a PR for review.",
     "The team must create a PR for review.",
     "Create an actual PR in the integration test.",
@@ -505,6 +507,7 @@ test("latest publication review cases fail before task effects without rejecting
     "The button creates a PR after tests pass where the user can inspect it.",
     "The button creates a PR after tests pass since the queue is ready.",
     "For tests, create a fake PR alongside a synthetic PR fixture.",
+    "For tests, create a fake PR fixture versus a synthetic PR fixture.",
     "If I approve the invoice, email the customer and apply the discount.",
     "If I approve the invoice, email the customer as well as apply the discount.",
   ];
