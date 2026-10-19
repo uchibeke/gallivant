@@ -64,17 +64,17 @@
       {
         "command": "npm test",
         "exit": 0,
-        "passed": 1722,
+        "passed": 1724,
         "skipped": 1,
-        "log": "/tmp/release-runtime-full.log",
-        "logSha256": "a5ff852b60523074cfe82025fc3d30b6016d43c0a6c4b48f6a98619ad11bf499"
+        "log": "/tmp/release-controls-final-full.log",
+        "logSha256": "4b6c4b907f8c26c6bcc6d177139b28c304c0a4db278d35ef9d3b2b2c5e8a5140"
       },
       {
         "command": "npm run lint",
         "exit": 0,
         "passed": null,
         "skipped": 0,
-        "log": "/tmp/release-runtime-lint.log",
+        "log": "/tmp/release-controls-final-lint.log",
         "logSha256": "cdc63b4e335e51146cdac6c8a99d5817150951621af8d0329a1bcd947f9b2c14"
       },
       {
@@ -82,32 +82,32 @@
         "exit": 0,
         "passed": 418,
         "skipped": 0,
-        "log": "/tmp/release-runtime-backends.log",
-        "logSha256": "79f9e19c3001c749c3cd1fcf875599b84b42d4069e1a845cfdd5d52b54a67ba5"
+        "log": "/tmp/release-controls-final-backends.log",
+        "logSha256": "30f6bfa7921d13f250b57d68ef5efd2646bb482d7fbd08198c98221602d6fd28"
       },
       {
         "command": "npm run test:plugin-package",
         "exit": 0,
-        "passed": 577,
+        "passed": 578,
         "skipped": 0,
-        "log": "/tmp/release-runtime-plugin.log",
-        "logSha256": "9a19e8dcb98cedfcbe900255188d5921592bebc30ec53010af26cd5862fefb3f"
+        "log": "/tmp/release-controls-final-plugin.log",
+        "logSha256": "5df8d59d2dd5506b4078f74ce92aad7ce647b404da4b4e072341e13069250c2c"
       },
       {
         "command": "npm run test:release-package",
         "exit": 0,
-        "passed": 10,
+        "passed": 11,
         "skipped": 0,
-        "log": "/tmp/release-runtime-package.log",
-        "logSha256": "c771dc123266ed9e4d193314393387263cd9a43b6db6ddc2b6890a67968b61d2"
+        "log": "/tmp/release-controls-final-release.log",
+        "logSha256": "460328fa6ca3f8efe5de1db416150f418fc3bf054f818fe818c88b6a5df1fa8a"
       },
       {
         "command": "git diff --check",
         "exit": 0
       }
     ],
-    "installedConformanceLog": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/task-plugin-consumer-CfTHlU/conformance.log",
-    "installedEvidence": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/task-plugin-consumer-CfTHlU/evidence.json",
+    "installedConformanceLog": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/task-plugin-consumer-TZ1yAX/conformance.log",
+    "installedEvidence": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/task-plugin-consumer-TZ1yAX/evidence.json",
     "previousChecks": [
       {
         "command": "npm test",
@@ -255,6 +255,56 @@
         ],
         "installedConformanceLog": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/task-plugin-consumer-3D5El7/conformance.log",
         "installedEvidence": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/task-plugin-consumer-3D5El7/evidence.json"
+      },
+      {
+        "checks": [
+          {
+            "command": "npm test",
+            "exit": 0,
+            "passed": 1722,
+            "skipped": 1,
+            "log": "/tmp/release-runtime-full.log",
+            "logSha256": "a5ff852b60523074cfe82025fc3d30b6016d43c0a6c4b48f6a98619ad11bf499"
+          },
+          {
+            "command": "npm run lint",
+            "exit": 0,
+            "passed": null,
+            "skipped": 0,
+            "log": "/tmp/release-runtime-lint.log",
+            "logSha256": "cdc63b4e335e51146cdac6c8a99d5817150951621af8d0329a1bcd947f9b2c14"
+          },
+          {
+            "command": "npm run test:execution-backends",
+            "exit": 0,
+            "passed": 418,
+            "skipped": 0,
+            "log": "/tmp/release-runtime-backends.log",
+            "logSha256": "79f9e19c3001c749c3cd1fcf875599b84b42d4069e1a845cfdd5d52b54a67ba5"
+          },
+          {
+            "command": "npm run test:plugin-package",
+            "exit": 0,
+            "passed": 577,
+            "skipped": 0,
+            "log": "/tmp/release-runtime-plugin.log",
+            "logSha256": "9a19e8dcb98cedfcbe900255188d5921592bebc30ec53010af26cd5862fefb3f"
+          },
+          {
+            "command": "npm run test:release-package",
+            "exit": 0,
+            "passed": 10,
+            "skipped": 0,
+            "log": "/tmp/release-runtime-package.log",
+            "logSha256": "c771dc123266ed9e4d193314393387263cd9a43b6db6ddc2b6890a67968b61d2"
+          },
+          {
+            "command": "git diff --check",
+            "exit": 0
+          }
+        ],
+        "installedConformanceLog": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/task-plugin-consumer-CfTHlU/conformance.log",
+        "installedEvidence": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/task-plugin-consumer-CfTHlU/evidence.json"
       }
     ]
   },
@@ -305,7 +355,7 @@
     },
     "ac-12": {
       "met": true,
-      "evidence": "test/release-package.test.mjs: runtime configuration changes invalidate deployment-dependent evidence only; actual resource-only rebuild and runtime/manifest mismatch regressions; /tmp/release-runtime-package.log"
+      "evidence": "test/release-package.test.mjs: packaging controls are source inputs and invalidate core evidence; clean-commit addition/edit/deletion and runtime-configuration regressions; /tmp/release-controls-final-release.log"
     },
     "ac-13": {
       "met": false,
@@ -353,6 +403,23 @@
       "lib/release_package.mjs": "4aed8e90a199b252e2792d03ae3e5b41c2edd42e31c37107bec53a9f2c376dde",
       "test/release-package.test.mjs": "a93f68ac6553b64c13470ab568726cd2944fc90a0999d05fdd9ecff266694ee5",
       "docs/release-qualification.md": "413b42b9a08e4a8b56a6bfd5e2e2dd6d16edb2d1f2447575a061f03819fc9dc0"
+    }
+  },
+  "packagingControlsReview": {
+    "reviewedCommit": "b5efb8a9e533c74b9ae6150bf3c6be3673b923ec",
+    "review": 5565761146,
+    "inlineComment": 4309358918,
+    "testedCommit": "2bfdb84eb3ac9f0e6552390aa56a40809377cfbb",
+    "approvedBase": "f0652e4722ae0261fb24378f074c908664858f19",
+    "baseMergeResult": "Already up to date",
+    "representativeOutput": "/tmp/release-controls-output.json",
+    "classification": "offline regression verification; live prerequisites unchanged",
+    "sourceHashes": {
+      "lib/plugin_package.mjs": "09979485d611d2526e5c5276e9dd9ce5c3d53bda16d1e310e168f92e85cdd897",
+      "lib/release_package.mjs": "7a7f239f46e9ba1ec837f410ed435780d57d288ff3ce8e6005e4be4192cf6011",
+      "test/plugin-package.test.mjs": "0659496a498fcafec60adcb2934c0595409fceb66382a89dbae448704b201ff4",
+      "test/release-package.test.mjs": "3cd595306f5600c9ef6676c88f7652fa516d3410f73f090bef33aaa6cd4c9a16",
+      "docs/release-qualification.md": "5d36c8032be1ee239c726ea41f74b28f7d294be709d19b53304df0851a10a9a5"
     }
   }
 }

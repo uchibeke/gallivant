@@ -159,3 +159,11 @@ the shared checks. Representative generated manifest and ZIP entries were review
 at `/tmp/release-controls-output.json`: the committed root ignore file has a digest
 but is absent from runtime payload and ZIP. These remain offline fixture results;
 no live prerequisite or unmet criterion changed.
+
+The resumed run committed the preserved task changes as `2bfdb84`, fetched the
+approved base `f0652e4722ae0261fb24378f074c908664858f19`, and the authorized
+base-into-task merge reported `Already up to date`. All six checks were rerun
+afterward: 1724 full-suite passes with one existing skip, 418 backend
+passes, 43 installed flows plus 535 conformance checks, 11 release tests,
+lint and whitespace. Logs and hashes are in `offline.checks`; prior runs are
+preserved. `packagingControlsReview` identifies the tested source and base.
