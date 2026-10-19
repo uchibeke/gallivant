@@ -442,6 +442,8 @@ test("latest publication review cases fail before task effects without rejecting
     "The button creates a PR after tests pass given that PRs must not be published.",
     "If I approve the Terraform plan, apply it.",
     "Apply it after I approve the Terraform plan.",
+    "If I approve the article, email the customer as well as proofread the article.",
+    "If I approve the article, email the customer in addition to proofread the article.",
     "For tests, create a fake PR fixture alongside a real PR.",
     "John should create a PR for review.",
     "The team must create a PR for review.",
@@ -504,6 +506,7 @@ test("latest publication review cases fail before task effects without rejecting
     "The button creates a PR after tests pass since the queue is ready.",
     "For tests, create a fake PR alongside a synthetic PR fixture.",
     "If I approve the invoice, email the customer and apply the discount.",
+    "If I approve the invoice, email the customer as well as apply the discount.",
   ];
   for (const text of productRequirements) {
     const w = world(), prepared = await w.service.prepare({ text });

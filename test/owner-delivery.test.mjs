@@ -396,14 +396,23 @@ test("conditioned approval after many coordinated business actions stays visible
 });
 
 test("business approval rules do not mask unclassified coordinated implementation work", () => {
-  for (const action of ["proofread", "polish", "edit"]) {
-    const source = `If I approve the article, email the customer and ${action} the article.`;
-    assert.throws(() => ownerDelivery(source), { code: "TASK_DELIVERY_SCOPE" }, source);
-    assert.throws(() => assertDeliveryAnswer({}, source), { code: "TASK_DELIVERY_SCOPE" }, source);
-  }
+  for (const connector of ["and", "as well as", "along with", "alongside", "together with", "in addition to", "not to mention", "besides", "plus"])
+    for (const action of ["proofread", "polish", "edit"]) {
+      const source = `If I approve the article, email the customer ${connector} ${action} the article.`;
+      assert.throws(() => ownerDelivery(source), { code: "TASK_DELIVERY_SCOPE" }, source);
+      assert.throws(() => assertDeliveryAnswer({}, source), { code: "TASK_DELIVERY_SCOPE" }, source);
+    }
   const supportedBusinessSequence = "If I approve the invoice, email the customer and apply the discount.";
   assert.equal(ownerDelivery(supportedBusinessSequence), null);
   assert.doesNotThrow(() => assertDeliveryAnswer({}, supportedBusinessSequence));
+  for (const connector of ["as well as", "in addition to", "alongside"]) {
+    const supported = `If I approve the invoice, email the customer ${connector} apply the discount.`;
+    assert.equal(ownerDelivery(supported), null, supported);
+    assert.doesNotThrow(() => assertDeliveryAnswer({}, supported), supported);
+  }
+  const missingFirstObject = "If I approve the invoice, email the report alongside apply the discount.";
+  assert.throws(() => ownerDelivery(missingFirstObject), { code: "TASK_DELIVERY_SCOPE" });
+  assert.throws(() => assertDeliveryAnswer({}, missingFirstObject), { code: "TASK_DELIVERY_SCOPE" });
 });
 
 test("synthetic PR fixtures cannot hide a coordinated live publication", () => {
@@ -548,6 +557,16 @@ test("saved ownership versions reapply delivery and approval controls outside th
 });
 
 test("historical publication spans cannot leave timing, destination or condition qualifiers in implementation scope", () => {
+  for (const version of [1, 2]) for (const qualifier of [", assuming tests pass", " without delay", " ASAP", " for the release"]) {
+    const source = `Implement export. Open a PR${qualifier}.`, start = source.indexOf("Open a PR"), end = start + "Open a PR".length;
+    const saved = { version, offsets: "utf16", source, spans: [
+      { start: 0, end: start, owner: "implementation" },
+      { start, end, owner: "coordinator", kind: "pull_request" },
+      { start: end, end: source.length, owner: "implementation" },
+    ] };
+    assert.throws(() => validateOwnerDelivery(saved), { code: "TASK_DELIVERY_SCOPE" }, `v${version}: ${source}`);
+    assert.throws(() => ownerDelivery(source), { code: "TASK_DELIVERY_SCOPE" }, `fresh intake: ${source}`);
+  }
   for (const version of [1, 2, 3, 4]) for (const qualifier of [" tomorrow", " against release", " to GitHub", " when tests pass"]) {
     const source = `Implement export. Open a PR${qualifier}.`, start = source.indexOf("Open a PR"), end = start + "Open a PR".length;
     const saved = { version, offsets: "utf16", source, spans: [
