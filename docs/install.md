@@ -31,6 +31,11 @@ separate setup below and needs no local Codex or Claude binary. See the
 
 ## 1. The command
 
+Check the [registry version](https://www.npmjs.com/package/gallivant). If one
+is available, install the CLI with `npm install -g gallivant` and check
+`gallivant --version`. If the package has not been published yet, use the source
+checkout:
+
 ```bash
 git clone https://github.com/uchibeke/gallivant && cd gallivant
 npm ci --ignore-scripts
@@ -40,9 +45,7 @@ gallivant --help          # from any directory, to confirm it is on your PATH
 ```
 
 The package has locked runtime dependencies; `npm ci` installs them for a source
-checkout. `npm i -g .` copies instead of linking. Once the first registry release
-is published, `npm install -g gallivant` needs no clone. Until then use the source
-path above (the repository needs to be public for anonymous access).
+checkout. `npm i -g .` copies instead of linking.
 If the shell cannot find the command afterwards,
 the `bin` directory under `npm prefix -g` is not on your PATH.
 
