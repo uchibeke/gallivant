@@ -401,8 +401,10 @@ use github.com. An enterprise token alone does not make those workflows supporte
 A configured token file that is missing, unreadable or empty fails closed with
 `NO_CREDENTIAL`. It never falls back to a broader environment token or saved login.
 Restore the file, or deliberately set `github_token_file` to `null` if fallback
-is the intended policy. The coordinator resolves credentials per operation, so
-removing a selected file also blocks later Git/GitHub operations.
+is the intended policy. Restart an already-running daemon after changing that
+setting; it keeps the configuration loaded at startup. The coordinator resolves
+the selected credential per operation, so removing a selected file blocks later
+Git/GitHub operations even while the daemon runs.
 
 ## Environment for runs
 

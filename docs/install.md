@@ -167,7 +167,7 @@ cat > ~/.gallivant/gh-token
 
 With the file set it wins over both of the other two. A missing, unreadable or empty
 file refuses the operation instead of falling back to a wider login. Restore it,
-or explicitly set `github_token_file` to `null` to choose ambient authentication. `doctor` reports which source a run would use, whether the token is classic or fine-grained, and repository access and protection checks. Its Git credential-transport check uses
+or explicitly set `github_token_file` to `null` and restart the daemon to choose ambient authentication. `doctor` reports which source a run would use, whether the token is classic or fine-grained, and repository access and protection checks. Its Git credential-transport check uses
 `git ls-remote`; a successful read does not by itself prove push permission.
 
 This installation guide targets github.com repositories. The credential resolver

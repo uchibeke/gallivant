@@ -229,6 +229,7 @@ test("a missing, unreadable or blank configured token file never widens to ambie
       assert.equal(error.reason, "configured-token-file-unavailable");
       assert.match(error.message, /configured github_token_file/);
       assert.match(error.message, /No fallback credential was used/);
+      assert.match(error.message, /restart the daemon/);
       assert.doesNotMatch(error.message, /t-broader|t-other/);
       return true;
     };
