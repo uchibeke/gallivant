@@ -21,6 +21,6 @@ test("only a confirmed absent version publishes the exact tarball with provenanc
   const calls = [], urls = [];
   assert.equal(await publishRelease("0.2.0", { read: () => Buffer.from("artifact"), request: async url => { urls.push(url); return new Response("missing", { status: 404 }); }, run: (...args) => calls.push(args) }), "Published");
   assert.deepEqual(urls, ["https://registry.npmjs.org/%40uchibeke%2Fgallivant/0.2.0"]);
-  assert.deepEqual(calls[0].slice(0, 2), ["npm", ["publish", "dist/uchibeke-gallivant-0.2.0.tgz", "--ignore-scripts", "--access", "public", "--provenance"]]);
+  assert.deepEqual(calls[0].slice(0, 2), ["npm", ["publish", "./dist/uchibeke-gallivant-0.2.0.tgz", "--ignore-scripts", "--access", "public", "--provenance"]]);
   await assert.rejects(publishRelease("0.2.0", { read: () => Buffer.from("artifact"), request: async () => new Response("missing", { status: 404 }), run: () => { throw new Error("publish denied"); } }), /publish denied/);
 });
