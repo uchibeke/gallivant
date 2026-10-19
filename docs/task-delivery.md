@@ -1,11 +1,21 @@
-# Task delivery package contract (M5)
+# Embed task delivery in another application
 
-APort is publisher and owns OAuth, tenant/region routing, repository authority,
-HTTP transport, persistence bindings and the shared web/plugin UI. This package
-owns task/readiness/review decisions and provider transports. The existing
+The package exposes Gallivant's task/readiness/review decisions and provider
+transports to a trusted host through a scoped operation API or MCP. The host
+supplies authentication and authorization, tenant/region routing, repository
+authority, HTTP transport, durable storage, scheduling and any web/plugin UI.
+Installing the package does not deploy a service or configure those boundaries.
+
+**APort is the reference integration**, not a required host for these exports.
+The examples below use its injected adapters and deployment names; another host
+must enforce the same authorization, ownership, persistence and recovery
+contracts. In the APort integration, APort owns publication and the host
+responsibilities above. Its existing
 `aporthq/agent-passport/aport-task-delivery-mcp` job produced merged
 [PR #414](https://github.com/aporthq/agent-passport/pull/414); reuse that integration.
-No new integration brief, public UI, database or competing runner is supplied.
+The M5/M6 notes below preserve that integration's milestone evidence and gates;
+they do not certify another host or supply a public UI, database or competing
+runner.
 
 ## Installed exports
 
@@ -397,15 +407,16 @@ Official formats rechecked 2026-10-12: [portable packaging](https://developers.o
 [submission](https://developers.openai.com/plugins/deploy/submission).
 Vendored portable JSON schemas retain their source URLs and recorded hashes.
 
-## M6 handoff gates
+## APort reference integration: M6 handoff gates
 
-M5 artifact tests are deterministic and unpaid; they are not actual host evidence.
+These gates belong to the APort integration handoff. M5 artifact tests are
+deterministic and unpaid; they are not actual host evidence.
 M6 pins the **human-merged** artifact/digest into the existing APort job, verifies
 real Pages/runtime/bindings/durable storage, and reconciles PR #414's deployment.
-The 2026-10-07 endpoint probe returned HTTP 503. This session had no configured
+The 2026-10-07 endpoint probe returned HTTP 503. That audit session had no configured
 Agents API credential/model/environment; pinned Cloud listing was accessible but
 proved neither environment repository nor inference access. Browser/capture
-inventory was available, with no task-delivery tool installed in this session.
+inventory was available, with no task-delivery tool installed in that session.
 
 Mandatory remaining gates: actual endpoint OAuth discovery/tool scans and scoped
 account isolation; both providers' real implementation and correction PRs across

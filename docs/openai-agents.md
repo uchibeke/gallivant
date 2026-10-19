@@ -163,6 +163,13 @@ there is no terminal question waiter or arbitrary shell executor.
 
 ## Progress, recovery and controls
 
+This adapter supports cancellation, but **not interruption**. A message or resume
+request queued during active work waits for that execution to finish before the
+coordinator continues the saved session. `--interrupt` is refused for this
+provider. Cancellation fences further dispatch and requires remote confirmation;
+it is not an interrupt-and-resume shortcut. The pending `ask_operator` response
+interface described above is separate from queued correction messages.
+
 Only the single coordinator performs provider I/O. Tracker/status reads saved
 state. Existing `execution.deadlineMs`, `progressMs`, concurrency and capped
 backoff apply (defaults: 20 seconds per operation, 10 seconds between polls,

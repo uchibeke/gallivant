@@ -1,6 +1,48 @@
 # Commands
 
-Handles: every command that takes one accepts `<repo>#<pr>` (short name or `owner/name`), the registry id `<repo>/<prd id>`, or a PRD path. Bare PR numbers are refused because they are ambiguous across repos.
+Use `gallivant --help` (or `gallivant help`) for the installed CLI's syntax and
+`gallivant --version` for its version. This reference covers the CLI; the
+[task service](tasks.md), [runtime embedding](execution.md) and
+[delivery integrations](task-delivery.md) expose the same core operations to hosts.
+
+## Command index
+
+| Intent | Command | Notes |
+|---|---|---|
+| Create config | `gallivant init` | Selected Codex or Claude installation; preserves existing config. |
+| Check setup/connectivity | `gallivant doctor` | `--network` tests DNS/HTTPS; `--probe` is a real Claude run. |
+| Prepare a task | `gallivant task "request"` | Uses inference; implementation requires `--run` authorization. |
+| Inspect/continue a prepared task | `gallivant task list`, `inspect`, `answer`, `resume`, `validate`, `start` | Task IDs and exact revisions; see [task operations](#task-operations). |
+| Create a written brief | `gallivant new NAME` | Writes a draft template in the target repository. |
+| Validate/record readiness | `gallivant ready PRD` | `--check` is local validation without hosted recording or file changes. |
+| Start work and services | `gallivant start [PRD]` | No PRD starts/reuses services only; `--no-open` and `--no-server` are available. |
+| Sequence work | `gallivant chain` | Each successor waits for the previous PR to merge; never auto-merges. |
+| Adopt/reset a PR | `gallivant register PR_URL` | Explicit registration; existing entry resets its review budget and cursor. |
+| Run the coordinator | `gallivant up` | Foreground loop; `--once` performs one cycle. |
+| Stop services | `gallivant down` | Leaves active agent processes running. |
+| Inspect runs | `gallivant status` | `--all` includes finished rows; `--json` is available. |
+| Start the dashboard | `gallivant serve` | Same service startup as `start` without a PRD; loopback only. |
+| Diagnose a stop | `gallivant why HANDLE` | Shows state, failure and pending controls. |
+| Continue stopped execution | `gallivant resume HANDLE` | Preserves the session; explicit changed-brief acceptance uses `--resnapshot`. |
+| Re-evaluate PR gates | `gallivant recheck HANDLE` | No budget reset, no CI rerun, no replacement for execution recovery. |
+| Send a correction | `gallivant say HANDLE --note "..."` | Queues same-session delivery; supported local runs can use `--interrupt`. |
+| Stop future dispatch | `gallivant cancel HANDLE` | Requests cancellation; inspect confirmation before assuming the process stopped. |
+| Forget tracking | `gallivant remove HANDLE` | Leaves the PR, branch, labels and checkout in place. |
+| Collect/review lessons | `gallivant learn` | Repository-scoped collection; production application remains unqualified. See [learning commands](#learning-commands). |
+
+A **run handle** is `<repo>#<pr>` (short name or `owner/name`), the registry ID
+`<repo>/<prd-id>`, or a PRD path. Bare PR numbers are ambiguous and refused.
+Task-intake commands instead use their returned **task ID and revision**; learning
+commands use a **repository, candidate ID and revision digest**. These identities
+are not interchangeable.
+
+Local implementation adapters are `claude`, `codex`, `gemini`, `opencode` and
+`goose`; `openai-agents` is hosted execution. Availability depends on the configured
+provider/model, permissions and tested adapter capabilities, not just the command
+name. `codex-cloud` is registered for recovery but refuses new dispatch. See the
+[current support matrix](../README.md#harness-support), [Agents API](openai-agents.md)
+and [Codex Cloud gate](codex-cloud.md). There is no separate cloud start command:
+select the configured harness in the PRD or task preparation.
 
 ## `gallivant init [--harness codex|claude] [--worktrees <directory>]`
 
@@ -47,6 +89,31 @@ A natural-language task still becomes an explicit, validated delivery contract;
 it does not require the user to write a PRD first.
 See [task operations](tasks.md) for examples, source delivery and stopping rules.
 
+
+### Task operations
+
+Use the ID and revision printed by the preceding operation; placeholders below
+are not literal values. `--json` returns structured task state for automation.
+
+| Operation | Syntax and purpose |
+|---|---|
+| Prepare | `gallivant task prepare "request" --dir CHECKOUT --harness NAME` creates a brief through the selected supported preparation adapter. The word `prepare` is optional. |
+| Read stdin | `gallivant task --stdin` reads a complete piped request instead of a positional string. |
+| List | `gallivant task list` lists saved intake tasks. |
+| Inspect | `gallivant task inspect TASK_ID` shows current revision, questions and next action. |
+| Answer | `gallivant task answer TASK_ID --revision N --request-id ANSWER_ID --answer 'QUESTION_ID=text'` resumes saved clarification; repeat `--answer` for multiple answers. |
+| Resume preparation | `gallivant task resume TASK_ID --revision N` continues the saved preparation state; it is different from `gallivant resume HANDLE` for implementation. |
+| Validate | `gallivant task validate TASK_ID --revision N` runs the shared readiness operation on the saved task. |
+| Authorize/start | `gallivant task start TASK_ID --revision N --run` authorizes implementation for that exact ready revision. Prior authorization can make `--run` unnecessary. |
+
+Preparation accepts `--repo`, `--base`, repeated `--context` files and `--verify`
+commands, and a retry-safe `--request-id`. Answers may also add explicit context
+and verification commands. `--completion-target delivery_ready|integrated` selects
+whether the task tracks readiness or confirmed integration; neither grants merge
+permission. `--run` on initial preparation authorizes dispatch after readiness and
+any required answers. `--no-daemon` leaves monitoring startup to an existing host
+or explicit coordinator. See [task operations](tasks.md) for revision conflicts,
+uncertain dispatch, evidence and authorization rules.
 
 ## `gallivant new <name> [--harness <name>] [--dir <repo>]`
 
@@ -139,9 +206,9 @@ not require a separate chain retry. See [PRD chains](chains.md) for the workflow
 
 Puts a PR into the loop that Gallivant did not open, or resets one that stopped.
 
-- With `--session` and `--worktree`, later fixes resume that session in that directory. Both harnesses key sessions by the directory they ran in, so the pair is required together. The id has to be one the chosen harness could have minted (a UUID for claude, codex and gemini, `ses_...` for opencode, `work-<uuid>` or legacy `gallivant-<uuid>` for goose), the same rule the PR block is held to: the value ends up in the harness's argv, where goose in particular derives its session file from it.
-- Without `--session`, the first fix run starts a fresh session whose prompt tells it to read the PR with `gh pr view` and `gh pr diff` before changing anything.
-- Without `--worktree`, a checkout is created from the PR branch at the standard path.
+- With `--session` and `--worktree`, later fixes resume that session in that directory. A new local session attachment requires both values; an existing entry can reuse its recorded directory. The directory and provider session identity must match the original run. The id has to be one the chosen harness could have minted (a UUID for claude, codex and gemini, `ses_...` for opencode, `work-<uuid>` or legacy `gallivant-<uuid>` for goose), the same rule the PR block is held to: the value ends up in the harness's argv, where goose in particular derives its session file from it.
+- Without `--session`, a compatible session recorded in the existing entry or validated PR metadata is retained. When none exists, the first fix starts a fresh session whose prompt tells it to read the PR with `gh pr view` and `gh pr diff` before changing anything.
+- Without `--worktree`, the existing recorded checkout is reused, or a checkout is created from the PR branch at the standard path.
 - A `--worktree` you pass is resolved to an absolute path first, so `.` means the directory you typed it in and not whatever directory the daemon happens to run in later. It is then checked before it is accepted: its `origin` must be the PR's repository and it must already be on the PR's head branch. A path that fails either check is an error, since the harness edits and pushes from that directory. It is never relocated or re-cloned for you, because a resumed session is keyed to the directory it ran in.
 - On an entry that already exists: reason cleared, iteration reset to zero, a marked reset comment posted on the PR (so a count rebuilt from GitHub starts from zero too), cursor set to now, watching again. This is how you restart a `needs-human` PR after you fixed the conflict or answered the question. A fresh registration instead looks at the PR's whole history, so feedback already on it gets addressed.
 - That reset comment is the reset boundary, so posting it is a precondition of the reset and not a best-effort extra. A count rebuilt from GitHub finds its marker and counts only the round comments after it; with the comment missing and `state.json` later lost, recovery reconstructs the rounds this command had just zeroed, and an entry restored at `max_iterations` stops with `iterations` on its next event having done no work in the round. If it cannot be posted, `register` refuses and changes nothing: the entry keeps its iteration, its state and its cursor, and running the same command again once GitHub answers does the whole reset in one go.
@@ -357,7 +424,7 @@ When the brief has changed since the run started it prints every difference, one
 
 An entry whose tick is waiting on one GitHub write also gets a line naming that write and how many ticks it has failed, so a PR that looks idle says why it is idle. `status` says the same thing on its row. After five consecutive failures the entry stops with reason `stuck` and `last event` carries the write and GitHub's own message, which is usually a token permission: `Resource not accessible by personal access token` on a body write means the token cannot edit PR descriptions, on a label write that it cannot edit issues, and on a comment that it cannot write to the PR conversation. Fix the token, then `gallivant register <pr-url>` to resume.
 
-The five writes that can put an entry there, and what each one is holding up:
+The writes that can put an entry there, and what each one is holding up:
 
 | `retry.op` | What it is holding up |
 |---|---|
@@ -370,7 +437,7 @@ The five writes that can put an entry there, and what each one is holding up:
 
 `round comment` is the other one. The round it announces is already counted, so the registry is one round ahead of what the PR says, and the count on the PR is what a recovery after a lost `state.json` rebuilds from. `why` prints both numbers: which round is counted, and how many a recovery would find until the comment posts. The gap is at most one round, and it closes the moment the comment lands.
 
-## `gallivant resume <handle> [--note "..."] [--resnapshot]`
+## `gallivant resume <handle> [--note "..."] [--resnapshot] [--fresh-session]`
 
 Puts a stopped entry back to work in the session that was doing it. The handle is the id, a PRD path, or `<repo>#<pr>`,
 the same forms `why` takes.
@@ -384,8 +451,12 @@ twice and could undo half-finished edits it knows nothing about. The prompt says
 agent's memory ends mid-task and that is the one thing it cannot know. `--note` adds a line of your own, which is where
 "the budget is now higher" belongs.
 
-An entry with no session is refused, because there is nothing to resume and `start` is the honest answer. So is one
-with a run already in flight or still awaiting daemon settlement, since replacing its record would lose its outcome. A missing checkout is
+An entry with no session is refused unless durable execution state proves that the
+initial launch was never submitted and its approved brief is available. In that
+case, resume can safely retry the initial launch after its prerequisites are fixed.
+Unknown submission state must be reconciled, not bypassed by a new `start`. A run
+already in flight or still awaiting daemon settlement also blocks resume, since
+replacing its record would lose its outcome. A missing checkout is
 recreated from the branch first; the session's memory lives in the harness, not the directory.
 
 When the checkout is clean, the base branch is merged in before the session carries on, which is the case that needs it most: an entry stopped
@@ -415,9 +486,79 @@ If timeout or interruption cannot verify the owned process tree, the task become
 
 The daemon comes up if it is not already running, for the same reason `start` brings it up.
 
+`--fresh-session` is a narrow learning-revocation recovery operation: after the
+owned run settles, replace provider memory carrying retired learned advice while
+preserving the approved brief, checkout, PR, review progress and allowance. It
+requires recorded learned context or its revocation, and does not reset task state
+or bypass cancellation. See [learning recovery](learning.md).
+
+## `gallivant recheck <handle>`
+
+Queue a new evaluation of an existing PR's checks, review and completion gate.
+This keeps the review budget and processed-check markers. It does not restart CI,
+resume a failed agent or remove a cancellation fence. Execution/connectivity
+failures require the existing recovery path or explicit `resume`. See
+[rechecking and updating a run](#rechecking-and-updating-a-run).
+
+## `gallivant say <handle> --note "..." [--interrupt]`
+
+Queue instructions for the same session, including a correction after the PR is
+ready for review. Normally delivery waits for the active run to settle.
+`--interrupt` requests verified stop-and-resume where supported; it is not live
+stdin streaming and hosted Agents refuses that local-process interrupt operation.
+Messages cannot silently replace an approved brief; contract/source changes need
+`resume --resnapshot`. Closed/merged PRs need a new task.
+
+## `gallivant cancel <handle>`
+
+Fence further dispatch immediately, then let the coordinator request cancellation
+of the owned execution. A provider may leave cancellation unconfirmed; inspect
+`why` and status before assuming work or billing has stopped. The PR, branch and
+files are preserved. This differs from `down`, which stops monitoring services
+while leaving active agent processes running.
+
+Recheck, message and cancel requests are durable. Their CLI commands start the
+daemon unless `--no-daemon` is passed; avoid resubmitting a saved request after a
+daemon-start error. The dashboard uses the same control service and displays
+queued, applying, applied or failed status.
+
 ## `gallivant remove <handle>`
 
 Forgets an entry. The PR, its branch, its labels and the checkout are left as they are; `register` puts the PR back into the loop. Use it for an entry that was started against the wrong repo or that you have taken over by hand.
+
+## Learning commands
+
+**Current production status: collection only.** These commands expose the learning
+workflow, but installed profiles do not qualify secure extraction or activation.
+`setup`, `extract` and apply/approval paths refuse missing isolation prerequisites.
+No command, hash, config switch or file mode makes candidate text trusted. Review
+[learning](learning.md) for exact qualification, signing and recovery boundaries.
+
+All repository operations use `--repo owner/repository`. Configure `collect` before
+inspecting local learning state. The collector reads eligible GitHub feedback;
+it never opens embedded evidence links or runs that text as instructions.
+
+| Command | Purpose |
+|---|---|
+| `gallivant learn configure --repo owner/repo --mode collect` | Enable repository-scoped collection. `off` disables it; `apply` requires qualification. |
+| `gallivant learn --repo owner/repo [--since YYYY-MM-DD] [--until YYYY-MM-DD] [--dry-run]` | Collect historical feedback with durable continuation; `learn collect` is the explicit equivalent. Dry-run performs no learning writes or inference. |
+| `gallivant learn doctor [--repo owner/repo]` | Report qualification and signing prerequisites. |
+| `gallivant learn list --repo owner/repo [--status pending]` | List candidate revisions. |
+| `gallivant learn show ID --repo owner/repo --revision SHA256` | Inspect the exact revision and evidence. |
+| `gallivant learn revise ID --repo owner/repo --from reviewed-rule.json` | Validate data and create a new unapproved revision. |
+| `gallivant learn reject ID --repo owner/repo --revision SHA256 [--reason "..."]` | Reject that exact revision. |
+| `gallivant learn report --repo owner/repo` | Report coverage, limits and stored learning state. |
+| `gallivant learn prune --repo owner/repo` | Remove expired retained excerpts. |
+| `gallivant learn explain --repo owner/repo --run RUN_ID` | Inspect recorded learned-context selection and delivery for a run. |
+| `gallivant learn setup --key-path ABSOLUTE_PATH [--ssh-keygen ABSOLUTE_PATH]` | Interactive signing-authority enrollment; requires qualified isolation. |
+| `gallivant learn extract --repo owner/repo --learning-budget USD` | Request bounded paid candidate extraction; no production extractor is qualified in this release. |
+| `gallivant learn approve ID --repo owner/repo --revision SHA256 [--reason "..."]` | Preview and sign an exact activation transition when qualified. No approve-all or noninteractive approval bypass exists. |
+| `gallivant learn retire ID --repo owner/repo --revision SHA256 [--reason "..."]` | Request a signed retirement transition when qualified. |
+| `gallivant learn recover --repo owner/repo` | Reconcile signed transitions and retry revocation controls; never invents or rebases approval. |
+
+Inspection commands do not launch inference. Every candidate revision remains
+unapproved until the exact protected signing workflow succeeds. Learning never
+changes task permissions, budgets, acceptance gates or the human merge boundary.
 
 ## What the daemon posts on your behalf
 
