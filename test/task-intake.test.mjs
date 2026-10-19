@@ -3959,6 +3959,16 @@ test("a profile conflict pauses before any harness run until the owner resolves 
   assert.equal(old.status, "needs-input");
   const resumed = await legacy.service.answer({ taskId: old.taskId, expectedRevision: old.revision, operationId: "legacy-answer", answers: { "q-r-1": "Use CSV." } });
   assert.equal(resumed.status, "started"); assert.equal(legacy.ctx.state.get(resumed.implementation.id).task.deliveryProfile, undefined);
+  // An anaphoric reply ("Do it anyway") carries no delivery vocabulary; without a covered typed reading
+  // on the reply the original conflict stays open and the reply gets its own question.
+  const anaphoric = world({ prepare: async (_ctx, task) => JSON.stringify(draftFor(task, { delivery: task.answers["q-delivery-r-1"] ? {} : { "r-1": { action: "merge" } } })) });
+  const asked = await anaphoric.service.prepare({ text: "Merge the pull request." });
+  assert.equal(asked.status, "needs-input");
+  const vague = await anaphoric.service.answer({ taskId: asked.taskId, expectedRevision: asked.revision, operationId: "anaphoric", answers: { "q-delivery-r-1": "Do it anyway." } });
+  assert.equal(vague.status, "needs-input"); assert.deepEqual(vague.questions.map(q => q.id), ["q-delivery-a-q-delivery-r-1-1"]);
+  assert.match(vague.review.requirementMap.find(m => m.requirementId === "a-q-delivery-r-1-1").conflict.reason, /no typed delivery reading/);
+  assert.deepEqual(anaphoric.ctx.state.entries(), []);
+  await assert.rejects(anaphoric.service.start({ taskId: asked.taskId, expectedRevision: vague.revision, run: true }), { code: "TASK_NOT_READY" });
   // Insisting on the action in the answer re-raises the clarification instead of granting it,
   // whether the planner tags the reply or leaves its escalating vocabulary untagged.
   for (const tagged of [true, false]) {
@@ -4049,6 +4059,11 @@ test("the model route drafts through the configured text-only endpoint when the 
   assert.deepEqual(await service.prepare({ text: REQUEST, requestId: "model-route" }), prepared); assert.equal(calls, 2, "the replay and the second task's single call");
   assert.equal((await service.validate({ taskId: prepared.taskId, expectedRevision: prepared.revision })).status, "ready");
   assert.deepEqual(w.ctx.state.entries(), []);
+  // An exact retry of a saved model task replays without the credential; the live check applies only to task creation.
+  const savedKey = w.ctx.env.FIXTURE_MODEL_KEY; delete w.ctx.env.FIXTURE_MODEL_KEY;
+  assert.deepEqual(await service.prepare({ text: REQUEST, requestId: "model-route" }), prepared, "replay does not need the credential");
+  await assert.rejects(service.prepare({ text: "Another request.", requestId: "model-route-new", route: "model" }), e => e.code === "TASK_MODEL_ROUTE" && e.taskEffects === "none");
+  w.ctx.env.FIXTURE_MODEL_KEY = savedKey; assert.equal(calls, 2);
   // Explicitly selecting the harness route keeps the existing boundary refusal; nothing is fetched.
   const harnessOnly = await service.prepare({ text: REQUEST, requestId: "harness-only", route: "harness" });
   assert.equal(harnessOnly.status, "blocked"); assert.equal(harnessOnly.errorCode, "TASK_PREPARATION_BOUNDARY"); assert.equal(calls, 2, "nothing was fetched for the harness-only task");

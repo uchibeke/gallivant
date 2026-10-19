@@ -89,7 +89,10 @@ control ("Do not: open a pull request") do not. The screen grants nothing:
   the brief and in the review: the clause is treated as product behaviour and
   the profile is unchanged.
 
-The owner's reply to a delivery question is screened like any other clause.
+The owner's reply to a delivery question is screened like any other clause,
+and it closes the original conflict only when every fragment of the reply
+carries a typed reading the profile covers; an anaphoric reply such as "do it
+anyway" gets its own question instead.
 A reply that the planner reads as asking for an uncovered action, or that
 carries escalating vocabulary the planner leaves untagged, raises the same
 question for the reply itself. A reply that restates a prohibition the profile
