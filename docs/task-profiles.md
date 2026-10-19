@@ -76,7 +76,8 @@ control ("Do not: open a pull request") do not. The screen grants nothing:
 - Escalating terms (merge, deploy including shipping, rollout, go-live and
   "to production" wording, release, wait, local-only, a write aimed
   at the base branch or at skipping the pull request such as "push directly
-  to main",
+  to main", "push to <the selected base>" with the profile's actual base name
+  or any explicitly direct branch write such as "commit straight to staging",
   publish whenever it appears as a bare verb such as "Publish this package to
   npm", "and publish the package" or "could you publish it", or as a package
   or build submission to a registry or store such as "submit the package to
@@ -234,7 +235,9 @@ can still be validated, started, resumed and controlled. A saved profile with an
 unsupported version, or whose target repository, base or completion does not
 match the task it is saved on, is readable through `inspect` and `list` and can
 be exported, but every mutation returns `TASK_PROFILE_UNSUPPORTED` with the
-remedy "prepare a new task". Such a record does not pin an idle namespace, so runtime migration
+remedy "prepare a new task". A record created with a typed profile (it carries
+a planner route, a repository snapshot or a pinned model route) whose profile
+is missing is treated the same way, never as a historical task. Such a record does not pin an idle namespace, so runtime migration
 proceeds. New tasks always use the current typed profile; there is no fallback
 to the free-text contract.
 

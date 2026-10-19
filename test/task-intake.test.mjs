@@ -4134,6 +4134,22 @@ test("historical tasks keep their interpretation while unsupported saved profile
     await assert.rejects(foreignProfile.service.start({ taskId: bound.taskId, expectedRevision: bound.revision, run: true }), e => e.code === "TASK_PROFILE_UNSUPPORTED" && /not bound to this task/.test(e.message) && e.taskEffects === "none");
     assert.deepEqual(boundStore.read(bound.taskId), record); assert.deepEqual(foreignProfile.ctx.state.entries(), []);
   }
+  // A record created with a typed profile that no longer carries one is damaged typed state, not a historical task:
+  // reads label it unsupported and every mutation refuses, even with a persisted --run and a preparing status.
+  const orphaned = world({ prepare: async (_ctx, task) => JSON.stringify(draftFor(task, { question: true })) });
+  const orphan = await orphaned.service.prepare({ text: REQUEST, requestId: "orphan", run: true }), orphanStore = taskStore(orphaned.home);
+  for (const missing of [undefined, null]) {
+    const record = orphanStore.read(orphan.taskId); record.deliveryProfile = missing; if (missing === undefined) delete record.deliveryProfile; record.status = "preparing"; record.runAuthorized = true; orphanStore.save(record);
+    const view = orphaned.service.inspect({ taskId: orphan.taskId });
+    assert.equal(view.deliveryProfile.legacy, false); assert.equal(view.deliveryProfile.supported, false); assert.equal(view.deliveryProfile.error.code, "TASK_PROFILE_UNSUPPORTED");
+    await assert.rejects(orphaned.service.validate({ taskId: orphan.taskId, expectedRevision: orphan.revision }), e => e.code === "TASK_NOT_READY" && e.taskEffects === "none", "a preparing record is not validated; it must be resumed, which refuses below");
+    for (const operation of [
+      () => orphaned.service.start({ taskId: orphan.taskId, expectedRevision: orphan.revision, run: true }),
+      () => orphaned.service.resume({ taskId: orphan.taskId, expectedRevision: orphan.revision }),
+      () => orphaned.service.answer({ taskId: orphan.taskId, expectedRevision: orphan.revision, operationId: "orphan-answer", answers: { "q-r-1": "Use CSV." } }),
+    ]) await assert.rejects(operation, e => e.code === "TASK_PROFILE_UNSUPPORTED" && e.taskEffects === "none" && /none is saved/.test(e.message));
+    assert.deepEqual(orphanStore.read(orphan.taskId), record); assert.deepEqual(orphaned.ctx.state.entries(), []);
+  }
   // An exact answer-operation replay is a mutation too: it fails closed before resuming preparation or dispatch.
   const replayed = world({ prepare: async (_ctx, task) => JSON.stringify(draftFor(task, { question: true })) });
   const asked = await replayed.service.prepare({ text: REQUEST, requestId: "historical-answer", run: true });

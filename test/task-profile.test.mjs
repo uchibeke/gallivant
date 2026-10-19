@@ -4,7 +4,7 @@ import { join } from "node:path";
 import { mkdirSync, writeFileSync, readFileSync } from "node:fs";
 import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import { deliveryProfile, validateDeliveryProfile, assertProfileBound, stableProfile, deliveryScreen, maskLiterals, statements, validateDeliveryTag, profileCovers, unaccountedTerms, deliveryQuestion, deliveryProfileFromPrd, profileView, DELIVERY_CAPABILITIES, PROFILE_VERSION, COMPLETION_CONDITIONS } from "../lib/task_profile.mjs";
+import { deliveryProfile, validateDeliveryProfile, assertProfileBound, savedProfile, typedEraTask, stableProfile, deliveryScreen, maskLiterals, statements, validateDeliveryTag, profileCovers, unaccountedTerms, deliveryQuestion, deliveryProfileFromPrd, profileView, DELIVERY_CAPABILITIES, PROFILE_VERSION, COMPLETION_CONDITIONS } from "../lib/task_profile.mjs";
 import { intakeModelProblems, validateIntakeModelConfig, intakeModelRoute, intakeModelRouteSummary, pinnedModelRoute, savedModelRoute, MODEL_ROUTE_CEILINGS } from "../lib/task_model_config.mjs";
 import { COMPLETION_SCHEMA } from "../lib/task_completion.mjs";
 import { prepareModelTurn, isModelRouteReceipt, estimateTokens, estimateUsd } from "../lib/task_model_route.mjs";
@@ -183,6 +183,20 @@ test("planner delivery tags are validated and compared with the profile without 
   assert.deepEqual(unaccounted("Do not push directly to main.", { action: "pull_request", prohibits: ["push", "direct_push"] }), ["local"], "a prohibition of the direct write speaks for it; 'do not push' also reads as local-only");
   assert.equal(profileCovers(PROFILE, { action: "restrict", prohibits: ["direct_push"] }).covered, true, "the profile never writes to the base directly");
   for (const text of ["Push notifications to subscribers.", "Push the button to continue."]) assert.equal(deliveryScreen(text).escalated.includes("direct_push"), false, text);
+  // An explicitly direct write names any branch; the selected base is matched by name through the screen's base option.
+  for (const text of ["Push the changes directly to staging.", "Commit straight to release/2.4.", "Land it directly on the staging branch."]) {
+    const screen = deliveryScreen(text);
+    assert.ok(screen.escalated.includes("direct_push"), `${text} → ${JSON.stringify(screen)}`); assert.deepEqual(unaccountedTerms(screen, { action: "pull_request" }).includes("direct_push"), true, text);
+  }
+  for (const [text, base] of [["Push the changes to staging.", "staging"], ["Commit the fix onto release/2.4.", "release/2.4"], ["Land it on the staging branch after tests pass.", "staging"], ["Implement export and push to Develop.", "develop"]]) {
+    const screen = deliveryScreen(text, { base });
+    assert.ok(screen.escalated.includes("direct_push"), `${text} (base ${base}) → ${JSON.stringify(screen)}`); assert.equal(screen.tier, "question", text);
+    assert.deepEqual(unaccountedTerms(screen, { action: "pull_request" }).includes("direct_push"), true, text);
+  }
+  assert.equal(deliveryScreen("Push the changes to staging.").escalated.includes("direct_push"), false, "without the base, a plain push to another branch is only an effect term");
+  assert.equal(deliveryScreen("Push the changes to staging2.", { base: "staging" }).escalated.includes("direct_push"), false, "the base name is matched whole");
+  assert.equal(deliveryScreen("Push the feature branch for review.", { base: "staging" }).escalated.includes("direct_push"), false);
+  assert.deepEqual(deliveryScreen("Do not push to staging.", { base: "staging" }).controlled, ["push", "direct_push", "local"]);
   // Stop-before and pause-before wording prohibits the delivery term that follows it.
   for (const text of ["Implement the fix, but stop before opening a pull request.", "Pause before the merge.", "Stop short of deploying."]) {
     const screen = deliveryScreen(text);
@@ -235,9 +249,18 @@ test("mapping targets include explicit assumptions and planner output cannot aut
   assert.throws(() => parseDraft(JSON.stringify(forged), task), /reserved for the delivery profile/);
   const badTag = draftFor(task); badTag.mapping[0].delivery = { action: "grant-merge" };
   assert.throws(() => parseDraft(JSON.stringify(badTag), task), /delivery tag action must be one of/);
-  const legacy = taskFor("Add CSV export.", { deliveryProfile: undefined, commandCandidates: ["npm test"] });
+  const legacy = taskFor("Add CSV export.", { deliveryProfile: undefined, route: undefined, modelRoute: undefined, repositoryContext: undefined, commandCandidates: ["npm test"] });
   const tagged = draftFor(legacy); tagged.mapping[0].delivery = { action: "pull_request" };
   assert.throws(() => parseDraft(JSON.stringify(tagged), legacy), /delivery tags require a typed delivery profile/);
+  assert.equal(typedEraTask(legacy), false); assert.equal(savedProfile(legacy), null); assert.equal(profileView(legacy).legacy, true);
+  // A typed-era record (planner route, snapshot or pinned model route) without a profile is damaged state, not a historical task.
+  for (const orphan of [taskFor("Add CSV export.", { deliveryProfile: undefined, commandCandidates: ["npm test"] }), taskFor("Add CSV export.", { deliveryProfile: null, route: undefined, modelRoute: undefined, repositoryContext: { status: "unavailable" }, commandCandidates: ["npm test"] }), taskFor("Add CSV export.", { deliveryProfile: undefined, route: "harness", modelRoute: undefined, commandCandidates: ["npm test"] })]) {
+    assert.equal(typedEraTask(orphan), true);
+    assert.throws(() => savedProfile(orphan), { code: "TASK_PROFILE_UNSUPPORTED" });
+    assert.throws(() => parseDraft(JSON.stringify(draftFor(orphan)), orphan), /typed delivery profile but none is saved/);
+    const view = profileView(orphan);
+    assert.equal(view.legacy, false); assert.equal(view.supported, false); assert.equal(view.error.code, "TASK_PROFILE_UNSUPPORTED");
+  }
 });
 
 test("intake model configuration is validated, ceilings cannot be raised and secrets stay in the environment", () => {
