@@ -83,12 +83,14 @@ test("repeated fixture clauses stay bounded and a live repository target stays v
 });
 
 test("publication fixture masking cannot hide coordinated live PRs", () => {
-  for (const connector of ["plus", "as well as", "along with", "alongside", "together with", "in addition to", "not to mention", "besides", "versus", "vs", "vs.", "compared with", "compared to"]) {
+  for (const connector of ["plus", "+", "as well as", "along with", "alongside", "together with", "in addition to", "not to mention", "besides", "versus", "vs", "vs.", "compared with", "compared to"]) {
     const source = `For tests, create a fake PR ${connector} a real PR.`;
     assert.throws(() => ownerDelivery(source), { code: "TASK_DELIVERY_SCOPE" }, source);
     assert.throws(() => assertDeliveryAnswer({}, source), { code: "TASK_DELIVERY_SCOPE" }, source);
   }
   assert.equal(ownerDelivery("For tests, create a fake PR plus a synthetic PR fixture."), null);
+  assert.equal(ownerDelivery("For tests, create a fake PR fixture + a synthetic PR fixture."), null);
+  assert.doesNotThrow(() => assertDeliveryAnswer({}, "For tests, create a fake PR fixture + a synthetic PR fixture."));
   assert.equal(ownerDelivery("For tests, create a fake PR alongside a synthetic PR fixture."), null);
   for (const connector of ["versus", "vs", "vs.", "compared with", "compared to"]) {
     const source = `For tests, create a fake PR fixture ${connector} a synthetic PR fixture.`;
@@ -101,6 +103,28 @@ test("publication fixture masking cannot hide coordinated live PRs", () => {
   const laterLivePr = "For tests, create a fake PR fixture before sending a real PR to GitHub.";
   assert.throws(() => ownerDelivery(laterLivePr), { code: "TASK_DELIVERY_SCOPE" });
   assert.throws(() => assertDeliveryAnswer({}, laterLivePr), { code: "TASK_DELIVERY_SCOPE" });
+});
+
+test("synthetic fixtures do not mask referential live publication actions", () => {
+  for (const source of [
+    "For tests, create a fake PR fixture and open it on GitHub.",
+    "For tests, create a fake PR fixture, then submit it to the remote repository.",
+    "For tests, create a fake PR fixture + publish it on GitLab.",
+    "For tests, create a fake PR fixture and upload it to GitHub.",
+    "For tests, create a fake PR fixture before opening it on GitHub.",
+    "For tests, create a fake PR fixture. Open it on GitHub.",
+    "For tests, create a fake PR fixture and submit it for review.",
+  ]) {
+    assert.throws(() => ownerDelivery(source), { code: "TASK_DELIVERY_SCOPE" }, source);
+    assert.throws(() => assertDeliveryAnswer({}, source), { code: "TASK_DELIVERY_SCOPE" }, source);
+  }
+  for (const source of [
+    "For tests, create a fake PR fixture and open it in the test UI.",
+    "For tests, create a fake PR fixture + upload logs to GitHub.",
+  ]) {
+    assert.equal(ownerDelivery(source), null, source);
+    assert.doesNotThrow(() => assertDeliveryAnswer({}, source), source);
+  }
 });
 
 test("subordinating clauses after product PR conditions retain delivery controls", () => {
@@ -439,6 +463,19 @@ test("business approval rules keep temporal implementation actions visible", () 
   const business = "If I approve the invoice, email the customer before applying the discount.";
   assert.equal(ownerDelivery(business), null);
   assert.doesNotThrow(() => assertDeliveryAnswer({}, business));
+  for (const connector of ["before", "after", "while"])
+    for (const subject of ["you", "the editor"]) {
+      const source = `If I approve the invoice, email the customer ${connector} ${subject} proofread the article.`;
+      assert.throws(() => ownerDelivery(source), { code: "TASK_DELIVERY_SCOPE" }, source);
+      assert.throws(() => assertDeliveryAnswer({}, source), { code: "TASK_DELIVERY_SCOPE" }, source);
+    }
+  for (const source of [
+    "If I approve the invoice, email the customer after you apply the discount.",
+    "If I approve the invoice, email the customer after the payment clears.",
+  ]) {
+    assert.equal(ownerDelivery(source), null, source);
+    assert.doesNotThrow(() => assertDeliveryAnswer({}, source), source);
+  }
 });
 
 test("synthetic PR fixtures cannot hide a coordinated live publication", () => {
