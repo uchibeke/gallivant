@@ -104,6 +104,15 @@ test("the delivery screen is deterministic over the fixture corpus and masks lit
     assert.deepEqual(unaccountedTerms(screen, { action: "pull_request" }), ["publish"], text);
   }
   for (const text of ["Add a publish button.", "Add a command to publish docs.", "The button publishes the report.", "Add a list of published articles.", "Show the publish status on the page."]) assert.equal(deliveryScreen(text).tier, "assumption", text);
+  // Shipping, rollout and go-live wording, and a production destination, read as deployment.
+  for (const text of ["Ship this change to production.", "Roll this out to production.", "Implement export, then roll it out.", "Go live with the new pricing page.", "Promote the build to staging.", "Ship it."]) {
+    const screen = deliveryScreen(text);
+    assert.equal(screen.tier, "question", text); assert.ok(screen.terms.includes("deploy"), `${text} → ${JSON.stringify(screen)}`);
+  }
+  for (const text of ["Add a shipping address field.", "Show the shipment tracker.", "Fix the crash reported in production logs."]) assert.equal(deliveryScreen(text).terms.includes("deploy"), false, text);
+  // A control word elsewhere on the line does not turn an ordinary feature clause into a question.
+  const unrelated = deliveryScreen("Add a PR status badge. Authentication is required.");
+  assert.equal(unrelated.tier, "assumption"); assert.deepEqual(unrelated.controlled, []); assert.ok(unrelated.controls.length, "the control word is still recorded for the review");
 });
 
 test("planner delivery tags are validated and compared with the profile without granting anything", () => {
@@ -389,6 +398,10 @@ test("repository snapshots are read-only, bounded, exclude private and ignored p
   let revisionCalls = 0;
   const racedHead = await repositorySnapshot({ ...git, revision: async () => revisionCalls++ === 0 ? revision : "b".repeat(40) }, "/checkout");
   assert.equal(racedHead.status, "unavailable"); assert.match(racedHead.reason, /changed while the snapshot was being collected/);
+  // An index that changes between the listings (a staged deletion of a force-tracked ignored path) is detected by re-reading it afterwards.
+  let indexCalls = 0;
+  const racedIndex = await repositorySnapshot({ ...git, indexPaths: async () => { indexCalls++; return indexCalls === 1 ? [...tree, "docs/staged-new.md"] : tree.filter(p => p !== "build/out.js"); } }, "/checkout");
+  assert.equal(racedIndex.status, "unavailable"); assert.match(racedIndex.reason, /revision, index or \.gitignore files changed/); assert.equal(indexCalls, 2);
   // An edited or untracked .gitignore means the rules in force are not the recorded revision's: nothing is listed or guessed.
   const diverged = await repositorySnapshot({ ...git, ignoreRuleChanges: async () => [".gitignore", "docs/.gitignore"] }, "/checkout");
   assert.equal(diverged.status, "unavailable"); assert.match(diverged.reason, /2 \.gitignore file\(s\) differ from the recorded revision/); assert.deepEqual(diverged.paths, []); assert.equal(diverged.digest, null);

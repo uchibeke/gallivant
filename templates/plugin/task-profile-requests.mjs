@@ -17,7 +17,8 @@ export const profileRequests = [
   // indirect
   { kind: "indirect", text: "Implement export and send the change up for the team to look at.", screen: { tier: "none" }, tag: { action: "pull_request" }, outcome: "ready" },
   { kind: "indirect", text: "Implement export. Keep the result out of main until someone has reviewed it.", screen: { tier: "question", terms: ["review"] }, tag: { action: "pull_request", prohibits: ["merge"] }, outcome: "ready" },
-  { kind: "indirect", text: "Build the widget table export. I will ship it myself afterwards.", screen: { tier: "none" }, tag: null, outcome: "ready" },
+  { kind: "indirect", text: "Build the widget table export. I will ship it myself afterwards.", screen: { tier: "question", terms: ["deploy"] }, tag: null, outcome: "needs-input", note: "shipping wording asks once even when the owner says they will do it themselves; the reply maps the clause" },
+  { kind: "indirect", text: "Build the widget table export. I will handle the rest myself afterwards.", screen: { tier: "none" }, tag: null, outcome: "ready" },
   // quoted
   { kind: "quoted", text: 'Document "Do not push" and "Keep the change local" in the README.', screen: { tier: "none" }, tag: null, outcome: "ready" },
   { kind: "quoted", text: "Render the string `merge the PR` in the help output.", screen: { tier: "none" }, tag: null, outcome: "ready" },
@@ -27,6 +28,9 @@ export const profileRequests = [
   { kind: "contradictory", text: "Implement export. Keep the change local; do not push or open a PR.", screen: { tier: "question" }, tag: { action: "local_only", prohibits: ["push", "pull_request"] }, outcome: "needs-input" },
   { kind: "contradictory", text: "Implement export and merge it into main once CI is green.", screen: { tier: "question" }, tag: { action: "merge" }, outcome: "needs-input" },
   { kind: "contradictory", text: "Deploy the approved release to production.", screen: { tier: "question" }, tag: { action: "deploy" }, outcome: "needs-input" },
+  { kind: "contradictory", text: "Implement export. Ship this change to production.", screen: { tier: "question", terms: ["deploy"] }, tag: null, outcome: "needs-input", note: "shipping wording with a production destination reads as deployment" },
+  { kind: "contradictory", text: "Implement export and roll this out to production.", screen: { tier: "question", terms: ["deploy"] }, tag: { action: "pull_request" }, outcome: "needs-input", note: "a pull_request tag cannot speak for a rollout" },
+  { kind: "feature", text: "Add a PR status badge. Authentication is required.", screen: { tier: "assumption", terms: ["pull_request"] }, tag: null, outcome: "ready", note: "a control word in another statement does not ask about the badge" },
   { kind: "contradictory", text: "Implement export. Wait for my approval before opening a PR.", screen: { tier: "question" }, tag: { action: "wait_for_approval" }, outcome: "needs-input" },
   { kind: "contradictory", text: "Implement export. Return a patch only.", screen: { tier: "question", terms: ["local"] }, tag: { action: "local_only" }, outcome: "needs-input" },
   // adversarial

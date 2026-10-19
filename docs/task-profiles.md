@@ -70,7 +70,8 @@ as "leave the changes uncommitted" or "unpublished" count as local-only. Control
 punctuation ends one, but conjunctions and an introductory colon after the
 control ("Do not: open a pull request") do not. The screen grants nothing:
 
-- Escalating terms (merge, deploy, release, approval, wait, local-only, and
+- Escalating terms (merge, deploy including shipping, rollout, go-live and
+  "to production" wording, release, approval, wait, local-only, and
   publish whenever it appears as a bare verb such as "Publish this package to
   npm", "and publish the package" or "could you publish it", rather than as a
   noun modifier such as "a publish button" or a feature infinitive such as
@@ -196,8 +197,8 @@ instead of evaluating rules the recorded tree does not contain. A tree path the
 index no longer holds (a staged deletion) is excluded as unverified and a
 staged addition is never listed; the listing therefore always describes the
 recorded revision. It is bounded to 400 paths and 16 KiB in the prompt; its
-digest covers the complete approved listing at that revision. The revision and
-the ignore files are rechecked after the listings are read, so a concurrent
+digest covers the complete approved listing at that revision. The revision,
+the index and the ignore files are rechecked after the listings are read, so a concurrent
 edit between the reads makes the snapshot unavailable instead of pairing the
 recorded revision with another state. File contents reach the planner only through
 explicitly selected `--context` documents, which are screened for credential
