@@ -37,30 +37,30 @@ writeFileSync(join(consumer, "package.json"), '{"private":true,"type":"module"}\
 execFileSync("npm", ["install", "--ignore-scripts", "--omit=dev", "--no-audit", "--no-fund", join(out, manifest.coreArtifact), "@modelcontextprotocol/sdk@1.32.1"], { cwd: consumer, stdio: "pipe" });
 cpSync(new URL("fixtures/plugin-installed-flow.mjs", import.meta.url), join(consumer, "flow.mjs"));
 let helpers = readFileSync(new URL("helpers.mjs", import.meta.url), "utf8");
-helpers = helpers.replace(/"\.\.\/lib\/(?:state|log|config|identity|harness|block)\.mjs"/g, '"gallivant/runtime/node/dependencies"');
+helpers = helpers.replace(/"\.\.\/lib\/(?:state|log|config|identity|harness|block)\.mjs"/g, '"@uchibeke/gallivant/runtime/node/dependencies"');
 writeFileSync(join(consumer, "helpers.mjs"), helpers);
-const draft = readFileSync(new URL("fixtures/task-intake.mjs", import.meta.url), "utf8").replace('"../../lib/task_contract.mjs"', '"gallivant/runtime/node/dependencies"');
+const draft = readFileSync(new URL("fixtures/task-intake.mjs", import.meta.url), "utf8").replace('"../../lib/task_contract.mjs"', '"@uchibeke/gallivant/runtime/node/dependencies"');
 writeFileSync(join(consumer, "draft.mjs"), draft);
 mkdirSync(join(consumer, "fixtures"));
 writeFileSync(join(consumer, "fixtures/task-intake.mjs"), draft);
 writeFileSync(join(consumer, "candidate.json"), JSON.stringify({ manifest, out }));
 let pagesErrors;
-try { await build({ entryPoints: [join(consumer, "node_modules/gallivant/lib/runtime_node.mjs")], platform: "browser", bundle: true, write: false, logLevel: "silent" }); assert.fail("full Node runtime unexpectedly bundles for Pages/browser"); }
+try { await build({ entryPoints: [join(consumer, "node_modules/@uchibeke/gallivant/lib/runtime_node.mjs")], platform: "browser", bundle: true, write: false, logLevel: "silent" }); assert.fail("full Node runtime unexpectedly bundles for Pages/browser"); }
 catch (e) { pagesErrors = e.errors?.map(error => error.text); assert.ok(pagesErrors?.some(error => error.includes("node:child_process"))); }
-for (const entry of ["task_delivery_contract", "task_delivery_view", "coordinator"]) await build({ entryPoints: [join(consumer, `node_modules/gallivant/lib/${entry}.mjs`)], platform: "browser", bundle: true, write: false, logLevel: "silent" });
+for (const entry of ["task_delivery_contract", "task_delivery_view", "coordinator"]) await build({ entryPoints: [join(consumer, `node_modules/@uchibeke/gallivant/lib/${entry}.mjs`)], platform: "browser", bundle: true, write: false, logLevel: "silent" });
 execFileSync(process.execPath, ["--test", "flow.mjs"], { cwd: consumer, stdio: "inherit", env: { ...process.env, GALLIVANT_HOME: join(temp, "unconfigured"), NODE_PATH: "" } });
 // Re-run provider/lifecycle conformance against ONLY emitted artifact modules.
 // Internal-module tests use the retained compatibility export; public consumers
 // above import only documented stable entrypoints.
 const conformance = ["execution-backends.test.mjs", "execution-preparation.test.mjs", "openai-agents.test.mjs", "codex-cloud.test.mjs", "loop.test.mjs", "review.test.mjs", "recovery.test.mjs", "control.test.mjs", "task-delivery.test.mjs", "plugin-package.test.mjs", "runtime-delivery.test.mjs"];
 for (const file of [...conformance, "codex-cloud-live-validation.mjs"]) {
-  const source = readFileSync(join(root, "test", file), "utf8").replace(/new URL\("\.\.\/([^"\n]+)", import\.meta\.url\)/g, (_, path) => `new URL("./node_modules/gallivant/${path}", import.meta.url)`).replace(/"\.\.\/lib\//g, '"gallivant/lib/');
+  const source = readFileSync(join(root, "test", file), "utf8").replace(/new URL\("\.\.\/([^"\n]+)", import\.meta\.url\)/g, (_, path) => `new URL("./node_modules/@uchibeke/gallivant/${path}", import.meta.url)`).replace(/"\.\.\/lib\//g, '"@uchibeke/gallivant/lib/');
   writeFileSync(join(consumer, file), source);
 }
 const conformanceLog = join(temp, "conformance.log"), logFd = openSync(conformanceLog, "w");
 console.log(`Installed provider/lifecycle conformance log: ${conformanceLog}`);
 try {
-  execFileSync(process.execPath, ["--test", ...conformance.map(file => join(consumer, file))], { cwd: join(consumer, "node_modules/gallivant"), stdio: ["ignore", logFd, logFd], env: { ...process.env, GALLIVANT_HOME: join(temp, "unconfigured"), NODE_PATH: "" } });
+  execFileSync(process.execPath, ["--test", ...conformance.map(file => join(consumer, file))], { cwd: join(consumer, "node_modules/@uchibeke/gallivant"), stdio: ["ignore", logFd, logFd], env: { ...process.env, GALLIVANT_HOME: join(temp, "unconfigured"), NODE_PATH: "" } });
 } catch (error) {
   throw new Error(`Installed conformance failed; inspect ${conformanceLog}`, { cause: error });
 } finally { closeSync(logFd); }

@@ -19,6 +19,8 @@ execution authorization, including after clarification answers. It is not a
 merge, deployment or release approval. To open the dashboard after dispatch,
 run `gallivant start` with no PRD path.
 
+## Supported preparation harnesses
+
 | Selected harness | Preparation boundary |
 | --- | --- |
 | `claude` | Local restricted mode with tools, MCP and skills disabled |
@@ -35,6 +37,12 @@ otherwise selects the first configured harness. See
 selected harness's configured model and provider settings. This
 can use inference even when you only prepare; it does not start implementation or
 open a pull request without execution authorization.
+
+## Writing requests and publication boundaries
+
+This section is a detailed reference for requests that need clarification. For
+a first run, use the example above; for saved drafts, go to
+[inspect, answer and start](#inspect-answer-and-start).
 
 For a new request such as “Implement CSV and JSON export, test both, and open one
 pull request for review,” Gallivant preserves the original text and records exact
@@ -261,6 +269,8 @@ of treating a model's interpretation as permission.
 Selecting `integrated` still grants no merge authority. Existing saved tasks,
 approved criteria, false attestations and exact operation retries retain their
 original semantics; this change does not repair historical results.
+
+## Repository context and preparation
 
 Preparation uses a capability on the selected harness adapter, through the same
 execution service for drafting, questions and repairs. Gallivant owns deterministic
@@ -501,6 +511,8 @@ implementation/publication text. A host must clarify unsupported or ambiguous
 ownership rather than silently drop a requirement. The generated
 Delivery target section explains which milestones the coordinator observes.
 
+## Inspect, answer and start
+
 The result includes contract `version: 1`, a durable `taskId`, a state `revision`,
 original input, requirements, answers, assumptions, requirement mapping, draft
 path/text/hash, source hashes, readiness evidence, preparation usage, artifacts and
@@ -734,8 +746,8 @@ Importing it reads no user configuration and starts no daemon or network work.
 Creating the usual context is an explicit caller action.
 
 ```js
-import { createTaskService, TASK_VERSION } from 'gallivant/tasks';
-import { makeContext } from 'gallivant/context';
+import { createTaskService, TASK_VERSION } from '@uchibeke/gallivant/tasks';
+import { makeContext } from '@uchibeke/gallivant/context';
 
 const tasks = createTaskService(makeContext());
 let result = await tasks.prepare({
@@ -754,7 +766,9 @@ if (result.status === 'needs-input') {
 }
 if (result.status === 'ready') {
   result = await tasks.validate({ taskId: result.taskId, expectedRevision: result.revision });
-  result = await tasks.start({ taskId: result.taskId, expectedRevision: result.revision, run: true });
+  if (result.status === 'ready' && result.readiness?.allow) {
+    result = await tasks.start({ taskId: result.taskId, expectedRevision: result.revision, run: true });
+  }
 }
 console.log(TASK_VERSION, tasks.inspect({ taskId: result.taskId }));
 ```

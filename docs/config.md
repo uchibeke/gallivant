@@ -17,7 +17,7 @@ See [installation](install.md) for the first-run sequence.
 
 | Key | Default | Meaning |
 |---|---|---|
-| `poll_seconds` | 120 | Tick interval. Minimum 30. |
+| `poll_seconds` | 120 | GitHub review and chain-check cadence. Minimum 30. Provider progress and readiness use the separate `execution.progressMs` cadence; the daemon may tick more frequently. |
 | `max_iterations` | 30 | Automatic fix-round allowance per PR. A pushed fix or changed completion receipt consumes a round. At the cap, further automatic work stops with `needs-human`. Explicit operator resumes can exceed the cap; their progress still counts. |
 | `checks_grace_minutes` | 5 | A head younger than this with no checks reported is not green yet; GitHub shows an empty check list for the first seconds after a push. A head older than this with no checks at all counts as green. |
 | `run_timeout_minutes` | 720 | Local runs exceeding this time are killed; remote execution uses provider cancellation/reconciliation where supported and preserves unknown ownership. It is a runtime allowance, not a provider billing cap. Overridable per repository; see below and [execution](execution.md). |
@@ -359,6 +359,13 @@ access to directories OUTSIDE its checkout, which only some harnesses can expres
 
 An empty list renders nothing at all, so a run without extras has the argv it had before the setting existed.
 
+The path validator rejects the named control directories and grants that contain
+them, resolving existing symlinks before checking. It does not reject every
+descendant of those directories or discover secrets in otherwise allowed folders.
+Do not grant a sensitive subdirectory such as a harness's session or credential
+folder. This validation is a narrow configuration check; the selected harness's
+permissions remain the access boundary.
+
 Any `--dangerously-*` flag is refused by the adapter, and so is each harness's own equivalent: `-y`/`--yolo` and
 `--approval-mode yolo` for Gemini CLI, `--auto` for opencode, and a `sandbox_mode` override whose value contains
 `danger` for Codex. goose has no such flag at all; it is bounded by the `GOOSE_MODE` environment variable, which
@@ -381,11 +388,29 @@ Gallivant asks `gh` rather than reading `~/.config/gh/hosts.yml` itself. Parsing
 
 If nothing answers, `gallivant start` refuses and names all three, and the daemon stops the entry with reason `no-credential`. Neither spends a run that could not push.
 
-Resolution happens once per run, at spawn, not once per daemon boot. It costs one subprocess, and only when neither the file nor the environment answered. The reason is that a daemon runs for days: a token cached at boot expires under it, and an operator who re-authenticates mid-session would otherwise have to restart the daemon for the new one to be used.
+Each run resolves its credential at launch rather than using a token cached at daemon boot. Coordinator Git/GitHub operations also resolve credentials when invoked. Resolution costs a subprocess only when neither a selected file nor the environment answered. A daemon can run for days; re-authentication can therefore take effect on its next operation without restarting it.
 
-The token reaches the child through the environment only. It is never in argv, which `ps` exposes to every process on the machine; never in `job.log`, which is the child's own stdout and is rendered in the tracker; and never in `cmd.json`, which records the command and its arguments but no environment. Anything that prints a credential prints its source and length instead.
+The coordinator passes the token to a local child through its environment, not
+argv or `cmd.json`. Credential-resolution diagnostics print its source and length,
+not the secret. Raw child output goes to private `provider.log`; recognized
+credentials and supplied secret values are redacted before projection into the
+tracker's `job.log`. A child can print its environment or other sensitive data, so
+raw diagnostics can contain secrets and redaction does not cover every form of
+sensitive content. Keep logs private and inspect/redact them before sharing.
+Token scope and repository protections remain essential.
 
-Enterprise hosts. `gh` can be logged in to more than one host, and a github.com token does not authenticate `github.acme.com`, so the host is taken from the checkout's `origin` remote and passed to `gh auth token --hostname`. The host is not a secret, so it is safe in argv; the token comes back on stdout. If `gh` has no login for that host, set `github_token_file`. Gallivant says so by name rather than sending a token that cannot work.
+The credential resolver can select a host from an existing checkout's `origin`
+and ask `gh auth token --hostname` for it. That is not end-to-end GitHub Enterprise
+support: new-task repository resolution, clone URLs and learning identity currently
+use github.com. An enterprise token alone does not make those workflows supported.
+
+A configured token file that is missing, unreadable or empty fails closed with
+`NO_CREDENTIAL`. It never falls back to a broader environment token or saved login.
+Restore the file, or deliberately set `github_token_file` to `null` if fallback
+is the intended policy. Restart an already-running daemon after changing that
+setting; it keeps the configuration loaded at startup. The coordinator resolves
+the selected credential per operation, so removing a selected file blocks later
+Git/GitHub operations even while the daemon runs.
 
 ## Environment for runs
 

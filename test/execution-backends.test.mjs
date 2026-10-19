@@ -1096,6 +1096,34 @@ function localTimeoutFixture({ immediate = false, provider = "codex" } = {}) {
   return { home, root, clock, id, session, runner, stops, open, setDescendants: value => { descendants = value; }, setInspectable: value => { inspectable = value; } };
 }
 
+test("local network recovery survives execution-ledger reopening without duplicate sessions", async () => {
+  const f = localTimeoutFixture({ provider: "claude" });
+  const state = makeState(f.home), worktree = join(f.home, "worktree");
+  mkdirSync(worktree);
+  state.put(f.id, { ...newEntry({ repo: "acme/widget", branch: "work/network", worktree, harness: "claude", session: null, pr: 142, state: STATES.prOpen, nowIso: T0 }), cursor: { since: T0, fixed_sha: "a1b2c3d", dispatched: [], checks_sha: null, receipt_hash: null } });
+  let service = f.open();
+  const ctx = { home: f.home, config: { ...CONFIG, harness: { ...CONFIG.harness, claude: { ...CONFIG.harness.claude, bin: harnessBin(f.home, "claude") } } }, state, clock: f.clock,
+    executionFor: () => service, runnerFor: () => f.runner, gh: fakeGh(), git: fakeGit(), log: silentLog, notify: fakeNotify(),
+    readPrd: () => null, ownLogin: "me", credential: fakeCredential(), identity: fakeIdentity() };
+  let tick = makeTick(ctx);
+  const { job, session } = await tick.startRun(f.id, state.get(f.id), { name: "test", prompt: "Implement the approved task" });
+  state.update(f.id, { session, last: { run: job.id, exit: null, at: T0, event: "test" } });
+  const lines = claudeResultLines({ ok: false, text: "API Error: DNS failed (ENOTFOUND)" });
+  lines[0] = JSON.stringify({ type: "system", subtype: "init", session_id: session });
+  f.runner.finish(lines, { exit: 1 });
+  f.runner.annotate(job.id, { endedAt: f.clock.now() });
+  await tick.tick();
+  assert.equal(state.get(f.id).network_retry?.phase, "waiting");
+  service = f.open(); tick = makeTick(ctx);
+  f.clock.advance(1);
+  await tick.tick();
+  assert.equal(f.runner.started.length, 2);
+  assert.equal(service.current().execution.sessionId, session);
+  assert.equal(state.get(f.id).network_retry.phase, "running");
+  await tick.tick();
+  assert.equal(f.runner.started.length, 2);
+});
+
 const localSessionLines = (provider, session) => provider === "claude"
   ? claudeResultLines().map(line => { const event = JSON.parse(line); if (event.type === "system") event.session_id = session; return JSON.stringify(event); })
   : provider === "gemini" ? geminiLines({ session }) : provider === "opencode" ? opencodeLines({ session })

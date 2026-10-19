@@ -13,6 +13,7 @@ requirements and checks.
 | Need | Guide |
 | --- | --- |
 | Install, configure access and complete a first task | [Getting started](install.md) |
+| Ask an agent to inspect, install and verify setup | [Agent setup](agent-setup.md) |
 | Describe work, answer questions, inspect a draft and authorize execution | [Natural-language tasks](tasks.md) |
 | Choose the typed delivery profile, planner route and review a prepared task | [Typed delivery profiles](task-profiles.md) |
 | Write a brief with acceptance criteria, source files and verification commands | [PRD contract](prd.md) |
@@ -25,8 +26,10 @@ requirements and checks.
 | Queue dependent tasks with a human merge between steps | [Chains](chains.md) |
 | Understand permissions, credentials and completion checks | [Guardrails](guardrails.md) |
 | Keep Node, Git and dependency execution consistent | [Runtime environment](runtime-environment.md) |
+| Diagnose DNS/HTTPS failures and understand automatic recovery | [Network recovery](network-recovery.md) |
 | Collect review feedback and understand why learned-rule activation is unavailable | [Learning](learning.md) |
 | Integrate the shared services or package a task-delivery plugin | [Task delivery](task-delivery.md) |
+| Qualify a specific task-delivery plugin release and its actual host evidence | [Release qualification](release-qualification.md) |
 | Understand preparation isolation and provider capabilities | [Preparation](preparation.md) |
 | Understand durable runs, continuation, cancellation and publication | [Execution](execution.md) |
 | Understand module ownership and the overall design | [Architecture](architecture.md) |
