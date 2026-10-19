@@ -91,7 +91,7 @@ approved PR target. Account login and Git identity belong to the user.
 ## 2. Install and initialize
 
 Use the [current installation instructions](install.md#1-the-command). Before
-the first npm publication, install from source; `npm install -g gallivant` is only
+the first npm publication, install from source; `npm install -g @uchibeke/gallivant` is only
 an option after the package is published. Avoid `sudo npm install`; use a
 user-owned Node installation or prefix when global installation is not writable.
 Do not silently replace a different installed version while its daemon is running.

@@ -1,6 +1,6 @@
 # Releasing
 
-The package name is `gallivant`; the executable is `gallivant`. The repository is
+The package name is `@uchibeke/gallivant`; the executable is `gallivant`. The repository is
 `uchibeke/gallivant`. Before announcing a version, confirm npm publication and a
 passing consumer smoke check. A public GitHub repository alone does not make the
 npm command work.
@@ -53,7 +53,7 @@ gh api repos/uchibeke/gallivant/environments/npm/deployment-branch-policies
 gh api repos/uchibeke/gallivant/branches/main --jq '{protected,protection}'
 gh api repos/uchibeke/gallivant/rulesets
 npm whoami --registry=https://registry.npmjs.org
-npm view gallivant version --registry=https://registry.npmjs.org
+npm view @uchibeke/gallivant version --registry=https://registry.npmjs.org
 ```
 
 An absent package is expected before the first publication. An absent `npm`
@@ -112,8 +112,8 @@ original workflow rather than dispatching newer `main` with the old version.
 ## Verify before announcing
 
 ```sh
-npm view gallivant version dist.integrity dist.attestations
-npm install -g gallivant
+npm view @uchibeke/gallivant version dist.integrity dist.attestations
+npm install -g @uchibeke/gallivant
 gallivant --version
 gallivant --help
 ```

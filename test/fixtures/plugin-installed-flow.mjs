@@ -5,20 +5,20 @@ import { join, dirname } from "node:path";
 import { execFileSync, fork } from "node:child_process";
 import { once } from "node:events";
 import { createHash } from "node:crypto";
-import { createTaskService } from "gallivant/tasks";
-import { createTaskDelivery } from "gallivant/task-delivery";
-import { createDeliveryStore } from "gallivant/task-delivery/store";
-import { CORE_VERSION, TASK_OPERATIONS, assertCompatible, uiResourceConfiguration, taskRejectionForModel } from "gallivant/task-delivery/contracts";
-import { registerTaskDelivery } from "gallivant/task-delivery/mcp";
-import { createCoordinator } from "gallivant/runtime/coordinator";
-import { createNodeCoordinator, createNodeOwnerStore, NODE_RUNTIME_REQUIREMENTS } from "gallivant/runtime/node";
-import { checkRuntimeState, migrateRuntimeState, backupRuntimeState, restoreRuntimeState } from "gallivant/runtime/state";
-import { makeState, MIN_VERSIONS, appendProjection, writeJsonAtomic, criteriaFromPrd, parsePrd, requestControl } from "gallivant/runtime/node/dependencies";
-import { makeExecution } from "gallivant/execution";
-import { executionCapabilities, capabilitiesFor } from "gallivant/capabilities";
-import { makeAgentsTransport } from "gallivant/providers/openai-agents";
-import { makeCloudTransport } from "gallivant/providers/codex-cloud";
-import { buildPluginPackage } from "gallivant/plugin-package";
+import { createTaskService } from "@uchibeke/gallivant/tasks";
+import { createTaskDelivery } from "@uchibeke/gallivant/task-delivery";
+import { createDeliveryStore } from "@uchibeke/gallivant/task-delivery/store";
+import { CORE_VERSION, TASK_OPERATIONS, assertCompatible, uiResourceConfiguration, taskRejectionForModel } from "@uchibeke/gallivant/task-delivery/contracts";
+import { registerTaskDelivery } from "@uchibeke/gallivant/task-delivery/mcp";
+import { createCoordinator } from "@uchibeke/gallivant/runtime/coordinator";
+import { createNodeCoordinator, createNodeOwnerStore, NODE_RUNTIME_REQUIREMENTS } from "@uchibeke/gallivant/runtime/node";
+import { checkRuntimeState, migrateRuntimeState, backupRuntimeState, restoreRuntimeState } from "@uchibeke/gallivant/runtime/state";
+import { makeState, MIN_VERSIONS, appendProjection, writeJsonAtomic, criteriaFromPrd, parsePrd, requestControl } from "@uchibeke/gallivant/runtime/node/dependencies";
+import { makeExecution } from "@uchibeke/gallivant/execution";
+import { executionCapabilities, capabilitiesFor } from "@uchibeke/gallivant/capabilities";
+import { makeAgentsTransport } from "@uchibeke/gallivant/providers/openai-agents";
+import { makeCloudTransport } from "@uchibeke/gallivant/providers/codex-cloud";
+import { buildPluginPackage } from "@uchibeke/gallivant/plugin-package";
 import { CONFIG, tempHome, harnessBin, fakeRunner, makeClock, fakeCredential, fakeIdentity, silentLog, fakeGh, fakeGit, fakeNotify, claudeResultLines, prFixture, checkRun } from "./helpers.mjs";
 import { draftFor } from "./draft.mjs";
 import { Server } from "@modelcontextprotocol/sdk/server/index.js";
@@ -441,8 +441,8 @@ test("coordinator persists wake before advance, excludes duplicates and rejects 
 
 test("process eviction recovers the durable owner but never purchases unresolved provider intent twice", async () => {
   const home = tempHome(), script = join(home, "eviction.mjs");
-  writeFileSync(script, `import {createNodeOwnerStore} from ${JSON.stringify(import.meta.resolve("gallivant/runtime/node"))};
-import {makeExecution} from ${JSON.stringify(import.meta.resolve("gallivant/execution"))};
+  writeFileSync(script, `import {createNodeOwnerStore} from ${JSON.stringify(import.meta.resolve("@uchibeke/gallivant/runtime/node"))};
+import {makeExecution} from ${JSON.stringify(import.meta.resolve("@uchibeke/gallivant/execution"))};
 import {appendFileSync} from 'node:fs';
 const home=${JSON.stringify(home)};
 await createNodeOwnerStore({home,durable:true}).withOwner(async () => {
@@ -569,7 +569,7 @@ test("actual compatible patch install and rollback preserve saved identities; ma
   writeJsonAtomic(provider, { version: 1, taskId: task.taskId, sessionId: "session-preserved", turnId: "root-preserved" });
   const providerBytes = readFileSync(provider), backup = join(w.root, "previous-state");
   const patch = join(w.root, "patch"), install = join(w.root, "upgrade-consumer");
-  cpSync(new URL("node_modules/gallivant", import.meta.url), patch, { recursive: true });
+  cpSync(new URL("node_modules/@uchibeke/gallivant", import.meta.url), patch, { recursive: true });
   const pkg = JSON.parse(readFileSync(join(patch, "package.json"))); pkg.version = "0.2.1";
   writeFileSync(join(patch, "package.json"), JSON.stringify(pkg));
   const contract = join(patch, "lib/task_delivery_contract.mjs"); writeFileSync(contract, readFileSync(contract, "utf8").replace('CORE_VERSION = "0.2.0"', 'CORE_VERSION = "0.2.1"'));
@@ -582,13 +582,13 @@ test("actual compatible patch install and rollback preserve saved identities; ma
   mkdirSync(install); writeFileSync(join(install, "package.json"), '{"private":true,"type":"module"}');
   execFileSync("npm", ["install", "--ignore-scripts", "--omit=dev", "--no-audit", "--no-fund", tarball], { cwd: install, stdio: "pipe" });
   const script = join(install, "check.mjs");
-  writeFileSync(script, `import {CORE_VERSION,assertCompatible} from 'gallivant/task-delivery/contracts';import {migrateRuntimeState} from 'gallivant/runtime/state';if(CORE_VERSION!=='0.2.1')throw Error('source import bypass');const manifest=${JSON.stringify(patchManifest)};migrateRuntimeState({home:${JSON.stringify(ctx.home)},manifest});assertCompatible(manifest);`);
+  writeFileSync(script, `import {CORE_VERSION,assertCompatible} from '@uchibeke/gallivant/task-delivery/contracts';import {migrateRuntimeState} from '@uchibeke/gallivant/runtime/state';if(CORE_VERSION!=='0.2.1')throw Error('source import bypass');const manifest=${JSON.stringify(patchManifest)};migrateRuntimeState({home:${JSON.stringify(ctx.home)},manifest});assertCompatible(manifest);`);
   execFileSync(process.execPath, [script], { cwd: install, stdio: "pipe" });
   assert.deepEqual(readFileSync(intake), before); assert.deepEqual(readFileSync(provider), providerBytes);
   assert.throws(() => migrateRuntimeState({ home: ctx.home, manifest: { ...patchManifest, coreVersion: "1.0.0" } }), { code: "DELIVERY_VERSION" });
   execFileSync("npm", ["install", "--ignore-scripts", "--omit=dev", "--no-audit", "--no-fund", join(candidate.out, candidate.manifest.coreArtifact)], { cwd: install, stdio: "pipe" });
   const restored = join(w.root, "rollback");
-  writeFileSync(script, `import {CORE_VERSION} from 'gallivant/task-delivery/contracts';import {restoreRuntimeState} from 'gallivant/runtime/state';if(CORE_VERSION!=='0.2.0')throw Error('rollback package mismatch');restoreRuntimeState({backup:${JSON.stringify(backup)},out:${JSON.stringify(restored)},manifest:${JSON.stringify(manifest)}});`);
+  writeFileSync(script, `import {CORE_VERSION} from '@uchibeke/gallivant/task-delivery/contracts';import {restoreRuntimeState} from '@uchibeke/gallivant/runtime/state';if(CORE_VERSION!=='0.2.0')throw Error('rollback package mismatch');restoreRuntimeState({backup:${JSON.stringify(backup)},out:${JSON.stringify(restored)},manifest:${JSON.stringify(manifest)}});`);
   execFileSync(process.execPath, [script], { cwd: install, stdio: "pipe" });
   assert.deepEqual(readFileSync(join(restored, "tasks", task.taskId, "intake.json")), before);
   assert.deepEqual(readFileSync(join(restored, "runs/fixture/agents.json")), providerBytes);
@@ -598,8 +598,8 @@ test("actual compatible patch install and rollback preserve saved identities; ma
 });
 
 test("actual installed Node runtime imports; Pages full-runtime dependencies require the measured Node remedy", async t => {
-  const modules = ["gallivant/tasks", "gallivant/runtime/node", "gallivant/task-delivery", "gallivant/providers/openai-agents", "gallivant/providers/codex-cloud"];
-  for (const path of modules) assert.ok(import.meta.resolve(path).includes("node_modules/gallivant/"));
+  const modules = ["@uchibeke/gallivant/tasks", "@uchibeke/gallivant/runtime/node", "@uchibeke/gallivant/task-delivery", "@uchibeke/gallivant/providers/openai-agents", "@uchibeke/gallivant/providers/codex-cloud"];
+  for (const path of modules) assert.ok(import.meta.resolve(path).includes("node_modules/@uchibeke/gallivant/"));
   assert.equal(NODE_RUNTIME_REQUIREMENTS.replicas, 1); assert.match(NODE_RUNTIME_REQUIREMENTS.pagesRemedy, /Node 22.*durable volume/);
   t.diagnostic("Node imports and bounded coordinator exercised above; no Workers-native workflow runtime is claimed.");
 });

@@ -359,8 +359,8 @@ there is no registry outside Gallivant's own tree; a label that is not in the co
 `gallivant serve` is one way to run the tracker, not the only one. The same router can be mounted inside a server you already start, so one process and one port serve both and there is no second thing to supervise:
 
 ```js
-import { mount } from "gallivant/lib/commands/serve.mjs";
-import { makeContext } from "gallivant/lib/context.mjs";
+import { mount } from "@uchibeke/gallivant/lib/commands/serve.mjs";
+import { makeContext } from "@uchibeke/gallivant/lib/context.mjs";
 
 const tracker = mount(makeContext(), { base: "/gallivant" });
 

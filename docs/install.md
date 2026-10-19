@@ -31,8 +31,8 @@ separate setup below and needs no local Codex or Claude binary. See the
 
 ## 1. The command
 
-Check the [registry version](https://www.npmjs.com/package/gallivant). If one
-is available, install the CLI with `npm install -g gallivant` and check
+Check the [registry version](https://www.npmjs.com/package/@uchibeke/gallivant). If one
+is available, install the CLI with `npm install -g @uchibeke/gallivant` and check
 `gallivant --version`. If the package has not been published yet, use the source
 checkout:
 

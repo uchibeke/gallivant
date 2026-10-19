@@ -25,21 +25,21 @@ pin the artifact produced from the eventual human-merged commit, not this branch
 
 | Import | Public API |
 | --- | --- |
-| `gallivant/tasks` | `createTaskService`, `TASK_VERSION`; same service used by CLI task commands |
-| `gallivant/capabilities` | `executionCapabilities`, `capabilitiesFor`, setup/runtime requirements |
-| `gallivant/task-delivery` | `createTaskDelivery` scoped operation dispatcher |
-| `gallivant/task-delivery/contracts` | `TASK_OPERATIONS`, versions, compatibility handshake, UI resource configuration |
-| `gallivant/task-delivery/views` | `taskView`, `modelSummary`; saved observations only |
-| `gallivant/task-delivery/store` | `createDeliveryStore`, `scopeKey`; single-host durable receipt adapter |
-| `gallivant/task-delivery/mcp` | `registerTaskDelivery`; lazy optional MCP SDK peer `1.32.1` |
-| `gallivant/execution` | Existing `makeExecution`, cached inspect and coordinator reconciliation |
-| `gallivant/providers/openai-agents` | Existing managed session transport and setup checks |
-| `gallivant/providers/codex-cloud` | Existing native CLI transport and setup checks |
-| `gallivant/runtime/coordinator` | `createCoordinator` fenced bounded wake envelope |
-| `gallivant/runtime/node` | `createNodeOwnerStore`, `createNodeCoordinator`, requirements |
-| `gallivant/runtime/state` | Check, migrate, private backup and fresh-namespace rollback |
-| `gallivant/runtime/node/dependencies` | State/config/log/identity constructors, canonical tick/readiness/controls, bounded log reader and atomic storage helpers for injected Node adapters |
-| `gallivant/plugin-package` | Single reproducible package builder and public metadata validator |
+| `@uchibeke/gallivant/tasks` | `createTaskService`, `TASK_VERSION`; same service used by CLI task commands |
+| `@uchibeke/gallivant/capabilities` | `executionCapabilities`, `capabilitiesFor`, setup/runtime requirements |
+| `@uchibeke/gallivant/task-delivery` | `createTaskDelivery` scoped operation dispatcher |
+| `@uchibeke/gallivant/task-delivery/contracts` | `TASK_OPERATIONS`, versions, compatibility handshake, UI resource configuration |
+| `@uchibeke/gallivant/task-delivery/views` | `taskView`, `modelSummary`; saved observations only |
+| `@uchibeke/gallivant/task-delivery/store` | `createDeliveryStore`, `scopeKey`; single-host durable receipt adapter |
+| `@uchibeke/gallivant/task-delivery/mcp` | `registerTaskDelivery`; lazy optional MCP SDK peer `1.32.1` |
+| `@uchibeke/gallivant/execution` | Existing `makeExecution`, cached inspect and coordinator reconciliation |
+| `@uchibeke/gallivant/providers/openai-agents` | Existing managed session transport and setup checks |
+| `@uchibeke/gallivant/providers/codex-cloud` | Existing native CLI transport and setup checks |
+| `@uchibeke/gallivant/runtime/coordinator` | `createCoordinator` fenced bounded wake envelope |
+| `@uchibeke/gallivant/runtime/node` | `createNodeOwnerStore`, `createNodeCoordinator`, requirements |
+| `@uchibeke/gallivant/runtime/state` | Check, migrate, private backup and fresh-namespace rollback |
+| `@uchibeke/gallivant/runtime/node/dependencies` | State/config/log/identity constructors, canonical tick/readiness/controls, bounded log reader and atomic storage helpers for injected Node adapters |
+| `@uchibeke/gallivant/plugin-package` | Single reproducible package builder and public metadata validator |
 
 Imports read no operator configuration, invoke no provider and start no daemon.
 Existing `./lib/*` compatibility imports remain; consumers use the named exports.
@@ -49,8 +49,8 @@ Command Center SSE/history, statuses and controls retain their version-1 shapes.
 ## Scoped operation adapter
 
 ```js
-import { createTaskDelivery } from 'gallivant/task-delivery';
-import { createDeliveryStore } from 'gallivant/task-delivery/store';
+import { createTaskDelivery } from '@uchibeke/gallivant/task-delivery';
+import { createDeliveryStore } from '@uchibeke/gallivant/task-delivery/store';
 const delivery = createTaskDelivery({
   manifest: emittedRuntimeManifest, // load this installed artifact's runtime.json
   authorize: aportAuthorize, // validate OAuth/audience/region/repository on EVERY call
@@ -269,16 +269,16 @@ node bin/package-plugin.mjs --config /private/aport-package.json --validate-publ
 npm run package:plugin -- --config /private/aport-package.json --out /private/candidate \
   --core-version 0.2.0 --source-commit <40-character-merged-commit>
 # For development only, add --internal; keep fixture:true in the config.
-npm install --ignore-scripts --prefix /private/candidate-runtime /private/candidate/gallivant-0.2.0.tgz
-node /private/candidate-runtime/node_modules/gallivant/bin/task-delivery-state.mjs check \
+npm install --ignore-scripts --prefix /private/candidate-runtime /private/candidate/uchibeke-gallivant-0.2.0.tgz
+node /private/candidate-runtime/node_modules/@uchibeke/gallivant/bin/task-delivery-state.mjs check \
   --home /durable/preview --manifest /private/candidate/runtime.json
-node /private/previous-runtime/node_modules/gallivant/bin/task-delivery-state.mjs backup \
+node /private/previous-runtime/node_modules/@uchibeke/gallivant/bin/task-delivery-state.mjs backup \
   --home /durable/preview --manifest /private/previous/runtime.json --out /private/backup
-node /private/candidate-runtime/node_modules/gallivant/bin/task-delivery-state.mjs migrate \
+node /private/candidate-runtime/node_modules/@uchibeke/gallivant/bin/task-delivery-state.mjs migrate \
   --home /durable/preview --manifest /private/candidate/runtime.json
 # Roll back package AND state into a fresh namespace, then switch the existing binding.
-npm install --ignore-scripts --prefix /private/previous-runtime /private/previous/gallivant-0.2.0.tgz
-node /private/previous-runtime/node_modules/gallivant/bin/task-delivery-state.mjs rollback \
+npm install --ignore-scripts --prefix /private/previous-runtime /private/previous/uchibeke-gallivant-0.2.0.tgz
+node /private/previous-runtime/node_modules/@uchibeke/gallivant/bin/task-delivery-state.mjs rollback \
   --backup /private/backup --out /durable/restored --manifest /private/previous/runtime.json
 npm run test:plugin-package
 ```

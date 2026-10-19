@@ -333,3 +333,15 @@ test("doctor preserves an explicit token-file refusal without falling back for r
   }
   assert.deepEqual(readFileSync(calls, "utf8").trim().split("\n"), ["api user --jq {login: .login}"]);
 });
+
+test("doctor's missing selected token-file remedy includes the daemon restart", async () => {
+  const home = doctorHome();
+  const configFile = pjoin(home, "config.json");
+  const config = JSON.parse(readFileSync(configFile, "utf8"));
+  writeFileSync(configFile, JSON.stringify({ ...config, github_token_file: pjoin(home, "missing-token") }));
+  const results = await doctor({ home, env: { GH_TOKEN: "t-broader-env" }, resolve: noGh });
+  const credential = named(results, "run credential");
+  assert.equal(credential.ok, false);
+  assert.match(credential.fix, /set github_token_file to null and restart the daemon/);
+  assert.doesNotMatch(credential.fix, /t-broader-env/);
+});

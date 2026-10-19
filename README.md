@@ -21,8 +21,8 @@ You need **macOS or Linux, Node 22+, Git, GitHub CLI and jq**. For your first ru
 use signed-in **Codex CLI 0.160.0+** or **Claude Code 2.1.263+**. Provider usage is
 billed to your own account. [Full prerequisites](docs/install.md).
 
-Check the [registry version](https://www.npmjs.com/package/gallivant). Once a
-version is available, install it with `npm install -g gallivant`. If the package
+Check the [registry version](https://www.npmjs.com/package/@uchibeke/gallivant). Once a
+version is available, install it with `npm install -g @uchibeke/gallivant`. If the package
 is not published yet, install from source:
 
 ```sh
