@@ -785,7 +785,7 @@ is live or its gates have passed. Check the linked PR and the consumer's current
 release evidence before an installation:
 
 The connected execution successor is
-[`aporthq/agent-passport#417`](https://github.com/aporthq/agent-passport/pull/417),
+[`aporthq/agent-passport#417`](https://github.com/aporthq/agent-passport/pull/417) (not publicly readable),
 with canonical PRD `docs/prds/aport-task-delivery-workflow-integration.md` and job
 identity `aporthq/agent-passport/aport-task-delivery-workflow-integration`. It
 preserves the original T0–T9 requirements; the recorded plan requires the actual

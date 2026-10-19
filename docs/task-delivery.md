@@ -12,7 +12,7 @@ must enforce the same authorization, ownership, persistence and recovery
 contracts. In the APort integration, APort owns publication and the host
 responsibilities above. Its existing
 `aporthq/agent-passport/aport-task-delivery-mcp` job produced merged
-[PR #414](https://github.com/aporthq/agent-passport/pull/414); reuse that integration.
+[PR #414](https://github.com/aporthq/agent-passport/pull/414) (not publicly readable); reuse that integration.
 The M5/M6 notes below preserve that integration's milestone evidence and gates;
 they do not certify another host or supply a public UI, database or competing
 runner.
