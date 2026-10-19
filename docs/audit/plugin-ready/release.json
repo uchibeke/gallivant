@@ -66,15 +66,15 @@
         "exit": 0,
         "passed": 1724,
         "skipped": 1,
-        "log": "/tmp/release-controls-final-full.log",
-        "logSha256": "4b6c4b907f8c26c6bcc6d177139b28c304c0a4db278d35ef9d3b2b2c5e8a5140"
+        "log": "/tmp/release-gate-full.log",
+        "logSha256": "0122f0f058d8110f156bcd4f7880778bb6c25c3d8d9129c4b5325e6469a3b5c9"
       },
       {
         "command": "npm run lint",
         "exit": 0,
         "passed": null,
         "skipped": 0,
-        "log": "/tmp/release-controls-final-lint.log",
+        "log": "/tmp/release-gate-lint.log",
         "logSha256": "cdc63b4e335e51146cdac6c8a99d5817150951621af8d0329a1bcd947f9b2c14"
       },
       {
@@ -82,32 +82,32 @@
         "exit": 0,
         "passed": 418,
         "skipped": 0,
-        "log": "/tmp/release-controls-final-backends.log",
-        "logSha256": "30f6bfa7921d13f250b57d68ef5efd2646bb482d7fbd08198c98221602d6fd28"
+        "log": "/tmp/release-gate-backends.log",
+        "logSha256": "94ff530596e1ca7f8c7112721349bfb83cf40a1e2642c5156620e00c893e85ab"
       },
       {
         "command": "npm run test:plugin-package",
         "exit": 0,
         "passed": 578,
         "skipped": 0,
-        "log": "/tmp/release-controls-final-plugin.log",
-        "logSha256": "5df8d59d2dd5506b4078f74ce92aad7ce647b404da4b4e072341e13069250c2c"
+        "log": "/tmp/release-gate-plugin.log",
+        "logSha256": "885fc686a8408a0b1ac124b1a931cea5816db495d9c2346e8a37f73bfd4b46c9"
       },
       {
         "command": "npm run test:release-package",
         "exit": 0,
         "passed": 11,
         "skipped": 0,
-        "log": "/tmp/release-controls-final-release.log",
-        "logSha256": "460328fa6ca3f8efe5de1db416150f418fc3bf054f818fe818c88b6a5df1fa8a"
+        "log": "/tmp/release-gate-release.log",
+        "logSha256": "384770c984fcfaff28e0dde884f44e8750f62b6de20720368a802d44bf6ba6ba"
       },
       {
         "command": "git diff --check",
         "exit": 0
       }
     ],
-    "installedConformanceLog": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/task-plugin-consumer-TZ1yAX/conformance.log",
-    "installedEvidence": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/task-plugin-consumer-TZ1yAX/evidence.json",
+    "installedConformanceLog": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/task-plugin-consumer-lgClvv/conformance.log",
+    "installedEvidence": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/task-plugin-consumer-lgClvv/evidence.json",
     "previousChecks": [
       {
         "command": "npm test",
@@ -305,6 +305,56 @@
         ],
         "installedConformanceLog": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/task-plugin-consumer-CfTHlU/conformance.log",
         "installedEvidence": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/task-plugin-consumer-CfTHlU/evidence.json"
+      },
+      {
+        "checks": [
+          {
+            "command": "npm test",
+            "exit": 0,
+            "passed": 1724,
+            "skipped": 1,
+            "log": "/tmp/release-controls-final-full.log",
+            "logSha256": "4b6c4b907f8c26c6bcc6d177139b28c304c0a4db278d35ef9d3b2b2c5e8a5140"
+          },
+          {
+            "command": "npm run lint",
+            "exit": 0,
+            "passed": null,
+            "skipped": 0,
+            "log": "/tmp/release-controls-final-lint.log",
+            "logSha256": "cdc63b4e335e51146cdac6c8a99d5817150951621af8d0329a1bcd947f9b2c14"
+          },
+          {
+            "command": "npm run test:execution-backends",
+            "exit": 0,
+            "passed": 418,
+            "skipped": 0,
+            "log": "/tmp/release-controls-final-backends.log",
+            "logSha256": "30f6bfa7921d13f250b57d68ef5efd2646bb482d7fbd08198c98221602d6fd28"
+          },
+          {
+            "command": "npm run test:plugin-package",
+            "exit": 0,
+            "passed": 578,
+            "skipped": 0,
+            "log": "/tmp/release-controls-final-plugin.log",
+            "logSha256": "5df8d59d2dd5506b4078f74ce92aad7ce647b404da4b4e072341e13069250c2c"
+          },
+          {
+            "command": "npm run test:release-package",
+            "exit": 0,
+            "passed": 11,
+            "skipped": 0,
+            "log": "/tmp/release-controls-final-release.log",
+            "logSha256": "460328fa6ca3f8efe5de1db416150f418fc3bf054f818fe818c88b6a5df1fa8a"
+          },
+          {
+            "command": "git diff --check",
+            "exit": 0
+          }
+        ],
+        "installedConformanceLog": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/task-plugin-consumer-TZ1yAX/conformance.log",
+        "installedEvidence": "/var/folders/1x/c2l_6n192s7b08876_nhjt7w0000gn/T/task-plugin-consumer-TZ1yAX/evidence.json"
       }
     ]
   },
@@ -355,7 +405,7 @@
     },
     "ac-12": {
       "met": true,
-      "evidence": "test/release-package.test.mjs: packaging controls are source inputs and invalidate core evidence; clean-commit addition/edit/deletion and runtime-configuration regressions; /tmp/release-controls-final-release.log"
+      "evidence": "test/release-package.test.mjs: packaging controls are source inputs and invalidate core evidence; clean-commit addition/edit/deletion and runtime-configuration regressions; /tmp/release-gate-release.log"
     },
     "ac-13": {
       "met": false,
@@ -420,6 +470,35 @@
       "test/plugin-package.test.mjs": "0659496a498fcafec60adcb2934c0595409fceb66382a89dbae448704b201ff4",
       "test/release-package.test.mjs": "3cd595306f5600c9ef6676c88f7652fa516d3410f73f090bef33aaa6cd4c9a16",
       "docs/release-qualification.md": "5d36c8032be1ee239c726ea41f74b28f7d294be709d19b53304df0851a10a9a5"
+    }
+  },
+  "completionGateFollowup": {
+    "sourceAtStart": "5a03d39ff10396b8574370ecf4a9f0261374f3bb",
+    "denialCodes": [
+      "oap.criteria_not_met",
+      "oap.blocked_pattern_detected"
+    ],
+    "outputPattern": "Removed prohibited logging calls from both release CLIs and installed-validator test; zero matches in changed modules.",
+    "remainingCriteria": [
+      "ac-2",
+      "ac-3",
+      "ac-4",
+      "ac-5",
+      "ac-6",
+      "ac-7",
+      "ac-8",
+      "ac-9",
+      "ac-10",
+      "ac-11",
+      "ac-13",
+      "ac-14"
+    ],
+    "representativeOutput": "/tmp/release-gate-output.json",
+    "classification": "offline regression verification; live prerequisites unchanged",
+    "sourceHashes": {
+      "bin/release-package.mjs": "b01962a22763c76ca61e86724c5249936cafd4084322193f3ff03988c204793f",
+      "bin/release-live.mjs": "d8a9e47406b79d948bd7a8d409bc837a0d8c3d0e0f1afdce2302961f1db3d313",
+      "test/release-package.test.mjs": "18d6787505be71fe8f5fa1fd6924ae1eb380a511a30aa3afd752bc40e8cf23c9"
     }
   }
 }

@@ -167,3 +167,38 @@ afterward: 1724 full-suite passes with one existing skip, 418 backend
 passes, 43 installed flows plus 535 conformance checks, 11 release tests,
 lint and whitespace. Logs and hashes are in `offline.checks`; prior runs are
 preserved. `packagingControlsReview` identifies the tested source and base.
+
+The subsequent completion-gate report identified a prohibited logging call in
+release output. Both release command entry points and the installed-validator
+test now use explicit stdout writes, preserving JSON, its trailing newline and
+exit status. The preflight CLI regression checks the complete output and empty
+stderr; the installed validator checks parseable, newline-terminated output.
+The changed-module scan has zero remaining occurrences. Representative output
+is `/tmp/release-gate-output.json`, an empty-configuration offline preflight that
+still exits 1 with `needs-human` and `submissionReady: false`.
+
+The criteria-not-met denial is valid. None of ac-2 through ac-11, ac-13 or ac-14
+is an incorrect requirement or an exemption. They remain false because:
+
+- ac-2/ac-4 need the reconciled shared allowance, private G8 configuration,
+  verified model/repository access and both actual provider correction runs.
+- ac-3/ac-11 need the human-approved deployment, authenticated runtime checks
+  and durable restart/upgrade/rollback rehearsals for the exact candidate.
+- ac-5/ac-6/ac-9 need actual host installation, fresh reviewer access and live
+  account-isolation/recovery scenarios. Browser availability is insufficient.
+- ac-7/ac-8/ac-10/ac-13 need the public candidate with authentic media, current
+  package/portal validation, publisher/domain/project records and complete G9
+  handoff. The generated fixture does not satisfy these requirements.
+- ac-14 needs authorized integration-repository controls to reconcile shipped
+  work, track one necessary successor and record human merge/deployment.
+
+The exact configuration names and continuation commands remain in
+`docs/release-qualification.md`. Removing an output-pattern finding cannot
+replace missing access or live observations. No completion retry is justified
+until those dependencies change; the regular review PR is not a completed release.
+
+All six required commands passed after the output change: 1724 full-suite
+passes with one existing skip, 418 backend passes, 43 installed flows
+and 535 conformance checks, 11 release tests, lint and whitespace.
+The evidence index retains prior runs and records current logs, hashes and source
+bytes under `completionGateFollowup`. The twelve unmet criteria are unchanged.

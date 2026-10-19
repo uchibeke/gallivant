@@ -154,13 +154,20 @@ test('malformed, private, future and boolean observations fail closed', () => {
   assert.equal(evaluateRelease({ ...input, evidence }).checks.host.status, 'unverified');
 });
 
-test('preflight keeps known setup and reports concrete missing prerequisites', () => {
+test('preflight keeps known setup and reports concrete missing prerequisites', t => {
   const result = releasePreflight({}, { target: 'audit/target.json' });
   assert.equal(result.status, 'needs-human');
   assert.equal(result.submissionReady, false);
   assert.ok(!result.blockers.some(b => b.id === 'target'));
   assert.ok(result.blockers.some(b => b.id === 'executionAllowance' && b.next.includes('shared USD 10')));
   assert.throws(() => releasePreflight({}, { apiKey: 'private' }));
+  const dir = mkdtempSync(join(tmpdir(), 'release-preflight-')); t.after(() => rmSync(dir, { recursive: true, force: true }));
+  writeFileSync(join(dir, 'config.json'), '{}');
+  writeFileSync(join(dir, 'setup.json'), JSON.stringify({ target: 'audit/target.json' }));
+  const cli = spawnSync(process.execPath, ['bin/release-package.mjs', '--config', join(dir, 'config.json'), '--setup', join(dir, 'setup.json')], { encoding: 'utf8' });
+  assert.equal(cli.status, 1);
+  assert.equal(cli.stderr, '');
+  assert.equal(cli.stdout, JSON.stringify(result, null, 2) + '\n');
 });
 
 test('payload verification rejects tampering, source additions and symlinks', t => {
@@ -318,10 +325,11 @@ test('release assembly reuses the packager and keeps evidence outside the public
   execFileSync('npm', ['install', '--ignore-scripts', '--omit=dev', '--no-audit', '--no-fund', join(out, built.manifest.coreArtifact)], { cwd: consumer, stdio: 'pipe' });
   // Import only the installed tarball, including its final release validator bytes.
   const installed = execFileSync(process.execPath, ['--input-type=module', '-e',
-    `import {evaluateRelease} from 'gallivant/lib/release_package.mjs'; console.log(JSON.stringify(evaluateRelease(${JSON.stringify({ manifest: built.manifest, deployment })})));`],
+    `import {evaluateRelease} from 'gallivant/lib/release_package.mjs'; process.stdout.write(JSON.stringify(evaluateRelease(${JSON.stringify({ manifest: built.manifest, deployment })})) + '\\n');`],
     { cwd: consumer, encoding: 'utf8', env: { ...process.env, NODE_PATH: '' } });
   assert.deepEqual(JSON.parse(installed).identity, built.evaluation.identity);
   assert.equal(JSON.parse(installed).status, 'needs-human');
+  assert.ok(installed.endsWith('\n'));
 
   writeFileSync(join(out, 'START-HERE.md'), 'truncated');
   for (const args of [['bin/release-package.mjs', '--mode', 'validate'], ['bin/release-live.mjs', '--host'], ['bin/release-live.mjs', '--backend', 'openai-agents']]) {

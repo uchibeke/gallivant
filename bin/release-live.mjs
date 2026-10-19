@@ -16,7 +16,7 @@ try {
   if (values.host) {
     if (values.execute || values.backend) throw new Error('Host verification reads actual operator-captured observations; it does not simulate or dispatch a host session');
     const ids = ['integration', 'deployment', 'host', 'recovery', 'reviewer', 'media'];
-    console.log(JSON.stringify({ kind: 'record-validation', actualHostExecution: false, checks: Object.fromEntries(ids.map(id => [id, result.checks[id]])), blockers: result.blockers.filter(item => ids.includes(item.id)) }, null, 2));
+    process.stdout.write(JSON.stringify({ kind: 'record-validation', actualHostExecution: false, checks: Object.fromEntries(ids.map(id => [id, result.checks[id]])), blockers: result.blockers.filter(item => ids.includes(item.id)) }, null, 2) + '\n');
     process.exitCode = ids.every(id => result.checks[id].status === 'passed') ? 0 : 1;
   } else {
     if (!['openai-agents', 'codex-cloud'].includes(values.backend) || !['preflight', 'implementation', 'correction'].includes(values.phase)) throw new Error('Select --backend openai-agents|codex-cloud and --phase preflight|implementation|correction');
