@@ -89,7 +89,7 @@ test("the delivery screen is deterministic over the fixture corpus and masks lit
     assert.equal(screen.tier, "question", text); assert.ok(screen.controlled.length, `${text} → ${JSON.stringify(screen)}`);
   }
   assert.deepEqual(unaccountedTerms(deliveryScreen("Opening a pull request is out of scope."), { action: "pull_request" }), ["pull_request"]);
-  for (const text of ["Leave the changes uncommitted.", "Leave all changes unpublished.", "Keep the branch unpushed and unmerged."]) {
+  for (const text of ["Leave the changes uncommitted.", "Leave all changes unpublished.", "Keep the branch unpushed and unmerged.", "Leave the changes unstaged.", "Keep all edits in the working tree.", "Keep the result in my checkout only.", "Don't stage anything."]) {
     const screen = deliveryScreen(text);
     assert.equal(screen.tier, "question", text); assert.ok(screen.terms.includes("local"), text);
   }

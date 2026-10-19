@@ -68,7 +68,8 @@ spans are masked, so literal examples do not count, except a span whose
 statement carries a control phrase before or after it (`Please do not ever
 "open a pull request"`, `"Open a pull request" is forbidden`), which is read as
 the control's target; a control word inside another example never counts. Restriction forms such
-as "leave the changes uncommitted" or "unpublished" count as local-only. Control words bind within a statement: sentence and clause
+as "leave the changes uncommitted", "unstaged", "keep all edits in the working
+tree" or "unpublished" count as local-only. Control words bind within a statement: sentence and clause
 punctuation ends one, but conjunctions and an introductory colon after the
 control ("Do not: open a pull request") do not. The screen grants nothing:
 
