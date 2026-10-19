@@ -270,8 +270,11 @@ Read [task operations](tasks.md) for selected context, revisions, recovery and c
 
 ### From a written brief
 
+`new` uses the first configured harness. Pass `--harness` with another configured
+harness only when you intend to select it.
+
 ```sh
-gallivant new widget-export --harness codex
+gallivant new widget-export
 # Fill in docs/prds/widget-export.md, including every required section.
 gallivant ready docs/prds/widget-export.md --check
 gallivant ready docs/prds/widget-export.md

@@ -64,11 +64,12 @@ Inside a repository you can push to:
 ```sh
 cd /path/to/your/repository
 gallivant task "Document how to run the existing tests in CONTRIBUTING.md. Use the commands already defined in the repository. Change documentation only." \
-  --harness codex --verify 'git diff --check' --run
+  --verify 'git diff --check' --run
 gallivant start
 ```
 
-`task` prepares a brief and asks for missing information. `--run` authorizes
+`task` uses the first configured harness; pass `--harness` to choose another
+configured preparation harness. It prepares a brief and asks for missing information. `--run` authorizes
 implementation when that brief is ready, including after clarification. Omit it
 to inspect the draft first. Follow the printed `Next` action using your task's ID
 and revision. Preparation also uses inference.

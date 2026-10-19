@@ -140,10 +140,13 @@ configuration, credentials and repository access without launching a model run.
 In the target checkout, use a new task name that does not already exist:
 
 ```sh
-gallivant new first-docs-task --harness codex
+gallivant new first-docs-task
 # Edit docs/prds/first-docs-task.md to describe the agreed task.
 gallivant ready docs/prds/first-docs-task.md --check
 ```
+
+With no `--harness` flag, `new` uses the first configured harness. If several are
+configured, pass `--harness` with the harness agreed during setup.
 
 Fill every required section with repository-specific facts. Pick a small useful
 change, such as documenting existing test commands, with concrete acceptance
