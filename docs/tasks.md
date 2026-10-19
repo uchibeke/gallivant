@@ -332,8 +332,8 @@ Each answer operation is also limited to 32 KiB of combined UTF-8 bytes across
 question IDs and answer strings. A new over-limit operation returns `TASK_INPUT`
 before signature hashing or delivery parsing, without changing the saved task.
 Exact receipts created by an older version still replay up to the largest batch
-the prior contract could accept: 100 answers of 32 KiB each with IDs up to 128
-bytes (3,289,600 bytes total). A changed input under an existing operation ID
+the prior in-process service could accept: 128 answers of 32 KiB each with IDs up to 128
+bytes (4,210,688 bytes total). A changed input under an existing operation ID
 within that compatibility bound returns `TASK_CONFLICT`; larger input returns
 `TASK_INPUT` before signature hashing.
 The complete serialized preparation prompt is also limited to 120 KiB, including

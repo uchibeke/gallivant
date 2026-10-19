@@ -116,6 +116,9 @@ test("synthetic fixtures cannot hide a live modifier on one PR noun", () => {
     "For tests, create fake or actual PRs.",
     "For tests, create fake + genuine PRs.",
     "For tests, create fake, mock, and real PRs.",
+    "For tests, create fake as well as real PRs.",
+    "For tests, create mock but live PRs.",
+    "For tests, create dummy yet actual PRs.",
   ]) {
     assert.throws(() => ownerDelivery(source), { code: "TASK_DELIVERY_SCOPE" }, source);
     assert.throws(() => assertDeliveryAnswer({}, source), { code: "TASK_DELIVERY_SCOPE" }, source);
@@ -123,6 +126,8 @@ test("synthetic fixtures cannot hide a live modifier on one PR noun", () => {
   for (const source of [
     "For tests, create both fake and mock PRs.",
     "For tests, create fake + synthetic PRs.",
+    "For tests, create fake as well as mock PRs.",
+    "For tests, create mock but dummy PRs.",
     "For tests, create fake and real PR dashboard cards.",
     "For tests, create a fake and accessible PR UI.",
   ]) {
@@ -514,6 +519,9 @@ test("business approval rules keep temporal implementation actions visible", () 
     "If I approve the invoice, email the customer as soon as you proofread the article.",
     "If I approve the invoice, email the customer as soon as our team proofreads the invoice.",
     "If I approve the invoice, email the customer as soon as proofreading the article.",
+    "If I approve the invoice, email the customer as you proofread the article.",
+    "If I approve the invoice, email the customer as our team proofreads the invoice.",
+    "If I approve the invoice, email the customer as proofreading the article.",
   ]) {
     assert.throws(() => ownerDelivery(source), { code: "TASK_DELIVERY_SCOPE" }, source);
     assert.throws(() => assertDeliveryAnswer({}, source), { code: "TASK_DELIVERY_SCOPE" }, source);
@@ -527,6 +535,8 @@ test("business approval rules keep temporal implementation actions visible", () 
     "If I approve the invoice, email the customer when our team emails the customer.",
     "If I approve the invoice, email the customer as soon as you apply the discount.",
     "If I approve the invoice, email the customer as soon as the payment clears.",
+    "If I approve the invoice, email the customer as you apply the discount.",
+    "If I approve the invoice, email the customer as the payment clears.",
   ]) {
     assert.equal(ownerDelivery(source), null, source);
     assert.doesNotThrow(() => assertDeliveryAnswer({}, source), source);

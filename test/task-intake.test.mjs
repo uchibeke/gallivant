@@ -20,7 +20,7 @@ import { runEnv, RUN_GIT_CONFIG, makeGit } from "../lib/git.mjs";
 import { prepareTurn } from "../lib/task_prepare.mjs";
 import { preparationEnvironment } from "../lib/task_environment.mjs";
 import { parseDraft, renderDraft, collectCommands, draftPrompt, MAX_INPUT_BYTES, MAX_PREPARATION_PROMPT_BYTES } from "../lib/task_contract.mjs";
-import { MAX_ANSWER_BYTES, MAX_ANSWER_COUNT, MAX_LEGACY_ANSWER_BATCH_BYTES } from "../lib/task_limits.mjs";
+import { MAX_ANSWER_BYTES, MAX_ANSWER_COUNT, MAX_LEGACY_ANSWER_COUNT, MAX_LEGACY_ANSWER_BATCH_BYTES } from "../lib/task_limits.mjs";
 import { buildRun, buildPreparationRun, PREPARATION_BOUNDARY, capabilitiesFor } from "../lib/harness.mjs";
 import { parseSourcesMeta } from "../lib/config.mjs";
 import { makeState } from "../lib/state.mjs";
@@ -212,6 +212,22 @@ test("answer batches enforce aggregate bytes and item limits before parsing or m
   store.save(saved);
   const legacyReplay = await w.service.answer({ taskId: first.taskId, expectedRevision: first.revision, operationId: legacyOperationId, answers: legacyOversizedAnswers });
   assert.equal(legacyReplay.taskId, first.taskId, "an exact previously accepted operation remains replayable across the new batch bound");
+  for (const count of [MAX_ANSWER_COUNT + 1, MAX_LEGACY_ANSWER_COUNT]) {
+    const operationId = `legacy-${count}-answer-replay`;
+    const legacyAnswers = Object.fromEntries(Array.from({ length: count }, (_, index) => [`q-r-${index + 1}`, "Use CSV."]));
+    saved.operations[operationId] = contentDigest(JSON.stringify({ answers: legacyAnswers, verifyCommands: [] }));
+    store.save(saved);
+    const replay = await w.service.answer({ taskId: first.taskId, expectedRevision: first.revision, operationId, answers: legacyAnswers });
+    assert.equal(replay.taskId, first.taskId, `${count} previously accepted answers remain replayable`);
+    await assert.rejects(w.service.answer({ taskId: first.taskId, expectedRevision: first.revision, operationId,
+      answers: { ...legacyAnswers, "q-r-1": "Use JSON." } }), { code: "TASK_CONFLICT", taskEffects: "none" });
+  }
+  let overCountReads = 0;
+  const excessiveLegacyAnswers = Object.fromEntries(Array.from({ length: MAX_LEGACY_ANSWER_COUNT + 1 }, (_, index) => [`q-r-${index + 1}`, "Use CSV."]));
+  Object.defineProperty(excessiveLegacyAnswers, "q-r-1", { enumerable: true, get() { overCountReads++; return "Use CSV."; } });
+  await assert.rejects(w.service.answer({ taskId: first.taskId, expectedRevision: first.revision, operationId: legacyOperationId,
+    answers: excessiveLegacyAnswers }), { code: "TASK_INPUT", taskEffects: "none" });
+  assert.equal(overCountReads, 0, "legacy count limit runs before reading answer values");
   await assert.rejects(w.service.answer({ taskId: first.taskId, expectedRevision: first.revision, operationId: legacyOperationId, answers: { "q-r-1": "y".repeat(legacyHalf), "q-r-2": "x".repeat(legacyHalf) } }), error => {
     assert.equal(error.code, "TASK_CONFLICT", "a prior operation ID cannot authorize changed over-limit input");
     assert.equal(error.taskEffects, "none"); return true;
@@ -453,8 +469,11 @@ test("latest publication review cases fail before task effects without rejecting
     "If I approve the invoice, email the customer until our team proofreads the article.",
     "If I approve the invoice, email the customer when proofreading the article.",
     "If I approve the invoice, email the customer as soon as you proofread the article.",
+    "If I approve the invoice, email the customer as you proofread the article.",
     "For tests, create a fake PR fixture alongside a real PR.",
     "For tests, create both fake and real PRs.",
+    "For tests, create fake as well as real PRs.",
+    "For tests, create mock but live PRs.",
     "For tests, create a fake PR fixture + a real PR.",
     "For tests, create a fake PR fixture and open it on GitHub.",
     "For tests, create a fake PR fixture versus a real PR.",
@@ -528,6 +547,7 @@ test("latest publication review cases fail before task effects without rejecting
     "For tests, create a fake PR fixture but a synthetic PR fixture.",
     "For tests, create a fake PR fixture yet a synthetic PR fixture.",
     "For tests, create both fake and mock PRs.",
+    "For tests, create fake as well as mock PRs.",
     "For tests, create fake and real PR dashboard cards.",
     "For tests, create a fake and accessible PR UI.",
     "For tests, create a fake PR fixture and open it in the test UI.",
@@ -537,6 +557,7 @@ test("latest publication review cases fail before task effects without rejecting
     "If I approve the invoice, email the customer once you apply the discount.",
     "If I approve the invoice, email the customer until the payment clears.",
     "If I approve the invoice, email the customer as soon as you apply the discount.",
+    "If I approve the invoice, email the customer as you apply the discount.",
     "If I approve the invoice, email the customer as well as apply the discount.",
   ];
   for (const text of productRequirements) {
