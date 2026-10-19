@@ -74,14 +74,17 @@ punctuation ends one, but conjunctions and an introductory colon after the
 control ("Do not: open a pull request") do not. The screen grants nothing:
 
 - Escalating terms (merge, deploy including shipping, rollout, go-live and
-  "to production" wording, release, approval, wait, local-only, and
+  "to production" wording, release, approval, wait, local-only, a write aimed
+  at the base branch or at skipping the pull request such as "push directly
+  to main", and
   publish whenever it appears as a bare verb such as "Publish this package to
   npm", "and publish the package" or "could you publish it", rather than as a
   noun modifier such as "a publish button" or a feature infinitive such as
   "a command to publish docs") or a
   control word such as "do not", "until", "unless", "out of scope",
   "exclude", "except", "other than", "but not", "disallowed", "isn't
-  allowed", "not permitted" or an owner reservation such
+  allowed", "not permitted", "stop before", "pause before" or an owner
+  reservation such
   as "I will open the PR myself" or "leave the PR to me" next to any delivery
   term
   raise the same `q-delivery-<clause>` question when the planner left the

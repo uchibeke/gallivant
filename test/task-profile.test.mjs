@@ -155,6 +155,21 @@ test("planner delivery tags are validated and compared with the profile without 
   assert.deepEqual(unaccounted("Open a PR for review; do not merge it.", { action: "pull_request", prohibits: ["merge"] }), []);
   // "do not push" also reads as local-only output, an escalating term no pull_request tag can speak for.
   assert.deepEqual(unaccounted("Do not push and open a PR.", { action: "pull_request", prohibits: ["push"] }), ["pull_request", "local"], "a control word binds across a conjunction");
+  // A write aimed at the base branch escalates; only a prohibition of direct_push can speak for it, and a pull_request tag cannot.
+  for (const text of ["Push the changes directly to main.", "Commit straight to master.", "Land it on the default branch without a pull request.", "Push to main."]) {
+    const screen = deliveryScreen(text);
+    assert.equal(screen.tier, "question", text); assert.ok(screen.escalated.includes("direct_push"), `${text} → ${JSON.stringify(screen)}`);
+    assert.deepEqual(unaccountedTerms(screen, { action: "pull_request" }).includes("direct_push"), true, text);
+  }
+  assert.deepEqual(unaccounted("Do not push directly to main.", { action: "pull_request", prohibits: ["push", "direct_push"] }), ["local"], "a prohibition of the direct write speaks for it; 'do not push' also reads as local-only");
+  assert.equal(profileCovers(PROFILE, { action: "restrict", prohibits: ["direct_push"] }).covered, true, "the profile never writes to the base directly");
+  for (const text of ["Push notifications to subscribers.", "Push the button to continue."]) assert.equal(deliveryScreen(text).escalated.includes("direct_push"), false, text);
+  // Stop-before and pause-before wording prohibits the delivery term that follows it.
+  for (const text of ["Implement the fix, but stop before opening a pull request.", "Pause before the merge.", "Stop short of deploying."]) {
+    const screen = deliveryScreen(text);
+    assert.equal(screen.tier, "question", text); assert.ok(screen.controlled.length, `${text} → ${JSON.stringify(screen)}`);
+  }
+  assert.deepEqual(unaccounted("Implement the fix, but stop before opening a pull request.", { action: "pull_request" }), ["pull_request"]);
   assert.deepEqual(deliveryScreen("Open a PR for review; do not merge it.").controlled, ["merge"]);
   const requirement = { id: "r-3", text: "Merge it." };
   assert.deepEqual(deliveryQuestion(PROFILE, requirement), deliveryQuestion(PROFILE, requirement));
