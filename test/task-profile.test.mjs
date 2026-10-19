@@ -204,6 +204,19 @@ test("planner delivery tags are validated and compared with the profile without 
   }
   assert.deepEqual(unaccounted("Implement the fix, but stop before opening a pull request.", { action: "pull_request" }), ["pull_request"]);
   assert.deepEqual(deliveryScreen("Open a PR for review; do not merge it.").controlled, ["merge"]);
+  // A review prohibited outright conflicts with pull-request delivery and no tag speaks for it; a review named as a condition or as optional does not.
+  for (const text of ["Do not create a code review.", "Implement export. Do not send this for review.", "Open a PR without review.", "No code review for this change.", "Reviews are forbidden for this change.", "Skip the review and open the PR."]) {
+    const screen = deliveryScreen(text);
+    assert.equal(screen.tier, "question", text); assert.ok(screen.escalated.includes("review"), `${text} → ${JSON.stringify(screen)}`);
+    assert.ok(unaccounted(text, { action: "pull_request" }).includes("review"), text);
+    assert.ok(unaccounted(text, { action: "restrict", prohibits: ["merge"] }).includes("review"), text);
+  }
+  for (const [text, tag] of [["Keep the result out of main until someone has reviewed it.", { action: "pull_request", prohibits: ["merge"] }], ["Do not merge until reviewed.", { action: "pull_request", prohibits: ["merge"] }], ["Do not push until reviewed.", { action: "pull_request", prohibits: ["push"] }], ["A code review is not required.", { action: "pull_request" }], ["Open one pull request for review.", { action: "pull_request" }]]) {
+    const screen = deliveryScreen(text);
+    assert.equal(screen.escalated.includes("review"), false, `${text} → ${JSON.stringify(screen)}`); assert.equal(unaccounted(text, tag).includes("review"), false, text);
+  }
+  assert.deepEqual(unaccounted("Keep the result out of main until someone has reviewed it.", { action: "pull_request", prohibits: ["merge"] }), []);
+  assert.deepEqual(unaccounted("Do not merge until reviewed.", { action: "pull_request", prohibits: ["merge"] }), []);
   const requirement = { id: "r-3", text: "Merge it." };
   assert.deepEqual(deliveryQuestion(PROFILE, requirement), deliveryQuestion(PROFILE, requirement));
   assert.equal(deliveryQuestion(PROFILE, requirement).id, "q-delivery-r-3");

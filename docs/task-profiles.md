@@ -96,6 +96,11 @@ control ("Do not: open a pull request") do not. The screen grants nothing:
   term
   raise the same `q-delivery-<clause>` question when the planner left the
   clause untagged.
+- A review prohibited outright ("do not send this for review", "no code
+  review", "reviews are forbidden") conflicts with pull-request delivery, which
+  exists to request review, so it keeps its clarification whatever the planner
+  tags. A review named as a condition ("do not merge until reviewed") or as
+  optional ("a review is not required") does not.
 - Ordinary vocabulary ("Add a PR status badge") becomes a visible assumption in
   the brief and in the review: the clause is treated as product behaviour and
   the profile is unchanged.
