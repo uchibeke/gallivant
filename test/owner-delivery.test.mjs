@@ -272,6 +272,25 @@ test("subordinating clauses after product PR conditions retain delivery controls
   }
 });
 
+test("passive merge controls recognize shared negative modals before product masking", () => {
+  for (const control of ["cannot", "can't", "can’t", "couldn't", "couldn’t", "mustn't", "shouldn't", "won't", "wouldn't", "isn't", "aren't", "might not", "would not", "must never"])
+    for (const restriction of [`Changes ${control} be merged.`, `Work ${control} be merged.`])
+      for (const source of [restriction, "The button creates a PR after tests pass since " + restriction.toLowerCase()]) {
+        assert.throws(() => ownerDelivery(source), { code: "TASK_DELIVERY_SCOPE" }, source);
+        assert.throws(() => assertDeliveryAnswer({}, source), { code: "TASK_DELIVERY_SCOPE" }, source);
+      }
+  for (const source of [
+    "The button creates a PR after tests pass since the queue is ready for merging.",
+    'Show the warning "Changes cannot be merged" in the PR dialog.',
+  ]) {
+    assert.equal(ownerDelivery(source), null, source);
+    assert.doesNotThrow(() => assertDeliveryAnswer({}, source), source);
+    const original = source + " Open a PR for review.", contract = ownerDelivery(original);
+    assert.equal(validateOwnerDelivery(contract), contract, source);
+    assert.equal(ownerImplementation(contract).join(""), source + " ", source);
+  }
+});
+
 test("merge commands remain visible when branch names look like feature predicates", () => {
   for (const source of ["Merge mergeable branches.", "Squash-merge selectable branches.", "Merge only mergeable branches."]) {
     assert.throws(() => ownerDelivery(source), { code: "TASK_DELIVERY_SCOPE" }, source);
@@ -704,6 +723,30 @@ test("unrecognized nominal purpose clauses retain owner approval gates", () => {
   ]) {
     assert.equal(ownerDelivery(source), null, source);
     assert.doesNotThrow(() => assertDeliveryAnswer({}, source), source);
+  }
+});
+
+test("nominal that complements retain owner approval gates", () => {
+  for (const connector of ["with the expectation that", "in the hope that", "with the assumption that", "for the purpose that"])
+    for (const action of ["you proofread the article", "our senior editor proofreads the article", "the article is proofread", "you apply the discount"])
+      for (const source of [
+        `If I approve the invoice, email the customer ${connector} ${action}.`,
+        `Email the customer ${connector} ${action} after I approve the invoice.`,
+      ]) {
+        assert.throws(() => ownerDelivery(source), { code: "TASK_DELIVERY_SCOPE" }, source);
+        assert.throws(() => assertDeliveryAnswer({}, source), { code: "TASK_DELIVERY_SCOPE" }, source);
+      }
+  for (const source of [
+    "If I approve the invoice, email the customer with a list of invoices.",
+    "If I approve the invoice, email the customer with the aim of applying the discount.",
+    'If I approve the invoice, email the customer with a note saying "with the expectation that you proofread the article".',
+  ]) {
+    assert.equal(ownerDelivery(source), null, source);
+    assert.doesNotThrow(() => assertDeliveryAnswer({}, source), source);
+    const original = source + " Open a PR for review.", contract = ownerDelivery(original);
+    assert.equal(validateOwnerDelivery(contract), contract, source);
+    assert.equal(ownerImplementation(contract).join(""), source + " ", source);
+    assert.equal(contract.spans.map(span => original.slice(span.start, span.end)).join(""), original, source);
   }
 });
 
