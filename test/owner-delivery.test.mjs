@@ -46,6 +46,12 @@ test("synthetic pull requests in test fixtures are not delivery requests", () =>
     "Generate a test PR in the unit test.",
     "For tests, create one hundred mock PRs on GitHub.",
     "For tests, create a fake PR on GitHub.",
+    "For tests, create a non-fake PR.",
+    "For tests, create a not-fake PR.",
+    "For tests, create a non fake PR.",
+    "In the integration test, create a non-synthetic PR.",
+    "Create a non-mock PR in the unit test.",
+    "Create a non‑dummy pull request for the test fixture.",
   ]) {
     assert.throws(() => ownerDelivery(text), { code: "TASK_DELIVERY_SCOPE" }, text);
     assert.throws(() => assertDeliveryAnswer({}, text), { code: "TASK_DELIVERY_SCOPE" }, text);
@@ -141,6 +147,10 @@ test("new publication predicates, actors, adverbs and approval gates fail closed
     "Create a PR visible to outsiders.",
     "Do not generate a PR visible to outsiders.",
     "Produce a PR public to everyone.",
+    "Implement export. Create a well-tested PR for review.",
+    "Implement export. Create a well‑tested PR for review.",
+    "Implement export. Create a well–tested PR for review.",
+    "Do not create a non‑draft PR.",
   ]) assert.throws(() => ownerDelivery(text), { code: "TASK_DELIVERY_SCOPE" }, text);
   const longOrdinaryAnswer = "Create ".repeat(4500);
   assert.equal(Buffer.byteLength(longOrdinaryAnswer), 31500);
@@ -374,6 +384,7 @@ test("synthetic PR fixtures cannot hide a coordinated live publication", () => {
     "For tests, create a fake PR and a real PR.",
     "For tests, create a fake pull request and a live pull request for review.",
     "For tests, prepare data and create a fake PR and a real PR.",
+    "For tests, create a fake PR and a non-fake PR.",
   ]) {
     assert.throws(() => ownerDelivery(source), { code: "TASK_DELIVERY_SCOPE" }, source);
     assert.throws(() => assertDeliveryAnswer({}, source), { code: "TASK_DELIVERY_SCOPE" }, source);
@@ -845,7 +856,7 @@ test("explicit PR fixtures remain data without exempting real Git or PR objects"
     assert.equal(ownerDelivery(text), null, text);
     assert.doesNotThrow(() => assertDeliveryAnswer({}, text), text);
   }
-  for (const text of ["Do not create commit objects.", "Do not generate branch objects.", "Do not create PR objects.", "Generate a mock fixture. Do not create PR objects.", "Generate a mock fixture and do not create PR objects.", "Create a mock PR object, but do not push changes."]) {
+  for (const text of ["Do not create commit objects.", "Do not generate branch objects.", "Do not create PR objects.", "Do not create non-mock PR objects.", "Generate a mock fixture. Do not create PR objects.", "Generate a mock fixture and do not create PR objects.", "Create a mock PR object, but do not push changes."]) {
     assert.throws(() => ownerDelivery(text), { code: "TASK_DELIVERY_SCOPE" }, text);
     assert.throws(() => assertDeliveryAnswer({}, text), { code: "TASK_DELIVERY_SCOPE" }, text);
   }
