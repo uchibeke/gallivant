@@ -750,6 +750,32 @@ test("nominal that complements retain owner approval gates", () => {
   }
 });
 
+test("causative relative clauses validate approval-dependent actions and their objects", () => {
+  for (const relative of ["which lets", "that lets", "which makes", "which helps", "which allows", "which enables", "that requires", "which can let", "which does not let"])
+    for (const action of ["you proofread the article", "our senior editor proofread the article", "our archive specialist proofread the article", "Alice proofread the article", "you to proofread the article", "you email the report"])
+      for (const source of [
+        `If I approve the invoice, send the customer an email ${relative} ${action}.`,
+        `Send the customer an email ${relative} ${action} after I approve the invoice.`,
+      ]) {
+        assert.throws(() => ownerDelivery(source), { code: "TASK_DELIVERY_SCOPE" }, source);
+        assert.throws(() => assertDeliveryAnswer({}, source), { code: "TASK_DELIVERY_SCOPE" }, source);
+      }
+  for (const source of [
+    "If I approve the invoice, send the customer an email which lets you apply the discount.",
+    "Send the customer an email which helps Alice apply the discount after I approve the invoice.",
+    "If I approve the invoice, send the customer an email which allows our senior editor to apply the discount.",
+    "If I approve the invoice, send the customer an email which contains the receipt.",
+    'If I approve the invoice, send the customer an email with the label "which lets you proofread the article".',
+  ]) {
+    assert.equal(ownerDelivery(source), null, source);
+    assert.doesNotThrow(() => assertDeliveryAnswer({}, source), source);
+    const original = source + " Open a PR for review.", contract = ownerDelivery(original);
+    assert.equal(validateOwnerDelivery(contract), contract, source);
+    assert.equal(ownerImplementation(contract).join(""), source + " ", source);
+    assert.equal(contract.spans.map(span => original.slice(span.start, span.end)).join(""), original, source);
+  }
+});
+
 test("business approval rules keep temporal implementation actions visible", () => {
   for (const connector of ["before", "after", "while", "once", "until", "when"])
     for (const action of ["proofreading", "editing"]) {

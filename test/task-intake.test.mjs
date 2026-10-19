@@ -254,6 +254,47 @@ test("answer batches enforce aggregate bytes and item limits before parsing or m
   assert.equal(calls, 2);
 });
 
+test("answer accessors and proxies share one bounded snapshot through persistence and replay", async t => {
+  for (const kind of ["accessor", "proxy"]) await t.test(kind, async () => {
+    let calls = 0;
+    const w = world({ prepare: async (_ctx, task) => { calls++; return JSON.stringify(draftFor(task, { question: true })); } });
+    const first = await w.service.prepare({ text: REQUEST });
+    const answer = "Use CSV only.", laterAnswer = "x".repeat(MAX_ANSWER_BYTES + 1);
+    let reads = 0;
+    const value = () => ++reads === 1 ? answer : laterAnswer;
+    const answers = kind === "accessor"
+      ? Object.defineProperty({}, "q-r-1", { enumerable: true, get: value })
+      : new Proxy({ "q-r-1": answer }, { get(target, key, receiver) { return key === "q-r-1" ? value() : Reflect.get(target, key, receiver); } });
+    const input = { taskId: first.taskId, expectedRevision: first.revision, operationId: "bounded-answer-snapshot", answers };
+    const accepted = await w.service.answer(input);
+    assert.equal(reads, 1, "a caller-owned answer value is read once before hashing and requirement construction");
+    assert.equal(accepted.status, "ready");
+    const store = taskStore(w.home), saved = store.read(first.taskId);
+    assert.deepEqual(saved.answers, { "q-r-1": answer });
+    assert.deepEqual(saved.requirements.filter(r => r.id.startsWith("a-")), [{ id: "a-q-r-1-1", text: answer }]);
+    assert.equal(saved.operations[input.operationId], "canonical-v1:" + contentDigest(JSON.stringify({ answers: { "q-r-1": answer }, verifyCommands: [] })));
+    assert.ok(accepted.draft.text.includes(JSON.stringify(answer)));
+    assert.ok(!accepted.draft.text.includes(laterAnswer));
+    t.diagnostic(`Bounded snapshot fixture draft (${kind}): ${accepted.draft.path}`);
+    assert.deepEqual(await w.service.answer({ ...input, answers: { "q-r-1": answer } }), accepted);
+    reads = 0;
+    assert.deepEqual(await w.service.answer(input), accepted);
+    assert.equal(reads, 1, "an exact accessor/proxy retry also hashes only its captured value");
+    assert.equal(calls, 2, "an exact retry replays the accepted snapshot without another preparation turn");
+    let conflictingReads = 0;
+    const conflicting = Object.defineProperty({}, "q-r-1", { enumerable: true, get() { return ++conflictingReads === 1 ? "Use JSON only." : answer; } });
+    await assert.rejects(w.service.answer({ ...input, answers: conflicting }), { code: "TASK_CONFLICT", taskEffects: "none" });
+    assert.equal(conflictingReads, 1);
+    assert.deepEqual(store.read(first.taskId), saved);
+    const unreadable = Object.defineProperty({}, "q-r-1", { enumerable: true, get() { throw new Error("answer read failed"); } });
+    await assert.rejects(w.service.answer({ ...input, answers: unreadable }), /answer read failed/);
+    assert.deepEqual(store.read(first.taskId), saved);
+    assert.deepEqual(await w.service.answer({ ...input, answers: { "q-r-1": answer } }), accepted, "failed reads release mutation ownership for an exact retry");
+    assert.deepEqual(w.ctx.state.entries(), []);
+    assert.equal(w.daemonCalls(), 0);
+  });
+});
+
 test("an implicit review workflow refuses delivery changes before effects but accepts product refinement", async () => {
   const w = world({ prepare: async (_ctx, task) => JSON.stringify(draftFor(task, { question: true })) });
   const first = await w.service.prepare({ text: REQUEST });
@@ -496,6 +537,9 @@ test("latest publication review cases fail before task effects without rejecting
     "If I approve the invoice, email the customer with the expectation that you proofread the article.",
     "Email the customer in the hope that our senior editor proofreads the article after I approve the invoice.",
     "If I approve the invoice, email the customer with the assumption that the article is proofread.",
+    "If I approve the invoice, send the customer an email which lets you proofread the article.",
+    "Send the customer an email which enables our senior editor to proofread the article after I approve the invoice.",
+    "If I approve the invoice, send the customer an email which lets you email the report.",
     "Email the customer with the expectation of carefully proofreading the article after I approve the invoice.",
     "Email the customer for the purpose of proofreading the article after I approve the invoice.",
     "If I approve the invoice, email the customer with the aim of proofreading the article.",
@@ -637,6 +681,8 @@ test("latest publication review cases fail before task effects without rejecting
     "If I approve the invoice, email the customer for the purpose of applying the discount.",
     "If I approve the invoice, email the customer with the aim of applying the discount.",
     "If I approve the invoice, email the customer with a list of invoices.",
+    "If I approve the invoice, send the customer an email which lets you apply the discount.",
+    "If I approve the invoice, send the customer an email which contains the receipt.",
     'Show the warning "Changes cannot be merged" in the PR dialog.',
     "If I approve the invoice, send a receipt to the customer.",
     "If I approve the invoice, email the customer as well as apply the discount.",
