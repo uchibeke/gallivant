@@ -4,7 +4,7 @@ import { join } from "node:path";
 import { mkdirSync, writeFileSync, readFileSync } from "node:fs";
 import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import { deliveryProfile, validateDeliveryProfile, stableProfile, deliveryScreen, maskLiterals, statements, validateDeliveryTag, profileCovers, unaccountedTerms, deliveryQuestion, deliveryProfileFromPrd, profileView, DELIVERY_CAPABILITIES, PROFILE_VERSION, COMPLETION_CONDITIONS } from "../lib/task_profile.mjs";
+import { deliveryProfile, validateDeliveryProfile, assertProfileBound, stableProfile, deliveryScreen, maskLiterals, statements, validateDeliveryTag, profileCovers, unaccountedTerms, deliveryQuestion, deliveryProfileFromPrd, profileView, DELIVERY_CAPABILITIES, PROFILE_VERSION, COMPLETION_CONDITIONS } from "../lib/task_profile.mjs";
 import { intakeModelProblems, validateIntakeModelConfig, intakeModelRoute, intakeModelRouteSummary, pinnedModelRoute, savedModelRoute, MODEL_ROUTE_CEILINGS } from "../lib/task_model_config.mjs";
 import { COMPLETION_SCHEMA } from "../lib/task_completion.mjs";
 import { prepareModelTurn, isModelRouteReceipt, estimateTokens, estimateUsd } from "../lib/task_model_route.mjs";
@@ -54,11 +54,19 @@ test("saved profiles validate strictly and unsupported versions fail closed with
   for (const broken of [{ ...PROFILE, version: 2 }, { ...PROFILE, action: "merge" }, { ...PROFILE, target: { ...PROFILE.target, kind: "gitlab" } }, { ...PROFILE, completion: { condition: "shipped" } }, { ...PROFILE, extra: true }, null, "pull_request"]) {
     assert.throws(() => validateDeliveryProfile(broken), e => e.code === "TASK_PROFILE_UNSUPPORTED" && /prepare a new task/.test(e.message));
   }
-  const view = profileView({ deliveryProfile: { ...PROFILE, version: 2 } });
+  // A profile is bound to the task it was reviewed on: another repository, base or completion target fails closed.
+  const bound = { repo: "acme/widget", base: "main", completion: { version: 1, target: "delivery_ready" }, deliveryProfile: PROFILE };
+  assert.equal(profileView(bound).supported, true); assert.deepEqual(assertProfileBound(PROFILE, bound), PROFILE);
+  for (const foreign of [{ ...bound, repo: "acme/other" }, { ...bound, base: "develop" }, { ...bound, completion: { version: 1, target: "integrated" } }]) {
+    assert.throws(() => assertProfileBound(PROFILE, foreign), e => e.code === "TASK_PROFILE_UNSUPPORTED" && /not bound to this task/.test(e.message));
+    const unbound = profileView(foreign);
+    assert.equal(unbound.supported, false); assert.match(unbound.error.message, /not bound to this task/);
+  }
+  const view = profileView({ ...bound, deliveryProfile: { ...PROFILE, version: 2 } });
   assert.equal(view.supported, false); assert.equal(view.error.code, "TASK_PROFILE_UNSUPPORTED"); assert.match(view.error.message, /does not pin the namespace/);
   assert.deepEqual(profileView({ completion: { version: 1, target: "integrated" } }), { legacy: true, version: null, action: null, target: null, completion: { condition: "integrated" }, supported: true, source: "completion-target", label: "Historical task; its original interpretation is retained" });
   assert.equal(profileView({ ownerDelivery: { version: 5 } }).source, "owner-delivery-contract");
-  assert.equal(profileView({ deliveryProfile: PROFILE }).mergeAuthorized, false);
+  assert.equal(profileView(bound).mergeAuthorized, false);
 });
 
 test("the delivery screen is deterministic over the fixture corpus and masks literal examples", () => {
@@ -84,7 +92,7 @@ test("the delivery screen is deterministic over the fixture corpus and masks lit
   assert.ok(deliveryScreen('"Open a pull request" is forbidden for this change.').controlled.includes("pull_request"));
   assert.equal(deliveryScreen('Opening a `pull request` is not allowed; label it "merge later".').controlled.includes("pull_request"), true);
   assert.equal(maskLiterals('Show "do not merge" and "open a PR" labels.'), "Show " + " ".repeat(14) + " and " + " ".repeat(11) + " labels.");
-  for (const text of ["Opening a pull request is out of scope.", "A merge is outside the scope of this task.", "Exclude deployment from this work.", "I will open the pull request myself afterwards.", "Leave the pull request to me.", "We'll create the PR ourselves.", "The merge is mine to do.", "Implement the change, except opening a pull request.", "Do everything except create a PR.", "Do the implementation, other than opening a PR.", "Everything apart from the PR is yours.", "Implement it but not the pull request."]) {
+  for (const text of ["Opening a pull request is out of scope.", "A merge is outside the scope of this task.", "Exclude deployment from this work.", "Pull requests are disallowed.", "Opening a pull request isn't allowed.", "Merging is not permitted.", "Deployment is off limits.", "I will open the pull request myself afterwards.", "Leave the pull request to me.", "We'll create the PR ourselves.", "The merge is mine to do.", "Implement the change, except opening a pull request.", "Do everything except create a PR.", "Do the implementation, other than opening a PR.", "Everything apart from the PR is yours.", "Implement it but not the pull request."]) {
     const screen = deliveryScreen(text);
     assert.equal(screen.tier, "question", text); assert.ok(screen.controlled.length, `${text} → ${JSON.stringify(screen)}`);
   }

@@ -4126,6 +4126,14 @@ test("historical tasks keep their interpretation while unsupported saved profile
     () => w.service.prepare({ text: REQUEST, requestId: "historical" }),
   ]) await assert.rejects(operation, e => e.code === "TASK_PROFILE_UNSUPPORTED" && e.taskEffects === "none" && /prepare a new task/.test(e.message));
   assert.deepEqual(store.read(prepared.taskId), saved); assert.deepEqual(w.ctx.state.entries(), []);
+  // A profile restored from a task on another repository, base or completion target is not bound to this task: reads label it, mutations refuse.
+  const foreignProfile = world(), bound = await foreignProfile.service.prepare({ text: REQUEST, requestId: "bound" }), boundStore = taskStore(foreignProfile.home);
+  for (const patch of [{ target: { ...TYPED_PROFILE.target, repository: "acme/other" } }, { target: { ...TYPED_PROFILE.target, base: "develop" } }, { completion: { condition: "integrated" } }]) {
+    const record = boundStore.read(bound.taskId); record.deliveryProfile = { ...TYPED_PROFILE, ...patch }; boundStore.save(record);
+    assert.equal(foreignProfile.service.inspect({ taskId: bound.taskId }).deliveryProfile.supported, false);
+    await assert.rejects(foreignProfile.service.start({ taskId: bound.taskId, expectedRevision: bound.revision, run: true }), e => e.code === "TASK_PROFILE_UNSUPPORTED" && /not bound to this task/.test(e.message) && e.taskEffects === "none");
+    assert.deepEqual(boundStore.read(bound.taskId), record); assert.deepEqual(foreignProfile.ctx.state.entries(), []);
+  }
   // An exact answer-operation replay is a mutation too: it fails closed before resuming preparation or dispatch.
   const replayed = world({ prepare: async (_ctx, task) => JSON.stringify(draftFor(task, { question: true })) });
   const asked = await replayed.service.prepare({ text: REQUEST, requestId: "historical-answer", run: true });

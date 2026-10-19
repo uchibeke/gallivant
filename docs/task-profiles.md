@@ -80,7 +80,8 @@ control ("Do not: open a pull request") do not. The screen grants nothing:
   noun modifier such as "a publish button" or a feature infinitive such as
   "a command to publish docs") or a
   control word such as "do not", "until", "unless", "out of scope",
-  "exclude", "except", "other than", "but not" or an owner reservation such
+  "exclude", "except", "other than", "but not", "disallowed", "isn't
+  allowed", "not permitted" or an owner reservation such
   as "I will open the PR myself" or "leave the PR to me" next to any delivery
   term
   raise the same `q-delivery-<clause>` question when the planner left the
@@ -220,9 +221,10 @@ Tasks saved before typed profiles existed keep their original interpretation.
 Those with a Coordinator delivery contract keep its versioned validation; those
 without one keep the workflow default. Inspection labels them `legacy` and they
 can still be validated, started, resumed and controlled. A saved profile with an
-unsupported version is readable through `inspect` and `list` and can be exported,
-but every mutation returns `TASK_PROFILE_UNSUPPORTED` with the remedy "prepare a
-new task". Such a record does not pin an idle namespace, so runtime migration
+unsupported version, or whose target repository, base or completion does not
+match the task it is saved on, is readable through `inspect` and `list` and can
+be exported, but every mutation returns `TASK_PROFILE_UNSUPPORTED` with the
+remedy "prepare a new task". Such a record does not pin an idle namespace, so runtime migration
 proceeds. New tasks always use the current typed profile; there is no fallback
 to the free-text contract.
 
