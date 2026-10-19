@@ -373,6 +373,7 @@ test("synthetic PR fixtures cannot hide a coordinated live publication", () => {
   for (const source of [
     "For tests, create a fake PR and a real PR.",
     "For tests, create a fake pull request and a live pull request for review.",
+    "For tests, prepare data and create a fake PR and a real PR.",
   ]) {
     assert.throws(() => ownerDelivery(source), { code: "TASK_DELIVERY_SCOPE" }, source);
     assert.throws(() => assertDeliveryAnswer({}, source), { code: "TASK_DELIVERY_SCOPE" }, source);
@@ -386,6 +387,9 @@ test("business approval exemptions do not mask technical implementation objects"
   for (const source of [
     "If I approve the migration proposal, generate the database migration.",
     "If I approve the code proposal, record the repository commit.",
+    "If I approve the proposal, generate the Docker image.",
+    "If I approve the artwork, create the lockfile.",
+    "If I approve the proposal, generate the deployment bundle.",
   ]) {
     assert.throws(() => ownerDelivery(source), { code: "TASK_DELIVERY_SCOPE" }, source);
     assert.throws(() => assertDeliveryAnswer({}, source), { code: "TASK_DELIVERY_SCOPE" }, source);
@@ -1474,6 +1478,8 @@ test("elisions retain following requirements without changing historical literal
   for (const source of [
     "'cause we should not create a PR for customers' and admins' safety.",
     "‘cause we should not create a PR for customers’ and admins’ safety.",
+    "'cause we should not create a PR for users' as well as administrators' safety.",
+    "‘cause we should not create a PR for users’ plus administrators’ safety.",
   ]) {
     assert.throws(() => ownerDelivery(source), { code: "TASK_DELIVERY_SCOPE" }, source);
     assert.throws(() => assertDeliveryAnswer({}, source), { code: "TASK_DELIVERY_SCOPE" }, source);
