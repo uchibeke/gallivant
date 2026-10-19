@@ -504,7 +504,7 @@ test("business approval rules keep temporal implementation actions visible", () 
   const business = "If I approve the invoice, email the customer before applying the discount.";
   assert.equal(ownerDelivery(business), null);
   assert.doesNotThrow(() => assertDeliveryAnswer({}, business));
-  for (const connector of ["before", "after", "while", "once", "until", "when"])
+  for (const connector of ["before", "after", "while", "once", "until", "when", "by the time"])
     for (const subject of ["you", "the editor"]) {
       const source = `If I approve the invoice, email the customer ${connector} ${subject} proofread the article.`;
       assert.throws(() => ownerDelivery(source), { code: "TASK_DELIVERY_SCOPE" }, source);
@@ -522,6 +522,7 @@ test("business approval rules keep temporal implementation actions visible", () 
     "If I approve the invoice, email the customer as you proofread the article.",
     "If I approve the invoice, email the customer as our team proofreads the invoice.",
     "If I approve the invoice, email the customer as proofreading the article.",
+    "If I approve the invoice, email the customer by the time our team proofreads the invoice.",
   ]) {
     assert.throws(() => ownerDelivery(source), { code: "TASK_DELIVERY_SCOPE" }, source);
     assert.throws(() => assertDeliveryAnswer({}, source), { code: "TASK_DELIVERY_SCOPE" }, source);
@@ -537,6 +538,7 @@ test("business approval rules keep temporal implementation actions visible", () 
     "If I approve the invoice, email the customer as soon as the payment clears.",
     "If I approve the invoice, email the customer as you apply the discount.",
     "If I approve the invoice, email the customer as the payment clears.",
+    "If I approve the invoice, email the customer by the time you apply the discount.",
   ]) {
     assert.equal(ownerDelivery(source), null, source);
     assert.doesNotThrow(() => assertDeliveryAnswer({}, source), source);
