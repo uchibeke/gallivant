@@ -17,7 +17,7 @@ See [installation](install.md) for the first-run sequence.
 
 | Key | Default | Meaning |
 |---|---|---|
-| `poll_seconds` | 120 | Tick interval. Minimum 30. |
+| `poll_seconds` | 120 | GitHub review and chain-check cadence. Minimum 30. Provider progress and readiness use the separate `execution.progressMs` cadence; the daemon may tick more frequently. |
 | `max_iterations` | 30 | Automatic fix-round allowance per PR. A pushed fix or changed completion receipt consumes a round. At the cap, further automatic work stops with `needs-human`. Explicit operator resumes can exceed the cap; their progress still counts. |
 | `checks_grace_minutes` | 5 | A head younger than this with no checks reported is not green yet; GitHub shows an empty check list for the first seconds after a push. A head older than this with no checks at all counts as green. |
 | `run_timeout_minutes` | 720 | Local runs exceeding this time are killed; remote execution uses provider cancellation/reconciliation where supported and preserves unknown ownership. It is a runtime allowance, not a provider billing cap. Overridable per repository; see below and [execution](execution.md). |

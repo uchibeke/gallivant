@@ -5,9 +5,13 @@ import { publishRelease } from "../scripts/publish-release.mjs";
 
 test("release recovery skips identical bytes but refuses changed artifacts and registry failures", async () => {
   const bytes = Buffer.from("release tarball"), integrity = `sha512-${createHash("sha512").update(bytes).digest("base64")}`;
-  const deps = { read: () => bytes, run: () => assert.fail("must not publish"), request: async () => Response.json({ dist: { integrity } }) };
+  const attestations = { url: "https://registry.npmjs.org/-/npm/v1/attestations/gallivant@0.2.0", provenance: { predicateType: "https://slsa.dev/provenance/v1" } };
+  const deps = { read: () => bytes, run: () => assert.fail("must not publish"), request: async () => Response.json({ dist: { integrity, attestations } }) };
   assert.match(await publishRelease("0.2.0", deps), /Already published/);
   await assert.rejects(publishRelease("0.2.0", { ...deps, request: async () => Response.json({ dist: { integrity: "different" } }) }), /different bytes/);
+  for (const missing of [undefined, {}, { url: attestations.url }, { provenance: attestations.provenance }]) {
+    await assert.rejects(publishRelease("0.2.0", { ...deps, request: async () => Response.json({ dist: { integrity, attestations: missing } }) }), /no provenance metadata/);
+  }
   for (const status of [401, 403, 429, 500]) await assert.rejects(publishRelease("0.2.0", { ...deps, request: async () => new Response("unavailable", { status }) }), /publication refused/);
   await assert.rejects(publishRelease("0.2.0", { ...deps, request: async () => { throw new Error("offline"); } }), /offline/);
   await assert.rejects(publishRelease("../other", deps), /Invalid release version/);
