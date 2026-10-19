@@ -127,6 +127,8 @@ service or page) are treated as declarative app behavior; unknown people, roles 
 automation subjects remain visible and require clarification. An owner prerequisite
 such as
 `Wait for my approval. Open a PR for review.` still requires clarification.
+Later clauses introduced by “where” or “even though” are checked separately,
+so a product rule cannot hide a publication prohibition in the same sentence.
 Implementation work gated on approval is rejected even when that approval names
 a purchase or refund. Complete transaction rules such as approving a refund
 before emailing a customer stay implementation requirements, including leading

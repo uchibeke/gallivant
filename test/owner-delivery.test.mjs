@@ -80,12 +80,28 @@ test("repeated fixture clauses stay bounded and a live repository target stays v
 });
 
 test("publication fixture masking cannot hide coordinated live PRs", () => {
-  for (const connector of ["plus", "as well as", "along with", "together with", "in addition to", "not to mention", "besides"]) {
+  for (const connector of ["plus", "as well as", "along with", "alongside", "together with", "in addition to", "not to mention", "besides"]) {
     const source = `For tests, create a fake PR ${connector} a real PR.`;
     assert.throws(() => ownerDelivery(source), { code: "TASK_DELIVERY_SCOPE" }, source);
     assert.throws(() => assertDeliveryAnswer({}, source), { code: "TASK_DELIVERY_SCOPE" }, source);
   }
   assert.equal(ownerDelivery("For tests, create a fake PR plus a synthetic PR fixture."), null);
+  assert.equal(ownerDelivery("For tests, create a fake PR alongside a synthetic PR fixture."), null);
+});
+
+test("subordinating clauses after product PR conditions retain delivery controls", () => {
+  for (const connector of ["where", "even though", "though", "because"]) {
+    const source = `The button creates a PR after tests pass ${connector} PRs must not be published.`;
+    assert.throws(() => ownerDelivery(source), { code: "TASK_DELIVERY_SCOPE" }, source);
+    assert.throws(() => assertDeliveryAnswer({}, source), { code: "TASK_DELIVERY_SCOPE" }, source);
+  }
+  for (const source of [
+    "The button creates a PR after tests pass where the user can inspect it.",
+    "The button creates a PR after tests pass even though retries are enabled.",
+  ]) {
+    assert.equal(ownerDelivery(source), null, source);
+    assert.doesNotThrow(() => assertDeliveryAnswer({}, source), source);
+  }
 });
 
 test("merge commands remain visible when branch names look like feature predicates", () => {
@@ -1489,6 +1505,41 @@ test("saved version-one ownership remains exact and cannot authorize forged conn
     ] };
     assert.equal(validateOwnerDelivery(prior), prior);
     assert.deepEqual(ownerImplementation(prior), [source.slice(0, split)]);
+  }
+});
+
+test("historical coordinator spans require a complete governing clause", () => {
+  for (const version of [1, 2]) {
+    for (const source of [
+      "Implement export. Refuse to Open a PR.",
+      "Implement export. Refuse to, Open a PR.",
+      "Implement export, after CI passes, Open a PR.",
+      "Implement export, when tests pass, Open a PR.",
+      "Implement export, only after approval, Open a PR.",
+    ]) {
+      const action = source.lastIndexOf("Open a PR");
+      const connector = source.slice(0, action).match(/,\s*(?:and\s*)?$/i);
+      const start = version === 2 && connector ? action - connector[0].length : action;
+      const saved = { version, offsets: "utf16", source, spans: [
+        { start: 0, end: start, owner: "implementation" },
+        { start, end: source.length, owner: "coordinator", kind: "pull_request" },
+      ] };
+      assert.throws(() => validateOwnerDelivery(saved), { code: "TASK_DELIVERY_SCOPE" }, `v${version}: ${source}`);
+    }
+    for (const source of [
+      "Implement export. Open a PR for review.",
+      "Implement export, and Open a PR for review.",
+      "Build the widget after I approved it, and Open a PR for review.",
+    ]) {
+      const action = source.lastIndexOf("Open a PR");
+      const connector = source.slice(0, action).match(/,\s*(?:and\s*)?$/i);
+      const start = version === 2 && connector ? action - connector[0].length : action;
+      const saved = { version, offsets: "utf16", source, spans: [
+        { start: 0, end: start, owner: "implementation" },
+        { start, end: source.length, owner: "coordinator", kind: "pull_request" },
+      ] };
+      assert.equal(validateOwnerDelivery(saved), saved, `v${version}: ${source}`);
+    }
   }
 });
 
