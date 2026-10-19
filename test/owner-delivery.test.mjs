@@ -385,13 +385,17 @@ test("synthetic PR fixtures cannot hide a coordinated live publication", () => {
     "For tests, create a fake pull request and a live pull request for review.",
     "For tests, prepare data and create a fake PR and a real PR.",
     "For tests, create a fake PR and a non-fake PR.",
+    "For tests, create a fake PR, a real PR.",
+    "For tests, create a fake PR, then a real PR.",
+    "For tests, create a fake PR, a live pull request for review.",
   ]) {
     assert.throws(() => ownerDelivery(source), { code: "TASK_DELIVERY_SCOPE" }, source);
     assert.throws(() => assertDeliveryAnswer({}, source), { code: "TASK_DELIVERY_SCOPE" }, source);
   }
-  const fixtures = "For tests, create a fake PR and a fake pull request fixture.";
-  assert.equal(ownerDelivery(fixtures), null);
-  assert.doesNotThrow(() => assertDeliveryAnswer({}, fixtures));
+  for (const fixtures of ["For tests, create a fake PR and a fake pull request fixture.", "For tests, create a fake PR, a mock PR fixture."]) {
+    assert.equal(ownerDelivery(fixtures), null, fixtures);
+    assert.doesNotThrow(() => assertDeliveryAnswer({}, fixtures), fixtures);
+  }
 });
 
 test("business approval exemptions do not mask technical implementation objects", () => {
@@ -401,6 +405,10 @@ test("business approval exemptions do not mask technical implementation objects"
     "If I approve the proposal, generate the Docker image.",
     "If I approve the artwork, create the lockfile.",
     "If I approve the proposal, generate the deployment bundle.",
+    "If I approve the proposal, apply the Terraform plan.",
+    "If I approve the proposal, apply the Kubernetes manifest.",
+    "Apply the Terraform plan after I approve the proposal.",
+    "If I approve the plan, send the report.",
   ]) {
     assert.throws(() => ownerDelivery(source), { code: "TASK_DELIVERY_SCOPE" }, source);
     assert.throws(() => assertDeliveryAnswer({}, source), { code: "TASK_DELIVERY_SCOPE" }, source);
