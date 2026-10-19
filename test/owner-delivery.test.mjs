@@ -543,6 +543,21 @@ test("positive merge auxiliary sequences refuse while negative and application c
   assert.equal(ownerDelivery("Implement import. We will have to merge customer records before saving."), null);
 });
 
+test("publication policy modifiers retain command scope after earlier sentences", () => {
+  for (const prefix of ["", "Implement export. ", "Implement export! ", "Implement export? ", "Implement export; ", "Implement export.\n\n", `${"Context ".repeat(100)}. `]) {
+    for (const command of ["Do not create a PR visible to outsiders.", "Create a PR visible to outsiders.", "Do not create a PR private from the owner.", "Do not make PRs selectable."]) {
+      const text = prefix + command;
+      assert.throws(() => ownerDelivery(text), { code: "TASK_DELIVERY_SCOPE" }, text);
+      assert.throws(() => assertDeliveryAnswer({}, text), { code: "TASK_DELIVERY_SCOPE" }, text);
+    }
+    for (const feature of ["Make PRs visible.", "Make the PR collapsible.", "Document whether PRs are selectable."]) {
+      const text = prefix + feature;
+      assert.equal(ownerDelivery(text), null, text);
+      assert.doesNotThrow(() => assertDeliveryAnswer({}, text), text);
+    }
+  }
+});
+
 test("generic policy modifiers cannot mask imperative merge actions", () => {
   for (const text of [
     "Merge mergeable PRs.",
