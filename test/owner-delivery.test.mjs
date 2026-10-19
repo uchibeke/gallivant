@@ -77,6 +77,7 @@ test("repeated fixture clauses stay bounded and a live repository target stays v
     "For tests, create a fake PR fixture while uploading logs to GitHub.",
     "For tests, create a fake PR fixture and upload logs via GitHub.",
     "For tests, create a fake PR fixture and upload logs in a GitHub repository.",
+    "For tests, create a fake PR fixture and upload logs in our GitHub repository.",
     "For tests, create a fake PR fixture using a local GitHub mock."]) {
     assert.equal(ownerDelivery(text), null, text);
     assert.doesNotThrow(() => assertDeliveryAnswer({}, text), text);
@@ -85,13 +86,14 @@ test("repeated fixture clauses stay bounded and a live repository target stays v
     "For tests, create a fake PR fixture via GitHub.",
     "For tests, create a fake PR fixture through GitHub.",
     "For tests, create a fake PR fixture using GitHub.",
+    "For tests, create a fake PR fixture to our origin.",
     "For tests, create a fake PR fixture and open it via GitHub."]) {
     assert.throws(() => ownerDelivery(text), { code: "TASK_DELIVERY_SCOPE" }, text);
     assert.throws(() => assertDeliveryAnswer({}, text), { code: "TASK_DELIVERY_SCOPE" }, text);
   }
-  for (const forge of ["GitHub", "GitLab"]) for (const article of ["a", "an", "the"])
+  for (const forge of ["GitHub", "GitLab"]) for (const determiner of ["a", "an", "the", "my", "our", "your", "their", "his", "her", "its"])
     for (const action of ["", "and open it "]) {
-      const source = `For tests, create a fake PR fixture ${action}in ${article} ${forge} repository.`;
+      const source = `For tests, create a fake PR fixture ${action}in ${determiner} ${forge} repository.`;
       assert.throws(() => ownerDelivery(source), { code: "TASK_DELIVERY_SCOPE" }, source);
       assert.throws(() => assertDeliveryAnswer({}, source), { code: "TASK_DELIVERY_SCOPE" }, source);
     }
@@ -558,21 +560,23 @@ test("business approval rules validate purpose-infinitive actions", () => {
 });
 
 test("business approval rules validate purpose gerunds", () => {
-  for (const source of [
-    "If I approve the invoice, email the customer with a view to proofreading the article.",
-    "Email the customer with a view to proofreading the article after I approve the invoice.",
-    "If I approve the invoice, email the customer with a view to not proofreading the article.",
-    "If I approve the invoice, email the report with a view to applying the discount.",
-  ]) {
-    assert.throws(() => ownerDelivery(source), { code: "TASK_DELIVERY_SCOPE" }, source);
-    assert.throws(() => assertDeliveryAnswer({}, source), { code: "TASK_DELIVERY_SCOPE" }, source);
+  for (const connector of ["with a view to", "for the purpose of", "for purposes of", "with the aim of", "with the goal of", "with the intent of", "with the intention of", "with the objective of"]) {
+    for (const source of [
+      `If I approve the invoice, email the customer ${connector} proofreading the article.`,
+      `Email the customer ${connector} proofreading the article after I approve the invoice.`,
+      `If I approve the invoice, email the customer ${connector} not proofreading the article.`,
+      `If I approve the invoice, email the report ${connector} applying the discount.`,
+    ]) {
+      assert.throws(() => ownerDelivery(source), { code: "TASK_DELIVERY_SCOPE" }, source);
+      assert.throws(() => assertDeliveryAnswer({}, source), { code: "TASK_DELIVERY_SCOPE" }, source);
+    }
+    const source = `If I approve the invoice, email the customer ${connector} applying the discount.`;
+    assert.equal(ownerDelivery(source), null, source);
+    assert.doesNotThrow(() => assertDeliveryAnswer({}, source), source);
+    const contract = ownerDelivery(source + " Open a PR for review.");
+    assert.equal(validateOwnerDelivery(contract), contract, source);
+    assert.equal(ownerImplementation(contract).join(""), source + " ", source);
   }
-  const source = "If I approve the invoice, email the customer with a view to applying the discount.";
-  assert.equal(ownerDelivery(source), null);
-  assert.doesNotThrow(() => assertDeliveryAnswer({}, source));
-  const contract = ownerDelivery(source + " Open a PR for review.");
-  assert.equal(validateOwnerDelivery(contract), contract);
-  assert.equal(ownerImplementation(contract).join(""), source + " ");
 });
 
 test("business approval rules keep temporal implementation actions visible", () => {
