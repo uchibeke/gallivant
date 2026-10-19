@@ -528,6 +528,28 @@ test("business approval rules do not mask unclassified coordinated implementatio
   assert.throws(() => assertDeliveryAnswer({}, missingFirstObject), { code: "TASK_DELIVERY_SCOPE" });
 });
 
+test("business approval rules validate purpose-infinitive actions", () => {
+  for (const connector of ["in order to", "so as to", "in order not to", "so as not to", "in order to not"]) {
+    for (const source of [
+      `If I approve the invoice, email the customer ${connector} proofread the article.`,
+      `Email the customer ${connector} proofread the article after I approve the invoice.`,
+      `If I approve the invoice, email the report ${connector} apply the discount.`,
+    ]) {
+      assert.throws(() => ownerDelivery(source), { code: "TASK_DELIVERY_SCOPE" }, source);
+      assert.throws(() => assertDeliveryAnswer({}, source), { code: "TASK_DELIVERY_SCOPE" }, source);
+    }
+    const source = `If I approve the invoice, email the customer ${connector} apply the discount.`;
+    assert.equal(ownerDelivery(source), null, source);
+    assert.doesNotThrow(() => assertDeliveryAnswer({}, source), source);
+    const contract = ownerDelivery(source + " Open a PR for review.");
+    assert.equal(validateOwnerDelivery(contract), contract, source);
+    assert.equal(ownerImplementation(contract).join(""), source + " ", source);
+  }
+  const recipient = "If I approve the invoice, send a receipt to the customer.";
+  assert.equal(ownerDelivery(recipient), null);
+  assert.doesNotThrow(() => assertDeliveryAnswer({}, recipient));
+});
+
 test("business approval rules keep temporal implementation actions visible", () => {
   for (const connector of ["before", "after", "while", "once", "until", "when"])
     for (const action of ["proofreading", "editing"]) {

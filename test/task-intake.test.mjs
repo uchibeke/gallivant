@@ -478,6 +478,9 @@ test("latest publication review cases fail before task effects without rejecting
     "If I approve the invoice, email the customer: then proofread the article.",
     "Email the customer after I approve the invoice—then proofread the article.",
     "If I approve the invoice, email the customer after our senior editor proofreads the article.",
+    "If I approve the invoice, email the customer in order to proofread the article.",
+    "Email the customer in order to proofread the article after I approve the invoice.",
+    "If I approve the invoice, email the customer so as not to proofread the article.",
     "For tests, create a fake PR fixture alongside a real PR.",
     "For tests, create both fake and real PRs.",
     "For tests, create fake as well as real PRs.",
@@ -578,6 +581,9 @@ test("latest publication review cases fail before task effects without rejecting
     "If I approve the invoice, email the customer—then apply the discount.",
     "Email the customer after I approve the invoice: then apply the discount.",
     "If I approve the invoice, email the customer after our senior editor emails the customer.",
+    "If I approve the invoice, email the customer in order to apply the discount.",
+    "If I approve the invoice, email the customer so as to apply the discount.",
+    "If I approve the invoice, send a receipt to the customer.",
     "If I approve the invoice, email the customer as well as apply the discount.",
   ];
   for (const text of productRequirements) {
