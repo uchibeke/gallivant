@@ -78,6 +78,8 @@ test("repeated fixture clauses stay bounded and a live repository target stays v
     "For tests, create a fake PR fixture and upload logs via GitHub.",
     "For tests, create a fake PR fixture and upload logs in a GitHub repository.",
     "For tests, create a fake PR fixture and upload logs in our GitHub repository.",
+    "For tests, create a fake PR fixture / upload logs inside our GitHub repository.",
+    "For tests, create a fake PR fixture from fixtures/requests in the unit test.",
     "For tests, create a fake PR fixture using a local GitHub mock."]) {
     assert.equal(ownerDelivery(text), null, text);
     assert.doesNotThrow(() => assertDeliveryAnswer({}, text), text);
@@ -87,20 +89,21 @@ test("repeated fixture clauses stay bounded and a live repository target stays v
     "For tests, create a fake PR fixture through GitHub.",
     "For tests, create a fake PR fixture using GitHub.",
     "For tests, create a fake PR fixture to our origin.",
+    "For tests, create a fake PR fixture from fixtures/requests inside our GitHub repository.",
     "For tests, create a fake PR fixture and open it via GitHub."]) {
     assert.throws(() => ownerDelivery(text), { code: "TASK_DELIVERY_SCOPE" }, text);
     assert.throws(() => assertDeliveryAnswer({}, text), { code: "TASK_DELIVERY_SCOPE" }, text);
   }
   for (const forge of ["GitHub", "GitLab"]) for (const determiner of ["a", "an", "the", "my", "our", "your", "their", "his", "her", "its"])
-    for (const action of ["", "and open it "]) {
-      const source = `For tests, create a fake PR fixture ${action}in ${determiner} ${forge} repository.`;
+    for (const action of ["", "and open it "]) for (const preposition of ["in", "inside", "within"]) {
+      const source = `For tests, create a fake PR fixture ${action}${preposition} ${determiner} ${forge} repository.`;
       assert.throws(() => ownerDelivery(source), { code: "TASK_DELIVERY_SCOPE" }, source);
       assert.throws(() => assertDeliveryAnswer({}, source), { code: "TASK_DELIVERY_SCOPE" }, source);
     }
 });
 
 test("publication fixture masking cannot hide coordinated live PRs", () => {
-  for (const connector of ["plus", "+", "as well as", "along with", "alongside", "together with", "in addition to", "not to mention", "besides", "versus", "vs", "vs.", "compared with", "compared to", "but", "yet"]) {
+  for (const connector of ["plus", "+", "/", "as well as", "along with", "alongside", "together with", "in addition to", "not to mention", "besides", "versus", "vs", "vs.", "compared with", "compared to", "but", "yet"]) {
     const source = `For tests, create a fake PR ${connector} a real PR.`;
     assert.throws(() => ownerDelivery(source), { code: "TASK_DELIVERY_SCOPE" }, source);
     assert.throws(() => assertDeliveryAnswer({}, source), { code: "TASK_DELIVERY_SCOPE" }, source);
@@ -109,6 +112,14 @@ test("publication fixture masking cannot hide coordinated live PRs", () => {
   assert.equal(ownerDelivery("For tests, create a fake PR fixture + a synthetic PR fixture."), null);
   assert.doesNotThrow(() => assertDeliveryAnswer({}, "For tests, create a fake PR fixture + a synthetic PR fixture."));
   assert.equal(ownerDelivery("For tests, create a fake PR alongside a synthetic PR fixture."), null);
+  for (const separator of [" / ", "/", " /", "/ "]) {
+    const live = `For tests, create a fake PR fixture${separator}a real PR.`;
+    assert.throws(() => ownerDelivery(live), { code: "TASK_DELIVERY_SCOPE" }, live);
+    assert.throws(() => assertDeliveryAnswer({}, live), { code: "TASK_DELIVERY_SCOPE" }, live);
+    const synthetic = `For tests, create a fake PR fixture${separator}a synthetic PR fixture.`;
+    assert.equal(ownerDelivery(synthetic), null, synthetic);
+    assert.doesNotThrow(() => assertDeliveryAnswer({}, synthetic), synthetic);
+  }
   for (const connector of ["but", "yet"]) {
     const source = `For tests, create a fake PR fixture ${connector} a synthetic PR fixture.`;
     assert.equal(ownerDelivery(source), null, source);
@@ -132,6 +143,7 @@ test("synthetic fixtures cannot hide a live modifier on one PR noun", () => {
     "For tests, create both fake and real PRs.",
     "For tests, create fake or actual PRs.",
     "For tests, create fake + genuine PRs.",
+    "For tests, create fake/real PRs.",
     "For tests, create fake, mock, and real PRs.",
     "For tests, create fake as well as real PRs.",
     "For tests, create mock but live PRs.",
@@ -143,6 +155,7 @@ test("synthetic fixtures cannot hide a live modifier on one PR noun", () => {
   for (const source of [
     "For tests, create both fake and mock PRs.",
     "For tests, create fake + synthetic PRs.",
+    "For tests, create fake/mock PRs.",
     "For tests, create fake as well as mock PRs.",
     "For tests, create mock but dummy PRs.",
     "For tests, create fake and real PR dashboard cards.",
@@ -158,6 +171,7 @@ test("synthetic fixtures do not mask referential live publication actions", () =
     "For tests, create a fake PR fixture and open it on GitHub.",
     "For tests, create a fake PR fixture, then submit it to the remote repository.",
     "For tests, create a fake PR fixture + publish it on GitLab.",
+    "For tests, create a fake PR fixture / open it within our GitLab repository.",
     "For tests, create a fake PR fixture and upload it to GitHub.",
     "For tests, create a fake PR fixture before opening it on GitHub.",
     "For tests, create a fake PR fixture. Open it on GitHub.",
