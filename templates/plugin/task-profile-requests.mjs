@@ -21,6 +21,8 @@ export const profileRequests = [
   { kind: "indirect", text: "Implement export. Keep the result out of main until someone has reviewed it.", screen: { tier: "question", terms: ["review"] }, tag: { action: "pull_request", prohibits: ["merge"] }, outcome: "ready" },
   { kind: "indirect", text: "Build the widget table export. I will ship it myself afterwards.", screen: { tier: "question", terms: ["deploy"] }, tag: null, outcome: "needs-input", note: "shipping wording asks once even when the owner says they will do it themselves; the reply maps the clause" },
   { kind: "indirect", text: "Build the widget table export. I will handle the rest myself afterwards.", screen: { tier: "none" }, tag: null, outcome: "ready" },
+  { kind: "indirect", text: "Implement export. Let me open the pull request afterwards.", screen: { tier: "question", terms: ["pull_request"] }, tag: { action: "pull_request" }, outcome: "needs-input", note: "let-me wording reserves the PR for the owner; a pull_request tag cannot speak for it" },
+  { kind: "indirect", text: "Implement export. Let me know when it is done.", screen: { tier: "none" }, tag: null, outcome: "ready" },
   { kind: "indirect", text: "Implement export. I will open the pull request myself afterwards.", screen: { tier: "question", terms: ["pull_request"] }, tag: { action: "pull_request" }, outcome: "needs-input", note: "a pull request the owner reserves for themselves is a control; a requested-action tag cannot speak for it" },
   { kind: "indirect", text: "Implement export. Leave the pull request to me.", screen: { tier: "question", terms: ["pull_request"] }, tag: null, outcome: "needs-input" },
   // quoted

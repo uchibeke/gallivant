@@ -90,7 +90,8 @@ control ("Do not: open a pull request") do not. The screen grants nothing:
   "exclude", "except", "other than", "but not", "disallowed", "isn't
   allowed", "not permitted", "stop before", "pause before" or an owner
   reservation such
-  as "I will open the PR myself" or "leave the PR to me" next to any delivery
+  as "I will open the PR myself", "let me open the PR" or "leave the PR to me"
+  next to any delivery
   term
   raise the same `q-delivery-<clause>` question when the planner left the
   clause untagged.
@@ -187,7 +188,8 @@ either ceiling rejects the draft after the call, and usage that is negative,
 fractional or non-numeric is treated as a malformed response rather than a
 spend record. The response body is read under the same deadline as the request
 and cancelled at one megabyte, so a stalled or oversized provider reply cannot
-hang the task lock or buffer without bound.
+hang the task lock or buffer without bound. Cancelling a body, including an
+error response's body, is awaited only until that deadline.
 
 A task pins the complete route selection (adapter, model, endpoint, budget,
 timeout and the credential variable name) when it is created. Later turns,

@@ -92,7 +92,7 @@ test("the delivery screen is deterministic over the fixture corpus and masks lit
   assert.ok(deliveryScreen('"Open a pull request" is forbidden for this change.').controlled.includes("pull_request"));
   assert.equal(deliveryScreen('Opening a `pull request` is not allowed; label it "merge later".').controlled.includes("pull_request"), true);
   assert.equal(maskLiterals('Show "do not merge" and "open a PR" labels.'), "Show " + " ".repeat(14) + " and " + " ".repeat(11) + " labels.");
-  for (const text of ["Opening a pull request is out of scope.", "A merge is outside the scope of this task.", "Exclude deployment from this work.", "Pull requests are disallowed.", "Opening a pull request isn't allowed.", "Merging is not permitted.", "Deployment is off limits.", "I will open the pull request myself afterwards.", "Leave the pull request to me.", "We'll create the PR ourselves.", "The merge is mine to do.", "Implement the change, except opening a pull request.", "Do everything except create a PR.", "Do the implementation, other than opening a PR.", "Everything apart from the PR is yours.", "Implement it but not the pull request."]) {
+  for (const text of ["Opening a pull request is out of scope.", "A merge is outside the scope of this task.", "Exclude deployment from this work.", "Pull requests are disallowed.", "Opening a pull request isn't allowed.", "Merging is not permitted.", "Deployment is off limits.", "I will open the pull request myself afterwards.", "Leave the pull request to me.", "Implement export. Let me open the pull request afterwards.", "Let us merge it ourselves.", "Please let me review the PR first.", "We'll create the PR ourselves.", "The merge is mine to do.", "Implement the change, except opening a pull request.", "Do everything except create a PR.", "Do the implementation, other than opening a PR.", "Everything apart from the PR is yours.", "Implement it but not the pull request."]) {
     const screen = deliveryScreen(text);
     assert.equal(screen.tier, "question", text); assert.ok(screen.controlled.length, `${text} → ${JSON.stringify(screen)}`);
   }
@@ -438,6 +438,20 @@ test("the model route enforces the response limit while streaming and keeps its 
   withRoute(dangling, { ...ROUTE, timeout_ms: 1000 });
   await assert.rejects(prepareModelTurn({ config: {}, env: key, fetch: async () => new Response(openEnded, { status: 200 }) }, dangling, memoryStore(), []), e => e.code === "TASK_MODEL_ROUTE" && /did not complete within 1000 ms/.test(e.message));
   assert.equal(openCancelled, true); assert.equal(dangling.attempts[0].ok, false); assert.equal(dangling.attempts[0].message, undefined);
+  // An error status whose body cancellation never settles is abandoned at the deadline instead of holding the task lock.
+  const errorBody = { cancel: () => new Promise(() => {}) };
+  const refused = taskFor("Add CSV export.", { commandCandidates: ["npm test"] });
+  withRoute(refused, { ...ROUTE, timeout_ms: 1000 });
+  const refusedAt = Date.now();
+  await assert.rejects(prepareModelTurn({ config: {}, env: key, fetch: async () => ({ ok: false, status: 503, body: errorBody }) }, refused, memoryStore(), []), e => e.code === "TASK_MODEL_ROUTE" && /HTTP 503/.test(e.message));
+  assert.ok(Date.now() - refusedAt < 5000, "the pending cancellation was abandoned at the deadline"); assert.equal(refused.attempts[0].settled, true); assert.equal(refused.attempts[0].spend.status, "unknown");
+  // An oversized stream whose cancellation never settles is abandoned at the deadline too.
+  const stuck = new ReadableStream({ pull(controller) { controller.enqueue(chunk); }, cancel() { return new Promise(() => {}); } });
+  const stuckTask = taskFor("Add CSV export.", { commandCandidates: ["npm test"] });
+  withRoute(stuckTask, { ...ROUTE, timeout_ms: 1000 });
+  const stuckAt = Date.now();
+  await assert.rejects(prepareModelTurn({ config: {}, env: key, fetch: async () => new Response(stuck, { status: 200 }) }, stuckTask, memoryStore(), []), /exceeds the bounded limit/);
+  assert.ok(Date.now() - stuckAt < 5000, "the stuck cancellation was abandoned at the deadline"); assert.equal(stuckTask.attempts[0].settled, true);
 });
 
 test("repository snapshots are read-only, bounded, exclude private and ignored paths and report unavailability", async () => {
