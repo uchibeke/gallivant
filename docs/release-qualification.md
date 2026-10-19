@@ -76,6 +76,12 @@ An affected binding becomes `stale` and appears in
 source payload files and the current tracked payload inventory. New, removed,
 modified or uncommitted executable/packaging inputs require a rebuild. Audit-only
 record changes outside the package payload do not invalidate unchanged artifacts.
+The builder records `packagingControlHashes` for committed root and relevant nested
+`.npmignore`, `.gitignore` and `.npmrc` files. Only paths and hashes are emitted;
+control contents are excluded from the runtime payload. Validation compares the
+committed inventory and checkout bytes, so clean committed additions, removals and
+edits require rebuilding too. These inputs bind core evidence. Older manifests
+without an inventory require rebuilding; unrelated audit-only commits remain valid.
 The manifest also records `handoffHashes` for listing, release notes, review cases,
 START-HERE and RUNTIME. Validation rehashes those files and the staged plugin files
 using the builder's `assetHashes`. Older manifests without complete handoff hashes

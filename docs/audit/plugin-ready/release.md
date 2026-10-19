@@ -142,3 +142,20 @@ passes with one existing skip, 418 backend passes, 43 installed flows and 534
 conformance checks, ten release tests, lint and whitespace. The latest source
 hashes and command logs are recorded in `runtimeIdentityReview` and `offline.checks`;
 previous verification records remain preserved.
+
+Review `5565761146` / comment `4309358918` identified committed packaging controls
+missing from source validation. The existing builder now records a separate
+`packagingControlHashes` inventory from the selected commit, using the same
+root/nested control matcher as dirty-input checks. Validation compares the committed
+inventory and checkout bytes; inventory changes bind core qualification evidence.
+Missing inventories require rebuilding. Only paths and digests are emitted, and
+the shared runtime allowlist now excludes nested template controls too.
+
+Regression coverage uses clean temporary Git commits to add, edit and remove
+root/nested ignore and npm configuration files, verifies dirty edits still fail,
+and confirms that removing controls restores the original valid inventory. A
+builder inventory failure removes partial output. Both release CLI callers reuse
+the shared checks. Representative generated manifest and ZIP entries were reviewed
+at `/tmp/release-controls-output.json`: the committed root ignore file has a digest
+but is absent from runtime payload and ZIP. These remain offline fixture results;
+no live prerequisite or unmet criterion changed.

@@ -2,14 +2,15 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdtempSync, writeFileSync, mkdirSync, rmSync, symlinkSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { join, dirname } from 'node:path';
 import { PNG } from 'pngjs';
 import { createHash } from 'node:crypto';
 import { execFileSync, spawnSync } from 'node:child_process';
 import { RELEASE_CHECKS, releaseIdentity, evaluateRelease, releasePreflight, verifyReleasePayload, readReleaseJson, assembleRelease } from '../lib/release_package.mjs';
+import { packagingControlInventory, packagingControl, runtimeFile } from '../lib/plugin_package.mjs';
 const hash = value => createHash('sha256').update(value).digest('hex');
 function candidate() {
-  const manifest = { classification: 'public-candidate-unqualified', sourceVerified: true, uncommittedPayload: [], coreSha256: hash('core'), dependencyLockSha256: hash('lock'), hashes: { plugin: hash('plugin'), operations: hash('tools'), runtime: hash('runtime') }, schemaHashes: {}, payloadHashes: {}, endpoint: 'https://aport.io/api/task-delivery/mcp' };
+  const manifest = { classification: 'public-candidate-unqualified', sourceVerified: true, uncommittedPayload: [], coreSha256: hash('core'), dependencyLockSha256: hash('lock'), hashes: { plugin: hash('plugin'), operations: hash('tools'), runtime: hash('runtime') }, schemaHashes: {}, payloadHashes: {}, packagingControlHashes: {}, endpoint: 'https://aport.io/api/task-delivery/mcp' };
   const deployment = { revision: 'observed-revision', configurationSha256: hash('config'), endpoint: manifest.endpoint };
   return { manifest, deployment };
 }
@@ -126,6 +127,19 @@ test('record-only changes preserve qualification and never infer publication', (
   assert.equal(evaluateRelease({ ...input, evidence }).status, 'needs-human');
 });
 
+test('packaging controls are source inputs and invalidate core evidence', () => {
+  for (const path of ['.npmignore', '.gitignore', '.npmrc', 'lib/nested/.npmignore', 'templates/plugin/.gitignore', 'templates/plugin/.npmrc', 'docs/.npmignore']) {
+    assert.equal(packagingControl(path), true);
+    assert.equal(runtimeFile(path), false, 'controls must not enter the runtime payload');
+  }
+  const input = candidate(), evidence = observed(input);
+  input.manifest.packagingControlHashes = { '.npmignore': hash('changed controls') };
+  const result = evaluateRelease({ ...input, evidence });
+  for (const id of ['integration', 'deployment', 'agents', 'cloud', 'host', 'recovery', 'reviewer', 'scans', 'upgrade']) assert.equal(result.checks[id].status, 'stale', id);
+  for (const id of ['publisher', 'media']) assert.equal(result.checks[id].status, 'passed', id);
+  assert.equal(result.states.submissionReady, false);
+});
+
 test('malformed, private, future and boolean observations fail closed', () => {
   const input = candidate();
   for (const edit of [e => { e.version = 2; }, e => { e.reviewer_instructions = 'private'; }, e => { e.checks.host.secret = 'private'; }, e => { e.states.published = true; }, e => { e.states.codeMerged.identity.core = 'Bearer private_test_secret'; }]) {
@@ -192,6 +206,29 @@ test('payload verification rejects tampering, source additions and symlinks', t 
   assert.throws(() => verifyReleasePayload(out, legacy, { sourceRoot: source }), /Incomplete handoff hashes/);
   for (const file of ['evidence.json', 'qualification.json']) writeFileSync(join(out, file), '{"updated":true}');
   assert.equal(verifyReleasePayload(out, manifest, { sourceRoot: source }), true);
+  const legacyControls = structuredClone(manifest); delete legacyControls.packagingControlHashes;
+  assert.throws(() => verifyReleasePayload(out, legacyControls, { sourceRoot: source }), /packaging-control inventory/);
+  const commitControls = () => {
+    execFileSync('git', ['add', '-A'], { cwd: source });
+    execFileSync('git', ['-c', 'user.name=Test', '-c', 'user.email=test@localhost', '-c', 'commit.gpgsign=false', 'commit', '-qm', 'Update packaging fixture'], { cwd: source });
+    assert.equal(execFileSync('git', ['status', '--porcelain'], { cwd: source, encoding: 'utf8' }), '');
+  };
+  for (const path of ['.npmignore', '.gitignore', '.npmrc', 'lib/nested/.npmignore', 'lib/nested/.gitignore', 'lib/nested/.npmrc', 'templates/plugin/.npmignore', 'docs/.gitignore']) {
+    mkdirSync(dirname(join(source, path)), { recursive: true });
+    writeFileSync(join(source, path), '# original operator control\n'); commitControls();
+    assert.throws(() => verifyReleasePayload(out, manifest, { sourceRoot: source }), /Committed packaging controls changed/, `added ${path}`);
+    const baseline = { ...manifest, packagingControlHashes: packagingControlInventory(source, 'HEAD') };
+    assert.deepEqual(baseline.packagingControlHashes, { [path]: hash('# original operator control\n') });
+    assert.equal(verifyReleasePayload(out, baseline, { sourceRoot: source }), true);
+    writeFileSync(join(source, path), '# changed operator control\n');
+    assert.throws(() => verifyReleasePayload(out, baseline, { sourceRoot: source }), /Packaging control changed/, `dirty ${path}`);
+    commitControls();
+    assert.throws(() => verifyReleasePayload(out, baseline, { sourceRoot: source }), /Committed packaging controls changed/, `modified ${path}`);
+    const changedControls = { ...manifest, packagingControlHashes: packagingControlInventory(source, 'HEAD') };
+    rmSync(join(source, path)); commitControls();
+    assert.throws(() => verifyReleasePayload(out, changedControls, { sourceRoot: source }), /Committed packaging controls changed/, `removed ${path}`);
+    assert.equal(verifyReleasePayload(out, manifest, { sourceRoot: source }), true);
+  }
   writeFileSync(join(source, 'lib/new.mjs'), '// newly introduced code');
   assert.throws(() => verifyReleasePayload(out, manifest, { sourceRoot: source }), /Uncommitted/);
   execFileSync('git', ['add', '.'], { cwd: source });
@@ -260,6 +297,10 @@ test('release assembly reuses the packager and keeps evidence outside the public
   for (const [file, expected] of Object.entries(built.manifest.handoffHashes)) assert.equal(hash(readFileSync(join(out, file))), expected);
   for (const [file, expected] of Object.entries(built.manifest.assetHashes)) assert.equal(hash(readFileSync(join(out, 'plugin', file))), expected);
   assert.deepEqual(readReleaseJson(join(out, 'manifest.json')), built.manifest);
+  const committedControls = packagingControlInventory(process.cwd(), sourceCommit);
+  assert.deepEqual(built.manifest.packagingControlHashes, committedControls);
+  assert.ok(committedControls['.gitignore'], 'actual build records controls omitted from npm payload');
+  assert.equal(built.manifest.payloadHashes['.gitignore'], undefined);
   const changed = assembleRelease({ config: { ...config, resource: { ...config.resource, uri: 'ui://task-delivery/next' } }, sourceCommit, coreVersion: '0.2.0', out: join(dir, 'changed-resource'), internal: true, deployment });
   assert.equal(changed.manifest.coreSha256, built.manifest.coreSha256);
   assert.equal(changed.manifest.hashes.plugin, built.manifest.hashes.plugin);
