@@ -767,6 +767,40 @@ test("temporal approval gerunds retain modifiers without hiding implementation",
   }
 });
 
+test("method gerunds retain approval gates and validate their own business objects", () => {
+  for (const connector of ["by", "via", "through", "on", "with", "in", "from", "for", "at", "into", "onto", "about", "of"])
+    for (const modifier of ["", "first ", "not carefully "]) {
+      for (const source of [
+        `If I approve the support request, complete the request ${connector} ${modifier}proofreading the article.`,
+        `Complete the request ${connector} ${modifier}proofreading the article after I approve the support request.`,
+        `If I approve the support request, complete the report ${connector} ${modifier}emailing the customer.`,
+        `If I approve the support request, complete the request ${connector} ${modifier}emailing the report.`,
+      ]) {
+        assert.throws(() => ownerDelivery(source), { code: "TASK_DELIVERY_SCOPE" }, source);
+        assert.throws(() => assertDeliveryAnswer({}, source), { code: "TASK_DELIVERY_SCOPE" }, source);
+      }
+      const source = `If I approve the support request, complete the request ${connector} ${modifier}emailing the customer.`;
+      assert.equal(ownerDelivery(source), null, source);
+      assert.doesNotThrow(() => assertDeliveryAnswer({}, source), source);
+      const contract = ownerDelivery(source + " Open a PR for review.");
+      assert.equal(validateOwnerDelivery(contract), contract, source);
+      assert.equal(ownerImplementation(contract).join(""), source + " ", source);
+    }
+  for (const source of [
+    "If I approve the support request, complete the request by our senior editor first proofreading the article.",
+    "If I approve the support request, complete the request by first proofreading the article via emailing the customer.",
+    "If I approve the support request, complete the request by first emailing the customer on proofreading the article.",
+  ]) {
+    assert.throws(() => ownerDelivery(source), { code: "TASK_DELIVERY_SCOPE" }, source);
+    assert.throws(() => assertDeliveryAnswer({}, source), { code: "TASK_DELIVERY_SCOPE" }, source);
+  }
+  for (const destination of ["by an email", "via the customer portal", "through the customer account", "on the invoice", "by the billing department", "by Alice King"]) {
+    const source = `If I approve the support request, complete the request ${destination}.`;
+    assert.equal(ownerDelivery(source), null, source);
+    assert.doesNotThrow(() => assertDeliveryAnswer({}, source), source);
+  }
+});
+
 test("temporal approval actors include modifiers before their role", () => {
   for (const actor of ["our senior editor", "the experienced reviewer", "their very experienced editors"]) {
     const source = `If I approve the invoice, email the customer after ${actor} proofreads the article.`;
