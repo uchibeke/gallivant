@@ -76,6 +76,7 @@ test("repeated fixture clauses stay bounded and a live repository target stays v
     "For tests, create a fake PR fixture after uploading logs to GitHub.",
     "For tests, create a fake PR fixture while uploading logs to GitHub.",
     "For tests, create a fake PR fixture and upload logs via GitHub.",
+    "For tests, create a fake PR fixture and upload logs in a GitHub repository.",
     "For tests, create a fake PR fixture using a local GitHub mock."]) {
     assert.equal(ownerDelivery(text), null, text);
     assert.doesNotThrow(() => assertDeliveryAnswer({}, text), text);
@@ -88,6 +89,12 @@ test("repeated fixture clauses stay bounded and a live repository target stays v
     assert.throws(() => ownerDelivery(text), { code: "TASK_DELIVERY_SCOPE" }, text);
     assert.throws(() => assertDeliveryAnswer({}, text), { code: "TASK_DELIVERY_SCOPE" }, text);
   }
+  for (const forge of ["GitHub", "GitLab"]) for (const article of ["a", "an", "the"])
+    for (const action of ["", "and open it "]) {
+      const source = `For tests, create a fake PR fixture ${action}in ${article} ${forge} repository.`;
+      assert.throws(() => ownerDelivery(source), { code: "TASK_DELIVERY_SCOPE" }, source);
+      assert.throws(() => assertDeliveryAnswer({}, source), { code: "TASK_DELIVERY_SCOPE" }, source);
+    }
 });
 
 test("publication fixture masking cannot hide coordinated live PRs", () => {
@@ -548,6 +555,24 @@ test("business approval rules validate purpose-infinitive actions", () => {
   const recipient = "If I approve the invoice, send a receipt to the customer.";
   assert.equal(ownerDelivery(recipient), null);
   assert.doesNotThrow(() => assertDeliveryAnswer({}, recipient));
+});
+
+test("business approval rules validate purpose gerunds", () => {
+  for (const source of [
+    "If I approve the invoice, email the customer with a view to proofreading the article.",
+    "Email the customer with a view to proofreading the article after I approve the invoice.",
+    "If I approve the invoice, email the customer with a view to not proofreading the article.",
+    "If I approve the invoice, email the report with a view to applying the discount.",
+  ]) {
+    assert.throws(() => ownerDelivery(source), { code: "TASK_DELIVERY_SCOPE" }, source);
+    assert.throws(() => assertDeliveryAnswer({}, source), { code: "TASK_DELIVERY_SCOPE" }, source);
+  }
+  const source = "If I approve the invoice, email the customer with a view to applying the discount.";
+  assert.equal(ownerDelivery(source), null);
+  assert.doesNotThrow(() => assertDeliveryAnswer({}, source));
+  const contract = ownerDelivery(source + " Open a PR for review.");
+  assert.equal(validateOwnerDelivery(contract), contract);
+  assert.equal(ownerImplementation(contract).join(""), source + " ");
 });
 
 test("business approval rules keep temporal implementation actions visible", () => {
