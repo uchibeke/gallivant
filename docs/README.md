@@ -13,6 +13,7 @@ requirements and checks.
 | Need | Guide |
 | --- | --- |
 | Install, configure access and complete a first task | [Getting started](install.md) |
+| Ask an agent to inspect, install and verify setup | [Agent setup](agent-setup.md) |
 | Describe work, answer questions, inspect a draft and authorize execution | [Natural-language tasks](tasks.md) |
 | Write a brief with acceptance criteria, source files and verification commands | [PRD contract](prd.md) |
 | Find commands, monitor progress, message or resume a run | [Commands](commands.md) |

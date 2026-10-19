@@ -1,5 +1,12 @@
 # Install
 
+Get one repository task from a brief to a reviewed pull request. Install the CLI,
+sign in to GitHub and one harness, finish the checks, then start a small task.
+Gallivant keeps the implementation and review loop moving; you review and merge.
+
+**Using a coding agent to set this up?** Give it the [agent setup guide](agent-setup.md).
+It includes a copy/paste prompt, setup checks and the point where a real run starts.
+
 For DNS errors or stalled provider calls, see [network diagnosis and recovery](network-recovery.md).
 The diagnostic command works before configuration or login, on Linux and macOS.
 
@@ -39,7 +46,8 @@ path above (the repository needs to be public for anonymous access).
 If the shell cannot find the command afterwards,
 the `bin` directory under `npm prefix -g` is not on your PATH.
 
-Global configuration lives in `~/.gallivant/config.json`. Task commands still
+Global configuration lives in `~/.gallivant/config.json` (or
+`$GALLIVANT_HOME/config.json` when explicitly set). Task commands still
 need a target checkout: run inside it, pass `--dir` for natural-language tasks, or
 pass the PRD path for a written brief.
 
@@ -58,12 +66,16 @@ gallivant doctor
 GitHub login, records only the selected installed harness, and creates
 `~/.gallivant-worktrees` for separate task checkouts. Use `--worktrees /absolute/path`
 to choose another location outside the config home. Notifications start disabled.
-Existing configs are never overwritten. Set your Git name/email if the checks
+Existing configs are never overwritten. If `init` reports an existing config,
+continue with `doctor`; preserve the config and repair only the relevant keys.
+Set your Git name/email if the checks
 above are empty; commits use your configured identity.
 
 `doctor` can also print a suggested config when none exists. It reports missing
 guardrails, credentials and repository protections; `init` does not configure
-those for you. See [config.md](config.md) for every key. The default reviewer is
+those for you. Add the target repository to `repos` so `doctor` checks its
+permissions, base branch and protections. See [config.md](config.md) for every key.
+The default reviewer is
 the Codex GitHub integration: enable it on your target repository, configure
 another supported bot, or explicitly set `"reviewer": null` to use CI and trusted
 human feedback. Without a configured review bot, the default loop waits for a
@@ -131,7 +143,10 @@ placed in command arguments or persisted by Gallivant, but the child process
 can read it. For hosted Agents execution, GitHub credentials stay with the local
 coordinator, which verifies and publishes returned artifacts.
 
-Earlier versions asked you to write `~/.gallivant/gitconfig` and pointed `GIT_CONFIG_GLOBAL` at it. That file is no longer read by anything, so if you have one you can delete it. Two things were wrong with it, and the second is the worse one. Its helper called `gh auth git-credential`, which asks `gh` to read stores a sandbox denies. And the file itself sat outside the worktree, so a sandboxed run could not read it at all: every git command, `git status` included, failed with `unable to access '/Users/you/.gallivant/gitconfig': Operation not permitted`, while git's fallback message blamed `~/.git-credentials` and sent two debugging sessions after the wrong file. `doctor`'s `run git push` line now runs a real `git ls-remote` with the run's own environment and no readable `HOME`, and prints whatever git says.
+Do not create a separate `~/.gallivant/gitconfig` or override `GIT_CONFIG_GLOBAL`
+for a run. Current versions carry Git configuration in the run environment.
+`doctor` checks that transport with `git ls-remote` in an isolated home;
+a successful read does not by itself prove push permission.
 
 Where the credential comes from, first answer wins:
 
@@ -217,6 +232,13 @@ sets the approval mode on start and resume. A denial must be diagnosed, not
 bypassed. See [guardrails.md](guardrails.md#codex-git-writes-need-automatic-approval).
 
 ## 8. First task
+
+Before dispatch, confirm the repository, target branch, permitted changes and
+spending limits. The default `max_iterations` is 30 automatic fix rounds;
+`max_budget_usd` defaults to 5 and gives Claude a native per-run dollar cap.
+Other local harnesses do not enforce an equivalent dollar cap. Use your provider's
+spend controls and review [budget semantics](config.md) before unattended work.
+A paid preparation call is different from the local `ready --check` validator.
 
 You can deliver code, documentation, research or content, provided the outcome
 is a repository change with concrete acceptance criteria and checks. You do not

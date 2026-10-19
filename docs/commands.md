@@ -19,6 +19,12 @@ do not prove API connectivity. See [network recovery](network-recovery.md).
 
 The install checklist and the health probe, one line per check, each failure with the exact command or file that fixes it. With no config it prints a complete config built from this machine. `--send` posts a test notification. `--probe` runs a real Claude session in a temp directory and confirms a write inside is allowed and a write outside is denied. Exit code 1 while anything fails.
 
+`doctor` prints one line per repository in `repos` naming the base branch its pull requests will target and where that answer came from,
+so a repository whose work should go to `staging` while nothing is configured is visible before a session opens a pull
+request against `main`. A configured base that GitHub does not have is a failure here, with the fix. See [the base
+branch](config.md#the-base-branch).
+
+
 ## `gallivant task [prepare] "request" [--stdin] [--run] [--json]`
 
 Prepares an isolated canonical PRD through the shared task service. Accepts
@@ -41,10 +47,6 @@ A natural-language task still becomes an explicit, validated delivery contract;
 it does not require the user to write a PRD first.
 See [task operations](tasks.md) for examples, source delivery and stopping rules.
 
-`doctor` prints one line per repository in `repos` naming the base branch its pull requests will target and where that answer came from,
-so a repository whose work should go to `staging` while nothing is configured is visible before a session opens a pull
-request against `main`. A configured base that GitHub does not have is a failure here, with the fix. See [the base
-branch](config.md#the-base-branch).
 
 ## `gallivant new <name> [--harness <name>] [--dir <repo>]`
 
@@ -159,19 +161,32 @@ It then reconciles with GitHub: for every repo in `repos`, every open PR of your
 A recovered entry is treated as newly asking, not as mid-conversation, and in two ways that `register` already worked this way:
 
 - The reviewer clock is floored at `rereview_minutes` ago, so a PR whose last round comment is seven hours old is not stopped `reviewer-silent` on the very first tick. The silence accrued while no daemon was running to ask, and stopping for it tells you nothing you can act on while costing you a `register` to resume.
-- Failing checks on the recovered head are dispatched rather than treated as already sent. A fix that had been dispatched and had pushed would have moved the head, so red CI on the head that is actually there has not been addressed by anything; the only case a recovery could dispatch twice is a run that was still in flight when the daemon died, and that run's work is lost anyway.
+- Failing checks on the recovered head remain eligible for dispatch. Preserve the local state and run records whenever possible: recovery from PR metadata cannot reconstruct every in-flight action. A daemon exit does not discard worktree changes or necessarily stop an agent; inspect surviving runs before recovering from lost state.
 
-Then it ticks every `poll_seconds`. Before each tick it probes `gh` and every configured harness; while any probe fails nothing is dispatched and one throttled error notification goes out per failing probe. Ticks chain on a timer and never overlap. `--once` runs a single tick and exits, which is useful for cron or for debugging.
+The coordinator runs bounded progress and review work on separate schedules.
+`poll_seconds` controls GitHub review and chain checks; provider progress and
+readiness refreshes have their own bounds. A failed or pending provider/account
+probe blocks dispatch for that scope, while independent scopes can continue.
+Ticks do not overlap. `--once` runs a single tick and exits; normal `up` stays in
+the foreground. Use `gallivant start` for background monitoring and the dashboard.
 
 On a Mac the daemon runs `caffeinate -i` for its own lifetime.
+
+## `gallivant down`
+
+Stops the verified daemon and the standalone dashboard. Already-spawned agent
+processes continue; the next startup recovers their recorded state. An embedded
+dashboard remains owned by its host application. Use `gallivant start` to restart
+services after updating the installed code. Do not start the same PRD again to
+recover an existing task.
 
 ## `gallivant status [--all] [--json]`
 
 ```
-gallivant  daemon up since 6h ago  last tick 40s ago  next in 80s  gh ok  claude ok  codex ok
+gallivant  daemon up since 6h ago  last tick 40s ago  next in 80s  gh ok  claude signed-in (API unchecked)  codex signed-in (API unchecked)
 
 NEEDS YOU
-  widget#142        needs-human   base-conflict             round 2/3   -> staging   12m ago   gallivant why widget#142
+  widget#142        needs-human   base-conflict             round 2/30   -> staging   12m ago   gallivant why widget#142
   api#31            ready         green, no blocking findings, receipt accepted  round 1/3   -> main   2h ago    https://github.com/acme/api/pull/31
 
 RUNNING
