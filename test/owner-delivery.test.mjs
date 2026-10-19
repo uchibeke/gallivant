@@ -71,7 +71,10 @@ test("repeated fixture clauses stay bounded and a live repository target stays v
   assert.throws(() => ownerDelivery(live), { code: "TASK_DELIVERY_SCOPE" });
   assert.throws(() => assertDeliveryAnswer({}, live), { code: "TASK_DELIVERY_SCOPE" });
   // A Git destination counts only inside the synthetic action's own clause.
-  for (const text of ["For tests, create a fake PR fixture and upload logs to GitHub.", "For tests, create a fake PR fixture, then upload logs to GitHub."]) {
+  for (const text of ["For tests, create a fake PR fixture and upload logs to GitHub.", "For tests, create a fake PR fixture, then upload logs to GitHub.",
+    "For tests, create a fake PR fixture before uploading logs to GitHub.",
+    "For tests, create a fake PR fixture after uploading logs to GitHub.",
+    "For tests, create a fake PR fixture while uploading logs to GitHub."]) {
     assert.equal(ownerDelivery(text), null, text);
     assert.doesNotThrow(() => assertDeliveryAnswer({}, text), text);
   }
@@ -95,6 +98,9 @@ test("publication fixture masking cannot hide coordinated live PRs", () => {
   const liveDestination = "For tests, create a fake PR fixture vs. a mock PR on GitHub.";
   assert.throws(() => ownerDelivery(liveDestination), { code: "TASK_DELIVERY_SCOPE" });
   assert.throws(() => assertDeliveryAnswer({}, liveDestination), { code: "TASK_DELIVERY_SCOPE" });
+  const laterLivePr = "For tests, create a fake PR fixture before sending a real PR to GitHub.";
+  assert.throws(() => ownerDelivery(laterLivePr), { code: "TASK_DELIVERY_SCOPE" });
+  assert.throws(() => assertDeliveryAnswer({}, laterLivePr), { code: "TASK_DELIVERY_SCOPE" });
 });
 
 test("subordinating clauses after product PR conditions retain delivery controls", () => {
@@ -421,6 +427,18 @@ test("business approval rules do not mask unclassified coordinated implementatio
   const missingFirstObject = "If I approve the invoice, email the report alongside apply the discount.";
   assert.throws(() => ownerDelivery(missingFirstObject), { code: "TASK_DELIVERY_SCOPE" });
   assert.throws(() => assertDeliveryAnswer({}, missingFirstObject), { code: "TASK_DELIVERY_SCOPE" });
+});
+
+test("business approval rules keep temporal implementation actions visible", () => {
+  for (const connector of ["before", "after", "while"])
+    for (const action of ["proofreading", "editing"]) {
+      const source = `If I approve the invoice, email the customer ${connector} ${action} the article.`;
+      assert.throws(() => ownerDelivery(source), { code: "TASK_DELIVERY_SCOPE" }, source);
+      assert.throws(() => assertDeliveryAnswer({}, source), { code: "TASK_DELIVERY_SCOPE" }, source);
+    }
+  const business = "If I approve the invoice, email the customer before applying the discount.";
+  assert.equal(ownerDelivery(business), null);
+  assert.doesNotThrow(() => assertDeliveryAnswer({}, business));
 });
 
 test("synthetic PR fixtures cannot hide a coordinated live publication", () => {
