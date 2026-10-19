@@ -14,6 +14,8 @@ export const profileRequests = [
   { kind: "direct", text: "Implement CSV export. Open one pull request for review.", screen: { tier: "assumption", terms: ["pull_request", "review"] }, tag: { action: "pull_request" }, outcome: "ready" },
   { kind: "direct", text: "Add JSON export and raise a PR for review; do not merge it.", screen: { tier: "question" }, tag: { action: "pull_request", prohibits: ["merge"] }, outcome: "ready" },
   { kind: "direct", text: "Fix the date parser, then open a PR.", screen: { tier: "assumption", terms: ["pull_request"] }, tag: { action: "pull_request" }, outcome: "ready" },
+  { kind: "direct", text: "Implement export. Opening a pull request is required.", screen: { tier: "question", terms: ["pull_request"] }, tag: { action: "pull_request" }, outcome: "ready", note: "an affirmative control states a requirement the requested-action tag speaks for" },
+  { kind: "adversarial", text: "Implement export. A pull request is required.", screen: { tier: "question", terms: ["pull_request"] }, tag: { action: "restrict", prohibits: ["pull_request"] }, outcome: "needs-input", note: "a prohibition tag cannot speak for a required term" },
   // indirect
   { kind: "indirect", text: "Implement export and send the change up for the team to look at.", screen: { tier: "none" }, tag: { action: "pull_request" }, outcome: "ready" },
   { kind: "indirect", text: "Implement export. Keep the result out of main until someone has reviewed it.", screen: { tier: "question", terms: ["review"] }, tag: { action: "pull_request", prohibits: ["merge"] }, outcome: "ready" },

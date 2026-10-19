@@ -49,8 +49,10 @@ profile:
   forbids effects the profile never performs) is recorded in the mapping. The
   clause still keeps its implementation content in the criteria. A tag speaks
   only for the terms it names, and only in the right sense: a requested action
-  speaks for terms outside a control word, a prohibition for terms under one
-  (control words bind within a statement, across conjunctions). So "do not open
+  speaks for terms outside a control word or under an affirmative one ("a
+  pull request is required"), a prohibition for terms under a negative one
+  ("do not", "except", "is not required"); control words bind within a
+  statement, across conjunctions. So "do not open
   a pull request" tagged as a `pull_request` action, "merge the PR" tagged with
   a `merge` prohibition, an escalating term the tag leaves out ("open a PR and
   deploy it") and an effect term it leaves out under a control word ("open a

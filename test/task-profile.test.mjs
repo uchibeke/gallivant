@@ -95,8 +95,19 @@ test("the delivery screen is deterministic over the fixture corpus and masks lit
   }
   assert.equal(maskLiterals('Keep the literal "open a pull request" text.'), "Keep the literal " + " ".repeat(21) + " text.");
   assert.deepEqual(statements("Do not: open a PR. Then: run tests; stop"), ["Do not: open a PR", " Then", " run tests", " stop"]);
-  assert.deepEqual(deliveryScreen(""), { terms: [], controlled: [], escalated: [], controls: [], tier: "none" });
-  assert.deepEqual(deliveryScreen(42), { terms: [], controlled: [], escalated: [], controls: [], tier: "none" });
+  assert.deepEqual(deliveryScreen(""), { terms: [], controlled: [], affirmed: [], escalated: [], controls: [], tier: "none" });
+  assert.deepEqual(deliveryScreen(42), { terms: [], controlled: [], affirmed: [], escalated: [], controls: [], tier: "none" });
+  // Affirmative controls state a requirement: a requested-action tag speaks for the term, a prohibition does not, and a negated form stays a prohibition.
+  for (const text of ["Opening a pull request is required.", "A pull request is mandatory.", "A PR remains required for every change."]) {
+    const screen = deliveryScreen(text);
+    assert.equal(screen.tier, "question", text); assert.deepEqual(screen.affirmed, ["pull_request"], text); assert.deepEqual(screen.controlled, [], text);
+    assert.deepEqual(unaccountedTerms(screen, { action: "pull_request" }), [], text);
+    assert.deepEqual(unaccountedTerms(screen, { action: "restrict", prohibits: ["pull_request"] }), ["pull_request"], text);
+  }
+  const negated = deliveryScreen("A pull request is not required.");
+  assert.deepEqual(negated.controlled, ["pull_request"]); assert.deepEqual(negated.affirmed, []);
+  assert.deepEqual(unaccountedTerms(negated, { action: "pull_request" }), ["pull_request"]);
+  assert.deepEqual(unaccountedTerms(deliveryScreen("Do not merge; a pull request is required."), { action: "pull_request", prohibits: ["merge"] }), []);
   // A bare publish verb anywhere escalates; publish as a noun modifier or a feature infinitive stays an assumption.
   for (const text of ["Publish this package to npm.", "Implement export. Then publish it to the registry.", "Please publish the docs site.", "Implement the feature and publish the package to npm.", "After implementation, publish the package.", "Could you publish the package?"]) {
     const screen = deliveryScreen(text);
