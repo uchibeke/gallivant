@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { executionEpoch, makeExecution, reserveExecutionEpoch } from "../lib/execution.mjs";
 import { tempHome } from "./helpers.mjs";
@@ -37,6 +37,7 @@ test("settled legacy PR reset selects a new ledger without adopting Claude's cur
     { code: "EXECUTION_CONTINUATION" });
   assert.equal(parsedOldLines, false, "Codex cannot derive a session from Claude output");
   assert.equal(readFileSync(oldFile, "utf8"), original, "migration only selects a new ledger; it does not rewrite prior ownership");
+  reserveExecutionEpoch({ root, taskId, provider: "codex", account: "operator", epoch, pr: 20 });
   assert.equal(executionEpoch({ root, taskId, entry: { ...switched(), execution_epoch: epoch,
     last: { run: "run-new-codex", exit: 0 }, execution: { provider: "codex" } }, provider: "codex", account: "operator", runner }), 1,
   "the durable epoch still selects Codex after a new run replaces the old inference evidence");
@@ -54,6 +55,15 @@ test("a provider mismatch without exact settled ownership cannot create a new le
   assert.equal(executionEpoch({ root, taskId, entry: switched(), provider: "codex", account: "operator",
     runner: { current: () => ({ id: runId, running: true }) } }), 0);
   assert.equal(executionEpoch({ root, taskId, entry: switched(), provider: "codex", account: "other-account", runner }), 0);
+});
+
+test("a missing recorded handoff ledger cannot be silently recreated", () => {
+  const root = join(tempHome(), "runs", "recovery");
+  mkdirSync(root, { recursive: true });
+  writeFileSync(join(root, "execution.json"), JSON.stringify(oldExecution));
+  assert.throws(() => executionEpoch({ root, taskId, entry: { ...switched(), execution_epoch: 1 },
+    provider: "codex", account: "operator" }), { code: "EXECUTION_OWNERSHIP" });
+  assert.equal(existsSync(join(root, "execution-1.json")), false);
 });
 
 test("registry loss recovers the latest reserved provider epoch, including A to B to A", () => {
