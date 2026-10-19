@@ -63,6 +63,36 @@ test("synthetic pull requests in test fixtures are not delivery requests", () =>
   assert.throws(() => assertDeliveryAnswer({}, "Generate a dummy PR in the unit test. Open a PR for review."), { code: "TASK_DELIVERY_SCOPE" });
 });
 
+test("fixture labels cannot hide review requests within the publication action", () => {
+  for (const action of ["submit a fake PR", "create a mock pull request", "generate synthetic PRs"])
+    for (const label of ["", "fixture", "fixtures", "test data", "fixture data", "test object", "test objects", "as test data"])
+      for (const review of ["review", "human review", "code review"]) {
+        const source = `For tests, ${action} ${label ? label + " " : ""}for ${review}.`;
+        assert.throws(() => ownerDelivery(source), { code: "TASK_DELIVERY_SCOPE" }, source);
+        assert.throws(() => assertDeliveryAnswer({}, source), { code: "TASK_DELIVERY_SCOPE" }, source);
+      }
+  for (const source of [
+    "For tests, create a fake PR fixture and a mock PR test object for review.",
+    "For tests, create a fake PR fixture and submit that fixture data for code review.",
+  ]) {
+    assert.throws(() => ownerDelivery(source), { code: "TASK_DELIVERY_SCOPE" }, source);
+    assert.throws(() => assertDeliveryAnswer({}, source), { code: "TASK_DELIVERY_SCOPE" }, source);
+  }
+  for (const source of [
+    "For tests, create a fake PR fixture.",
+    "For tests, create a fake PR fixture and draft a report for review.",
+    "For tests, create a fake PR fixture, then upload logs for code review.",
+    "For tests, create a fake PR fixture before uploading logs for code review.",
+  ]) {
+    assert.equal(ownerDelivery(source), null, source);
+    assert.doesNotThrow(() => assertDeliveryAnswer({}, source), source);
+    const original = source + " Open a PR for review.", contract = ownerDelivery(original);
+    assert.equal(validateOwnerDelivery(contract), contract, source);
+    assert.equal(ownerImplementation(contract).join(""), source + " ", source);
+    assert.equal(contract.spans.map(span => original.slice(span.start, span.end)).join(""), original, source);
+  }
+});
+
 test("repeated fixture clauses stay bounded and a live repository target stays visible", () => {
   const fixtures = Array(1100).fill("For tests, create a fake PR").join(", ") + ".";
   assert.ok(Buffer.byteLength(fixtures) < 32 * 1024);

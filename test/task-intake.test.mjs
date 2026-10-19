@@ -502,6 +502,9 @@ test("latest publication review cases fail before task effects without rejecting
     "For tests, create a fake PR fixture / a real PR.",
     "For tests, create fake/real PRs.",
     "For tests, create a fake PR fixture and open it on GitHub.",
+    "For tests, submit a fake PR fixture for review.",
+    "For tests, generate synthetic pull requests as test data for human review.",
+    "For tests, create a fake PR fixture and a mock PR test object for code review.",
     "For tests, create a fake PR fixture via GitHub.",
     "For tests, create a fake PR fixture at https://github.com/acme/widget.",
     "For tests, create a fake PR fixture and open it at ssh://git@gitlab.com/acme/widget.git.",
@@ -551,6 +554,8 @@ test("latest publication review cases fail before task effects without rejecting
 
   const productRequirements = [
     "Add a unit test that creates a dummy PR fixture.",
+    "For tests, create a fake PR fixture and draft a report for review.",
+    "For tests, create a fake PR fixture before uploading logs for code review.",
     "The button opens a PR.",
     "Ensure the button creates a PR.",
     "Have the submit button create a PR.",
