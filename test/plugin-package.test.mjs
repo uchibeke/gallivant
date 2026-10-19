@@ -294,6 +294,19 @@ test("internal packaging records npm controls without claiming public qualificat
   assert.equal(manifest.submissionReady, false);
 });
 
+test("packaging-control inventory failure removes partial package output", t => {
+  gitFixture(t);
+  const original = childProcess.execFileSync;
+  t.mock.method(childProcess, "execFileSync", (file, args, options) => {
+    if (file === "git" && args[0] === "ls-tree") throw new Error("Fixture tree unavailable");
+    return original(file, args, options);
+  });
+  syncBuiltinESMExports();
+  const input = fixture();
+  assert.throws(() => buildPluginPackage(input), { code: "PACKAGE_SOURCE", message: /Cannot inventory committed packaging controls/ });
+  assert.equal(existsSync(input.out), false);
+});
+
 for (const control of [".npmignore", ".gitignore"]) test(`npm pack applies nested ${control} to exported modules`, () => {
   const dir = tempHome(); mkdirSync(join(dir, "lib"));
   writeFileSync(join(dir, "package.json"), JSON.stringify({ name: "pack-control-fixture", version: "1.0.0", files: ["lib"], exports: { ".": "./lib/task_delivery.mjs" } }));

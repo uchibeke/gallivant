@@ -63,7 +63,13 @@
     "test:live-harnesses": "node test/live-harnesses.mjs",
     "test:plugin-package": "node test/plugin-package.mjs",
     "package:plugin": "node bin/package-plugin.mjs",
-    "lint": "node --check bin/gallivant.mjs && node --check bin/package-plugin.mjs && node --check bin/task-delivery-state.mjs && for f in lib/*.mjs lib/*/*.mjs; do node --check \"$f\" || exit 1; done"
+    "lint": "node --check bin/release-package.mjs && node --check bin/release-live.mjs && node --check bin/gallivant.mjs && node --check bin/package-plugin.mjs && node --check bin/task-delivery-state.mjs && for f in lib/*.mjs lib/*/*.mjs; do node --check \"$f\" || exit 1; done",
+    "test:release-package": "node --test test/release-package.test.mjs",
+    "release:preflight": "node bin/release-package.mjs --mode preflight",
+    "release:package": "node bin/release-package.mjs --mode build",
+    "release:validate": "node bin/release-package.mjs --mode validate",
+    "test:release:live": "node bin/release-live.mjs",
+    "test:release:host": "node bin/release-live.mjs --host"
   },
   "keywords": [
     "claude-code",
