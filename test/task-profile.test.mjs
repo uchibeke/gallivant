@@ -84,7 +84,7 @@ test("the delivery screen is deterministic over the fixture corpus and masks lit
   assert.ok(deliveryScreen('"Open a pull request" is forbidden for this change.').controlled.includes("pull_request"));
   assert.equal(deliveryScreen('Opening a `pull request` is not allowed; label it "merge later".').controlled.includes("pull_request"), true);
   assert.equal(maskLiterals('Show "do not merge" and "open a PR" labels.'), "Show " + " ".repeat(14) + " and " + " ".repeat(11) + " labels.");
-  for (const text of ["Opening a pull request is out of scope.", "A merge is outside the scope of this task.", "Exclude deployment from this work.", "Implement the change, except opening a pull request.", "Do everything except create a PR.", "Do the implementation, other than opening a PR.", "Everything apart from the PR is yours.", "Implement it but not the pull request."]) {
+  for (const text of ["Opening a pull request is out of scope.", "A merge is outside the scope of this task.", "Exclude deployment from this work.", "I will open the pull request myself afterwards.", "Leave the pull request to me.", "We'll create the PR ourselves.", "The merge is mine to do.", "Implement the change, except opening a pull request.", "Do everything except create a PR.", "Do the implementation, other than opening a PR.", "Everything apart from the PR is yours.", "Implement it but not the pull request."]) {
     const screen = deliveryScreen(text);
     assert.equal(screen.tier, "question", text); assert.ok(screen.controlled.length, `${text} → ${JSON.stringify(screen)}`);
   }
@@ -328,6 +328,13 @@ test("the model route stops before a call that would exceed its limits and rejec
   assert.throws(() => savedModelRoute({ ...pinned(ROUTE), budget: { ...pinned(ROUTE).budget, maxCalls: 9 } }), { code: "TASK_MODEL_ROUTE" });
   await assert.rejects(prepareModelTurn({ config: { intake_model: ROUTE }, env: {}, fetch: ok }, taskFor("Add CSV export."), memoryStore(), []), e => e.code === "TASK_MODEL_ROUTE" && /export FIXTURE_MODEL_KEY/.test(e.message));
   assert.equal(calls, 1);
+  // Settled output replays from its saved receipt without the credential and without a request; only a new call needs the key.
+  const settled = taskFor("Add CSV export.", { commandCandidates: ["npm test"] });
+  await prepareModelTurn({ config: {}, env: key, fetch: ok }, settled, memoryStore(), []);
+  assert.equal(calls, 2); settled.attempts[0].consumed = false;
+  assert.equal(await prepareModelTurn({ config: {}, env: {}, fetch: async () => { throw new Error("must not call"); } }, settled, memoryStore(), []), draft);
+  assert.equal(calls, 2); assert.equal(settled.attempts.length, 1);
+  calls = 1; // Restore the counter the later checks in this test were written against.
   // The Anthropic request shape is text-only too.
   const anthropic = taskFor("Add CSV export.", { commandCandidates: ["npm test"] });
   let seen;

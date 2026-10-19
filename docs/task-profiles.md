@@ -80,7 +80,9 @@ control ("Do not: open a pull request") do not. The screen grants nothing:
   noun modifier such as "a publish button" or a feature infinitive such as
   "a command to publish docs") or a
   control word such as "do not", "until", "unless", "out of scope",
-  "exclude", "except", "other than" or "but not" next to any delivery term
+  "exclude", "except", "other than", "but not" or an owner reservation such
+  as "I will open the PR myself" or "leave the PR to me" next to any delivery
+  term
   raise the same `q-delivery-<clause>` question when the planner left the
   clause untagged.
 - Ordinary vocabulary ("Add a PR status badge") becomes a visible assumption in
