@@ -59,17 +59,17 @@ configuration, verification and the points where your input is required.
 
 ## Run your first task
 
-Inside a repository you can push to:
+Inside a repository you can push to. This example uses Codex; if you configured
+Claude, replace `--harness codex` with `--harness claude` before running it:
 
 ```sh
 cd /path/to/your/repository
 gallivant task "Document how to run the existing tests in CONTRIBUTING.md. Use the commands already defined in the repository. Change documentation only." \
-  --verify 'git diff --check' --run
+  --harness codex --verify 'git diff --check' --run
 gallivant start
 ```
 
-`task` uses the first configured harness; pass `--harness` to choose another
-configured preparation harness. It prepares a brief and asks for missing information. `--run` authorizes
+`task` prepares a brief and asks for missing information. `--run` authorizes
 implementation when that brief is ready, including after clarification. Omit it
 to inspect the draft first. Follow the printed `Next` action using your task's ID
 and revision. Preparation also uses inference.
@@ -128,19 +128,48 @@ base. You can plan longer work while retaining the merge decision.
 
 ## Harness support
 
-| Harness | Prepare requests | Implement and fix review feedback |
-| --- | --- | --- |
-| Local Claude Code | Yes | Recommended; live usage evidence |
-| Local Codex CLI | Yes, 0.160.0+ | Recommended; live usage evidence |
-| OpenAI Agents API | Yes, text-only | Implemented hosted adapter; explicit API access, model and sandbox configuration required; full live qualification remains separate |
-| Gemini CLI, OpenCode, Goose | Use a written PRD | Implemented adapters with automated coverage; unattended end-to-end qualification incomplete |
-| Codex Cloud | No | New dispatch disabled until the selected environment's repository binding can be verified |
+| Harness (`harness` key) | Runs on | Prepare requests | Implementation status |
+| --- | --- | --- | --- |
+| Claude Code (`claude`) | Your host | Yes | Recommended; live usage evidence |
+| Codex CLI (`codex`) | Your host | Yes, 0.160.0+ | Recommended; live usage evidence |
+| Gemini CLI (`gemini`) | Your host | Written PRDs only | Adapter implemented; unattended end-to-end qualification incomplete |
+| OpenCode (`opencode`) | Your host | Written PRDs only | Adapter implemented; unattended end-to-end qualification incomplete |
+| Goose (`goose`) | Your host | Written PRDs only | Adapter implemented; unattended end-to-end qualification incomplete |
+| OpenAI Agents API (`openai-agents`) | OpenAI-hosted sandbox | Yes, text-only | Hosted adapter implemented; eligible API account, explicit model/environment and live qualification required |
+| Codex Cloud (`codex-cloud`) | Codex Cloud | No | New dispatch disabled until the selected environment's repository binding can be verified |
 
 Local Codex, Codex Cloud and the Agents API are distinct integrations. Local
 Codex and Claude work independently of the Cloud dispatch restriction.
+`openai-agents` supports remote progress, continuation, cancellation and artifact
+retrieval; the coordinator verifies returned changes and publishes the PR.
+Implemented transport support is not a claim that every account has access or
+that the full live lifecycle has passed qualification.
+
+For local harnesses, provider and model selection belongs to that harness's own
+configuration. Gallivant has no general per-task local model router and does not
+turn a provider API key into a configured harness automatically. Hosted Agents
+requires an explicit authorized model; there is no automatic model fallback.
 [Hosted setup](docs/install.md#hosted-agents-api-instead-of-a-local-cli) ·
 [Detailed capabilities](docs/config.md#execution-providers) ·
 [Recorded qualification](https://github.com/uchibeke/gallivant/blob/main/docs/audit/harness-live-validation.md).
+
+## Feature map
+
+| Capability | What you can do | Guide |
+| --- | --- | --- |
+| Task intake | Prepare a brief from a request, answer clarification questions, inspect revisions and authorize the ready task | [Tasks](docs/tasks.md) |
+| Written briefs and context | Define acceptance criteria, verification commands and carried source files | [PRDs](docs/prd.md) |
+| Review loop | Watch CI and trusted feedback, continue corrections, recover bounded connection failures and inspect stops | [Commands](docs/commands.md), [recovery](docs/network-recovery.md) |
+| Run controls | Message, resume, recheck or cancel from the CLI/dashboard; inspect saved progress and logs | [Dashboard](docs/app.md) |
+| Sequential plans | Queue dependent briefs with a merge gate between milestones | [Chains](docs/chains.md) |
+| Completion checks | Evaluate acceptance evidence with APort or the explicit local evaluator; choose review handoff or watching for merge | [Guardrails](docs/guardrails.md), [milestones](docs/tasks.md#choose-the-delivery-milestone) |
+| Notifications | Configure transition notifications through ntfy | [Configuration](docs/config.md) |
+| Embedding and integrations | Use versioned task-delivery operations, Node coordination, MCP and plugin packaging; deployment is separate | [Task delivery](docs/task-delivery.md) |
+| Review learning | Collect historical feedback and inspect candidates; rule activation remains unqualified | [Learning](docs/learning.md) |
+
+The [command index](docs/commands.md#command-index) covers every top-level CLI
+command and points to the task and learning subcommands. Run `gallivant --help`
+for the installed version's flags.
 
 ## What to expect
 
