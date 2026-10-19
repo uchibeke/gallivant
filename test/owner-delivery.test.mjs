@@ -90,14 +90,18 @@ test("publication fixture masking cannot hide coordinated live PRs", () => {
 });
 
 test("subordinating clauses after product PR conditions retain delivery controls", () => {
-  for (const connector of ["where", "even though", "though", "because"]) {
+  for (const connector of ["where", "even though", "though", "because", "since", "given that"]) {
     const source = `The button creates a PR after tests pass ${connector} PRs must not be published.`;
     assert.throws(() => ownerDelivery(source), { code: "TASK_DELIVERY_SCOPE" }, source);
     assert.throws(() => assertDeliveryAnswer({}, source), { code: "TASK_DELIVERY_SCOPE" }, source);
   }
+  const laterCondition = "The button creates a PR after tests pass since PRs only after human review.";
+  assert.throws(() => ownerDelivery(laterCondition), { code: "TASK_DELIVERY_SCOPE" });
+  assert.throws(() => assertDeliveryAnswer({}, laterCondition), { code: "TASK_DELIVERY_SCOPE" });
   for (const source of [
     "The button creates a PR after tests pass where the user can inspect it.",
     "The button creates a PR after tests pass even though retries are enabled.",
+    "The button creates a PR after tests pass since the queue is ready.",
   ]) {
     assert.equal(ownerDelivery(source), null, source);
     assert.doesNotThrow(() => assertDeliveryAnswer({}, source), source);
@@ -431,6 +435,11 @@ test("business approval exemptions do not mask technical implementation objects"
     "If I approve the artwork, create the lockfile.",
     "If I approve the proposal, generate the deployment bundle.",
     "If I approve the proposal, apply the Terraform plan.",
+    "If I approve the Terraform plan, apply it.",
+    "Apply it after I approve the Terraform plan.",
+    "If I approve the payment SDK, display it.",
+    "If I approve the code comment, display it.",
+    "If I approve the invoice, apply it and send the report.",
     "If I approve the proposal, apply the Kubernetes manifest.",
     "Apply the Terraform plan after I approve the proposal.",
     "If I approve the plan, send the report.",
@@ -441,7 +450,7 @@ test("business approval exemptions do not mask technical implementation objects"
     assert.throws(() => ownerDelivery(source), { code: "TASK_DELIVERY_SCOPE" }, source);
     assert.throws(() => assertDeliveryAnswer({}, source), { code: "TASK_DELIVERY_SCOPE" }, source);
   }
-  for (const businessOutcome of ["If I approve the purchase, generate a customer receipt.", "If I approve the purchase, show a confirmation page.", "If a customer approves the refund, send the customer an email."]) {
+  for (const businessOutcome of ["If I approve the purchase, generate a customer receipt.", "If I approve the purchase, show a confirmation page.", "If a customer approves the refund, send the customer an email.", "If I approve the invoice, apply it and mark it paid."]) {
     assert.equal(ownerDelivery(businessOutcome), null, businessOutcome);
     assert.doesNotThrow(() => assertDeliveryAnswer({}, businessOutcome), businessOutcome);
   }

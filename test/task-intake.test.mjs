@@ -438,6 +438,10 @@ test("latest publication review cases fail before task effects without rejecting
     "The button creates a PR after tests pass - PRs must not be published.",
     "The button creates a PR after tests pass where PRs must not be published.",
     "The button creates a PR after tests pass even though PRs must not be published.",
+    "The button creates a PR after tests pass since PRs must not be published.",
+    "The button creates a PR after tests pass given that PRs must not be published.",
+    "If I approve the Terraform plan, apply it.",
+    "Apply it after I approve the Terraform plan.",
     "For tests, create a fake PR fixture alongside a real PR.",
     "John should create a PR for review.",
     "The team must create a PR for review.",
@@ -497,6 +501,7 @@ test("latest publication review cases fail before task effects without rejecting
     "The button creates a PR after tests pass and retries when tests fail.",
     "The service creates a PR after tests pass and retries when tests fail.",
     "The button creates a PR after tests pass where the user can inspect it.",
+    "The button creates a PR after tests pass since the queue is ready.",
     "For tests, create a fake PR alongside a synthetic PR fixture.",
     "If I approve the invoice, email the customer and apply the discount.",
   ];
