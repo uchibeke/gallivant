@@ -475,6 +475,32 @@ test("business approval masking stops at colon and dash before a later owner gat
   }
 });
 
+test("approval rules validate actions across colon and dash continuations", () => {
+  for (const separator of [": ", "—", " – ", " - ", " -- "]) {
+    for (const source of [
+      `If I approve the invoice, email the customer${separator}then proofread the article.`,
+      `Email the customer after I approve the invoice${separator}then proofread the article.`,
+      `Proofread the article${separator}then email the customer after I approve the invoice.`,
+    ]) {
+      assert.throws(() => ownerDelivery(source), { code: "TASK_DELIVERY_SCOPE" }, source);
+      assert.throws(() => assertDeliveryAnswer({}, source), { code: "TASK_DELIVERY_SCOPE" }, source);
+    }
+    for (const source of [
+      `If I approve the invoice, email the customer${separator}then apply the discount.`,
+      `Email the customer after I approve the invoice${separator}then apply the discount.`,
+    ]) {
+      assert.equal(ownerDelivery(source), null, source);
+      assert.doesNotThrow(() => assertDeliveryAnswer({}, source), source);
+      const contract = ownerDelivery(source + " Open a PR for review.");
+      assert.equal(validateOwnerDelivery(contract), contract, source);
+      assert.equal(ownerImplementation(contract).join(""), source + " ", source);
+    }
+  }
+  const separate = "If I approve the invoice, email the customer. Proofread the article.";
+  assert.equal(ownerDelivery(separate), null);
+  assert.doesNotThrow(() => assertDeliveryAnswer({}, separate));
+});
+
 test("conditioned approval after many coordinated business actions stays visible", () => {
   const source = `If I approve x, email y ${"and x ".repeat(4000)}and if tests pass the owner approves it`;
   assert.ok(source.length < 32 * 1024);
@@ -558,6 +584,19 @@ test("business approval rules keep temporal implementation actions visible", () 
     assert.equal(ownerDelivery(source), null, source);
     assert.doesNotThrow(() => assertDeliveryAnswer({}, source), source);
   }
+});
+
+test("temporal approval actors include modifiers before their role", () => {
+  for (const actor of ["our senior editor", "the experienced reviewer", "their very experienced editors"]) {
+    const source = `If I approve the invoice, email the customer after ${actor} proofreads the article.`;
+    assert.throws(() => ownerDelivery(source), { code: "TASK_DELIVERY_SCOPE" }, source);
+    assert.throws(() => assertDeliveryAnswer({}, source), { code: "TASK_DELIVERY_SCOPE" }, source);
+    const business = `If I approve the invoice, email the customer after ${actor} emails the customer.`;
+    assert.equal(ownerDelivery(business), null, business);
+    assert.doesNotThrow(() => assertDeliveryAnswer({}, business), business);
+  }
+  for (const response of ["we email the customer", "Alice will email the customer"])
+    assert.equal(ownerDelivery(`If I approve the invoice, ${response}.`), null, response);
 });
 
 test("synthetic PR fixtures cannot hide a coordinated live publication", () => {
