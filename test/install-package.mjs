@@ -11,12 +11,12 @@ const root = realpathSync(mkdtempSync(join(tmpdir(), "install-consumer-")));
 const run = (cmd, args, options = {}) => execFileSync(cmd, args, { encoding: "utf8", timeout: 120_000, stdio: ["ignore", "pipe", "pipe"], ...options });
 try {
   const packed = JSON.parse(run("npm", ["pack", "--ignore-scripts", "--json", "--pack-destination", root], { cwd: source }))[0];
-  assert.equal(packed.name, "gallivant");
+  assert.equal(packed.name, "@uchibeke/gallivant");
   for (const f of packed.files) assert.ok(!/(^|\/)(?:\.env[^/]*|\.git|\.npmrc|test|audit)(?:\/|$)/.test(f.path), `private/test payload: ${f.path}`);
   const consumer = join(root, "consumer"), prefix = join(root, "prefix"), bin = join(root, "fixtures"), home = join(root, "home"), repo = join(root, "repo");
   for (const dir of [consumer, bin, home, repo]) mkdirSync(dir, { mode: 0o700 });
   run("npm", ["install", "--prefix", prefix, "--ignore-scripts", "--no-audit", "--no-fund", join(root, packed.filename)], { cwd: consumer });
-  const installed = join(prefix, "node_modules/gallivant"), cli = join(installed, "bin/gallivant.mjs");
+  const installed = join(prefix, "node_modules/@uchibeke/gallivant"), cli = join(installed, "bin/gallivant.mjs");
   for (const [command, output] of [["codex", "fixture"], ["gh", '{"login":"fixture-user"}']]) writeFileSync(join(bin, command), `#!/bin/sh\nprintf '%s\\n' '${output}'\n`, { mode: 0o700 });
   const env = { ...process.env, GALLIVANT_HOME: home, PATH: `${bin}:${dirname(process.execPath)}:${process.env.PATH}` };
   const command = (...args) => run(process.execPath, [cli, ...args], { cwd: repo, env });

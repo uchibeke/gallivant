@@ -282,6 +282,22 @@ test("actionable failures do not echo subprocess credentials", () => {
   assert.doesNotMatch(controlFailure(new Error("fetch failed https://secret@github.com")), /secret/);
 });
 
+test("control failures preserve the selected token-file remedy without exposing error details", async () => {
+  const w = world();
+  const failure = Object.assign(new Error("private token path: /secret/location"), {
+    code: "NO_CREDENTIAL", reason: "configured-token-file-unavailable",
+  });
+  w.gh.prView = async () => { throw failure; };
+  requestControl(w.ctx, { handle: w.id, action: "recheck" });
+  await applyControl(w.ctx, w.id);
+  const saved = w.state.get(w.id).control;
+  assert.equal(saved.status, "failed");
+  assert.match(saved.message, /Restore that private token file/);
+  assert.match(saved.message, /set github_token_file to null and restart the daemon/);
+  assert.doesNotMatch(saved.message, /gh auth login|\/secret\/location/);
+  assert.match(controlFailure({ code: "NO_CREDENTIAL" }), /gh auth login/);
+});
+
 test("an unverifiable interrupt fails visibly and retains the message without starting a replacement", () => {
   const w = world({ state: STATES.prOpen });
   const job = w.runner.start("fix", "claude", [], {});

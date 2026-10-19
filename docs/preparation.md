@@ -7,8 +7,9 @@ Natural-language intake is a normal harness job with limited authority:
 Questions and validation repairs return through that same adapter and durable
 runner. Gallivant owns requirements, revisions, readiness and execution consent.
 The model does not certify its own PRD or launch implementation while drafting.
-APort must call these shared task operations, rather than generate PRDs or launch
-a provider itself. Preparation and implementation are separate capabilities:
+Embedding hosts, including the APort reference integration, call these shared
+task operations rather than recreate PRD generation or provider dispatch.
+Preparation and implementation are separate capabilities:
 
 | Provider | Natural-language preparation | Implementation |
 | --- | --- | --- |

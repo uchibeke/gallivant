@@ -2,38 +2,28 @@
 
 **Give an agent a task. Let the review loop run. Go outside.**
 
-Gallivant takes repository work from a request to a pull request ready for your
-review. It prepares a brief, starts an agent in an isolated checkout or hosted
-sandbox, watches reviews and CI, and sends feedback back to the same session.
-You can check progress or send a correction from a local dashboard. You decide
-what gets merged.
+Gallivant turns repository tasks into reviewed pull requests. It starts an agent,
+watches CI and reviewer feedback, and continues the same session to fix issues.
+You can follow progress and send corrections from a local dashboard. **You decide
+what gets merged.**
 
-Use it for features and bug fixes, but also research reports, documentation,
-content and other files your team reviews in GitHub. Every task needs a concrete
-repository deliverable and verification commands. Start with plain language or
-bring your own PRD; both use the same acceptance and review gates.
+Use it for code, documentation, research or content that belongs in a GitHub
+repository. Start with a plain-language request or a written brief.
 
-- **Finish the review loop.** Implementation, reviewer feedback, fixes, CI and
-  acceptance evidence stay attached to the same task, branch and PR.
-- **Choose where the agent runs.** Use local Claude Code or Codex, or explicitly
-  configured OpenAI Agents API sessions in a hosted sandbox. Provider access,
-  permissions and costs differ; see the support table below.
-- **Correct work as it happens.** Message the agent, recheck a PR or resume a
-  stopped run from the dashboard, with its saved context.
-- **Plan longer work.** Chain briefs; each successor starts after you merge its
-  predecessor into the planned base.
-- **Know when to step in.** Runs stop at unmet permissions, missing evidence,
-  repeated non-progress or configured limits, with a reason you can inspect.
+```text
+Your task → agent works → PR → review + CI → fixes → ready for you
+                                 ↑___________|
+```
 
-## Get started
+## Install
 
-The recommended first path uses **macOS or Linux, Node 22+, Git, GitHub CLI, jq**,
-and signed-in **Codex CLI 0.160.0+** or **Claude Code 2.1.263+**. Model usage is
-billed by your harness/provider; Gallivant does not include inference credits.
-For API execution without a local agent CLI, follow the
-[hosted setup](docs/install.md#hosted-agents-api-instead-of-a-local-cli).
+You need **macOS or Linux, Node 22+, Git, GitHub CLI and jq**. For your first run,
+use signed-in **Codex CLI 0.160.0+** or **Claude Code 2.1.263+**. Provider usage is
+billed to your own account. [Full prerequisites](docs/install.md).
 
-Until the first npm release is published, install from source:
+Check the [registry version](https://www.npmjs.com/package/@uchibeke/gallivant). Once a
+version is available, install it with `npm install -g @uchibeke/gallivant`. If the package
+is not published yet, install from source:
 
 ```sh
 git clone https://github.com/uchibeke/gallivant.git
@@ -43,28 +33,34 @@ npm link
 gallivant --version
 ```
 
-Anonymous installation requires a public repository. After the first registry
-release, use `npm install -g gallivant`. See [release readiness](docs/releasing.md).
+[Release status and checks](docs/releasing.md).
 
-Create your local configuration:
+## Set up
 
 ```sh
 gh auth status
-codex login status
-gallivant init --harness codex       # or --harness claude
+codex login status                    # use Claude sign-in if you choose Claude
+gallivant init --harness codex         # or --harness claude
 gallivant doctor
 ```
 
-`init` records your GitHub login, selected local harness and a separate checkouts
-directory. It never overwrites an existing config or changes global agent
-settings. Follow the [installation guide](docs/install.md) to resolve `doctor`
-findings, configure harness guardrails and protect your repository. Enable your
-review bot on the target repository; otherwise explicitly configure a different
-reviewer or `"reviewer": null` for CI and trusted human feedback.
+`init` creates local configuration and a separate task-checkout directory. It
+preserves existing config, credentials and global agent settings. Follow the
+fixes from `doctor`; [setup instructions](docs/install.md) cover authentication,
+harness permissions and repository protection.
 
-### Start with a request
+Enable the Codex GitHub review integration on the target repository, or choose
+another reviewer. If you want CI and trusted human feedback without a review bot,
+explicitly configure `"reviewer": null`. The default waits for Codex review.
 
-Inside a repository you can push to, try a small documentation task:
+**Prefer an agent to handle setup?** Give it the
+[setup-agent instructions](docs/agent-setup.md). They cover inspection, installation,
+configuration, verification and the points where your input is required.
+
+## Run your first task
+
+Inside a repository you can push to. This example uses Codex; if you configured
+Claude, replace `--harness codex` with `--harness claude` before running it:
 
 ```sh
 cd /path/to/your/repository
@@ -73,126 +69,134 @@ gallivant task "Document how to run the existing tests in CONTRIBUTING.md. Use t
 gallivant start
 ```
 
-`task` prepares the brief and asks for missing information. `--run` authorizes
-implementation as soon as that brief passes validation, including after you
-answer questions. Omit `--run` to inspect the draft first; follow the printed
-`Next` action with your task ID and current revision. Preparation itself uses
-inference. [Task operations](docs/tasks.md) covers answers, context files and
-explicit approval of a prepared brief.
+`task` prepares a brief and asks for missing information. `--run` authorizes
+implementation when that brief is ready, including after clarification. Omit it
+to inspect the draft first. Follow the printed `Next` action using your task's ID
+and revision. Preparation also uses inference.
 
-The final `gallivant start` opens the dashboard and ensures monitoring is running;
-it does not submit another task. The dashboard is at **http://127.0.0.1:8791**.
+`gallivant start` opens **http://127.0.0.1:8791** and ensures the daemon is running.
+Without a PRD path, it does not submit another task. Closing the browser does not
+stop the work.
 
-### Or start with a written brief
+With the default configuration, **ready** means the configured checks, reviewer
+and acceptance gate passed. Inspect status for skipped-gate warnings, review the
+PR and merge when you choose. Missing access, evidence or exhausted limits produce
+an inspectable stop instead.
+
+### Bring a written brief
 
 ```sh
 gallivant new add-csv-export
-# Fill in docs/prds/add-csv-export.md: scope, acceptance criteria and checks.
+# Edit docs/prds/add-csv-export.md: outcome, scope, acceptance criteria and checks.
 gallivant ready docs/prds/add-csv-export.md --check
 gallivant ready docs/prds/add-csv-export.md
 gallivant start docs/prds/add-csv-export.md
 ```
 
-`start` with a PRD launches the task, ensures the daemon and dashboard are running,
-and opens a browser when available. It returns to your shell. Closing the browser
-does not stop the work. See the [PRD contract](docs/prd.md).
+You do not have to write a PRD yourself. Both entry points use a validated brief
+and the same review loop. [Writing briefs](docs/prd.md) · [Task commands](docs/tasks.md).
 
-```sh
-gallivant start                     # reopen dashboard; ensure services are up
-gallivant start docs/prds/add-csv-export.md --no-open    # dashboard runs; do not open a browser
-gallivant start docs/prds/add-csv-export.md --no-server  # task + daemon only
-gallivant serve --port 8792          # same services, without a new task
-gallivant status
-gallivant down                      # stop monitoring/dashboard; active runs continue
-```
+## While it works
 
-If service startup fails after a task starts, retry `gallivant start` without a
-PRD path. The task stays recorded; there is no need to submit it again.
+| What you need | Action |
+| --- | --- |
+| Follow runs | `gallivant start` or `gallivant status` |
+| Correct the agent | **Send message** on its dashboard page; context and existing work are preserved |
+| Inspect a stop | `gallivant why <handle>` |
+| Continue after fixing a blocker | `gallivant resume <handle>` or **Resume agent** |
+| Refresh review and CI | **Recheck PR**; this does not resume a failed agent |
+| Keep the dashboard without opening a browser | `gallivant start --no-open` |
+| Run only the daemon | `gallivant start --no-server` |
+| Stop monitoring and the standalone dashboard | `gallivant down`; existing agent processes continue |
 
-## Harness support
+If services fail to start after a task is accepted, retry `gallivant start`
+without the PRD path. Do not submit the same task again.
 
-Preparation means turning plain language into a validated brief. Execution means
-performing the task and continuing its review fixes. An implemented adapter does
-not establish that every account, model or permission configuration works.
+Temporary connection failures have bounded same-session recovery. For DNS errors,
+use `gallivant doctor --network https://api.anthropic.com` with your provider's
+actual HTTPS origin. [Recovery and troubleshooting](docs/network-recovery.md).
 
-| Harness ID | Runs where | Request preparation | Execution and evidence |
-| --- | --- | --- | --- |
-| `claude` | Local Claude Code | Available | Recommended starting point; live usage evidence |
-| `codex` | Local Codex CLI | Available with 0.160.0+ | Recommended starting point; live usage evidence |
-| `openai-agents` | OpenAI-hosted sandbox | Available, text-only session | Implemented; explicit API access, model and sandbox setup required. Full live lifecycle qualification remains separate. |
-| `gemini` | Local Gemini CLI | Unavailable; use a written PRD | Adapter and automated coverage; unattended end-to-end qualification incomplete |
-| `opencode` | Local OpenCode | Unavailable; use a written PRD | Adapter and automated coverage; unattended end-to-end qualification incomplete |
-| `goose` | Local Goose | Unavailable; use a written PRD | Adapter and automated coverage; unattended end-to-end qualification incomplete |
-| `codex-cloud` | Codex Cloud | Unavailable | **New dispatch disabled:** selected environment-to-repository ownership cannot yet be verified by the supported CLI interface |
-
-Local Codex, Codex Cloud and the Agents API are different integrations. Disabling
-Codex Cloud does **not** disable local Codex or Claude. Read the
-[Agents API guide](docs/openai-agents.md), [Cloud blocker](docs/codex-cloud.md),
-[preparation boundaries](docs/preparation.md) and
-[recorded harness evidence](https://github.com/uchibeke/gallivant/blob/main/docs/audit/harness-live-validation.md).
-
-Hosted execution moves the agent's compute, not Gallivant's coordinator. Your
-coordinator machine must remain awake, online and running the daemon to publish,
-watch CI and handle reviews. This package is not a managed always-on service.
-Subscriptions and API credits are separate, and a CLI connection does not prove
-permission for unattended use. There is no automatic provider or model fallback.
-
-## What completion means
-
-```text
-request → prepared brief ─┐
-                         ├→ approved task → isolated work → pull request
-written brief ───────────┘                                     ↓
-                              same session ← review / CI feedback
-                                   ↓
-                              verify + update → ready for your review
-```
-
-Acceptance evidence, verification, CI and reviewer findings determine readiness.
-Gallivant never merges PRs. The default review allowance is 30 rounds; limits,
-repeated non-progress and unrecoverable failures stop for you. Optional ntfy
-notifications report readiness and blockers. Natural-language tasks default to `delivery_ready`: automatic observation and
-fixes stop once that handoff is qualified. Recheck, resume or message the run to
-explicitly reopen work. Choose `integrated` to keep watching for a human merge.
-Existing written-PRD runs retain their monitoring behavior. Neither target
-authorizes merging, releasing or deploying.
-
-For a longer plan:
+## More than one task
 
 ```sh
 gallivant chain launch docs/prds/foundation.md docs/prds/integration.md docs/prds/launch.md
-gallivant chain launch
 ```
 
-The daemon starts the first ready brief and waits for your merge before starting
-the next. [Chains](docs/chains.md) explains gates and recovery. The structured
-[task-delivery package](docs/task-delivery.md) lets another trusted application
-use these same operations; installing the CLI alone does not publish a chat app.
-[Review learning](docs/learning.md) is experimental and collection only in
-production; automatic application of learned rules is not qualified.
+The next milestone starts only after its predecessor is merged into the planned
+base. You can plan longer work while retaining the merge decision.
+[Chaining tasks](docs/chains.md).
 
-## Security and operating limits
+## Harness support
 
-Runs use your GitHub identity. Prefer a fine-grained token restricted to selected
-repositories and protect base branches with GitHub rulesets. Local permission
-controls differ by harness; hosted agents do not inherit local APort hooks or
-OS sandbox guarantees. APort pre-tool authorization and task-completion
-verification are separate controls. See [guardrails](docs/guardrails.md) before
-unattended work. Never treat automatic approval as an OS sandbox.
+| Harness (`harness` key) | Runs on | Prepare requests | Implementation status |
+| --- | --- | --- | --- |
+| Claude Code (`claude`) | Your host | Yes | Recommended; live usage evidence |
+| Codex CLI (`codex`) | Your host | Yes, 0.160.0+ | Recommended; live usage evidence |
+| Gemini CLI (`gemini`) | Your host | Written PRDs only | Adapter implemented; unattended end-to-end qualification incomplete |
+| OpenCode (`opencode`) | Your host | Written PRDs only | Adapter implemented; unattended end-to-end qualification incomplete |
+| Goose (`goose`) | Your host | Written PRDs only | Adapter implemented; unattended end-to-end qualification incomplete |
+| OpenAI Agents API (`openai-agents`) | OpenAI-hosted sandbox | Yes, text-only | Hosted adapter implemented; eligible API account, explicit model/environment and live qualification required |
+| Codex Cloud (`codex-cloud`) | Codex Cloud | No | New dispatch disabled until the selected environment's repository binding can be verified |
+
+Local Codex, Codex Cloud and the Agents API are distinct integrations. Local
+Codex and Claude work independently of the Cloud dispatch restriction.
+`openai-agents` supports remote progress, continuation, cancellation and artifact
+retrieval; the coordinator verifies returned changes and publishes the PR.
+Implemented transport support is not a claim that every account has access or
+that the full live lifecycle has passed qualification.
+
+For local harnesses, provider and model selection belongs to that harness's own
+configuration. Gallivant has no general per-task local model router and does not
+turn a provider API key into a configured harness automatically. Hosted Agents
+requires an explicit authorized model; there is no automatic model fallback.
+[Hosted setup](docs/install.md#hosted-agents-api-instead-of-a-local-cli) ·
+[Detailed capabilities](docs/config.md#execution-providers) ·
+[Recorded qualification](https://github.com/uchibeke/gallivant/blob/main/docs/audit/harness-live-validation.md).
+
+## Feature map
+
+| Capability | What you can do | Guide |
+| --- | --- | --- |
+| Task intake | Prepare a brief from a request, answer clarification questions, inspect revisions and authorize the ready task | [Tasks](docs/tasks.md) |
+| Written briefs and context | Define acceptance criteria, verification commands and carried source files | [PRDs](docs/prd.md) |
+| Review loop | Watch CI and trusted feedback, continue corrections, recover bounded connection failures and inspect stops | [Commands](docs/commands.md), [recovery](docs/network-recovery.md) |
+| Run controls | Message, resume, recheck or cancel from the CLI/dashboard; inspect saved progress and logs | [Dashboard](docs/app.md) |
+| Sequential plans | Queue dependent briefs with a merge gate between milestones | [Chains](docs/chains.md) |
+| Completion checks | Evaluate acceptance evidence with APort or the explicit local evaluator; choose review handoff or watching for merge | [Guardrails](docs/guardrails.md), [milestones](docs/tasks.md#choose-the-delivery-milestone) |
+| Notifications | Configure transition notifications through ntfy | [Configuration](docs/config.md) |
+| Embedding and integrations | Use versioned task-delivery operations, Node coordination, MCP and plugin packaging; deployment is separate | [Task delivery](docs/task-delivery.md) |
+| Review learning | Collect historical feedback and inspect candidates; rule activation remains unqualified | [Learning](docs/learning.md) |
+
+The [command index](docs/commands.md#command-index) covers every top-level CLI
+command and points to the task and learning subcommands. Run `gallivant --help`
+for the installed version's flags.
+
+## What to expect
+
+- **Your machine coordinates the work.** Keep it awake, online and running the
+  daemon, including when execution is hosted. Gallivant is not a managed service.
+- **Your accounts pay for inference.** Subscriptions and API credits differ.
+  There is no automatic provider fallback. Review [limits](docs/config.md) before
+  unattended work; the default review allowance is 30 rounds.
+- **Your permissions apply.** Scope GitHub access to the required repositories.
+  Harness permissions, OS sandboxing and optional APort checks are different
+  controls. [Security boundaries](docs/guardrails.md).
+- **Ready does not mean merged.** Natural-language tasks default to stopping at a
+  qualified review handoff. Choose `integrated` to keep watching for your merge.
+  Written-PRD runs retain their monitoring behavior. No mode authorizes automatic
+  merge, release or deployment. [Delivery milestones](docs/tasks.md#choose-the-delivery-milestone).
+- **Learning is experimental.** Review feedback can be collected, but production
+  activation of learned rules is not qualified. [Learning](docs/learning.md).
 
 ## Documentation
 
-| Need | Guide |
-| --- | --- |
-| Install and run your first task | [Getting started](docs/install.md) |
-| Start from a request, answer questions, inspect results | [Natural-language tasks](docs/tasks.md) |
-| Write a brief or define noncoding acceptance checks | [PRD contract](docs/prd.md) |
-| Use API-backed hosted execution | [OpenAI Agents](docs/openai-agents.md) |
-| Dashboard messages, controls and recovery | [Dashboard](docs/app.md) · [Commands](docs/commands.md) |
-| Models, credentials, limits and notifications | [Configuration](docs/config.md) |
-| Plan sequential work | [Chains](docs/chains.md) |
-| Embed task delivery in another application | [Task-delivery package](docs/task-delivery.md) |
-| Understand internals or recorded qualification | [Documentation index](docs/README.md) |
-| Release, contribute or report a vulnerability | [Releasing](docs/releasing.md) · [Contributing](CONTRIBUTING.md) · [Security](SECURITY.md) |
+[Getting started](docs/install.md) · [Agent setup](docs/agent-setup.md) ·
+[Commands](docs/commands.md) · [Configuration](docs/config.md) ·
+[Dashboard](docs/app.md) · [All guides](docs/README.md)
 
-Apache-2.0. [License](LICENSE).
+Embedding the same workflow in another application? See
+[task delivery](docs/task-delivery.md). Installing this CLI does not deploy a
+hosted service or publish a chat plugin.
+
+[Contributing](CONTRIBUTING.md) · [Security reports](SECURITY.md) ·
+[Releasing](docs/releasing.md) · [Apache-2.0 license](LICENSE)

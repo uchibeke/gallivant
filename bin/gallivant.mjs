@@ -9,6 +9,7 @@ import { up, upInBackground, readDaemon, down } from "../lib/commands/up.mjs";
 import { status } from "../lib/commands/status.mjs";
 import { why } from "../lib/commands/why.mjs";
 import { doctor, renderDoctor } from "../lib/commands/doctor.mjs";
+import { diagnoseNetwork, renderNetworkDiagnostics } from "../lib/network_diagnostics.mjs";
 import { ready } from "../lib/commands/ready.mjs";
 import { newPrd } from "../lib/commands/new.mjs";
 import { resume } from "../lib/commands/resume.mjs";
@@ -31,6 +32,7 @@ const HELP = `gallivant: give an agent a task, let the review loop run, go outsi
                                          create a private config; never overwrite settings or sign in for you
   gallivant --version                    print the installed version
   gallivant doctor [--send] [--probe]   install checklist and health probe
+  gallivant doctor --network <https-origin> [--json]   bounded DNS/HTTPS diagnosis
   gallivant learn [--repo owner/repo] [--since YYYY-MM-DD] [--until YYYY-MM-DD] [--dry-run]
                                          bounded historical feedback collection; independent coding cursor
   gallivant learn doctor [--repo owner/repo]
@@ -86,6 +88,7 @@ const HELP = `gallivant: give an agent a task, let the review loop run, go outsi
 Config: $GALLIVANT_HOME/config.json (default ~/.gallivant). Run doctor for the file to write.`;
 
 const OPTIONS = {
+  network: { type: "string" },
   check: { type: "boolean" }, once: { type: "boolean" }, all: { type: "boolean" }, json: { type: "boolean" },
   send: { type: "boolean" }, probe: { type: "boolean" }, help: { type: "boolean", short: "h" }, version: { type: "boolean", short: "v" },
   "no-server": { type: "boolean" }, "no-open": { type: "boolean" }, foreground: { type: "boolean" }, worktrees: { type: "string" },
@@ -127,6 +130,12 @@ async function dispatch(argv) {
     return result?.isolation?.qualified === false ? 1 : 0;
   }
 
+  if (values.network && cmd !== "doctor") throw new Error("--network is available only with doctor");
+  if (cmd === "doctor" && values.network) {
+    const result = await diagnoseNetwork(values.network);
+    console.log(values.json ? JSON.stringify(result, null, 2) : renderNetworkDiagnostics(result));
+    return result.ok ? 0 : 1;
+  }
   if (cmd === "doctor") { const r = renderDoctor(await doctor({ send: values.send, probe: values.probe })); console.log(r.text); return r.exitCode; }
   if (cmd === "ready") {
     if (!arg) throw new Error("ready needs a PRD path");
