@@ -106,9 +106,10 @@ private configurations and the **same** campaign ledger, reconcile previous
 reservations and unknown usage first, and preserve task/session/PR identities.
 The current Cloud adapter refuses new dispatch until its supported
 repository-to-environment check can be demonstrated. Do not work around that gate.
-For this harness installation, configure the worker binary as the exact path
-`/Users/uchi/.local/share/gallivant/codex/node_modules/.bin/codex`; do not assume PATH
-selects it. Neither help nor login status qualifies inference.
+For a live campaign, resolve and record the absolute worker-binary path on
+the host that will execute it. Verify the selected version, architecture and
+account; do not assume the shell `PATH` selects the intended installation.
+Neither help nor login status qualifies inference.
 
 ```sh
 npm run test:release:live -- --out "$RELEASE_DIR" --backend openai-agents --phase preflight
