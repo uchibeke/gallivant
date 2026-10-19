@@ -102,6 +102,30 @@ test("repeated fixture clauses stay bounded and a live repository target stays v
     }
 });
 
+test("fixture destinations recognize forge URLs within their own action", () => {
+  for (const host of ["github.com", "gitlab.com"]) for (const url of [
+    `https://${host}/acme/widget`, `https://git@${host}/acme/widget.git`,
+    `ssh://git@${host}/acme/widget.git`, `git@${host}:acme/widget.git`,
+  ]) {
+    for (const action of ["at", "via", "and open it at"]) {
+      const source = `For tests, create a fake PR fixture ${action} ${url}.`;
+      assert.throws(() => ownerDelivery(source), { code: "TASK_DELIVERY_SCOPE" }, source);
+      assert.throws(() => assertDeliveryAnswer({}, source), { code: "TASK_DELIVERY_SCOPE" }, source);
+    }
+    for (const connector of ["and upload", "before uploading", "/ upload"]) {
+      const source = `For tests, create a fake PR fixture ${connector} logs to ${url}.`;
+      assert.equal(ownerDelivery(source), null, source);
+      assert.doesNotThrow(() => assertDeliveryAnswer({}, source), source);
+      const contract = ownerDelivery(source + " Open a PR for review.");
+      assert.equal(validateOwnerDelivery(contract), contract, source);
+      assert.equal(ownerImplementation(contract).join(""), source + " ", source);
+    }
+  }
+  const source = "For tests, create a fake PR fixture using a mock at https://github.com.example.invalid/acme/widget.";
+  assert.equal(ownerDelivery(source), null);
+  assert.doesNotThrow(() => assertDeliveryAnswer({}, source));
+});
+
 test("publication fixture masking cannot hide coordinated live PRs", () => {
   for (const connector of ["plus", "+", "/", "as well as", "along with", "alongside", "together with", "in addition to", "not to mention", "besides", "versus", "vs", "vs.", "compared with", "compared to", "but", "yet"]) {
     const source = `For tests, create a fake PR ${connector} a real PR.`;
@@ -552,7 +576,7 @@ test("business approval rules do not mask unclassified coordinated implementatio
 });
 
 test("business approval rules validate purpose-infinitive actions", () => {
-  for (const connector of ["in order to", "so as to", "in order not to", "so as not to", "in order to not"]) {
+  for (const connector of ["to", "to not", "in order to", "so as to", "in order not to", "so as not to", "in order to not"]) {
     for (const source of [
       `If I approve the invoice, email the customer ${connector} proofread the article.`,
       `Email the customer ${connector} proofread the article after I approve the invoice.`,
@@ -568,9 +592,21 @@ test("business approval rules validate purpose-infinitive actions", () => {
     assert.equal(validateOwnerDelivery(contract), contract, source);
     assert.equal(ownerImplementation(contract).join(""), source + " ", source);
   }
-  const recipient = "If I approve the invoice, send a receipt to the customer.";
-  assert.equal(ownerDelivery(recipient), null);
-  assert.doesNotThrow(() => assertDeliveryAnswer({}, recipient));
+  for (const recipient of ["the customer", "our customer", "customer", "them", "Alice", "Alice Smith"]) {
+    const source = `If I approve the invoice, send a receipt to ${recipient}.`;
+    assert.equal(ownerDelivery(source), null, source);
+    assert.doesNotThrow(() => assertDeliveryAnswer({}, source), source);
+  }
+  for (const source of [
+    "If I approve the invoice, send a receipt to the customer to proofread the article.",
+    "If I approve the invoice, email the customer to Proofread the article.",
+  ]) {
+    assert.throws(() => ownerDelivery(source), { code: "TASK_DELIVERY_SCOPE" }, source);
+    assert.throws(() => assertDeliveryAnswer({}, source), { code: "TASK_DELIVERY_SCOPE" }, source);
+  }
+  const coordinated = "If I approve the invoice, email the customer not to mention apply the discount.";
+  assert.equal(ownerDelivery(coordinated), null);
+  assert.doesNotThrow(() => assertDeliveryAnswer({}, coordinated));
 });
 
 test("business approval rules validate purpose gerunds", () => {
