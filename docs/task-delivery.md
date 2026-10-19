@@ -25,21 +25,21 @@ pin the artifact produced from the eventual human-merged commit, not this branch
 
 | Import | Public API |
 | --- | --- |
-| `gallivant/tasks` | `createTaskService`, `TASK_VERSION`; same service used by CLI task commands |
-| `gallivant/capabilities` | `executionCapabilities`, `capabilitiesFor`, setup/runtime requirements |
-| `gallivant/task-delivery` | `createTaskDelivery` scoped operation dispatcher |
-| `gallivant/task-delivery/contracts` | `TASK_OPERATIONS`, versions, compatibility handshake, UI resource configuration |
-| `gallivant/task-delivery/views` | `taskView`, `modelSummary`; saved observations only |
-| `gallivant/task-delivery/store` | `createDeliveryStore`, `scopeKey`; single-host durable receipt adapter |
-| `gallivant/task-delivery/mcp` | `registerTaskDelivery`; lazy optional MCP SDK peer `1.32.1` |
-| `gallivant/execution` | Existing `makeExecution`, cached inspect and coordinator reconciliation |
-| `gallivant/providers/openai-agents` | Existing managed session transport and setup checks |
-| `gallivant/providers/codex-cloud` | Existing native CLI transport and setup checks |
-| `gallivant/runtime/coordinator` | `createCoordinator` fenced bounded wake envelope |
-| `gallivant/runtime/node` | `createNodeOwnerStore`, `createNodeCoordinator`, requirements |
-| `gallivant/runtime/state` | Check, migrate, private backup and fresh-namespace rollback |
-| `gallivant/runtime/node/dependencies` | State/config/log/identity constructors, canonical tick/readiness/controls, bounded log reader and atomic storage helpers for injected Node adapters |
-| `gallivant/plugin-package` | Single reproducible package builder and public metadata validator |
+| `@uchibeke/gallivant/tasks` | `createTaskService`, `TASK_VERSION`; same service used by CLI task commands |
+| `@uchibeke/gallivant/capabilities` | `executionCapabilities`, `capabilitiesFor`, setup/runtime requirements |
+| `@uchibeke/gallivant/task-delivery` | `createTaskDelivery` scoped operation dispatcher |
+| `@uchibeke/gallivant/task-delivery/contracts` | `TASK_OPERATIONS`, versions, compatibility handshake, UI resource configuration |
+| `@uchibeke/gallivant/task-delivery/views` | `taskView`, `modelSummary`; saved observations only |
+| `@uchibeke/gallivant/task-delivery/store` | `createDeliveryStore`, `scopeKey`; single-host durable receipt adapter |
+| `@uchibeke/gallivant/task-delivery/mcp` | `registerTaskDelivery`; lazy optional MCP SDK peer `1.32.1` |
+| `@uchibeke/gallivant/execution` | Existing `makeExecution`, cached inspect and coordinator reconciliation |
+| `@uchibeke/gallivant/providers/openai-agents` | Existing managed session transport and setup checks |
+| `@uchibeke/gallivant/providers/codex-cloud` | Existing native CLI transport and setup checks |
+| `@uchibeke/gallivant/runtime/coordinator` | `createCoordinator` fenced bounded wake envelope |
+| `@uchibeke/gallivant/runtime/node` | `createNodeOwnerStore`, `createNodeCoordinator`, requirements |
+| `@uchibeke/gallivant/runtime/state` | Check, migrate, private backup and fresh-namespace rollback |
+| `@uchibeke/gallivant/runtime/node/dependencies` | State/config/log/identity constructors, canonical tick/readiness/controls, bounded log reader and atomic storage helpers for injected Node adapters |
+| `@uchibeke/gallivant/plugin-package` | Single reproducible package builder and public metadata validator |
 
 Imports read no operator configuration, invoke no provider and start no daemon.
 Existing `./lib/*` compatibility imports remain; consumers use the named exports.
@@ -49,8 +49,8 @@ Command Center SSE/history, statuses and controls retain their version-1 shapes.
 ## Scoped operation adapter
 
 ```js
-import { createTaskDelivery } from 'gallivant/task-delivery';
-import { createDeliveryStore } from 'gallivant/task-delivery/store';
+import { createTaskDelivery } from '@uchibeke/gallivant/task-delivery';
+import { createDeliveryStore } from '@uchibeke/gallivant/task-delivery/store';
 const delivery = createTaskDelivery({
   manifest: emittedRuntimeManifest, // load this installed artifact's runtime.json
   authorize: aportAuthorize, // validate OAuth/audience/region/repository on EVERY call
@@ -172,15 +172,20 @@ credential rotation, request limits, quota, retention and production authorizati
 
 Full UI views include questions, brief, harness/cost/setup, allowance, progress,
 bounded logs, artifact IDs/hashes, source snapshots, PR URLs and supported controls.
-They remove local paths and redact resolved secrets. Automatic model output is
-limited to the capability discovery fields above, task/revision/status/question
-IDs and the PR link. Raw logs and brief bytes stay in UI metadata. Artifact download authorization/storage remains APort's
+They remove configured private path prefixes and redact resolved secrets;
+repository-relative artifact paths remain available in authorized UI views.
+Model output includes bounded capability discovery, task/revision/status,
+repository/harness identity, completion, question IDs and text, supported controls,
+blocked-task recovery guidance and the PR link. List pages include question counts;
+inspect and mutation responses include the questions. Raw logs and brief bytes
+stay in UI metadata. Artifact download authorization/storage remains APort's
 job; the public dispatcher exposes stable manifests, not arbitrary file retrieval.
 
 `uiResourceConfiguration` accepts the single registered `ui://` URI, dedicated
 HTTPS origin and exact CSP connect/resource origins. Global sidebar and thread
-panel entrypoints share it. HTML is supplied from the built APort UI (256 KiB
-maximum), served as `text/html;profile=mcp-app`. Fixture HTML proves resource
+panel entrypoints share it. HTML is supplied from the built APort UI (2,000,000 bytes
+maximum, shared by the package builder and runtime reader), served as
+`text/html;profile=mcp-app`. Fixture HTML proves resource
 wiring only. No final UI or host availability is claimed here.
 
 ## Runtime and existing Pages deployment
@@ -259,20 +264,31 @@ controls or directories under the runtime payload. Internal builds record these
 changes and remain development fixtures:
 
 ```sh
-npm ci
+npm ci --ignore-scripts
+node bin/package-plugin.mjs --config /private/aport-package.json --validate-public
 npm run package:plugin -- --config /private/aport-package.json --out /private/candidate \
   --core-version 0.2.0 --source-commit <40-character-merged-commit>
 # For development only, add --internal; keep fixture:true in the config.
-task-delivery-package --config /private/aport-package.json --validate-public
-npm install --ignore-scripts /private/candidate/gallivant-0.2.0.tgz
-task-delivery-state check --home /durable/preview --manifest /private/candidate/runtime.json
-task-delivery-state backup --home /durable/preview --manifest /private/previous/runtime.json --out /private/backup
-task-delivery-state migrate --home /durable/preview --manifest /private/candidate/runtime.json
+npm install --ignore-scripts --prefix /private/candidate-runtime /private/candidate/uchibeke-gallivant-0.2.0.tgz
+node /private/candidate-runtime/node_modules/@uchibeke/gallivant/bin/task-delivery-state.mjs check \
+  --home /durable/preview --manifest /private/candidate/runtime.json
+node /private/previous-runtime/node_modules/@uchibeke/gallivant/bin/task-delivery-state.mjs backup \
+  --home /durable/preview --manifest /private/previous/runtime.json --out /private/backup
+node /private/candidate-runtime/node_modules/@uchibeke/gallivant/bin/task-delivery-state.mjs migrate \
+  --home /durable/preview --manifest /private/candidate/runtime.json
 # Roll back package AND state into a fresh namespace, then switch the existing binding.
-npm install --ignore-scripts /private/previous/gallivant-0.2.0.tgz
-task-delivery-state rollback --backup /private/backup --out /durable/restored --manifest /private/previous/runtime.json
+npm install --ignore-scripts --prefix /private/previous-runtime /private/previous/uchibeke-gallivant-0.2.0.tgz
+node /private/previous-runtime/node_modules/@uchibeke/gallivant/bin/task-delivery-state.mjs rollback \
+  --backup /private/backup --out /durable/restored --manifest /private/previous/runtime.json
 npm run test:plugin-package
 ```
+
+Replace the illustrative `/private/...` and `/durable/...` paths with private,
+writable locations on your host. The upgrade example assumes the previous
+package is installed under `/private/previous-runtime`; use that installed
+artifact for backup. First-time setup has no previous namespace to back up.
+Separate installation prefixes keep candidate and rollback versions out of the
+source checkout and avoid depending on a global executable or shell `PATH`.
 
 Stop new intake/wake-ups and the old coordinator before backup/migration. Active
 jobs retain their runtime; incompatible changes fail with this remedy. Backups

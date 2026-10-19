@@ -1,6 +1,29 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {makeGh} from '../lib/gh.mjs';
+import { resolveCredential } from '../lib/credential.mjs';
+import { mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+
+test('branch preflight preserves a selected token-file refusal before calling gh', async t => {
+  const home = mkdtempSync(join(tmpdir(), 'branch-credential-'));
+  t.after(() => rmSync(home, { recursive: true, force: true }));
+  let calls = 0;
+  const gh = makeGh({
+    credential: () => resolveCredential({ github_token_file: join(home, 'missing-token') }, { env: { GH_TOKEN: 'broader-fixture-token' }, exec: async () => 'broader-fixture-token' }),
+    exec: async () => { calls++; throw new Error('gh should not run'); },
+  });
+  await assert.rejects(gh.branchExists('acme/widget', 'main'), error => {
+    assert.equal(error.code, 'NO_CREDENTIAL');
+    assert.equal(error.reason, 'configured-token-file-unavailable');
+    assert.match(error.message, /Restore that private token file.*restart the daemon/);
+    assert.doesNotMatch(error.message, /broader-fixture-token/);
+    return true;
+  });
+  await assert.rejects(gh.fileAt('acme/widget', 'docs/prd.md', 'main'), { code: 'NO_CREDENTIAL', reason: 'configured-token-file-unavailable' });
+  assert.equal(calls, 0);
+});
 
 test('branch lookup retains exact credential, standard deadline and encoded branch route',async()=>{
   let called=0;

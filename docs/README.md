@@ -27,6 +27,7 @@ requirements and checks.
 | Diagnose DNS/HTTPS failures and understand automatic recovery | [Network recovery](network-recovery.md) |
 | Collect review feedback and understand why learned-rule activation is unavailable | [Learning](learning.md) |
 | Integrate the shared services or package a task-delivery plugin | [Task delivery](task-delivery.md) |
+| Qualify a specific task-delivery plugin release and its actual host evidence | [Release qualification](release-qualification.md) |
 | Understand preparation isolation and provider capabilities | [Preparation](preparation.md) |
 | Understand durable runs, continuation, cancellation and publication | [Execution](execution.md) |
 | Understand module ownership and the overall design | [Architecture](architecture.md) |

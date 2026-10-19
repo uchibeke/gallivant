@@ -79,6 +79,12 @@ committed removals retry their controls even after qualification is lost; prepar
 transitions still require qualification before activation. Batch
 approval rejects multiple revisions of one candidate before preview or signing.
 
+`reject` requires a nonempty `--reason` and applies only to pending or already
+rejected revisions. `retire` also requires a reason and, when qualification is
+available, targets an exact active revision through the signing workflow.
+`approve` accepts an optional reason. These are distinct from changing a
+repository's collection mode.
+
 `revise` validates closed-schema JSON and creates an unapproved revision:
 
 ```sh

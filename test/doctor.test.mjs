@@ -303,3 +303,45 @@ test("doctor reports which source a run's credential would come from, and never 
   const printed = `${c.detail} ${c.fix ?? ""}`;
   assert.ok(!printed.includes("t-secret-marker"), "doctor must never print the credential it resolved");
 });
+
+
+test("doctor preserves an explicit token-file refusal without falling back for repository diagnostics", async t => {
+  const home = doctorHome({ repos: ["acme/widget"] });
+  const file = pjoin(home, "token"), configFile = pjoin(home, "config.json"), calls = pjoin(home, "gh-calls");
+  writeFileSync(file, "  ", { mode: 0o600 });
+  const config = JSON.parse(readFileSync(configFile, "utf8"));
+  writeFileSync(configFile, JSON.stringify({ ...config, github_token_file: file }));
+  // Only the separate operator-login check may execute gh. All repository
+  // checks must retain the failed selected credential, even with ambient access.
+  writeFileSync(pjoin(home, "gh"), `#!/bin/sh\nprintf '%s\\n' "$*" >> '${calls}'\nprintf '{"login":"fixture-user"}\\n'\n`, { mode: 0o755 });
+  const before = process.env.PATH;
+  process.env.PATH = `${home}:${before}`;
+  t.after(() => { process.env.PATH = before; });
+  let pushProbe = false;
+  const results = await doctor({ home, env: { GH_TOKEN: "t-broader-env" }, resolve: noGh,
+    probePush: async () => { pushProbe = true; return probeOk(); } });
+  const credential = named(results, "run credential");
+  assert.equal(credential.ok, false);
+  assert.match(credential.fix, /No fallback credential was used/);
+  assert.equal(pushProbe, false);
+  for (const check of [named(results, "base branch acme/widget"), named(results, "ruleset acme/widget")]) {
+    assert.equal(check.ok, false);
+    assert.match(check.detail, /unavailable: selected GitHub credential could not be resolved/);
+    assert.equal(check.fix, credential.fix, "repair the selected credential before diagnosing repository settings");
+    assert.doesNotMatch(`${check.detail} ${check.fix}`, /no base branch|no active ruleset|gh api -X POST|Add \{ "repo"/);
+    assert.doesNotMatch(`${check.detail} ${check.fix}`, /t-broader-env/);
+  }
+  assert.deepEqual(readFileSync(calls, "utf8").trim().split("\n"), ["api user --jq {login: .login}"]);
+});
+
+test("doctor's missing selected token-file remedy includes the daemon restart", async () => {
+  const home = doctorHome();
+  const configFile = pjoin(home, "config.json");
+  const config = JSON.parse(readFileSync(configFile, "utf8"));
+  writeFileSync(configFile, JSON.stringify({ ...config, github_token_file: pjoin(home, "missing-token") }));
+  const results = await doctor({ home, env: { GH_TOKEN: "t-broader-env" }, resolve: noGh });
+  const credential = named(results, "run credential");
+  assert.equal(credential.ok, false);
+  assert.match(credential.fix, /set github_token_file to null and restart the daemon/);
+  assert.doesNotMatch(credential.fix, /t-broader-env/);
+});

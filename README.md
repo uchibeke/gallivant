@@ -21,8 +21,9 @@ You need **macOS or Linux, Node 22+, Git, GitHub CLI and jq**. For your first ru
 use signed-in **Codex CLI 0.160.0+** or **Claude Code 2.1.263+**. Provider usage is
 billed to your own account. [Full prerequisites](docs/install.md).
 
-The first npm release is pending. Install from source for now; anonymous cloning
-will work once this repository is public:
+Check the [registry version](https://www.npmjs.com/package/@uchibeke/gallivant). Once a
+version is available, install it with `npm install -g @uchibeke/gallivant`. If the package
+is not published yet, install from source:
 
 ```sh
 git clone https://github.com/uchibeke/gallivant.git
@@ -32,7 +33,6 @@ npm link
 gallivant --version
 ```
 
-After registry publication, the install command will be `npm install -g gallivant`.
 [Release status and checks](docs/releasing.md).
 
 ## Set up

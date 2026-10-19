@@ -31,6 +31,11 @@ separate setup below and needs no local Codex or Claude binary. See the
 
 ## 1. The command
 
+Check the [registry version](https://www.npmjs.com/package/@uchibeke/gallivant). If one
+is available, install the CLI with `npm install -g @uchibeke/gallivant` and check
+`gallivant --version`. If the package has not been published yet, use the source
+checkout:
+
 ```bash
 git clone https://github.com/uchibeke/gallivant && cd gallivant
 npm ci --ignore-scripts
@@ -40,9 +45,7 @@ gallivant --help          # from any directory, to confirm it is on your PATH
 ```
 
 The package has locked runtime dependencies; `npm ci` installs them for a source
-checkout. `npm i -g .` copies instead of linking. Once the first registry release
-is published, `npm install -g gallivant` needs no clone. Until then use the source
-path above (the repository needs to be public for anonymous access).
+checkout. `npm i -g .` copies instead of linking.
 If the shell cannot find the command afterwards,
 the `bin` directory under `npm prefix -g` is not on your PATH.
 
@@ -165,10 +168,15 @@ cat > ~/.gallivant/gh-token
 # config.json: "github_token_file": "~/.gallivant/gh-token"
 ```
 
-With the file set it wins over both of the other two, so a token you deliberately narrowed is never quietly replaced by a wider one. `doctor` reports which source a run would use, whether the token is classic or fine-grained, and repository access and protection checks. Its Git credential-transport check uses
+With the file set it wins over both of the other two. A missing, unreadable or empty
+file refuses the operation instead of falling back to a wider login. Restore it,
+or explicitly set `github_token_file` to `null` and restart the daemon to choose ambient authentication. `doctor` reports which source a run would use, whether the token is classic or fine-grained, and repository access and protection checks. Its Git credential-transport check uses
 `git ls-remote`; a successful read does not by itself prove push permission.
 
-A `gh` logged in to an enterprise host is the one case this does not resolve for you. Gallivant asks `gh` for the host the remote names, but if `gh` has no login for that host, use `github_token_file`: a github.com token will not authenticate `github.acme.com`, and Gallivant says so rather than sending the wrong one.
+This installation guide targets github.com repositories. The credential resolver
+recognizes enterprise hosts on an existing checkout, but new-task repository
+resolution and clone URLs currently use github.com. An enterprise login or token
+alone does not establish supported end-to-end operation.
 
 ## 4. A ruleset on each repo
 
@@ -320,7 +328,7 @@ Watch `gallivant status` after the start run ends: the entry moves from `impleme
 |---|---|
 | `~/.gallivant/config.json` | your config, mode 600 |
 | `~/.gallivant/state.json` | the registry; preserve it and its snapshots for exact local recovery |
-| `~/.gallivant/runs/<entry>/<run>/` | `job.json`, `job.log` (provider output), local `cmd.json` or hosted execution/artifact records |
+| `~/.gallivant/runs/<entry>/<run>/` | `job.json`, redacted `job.log`, private raw `provider.log` for local runs, local `cmd.json` or hosted execution/artifact records |
 | `~/.gallivant/daemon.json` | daemon health, read by `status` |
 | `~/.gallivant/tracker.json`, `tracker.lock`, `tracker.log` | standalone dashboard ownership, port and output |
 | `~/.gallivant/errors.log` | every warning and error |

@@ -318,7 +318,7 @@ test('release assembly reuses the packager and keeps evidence outside the public
   execFileSync('npm', ['install', '--ignore-scripts', '--omit=dev', '--no-audit', '--no-fund', join(out, built.manifest.coreArtifact)], { cwd: consumer, stdio: 'pipe' });
   // Import only the installed tarball, including its final release validator bytes.
   const installed = execFileSync(process.execPath, ['--input-type=module', '-e',
-    `import {evaluateRelease} from 'gallivant/lib/release_package.mjs'; console.log(JSON.stringify(evaluateRelease(${JSON.stringify({ manifest: built.manifest, deployment })})));`],
+    `import {evaluateRelease} from '@uchibeke/gallivant/lib/release_package.mjs'; console.log(JSON.stringify(evaluateRelease(${JSON.stringify({ manifest: built.manifest, deployment })})));`],
     { cwd: consumer, encoding: 'utf8', env: { ...process.env, NODE_PATH: '' } });
   assert.deepEqual(JSON.parse(installed).identity, built.evaluation.identity);
   assert.equal(JSON.parse(installed).status, 'needs-human');
@@ -330,7 +330,7 @@ test('release assembly reuses the packager and keeps evidence outside the public
     assert.match(result.stderr, /Candidate bytes changed: START-HERE.md/);
   }
   const installedVerification = spawnSync(process.execPath, ['--input-type=module', '-e',
-    `import {verifyReleasePayload} from 'gallivant/lib/release_package.mjs'; verifyReleasePayload(${JSON.stringify(out)}, ${JSON.stringify(built.manifest)});`],
+    `import {verifyReleasePayload} from '@uchibeke/gallivant/lib/release_package.mjs'; verifyReleasePayload(${JSON.stringify(out)}, ${JSON.stringify(built.manifest)});`],
     { cwd: consumer, encoding: 'utf8', env: { ...process.env, NODE_PATH: '' } });
   assert.equal(installedVerification.status, 1);
   assert.match(installedVerification.stderr, /Candidate bytes changed: START-HERE.md/);

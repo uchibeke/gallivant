@@ -1,9 +1,9 @@
 # Releasing
 
-The package name is `gallivant`; the executable is `gallivant`. The repository is
-`uchibeke/gallivant`. The first public release is pending: the npm registry check
-on 2026-10-18 returned 404, and the repository was private. Do not announce an
-available npm install until publication and the consumer smoke check pass.
+The package name is `@uchibeke/gallivant`; the executable is `gallivant`. The repository is
+`uchibeke/gallivant`. Before announcing a version, confirm npm publication and a
+passing consumer smoke check. A public GitHub repository alone does not make the
+npm command work.
 
 ## One-time launch setup
 
@@ -53,7 +53,7 @@ gh api repos/uchibeke/gallivant/environments/npm/deployment-branch-policies
 gh api repos/uchibeke/gallivant/branches/main --jq '{protected,protection}'
 gh api repos/uchibeke/gallivant/rulesets
 npm whoami --registry=https://registry.npmjs.org
-npm view gallivant version --registry=https://registry.npmjs.org
+npm view @uchibeke/gallivant version --registry=https://registry.npmjs.org
 ```
 
 An absent package is expected before the first publication. An absent `npm`
@@ -112,8 +112,8 @@ original workflow rather than dispatching newer `main` with the old version.
 ## Verify before announcing
 
 ```sh
-npm view gallivant version dist.integrity dist.attestations
-npm install -g gallivant
+npm view @uchibeke/gallivant version dist.integrity dist.attestations
+npm install -g @uchibeke/gallivant
 gallivant --version
 gallivant --help
 ```
@@ -132,8 +132,7 @@ Use a clean test account/home and the [getting-started guide](install.md) for on
 small real PR. Confirm implementation, feedback-driven continuation, CI and the
 completion receipt; automated installation checks use fixtures and do not prove
 paid-provider access. Recheck anonymous GitHub access and all README links.
-Then change the README's primary installation command to `npm install -g gallivant`
-and remove its pending-release note. Announcement drafts are in [launch.md](launch.md).
+Announcement drafts are in [launch.md](launch.md).
 
 For local validation without publishing: `npm run lint`, `npm test`, and
 `npm run test:install`. The last command packs and installs under a disposable

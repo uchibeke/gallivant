@@ -686,8 +686,8 @@ Importing it reads no user configuration and starts no daemon or network work.
 Creating the usual context is an explicit caller action.
 
 ```js
-import { createTaskService, TASK_VERSION } from 'gallivant/tasks';
-import { makeContext } from 'gallivant/context';
+import { createTaskService, TASK_VERSION } from '@uchibeke/gallivant/tasks';
+import { makeContext } from '@uchibeke/gallivant/context';
 
 const tasks = createTaskService(makeContext());
 let result = await tasks.prepare({
@@ -706,7 +706,9 @@ if (result.status === 'needs-input') {
 }
 if (result.status === 'ready') {
   result = await tasks.validate({ taskId: result.taskId, expectedRevision: result.revision });
-  result = await tasks.start({ taskId: result.taskId, expectedRevision: result.revision, run: true });
+  if (result.status === 'ready' && result.readiness?.allow) {
+    result = await tasks.start({ taskId: result.taskId, expectedRevision: result.revision, run: true });
+  }
 }
 console.log(TASK_VERSION, tasks.inspect({ taskId: result.taskId }));
 ```

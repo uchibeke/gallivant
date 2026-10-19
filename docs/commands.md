@@ -92,6 +92,11 @@ See [task operations](tasks.md) for examples, source delivery and stopping rules
 
 ### Task operations
 
+Task state and process exit status answer different questions. The CLI exits 1
+for a blocked task, daemon startup failure or an exception. Saved clarification
+questions can return 0; automation must inspect `status`, `questions` and
+`nextAction` in `--json` output before deciding that preparation is ready.
+
 Use the ID and revision printed by the preceding operation; placeholders below
 are not literal values. `--json` returns structured task state for automation.
 
@@ -270,9 +275,9 @@ A `ready` row says whether the completion gate accepted the receipt or never ran
 
 A `brief-moved` row is an entry whose brief you have edited since it started, in a way that changes what the work is or what will be checked. It sits under NEEDS YOU whatever the entry is otherwise doing, and it outranks every other label on the row, because it is the only one that says the work itself may be aimed at the wrong target: a red check or a waiting reviewer are questions about work whose brief nobody disputes. The detail names the first difference and `gallivant why` has the rest. `status` runs the comparison itself rather than reading what the last tick found, so a brief you edited thirty seconds ago shows up now rather than after the next poll. A `done` entry is never compared: there is nothing left to certify, and tidying up your briefs afterwards is not something to be warned about.
 
-A row whose detail names a GitHub write is an entry whose tick is declining one step until that write lands, with the failures counted; see `gallivant why` below for the five writes this can be. `blocked` is the one of those to read twice: every readiness condition has already passed and only the label that says so will not write, so the label is `blocked` rather than `fixing`. The others read `fixing` or `implementing`, which is true for them, because a fix round really does follow.
+A row whose detail names a GitHub write is an entry whose tick is declining one step until that write lands, with the failures counted; see `gallivant why` below for those writes. `blocked` is the one of those to read twice: every readiness condition has already passed and only the label that says so will not write, so the label is `blocked` rather than `fixing`. The others read `fixing` or `implementing`, which is true for them, because a fix round really does follow.
 
-Sections are in the order needs-you, running; `--all` adds done. The first line is `daemon DOWN` with exit code 1 when no daemon is alive. `--json` prints the same model for scripts and UIs.
+Sections are in the order needs-you, running; `--all` adds done. Exit code 0 means the daemon has a verified live process identity; it does not mean every provider is healthy or every task succeeded. Exit code 1 means no verified live daemon. `--json` prints the same model, including done rows, for scripts and UIs; inspect the rows and probes rather than using the exit code as a completion gate.
 
 Chain progress is shown alongside runs. `gallivant chain <name>` shows the full ordered plan and explains which
 milestone or merge it is waiting for. Unstarted milestones have no agent run yet.
@@ -354,8 +359,8 @@ there is no registry outside Gallivant's own tree; a label that is not in the co
 `gallivant serve` is one way to run the tracker, not the only one. The same router can be mounted inside a server you already start, so one process and one port serve both and there is no second thing to supervise:
 
 ```js
-import { mount } from "gallivant/lib/commands/serve.mjs";
-import { makeContext } from "gallivant/lib/context.mjs";
+import { mount } from "@uchibeke/gallivant/lib/commands/serve.mjs";
+import { makeContext } from "@uchibeke/gallivant/lib/context.mjs";
 
 const tracker = mount(makeContext(), { base: "/gallivant" });
 
@@ -534,6 +539,13 @@ workflow, but installed profiles do not qualify secure extraction or activation.
 No command, hash, config switch or file mode makes candidate text trusted. Review
 [learning](learning.md) for exact qualification, signing and recovery boundaries.
 
+`learn reject` and `learn retire` require a nonempty `--reason`; `learn approve`
+accepts an optional reason. Learning output is escaped JSON, with or without
+`--json`. The CLI reports exit 1 for exceptions and an explicitly unqualified
+`learn doctor` result. An unavailable extraction result can return exit 0 with
+`status: "unavailable"` and `inference: false`; inspect the result, not only the
+exit status.
+
 All repository operations use `--repo owner/repository`. Configure `collect` before
 inspecting local learning state. The collector reads eligible GitHub feedback;
 it never opens embedded evidence links or runs that text as instructions.
@@ -546,14 +558,14 @@ it never opens embedded evidence links or runs that text as instructions.
 | `gallivant learn list --repo owner/repo [--status pending]` | List candidate revisions. |
 | `gallivant learn show ID --repo owner/repo --revision SHA256` | Inspect the exact revision and evidence. |
 | `gallivant learn revise ID --repo owner/repo --from reviewed-rule.json` | Validate data and create a new unapproved revision. |
-| `gallivant learn reject ID --repo owner/repo --revision SHA256 [--reason "..."]` | Reject that exact revision. |
+| `gallivant learn reject ID --repo owner/repo --revision SHA256 --reason "..."` | Reject that exact revision. |
 | `gallivant learn report --repo owner/repo` | Report coverage, limits and stored learning state. |
 | `gallivant learn prune --repo owner/repo` | Remove expired retained excerpts. |
 | `gallivant learn explain --repo owner/repo --run RUN_ID` | Inspect recorded learned-context selection and delivery for a run. |
 | `gallivant learn setup --key-path ABSOLUTE_PATH [--ssh-keygen ABSOLUTE_PATH]` | Interactive signing-authority enrollment; requires qualified isolation. |
 | `gallivant learn extract --repo owner/repo --learning-budget USD` | Request bounded paid candidate extraction; no production extractor is qualified in this release. |
 | `gallivant learn approve ID --repo owner/repo --revision SHA256 [--reason "..."]` | Preview and sign an exact activation transition when qualified. No approve-all or noninteractive approval bypass exists. |
-| `gallivant learn retire ID --repo owner/repo --revision SHA256 [--reason "..."]` | Request a signed retirement transition when qualified. |
+| `gallivant learn retire ID --repo owner/repo --revision SHA256 --reason "..."` | Request a signed retirement transition when qualified. |
 | `gallivant learn recover --repo owner/repo` | Reconcile signed transitions and retry revocation controls; never invents or rebases approval. |
 
 Inspection commands do not launch inference. Every candidate revision remains

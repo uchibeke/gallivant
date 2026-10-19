@@ -53,7 +53,7 @@ This table describes local Claude/Codex setup unless another provider is named.
 | No push to the default branch, no force push | A GitHub ruleset on each repo: no deletion, no force push, pull request required, no bypass actors. `doctor` prints the call. Sessions are also told not to rebase, because keeping a branch on its base is the daemon's job and it does it with a merge commit, which needs no force. | `blocked_patterns` checks command text using word-boundary/glob matching for single words and literal matching for phrases such as `push --force`. Best effort; APort does not parse refspecs. |
 | Blast radius of a successful injection | Optional but recommended: a fine-grained PAT limited to the participating repos with no Workflows permission (`github_token_file`). By default runs act as your own login, which reaches every repo it can. Either way the credential is resolved by the daemon and handed to the run in its environment, so `~/.git-credentials`, the keychain and `~/.config/gh` stay out of a run's path. | An audit log of every tool call, for reconstruction. |
 | Runtime and dispatch bounds | Claude's `--max-budget-usd`, `run_timeout_minutes` for local runs (per repository or global; default 720), and `max_iterations` per PR. Other local harnesses have no native dollar hard cap. Remote reservations bound further dispatch, not provider billing. | none |
-| No harness attribution in the history | A `commit-msg` hook in each checkout's `.git/hooks`, written at clone time and on every reuse. A message with a `Co-Authored-By:` trailer naming a harness or its vendor, or a "Generated with" / robot line, exits non-zero and no commit object is created. The hook applies to local commits regardless of which harness invoked Git; hosted results also pass coordinator public-output validation. | none |
+| No harness attribution in the history | The coordinator attempts to install a `commit-msg` hook in each checkout's `.git/hooks` at clone time and on reuse. Installation failures warn rather than abort; inspect those warnings. With the hook installed, a message with a `Co-Authored-By:` trailer naming a harness or its vendor, or a "Generated with" / robot line, exits non-zero and no commit object is created. The hook applies to local commits regardless of which harness invoked Git; hosted results also pass coordinator public-output validation. | none |
 | Commits are yours, not a bot's | `user.name` and `user.email` in the run env, on git's command line where no repo can override them, resolved per run from your own git config by the daemon. No identity on the machine means the run is refused before it is spawned. | none |
 
 ## Codex Git writes need automatic approval
@@ -109,8 +109,8 @@ What bounds the credential, and what does not:
 
 - **A scoped token still wins.** `github_token_file` is checked before anything else, so a token you deliberately narrowed is never replaced by a wider one the daemon could also have found.
 - **The token is not in argv.** `ps` shows argv to every process on the machine, including processes owned by other users.
-- **The token is not in any log.** `job.log` is the run's own stdout and is rendered in the tracker; `cmd.json` records the command and arguments and no environment. Anything that reports on a credential reports its source and length.
-- **A run cannot widen its own access.** The passport blocks reads of `~/.gallivant/**` and `~/.claude/**`, so the config that names the token file, and the token file itself when it lives there, are not readable from inside a run. Resolution happens in the daemon before the child exists.
+- **Launch records omit the token.** `cmd.json` records the command and arguments, not its environment. Raw child output goes to private `provider.log`; the coordinator redacts recognized credentials and supplied secret values before producing tracker logs. A child can print its environment or other sensitive data, so raw diagnostics may contain secrets and redaction is not a complete data-loss boundary.
+- **Credential resolution stays in the coordinator.** The passport's represented file-read restrictions and the selected harness's sandbox restrict access to coordinator settings and credential files. These controls do not make the token already in the child's environment unreadable, and Gemini, OpenCode and Goose do not inherit Claude/Codex's sandbox controls. Use the token's scope and repository rules to limit what the credential can authorize.
 - **The run's git config reaches nothing outside the worktree.** The four settings a run needs, credential helper included, travel in the environment as git's own `GIT_CONFIG_COUNT` pairs. `GIT_CONFIG_NOSYSTEM=1` drops git's system file, which on a Mac with the Xcode command line tools sets `credential.helper = osxkeychain`; without it a run had a path to your keychain whatever else was configured.
 - **What it does not bound.** The credential is in the environment of a process the agent controls, so a successful injection can read it and use it for anything the token permits. That is also true of a token file the run could read, and of a credential helper the run could invoke; the environment is not worse, it is the same exposure with one fewer copy on disk. Nor does the run's git config bound it: a run owns its worktree, so it can add its own `credential.helper` to `.git/config`, which git consults first because that key is multi-valued. That was equally true when the helper lived in a global file. The controls that actually bound it are the token's own scope, which is why a fine-grained PAT limited to the participating repos is the recommendation, and the GitHub ruleset, which stops a push to the default branch whatever the token permits. Transport is not a control; scope and the ruleset are.
 
@@ -122,7 +122,21 @@ sandbox. Spending a budget on work that cannot be published is not a useful defa
 
 ## What must be delivered
 
-Before a PR can be ready for a human, the daemon evaluates a completion receipt in the PR body against the PRD's acceptance criteria, following APort's `deliverable.task.complete.v1` policy: one attestation with evidence per criterion, a summary, and tests green as observed by the daemon. See [prd.md](prd.md). It is a gate on what the agent must deliver, not a security boundary; the table above is the boundary.
+When a deliverable contract is configured, the daemon evaluates the PR body's
+completion receipt against the approved criteria through
+`deliverable.task.complete.v1`. It checks the required attestations, their `met`
+values and nonempty evidence, the summary, configured output patterns and observed
+CI state. It does not dereference evidence links or independently prove that an
+attestation is true. Local Verify results in a receipt remain agent reports unless
+supported by independently observed CI or review. Hosted publication additionally
+executes the approved Verify commands in the coordinator's enforced OS sandbox
+and records their actual exits, output and revision. Even those commands prove
+only what they test. See [prd.md](prd.md) and [execution](execution.md).
+
+`deliverable: null` disables the completion-receipt gate; reviewer and CI settings
+also affect what is required for readiness. A ready state is therefore a result
+under the configured gates, not a general security or semantic-correctness proof.
+The pre-tool policy, provider sandbox and human merge decision remain separate.
 
 ## What reaches a prompt
 
