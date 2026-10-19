@@ -83,7 +83,7 @@ test("repeated fixture clauses stay bounded and a live repository target stays v
 });
 
 test("publication fixture masking cannot hide coordinated live PRs", () => {
-  for (const connector of ["plus", "+", "as well as", "along with", "alongside", "together with", "in addition to", "not to mention", "besides", "versus", "vs", "vs.", "compared with", "compared to"]) {
+  for (const connector of ["plus", "+", "as well as", "along with", "alongside", "together with", "in addition to", "not to mention", "besides", "versus", "vs", "vs.", "compared with", "compared to", "but", "yet"]) {
     const source = `For tests, create a fake PR ${connector} a real PR.`;
     assert.throws(() => ownerDelivery(source), { code: "TASK_DELIVERY_SCOPE" }, source);
     assert.throws(() => assertDeliveryAnswer({}, source), { code: "TASK_DELIVERY_SCOPE" }, source);
@@ -92,6 +92,11 @@ test("publication fixture masking cannot hide coordinated live PRs", () => {
   assert.equal(ownerDelivery("For tests, create a fake PR fixture + a synthetic PR fixture."), null);
   assert.doesNotThrow(() => assertDeliveryAnswer({}, "For tests, create a fake PR fixture + a synthetic PR fixture."));
   assert.equal(ownerDelivery("For tests, create a fake PR alongside a synthetic PR fixture."), null);
+  for (const connector of ["but", "yet"]) {
+    const source = `For tests, create a fake PR fixture ${connector} a synthetic PR fixture.`;
+    assert.equal(ownerDelivery(source), null, source);
+    assert.doesNotThrow(() => assertDeliveryAnswer({}, source), source);
+  }
   for (const connector of ["versus", "vs", "vs.", "compared with", "compared to"]) {
     const source = `For tests, create a fake PR fixture ${connector} a synthetic PR fixture.`;
     assert.equal(ownerDelivery(source), null, source);
@@ -475,7 +480,7 @@ test("business approval rules do not mask unclassified coordinated implementatio
 });
 
 test("business approval rules keep temporal implementation actions visible", () => {
-  for (const connector of ["before", "after", "while"])
+  for (const connector of ["before", "after", "while", "once", "until", "when"])
     for (const action of ["proofreading", "editing"]) {
       const source = `If I approve the invoice, email the customer ${connector} ${action} the article.`;
       assert.throws(() => ownerDelivery(source), { code: "TASK_DELIVERY_SCOPE" }, source);
@@ -484,7 +489,7 @@ test("business approval rules keep temporal implementation actions visible", () 
   const business = "If I approve the invoice, email the customer before applying the discount.";
   assert.equal(ownerDelivery(business), null);
   assert.doesNotThrow(() => assertDeliveryAnswer({}, business));
-  for (const connector of ["before", "after", "while"])
+  for (const connector of ["before", "after", "while", "once", "until", "when"])
     for (const subject of ["you", "the editor"]) {
       const source = `If I approve the invoice, email the customer ${connector} ${subject} proofread the article.`;
       assert.throws(() => ownerDelivery(source), { code: "TASK_DELIVERY_SCOPE" }, source);
@@ -494,6 +499,8 @@ test("business approval rules keep temporal implementation actions visible", () 
     "If I approve the invoice, email the customer after our team proofreads the invoice.",
     "If I approve the invoice, email the customer before their editors proofread the article.",
     "If I approve the invoice, email the customer while Alice proofreads the article.",
+    "If I approve the invoice, email the customer once our team proofreads the invoice.",
+    "If I approve the invoice, email the customer until Alice proofreads the article.",
   ]) {
     assert.throws(() => ownerDelivery(source), { code: "TASK_DELIVERY_SCOPE" }, source);
     assert.throws(() => assertDeliveryAnswer({}, source), { code: "TASK_DELIVERY_SCOPE" }, source);
@@ -502,6 +509,9 @@ test("business approval rules keep temporal implementation actions visible", () 
     "If I approve the invoice, email the customer after you apply the discount.",
     "If I approve the invoice, email the customer after our team emails the customer.",
     "If I approve the invoice, email the customer after the payment clears.",
+    "If I approve the invoice, email the customer once you apply the discount.",
+    "If I approve the invoice, email the customer until the payment clears.",
+    "If I approve the invoice, email the customer when our team emails the customer.",
   ]) {
     assert.equal(ownerDelivery(source), null, source);
     assert.doesNotThrow(() => assertDeliveryAnswer({}, source), source);
