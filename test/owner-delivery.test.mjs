@@ -70,6 +70,13 @@ test("repeated fixture clauses stay bounded and a live repository target stays v
   const live = "For tests, create one hundred mock PRs on GitHub.";
   assert.throws(() => ownerDelivery(live), { code: "TASK_DELIVERY_SCOPE" });
   assert.throws(() => assertDeliveryAnswer({}, live), { code: "TASK_DELIVERY_SCOPE" });
+  // A Git destination counts only inside the synthetic action's own clause.
+  for (const text of ["For tests, create a fake PR fixture and upload logs to GitHub.", "For tests, create a fake PR fixture, then upload logs to GitHub."]) {
+    assert.equal(ownerDelivery(text), null, text);
+    assert.doesNotThrow(() => assertDeliveryAnswer({}, text), text);
+  }
+  for (const text of ["For tests, create a fake PR on GitHub.", "For tests, create a fake PR against the upstream repository.", "For tests, create a fake PR fixture and a mock PR on GitHub."])
+    assert.throws(() => ownerDelivery(text), { code: "TASK_DELIVERY_SCOPE" }, text);
 });
 
 test("publication fixture masking cannot hide coordinated live PRs", () => {
@@ -388,11 +395,13 @@ test("synthetic PR fixtures cannot hide a coordinated live publication", () => {
     "For tests, create a fake PR, a real PR.",
     "For tests, create a fake PR, then a real PR.",
     "For tests, create a fake PR, a live pull request for review.",
+    "For tests, create a fake PR & a real PR.",
+    "For tests, create a fake PR & a live pull request for review.",
   ]) {
     assert.throws(() => ownerDelivery(source), { code: "TASK_DELIVERY_SCOPE" }, source);
     assert.throws(() => assertDeliveryAnswer({}, source), { code: "TASK_DELIVERY_SCOPE" }, source);
   }
-  for (const fixtures of ["For tests, create a fake PR and a fake pull request fixture.", "For tests, create a fake PR, a mock PR fixture."]) {
+  for (const fixtures of ["For tests, create a fake PR and a fake pull request fixture.", "For tests, create a fake PR, a mock PR fixture.", "For tests, create a fake PR & a mock PR fixture."]) {
     assert.equal(ownerDelivery(fixtures), null, fixtures);
     assert.doesNotThrow(() => assertDeliveryAnswer({}, fixtures), fixtures);
   }
@@ -1457,6 +1466,14 @@ test("saved version-one ownership remains exact and cannot authorize forged conn
       { start: end, end: source.length, owner: "implementation" },
     ] };
     assert.throws(() => validateOwnerDelivery(forged), { code: "TASK_DELIVERY_SCOPE" }, `v${version} cannot leave an approval qualifier outside the coordinator span`);
+  }
+  for (const version of [1, 2]) for (const source of ["Implement export. After CI passes, Open a PR.", "Implement export. Only after CI passes open a PR.", "Implement export. Tomorrow open a PR.", "Implement export. When tests pass, open a PR."]) {
+    const directive = source.search(/\bopen a PR/i), start = version === 2 && source[directive - 2] === "," ? directive - 2 : directive;
+    const forged = { version, offsets: "utf16", source, spans: [
+      { start: 0, end: start, owner: "implementation" },
+      { start, end: source.length, owner: "coordinator", kind: "pull_request" },
+    ] };
+    assert.throws(() => validateOwnerDelivery(forged), { code: "TASK_DELIVERY_SCOPE" }, `v${version} cannot leave a governing condition before the coordinator span: ${source}`);
   }
   const priorApprovalSource = "Build the widget after I approved it, and Open a PR for review.", priorApprovalStart = priorApprovalSource.indexOf("Open a PR");
   const priorApproval = { version: 1, offsets: "utf16", source: priorApprovalSource, spans: [
