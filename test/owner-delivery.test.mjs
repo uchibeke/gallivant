@@ -251,6 +251,34 @@ test("merge commands remain visible when branch names look like feature predicat
   assert.equal(ownerDelivery("Add a squash-merge settings panel."), null);
 });
 
+test("delegated application publication recognizes product surfaces before actors", () => {
+  for (const subject of ["the button", "the submit button", "our webhook handler", "the service", "the Dashboard"])
+    for (const [lead, action] of [["Ensure", "creates"], ["Have", "create"], ["Let", "open"], ["Get", "to create"]]) {
+      const source = `${lead} ${subject} ${action} a PR.`;
+      assert.equal(ownerDelivery(source), null, source);
+      assert.doesNotThrow(() => assertDeliveryAnswer({}, source), source);
+      const contract = ownerDelivery(source + " Open a PR for review.");
+      assert.equal(validateOwnerDelivery(contract), contract, source);
+      assert.equal(ownerImplementation(contract).join(""), source + " ", source);
+    }
+  const conditional = "Ensure the button creates a PR after tests pass.";
+  assert.equal(ownerDelivery(conditional), null);
+  assert.doesNotThrow(() => assertDeliveryAnswer({}, conditional));
+  for (const source of [
+    "Ensure the button creates a PR after tests pass since changes must not be merged.",
+    "Ensure the button creates a PR, and PRs must not be published.",
+    "Have the button create a PR, then have John create a PR.",
+    "Ensure the developer creates a PR.",
+    "Ensure the team creates a PR.",
+    "Ensure John creates a PR.",
+    "Ensure alex creates a PR.",
+    "Ensure the automation creates a PR.",
+  ]) {
+    assert.throws(() => ownerDelivery(source), { code: "TASK_DELIVERY_SCOPE" }, source);
+    assert.throws(() => assertDeliveryAnswer({}, source), { code: "TASK_DELIVERY_SCOPE" }, source);
+  }
+});
+
 test("large repeated feature-object clauses stay within the supported request size", () => {
   const source = Array(1638).fill("Make PRs mergeable.").join(" ");
   assert.ok(Buffer.byteLength(source) < 32 * 1024);
@@ -626,6 +654,26 @@ test("business approval rules validate purpose gerunds", () => {
     const contract = ownerDelivery(source + " Open a PR for review.");
     assert.equal(validateOwnerDelivery(contract), contract, source);
     assert.equal(ownerImplementation(contract).join(""), source + " ", source);
+  }
+});
+
+test("unrecognized nominal purpose clauses retain owner approval gates", () => {
+  for (const connector of ["in the hope of", "in hopes of", "with the expectation of", "for the eventual prospect of"])
+    for (const action of ["proofreading the article", "not proofreading the article", "carefully proofreading the article", "applying the discount"]) {
+      for (const source of [
+        `If I approve the invoice, email the customer ${connector} ${action}.`,
+        `Email the customer ${connector} ${action} after I approve the invoice.`,
+      ]) {
+        assert.throws(() => ownerDelivery(source), { code: "TASK_DELIVERY_SCOPE" }, source);
+        assert.throws(() => assertDeliveryAnswer({}, source), { code: "TASK_DELIVERY_SCOPE" }, source);
+      }
+    }
+  for (const source of [
+    "If I approve the invoice, email the customer with a list of invoices.",
+    "If I approve the invoice, email the customer for a record of invoices.",
+  ]) {
+    assert.equal(ownerDelivery(source), null, source);
+    assert.doesNotThrow(() => assertDeliveryAnswer({}, source), source);
   }
 });
 

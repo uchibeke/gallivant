@@ -488,6 +488,8 @@ test("latest publication review cases fail before task effects without rejecting
     "If I approve the invoice, email the customer with a view to proofreading the article.",
     "Email the customer with a view to proofreading the article after I approve the invoice.",
     "If I approve the invoice, email the customer for the purpose of proofreading the article.",
+    "If I approve the invoice, email the customer in the hope of proofreading the article.",
+    "Email the customer with the expectation of carefully proofreading the article after I approve the invoice.",
     "Email the customer for the purpose of proofreading the article after I approve the invoice.",
     "If I approve the invoice, email the customer with the aim of proofreading the article.",
     "For tests, create a fake PR fixture alongside a real PR.",
@@ -548,6 +550,9 @@ test("latest publication review cases fail before task effects without rejecting
   const productRequirements = [
     "Add a unit test that creates a dummy PR fixture.",
     "The button opens a PR.",
+    "Ensure the button creates a PR.",
+    "Have the submit button create a PR.",
+    "Ensure the button creates a PR after tests pass.",
     "Clicking submit creates a pull request.",
     "Make PRs searchable in the dashboard.",
     "Make a pull request API.",
