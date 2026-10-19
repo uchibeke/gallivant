@@ -875,6 +875,30 @@ test("whenever approval clauses validate finite gerund and passive actions", () 
   }
 });
 
+test("conditional approval clauses validate finite gerund and passive actions", () => {
+  for (const action of ["you proofread the article", "our senior editor proofreads the invoice", "Alice King proofreads the invoice", "carefully proofreading the invoice", "the invoice is proofread", "you email the report"])
+    for (const source of [
+      `If I approve the invoice, email the customer if ${action}.`,
+      `Email the customer if ${action} after I approve the invoice.`,
+      `If I approve the invoice, email the customer if you apply the discount before ${action}.`,
+    ]) {
+      assert.throws(() => ownerDelivery(source), { code: "TASK_DELIVERY_SCOPE" }, source);
+      assert.throws(() => assertDeliveryAnswer({}, source), { code: "TASK_DELIVERY_SCOPE" }, source);
+    }
+  for (const action of ["you apply the discount", "our senior editor emails the customer", "Alice King emails the customer", "carefully applying the discount", "the discount is applied", "the recurring payment clears"])
+    for (const source of [
+      `If I approve the invoice, email the customer if ${action}.`,
+      `Email the customer if ${action} after I approve the invoice.`,
+    ]) {
+      assert.equal(ownerDelivery(source), null, source);
+      assert.doesNotThrow(() => assertDeliveryAnswer({}, source), source);
+      const original = source + " Open a PR for review.", contract = ownerDelivery(original);
+      assert.equal(validateOwnerDelivery(contract), contract, source);
+      assert.equal(ownerImplementation(contract).join(""), source + " ", source);
+      assert.equal(contract.spans.map(span => original.slice(span.start, span.end)).join(""), original, source);
+    }
+});
+
 test("temporal approval gerunds retain modifiers without hiding implementation", () => {
   for (const connector of ["before", "after", "while", "once", "until", "when", "as soon as", "by the time", "as"])
     for (const modifier of ["carefully", "very carefully", "not carefully"]) {
