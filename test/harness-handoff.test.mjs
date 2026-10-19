@@ -2,7 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { executionEpoch, makeExecution } from "../lib/execution.mjs";
+import { executionEpoch, makeExecution, reserveExecutionEpoch } from "../lib/execution.mjs";
 import { tempHome } from "./helpers.mjs";
 
 const taskId = "acme/widget/recovery";
@@ -54,4 +54,31 @@ test("a provider mismatch without exact settled ownership cannot create a new le
   assert.equal(executionEpoch({ root, taskId, entry: switched(), provider: "codex", account: "operator",
     runner: { current: () => ({ id: runId, running: true }) } }), 0);
   assert.equal(executionEpoch({ root, taskId, entry: switched(), provider: "codex", account: "other-account", runner }), 0);
+});
+
+test("registry loss recovers the latest reserved provider epoch, including A to B to A", () => {
+  const root = join(tempHome(), "runs", "recovery");
+  mkdirSync(root, { recursive: true });
+  writeFileSync(join(root, "execution.json"), JSON.stringify(oldExecution));
+  const original = readFileSync(join(root, "execution.json"), "utf8");
+  const recovered = harness => ({ pr: 20, harness, session: null, last: { event: "recovered from GitHub" } });
+
+  reserveExecutionEpoch({ root, taskId, provider: "codex", account: "operator", epoch: 1, pr: 20 });
+  assert.equal(executionEpoch({ root, taskId, entry: recovered("codex"), provider: "codex", account: "operator" }), 1,
+    "the new empty ledger survives loss of last-run and execution fields");
+  const pending = { ...switched(), harness: "claude", session: "claude-session", dispatch_stopped: "harness-handoff-pending",
+    handoff_pending: { from: "claude", to: "codex", epoch: 1, pr: 20 } };
+  assert.equal(executionEpoch({ root, taskId, entry: pending, provider: "claude", account: "operator" }), 0,
+    "an interrupted reset may inspect its fenced old ledger to retry");
+  assert.throws(() => executionEpoch({ root, taskId, entry: recovered("claude"), provider: "claude", account: "operator" }),
+    { code: "EXECUTION_OWNERSHIP" }, "a stale registry cannot reopen Claude epoch zero");
+
+  reserveExecutionEpoch({ root, taskId, provider: "claude", account: "operator", epoch: 2, pr: 20 });
+  assert.equal(executionEpoch({ root, taskId, entry: recovered("claude"), provider: "claude", account: "operator" }), 2,
+    "returning to Claude still chooses a fresh ledger");
+  assert.throws(() => executionEpoch({ root, taskId, entry: { ...recovered("claude"), execution_epoch: 1 }, provider: "claude", account: "operator" }),
+    { code: "EXECUTION_OWNERSHIP" }, "an interrupted reset fails closed instead of selecting the stale epoch");
+  assert.throws(() => executionEpoch({ root, taskId, entry: { ...recovered("claude"), pr: 21 }, provider: "claude", account: "operator" }),
+    { code: "EXECUTION_OWNERSHIP" }, "another PR cannot inherit this ledger merely by reusing the task ID");
+  assert.equal(readFileSync(join(root, "execution.json"), "utf8"), original);
 });

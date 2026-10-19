@@ -6,6 +6,7 @@ import { mkdirSync, readFileSync, writeFileSync, statSync, existsSync, rmSync } 
 import { makeGit } from "../lib/git.mjs";
 import { resolveCredential } from "../lib/credential.mjs";
 import { makeTick } from "../lib/tick.mjs";
+import { executionEpoch, makeExecution } from "../lib/execution.mjs";
 import { start } from "../lib/commands/start.mjs";
 import { register } from "../lib/commands/register.mjs";
 import { makeState, newEntry, STATES } from "../lib/state.mjs";
@@ -290,6 +291,7 @@ function registerWorld(git, { files = {}, snapshots = new Map() } = {}) {
     home,
     config: { ...CONFIG, home, worktrees: join(home, "worktrees") },
     state: makeState(home),
+    acquireRuntimeOwner: () => ({ release() {} }),
     log: { info: m => logged.push(m), warn: m => logged.push(m), error: m => logged.push(m), latest: () => null },
     git,
     gh: {
@@ -484,6 +486,8 @@ test("cross-harness reset fences unsettled execution and records a separate ledg
   assert.equal(saved.session, null);
   assert.equal(saved.iteration, 0, "register retains its documented reset semantics");
   assert.equal(saved.last.run, run, "the settled old run remains recorded for inspection");
+  assert.equal(JSON.parse(readFileSync(join(w.ctx.home, "runs", "widget-export", "execution-1.json"), "utf8")).provider, "codex",
+    "the next ledger is reserved before the registry records the handoff");
 
   const codexRun = "run-new-codex";
   w.ctx.state.update(id, { session: "7f1c2d3e-1111-4111-8111-111111111111", last: { run: codexRun, exit: 0 },
@@ -497,6 +501,102 @@ test("cross-harness reset fences unsettled execution and records a separate ledg
   assert.equal(returned.execution_epoch, 2, "switching back must not reopen Claude's original ledger");
   assert.equal(returned.execution_handoff.from, "codex");
   assert.equal(returned.session, null, "the new Claude epoch starts a fresh session too");
+  assert.equal(JSON.parse(readFileSync(join(w.ctx.home, "runs", "widget-export", "execution-2.json"), "utf8")).provider, "claude");
+});
+
+test("cross-harness register requires a stopped daemon and releases exclusion after the reset", async () => {
+  const w = registerWorld(registerGit());
+  const id = "acme/widget/widget-export";
+  w.ctx.state.put(id, newEntry({ prd: "docs/prds/widget-export.md", harness: "claude", repo: "acme/widget",
+    branch: "gallivant/widget-export", worktree: "/checkouts/widget", pr: 142, state: STATES.prOpen, nowIso: T0 }));
+  w.ctx.acquireRuntimeOwner = () => { throw new Error("runtime already running (pid 42)"); };
+  await assert.rejects(() => register(w.ctx, { url: w.url, harness: "codex" }), /runtime already running/);
+  assert.deepEqual(w.calls, [], "a live daemon prevents all GitHub reset writes");
+  assert.equal(w.ctx.state.get(id).harness, "claude");
+
+  w.ctx.acquireRuntimeOwner = () => { w.ctx.state.update(id, { last: { run: "run-just-started", exit: null } }); return { release() {} }; };
+  await assert.rejects(() => register(w.ctx, { url: w.url, harness: "codex" }), /watched entry changed/);
+  assert.deepEqual(w.calls, [], "a tick that wins the lock race forces a fresh settlement check");
+  w.ctx.state.update(id, { last: null });
+
+  let held = false;
+  w.ctx.acquireRuntimeOwner = () => { held = true; return { release: () => { held = false; } }; };
+  w.ctx.gh.comment = async () => { assert.equal(held, true); w.calls.push(["comment"]); };
+  await register(w.ctx, { url: w.url, harness: "codex" });
+  assert.equal(held, false, "the lock is released after the final registry write");
+});
+
+test("cross-harness register refuses even a new-provider-shaped explicit session before PR writes", async () => {
+  const w = registerWorld(registerGit());
+  w.ctx.state.put("acme/widget/widget-export", newEntry({ prd: "docs/prds/widget-export.md", harness: "claude", repo: "acme/widget",
+    branch: "gallivant/widget-export", worktree: "/checkouts/widget", pr: 142, state: STATES.prOpen, nowIso: T0 }));
+  await assert.rejects(() => register(w.ctx, { url: w.url, harness: "codex", session: "7f1c2d3e-1111-4111-8111-111111111111" }),
+    /cross-harness reset requires a fresh provider session/);
+  assert.deepEqual(w.calls, []);
+});
+
+test("cross-harness failures restore a pre-write fence but retain an ambiguous post-write fence", async () => {
+  const w = registerWorld(registerGit());
+  const id = "acme/widget/widget-export", run = "run-old";
+  w.ctx.gh.prView = async () => ({ ...prFixture({ headRefName: "gallivant/widget-export", createdAt: T0 }), body: BLOCK() });
+  w.ctx.state.put(id, { ...newEntry({ prd: "docs/prds/widget-export.md", harness: "claude", repo: "acme/widget",
+    branch: "gallivant/widget-export", worktree: "/checkouts/widget", pr: 142, state: STATES.prOpen, nowIso: T0 }),
+    last: { run, exit: 1 } });
+  w.ctx.executionFor = () => ({ root: join(w.ctx.home, "runs", "widget-export"), account: "operator",
+    state: () => ({ current: { id: run, exit: 1, execution: { collected: true } }, stopped: null }),
+    current: () => ({ id: run, running: false }) });
+  w.ctx.runnerFor = () => ({ current: () => ({ id: run, running: false }) });
+
+  w.ctx.gh.comment = async () => { throw new Error("comment unavailable"); };
+  await assert.rejects(() => register(w.ctx, { url: w.url, harness: "codex" }), /comment unavailable/);
+  assert.equal(w.ctx.state.get(id).harness, "claude");
+  assert.equal(w.ctx.state.get(id).dispatch_stopped, undefined, "failure before the identity write restores the exact entry");
+  assert.equal(existsSync(join(w.ctx.home, "runs", "widget-export", "execution-1.json")), false);
+
+  w.ctx.gh.comment = async () => { w.calls.push(["comment"]); };
+  w.ctx.reserveExecutionEpoch = () => { throw new Error("disk unavailable"); };
+  await assert.rejects(() => register(w.ctx, { url: w.url, harness: "codex" }), /disk unavailable/);
+  assert.deepEqual(w.calls.map(call => call[0]), ["comment", "setBody"], "the reservation failure happens after the PR identity write");
+  assert.equal(w.ctx.state.get(id).harness, "claude");
+  assert.equal(w.ctx.state.get(id).dispatch_stopped, "harness-handoff-pending", "old-provider dispatch stays fenced");
+  assert.equal(w.ctx.state.get(id).handoff_pending.to, "codex");
+
+  delete w.ctx.reserveExecutionEpoch;
+  await register(w.ctx, { url: w.url, harness: "codex" });
+  assert.equal(w.ctx.state.get(id).harness, "codex", "a retry finishes the pending handoff");
+  assert.equal(w.ctx.state.get(id).dispatch_stopped, null);
+});
+
+test("an interrupted final registry write retries through its reserved ledger without old-provider dispatch", async () => {
+  const w = registerWorld(registerGit());
+  const id = "acme/widget/widget-export", run = "run-old", root = join(w.ctx.home, "runs", "widget-export");
+  mkdirSync(root, { recursive: true });
+  writeFileSync(join(root, "execution.json"), JSON.stringify({ version: 1, taskId: id, provider: "claude", account: "operator",
+    operations: {}, stopped: null, current: { id: run, exit: 1, execution: { provider: "claude", account: "operator", collected: true, providerState: "failed" } } }));
+  w.ctx.state.put(id, { ...newEntry({ prd: "docs/prds/widget-export.md", harness: "claude", repo: "acme/widget",
+    branch: "gallivant/widget-export", worktree: "/checkouts/widget", pr: 142, state: STATES.prOpen, nowIso: T0 }),
+    last: { run, exit: 1 } });
+  w.ctx.gh.prView = async () => ({ ...prFixture({ headRefName: "gallivant/widget-export", createdAt: T0 }), body: BLOCK() });
+  const runner = { current: () => ({ id: run, exit: 1, running: false }) };
+  w.ctx.runnerFor = () => runner;
+  w.ctx.executionFor = (_, provider) => {
+    const epoch = executionEpoch({ root, taskId: id, entry: w.ctx.state.get(id), provider, account: "operator", runner });
+    return makeExecution({ root, taskId: id, provider, account: "operator", runner, ledgerEpoch: epoch,
+      ledgerFile: join(root, epoch ? `execution-${epoch}.json` : "execution.json") });
+  };
+  const put = w.ctx.state.put;
+  let writes = 0;
+  w.ctx.state.put = (...args) => { if (++writes === 2) throw new Error("registry unavailable"); return put(...args); };
+  await assert.rejects(() => register(w.ctx, { url: w.url, harness: "codex" }), /registry unavailable/);
+  assert.equal(w.ctx.state.get(id).dispatch_stopped, "harness-handoff-pending");
+  assert.equal(existsSync(join(root, "execution-1.json")), true);
+  assert.equal(executionEpoch({ root, taskId: id, entry: w.ctx.state.get(id), provider: "claude", account: "operator", runner }), 0);
+
+  w.ctx.state.put = put;
+  await register(w.ctx, { url: w.url, harness: "codex" });
+  assert.equal(w.ctx.state.get(id).harness, "codex");
+  assert.equal(w.ctx.state.get(id).execution_epoch, 1, "retry reuses the reserved epoch");
+  assert.equal(w.ctx.state.get(id).dispatch_stopped, null);
 });
 
 test("registering with no identity override migrates only the legacy block", async () => {
@@ -723,18 +823,20 @@ test("a reset that fails halfway leaves GitHub and the registry agreeing on ONE 
   assert.deepEqual(a.calls.filter(c => c[0] === "setBody"), [], "the identity write never ran, so the PR still names the old harness");
   assert.equal(a.ctx.state.get(id).harness, "claude", "and so does the registry: they agree");
 
-  // The comment lands and the BODY fails. The reset comment is on the PR and nothing else changed, so both sides still
-  // say claude. A duplicate reset comment is harmless: `countRounds` takes the last marker, so two count as one.
+  // The comment lands and the BODY reply fails. The old registry identity is
+  // fenced because the caller cannot prove whether GitHub applied the body.
+  // A duplicate reset comment is harmless: `countRounds` takes the last marker.
   const b = registerWorld(registerGit());
   b.ctx.gh.prView = async () => ({ ...prFixture({ headRefName: "gallivant/widget-export", createdAt: T0 }), body: BLOCK() });
   b.ctx.gh.setBody = async () => { b.calls.push(["setBody"]); throw new Error("HTTP 403: Resource not accessible by personal access token"); };
   b.ctx.state.put(id, seed());
   await assert.rejects(() => register(b.ctx, { url: b.url, worktree: "/checkouts/widget", harness: "codex" }),
-    /cannot write the gallivant block.*keeps harness claude and session 6f1c2d3e.*still what the PR records/s);
+    /cannot write the gallivant block.*keeps harness claude and session 6f1c2d3e.*old entry remains fenced/s);
   const stillOld = b.ctx.state.get(id);
   assert.deepEqual([stillOld.harness, stillOld.session], ["claude", "6f1c2d3e-1111-4111-8111-111111111111"],
     "the registry keeps the old identity");
   assert.equal(stillOld.iteration, 3, "and the reset did not land locally either");
+  assert.equal(stillOld.dispatch_stopped, "harness-handoff-pending", "the ambiguous body write cannot authorize old-provider dispatch");
   assert.equal(b.calls.filter(c => c[0] === "comment").length, 1, "the comment is on the PR, which is safe: countRounds takes the LAST marker");
 
   // An existing entry on a PR with no block at all is the one case where "the PR still records that" would be false:
