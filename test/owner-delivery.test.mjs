@@ -1187,6 +1187,39 @@ test("saved version-two contracts retain their original approval and PR-policy g
   assert.throws(() => validateOwnerDelivery(truncated), { code: "TASK_DELIVERY_SCOPE" }, "saved publication span cannot leave its approval qualifier in implementation ownership");
 });
 
+test("historical publication authority uses each producer's affirmative grammar", () => {
+  const savedContract = (version, clause) => {
+    const source = `Implement export. ${clause}`, start = source.indexOf(clause);
+    return { version, offsets: "utf16", source, spans: [
+      { start: 0, end: start, owner: "implementation" },
+      { start, end: source.length, owner: "coordinator", kind: "pull_request" },
+    ] };
+  };
+  const fromPrd = saved => ownerDeliveryFromPrd(parsePrd(GOOD_PRD +
+    `\n## Coordinator delivery contract\n\n\`\`\`json\n${JSON.stringify(saved)}\n\`\`\`\n`, "docs/prds/example.md"));
+  for (const version of [1, 2]) {
+    const unsupported = ["Publishing a PR.", "Prepared a PR.", "Publish a PR.", "Published a PR.", "Prepares a PR.", "Preparing a PR.", "Send a PR.", "Sends a PR.", "Sent a PR.", "Sending a PR.", "File a PR.", "Files a PR.", "Filed a PR.", "Filing a PR.", "Generate a PR.", "Please publish a PR for review.", "Open a pull-request."];
+    if (version === 1) unsupported.push("Make a PR.", "Made a PR.", "Opening a PR.", "Created a PR.", "Creates a PR.", "Open PRs.", "Open an PR.", "Open another new PR.");
+    for (const clause of unsupported) {
+      const saved = savedContract(version, clause), before = structuredClone(saved);
+      for (const act of [() => validateOwnerDelivery(saved), () => ownerImplementation(saved), () => fromPrd(saved)])
+        assert.throws(act, { code: "TASK_DELIVERY_SCOPE" }, `v${version}: ${clause}`);
+      assert.deepEqual(saved, before, `invalid v${version} record remains unchanged`);
+    }
+    // v1's grammar is from ab3c37f; 3db059f emitted the wider v2 forms.
+    const supported = ["Open a PR.", "Create one new pull request for code review.", "Raise the PR!", "Submit a PR for human review."];
+    if (version === 2) supported.push("Opening a PR.", "Opened a PR.", "Creates a PR.", "Created a PR.", "Raises a PR.", "Raised a PR.", "Submits a PR.", "Submitted a PR.", "Make PRs.", "Makes a PR.", "Making a PR.", "Made a PR.", "Open pull requests.", "Open another new PR.");
+    for (const clause of supported) {
+      const saved = savedContract(version, clause), before = structuredClone(saved);
+      assert.equal(validateOwnerDelivery(saved), saved, `v${version}: ${clause}`);
+      assert.deepEqual(ownerImplementation(saved), ["Implement export. "], `v${version}: ${clause}`);
+      assert.deepEqual(fromPrd(saved), saved, `loaded v${version}: ${clause}`);
+      assert.equal(saved.spans.map(span => saved.source.slice(span.start, span.end)).join(""), saved.source);
+      assert.deepEqual(saved, before, `valid v${version} record remains unchanged`);
+    }
+  }
+});
+
 test("new business approval rules validate with the same v5 predicates used at intake", () => {
   const source = "If I approve the purchase, apply the discount. Implement export. Open a PR for review.";
   const contract = ownerDelivery(source);
