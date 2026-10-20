@@ -797,6 +797,35 @@ test("causative relative clauses validate approval-dependent actions and their o
   }
 });
 
+test("relative have causatives retain approval gates while business possession stays descriptive", () => {
+  for (const relative of ["which has", "that has", "which have", "which had", "which can have", "which does not have"])
+    for (const action of ["you proofread the article", "us proofread the invoice", "our senior editor proofread the invoice", "our archive specialist proofread the invoice", "Alice King proofread the invoice", "the invoice proofread", "you email the report", "the customer" + " ".repeat(170) + "proofread the invoice"])
+      for (const source of [
+        `If I approve the invoice, send the customer an email ${relative} ${action}.`,
+        `Send the customer an email ${relative} ${action} after I approve the invoice.`,
+      ]) {
+        assert.throws(() => ownerDelivery(source), { code: "TASK_DELIVERY_SCOPE" }, source);
+        assert.throws(() => assertDeliveryAnswer({}, source), { code: "TASK_DELIVERY_SCOPE" }, source);
+      }
+  for (const source of [
+    "If I approve the invoice, send the customer an email which has you apply the discount.",
+    "Send the customer an email which can have Alice King apply the discount after I approve the invoice.",
+    "If I approve the invoice, send the customer an email which has our senior editor email the customer.",
+    "If I approve the invoice, send the customer an email which has us apply the discount.",
+    "If I approve the invoice, send the customer an email which has the receipt sent.",
+    "If I approve the invoice, send the customer an email which has the receipt.",
+    "If I approve the invoice, send the customer an email which has a confirmation page.",
+    'If I approve the invoice, send the customer an email with the label "which has you proofread the article".',
+  ]) {
+    assert.equal(ownerDelivery(source), null, source);
+    assert.doesNotThrow(() => assertDeliveryAnswer({}, source), source);
+    const original = source + " Open a PR for review.", contract = ownerDelivery(original);
+    assert.equal(validateOwnerDelivery(contract), contract, source);
+    assert.equal(ownerImplementation(contract).join(""), source + " ", source);
+    assert.equal(contract.spans.map(span => original.slice(span.start, span.end)).join(""), original, source);
+  }
+});
+
 test("business approval rules keep temporal implementation actions visible", () => {
   for (const connector of ["before", "after", "while", "once", "until", "when"])
     for (const action of ["proofreading", "editing"]) {
