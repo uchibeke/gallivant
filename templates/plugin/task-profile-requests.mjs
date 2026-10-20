@@ -10,6 +10,12 @@
 // delivery authority), feature (ordinary product wording with delivery
 // vocabulary).
 export const profileRequests = [
+  { kind: "direct", text: "Open a PR and run the tests on Linux.", screen: { tier: "assumption", terms: ["pull_request"] }, tag: null, outcome: "ready" },
+  { kind: "direct", text: "Open a PR and document it in the README.", screen: { tier: "assumption", terms: ["pull_request"] }, tag: { action: "pull_request" }, outcome: "ready" },
+  { kind: "direct", text: "Open a PR and document it in docs/README.md.", screen: { tier: "assumption", terms: ["pull_request"] }, tag: null, outcome: "ready" },
+  { kind: "direct", text: "Compare code in acme/other and open a PR.", screen: { tier: "assumption", terms: ["pull_request"] }, tag: { action: "pull_request" }, outcome: "ready" },
+  { kind: "contradictory", text: "Open a PR against staging and run the tests on Linux.", screen: { tier: "question", terms: ["pull_request_target"] }, tag: { action: "pull_request" }, outcome: "needs-input" },
+  { kind: "adversarial", text: "Open a PR for review in acme/other against main and document it in the README.", screen: { tier: "question", terms: ["pull_request_target"] }, tag: { action: "pull_request" }, outcome: "needs-input" },
   { kind: "contradictory", text: "Get my consent before opening a PR.", screen: { tier: "question", terms: ["pull_request", "approval"] }, tag: null, outcome: "needs-input" },
   { kind: "adversarial", text: "Get my authorization before opening a PR.", screen: { tier: "question", terms: ["pull_request", "approval"] }, tag: { action: "pull_request" }, outcome: "needs-input" },
   { kind: "contradictory", text: "Wait for my authorisation before opening a PR.", screen: { tier: "question", terms: ["approval", "wait"] }, tag: null, outcome: "needs-input" },

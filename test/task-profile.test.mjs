@@ -176,6 +176,19 @@ test("PR destinations are compared with the selected repository and case-sensiti
   assert.equal(deliveryScreen("Open a PR against release/1.2.", { ...PROFILE.target, base: "release/1.2" }).targetConflicts, undefined);
 });
 
+test("PR target qualifiers stay attached to their instruction across independent actions", () => {
+  for (const text of ["Open a PR and run the tests on Linux.", "Open a PR and document it in the README.", "Open a PR and document it in docs/README.md.", "Open a PR in acme/widget against main and run the tests on Linux.", "Open a PR for review, then document it in the README.", "Open a PR, run the tests on Linux.", "Open a PR and compare code in another repository.", "Run the tests on Linux and open a PR.", "Compare code in acme/other and open a PR."]) {
+    assert.equal(deliveryScreen(text, PROFILE.target).targetConflicts, undefined, text);
+    const task = taskFor(text, { commandCandidates: ["npm test"] });
+    for (const delivery of [{}, { "r-1": { action: "pull_request" } }]) assert.deepEqual(parseDraft(JSON.stringify(draftFor(task, { delivery })), task).questions, [], text);
+  }
+  for (const text of ["Open a PR against staging and run the tests on Linux.", "Open a PR for review against staging.", "Open a PR for review, against staging.", "Open a PR for team review and in acme/other.", "Open a PR in acme/other against main and document it in the README.", "Against staging, in acme/other, open a PR.", "Open a PR against main and then open a PR against staging.", "Open a PR in another repository and document it in the README.", 'Open a PR against "staging" and run the tests on Linux.', 'Against "staging", open a PR.', 'Open a PR in "acme/other".']) {
+    const screen = deliveryScreen(text, PROFILE.target);
+    assert.ok(screen.targetConflicts?.length, text);
+    assert.equal(screen.tier, "question", text);
+  }
+});
+
 test("dotted registry destinations retain publication controls and feature examples stay product text", () => {
   for (const registry of ["hex.pm", "crates.io", "crates", "npm", "PyPI"]) {
     for (const verb of ["Upload the package", "Push the package", "Submit the package"]) {

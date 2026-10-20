@@ -2988,7 +2988,7 @@ else {
     t.after(async () => { const job = runner.current(); if (job?.running) { runner.kill(job.id); await runner.waitForKill(job.id); } });
     const service = offlineRunnerService(w.ctx), r = await service.resume({ taskId: record.id, expectedRevision: record.revision });
     if (extra) { assert.equal(r.status, "blocked"); assert.deepEqual(r.preparation.attempts, []); assert.equal(runner.current(), null); continue; }
-    assert.equal(r.status, "ready"); assert.equal(r.preparation.attempts.length, 1); assert.equal(r.preparation.repairs, 0);
+    assert.equal(r.status, "ready", r.failures.join("\n")); assert.equal(r.preparation.attempts.length, 1); assert.equal(r.preparation.repairs, 0);
     const observed = JSON.parse(readFileSync(join(r.preparation.attempts[0].cwd, "prompt-bytes.json"), "utf8"));
     assert.equal(observed.bytes, MAX_PREPARATION_PROMPT_BYTES); assert.equal(observed.original, REQUEST); assert.deepEqual(observed.requirements, record.requirements); assert.equal(observed.context.at(-1).text, source.text);
     assert.match(r.draft.text, /Do not add dependencies/); assert.deepEqual(r.preparation.attempts[0].usage, [{ input_tokens: 120, output_tokens: 40 }]);
@@ -4608,7 +4608,8 @@ test("target, publication, approval and mixed-polarity conflicts survive answer 
     ["Do not merge, but deploy this to production.", { action: "restrict", prohibits: ["merge", "deploy"] }],
     ["Do not deploy; deploy this to production.", { action: "restrict", prohibits: ["deploy"] }],
   ]) {
-    const w = world({ prepare: async (_ctx, task) => JSON.stringify(draftFor(task, { delivery: Object.fromEntries(task.requirements.map(r => [r.id, r.text === "Open a pull request for review and implement export only." ? { action: "pull_request" } : r.id === "r-1" ? { action: "merge" } : tag])) })) });
+    const clear = "Open a pull request for review, run the tests on Linux and document export in docs/README.md.";
+    const w = world({ prepare: async (_ctx, task) => JSON.stringify(draftFor(task, { delivery: Object.fromEntries(task.requirements.map(r => [r.id, r.text === clear ? { action: "pull_request" } : r.id === "r-1" ? { action: "merge" } : tag])) })) });
     const first = await w.service.prepare({ text: "Implement export and merge the PR.", run: true });
     const answered = await w.service.answer({ taskId: first.taskId, expectedRevision: first.revision, operationId: "insist-on-conflict", answers: { "q-delivery-r-1": text } });
     assert.equal(answered.status, "needs-input", text); assert.equal(answered.readiness, null);
@@ -4617,7 +4618,7 @@ test("target, publication, approval and mixed-polarity conflicts survive answer 
     assert.equal(taskStore(w.home).read(first.taskId).runAuthorized, false);
     assert.deepEqual(w.ctx.state.entries(), []); assert.equal(w.daemonCalls(), 0);
     await assert.rejects(w.service.start({ taskId: first.taskId, expectedRevision: answered.revision, run: true }), { code: "TASK_NOT_READY" });
-    const resolved = await w.service.answer({ taskId: first.taskId, expectedRevision: answered.revision, operationId: "keep-profile", answers: { "q-delivery-a-q-delivery-r-1-1": "Open a pull request for review and implement export only." } });
+    const resolved = await w.service.answer({ taskId: first.taskId, expectedRevision: answered.revision, operationId: "keep-profile", answers: { "q-delivery-a-q-delivery-r-1-1": clear } });
     assert.equal(resolved.status, "ready", resolved.failures.join("\n"));
     assert.deepEqual(taskStore(w.home).read(first.taskId).deliveryProfile, TYPED_PROFILE); assert.equal(resolved.approval, null);
     assert.deepEqual(w.ctx.state.entries(), []); assert.equal(w.daemonCalls(), 0);

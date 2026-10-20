@@ -83,6 +83,9 @@ either field optional; malformed targets are rejected and mismatches clarify.
 repository, pauses with a question naming the selected target. Ambiguous
 destinations require clarification. Text cannot change the saved target; the
 owner must resolve the scope or prepare a new task with the intended selection.
+Target qualifiers must be attached to the PR instruction, including leading
+targets and adjacent repository/base pairs. Separate actions such as "run the
+tests on Linux" or "document it in docs/README.md" do not select a PR target.
 
 Independently of the planner, a deterministic screen looks for delivery
 vocabulary in each clause (pull request, merge, deploy, release, publish, push,
