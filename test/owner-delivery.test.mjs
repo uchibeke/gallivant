@@ -152,11 +152,11 @@ test("fixture destinations recognize forge URLs within their own action", () => 
     }
   }
   const source = "For tests, create a fake PR fixture using a mock at https://github.com.example.invalid/acme/widget.";
-  assert.equal(ownerDelivery(source), null);
-  assert.doesNotThrow(() => assertDeliveryAnswer({}, source));
+  assert.throws(() => ownerDelivery(source), { code: "TASK_DELIVERY_SCOPE" });
+  assert.throws(() => assertDeliveryAnswer({}, source), { code: "TASK_DELIVERY_SCOPE" });
 });
 
-test("fixture destinations recognize forge subdomains without matching lookalike hosts", () => {
+test("forge subdomains and quoted URL data retain fixture clause boundaries", () => {
   for (const host of ["www.github.com", "ssh.github.com", "www.gitlab.com", "group.gitlab.com"])
     for (const url of [`https://${host}/acme/widget`, `ssh://git@${host}:443/acme/widget.git`, `git@${host}:acme/widget.git`]) {
       for (const action of ["at", "and open it at"]) {
@@ -175,8 +175,36 @@ test("fixture destinations recognize forge subdomains without matching lookalike
   for (const url of ["https://www.github.com.example.invalid/acme/widget", "https://notgithub.com/acme/widget",
     "https://github.com@example.invalid/acme/widget", "ssh://git@www.gitlab.com.example.invalid/acme/widget.git"]) {
     const source = `For tests, create a fake PR fixture using a mock at ${url}.`;
+    assert.throws(() => ownerDelivery(source), { code: "TASK_DELIVERY_SCOPE" }, source);
+    assert.throws(() => assertDeliveryAnswer({}, source), { code: "TASK_DELIVERY_SCOPE" }, source);
+    const data = `For tests, create a fake PR fixture using a mock with URL "${url}".`;
+    assert.equal(ownerDelivery(data), null, data);
+    assert.doesNotThrow(() => assertDeliveryAnswer({}, data), data);
+  }
+});
+
+test("fixture publication cannot target an explicit network endpoint on any forge", () => {
+  for (const url of ["https://bitbucket.org/acme/widget", "https://codeberg.org/acme/widget", "https://git.example.net/acme/widget",
+    "ssh://git@git.sr.ht/~acme/widget", "git@forge.example.net:acme/widget.git", "git+ssh://git@forge.example.net/acme/widget.git", "a@b:."])
+    for (const action of ["at", "via", "in", "inside", "within", "and open it at", "and open it in", "and upload it to"]) {
+      const source = `For tests, create a fake PR fixture ${action} ${url}.`;
+      assert.throws(() => ownerDelivery(source), { code: "TASK_DELIVERY_SCOPE" }, source);
+      assert.throws(() => assertDeliveryAnswer({}, source), { code: "TASK_DELIVERY_SCOPE" }, source);
+    }
+  for (const source of [
+    "For tests, create a fake PR fixture and upload logs to https://bitbucket.org/acme/widget.",
+    "For tests, create a fake PR fixture before uploading logs to ssh://git@forge.example.net/acme/widget.git.",
+    'For tests, create a fake PR fixture with the URL field "https://bitbucket.org/acme/widget".',
+    "For tests, create a fake PR fixture at ./fixtures/request.json.",
+    "For tests, create a fake PR fixture at file:///tmp/request.json.",
+    "For tests, create a fake PR fixture in our repository fixtures directory.",
+  ]) {
     assert.equal(ownerDelivery(source), null, source);
     assert.doesNotThrow(() => assertDeliveryAnswer({}, source), source);
+    const original = source + " Open a PR for review.", contract = ownerDelivery(original);
+    assert.equal(validateOwnerDelivery(contract), contract, source);
+    assert.equal(ownerImplementation(contract).join(""), source + " ", source);
+    assert.equal(contract.spans.map(span => original.slice(span.start, span.end)).join(""), original, source);
   }
 });
 
