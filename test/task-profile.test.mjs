@@ -154,6 +154,27 @@ test("the delivery screen is deterministic over the fixture corpus and masks lit
   assert.equal(unrelated.tier, "assumption"); assert.deepEqual(unrelated.controlled, []); assert.ok(unrelated.controls.length, "the control word is still recorded for the review");
 });
 
+test("landing a PR or change retains merge intent through delivery validation", () => {
+  for (const text of ["Land the pull request after CI passes.", "Please land this change.", "Land the PR.", "Land the patch once tests pass.", "Land it after CI.", "Finish by landing our changes.", "The bot lands the commits.", "Make sure the PR is landed after CI.", "The change must be landed.", 'Land `the pull request` after CI.', "Land ‘the change’ after tests."]) {
+    const screen = deliveryScreen(text, PROFILE.target);
+    assert.equal(screen.tier, "question", text); assert.ok(screen.escalated.includes("merge"), text);
+    assert.ok(unaccountedTerms(screen, { action: "pull_request" }).includes("merge"), text);
+    assert.ok(unaccountedTerms(screen, { action: "pull_request", prohibits: ["merge"] }).includes("merge"), text);
+    const task = taskFor(text, { commandCandidates: ["npm test"] });
+    for (const delivery of [{}, { "r-1": { action: "pull_request" } }, { "r-1": { action: "merge" } }]) assert.deepEqual(parseDraft(JSON.stringify(draftFor(task, { delivery })), task).questions.map(q => q.id), ["q-delivery-r-1"], text);
+  }
+  for (const text of ["Do not land the changes.", "I will land the changes afterwards.", "Let me land the patch."]) {
+    const screen = deliveryScreen(text, PROFILE.target);
+    assert.ok(screen.controlled.includes("merge"), text);
+    assert.deepEqual(unaccountedTerms(screen, { action: "restrict", prohibits: ["merge"] }), [], text);
+  }
+  for (const text of ["Build a landing page.", "Add a field for the aircraft landing time.", "Land the plane in the simulation.", "Add a command to land changes.", 'Add a button to land `the pull request`.', "Document how to land a PR.", "Show the label 'Land the pull request'.", 'Add a test for the exact text “Land the change”.']) {
+    const screen = deliveryScreen(text, PROFILE.target);
+    assert.equal(screen.terms.includes("merge"), false, text);
+    assert.notEqual(screen.tier, "question", text);
+  }
+});
+
 test("imperative command spans stay visible through delivery validation", () => {
   for (const text of ['Run `npm publish` after the tests.', 'Execute "npm publish" after the tests.', "Run 'npm publish' after the tests.", 'Run ‘npm publish’ after tests.', 'Please run: `npm publish`.', 'Run `npm test` and `npm publish`.', '`npm publish`', 'Run `git push origin main` after tests.', 'Run `git push --force origin HEAD:main` after tests.', "Run `git push origin 'main'` after tests.", 'Stop after `git commit`.']) {
     const screen = deliveryScreen(text, PROFILE.target);
@@ -691,7 +712,7 @@ test("the screen and mapping stay fast at the request and mapping limits", () =>
   const text = clause.repeat(Math.floor(MAX_INPUT_BYTES / clause.length));
   // Each test file runs in its own process. Charge work to this process, not
   // time that a parallel CI job leaves it waiting to be scheduled.
-  for (const [input, tier] of [[text, "question"], ["'npm publish' ".repeat(Math.floor(MAX_INPUT_BYTES / 14)), "none"], ['Run `npm publish`. '.repeat(Math.floor(MAX_INPUT_BYTES / 19)), "question"]]) {
+  for (const [input, tier] of [[text, "question"], ["'npm publish' ".repeat(Math.floor(MAX_INPUT_BYTES / 14)), "none"], ['Run `npm publish`. '.repeat(Math.floor(MAX_INPUT_BYTES / 19)), "question"], ["landing ".repeat(Math.floor(MAX_INPUT_BYTES / 8)), "none"], ["landed ".repeat(Math.floor(MAX_INPUT_BYTES / 7)), "none"], ["Add a command to land changes. ".repeat(Math.floor(MAX_INPUT_BYTES / 31)), "none"], ["Land the PR after CI passes. ".repeat(Math.floor(MAX_INPUT_BYTES / 29)), "question"]]) {
     const started = process.hrtime.bigint(), cpuStarted = process.cpuUsage();
     let screen;
     for (let i = 0; i < 20; i++) screen = deliveryScreen(input);

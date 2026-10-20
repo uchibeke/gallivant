@@ -114,7 +114,8 @@ retain their product interpretation.
 
 The screen grants nothing:
 
-- Escalating terms (merge, deploy including shipping, rollout, go-live and
+- Escalating terms (merge, including landing a PR, patch or change; deploy
+  including shipping, rollout, go-live and
   "to production" wording, release, wait, local-only, a write aimed
   at the base branch or at skipping the pull request such as "push directly
   to main", "push to <the selected base>" with the profile's actual base name

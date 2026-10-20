@@ -10,6 +10,15 @@
 // delivery authority), feature (ordinary product wording with delivery
 // vocabulary).
 export const profileRequests = [
+  { kind: "contradictory", text: "Land the pull request after CI passes.", screen: { tier: "question", terms: ["merge"] }, tag: null, outcome: "needs-input" },
+  { kind: "adversarial", text: "Land the PR after CI passes.", screen: { tier: "question", terms: ["merge"] }, tag: { action: "pull_request" }, outcome: "needs-input" },
+  { kind: "indirect", text: "Finish by landing the change.", screen: { tier: "question", terms: ["merge"] }, tag: null, outcome: "needs-input" },
+  { kind: "contradictory", text: "The patch must be landed after tests pass.", screen: { tier: "question", terms: ["merge"] }, tag: { action: "pull_request" }, outcome: "needs-input" },
+  { kind: "adversarial", text: "Land `the pull request` after CI.", screen: { tier: "question", terms: ["merge"] }, tag: { action: "pull_request" }, outcome: "needs-input" },
+  { kind: "indirect", text: "I will land the changes afterwards.", screen: { tier: "question", terms: ["merge"] }, tag: { action: "restrict", prohibits: ["merge"] }, outcome: "ready" },
+  { kind: "feature", text: "Build a landing page.", screen: { tier: "none" }, tag: null, outcome: "ready" },
+  { kind: "feature", text: "Add a command to land changes.", screen: { tier: "none" }, tag: null, outcome: "ready" },
+  { kind: "quoted", text: "Show the label 'Land the pull request'.", screen: { tier: "none" }, tag: null, outcome: "ready" },
   { kind: "adversarial", text: "Run `npm publish` after the tests.", screen: { tier: "question", terms: ["publish"] }, tag: null, outcome: "needs-input" },
   { kind: "adversarial", text: "Run `npm test` and `npm publish`.", screen: { tier: "question", terms: ["publish"] }, tag: { action: "pull_request" }, outcome: "needs-input" },
   { kind: "contradictory", text: "Open two pull requests, one for the API and one for the UI.", screen: { tier: "question", terms: ["pull_request_count"] }, tag: null, outcome: "needs-input" },

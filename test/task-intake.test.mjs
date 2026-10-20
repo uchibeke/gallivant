@@ -4598,6 +4598,9 @@ test("anaphoric delivery replies cannot be resolved by empty or ungrounded plann
 
 test("target, publication, approval and mixed-polarity conflicts survive answer chains without dispatch", async () => {
   for (const [text, tag] of [
+    ["Land the pull request after CI passes.", { action: "pull_request" }],
+    ["Land the changes after tests pass.", { action: "pull_request" }],
+    ["Land `the pull request` after CI.", { action: "pull_request" }],
     ["Run `npm publish` after tests.", { action: "pull_request" }],
     ["Open two pull requests for the API and UI.", { action: "pull_request" }],
     ["Create separate pull requests for the API and UI.", { action: "pull_request" }],
