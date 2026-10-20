@@ -114,6 +114,14 @@ retain their product interpretation.
 
 The screen grants nothing:
 
+- Pushing tags, Git notes, all/mirrored refs, deleting remote refs or naming
+  another destination ref is a `direct_push` conflict. A task-branch push such
+  as `git push -u origin HEAD` keeps the profile's normal reading. Product
+  commands and literal examples retain their feature meaning.
+- Closing, reopening, editing, locking or changing the state of an existing
+  PR is a `pull_request_lifecycle` conflict, including imperative CLI commands
+  and quoted PR objects. The profile creates one new review PR; a planner's
+  `pull_request` tag cannot cover an existing-PR mutation or grant it authority.
 - Escalating terms (merge, including landing a PR, patch or change; deploy
   including shipping, rollout, go-live and
   "to production" wording, release, wait, local-only, a write aimed

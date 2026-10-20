@@ -4598,6 +4598,13 @@ test("anaphoric delivery replies cannot be resolved by empty or ungrounded plann
 
 test("target, publication, approval and mixed-polarity conflicts survive answer chains without dispatch", async () => {
   for (const [text, tag] of [
+    ["Run git push --tags.", { action: "pull_request" }],
+    ["Push tag v1.0 to origin.", { action: "pull_request" }],
+    ["Run `git push origin HEAD:refs/notes/ci`.", { action: "pull_request" }],
+    ["Close pull request #123.", { action: "pull_request" }],
+    ["Pull request #123 must be closed.", { action: "pull_request" }],
+    ["Reopen the pull request.", { action: "pull_request" }],
+    ["Run `gh pr ready 123 --undo`.", { action: "pull_request" }],
     ["Land the pull request after CI passes.", { action: "pull_request" }],
     ["Land the changes after tests pass.", { action: "pull_request" }],
     ["Land `the pull request` after CI.", { action: "pull_request" }],

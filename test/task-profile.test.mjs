@@ -154,6 +154,29 @@ test("the delivery screen is deterministic over the fixture corpus and masks lit
   assert.equal(unrelated.tier, "assumption"); assert.deepEqual(unrelated.controlled, []); assert.ok(unrelated.controls.length, "the control word is still recorded for the review");
 });
 
+test("pushes of tags and non-task refs cannot be covered by the task-branch profile", () => {
+  for (const text of ["Run git push --tags.", 'Run `git push --tags`.', "Push tag v1.0 to origin.", "Push all tags to origin.", "Push the Git notes to origin.", "Push all branches to origin.", "Run git push origin --follow-tags HEAD.", "Run git push --mirror origin.", "Run git push --all origin.", "Run git push origin refs/tags/v1.0.", "Run git push origin HEAD:refs/notes/ci.", "Run git push origin +refs/heads/release:refs/heads/release.", "Run git push origin :refs/tags/v1.0.", "Run git push --delete origin old-branch.", "Run git -C . push origin tag v1.0.", "Run git push origin other-branch.", "Run git push --repo origin other-branch.", "Run git push --repo=origin other-branch.", "Run git push --repo --tags HEAD.", "Push branch release/2.0 to origin.", "Run git push origin HEAD:other-branch.", 'Push `tag v1.0` to origin.']) {
+    const screen = deliveryScreen(text, PROFILE.target);
+    assert.equal(screen.tier, "question", text); assert.ok(screen.escalated.includes("direct_push"), text);
+    assert.ok(unaccountedTerms(screen, { action: "pull_request" }).includes("direct_push"), text);
+    const task = taskFor(text, { commandCandidates: ["npm test"] });
+    for (const delivery of [{}, { "r-1": { action: "pull_request" } }]) assert.deepEqual(parseDraft(JSON.stringify(draftFor(task, { delivery })), task).questions.map(q => q.id), ["q-delivery-r-1"], text);
+  }
+  for (const text of ["Push the task branch for review.", "Run git push -u origin HEAD.", "Run git push --repo origin HEAD.", "Run git push --repo=origin HEAD.", 'Run `git push origin HEAD` after tests.', "Run git push origin HEAD and run tests.", 'Show `git push --tags` as an example.', "Add a command to push tags to origin.", "Add support for pushing tags to origin.", 'Add a button to run `git push --tags`.', "Push notifications to subscribers.", "Push the button to continue."]) assert.notEqual(deliveryScreen(text, PROFILE.target).tier, "question", text);
+});
+
+test("existing PR lifecycle changes remain distinct from creating a new review PR", () => {
+  for (const text of ["Close pull request #123.", "Reopen the pull request.", "Delete the PR.", "Edit the pull request title.", "Lock the pull request.", "Unlock PR #123.", "Retarget the pull request to staging.", "Convert the PR to draft.", "Mark the PR ready for review.", "The pull request must be closed.", "The PR should be reopened.", "Pull request #123 must be closed.", "The PR #123 should be reopened.", "PR#123 must be closed.", "Pull request 123 should be reopened.", "Run gh pr close 123.", "Run gh pr reopen 123.", "Run gh pr lock 123.", "Run gh pr unlock 123.", "Run gh pr comment 123 --body done.", "Run gh pr review 123 --approve.", "Run gh pr edit 123 --base staging.", "Run gh pr ready 123 --undo.", 'Close `pull request #123`.', "Reopen ‘the pull request’."]) {
+    const screen = deliveryScreen(text, PROFILE.target);
+    assert.equal(screen.tier, "question", text); assert.ok(screen.escalated.includes("pull_request_lifecycle"), text);
+    assert.ok(unaccountedTerms(screen, { action: "pull_request" }).includes("pull_request_lifecycle"), text);
+    const task = taskFor(text, { commandCandidates: ["npm test"] });
+    for (const delivery of [{}, { "r-1": { action: "pull_request" } }]) assert.deepEqual(parseDraft(JSON.stringify(draftFor(task, { delivery })), task).questions.map(q => q.id), ["q-delivery-r-1"], text);
+  }
+  for (const text of ["Open a new PR for review.", "Create a pull request ready for review.", "Add a button to close pull requests.", "Add support for closing PRs.", "Document how to reopen the PR.", "Show closed pull requests in the dashboard.", "Add a closed PR count.", 'Render "Reopen the pull request" as a label.', 'Add a command to run `gh pr close 123`.']) assert.notEqual(deliveryScreen(text, PROFILE.target).tier, "question", text);
+  assert.throws(() => validateDeliveryTag({ action: "pull_request_lifecycle" }), /delivery tag action/);
+});
+
 test("landing a PR or change retains merge intent through delivery validation", () => {
   for (const text of ["Land the pull request after CI passes.", "Please land this change.", "Land the PR.", "Land the patch once tests pass.", "Land it after CI.", "Finish by landing our changes.", "The bot lands the commits.", "Make sure the PR is landed after CI.", "The change must be landed.", 'Land `the pull request` after CI.', "Land ‘the change’ after tests."]) {
     const screen = deliveryScreen(text, PROFILE.target);
@@ -168,7 +191,7 @@ test("landing a PR or change retains merge intent through delivery validation", 
     assert.ok(screen.controlled.includes("merge"), text);
     assert.deepEqual(unaccountedTerms(screen, { action: "restrict", prohibits: ["merge"] }), [], text);
   }
-  for (const text of ["Build a landing page.", "Add a field for the aircraft landing time.", "Land the plane in the simulation.", "Add a command to land changes.", 'Add a button to land `the pull request`.', "Document how to land a PR.", "Show the label 'Land the pull request'.", 'Add a test for the exact text “Land the change”.']) {
+  for (const text of ["Build a landing page.", "Add a field for the aircraft landing time.", "Land the plane in the simulation.", "Add a command to land changes.", "Add support for landing changes.", 'Add a button to land `the pull request`.', "Document how to land a PR.", "Show the label 'Land the pull request'.", 'Add a test for the exact text “Land the change”.']) {
     const screen = deliveryScreen(text, PROFILE.target);
     assert.equal(screen.terms.includes("merge"), false, text);
     assert.notEqual(screen.tier, "question", text);
@@ -712,7 +735,7 @@ test("the screen and mapping stay fast at the request and mapping limits", () =>
   const text = clause.repeat(Math.floor(MAX_INPUT_BYTES / clause.length));
   // Each test file runs in its own process. Charge work to this process, not
   // time that a parallel CI job leaves it waiting to be scheduled.
-  for (const [input, tier] of [[text, "question"], ["'npm publish' ".repeat(Math.floor(MAX_INPUT_BYTES / 14)), "none"], ['Run `npm publish`. '.repeat(Math.floor(MAX_INPUT_BYTES / 19)), "question"], ["landing ".repeat(Math.floor(MAX_INPUT_BYTES / 8)), "none"], ["landed ".repeat(Math.floor(MAX_INPUT_BYTES / 7)), "none"], ["Add a command to land changes. ".repeat(Math.floor(MAX_INPUT_BYTES / 31)), "none"], ["Land the PR after CI passes. ".repeat(Math.floor(MAX_INPUT_BYTES / 29)), "question"]]) {
+  for (const [input, tier] of [[text, "question"], ["'npm publish' ".repeat(Math.floor(MAX_INPUT_BYTES / 14)), "none"], ['Run `npm publish`. '.repeat(Math.floor(MAX_INPUT_BYTES / 19)), "question"], ["landing ".repeat(Math.floor(MAX_INPUT_BYTES / 8)), "none"], ["landed ".repeat(Math.floor(MAX_INPUT_BYTES / 7)), "none"], ["Add a command to land changes. ".repeat(Math.floor(MAX_INPUT_BYTES / 31)), "none"], ["Land the PR after CI passes. ".repeat(Math.floor(MAX_INPUT_BYTES / 29)), "question"], ["Run git push origin HEAD. ".repeat(Math.floor(MAX_INPUT_BYTES / 25)), "assumption"], ["Run git push --tags. ".repeat(Math.floor(MAX_INPUT_BYTES / 20)), "question"], ["Close pull request #123. ".repeat(Math.floor(MAX_INPUT_BYTES / 24)), "question"], ["Add a button to close PRs. ".repeat(Math.floor(MAX_INPUT_BYTES / 26)), "assumption"]]) {
     const started = process.hrtime.bigint(), cpuStarted = process.cpuUsage();
     let screen;
     for (let i = 0; i < 20; i++) screen = deliveryScreen(input);
