@@ -349,6 +349,42 @@ test("delegated application publication recognizes product surfaces before actor
   }
 });
 
+test("actor-led publication stays visible after coordinated product actions", () => {
+  const actors = ["the agent", "our developer", "the team", "the automation", "human agent", "John", "Jane Doe", "alex"];
+  const connectors = ["and", "and then", "but", "then", "as well as", ",", "&", "+", " / "];
+  for (const actor of actors)
+    for (const connector of connectors) {
+      const source = `Ensure the button creates a PR after tests pass ${connector} ${actor} opens another PR.`;
+      assert.throws(() => ownerDelivery(source), { code: "TASK_DELIVERY_SCOPE" }, source);
+      assert.throws(() => assertDeliveryAnswer({}, source), { code: "TASK_DELIVERY_SCOPE" }, source);
+    }
+  for (const source of [
+    "The agent opens another PR.",
+    "The developer submits a pull request.",
+    "Ensure the button creates a PR after tests pass provided that the agent opens another PR.",
+    "Ensure the button creates a PR, and the team creates another PR.",
+    "Clicking submit creates a PR and the agent opens another PR.",
+  ]) {
+    assert.throws(() => ownerDelivery(source), { code: "TASK_DELIVERY_SCOPE" }, source);
+    assert.throws(() => assertDeliveryAnswer({}, source), { code: "TASK_DELIVERY_SCOPE" }, source);
+  }
+  for (const source of [
+    "Ensure the button creates a PR after tests pass and the service opens another PR.",
+    "The button opens a PR and our webhook handler creates another PR.",
+    "Clicking submit creates a PR and the service opens another PR.",
+    "Ensure the button creates a PR after tests pass and the agent creates a PR template.",
+    "Ensure the button creates a PR after tests pass and the agent generates a report about PRs.",
+    'Show the example "the agent opens another PR" in the button help.',
+  ]) {
+    assert.equal(ownerDelivery(source), null, source);
+    assert.doesNotThrow(() => assertDeliveryAnswer({}, source), source);
+    const original = source + " Open a PR for review.", contract = ownerDelivery(original);
+    assert.equal(validateOwnerDelivery(contract), contract, source);
+    assert.equal(ownerImplementation(contract).join(""), source + " ", source);
+    assert.equal(contract.spans.map(span => original.slice(span.start, span.end)).join(""), original, source);
+  }
+});
+
 test("large repeated feature-object clauses stay within the supported request size", () => {
   const source = Array(1638).fill("Make PRs mergeable.").join(" ");
   assert.ok(Buffer.byteLength(source) < 32 * 1024);
