@@ -4,9 +4,10 @@ import { join } from "node:path";
 import { mkdirSync, writeFileSync, readFileSync } from "node:fs";
 import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import { deliveryProfile, validateDeliveryProfile, assertProfileBound, savedProfile, typedEraTask, stableProfile, deliveryScreen, maskLiterals, statements, validateDeliveryTag, profileCovers, unaccountedTerms, deliveryQuestion, deliveryProfileFromPrd, profileView, DELIVERY_CAPABILITIES, PROFILE_VERSION, COMPLETION_CONDITIONS } from "../lib/task_profile.mjs";
+import { deliveryProfile, validateDeliveryProfile, assertProfileBound, savedProfile, typedEraTask, stableProfile, deliveryScreen, maskLiterals, statements, validateDeliveryTag, profileCovers, unaccountedTerms, deliveryQuestion, deliveryQuestionId, deliveryProfileFromPrd, profileView, DELIVERY_CAPABILITIES, PROFILE_VERSION, COMPLETION_CONDITIONS } from "../lib/task_profile.mjs";
 import { intakeModelProblems, validateIntakeModelConfig, intakeModelRoute, intakeModelRouteSummary, pinnedModelRoute, savedModelRoute, MODEL_ROUTE_CEILINGS } from "../lib/task_model_config.mjs";
 import { COMPLETION_SCHEMA } from "../lib/task_completion.mjs";
+import { MAX_ANSWER_ID_CHARACTERS } from "../lib/task_limits.mjs";
 import { prepareModelTurn, isModelRouteReceipt, estimateTokens, estimateUsd } from "../lib/task_model_route.mjs";
 import { repositorySnapshot, REPOSITORY_CONTEXT_LIMITS } from "../lib/task_repository_context.mjs";
 import { fragments, parseDraft, renderDraft, draftPrompt, MAX_INPUT_BYTES } from "../lib/task_contract.mjs";
@@ -286,6 +287,30 @@ test("planner delivery tags are validated and compared with the profile without 
   assert.deepEqual(deliveryQuestion(PROFILE, requirement), deliveryQuestion(PROFILE, requirement));
   assert.equal(deliveryQuestion(PROFILE, requirement).id, "q-delivery-r-3");
   assert.doesNotMatch(deliveryQuestion(PROFILE, requirement).text, /Merge it/, "question text never echoes a planner reading");
+});
+
+test("recursive delivery question identifiers remain bounded, stable and distinct", () => {
+  let requirementId = "r-1";
+  const seen = new Set();
+  for (let depth = 0; depth < 128; depth++) {
+    const id = deliveryQuestionId(requirementId);
+    assert.ok(id.length <= 64, `depth ${depth}: ${id.length} characters`);
+    assert.match(id, /^q-[a-z0-9-]{1,64}$/);
+    assert.equal(deliveryQuestionId(requirementId), id);
+    assert.equal(seen.has(id), false); seen.add(id);
+    requirementId = `a-${id}-1`;
+  }
+  const long = "a-" + "q-delivery-".repeat(32) + "r-1-1";
+  assert.notEqual(deliveryQuestionId(long), deliveryQuestionId(long + "-2"));
+  assert.equal(deliveryQuestionId("r-1"), "q-delivery-r-1");
+  for (const length of [128, 129]) {
+    const requirementId = "a-" + "x".repeat(length - 13), id = `q-delivery-${requirementId}`;
+    const task = { questionHistory: { [id]: { id, requirements: [requirementId] } }, questionMappings: { [id]: [requirementId] }, answers: {} };
+    if (length === 128) { assert.equal(deliveryQuestionId(requirementId, task), id); assert.ok(id.length <= MAX_ANSWER_ID_CHARACTERS); }
+    else { assert.ok(deliveryQuestionId(requirementId, task).length <= 64); task.answers[id] = "Do it anyway."; assert.equal(deliveryQuestionId(requirementId, task), id, "accepted historical answer keys retain their provenance"); }
+    delete task.questionMappings[id];
+    assert.ok(deliveryQuestionId(requirementId, task).length <= 64, "history alone cannot establish question ownership");
+  }
 });
 
 test("fragments carry stable source spans into the immutable request and answers", () => {

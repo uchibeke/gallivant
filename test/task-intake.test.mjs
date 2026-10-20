@@ -19,7 +19,7 @@ import { makeRunner } from "../lib/run.mjs";
 import { runEnv, RUN_GIT_CONFIG, makeGit } from "../lib/git.mjs";
 import { prepareTurn } from "../lib/task_prepare.mjs";
 import { preparationEnvironment } from "../lib/task_environment.mjs";
-import { parseDraft, renderDraft, collectCommands, draftPrompt, MAX_INPUT_BYTES, MAX_PREPARATION_PROMPT_BYTES } from "../lib/task_contract.mjs";
+import { parseDraft, renderDraft, fragments, collectCommands, draftPrompt, MAX_INPUT_BYTES, MAX_PREPARATION_PROMPT_BYTES } from "../lib/task_contract.mjs";
 import { MAX_ANSWER_BYTES, MAX_ANSWER_COUNT, MAX_LEGACY_ANSWER_COUNT, MAX_LEGACY_ANSWER_BATCH_BYTES } from "../lib/task_limits.mjs";
 import { buildRun, buildPreparationRun, PREPARATION_BOUNDARY, capabilitiesFor } from "../lib/harness.mjs";
 import { parseSourcesMeta } from "../lib/config.mjs";
@@ -29,7 +29,7 @@ import { contentDigest, captureStartInput } from "../lib/start_contract.mjs";
 import { draftFor } from "./fixtures/task-intake.mjs";
 import { workflowRequests, applicationRequests } from "./fixtures/owner-actions.mjs";
 import { profileRequests } from "../templates/plugin/task-profile-requests.mjs";
-import { DELIVERY_CAPABILITIES, PROFILE_VERSION, deliveryScreen } from "../lib/task_profile.mjs";
+import { DELIVERY_CAPABILITIES, PROFILE_VERSION, deliveryScreen, deliveryQuestion } from "../lib/task_profile.mjs";
 import { modelSummary, capabilitySummary } from "../lib/task_delivery_view.mjs";
 import { tempHome, CONFIG, GOOD_PRD, harnessBin, fakeCredential, fakeIdentity, silentLog, fakeRunner, makeClock, codexLines, claudeResultLines, geminiLines, opencodeLines, gooseLines } from "./helpers.mjs";
 
@@ -4480,6 +4480,87 @@ test("a profile conflict pauses before any harness run until the owner resolves 
     assert.equal(pushed.status, "needs-input", `tagged=${tagged}`); assert.deepEqual(pushed.questions.map(q => q.id), ["q-delivery-a-q-delivery-r-1-1"]);
     assert.equal(pushed.readiness, null); assert.deepEqual(again.ctx.state.entries(), []);
     await assert.rejects(again.service.start({ taskId: first.taskId, expectedRevision: pushed.revision, run: true }), { code: "TASK_NOT_READY" });
+  }
+});
+
+test("delivery clients can answer eight nested clarification questions after restart and exact replay", async () => {
+  const w = world(), scope = { tenant: "alice", account: "alice", environment: "preview", region: "US", scopes: ["task-delivery:read", "task-delivery:write"], repositories: ["widget"] };
+  const manifest = { coreVersion: CORE_VERSION, coreSha256: "a".repeat(64), operationVersion: 1, taskVersion: 1, executionVersion: 1 };
+  migrateRuntimeState({ home: w.home, manifest });
+  let calls = 0;
+  const makeDelivery = () => createTaskDelivery({ manifest, authorize: async () => scope, store: createDeliveryStore(join(w.home, "delivery")), schedule: async () => {},
+    contextFor: async () => ({ ctx: w.ctx, repository: { dir: w.checkout, repo: "acme/widget" }, taskOptions: { prepare: async (_ctx, task) => {
+      calls++;
+      const out = draftFor(task, { delivery: Object.fromEntries(task.requirements.map(r => [r.id, r.id === "r-1" ? { action: "merge" } : r.text === "Do it anyway." ? { action: "restrict", prohibits: [] } : { action: "pull_request", prohibits: ["merge"] }])) });
+      out.criteria = [out.criteria[0]]; out.mapping.forEach(m => { m.criteria = ["ac-1"]; });
+      return JSON.stringify(out);
+    } } }) });
+  let delivery = makeDelivery();
+  let current = await delivery.dispatch("prepare", { repositoryId: "widget", text: "Merge the pull request.", harness: "codex", allowance: { budgetUsd: 1, runtimeMs: 60000 }, operationId: "nested-prepare", expectedRevision: 0 }, "alice");
+  for (let depth = 0; depth < 8; depth++) {
+    assert.equal(current.status, "needs-input", JSON.stringify(current.failures));
+    assert.equal(current.questions.length, 1);
+    assert.ok(current.questions[0].id.length <= 64, `depth ${depth}`);
+    const input = { taskId: current.taskId, expectedRevision: current.revision, operationId: `nested-${depth}`, answers: { [current.questions[0].id]: "Do it anyway." } };
+    current = await delivery.dispatch("answer", input, "alice");
+    delivery = makeDelivery();
+    assert.deepEqual(await delivery.dispatch("answer", input, "alice"), current);
+    assert.equal(calls, depth + 2); assert.deepEqual(w.ctx.state.entries(), []);
+  }
+  assert.equal(current.status, "needs-input"); assert.ok(current.questions[0].id.length <= 64);
+  const resolved = await delivery.dispatch("answer", { taskId: current.taskId, expectedRevision: current.revision, operationId: "nested-clear", answers: { [current.questions[0].id]: "Open a PR; do not merge." } }, "alice");
+  assert.equal(resolved.status, "ready", JSON.stringify(resolved.failures)); assert.equal(calls, 10);
+  assert.equal(taskStore(w.home).read(resolved.taskId).runAuthorized, false);
+  assert.deepEqual(w.ctx.state.entries(), []); assert.equal(w.daemonCalls(), 0);
+});
+
+test("saved delivery question IDs retain answerable history and oversized pending IDs recover without inference", async () => {
+  const clear = "Open a PR; do not merge.";
+  const plan = task => {
+    const out = draftFor(task, { delivery: Object.fromEntries(task.requirements.map(r => [r.id, r.id === "r-1" ? { action: "merge" } : r.text === clear ? { action: "pull_request", prohibits: ["merge"] } : { action: "restrict", prohibits: [] }])) });
+    out.criteria = [out.criteria[0]]; out.mapping.forEach(m => { m.criteria = ["ac-1"]; });
+    return out;
+  };
+  for (const depth of [4, 8]) {
+    let calls = 0;
+    const w = world({ prepare: async (_ctx, task) => { calls++; return JSON.stringify(plan(task)); } });
+    const first = await w.service.prepare({ text: "Merge the pull request.", run: true });
+    const store = taskStore(w.home), saved = store.read(first.taskId);
+    let question = saved.questions[0];
+    for (let i = 0; i < depth; i++) {
+      saved.answers[question.id] = "Do it anyway.";
+      const reply = fragments("Do it anyway.", `a-${question.id}`)[0]; saved.requirements.push(reply);
+      question = { ...deliveryQuestion(saved.deliveryProfile, reply), id: `q-delivery-${reply.id}` };
+      saved.questionHistory[question.id] = question; saved.questionMappings[question.id] = question.requirements;
+    }
+    const parsed = parseDraft(JSON.stringify(plan(saved)), saved), pendingId = parsed.questions[0].id;
+    saved.output = { ...parsed, questions: [question], mapping: parsed.mapping.map(m => m.questionId === pendingId ? { ...m, questionId: question.id } : m) };
+    saved.questions = [question]; saved.status = "needs-input"; saved.readiness = null;
+    if (depth === 4) assert.equal(parseDraft(JSON.stringify(saved.output), saved).questions[0].id, question.id);
+    else assert.throws(() => parseDraft(JSON.stringify(saved.output), saved), /resume a saved oversized delivery question/);
+    const text = renderDraft(saved, saved.output); writeFileSync(saved.draft.path, text);
+    saved.draft.hash = contentDigest(text); saved.draft.requirementsHash = contentDigest(JSON.stringify(saved.requirements)); store.save(saved);
+    const originalSources = structuredClone(saved.requirements), originalAnswers = structuredClone(saved.answers), originalHistory = structuredClone(saved.questionHistory);
+    if (depth === 8) {
+      const broken = structuredClone(saved); broken.questionHistory[question.id].requirements = ["r-999"]; store.save(broken);
+      await assert.rejects(w.service.resume({ taskId: first.taskId, expectedRevision: first.revision }), { code: "TASK_CONFLICT", taskEffects: "none" });
+      assert.deepEqual(store.read(first.taskId), broken); assert.equal(calls, 1); store.save(saved);
+      const owned = { ...saved, dispatchIntent: { at: "2026-10-20T00:00:00.000Z" } }; store.save(owned);
+      await assert.rejects(w.service.resume({ taskId: first.taskId, expectedRevision: first.revision }), { code: "TASK_CONFLICT", taskEffects: "none" });
+      assert.deepEqual(store.read(first.taskId), owned); assert.equal(calls, 1); store.save(saved);
+    }
+    const resumed = await w.service.resume({ taskId: first.taskId, expectedRevision: first.revision });
+    assert.equal(resumed.status, "needs-input"); assert.equal(calls, 1, "identifier recovery makes no planning call");
+    assert.deepEqual(store.read(first.taskId).requirements, originalSources); assert.deepEqual(store.read(first.taskId).answers, originalAnswers);
+    assert.equal(readFileSync(saved.draft.path, "utf8"), text, "the prior draft revision is preserved");
+    assert.deepEqual(store.read(first.taskId).deliveryProfile, saved.deliveryProfile);
+    for (const [id, historical] of Object.entries(originalHistory)) assert.deepEqual(store.read(first.taskId).questionHistory[id], historical);
+    if (depth === 4) assert.equal(resumed.questions[0].id, question.id, "a saved ID within the wire limit stays exact");
+    else { assert.ok(resumed.questions[0].id.length <= 64); assert.notEqual(resumed.questions[0].id, question.id); assert.ok(resumed.revision > first.revision); }
+    assert.deepEqual(await w.service.resume({ taskId: first.taskId, expectedRevision: resumed.revision }), resumed);
+    const resolved = await w.service.answer({ taskId: first.taskId, expectedRevision: resumed.revision, operationId: "legacy-clear", answers: { [resumed.questions[0].id]: clear } });
+    assert.equal(resolved.status, "ready", resolved.failures.join("\n")); assert.equal(calls, 2);
+    assert.equal(store.read(first.taskId).runAuthorized, false); assert.deepEqual(w.ctx.state.entries(), []);
   }
 });
 

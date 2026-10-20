@@ -64,6 +64,17 @@ profile:
   Preparation pauses with `needs-input`; no readiness decision or implementation
   starts until the owner answers.
 
+New delivery question IDs are at most 64 characters. Longer clause identifiers
+use a stable portable digest suffix instead of embedding their full answer
+ancestry. Exact source spans and saved question ownership retain that ancestry.
+Saved IDs within the 128-character public answer limit remain unchanged. If an
+older pending delivery question exceeds that limit, explicitly resume the task
+at its current revision: intake creates a bounded replacement and a fresh draft
+revision without inference or implementation, preserving the old history and
+accepted answers. Answer the replacement ID from the resumed result; readiness
+and execution authorization remain unset. Conflicting saved ownership refuses
+recovery and requires inspection before retrying.
+
 Explicit PR destinations are also compared with the selected repository and
 case-sensitive base, even if the planner supplies only a `pull_request` tag.
 Planner tags retain named destinations as `target: { repository, base }`, with
