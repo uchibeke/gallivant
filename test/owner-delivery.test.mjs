@@ -434,6 +434,44 @@ test("actor-led publication stays visible after coordinated product actions", ()
   }
 });
 
+test("modified actor-led publication stays visible without changing product ownership", () => {
+  for (const actor of ["the agent", "our developer", "the automation", "John", "Jane Doe", "alex"])
+    for (const lead of ["quickly", "also", "will quickly", "must not silently", "to immediately", "very carefully"])
+      for (const source of [
+        `The button creates a PR after tests pass and ${actor} ${lead} opens another PR.`,
+        `Ensure the button creates a PR after tests pass provided that ${actor} ${lead} opens another PR.`,
+        `Ensure ${actor} ${lead} creates a PR.`,
+        `${actor} ${lead} opens another PR.`,
+      ]) {
+        assert.throws(() => ownerDelivery(source), { code: "TASK_DELIVERY_SCOPE" }, source);
+        assert.throws(() => assertDeliveryAnswer({}, source), { code: "TASK_DELIVERY_SCOPE" }, source);
+      }
+  for (const source of [
+    "The button creates a PR after tests pass and the service quickly opens another PR.",
+    "Ensure the button quickly creates a PR after tests pass.",
+    "The button quickly creates a PR after tests pass.",
+    "Have the submit button to immediately create a PR.",
+    "The button creates a PR after tests pass and the agent quickly creates a PR template.",
+    "Clicking submit quickly creates a PR and the service also opens another PR.",
+    'Show the example "the agent quickly opens another PR" in the button help.',
+  ]) {
+    assert.equal(ownerDelivery(source), null, source);
+    assert.doesNotThrow(() => assertDeliveryAnswer({}, source), source);
+    const original = source + " Open a PR for review.", contract = ownerDelivery(original);
+    assert.equal(validateOwnerDelivery(contract), contract, source);
+    assert.equal(ownerImplementation(contract).join(""), source + " ", source);
+    assert.equal(contract.spans.map(span => original.slice(span.start, span.end)).join(""), original, source);
+  }
+  for (const source of [
+    "Ensure the button quickly creates a PR after tests pass since changes cannot be merged.",
+    "Ensure the button creates a PR after tests pass and the agent quickly creates a PR after I approve the code.",
+    "The button creates a PR after tests pass & Jane Doe also submits another PR.",
+  ]) {
+    assert.throws(() => ownerDelivery(source), { code: "TASK_DELIVERY_SCOPE" }, source);
+    assert.throws(() => assertDeliveryAnswer({}, source), { code: "TASK_DELIVERY_SCOPE" }, source);
+  }
+});
+
 test("large repeated feature-object clauses stay within the supported request size", () => {
   const source = Array(1638).fill("Make PRs mergeable.").join(" ");
   assert.ok(Buffer.byteLength(source) < 32 * 1024);
