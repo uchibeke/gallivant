@@ -126,5 +126,5 @@ esac
     if (name.includes("*") || path.endsWith(".json")) continue;
     run(process.execPath, ["--input-type=module", "-e", `await import(${JSON.stringify(join(installed, path))})`], { cwd: consumer, env });
   }
-  console.log(`Installed ${packed.name}@${packed.version}: npx fast path (binary, config permissions, repository registration, repeat safety, next steps), credential-scope refusals before writes, version, help, packaged PRD, validation and all module exports passed.`);
+  process.stdout.write(`Installed ${packed.name}@${packed.version}: npx fast path (binary, config permissions, repository registration, repeat safety, next steps), credential-scope refusals before writes, version, help, packaged PRD, validation and all module exports passed.\n`);
 } finally { rmSync(root, { recursive: true, force: true }); }

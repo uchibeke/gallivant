@@ -115,7 +115,7 @@ async function dispatch(argv) {
     if (arg) throw new Error("init takes no positional argument; run it from inside the target checkout");
     const r = await init({ harness: values.harness, worktrees: values.worktrees });
     const report = renderDoctor(r.doctor);
-    console.log(renderInit(r, report));
+    process.stdout.write(renderInit(r, report) + "\n");
     // Doctor's exit code, so a script or an agent reading only the status knows whether setup still has open items.
     return report.exitCode;
   }
