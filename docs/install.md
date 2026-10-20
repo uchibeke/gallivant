@@ -1,14 +1,34 @@
 # Install
 
-Get one repository task from a brief to a reviewed pull request. Install the CLI,
-sign in to GitHub and one harness, finish the checks, then start a small task.
-Gallivant keeps the implementation and review loop moving; you review and merge.
+Get one repository task from a brief to a reviewed pull request. One command sets
+up a repository; `doctor` tells you what still needs your decision or login; then
+you start a small task. Gallivant keeps the implementation and review loop moving
+and you review and merge.
 
 **Using a coding agent to set this up?** Give it the [agent setup guide](agent-setup.md).
-It includes a copy/paste prompt, setup checks and the point where a real run starts.
+It includes a copy/paste prompt, the setup checks and the point where a real run starts.
 
-For DNS errors or stalled provider calls, see [network diagnosis and recovery](network-recovery.md).
-The diagnostic command works before configuration or login, on Linux and macOS.
+## 1. Prerequisites
+
+Requirements shared by the coordinator: macOS or Linux, Node 22 or newer, Git,
+`gh` signed in, and `jq`. For the recommended local path, use signed-in Codex CLI
+0.160.0+ or Claude Code 2.1.263+ (Codex implementation accepts 0.158.0+, but
+plain-language preparation needs 0.160.0+). Hosted OpenAI Agents execution has a
+separate setup below and needs no local Codex or Claude binary. See the
+[capability matrix](../README.md#harness-support) before choosing another harness.
+
+| Prerequisite | Check | If it fails |
+| --- | --- | --- |
+| Node 22+ | `node --version` | install Node from your package manager or a version manager |
+| Git and jq | `git --version`, `jq --version` | `brew install git jq`, `apt install git jq` or `dnf install git jq` |
+| GitHub CLI signed in | `gh auth status` | `gh auth login` |
+| Codex CLI signed in | `codex login status` | `codex login` |
+| Claude Code signed in | `claude auth status` | `claude auth login` |
+| Git identity | `git config --get user.name`, `git config --get user.email` | `git config --global user.name "..."` and `user.email` |
+
+Each login belongs to that tool's own flow. Nothing in Gallivant asks for a
+password, token or browser cookie, and `init` stops before writing anything when
+`gh` or the selected harness is signed out.
 
 Linux installations need process inspection through `ps` with `lstart`, `command`,
 PID and process-group fields (normally the `procps`/`procps-ng` package). Minimal
@@ -17,72 +37,103 @@ blocks safe restart rather than allowing overlapping agents. The CI baseline is
 Ubuntu with Node 22/24; other distributions must also satisfy their harness and
 sandbox prerequisites.
 
-Start with one harness and one repository. `gallivant init` creates your local
-config; `gallivant doctor` checks the prerequisites and prints a fix for each
-missing item. Setup time depends on whether your harness and GitHub are already
-configured. No model call is needed to install the CLI or validate a hand-written PRD.
+For DNS errors or stalled provider calls, see [network diagnosis and recovery](network-recovery.md).
+The diagnostic command works before configuration or login, on Linux and macOS.
 
-Requirements shared by the coordinator: macOS or Linux, Node 22 or newer, Git,
-`gh` signed in, and `jq`. For the recommended local path, use signed-in Claude
-Code 2.1.263+ or Codex CLI 0.160.0+ (Codex implementation accepts 0.158.0+, but
-plain-language preparation needs 0.160.0+). Hosted OpenAI Agents execution has a
-separate setup below and needs no local Codex or Claude binary. See the
-[capability matrix](../README.md#harness-support) before choosing another harness.
+## 2. The command
 
-## 1. The command
+Inside the Git checkout you want Gallivant to work in:
 
-Check the [registry version](https://www.npmjs.com/package/@uchibeke/gallivant). If one
-is available, install the CLI with `npm install -g @uchibeke/gallivant` and check
-`gallivant --version`. If the package has not been published yet, use the source
-checkout:
+```bash
+cd /path/to/your/repository
+npx --yes @uchibeke/gallivant init --harness codex    # or: --harness claude
+```
+
+This setup flow requires **0.2.1 or newer**. On 2026-10-20, npm's `latest` was
+still 0.2.0: its `init` creates the config only, so repository registration and
+`doctor` must be done separately. A maintainer must [publish 0.2.1](releasing.md)
+before the command above provides the flow below; setup does not publish it.
+
+`npx` downloads the published `@uchibeke/gallivant` package into npm's cache and
+runs its `gallivant` command. Nothing is installed globally, no `gallivant`
+command is added to your PATH, and this repository is not cloned. The command
+ends by saying so and printing both the next `npx` command and the optional
+persistent install:
+
+```bash
+npm install -g @uchibeke/gallivant     # optional; then use plain `gallivant`
+gallivant --version
+```
+
+If the shell cannot find `gallivant` after a global install, the `bin` directory
+under `npm prefix -g` is not on your PATH. Avoid `sudo npm install`; use a
+user-owned Node installation or prefix. The rest of this guide writes
+`gallivant`; with `npx`, read that as `npx --yes @uchibeke/gallivant`.
+
+### What `init` does
+
+1. Refuses to continue, writing nothing, when the directory is not a Git
+   checkout, its `origin` remote is not a github.com repository, `gh` is signed
+   out, the selected harness is missing, too old or signed out, or the resolved
+   run credential cannot see or push to the repository. Each refusal names the
+   command that fixes it. Classic credentials also need `public_repo` or `repo`
+   scope; a failed scope lookup stops setup before writing and asks you to retry.
+2. Creates `~/.gallivant/config.json` (mode 600) with your authenticated GitHub
+   login in `trusted_authors`, the selected installed harness, notifications
+   disabled and a separate `~/.gallivant-worktrees` directory for task checkouts.
+   Use `--worktrees /absolute/path` to put checkouts elsewhere, outside the
+   config home.
+3. Records the repository in `repos` once, by its lowercased `owner/name`.
+4. Prints the `doctor` report and exits with its status: `0` when every check
+   passes, `1` while something still needs you.
+
+Running it again is safe. An existing config keeps every key as written,
+including custom harness binaries, `github_token_file`, `repos` entries with
+their base branches, `notify` and `worktrees`; the only change is the one `repos`
+entry for the current repository, and a repository already listed is not
+duplicated. `--worktrees` is refused when it differs from the configured
+directory, so edit the config to move checkouts. `--harness` adds the named
+harness when it is not configured yet and leaves the others alone.
+If both Codex and Claude are configured, pass `--harness codex` or
+`--harness claude` explicitly. Setup rechecks settings changed by another command
+before writing, so concurrent repository registrations preserve each other's entries.
+
+### What `init` leaves to you
+
+`doctor` reports these with the exact fix. `init` does not perform them:
+
+- **Reviewer.** The default reviewer is the Codex GitHub integration. Enable it
+  on the repository, configure another supported bot, or set `"reviewer": null`
+  to rely on CI and trusted human feedback. Without one of these, the default
+  loop waits for a review that cannot arrive. See [the reviewer key](config.md#the-reviewer-object).
+- **Branch protection.** Section 5 below. `doctor` prints the `gh api` call; you
+  run it.
+- **Harness guardrails.** Sections 7 and 8 below. APort's installer writes the
+  hook, and Codex asks you to trust it interactively.
+- **Credentials and notifications.** Sections 4 and 6 below are optional and
+  need your own token or ntfy topic.
+- **Starting work.** Setup never prepares or starts a task, so it spends nothing
+  on inference. Section 9 covers the first task and what `--run` authorizes.
+
+Global configuration lives in `~/.gallivant/config.json` (or
+`$GALLIVANT_HOME/config.json` when explicitly set). See [config.md](config.md)
+for every key. Task commands still need a target checkout: run inside it, pass
+`--dir` for natural-language tasks, or pass the PRD path for a written brief.
+
+### Install from source
+
+Contributors who want to run the checkout they are editing:
 
 ```bash
 git clone https://github.com/uchibeke/gallivant && cd gallivant
 npm ci --ignore-scripts
 npm link
 gallivant --version
-gallivant --help          # from any directory, to confirm it is on your PATH
 ```
 
 The package has locked runtime dependencies; `npm ci` installs them for a source
-checkout. `npm i -g .` copies instead of linking.
-If the shell cannot find the command afterwards,
-the `bin` directory under `npm prefix -g` is not on your PATH.
-
-Global configuration lives in `~/.gallivant/config.json` (or
-`$GALLIVANT_HOME/config.json` when explicitly set). Task commands still
-need a target checkout: run inside it, pass `--dir` for natural-language tasks, or
-pass the PRD path for a written brief.
-
-## 2. Sign in and create config
-
-```bash
-gh auth login             # skip if gh auth status already passes
-codex login               # or sign in with claude, if that is your selected harness
-git config --get user.name
-git config --get user.email
-gallivant init --harness codex    # or --harness claude
-gallivant doctor
-```
-
-`init` writes `~/.gallivant/config.json` with mode 600, trusts your authenticated
-GitHub login, records only the selected installed harness, and creates
-`~/.gallivant-worktrees` for separate task checkouts. Use `--worktrees /absolute/path`
-to choose another location outside the config home. Notifications start disabled.
-Existing configs are never overwritten. If `init` reports an existing config,
-continue with `doctor`; preserve the config and repair only the relevant keys.
-Set your Git name/email if the checks
-above are empty; commits use your configured identity.
-
-`doctor` can also print a suggested config when none exists. It reports missing
-guardrails, credentials and repository protections; `init` does not configure
-those for you. Add the target repository to `repos` so `doctor` checks its
-permissions, base branch and protections. See [config.md](config.md) for every key.
-The default reviewer is
-the Codex GitHub integration: enable it on your target repository, configure
-another supported bot, or explicitly set `"reviewer": null` to use CI and trusted
-human feedback. Without a configured review bot, the default loop waits for a
-review that cannot arrive.
+checkout. `npm i -g .` copies instead of linking. This is not the path for using
+Gallivant; the published package is.
 
 ### Hosted Agents API instead of a local CLI
 
@@ -134,7 +185,16 @@ currently disabled because repository ownership of the selected environment
 cannot be verified. See [the Cloud gate](codex-cloud.md); local Codex and Claude
 remain available.
 
-## 3. GitHub auth
+## 3. Read the report
+
+`init` ends with the `doctor` report; `gallivant doctor` prints it again at any
+time. Every failing line carries the command or file that fixes it. Work through
+them in order, then rerun `doctor`. `doctor` without flags checks configuration,
+credentials and repository access without launching a model run; `doctor --probe`
+runs a real Claude sandbox test and `doctor --send` sends a real notification,
+so use those only when you mean to.
+
+## 4. GitHub auth
 
 By default Gallivant uses the login you already have, however you set it up. Nothing to configure beyond `gh auth status` passing. There is no file to copy for this: every git setting a run needs, the credential helper included, is passed in the run's environment.
 
@@ -178,11 +238,11 @@ recognizes enterprise hosts on an existing checkout, but new-task repository
 resolution and clone URLs currently use github.com. An enterprise login or token
 alone does not establish supported end-to-end operation.
 
-## 4. A ruleset on each repo
+## 5. A ruleset on each repo
 
 The one control that stops a push to the default branch is GitHub's. `doctor` prints the exact `gh api` call for every repo in `repos`; it creates a ruleset that blocks deletion and force pushes on the default branch and requires a pull request, with no bypass actors. Gallivant never merges, so the ruleset costs nothing in the loop.
 
-## 5. Notifications
+## 6. Notifications
 
 Optional: create a topic on [ntfy.sh](https://ntfy.sh) or your own server, install the ntfy app, and set
 `"notify": { "ntfy": "https://ntfy.sh/<unguessable-topic>", "email": null }`.
@@ -195,7 +255,7 @@ gallivant doctor --send      # sends one test message
 
 Three kinds of message exist: `ready for a human`, `needs you: <reason>`, and a throttled `gallivant: <error>` when the daemon itself cannot work (gh not authenticated, a harness signed out). Nothing on merge. Nothing per round.
 
-## 6. APort on Claude Code
+## 7. APort on Claude Code
 
 APort's installer writes a PreToolUse hook with matcher `*` into whichever settings file it is pointed at, and the hook enforces one passport. Gallivant's passport is strict on purpose: writes only under the worktrees directory, control-plane directories blocked. Installed into `~/.claude/settings.json`, that policy would apply to every interactive Claude session you run and block your normal work. So the installer goes into a Gallivant-owned directory, and every run loads it with `--settings` plus `APORT_CLAUDE_CODE_CONFIG_DIR`. Nothing about the sandbox requires this; it is only about keeping Gallivant's policy separate from yours.
 
@@ -224,7 +284,7 @@ gallivant doctor --probe     # a real run: a write inside the checkout succeeds,
 
 The probe reads the APort audit log to tell apart a hook that never ran from a passport that allowed the write, and prints the fix for each.
 
-## 7. APort on Codex
+## 8. APort on Codex
 
 ```bash
 npx @aporthq/aport-agent-guardrails codex --global --enforcement=warn
@@ -239,7 +299,7 @@ Git metadata writes and escalations, the scoped token and the ruleset. Gallivant
 sets the approval mode on start and resume. A denial must be diagnosed, not
 bypassed. See [guardrails.md](guardrails.md#codex-git-writes-need-automatic-approval).
 
-## 8. First task
+## 9. First task
 
 Before dispatch, confirm the repository, target branch, permitted changes and
 spending limits. The default `max_iterations` is 30 automatic fix rounds;

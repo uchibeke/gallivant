@@ -1,9 +1,16 @@
 # Releasing
 
 The package name is `@uchibeke/gallivant`; the executable is `gallivant`. The repository is
-`uchibeke/gallivant`. Before announcing a version, confirm npm publication and a
-passing consumer smoke check. A public GitHub repository alone does not make the
-npm command work.
+`uchibeke/gallivant`. The first public release, 0.2.0, was published on
+2026-10-19; `npm view @uchibeke/gallivant version` reports the current one.
+Before announcing a version, confirm its npm publication and a passing consumer
+smoke check. A public GitHub repository alone does not make the npm command work.
+
+The README and installation guide lead with
+`npx --yes @uchibeke/gallivant init --harness codex`, which runs whatever
+version npm serves as `latest`. When `init` or another documented command changes
+behavior, release the version that carries it before, or together with, the
+documentation that describes it.
 
 ## One-time launch setup
 
@@ -21,14 +28,13 @@ npm command work.
    Enable the `main` ruleset with pull requests, the four portability checks,
    and protection against deletion and force pushes. Read back both settings:
    merely referencing `environment: npm` in YAML does not create protection.
-3. For a package that does not exist yet, arrange the initial npm publication
-   credential with the npm owner. If needed, set a short-lived granular
-   `NPM_TOKEN` in the protected `npm` environment, scoped as narrowly as npm
-   permits. Never put it in the repository or a PR.
-   A local `npm login` is not authentication for GitHub Actions. Do not publish
-   the release locally to bypass this setup: the release's provenance is
-   generated in supported CI, not by the developer's terminal.
-4. Once the package exists, configure its npm trusted publisher for GitHub owner
+3. The initial publication used a short-lived granular `NPM_TOKEN` in the
+   protected `npm` environment, scoped as narrowly as npm permits. Never put a
+   token in the repository or a PR. A local `npm login` is not authentication
+   for GitHub Actions. Do not publish a release locally to bypass this setup:
+   the release's provenance is generated in supported CI, not by the
+   developer's terminal.
+4. With the package published, configure its npm trusted publisher for GitHub owner
    `uchibeke`, repository `gallivant`, workflow `release.yml`, environment `npm`.
    Permit direct `npm publish`, which is what this workflow runs. Validate a new
    trusted publisher within two days or recreate it after expiry; configure it
@@ -56,8 +62,8 @@ npm whoami --registry=https://registry.npmjs.org
 npm view @uchibeke/gallivant version --registry=https://registry.npmjs.org
 ```
 
-An absent package is expected before the first publication. An absent `npm`
-environment or disabled branch protection is unfinished release setup.
+`npm view` should report the published version. An absent `npm` environment or
+disabled branch protection is unfinished release setup.
 
 ### Staged publishing is a different workflow
 
@@ -87,8 +93,8 @@ Choose one trigger:
 
 ```sh
 # From an up-to-date main checkout; replace the example with package.json's version.
-git tag -a v0.2.0 -m 'Release 0.2.0'
-git push origin v0.2.0
+git tag -a v0.2.1 -m 'Release 0.2.1'
+git push origin v0.2.1
 
 # Or dispatch against main; the workflow uses main's package version.
 gh workflow run release.yml --repo uchibeke/gallivant --ref main
@@ -113,7 +119,8 @@ original workflow rather than dispatching newer `main` with the old version.
 
 ```sh
 npm view @uchibeke/gallivant version dist.integrity dist.attestations
-npm install -g @uchibeke/gallivant
+npx --yes @uchibeke/gallivant --version     # the command the README leads with
+npm install -g @uchibeke/gallivant          # the documented persistent option
 gallivant --version
 gallivant --help
 ```
@@ -124,9 +131,9 @@ in a clean project that installed the released version to verify registry
 signatures and available provenance. Metadata presence alone is not signature
 verification; see [npm provenance verification](https://docs.npmjs.com/generating-provenance-statements/#verifying-provenance-attestations).
 
-After publication is verified, update the README and installation guide to put
-the tested npm install command first and remove the first-release-pending notes
-(including this page). Keep the source-install alternative.
+After publication is verified, check that the README's `npx` command and the
+installation guide match the behavior of the released version, and keep the
+source-install alternative for contributors.
 
 Use a clean test account/home and the [getting-started guide](install.md) for one
 small real PR. Confirm implementation, feedback-driven continuation, CI and the
@@ -135,6 +142,8 @@ paid-provider access. Recheck anonymous GitHub access and all README links.
 Announcement drafts are in [launch.md](launch.md).
 
 For local validation without publishing: `npm run lint`, `npm test`, and
-`npm run test:install`. The last command packs and installs under a disposable
-directory, exercises setup and PRD commands outside the source tree, and imports
-every declared module export. It makes registry requests but no model calls.
+`npm run test:install`. The last command packs the tarball under a disposable
+directory, runs the README's `npx` setup command against it from a fixture
+repository with a throwaway home, installs it as a dependency, exercises PRD
+commands outside the source tree, and imports every declared module export. It
+makes registry requests but no model calls.

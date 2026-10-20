@@ -1,7 +1,9 @@
 # Documentation
 
-Start with [installation and your first run](install.md), then choose how to
-describe the work. [Natural-language tasks](tasks.md) prepare a reviewable brief
+Start with [installation and your first run](install.md): inside the target
+checkout, `npx --yes @uchibeke/gallivant init --harness codex` (or
+`--harness claude`) writes the config, records the repository and prints the
+setup report. Then choose how to describe the work. [Natural-language tasks](tasks.md) prepare a reviewable brief
 from your request; [hand-authored PRDs](prd.md) let you write that brief directly.
 Both use the same validation, execution, GitHub review and completion workflow.
 Code, research and documentation can all be delivered as verifiable repository

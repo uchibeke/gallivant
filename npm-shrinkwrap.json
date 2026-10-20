@@ -1,12 +1,12 @@
 {
   "name": "@uchibeke/gallivant",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "lockfileVersion": 3,
   "requires": true,
   "packages": {
     "": {
       "name": "@uchibeke/gallivant",
-      "version": "0.2.0",
+      "version": "0.2.1",
       "bundleDependencies": [
         "smol-toml"
       ],

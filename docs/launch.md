@@ -1,10 +1,13 @@
 # Announcement drafts
 
 Publish these only after [the release checks](releasing.md#verify-before-announcing)
-pass and the repository is public. Use the install command that actually works
-for the released version; do not advertise npm installation before publication.
-Add a genuine dashboard screenshot or recording of a task reaching a reviewed
-PR. Fixture tests are not live provider evidence.
+pass for the version being announced. The package is published as
+`@uchibeke/gallivant`; the setup command to advertise is
+`npx --yes @uchibeke/gallivant init --harness codex` (or `--harness claude`),
+run inside the target checkout. Check that the behavior the README describes is
+in the released version before quoting it. Add a genuine dashboard screenshot or
+recording of a task reaching a reviewed PR. Fixture tests are not live provider
+evidence.
 
 ## X
 

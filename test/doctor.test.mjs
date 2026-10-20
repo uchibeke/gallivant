@@ -3,11 +3,28 @@
 // check that passes on an unprotected default branch is worse than no check: it reports a control that is not there.
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { protectsDefaultBranch, claudeSandboxCheck, hasRepositoryWriteScope } from "../lib/commands/doctor.mjs";
+import { protectsDefaultBranch, claudeSandboxCheck, hasRepositoryWriteScope, repositoryWriteScopeCheck } from "../lib/commands/doctor.mjs";
 
 test("doctor accepts public-only repository scope without requiring private repository access", () => {
   for (const scopes of [null, "repo", "read:org, public_repo, user:email"]) assert.equal(hasRepositoryWriteScope(scopes), true);
   for (const scopes of ["", "read:user, user:email", "repo:status", "repo:invite", "not_repo"]) assert.equal(hasRepositoryWriteScope(scopes), false);
+});
+
+test("repository scope validation distinguishes a missing header from a failed lookup and redacts errors", async () => {
+  const credential = { token: "scope-secret-marker", source: "fixture", host: "github.com" };
+  for (const scopes of [null, "repo", "public_repo"]) {
+    const result = await repositoryWriteScopeCheck({ tokenScopes: async () => scopes }, credential);
+    assert.equal(result.ok, true);
+    assert.equal(result.detail, scopes === null ? "fine-grained" : `classic (${scopes})`);
+  }
+  const denied = await repositoryWriteScopeCheck({ tokenScopes: async () => "read:user" }, credential);
+  assert.equal(denied.ok, false);
+  assert.match(denied.fix, /public_repo.*Contents: write/);
+  const unavailable = await repositoryWriteScopeCheck({ tokenScopes: async () => { throw new Error("HTTP 503: scope-secret-marker\nprivate diagnostic"); } }, credential);
+  assert.equal(unavailable.ok, false);
+  assert.match(unavailable.detail, /could not verify.*write scope: HTTP 503: <token>/);
+  assert.match(unavailable.fix, /retry/);
+  assert.doesNotMatch(JSON.stringify(unavailable), /scope-secret-marker|private diagnostic/);
 });
 
 test("doctor reports macOS gh certificate failures without weakening Linux settings or modifying the input", () => {

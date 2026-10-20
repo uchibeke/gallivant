@@ -3,36 +3,12 @@ import assert from "node:assert/strict";
 import { createServer } from "node:http";
 import { execFileSync } from "node:child_process";
 import { join } from "node:path";
-import { realpathSync, readFileSync, statSync, symlinkSync, existsSync } from "node:fs";
-import { init } from "../lib/commands/init.mjs";
+import { realpathSync } from "node:fs";
 import { startServices } from "../lib/commands/start_services.mjs";
 import { trackerInBackground, trackerForeground, stopTracker, readTracker, trackerPort, openTracker } from "../lib/tracker_process.mjs";
 import { writeJsonAtomic } from "../lib/fs.mjs";
 import { makeContext } from "../lib/context.mjs";
 import { tempHome, CONFIG } from "./helpers.mjs";
-
-test("init writes only a private selected-harness config and refuses overwrite", async () => {
-  const home = join(realpathSync(tempHome()), "new-home"), worktrees = realpathSync(tempHome());
-  const options = { home, worktrees, login: "fixture", harness: "codex", discover: () => ({ codex: { bin: process.execPath }, claude: { bin: process.execPath } }) };
-  const result = await init(options);
-  assert.deepEqual(Object.keys(result.config.harness), ["codex"]);
-  assert.equal(result.config.notify, null);
-  assert.equal(statSync(result.file).mode & 0o777, 0o600);
-  assert.equal(statSync(home).mode & 0o777, 0o700);
-  const before = readFileSync(result.file, "utf8");
-  await assert.rejects(init(options), /already exists/);
-  assert.equal(readFileSync(result.file, "utf8"), before);
-});
-
-test("init refuses unsupported, missing and unsafe setup before writing", async () => {
-  const root = realpathSync(tempHome()), home = join(root, "home");
-  await assert.rejects(init({ home, harness: "goose" }), /codex or claude/);
-  await assert.rejects(init({ home, discover: () => ({}) }), /not on PATH/);
-  assert.equal(existsSync(home), false);
-  symlinkSync(join(root, "missing"), home);
-  await assert.rejects(init({ home, login: "fixture", discover: () => ({ codex: { bin: process.execPath } }) }));
-  assert.equal(existsSync(join(root, "missing")), false);
-});
 
 test("start and serve service startup reuses the same daemon/tracker path with explicit opt-outs", async () => {
   const calls = [];

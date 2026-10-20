@@ -1,9 +1,10 @@
 # Let an agent set up Gallivant
 
-Give the prompt below to your coding agent. It can inspect prerequisites, install
-the CLI, create a private config and validate a first task. You handle account
-login and any required trust prompts. Setup does not need access to every private
-repository, and installing the CLI does not start a paid session.
+Give the prompt below to your coding agent. It can inspect prerequisites, run
+the published setup command, read the resulting report and validate a first task.
+You handle account login and any required trust prompts. Setup does not need
+access to every private repository, and running the setup command does not start
+a paid session.
 
 Start with **Codex or Claude and one repository**. Those are the harnesses supported
 by `gallivant init`. [Hosted Agents API](openai-agents.md) uses an explicit config
@@ -24,12 +25,15 @@ CLI --help and the docs matching the installed version. Prefer an already workin
 Codex or Claude setup. Preserve existing credentials, settings, running jobs,
 worktrees and uncommitted changes. Report proposed config changes without secrets.
 
-Install/configure the CLI and run the setup checks. If Gallivant is not yet
-published on npm, use the documented source installation. Do not overwrite an
-existing config, weaken security settings, install global hooks, change repository
-protections, sign into accounts or elevate privileges without the relevant user
-authorization. Never ask me to paste API keys or tokens into this conversation.
-Use the provider's login flow or a private credential file instead.
+From inside the target checkout, run the published setup command:
+npx --yes @uchibeke/gallivant init --harness codex (or --harness claude), then
+read its report. Do not clone the Gallivant repository or install it globally
+unless I ask. If the command stops because gh or the harness is signed out, tell
+me the exact login command it printed and wait; do not sign in for me. Do not
+overwrite an existing config, weaken security settings, install hooks, change
+repository protections or elevate privileges without my authorization. Never ask
+me to paste API keys or tokens into this conversation. Use the provider's login
+flow or a private credential file instead.
 
 Ask only for missing decisions: target repository and checkout, approved base
 branch, preferred available harness, first task scope, and allowed spending.
@@ -88,38 +92,45 @@ automatically commit, or switch a dirty checkout. Confirm which GitHub repositor
 and base branch the task should use; the current branch is not necessarily the
 approved PR target. Account login and Git identity belong to the user.
 
-## 2. Install and initialize
+## 2. Run the setup command
 
-Use the [current installation instructions](install.md#1-the-command). Before
-the first npm publication, install from source; `npm install -g @uchibeke/gallivant` is only
-an option after the package is published. Avoid `sudo npm install`; use a
-user-owned Node installation or prefix when global installation is not writable.
-Do not silently replace a different installed version while its daemon is running.
-
-After GitHub and the selected harness are signed in:
+Use the [current installation instructions](install.md#2-the-command). After
+GitHub and the selected harness are signed in, from inside the target checkout:
 
 ```sh
-gallivant --version
-gallivant --help
-gallivant init --harness codex
-gallivant doctor
+npx --yes @uchibeke/gallivant init --harness codex    # or: --harness claude
 ```
 
-Use `--harness claude` for Claude. `init` is noninteractive; it creates a config
-only when none exists. It does not log in, install hooks or fix permissions.
-If a config exists, skip `init` and preserve its unrelated keys. The normal path
-is `~/.gallivant/config.json`; use `$GALLIVANT_HOME/config.json` if that variable is
-already set. Keep it private (mode `600`). Choose a worktrees directory outside
-the config home, using `init --worktrees /absolute/path` if needed.
+`npx` runs the published package on demand; it installs nothing globally and
+does not clone this repository. `init` is noninteractive. It refuses, writing
+nothing, when the directory is not a GitHub checkout, `gh` or the harness is
+signed out, or the login cannot push to the repository; report the printed
+command to the user instead of working around it. Otherwise it creates
+`~/.gallivant/config.json` (mode 600) when none exists, records the current
+repository in `repos` once, creates the worktrees directory and prints the
+`doctor` report. Exit status `1` means checks remain, not that setup failed.
 
-Before a real run, finish the [harness guardrail setup](install.md#6-aport-on-claude-code)
+With an existing config, `init` keeps every key as written and adds only the
+current repository. Do not edit unrelated keys. The normal path is
+`~/.gallivant/config.json`; use `$GALLIVANT_HOME/config.json` if that variable is
+already set. Pass `--worktrees /absolute/path` only on first creation; later
+runs refuse a different directory.
+
+If the user prefers a persistent command, `npm install -g @uchibeke/gallivant`
+is the documented option; ask before installing globally. Avoid `sudo npm
+install`; use a user-owned Node installation or prefix. Do not silently replace
+a different installed version while its daemon is running.
+
+Before a real run, finish the [harness guardrail setup](install.md#7-aport-on-claude-code)
 for the selected harness. Some steps require human interaction: for example,
 Codex's initial `/hooks` trust prompt cannot be automated. Report such a blocker
 instead of changing the enforcement level or bypassing it.
 
-Add the authorized repository to `repos` and its approved base where necessary,
-following [configuration](config.md#the-base-branch). Review the config diff without
-printing credentials. Confirm these decisions before dispatch:
+`init` records the repository without a base branch; its pull requests target
+the default branch unless the user chooses otherwise with `start --base` or a
+`{ "repo", "base" }` entry, following [configuration](config.md#the-base-branch).
+Review the config diff without printing credentials. Confirm these decisions
+before dispatch:
 
 | Decision | What must be established |
 |---|---|
@@ -129,8 +140,9 @@ printing credentials. Confirm these decisions before dispatch:
 | Completion evaluator | Default APort hosted confirmation needs network access. A local evaluator is an explicit user choice, not an automatic workaround for a failure. |
 | Cost | Confirm `max_iterations`, provider budget controls and allowed spend. `max_budget_usd` is a native per-run dollar cap for Claude; other local harnesses have no equivalent enforced dollar cap. |
 
-Run `gallivant doctor` again and report every failure. Do not treat “signed in
-(API unchecked)” as proof of inference access. `doctor` without extra flags checks
+Run `gallivant doctor` (or `npx --yes @uchibeke/gallivant doctor`) again and
+report every failure. Do not treat “signed in (API unchecked)” as proof of
+inference access. `doctor` without extra flags checks
 configuration, credentials and repository access without launching a model run.
 `doctor --probe` launches a real Claude sandbox test when Claude is configured;
 `doctor --send` sends a real notification. Use those only when authorized.
@@ -206,9 +218,11 @@ review and merge.
 
 ## What setup verification proves
 
-The package's `npm run test:install` smoke test installs the tarball into a
-throwaway directory, uses fixture CLI credentials, initializes a private config,
-loads the packaged PRD template, and checks an offline brief. It does not use a
-real account, invoke a model or certify a provider's current availability.
-A first authorized end-to-end task is still needed to verify the user's actual
-repository permissions, provider entitlement, sandbox, CI and review integration.
+The package's `npm run test:install` check packs the tarball and runs the
+README's `npx` setup command against it from a disposable repository, with
+fixture `gh` and `codex` commands and a throwaway home. It proves which binary
+ran, the config and directory permissions, repository registration, repeat
+safety and the printed next steps. It does not use a real account, invoke a
+model or certify a provider's current availability. A first authorized
+end-to-end task is still needed to verify the user's actual repository
+permissions, provider entitlement, sandbox, CI and review integration.
