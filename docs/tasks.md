@@ -127,6 +127,8 @@ service or page) are treated as declarative app behavior; unknown people, roles 
 automation subjects remain visible and require clarification. An owner prerequisite
 such as
 `Wait for my approval. Open a PR for review.` still requires clarification.
+Later clauses introduced by “where” or “even though” are checked separately,
+so a product rule cannot hide a publication prohibition in the same sentence.
 Implementation work gated on approval is rejected even when that approval names
 a purchase or refund. Complete transaction rules such as approving a refund
 before emailing a customer stay implementation requirements, including leading
@@ -330,8 +332,8 @@ Each answer operation is also limited to 32 KiB of combined UTF-8 bytes across
 question IDs and answer strings. A new over-limit operation returns `TASK_INPUT`
 before signature hashing or delivery parsing, without changing the saved task.
 Exact receipts created by an older version still replay up to the largest batch
-the prior contract could accept: 100 answers of 32 KiB each with IDs up to 128
-bytes (3,289,600 bytes total). A changed input under an existing operation ID
+the prior in-process service could accept: 128 answers of 32 KiB each with IDs up to 128
+bytes (4,210,688 bytes total). A changed input under an existing operation ID
 within that compatibility bound returns `TASK_CONFLICT`; larger input returns
 `TASK_INPUT` before signature hashing.
 The complete serialized preparation prompt is also limited to 120 KiB, including
