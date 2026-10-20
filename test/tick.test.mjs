@@ -1,5 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
+import { join } from "node:path";
 import { makeTick, roundComment, receiptRoundComment, nudgeComment } from "../lib/tick.mjs";
 import { READY_LABEL, NEEDS_LABEL, ROUND_MARKER, NUDGE_MARKER, makeGh, MAX_DIFF_BYTES } from "../lib/gh.mjs";
 import { RECEIPT_TAG } from "../lib/deliverable.mjs";
@@ -38,6 +39,24 @@ function world(stateOver = {}, ghOver = {}, { config = CONFIG, readPrd = () => n
   const tick = makeTick({ credential: fakeCredential(), identity: fakeIdentity(),  config, state, gh, git, notify, log, clock, ownLogin: "me", runnerFor: () => runner, readPrd });
   return { clock, state, id, gh, git, runner, notify, tick, logged, entry: () => state.get(id) };
 }
+
+test("a recovered handoff ledger gives the first new session its context instructions", async () => {
+  const w = world({ harness: "codex", session: null, execution: null, execution_handoff: null,
+    last: { at: T0, event: "recovered from GitHub" } }, {
+    reviews: [review({ id: 22, by: BOT, bot: true, state: "CHANGES_REQUESTED", at: at(1), body: "Finish the pending change." })],
+  });
+  w.runner.root = join(tempHome(), "runs", "recovered-handoff");
+  w.runner.account = "operator";
+  w.runner.ledgerEpoch = 1;
+  w.clock.advance(2);
+  await w.tick.tick();
+  assert.equal(w.runner.started.length, 1);
+  const prompt = w.runner.started[0].args.at(-1);
+  assert.match(prompt, /previous conversation is unavailable/);
+  assert.match(prompt, /approved brief/);
+  assert.match(prompt, /local checkout's status and unpushed commits/);
+  assert.match(prompt, /Finish the pending change/);
+});
 
 test("a ready PR with branded prose is reopened for correction before any readiness signal", async () => {
   const w = world({ state: STATES.ready, public_since: T0 }, {

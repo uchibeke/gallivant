@@ -83,6 +83,12 @@ an awake machine or a continuously running Node host.
 qualify its event stream and unattended permissions; it is not a supported choice.
 Provider/model selection for local harnesses remains in each harness's own
 configuration; Gallivant does not add a general per-task local model router.
+Changing the native model configuration for the same local harness does not
+change Gallivant's recorded harness or session ID. A later `gallivant resume`
+still asks that CLI to resume its exact session, but whether the CLI applies the
+new model to that conversation is native provider behavior, not a Gallivant
+continuity guarantee. Gallivant does not pass a per-run `--model` flag or route
+around an exhausted provider account.
 
 ## The base branch
 
