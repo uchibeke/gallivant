@@ -156,6 +156,30 @@ test("fixture destinations recognize forge URLs within their own action", () => 
   assert.doesNotThrow(() => assertDeliveryAnswer({}, source));
 });
 
+test("fixture destinations recognize forge subdomains without matching lookalike hosts", () => {
+  for (const host of ["www.github.com", "ssh.github.com", "www.gitlab.com", "group.gitlab.com"])
+    for (const url of [`https://${host}/acme/widget`, `ssh://git@${host}:443/acme/widget.git`, `git@${host}:acme/widget.git`]) {
+      for (const action of ["at", "and open it at"]) {
+        const source = `For tests, create a fake PR fixture ${action} ${url}.`;
+        assert.throws(() => ownerDelivery(source), { code: "TASK_DELIVERY_SCOPE" }, source);
+        assert.throws(() => assertDeliveryAnswer({}, source), { code: "TASK_DELIVERY_SCOPE" }, source);
+      }
+      const source = `For tests, create a fake PR fixture and upload logs to ${url}.`;
+      assert.equal(ownerDelivery(source), null, source);
+      assert.doesNotThrow(() => assertDeliveryAnswer({}, source), source);
+      const original = source + " Open a PR for review.", contract = ownerDelivery(original);
+      assert.equal(validateOwnerDelivery(contract), contract, source);
+      assert.equal(ownerImplementation(contract).join(""), source + " ", source);
+      assert.equal(contract.spans.map(span => original.slice(span.start, span.end)).join(""), original, source);
+    }
+  for (const url of ["https://www.github.com.example.invalid/acme/widget", "https://notgithub.com/acme/widget",
+    "https://github.com@example.invalid/acme/widget", "ssh://git@www.gitlab.com.example.invalid/acme/widget.git"]) {
+    const source = `For tests, create a fake PR fixture using a mock at ${url}.`;
+    assert.equal(ownerDelivery(source), null, source);
+    assert.doesNotThrow(() => assertDeliveryAnswer({}, source), source);
+  }
+});
+
 test("publication fixture masking cannot hide coordinated live PRs", () => {
   for (const connector of ["plus", "+", "/", "as well as", "along with", "alongside", "together with", "in addition to", "not to mention", "besides", "versus", "vs", "vs.", "compared with", "compared to", "but", "yet"]) {
     const source = `For tests, create a fake PR ${connector} a real PR.`;
@@ -811,6 +835,35 @@ test("finite purpose clauses validate their actions and business objects", () =>
     assert.equal(validateOwnerDelivery(contract), contract, source);
     assert.equal(ownerImplementation(contract).join(""), source + " ", source);
     assert.equal(contract.spans.map(span => original.slice(span.start, span.end)).join(""), original, source);
+  }
+});
+
+test("relative temporal clauses validate approval-dependent actions and their own objects", () => {
+  for (const connector of ["after which", "before which", "AFTER WHICH"]) {
+    for (const action of ["you must proofread the invoice", "our senior editor proofreads the invoice", "Alice King must proofread the invoice",
+      "the invoice must be proofread", "our archive specialist proofreads the invoice", "you email the report"])
+      for (const source of [
+        `If I approve the invoice, email the customer ${connector} ${action}.`,
+        `Email the customer ${connector} ${action} after I approve the invoice.`,
+      ]) {
+        assert.throws(() => ownerDelivery(source), { code: "TASK_DELIVERY_SCOPE" }, source);
+        assert.throws(() => assertDeliveryAnswer({}, source), { code: "TASK_DELIVERY_SCOPE" }, source);
+      }
+    const borrowedObject = `If I approve the invoice, email the report ${connector} you apply the discount.`;
+    assert.throws(() => ownerDelivery(borrowedObject), { code: "TASK_DELIVERY_SCOPE" }, borrowedObject);
+    assert.throws(() => assertDeliveryAnswer({}, borrowedObject), { code: "TASK_DELIVERY_SCOPE" }, borrowedObject);
+    for (const action of ["you must apply the discount", "our senior editor emails the customer", "Alice King must email the customer", "the discount must be applied"])
+      for (const source of [
+        `If I approve the invoice, email the customer ${connector} ${action}.`,
+        `Email the customer ${connector} ${action} after I approve the invoice.`,
+      ]) {
+        assert.equal(ownerDelivery(source), null, source);
+        assert.doesNotThrow(() => assertDeliveryAnswer({}, source), source);
+        const original = source + " Open a PR for review.", contract = ownerDelivery(original);
+        assert.equal(validateOwnerDelivery(contract), contract, source);
+        assert.equal(ownerImplementation(contract).join(""), source + " ", source);
+        assert.equal(contract.spans.map(span => original.slice(span.start, span.end)).join(""), original, source);
+      }
   }
 });
 
