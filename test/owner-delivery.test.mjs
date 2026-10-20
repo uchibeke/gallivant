@@ -312,6 +312,31 @@ test("passive merge controls recognize shared negative modals before product mas
   }
 });
 
+test("infinitive passive prohibitions stay visible before product masking", () => {
+  for (const restriction of [
+    "Changes are not to be merged.", "Work is not to be merged.", "PRs aren't to be merged.",
+    "Changes are never to be merged.", "Code is never to be merged.", "Implementation isn’t to be merged.",
+    "Commits are not to be created.", "Git branches are not to be generated.",
+  ])
+    for (const source of [restriction, "The button creates a PR after tests pass since " + restriction.toLowerCase()]) {
+      assert.throws(() => ownerDelivery(source), { code: "TASK_DELIVERY_SCOPE" }, source);
+      assert.throws(() => assertDeliveryAnswer({}, source), { code: "TASK_DELIVERY_SCOPE" }, source);
+    }
+  for (const source of [
+    "Customer records are not to be merged.",
+    "The button creates a PR after tests pass since customer records are not to be merged.",
+    "Bank branches are not to be created without an address.",
+    'Show the warning "Changes are not to be merged" in the PR dialog.',
+  ]) {
+    assert.equal(ownerDelivery(source), null, source);
+    assert.doesNotThrow(() => assertDeliveryAnswer({}, source), source);
+    const original = source + " Open a PR for review.", contract = ownerDelivery(original);
+    assert.equal(validateOwnerDelivery(contract), contract, source);
+    assert.equal(ownerImplementation(contract).join(""), source + " ", source);
+    assert.equal(contract.spans.map(span => original.slice(span.start, span.end)).join(""), original, source);
+  }
+});
+
 test("merge commands remain visible when branch names look like feature predicates", () => {
   for (const source of ["Merge mergeable branches.", "Squash-merge selectable branches.", "Merge only mergeable branches."]) {
     assert.throws(() => ownerDelivery(source), { code: "TASK_DELIVERY_SCOPE" }, source);
@@ -1140,6 +1165,29 @@ test("method gerunds retain approval gates and validate their own business objec
     assert.equal(ownerDelivery(source), null, source);
     assert.doesNotThrow(() => assertDeliveryAnswer({}, source), source);
   }
+});
+
+test("result gerunds retain approval gates and their own business objects", () => {
+  for (const connector of ["thereby", "thus", "hence"])
+    for (const modifier of ["", "carefully ", "not carefully "]) {
+      for (const source of [
+        `If I approve the invoice, email the customer ${connector} ${modifier}proofreading the invoice.`,
+        `Email the customer ${connector} ${modifier}proofreading the invoice after I approve the invoice.`,
+        `If I approve the invoice, email the report ${connector} ${modifier}applying the discount.`,
+        `If I approve the invoice, email the customer ${connector} ${modifier}emailing the report.`,
+        `If I approve the invoice, email the customer ${connector} ${modifier}applying the discount before proofreading the invoice.`,
+      ]) {
+        assert.throws(() => ownerDelivery(source), { code: "TASK_DELIVERY_SCOPE" }, source);
+        assert.throws(() => assertDeliveryAnswer({}, source), { code: "TASK_DELIVERY_SCOPE" }, source);
+      }
+      const source = `If I approve the invoice, email the customer ${connector} ${modifier}applying the discount.`;
+      assert.equal(ownerDelivery(source), null, source);
+      assert.doesNotThrow(() => assertDeliveryAnswer({}, source), source);
+      const original = source + " Open a PR for review.", contract = ownerDelivery(original);
+      assert.equal(validateOwnerDelivery(contract), contract, source);
+      assert.equal(ownerImplementation(contract).join(""), source + " ", source);
+      assert.equal(contract.spans.map(span => original.slice(span.start, span.end)).join(""), original, source);
+    }
 });
 
 test("finite nominal clauses after method prepositions retain approval gates", () => {
