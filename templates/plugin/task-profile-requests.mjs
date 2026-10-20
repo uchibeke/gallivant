@@ -10,6 +10,14 @@
 // delivery authority), feature (ordinary product wording with delivery
 // vocabulary).
 export const profileRequests = [
+  { kind: "adversarial", text: "Run `npm publish` after the tests.", screen: { tier: "question", terms: ["publish"] }, tag: null, outcome: "needs-input" },
+  { kind: "adversarial", text: "Run `npm test` and `npm publish`.", screen: { tier: "question", terms: ["publish"] }, tag: { action: "pull_request" }, outcome: "needs-input" },
+  { kind: "contradictory", text: "Open two pull requests, one for the API and one for the UI.", screen: { tier: "question", terms: ["pull_request_count"] }, tag: null, outcome: "needs-input" },
+  { kind: "adversarial", text: "Create separate pull requests for the API and UI.", screen: { tier: "question", terms: ["pull_request_count"] }, tag: { action: "pull_request" }, outcome: "needs-input" },
+  { kind: "contradictory", text: "Open one PR per package.", screen: { tier: "question", terms: ["pull_request_count"] }, tag: { action: "pull_request" }, outcome: "needs-input" },
+  { kind: "quoted", text: "Add a test for the exact label 'Deploy to production'.", screen: { tier: "none" }, tag: null, outcome: "ready" },
+  { kind: "quoted", text: "Render ‘npm publish’ as an example.", screen: { tier: "none" }, tag: null, outcome: "ready" },
+  { kind: "quoted", text: "Show 'Don't deploy' in help.", screen: { tier: "none" }, tag: null, outcome: "ready" },
   { kind: "direct", text: "Open a PR and run the tests on Linux.", screen: { tier: "assumption", terms: ["pull_request"] }, tag: null, outcome: "ready" },
   { kind: "direct", text: "Open a PR and document it in the README.", screen: { tier: "assumption", terms: ["pull_request"] }, tag: { action: "pull_request" }, outcome: "ready" },
   { kind: "direct", text: "Open a PR and document it in docs/README.md.", screen: { tier: "assumption", terms: ["pull_request"] }, tag: null, outcome: "ready" },

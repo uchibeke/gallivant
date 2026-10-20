@@ -83,16 +83,23 @@ either field optional; malformed targets are rejected and mismatches clarify.
 repository, pauses with a question naming the selected target. Ambiguous
 destinations require clarification. Text cannot change the saved target; the
 owner must resolve the scope or prepare a new task with the intended selection.
+The profile opens exactly one PR. Requests for two or more PRs, separate PRs,
+a PR per component, repeated PR creation commands or another PR retain a
+`pull_request_count` conflict even if the planner supplies a `pull_request` tag.
 Target qualifiers must be attached to the PR instruction, including leading
 targets and adjacent repository/base pairs. Separate actions such as "run the
 tests on Linux" or "document it in docs/README.md" do not select a PR target.
 
 Independently of the planner, a deterministic screen looks for delivery
 vocabulary in each clause (pull request, merge, deploy, release, publish, push,
-commit, branch, approval, review, wait, local-only). Paired quotes and code
-spans are masked, so literal examples do not count, except a span whose
+commit, branch, approval, review, wait, local-only). Paired straight or curly
+single/double quotes and code spans are masked as literal examples. Apostrophes
+in contractions and possessives do not open quotes. Imperative command spans
+such as ``Run `npm publish` `` remain visible, including linked command lists;
+product wording such as ``Document how to run `npm publish` `` stays literal.
+A span whose
 statement carries a control phrase before or after it (`Please do not ever
-"open a pull request"`, `"Open a pull request" is forbidden`), which is read as
+"open a pull request"`, `"Open a pull request" is forbidden`) is read as
 the control's target; a control word inside another example never counts. Restriction forms such
 as "leave the changes uncommitted", "unstaged", "keep all edits in the working
 tree" or "unpublished" count as local-only. Control words bind within a statement: sentence and clause

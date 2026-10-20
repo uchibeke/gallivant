@@ -4598,6 +4598,9 @@ test("anaphoric delivery replies cannot be resolved by empty or ungrounded plann
 
 test("target, publication, approval and mixed-polarity conflicts survive answer chains without dispatch", async () => {
   for (const [text, tag] of [
+    ["Run `npm publish` after tests.", { action: "pull_request" }],
+    ["Open two pull requests for the API and UI.", { action: "pull_request" }],
+    ["Create separate pull requests for the API and UI.", { action: "pull_request" }],
     ["Get my consent before opening a PR.", { action: "pull_request" }],
     ["Get my authorization before opening a PR.", { action: "pull_request" }],
     ["Wait for my authorisation before opening a PR.", { action: "pull_request" }],

@@ -154,9 +154,36 @@ test("the delivery screen is deterministic over the fixture corpus and masks lit
   assert.equal(unrelated.tier, "assumption"); assert.deepEqual(unrelated.controlled, []); assert.ok(unrelated.controls.length, "the control word is still recorded for the review");
 });
 
+test("imperative command spans stay visible through delivery validation", () => {
+  for (const text of ['Run `npm publish` after the tests.', 'Execute "npm publish" after the tests.', "Run 'npm publish' after the tests.", 'Run ‘npm publish’ after tests.', 'Please run: `npm publish`.', 'Run `npm test` and `npm publish`.', '`npm publish`', 'Run `git push origin main` after tests.', 'Run `git push --force origin HEAD:main` after tests.', "Run `git push origin 'main'` after tests.", 'Stop after `git commit`.']) {
+    const screen = deliveryScreen(text, PROFILE.target);
+    assert.equal(screen.tier, "question", text);
+    const task = taskFor(text, { commandCandidates: ["npm test"] });
+    for (const delivery of [{}, { "r-1": { action: "pull_request" } }]) assert.deepEqual(parseDraft(JSON.stringify(draftFor(task, { delivery })), task).questions.map(q => q.id), ["q-delivery-r-1"], text);
+  }
+  for (const text of ['Add a button to run `npm publish`.', 'Document how to run `npm publish`.', 'Run `npm test` and document `npm publish` in help.']) assert.equal(deliveryScreen(text).tier, "none", text);
+});
+
+test("single-quoted examples mask contractions while apostrophes and quote emphasis preserve controls", () => {
+  for (const text of ["Add a test for the exact label 'Deploy to production'.", "Add a test for the exact label ‘Deploy to production’.", "Render 'npm publish' as an example.", "Show 'Don't deploy' in help.", "Show ‘Don’t deploy’ in help.", "Show 'do not merge' and 'open a PR' labels."]) assert.equal(deliveryScreen(text).tier, "none", text);
+  for (const text of ["Don't 'open a PR'.", "Do not ‘open a PR’.", "The owner's changes must not deploy to production.", "Don't merge the user's PR."]) assert.equal(deliveryScreen(text).tier, "question", text);
+  for (const text of ["Add a label 'Deploy to production", "Add a label ‘Deploy to production"]) assert.equal(deliveryScreen(text).tier, "question", text);
+});
+
+test("multiple and separate PR requests remain conflicts with the one-PR profile", () => {
+  for (const text of ["Open two pull requests, one for the API and one for the UI.", 'Open two `pull requests` for the API and UI.', "Open 2 PRs.", "Create separate pull requests for the API and UI.", "Use separate PRs for each component.", "I need two PRs.", "Separate PRs for the API and UI.", "Open a separate PR for each package.", "Open one PR per package.", "Open a PR for the API and another for the UI.", "Open a PR for the API and open a PR for the UI.", "Open pull requests for the changes.", 'Run `gh pr create` and `gh pr create`.', 'Run `gh pr create` twice.']) {
+    const screen = deliveryScreen(text, PROFILE.target);
+    assert.equal(screen.tier, "question", text); assert.ok(screen.terms.includes("pull_request_count"), text);
+    assert.ok(unaccountedTerms(screen, { action: "pull_request" }).includes("pull_request_count"), text);
+    const task = taskFor(text, { commandCandidates: ["npm test"] });
+    for (const delivery of [{}, { "r-1": { action: "pull_request" } }]) assert.deepEqual(parseDraft(JSON.stringify(draftFor(task, { delivery })), task).questions.map(q => q.id), ["q-delivery-r-1"], text);
+  }
+  for (const text of ["Open one pull request for the API and UI.", "Open a single PR for review.", "I want you to open one PR.", "Add a button to open two PRs.", "List two pull requests on the dashboard.", 'Document "Open two pull requests" in help.']) assert.equal(deliveryScreen(text, PROFILE.target).terms.includes("pull_request_count"), false, text);
+});
+
 test("PR destinations are compared with the selected repository and case-sensitive base even when the planner omits them", () => {
   const tag = { action: "pull_request" };
-  for (const text of ["Open the pull request against staging.", "Against staging, open a PR.", "Create a PR targeting MAIN.", "Open a PR to staging.", "Open a PR on the staging branch.", "Open a PR in acme/other.", "Open a PR in https://github.com/acme/other.", "Open a PR in https://gitlab.com/acme/widget.", "In acme/other, open a pull request.", "Open a PR in another repository.", 'Open a PR against "staging".']) {
+  for (const text of ["Open the pull request against staging.", "Against staging, open a PR.", "Create a PR targeting MAIN.", "Open a PR to staging.", "Open a PR on the staging branch.", "Open a PR in acme/other.", "Open a PR in https://github.com/acme/other.", "Open a PR in https://gitlab.com/acme/widget.", "In acme/other, open a pull request.", "Open a PR in another repository.", 'Open a PR against "staging".', 'Open a `PR` against staging.']) {
     const screen = deliveryScreen(text, PROFILE.target);
     assert.equal(screen.tier, "question", text); assert.ok(screen.targetConflicts.length, text);
     assert.ok(unaccountedTerms(screen, tag).includes("pull_request_target"), text);
@@ -253,7 +280,7 @@ test("planner delivery tags are validated and compared with the profile without 
   for (const target of [{ repository: "acme/other" }, { base: "staging" }, { base: "MAIN" }]) assert.equal(profileCovers(PROFILE, { action: "pull_request", target }).covered, false);
   for (const target of [null, [], {}, { base: "" }, { base: "main\n" }, { repository: "other" }, { kind: "github-pull-request" }]) assert.throws(() => validateDeliveryTag({ action: "pull_request", target }));
   assert.deepEqual(validateDeliveryTag({ action: "pull_request", prohibits: ["merge"] }), { action: "pull_request", prohibits: ["merge"] });
-  for (const bad of [null, { action: "ship" }, { action: "pull_request", prohibits: ["rm -rf"] }, { action: "pull_request", prohibits: ["merge", "merge"] }, { action: "pull_request", completion: "done" }, { action: "pull_request", grant: "merge" }, { action: "restrict" }]) {
+  for (const bad of [null, { action: "ship" }, { action: "pull_request", count: 2 }, { action: "pull_request", prohibits: ["rm -rf"] }, { action: "pull_request", prohibits: ["merge", "merge"] }, { action: "pull_request", completion: "done" }, { action: "pull_request", grant: "merge" }, { action: "restrict" }]) {
     assert.throws(() => validateDeliveryTag(bad));
   }
   assert.equal(profileCovers(PROFILE, { action: "pull_request" }).covered, true);
@@ -662,14 +689,17 @@ test("repository snapshots are read-only, bounded, exclude private and ignored p
 test("the screen and mapping stay fast at the request and mapping limits", () => {
   const clause = "Implement export and merge the PR after approval; do not push until reviewed. ";
   const text = clause.repeat(Math.floor(MAX_INPUT_BYTES / clause.length));
-  const started = process.hrtime.bigint();
   // Each test file runs in its own process. Charge work to this process, not
   // time that a parallel CI job leaves it waiting to be scheduled.
-  const cpuStarted = process.cpuUsage();
-  for (let i = 0; i < 20; i++) deliveryScreen(text);
-  const wallPerCall = Number(process.hrtime.bigint() - started) / 20 / 1e6;
-  const cpu = process.cpuUsage(cpuStarted), perCall = (cpu.user + cpu.system) / 20 / 1000;
-  assert.ok(perCall < 50, `screening a ${Buffer.byteLength(text)} byte request took ${perCall.toFixed(1)} CPU ms (${wallPerCall.toFixed(1)} wall ms)`);
+  for (const [input, tier] of [[text, "question"], ["'npm publish' ".repeat(Math.floor(MAX_INPUT_BYTES / 14)), "none"], ['Run `npm publish`. '.repeat(Math.floor(MAX_INPUT_BYTES / 19)), "question"]]) {
+    const started = process.hrtime.bigint(), cpuStarted = process.cpuUsage();
+    let screen;
+    for (let i = 0; i < 20; i++) screen = deliveryScreen(input);
+    const wallPerCall = Number(process.hrtime.bigint() - started) / 20 / 1e6;
+    const cpu = process.cpuUsage(cpuStarted), perCall = (cpu.user + cpu.system) / 20 / 1000;
+    assert.equal(screen.tier, tier, "maximum-size examples and commands retain their interpretation");
+    assert.ok(perCall < 50, `screening a ${Buffer.byteLength(input)} byte request took ${perCall.toFixed(1)} CPU ms (${wallPerCall.toFixed(1)} wall ms)`);
+  }
   const lines = Array.from({ length: 64 }, (_, i) => `Merge ${i + 1}.`).join("\n");
   const task = taskFor(lines, { commandCandidates: ["npm test"] });
   const out = draftFor(task);
