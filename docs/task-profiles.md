@@ -115,9 +115,11 @@ The screen grants nothing:
   npm", "upload the build to the App Store" or "run gem push", rather than as a
   noun modifier such as "a publish button" or a feature infinitive such as
   "a command to publish docs", and approval whenever the statement waits on
-  someone's decision such as "wait for my approval", "get sign-off" or "once
-  approved", rather than an approval feature such as "an approval workflow",
-  "the approval status column" or "a button to approve comments") or a
+  someone's decision such as "wait for my approval", "get sign-off", "once
+  approved", "get my consent" or "get my authorization" (also "authorisation"
+  and "permission"), rather than a product feature such as "an approval
+  workflow", "a consent banner", "authorization middleware", "the approval
+  status column" or "a button to approve comments") or a
   control word such as "do not", "until", "unless", "out of scope",
   "exclude", "except", "other than", "but not", "disallowed", "isn't
   allowed", "not permitted", "stop before", "pause before" or an owner

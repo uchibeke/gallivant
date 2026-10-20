@@ -10,6 +10,12 @@
 // delivery authority), feature (ordinary product wording with delivery
 // vocabulary).
 export const profileRequests = [
+  { kind: "contradictory", text: "Get my consent before opening a PR.", screen: { tier: "question", terms: ["pull_request", "approval"] }, tag: null, outcome: "needs-input" },
+  { kind: "adversarial", text: "Get my authorization before opening a PR.", screen: { tier: "question", terms: ["pull_request", "approval"] }, tag: { action: "pull_request" }, outcome: "needs-input" },
+  { kind: "contradictory", text: "Wait for my authorisation before opening a PR.", screen: { tier: "question", terms: ["approval", "wait"] }, tag: null, outcome: "needs-input" },
+  { kind: "adversarial", text: "Get my permission before opening a PR.", screen: { tier: "question", terms: ["approval"] }, tag: { action: "pull_request" }, outcome: "needs-input" },
+  { kind: "feature", text: "Add a consent banner and fix the authorization middleware.", screen: { tier: "assumption", terms: ["approval"] }, tag: null, outcome: "ready" },
+  { kind: "quoted", text: 'Document "Get my consent before opening a PR" in help.', screen: { tier: "none" }, tag: null, outcome: "ready" },
   { kind: "contradictory", text: "Implement the fix, but stop after committing the changes.", screen: { tier: "question", terms: ["commit", "local"] }, tag: null, outcome: "needs-input" },
   { kind: "adversarial", text: "Implement export. Stop once the changes are committed.", screen: { tier: "question", terms: ["local"] }, tag: { action: "pull_request" }, outcome: "needs-input" },
   { kind: "indirect", text: "Once committed, stop.", screen: { tier: "question", terms: ["local"] }, tag: null, outcome: "needs-input" },

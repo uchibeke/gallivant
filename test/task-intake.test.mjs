@@ -4596,8 +4596,12 @@ test("anaphoric delivery replies cannot be resolved by empty or ungrounded plann
   }
 });
 
-test("target, dotted publication and mixed-polarity conflicts survive answer chains without dispatch", async () => {
+test("target, publication, approval and mixed-polarity conflicts survive answer chains without dispatch", async () => {
   for (const [text, tag] of [
+    ["Get my consent before opening a PR.", { action: "pull_request" }],
+    ["Get my authorization before opening a PR.", { action: "pull_request" }],
+    ["Wait for my authorisation before opening a PR.", { action: "pull_request" }],
+    ["Get my permission before opening a PR.", { action: "pull_request" }],
     ["Open the pull request against staging.", { action: "pull_request" }],
     ["Open a PR in acme/other.", { action: "pull_request" }],
     ["Upload the package to hex.pm.", { action: "pull_request" }],

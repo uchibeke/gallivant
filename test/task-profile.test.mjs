@@ -203,6 +203,25 @@ test("each delivery term retains positive and negative occurrences across contro
   assert.deepEqual(unaccountedTerms(deliveryScreen("Do not merge, but do not deploy either."), { action: "restrict", prohibits: ["merge", "deploy"] }), []);
 });
 
+test("consent and authorization gates survive omitted or covered planner delivery tags", () => {
+  for (const text of ["Get my consent before opening a PR.", "Wait for my authorization before opening a PR.", "Get my authorisation before opening a PR.", "Open a PR only after I consent.", "I must authorize opening the PR first.", "Get my permission before opening a PR.", "Get CONSENT before opening a PR."]) {
+    const screen = deliveryScreen(text);
+    assert.equal(screen.tier, "question", text); assert.ok(screen.escalated.includes("approval"), text);
+    assert.ok(unaccountedTerms(screen, { action: "pull_request" }).includes("approval"), text);
+    const task = taskFor(text, { commandCandidates: ["npm test"] });
+    for (const delivery of [{}, { "r-1": { action: "pull_request" } }]) {
+      const output = parseDraft(JSON.stringify(draftFor(task, { delivery })), task);
+      assert.deepEqual(output.questions.map(q => q.id), ["q-delivery-r-1"], text);
+      assert.equal(output.mapping[0].conflict.screen.escalated.includes("approval"), true, text);
+    }
+  }
+  for (const text of ["Add a consent banner.", "Fix the authorization middleware.", "Show the permission status column.", "Add a button to authorize users.", "List authorized users.", "Show consented records."]) {
+    const screen = deliveryScreen(text);
+    assert.deepEqual(screen.terms, ["approval"], text); assert.equal(screen.tier, "assumption", text);
+  }
+  for (const text of ['Document "Get my consent before opening a PR" in help.', "Render `Wait for my authorization` as an example."]) assert.equal(deliveryScreen(text).tier, "none", text);
+});
+
 test("terminal stops after committing remain local delivery restrictions with or without planner tags", () => {
   for (const text of ["Implement the fix, but stop after committing the changes.", "Stop once the changes are committed.", "Once committed, stop.", "After committing the changes, halt.", "Pause after the commit.", "Stop immediately after committing.", "Stop after creating the commit.", "I want this task to stop after committing the changes.", "Stop after committing the changes and document committing the database transaction."]) {
     const screen = deliveryScreen(text);
@@ -631,9 +650,13 @@ test("the screen and mapping stay fast at the request and mapping limits", () =>
   const clause = "Implement export and merge the PR after approval; do not push until reviewed. ";
   const text = clause.repeat(Math.floor(MAX_INPUT_BYTES / clause.length));
   const started = process.hrtime.bigint();
+  // Each test file runs in its own process. Charge work to this process, not
+  // time that a parallel CI job leaves it waiting to be scheduled.
+  const cpuStarted = process.cpuUsage();
   for (let i = 0; i < 20; i++) deliveryScreen(text);
-  const perCall = Number(process.hrtime.bigint() - started) / 20 / 1e6;
-  assert.ok(perCall < 50, `screening a ${Buffer.byteLength(text)} byte request took ${perCall.toFixed(1)} ms`);
+  const wallPerCall = Number(process.hrtime.bigint() - started) / 20 / 1e6;
+  const cpu = process.cpuUsage(cpuStarted), perCall = (cpu.user + cpu.system) / 20 / 1000;
+  assert.ok(perCall < 50, `screening a ${Buffer.byteLength(text)} byte request took ${perCall.toFixed(1)} CPU ms (${wallPerCall.toFixed(1)} wall ms)`);
   const lines = Array.from({ length: 64 }, (_, i) => `Merge ${i + 1}.`).join("\n");
   const task = taskFor(lines, { commandCandidates: ["npm test"] });
   const out = draftFor(task);
