@@ -4598,6 +4598,14 @@ test("anaphoric delivery replies cannot be resolved by empty or ungrounded plann
 
 test("target, publication, approval and mixed-polarity conflicts survive answer chains without dispatch", async () => {
   for (const [text, tag] of [
+    ["Check with me before opening a pull request.", { action: "pull_request" }],
+    ["Ask me before opening a PR.", { action: "pull_request" }],
+    ["Get my go-ahead before opening the pull request.", { action: "pull_request" }],
+    ["Review pull request #123 and leave feedback.", { action: "pull_request" }],
+    ["Comment on pull request #123 with the test results.", { action: "pull_request" }],
+    ["Run terraform apply after implementing it.", { action: "pull_request" }],
+    ["Execute helm upgrade api ./chart.", { action: "pull_request" }],
+    ["Run `kubectl apply -f app.yaml`.", { action: "pull_request" }],
     ["Run git push --tags.", { action: "pull_request" }],
     ["Push tag v1.0 to origin.", { action: "pull_request" }],
     ["Run `git push origin HEAD:refs/notes/ci`.", { action: "pull_request" }],

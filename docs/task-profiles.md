@@ -114,6 +114,18 @@ retain their product interpretation.
 
 The screen grants nothing:
 
+- Conversational owner decisions such as "check with me", "ask me" and "get
+  my go-ahead" are approval gates, including quoted decision objects. A plain
+  "go ahead and open a PR" retains its affirmative reading. Confirmation
+  dialogs, product features and literal examples keep their product meaning.
+- Imperative infrastructure writes, including Terraform/OpenTofu apply/destroy,
+  Helm install/upgrade/rollback/uninstall and kubectl resource mutations, retain
+  the existing deployment conflict. Plan/template/get commands and unambiguous
+  simulation flags keep their read-only reading. Simulation flags cannot be
+  borrowed from another command or override a later mutating mode; quoted or
+  ambiguous option values keep a clarification. See [Terraform CLI](https://developer.hashicorp.com/terraform/cli/commands),
+  [Helm upgrade](https://docs.helm.sh/docs/helm/helm_upgrade/) and
+  [kubectl apply](https://kubernetes.io/docs/reference/kubectl/generated/kubectl_apply/).
 - Pushing tags, Git notes, all/mirrored refs, deleting remote refs or naming
   another destination ref is a `direct_push` conflict. A task-branch push such
   as `git push -u origin HEAD` keeps the profile's normal reading. Product
@@ -122,6 +134,8 @@ The screen grants nothing:
   PR is a `pull_request_lifecycle` conflict, including imperative CLI commands
   and quoted PR objects. The profile creates one new review PR; a planner's
   `pull_request` tag cannot cover an existing-PR mutation or grant it authority.
+  Prose reviews, comments, feedback and replies use the same conflict as their
+  CLI equivalents; asking to open a new PR "for review" stays creation scope.
 - Escalating terms (merge, including landing a PR, patch or change; deploy
   including shipping, rollout, go-live and
   "to production" wording, release, wait, local-only, a write aimed

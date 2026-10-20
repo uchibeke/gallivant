@@ -154,6 +154,39 @@ test("the delivery screen is deterministic over the fixture corpus and masks lit
   assert.equal(unrelated.tier, "assumption"); assert.deepEqual(unrelated.controlled, []); assert.ok(unrelated.controls.length, "the control word is still recorded for the review");
 });
 
+test("conversational owner confirmations remain approval gates", () => {
+  for (const text of ["Check with me before opening a pull request.", "Ask me before opening a PR.", "Get my go-ahead before opening the pull request.", "Confirm with us before opening a PR.", "Consult me before opening the PR.", "Get my confirmation before opening a PR.", "Open a PR once you have my go ahead.", 'Get my `go-ahead` before opening a PR.', "Check with ‘me’ before opening a PR."]) {
+    const screen = deliveryScreen(text, PROFILE.target);
+    assert.equal(screen.tier, "question", text); assert.ok(screen.escalated.includes("approval"), text);
+    assert.ok(unaccountedTerms(screen, { action: "pull_request" }).includes("approval"), text);
+    const task = taskFor(text, { commandCandidates: ["npm test"] });
+    for (const delivery of [{}, { "r-1": { action: "pull_request" } }]) assert.deepEqual(parseDraft(JSON.stringify(draftFor(task, { delivery })), task).questions.map(q => q.id), ["q-delivery-r-1"], text);
+  }
+  for (const text of ["Go ahead and open a PR for review.", "Add a confirmation dialog.", "Add a button to ask me before opening a PR.", 'Show "Check with me before opening a PR" as a label.', "Add a go-ahead button."]) assert.notEqual(deliveryScreen(text, PROFILE.target).tier, "question", text);
+});
+
+test("prose reviews and comments on existing PRs cannot use creation authority", () => {
+  for (const text of ["Review pull request #123 and leave feedback.", "Comment on pull request #123 with the test results.", "Review PR#123.", "Leave feedback on the PR.", "Post a comment to pull request #123.", "Reply to the pull request.", "The PR #123 must be reviewed.", 'Review `pull request #123`.', "Comment on ‘pull request #123’ with results."]) {
+    const screen = deliveryScreen(text, PROFILE.target);
+    assert.equal(screen.tier, "question", text); assert.ok(screen.escalated.includes("pull_request_lifecycle"), text);
+    assert.ok(unaccountedTerms(screen, { action: "pull_request" }).includes("pull_request_lifecycle"), text);
+    const task = taskFor(text, { commandCandidates: ["npm test"] });
+    for (const delivery of [{}, { "r-1": { action: "pull_request" } }]) assert.deepEqual(parseDraft(JSON.stringify(draftFor(task, { delivery })), task).questions.map(q => q.id), ["q-delivery-r-1"], text);
+  }
+  for (const text of ["Open one PR for review.", "Add a button to review PRs.", "Add support for commenting on PRs.", "Show reviewed PRs in the dashboard.", 'Render "Comment on pull request #123" as an example.']) assert.notEqual(deliveryScreen(text, PROFILE.target).tier, "question", text);
+});
+
+test("imperative infrastructure mutations retain deployment intent", () => {
+  for (const text of ["Run terraform apply after implementing it.", "Execute helm upgrade api ./chart.", 'Run `terraform apply` after tests.', 'Execute "helm upgrade api ./chart".', "Run terraform -chdir=infra apply.", "Run terraform destroy.", "Run tofu apply.", "Run helm install api ./chart.", "Run helm rollback api 1.", "Run helm uninstall api.", "Run helm -n prod upgrade api ./chart.", "Run helm --debug --debug --debug --debug --debug upgrade api ./chart.", "Run kubectl apply -f app.yaml.", "Run kubectl --context prod delete deployment api.", "Run kubectl rollout restart deployment/api.", "Run kubectl scale deployment/api --replicas=3.", "Run helm upgrade api ./chart --dry-run=none.", "Run helm --dry-run=none upgrade api ./chart.", "Run helm upgrade api ./chart --dry-run=client --dry-run=none.", "Run helm upgrade api ./chart --dry-run=client and helm upgrade api ./chart.", "Run helm upgrade api ./chart and helm upgrade api ./chart --dry-run=client.", 'Run `helm upgrade api ./chart --set note=" --dry-run=client"`.', "Run helm upgrade api ./chart --kubeconfig --dry-run=client."]) {
+    const screen = deliveryScreen(text, PROFILE.target);
+    assert.equal(screen.tier, "question", text); assert.ok(screen.escalated.includes("deploy"), text);
+    assert.ok(unaccountedTerms(screen, { action: "pull_request" }).includes("deploy"), text);
+    const task = taskFor(text, { commandCandidates: ["npm test"] });
+    for (const delivery of [{}, { "r-1": { action: "pull_request" } }]) assert.deepEqual(parseDraft(JSON.stringify(draftFor(task, { delivery })), task).questions.map(q => q.id), ["q-delivery-r-1"], text);
+  }
+  for (const text of ["Run terraform plan.", "Run helm template api ./chart.", "Run helm lint ./chart.", "Run kubectl get pods.", "Run helm upgrade api ./chart --dry-run.", "Run helm --dry-run=client upgrade api ./chart.", "Run helm upgrade api ./chart --dry-run=client --dry-run=server.", "Run kubectl apply -f app.yaml --dry-run=client.", 'Document how to run `terraform apply`.', "Add a command to run terraform apply.", "Add support for running helm upgrade.", 'Render "helm upgrade" as a label.']) assert.equal(deliveryScreen(text, PROFILE.target).escalated.includes("deploy"), false, text);
+});
+
 test("pushes of tags and non-task refs cannot be covered by the task-branch profile", () => {
   for (const text of ["Run git push --tags.", 'Run `git push --tags`.', "Push tag v1.0 to origin.", "Push all tags to origin.", "Push the Git notes to origin.", "Push all branches to origin.", "Run git push origin --follow-tags HEAD.", "Run git push --mirror origin.", "Run git push --all origin.", "Run git push origin refs/tags/v1.0.", "Run git push origin HEAD:refs/notes/ci.", "Run git push origin +refs/heads/release:refs/heads/release.", "Run git push origin :refs/tags/v1.0.", "Run git push --delete origin old-branch.", "Run git -C . push origin tag v1.0.", "Run git push origin other-branch.", "Run git push --repo origin other-branch.", "Run git push --repo=origin other-branch.", "Run git push --repo --tags HEAD.", "Push branch release/2.0 to origin.", "Run git push origin HEAD:other-branch.", 'Push `tag v1.0` to origin.']) {
     const screen = deliveryScreen(text, PROFILE.target);
@@ -735,7 +768,7 @@ test("the screen and mapping stay fast at the request and mapping limits", () =>
   const text = clause.repeat(Math.floor(MAX_INPUT_BYTES / clause.length));
   // Each test file runs in its own process. Charge work to this process, not
   // time that a parallel CI job leaves it waiting to be scheduled.
-  for (const [input, tier] of [[text, "question"], ["'npm publish' ".repeat(Math.floor(MAX_INPUT_BYTES / 14)), "none"], ['Run `npm publish`. '.repeat(Math.floor(MAX_INPUT_BYTES / 19)), "question"], ["landing ".repeat(Math.floor(MAX_INPUT_BYTES / 8)), "none"], ["landed ".repeat(Math.floor(MAX_INPUT_BYTES / 7)), "none"], ["Add a command to land changes. ".repeat(Math.floor(MAX_INPUT_BYTES / 31)), "none"], ["Land the PR after CI passes. ".repeat(Math.floor(MAX_INPUT_BYTES / 29)), "question"], ["Run git push origin HEAD. ".repeat(Math.floor(MAX_INPUT_BYTES / 25)), "assumption"], ["Run git push --tags. ".repeat(Math.floor(MAX_INPUT_BYTES / 20)), "question"], ["Close pull request #123. ".repeat(Math.floor(MAX_INPUT_BYTES / 24)), "question"], ["Add a button to close PRs. ".repeat(Math.floor(MAX_INPUT_BYTES / 26)), "assumption"]]) {
+  for (const [input, tier] of [["helm " + "--debug ".repeat(Math.floor((MAX_INPUT_BYTES - 40) / 8)) + "upgrade api ./chart", "question"], [text, "question"], ["'npm publish' ".repeat(Math.floor(MAX_INPUT_BYTES / 14)), "none"], ['Run `npm publish`. '.repeat(Math.floor(MAX_INPUT_BYTES / 19)), "question"], ["landing ".repeat(Math.floor(MAX_INPUT_BYTES / 8)), "none"], ["landed ".repeat(Math.floor(MAX_INPUT_BYTES / 7)), "none"], ["Add a command to land changes. ".repeat(Math.floor(MAX_INPUT_BYTES / 31)), "none"], ["Land the PR after CI passes. ".repeat(Math.floor(MAX_INPUT_BYTES / 29)), "question"], ["Run git push origin HEAD. ".repeat(Math.floor(MAX_INPUT_BYTES / 25)), "assumption"], ["Run git push --tags. ".repeat(Math.floor(MAX_INPUT_BYTES / 20)), "question"], ["Close pull request #123. ".repeat(Math.floor(MAX_INPUT_BYTES / 24)), "question"], ["Add a button to close PRs. ".repeat(Math.floor(MAX_INPUT_BYTES / 26)), "assumption"], ['Ask me before opening a PR. '.repeat(Math.floor(MAX_INPUT_BYTES / 28)), 'question'], ['Review pull request #123 and leave feedback. '.repeat(Math.floor(MAX_INPUT_BYTES / 45)), 'question'], ['Run terraform apply. '.repeat(Math.floor(MAX_INPUT_BYTES / 21)), 'question'], ['Add a command to run terraform apply. '.repeat(Math.floor(MAX_INPUT_BYTES / 38)), 'none']]) {
     const started = process.hrtime.bigint(), cpuStarted = process.cpuUsage();
     let screen;
     for (let i = 0; i < 20; i++) screen = deliveryScreen(input);
