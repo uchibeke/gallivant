@@ -1020,6 +1020,33 @@ test("conditional approval clauses validate finite gerund and passive actions", 
     }
 });
 
+test("unless approval clauses validate each action and its own business object", () => {
+  for (const action of ["you proofread the invoice", "our senior editor proofreads the invoice", "Alice King proofreads the invoice", "carefully proofreading the invoice", "the invoice is proofread", "you email the report"])
+    for (const source of [
+      `If I approve the invoice, email the customer unless ${action}.`,
+      `Email the customer unless ${action} after I approve the invoice.`,
+      `If I approve the invoice, email the customer unless you apply the discount before ${action}.`,
+    ]) {
+      assert.throws(() => ownerDelivery(source), { code: "TASK_DELIVERY_SCOPE" }, source);
+      assert.throws(() => assertDeliveryAnswer({}, source), { code: "TASK_DELIVERY_SCOPE" }, source);
+    }
+  const borrowedObject = "If I approve the invoice, email the report unless you apply the discount.";
+  assert.throws(() => ownerDelivery(borrowedObject), { code: "TASK_DELIVERY_SCOPE" });
+  assert.throws(() => assertDeliveryAnswer({}, borrowedObject), { code: "TASK_DELIVERY_SCOPE" });
+  for (const action of ["you apply the discount", "our senior editor emails the customer", "Alice King emails the customer", "carefully applying the discount", "the discount is applied", "the recurring payment clears"])
+    for (const source of [
+      `If I approve the invoice, email the customer unless ${action}.`,
+      `Email the customer unless ${action} after I approve the invoice.`,
+    ]) {
+      assert.equal(ownerDelivery(source), null, source);
+      assert.doesNotThrow(() => assertDeliveryAnswer({}, source), source);
+      const original = source + " Open a PR for review.", contract = ownerDelivery(original);
+      assert.equal(validateOwnerDelivery(contract), contract, source);
+      assert.equal(ownerImplementation(contract).join(""), source + " ", source);
+      assert.equal(contract.spans.map(span => original.slice(span.start, span.end)).join(""), original, source);
+    }
+});
+
 test("temporal approval gerunds retain modifiers without hiding implementation", () => {
   for (const connector of ["before", "after", "while", "once", "until", "when", "as soon as", "by the time", "as"])
     for (const modifier of ["carefully", "very carefully", "not carefully"]) {
@@ -1235,7 +1262,7 @@ test("historical publication authority uses each producer's affirmative grammar"
     `\n## Coordinator delivery contract\n\n\`\`\`json\n${JSON.stringify(saved)}\n\`\`\`\n`, "docs/prds/example.md"));
   for (const version of [1, 2]) {
     const unsupported = ["Publishing a PR.", "Prepared a PR.", "Publish a PR.", "Published a PR.", "Prepares a PR.", "Preparing a PR.", "Send a PR.", "Sends a PR.", "Sent a PR.", "Sending a PR.", "File a PR.", "Files a PR.", "Filed a PR.", "Filing a PR.", "Generate a PR.", "Please publish a PR for review.", "Open a pull-request."];
-    if (version === 1) unsupported.push("Make a PR.", "Made a PR.", "Opening a PR.", "Created a PR.", "Creates a PR.", "Open PRs.", "Open an PR.", "Open another new PR.");
+    if (version === 1) unsupported.push("Make a PR.", "Made a PR.", "Opening a PR.", "Created a PR.", "Creates a PR.", "Open PRs.", "Open an PR.", "Open another new PR.", "Openly a PR for review.", "Openhearted a PR for review.", "Creation a PR for review.", "Submittable a PR for review.");
     for (const clause of unsupported) {
       const saved = savedContract(version, clause), before = structuredClone(saved);
       for (const act of [() => validateOwnerDelivery(saved), () => ownerImplementation(saved), () => fromPrd(saved)])
@@ -1245,6 +1272,9 @@ test("historical publication authority uses each producer's affirmative grammar"
     // v1's grammar is from ab3c37f; 3db059f emitted the wider v2 forms.
     const supported = ["Open a PR.", "Create one new pull request for code review.", "Raise the PR!", "Submit a PR for human review."];
     if (version === 2) supported.push("Opening a PR.", "Opened a PR.", "Creates a PR.", "Created a PR.", "Raises a PR.", "Raised a PR.", "Submits a PR.", "Submitted a PR.", "Make PRs.", "Makes a PR.", "Making a PR.", "Made a PR.", "Open pull requests.", "Open another new PR.");
+    // Running the v2 producer at 3db059f emits these exact records too. Its
+    // wildcard suffixes were not limited to grammatical verb inflections.
+    if (version === 2) supported.push("Openly a PR for review.", "Openhearted a PR for review.", "Creation a PR for review.", "Submittable a PR for review.");
     for (const clause of supported) {
       const saved = savedContract(version, clause), before = structuredClone(saved);
       assert.equal(validateOwnerDelivery(saved), saved, `v${version}: ${clause}`);
