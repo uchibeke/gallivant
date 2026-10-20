@@ -120,6 +120,15 @@ retain their product interpretation.
 
 The screen grants nothing:
 
+- Issue creation, editing, commenting, closing and reopening are unsupported
+  external mutations, including passive instructions, quoted issue references,
+  GitHub issue URLs and canonical `gh issue` write commands. Related writes
+  (deleting, assigning, locking, pinning and transferring issues, or creating
+  linked development branches) follow the same rule. They require clarification
+  even with an omitted or `pull_request` planner tag; no new profile action or
+  prohibition tag is granted. Read-only issue commands, issue templates,
+  product features and literal examples retain their implementation meaning.
+  Command coverage follows the [GitHub CLI issue commands](https://cli.github.com/manual/gh_issue).
 - Hosted registry names and host destinations use the same publication
   restriction: GitHub Packages/GHCR, GitLab registries, cloud artifact registries
   and explicit registry hosts, including schemes, ports and artifact paths.

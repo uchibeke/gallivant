@@ -4598,6 +4598,14 @@ test("anaphoric delivery replies cannot be resolved by empty or ungrounded plann
 
 test("target, publication, approval and mixed-polarity conflicts survive answer chains without dispatch", async () => {
   for (const [text, tag] of [
+    ["Create a GitHub issue describing the follow-up.", { action: "pull_request" }],
+    ["Edit issue #123 with the test results.", { action: "pull_request" }],
+    ["Comment on issue #123 with the test results.", { action: "pull_request" }],
+    ["Close the GitHub issue.", { action: "pull_request" }],
+    ["Reopen issue #123.", { action: "pull_request" }],
+    ['Run `gh issue create --title Follow-up`.', { action: "pull_request" }],
+    ['The "GitHub issue #123" must be closed.', { action: "pull_request" }],
+    ["Create a GitHub issue.", { action: "restrict", prohibits: [] }],
     ["Push the image to ghcr.io/acme/app.", { action: "pull_request" }],
     ["Upload the package to GitHub Packages.", { action: "pull_request" }],
     ["Push the image to \"ghcr.io/acme/app\".", { action: "pull_request" }],
