@@ -6,10 +6,13 @@ import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
 import { join } from "node:path";
 import { realpathSync, readFileSync, statSync, symlinkSync, existsSync, writeFileSync, mkdirSync, readdirSync } from "node:fs";
-import { init, targetRepository, renderInit, viaNpx, commandPrefix } from "../lib/commands/init.mjs";
+import { init, targetRepository, renderInit, viaNpx, commandPrefix, safeOrigin } from "../lib/commands/init.mjs";
 import { renderDoctor } from "../lib/commands/doctor.mjs";
 import { writeJsonAtomic, PACKAGE_NAME, VERSION } from "../lib/fs.mjs";
+import { resolveCredential, SOURCES } from "../lib/credential.mjs";
 import { tempHome } from "./helpers.mjs";
+
+const CRED = { token: "fixture-token", source: SOURCES.gh, host: "github.com" };
 
 const repository = (repo = "acme/widget") => () => ({ checkout: "/work/widget", origin: `https://github.com/${repo}.git`, repo: repo.toLowerCase() });
 const gh = ({ login = "fixture", permissions = { push: true, admin: true, archived: false }, userError = null, permissionsError = null } = {}) => {
@@ -27,7 +30,8 @@ const fresh = () => {
   const root = realpathSync(tempHome());
   return { root, home: join(root, "home"), worktrees: join(root, "worktrees") };
 };
-const base = over => ({ discover, gh: gh(), repository: repository(), harnessCheck: ready, doctor: async () => DOCTOR, ...over });
+// One fake `gh` answers both as the operator's login and as the run credential unless a test separates them.
+const base = over => { const g = over.gh ?? gh(); return { discover, gh: g, ghFor: () => g, resolve: async () => CRED, repository: repository(), harnessCheck: ready, doctor: async () => DOCTOR, ...over }; };
 
 test("init records the target repository once, writes a private config and ends with doctor's report", async () => {
   const { home, worktrees } = fresh();
@@ -136,8 +140,8 @@ test("init names an unmet repository prerequisite before changing any repo-speci
   await assert.rejects(init(base({ home, worktrees, harness: "codex", gh: untouched, repository: () => targetRepository(plain) })), /not inside a Git checkout/);
   assert.deepEqual(untouched.calls, []);
   // A GitHub URL whose repository this login cannot see, cannot push to, or that is archived: refused after asking GitHub.
-  await assert.rejects(init(base({ home, worktrees, harness: "codex", gh: gh({ permissionsError: "HTTP 404: Not Found" }) })), /cannot resolve acme\/widget for fixture: HTTP 404[\s\S]*nothing was written/);
-  await assert.rejects(init(base({ home, worktrees, harness: "codex", gh: gh({ permissions: { push: false, admin: false, archived: false } }) })), /no push permission on acme\/widget/);
+  await assert.rejects(init(base({ home, worktrees, harness: "codex", gh: gh({ permissionsError: "HTTP 404: Not Found" }) })), /cannot resolve acme\/widget with the run credential \(gh auth token \(13 characters\)\): HTTP 404[\s\S]*nothing was written/);
+  await assert.rejects(init(base({ home, worktrees, harness: "codex", gh: gh({ permissions: { push: false, admin: false, archived: false } }) })), /run credential \(gh auth token \(13 characters\)\) has no push permission on acme\/widget\. Ask for write access/);
   await assert.rejects(init(base({ home, worktrees, harness: "codex", gh: gh({ permissions: { push: true, admin: true, archived: true } }) })), /archived/);
   assert.equal(existsSync(home), false);
   assert.equal(existsSync(worktrees), false);
@@ -149,6 +153,59 @@ test("init names an unmet repository prerequisite before changing any repo-speci
   await assert.rejects(init(base({ home, gh: gh({ permissions: { push: false } }) })), /no push permission/);
   assert.equal(readFileSync(join(home, "config.json"), "utf8"), before);
   assert.deepEqual(readdirSync(home), ["config.json"]);
+});
+
+test("origin URLs are printed without their userinfo, so a token embedded in a remote never reaches a terminal", async () => {
+  assert.equal(safeOrigin("https://x-access-token:SECRET@github.com/acme/widget.git"), "https://github.com/acme/widget.git");
+  assert.equal(safeOrigin("ssh://git@github.com/acme/widget.git"), "ssh://github.com/acme/widget.git");
+  assert.equal(safeOrigin("git@github.com:acme/widget.git"), "git@github.com:acme/widget.git");
+  const { home, worktrees, root } = fresh();
+  const withToken = join(root, "with-token");
+  mkdirSync(withToken);
+  execFileSync("git", ["init", "-q", withToken]);
+  execFileSync("git", ["-C", withToken, "remote", "add", "origin", "https://x-access-token:SECRET@github.com/Acme/Widget.git"]);
+  assert.deepEqual(targetRepository(withToken), { checkout: realpathSync(withToken), origin: "https://github.com/Acme/Widget.git", repo: "acme/widget" });
+  const foreign = join(root, "foreign");
+  mkdirSync(foreign);
+  execFileSync("git", ["init", "-q", foreign]);
+  execFileSync("git", ["-C", foreign, "remote", "add", "origin", "https://user:SECRET@gitlab.com/acme/widget.git"]);
+  assert.throws(() => targetRepository(foreign), e => /not a github\.com repository URL/.test(e.message) && !e.message.includes("SECRET"));
+  // The permission refusal names the origin too, and must not leak even when handed an unredacted one.
+  const leaky = () => ({ checkout: "/work/widget", origin: "https://x-access-token:SECRET@github.com/acme/widget.git", repo: "acme/widget" });
+  await assert.rejects(init(base({ home, worktrees, harness: "codex", repository: leaky, gh: gh({ permissionsError: "HTTP 404: Not Found" }) })),
+    e => /origin \(https:\/\/github\.com\/acme\/widget\.git\)/.test(e.message) && !e.message.includes("SECRET"));
+});
+
+test("init checks push access with the credential a run would resolve, not the operator's ambient login", async () => {
+  const { home, root } = fresh();
+  mkdirSync(home, { recursive: true, mode: 0o700 });
+  const tokenFile = join(home, "gh-token");
+  const existing = { trusted_authors: ["me"], worktrees: join(root, "worktrees"), harness: { codex: { bin: process.execPath } }, github_token_file: tokenFile, repos: [] };
+  writeJsonAtomic(join(home, "config.json"), existing, 0o600);
+  const before = readFileSync(join(home, "config.json"), "utf8");
+  const ambient = gh();          // can push, as the operator's own login often can
+  const run = gh({ permissions: { push: false, admin: false, archived: false } });
+  const seen = [];
+  const ghFor = credential => { seen.push(credential); return run; };
+  // The configured token file is missing: the real resolver refuses rather than widening to the ambient login.
+  await assert.rejects(init(base({ home, gh: ambient, ghFor, resolve: resolveCredential })), /github_token_file is missing, unreadable or empty[\s\S]*nothing was written/);
+  assert.deepEqual(seen, []);
+  assert.deepEqual(run.calls, []);
+  // With the file in place, the run credential is the one asked, and its answer is the one that counts.
+  writeFileSync(tokenFile, "ghp_fixturetoken\n", { mode: 0o600 });
+  await assert.rejects(init(base({ home, gh: ambient, ghFor, resolve: resolveCredential })), /run credential \(github_token_file \(16 characters\)\) has no push permission on acme\/widget\. Give the token in .*gh-token Contents: write on acme\/widget/);
+  assert.equal(seen.length, 1);
+  assert.equal(seen[0].token, "ghp_fixturetoken");
+  assert.equal(seen[0].source, SOURCES.file);
+  assert.deepEqual(run.calls, ["permissions acme/widget"]);
+  assert.deepEqual(ambient.calls, ["user", "user"]);
+  assert.equal(readFileSync(join(home, "config.json"), "utf8"), before);
+  // A run credential that can push records the repository even though the ambient login was never asked.
+  const pushable = gh();
+  const r = await init(base({ home, gh: gh({ permissions: { push: false } }), ghFor: () => pushable, resolve: resolveCredential }));
+  assert.equal(r.recorded, true);
+  assert.deepEqual(JSON.parse(readFileSync(r.file, "utf8")).repos, ["acme/widget"]);
+  assert.deepEqual(pushable.calls, ["permissions acme/widget"]);
 });
 
 test("init refuses unsupported, missing and unsafe setup, and an invalid existing config, before writing", async () => {

@@ -116,11 +116,13 @@ which are illustrations rather than references.
 
 ## What remains
 
-- **Release.** The published 0.2.0 `init` creates the config only. The
-  repository registration, prerequisite refusals and doctor report described in
-  the README ship with the next release. Until that version is `latest`,
+- **Release.** The published 0.2.0 `init` creates the config only. This change
+  raises `package.json` to 0.2.1 so that the merge carries a releasable version
+  with the repository registration, prerequisite refusals and doctor report the
+  README describes. Until 0.2.1 is tagged, published and `latest`,
   `npx --yes @uchibeke/gallivant init` runs the 0.2.0 behavior, and a 0.2.0 user
-  still adds `repos` by hand and runs `doctor` separately.
+  still adds `repos` by hand and runs `doctor` separately. Publishing is the
+  maintainer's step; see `docs/releasing.md`.
 - **Live validation.** The installed-package test uses fixture `gh` and `codex`
   commands. A run with a real GitHub login, a real signed-in harness and a real
   repository was not performed in this audit and is manual validation, as the

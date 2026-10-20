@@ -1,6 +1,6 @@
 {
   "name": "@uchibeke/gallivant",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "Turn repository tasks into reviewed pull requests with local or hosted agents, acceptance checks and a persistent review loop.",
   "type": "module",
   "bin": {

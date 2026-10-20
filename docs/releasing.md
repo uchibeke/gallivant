@@ -93,8 +93,8 @@ Choose one trigger:
 
 ```sh
 # From an up-to-date main checkout; replace the example with package.json's version.
-git tag -a v0.2.0 -m 'Release 0.2.0'
-git push origin v0.2.0
+git tag -a v0.2.1 -m 'Release 0.2.1'
+git push origin v0.2.1
 
 # Or dispatch against main; the workflow uses main's package version.
 gh workflow run release.yml --repo uchibeke/gallivant --ref main
