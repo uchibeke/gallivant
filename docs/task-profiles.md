@@ -403,5 +403,10 @@ contradictory, adversarial and ordinary feature wording), per-clause
 traceability, typed-profile authorization, review invalidation, retry and
 idempotency, historical fixtures, model-route call, token and allowance
 boundaries, repository snapshots and a bounded-input timing check. It makes no
-provider calls. No live qualification of generated-PRD quality or actual cost is
+provider calls. Maximum-size timing fixtures use the UTF-8 byte counts of their
+complete repeated units and command prefixes/suffixes, with assertions that
+inputs fill but never exceed the accepted request allowance. The 50 CPU ms
+screening budget is unchanged. Repeated statements share checks only within one
+screen; every target-conflict occurrence and whole-request PR count is retained.
+No live qualification of generated-PRD quality or actual cost is
 recorded here.

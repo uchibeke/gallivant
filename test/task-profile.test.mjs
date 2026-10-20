@@ -865,8 +865,22 @@ test("repository snapshots are read-only, bounded, exclude private and ignored p
   assert.deepEqual(real.paths, [".gitignore", "src/index.mjs"]); assert.equal(real.counts.ignored, 1); assert.equal(real.counts.private, 1);
 });
 
+test("duplicate statements preserve target occurrences, PR counts and mixed control scopes", () => {
+  const targets = deliveryScreen("Open a PR against staging. ".repeat(4).trim(), PROFILE.target);
+  assert.equal(targets.targetConflicts.length, 4);
+  assert.ok(targets.targetConflicts.every(reason => reason === 'base "staging" differs from selected base "main"'));
+  assert.ok(targets.escalated.includes("pull_request_count"));
+  const mixed = deliveryScreen("Do not merge; merge it; do not merge; merge it; do not merge; merge it.", PROFILE.target);
+  assert.ok(mixed.controlled.includes("merge")); assert.ok(mixed.uncontrolled.includes("merge"));
+  assert.deepEqual(unaccountedTerms(mixed, { action: "restrict", prohibits: ["merge"] }), ["merge"]);
+  assert.equal(deliveryScreen("Add a button to close PRs. ".repeat(4), PROFILE.target).tier, "assumption");
+  const matching = deliveryScreen("Open a PR against staging.", { ...PROFILE.target, base: "staging" });
+  assert.equal(matching.tier, "assumption", "statement cache never crosses target or call boundaries");
+});
+
 test("the screen and mapping stay fast at the request and mapping limits", () => {
   const wrapped = "Do not\n" + ("context ".repeat(31).trim() + "\n").repeat(126) + "open a pull request";
+  assert.ok(Buffer.byteLength(wrapped) <= MAX_INPUT_BYTES);
   const clauses = fragments(wrapped), cpuStart = process.cpuUsage();
   let contextual;
   for (let i = 0; i < 20; i++) contextual = deliveryScreens(wrapped, clauses, PROFILE.target);
@@ -876,10 +890,39 @@ test("the screen and mapping stay fast at the request and mapping limits", () =>
   assert.ok((cpuUsed.user + cpuUsed.system) / 20000 < 50, "128 wrapped source spans reuse the bounded statement screen");
 
   const clause = "Implement export and merge the PR after approval; do not push until reviewed. ";
-  const text = clause.repeat(Math.floor(MAX_INPUT_BYTES / clause.length));
+  const atLimit = (unit, prefix = "", suffix = "") => prefix + unit.repeat(Math.floor((MAX_INPUT_BYTES - Buffer.byteLength(prefix + suffix)) / Buffer.byteLength(unit))) + suffix;
   // Each test file runs in its own process. Charge work to this process, not
   // time that a parallel CI job leaves it waiting to be scheduled.
-  for (const [input, tier] of [["Create a GitHub issue. ".repeat(Math.floor(MAX_INPUT_BYTES / 22)), "question"], ["Add a button to create a GitHub issue. ".repeat(Math.floor(MAX_INPUT_BYTES / 37)), "none"], ["gh issue " + "--repo acme/widget ".repeat(Math.floor((MAX_INPUT_BYTES - 40) / 19)) + "create", "question"], ["gh issue " + "--repo ".repeat(Math.floor((MAX_INPUT_BYTES - 40) / 7)) + "list", "none"], ["Push the image to ghcr.io/acme/app. ".repeat(Math.floor(MAX_INPUT_BYTES / 35)), "question"], ['Upload the package to "GitHub Packages". '.repeat(Math.floor(MAX_INPUT_BYTES / 40)), "question"], ["Run npm unpublish old-package. ".repeat(Math.floor(MAX_INPUT_BYTES / 30)), "question"], ["Run gh pr create --base staging. ".repeat(Math.floor(MAX_INPUT_BYTES / 32)), "question"], ["gh pr create " + "--title x ".repeat(Math.floor((MAX_INPUT_BYTES - 40) / 10)) + "--base staging", "question"], ["helm " + "--debug ".repeat(Math.floor((MAX_INPUT_BYTES - 40) / 8)) + "upgrade api ./chart", "question"], [text, "question"], ["'npm publish' ".repeat(Math.floor(MAX_INPUT_BYTES / 14)), "none"], ['Run `npm publish`. '.repeat(Math.floor(MAX_INPUT_BYTES / 19)), "question"], ["landing ".repeat(Math.floor(MAX_INPUT_BYTES / 8)), "none"], ["landed ".repeat(Math.floor(MAX_INPUT_BYTES / 7)), "none"], ["Add a command to land changes. ".repeat(Math.floor(MAX_INPUT_BYTES / 31)), "none"], ["Land the PR after CI passes. ".repeat(Math.floor(MAX_INPUT_BYTES / 29)), "question"], ["Run git push origin HEAD. ".repeat(Math.floor(MAX_INPUT_BYTES / 25)), "assumption"], ["Run git push --tags. ".repeat(Math.floor(MAX_INPUT_BYTES / 20)), "question"], ["Close pull request #123. ".repeat(Math.floor(MAX_INPUT_BYTES / 24)), "question"], ["Add a button to close PRs. ".repeat(Math.floor(MAX_INPUT_BYTES / 26)), "assumption"], ['Ask me before opening a PR. '.repeat(Math.floor(MAX_INPUT_BYTES / 28)), 'question'], ['Review pull request #123 and leave feedback. '.repeat(Math.floor(MAX_INPUT_BYTES / 45)), 'question'], ['Run terraform apply. '.repeat(Math.floor(MAX_INPUT_BYTES / 21)), 'question'], ['Add a command to run terraform apply. '.repeat(Math.floor(MAX_INPUT_BYTES / 38)), 'none']]) {
+  const cases = [
+    ["Create a GitHub issue. ", "question"],
+    ["Add a button to create a GitHub issue. ", "none"],
+    ["--repo acme/widget ", "question", "gh issue ", "create"],
+    ["--repo ", "none", "gh issue ", "list"],
+    ["Push the image to ghcr.io/acme/app. ", "question"],
+    ['Upload the package to "GitHub Packages". ', "question"],
+    ["Run npm unpublish old-package. ", "question"],
+    ["Run gh pr create --base staging. ", "question"],
+    ["--title x ", "question", "gh pr create ", "--base staging"],
+    ["--debug ", "question", "helm ", "upgrade api ./chart"],
+    [clause, "question"],
+    ["'npm publish' ", "none"],
+    ['Run `npm publish`. ', "question"],
+    ["landing ", "none"], ["landed ", "none"],
+    ["Add a command to land changes. ", "none"],
+    ["Land the PR after CI passes. ", "question"],
+    ["Run git push origin HEAD. ", "assumption"],
+    ["Run git push --tags. ", "question"],
+    ["Close pull request #123. ", "question"],
+    ["Add a button to close PRs. ", "assumption"],
+    ["Ask me before opening a PR. ", "question"],
+    ["Review pull request #123 and leave feedback. ", "question"],
+    ["Run terraform apply. ", "question"],
+    ["Add a command to run terraform apply. ", "none"],
+  ];
+  for (const [unit, tier, prefix, suffix] of cases) {
+    const input = atLimit(unit, prefix, suffix), bytes = Buffer.byteLength(input);
+    assert.ok(bytes <= MAX_INPUT_BYTES, "performance fixtures must fit the accepted request byte limit");
+    assert.ok(bytes > MAX_INPUT_BYTES - Buffer.byteLength(unit), "fixtures fill the byte allowance to within one complete unit");
     const started = process.hrtime.bigint(), cpuStarted = process.cpuUsage();
     let screen;
     for (let i = 0; i < 20; i++) screen = deliveryScreen(input);

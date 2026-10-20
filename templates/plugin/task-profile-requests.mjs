@@ -10,6 +10,9 @@
 // delivery authority), feature (ordinary product wording with delivery
 // vocabulary).
 export const profileRequests = [
+  { kind: "adversarial", text: "Open a PR against staging. Open a PR against staging. Open a PR against staging.", screen: { tier: "question", terms: ["pull_request_target", "pull_request_count"] }, tag: { action: "pull_request" }, outcome: "needs-input" },
+  { kind: "adversarial", text: "Do not publish; publish it; do not publish; publish it; do not publish; publish it.", screen: { tier: "question", terms: ["publish"] }, tag: { action: "restrict", prohibits: ["publish"] }, outcome: "needs-input" },
+  { kind: "feature", text: "Add a button to close PRs. Add a button to close PRs. Add a button to close PRs.", screen: { tier: "assumption", terms: ["pull_request"] }, tag: null, outcome: "ready" },
   {"kind": "adversarial", "text": "Do not\nopen a pull request", "screen": {"tier": "question"}, "tag": {"action": "pull_request"}, "outcome": "needs-input", "questions": ["q-delivery-r-1", "q-delivery-r-2"]},
   {"kind": "contradictory", "text": "Upload the package\nto npm", "screen": {"tier": "question"}, "tag": null, "outcome": "needs-input", "questions": ["q-delivery-r-1", "q-delivery-r-2"]},
   {"kind": "adversarial", "text": "Do\r\nnot\r\nopen a PR", "screen": {"tier": "question"}, "tag": {"action": "pull_request"}, "outcome": "needs-input", "questions": ["q-delivery-r-1", "q-delivery-r-2", "q-delivery-r-3"]},
