@@ -11,6 +11,7 @@ import { renderDoctor } from "../lib/commands/doctor.mjs";
 import { writeJsonAtomic, PACKAGE_NAME, VERSION } from "../lib/fs.mjs";
 import { resolveCredential, SOURCES } from "../lib/credential.mjs";
 import { tempHome } from "./helpers.mjs";
+import { acquireCliMutation } from "../lib/daemon.mjs";
 
 const CRED = { token: "fixture-token", source: SOURCES.gh, host: "github.com" };
 
@@ -97,6 +98,86 @@ test("init preserves every key of an existing config and deduplicates only its o
   await assert.rejects(init(base({ home, worktrees: join(root, "elsewhere") })), /already sets worktrees.*nothing was written/s);
   assert.equal(JSON.parse(readFileSync(added.file, "utf8")).worktrees, custom.worktrees);
   assert.equal(existsSync(join(root, "elsewhere")), false);
+});
+
+test("init rejects JSON null and other non-object configs before any probe or write", async () => {
+  const { home, worktrees } = fresh();
+  mkdirSync(home, { mode: 0o700 });
+  const file = join(home, "config.json");
+  for (const value of [null, [], false, 42, "settings"]) {
+    const bytes = JSON.stringify(value) + "\n";
+    writeFileSync(file, bytes, { mode: 0o600 });
+    await assert.rejects(init(base({ home, worktrees, repository: () => { assert.fail("invalid config must stop before repository probing"); } })), /not a JSON object.*nothing was written/s);
+    assert.equal(readFileSync(file, "utf8"), bytes);
+    assert.equal(existsSync(worktrees), false);
+    assert.deepEqual(readdirSync(home), ["config.json"]);
+  }
+});
+
+test("init requires an explicit choice with multiple harnesses and renders the chosen first task", async () => {
+  const { home, worktrees } = fresh();
+  mkdirSync(home, { mode: 0o700 });
+  const file = join(home, "config.json");
+  writeJsonAtomic(file, { trusted_authors: ["fixture"], worktrees, harness: discover(), repos: [] });
+  const before = readFileSync(file, "utf8");
+  await assert.rejects(init(base({ home })), /Choose a harness:.*init --harness codex.*init --harness claude.*nothing was written/s);
+  assert.equal(readFileSync(file, "utf8"), before);
+  assert.equal(existsSync(worktrees), false);
+  for (const harness of ["codex", "claude"]) {
+    const checked = [];
+    const r = await init(base({ home, harness, harnessCheck: async name => { checked.push(name); return ready(); } }));
+    assert.deepEqual(checked, [harness]);
+    const text = renderInit(r, renderDoctor(r.doctor), { npx: true });
+    assert.match(text, new RegExp(`task .* --harness ${harness} --verify`));
+    assert.doesNotMatch(text, /<harness>|--harness null/);
+    assert.deepEqual(JSON.parse(readFileSync(file)).harness, discover());
+  }
+});
+
+test("concurrent init calls retain both repositories for a new or existing home", async () => {
+  for (const existing of [false, true]) {
+    const { home, worktrees } = fresh();
+    if (existing) await init(base({ home, worktrees, harness: "codex", repository: repository("acme/original") }));
+    // Hold both permission probes until both calls have read the same config snapshot.
+    let arrived = 0, release;
+    const barrier = new Promise(resolve => { release = resolve; });
+    const permissions = async () => { if (++arrived === 2) release(); await barrier; return { push: true }; };
+    const results = await Promise.all(["acme/one", "acme/two"].map(repo => init(base({
+      home, worktrees, harness: "codex", repository: repository(repo), ghFor: () => ({ repoPermissions: permissions }),
+    }))));
+    assert.ok(results.every(r => r.recorded));
+    assert.deepEqual(JSON.parse(readFileSync(join(home, "config.json"))).repos.sort(), (existing ? ["acme/original", "acme/one", "acme/two"] : ["acme/one", "acme/two"]).sort());
+    assert.equal(existsSync(join(home, "task-mutation.lock")), false);
+  }
+});
+
+test("init rechecks changed credentials and releases the mutation lock on failure", async () => {
+  const { home, worktrees, root } = fresh();
+  const first = await init(base({ home, worktrees, harness: "codex" }));
+  const file = first.file, tokenFile = join(home, "new-token");
+  let calls = 0;
+  await assert.rejects(init(base({ home, repository: repository("acme/second"),
+    resolve: async config => {
+      calls++;
+      if (config.github_token_file === tokenFile) throw new Error("new credential is unavailable");
+      const owner = acquireCliMutation(home);
+      try { writeJsonAtomic(file, { ...JSON.parse(readFileSync(file)), github_token_file: tokenFile }); }
+      finally { owner.release(); }
+      return CRED;
+    },
+  })), /new credential is unavailable.*nothing was written/s);
+  assert.equal(calls, 2);
+  const saved = JSON.parse(readFileSync(file));
+  assert.equal(saved.github_token_file, tokenFile);
+  assert.deepEqual(saved.repos, ["acme/widget"]);
+  // A filesystem failure after lock acquisition must also release ownership.
+  const blocked = join(root, "not-a-directory");
+  writeFileSync(blocked, "fixture");
+  writeJsonAtomic(file, { ...saved, worktrees: blocked });
+  const bytes = readFileSync(file, "utf8");
+  await assert.rejects(init(base({ home, harness: "codex" })), /EEXIST|ENOTDIR/);
+  assert.equal(readFileSync(file, "utf8"), bytes);
+  assert.equal(existsSync(join(home, "task-mutation.lock")), false);
 });
 
 test("init stops with the exact login action when gh or the harness is signed out, and writes nothing", async () => {

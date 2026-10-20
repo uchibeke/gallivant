@@ -52,9 +52,9 @@ Set up the Git checkout you run it in. Published form:
 Before writing anything it checks, in this order, that the directory is a Git
 checkout whose `origin` is a github.com repository, that `gh` is signed in, that
 the selected harness is installed at a supported version and signed in, and that
-your login can push to the repository. A failed check stops the command with the
-exact fix (`gh auth login`, `codex login`, `claude auth login`, or the remote or
-permission to correct) and leaves no state behind.
+the resolved run credential can push to the repository. A failed check stops the
+command with the exact fix (`gh auth login`, `codex login`, `claude auth login`,
+or the remote or permission to correct) and leaves no state behind.
 
 It then creates a private config from your authenticated GitHub login and the
 selected installed harness (Codex by default for a new config), creates a
@@ -66,6 +66,9 @@ while checks remain.
 Repeating it is safe. An existing config keeps every key as written; the only
 change is the one `repos` entry for the current repository, never duplicated.
 `--harness` adds a second supported harness without touching the first;
+when both Codex and Claude are configured, pass `--harness` to choose one.
+Concurrent updates use the same mutation lock as other CLI writes; if settings
+change during the prerequisite checks, setup rechecks them before writing.
 `--worktrees` is refused when it differs from the configured directory. `init`
 does not sign in, change credentials, global harness settings, reviewer
 installation or repository rules, and does not start a task. When run through

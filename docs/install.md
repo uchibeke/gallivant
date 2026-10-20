@@ -49,6 +49,11 @@ cd /path/to/your/repository
 npx --yes @uchibeke/gallivant init --harness codex    # or: --harness claude
 ```
 
+This setup flow requires **0.2.1 or newer**. On 2026-10-20, npm's `latest` was
+still 0.2.0: its `init` creates the config only, so repository registration and
+`doctor` must be done separately. A maintainer must [publish 0.2.1](releasing.md)
+before the command above provides the flow below; setup does not publish it.
+
 `npx` downloads the published `@uchibeke/gallivant` package into npm's cache and
 runs its `gallivant` command. Nothing is installed globally, no `gallivant`
 command is added to your PATH, and this repository is not cloned. The command
@@ -69,9 +74,9 @@ user-owned Node installation or prefix. The rest of this guide writes
 
 1. Refuses to continue, writing nothing, when the directory is not a Git
    checkout, its `origin` remote is not a github.com repository, `gh` is signed
-   out, the selected harness is missing, too old or signed out, or your GitHub
-   login cannot see or push to the repository. Each refusal names the command
-   that fixes it.
+   out, the selected harness is missing, too old or signed out, or the resolved
+   run credential cannot see or push to the repository. Each refusal names the
+   command that fixes it.
 2. Creates `~/.gallivant/config.json` (mode 600) with your authenticated GitHub
    login in `trusted_authors`, the selected installed harness, notifications
    disabled and a separate `~/.gallivant-worktrees` directory for task checkouts.
@@ -88,6 +93,9 @@ entry for the current repository, and a repository already listed is not
 duplicated. `--worktrees` is refused when it differs from the configured
 directory, so edit the config to move checkouts. `--harness` adds the named
 harness when it is not configured yet and leaves the others alone.
+If both Codex and Claude are configured, pass `--harness codex` or
+`--harness claude` explicitly. Setup rechecks settings changed by another command
+before writing, so concurrent repository registrations preserve each other's entries.
 
 ### What `init` leaves to you
 

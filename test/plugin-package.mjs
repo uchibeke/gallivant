@@ -1,3 +1,4 @@
+import { CORE_VERSION } from "../lib/task_delivery_contract.mjs";
 // Artifact-installed verification only. Fixtures are never installed-host evidence.
 import assert from "node:assert/strict";
 import { mkdtempSync, writeFileSync, readFileSync, cpSync, openSync, closeSync, existsSync, mkdirSync } from "node:fs";
@@ -14,8 +15,8 @@ writeFileSync(ui, "<!doctype html><title>Internal task resource fixture</title><
 const config = { publisher: "APort", fixture: true, endpoint: "https://example.com/task-delivery/mcp", resource: { uri: "ui://task-delivery/app", domain: "https://example.com", connectDomains: ["https://example.com"], resourceDomains: [] }, assets: { ui } };
 const commit = execFileSync("git", ["rev-parse", "HEAD"], { cwd: root, encoding: "utf8" }).trim();
 const out = join(temp, "artifacts");
-const manifest = buildPluginPackage({ config, out, coreVersion: "0.2.0", sourceCommit: commit, internal: true });
-const duplicate = buildPluginPackage({ config, out: join(temp, "rebuild"), coreVersion: "0.2.0", sourceCommit: commit, internal: true });
+const manifest = buildPluginPackage({ config, out, coreVersion: CORE_VERSION, sourceCommit: commit, internal: true });
+const duplicate = buildPluginPackage({ config, out: join(temp, "rebuild"), coreVersion: CORE_VERSION, sourceCommit: commit, internal: true });
 assert.deepEqual(manifest.hashes, duplicate.hashes, "same source/config must reproduce exact ZIP/runtime/operation hashes");
 assert.equal(manifest.coreSha256, duplicate.coreSha256);
 const unpacked = join(temp, "unpacked"); mkdirSync(unpacked);
@@ -25,12 +26,12 @@ assert.deepEqual(readFileSync(join(out, "plugin/LICENSE")), readFileSync(join(ro
 assert.deepEqual(JSON.parse(readFileSync(join(out, "operations.json"))).map(o => o.name), ["capabilities", "prepare", "answer", "resume", "validate", "start", "list", "inspect", "evidence", "logs", "control"]);
 const secretUi = join(temp, "secret-ui.html"), rejected = join(temp, "rejected");
 writeFileSync(secretUi, "Bearer private-credential-test-value");
-assert.throws(() => buildPluginPackage({ config: { ...config, assets: { ui: secretUi } }, out: rejected, coreVersion: "0.2.0", sourceCommit: commit, internal: true }), { code: "PACKAGE_ASSET" });
+assert.throws(() => buildPluginPackage({ config: { ...config, assets: { ui: secretUi } }, out: rejected, coreVersion: CORE_VERSION, sourceCommit: commit, internal: true }), { code: "PACKAGE_ASSET" });
 assert.equal(existsSync(rejected), false, "failed packaging removes the partial artifact it owns");
 const publicCheck = validatePublicRelease(config);
 assert.equal(publicCheck.ok, false); assert.equal(publicCheck.submissionReady, false);
 assert.ok(publicCheck.errors.some(e => e.includes("supportEmail")) && publicCheck.errors.some(e => e.includes("real HTTPS")) && publicCheck.errors.some(e => e.includes("built")));
-assert.throws(() => buildPluginPackage({ config, out: join(temp, "public"), coreVersion: "0.2.0", sourceCommit: commit }), { code: "PACKAGE_RELEASE" });
+assert.throws(() => buildPluginPackage({ config, out: join(temp, "public"), coreVersion: CORE_VERSION, sourceCommit: commit }), { code: "PACKAGE_RELEASE" });
 const consumer = join(temp, "consumer");
 mkdirSync(consumer, { recursive: true });
 writeFileSync(join(consumer, "package.json"), '{"private":true,"type":"module"}\n');

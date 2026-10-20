@@ -19,6 +19,11 @@ Run this inside the Git checkout you want to work in:
 npx --yes @uchibeke/gallivant init --harness codex    # or: --harness claude
 ```
 
+The setup flow below requires **0.2.1 or newer**. At verification on 2026-10-20,
+npm's `latest` was still 0.2.0, whose `init` only creates the config. A maintainer
+must [publish 0.2.1](docs/releasing.md) before this command provides repository
+registration, repeat safety and the diagnostic report described below.
+
 `init` writes a private config at `~/.gallivant/config.json`, records this
 repository, creates a separate directory for task checkouts, and ends with the
 same report as `gallivant doctor`: one line per check and the exact fix for each

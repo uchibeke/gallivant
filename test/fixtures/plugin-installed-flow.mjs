@@ -25,6 +25,7 @@ import { Server } from "@modelcontextprotocol/sdk/server/index.js";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 const candidate = JSON.parse(readFileSync(new URL("candidate.json", import.meta.url))), manifest = JSON.parse(readFileSync(join(candidate.out, "runtime.json")));
+const nextPatchVersion = CORE_VERSION.replace(/\d+$/, n => String(Number(n) + 1));
 const resource = manifest.resource;
 const request = "Add CSV export for the widget table.\nDo not add dependencies.";
 const scope = account => ({ tenant: "tenant", account, region: "ca", environment: "preview", scopes: ["task-delivery:read", "task-delivery:write"], repositories: ["widget"] });
@@ -77,7 +78,7 @@ const prepare = (operationId = "prepare", text = request) => ({ repositoryId: "w
 const mutate = (task, operationId) => ({ taskId: task.taskId, expectedRevision: task.revision, operationId });
 
 test("installed documented imports have no user-config/daemon effects and preserve both providers", () => {
-  assert.equal(CORE_VERSION, "0.2.0"); assert.equal(typeof createTaskService, "function");
+  assert.equal(CORE_VERSION, JSON.parse(readFileSync(new URL("node_modules/@uchibeke/gallivant/package.json", import.meta.url))).version); assert.equal(typeof createTaskService, "function");
   assert.equal(typeof makeAgentsTransport, "function"); assert.equal(typeof makeCloudTransport, "function");
   assert.ok(executionCapabilities().some(p => p.name === "openai-agents") && executionCapabilities().some(p => p.name === "codex-cloud"));
   assert.equal(capabilitiesFor("codex-cloud").available, false, "inherited safety block is preserved");
@@ -538,7 +539,7 @@ test("compatible package/state backup and rollback preserve task/provider/brief 
   const w = world({ question: false }), task = await w.delivery.dispatch("prepare", prepare(), "alice"), ctx = w.worlds.get("alice").ctx;
   migrateRuntimeState({ home: ctx.home, manifest });
   const before = readFileSync(join(ctx.home, "tasks", task.taskId, "intake.json"));
-  assertCompatible({ ...manifest, coreVersion: "0.2.1" });
+  assertCompatible({ ...manifest, coreVersion: nextPatchVersion });
   const backup = join(w.root, "backup"), restored = join(w.root, "restored");
   backupRuntimeState({ home: ctx.home, out: backup, manifest }); restoreRuntimeState({ backup, out: restored, manifest });
   assert.deepEqual(readFileSync(join(restored, "tasks", task.taskId, "intake.json")), before);
@@ -570,11 +571,14 @@ test("actual compatible patch install and rollback preserve saved identities; ma
   const providerBytes = readFileSync(provider), backup = join(w.root, "previous-state");
   const patch = join(w.root, "patch"), install = join(w.root, "upgrade-consumer");
   cpSync(new URL("node_modules/@uchibeke/gallivant", import.meta.url), patch, { recursive: true });
-  const pkg = JSON.parse(readFileSync(join(patch, "package.json"))); pkg.version = "0.2.1";
+  const pkg = JSON.parse(readFileSync(join(patch, "package.json"))); pkg.version = nextPatchVersion;
   writeFileSync(join(patch, "package.json"), JSON.stringify(pkg));
-  const contract = join(patch, "lib/task_delivery_contract.mjs"); writeFileSync(contract, readFileSync(contract, "utf8").replace('CORE_VERSION = "0.2.0"', 'CORE_VERSION = "0.2.1"'));
+  const contract = join(patch, "lib/task_delivery_contract.mjs"), previousContract = readFileSync(contract, "utf8");
+  const nextContract = previousContract.replace(`CORE_VERSION = ${JSON.stringify(CORE_VERSION)}`, `CORE_VERSION = ${JSON.stringify(nextPatchVersion)}`);
+  assert.notEqual(nextContract, previousContract, "the synthetic upgrade must change the installed contract version");
+  writeFileSync(contract, nextContract);
   const packed = JSON.parse(execFileSync("npm", ["pack", "--ignore-scripts", "--json"], { cwd: patch, encoding: "utf8" }))[0];
-  const tarball = join(patch, packed.filename), patchManifest = { ...manifest, coreVersion: "0.2.1", coreSha256: createHash("sha256").update(readFileSync(tarball)).digest("hex") };
+  const tarball = join(patch, packed.filename), patchManifest = { ...manifest, coreVersion: nextPatchVersion, coreSha256: createHash("sha256").update(readFileSync(tarball)).digest("hex") };
   const rejectedBackup = join(w.root, "candidate-backup"), oldPin = readFileSync(join(ctx.home, "runtime-pin.json"));
   assert.throws(() => backupRuntimeState({ home: ctx.home, out: rejectedBackup, manifest: patchManifest }), { code: "RUNTIME_STATE" });
   assert.equal(existsSync(rejectedBackup), false); assert.deepEqual(readFileSync(join(ctx.home, "runtime-pin.json")), oldPin);
@@ -582,13 +586,13 @@ test("actual compatible patch install and rollback preserve saved identities; ma
   mkdirSync(install); writeFileSync(join(install, "package.json"), '{"private":true,"type":"module"}');
   execFileSync("npm", ["install", "--ignore-scripts", "--omit=dev", "--no-audit", "--no-fund", tarball], { cwd: install, stdio: "pipe" });
   const script = join(install, "check.mjs");
-  writeFileSync(script, `import {CORE_VERSION,assertCompatible} from '@uchibeke/gallivant/task-delivery/contracts';import {migrateRuntimeState} from '@uchibeke/gallivant/runtime/state';if(CORE_VERSION!=='0.2.1')throw Error('source import bypass');const manifest=${JSON.stringify(patchManifest)};migrateRuntimeState({home:${JSON.stringify(ctx.home)},manifest});assertCompatible(manifest);`);
+  writeFileSync(script, `import {CORE_VERSION,assertCompatible} from '@uchibeke/gallivant/task-delivery/contracts';import {migrateRuntimeState} from '@uchibeke/gallivant/runtime/state';if(CORE_VERSION!==${JSON.stringify(nextPatchVersion)})throw Error('source import bypass');const manifest=${JSON.stringify(patchManifest)};migrateRuntimeState({home:${JSON.stringify(ctx.home)},manifest});assertCompatible(manifest);`);
   execFileSync(process.execPath, [script], { cwd: install, stdio: "pipe" });
   assert.deepEqual(readFileSync(intake), before); assert.deepEqual(readFileSync(provider), providerBytes);
   assert.throws(() => migrateRuntimeState({ home: ctx.home, manifest: { ...patchManifest, coreVersion: "1.0.0" } }), { code: "DELIVERY_VERSION" });
   execFileSync("npm", ["install", "--ignore-scripts", "--omit=dev", "--no-audit", "--no-fund", join(candidate.out, candidate.manifest.coreArtifact)], { cwd: install, stdio: "pipe" });
   const restored = join(w.root, "rollback");
-  writeFileSync(script, `import {CORE_VERSION} from '@uchibeke/gallivant/task-delivery/contracts';import {restoreRuntimeState} from '@uchibeke/gallivant/runtime/state';if(CORE_VERSION!=='0.2.0')throw Error('rollback package mismatch');restoreRuntimeState({backup:${JSON.stringify(backup)},out:${JSON.stringify(restored)},manifest:${JSON.stringify(manifest)}});`);
+  writeFileSync(script, `import {CORE_VERSION} from '@uchibeke/gallivant/task-delivery/contracts';import {restoreRuntimeState} from '@uchibeke/gallivant/runtime/state';if(CORE_VERSION!==${JSON.stringify(CORE_VERSION)})throw Error('rollback package mismatch');restoreRuntimeState({backup:${JSON.stringify(backup)},out:${JSON.stringify(restored)},manifest:${JSON.stringify(manifest)}});`);
   execFileSync(process.execPath, [script], { cwd: install, stdio: "pipe" });
   assert.deepEqual(readFileSync(join(restored, "tasks", task.taskId, "intake.json")), before);
   assert.deepEqual(readFileSync(join(restored, "runs/fixture/agents.json")), providerBytes);
