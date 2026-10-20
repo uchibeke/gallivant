@@ -28,18 +28,21 @@ try {
 case "$*" in
   "api user --jq {login: .login}") echo '{"login":"fixture-user"}';;
   "auth token") echo 'fixture-token';;
-  "api user -i") printf 'HTTP/2.0 200 OK\\nx-oauth-scopes: repo\\n\\n{}\\n';;
+  "api user -i")
+    if [ "$FIXTURE_SCOPE_ERROR" = "1" ]; then echo 'HTTP 503: Service Unavailable' >&2; exit 1; fi
+    printf 'HTTP/2.0 200 OK\\nx-oauth-scopes: %s\\n\\n{}\\n' "$FIXTURE_GH_SCOPES";;
   api\\ repos/*/rulesets*) echo '[]';;
   api\\ repos/*\\ --jq\\ *push*) echo '{"push":true,"admin":true,"archived":false}';;
   repo\\ view*) echo '{"defaultBranchRef":{"name":"main"}}';;
   *) echo '{}';;
 esac
 `, { mode: 0o700 });
-  const env = { ...process.env, HOME: home, GALLIVANT_HOME: ghome, PATH: `${bin}:${dirname(process.execPath)}:${process.env.PATH}`, npm_config_cache: cache, NPM_CONFIG_CACHE: cache };
+  const env = { ...process.env, HOME: home, GALLIVANT_HOME: ghome, PATH: `${bin}:${dirname(process.execPath)}:${process.env.PATH}`, npm_config_cache: cache, NPM_CONFIG_CACHE: cache, FIXTURE_GH_SCOPES: "repo", FIXTURE_SCOPE_ERROR: "0" };
 
   // The README fast path, word for word except that the package spec is this tarball rather than the registry name, so
   // the revision under test is what runs and not whatever is published. `npx` resolves the `gallivant` bin itself.
-  const npx = (cwd, ...args) => spawnSync("npx", ["--yes", `--package=${tarball}`, "gallivant", ...args], { cwd, env, encoding: "utf8", timeout: 300_000 });
+  const npxWithEnv = (overrides, cwd, ...args) => spawnSync("npx", ["--yes", `--package=${tarball}`, "gallivant", ...args], { cwd, env: { ...env, ...overrides }, encoding: "utf8", timeout: 300_000 });
+  const npx = (cwd, ...args) => npxWithEnv({}, cwd, ...args);
   const version = npx(consumer, "--version");
   assert.equal(version.status, 0, version.stderr);
   assert.equal(version.stdout.trim(), packed.version);
@@ -52,6 +55,15 @@ esac
 
   run("git", ["init", "-q"], { cwd: repo });
   run("git", ["remote", "add", "origin", "https://github.com/uchibeke/gallivant.git"], { cwd: repo });
+  // The account's push role is true in both cases; classic-token scope and a failed scope lookup must still stop
+  // the installed command before it creates config or worktrees, rather than deferring refusal to doctor.
+  for (const overrides of [{ FIXTURE_GH_SCOPES: "read:user" }, { FIXTURE_SCOPE_ERROR: "1" }]) {
+    const refused = npxWithEnv(overrides, repo, "init", "--harness", "codex");
+    assert.equal(refused.status, 1, refused.stderr);
+    assert.match(refused.stderr, /repository write scope[\s\S]*nothing was written/);
+    assert.equal(existsSync(ghome), false);
+    assert.equal(existsSync(join(root, ".gallivant-worktrees")), false);
+  }
   const first = npx(repo, "init", "--harness", "codex");
   // Doctor has open items on a fresh machine (no APort hook, no ruleset), and init's exit code is doctor's.
   assert.equal(first.status, 1, first.stderr);
@@ -87,6 +99,10 @@ esac
   assert.match(again.stdout, /Config:\s+\S+ \(unchanged\)/);
   assert.match(again.stdout, /Repository: uchibeke\/gallivant \(already in repos; not duplicated\)/);
   assert.equal(readFileSync(join(ghome, "config.json"), "utf8"), bytes);
+  const lostScope = npxWithEnv({ FIXTURE_GH_SCOPES: "read:user" }, repo, "init", "--harness", "codex");
+  assert.equal(lostScope.status, 1, lostScope.stderr);
+  assert.match(lostScope.stderr, /no repository write scope[\s\S]*public_repo[\s\S]*nothing was written/);
+  assert.equal(readFileSync(join(ghome, "config.json"), "utf8"), bytes);
 
   // The same tarball installed as a dependency: help, a packaged brief template, offline validation and every export.
   run("npm", ["install", "--prefix", prefix, "--ignore-scripts", "--no-audit", "--no-fund", tarball], { cwd: consumer, env });
@@ -110,5 +126,5 @@ esac
     if (name.includes("*") || path.endsWith(".json")) continue;
     run(process.execPath, ["--input-type=module", "-e", `await import(${JSON.stringify(join(installed, path))})`], { cwd: consumer, env });
   }
-  console.log(`Installed ${packed.name}@${packed.version}: npx fast path (binary, config permissions, repository registration, repeat safety, next steps), version, help, packaged PRD, validation and all module exports passed.`);
+  console.log(`Installed ${packed.name}@${packed.version}: npx fast path (binary, config permissions, repository registration, repeat safety, next steps), credential-scope refusals before writes, version, help, packaged PRD, validation and all module exports passed.`);
 } finally { rmSync(root, { recursive: true, force: true }); }

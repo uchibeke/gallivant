@@ -76,7 +76,8 @@ user-owned Node installation or prefix. The rest of this guide writes
    checkout, its `origin` remote is not a github.com repository, `gh` is signed
    out, the selected harness is missing, too old or signed out, or the resolved
    run credential cannot see or push to the repository. Each refusal names the
-   command that fixes it.
+   command that fixes it. Classic credentials also need `public_repo` or `repo`
+   scope; a failed scope lookup stops setup before writing and asks you to retry.
 2. Creates `~/.gallivant/config.json` (mode 600) with your authenticated GitHub
    login in `trusted_authors`, the selected installed harness, notifications
    disabled and a separate `~/.gallivant-worktrees` directory for task checkouts.

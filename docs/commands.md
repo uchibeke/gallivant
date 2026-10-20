@@ -55,6 +55,10 @@ the selected harness is installed at a supported version and signed in, and that
 the resolved run credential can push to the repository. A failed check stops the
 command with the exact fix (`gh auth login`, `codex login`, `claude auth login`,
 or the remote or permission to correct) and leaves no state behind.
+Classic credentials also need `public_repo` or `repo` scope; the account's push
+role alone does not grant that scope. If the scope lookup fails, setup asks you
+to retry before writing state. Fine-grained tokens have no OAuth scope header
+and still require the repository permission check.
 
 It then creates a private config from your authenticated GitHub login and the
 selected installed harness (Codex by default for a new config), creates a

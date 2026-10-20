@@ -16,12 +16,13 @@ import { acquireCliMutation } from "../lib/daemon.mjs";
 const CRED = { token: "fixture-token", source: SOURCES.gh, host: "github.com" };
 
 const repository = (repo = "acme/widget") => () => ({ checkout: "/work/widget", origin: `https://github.com/${repo}.git`, repo: repo.toLowerCase() });
-const gh = ({ login = "fixture", permissions = { push: true, admin: true, archived: false }, userError = null, permissionsError = null } = {}) => {
+const gh = ({ login = "fixture", permissions = { push: true, admin: true, archived: false }, userError = null, permissionsError = null, scopes = "repo", scopeError = null } = {}) => {
   const calls = [];
   return {
     calls,
     user: async () => { calls.push("user"); if (userError) throw new Error(userError); return login; },
     repoPermissions: async repo => { calls.push(`permissions ${repo}`); if (permissionsError) throw new Error(permissionsError); return permissions; },
+    tokenScopes: async () => { calls.push("scopes"); if (scopeError) throw new Error(scopeError); return scopes; },
   };
 };
 const discover = () => ({ codex: { bin: process.execPath }, claude: { bin: process.execPath, settings: "/tmp/claude/settings.json" } });
@@ -143,7 +144,7 @@ test("concurrent init calls retain both repositories for a new or existing home"
     const barrier = new Promise(resolve => { release = resolve; });
     const permissions = async () => { if (++arrived === 2) release(); await barrier; return { push: true }; };
     const results = await Promise.all(["acme/one", "acme/two"].map(repo => init(base({
-      home, worktrees, harness: "codex", repository: repository(repo), ghFor: () => ({ repoPermissions: permissions }),
+      home, worktrees, harness: "codex", repository: repository(repo), ghFor: () => ({ repoPermissions: permissions, tokenScopes: async () => "repo" }),
     }))));
     assert.ok(results.every(r => r.recorded));
     assert.deepEqual(JSON.parse(readFileSync(join(home, "config.json"))).repos.sort(), (existing ? ["acme/original", "acme/one", "acme/two"] : ["acme/one", "acme/two"]).sort());
@@ -286,7 +287,42 @@ test("init checks push access with the credential a run would resolve, not the o
   const r = await init(base({ home, gh: gh({ permissions: { push: false } }), ghFor: () => pushable, resolve: resolveCredential }));
   assert.equal(r.recorded, true);
   assert.deepEqual(JSON.parse(readFileSync(r.file, "utf8")).repos, ["acme/widget"]);
-  assert.deepEqual(pushable.calls, ["permissions acme/widget"]);
+  assert.deepEqual(pushable.calls, ["permissions acme/widget", "scopes"]);
+});
+
+test("init refuses missing credential write scope or an unverifiable scope before setup writes", async () => {
+  for (const existing of [false, true]) {
+    for (const failure of [{ scopes: "read:user, user:email" }, { scopes: "" }, { scopes: "repo:status" }, { scopeError: "HTTP 503: Service Unavailable" }]) {
+      const { home, worktrees } = fresh(), file = join(home, "config.json");
+      if (existing) {
+        mkdirSync(home, { mode: 0o700 });
+        writeJsonAtomic(file, { trusted_authors: ["fixture"], worktrees, harness: { codex: { bin: process.execPath } }, repos: ["acme/other"], reviewer: null });
+      }
+      const before = existing ? readFileSync(file, "utf8") : null;
+      const ambient = gh(), run = gh(failure);
+      const expected = failure.scopeError ? /could not verify.*write scope.*HTTP 503.*retry.*nothing was written/is : /no repository write scope.*public_repo.*Contents: write.*nothing was written/s;
+      await assert.rejects(init(base({ home, worktrees, harness: "codex", gh: ambient,
+        ghFor: credential => { assert.equal(credential, CRED); return run; },
+        doctor: async () => { assert.fail("the credential must be refused before doctor and setup writes"); },
+      })), expected);
+      assert.deepEqual(ambient.calls, ["user"]);
+      assert.deepEqual(run.calls, ["permissions acme/widget", "scopes"]);
+      assert.equal(existsSync(worktrees), false);
+      assert.equal(existsSync(join(home, "task-mutation.lock")), false);
+      if (existing) assert.equal(readFileSync(file, "utf8"), before);
+      else assert.equal(existsSync(home), false);
+    }
+  }
+});
+
+test("init accepts public-only, full-repository and fine-grained scope responses for the run credential", async () => {
+  for (const scopes of ["read:org, public_repo", "repo", null]) {
+    const { home, worktrees } = fresh(), run = gh({ scopes });
+    const r = await init(base({ home, worktrees, harness: "codex", ghFor: credential => { assert.equal(credential, CRED); return run; } }));
+    assert.equal(r.recorded, true);
+    assert.deepEqual(JSON.parse(readFileSync(r.file)).repos, ["acme/widget"]);
+    assert.deepEqual(run.calls, ["permissions acme/widget", "scopes"]);
+  }
 });
 
 test("init refuses unsupported, missing and unsafe setup, and an invalid existing config, before writing", async () => {
