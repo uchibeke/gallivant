@@ -72,7 +72,7 @@ test("saved profiles validate strictly and unsupported versions fail closed with
 
 test("the delivery screen is deterministic over the fixture corpus and masks literal examples", () => {
   for (const fixture of profileRequests) {
-    const first = deliveryScreen(fixture.text), second = deliveryScreen(fixture.text);
+    const first = deliveryScreen(fixture.text, PROFILE.target), second = deliveryScreen(fixture.text, PROFILE.target);
     assert.deepEqual(first, second, fixture.text);
     assert.equal(first.tier, fixture.screen.tier, `${fixture.kind}: ${fixture.text} → ${JSON.stringify(first)}`);
     for (const term of fixture.screen.terms || []) assert.ok(first.terms.includes(term), `${fixture.text} should mention ${term}`);
@@ -256,6 +256,32 @@ test("multiple and separate PR requests remain conflicts with the one-PR profile
     for (const delivery of [{}, { "r-1": { action: "pull_request" } }]) assert.deepEqual(parseDraft(JSON.stringify(draftFor(task, { delivery })), task).questions.map(q => q.id), ["q-delivery-r-1"], text);
   }
   for (const text of ["Open one pull request for the API and UI.", "Open a single PR for review.", "I want you to open one PR.", "Add a button to open two PRs.", "List two pull requests on the dashboard.", 'Document "Open two pull requests" in help.']) assert.equal(deliveryScreen(text, PROFILE.target).terms.includes("pull_request_count"), false, text);
+});
+
+test("registry removal, deprecation and yanking require clarification without publication authority", () => {
+  for (const text of ["Run npm unpublish old-package.", "npm deprecate pkg@1.0.", "Run npm --force --loglevel silent deprecate pkg@1.0.", "Yank version 1.2 from crates.io.", "Run `npm unpublish old-package`.", "Run npm --registry=https://registry.npmjs.org deprecate pkg@1.0.", "Run cargo yank --version 1.2.0 old-package.", "Run gem yank old-package -v 1.2.", "Remove the package from npm.", "Delete version 1.2 from the package registry.", "Deprecate old-package on npm.", "Unpublish old-package.", "Do not unpublish old-package."]) {
+    const screen = deliveryScreen(text, PROFILE.target);
+    assert.equal(screen.tier, "question", text); assert.ok(screen.terms.includes("publish"), text);
+    assert.ok(unaccountedTerms(screen, { action: "pull_request" }).includes("publish"), text);
+    const task = taskFor(text, { commandCandidates: ["npm test"] });
+    for (const delivery of [{}, { "r-1": { action: "pull_request" } }]) assert.deepEqual(parseDraft(JSON.stringify(draftFor(task, { delivery })), task).questions.map(q => q.id), ["q-delivery-r-1"], text);
+  }
+  for (const text of ["Run npm uninstall old-package.", "Remove old-package from package.json.", "Deprecate the legacy API.", "Delete the local package cache.", "Add a command to run npm unpublish.", "Add support for yanking versions from crates.io.", "Document how to run npm deprecate pkg@1.0.", "Show 'npm unpublish' as a label.", "Add a test for `Yank version 1.2 from crates.io`."]) assert.notEqual(deliveryScreen(text, PROFILE.target).tier, "question", text);
+});
+
+test("PR creation command flags retain target qualifiers without borrowing option values or later commands", () => {
+  for (const text of ["Run gh pr create --base staging.", "Run gh pr create --repo acme/other.", "Run gh pr create -B staging -R acme/widget.", "Run gh pr create --base=staging.", "Run gh pr create -Bstaging.", "Run gh pr create -Racme/other.", "Run gh pr create -fBstaging.", 'Run gh pr create --base "staging".', 'Run `gh pr create --repo "acme/other"`.', "Run gh pr create --repo git.example/acme/widget.", "Run gh pr create --base main --base staging.", "Run gh pr create --base $BASE.", 'Run gh pr create --title "quoted \\" title" --base staging.', "Run gh pr create --base.", "Run gh pr create --repo=.", "Run gh pr create --base --repo acme/widget."]) {
+    const screen = deliveryScreen(text, PROFILE.target);
+    assert.equal(screen.tier, "question", text); assert.ok(screen.targetConflicts?.length, text);
+    assert.ok(unaccountedTerms(screen, { action: "pull_request" }).includes("pull_request_target"), text);
+    const task = taskFor(text, { commandCandidates: ["npm test"] });
+    for (const delivery of [{}, { "r-1": { action: "pull_request" } }]) assert.deepEqual(parseDraft(JSON.stringify(draftFor(task, { delivery })), task).questions.map(q => q.id), ["q-delivery-r-1"], text);
+  }
+  for (const text of ["Run gh pr create --base main --repo Acme/Widget.", "Run gh pr create -Bmain -Rgithub.com/acme/widget.", 'Run gh pr create --base "main" --repo \'acme/widget\'.', 'Run `gh pr create --base main --repo "acme/widget"`.', 'Run gh pr create --title "--base staging" --base main.', 'Run gh pr create --body "and --repo acme/other; --base staging" --base main.', "Run gh pr create --title --base --repo acme/widget.", "Run gh pr create --base main and run echo --base staging.", "Run gh pr create --base main; run echo --repo acme/other.", "Run gh pr create --base main -- --base staging.", "Add a command to run gh pr create --base staging.", "Document how to run gh pr create --base staging.", "Show 'gh pr create --base staging' as a label."]) {
+    assert.equal(deliveryScreen(text, PROFILE.target).targetConflicts, undefined, text);
+    const task = taskFor(text, { commandCandidates: ["npm test"] });
+    assert.deepEqual(parseDraft(JSON.stringify(draftFor(task)), task).questions, [], text);
+  }
 });
 
 test("PR destinations are compared with the selected repository and case-sensitive base even when the planner omits them", () => {
@@ -768,7 +794,7 @@ test("the screen and mapping stay fast at the request and mapping limits", () =>
   const text = clause.repeat(Math.floor(MAX_INPUT_BYTES / clause.length));
   // Each test file runs in its own process. Charge work to this process, not
   // time that a parallel CI job leaves it waiting to be scheduled.
-  for (const [input, tier] of [["helm " + "--debug ".repeat(Math.floor((MAX_INPUT_BYTES - 40) / 8)) + "upgrade api ./chart", "question"], [text, "question"], ["'npm publish' ".repeat(Math.floor(MAX_INPUT_BYTES / 14)), "none"], ['Run `npm publish`. '.repeat(Math.floor(MAX_INPUT_BYTES / 19)), "question"], ["landing ".repeat(Math.floor(MAX_INPUT_BYTES / 8)), "none"], ["landed ".repeat(Math.floor(MAX_INPUT_BYTES / 7)), "none"], ["Add a command to land changes. ".repeat(Math.floor(MAX_INPUT_BYTES / 31)), "none"], ["Land the PR after CI passes. ".repeat(Math.floor(MAX_INPUT_BYTES / 29)), "question"], ["Run git push origin HEAD. ".repeat(Math.floor(MAX_INPUT_BYTES / 25)), "assumption"], ["Run git push --tags. ".repeat(Math.floor(MAX_INPUT_BYTES / 20)), "question"], ["Close pull request #123. ".repeat(Math.floor(MAX_INPUT_BYTES / 24)), "question"], ["Add a button to close PRs. ".repeat(Math.floor(MAX_INPUT_BYTES / 26)), "assumption"], ['Ask me before opening a PR. '.repeat(Math.floor(MAX_INPUT_BYTES / 28)), 'question'], ['Review pull request #123 and leave feedback. '.repeat(Math.floor(MAX_INPUT_BYTES / 45)), 'question'], ['Run terraform apply. '.repeat(Math.floor(MAX_INPUT_BYTES / 21)), 'question'], ['Add a command to run terraform apply. '.repeat(Math.floor(MAX_INPUT_BYTES / 38)), 'none']]) {
+  for (const [input, tier] of [["Run npm unpublish old-package. ".repeat(Math.floor(MAX_INPUT_BYTES / 30)), "question"], ["Run gh pr create --base staging. ".repeat(Math.floor(MAX_INPUT_BYTES / 32)), "question"], ["gh pr create " + "--title x ".repeat(Math.floor((MAX_INPUT_BYTES - 40) / 10)) + "--base staging", "question"], ["helm " + "--debug ".repeat(Math.floor((MAX_INPUT_BYTES - 40) / 8)) + "upgrade api ./chart", "question"], [text, "question"], ["'npm publish' ".repeat(Math.floor(MAX_INPUT_BYTES / 14)), "none"], ['Run `npm publish`. '.repeat(Math.floor(MAX_INPUT_BYTES / 19)), "question"], ["landing ".repeat(Math.floor(MAX_INPUT_BYTES / 8)), "none"], ["landed ".repeat(Math.floor(MAX_INPUT_BYTES / 7)), "none"], ["Add a command to land changes. ".repeat(Math.floor(MAX_INPUT_BYTES / 31)), "none"], ["Land the PR after CI passes. ".repeat(Math.floor(MAX_INPUT_BYTES / 29)), "question"], ["Run git push origin HEAD. ".repeat(Math.floor(MAX_INPUT_BYTES / 25)), "assumption"], ["Run git push --tags. ".repeat(Math.floor(MAX_INPUT_BYTES / 20)), "question"], ["Close pull request #123. ".repeat(Math.floor(MAX_INPUT_BYTES / 24)), "question"], ["Add a button to close PRs. ".repeat(Math.floor(MAX_INPUT_BYTES / 26)), "assumption"], ['Ask me before opening a PR. '.repeat(Math.floor(MAX_INPUT_BYTES / 28)), 'question'], ['Review pull request #123 and leave feedback. '.repeat(Math.floor(MAX_INPUT_BYTES / 45)), 'question'], ['Run terraform apply. '.repeat(Math.floor(MAX_INPUT_BYTES / 21)), 'question'], ['Add a command to run terraform apply. '.repeat(Math.floor(MAX_INPUT_BYTES / 38)), 'none']]) {
     const started = process.hrtime.bigint(), cpuStarted = process.cpuUsage();
     let screen;
     for (let i = 0; i < 20; i++) screen = deliveryScreen(input);

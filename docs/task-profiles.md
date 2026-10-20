@@ -83,6 +83,12 @@ either field optional; malformed targets are rejected and mismatches clarify.
 repository, pauses with a question naming the selected target. Ambiguous
 destinations require clarification. Text cannot change the saved target; the
 owner must resolve the scope or prepare a new task with the intended selection.
+Canonical `gh pr create` commands retain `--base`/`-B` and `--repo`/`-R`
+arguments under the same comparison, including equals, attached short flags,
+quoted values and repeated flags. Title/body values and later commands cannot
+supply a target flag. Missing, dynamic or ambiguous target arguments clarify;
+matching explicit targets retain the normal PR reading. These arguments never
+select or expand the saved target.
 The profile opens exactly one PR. Requests for two or more PRs, separate PRs,
 a PR per component, repeated PR creation commands or another PR retain a
 `pull_request_count` conflict even if the planner supplies a `pull_request` tag.
@@ -114,6 +120,14 @@ retain their product interpretation.
 
 The screen grants nothing:
 
+- Removing, deprecating or yanking registry packages retains the existing
+  publication conflict. This includes npm unpublish/deprecate, Cargo/RubyGems
+  yank and prose such as "remove the package from npm". No registry mutation
+  is authorized by PR delivery. Local dependency removal, feature descriptions
+  and literal examples keep their implementation meaning. Command semantics
+  follow [npm unpublish](https://docs.npmjs.com/cli/v11/commands/npm-unpublish/),
+  [npm deprecate](https://docs.npmjs.com/cli/v11/commands/npm-deprecate/) and
+  [Cargo yank](https://doc.rust-lang.org/cargo/commands/cargo-yank.html).
 - Conversational owner decisions such as "check with me", "ask me" and "get
   my go-ahead" are approval gates, including quoted decision objects. A plain
   "go ahead and open a PR" retains its affirmative reading. Confirmation
