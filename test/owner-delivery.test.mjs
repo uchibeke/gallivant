@@ -1210,6 +1210,40 @@ test("conditional approval clauses validate finite gerund and passive actions", 
     }
 });
 
+test("assuming approval clauses validate each action and its own business object", () => {
+  for (const connector of ["assuming", "assuming that", "ASSUMING", "ASSUMING THAT"]) {
+    for (const action of ["you proofread the invoice", "you must proofread the invoice", "our senior editor proofreads the invoice",
+      "Alice King proofreads the invoice", "carefully proofreading the invoice", "the invoice is proofread", "you email the report"])
+      for (const source of [
+        `If I approve the invoice, email the customer ${connector} ${action}.`,
+        `Email the customer ${connector} ${action} after I approve the invoice.`,
+        `If I approve the invoice, email the customer ${connector} you apply the discount before ${action}.`,
+      ]) {
+        assert.throws(() => ownerDelivery(source), { code: "TASK_DELIVERY_SCOPE" }, source);
+        assert.throws(() => assertDeliveryAnswer({}, source), { code: "TASK_DELIVERY_SCOPE" }, source);
+      }
+    const borrowedObject = `If I approve the invoice, email the report ${connector} you apply the discount.`;
+    assert.throws(() => ownerDelivery(borrowedObject), { code: "TASK_DELIVERY_SCOPE" }, borrowedObject);
+    assert.throws(() => assertDeliveryAnswer({}, borrowedObject), { code: "TASK_DELIVERY_SCOPE" }, borrowedObject);
+    for (const action of ["you must apply the discount", "our senior editor emails the customer", "Alice King emails the customer",
+      "carefully applying the discount", "the discount is applied", "the recurring payment clears"])
+      for (const source of [
+        `If I approve the invoice, email the customer ${connector} ${action}.`,
+        `Email the customer ${connector} ${action} after I approve the invoice.`,
+      ]) {
+        assert.equal(ownerDelivery(source), null, source);
+        assert.doesNotThrow(() => assertDeliveryAnswer({}, source), source);
+        const original = source + " Open a PR for review.", contract = ownerDelivery(original);
+        assert.equal(validateOwnerDelivery(contract), contract, source);
+        assert.equal(ownerImplementation(contract).join(""), source + " ", source);
+        assert.equal(contract.spans.map(span => original.slice(span.start, span.end)).join(""), original, source);
+      }
+  }
+  const quoted = 'If I approve the invoice, email the customer with the note "assuming you proofread the invoice".';
+  assert.equal(ownerDelivery(quoted), null);
+  assert.doesNotThrow(() => assertDeliveryAnswer({}, quoted));
+});
+
 test("unless approval clauses validate each action and its own business object", () => {
   for (const action of ["you proofread the invoice", "our senior editor proofreads the invoice", "Alice King proofreads the invoice", "carefully proofreading the invoice", "the invoice is proofread", "you email the report"])
     for (const source of [
