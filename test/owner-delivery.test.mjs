@@ -768,6 +768,52 @@ test("business approval rules validate purpose-infinitive actions", () => {
   assert.doesNotThrow(() => assertDeliveryAnswer({}, coordinated));
 });
 
+test("finite purpose clauses validate their actions and business objects", () => {
+  for (const connector of ["so", "so that", "SO THAT"]) {
+    for (const action of ["you can proofread the invoice", "our senior editor can proofread the invoice", "Alice King proofreads the invoice", "the invoice can be proofread", "you can email the report"])
+      for (const source of [
+        `If I approve the invoice, email the customer ${connector} ${action}.`,
+        `Email the customer ${connector} ${action} after I approve the invoice.`,
+        `If I approve the invoice, email the customer ${connector} you can apply the discount before ${action}.`,
+      ]) {
+        assert.throws(() => ownerDelivery(source), { code: "TASK_DELIVERY_SCOPE" }, source);
+        assert.throws(() => assertDeliveryAnswer({}, source), { code: "TASK_DELIVERY_SCOPE" }, source);
+      }
+    const borrowedObject = `If I approve the invoice, email the report ${connector} you can apply the discount.`;
+    assert.throws(() => ownerDelivery(borrowedObject), { code: "TASK_DELIVERY_SCOPE" }, borrowedObject);
+    assert.throws(() => assertDeliveryAnswer({}, borrowedObject), { code: "TASK_DELIVERY_SCOPE" }, borrowedObject);
+    for (const action of ["you can apply the discount", "our senior editor can email the customer", "Alice King emails the customer", "the discount can be applied", "the recurring payment clears"])
+      for (const source of [
+        `If I approve the invoice, email the customer ${connector} ${action}.`,
+        `Email the customer ${connector} ${action} after I approve the invoice.`,
+      ]) {
+        assert.equal(ownerDelivery(source), null, source);
+        assert.doesNotThrow(() => assertDeliveryAnswer({}, source), source);
+        const original = source + " Open a PR for review.", contract = ownerDelivery(original);
+        assert.equal(validateOwnerDelivery(contract), contract, source);
+        assert.equal(ownerImplementation(contract).join(""), source + " ", source);
+        assert.equal(contract.spans.map(span => original.slice(span.start, span.end)).join(""), original, source);
+      }
+  }
+  const otherRelative = "If I approve the invoice, email the customer that proofreads the invoice.";
+  assert.throws(() => ownerDelivery(otherRelative), { code: "TASK_DELIVERY_SCOPE" });
+  assert.throws(() => assertDeliveryAnswer({}, otherRelative), { code: "TASK_DELIVERY_SCOPE" });
+  for (const source of [
+    "If I approve the invoice, send a receipt to So.",
+    "If I approve the invoice, send a receipt to So Smith.",
+    "If I approve the invoice, send a receipt to  So Smith after you apply the discount.",
+    "If I approve the invoice, email the customer so as to apply the discount.",
+    "If I approve the invoice, email the customer so as not to apply the discount.",
+  ]) {
+    assert.equal(ownerDelivery(source), null, source);
+    assert.doesNotThrow(() => assertDeliveryAnswer({}, source), source);
+    const original = source + " Open a PR for review.", contract = ownerDelivery(original);
+    assert.equal(validateOwnerDelivery(contract), contract, source);
+    assert.equal(ownerImplementation(contract).join(""), source + " ", source);
+    assert.equal(contract.spans.map(span => original.slice(span.start, span.end)).join(""), original, source);
+  }
+});
+
 test("symbol-coordinated business actions keep approval-dependent implementation visible", () => {
   for (const separator of [" & ", " + ", " / ", "&", "+", "\t/\t"])
     for (const source of [
