@@ -120,6 +120,16 @@ retain their product interpretation.
 
 The screen grants nothing:
 
+- Hosted registry names and host destinations use the same publication
+  restriction: GitHub Packages/GHCR, GitLab registries, cloud artifact registries
+  and explicit registry hosts, including schemes, ports and artifact paths.
+  Detection, escalation and registry-removal checks share one destination
+  vocabulary. Quoted destinations of mutation instructions remain visible;
+  read-only pulls/downloads, feature infinitives and literal examples retain
+  their implementation meaning. Host formats follow [GitHub Container registry](https://docs.github.com/en/packages/working-with-a-github-packages-registry/working-with-the-container-registry),
+  [Google Artifact Registry](https://docs.cloud.google.com/artifact-registry/docs/docker/names),
+  [Amazon ECR](https://docs.aws.amazon.com/AmazonECR/latest/userguide/Registries.html)
+  and [Azure Container Registry](https://learn.microsoft.com/en-us/azure/container-registry/container-registry-get-started-portal).
 - Removing, deprecating or yanking registry packages retains the existing
   publication conflict. This includes npm unpublish/deprecate, Cargo/RubyGems
   yank and prose such as "remove the package from npm". No registry mutation

@@ -4598,6 +4598,10 @@ test("anaphoric delivery replies cannot be resolved by empty or ungrounded plann
 
 test("target, publication, approval and mixed-polarity conflicts survive answer chains without dispatch", async () => {
   for (const [text, tag] of [
+    ["Push the image to ghcr.io/acme/app.", { action: "pull_request" }],
+    ["Upload the package to GitHub Packages.", { action: "pull_request" }],
+    ["Push the image to \"ghcr.io/acme/app\".", { action: "pull_request" }],
+    ["Remove the image from ghcr.io/acme/app.", { action: "pull_request" }],
     ["Run npm unpublish old-package.", { action: "pull_request" }],
     ["npm deprecate pkg@1.0.", { action: "pull_request" }],
     ["Yank version 1.2 from crates.io.", { action: "pull_request" }],
