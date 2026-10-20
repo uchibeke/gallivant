@@ -52,7 +52,10 @@ profile:
   speaks for terms outside a control word or under an affirmative one ("a
   pull request is required"), a prohibition for terms under a negative one
   ("do not", "except", "is not required"); control words bind within a
-  statement, across conjunctions. So "do not open
+  statement, across additive conjunctions. Contrast words such as "but" and
+  "however" start a new control scope. Both senses are retained when an action
+  occurs more than once: "Do not deploy; deploy to production" cannot be covered
+  by a prohibition tag. So "do not open
   a pull request" tagged as a `pull_request` action, "merge the PR" tagged with
   a `merge` prohibition, an escalating term the tag leaves out ("open a PR and
   deploy it") and an effect term it leaves out under a control word ("open a
@@ -60,6 +63,15 @@ profile:
 - An uncovered reading becomes the deterministic question `q-delivery-<clause>`.
   Preparation pauses with `needs-input`; no readiness decision or implementation
   starts until the owner answers.
+
+Explicit PR destinations are also compared with the selected repository and
+case-sensitive base, even if the planner supplies only a `pull_request` tag.
+Planner tags retain named destinations as `target: { repository, base }`, with
+either field optional; malformed targets are rejected and mismatches clarify.
+"Open a PR against staging" under a `main` profile, or a PR in another
+repository, pauses with a question naming the selected target. Ambiguous
+destinations require clarification. Text cannot change the saved target; the
+owner must resolve the scope or prepare a new task with the intended selection.
 
 Independently of the planner, a deterministic screen looks for delivery
 vocabulary in each clause (pull request, merge, deploy, release, publish, push,
@@ -70,7 +82,7 @@ statement carries a control phrase before or after it (`Please do not ever
 the control's target; a control word inside another example never counts. Restriction forms such
 as "leave the changes uncommitted", "unstaged", "keep all edits in the working
 tree" or "unpublished" count as local-only. Control words bind within a statement: sentence and clause
-punctuation ends one, but conjunctions and an introductory colon after the
+punctuation ends one, but additive conjunctions and an introductory colon after the
 control ("Do not: open a pull request") do not. The screen grants nothing:
 
 - Escalating terms (merge, deploy including shipping, rollout, go-live and
@@ -96,6 +108,10 @@ control ("Do not: open a pull request") do not. The screen grants nothing:
   term
   raise the same `q-delivery-<clause>` question when the planner left the
   clause untagged.
+- Dots inside registry and repository names stay in the statement, so
+  "Upload the package to hex.pm" and "Submit the package to crates.io" keep
+  their publication meaning. Quoted examples and feature infinitives retain
+  their product interpretation.
 - A review prohibited outright ("do not send this for review", "no code
   review", "reviews are forbidden") conflicts with pull-request delivery, which
   exists to request review, so it keeps its clarification whatever the planner

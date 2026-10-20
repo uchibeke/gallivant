@@ -4477,6 +4477,30 @@ test("a profile conflict pauses before any harness run until the owner resolves 
   }
 });
 
+test("target, dotted publication and mixed-polarity conflicts survive answer chains without dispatch", async () => {
+  for (const [text, tag] of [
+    ["Open the pull request against staging.", { action: "pull_request" }],
+    ["Open a PR in acme/other.", { action: "pull_request" }],
+    ["Upload the package to hex.pm.", { action: "pull_request" }],
+    ["Do not merge, but deploy this to production.", { action: "restrict", prohibits: ["merge", "deploy"] }],
+    ["Do not deploy; deploy this to production.", { action: "restrict", prohibits: ["deploy"] }],
+  ]) {
+    const w = world({ prepare: async (_ctx, task) => JSON.stringify(draftFor(task, { delivery: Object.fromEntries(task.requirements.map(r => [r.id, r.text === "Keep the selected profile and implement export only." ? { action: "restrict", prohibits: [] } : r.id === "r-1" ? { action: "merge" } : tag])) })) });
+    const first = await w.service.prepare({ text: "Implement export and merge the PR.", run: true });
+    const answered = await w.service.answer({ taskId: first.taskId, expectedRevision: first.revision, operationId: "insist-on-conflict", answers: { "q-delivery-r-1": text } });
+    assert.equal(answered.status, "needs-input", text); assert.equal(answered.readiness, null);
+    assert.deepEqual(answered.questions.map(q => q.id), ["q-delivery-a-q-delivery-r-1-1"], text);
+    assert.ok(answered.review.requirementMap.find(m => m.requirementId === "a-q-delivery-r-1-1").conflict.reason, text);
+    assert.equal(taskStore(w.home).read(first.taskId).runAuthorized, false);
+    assert.deepEqual(w.ctx.state.entries(), []); assert.equal(w.daemonCalls(), 0);
+    await assert.rejects(w.service.start({ taskId: first.taskId, expectedRevision: answered.revision, run: true }), { code: "TASK_NOT_READY" });
+    const resolved = await w.service.answer({ taskId: first.taskId, expectedRevision: answered.revision, operationId: "keep-profile", answers: { "q-delivery-a-q-delivery-r-1-1": "Keep the selected profile and implement export only." } });
+    assert.equal(resolved.status, "ready", resolved.failures.join("\n"));
+    assert.deepEqual(taskStore(w.home).read(first.taskId).deliveryProfile, TYPED_PROFILE); assert.equal(resolved.approval, null);
+    assert.deepEqual(w.ctx.state.entries(), []); assert.equal(w.daemonCalls(), 0);
+  }
+});
+
 test("typed delivery inputs refuse merge, deployment and unknown routes before effects and conflict on changed retry input", async () => {
   const w = world();
   for (const delivery of [{ action: "merge" }, { action: "deploy" }, { action: "pull_request", completion: "shipped" }, { action: "pull_request", merge: true }, "pull_request"]) {

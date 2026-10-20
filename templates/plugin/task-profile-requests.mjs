@@ -10,6 +10,15 @@
 // delivery authority), feature (ordinary product wording with delivery
 // vocabulary).
 export const profileRequests = [
+  { kind: "contradictory", text: "Open the pull request against staging.", screen: { tier: "question", terms: ["pull_request", "pull_request_target"] }, tag: { action: "pull_request" }, outcome: "needs-input" },
+  { kind: "adversarial", text: "Open a PR in acme/other.", screen: { tier: "question", terms: ["pull_request", "pull_request_target"] }, tag: { action: "pull_request" }, outcome: "needs-input" },
+  { kind: "contradictory", text: "Open a PR in another repository.", screen: { tier: "question" }, tag: null, outcome: "needs-input" },
+  { kind: "indirect", text: "Send the change to the sibling project for review.", screen: { tier: "assumption" }, tag: { action: "pull_request", target: { repository: "acme/other" } }, outcome: "needs-input" },
+  { kind: "direct", text: "Open a PR for review.", screen: { tier: "assumption" }, tag: { action: "pull_request", target: { repository: "acme/widget", base: "main" } }, outcome: "ready" },
+  { kind: "adversarial", text: "Upload the package to hex.pm.", screen: { tier: "question", terms: ["publish"] }, tag: { action: "pull_request" }, outcome: "needs-input" },
+  { kind: "direct", text: "Upload the package to crates.io.", screen: { tier: "question", terms: ["publish"] }, tag: null, outcome: "needs-input" },
+  { kind: "adversarial", text: "Do not merge, but deploy this to production.", screen: { tier: "question" }, tag: { action: "restrict", prohibits: ["merge", "deploy"] }, outcome: "needs-input" },
+  { kind: "adversarial", text: "Do not deploy; deploy this to production.", screen: { tier: "question" }, tag: { action: "restrict", prohibits: ["deploy"] }, outcome: "needs-input" },
   // direct
   { kind: "direct", text: "Implement CSV export. Open one pull request for review.", screen: { tier: "assumption", terms: ["pull_request", "review"] }, tag: { action: "pull_request" }, outcome: "ready" },
   { kind: "direct", text: "Add JSON export and raise a PR for review; do not merge it.", screen: { tier: "question" }, tag: { action: "pull_request", prohibits: ["merge"] }, outcome: "ready" },

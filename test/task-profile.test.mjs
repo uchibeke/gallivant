@@ -153,7 +153,61 @@ test("the delivery screen is deterministic over the fixture corpus and masks lit
   assert.equal(unrelated.tier, "assumption"); assert.deepEqual(unrelated.controlled, []); assert.ok(unrelated.controls.length, "the control word is still recorded for the review");
 });
 
+test("PR destinations are compared with the selected repository and case-sensitive base even when the planner omits them", () => {
+  const tag = { action: "pull_request" };
+  for (const text of ["Open the pull request against staging.", "Against staging, open a PR.", "Create a PR targeting MAIN.", "Open a PR to staging.", "Open a PR on the staging branch.", "Open a PR in acme/other.", "Open a PR in https://github.com/acme/other.", "Open a PR in https://gitlab.com/acme/widget.", "In acme/other, open a pull request.", "Open a PR in another repository.", 'Open a PR against "staging".']) {
+    const screen = deliveryScreen(text, PROFILE.target);
+    assert.equal(screen.tier, "question", text); assert.ok(screen.targetConflicts.length, text);
+    assert.ok(unaccountedTerms(screen, tag).includes("pull_request_target"), text);
+    const task = taskFor(text, { commandCandidates: ["npm test"] });
+    for (const delivery of [{}, { "r-1": tag }]) {
+      const output = parseDraft(JSON.stringify(draftFor(task, { delivery })), task);
+      assert.deepEqual(output.questions.map(q => q.id), ["q-delivery-r-1"], text);
+      assert.match(output.mapping[0].conflict.reason, /base|repository|target/);
+      assert.match(output.questions[0].text, /acme\/widget against main/);
+    }
+  }
+  for (const text of ["Open a PR against main.", "Open a PR in Acme/Widget against main.", "Open a PR in https://github.com/acme/widget.", "Add export to CSV and open a PR.", "Add a button to open a PR against staging.", 'Document "Open a PR against staging" in help.']) {
+    assert.equal(deliveryScreen(text, PROFILE.target).targetConflicts, undefined, text);
+    const task = taskFor(text, { commandCandidates: ["npm test"] });
+    assert.deepEqual(parseDraft(JSON.stringify(draftFor(task, { delivery: { "r-1": tag } })), task).questions, [], text);
+  }
+  assert.equal(deliveryScreen("Open a PR against release/1.2.", { ...PROFILE.target, base: "release/1.2" }).targetConflicts, undefined);
+});
+
+test("dotted registry destinations retain publication controls and feature examples stay product text", () => {
+  for (const registry of ["hex.pm", "crates.io", "crates", "npm", "PyPI"]) {
+    for (const verb of ["Upload the package", "Push the package", "Submit the package"]) {
+      const text = `${verb} to ${registry}.`;
+      const screen = deliveryScreen(text);
+      assert.equal(screen.tier, "question", text); assert.ok(screen.escalated.includes("publish"), text);
+      assert.ok(unaccountedTerms(screen, { action: "pull_request" }).includes("publish"), text);
+    }
+  }
+  assert.equal(deliveryScreen("Add a command to upload packages to hex.pm.").tier, "assumption");
+  assert.equal(deliveryScreen('Document "Upload the package to hex.pm" in help.').tier, "none");
+  assert.ok(deliveryScreen('Do not upload "the package" to hex.pm.').controlled.includes("publish"));
+});
+
+test("each delivery term retains positive and negative occurrences across control scopes", () => {
+  for (const connector of [", but", ";", ".", ", however", ", yet"]) {
+    for (const first of ["merge", "deploy"]) {
+      const text = `Do not ${first}${connector} deploy this to production.`;
+      const screen = deliveryScreen(text);
+      assert.ok(screen.uncontrolled.includes("deploy"), text);
+      assert.ok(unaccountedTerms(screen, { action: "restrict", prohibits: ["merge", "deploy"] }).includes("deploy"), text);
+    }
+  }
+  assert.deepEqual(unaccountedTerms(deliveryScreen("Do not merge or deploy to production."), { action: "restrict", prohibits: ["merge", "deploy"] }), []);
+  assert.deepEqual(unaccountedTerms(deliveryScreen("Do not merge, but do not deploy either."), { action: "restrict", prohibits: ["merge", "deploy"] }), []);
+});
+
 test("planner delivery tags are validated and compared with the profile without granting anything", () => {
+  const target = { repository: "Acme/Widget", base: "main" };
+  assert.deepEqual(validateDeliveryTag({ action: "pull_request", target }), { action: "pull_request", target });
+  assert.equal(profileCovers(PROFILE, { action: "pull_request", target }).covered, true);
+  for (const target of [{ repository: "acme/other" }, { base: "staging" }, { base: "MAIN" }]) assert.equal(profileCovers(PROFILE, { action: "pull_request", target }).covered, false);
+  for (const target of [null, [], {}, { base: "" }, { base: "main\n" }, { repository: "other" }, { kind: "github-pull-request" }]) assert.throws(() => validateDeliveryTag({ action: "pull_request", target }));
   assert.deepEqual(validateDeliveryTag({ action: "pull_request", prohibits: ["merge"] }), { action: "pull_request", prohibits: ["merge"] });
   for (const bad of [null, { action: "ship" }, { action: "pull_request", prohibits: ["rm -rf"] }, { action: "pull_request", prohibits: ["merge", "merge"] }, { action: "pull_request", completion: "done" }, { action: "pull_request", grant: "merge" }, { action: "restrict" }]) {
     assert.throws(() => validateDeliveryTag(bad));
