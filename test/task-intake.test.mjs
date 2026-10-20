@@ -4602,6 +4602,17 @@ test("anaphoric delivery replies cannot be resolved by empty or ungrounded plann
 
 test("target, publication, approval and mixed-polarity conflicts survive answer chains without dispatch", async () => {
   for (const [text, tag] of [
+    ["Run gh pr create --draft.", { action: "pull_request" }],
+    ["Run gh pr create --dry-run.", { action: "pull_request" }],
+    ["Run gh pr create -d.", { action: "pull_request" }],
+    ["Open a draft pull request.", { action: "pull_request" }],
+    ["Run npm access set status=public pkg.", { action: "pull_request" }],
+    ["Run npm access grant read-write acme:team pkg.", { action: "pull_request" }],
+    ["Run npm owner add alice pkg.", { action: "pull_request" }],
+    ["Run npm owner rm alice pkg.", { action: "pull_request" }],
+    ["Run npm dist-tag add pkg@2.0 latest.", { action: "pull_request" }],
+    ["Run npm dist-tag rm pkg latest.", { action: "pull_request" }],
+    ["Run `npm --registry https://registry.npmjs.org owner add alice pkg`.", { action: "pull_request" }],
     ["Create a GitHub issue describing the follow-up.", { action: "pull_request" }],
     ["Edit issue #123 with the test results.", { action: "pull_request" }],
     ["Comment on issue #123 with the test results.", { action: "pull_request" }],
@@ -4658,6 +4669,7 @@ test("target, publication, approval and mixed-polarity conflicts survive answer 
     assert.equal(answered.status, "needs-input", text); assert.equal(answered.readiness, null);
     assert.deepEqual(answered.questions.map(q => q.id), ["q-delivery-a-q-delivery-r-1-1"], text);
     assert.ok(answered.review.requirementMap.find(m => m.requirementId === "a-q-delivery-r-1-1").conflict.reason, text);
+    if (text.includes("--draft") || text.includes("--dry-run") || text.includes("create -d") || text === "Open a draft pull request.") assert.match(answered.review.requirementMap.find(m => m.requirementId === "a-q-delivery-r-1-1").conflict.reason, /regular review PR/, text);
     assert.equal(taskStore(w.home).read(first.taskId).runAuthorized, false);
     assert.deepEqual(w.ctx.state.entries(), []); assert.equal(w.daemonCalls(), 0);
     await assert.rejects(w.service.start({ taskId: first.taskId, expectedRevision: answered.revision, run: true }), { code: "TASK_NOT_READY" });

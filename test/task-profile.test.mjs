@@ -345,6 +345,43 @@ test("registry removal, deprecation and yanking require clarification without pu
   for (const text of ["Run npm uninstall old-package.", "Remove old-package from package.json.", "Deprecate the legacy API.", "Delete the local package cache.", "Add a command to run npm unpublish.", "Add support for yanking versions from crates.io.", "Document how to run npm deprecate pkg@1.0.", "Show 'npm unpublish' as a label.", "Add a test for `Yank version 1.2 from crates.io`."]) assert.notEqual(deliveryScreen(text, PROFILE.target).tier, "question", text);
 });
 
+test("PR creation modes cannot change regular review delivery", () => {
+  for (const text of ["Run gh pr create --draft.", "Run gh pr create --dry-run.", "Run gh pr create -d.", "Run gh pr create -fd.", "Run gh pr create --draft=true.", "Run gh pr create --dry-run=1.", "Run gh pr create -d=true.", "Run `gh pr create --draft`.", "Run gh pr create --draft=false --draft.", "Run gh pr create --dry-run=$MODE.", "Open a draft pull request.", "Create a PR as a draft.", "Open a PR in draft mode."]) {
+    const screen = deliveryScreen(text, PROFILE.target);
+    assert.equal(screen.tier, "question", text); assert.ok(screen.terms.includes("pull_request_mode"), text);
+    assert.equal(screen.targetConflicts, undefined, "mode qualifiers do not invent a base: " + text);
+    assert.ok(unaccountedTerms(screen, { action: "pull_request" }).includes("pull_request_mode"), text);
+    const task = taskFor(text, { commandCandidates: ["npm test"] });
+    for (const delivery of [{}, { "r-1": { action: "pull_request" } }, { "r-1": { action: "restrict", prohibits: [] } }]) {
+      const output = parseDraft(JSON.stringify(draftFor(task, { delivery })), task);
+      assert.deepEqual(output.questions.map(q => q.id), ["q-delivery-r-1"], text);
+      assert.match(output.mapping[0].conflict.reason, /regular review PR/, text);
+    }
+  }
+  for (const text of ["Run gh pr create --help.", "Run gh pr create -h.", "Run gh pr create --draft=false.", "Run gh pr create --dry-run=0.", "Run gh pr create -d=false.", "Run gh pr create --help=false.", 'Run gh pr create --title "--draft" --body "--dry-run".', "Run gh pr create --body-file --draft.", "Run gh pr create -- --draft.", "Run gh pr create and echo --draft.", "Run gh pr create; echo --dry-run.", "Add a command to run gh pr create --draft.", "Document how to run `gh pr create --dry-run`.", "Show 'gh pr create --draft' as a label.", "Add a button to open a draft PR."]) {
+    const screen = deliveryScreen(text, PROFILE.target);
+    assert.notEqual(screen.tier, "question", text); assert.ok(!screen.terms.includes("pull_request_mode"), text);
+    const task = taskFor(text, { commandCandidates: ["npm test"] });
+    assert.deepEqual(parseDraft(JSON.stringify(draftFor(task)), task).questions, [], text);
+  }
+  assert.throws(() => validateDeliveryTag({ action: "pull_request_mode" }), /action must be/);
+});
+
+test("registry administration writes require clarification while reads stay implementation scope", () => {
+  for (const text of ["Run npm access set status=public pkg.", "npm owner add alice pkg.", "Run npm --help=false owner add alice pkg.", "npm dist-tag add pkg@2.0 latest.", "Run npm access grant read-write acme:team pkg.", "Run npm access revoke acme:team pkg.", "Run npm access public pkg.", "Run npm access restricted pkg.", "Run npm access 2fa-required pkg.", "Run npm access 2fa-not-required pkg.", "Run npm owner rm alice pkg.", "Run npm dist-tag rm pkg latest.", "Run npm --registry=https://registry.npmjs.org owner add alice pkg.", "Run npm access --registry https://registry.npmjs.org set mfa=none pkg.", "Run `npm dist-tag add pkg@2.0 latest`.", "Run npm owner $ACTION alice pkg.", 'Run npm owner "add" alice pkg.', 'Run `npm owner "add" alice pkg`.',  "Run npm owner add alice pkg and npm owner ls pkg."]) {
+    const screen = deliveryScreen(text, PROFILE.target);
+    assert.equal(screen.tier, "question", text); assert.ok(screen.escalated.includes("publish"), text);
+    assert.ok(unaccountedTerms(screen, { action: "pull_request" }).includes("publish"), text);
+    const task = taskFor(text, { commandCandidates: ["npm test"] });
+    for (const delivery of [{}, { "r-1": { action: "pull_request" } }]) assert.deepEqual(parseDraft(JSON.stringify(draftFor(task, { delivery })), task).questions.map(q => q.id), ["q-delivery-r-1"], text);
+  }
+  for (const text of ["Run npm access list packages.", "Run npm access list collaborators pkg.", "Run npm access get status pkg.", "Run npm access ls-packages.", "Run npm owner ls pkg.", "Run npm dist-tag ls pkg.", "Run npm dist-tag pkg.", "Run npm --registry https://registry.npmjs.org owner ls add.", "Run npm --userconfig owner access get status pkg.", "Run npm access get status add.", "Run npm owner ls pkg and echo add.", "Run npm owner ls pkg; echo add.", "Run npm --help owner add alice pkg.", "Run npm owner add alice pkg --help.", "Run npm dist-tag add pkg@2 latest -h.", "Add a command to run npm access set status=public pkg.", "Document how to run `npm owner add alice pkg`.", "Show 'npm dist-tag add pkg@2.0 latest' as a label.", "Run npm pkg set access=public.", 'Run npm --userconfig "x npm owner add" access get status pkg.', 'Run `npm --userconfig "x npm owner add" access get status pkg`.',  'Run npm --userconfig "x owner add" access get status pkg.', "Run npm --registry 'owner add' owner ls pkg.", 'Run npm owner "ls add" pkg.', "Run npm --userconfig x owner ls pkg; run npm --userconfig 'x owner add' access get status pkg."]) {
+    assert.notEqual(deliveryScreen(text, PROFILE.target).tier, "question", text);
+    const task = taskFor(text, { commandCandidates: ["npm test"] });
+    assert.deepEqual(parseDraft(JSON.stringify(draftFor(task)), task).questions, [], text);
+  }
+});
+
 test("PR creation command flags retain target qualifiers without borrowing option values or later commands", () => {
   for (const text of ["Run gh pr create --base staging.", "Run gh pr create --repo acme/other.", "Run gh pr create -B staging -R acme/widget.", "Run gh pr create --base=staging.", "Run gh pr create -Bstaging.", "Run gh pr create -Racme/other.", "Run gh pr create -fBstaging.", 'Run gh pr create --base "staging".', 'Run `gh pr create --repo "acme/other"`.', "Run gh pr create --repo git.example/acme/widget.", "Run gh pr create --base main --base staging.", "Run gh pr create --base $BASE.", 'Run gh pr create --title "quoted \\" title" --base staging.', "Run gh pr create --base.", "Run gh pr create --repo=.", "Run gh pr create --base --repo acme/widget."]) {
     const screen = deliveryScreen(text, PROFILE.target);
@@ -894,6 +931,10 @@ test("the screen and mapping stay fast at the request and mapping limits", () =>
   // Each test file runs in its own process. Charge work to this process, not
   // time that a parallel CI job leaves it waiting to be scheduled.
   const cases = [
+    ["Run npm owner add alice pkg. ", "question"],
+    ["Run npm owner ls pkg. ", "none"],
+    ["--registry x ", "question", "npm ", "owner add alice pkg"],
+    ["--title x ", "question", "gh pr create ", "--draft"],
     ["Create a GitHub issue. ", "question"],
     ["Add a button to create a GitHub issue. ", "none"],
     ["--repo acme/widget ", "question", "gh issue ", "create"],

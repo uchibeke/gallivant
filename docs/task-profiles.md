@@ -89,6 +89,11 @@ quoted values and repeated flags. Title/body values and later commands cannot
 supply a target flag. Missing, dynamic or ambiguous target arguments clarify;
 matching explicit targets retain the normal PR reading. These arguments never
 select or expand the saved target.
+Draft and dry-run PR creation modes (`--draft`/`-d`, `--dry-run`) remain
+`pull_request_mode` conflicts: this profile creates a regular review PR. Explicit false boolean flags, title/body argument values,
+read-only help for registry commands, product features and literal examples
+retain their own meaning. Natural-language requests to create a draft PR also
+require clarification; no planner tag can select a different creation mode.
 The profile opens exactly one PR. Requests for two or more PRs, separate PRs,
 a PR per component, repeated PR creation commands or another PR retain a
 `pull_request_count` conflict even if the planner supplies a `pull_request` tag.
@@ -142,6 +147,11 @@ The screen grants nothing:
   prohibition tag is granted. Read-only issue commands, issue templates,
   product features and literal examples retain their implementation meaning.
   Command coverage follows the [GitHub CLI issue commands](https://cli.github.com/manual/gh_issue).
+- Package registry administration is also a publication restriction. Write
+  subcommands of `npm access` (set/grant/revoke and legacy access/MFA setters),
+  `npm owner` (add/remove), and `npm dist-tag` (add/remove) require clarification.
+  List/get forms and help remain read-only. The quote-aware command argument
+  reader keeps option values and later commands from supplying a write verb.
 - Hosted registry names and host destinations use the same publication
   restriction: GitHub Packages/GHCR, GitLab registries, cloud artifact registries
   and explicit registry hosts, including schemes, ports and artifact paths.
