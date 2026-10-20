@@ -707,6 +707,34 @@ test("business approval rules validate purpose-infinitive actions", () => {
   assert.doesNotThrow(() => assertDeliveryAnswer({}, coordinated));
 });
 
+test("symbol-coordinated business actions keep approval-dependent implementation visible", () => {
+  for (const separator of [" & ", " + ", " / ", "&", "+", "\t/\t"])
+    for (const source of [
+      `If I approve the invoice, email the customer${separator}proofread the invoice.`,
+      `Email the customer${separator}proofread the invoice after I approve the invoice.`,
+      `If I approve the invoice, email the report${separator}apply the discount.`,
+      `If I approve the invoice, email the customer${separator}apply the report.`,
+      `If I approve the invoice, email the customer${separator}apply the discount${separator}proofread the invoice.`,
+    ]) {
+      assert.throws(() => ownerDelivery(source), { code: "TASK_DELIVERY_SCOPE" }, source);
+      assert.throws(() => assertDeliveryAnswer({}, source), { code: "TASK_DELIVERY_SCOPE" }, source);
+    }
+  for (const source of [
+    ...[" & ", " + ", " / ", "&", "+"].map(separator => `If I approve the invoice, email the customer${separator}apply the discount.`),
+    "Email the customer / apply the discount after I approve the invoice.",
+    "If I approve the invoice, email the customer & send a receipt to Alice.",
+    "If I approve the invoice, email the customer at customer/checkout.",
+    'If I approve the invoice, email the customer with the label "& proofread the invoice / +".',
+  ]) {
+    assert.equal(ownerDelivery(source), null, source);
+    assert.doesNotThrow(() => assertDeliveryAnswer({}, source), source);
+    const original = source + " Open a PR for review.", contract = ownerDelivery(original);
+    assert.equal(validateOwnerDelivery(contract), contract, source);
+    assert.equal(ownerImplementation(contract).join(""), source + " ", source);
+    assert.equal(contract.spans.map(span => original.slice(span.start, span.end)).join(""), original, source);
+  }
+});
+
 test("business approval rules validate purpose gerunds", () => {
   for (const connector of ["with a view to", "for the purpose of", "for purposes of", "with the aim of", "with the goal of", "with the intent of", "with the intention of", "with the objective of"]) {
     for (const source of [
