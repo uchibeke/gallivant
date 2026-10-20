@@ -4,7 +4,7 @@ import { join } from "node:path";
 import { mkdirSync, writeFileSync, readFileSync } from "node:fs";
 import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import { deliveryProfile, validateDeliveryProfile, assertProfileBound, savedProfile, typedEraTask, stableProfile, deliveryScreen, maskLiterals, statements, validateDeliveryTag, profileCovers, unaccountedTerms, deliveryQuestion, deliveryQuestionId, deliveryProfileFromPrd, profileView, DELIVERY_CAPABILITIES, PROFILE_VERSION, COMPLETION_CONDITIONS } from "../lib/task_profile.mjs";
+import { deliveryProfile, validateDeliveryProfile, assertProfileBound, savedProfile, typedEraTask, stableProfile, deliveryScreen, maskLiterals, statements, validateDeliveryTag, profileCovers, unaccountedTerms, deliveryQuestion, deliveryQuestionId, deliveryProfileFromPrd, deliveryScreens, profileView, DELIVERY_CAPABILITIES, PROFILE_VERSION, COMPLETION_CONDITIONS } from "../lib/task_profile.mjs";
 import { intakeModelProblems, validateIntakeModelConfig, intakeModelRoute, intakeModelRouteSummary, pinnedModelRoute, savedModelRoute, MODEL_ROUTE_CEILINGS } from "../lib/task_model_config.mjs";
 import { COMPLETION_SCHEMA } from "../lib/task_completion.mjs";
 import { MAX_ANSWER_ID_CHARACTERS } from "../lib/task_limits.mjs";
@@ -196,6 +196,42 @@ test("pushes of tags and non-task refs cannot be covered by the task-branch prof
     for (const delivery of [{}, { "r-1": { action: "pull_request" } }]) assert.deepEqual(parseDraft(JSON.stringify(draftFor(task, { delivery })), task).questions.map(q => q.id), ["q-delivery-r-1"], text);
   }
   for (const text of ["Push the task branch for review.", "Run git push -u origin HEAD.", "Run git push --repo origin HEAD.", "Run git push --repo=origin HEAD.", 'Run `git push origin HEAD` after tests.', "Run git push origin HEAD and run tests.", 'Show `git push --tags` as an example.', "Add a command to push tags to origin.", "Add support for pushing tags to origin.", 'Add a button to run `git push --tags`.', "Push notifications to subscribers.", "Push the button to continue."]) assert.notEqual(deliveryScreen(text, PROFILE.target).tier, "question", text);
+});
+
+test("wrapped delivery instructions retain adjacent source context and stable clause mappings", () => {
+  for (const text of ["Do not\nopen a pull request", "Do\r\nnot\r\nopen a PR", "Upload the package\nto npm", "Create a GitHub\nissue for the follow-up", 'Run `gh workflow\nrun smoke.yml`', "Open the PR against\nstaging"]) {
+    const task = taskFor(text, { commandCandidates: ["npm test"] });
+    const saved = structuredClone(task.requirements);
+    for (const tagged of [false, true]) {
+      const delivery = tagged ? Object.fromEntries(task.requirements.map(r => [r.id, { action: "pull_request" }])) : {};
+      const out = parseDraft(JSON.stringify(draftFor(task, { delivery })), task);
+      assert.ok(out.questions.length > 0, text);
+      assert.deepEqual(task.requirements, saved, "context never rekeys or rewrites source fragments");
+      assert.equal(out.mapping.length, saved.length);
+      for (const r of saved) assert.equal(text.slice(r.source.start, r.source.end), r.text);
+      assert.match(renderDraft(task, out), /q-delivery-r-/, text);
+    }
+  }
+  for (const text of ['Show "Create a GitHub\nissue" as a label.', "Add a button to upload packages\nto npm.", "Run gh workflow\nview smoke.yml."]) {
+    const task = taskFor(text, { commandCandidates: ["npm test"] });
+    assert.deepEqual(parseDraft(JSON.stringify(draftFor(task)), task).questions, [], text);
+  }
+  for (const text of ["Do not merge.\nOpen a PR.", "Do not merge\n\nOpen a PR.", "- Do not merge\n- Open a PR."]) {
+    const task = taskFor(text, { commandCandidates: ["npm test"] });
+    assert.deepEqual(parseDraft(JSON.stringify(draftFor(task, { delivery: { "r-1": { action: "restrict", prohibits: ["merge"] }, "r-2": { action: "pull_request" } } })), task).questions, [], text);
+  }
+});
+
+test("workflow dispatch and state mutations cannot borrow pull-request authority", () => {
+  for (const text of ["Run gh workflow run smoke.yml.", "Run gh workflow enable smoke.yml.", "Run gh workflow disable smoke.yml.", 'Run `gh workflow run smoke.yml`.', 'Run gh workflow --repo "acme/widget" run smoke.yml.', "Run gh workflow -Racme/widget disable smoke.yml.", "Trigger the GitHub Actions workflow.", "Dispatch the workflow after tests.", "Enable the GitHub workflow.", "Run gh run rerun 123.", "Run gh run cancel 123.", "Run gh run delete 123."]) {
+    const screen = deliveryScreen(text, PROFILE.target);
+    assert.equal(screen.tier, "question", text); assert.ok(screen.escalated.includes("workflow_mutation"), text);
+    const task = taskFor(text, { commandCandidates: ["npm test"] });
+    for (const delivery of [{}, { "r-1": { action: "pull_request" } }, { "r-1": { action: "restrict", prohibits: [] } }]) assert.deepEqual(parseDraft(JSON.stringify(draftFor(task, { delivery })), task).questions.map(q => q.id), ["q-delivery-r-1"], text);
+  }
+  for (const text of ["Run gh workflow list.", "Run gh workflow view smoke.yml.", "Run gh run view 123.", "Run gh run watch 123.", "Add a button to trigger the workflow.", 'Add a command to run `gh workflow run smoke.yml`.', 'Show "gh workflow run smoke.yml" as an example.', "Document how to enable the workflow."]) assert.notEqual(deliveryScreen(text, PROFILE.target).tier, "question", text);
+  assert.throws(() => validateDeliveryTag({ action: "workflow_mutation" }), /delivery tag action/);
+  assert.throws(() => validateDeliveryTag({ action: "restrict", prohibits: ["workflow_mutation"] }), /prohibits must list/);
 });
 
 test("issue mutations remain unsupported delivery actions across prose, commands and quoted references", () => {
@@ -830,6 +866,15 @@ test("repository snapshots are read-only, bounded, exclude private and ignored p
 });
 
 test("the screen and mapping stay fast at the request and mapping limits", () => {
+  const wrapped = "Do not\n" + ("context ".repeat(31).trim() + "\n").repeat(126) + "open a pull request";
+  const clauses = fragments(wrapped), cpuStart = process.cpuUsage();
+  let contextual;
+  for (let i = 0; i < 20; i++) contextual = deliveryScreens(wrapped, clauses, PROFILE.target);
+  const cpuUsed = process.cpuUsage(cpuStart);
+  assert.equal(contextual.size, 128);
+  assert.ok([...contextual.values()].every(screen => screen.controlled.includes("pull_request")));
+  assert.ok((cpuUsed.user + cpuUsed.system) / 20000 < 50, "128 wrapped source spans reuse the bounded statement screen");
+
   const clause = "Implement export and merge the PR after approval; do not push until reviewed. ";
   const text = clause.repeat(Math.floor(MAX_INPUT_BYTES / clause.length));
   // Each test file runs in its own process. Charge work to this process, not

@@ -118,8 +118,21 @@ the push and PR required by the profile. They require clarification even when
 the planner omits a tag. Feature infinitives and database transaction commits
 retain their product interpretation.
 
+Wrapped request and answer lines are screened in the complete source statements
+that touch their immutable spans. Source IDs, text and offsets remain unchanged;
+context never crosses between the original request and an answer or between
+separate answers. Sentence punctuation, blank lines and list-item boundaries
+separate controls; paired literal spans retain their context across wrapped
+lines. Shared statement windows are cached within each source.
+
 The screen grants nothing:
 
+- Workflow dispatch, enable/disable and existing Actions run rerun/cancel/delete
+  are unsupported external mutations, including canonical CLI commands and
+  imperative workflow wording. Read-only list/view/watch commands, features and
+  literal examples retain their implementation meaning. Command coverage follows
+  [workflow commands](https://cli.github.com/manual/gh_workflow) and
+  [run commands](https://cli.github.com/manual/gh_run).
 - Issue creation, editing, commenting, closing and reopening are unsupported
   external mutations, including passive instructions, quoted issue references,
   GitHub issue URLs and canonical `gh issue` write commands. Related writes
@@ -303,6 +316,13 @@ spend record. The response body is read under the same deadline as the request
 and cancelled at one megabyte, so a stalled or oversized provider reply cannot
 hang the task lock or buffer without bound. Cancelling a body, including an
 error response's body, is awaited only until that deadline.
+
+A missing pinned credential blocks before any model attempt or reservation is
+created. Restore the named environment variable and explicitly resume the saved
+task; known credential preflight recovery preserves accepted answers, the
+original validation feedback and repair count. Only this known model pre-call failure
+can rearm: submitted, unsettled or failed provider calls retain their ownership
+and spend evidence and cannot purchase a replacement call through resume. Older markerless pre-call failures recover only when all saved calls are successful, settled and consumed with matching text-only receipts.
 
 A task pins the complete route selection (adapter, model, endpoint, budget,
 timeout and the credential variable name) when it is created. Later turns,
