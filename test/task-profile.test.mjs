@@ -202,6 +202,17 @@ test("each delivery term retains positive and negative occurrences across contro
   assert.deepEqual(unaccountedTerms(deliveryScreen("Do not merge, but do not deploy either."), { action: "restrict", prohibits: ["merge", "deploy"] }), []);
 });
 
+test("terminal stops after committing remain local delivery restrictions with or without planner tags", () => {
+  for (const text of ["Implement the fix, but stop after committing the changes.", "Stop once the changes are committed.", "Once committed, stop.", "After committing the changes, halt.", "Pause after the commit.", "Stop immediately after committing.", "Stop after creating the commit.", "I want this task to stop after committing the changes.", "Stop after committing the changes and document committing the database transaction."]) {
+    const screen = deliveryScreen(text);
+    assert.equal(screen.tier, "question", text); assert.ok(screen.terms.includes("local"), text);
+    assert.ok(unaccountedTerms(screen, { action: "pull_request" }).includes("local"), text);
+    const task = taskFor(text, { commandCandidates: ["npm test"] });
+    for (const delivery of [{}, { "r-1": { action: "pull_request" } }]) assert.deepEqual(parseDraft(JSON.stringify(draftFor(task, { delivery })), task).questions.map(q => q.id), ["q-delivery-r-1"], text);
+  }
+  for (const text of ["Add an option to stop after committing changes.", "Stop after committing the database transaction.", 'Document "Stop once committed" in help.']) assert.equal(deliveryScreen(text).terms.includes("local"), false, text);
+});
+
 test("planner delivery tags are validated and compared with the profile without granting anything", () => {
   const target = { repository: "Acme/Widget", base: "main" };
   assert.deepEqual(validateDeliveryTag({ action: "pull_request", target }), { action: "pull_request", target });

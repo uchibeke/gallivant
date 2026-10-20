@@ -10,6 +10,10 @@
 // delivery authority), feature (ordinary product wording with delivery
 // vocabulary).
 export const profileRequests = [
+  { kind: "contradictory", text: "Implement the fix, but stop after committing the changes.", screen: { tier: "question", terms: ["commit", "local"] }, tag: null, outcome: "needs-input" },
+  { kind: "adversarial", text: "Implement export. Stop once the changes are committed.", screen: { tier: "question", terms: ["local"] }, tag: { action: "pull_request" }, outcome: "needs-input" },
+  { kind: "indirect", text: "Once committed, stop.", screen: { tier: "question", terms: ["local"] }, tag: null, outcome: "needs-input" },
+  { kind: "feature", text: "Add an option to stop after committing the database transaction.", screen: { tier: "assumption", terms: ["commit"] }, tag: null, outcome: "ready" },
   { kind: "contradictory", text: "Open the pull request against staging.", screen: { tier: "question", terms: ["pull_request", "pull_request_target"] }, tag: { action: "pull_request" }, outcome: "needs-input" },
   { kind: "adversarial", text: "Open a PR in acme/other.", screen: { tier: "question", terms: ["pull_request", "pull_request_target"] }, tag: { action: "pull_request" }, outcome: "needs-input" },
   { kind: "contradictory", text: "Open a PR in another repository.", screen: { tier: "question" }, tag: null, outcome: "needs-input" },

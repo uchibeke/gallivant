@@ -4477,6 +4477,30 @@ test("a profile conflict pauses before any harness run until the owner resolves 
   }
 });
 
+test("anaphoric delivery replies cannot be resolved by empty or ungrounded planner tags", async () => {
+  const clear = "Open a pull request for review; do not merge.";
+  for (const tag of [{ action: "restrict", prohibits: [] }, { action: "restrict", prohibits: ["merge"] }, { action: "pull_request" }]) {
+    const w = world({ prepare: async (_ctx, task) => JSON.stringify(draftFor(task, { delivery: Object.fromEntries(task.requirements.map(r => [r.id, r.id === "r-1" ? { action: "merge" } : r.text === clear ? { action: "pull_request", prohibits: ["merge"] } : tag])) })) });
+    let current = await w.service.prepare({ text: "Implement export and merge the pull request.", run: true });
+    const taskId = current.taskId;
+    for (const [i, text] of ["Do it anyway.", "Proceed as requested."].entries()) {
+      const questionId = current.questions[0].id;
+      const expectedRevision = current.revision;
+      current = await w.service.answer({ taskId, expectedRevision, operationId: `vague-${i}`, answers: { [questionId]: text } });
+      assert.equal(current.status, "needs-input", JSON.stringify(tag)); assert.equal(current.readiness, null);
+      assert.ok(current.questions.every(q => q.id.startsWith("q-delivery-a-")));
+      assert.match(current.review.requirementMap.find(m => m.target?.id === current.questions[0].id).conflict.reason, /explicitly|grounded/);
+      assert.deepEqual(w.ctx.state.entries(), []); assert.equal(w.daemonCalls(), 0);
+      await assert.rejects(w.service.start({ taskId, expectedRevision: current.revision, run: true }), { code: "TASK_NOT_READY" });
+      assert.deepEqual(await w.service.answer({ taskId, expectedRevision, operationId: `vague-${i}`, answers: { [questionId]: text } }), current);
+    }
+    const resolved = await w.service.answer({ taskId, expectedRevision: current.revision, operationId: "explicit-scope", answers: { [current.questions[0].id]: clear } });
+    assert.equal(resolved.status, "ready", resolved.failures.join("\n")); assert.equal(resolved.approval, null);
+    assert.equal(taskStore(w.home).read(taskId).runAuthorized, false); assert.deepEqual(w.ctx.state.entries(), []);
+    assert.deepEqual(taskStore(w.home).read(taskId).deliveryProfile, TYPED_PROFILE);
+  }
+});
+
 test("target, dotted publication and mixed-polarity conflicts survive answer chains without dispatch", async () => {
   for (const [text, tag] of [
     ["Open the pull request against staging.", { action: "pull_request" }],
@@ -4485,7 +4509,7 @@ test("target, dotted publication and mixed-polarity conflicts survive answer cha
     ["Do not merge, but deploy this to production.", { action: "restrict", prohibits: ["merge", "deploy"] }],
     ["Do not deploy; deploy this to production.", { action: "restrict", prohibits: ["deploy"] }],
   ]) {
-    const w = world({ prepare: async (_ctx, task) => JSON.stringify(draftFor(task, { delivery: Object.fromEntries(task.requirements.map(r => [r.id, r.text === "Keep the selected profile and implement export only." ? { action: "restrict", prohibits: [] } : r.id === "r-1" ? { action: "merge" } : tag])) })) });
+    const w = world({ prepare: async (_ctx, task) => JSON.stringify(draftFor(task, { delivery: Object.fromEntries(task.requirements.map(r => [r.id, r.text === "Open a pull request for review and implement export only." ? { action: "pull_request" } : r.id === "r-1" ? { action: "merge" } : tag])) })) });
     const first = await w.service.prepare({ text: "Implement export and merge the PR.", run: true });
     const answered = await w.service.answer({ taskId: first.taskId, expectedRevision: first.revision, operationId: "insist-on-conflict", answers: { "q-delivery-r-1": text } });
     assert.equal(answered.status, "needs-input", text); assert.equal(answered.readiness, null);
@@ -4494,7 +4518,7 @@ test("target, dotted publication and mixed-polarity conflicts survive answer cha
     assert.equal(taskStore(w.home).read(first.taskId).runAuthorized, false);
     assert.deepEqual(w.ctx.state.entries(), []); assert.equal(w.daemonCalls(), 0);
     await assert.rejects(w.service.start({ taskId: first.taskId, expectedRevision: answered.revision, run: true }), { code: "TASK_NOT_READY" });
-    const resolved = await w.service.answer({ taskId: first.taskId, expectedRevision: answered.revision, operationId: "keep-profile", answers: { "q-delivery-a-q-delivery-r-1-1": "Keep the selected profile and implement export only." } });
+    const resolved = await w.service.answer({ taskId: first.taskId, expectedRevision: answered.revision, operationId: "keep-profile", answers: { "q-delivery-a-q-delivery-r-1-1": "Open a pull request for review and implement export only." } });
     assert.equal(resolved.status, "ready", resolved.failures.join("\n"));
     assert.deepEqual(taskStore(w.home).read(first.taskId).deliveryProfile, TYPED_PROFILE); assert.equal(resolved.approval, null);
     assert.deepEqual(w.ctx.state.entries(), []); assert.equal(w.daemonCalls(), 0);

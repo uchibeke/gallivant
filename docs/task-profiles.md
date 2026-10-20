@@ -83,7 +83,15 @@ the control's target; a control word inside another example never counts. Restri
 as "leave the changes uncommitted", "unstaged", "keep all edits in the working
 tree" or "unpublished" count as local-only. Control words bind within a statement: sentence and clause
 punctuation ends one, but additive conjunctions and an introductory colon after the
-control ("Do not: open a pull request") do not. The screen grants nothing:
+control ("Do not: open a pull request") do not.
+
+Terminal directions such as "stop after committing the changes", "stop once
+committed" and "once committed, stop" also count as local-only: they withhold
+the push and PR required by the profile. They require clarification even when
+the planner omits a tag. Feature infinitives and database transaction commits
+retain their product interpretation.
+
+The screen grants nothing:
 
 - Escalating terms (merge, deploy including shipping, rollout, go-live and
   "to production" wording, release, wait, local-only, a write aimed
@@ -125,6 +133,10 @@ The owner's reply to a delivery question is screened like any other clause,
 and it closes the original conflict only when every fragment of the reply
 carries a typed reading the profile covers; an anaphoric reply such as "do it
 anyway" gets its own question instead.
+That reading must be grounded in the reply's own explicit action or prohibited
+effects. Empty `restrict` tags and invented actions or prohibitions cannot close
+a delivery question. Restate the intended action (for example, "Open a pull
+request for review; do not merge") or explicitly name the prohibited effects.
 A reply that the planner reads as asking for an uncovered action, or that
 carries escalating vocabulary the planner leaves untagged, raises the same
 question for the reply itself. A reply that restates a prohibition the profile
