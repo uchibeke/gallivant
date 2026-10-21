@@ -528,6 +528,19 @@ test("landing a PR or change retains merge intent through delivery validation", 
   }
 });
 
+test("passive landing checks skip unrelated words without hiding a later instruction", () => {
+  const noise = "landed ".repeat(20);
+  for (const suffix of ["The change must be landed.", "The PR is landed.", "Land the patch.", "The\u00a0change\u2003must\tbe landed."]) {
+    const text = noise + suffix, screen = deliveryScreen(text, PROFILE.target);
+    assert.ok(screen.escalated.includes("merge"), suffix);
+    const task = taskFor(text, { commandCandidates: ["npm test"] });
+    for (const delivery of [{}, { "r-1": { action: "pull_request" } }]) assert.deepEqual(parseDraft(JSON.stringify(draftFor(task, { delivery })), task).questions.map(q => q.id), ["q-delivery-r-1"], suffix);
+  }
+  for (const suffix of ["", "the plane has landed.", "Add a command to land changes.", "Add support for landing changes.", 'Show "The PR must be landed" as a label.']) {
+    assert.equal(deliveryScreen(noise + suffix, PROFILE.target).terms.includes("merge"), false, suffix);
+  }
+});
+
 test("imperative command spans stay visible through delivery validation", () => {
   for (const text of ['Run `npm publish` after the tests.', 'Execute "npm publish" after the tests.', "Run 'npm publish' after the tests.", 'Run ‘npm publish’ after tests.', 'Please run: `npm publish`.', 'Run `npm test` and `npm publish`.', '`npm publish`', 'Run `git push origin main` after tests.', 'Run `git push --force origin HEAD:main` after tests.', "Run `git push origin 'main'` after tests.", 'Stop after `git commit`.']) {
     const screen = deliveryScreen(text, PROFILE.target);
@@ -1374,6 +1387,8 @@ test("the screen and mapping stay fast at the request and mapping limits", () =>
     ["'npm publish' ", "none"],
     ['Run `npm publish`. ', "question"],
     ["landing ", "none"], ["landed ", "none"],
+    ["landed ", "question", "", "The change must be landed."],
+    ["landed ", "none", "", "Add a command to land changes."],
     ["Add a command to land changes. ", "none"],
     ["Land the PR after CI passes. ", "question"],
     ["Run git push origin HEAD. ", "assumption"],
@@ -1419,7 +1434,7 @@ test("the screen and mapping stay fast at the request and mapping limits", () =>
     const wallPerCall = Number(process.hrtime.bigint() - started) / 20 / 1e6;
     const cpu = process.cpuUsage(cpuStarted), perCall = (cpu.user + cpu.system) / 20 / 1000;
     assert.equal(screen.tier, tier, "maximum-size examples and commands retain their interpretation");
-    assert.ok(perCall < 50, `screening a ${Buffer.byteLength(input)} byte request took ${perCall.toFixed(1)} CPU ms (${wallPerCall.toFixed(1)} wall ms)`);
+    assert.ok(perCall < 50, `screening ${JSON.stringify({ unit, prefix, suffix })}, ${bytes} bytes, took ${perCall.toFixed(1)} CPU ms (${wallPerCall.toFixed(1)} wall ms)`);
   }
   const lines = Array.from({ length: 64 }, (_, i) => `Merge ${i + 1}.`).join("\n");
   const task = taskFor(lines, { commandCandidates: ["npm test"] });

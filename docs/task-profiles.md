@@ -493,5 +493,8 @@ complete repeated units and command prefixes/suffixes, with assertions that
 inputs fill but never exceed the accepted request allowance. The 50 CPU ms
 screening budget is unchanged. Repeated statements share checks only within one
 screen; every target-conflict occurrence and whole-request PR count is retained.
+Passive landing checks first require a matching subject before inspecting
+feature context; maximum-size probes include unrelated words followed by a real
+instruction or a feature phrase. Timing failures identify the exact fixture.
 No live qualification of generated-PRD quality or actual cost is
 recorded here.
