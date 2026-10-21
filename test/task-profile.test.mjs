@@ -229,7 +229,7 @@ test("pushes of tags and non-task refs cannot be covered by the task-branch prof
 });
 
 test("wrapped delivery instructions retain adjacent source context and stable clause mappings", () => {
-  for (const text of ["Do not\nopen a pull request", "Do\r\nnot\r\nopen a PR", "Upload the package\nto npm", "Create a GitHub\nissue for the follow-up", "Run gh label\ncreate urgent", "Run gh gist\ncreate --public report.txt", "Run gh project\nitem-add 1 --url https://github.com/acme/widget/issues/1", 'Run `gh workflow\nrun smoke.yml`', "Open the PR against\nstaging"]) {
+  for (const text of ["Do not\nopen a pull request", "Do\r\nnot\r\nopen a PR", "Upload the package\nto npm", "Create a GitHub\nissue for the follow-up", "Run gh label\ncreate urgent", "Run gh gist\ncreate --public report.txt", "Run gh project\nitem-add 1 --url https://github.com/acme/widget/issues/1", "Run gh pr create --head\nattacker:feature", 'Run `gh workflow\nrun smoke.yml`', "Open the PR against\nstaging"]) {
     const task = taskFor(text, { commandCandidates: ["npm test"] });
     const saved = structuredClone(task.requirements);
     for (const tagged of [false, true]) {
@@ -651,6 +651,44 @@ test("registry administration writes require clarification while reads stay impl
   }
   for (const text of ["Run npm access list packages.", "Run npm access list collaborators pkg.", "Run npm access get status pkg.", "Run npm access ls-packages.", "Run npm owner ls pkg.", "Run npm dist-tag ls pkg.", "Run npm dist-tag pkg.", "Run npm --registry https://registry.npmjs.org owner ls add.", "Run npm --userconfig owner access get status pkg.", "Run npm access get status add.", "Run npm owner ls pkg and echo add.", "Run npm owner ls pkg; echo add.", "Run npm --help owner add alice pkg.", "Run npm owner add alice pkg --help.", "Run npm dist-tag add pkg@2 latest -h.", "Add a command to run npm access set status=public pkg.", "Document how to run `npm owner add alice pkg`.", "Show 'npm dist-tag add pkg@2.0 latest' as a label.", "Run npm pkg set access=public.", 'Run npm --userconfig "x npm owner add" access get status pkg.', 'Run `npm --userconfig "x npm owner add" access get status pkg`.',  'Run npm --userconfig "x owner add" access get status pkg.', "Run npm --registry 'owner add' owner ls pkg.", 'Run npm owner "ls add" pkg.', "Run npm --userconfig x owner ls pkg; run npm --userconfig 'x owner add' access get status pkg."]) {
     assert.notEqual(deliveryScreen(text, PROFILE.target).tier, "question", text);
+    const task = taskFor(text, { commandCandidates: ["npm test"] });
+    assert.deepEqual(parseDraft(JSON.stringify(draftFor(task)), task).questions, [], text);
+  }
+});
+
+test("PR head overrides require clarification before a managed branch exists", () => {
+  const overrides = [
+    "Run gh pr create --head attacker:feature.", "Run gh pr create -H staging.",
+    "Run gh pr create --head=staging.", "Run gh pr create -Hstaging.", "Run gh pr create -H=staging.",
+    "Run gh pr create -fHstaging.", 'Run gh pr create --head "attacker:feature".',
+    'Run `gh pr create --head "attacker:feature"`.', "Run gh pr create --head 'staging'.",
+    "Run gh pr create --head $HEAD.", 'Run gh pr create --head "${HEAD}".', "Run gh pr create --head=$HEAD.",
+    "Run gh pr create -H$HEAD.", "Run gh pr create --head.", "Run gh pr create --head=.",
+    "Run gh pr create --head --base main.", "Run gh pr create --head HEAD.",
+    "Run gh pr create --head work/task-123 --head attacker:feature.",
+    "Run gh pr create --repo acme/widget --base main --head staging.",
+  ];
+  for (const text of overrides) {
+    const screen = deliveryScreen(text, PROFILE.target);
+    assert.equal(screen.tier, "question", text); assert.ok(screen.targetConflicts?.length, text);
+    assert.ok(unaccountedTerms(screen, { action: "pull_request" }).includes("pull_request_target"), text);
+    const task = taskFor(text, { commandCandidates: ["npm test"] });
+    for (const delivery of [{}, { "r-1": { action: "pull_request" } }, { "r-1": { action: "restrict", prohibits: [] } }]) {
+      const out = parseDraft(JSON.stringify(draftFor(task, { delivery })), task);
+      assert.deepEqual(out.questions.map(q => q.id), ["q-delivery-r-1"], text); assert.equal(task.requirements[0].text, text);
+    }
+  }
+  assert.match(deliveryScreen(overrides[0], PROFILE.target).targetConflicts[0], /head.*attacker:feature.*managed task branch/);
+  for (const text of [
+    'Run gh pr create --title "--head attacker:feature" --base main.',
+    'Run gh pr create --body "--head staging; -H attacker:feature" --base main.',
+    'Run `gh pr create --title "--head attacker:feature" --base main`.',
+    "Run gh pr create --base main and run echo --head staging.",
+    "Run gh pr create --base main; run echo -H staging.", "Run gh pr create --base main -- --head staging.",
+    "Add a command to run gh pr create --head staging.", 'Document how to run `gh pr create -H staging`.',
+    "Show 'gh pr create --head attacker:feature' as a label.", "Run gh pr create --base main --repo acme/widget.",
+  ]) {
+    assert.equal(deliveryScreen(text, PROFILE.target).targetConflicts, undefined, text);
     const task = taskFor(text, { commandCandidates: ["npm test"] });
     assert.deepEqual(parseDraft(JSON.stringify(draftFor(task)), task).questions, [], text);
   }
@@ -1274,6 +1312,9 @@ test("the screen and mapping stay fast at the request and mapping limits", () =>
     ["Add a button to close PRs. ", "assumption"],
     ["Ask me before opening a PR. ", "question"],
     ["Review pull request #123 and leave feedback. ", "question"],
+    ["Run gh pr create --head staging. ", "question"],
+    ["--title x ", "question", "gh pr create ", "--head attacker:feature"],
+    ['--title "--head staging" ', "assumption", "gh pr create ", "--title normal"],
     ["Run gh project create --title Roadmap. ", "question"],
     ["Run gh project item-list 1. ", "none"],
     ["--title x ", "question", "gh project create ", "--owner acme"],

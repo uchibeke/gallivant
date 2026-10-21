@@ -4687,6 +4687,10 @@ test("anaphoric delivery replies cannot be resolved by empty or ungrounded plann
 
 test("target, publication, approval and mixed-polarity conflicts survive answer chains without dispatch", async () => {
   for (const [text, tag] of [
+    ["Run gh pr create --head attacker:feature.", { action: "pull_request" }],
+    ["Run gh pr create -H staging.", { action: "pull_request" }],
+    ["Run gh pr create --head $HEAD.", { action: "pull_request" }],
+    ["Run gh pr create --head.", { action: "pull_request" }],
     ["Run gh project create --title Roadmap.", { action: "pull_request" }],
     ["Run gh project edit 1 --visibility PUBLIC.", { action: "pull_request" }],
     ["Run gh project delete 1.", { action: "pull_request" }],

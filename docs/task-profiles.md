@@ -94,6 +94,12 @@ quoted values and repeated flags. Title/body values and later commands cannot
 supply a target flag. Missing, dynamic or ambiguous target arguments clarify;
 matching explicit targets retain the normal PR reading. These arguments never
 select or expand the saved target.
+Explicit `--head`/`-H` selectors also retain a target conflict, including fork
+refs, attached/equal values, dynamic values and `HEAD`. The managed task branch
+is allocated after approval, so preparation cannot prove an explicit head names
+it. Omit the head override to keep managed task-branch delivery. Title/body data,
+feature examples, terminators and independent later commands do not select a
+head. No profile or planner field can grant a different head branch.
 Quoted target values stay visible only when attached to a PR target qualifier,
 including paired repository/base values and leading qualifiers. Matching quoted
 values keep the ordinary PR reading; mismatches retain the exact named target.
