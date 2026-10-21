@@ -4516,9 +4516,12 @@ test("the request corpus is traceable and the typed profile controls every exter
     assert.equal(saved.ownerDelivery, undefined); assert.deepEqual(saved.deliveryProfile, TYPED_PROFILE);
     assert.deepEqual(prepared.mapping.map(m => m.requirementId), prepared.requirements.map(r => r.id), "every clause stays mapped");
     assert.equal(saved.original, fixture.text, "the full request stays immutable");
+    const quotedMappings = new Map([...prepared.draft.text.matchAll(/^- (r-\d+): ("(?:[^"\\]|\\.)*") →/gmu)]
+      .map(([, id, quoted]) => [id, JSON.parse(quoted)]));
+    assert.deepEqual([...quotedMappings.keys()], prepared.requirements.map(r => r.id), "the brief quotes every mapped source clause");
     for (const requirement of prepared.requirements) {
       assert.equal(fixture.text.slice(requirement.source.start, requirement.source.end), requirement.text);
-      assert.ok(prepared.draft.text.includes(JSON.stringify(requirement.text)), "the brief quotes every exact source clause");
+      assert.equal(quotedMappings.get(requirement.id), requirement.text, "safe JSON quoting round-trips to the exact immutable source");
     }
     if (fixture.outcome === "needs-input") {
       assert.deepEqual(prepared.questions.map(q => q.id), fixture.questions || ["q-delivery-r-1"]);
