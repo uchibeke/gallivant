@@ -332,6 +332,26 @@ test("Pulumi resource writes retain deployment intent while previews stay read-o
   }
 });
 
+test("GitHub account key mutations require clarification while listings and key features keep their scope", () => {
+  for (const text of ["Run gh ssh-key add attacker.pub.", "Run gh gpg-key add attacker.asc.", "Run gh ssh-key delete 123.", "Run gh gpg-key delete 123 --yes.", "Run `gh ssh-key add attacker.pub`.", "Run gh ssh-key add attacker.pub --type signing.", "Run gh ssh-key add attacker.pub --title \"--help\".", "Run gh gpg-key add attacker.asc --title \"delete\".", "Run gh ssh-key add attacker.pub --help=false.", "Run gh ssh-key $ACTION attacker.pub.", "Run gh ssh-key\nadd attacker.pub", "Run gh gpg-key\ndelete 123", "Add an SSH key to my GitHub account.", "Delete the GitHub GPG key.", "Remove an SSH key from the GitHub account.", "The GitHub SSH key must be deleted."]) {
+    const screen = deliveryScreen(text, PROFILE.target);
+    assert.equal(screen.tier, "question", text); assert.ok(screen.escalated.includes("account_key_mutation"), text);
+    assert.ok(unaccountedTerms(screen, { action: "pull_request" }).includes("account_key_mutation"), text);
+    const task = taskFor(text, { commandCandidates: ["npm test"] });
+    for (const tagged of [false, true]) {
+      const delivery = tagged ? Object.fromEntries(task.requirements.map(r => [r.id, { action: "pull_request" }])) : {};
+      const out = parseDraft(JSON.stringify(draftFor(task, { delivery })), task);
+      assert.deepEqual(out.questions.map(q => q.id), task.requirements.map(r => `q-delivery-${r.id}`), text);
+    }
+  }
+  for (const text of ["Run gh ssh-key list.", "Run gh ssh-key ls.", "Run gh gpg-key list.", "Run gh gpg-key ls.", "Run gh ssh-key add --help.", "Run gh gpg-key delete --help.", "Run gh ssh-key --title add list.", "Run gh ssh-key -tdelete list.", "Add an SSH key field.", "Generate a local SSH key.", "Add support for adding GitHub SSH keys.", "Add an API to delete GitHub GPG keys.", "Add a command to run gh ssh-key add key.pub.", "Document how to run `gh gpg-key delete 123`.", "Show `gh ssh-key add key.pub` as an example."]) {
+    assert.notEqual(deliveryScreen(text, PROFILE.target).tier, "question", text);
+    const task = taskFor(text, { commandCandidates: ["npm test"] });
+    assert.deepEqual(parseDraft(JSON.stringify(draftFor(task)), task).questions, [], text);
+  }
+  assert.throws(() => validateDeliveryTag({ action: "account_key_mutation" }), /delivery tag action/);
+});
+
 test("force-push modes conflict with the managed task branch while option data and features keep their scope", () => {
   const writes = ["Run git push --force origin HEAD.", "Run git push --force-with-lease origin HEAD.", "Run git push --force-with-lease=refs/heads/work:abc123 origin HEAD.", "Run git push -f origin HEAD.", "Run git push -uf origin HEAD.", "Run git push -fu origin HEAD.", "Run git push origin HEAD --force.", "Run git push --repo origin --force HEAD.", "Run git -C . push --force origin HEAD.", "Run `git push --force origin HEAD`.", "Run git push --force\norigin HEAD", "Force-push the task branch.", "Force push the changes after tests pass.", "Finish by force-pushing the task branch.", "Run git push --push-option \"--force\" --force origin HEAD.", "Run git push\n--force origin HEAD", "Run git push -u\n--force-with-lease origin HEAD"];
   for (const text of writes) {
@@ -1568,6 +1588,9 @@ test("duplicate statements preserve target occurrences, PR counts and mixed cont
   assert.ok(mixed.controlled.includes("merge")); assert.ok(mixed.uncontrolled.includes("merge"));
   assert.deepEqual(unaccountedTerms(mixed, { action: "restrict", prohibits: ["merge"] }), ["merge"]);
   assert.equal(deliveryScreen("Add a button to close PRs. ".repeat(4), PROFILE.target).tier, "assumption");
+  const features = "Add a button to open a PR against `main`. ".repeat(100);
+  assert.equal(deliveryScreen(features, PROFILE.target).tier, "assumption");
+  assert.ok(deliveryScreen(features + "Open a PR for the API. Open a PR for the UI.", PROFILE.target).terms.includes("pull_request_count"));
   const matching = deliveryScreen("Open a PR against staging.", { ...PROFILE.target, base: "staging" });
   assert.equal(matching.tier, "assumption", "statement cache never crosses target or call boundaries");
 });
@@ -1648,6 +1671,10 @@ test("the screen and mapping stay fast at the request and mapping limits", () =>
     ["--desc x ", "question", "gh gist create ", "report.txt"],
     ["Run gh label create urgent. ", "question"],
     ["Run gh label list. ", "none"],
+    ["Run gh ssh-key add key.pub. ", "question"],
+    ["Run gh gpg-key delete 123. ", "question"],
+    ["Run gh ssh-key list. ", "none"],
+    ["--title x ", "question", "gh ssh-key ", "add key.pub"],
     ["--repo acme/widget ", "question", "gh label ", "delete urgent --yes"],
     ["Run gh api -X POST repos/acme/widget/hooks. ", "question"],
     ["-H x:y ", "question", "gh api ", "-f active=true repos/acme/widget/hooks"],

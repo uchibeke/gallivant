@@ -178,6 +178,10 @@ The screen grants nothing:
   keeps read-only release commands, option values and templates as data.
   Feature infinitives, local resource release, and release-named refs/flags
   retain implementation scope; explicit release prohibitions remain traceable.
+- GitHub account SSH/GPG key additions and deletions are unsupported external
+  effects. Canonical `gh ssh-key`/`gh gpg-key` writes and explicit account-key
+  mutations require clarification. Listings, help, title/type values, local key
+  generation and product features retain their implementation meaning.
 - Codespace creation, deletion, stopping, rebuilding and editing are unsupported
   external effects. Canonical `gh codespace`/`gh cs` writes and imperative
   Codespace lifecycle prose require clarification under omitted or covered PR
