@@ -229,7 +229,7 @@ test("pushes of tags and non-task refs cannot be covered by the task-branch prof
 });
 
 test("wrapped delivery instructions retain adjacent source context and stable clause mappings", () => {
-  for (const text of ["Do not\nopen a pull request", "Do\r\nnot\r\nopen a PR", "Upload the package\nto npm", "Create a GitHub\nissue for the follow-up", 'Run `gh workflow\nrun smoke.yml`', "Open the PR against\nstaging"]) {
+  for (const text of ["Do not\nopen a pull request", "Do\r\nnot\r\nopen a PR", "Upload the package\nto npm", "Create a GitHub\nissue for the follow-up", "Run gh label\ncreate urgent", 'Run `gh workflow\nrun smoke.yml`', "Open the PR against\nstaging"]) {
     const task = taskFor(text, { commandCandidates: ["npm test"] });
     const saved = structuredClone(task.requirements);
     for (const tagged of [false, true]) {
@@ -242,7 +242,7 @@ test("wrapped delivery instructions retain adjacent source context and stable cl
       assert.match(renderDraft(task, out), /q-delivery-r-/, text);
     }
   }
-  for (const text of ['Show "Create a GitHub\nissue" as a label.', "Add a button to upload packages\nto npm.", "Run gh workflow\nview smoke.yml."]) {
+  for (const text of ['Show "Create a GitHub\nissue" as a label.', "Add a button to upload packages\nto npm.", "Run gh workflow\nview smoke.yml.", "Run gh label\nlist."]) {
     const task = taskFor(text, { commandCandidates: ["npm test"] });
     assert.deepEqual(parseDraft(JSON.stringify(draftFor(task)), task).questions, [], text);
   }
@@ -250,6 +250,53 @@ test("wrapped delivery instructions retain adjacent source context and stable cl
     const task = taskFor(text, { commandCandidates: ["npm test"] });
     assert.deepEqual(parseDraft(JSON.stringify(draftFor(task, { delivery: { "r-1": { action: "restrict", prohibits: ["merge"] }, "r-2": { action: "pull_request" } } })), task).questions, [], text);
   }
+});
+
+test("GitHub label writes cannot borrow pull-request authority", () => {
+  const writes = [
+    "Run gh label create urgent.", "Run gh label edit urgent --name critical.", "Run gh label delete urgent --yes.",
+    "Run gh label clone acme/templates --force.", 'Run `gh label create urgent`.',
+    'Run gh label --repo "acme/widget" create urgent.', "Run gh label -Racme/widget edit urgent --name critical.",
+    "Run gh label --repo=acme/widget delete urgent.", "Run gh label -R=acme/widget clone acme/templates.",
+    'Run gh label create urgent --description "--help".', 'Run gh label create urgent --description "gh label list --help".',
+    "Run gh label create urgent --description=--help.", "Run gh label create -- --help.",
+    "Run gh label --help=false create urgent.", "Run gh label create urgent --help=false.",
+    "Run gh label list and run gh label create urgent.", "Run gh label $ACTION urgent.",
+    "Create a GitHub label urgent.", "Edit the repository label urgent.", "Delete a GitHub label urgent.",
+    "The GitHub label must be deleted.",
+  ];
+  for (const text of writes) {
+    const screen = deliveryScreen(text, PROFILE.target);
+    assert.equal(screen.tier, "question", text); assert.ok(screen.escalated.includes("label_mutation"), text);
+    assert.ok(unaccountedTerms(screen, { action: "pull_request" }).includes("label_mutation"), text);
+    const task = taskFor(text, { commandCandidates: ["npm test"] });
+    for (const delivery of [{}, { "r-1": { action: "pull_request" } }, { "r-1": { action: "restrict", prohibits: [] } }]) {
+      const out = parseDraft(JSON.stringify(draftFor(task, { delivery })), task);
+      assert.deepEqual(out.questions.map(q => q.id), ["q-delivery-r-1"], text);
+      assert.equal(out.mapping[0].requirementId, "r-1"); assert.equal(task.requirements[0].text, text);
+    }
+  }
+  for (const text of [
+    "Run gh label list.", "Run gh label ls.", "Run gh label --repo acme/widget list.", "Run gh label -Racme/widget list.",
+    'Run gh label --repo "create" list.', 'Run gh label --repo "gh label create" list.',
+    'Run gh label list --search "create".', 'Run gh label list --template "gh label create urgent".',
+    'Run `gh label list --template "gh label create urgent"`.',
+    'Run `gh label list --template "Create a GitHub label urgent"`.',
+    "Run gh label list and echo create.", "Run gh label --help.", "Run gh label create urgent --help.",
+    "Run gh label edit urgent --help.", "Run gh label delete urgent --help.", "Run gh label clone acme/templates --help.",
+    'Run gh label create urgent --description "--help" --help.',
+    "Add a command to run gh label create urgent.", 'Add a command to run `gh label delete urgent`.',
+    'Document how to run `gh label edit urgent`.', "Show 'gh label create urgent' as an example.",
+    "Add a label to the form.", "Create a GitHub label selector.", "Add a button to create GitHub labels.",
+  ]) {
+    assert.equal(deliveryScreen(text, PROFILE.target).tier, "none", text);
+    const task = taskFor(text, { commandCandidates: ["npm test"] });
+    assert.deepEqual(parseDraft(JSON.stringify(draftFor(task)), task).questions, [], text);
+  }
+  const separate = taskFor("Run gh label list. Create a GitHub label urgent.", { commandCandidates: ["npm test"] });
+  assert.deepEqual(parseDraft(JSON.stringify(draftFor(separate)), separate).questions.map(q => q.id), ["q-delivery-r-2"]);
+  assert.throws(() => validateDeliveryTag({ action: "label_mutation" }), /delivery tag action/);
+  assert.throws(() => validateDeliveryTag({ action: "restrict", prohibits: ["label_mutation"] }), /prohibits must list/);
 });
 
 test("workflow dispatch and state mutations cannot borrow pull-request authority", () => {
@@ -1132,6 +1179,9 @@ test("the screen and mapping stay fast at the request and mapping limits", () =>
     ["Add a button to close PRs. ", "assumption"],
     ["Ask me before opening a PR. ", "question"],
     ["Review pull request #123 and leave feedback. ", "question"],
+    ["Run gh label create urgent. ", "question"],
+    ["Run gh label list. ", "none"],
+    ["--repo acme/widget ", "question", "gh label ", "delete urgent --yes"],
     ["Run gh api -X POST repos/acme/widget/hooks. ", "question"],
     ["-H x:y ", "question", "gh api ", "-f active=true repos/acme/widget/hooks"],
     ["Run gh api -X GET repos/acme/widget. ", "none"],

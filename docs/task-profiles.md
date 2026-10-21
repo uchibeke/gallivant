@@ -156,6 +156,13 @@ The screen grants nothing:
   prohibition tag is granted. Read-only issue commands, issue templates,
   product features and literal examples retain their implementation meaning.
   Command coverage follows the [GitHub CLI issue commands](https://cli.github.com/manual/gh_issue).
+- Repository label creation, editing, deletion and cloning are unsupported
+  external mutations. Canonical `gh label` writes and explicit GitHub/repository
+  label instructions require clarification under omitted or covered PR tags.
+  The shared quote-aware command reader preserves repository selectors and
+  option values; list/help, product features and literal examples keep their
+  ordinary meaning. Cloning labels writes the destination repository too.
+  No label action or prohibition tag is granted.
 - Package registry administration is also a publication restriction. Write
   subcommands of `npm access` (set/grant/revoke and legacy access/MFA setters),
   `npm owner` (add/remove), and `npm dist-tag` (add/remove) require clarification.

@@ -4687,6 +4687,10 @@ test("anaphoric delivery replies cannot be resolved by empty or ungrounded plann
 
 test("target, publication, approval and mixed-polarity conflicts survive answer chains without dispatch", async () => {
   for (const [text, tag] of [
+    ["Run gh label create urgent.", { action: "pull_request" }],
+    ["Run gh label edit urgent --name critical.", { action: "pull_request" }],
+    ["Run gh label delete urgent --yes.", { action: "pull_request" }],
+    ["Run gh label clone acme/templates --force.", { action: "pull_request" }],
     ["Run gh api -X POST repos/acme/widget/hooks.", { action: "pull_request" }],
     ["Run gh api repos/acme/widget/hooks -f name=web.", { action: "pull_request" }],
     ["Run gh api repos/acme/widget/hooks --input payload.json.", { action: "pull_request" }],
