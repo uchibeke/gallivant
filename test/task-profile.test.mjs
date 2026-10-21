@@ -1635,6 +1635,36 @@ test("duplicate statements preserve target occurrences, PR counts and mixed cont
   assert.equal(matching.tier, "assumption", "statement cache never crosses target or call boundaries");
 });
 
+test("landing candidates preserve context after long non-instruction prefixes", () => {
+  const padding = "landed ".repeat(1024) + "; ";
+  for (const [ending, tier] of [
+    ["The change must be landed.", "question"],
+    ["The pull request needs to be landed.", "question"],
+    ["The PR has been landed.", "question"],
+    ["Land the changes.", "question"],
+    ["Landing the changes.", "question"],
+    ["The change landed the patch.", "question"],
+    ["Do not land the changes.", "question"],
+    ["Do not land the changes; land the changes.", "question"],
+    ["Add a command to land changes.", "none"],
+    ["Add a command to land the PR.", "assumption"],
+    ["Add support for landing changes.", "none"],
+    ["Add a landing page.", "none"],
+    ["The change should be landing.", "none"],
+    ["Add a command to land changes; the changes should be landed.", "question"],
+    ['Display "The change must be landed" as an example.', "none"],
+    ["Implement export. The change must be landed.", "question"],
+    ["The change has been landed. Add a command to land changes.", "question"],
+  ]) {
+    const input = padding + ending, screen = deliveryScreen(input, PROFILE.target);
+    assert.equal(screen.tier, tier, ending);
+    assert.deepEqual(screen, deliveryScreen(ending, PROFILE.target), "non-instruction padding cannot alter object, subject, feature or control interpretation");
+    for (const requirement of fragments(input)) assert.equal(input.slice(requirement.source.start, requirement.source.end), requirement.text);
+  }
+  const suffix = "The change must be landed.";
+  assert.deepEqual(deliveryScreen("landed ".repeat(1024) + suffix, PROFILE.target), deliveryScreen(suffix, PROFILE.target), "the unpunctuated CI input keeps its merge conflict");
+});
+
 test("the screen and mapping stay fast at the request and mapping limits", () => {
   const wrapped = "Do not\n" + ("context ".repeat(31).trim() + "\n").repeat(126) + "open a pull request";
   assert.ok(Buffer.byteLength(wrapped) <= MAX_INPUT_BYTES);
