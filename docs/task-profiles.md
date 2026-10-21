@@ -178,6 +178,11 @@ The screen grants nothing:
   keeps read-only release commands, option values and templates as data.
   Feature infinitives, local resource release, and release-named refs/flags
   retain implementation scope; explicit release prohibitions remain traceable.
+- GitHub Discussion creation, edits and comment/reply writes are unsupported
+  external content mutations. List/view, help and quoted content retain scope.
+- Nested repository autolink create/new/delete commands retain a repository
+  mutation conflict; list/view and help remain read-only, including parent and
+  child option values.
 - Repository delete, archive/unarchive, rename, settings, creation, fork and
   sync commands are unsupported external mutations. The shared command reader
   preserves read-only repository commands, help and option values; explicit

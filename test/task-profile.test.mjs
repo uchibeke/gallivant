@@ -332,6 +332,26 @@ test("Pulumi resource writes retain deployment intent while previews stay read-o
   }
 });
 
+test("Discussion and nested repository autolink writes retain conflicts while reads and feature data keep scope", () => {
+  for (const [term, text] of [["discussion_mutation", "Create GitHub discussions."], ["discussion_mutation", "Run gh discussion create --title Hello --body world."], ["discussion_mutation", "Run gh discussion edit 123 --title Updated."], ["discussion_mutation", "Run gh discussion comment 123 --body Thanks."], ["discussion_mutation", "Run gh discussion comment 123 --edit --body Updated."], ["discussion_mutation", "Run gh discussion comment 123 --delete --yes."], ["discussion_mutation", "Run `gh discussion create --title Hello --body world`."], ["discussion_mutation", "Run gh discussion create --title \"--help\" --body world."], ["discussion_mutation", "Run gh discussion create --body \"--help\" --title Hello."], ["discussion_mutation", "Run gh discussion -Racme/widget comment 123 --body Thanks."], ["discussion_mutation", "Run gh discussion $ACTION 123."], ["discussion_mutation", "Run gh discussion create --help=false --title Hello."], ["discussion_mutation", "Run gh discussion\ncomment 123 --body Thanks"], ["discussion_mutation", "Create a GitHub discussion."], ["discussion_mutation", "Edit the GitHub discussion."], ["discussion_mutation", "Comment on the GitHub discussion."], ["discussion_mutation", "The GitHub discussion must be created."], ["repository_mutation", "Run gh repo autolink create TICKET- https://host/<num>"], ["repository_mutation", "Run gh repo autolink new TICKET- https://host/<num>"], ["repository_mutation", "Run gh repo autolink delete 123."], ["repository_mutation", "Run `gh repo autolink delete 123`."], ["repository_mutation", "Run gh repo --repo acme/widget autolink create TICKET- https://host/<num>"], ["repository_mutation", "Run gh repo autolink --repo create delete 123."], ["repository_mutation", "Run gh repo autolink $ACTION 123."], ["repository_mutation", "Run gh repo autolink delete 123 --help=false."], ["repository_mutation", "Run gh repo autolink --repo \"--help\" delete 123."], ["repository_mutation", "Run gh repo\nautolink delete 123"]]) {
+    const screen = deliveryScreen(text, PROFILE.target);
+    assert.equal(screen.tier, "question", text); assert.ok(screen.escalated.includes(term), text);
+    assert.ok(unaccountedTerms(screen, { action: "pull_request" }).includes(term), text);
+    const task = taskFor(text, { commandCandidates: ["npm test"] });
+    for (const tagged of [false, true]) {
+      const delivery = tagged ? Object.fromEntries(task.requirements.map(r => [r.id, { action: "pull_request" }])) : {};
+      const out = parseDraft(JSON.stringify(draftFor(task, { delivery })), task);
+      assert.deepEqual(out.questions.map(q => q.id), task.requirements.map(r => `q-delivery-${r.id}`), text);
+    }
+  }
+  for (const text of ["Run gh discussion list.", "Run gh discussion view 123.", "Run gh discussion create --help.", "Run gh discussion edit 123 -h.", "Run gh discussion comment 123 --help.", "Run `gh discussion view 123 --template \"Create a GitHub discussion\"`.", "Run gh discussion list --jq comment.", "Run gh discussion --repo create list.", "Add a button to create a GitHub discussion.", "Add an API to comment on the GitHub discussion.", "Add a command to run gh discussion create --title Hello.", "Show `gh discussion comment 123 --body Thanks` as an example.", "Add a discussion panel.", "Run gh repo autolink list.", "Run gh repo autolink view 123.", "Run gh repo autolink create --help.", "Run gh repo autolink delete 123 -h.", "Run gh repo autolink --repo delete list.", "Run gh repo -Rcreate autolink list.", "Run `gh repo autolink list --template \"delete\"`.", "Run gh repo autolink list --jq create.", "Add a command to run gh repo autolink delete 123.", "Document how to run `gh repo autolink create TICKET- https://host/<num>`.", "Add a repository autolink settings page."]) {
+    assert.equal(deliveryScreen(text, PROFILE.target).tier, "none", text);
+    const task = taskFor(text, { commandCandidates: ["npm test"] });
+    assert.deepEqual(parseDraft(JSON.stringify(draftFor(task)), task).questions, [], text);
+  }
+  assert.throws(() => validateDeliveryTag({ action: "discussion_mutation" }), /delivery tag action/);
+});
+
 test("GitHub repository lifecycle writes require clarification while read commands and features retain scope", () => {
   for (const text of ["Run gh repo delete acme/widget --yes.", "Run gh repo archive acme/widget --yes.", "Run gh repo unarchive acme/widget --yes.", "Run gh repo rename widget2 --repo acme/widget --yes.", "Run gh repo edit acme/widget --visibility public --accept-visibility-change-consequences.", "Run gh repo create acme/new --private.", "Run gh repo fork acme/upstream --clone=false.", "Run gh repo sync acme/widget --source acme/upstream.", "Run `gh repo delete acme/widget --yes`.", "Run gh repo delete acme/widget --help=false.", "Run gh repo edit acme/widget --description \"--help\".", "Run gh repo create acme/new --template \"--help\".", "Run gh repo --repo acme/widget delete --yes.", "Run gh repo -Racme/widget archive --yes.", "Run gh repo $ACTION acme/widget.", "Run gh repo\narchive acme/widget --yes", "Run gh repo\ndelete acme/widget --yes", "Delete the GitHub repository.", "Archive the GitHub repository.", "Unarchive the GitHub repository.", "Rename the GitHub repository.", "The GitHub repository must be archived.", "The GitHub repository must be deleted."]) {
     const screen = deliveryScreen(text, PROFILE.target);
@@ -1694,6 +1714,12 @@ test("the screen and mapping stay fast at the request and mapping limits", () =>
     ["Run gh ssh-key add key.pub. ", "question"],
     ["Run gh gpg-key delete 123. ", "question"],
     ["Run gh ssh-key list. ", "none"],
+    ["Run gh discussion create --title Hello. ", "question"],
+    ["Run gh discussion view 123. ", "none"],
+    ["--body x ", "question", "gh discussion create ", "--title Hello"],
+    ["Run gh repo autolink delete 123. ", "question"],
+    ["Run gh repo autolink list. ", "none"],
+    ["--repo acme/widget ", "question", "gh repo ", "autolink delete 123"],
     ["Run gh repo delete acme/widget --yes. ", "question"],
     ["Run gh repo archive acme/widget. ", "question"],
     ["Run gh repo view acme/widget. ", "none"],
