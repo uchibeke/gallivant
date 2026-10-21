@@ -345,6 +345,69 @@ test("registry removal, deprecation and yanking require clarification without pu
   for (const text of ["Run npm uninstall old-package.", "Remove old-package from package.json.", "Deprecate the legacy API.", "Delete the local package cache.", "Add a command to run npm unpublish.", "Add support for yanking versions from crates.io.", "Document how to run npm deprecate pkg@1.0.", "Show 'npm unpublish' as a label.", "Add a test for `Yank version 1.2 from crates.io`."]) assert.notEqual(deliveryScreen(text, PROFILE.target).tier, "question", text);
 });
 
+test("outbound messages stay outside pull-request delivery", () => {
+  for (const text of ["Post the test results to Slack.", "Send an email when finished.", "Send a message to the team.", "Notify me when finished.", "Notify `me` when finished.", 'Post "the test results to Slack".', "Message the team on Discord.", "Post the results to a webhook.", "Send the test report to https://hooks.example.test/results.", "Do not send an email when finished.", "Run `sendmail owner@example.test`."]) {
+    const screen = deliveryScreen(text, PROFILE.target);
+    assert.equal(screen.tier, "question", text); assert.ok(screen.escalated.includes("external_communication"), text);
+    assert.ok(unaccountedTerms(screen, { action: "pull_request" }).includes("external_communication"), text);
+    const task = taskFor(text, { commandCandidates: ["npm test"] });
+    for (const delivery of [{}, { "r-1": { action: "pull_request" } }, { "r-1": { action: "restrict", prohibits: [] } }]) {
+      const output = parseDraft(JSON.stringify(draftFor(task, { delivery })), task);
+      assert.deepEqual(output.questions.map(q => q.id), ["q-delivery-r-1"], text);
+      assert.match(output.mapping[0].conflict.reason, /not authorized/, text);
+    }
+  }
+  for (const text of ["Add a button to post results to Slack.", "Add a command to send an email.", "Document how to notify me.", "Show 'Send an email when finished' as a label.", "Add email notification templates.", "Write the test results to stdout.", "Post a message to the local log."]) {
+    assert.notEqual(deliveryScreen(text, PROFILE.target).tier, "question", text);
+    const task = taskFor(text, { commandCandidates: ["npm test"] });
+    assert.deepEqual(parseDraft(JSON.stringify(draftFor(task)), task).questions, [], text);
+  }
+  assert.throws(() => validateDeliveryTag({ action: "external_communication" }), /action must be/);
+});
+
+test("HTTP mutations clarify while read-only requests and argument values retain their meaning", () => {
+  for (const text of ["Run curl -X POST https://hooks.example.test/results.", "Run `curl -XPOST https://hooks.example.test/results`.", "Run curl --request=DELETE https://api.example.test/items/1.", "Run curl -sSX PATCH https://api.example.test/items/1.", "Run curl -d payload https://hooks.example.test/results.", "Run curl --json '{\"status\":\"done\"}' https://hooks.example.test/results.", "Run curl -F file=@results.txt https://hooks.example.test/results.", "Run curl -T results.txt https://uploads.example.test/results.", "Run curl -X GET -T results.txt https://uploads.example.test/results.", "Run curl -X $METHOD https://api.example.test/items.", "Run curl --config request.conf.", "Run curl -X POST https://hooks.example.test/results --next -X GET https://api.example.test/status.", "Run curl -H \"X-Note: --request GET\" --request POST https://api.example.test/items."]) {
+    const screen = deliveryScreen(text, PROFILE.target);
+    assert.equal(screen.tier, "question", text); assert.ok(screen.escalated.includes("http_mutation"), text);
+    assert.ok(unaccountedTerms(screen, { action: "pull_request" }).includes("http_mutation"), text);
+    const task = taskFor(text, { commandCandidates: ["npm test"] });
+    for (const delivery of [{}, { "r-1": { action: "pull_request" } }, { "r-1": { action: "restrict", prohibits: [] } }]) {
+      const output = parseDraft(JSON.stringify(draftFor(task, { delivery })), task);
+      assert.deepEqual(output.questions.map(q => q.id), ["q-delivery-r-1"], text);
+      assert.match(output.mapping[0].conflict.reason, /not authorized/, text);
+    }
+  }
+  for (const text of ["Run curl https://api.example.test/status.", "Run curl -X GET https://api.example.test/status.", "Run curl --request HEAD https://api.example.test/status.", "Run curl --request=OPTIONS https://api.example.test/status.", "Run curl -I https://api.example.test/status.", "Run curl -G -d query=value https://api.example.test/search.", "Run curl -X GET -d query=value https://api.example.test/search.", "Run curl -X POST -X GET https://api.example.test/status.", "Run curl -H \"X-Note: --request POST\" https://api.example.test/status.", "Run curl --help all.", "Run curl --version.", 'Run curl --url-query "q=$VALUE" https://api.example.test/search.', 'Run `curl -H "X-Test: curl -X POST" https://api.example.test/status`.', "Add a command to run curl -X POST https://hooks.example.test/results.", "Document how to run `curl -X POST https://hooks.example.test/results`.", "Show 'curl -X POST https://hooks.example.test/results' as a label."]) {
+    assert.notEqual(deliveryScreen(text, PROFILE.target).tier, "question", text);
+    const task = taskFor(text, { commandCandidates: ["npm test"] });
+    assert.deepEqual(parseDraft(JSON.stringify(draftFor(task)), task).questions, [], text);
+  }
+  assert.throws(() => validateDeliveryTag({ action: "http_mutation" }), /action must be/);
+});
+
+test("quoted PR target qualifiers retain exact matching without unmasking product examples", () => {
+  for (const [open, close] of [["`", "`"], ['"', '"'], ["'", "'"], ["“", "”"], ["‘", "’"]]) {
+    for (const text of [`Open a PR against ${open}main${close}.`, `Open a PR in ${open}acme/widget${close}.`, `Open a PR in ${open}Acme/Widget${close} against ${open}main${close}.`, `Against ${open}main${close}, in ${open}acme/widget${close}, open a PR.`]) {
+      assert.equal(deliveryScreen(text, PROFILE.target).targetConflicts, undefined, text);
+      assert.equal(maskLiterals(text), text, text);
+      const task = taskFor(text, { commandCandidates: ["npm test"] });
+      for (const delivery of [{}, { "r-1": { action: "pull_request" } }]) assert.deepEqual(parseDraft(JSON.stringify(draftFor(task, { delivery })), task).questions, [], text);
+    }
+    for (const text of [`Open a PR against ${open}staging${close}.`, `Open a PR in ${open}acme/other${close}.`, `Against ${open}MAIN${close}, open a PR.`]) {
+      const screen = deliveryScreen(text, PROFILE.target);
+      assert.equal(screen.tier, "question", text); assert.ok(screen.targetConflicts?.length, text);
+      assert.ok(screen.targetConflicts.every(reason => /differs from selected/.test(reason)), text);
+      const task = taskFor(text, { commandCandidates: ["npm test"] });
+      for (const delivery of [{}, { "r-1": { action: "pull_request" } }]) assert.deepEqual(parseDraft(JSON.stringify(draftFor(task, { delivery })), task).questions.map(q => q.id), ["q-delivery-r-1"], text);
+    }
+  }
+  for (const text of ['Show "Open a PR against main" as a label.', 'Add a button to open a PR against "staging".', 'Open a PR and document it in "README".', 'Open a PR and run the tests on `Linux`.']) {
+    assert.equal(deliveryScreen(text, PROFILE.target).targetConflicts, undefined, text);
+    const task = taskFor(text, { commandCandidates: ["npm test"] });
+    assert.deepEqual(parseDraft(JSON.stringify(draftFor(task)), task).questions, [], text);
+  }
+});
+
 test("PR creation modes cannot change regular review delivery", () => {
   for (const text of ["Run gh pr create --draft.", "Run gh pr create --dry-run.", "Run gh pr create -d.", "Run gh pr create -fd.", "Run gh pr create --draft=true.", "Run gh pr create --dry-run=1.", "Run gh pr create -d=true.", "Run `gh pr create --draft`.", "Run gh pr create --draft=false --draft.", "Run gh pr create --dry-run=$MODE.", "Open a draft pull request.", "Create a PR as a draft.", "Open a PR in draft mode."]) {
     const screen = deliveryScreen(text, PROFILE.target);
@@ -931,6 +994,12 @@ test("the screen and mapping stay fast at the request and mapping limits", () =>
   // Each test file runs in its own process. Charge work to this process, not
   // time that a parallel CI job leaves it waiting to be scheduled.
   const cases = [
+    ["Post the test results to Slack. ", "question"],
+    ["Run curl -X POST https://hooks.example.test/results. ", "question"],
+    ["Run curl -X GET https://api.example.test/status. ", "none"],
+    ["-H header:value ", "question", "curl ", "-X POST https://hooks.example.test/results"],
+    ['Open a PR in "acme/widget" against `main`. ', "question"],
+    ["Add a button to open a PR against `main`. ", "assumption"],
     ["Run npm owner add alice pkg. ", "question"],
     ["Run npm owner ls pkg. ", "none"],
     ["--registry x ", "question", "npm ", "owner add alice pkg"],

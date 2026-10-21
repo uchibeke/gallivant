@@ -89,6 +89,10 @@ quoted values and repeated flags. Title/body values and later commands cannot
 supply a target flag. Missing, dynamic or ambiguous target arguments clarify;
 matching explicit targets retain the normal PR reading. These arguments never
 select or expand the saved target.
+Quoted target values stay visible only when attached to a PR target qualifier,
+including paired repository/base values and leading qualifiers. Matching quoted
+values keep the ordinary PR reading; mismatches retain the exact named target.
+Other quoted examples and unrelated prepositional phrases remain product text.
 Draft and dry-run PR creation modes (`--draft`/`-d`, `--dry-run`) remain
 `pull_request_mode` conflicts: this profile creates a regular review PR. Explicit false boolean flags, title/body argument values,
 read-only help for registry commands, product features and literal examples
@@ -152,6 +156,15 @@ The screen grants nothing:
   `npm owner` (add/remove), and `npm dist-tag` (add/remove) require clarification.
   List/get forms and help remain read-only. The quote-aware command argument
   reader keeps option values and later commands from supplying a write verb.
+- Outbound messages (email, Slack, chat and webhook instructions) are unsupported
+  external communications. Mutating `curl` calls, including explicit methods,
+  data/form/JSON bodies and file uploads, require clarification. Read-only
+  GET/HEAD/OPTIONS/TRACE requests and GET query options retain their meaning;
+  explicit methods and `--next` transfer boundaries are respected. Configuration
+  files or unresolved methods cannot silently choose a write. Header/body option
+  values, read-only help, local logging, product features and literal examples
+  do not become separate communication instructions. These screens never send
+  a message or issue a network request.
 - Hosted registry names and host destinations use the same publication
   restriction: GitHub Packages/GHCR, GitLab registries, cloud artifact registries
   and explicit registry hosts, including schemes, ports and artifact paths.

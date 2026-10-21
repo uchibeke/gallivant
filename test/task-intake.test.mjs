@@ -4602,6 +4602,15 @@ test("anaphoric delivery replies cannot be resolved by empty or ungrounded plann
 
 test("target, publication, approval and mixed-polarity conflicts survive answer chains without dispatch", async () => {
   for (const [text, tag] of [
+    ["Post the test results to Slack.", { action: "pull_request" }],
+    ["Send an email when finished.", { action: "pull_request" }],
+    ["Notify me when finished.", { action: "pull_request" }],
+    ["Run curl -X POST https://hooks.example.test/results.", { action: "pull_request" }],
+    ["Run `curl -d payload https://hooks.example.test/results`.", { action: "pull_request" }],
+    ["Run curl --request DELETE https://api.example.test/items/1.", { action: "pull_request" }],
+    ["Run curl -X $METHOD https://api.example.test/items.", { action: "pull_request" }],
+    ["Open a PR against `staging`.", { action: "pull_request" }],
+    ["Open a PR in \"acme/other\".", { action: "pull_request" }],
     ["Run gh pr create --draft.", { action: "pull_request" }],
     ["Run gh pr create --dry-run.", { action: "pull_request" }],
     ["Run gh pr create -d.", { action: "pull_request" }],
@@ -4662,7 +4671,7 @@ test("target, publication, approval and mixed-polarity conflicts survive answer 
     ["Do not merge, but deploy this to production.", { action: "restrict", prohibits: ["merge", "deploy"] }],
     ["Do not deploy; deploy this to production.", { action: "restrict", prohibits: ["deploy"] }],
   ]) {
-    const clear = "Open a pull request for review, run the tests on Linux and document export in docs/README.md.";
+    const clear = 'Open a pull request in "acme/widget" against `main` for review, run the tests on Linux and document export in docs/README.md.';
     const w = world({ prepare: async (_ctx, task) => JSON.stringify(draftFor(task, { delivery: Object.fromEntries(task.requirements.map(r => [r.id, r.text === clear ? { action: "pull_request" } : r.id === "r-1" ? { action: "merge" } : tag])) })) });
     const first = await w.service.prepare({ text: "Implement export and merge the PR.", run: true });
     const answered = await w.service.answer({ taskId: first.taskId, expectedRevision: first.revision, operationId: "insist-on-conflict", answers: { "q-delivery-r-1": text } });
