@@ -4687,6 +4687,11 @@ test("anaphoric delivery replies cannot be resolved by empty or ungrounded plann
 
 test("target, publication, approval and mixed-polarity conflicts survive answer chains without dispatch", async () => {
   for (const [text, tag] of [
+    ["Run gh gist create --public report.txt.", { action: "pull_request" }],
+    ["Run gh gist new report.txt.", { action: "pull_request" }],
+    ["Run gh gist edit abcd --add report.txt.", { action: "pull_request" }],
+    ["Run gh gist delete abcd --yes.", { action: "pull_request" }],
+    ["Run gh gist rename abcd old.txt new.txt.", { action: "pull_request" }],
     ["Run gh label create urgent.", { action: "pull_request" }],
     ["Run gh label edit urgent --name critical.", { action: "pull_request" }],
     ["Run gh label delete urgent --yes.", { action: "pull_request" }],

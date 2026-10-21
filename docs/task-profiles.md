@@ -156,6 +156,13 @@ The screen grants nothing:
   prohibition tag is granted. Read-only issue commands, issue templates,
   product features and literal examples retain their implementation meaning.
   Command coverage follows the [GitHub CLI issue commands](https://cli.github.com/manual/gh_issue).
+- Gist creation, editing, deletion and file renaming are unsupported external
+  mutations, including `gh gist create`/`new`, `edit`, `delete` and `rename`.
+  Both secret and public gists write account-owned content and require
+  clarification with omitted or covered PR tags; no gist action/prohibition
+  authority is granted. The shared command reader preserves option values,
+  read-only list/view/help and local gist cloning. Product viewers, feature
+  requests and literal examples retain their ordinary meaning.
 - Repository label creation, editing, deletion and cloning are unsupported
   external mutations. Canonical `gh label` writes and explicit GitHub/repository
   label instructions require clarification under omitted or covered PR tags.
