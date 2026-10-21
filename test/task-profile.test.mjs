@@ -154,6 +154,121 @@ test("the delivery screen is deterministic over the fixture corpus and masks lit
   assert.equal(unrelated.tier, "assumption"); assert.deepEqual(unrelated.controlled, []); assert.ok(unrelated.controls.length, "the control word is still recorded for the review");
 });
 
+test("release product nouns and read-only commands do not request external release authority", () => {
+  const features = [
+    "Improve the release workflow.",
+    "Refactor release metadata parsing.",
+    "Create a GitHub release metadata parser.",
+    "Add an API to edit GitHub release notes.",
+
+    "Add a release notes page.",
+    "Display the latest release version.",
+    "Parse GitHub release metadata.",
+    "Add a release status badge.",
+    "Create a release notes page.",
+    "Update release notes.",
+    "Create a release viewer.",
+    "Display the latest release.",
+    "List releases in a table.",
+    "Add a table of releases.",
+    "Add a command to release the package.",
+    "Add support for releasing builds.",
+    "Document how to release the package.",
+    "Show released products.",
+    "The latest release version must be displayed.",
+    "Do not alter release notes.",
+    "Release notes must include a timestamp.",
+    "Release memory after parsing.",
+    "Release the mutex.",
+    "Run cargo build --release.",
+    "Show \"Release the package\" as a label."
+];
+  const reads = [
+    "Run gh release list.",
+    "Run gh release view v1.2.",
+    "Run gh release download v1.2.",
+    "Run gh release verify v1.2.",
+    "Run gh release verify-asset v1.2 app.zip.",
+    "Run gh release --repo \"create\" list.",
+    "Run gh release view v1.2 --template \"Release the package\".",
+    "Run `gh release view v1.2 --template \"Create a GitHub release\"`.",
+    "Run gh release list and echo create.",
+    "Run gh release --help.",
+    "Run gh release create --help.",
+    "Run gh release delete --help.",
+    "Run gh release edit --help.",
+    "Run gh release upload --help.",
+    "Run gh release delete-asset --help.",
+    "Add a command to run gh release create v1.2.",
+    "Document how to run `gh release delete v1.2`."
+];
+  const writes = [
+    "Finish by submitting files to the GitHub release.",
+    "Update the GitHub release notes.",
+    "Edit GitHub release metadata.",
+
+    "Release the package.",
+    "Please release version 1.2.",
+    "Implement export and release the build.",
+    "Release it after tests pass.",
+    "The package must be released.",
+    "Get the package released.",
+    "Create a GitHub release.",
+    "Cut a new release.",
+    "Draft a release.",
+    "Delete the latest release.",
+    "The release must be published.",
+    "Upload build.zip to the release.",
+    "Release notes to customers.",
+    "Run gh release create v1.2.",
+    "Run gh release create v1.2 --draft.",
+    "Run gh release edit v1.2 --draft=false.",
+    "Run gh release delete v1.2 --yes.",
+    "Run gh release delete-asset v1.2 app.zip --yes.",
+    "Run gh release upload v1.2 app.zip --clobber.",
+    "Run `gh release create v1.2 --notes \"release notes\"`.",
+    "Run gh release --repo \"acme/widget\" create v1.2.",
+    "Run gh release create v1.2 --title \"--help\".",
+    "Run gh release create v1.2 --notes-file=--help.",
+    "Run gh release create v1.2 --help=false.",
+    "Run gh release $ACTION v1.2."
+];
+  const restrictions = [
+    "Do not release the package.",
+    "No new release.",
+    "The release is mine to do.",
+    "The release is forbidden."
+];
+  for (const text of [...features, ...reads]) {
+    const screen = deliveryScreen(text, PROFILE.target);
+    assert.equal(screen.terms.includes("release"), false, text); assert.notEqual(screen.tier, "question", text);
+    const task = taskFor(text, { commandCandidates: ["npm test"] });
+    for (const delivery of [{}, { "r-1": { action: "pull_request" } }]) {
+      const out = parseDraft(JSON.stringify(draftFor(task, { delivery })), task);
+      assert.deepEqual(out.questions, [], text); assert.equal(task.requirements[0].text, text);
+    }
+  }
+  for (const text of writes) {
+    const screen = deliveryScreen(text, PROFILE.target);
+    assert.ok(screen.escalated.includes("release"), text); assert.ok(unaccountedTerms(screen, { action: "pull_request" }).includes("release"), text);
+    const task = taskFor(text, { commandCandidates: ["npm test"] });
+    for (const delivery of [{}, { "r-1": { action: "pull_request" } }]) assert.deepEqual(parseDraft(JSON.stringify(draftFor(task, { delivery })), task).questions.map(q => q.id), ["q-delivery-r-1"], text);
+  }
+  for (const text of restrictions) {
+    const screen = deliveryScreen(text, PROFILE.target);
+    assert.ok(screen.controlled.includes("release"), text);
+    assert.deepEqual(unaccountedTerms(screen, { action: "restrict", prohibits: ["release"] }), [], text);
+    const task = taskFor(text, { commandCandidates: ["npm test"] });
+    assert.deepEqual(parseDraft(JSON.stringify(draftFor(task, { delivery: { "r-1": { action: "restrict", prohibits: ["release"] } } })), task).questions, [], text);
+  }
+  const mixed = taskFor("Add a release notes page. Release the package.", { commandCandidates: ["npm test"] });
+  assert.deepEqual(parseDraft(JSON.stringify(draftFor(mixed)), mixed).questions.map(q => q.id), ["q-delivery-r-2"]);
+  const controlled = deliveryScreen("Add release notes and do not release the package.", PROFILE.target);
+  assert.ok(controlled.controlled.includes("release"));
+  const separate = deliveryScreen("Display the latest release and do not merge.", PROFILE.target);
+  assert.equal(separate.terms.includes("release"), false); assert.ok(separate.controlled.includes("merge"));
+});
+
 test("conversational owner confirmations remain approval gates", () => {
   for (const text of ["Check with me before opening a pull request.", "Ask me before opening a PR.", "Get my go-ahead before opening the pull request.", "Confirm with us before opening a PR.", "Consult me before opening the PR.", "Get my confirmation before opening a PR.", "Open a PR once you have my go ahead.", 'Get my `go-ahead` before opening a PR.', "Check with ‘me’ before opening a PR."]) {
     const screen = deliveryScreen(text, PROFILE.target);
@@ -1489,6 +1604,10 @@ test("the screen and mapping stay fast at the request and mapping limits", () =>
     ["Run gh pr create --head staging. ", "question"],
     ["--title x ", "question", "gh pr create ", "--head attacker:feature"],
     ['--title "--head staging" ', "assumption", "gh pr create ", "--title normal"],
+    ["Add a release notes page. ", "none"],
+    ["Release the package. ", "question"],
+    ["Run gh release view v1.2. ", "none"],
+    ["--title x ", "question", "gh release create v1.2 ", "--draft"],
     ["Run gh codespace create -R acme/widget. ", "question"],
     ["Run gh codespace list. ", "none"],
     ["--display-name x ", "question", "gh codespace create ", "--repo acme/widget"],

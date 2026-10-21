@@ -76,6 +76,16 @@ test("implementation lifecycle nouns reach ordinary preparation without changing
   assert.equal(calls, 5);
 });
 
+test("release product features reach readiness without unrelated delivery questions or dispatch", async () => {
+  for (const text of ["Add a release notes page.", "Display the latest release version.", "Parse GitHub release metadata.", "Do not alter release notes.", "Run gh release list."]) {
+    const w = world(), prepared = await w.service.prepare({ text, run: true });
+    assert.equal(prepared.status, "ready", prepared.failures.join("\n")); assert.deepEqual(prepared.questions, []);
+    assert.deepEqual(prepared.requirements, fragments(text)); assert.equal(prepared.review.requirementMap[0].target.kind, "criteria");
+    assert.ok(prepared.draft.text.includes(text)); assert.equal(prepared.approval, null);
+    assert.deepEqual(w.ctx.state.entries(), []); assert.equal(w.runners.size, 0); assert.equal(w.daemonCalls(), 0);
+  }
+});
+
 test("quoted delivery examples and ordinary product vocabulary remain implementation requirements", async () => {
   for (const text of ['Document "Keep the change local", "Do not push" and `Return a patch only`.',
     "Implement branch sorting. Update the patch renderer. Cache local timezone offsets."]) {
@@ -4687,6 +4697,9 @@ test("anaphoric delivery replies cannot be resolved by empty or ungrounded plann
 
 test("target, publication, approval and mixed-polarity conflicts survive answer chains without dispatch", async () => {
   for (const [text, tag] of [
+    ["Release the package.", { action: "pull_request" }],
+    ["Run gh release create v1.2 --draft.", { action: "pull_request" }],
+    ["Run gh release upload v1.2 app.zip.", { action: "pull_request" }],
     ["Run gh codespace create -R acme/widget.", { action: "pull_request" }],
     ["Run gh codespace delete --all.", { action: "pull_request" }],
     ["Run gh cs stop -c dev.", { action: "pull_request" }],
@@ -4805,7 +4818,7 @@ test("target, publication, approval and mixed-polarity conflicts survive answer 
     const conflictId = text === "Do not deploy; deploy this to production." ? "q-delivery-a-q-delivery-r-1-2" : "q-delivery-a-q-delivery-r-1-1";
     assert.deepEqual(answered.questions.map(q => q.id), [conflictId], text);
     assert.ok(answered.review.requirementMap.find(m => `q-delivery-${m.requirementId}` === conflictId).conflict.reason, text);
-    if (text.includes("--draft") || text.includes("--dry-run") || text.includes("create -d") || text === "Open a draft pull request.") assert.match(answered.review.requirementMap.find(m => m.requirementId === "a-q-delivery-r-1-1").conflict.reason, /regular review PR/, text);
+    if ((text.startsWith("Run gh pr create ") && (text.includes("--draft") || text.includes("--dry-run") || text.includes("create -d"))) || text === "Open a draft pull request.") assert.match(answered.review.requirementMap.find(m => m.requirementId === "a-q-delivery-r-1-1").conflict.reason, /regular review PR/, text);
     assert.equal(taskStore(w.home).read(first.taskId).runAuthorized, false);
     assert.deepEqual(w.ctx.state.entries(), []); assert.equal(w.daemonCalls(), 0);
     await assert.rejects(w.service.start({ taskId: first.taskId, expectedRevision: answered.revision, run: true }), { code: "TASK_NOT_READY" });

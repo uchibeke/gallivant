@@ -171,6 +171,13 @@ The screen grants nothing:
   prohibition tag is granted. Read-only issue commands, issue templates,
   product features and literal examples retain their implementation meaning.
   Command coverage follows the [GitHub CLI issue commands](https://cli.github.com/manual/gh_issue).
+- Release actions retain their unsupported delivery effect; product nouns such
+  as release notes, versions and metadata do not request that effect. Actual
+  release/publish lifecycle instructions, release asset writes and canonical
+  `gh release` mutations still require clarification. The shared command reader
+  keeps read-only release commands, option values and templates as data.
+  Feature infinitives, local resource release, and release-named refs/flags
+  retain implementation scope; explicit release prohibitions remain traceable.
 - Codespace creation, deletion, stopping, rebuilding and editing are unsupported
   external effects. Canonical `gh codespace`/`gh cs` writes and imperative
   Codespace lifecycle prose require clarification under omitted or covered PR
