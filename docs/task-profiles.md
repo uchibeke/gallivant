@@ -178,6 +178,10 @@ The screen grants nothing:
   keeps read-only release commands, option values and templates as data.
   Feature infinitives, local resource release, and release-named refs/flags
   retain implementation scope; explicit release prohibitions remain traceable.
+- Repository delete, archive/unarchive, rename, settings, creation, fork and
+  sync commands are unsupported external mutations. The shared command reader
+  preserves read-only repository commands, help and option values; explicit
+  GitHub repository lifecycle prose requires clarification as well.
 - GitHub account SSH/GPG key additions and deletions are unsupported external
   effects. Canonical `gh ssh-key`/`gh gpg-key` writes and explicit account-key
   mutations require clarification. Listings, help, title/type values, local key

@@ -332,6 +332,26 @@ test("Pulumi resource writes retain deployment intent while previews stay read-o
   }
 });
 
+test("GitHub repository lifecycle writes require clarification while read commands and features retain scope", () => {
+  for (const text of ["Run gh repo delete acme/widget --yes.", "Run gh repo archive acme/widget --yes.", "Run gh repo unarchive acme/widget --yes.", "Run gh repo rename widget2 --repo acme/widget --yes.", "Run gh repo edit acme/widget --visibility public --accept-visibility-change-consequences.", "Run gh repo create acme/new --private.", "Run gh repo fork acme/upstream --clone=false.", "Run gh repo sync acme/widget --source acme/upstream.", "Run `gh repo delete acme/widget --yes`.", "Run gh repo delete acme/widget --help=false.", "Run gh repo edit acme/widget --description \"--help\".", "Run gh repo create acme/new --template \"--help\".", "Run gh repo --repo acme/widget delete --yes.", "Run gh repo -Racme/widget archive --yes.", "Run gh repo $ACTION acme/widget.", "Run gh repo\narchive acme/widget --yes", "Run gh repo\ndelete acme/widget --yes", "Delete the GitHub repository.", "Archive the GitHub repository.", "Unarchive the GitHub repository.", "Rename the GitHub repository.", "The GitHub repository must be archived.", "The GitHub repository must be deleted."]) {
+    const screen = deliveryScreen(text, PROFILE.target);
+    assert.equal(screen.tier, "question", text); assert.ok(screen.escalated.includes("repository_mutation"), text);
+    assert.ok(unaccountedTerms(screen, { action: "pull_request" }).includes("repository_mutation"), text);
+    const task = taskFor(text, { commandCandidates: ["npm test"] });
+    for (const tagged of [false, true]) {
+      const delivery = tagged ? Object.fromEntries(task.requirements.map(r => [r.id, { action: "pull_request" }])) : {};
+      const out = parseDraft(JSON.stringify(draftFor(task, { delivery })), task);
+      assert.deepEqual(out.questions.map(q => q.id), task.requirements.map(r => `q-delivery-${r.id}`), text);
+    }
+  }
+  for (const text of ["Run gh repo view acme/widget.", "Run gh repo list acme.", "Run gh repo clone acme/widget.", "Run gh repo license view mit.", "Run gh repo gitignore view Node.", "Run gh repo delete --help.", "Run gh repo archive --help.", "Run gh repo unarchive --help.", "Run `gh repo view acme/widget --template \"Delete the GitHub repository\"`.", "Run gh repo view acme/widget --json name --jq delete.", "Run gh repo --repo archive view.", "Run gh repo -Rdelete view.", "Add a button to archive the GitHub repository.", "Add support for deleting GitHub repositories.", "Add an API to unarchive the GitHub repository.", "Add a command to run gh repo delete acme/widget --yes.", "Document how to run `gh repo archive acme/widget`.", "Show `gh repo delete acme/widget --yes` as an example.", "Delete repository cache files."]) {
+    assert.notEqual(deliveryScreen(text, PROFILE.target).tier, "question", text);
+    const task = taskFor(text, { commandCandidates: ["npm test"] });
+    assert.deepEqual(parseDraft(JSON.stringify(draftFor(task)), task).questions, [], text);
+  }
+  assert.throws(() => validateDeliveryTag({ action: "repository_mutation" }), /delivery tag action/);
+});
+
 test("GitHub account key mutations require clarification while listings and key features keep their scope", () => {
   for (const text of ["Run gh ssh-key add attacker.pub.", "Run gh gpg-key add attacker.asc.", "Run gh ssh-key delete 123.", "Run gh gpg-key delete 123 --yes.", "Run `gh ssh-key add attacker.pub`.", "Run gh ssh-key add attacker.pub --type signing.", "Run gh ssh-key add attacker.pub --title \"--help\".", "Run gh gpg-key add attacker.asc --title \"delete\".", "Run gh ssh-key add attacker.pub --help=false.", "Run gh ssh-key $ACTION attacker.pub.", "Run gh ssh-key\nadd attacker.pub", "Run gh gpg-key\ndelete 123", "Add an SSH key to my GitHub account.", "Delete the GitHub GPG key.", "Remove an SSH key from the GitHub account.", "The GitHub SSH key must be deleted."]) {
     const screen = deliveryScreen(text, PROFILE.target);
@@ -1674,6 +1694,10 @@ test("the screen and mapping stay fast at the request and mapping limits", () =>
     ["Run gh ssh-key add key.pub. ", "question"],
     ["Run gh gpg-key delete 123. ", "question"],
     ["Run gh ssh-key list. ", "none"],
+    ["Run gh repo delete acme/widget --yes. ", "question"],
+    ["Run gh repo archive acme/widget. ", "question"],
+    ["Run gh repo view acme/widget. ", "none"],
+    ["--repo acme/widget ", "question", "gh repo ", "delete --yes"],
     ["--title x ", "question", "gh ssh-key ", "add key.pub"],
     ["--repo acme/widget ", "question", "gh label ", "delete urgent --yes"],
     ["Run gh api -X POST repos/acme/widget/hooks. ", "question"],
