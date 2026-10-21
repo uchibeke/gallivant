@@ -164,7 +164,12 @@ The screen grants nothing:
   files or unresolved methods cannot silently choose a write. Header/body option
   values, read-only help, local logging, product features and literal examples
   do not become separate communication instructions. These screens never send
-  a message or issue a network request.
+  a message or issue a network request. Authenticated `gh api` writes use the
+  same HTTP conflict: explicit mutating methods and implicit POST from
+  field/input flags cannot use PR authority. Explicit GET overrides retain query
+  semantics, including field values; method, header, payload and output option
+  values stay atomic. Unknown modes require clarification. See the
+  [GitHub CLI API reference](https://cli.github.com/manual/gh_api).
 - Hosted registry names and host destinations use the same publication
   restriction: GitHub Packages/GHCR, GitLab registries, cloud artifact registries
   and explicit registry hosts, including schemes, ports and artifact paths.
@@ -207,7 +212,11 @@ The screen grants nothing:
   [kubectl apply](https://kubernetes.io/docs/reference/kubectl/generated/kubectl_apply/)
   and [Pulumi up](https://www.pulumi.com/docs/iac/cli/commands/pulumi_up/).
 - Pushing tags, Git notes, all/mirrored refs, deleting remote refs or naming
-  another destination ref is a `direct_push` conflict. A task-branch push such
+  another destination ref is a `direct_push` conflict. A base named before
+  the remote ("push main to origin", "push the main branch to origin") has the
+  same restriction, including literal selected-base names and reversed named
+  branch wording. Descriptive task/feature branches retain their ordinary
+  reading. A task-branch push such
   as `git push -u origin HEAD` keeps the profile's normal reading. Product
   commands and literal examples retain their feature meaning.
 - Closing, reopening, editing, locking or changing the state of an existing

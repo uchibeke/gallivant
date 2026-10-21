@@ -415,6 +415,45 @@ test("HTTP mutations clarify while read-only requests and argument values retain
   assert.throws(() => validateDeliveryTag({ action: "http_mutation" }), /action must be/);
 });
 
+test("authenticated API writes cannot use PR delivery authority", () => {
+  for (const text of ["Run gh api -X POST repos/acme/widget/hooks.", "Run gh api --method=DELETE repos/acme/widget/hooks/1.", "Run `gh api -XPOST repos/acme/widget/hooks`.", "Run gh api -iX PATCH repos/acme/widget.", "Run gh api repos/acme/widget/hooks -f name=web.", "Run gh api repos/acme/widget/hooks --raw-field=name=web.", "Run gh api repos/acme/widget/hooks -F active=true.", "Run gh api repos/acme/widget/hooks --field=active=true.", "Run gh api repos/acme/widget/hooks --input payload.json.", "Run gh api repos/acme/widget/hooks --input=-.", "Run gh api -X $METHOD repos/acme/widget/hooks.", "Run gh api --method GET --method POST repos/acme/widget/hooks.", "Run gh api -H \"X-Note: --method GET\" -X POST repos/acme/widget/hooks.", "Run gh api --unknown \"--help\" -X POST repos/acme/widget/hooks.", "Run gh api repos/acme/widget and gh api -X DELETE repos/acme/widget/hooks/1.", "Run gh api graphql -f query=\"mutation { addStar(input: {starrableId: \\\"id\\\"}) { clientMutationId } }\".", "Run gh api -X=POST repos/acme/widget/hooks.", "Run gh api --method POST repos/acme/widget/hooks --help=false.", "Run gh api repos/acme/widget/hooks --method.", "Run gh api $ARGS."]) {
+    const screen = deliveryScreen(text, PROFILE.target);
+    assert.equal(screen.tier, "question", text); assert.ok(screen.escalated.includes("http_mutation"), text);
+    assert.ok(unaccountedTerms(screen, { action: "pull_request" }).includes("http_mutation"), text);
+    const task = taskFor(text, { commandCandidates: ["npm test"] });
+    for (const delivery of [{}, { "r-1": { action: "pull_request" } }]) assert.deepEqual(parseDraft(JSON.stringify(draftFor(task, { delivery })), task).questions.map(q => q.id), ["q-delivery-r-1"], text);
+  }
+  for (const text of ["Run gh api repos/acme/widget.", "Run gh api -X GET repos/acme/widget.", "Run gh api --method=GET search/issues -f q=repo:acme/widget.", "Run gh api -F q=widget --method GET search/issues.", "Run gh api --method HEAD repos/acme/widget.", "Run gh api --method OPTIONS repos/acme/widget.", "Run gh api -X POST -X GET repos/acme/widget.", "Run gh api --method GET --input payload.json repos/acme/widget.", "Run gh api -H \"X-Note: --method POST\" repos/acme/widget.", "Run `gh api -H \"X-Note: gh api -X POST\" repos/acme/widget`.", "Run gh api --help.", "Run gh api --method POST repos/acme/widget/hooks --help.", "Add a command to run gh api -X POST repos/acme/widget/hooks.", "Document how to run `gh api -X POST repos/acme/widget/hooks`.", "Show 'gh api -X POST repos/acme/widget/hooks' as a label.", "Run gh api -X=GET repos/acme/widget.", "Run gh api -X GET --input - repos/acme/widget.", "Run gh api -X GET search/issues -f q=\"$QUERY\".", "Run gh api --cache 1h --jq \".name\" repos/acme/widget."]) {
+    assert.notEqual(deliveryScreen(text, PROFILE.target).tier, "question", text);
+    const task = taskFor(text, { commandCandidates: ["npm test"] });
+    assert.deepEqual(parseDraft(JSON.stringify(draftFor(task)), task).questions, [], text);
+  }
+});
+
+test("source-before-remote pushes retain base and non-task branch conflicts", () => {
+  for (const text of ["Push main to origin.", "Push the main branch to origin.", "Push main branch to upstream.", "Push `main` to origin.", "Push the \"main\" branch to origin.", "Push refs/heads/main to origin.", "Push main to our remote fork.", "Push the release/2.0 branch to origin."]) {
+    const screen = deliveryScreen(text, PROFILE.target);
+    assert.equal(screen.tier, "question", text); assert.ok(screen.escalated.includes("direct_push"), text);
+    assert.ok(unaccountedTerms(screen, { action: "pull_request" }).includes("direct_push"), text);
+    const task = taskFor(text, { commandCandidates: ["npm test"] });
+    for (const delivery of [{}, { "r-1": { action: "pull_request" } }]) assert.deepEqual(parseDraft(JSON.stringify(draftFor(task, { delivery })), task).questions.map(q => q.id), ["q-delivery-r-1"], text);
+  }
+  for (const text of ["Push the task branch to origin.", "Push the feature branch to origin.", "Push main2 to origin.", "Push notifications to subscribers.", "Add a command to push main to origin.", "Add support for pushing main to origin.", "Show 'Push main to origin' as a label."]) {
+    assert.notEqual(deliveryScreen(text, PROFILE.target).tier, "question", text);
+    const task = taskFor(text, { commandCandidates: ["npm test"] });
+    assert.deepEqual(parseDraft(JSON.stringify(draftFor(task)), task).questions, [], text);
+  }
+  for (const base of ["staging", "release/2.0", "feature+qualified", "MAIN"]) {
+    const profile = { ...PROFILE, target: { ...PROFILE.target, base } };
+    for (const text of [`Push ${base} to origin.`, `Push the ${base} branch to fork.`]) {
+      assert.ok(deliveryScreen(text, profile.target).escalated.includes("direct_push"), text);
+      const task = taskFor(text, { commandCandidates: ["npm test"], base, deliveryProfile: profile });
+      for (const delivery of [{}, { "r-1": { action: "pull_request" } }]) assert.deepEqual(parseDraft(JSON.stringify(draftFor(task, { delivery })), task).questions.map(q => q.id), ["q-delivery-r-1"], text);
+    }
+    assert.equal(deliveryScreen(`Push ${base}2 to origin.`, profile.target).escalated.includes("direct_push"), false, base);
+  }
+});
+
 test("quoted PR target qualifiers retain exact matching without unmasking product examples", () => {
   for (const [open, close] of [["`", "`"], ['"', '"'], ["'", "'"], ["“", "”"], ["‘", "’"]]) {
     for (const text of [`Open a PR against ${open}main${close}.`, `Open a PR in ${open}acme/widget${close}.`, `Open a PR in ${open}Acme/Widget${close} against ${open}main${close}.`, `Against ${open}main${close}, in ${open}acme/widget${close}, open a PR.`]) {
@@ -1056,6 +1095,10 @@ test("the screen and mapping stay fast at the request and mapping limits", () =>
     ["Add a button to close PRs. ", "assumption"],
     ["Ask me before opening a PR. ", "question"],
     ["Review pull request #123 and leave feedback. ", "question"],
+    ["Run gh api -X POST repos/acme/widget/hooks. ", "question"],
+    ["-H x:y ", "question", "gh api ", "-f active=true repos/acme/widget/hooks"],
+    ["Run gh api -X GET repos/acme/widget. ", "none"],
+    ["Push main to origin. ", "question"],
     ["Run aws s3 cp build.zip s3://bucket/a. ", "question"],
     ["Run aws s3 cp s3://bucket/a ./a. ", "none"],
     ["Run pulumi up. ", "question"],
