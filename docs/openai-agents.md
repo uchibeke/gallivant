@@ -85,7 +85,8 @@ entry, prepare and inspect a brief first, then follow the returned next action:
 ```sh
 gallivant task "Document the existing test commands in CONTRIBUTING.md. Change documentation only." \
   --harness openai-agents --verify 'git diff --check'
-# Add --run to authorize implementation once the brief passes readiness.
+# Review the ready draft, then substitute its returned task ID and revision:
+gallivant task start TASK_ID --revision REVISION --run
 ```
 
 Natural-language intake uses the selected provider's versioned preparation

@@ -33,8 +33,13 @@ the supported actions, so clients render those instead of their own list.
 
 ## Clauses, mappings and the delivery screen
 
-Every nonblank request line and answer line is an immutable fragment with a
-stable identifier and its exact UTF-16 span in the source text. The planner must
+New tasks split request and answer text at sentence, semicolon and newline
+boundaries outside paired quoted literals and code spans. Each material clause
+has a stable identifier and its exact UTF-16 span in the immutable source text.
+The task and review pin `fragmentVersion: 2`; saved tasks without that pin or
+with version 1 retain their original line-based references, including later
+answers. Unsupported versions remain inspectable and fail mutations closed with
+a compatible-package or new-task recovery path. The planner must
 map each fragment to generated criteria, to one explicit assumption listed in
 the brief, or to a clarification question. Unmapped fragments trigger bounded
 repair and can never validate or start.
@@ -297,10 +302,11 @@ route, draft hash, selected sources, repository snapshot and allowance:
 
 `task start --run` on the current revision records `approval` with that digest.
 Answers clear readiness and approval, so a changed material input requires a
-new review before the existing run path is callable. For typed tasks this also
-revokes a `--run` given at preparation: that consent covered the revision the
-owner saw, so an answered intake returns `ready` and needs its own
-`task start --run`. Tasks saved before typed profiles keep their documented
+new review before the existing run path is callable. Preparation never authorizes
+a new typed task, even if called with `run: true`.
+An answered intake returns `ready` and needs its own `task start --run`. A saved
+typed preparation flag without a review approval also requires that explicit
+start. Tasks saved before typed profiles keep their documented
 persisted authorization. A saved approval whose
 digest no longer matches returns `TASK_CONFLICT` instead of dispatching. The
 approved profile and approval travel into the implementation entry and are

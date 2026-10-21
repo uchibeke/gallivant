@@ -13,11 +13,11 @@ gallivant task "Explain the existing backup and restore commands in docs/operati
 ```
 
 Inspect the returned draft or answer its questions, then use its printed `Next`
-action to authorize implementation. Add `--run` to the original request when you
-want implementation to start automatically once the brief is ready. This is
-execution authorization, including after clarification answers. It is not a
-merge, deployment or release approval. To open the dashboard after dispatch,
-run `gallivant start` with no PRD path.
+action to approve that visible revision with `task start --revision <revision>
+--run`. Preparation always returns a draft or questions, including when the
+original command contains `--run`; it cannot pre-authorize an unseen draft.
+Approval grants implementation under the selected delivery profile. To open the
+dashboard after dispatch, run `gallivant start` with no PRD path.
 
 ## Supported preparation harnesses
 
@@ -321,8 +321,8 @@ a shorter corrected answer can reuse the refused operation identity. Raw whitesp
 word counts alone are insufficient because JSON quoting escapes tabs. Recovery
 settles any already-owned preparation turn and preserves usage before stopping
 oversized saved state; it launches no further planning or repair turn.
-An intake accepts at most 128 immutable requirement fragments across nonblank
-request and answer lines, matching its mapping capacity. Oversize requests stop
+An intake accepts at most 128 immutable requirement fragments across material
+request and answer clauses, matching its mapping capacity. Oversize requests stop
 before repository lookup or preparation. An answer that exceeds the remaining
 capacity is rejected before context reads or state changes; its operation ID and
 revision remain available for a corrected reply. Prepare a smaller intake if
@@ -550,20 +550,19 @@ changing their selected paths conflicts. Other CLI task operations reject
 without discoverable test commands, answer the material question and supply the
 exact repository command using `--verify 'python -m unittest'`.
 
-`--run` on preparation persists execution authorization through questions and
-answers. Once the exact generated brief and source snapshot pass readiness, the
-service starts it once and brings up the normal daemon. No second confirmation is
-needed. If the process exits after saving readiness but before dispatch, retrying
-the same preparation request or answer identity resumes that saved authorization
-through the exact approval and dispatch-ownership checks. A preparation-only
-retry still returns the draft without implementation.
-Preparation without `--run` returns the draft and an explicit next action.
-`--no-daemon` leaves monitoring to an explicitly started `gallivant up`.
+Preparation returns the draft and an explicit next action. Only a separate
+`task start --revision <revision> --run` approves its review digest and starts
+implementation through the normal daemon. Answers invalidate approval and return
+the next revision for review. After explicit approval has been saved, a crash
+retry reconciles that same approval and dispatch ownership without duplicating a
+run. A saved typed preparation flag without a review approval requires explicit
+start. Historical tasks created before typed profiles retain their saved consent.
+`--no-daemon` on start leaves monitoring to an explicitly started `gallivant up`.
 
 Readiness uses the existing PRD checker and readiness decision procedure. It proves
 contract structure, not semantic correctness or passing implementation tests.
-Review the assumptions and mapping. All nonblank request lines are immutable
-requirement fragments; their exact text is attached to mapped criteria or shown as
+Review the assumptions and mapping. Sentences, semicolon clauses and nonblank request lines outside quoted literals
+and code are immutable requirement fragments; their exact text is attached to mapped criteria or shown as
 unresolved. An explicit answer can clarify a previously questioned fragment; the
 mapping records which answer resolved it. Saved question ownership determines the
 clarification even when the planner omits `resolvedBy`. All applicable answers
@@ -593,8 +592,7 @@ new intake to establish its story ownership; no authorization is inferred from
 untrusted context. Saved validation recomputes the same owner-derived body, so an
 older draft containing planner-written executable scope cannot dispatch even if
 its recorded hash and readiness digest match. Existing owned implementation runs
-still reconcile without a duplicate launch. No extra confirmation is added to
-already authorized `--run` work.
+still reconcile without a duplicate launch. Existing revision-pinned approvals remain valid for exact crash retries.
 Each question's requirement IDs must exactly match its unresolved mappings, with
 no duplicate IDs. Saved ownership limits which fragments an answer can clarify.
 Reopening an older unanswered question proves ownership from its saved mappings;

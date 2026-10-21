@@ -10,7 +10,7 @@ import { COMPLETION_SCHEMA } from "../lib/task_completion.mjs";
 import { MAX_ANSWER_ID_CHARACTERS } from "../lib/task_limits.mjs";
 import { prepareModelTurn, isModelRouteReceipt, estimateTokens, estimateUsd } from "../lib/task_model_route.mjs";
 import { repositorySnapshot, REPOSITORY_CONTEXT_LIMITS } from "../lib/task_repository_context.mjs";
-import { fragments, parseDraft, renderDraft, draftPrompt, MAX_INPUT_BYTES } from "../lib/task_contract.mjs";
+import { fragments, parseDraft, renderDraft, draftPrompt, FRAGMENT_VERSION, fragmentsForTask, MAX_INPUT_BYTES } from "../lib/task_contract.mjs";
 import { check, parsePrd, contractOf } from "../lib/prd.mjs";
 import { validate as validateConfig, merge as mergeConfig } from "../lib/config.mjs";
 import { makeGit } from "../lib/git.mjs";
@@ -29,7 +29,7 @@ const withRoute = (task, config) => Object.assign(task, { modelRoute: pinned(con
 
 function taskFor(text, overrides = {}) {
   const requirements = fragments(text);
-  return { id: "task-" + "0".repeat(24), original: text, requirements, answers: {}, questionHistory: {}, questionMappings: {}, context: [{ path: "package.json", text: JSON.stringify({ scripts: { test: "node --test" }, packageManager: "npm@10.0.0" }), hash: "x" }], modelRoute: pinned(ROUTE),
+  return { id: "task-" + "0".repeat(24), fragmentVersion: FRAGMENT_VERSION, original: text, requirements, answers: {}, questionHistory: {}, questionMappings: {}, context: [{ path: "package.json", text: JSON.stringify({ scripts: { test: "node --test" }, packageManager: "npm@10.0.0" }), hash: "x" }], modelRoute: pinned(ROUTE),
     explicitVerifyCommands: [], attempts: [], allowance: { budgetUsd: 5, runtimeMs: 60_000 }, repo: "acme/widget", base: "main", harness: "gemini", route: "model", deliveryProfile: PROFILE, completion: { version: 1, target: "delivery_ready" }, ...overrides };
 }
 const memoryStore = () => { const saves = []; return { saves, save: task => saves.push(structuredClone(task)) }; };
@@ -720,6 +720,43 @@ test("recursive delivery question identifiers remain bounded, stable and distinc
   }
 });
 
+test("same-line material clauses can independently map to criteria assumptions and questions", () => {
+  const text = "  Implement CSV export. The proposed filename is only a suggestion; Ask which delimiter to use.  ";
+  const task = taskFor(text, { commandCandidates: ["npm test"] });
+  assert.deepEqual(task.requirements.map(r => r.text), ["Implement CSV export.", "The proposed filename is only a suggestion;", "Ask which delimiter to use."]);
+  assert.deepEqual(fragments(text), task.requirements);
+  for (const r of task.requirements) assert.equal(text.slice(r.source.start, r.source.end), r.text);
+  const draft = draftFor(task, { assumptions: { "r-2": "The filename is advisory." } });
+  draft.mapping[2] = { requirementId: "r-3", questionId: "q-delimiter" };
+  draft.questions = [{ id: "q-delimiter", text: "Which delimiter should be used?", requirements: ["r-3"] }];
+  draft.criteria = draft.criteria.slice(0, 1);
+  const out = parseDraft(JSON.stringify(draft), task), rendered = renderDraft(task, out);
+  assert.deepEqual(out.mapping.map(m => m.requirementId), ["r-1", "r-2", "r-3"]);
+  assert.deepEqual(out.mapping[0].criteria, ["ac-1"]); assert.equal(out.mapping[1].assumption, "The filename is advisory."); assert.equal(out.mapping[2].questionId, "q-delimiter");
+  for (const r of task.requirements) assert.ok(rendered.includes(JSON.stringify(r.text)));
+});
+
+test("clause spans preserve quoted code paths decimals abbreviations and UTF-16 offsets", () => {
+  const cases = [
+    ["Run `npm test`. Ask which filename to use.", ["Run `npm test`.", "Ask which filename to use."]],
+    ["  Export café 😀. Filename is advisory; Ask about delimiters?  ", ["Export café 😀.", "Filename is advisory;", "Ask about delimiters?"]],
+    ['Render "Ready. Deploy; now!" as text. Keep `npm test; npm run lint` literal.', ['Render "Ready. Deploy; now!" as text.', 'Keep `npm test; npm run lint` literal.']],
+    ["Show 'Hello. World!' and ‘One; two.’ as labels. Keep them exact.", ["Show 'Hello. World!' and ‘One; two.’ as labels.", "Keep them exact."]],
+    ["Run git -C . push origin tag v1.0. Preserve ./docs/v1.2.md and https://example.test/a. Ask Dr. Smith, e.g. for version 1.2.", ["Run git -C . push origin tag v1.0.", "Preserve ./docs/v1.2.md and https://example.test/a.", "Ask Dr. Smith, e.g. for version 1.2."]],
+    ["First clause.\r\n  Second clause; third clause!", ["First clause.", "Second clause;", "third clause!"]],
+    ['Keep `first.\nsecond;` as one example. Then test.', ['Keep `first.\nsecond;` as one example.', 'Then test.']],
+  ];
+  for (const [text, expected] of cases) {
+    const parts = fragments(text);
+    assert.deepEqual(parts.map(r => r.text), expected, text); assert.deepEqual(parts, fragments(text));
+    assert.deepEqual(parts.map(r => r.id), expected.map((_, i) => `r-${i + 1}`));
+    for (const r of parts) assert.equal(text.slice(r.source.start, r.source.end), r.text);
+    const legacy = fragmentsForTask({}, text);
+    assert.deepEqual(legacy, fragments(text, "r", "original", 1));
+    assert.throws(() => fragmentsForTask({ fragmentVersion: 999 }, text), { code: "TASK_PROFILE_UNSUPPORTED" });
+  }
+});
+
 test("fragments carry stable source spans into the immutable request and answers", () => {
   const text = "  Add export.  \r\n\n\tDo not add dependencies.\nOpen a PR.";
   const parts = fragments(text);
@@ -1133,7 +1170,7 @@ test("the screen and mapping stay fast at the request and mapping limits", () =>
 test("the vendored validator and fixture corpus are pinned byte-for-byte with their schema version", () => {
   const saved = savedContract(), current = currentContract();
   assert.deepEqual(contractDrift(), [], "run npm run contract:intake -- --write after reviewing a validator change");
-  assert.equal(saved.profileVersion, PROFILE_VERSION); assert.equal(saved.validator, "lib/task_profile.mjs");
+  assert.equal(saved.fragmentVersion, FRAGMENT_VERSION); assert.equal(saved.profileVersion, PROFILE_VERSION); assert.equal(saved.validator, "lib/task_profile.mjs");
   assert.equal(saved.files["lib/task_profile.mjs"], sha(readFileSync(new URL("../lib/task_profile.mjs", import.meta.url))));
   assert.equal(current.files["templates/plugin/task-profile-requests.mjs"], saved.files["templates/plugin/task-profile-requests.mjs"]);
   // Both pinned files live under packaged paths, so the published artifact carries the exact corpus.

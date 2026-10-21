@@ -65,14 +65,16 @@ Claude, replace `--harness codex` with `--harness claude` before running it:
 ```sh
 cd /path/to/your/repository
 gallivant task "Document how to run the existing tests in CONTRIBUTING.md. Use the commands already defined in the repository. Change documentation only." \
-  --harness codex --verify 'git diff --check' --run
+  --harness codex --verify 'git diff --check'
+# Review the draft, then substitute its returned task ID and revision:
+gallivant task start TASK_ID --revision REVISION --run
 gallivant start
 ```
 
-`task` prepares a brief and asks for missing information. `--run` authorizes
-implementation when that brief is ready, including after clarification. Omit it
-to inspect the draft first. Follow the printed `Next` action using your task's ID
-and revision. Preparation also uses inference.
+`task` prepares a brief and asks for missing information. Review the draft and
+answer any questions, then use the printed `Next` action to approve that revision
+with `task start --run`. Preparation always returns for review, even if its
+command includes `--run`. Preparation also uses inference.
 
 `gallivant start` opens **http://127.0.0.1:8791** and ensures the daemon is running.
 Without a PRD path, it does not submit another task. Closing the browser does not

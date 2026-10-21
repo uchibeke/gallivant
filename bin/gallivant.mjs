@@ -52,7 +52,7 @@ const HELP = `gallivant: give an agent a task, let the review loop run, go outsi
                 [--base <branch>] [--harness <name>] [--context <file>] [--request-id <id>] [--run] [--json]
                 [--completion-target delivery_ready|integrated] [--delivery pull_request] [--route harness|model]
                 [--verify <command>] [--no-daemon]
-                                         prepare an isolated brief; --run authorizes its exact ready revision
+                                         prepare an isolated brief for review; approve later with task start --run
                                          --delivery selects the typed delivery profile (the only delivery authority);
                                          --route drafts through the connected harness or the operator's bounded model route
                                          Claude, Codex and OpenAI Agents support isolated preparation.
@@ -61,7 +61,7 @@ const HELP = `gallivant: give an agent a task, let the review loop run, go outsi
                                          resume saved questions; --answer, --context and --verify may repeat
   gallivant task inspect <task-id> [--json] | task list [--json]
   gallivant task resume|validate|start <task-id> --revision <n> [--run] [--no-daemon] [--json]
-                                         shared versioned operations; start needs prior or --run authorization
+                                         shared versioned operations; start --run approves the reviewed revision
   gallivant ready <prd.md> [--check]     check the PRD against the contract; flip it to ready when it passes
   gallivant start [prd.md] [--no-daemon] [--no-server] [--no-open] [--port 8791] [--base <branch>]
                                          start the daemon and dashboard, then open it; optionally start a ready PRD
