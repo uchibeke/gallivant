@@ -265,6 +265,10 @@ The screen grants nothing:
   [Helm upgrade](https://docs.helm.sh/docs/helm/helm_upgrade/) and
   [kubectl apply](https://kubernetes.io/docs/reference/kubectl/generated/kubectl_apply/)
   and [Pulumi up](https://www.pulumi.com/docs/iac/cli/commands/pulumi_up/).
+- Force-push requirements (`--force`, `--force-with-lease`, short `-f`,
+  and direct force-push wording) conflict with the fixed task-branch safety
+  rule, even when the destination is `HEAD`. Known push-option values and
+  literal/product examples stay data; a PR tag cannot cover a force mode.
 - Pushing tags, Git notes, all/mirrored refs, deleting remote refs or naming
   another destination ref is a `direct_push` conflict. A base named before
   the remote ("push main to origin", "push the main branch to origin") has the

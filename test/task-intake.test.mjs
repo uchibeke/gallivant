@@ -4697,6 +4697,9 @@ test("anaphoric delivery replies cannot be resolved by empty or ungrounded plann
 
 test("target, publication, approval and mixed-polarity conflicts survive answer chains without dispatch", async () => {
   for (const [text, tag] of [
+    ["Run git push --force origin HEAD.", { action: "pull_request" }],
+    ["Run git push --force-with-lease origin HEAD.", { action: "pull_request" }],
+    ["Force-push the task branch.", { action: "pull_request" }],
     ["Release the package.", { action: "pull_request" }],
     ["Run gh release create v1.2 --draft.", { action: "pull_request" }],
     ["Run gh release upload v1.2 app.zip.", { action: "pull_request" }],
@@ -4849,7 +4852,7 @@ test("typed delivery inputs refuse merge, deployment and unknown routes before e
 });
 
 test("wrapped source and reply delivery instructions pause before readiness or dispatch", async () => {
-  for (const text of ["Do not\nopen a pull request", "Upload the package\nto npm", "Run gh workflow\nrun smoke.yml"]) {
+  for (const text of ["Do not\nopen a pull request", "Upload the package\nto npm", "Run gh workflow\nrun smoke.yml", "Run git push\n--force origin HEAD", "Run git push -u\n--force-with-lease origin HEAD"]) {
     const w = world({ prepare: async (_ctx, task) => JSON.stringify(draftFor(task, { delivery: Object.fromEntries(task.requirements.map(r => [r.id, { action: "pull_request" }])) })) });
     const first = await w.service.prepare({ text, run: true });
     assert.equal(first.status, "needs-input", text); assert.equal(first.readiness, null);

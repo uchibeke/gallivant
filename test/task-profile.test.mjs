@@ -332,6 +332,31 @@ test("Pulumi resource writes retain deployment intent while previews stay read-o
   }
 });
 
+test("force-push modes conflict with the managed task branch while option data and features keep their scope", () => {
+  const writes = ["Run git push --force origin HEAD.", "Run git push --force-with-lease origin HEAD.", "Run git push --force-with-lease=refs/heads/work:abc123 origin HEAD.", "Run git push -f origin HEAD.", "Run git push -uf origin HEAD.", "Run git push -fu origin HEAD.", "Run git push origin HEAD --force.", "Run git push --repo origin --force HEAD.", "Run git -C . push --force origin HEAD.", "Run `git push --force origin HEAD`.", "Run git push --force\norigin HEAD", "Force-push the task branch.", "Force push the changes after tests pass.", "Finish by force-pushing the task branch.", "Run git push --push-option \"--force\" --force origin HEAD.", "Run git push\n--force origin HEAD", "Run git push -u\n--force-with-lease origin HEAD"];
+  for (const text of writes) {
+    const screen = deliveryScreen(text, PROFILE.target);
+    assert.equal(screen.tier, "question", text); assert.ok(screen.escalated.includes("direct_push"), text);
+    assert.ok(unaccountedTerms(screen, { action: "pull_request" }).includes("direct_push"), text);
+    const task = taskFor(text, { commandCandidates: ["npm test"] });
+    for (const tagged of [false, true]) {
+      const delivery = tagged ? Object.fromEntries(task.requirements.map(r => [r.id, { action: "pull_request" }])) : {};
+      const out = parseDraft(JSON.stringify(draftFor(task, { delivery })), task);
+      assert.ok(out.questions.length, text); assert.deepEqual(task.requirements.map(r => text.slice(r.source.start, r.source.end)), task.requirements.map(r => r.text));
+    }
+  }
+  for (const text of ["Run git push -u origin HEAD.", "Run git push --push-option=--force origin HEAD.", "Run git push --push-option --force origin HEAD.", "Run git push -o --force origin HEAD.", "Run git push -o--force origin HEAD.", "Run git push -uo--force origin HEAD.", "Run git push --receive-pack=--force origin HEAD.", "Run git push --receive-pack --force origin HEAD.", "Add a command to run git push --force origin HEAD.", "Document how to run `git push --force origin HEAD`.", "Show `git push --force origin HEAD` as an example.", "Add support for force-pushing branches.", "Add a force-push option.", "Run `git push --push-option \"force push\" origin HEAD`.", "Run git push --push-option\n--force origin HEAD."]) {
+    assert.notEqual(deliveryScreen(text, PROFILE.target).tier, "question", text);
+    const task = taskFor(text, { commandCandidates: ["npm test"] });
+    assert.deepEqual(parseDraft(JSON.stringify(draftFor(task)), task).questions, [], text);
+  }
+  for (const text of ["Run git push --no-force origin HEAD.", "Run git push --no-force-with-lease origin HEAD."]) assert.equal(deliveryScreen(text, PROFILE.target).terms.includes("direct_push"), false, text);
+  const text = "Do not force-push the task branch.", screen = deliveryScreen(text, PROFILE.target);
+  assert.ok(screen.controlled.includes("direct_push"));
+  const task = taskFor(text, { commandCandidates: ["npm test"] });
+  assert.deepEqual(parseDraft(JSON.stringify(draftFor(task, { delivery: { "r-1": { action: "restrict", prohibits: ["direct_push"] } } })), task).questions.map(q => q.id), ["q-delivery-r-1"]);
+});
+
 test("pushes of tags and non-task refs cannot be covered by the task-branch profile", () => {
   for (const text of ["Run git push --tags.", 'Run `git push --tags`.', "Push tag v1.0 to origin.", "Push all tags to origin.", "Push the Git notes to origin.", "Push all branches to origin.", "Run git push origin --follow-tags HEAD.", "Run git push --mirror origin.", "Run git push --all origin.", "Run git push origin refs/tags/v1.0.", "Run git push origin HEAD:refs/notes/ci.", "Run git push origin +refs/heads/release:refs/heads/release.", "Run git push origin :refs/tags/v1.0.", "Run git push --delete origin old-branch.", "Run git -C . push origin tag v1.0.", "Run git push origin other-branch.", "Run git push --repo origin other-branch.", "Run git push --repo=origin other-branch.", "Run git push --repo --tags HEAD.", "Push branch release/2.0 to origin.", "Run git push origin HEAD:other-branch.", 'Push `tag v1.0` to origin.']) {
     const screen = deliveryScreen(text, PROFILE.target);
@@ -1593,6 +1618,10 @@ test("the screen and mapping stay fast at the request and mapping limits", () =>
     ["Land the PR after CI passes. ", "question"],
     ["Run git push origin HEAD. ", "assumption"],
     ["Run git push --tags. ", "question"],
+    ["Run git push --force origin HEAD. ", "question"],
+    ["Run git push\n--force origin HEAD. ", "question"],
+    ["--push-option x ", "question", "git push ", "--force-with-lease origin HEAD"],
+    ["Run git push --push-option=--force origin HEAD. ", "assumption"],
     ["Close pull request #123. ", "question"],
     ["Add a button to close PRs. ", "assumption"],
     ["Ask me before opening a PR. ", "question"],
