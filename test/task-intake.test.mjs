@@ -4602,6 +4602,11 @@ test("anaphoric delivery replies cannot be resolved by empty or ungrounded plann
 
 test("target, publication, approval and mixed-polarity conflicts survive answer chains without dispatch", async () => {
   for (const [text, tag] of [
+    ["Run aws s3 cp build.zip s3://bucket/out.zip.", { action: "pull_request" }],
+    ["Upload build.zip to S3.", { action: "pull_request" }],
+    ["Run gsutil cp build.zip gs://bucket/out.zip.", { action: "pull_request" }],
+    ["Run pulumi up.", { action: "pull_request" }],
+    ["Run pulumi destroy.", { action: "pull_request" }],
     ["Post the test results to Slack.", { action: "pull_request" }],
     ["Send an email when finished.", { action: "pull_request" }],
     ["Notify me when finished.", { action: "pull_request" }],

@@ -187,14 +187,25 @@ The screen grants nothing:
   my go-ahead" are approval gates, including quoted decision objects. A plain
   "go ahead and open a PR" retains its affirmative reading. Confirmation
   dialogs, product features and literal examples keep their product meaning.
+- Object-storage uploads and remote copies using AWS S3 cp/sync or gsutil
+  cp/rsync require clarification, as do moves that delete a remote source.
+  Prose uploads to S3 and other named object stores use the same restriction.
+  Operand direction, quoted option values and separate command boundaries are
+  preserved; download-only transfers, listing and unambiguous simulations retain
+  their read-only reading. Dynamic operands or unresolved option arity cannot
+  prove a download or dry run. See [AWS S3 transfer commands](https://docs.aws.amazon.com/cli/latest/userguide/cli-services-s3-commands.html).
 - Imperative infrastructure writes, including Terraform/OpenTofu apply/destroy,
-  Helm install/upgrade/rollback/uninstall and kubectl resource mutations, retain
+  Helm install/upgrade/rollback/uninstall, kubectl resource mutations and Pulumi
+  up/destroy/refresh/import/cancel, retain
   the existing deployment conflict. Plan/template/get commands and unambiguous
-  simulation flags keep their read-only reading. Simulation flags cannot be
+  simulation flags (including Pulumi refresh --preview-only) keep their read-only
+  reading. Pulumi preview/history/stack output do not request an update.
+  Simulation flags cannot be
   borrowed from another command or override a later mutating mode; quoted or
   ambiguous option values keep a clarification. See [Terraform CLI](https://developer.hashicorp.com/terraform/cli/commands),
   [Helm upgrade](https://docs.helm.sh/docs/helm/helm_upgrade/) and
-  [kubectl apply](https://kubernetes.io/docs/reference/kubectl/generated/kubectl_apply/).
+  [kubectl apply](https://kubernetes.io/docs/reference/kubectl/generated/kubectl_apply/)
+  and [Pulumi up](https://www.pulumi.com/docs/iac/cli/commands/pulumi_up/).
 - Pushing tags, Git notes, all/mirrored refs, deleting remote refs or naming
   another destination ref is a `direct_push` conflict. A task-branch push such
   as `git push -u origin HEAD` keeps the profile's normal reading. Product

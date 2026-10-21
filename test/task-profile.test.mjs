@@ -187,6 +187,36 @@ test("imperative infrastructure mutations retain deployment intent", () => {
   for (const text of ["Run terraform plan.", "Run helm template api ./chart.", "Run helm lint ./chart.", "Run kubectl get pods.", "Run helm upgrade api ./chart --dry-run.", "Run helm --dry-run=client upgrade api ./chart.", "Run helm upgrade api ./chart --dry-run=client --dry-run=server.", "Run kubectl apply -f app.yaml --dry-run=client.", 'Document how to run `terraform apply`.', "Add a command to run terraform apply.", "Add support for running helm upgrade.", 'Render "helm upgrade" as a label.']) assert.equal(deliveryScreen(text, PROFILE.target).escalated.includes("deploy"), false, text);
 });
 
+test("object-storage transfers clarify outbound writes while preserving downloads", () => {
+  for (const text of ["Run aws s3 cp build.zip s3://bucket/a --unknown \"--help\".", "Upload avatars to S3.", "Run aws s3 cp build.zip s3://bucket/out.zip.", "Upload build.zip to S3.", "Run aws s3 sync dist/ s3://bucket/site/ --delete.", "Run gsutil cp build.zip gs://bucket/out.zip.", "Run gsutil -m rsync -r dist/ gs://bucket/site/.", "Run `aws s3 cp \"build artifact.zip\" \"s3://bucket/out.zip\"`.", "Run aws --profile prod s3 cp --region us-east-1 build.zip s3://bucket/out.zip.", "Run aws s3 cp s3://source/a s3://target/a.", "Run aws s3 mv s3://bucket/a ./a.", "Run gsutil mv gs://bucket/a ./a.", "Run aws s3 cp build.zip \"$DEST\".", "Run aws s3 cp build.zip s3://bucket/a --dryrun=false.", "Run aws s3 cp build.zip s3://bucket/a --metadata note=--dryrun.", "Run aws s3 cp s3://bucket/a ./a and aws s3 cp ./a s3://bucket/b.", "Upload the build to `S3`.", "Sync the build to Google Cloud Storage.", "Run gsutil cp -n build.zip gs://bucket/a.", "Run aws s3 cp build.zip s3://bucket/a --metadata \"note=--help\".", "Run aws s3 cp build.zip s3://bucket/a and aws s3 cp s3://bucket/a ./a --dryrun."]) {
+    const screen = deliveryScreen(text, PROFILE.target);
+    assert.equal(screen.tier, "question", text); assert.ok(screen.escalated.includes("storage_mutation"), text);
+    assert.ok(unaccountedTerms(screen, { action: "pull_request" }).includes("storage_mutation"), text);
+    const task = taskFor(text, { commandCandidates: ["npm test"] });
+    for (const delivery of [{}, { "r-1": { action: "pull_request" } }]) assert.deepEqual(parseDraft(JSON.stringify(draftFor(task, { delivery })), task).questions.map(q => q.id), ["q-delivery-r-1"], text);
+  }
+  for (const text of ["Run aws s3 cp s3://bucket/a ./a.", "Run aws s3 sync s3://bucket/site/ ./site/ --delete.", "Run gsutil cp gs://bucket/a ./a.", "Run gsutil -m rsync -r gs://bucket/site/ ./site/.", "Run aws s3 cp s3://bucket/a -.", "Run aws s3 cp build.zip s3://bucket/a --dryrun.", "Run gsutil rsync -n -r dist/ gs://bucket/site/.", "Run aws s3 ls s3://bucket/.", "Run gsutil ls gs://bucket/.", "Run aws s3 cp --help.", "Add a button to upload build.zip to S3.", "Add a command to run aws s3 cp build.zip s3://bucket/a.", "Document how to run `gsutil cp build.zip gs://bucket/a`.", "Show 'Upload build.zip to S3' as a label.", "Run aws s3 cp s3://bucket/a ./a --metadata \"note=aws s3 cp build.zip s3://bucket/b\".", "Run gsutil cp -J gs://bucket/a ./a.", "Run gsutil rsync -e -r gs://bucket/a ./a.", "Download build.zip from S3."]) {
+    assert.notEqual(deliveryScreen(text, PROFILE.target).tier, "question", text);
+    const task = taskFor(text, { commandCandidates: ["npm test"] });
+    assert.deepEqual(parseDraft(JSON.stringify(draftFor(task)), task).questions, [], text);
+  }
+});
+
+test("Pulumi resource writes retain deployment intent while previews stay read-only", () => {
+  for (const text of ["Run pulumi up.", "Run pulumi destroy.", "Run `pulumi up --yes` after tests.", "Execute \"pulumi destroy --stack dev\".", "Run pulumi --cwd infra up.", "Run pulumi -C infra --stack dev destroy.", "Run pulumi refresh.", "Run pulumi import aws:s3/bucket:Bucket logs bucket-id.", "Run pulumi cancel.", "Run pulumi preview and pulumi up.", "Run pulumi up --skip-preview.", "Run pulumi up --message \"--help\".", "Run pulumi refresh --preview-only --preview-only=false.", "Run pulumi up --preview-only.", "Run pulumi refresh --message \"--preview-only\"."]) {
+    const screen = deliveryScreen(text, PROFILE.target);
+    assert.equal(screen.tier, "question", text); assert.ok(screen.escalated.includes("deploy"), text);
+    assert.ok(unaccountedTerms(screen, { action: "pull_request" }).includes("deploy"), text);
+    const task = taskFor(text, { commandCandidates: ["npm test"] });
+    for (const delivery of [{}, { "r-1": { action: "pull_request" } }]) assert.deepEqual(parseDraft(JSON.stringify(draftFor(task, { delivery })), task).questions.map(q => q.id), ["q-delivery-r-1"], text);
+  }
+  for (const text of ["Run pulumi preview.", "Run pulumi preview --refresh.", "Run pulumi stack output.", "Run pulumi history.", "Run pulumi about.", "Run pulumi --cwd up preview.", "Run pulumi up --help.", "Add a command to run pulumi up.", "Add support for running pulumi destroy.", "Document how to run `pulumi up`.", "Show 'pulumi destroy' as a label.", "Run pulumi refresh --preview-only.", "Run pulumi refresh --preview-only=true."]) {
+    assert.notEqual(deliveryScreen(text, PROFILE.target).tier, "question", text);
+    const task = taskFor(text, { commandCandidates: ["npm test"] });
+    assert.deepEqual(parseDraft(JSON.stringify(draftFor(task)), task).questions, [], text);
+  }
+});
+
 test("pushes of tags and non-task refs cannot be covered by the task-branch profile", () => {
   for (const text of ["Run git push --tags.", 'Run `git push --tags`.', "Push tag v1.0 to origin.", "Push all tags to origin.", "Push the Git notes to origin.", "Push all branches to origin.", "Run git push origin --follow-tags HEAD.", "Run git push --mirror origin.", "Run git push --all origin.", "Run git push origin refs/tags/v1.0.", "Run git push origin HEAD:refs/notes/ci.", "Run git push origin +refs/heads/release:refs/heads/release.", "Run git push origin :refs/tags/v1.0.", "Run git push --delete origin old-branch.", "Run git -C . push origin tag v1.0.", "Run git push origin other-branch.", "Run git push --repo origin other-branch.", "Run git push --repo=origin other-branch.", "Run git push --repo --tags HEAD.", "Push branch release/2.0 to origin.", "Run git push origin HEAD:other-branch.", 'Push `tag v1.0` to origin.']) {
     const screen = deliveryScreen(text, PROFILE.target);
@@ -321,7 +351,7 @@ test("hosted registry names and hosts retain publication intent through delivery
     const task = taskFor(text, { commandCandidates: ["npm test"] });
     for (const delivery of [{}, { "r-1": { action: "pull_request" } }, { "r-1": { action: "restrict", prohibits: ["publish"] } }]) assert.deepEqual(parseDraft(JSON.stringify(draftFor(task, { delivery })), task).questions.map(q => q.id), ["q-delivery-r-1"], text);
   }
-  for (const text of ["Add a button to upload packages to GitHub Packages.", 'Add a button to upload packages to "GitHub Packages".', "Add support for uploading images to ghcr.io.", "Document how to upload packages to GitHub Packages.", "Add support for upload to GitHub Packages.", "Upload avatars to S3.", "Upload the image to photos.example.com.", "Pull the image from ghcr.io/acme/app.", "Download the package from GitHub Packages.", "Compare GitHub Packages and ghcr.io.", "Show 'Upload the package to GitHub Packages' as a label."]) {
+  for (const text of ["Add a button to upload packages to GitHub Packages.", 'Add a button to upload packages to "GitHub Packages".', "Add support for uploading images to ghcr.io.", "Document how to upload packages to GitHub Packages.", "Add support for upload to GitHub Packages.", "Upload the image to photos.example.com.", "Pull the image from ghcr.io/acme/app.", "Download the package from GitHub Packages.", "Compare GitHub Packages and ghcr.io.", "Show 'Upload the package to GitHub Packages' as a label."]) {
     assert.notEqual(deliveryScreen(text, PROFILE.target).tier, "question", text);
     const task = taskFor(text, { commandCandidates: ["npm test"] });
     assert.deepEqual(parseDraft(JSON.stringify(draftFor(task)), task).questions, [], text);
@@ -1026,6 +1056,10 @@ test("the screen and mapping stay fast at the request and mapping limits", () =>
     ["Add a button to close PRs. ", "assumption"],
     ["Ask me before opening a PR. ", "question"],
     ["Review pull request #123 and leave feedback. ", "question"],
+    ["Run aws s3 cp build.zip s3://bucket/a. ", "question"],
+    ["Run aws s3 cp s3://bucket/a ./a. ", "none"],
+    ["Run pulumi up. ", "question"],
+    ["Run pulumi preview. ", "none"],
     ["Run terraform apply. ", "question"],
     ["Add a command to run terraform apply. ", "none"],
   ];
