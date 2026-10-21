@@ -4687,6 +4687,11 @@ test("anaphoric delivery replies cannot be resolved by empty or ungrounded plann
 
 test("target, publication, approval and mixed-polarity conflicts survive answer chains without dispatch", async () => {
   for (const [text, tag] of [
+    ["Run gh codespace create -R acme/widget.", { action: "pull_request" }],
+    ["Run gh codespace delete --all.", { action: "pull_request" }],
+    ["Run gh cs stop -c dev.", { action: "pull_request" }],
+    ["Run gh codespace rebuild -c dev.", { action: "pull_request" }],
+    ["Run gh codespace edit -c dev --display-name CI.", { action: "pull_request" }],
     ["Run gh pr update-branch 123 --rebase.", { action: "pull_request" }],
     ["Run gh pr --repo acme/widget update-branch 123.", { action: "pull_request" }],
     ["Cancel the GitHub Actions run 123.", { action: "pull_request" }],
@@ -4916,6 +4921,87 @@ test("a provider failure after credential recovery retains spend and cannot rear
   assert.equal(saved.preflightFailure, undefined); assert.equal(saved.attempts.at(-1).spend.status, "unknown"); assert.ok(saved.attempts.at(-1).reservedUsd > 0);
   assert.deepEqual(await createTaskService(w.ctx).resume({ taskId: first.taskId, expectedRevision: failed.revision }), failed);
   assert.equal(calls, 2); assert.deepEqual(w.ctx.state.entries(), []);
+});
+
+test("unavailable implementation harnesses reject intake before route selection can spend", async () => {
+  const outcomes = [];
+  for (const harness of ["codex-cloud", "gemini"]) for (const route of [null, "model", "harness"]) {
+    const w = world();
+    w.ctx.config.harness = { [harness]: { bin: join(w.home, "never-invoked") } };
+    w.ctx.config.intake_model = MODEL_ROUTE; w.ctx.env.FIXTURE_MODEL_KEY = "sk-fixture-key-availability";
+    if (harness === "gemini") w.ctx.capabilitiesFor = name => ({ ...capabilitiesFor(name), available: false, reason: "fixture dispatch unavailable", fix: "restore the fixture transport" });
+    let fetches = 0;
+    w.ctx.fetch = async (...args) => { fetches++; return modelReply(w.home)(...args); };
+    const service = createTaskService(w.ctx);
+    await assert.rejects(service.prepare({ text: REQUEST, route, requestId: "unavailable-implementation" }), error => {
+      assert.equal(error.code, "EXECUTION_UNAVAILABLE"); assert.equal(error.taskEffects, "none");
+      assert.match(error.message, /cannot dispatch implementation/); assert.match(error.message, /no planning call was made/);
+      assert.match(error.message, harness === "codex-cloud" ? /environment-to-repository check/ : /restore the fixture transport/);
+      outcomes.push({ harness, route, code: error.code, taskEffects: error.taskEffects, message: error.message });
+      return true;
+    });
+    outcomes.at(-1).fetches = fetches;
+    assert.equal(fetches, 0); assert.deepEqual(service.list().tasks, []);
+    assert.deepEqual(w.ctx.state.entries(), []); assert.equal(w.runners.size, 0); assert.equal(w.daemonCalls(), 0);
+  }
+  // An implementation-capable adapter without isolated preparation still gets
+  // the configured model route, through either automatic or explicit selection.
+  for (const route of [null, "model"]) {
+    const w = world(); w.ctx.config.harness = { gemini: { bin: harnessBin(w.home, "gemini") } };
+    w.ctx.config.intake_model = MODEL_ROUTE; w.ctx.env.FIXTURE_MODEL_KEY = "sk-fixture-key-available";
+    let fetches = 0; w.ctx.fetch = async (...args) => { fetches++; return modelReply(w.home)(...args); };
+    const prepared = await createTaskService(w.ctx).prepare({ text: REQUEST, route });
+    assert.equal(prepared.status, "ready", prepared.failures.join("\n")); assert.equal(prepared.route, "model"); assert.equal(fetches, 1);
+    outcomes.push({ harness: "gemini", route, status: prepared.status, selectedRoute: prepared.route, fetches, approval: prepared.approval });
+    assert.equal(prepared.approval, null); assert.deepEqual(w.ctx.state.entries(), []);
+  }
+  const evidence = join(tempHome(), "implementation-availability-evidence.json");
+  writeFileSync(evidence, JSON.stringify(outcomes, null, 2) + "\n");
+  console.log(`# implementation availability evidence: ${evidence}`);
+});
+
+test("implementation availability stops fresh model turns while saved results and pre-call recovery remain safe", async () => {
+  for (const phase of ["answer", "repair"]) {
+    const w = world(); w.ctx.config.harness = { gemini: { bin: harnessBin(w.home, "gemini") } };
+    w.ctx.config.intake_model = MODEL_ROUTE; w.ctx.env.FIXTURE_MODEL_KEY = "sk-fixture-key-recovery";
+    let available = true, calls = 0;
+    w.ctx.capabilitiesFor = name => ({ ...capabilitiesFor(name), available, reason: "fixture implementation offline", fix: "restore the fixture implementation transport" });
+    w.ctx.fetch = async () => {
+      calls++;
+      const task = taskStore(w.home).list().at(-1), draft = draftFor(task, { question: phase === "answer" && calls === 1 });
+      if (phase === "repair" && calls === 1) { draft.mapping = []; available = false; }
+      const body = { choices: [{ message: { content: JSON.stringify(draft) }, finish_reason: "stop" }], usage: { prompt_tokens: 50, completion_tokens: 50 } };
+      return { ok: true, status: 200, headers: { get: () => null }, text: async () => JSON.stringify(body), body: { cancel: async () => {} } };
+    };
+    const service = createTaskService(w.ctx), input = { text: REQUEST, requestId: "availability-turn" };
+    let first = await service.prepare(input);
+    let blocked = first;
+    if (phase === "answer") {
+      assert.equal(first.status, "needs-input"); available = false;
+      assert.deepEqual(await service.prepare(input), first, "saved results replay without another planning call");
+      const replay = taskStore(w.home).read(first.taskId); replay.status = "preparing"; replay.attempts[0].consumed = false;
+      taskStore(w.home).save(replay);
+      first = await service.resume({ taskId: first.taskId, expectedRevision: first.revision });
+      assert.equal(first.status, "needs-input"); assert.equal(calls, 1, "settled output is reconciled before availability can reject a fresh call");
+      blocked = await service.answer({ taskId: first.taskId, expectedRevision: first.revision, operationId: "availability-answer", answers: { "q-r-1": "Use CSV." } });
+    }
+    assert.equal(blocked.status, "blocked"); assert.equal(blocked.errorCode, "EXECUTION_UNAVAILABLE"); assert.equal(calls, 1);
+    const store = taskStore(w.home), saved = store.read(first.taskId), repairs = saved.repairs;
+    assert.equal(saved.attempts.length, 1); assert.ok(saved.attempts[0].settled && saved.attempts[0].consumed);
+    assert.equal(saved.preflightFailure.stage, "implementation-availability"); assert.ok(preparationPreflightRetryable(saved));
+    assert.equal(preparationPreflightRetryable({ ...saved, preflightFailure: { ...saved.preflightFailure, attemptCount: 2 } }), false);
+    assert.equal(preparationPreflightRetryable({ ...saved, dispatchIntent: {} }), false);
+    assert.equal(preparationPreflightRetryable({ ...saved, attempts: [{ ...saved.attempts[0], settled: false }] }), false);
+    const pinned = structuredClone(saved.modelRoute), spend = structuredClone(blocked.cost);
+    const stillBlocked = await service.resume({ taskId: first.taskId, expectedRevision: blocked.revision });
+    assert.equal(stillBlocked.status, "blocked"); assert.equal(calls, 1); assert.deepEqual(stillBlocked.cost, spend);
+    available = true;
+    const recovered = await service.resume({ taskId: first.taskId, expectedRevision: stillBlocked.revision });
+    assert.equal(recovered.status, "ready", recovered.failures.join("\n")); assert.equal(calls, 2);
+    assert.equal(store.read(first.taskId).repairs, repairs); assert.deepEqual(store.read(first.taskId).modelRoute, pinned);
+    assert.equal(store.read(first.taskId).preflightFailure, undefined); assert.equal(recovered.approval, null);
+    assert.deepEqual(w.ctx.state.entries(), []); assert.equal(w.runners.size, 0); assert.equal(w.daemonCalls(), 0);
+  }
 });
 
 test("the model route drafts through the configured text-only endpoint when the selected harness cannot prepare", async () => {

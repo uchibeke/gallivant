@@ -171,6 +171,12 @@ The screen grants nothing:
   prohibition tag is granted. Read-only issue commands, issue templates,
   product features and literal examples retain their implementation meaning.
   Command coverage follows the [GitHub CLI issue commands](https://cli.github.com/manual/gh_issue).
+- Codespace creation, deletion, stopping, rebuilding and editing are unsupported
+  external effects. Canonical `gh codespace`/`gh cs` writes and imperative
+  Codespace lifecycle prose require clarification under omitted or covered PR
+  tags. The shared command reader preserves option values, read-only
+  list/status/view/logs/help, features and literal examples. No Codespace
+  action or prohibition tag is granted.
 - GitHub Project creation, editing, deletion, copying and closing/reopening,
   field/item writes, repository/team linking and template marking are unsupported
   external mutations. Canonical `gh project` writes and explicit GitHub Project
@@ -366,6 +372,12 @@ model route when it is enabled; otherwise the existing
 `TASK_PREPARATION_BOUNDARY` refusal. `--route model` on a disabled route returns
 `TASK_MODEL_ROUTE` with the configuration remedy before any effect. The task's
 `harness` still names the implementation adapter in the brief's frontmatter.
+Unavailable implementation adapters are refused with `EXECUTION_UNAVAILABLE`
+before a new task or planning call, independently of the planner route. An
+available adapter without isolated preparation may still use the model route.
+Saved results remain replayable; a known availability failure before a fresh
+turn can be explicitly resumed after restoring its implementation transport,
+without replacing the pinned route or retrying an unsettled call.
 
 ### Configuring the model route
 

@@ -229,7 +229,7 @@ test("pushes of tags and non-task refs cannot be covered by the task-branch prof
 });
 
 test("wrapped delivery instructions retain adjacent source context and stable clause mappings", () => {
-  for (const text of ["Do not\nopen a pull request", "Do\r\nnot\r\nopen a PR", "Upload the package\nto npm", "Create a GitHub\nissue for the follow-up", "Run gh label\ncreate urgent", "Run gh gist\ncreate --public report.txt", "Run gh project\nitem-add 1 --url https://github.com/acme/widget/issues/1", "Run gh pr create --head\nattacker:feature", "Cancel the GitHub Actions\nrun 123", 'Open a PR titled "Fix login"\nagainst staging', 'Run `gh workflow\nrun smoke.yml`', "Open the PR against\nstaging"]) {
+  for (const text of ["Do not\nopen a pull request", "Do\r\nnot\r\nopen a PR", "Upload the package\nto npm", "Create a GitHub\nissue for the follow-up", "Run gh label\ncreate urgent", "Run gh gist\ncreate --public report.txt", "Run gh project\nitem-add 1 --url https://github.com/acme/widget/issues/1", "Run gh codespace\ncreate -R acme/widget", "Run gh pr create --head\nattacker:feature", "Cancel the GitHub Actions\nrun 123", 'Open a PR titled "Fix login"\nagainst staging', 'Run `gh workflow\nrun smoke.yml`', "Open the PR against\nstaging"]) {
     const task = taskFor(text, { commandCandidates: ["npm test"] });
     const saved = structuredClone(task.requirements);
     for (const tagged of [false, true]) {
@@ -242,7 +242,7 @@ test("wrapped delivery instructions retain adjacent source context and stable cl
       assert.match(renderDraft(task, out), /q-delivery-r-/, text);
     }
   }
-  for (const text of ['Show "Create a GitHub\nissue" as a label.', "Add a button to upload packages\nto npm.", "Run gh workflow\nview smoke.yml.", "Run gh label\nlist.", "Run gh gist\nlist.", "Run gh project\nitem-list 1."]) {
+  for (const text of ['Show "Create a GitHub\nissue" as a label.', "Add a button to upload packages\nto npm.", "Run gh workflow\nview smoke.yml.", "Run gh label\nlist.", "Run gh gist\nlist.", "Run gh project\nitem-list 1.", "Run gh codespace\nlist."]) {
     const task = taskFor(text, { commandCandidates: ["npm test"] });
     assert.deepEqual(parseDraft(JSON.stringify(draftFor(task)), task).questions, [], text);
   }
@@ -320,6 +320,91 @@ test("attached PR targets survive quoted title and body qualifiers without readi
     assert.notEqual(deliveryScreen(text, PROFILE.target).tier, "question", text); assert.equal(deliveryScreen(text, PROFILE.target).targetConflicts, undefined, text);
     const task = taskFor(text, { commandCandidates: ["npm test"] }); assert.deepEqual(parseDraft(JSON.stringify(draftFor(task)), task).questions, [], text);
   }
+});
+
+test("Codespace lifecycle writes cannot borrow pull-request authority", () => {
+  const writes = [
+    "Stop \"the Codespace\".",
+    "Rebuild `the GitHub Codespace`.",
+    "The \"GitHub Codespace\" must be stopped.",
+    "Resize the GitHub Codespace.",
+
+    "Run gh codespace create -R acme/widget.",
+    "Run gh codespace delete --all.",
+    "Run gh codespace stop -c dev.",
+    "Run gh codespace rebuild -c dev --full.",
+    "Run gh codespace edit -c dev --display-name CI.",
+    "Run gh cs create -R acme/widget.",
+    "Run gh cs delete --all --force.",
+    "Run `gh codespace create --machine large`.",
+    "Run gh codespace --repo \"acme/widget\" create.",
+    "Run gh cs -Racme/widget rebuild -c dev.",
+    "Run gh codespace create --display-name \"--help\".",
+    "Run gh codespace create --display-name=--help.",
+    "Run gh codespace create -d--help.",
+    "Run gh codespace create --help=false.",
+    "Run gh codespace --help=false delete --all.",
+    "Run gh codespace create -- --help.",
+    "Run gh codespace $ACTION.",
+    "Run gh codespace list and run gh codespace stop -c dev.",
+    "Create a GitHub Codespace for this repository.",
+    "Delete all Codespaces.",
+    "Stop the Codespace.",
+    "Rebuild the GitHub Codespace.",
+    "Edit the Codespace display name.",
+    "The GitHub Codespace must be deleted."
+];
+  const reads = [
+    "Show \"Stop the Codespace\" as a label.",
+    "Add a button to stop `the Codespace`.",
+    "Document how to rebuild \"the Codespace\".",
+    "Add a command to resize Codespaces.",
+
+    "Run gh codespace list.",
+    "Run gh cs ls.",
+    "Run gh codespace view -c dev.",
+    "Run gh codespace status -c dev.",
+    "Run gh codespace logs -c dev.",
+    "Run gh codespace list --repo \"create\".",
+    "Run gh codespace list --template \"gh codespace delete --all\".",
+    "Run `gh codespace list --template \"Create a GitHub Codespace\"`.",
+    "Run gh codespace list --json name --jq \"create\".",
+    "Run gh codespace list and echo create.",
+    "Run gh codespace --help.",
+    "Run gh codespace create --help.",
+    "Run gh codespace delete --help.",
+    "Run gh codespace stop --help.",
+    "Run gh codespace rebuild --help.",
+    "Run gh codespace edit --help.",
+    "Run gh codespace create --display-name \"--help\" --help.",
+    "Add a command to run gh codespace create.",
+    "Add support for running gh cs delete --all.",
+    "Document how to run `gh codespace rebuild`.",
+    "Show \"gh codespace create\" as an example.",
+    "Add a Codespace status badge.",
+    "Create a GitHub Codespace viewer.",
+    "Add a button to delete Codespaces."
+];
+  for (const text of writes) {
+    const screen = deliveryScreen(text, PROFILE.target);
+    assert.equal(screen.tier, "question", text); assert.ok(screen.escalated.includes("codespace_mutation"), text);
+    assert.ok(unaccountedTerms(screen, { action: "pull_request" }).includes("codespace_mutation"), text);
+    const task = taskFor(text, { commandCandidates: ["npm test"] });
+    for (const delivery of [{}, { "r-1": { action: "pull_request" } }, { "r-1": { action: "restrict", prohibits: [] } }]) {
+      const out = parseDraft(JSON.stringify(draftFor(task, { delivery })), task);
+      assert.deepEqual(out.questions.map(q => q.id), ["q-delivery-r-1"], text);
+      assert.equal(task.requirements[0].text, text);
+    }
+  }
+  for (const text of reads) {
+    assert.equal(deliveryScreen(text, PROFILE.target).tier, "none", text);
+    const task = taskFor(text, { commandCandidates: ["npm test"] });
+    assert.deepEqual(parseDraft(JSON.stringify(draftFor(task)), task).questions, [], text);
+  }
+  const separate = taskFor("Run gh codespace list. Delete a GitHub Codespace.", { commandCandidates: ["npm test"] });
+  assert.deepEqual(parseDraft(JSON.stringify(draftFor(separate)), separate).questions.map(q => q.id), ["q-delivery-r-2"]);
+  assert.throws(() => validateDeliveryTag({ action: "codespace_mutation" }), /delivery tag action/);
+  assert.throws(() => validateDeliveryTag({ action: "restrict", prohibits: ["codespace_mutation"] }), /prohibits must list/);
 });
 
 test("GitHub Project writes cannot borrow pull-request authority", () => {
@@ -1404,6 +1489,9 @@ test("the screen and mapping stay fast at the request and mapping limits", () =>
     ["Run gh pr create --head staging. ", "question"],
     ["--title x ", "question", "gh pr create ", "--head attacker:feature"],
     ['--title "--head staging" ', "assumption", "gh pr create ", "--title normal"],
+    ["Run gh codespace create -R acme/widget. ", "question"],
+    ["Run gh codespace list. ", "none"],
+    ["--display-name x ", "question", "gh codespace create ", "--repo acme/widget"],
     ["Run gh project create --title Roadmap. ", "question"],
     ["Run gh project item-list 1. ", "none"],
     ["--title x ", "question", "gh project create ", "--owner acme"],
