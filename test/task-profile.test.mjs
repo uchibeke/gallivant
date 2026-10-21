@@ -229,7 +229,7 @@ test("pushes of tags and non-task refs cannot be covered by the task-branch prof
 });
 
 test("wrapped delivery instructions retain adjacent source context and stable clause mappings", () => {
-  for (const text of ["Do not\nopen a pull request", "Do\r\nnot\r\nopen a PR", "Upload the package\nto npm", "Create a GitHub\nissue for the follow-up", "Run gh label\ncreate urgent", "Run gh gist\ncreate --public report.txt", 'Run `gh workflow\nrun smoke.yml`', "Open the PR against\nstaging"]) {
+  for (const text of ["Do not\nopen a pull request", "Do\r\nnot\r\nopen a PR", "Upload the package\nto npm", "Create a GitHub\nissue for the follow-up", "Run gh label\ncreate urgent", "Run gh gist\ncreate --public report.txt", "Run gh project\nitem-add 1 --url https://github.com/acme/widget/issues/1", 'Run `gh workflow\nrun smoke.yml`', "Open the PR against\nstaging"]) {
     const task = taskFor(text, { commandCandidates: ["npm test"] });
     const saved = structuredClone(task.requirements);
     for (const tagged of [false, true]) {
@@ -242,7 +242,7 @@ test("wrapped delivery instructions retain adjacent source context and stable cl
       assert.match(renderDraft(task, out), /q-delivery-r-/, text);
     }
   }
-  for (const text of ['Show "Create a GitHub\nissue" as a label.', "Add a button to upload packages\nto npm.", "Run gh workflow\nview smoke.yml.", "Run gh label\nlist.", "Run gh gist\nlist."]) {
+  for (const text of ['Show "Create a GitHub\nissue" as a label.', "Add a button to upload packages\nto npm.", "Run gh workflow\nview smoke.yml.", "Run gh label\nlist.", "Run gh gist\nlist.", "Run gh project\nitem-list 1."]) {
     const task = taskFor(text, { commandCandidates: ["npm test"] });
     assert.deepEqual(parseDraft(JSON.stringify(draftFor(task)), task).questions, [], text);
   }
@@ -250,6 +250,58 @@ test("wrapped delivery instructions retain adjacent source context and stable cl
     const task = taskFor(text, { commandCandidates: ["npm test"] });
     assert.deepEqual(parseDraft(JSON.stringify(draftFor(task, { delivery: { "r-1": { action: "restrict", prohibits: ["merge"] }, "r-2": { action: "pull_request" } } })), task).questions, [], text);
   }
+});
+
+test("GitHub Project writes cannot borrow pull-request authority", () => {
+  const writes = [
+    "Run gh project create --owner acme --title Roadmap.", "Run gh project edit 1 --title Roadmap.",
+    "Run gh project delete 1 --owner acme.", "Run gh project item-add 1 --url https://github.com/acme/widget/issues/1.",
+    "Run gh project close 1.", "Run gh project close 1 --undo.", "Run gh project copy 1 --target-owner acme.",
+    "Run gh project field-create 1 --name Status --data-type TEXT.", "Run gh project field-delete --id FIELD.",
+    "Run gh project item-archive 1 --id ITEM.", "Run gh project item-archive 1 --id ITEM --undo.",
+    "Run gh project item-create 1 --title Follow-up.", "Run gh project item-delete 1 --id ITEM.",
+    "Run gh project item-edit --id ITEM --text Done.", "Run gh project link 1 --repo acme/widget.",
+    "Run gh project unlink 1 --team acme/engineering.", "Run gh project mark-template 1.", "Run gh project mark-template 1 --undo.",
+    'Run `gh project create --title Roadmap`.', 'Run gh project create --title "--help".',
+    'Run gh project edit 1 -d "gh project list --help".', "Run gh project create --title=--help.",
+    "Run gh project create -- --help.", "Run gh project --help=false create.", "Run gh project create --help=false.",
+    "Run gh project edit 1 -d--help.", "Run gh project list and run gh project create.", "Run gh project $ACTION.",
+    "Create a GitHub project for the roadmap.", "Edit the GitHub project.", "Delete the GitHub project.",
+    "The GitHub project must be deleted.",
+  ];
+  for (const text of writes) {
+    const screen = deliveryScreen(text, PROFILE.target);
+    assert.equal(screen.tier, "question", text); assert.ok(screen.escalated.includes("project_mutation"), text);
+    assert.ok(unaccountedTerms(screen, { action: "pull_request" }).includes("project_mutation"), text);
+    const task = taskFor(text, { commandCandidates: ["npm test"] });
+    for (const delivery of [{}, { "r-1": { action: "pull_request" } }, { "r-1": { action: "restrict", prohibits: [] } }]) {
+      assert.deepEqual(parseDraft(JSON.stringify(draftFor(task, { delivery })), task).questions.map(q => q.id), ["q-delivery-r-1"], text);
+      assert.equal(task.requirements[0].text, text);
+    }
+  }
+  for (const text of [
+    "Run gh project list.", "Run gh project view 1.", "Run gh project item-list 1.", "Run gh project field-list 1.",
+    'Run gh project list --owner "create".', 'Run gh project list --template "gh project create".',
+    'Run `gh project list --template "Create a GitHub project"`.', 'Run gh project item-list 1 --query "--help".',
+    "Run gh project list and echo create.", "Run gh project --help.", "Run gh project create --help.",
+    "Run gh project edit 1 --help.", "Run gh project delete 1 --help.", "Run gh project item-add 1 --help.",
+    "Run gh project close 1 --help.", "Run gh project copy 1 --help.", "Run gh project field-create 1 --help.",
+    "Run gh project field-delete --help.", "Run gh project item-archive 1 --help.", "Run gh project item-create 1 --help.",
+    "Run gh project item-delete 1 --help.", "Run gh project item-edit --help.", "Run gh project link 1 --help.",
+    "Run gh project unlink 1 --help.", "Run gh project mark-template 1 --help.",
+    'Run gh project create --title "--help" --help.', "Add a command to run gh project create.",
+    'Add a command to run `gh project item-add 1`.', 'Document how to run `gh project delete 1`.',
+    "Show 'gh project create' as an example.", "Create a GitHub project viewer.",
+    "Add a button to create GitHub projects.", "Create a project directory.", "Edit the project configuration.",
+  ]) {
+    assert.equal(deliveryScreen(text, PROFILE.target).tier, "none", text);
+    const task = taskFor(text, { commandCandidates: ["npm test"] });
+    assert.deepEqual(parseDraft(JSON.stringify(draftFor(task)), task).questions, [], text);
+  }
+  const separate = taskFor("Run gh project list. Create a GitHub project for the roadmap.", { commandCandidates: ["npm test"] });
+  assert.deepEqual(parseDraft(JSON.stringify(draftFor(separate)), separate).questions.map(q => q.id), ["q-delivery-r-2"]);
+  assert.throws(() => validateDeliveryTag({ action: "project_mutation" }), /delivery tag action/);
+  assert.throws(() => validateDeliveryTag({ action: "restrict", prohibits: ["project_mutation"] }), /prohibits must list/);
 });
 
 test("GitHub gist writes cannot borrow pull-request authority", () => {
@@ -1222,6 +1274,9 @@ test("the screen and mapping stay fast at the request and mapping limits", () =>
     ["Add a button to close PRs. ", "assumption"],
     ["Ask me before opening a PR. ", "question"],
     ["Review pull request #123 and leave feedback. ", "question"],
+    ["Run gh project create --title Roadmap. ", "question"],
+    ["Run gh project item-list 1. ", "none"],
+    ["--title x ", "question", "gh project create ", "--owner acme"],
     ["Run gh gist create --public report.txt. ", "question"],
     ["Run gh gist list. ", "none"],
     ["--desc x ", "question", "gh gist create ", "report.txt"],
