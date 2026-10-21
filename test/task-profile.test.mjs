@@ -229,7 +229,7 @@ test("pushes of tags and non-task refs cannot be covered by the task-branch prof
 });
 
 test("wrapped delivery instructions retain adjacent source context and stable clause mappings", () => {
-  for (const text of ["Do not\nopen a pull request", "Do\r\nnot\r\nopen a PR", "Upload the package\nto npm", "Create a GitHub\nissue for the follow-up", "Run gh label\ncreate urgent", "Run gh gist\ncreate --public report.txt", "Run gh project\nitem-add 1 --url https://github.com/acme/widget/issues/1", "Run gh pr create --head\nattacker:feature", 'Run `gh workflow\nrun smoke.yml`', "Open the PR against\nstaging"]) {
+  for (const text of ["Do not\nopen a pull request", "Do\r\nnot\r\nopen a PR", "Upload the package\nto npm", "Create a GitHub\nissue for the follow-up", "Run gh label\ncreate urgent", "Run gh gist\ncreate --public report.txt", "Run gh project\nitem-add 1 --url https://github.com/acme/widget/issues/1", "Run gh pr create --head\nattacker:feature", "Cancel the GitHub Actions\nrun 123", 'Open a PR titled "Fix login"\nagainst staging', 'Run `gh workflow\nrun smoke.yml`', "Open the PR against\nstaging"]) {
     const task = taskFor(text, { commandCandidates: ["npm test"] });
     const saved = structuredClone(task.requirements);
     for (const tagged of [false, true]) {
@@ -249,6 +249,76 @@ test("wrapped delivery instructions retain adjacent source context and stable cl
   for (const text of ["Do not merge.\nOpen a PR.", "Do not merge\n\nOpen a PR.", "- Do not merge\n- Open a PR."]) {
     const task = taskFor(text, { commandCandidates: ["npm test"] });
     assert.deepEqual(parseDraft(JSON.stringify(draftFor(task, { delivery: { "r-1": { action: "restrict", prohibits: ["merge"] }, "r-2": { action: "pull_request" } } })), task).questions, [], text);
+  }
+});
+
+test("updating an existing PR branch stays outside creation authority", () => {
+  const writes = ["Run gh pr update-branch 123 --rebase.", "Run gh pr update-branch 123.", "Run gh pr update-branch.",
+    'Run `gh pr update-branch 123 --rebase`.', "Run gh pr --repo acme/widget update-branch 123.",
+    'Run gh pr -Racme/widget update-branch 123 --rebase.', 'Run gh pr --repo "acme/widget" edit 123 --title Fixed.'];
+  for (const text of writes) {
+    assert.ok(deliveryScreen(text, PROFILE.target).escalated.includes("pull_request_lifecycle"), text);
+    const task = taskFor(text, { commandCandidates: ["npm test"] });
+    for (const delivery of [{}, { "r-1": { action: "pull_request" } }]) assert.deepEqual(parseDraft(JSON.stringify(draftFor(task, { delivery })), task).questions.map(q => q.id), ["q-delivery-r-1"], text);
+  }
+  for (const text of ["Run gh pr view 123.", "Run gh pr --repo acme/widget view 123.",
+    "Add a command to run gh pr update-branch 123 --rebase.", 'Document how to run `gh pr update-branch 123`.',
+    "Show 'gh pr update-branch 123 --rebase' as an example.", "Run gh pr update-branch 123 --help.",
+    'Run `gh pr view 123 --json title --template "gh pr update-branch 456 --rebase"`.']) {
+    assert.notEqual(deliveryScreen(text, PROFILE.target).tier, "question", text);
+    const task = taskFor(text, { commandCandidates: ["npm test"] }); assert.deepEqual(parseDraft(JSON.stringify(draftFor(task)), task).questions, [], text);
+  }
+});
+
+test("Actions run mutations in prose retain workflow conflicts", () => {
+  const writes = ["Cancel the GitHub Actions run 123.", "Rerun the failed Actions run.", "Delete the workflow run.",
+    "Cancel the running GitHub Actions run.", "Re-run the latest workflow run.", "Delete the GitHub workflow run 123.",
+    "The GitHub Actions run 123 must be cancelled.", "The failed Actions run should be rerun.", "The workflow run must be deleted.", "Cancel all GitHub Actions runs.", "Delete old workflow runs.",
+    'Cancel `GitHub Actions run 123`.', 'Rerun "the failed Actions run".', 'The "workflow run 123" must be deleted.'];
+  for (const text of writes) {
+    assert.ok(deliveryScreen(text, PROFILE.target).escalated.includes("workflow_mutation"), text);
+    const task = taskFor(text, { commandCandidates: ["npm test"] });
+    for (const delivery of [{}, { "r-1": { action: "pull_request" } }]) assert.deepEqual(parseDraft(JSON.stringify(draftFor(task, { delivery })), task).questions.map(q => q.id), ["q-delivery-r-1"], text);
+  }
+  for (const text of ["Run gh run view 123.", "Run gh run watch 123.", "Cancel the local test run.",
+    "Add a button to cancel the GitHub Actions run.", "Add support for rerunning Actions runs.", "Delete the workflow run dialog.",
+    'Show "Cancel the GitHub Actions run 123" as an example.', "Document how to delete the workflow run."]) {
+    assert.notEqual(deliveryScreen(text, PROFILE.target).tier, "question", text);
+    const task = taskFor(text, { commandCandidates: ["npm test"] }); assert.deepEqual(parseDraft(JSON.stringify(draftFor(task)), task).questions, [], text);
+  }
+});
+
+test("attached PR targets survive quoted title and body qualifiers without reading their data", () => {
+  const conflicts = [
+    'Open a PR titled "Fix login" against staging.', "Open a PR named 'Fix login' in acme/other.",
+    'Open a PR called `Fix login` against "staging".', 'Open a PR with the title “Fix login” in "acme/other" against `main`.',
+    'Open a PR with title "Fix login" and body "Details" against staging.',
+    'Open a PR with body "Details" titled "Fix login" in acme/other.',
+    'Open a PR against "main" titled "Fix login" in "acme/other".',
+    'Open a PR with a description "Details" against "staging".',
+    'Open a PR titled "Fix. Login; now" for review against staging.',
+    'Open a PR titled "against main" against staging.', 'Open a PR titled "Fix login" against MAIN.',
+    'Open a PR titled Fix login against staging.', 'Open a PR titled ‘Fix login’ against `staging`.', 'Open a PR with body against staging.',
+  ];
+  for (const text of conflicts) {
+    const screen = deliveryScreen(text, PROFILE.target); assert.equal(screen.tier, "question", text); assert.ok(screen.targetConflicts?.length, text);
+    const task = taskFor(text, { commandCandidates: ["npm test"] });
+    for (const delivery of [{}, { "r-1": { action: "pull_request" } }]) {
+      const out = parseDraft(JSON.stringify(draftFor(task, { delivery })), task); assert.deepEqual(out.questions.map(q => q.id), ["q-delivery-r-1"], text);
+      assert.equal(task.requirements[0].text, text);
+    }
+  }
+  for (const text of [
+    'Open a PR titled "Fix login" against main.', 'Open a PR with a title of ‘Fix login’ against `main`.', 'Open a PR called `Fix login` against "main".',
+    'Open a PR with title "Fix login" and body "Details" in "acme/widget" against `main`.',
+    'Open a PR titled "Deploy to production" against main.', 'Open a PR with body "Do not merge; deploy to production" against main.',
+    'Open a PR titled "against staging" against main.', 'Open a PR titled "Open a PR" against main.',
+    'Open a PR titled "Fix login" and run tests on Linux.', 'Open a PR with title "Fix login" and document it in docs/README.md.',
+    'Add a button to open a PR titled "Fix login" against staging.',
+    'Document "Open a PR titled Fix login against staging" in help.',
+  ]) {
+    assert.notEqual(deliveryScreen(text, PROFILE.target).tier, "question", text); assert.equal(deliveryScreen(text, PROFILE.target).targetConflicts, undefined, text);
+    const task = taskFor(text, { commandCandidates: ["npm test"] }); assert.deepEqual(parseDraft(JSON.stringify(draftFor(task)), task).questions, [], text);
   }
 });
 
@@ -1312,6 +1382,10 @@ test("the screen and mapping stay fast at the request and mapping limits", () =>
     ["Add a button to close PRs. ", "assumption"],
     ["Ask me before opening a PR. ", "question"],
     ["Review pull request #123 and leave feedback. ", "question"],
+    ["Run gh pr update-branch 123 --rebase. ", "question"],
+    ["Cancel the GitHub Actions run 123. ", "question"],
+    ['Open a PR titled "Fix login" against staging. ', "question"],
+    ['with title "against staging" ', "assumption", "Open a PR ", "for review"],
     ["Run gh pr create --head staging. ", "question"],
     ["--title x ", "question", "gh pr create ", "--head attacker:feature"],
     ['--title "--head staging" ', "assumption", "gh pr create ", "--title normal"],

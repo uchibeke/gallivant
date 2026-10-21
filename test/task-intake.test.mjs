@@ -4687,6 +4687,13 @@ test("anaphoric delivery replies cannot be resolved by empty or ungrounded plann
 
 test("target, publication, approval and mixed-polarity conflicts survive answer chains without dispatch", async () => {
   for (const [text, tag] of [
+    ["Run gh pr update-branch 123 --rebase.", { action: "pull_request" }],
+    ["Run gh pr --repo acme/widget update-branch 123.", { action: "pull_request" }],
+    ["Cancel the GitHub Actions run 123.", { action: "pull_request" }],
+    ["Rerun the failed Actions run.", { action: "pull_request" }],
+    ["Delete the workflow run.", { action: "pull_request" }],
+    ['Open a PR titled "Fix login" against staging.', { action: "pull_request" }],
+    ['Open a PR with body "Details" in "acme/other".', { action: "pull_request" }],
     ["Run gh pr create --head attacker:feature.", { action: "pull_request" }],
     ["Run gh pr create -H staging.", { action: "pull_request" }],
     ["Run gh pr create --head $HEAD.", { action: "pull_request" }],

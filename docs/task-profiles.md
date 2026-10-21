@@ -94,6 +94,11 @@ quoted values and repeated flags. Title/body values and later commands cannot
 supply a target flag. Missing, dynamic or ambiguous target arguments clarify;
 matching explicit targets retain the normal PR reading. These arguments never
 select or expand the saved target.
+Attached quoted title/body/description values (`titled`, `named`, `called`,
+`with title`, `with body`) are consumed as data before checking later targets.
+Only actual target spans are unmasked; title/body text cannot add delivery terms
+or supply a destination. Incomplete or ambiguous descriptive values clarify.
+Parsing still stops at independent actions instead of borrowing their targets.
 Explicit `--head`/`-H` selectors also retain a target conflict, including fork
 refs, attached/equal values, dynamic values and `HEAD`. The managed task branch
 is allocated after approval, so preparation cannot prove an explicit head names
@@ -147,10 +152,14 @@ lines. Shared statement windows are cached within each source.
 
 The screen grants nothing:
 
+- Existing-PR branch updates (`gh pr update-branch`, including `--rebase`)
+  retain the lifecycle conflict, including repository selectors. They do not
+  authorize updating an unrelated PR head.
 - Workflow dispatch, enable/disable and existing Actions run rerun/cancel/delete
   are unsupported external mutations, including canonical CLI commands and
-  imperative workflow wording. Read-only list/view/watch commands, features and
-  literal examples retain their implementation meaning. Command coverage follows
+  imperative workflow wording. Active/passive Actions-run mutation prose and
+  quoted run references follow the same rule. Read-only list/view/watch commands,
+  features and literal examples retain their implementation meaning. Command coverage follows
   [workflow commands](https://cli.github.com/manual/gh_workflow) and
   [run commands](https://cli.github.com/manual/gh_run).
 - Issue creation, editing, commenting, closing and reopening are unsupported
