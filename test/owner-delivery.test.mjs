@@ -444,6 +444,46 @@ test("modified passive controls remain visible without swallowing application da
   }
 });
 
+test("passive branch merge controls distinguish application domains from Git", () => {
+  for (const source of [
+    "Syntax tree branches cannot ever be merged.",
+    "Bank branches must not ever be merged.",
+    "Syntax tree branch cannot ever be merged.",
+    "Bank branches are not to be silently merged.",
+    "Branches cannot ever be merged in the syntax tree.",
+    "Branches must not ever be merged across the bank network.",
+    "Bank branches cannot be created without an address. Syntax tree branches cannot ever be merged.",
+    "Syntax tree branches cannot ever be merged. Bank branches cannot be created without an address.",
+    "The button creates a PR after tests pass. Bank branches must not ever be merged.",
+  ]) {
+    assert.equal(ownerDelivery(source), null, source);
+    assert.doesNotThrow(() => assertDeliveryAnswer({}, source), source);
+    const original = source + " Open a PR for review.", contract = ownerDelivery(original);
+    assert.equal(validateOwnerDelivery(contract), contract, source);
+    assert.equal(ownerImplementation(contract).join(""), source + " ", source);
+    assert.equal(contract.spans.map(span => original.slice(span.start, span.end)).join(""), original, source);
+  }
+  for (const source of [
+    "Branches cannot ever be merged.",
+    "Branch must not ever be merged.",
+    "Git branches must not ever be merged.",
+    "Branches cannot ever be merged in the repository.",
+    "Branches cannot ever be merged in GitLab.",
+    "Branches cannot ever be generated in GitLab.",
+    "Syntax tree branches cannot ever be merged into origin/main.",
+    "The button creates a PR after tests pass since branches cannot ever be merged.",
+    "Syntax tree branches cannot ever be merged. Branches must not ever be merged.",
+    "Syntax tree branches cannot ever be merged. Changes cannot ever be merged.",
+    "Syntax tree branches cannot ever be merged and branches must not ever be merged.",
+    "Branches cannot ever be merged and customer records remain in the bank network.",
+    "Bank branches cannot be created without an address. Git branches cannot ever be generated.",
+    "Bank branches cannot be created without an address. Commits must not automatically be created.",
+  ]) {
+    assert.throws(() => ownerDelivery(source), { code: "TASK_DELIVERY_SCOPE" }, source);
+    assert.throws(() => assertDeliveryAnswer({}, source), { code: "TASK_DELIVERY_SCOPE" }, source);
+  }
+});
+
 test("infinitive passive prohibitions stay visible before product masking", () => {
   for (const restriction of [
     "Changes are not to be merged.", "Work is not to be merged.", "PRs aren't to be merged.",
