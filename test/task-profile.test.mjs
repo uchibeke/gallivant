@@ -332,6 +332,29 @@ test("Pulumi resource writes retain deployment intent while previews stay read-o
   }
 });
 
+test("GitHub secret and variable writes retain conflicts while reads and no-store operations keep scope", () => {
+  for (const text of ["Run gh secret set API_KEY --body fixture-value.", "Run gh secret delete API_KEY.", "Run gh variable set DEPLOY_ENV --body production.", "Run gh variable delete DEPLOY_ENV.", "Run gh secret set API_KEY --env staging --body fixture-value.", "Run gh secret set API_KEY --org acme --body fixture-value.", "Run gh secret set API_KEY --user --body fixture-value.", "Run gh secret set --env-file fixture.env.", "Run gh variable set DEPLOY_ENV --org acme --body staging.", "Run gh variable set --env-file fixture.env.", "Run gh secret -Racme/widget delete API_KEY.", "Run gh variable --org set delete DEPLOY_ENV.", "Run gh secret set API_KEY --body \"--help\".", "Run gh secret set API_KEY --body \"--no-store\".", "Run gh secret set API_KEY -b\"--no-store\".", "Run gh secret --repo \"--no-store\" set API_KEY.", "Run gh secret set API_KEY --no-store=false.", "Run gh secret set API_KEY --no-store=$MODE.", "Run gh secret set API_KEY --no-store --no-store=false.", "Run gh variable set DEPLOY_ENV --no-store.", "Run gh secret delete API_KEY --no-store.", "Run gh secret $ACTION API_KEY --no-store.", "Run gh variable $ACTION DEPLOY_ENV.", "Run gh variable set DEPLOY_ENV --help=false.", "Run `gh secret set API_KEY --body fixture-value`.", "Run gh secret\nset API_KEY --body fixture-value", "Run gh variable\ndelete DEPLOY_ENV", "Set the GitHub repository secret.", "Delete the GitHub environment variable.", "The GitHub organization variable must be set."]) {
+    const screen = deliveryScreen(text, PROFILE.target);
+    assert.equal(screen.tier, "question", text); assert.ok(screen.escalated.includes("configuration_mutation"), text);
+    assert.ok(unaccountedTerms(screen, { action: "pull_request" }).includes("configuration_mutation"), text);
+    const task = taskFor(text, { commandCandidates: ["npm test"] });
+    for (const tagged of [false, true]) {
+      const delivery = tagged ? Object.fromEntries(task.requirements.map(r => [r.id, { action: "pull_request" }])) : {};
+      const out = parseDraft(JSON.stringify(draftFor(task, { delivery })), task);
+      assert.deepEqual(out.questions.map(q => q.id), task.requirements.map(r => `q-delivery-${r.id}`), text);
+      for (const requirement of task.requirements) assert.equal(text.slice(requirement.source.start, requirement.source.end), requirement.text);
+    }
+  }
+  for (const text of ["Run gh secret list.", "Run gh variable list.", "Run gh variable get DEPLOY_ENV.", "Run gh secret set --help.", "Run gh secret delete API_KEY -h.", "Run gh variable set --help.", "Run gh variable delete DEPLOY_ENV --help.", "Run gh secret set API_KEY --no-store.", "Run gh secret set API_KEY --no-store=true.", "Run gh secret set API_KEY --no-store=1.", "Run gh secret set API_KEY --no-store=false --no-store.", "Run gh secret --repo set list.", "Run gh variable --org delete list.", "Run `gh variable get DEPLOY_ENV --template \"Set the GitHub repository secret\"`.", "Add a command to run gh secret set API_KEY.", "Add a button to delete the GitHub variable.", "Set the GitHub variable selector.", "Show `gh secret delete API_KEY` as an example.", "Document how to run `gh variable set DEPLOY_ENV --body staging`.", "Add a secret settings page.", "Delete local variable cache files."]) {
+    assert.equal(deliveryScreen(text, PROFILE.target).tier, "none", text);
+    const task = taskFor(text, { commandCandidates: ["npm test"] });
+    assert.deepEqual(parseDraft(JSON.stringify(draftFor(task)), task).questions, [], text);
+  }
+  const mixed = taskFor("Run gh secret set API_KEY --no-store. Run gh secret set OTHER_KEY.", { commandCandidates: ["npm test"] });
+  assert.deepEqual(parseDraft(JSON.stringify(draftFor(mixed)), mixed).questions.map(q => q.id), ["q-delivery-r-2"], "no-store stays local to its command");
+  assert.throws(() => validateDeliveryTag({ action: "configuration_mutation" }), /delivery tag action/);
+});
+
 test("Discussion and nested repository autolink writes retain conflicts while reads and feature data keep scope", () => {
   for (const [term, text] of [["discussion_mutation", "Create GitHub discussions."], ["discussion_mutation", "Run gh discussion create --title Hello --body world."], ["discussion_mutation", "Run gh discussion edit 123 --title Updated."], ["discussion_mutation", "Run gh discussion comment 123 --body Thanks."], ["discussion_mutation", "Run gh discussion comment 123 --edit --body Updated."], ["discussion_mutation", "Run gh discussion comment 123 --delete --yes."], ["discussion_mutation", "Run `gh discussion create --title Hello --body world`."], ["discussion_mutation", "Run gh discussion create --title \"--help\" --body world."], ["discussion_mutation", "Run gh discussion create --body \"--help\" --title Hello."], ["discussion_mutation", "Run gh discussion -Racme/widget comment 123 --body Thanks."], ["discussion_mutation", "Run gh discussion $ACTION 123."], ["discussion_mutation", "Run gh discussion create --help=false --title Hello."], ["discussion_mutation", "Run gh discussion\ncomment 123 --body Thanks"], ["discussion_mutation", "Create a GitHub discussion."], ["discussion_mutation", "Edit the GitHub discussion."], ["discussion_mutation", "Comment on the GitHub discussion."], ["discussion_mutation", "The GitHub discussion must be created."], ["repository_mutation", "Run gh repo autolink create TICKET- https://host/<num>"], ["repository_mutation", "Run gh repo autolink new TICKET- https://host/<num>"], ["repository_mutation", "Run gh repo autolink delete 123."], ["repository_mutation", "Run `gh repo autolink delete 123`."], ["repository_mutation", "Run gh repo --repo acme/widget autolink create TICKET- https://host/<num>"], ["repository_mutation", "Run gh repo autolink --repo create delete 123."], ["repository_mutation", "Run gh repo autolink $ACTION 123."], ["repository_mutation", "Run gh repo autolink delete 123 --help=false."], ["repository_mutation", "Run gh repo autolink --repo \"--help\" delete 123."], ["repository_mutation", "Run gh repo\nautolink delete 123"]]) {
     const screen = deliveryScreen(text, PROFILE.target);
@@ -1635,6 +1658,20 @@ test("duplicate statements preserve target occurrences, PR counts and mixed cont
   assert.equal(matching.tier, "assumption", "statement cache never crosses target or call boundaries");
 });
 
+test("repeated regular PR instructions preserve later draft modes and feature context", () => {
+  const prefix = 'Open a PR in "acme/widget" against `main`. '.repeat(128);
+  for (const [suffix, mode] of [
+    ["Open a draft PR.", true], ["Open a PR as a draft.", true],
+    ["Add a button to open a draft PR.", false], ["Add a button to open a PR as a draft.", false],
+    ["Open a PR.", false], ["Do not open a draft PR.", true],
+  ]) {
+    const single = deliveryScreen(suffix, PROFILE.target), screen = deliveryScreen(prefix + suffix, PROFILE.target);
+    assert.equal(Boolean(screen.modeConflicts?.length), mode, suffix);
+    assert.deepEqual(screen.modeConflicts, single.modeConflicts, "earlier regular PRs cannot hide or add a later draft mode");
+    assert.ok(screen.terms.includes("pull_request_count"), "duplicate creation requests retain their conflict");
+  }
+});
+
 test("landing candidates preserve context after long non-instruction prefixes", () => {
   const padding = "landed ".repeat(1024) + "; ";
   for (const [ending, tier] of [
@@ -1744,6 +1781,12 @@ test("the screen and mapping stay fast at the request and mapping limits", () =>
     ["Run gh ssh-key add key.pub. ", "question"],
     ["Run gh gpg-key delete 123. ", "question"],
     ["Run gh ssh-key list. ", "none"],
+    ["Run gh secret set API_KEY --body fixture-value. ", "question"],
+    ["Run gh variable delete DEPLOY_ENV. ", "question"],
+    ["Run gh secret set API_KEY --no-store. ", "none"],
+    ["Run gh variable list. ", "none"],
+    ["--body x ", "question", "gh secret set API_KEY ", "--no-store=false"],
+    ["--body x ", "none", "gh secret set API_KEY ", "--no-store"],
     ["Run gh discussion create --title Hello. ", "question"],
     ["Run gh discussion view 123. ", "none"],
     ["--body x ", "question", "gh discussion create ", "--title Hello"],

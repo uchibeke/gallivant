@@ -4702,6 +4702,10 @@ test("target, publication, approval and mixed-polarity conflicts survive answer 
   for (const [text, tag] of [
     ["Run gh discussion create --title Hello --body world.", { action: "pull_request" }],
     ["Run gh discussion comment 123 --body Thanks.", { action: "pull_request" }],
+    ["Run gh secret set API_KEY --body fixture-value.", { action: "pull_request" }],
+    ["Run gh secret delete API_KEY.", { action: "pull_request" }],
+    ["Run gh variable set DEPLOY_ENV --body staging.", { action: "pull_request" }],
+    ["Run gh variable delete DEPLOY_ENV.", { action: "pull_request" }],
     ["Run gh repo autolink create TICKET- https://host/<num>", { action: "pull_request" }],
     ["Run gh repo autolink delete 123.", { action: "pull_request" }],
     ["Run gh repo delete acme/widget --yes.", { action: "pull_request" }],
@@ -4866,7 +4870,7 @@ test("typed delivery inputs refuse merge, deployment and unknown routes before e
 });
 
 test("wrapped source and reply delivery instructions pause before readiness or dispatch", async () => {
-  for (const text of ["Do not\nopen a pull request", "Upload the package\nto npm", "Run gh workflow\nrun smoke.yml", "Run gh discussion\ncomment 123 --body Thanks", "Run gh repo\nautolink delete 123", "Run gh repo\ndelete acme/widget --yes", "Run gh repo\narchive acme/widget --yes", "Run gh ssh-key\nadd key.pub", "Run gh gpg-key\ndelete 123", "Run git push\n--force origin HEAD", "Run git push -u\n--force-with-lease origin HEAD"]) {
+  for (const text of ["Run gh secret\nset API_KEY --body fixture-value", "Run gh variable\ndelete DEPLOY_ENV", "Do not\nopen a pull request", "Upload the package\nto npm", "Run gh workflow\nrun smoke.yml", "Run gh discussion\ncomment 123 --body Thanks", "Run gh repo\nautolink delete 123", "Run gh repo\ndelete acme/widget --yes", "Run gh repo\narchive acme/widget --yes", "Run gh ssh-key\nadd key.pub", "Run gh gpg-key\ndelete 123", "Run git push\n--force origin HEAD", "Run git push -u\n--force-with-lease origin HEAD"]) {
     const w = world({ prepare: async (_ctx, task) => JSON.stringify(draftFor(task, { delivery: Object.fromEntries(task.requirements.map(r => [r.id, { action: "pull_request" }])) })) });
     const first = await w.service.prepare({ text, run: true });
     assert.equal(first.status, "needs-input", text); assert.equal(first.readiness, null);
@@ -4951,6 +4955,65 @@ test("a provider failure after credential recovery retains spend and cannot rear
   assert.equal(saved.preflightFailure, undefined); assert.equal(saved.attempts.at(-1).spend.status, "unknown"); assert.ok(saved.attempts.at(-1).reservedUsd > 0);
   assert.deepEqual(await createTaskService(w.ctx).resume({ taskId: first.taskId, expectedRevision: failed.revision }), failed);
   assert.equal(calls, 2); assert.deepEqual(w.ctx.state.entries(), []);
+});
+
+test("MCP preserves bounded unavailable-implementation receipts across replay and hides untrusted errors", async () => {
+  const { registerTaskDelivery } = await import("../lib/task_delivery_mcp.mjs");
+  const { Server } = await import("@modelcontextprotocol/sdk/server/index.js");
+  const { Client } = await import("@modelcontextprotocol/sdk/client/index.js");
+  const { InMemoryTransport } = await import("@modelcontextprotocol/sdk/inMemory.js");
+  const outcomes = [];
+  for (const [harness, route] of [["codex-cloud", null], ["codex-cloud", "model"], ["codex-cloud", "harness"], ["gemini", "model"]]) {
+    const w = world(), scope = { tenant: "alice", account: "alice", environment: "preview", region: "US", scopes: ["task-delivery:read", "task-delivery:write"], repositories: ["widget"] };
+    const manifest = { coreVersion: CORE_VERSION, coreSha256: "a".repeat(64), operationVersion: 1, taskVersion: 1, executionVersion: 1 };
+    migrateRuntimeState({ home: w.home, manifest });
+    const secret = "sk-fixture-unavailable-private";
+    w.ctx.config.harness = { [harness]: { bin: join(w.home, "never-invoked") } };
+    w.ctx.config.intake_model = MODEL_ROUTE; w.ctx.env.FIXTURE_MODEL_KEY = secret;
+    let fetches = 0, capabilityReads = 0, restored = false, untrusted = false;
+    w.ctx.fetch = async () => { fetches++; assert.fail("unavailable implementation cannot spend"); };
+    w.ctx.capabilitiesFor = name => {
+      capabilityReads++;
+      return restored ? { ...capabilitiesFor(name), available: true } : harness === "gemini"
+        ? { ...capabilitiesFor(name), available: false, reason: "fixture dispatch unavailable", fix: `restore the fixture transport ${w.home} ${secret} ${"x".repeat(800)}` }
+        : capabilitiesFor(name);
+    };
+    const store = createDeliveryStore(join(w.home, "delivery"));
+    const makeDelivery = () => createTaskDelivery({ manifest, authorize: async () => scope, store, secretsFor: () => [secret], schedule: async () => assert.fail("pre-effect rejection cannot schedule"),
+      contextFor: async () => ({ ctx: w.ctx, repository: { dir: w.checkout, repo: "acme/widget" } }) });
+    let delivery = makeDelivery();
+    const server = new Server({ name: "unavailable-test", version: "1" }, { capabilities: { tools: {} } });
+    const client = new Client({ name: "unavailable-client", version: "1" });
+    await registerTaskDelivery(server, { delivery: { dispatch: (...args) => {
+      if (untrusted) throw Object.assign(new Error(`provider diagnostic ${secret}`), { code: "EXECUTION_UNAVAILABLE", taskEffects: "none" });
+      return delivery.dispatch(...args);
+    } }, identityFor: async () => "alice" });
+    const [a, b] = InMemoryTransport.createLinkedPair(); await server.connect(a); await client.connect(b);
+    const input = { repositoryId: "widget", text: REQUEST, harness, allowance: { budgetUsd: 1, runtimeMs: 60000 }, operationId: "unavailable-mcp", expectedRevision: 0, ...(route ? { route } : {}) };
+    try {
+      const first = await client.callTool({ name: "task_prepare", arguments: input });
+      assert.equal(first.isError, true); assert.equal(first.structuredContent, undefined); assert.equal(first._meta, undefined);
+      assert.match(first.content[0].text, /^EXECUTION_UNAVAILABLE: .*cannot dispatch implementation/);
+      assert.match(first.content[0].text, harness === "codex-cloud" ? /environment-to-repository check/ : /restore the fixture transport/);
+      assert.doesNotMatch(JSON.stringify(first), new RegExp(secret)); assert.ok(!JSON.stringify(first).includes(w.home));
+      const receipt = store.read(scope).operations[input.operationId];
+      assert.equal(receipt.status, "acknowledged"); assert.equal(receipt.wakePending, false);
+      assert.equal(receipt.rejection.code, "EXECUTION_UNAVAILABLE"); assert.ok(receipt.rejection.message.length <= 500);
+      assert.equal(first.content[0].text, `${receipt.rejection.code}: ${receipt.rejection.message}`);
+      const reads = capabilityReads; restored = true; delivery = makeDelivery();
+      assert.deepEqual(await client.callTool({ name: "task_prepare", arguments: input }), first, "saved rejection survives dispatcher reload and transport restoration");
+      assert.equal(capabilityReads, reads, "replay cannot repeat availability or planning checks");
+      assert.deepEqual(store.read(scope).tasks, {}); assert.deepEqual(taskStore(w.home).list(), []);
+      assert.equal(fetches, 0); assert.equal(w.runners.size, 0); assert.equal(w.daemonCalls(), 0); assert.deepEqual(w.ctx.state.entries(), []);
+      untrusted = true;
+      const raw = await client.callTool({ name: "task_prepare", arguments: input });
+      assert.match(raw.content[0].text, /^DELIVERY_FAILED:/); assert.doesNotMatch(JSON.stringify(raw), /provider diagnostic|sk-fixture-unavailable-private/);
+      assert.equal(taskRejectionForModel(Object.assign(Error("untrusted"), { code: "EXECUTION_UNAVAILABLE" })), null);
+      outcomes.push({ harness, route, rejection: receipt.rejection, fetches, replayUnchanged: true, untrustedErrorHidden: true });
+    } finally { await client.close(); await server.close(); }
+  }
+  const evidence = join(tempHome(), "mcp-unavailable-evidence.json"); writeFileSync(evidence, JSON.stringify(outcomes, null, 2) + "\n");
+  console.log(`# MCP unavailable implementation evidence: ${evidence}`);
 });
 
 test("unavailable implementation harnesses reject intake before route selection can spend", async () => {
