@@ -543,7 +543,8 @@ test("actor-led publication stays visible after coordinated product actions", ()
 });
 
 test("conjunctive adverbs keep later actor publications outside product masks", () => {
-  for (const connector of ["therefore", "consequently", "accordingly", "thus", "hence", "THEREFORE"])
+  for (const connector of ["meanwhile", "meantime", "in the meantime", "subsequently", "afterward", "afterwards", "thereafter", "MEANWHILE",
+    "therefore", "consequently", "accordingly", "thus", "hence", "THEREFORE"])
     for (const action of ["the agent opens another PR", "our senior developer quickly creates another PR", "Alice King will submit another pull request"])
       for (const source of [
         `The button creates a PR after tests pass, ${connector} ${action}.`,
@@ -553,7 +554,8 @@ test("conjunctive adverbs keep later actor publications outside product masks", 
         assert.throws(() => ownerDelivery(source), { code: "TASK_DELIVERY_SCOPE" }, source);
         assert.throws(() => assertDeliveryAnswer({}, source), { code: "TASK_DELIVERY_SCOPE" }, source);
       }
-  for (const connector of ["therefore", "consequently", "accordingly", "thus", "hence"])
+  for (const connector of ["meanwhile", "meantime", "in the meantime", "subsequently", "afterward", "afterwards", "thereafter",
+    "therefore", "consequently", "accordingly", "thus", "hence"])
     for (const source of [
       `The button creates a PR after tests pass, ${connector} the service opens another PR.`,
       `Ensure the button creates a PR after tests pass ${connector} the service opens another PR.`,
@@ -568,6 +570,34 @@ test("conjunctive adverbs keep later actor publications outside product masks", 
       assert.equal(ownerImplementation(contract).join(""), source + " ", source);
       assert.equal(contract.spans.map(span => original.slice(span.start, span.end)).join(""), original, source);
     }
+});
+
+test("multi-part actor names keep publication directives visible within their clause", () => {
+  for (const actor of ["Mary Jane Watson", "John Ronald Reuel Tolkien", "Jean-Luc Mary O’Neill", "Ana María De La Cruz"])
+    for (const source of [
+      `The button creates a PR after tests pass and ${actor} opens another PR.`,
+      `Ensure the button creates a PR after tests pass provided that ${actor} quickly opens another PR.`,
+      `Ensure ${actor} creates a PR.`,
+      `${actor} also opens another PR.`,
+    ]) {
+      assert.throws(() => ownerDelivery(source), { code: "TASK_DELIVERY_SCOPE" }, source);
+      assert.throws(() => assertDeliveryAnswer({}, source), { code: "TASK_DELIVERY_SCOPE" }, source);
+    }
+  for (const source of [
+    "The Mary Jane Watson button creates a PR after tests pass.",
+    "Ensure the Mary Jane Watson button creates a PR after tests pass.",
+    "The button creates a PR after tests pass and Mary Jane Watson creates a PR template.",
+    "The button creates a PR after tests pass and Mary Jane Watson generates a report about PRs.",
+    "Clicking submit creates a PR and the service opens another PR.",
+    'Show the example "Mary Jane Watson opens another PR" in the button help.',
+  ]) {
+    assert.equal(ownerDelivery(source), null, source);
+    assert.doesNotThrow(() => assertDeliveryAnswer({}, source), source);
+    const original = source + " Open a PR for review.", contract = ownerDelivery(original);
+    assert.equal(validateOwnerDelivery(contract), contract, source);
+    assert.equal(ownerImplementation(contract).join(""), source + " ", source);
+    assert.equal(contract.spans.map(span => original.slice(span.start, span.end)).join(""), original, source);
+  }
 });
 
 test("modified actor-led publication stays visible without changing product ownership", () => {
