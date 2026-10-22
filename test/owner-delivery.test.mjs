@@ -484,6 +484,51 @@ test("passive branch merge controls distinguish application domains from Git", (
   }
 });
 
+test("passive code merges distinguish application destinations from Git controls", () => {
+  // Active merges share the destination validator with the passive exception.
+  for (const source of ["Merge arrays inside the editor.", "Merge records within the editor."]) {
+    assert.equal(ownerDelivery(source), null, source);
+    assert.doesNotThrow(() => assertDeliveryAnswer({}, source), source);
+  }
+  for (const subject of ["Code", "Changes", "Edits", "Work", "Implementation"])
+    for (const destination of ["into one cell", "in the editor", "within the document editor"])
+      for (const source of [
+        `${subject} cannot be merged ${destination}.`,
+        `${subject} must not ever be merged ${destination}.`,
+        `The button creates a PR after tests pass since ${subject.toLowerCase()} cannot be merged ${destination}.`,
+      ]) {
+        assert.equal(ownerDelivery(source), null, source);
+        assert.doesNotThrow(() => assertDeliveryAnswer({}, source), source);
+        const original = source + " Open a PR for review.", contract = ownerDelivery(original);
+        assert.equal(validateOwnerDelivery(contract), contract, source);
+        assert.equal(ownerImplementation(contract).join(""), source + " ", source);
+        assert.equal(contract.spans.map(span => original.slice(span.start, span.end)).join(""), original, source);
+      }
+  for (const source of [
+    "Code cannot be merged.",
+    "Changes cannot ever be merged.",
+    "Reviewed changes cannot be merged.",
+    "Code cannot be merged into main.",
+    "Changes cannot be merged into origin/main.",
+    "Work cannot be merged in the repository.",
+    "Implementation cannot be merged in GitLab.",
+    "Code cannot be merged in the editor into main.",
+    "Code cannot be merged into one cell and main.",
+    "Code cannot be merged in the editor or origin/main.",
+    "Merge arrays inside main.",
+    "Merge records within origin/main.",
+    "Changes cannot be merged into one cell in the repository.",
+    "PRs cannot be merged in the editor.",
+    "Code cannot be merged and records remain in the editor.",
+    "Code cannot be merged into one cell. Changes cannot be merged.",
+    "Code cannot be merged into one cell and changes cannot be merged.",
+    "The button creates a PR after tests pass since changes cannot be merged.",
+  ]) {
+    assert.throws(() => ownerDelivery(source), { code: "TASK_DELIVERY_SCOPE" }, source);
+    assert.throws(() => assertDeliveryAnswer({}, source), { code: "TASK_DELIVERY_SCOPE" }, source);
+  }
+});
+
 test("infinitive passive prohibitions stay visible before product masking", () => {
   for (const restriction of [
     "Changes are not to be merged.", "Work is not to be merged.", "PRs aren't to be merged.",
@@ -624,9 +669,34 @@ test("actor publication uses every current publication verb and its inflections"
   }
 });
 
+test("API, parser and serializer product behavior retains implementation scope", () => {
+  for (const surface of ["API", "parser", "serializer"]) {
+    for (const source of [
+      `The ${surface} generates a PR object.`,
+      `The ${surface} creates a PR node.`,
+      `Ensure the ${surface} creates a PR object.`,
+      `The ${surface} generates a PR after tests pass.`,
+      `The button creates a PR after tests pass and the ${surface} creates another PR object.`,
+    ]) {
+      assert.equal(ownerDelivery(source), null, source);
+      assert.doesNotThrow(() => assertDeliveryAnswer({}, source), source);
+      const original = source + " Open a PR for review.", contract = ownerDelivery(original);
+      assert.equal(validateOwnerDelivery(contract), contract, source);
+      assert.equal(ownerImplementation(contract).join(""), source + " ", source);
+      assert.equal(contract.spans.map(span => original.slice(span.start, span.end)).join(""), original, source);
+    }
+    for (const control of ["and the agent opens another PR", "provided that you open another PR", "since changes cannot be merged"])
+      for (const text of [`The ${surface} generates a PR after tests pass ${control}.`, `Ensure the ${surface} creates a PR object ${control}.`]) {
+        assert.throws(() => ownerDelivery(text), { code: "TASK_DELIVERY_SCOPE" }, text);
+        assert.throws(() => assertDeliveryAnswer({}, text), { code: "TASK_DELIVERY_SCOPE" }, text);
+      }
+  }
+});
+
 test("conjunctive adverbs keep later actor publications outside product masks", () => {
   for (const connector of ["meanwhile", "meantime", "in the meantime", "subsequently", "afterward", "afterwards", "thereafter", "MEANWHILE",
-    "therefore", "consequently", "accordingly", "thus", "hence", "THEREFORE"])
+    "therefore", "consequently", "accordingly", "thus", "hence", "THEREFORE",
+    "however", "nevertheless", "nonetheless", "instead", "otherwise", "HOWEVER"])
     for (const action of ["the agent opens another PR", "our senior developer quickly creates another PR", "Alice King will submit another pull request"])
       for (const source of [
         `The button creates a PR after tests pass, ${connector} ${action}.`,
@@ -637,7 +707,8 @@ test("conjunctive adverbs keep later actor publications outside product masks", 
         assert.throws(() => assertDeliveryAnswer({}, source), { code: "TASK_DELIVERY_SCOPE" }, source);
       }
   for (const connector of ["meanwhile", "meantime", "in the meantime", "subsequently", "afterward", "afterwards", "thereafter",
-    "therefore", "consequently", "accordingly", "thus", "hence"])
+    "therefore", "consequently", "accordingly", "thus", "hence",
+    "however", "nevertheless", "nonetheless", "instead", "otherwise"])
     for (const source of [
       `The button creates a PR after tests pass, ${connector} the service opens another PR.`,
       `Ensure the button creates a PR after tests pass ${connector} the service opens another PR.`,
