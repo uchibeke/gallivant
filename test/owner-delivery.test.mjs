@@ -982,12 +982,13 @@ test("finite purpose clauses validate their actions and business objects", () =>
 });
 
 test("relative temporal clauses validate approval-dependent actions and their own objects", () => {
-  for (const connector of ["after which", "before which", "AFTER WHICH"]) {
-    for (const action of ["you must proofread the invoice", "our senior editor proofreads the invoice", "Alice King must proofread the invoice",
+  for (const connector of ["after which", "before which", "AFTER WHICH", "whereupon", "WHEREUPON"]) {
+    for (const action of ["you proofread the invoice", "you must proofread the invoice", "our senior editor proofreads the invoice", "Alice King must proofread the invoice",
       "the invoice must be proofread", "our archive specialist proofreads the invoice", "you email the report"])
       for (const source of [
         `If I approve the invoice, email the customer ${connector} ${action}.`,
         `Email the customer ${connector} ${action} after I approve the invoice.`,
+        `If I approve the invoice, email the customer ${connector} you apply the discount after which ${action}.`,
       ]) {
         assert.throws(() => ownerDelivery(source), { code: "TASK_DELIVERY_SCOPE" }, source);
         assert.throws(() => assertDeliveryAnswer({}, source), { code: "TASK_DELIVERY_SCOPE" }, source);
@@ -1008,6 +1009,9 @@ test("relative temporal clauses validate approval-dependent actions and their ow
         assert.equal(contract.spans.map(span => original.slice(span.start, span.end)).join(""), original, source);
       }
   }
+  const quoted = 'If I approve the invoice, email the customer with the note "whereupon you proofread the invoice".';
+  assert.equal(ownerDelivery(quoted), null);
+  assert.doesNotThrow(() => assertDeliveryAnswer({}, quoted));
 });
 
 test("symbol-coordinated business actions keep approval-dependent implementation visible", () => {
