@@ -15,7 +15,7 @@ import { newPrd } from "../lib/commands/new.mjs";
 import { resume } from "../lib/commands/resume.mjs";
 import { startServices } from "../lib/commands/start_services.mjs";
 import { trackerPort, stopTracker } from "../lib/tracker_process.mjs";
-import { init } from "../lib/commands/init.mjs";
+import { init, renderInit } from "../lib/commands/init.mjs";
 import { VERSION } from "../lib/fs.mjs";
 import { hasConfig } from "../lib/config.mjs";
 import { resolveHandle } from "../lib/state.mjs";
@@ -29,7 +29,8 @@ import { safeDisplay } from "../lib/learning_data.mjs";
 const HELP = `gallivant: give an agent a task, let the review loop run, go outside.
 
   gallivant init [--harness codex|claude] [--worktrees <directory>]
-                                         create a private config; never overwrite settings or sign in for you
+                                         set up the repository you are in: private config, this repo in repos,
+                                         then doctor's report. Safe to repeat; never signs in or overwrites settings
   gallivant --version                    print the installed version
   gallivant doctor [--send] [--probe]   install checklist and health probe
   gallivant doctor --network <https-origin> [--json]   bounded DNS/HTTPS diagnosis
@@ -111,9 +112,12 @@ async function dispatch(argv) {
   if (values.version) { console.log(VERSION); return 0; }
   if (values.help || !cmd || cmd === "help") { console.log(HELP); return 0; }
   if (cmd === "init") {
+    if (arg) throw new Error("init takes no positional argument; run it from inside the target checkout");
     const r = await init({ harness: values.harness, worktrees: values.worktrees });
-    console.log(`Created ${r.file}\nHarness: ${r.harness}\nWorktrees: ${r.config.worktrees}\n\nNext: gallivant doctor\nComplete the harness guardrail and repository setup before starting work:\n  https://github.com/uchibeke/gallivant/blob/main/docs/install.md\nPackaged templates:\n  ${r.templates.passport}\n  ${r.templates.sandbox}`);
-    return 0;
+    const report = renderDoctor(r.doctor);
+    console.log(renderInit(r, report));
+    // Doctor's exit code, so a script or an agent reading only the status knows whether setup still has open items.
+    return report.exitCode;
   }
   if (values.foreground && cmd !== "serve") throw new Error("--foreground is available only with serve");
   if (values.foreground && values["no-server"]) throw new Error("--foreground cannot be combined with --no-server");

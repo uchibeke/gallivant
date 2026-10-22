@@ -102,7 +102,7 @@ Official configuration references:
 Re-run native qualification when upgrading the CLI or adding tool capabilities.
 
 The recorded cross-repository integration handoff names
-[`aporthq/agent-passport#417`](https://github.com/aporthq/agent-passport/pull/417),
+[`aporthq/agent-passport#417`](https://github.com/aporthq/agent-passport/pull/417) (not publicly readable),
 with job identity `aporthq/agent-passport/aport-task-delivery-workflow-integration`.
 The handoff calls for reusing that continuation after the actual portable package
 is available. This document qualifies the preparation boundary; it does not

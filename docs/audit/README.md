@@ -16,6 +16,7 @@ fixture exercised. The [operator guides](../README.md) describe current behavior
 | [Review learning](learning-qualification.md) | Collection, signature/lifecycle tests and remaining production isolation requirements |
 | [Task, execution and plugin evidence](plugin-ready/README.md) | Separate milestone records and checklists for intake, remote adapters, package consumers and live-release gates |
 | [Plugin launch assessment](plugin-launch-2026-10-08.md) | Dated release assessment, not proof of a current public deployment |
+| [Published onboarding](published-onboarding.md) | Documentation audit against the 0.2.0 release: reference READMEs read, stale claims found, what changed and what still needs a release or live validation |
 
 Keep failures, unverified criteria and original measurements visible. Add a dated
 follow-up when a later change resolves a finding rather than replacing the old
