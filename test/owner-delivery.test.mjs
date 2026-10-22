@@ -582,6 +582,48 @@ test("actor-led publication stays visible after coordinated product actions", ()
   }
 });
 
+test("actor publication uses every current publication verb and its inflections", () => {
+  const verbs = [
+    ["file", "files", "filed", "filing"], ["issue", "issues", "issued", "issuing"],
+    ["publish", "publishes", "published", "publishing"], ["deliver", "delivers", "delivered", "delivering"],
+    ["draft", "drafts", "drafted", "drafting"], ["generate", "generates", "generated", "generating"],
+    ["prepare", "prepares", "prepared", "preparing"], ["send", "sends", "sent", "sending"],
+    ["produce", "produces", "produced", "producing"], ["start", "starts", "started", "starting"],
+    ["begin", "begins", "began", "beginning"], ["open", "opens", "opened", "opening"],
+    ["create", "creates", "created", "creating"], ["raise", "raises", "raised", "raising"],
+    ["submit", "submits", "submitted", "submitting"], ["make", "makes", "made", "making"],
+  ];
+  for (const [base, third, past, gerund] of verbs) {
+    for (const source of [
+      `The button creates a PR after tests pass and the agent ${third} another PR.`,
+      `Ensure the button creates a PR after tests pass provided that Mary Jane Watson ${third} another PR.`,
+      `Mary Jane Watson quickly ${third} a PR.`,
+      `Ensure the agent ${base} a PR.`,
+      `The agent ${past} a PR.`,
+      `The agent ${gerund} a PR.`,
+    ]) {
+      assert.throws(() => ownerDelivery(source), { code: "TASK_DELIVERY_SCOPE" }, source);
+      assert.throws(() => assertDeliveryAnswer({}, source), { code: "TASK_DELIVERY_SCOPE" }, source);
+    }
+    for (const source of [
+      `The button ${third} a PR after tests pass.`,
+      `Ensure the button ${third} a PR after tests pass.`,
+      `The button can ${base} a PR after tests pass.`,
+      `The button creates a PR after tests pass and the service ${third} another PR.`,
+      `The button creates a PR after tests pass and the agent ${third} a PR template.`,
+      `The button creates a PR after tests pass and the agent ${third} a report about PRs.`,
+      `Show the example "the agent ${third} another PR" in the button help.`,
+    ]) {
+      assert.equal(ownerDelivery(source), null, source);
+      assert.doesNotThrow(() => assertDeliveryAnswer({}, source), source);
+      const original = source + " Open a PR for review.", contract = ownerDelivery(original);
+      assert.equal(validateOwnerDelivery(contract), contract, source);
+      assert.equal(ownerImplementation(contract).join(""), source + " ", source);
+      assert.equal(contract.spans.map(span => original.slice(span.start, span.end)).join(""), original, source);
+    }
+  }
+});
+
 test("conjunctive adverbs keep later actor publications outside product masks", () => {
   for (const connector of ["meanwhile", "meantime", "in the meantime", "subsequently", "afterward", "afterwards", "thereafter", "MEANWHILE",
     "therefore", "consequently", "accordingly", "thus", "hence", "THEREFORE"])
