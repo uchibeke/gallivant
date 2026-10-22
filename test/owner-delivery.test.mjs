@@ -694,8 +694,11 @@ test("API, parser and serializer product behavior retains implementation scope",
 });
 
 test("conjunctive adverbs keep later actor publications outside product masks", () => {
+  const reviewed = "The button creates a PR after tests pass, likewise the agent opens another PR.";
+  assert.throws(() => ownerDelivery(reviewed), { code: "TASK_DELIVERY_SCOPE" }, reviewed);
+  assert.throws(() => assertDeliveryAnswer({}, reviewed), { code: "TASK_DELIVERY_SCOPE" }, reviewed);
   for (const separator of ["&", "+", "/"])
-    for (const modifier of ["also", "additionally"])
+    for (const modifier of ["also", "additionally", "likewise", "similarly", "equally", "correspondingly", "analogously"])
       for (const actor of ["the agent", "Jane Doe"])
         for (const source of [
           `The button creates a PR after tests pass ${separator} ${actor} ${modifier} files another PR.`,
@@ -715,7 +718,8 @@ test("conjunctive adverbs keep later actor publications outside product masks", 
   for (const connector of ["meanwhile", "meantime", "in the meantime", "subsequently", "afterward", "afterwards", "thereafter", "MEANWHILE",
     "therefore", "consequently", "accordingly", "thus", "hence", "THEREFORE",
     "however", "nevertheless", "nonetheless", "instead", "otherwise", "HOWEVER",
-    "moreover", "furthermore", "additionally", "also", "in addition", "MOREOVER", "albeit", "ALBEIT"])
+    "moreover", "furthermore", "additionally", "also", "in addition", "MOREOVER", "albeit", "ALBEIT",
+    "likewise", "similarly", "equally", "correspondingly", "analogously", "in the same way", "LIKEWISE"])
     for (const action of ["the agent files another PR", "the agent opens another PR", "our senior developer quickly creates another PR", "Alice King will submit another pull request"])
       for (const source of [
         `The button creates a PR after tests pass, ${connector} ${action}.`,
@@ -728,7 +732,8 @@ test("conjunctive adverbs keep later actor publications outside product masks", 
   for (const connector of ["meanwhile", "meantime", "in the meantime", "subsequently", "afterward", "afterwards", "thereafter",
     "therefore", "consequently", "accordingly", "thus", "hence",
     "however", "nevertheless", "nonetheless", "instead", "otherwise",
-    "moreover", "furthermore", "additionally", "also", "in addition", "albeit"])
+    "moreover", "furthermore", "additionally", "also", "in addition", "albeit",
+    "likewise", "similarly", "equally", "correspondingly", "analogously", "in the same way"])
     for (const source of [
       `The button creates a PR after tests pass, ${connector} the service opens another PR.`,
       `Ensure the button creates a PR after tests pass ${connector} the service opens another PR.`,
@@ -775,7 +780,7 @@ test("multi-part actor names keep publication directives visible within their cl
 
 test("modified actor-led publication stays visible without changing product ownership", () => {
   for (const actor of ["the agent", "our developer", "the automation", "John", "Jane Doe", "alex"])
-    for (const lead of ["quickly", "also", "will quickly", "must not silently", "to immediately", "very carefully"])
+    for (const lead of ["quickly", "also", "likewise", "similarly", "equally", "correspondingly", "analogously", "will quickly", "must not silently", "to immediately", "very carefully"])
       for (const source of [
         `The button creates a PR after tests pass and ${actor} ${lead} opens another PR.`,
         `Ensure the button creates a PR after tests pass provided that ${actor} ${lead} opens another PR.`,
@@ -789,6 +794,9 @@ test("modified actor-led publication stays visible without changing product owne
     "The button creates a PR after tests pass and the service quickly opens another PR.",
     "Ensure the button quickly creates a PR after tests pass.",
     "The button quickly creates a PR after tests pass.",
+    "The button likewise creates a PR after tests pass.",
+    "Ensure the button likewise creates a PR after tests pass.",
+    "The button creates a PR after tests pass and the service likewise opens another PR.",
     "Have the submit button to immediately create a PR.",
     "The button creates a PR after tests pass and the agent quickly creates a PR template.",
     "Clicking submit quickly creates a PR and the service also opens another PR.",
