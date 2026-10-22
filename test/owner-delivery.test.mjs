@@ -542,6 +542,34 @@ test("actor-led publication stays visible after coordinated product actions", ()
   }
 });
 
+test("conjunctive adverbs keep later actor publications outside product masks", () => {
+  for (const connector of ["therefore", "consequently", "accordingly", "thus", "hence", "THEREFORE"])
+    for (const action of ["the agent opens another PR", "our senior developer quickly creates another PR", "Alice King will submit another pull request"])
+      for (const source of [
+        `The button creates a PR after tests pass, ${connector} ${action}.`,
+        `Ensure the button creates a PR after tests pass ${connector} ${action}.`,
+        `${connector} ${action}.`,
+      ]) {
+        assert.throws(() => ownerDelivery(source), { code: "TASK_DELIVERY_SCOPE" }, source);
+        assert.throws(() => assertDeliveryAnswer({}, source), { code: "TASK_DELIVERY_SCOPE" }, source);
+      }
+  for (const connector of ["therefore", "consequently", "accordingly", "thus", "hence"])
+    for (const source of [
+      `The button creates a PR after tests pass, ${connector} the service opens another PR.`,
+      `Ensure the button creates a PR after tests pass ${connector} the service opens another PR.`,
+      `The button creates a PR after tests pass, ${connector} the agent creates a PR template.`,
+      `The button creates a PR after tests pass, ${connector} the agent generates a report about PRs.`,
+      `Show the example "${connector} the agent opens another PR" in the button help.`,
+    ]) {
+      assert.equal(ownerDelivery(source), null, source);
+      assert.doesNotThrow(() => assertDeliveryAnswer({}, source), source);
+      const original = source + " Open a PR for review.", contract = ownerDelivery(original);
+      assert.equal(validateOwnerDelivery(contract), contract, source);
+      assert.equal(ownerImplementation(contract).join(""), source + " ", source);
+      assert.equal(contract.spans.map(span => original.slice(span.start, span.end)).join(""), original, source);
+    }
+});
+
 test("modified actor-led publication stays visible without changing product ownership", () => {
   for (const actor of ["the agent", "our developer", "the automation", "John", "Jane Doe", "alex"])
     for (const lead of ["quickly", "also", "will quickly", "must not silently", "to immediately", "very carefully"])
@@ -1594,9 +1622,10 @@ test("concessive approval clauses validate each action and its own business obje
   }
 });
 
-test("despite complements validate approval-gated gerunds and their own objects", () => {
-  for (const connector of ["despite", "DESPITE"]) {
-    for (const action of ["proofreading the invoice", "carefully proofreading the invoice", "not carefully proofreading the invoice",
+test("prepositional concessions validate approval-gated actions and their own objects", () => {
+  for (const connector of ["despite", "DESPITE", "notwithstanding", "NOTWITHSTANDING"]) {
+    for (const action of ["you proofread the invoice", "Alice King must proofread the invoice", "the invoice is proofread",
+      "proofreading the invoice", "carefully proofreading the invoice", "not carefully proofreading the invoice",
       "you proofreading the invoice", "our senior editor proofreading the invoice", "Alice King proofreading the invoice",
       "emailing the report", "applying the discount before proofreading the invoice"])
       for (const source of [
@@ -1609,7 +1638,8 @@ test("despite complements validate approval-gated gerunds and their own objects"
     const borrowedObject = `If I approve the invoice, email the report ${connector} applying the discount.`;
     assert.throws(() => ownerDelivery(borrowedObject), { code: "TASK_DELIVERY_SCOPE" }, borrowedObject);
     assert.throws(() => assertDeliveryAnswer({}, borrowedObject), { code: "TASK_DELIVERY_SCOPE" }, borrowedObject);
-    for (const complement of ["applying the discount", "carefully applying the discount", "you applying the discount",
+    for (const complement of ["you apply the discount", "Alice King must email the customer", "the receipt is sent",
+      "applying the discount", "carefully applying the discount", "you applying the discount",
       "our senior editor emailing the customer", "Alice King emailing the customer", "the discount", "a recurring payment"])
       for (const source of [
         `If I approve the invoice, email the customer ${connector} ${complement}.`,
@@ -1633,6 +1663,9 @@ test("despite complements validate approval-gated gerunds and their own objects"
   const quoted = 'If I approve the invoice, email the customer with the note "despite proofreading the invoice".';
   assert.equal(ownerDelivery(quoted), null);
   assert.doesNotThrow(() => assertDeliveryAnswer({}, quoted));
+  const quotedNotwithstanding = 'If I approve the invoice, email the customer with the note "notwithstanding you proofread the invoice".';
+  assert.equal(ownerDelivery(quotedNotwithstanding), null);
+  assert.doesNotThrow(() => assertDeliveryAnswer({}, quotedNotwithstanding));
 });
 
 test("upon clauses validate approval-gated actions and relative continuations", () => {
