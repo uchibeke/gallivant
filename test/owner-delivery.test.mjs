@@ -694,10 +694,29 @@ test("API, parser and serializer product behavior retains implementation scope",
 });
 
 test("conjunctive adverbs keep later actor publications outside product masks", () => {
+  for (const separator of ["&", "+", "/"])
+    for (const modifier of ["also", "additionally"])
+      for (const actor of ["the agent", "Jane Doe"])
+        for (const source of [
+          `The button creates a PR after tests pass ${separator} ${actor} ${modifier} files another PR.`,
+          `Ensure the button creates a PR after tests pass ${separator} ${actor} ${modifier} files another PR.`,
+        ]) {
+          assert.throws(() => ownerDelivery(source), { code: "TASK_DELIVERY_SCOPE" }, source);
+          assert.throws(() => assertDeliveryAnswer({}, source), { code: "TASK_DELIVERY_SCOPE" }, source);
+        }
+  for (const separator of ["&", "+", "/"])
+    for (const source of [
+      `The button creates a PR after tests pass ${separator} the service additionally files another PR.`,
+      `The button creates a PR after tests pass ${separator} Jane Doe also creates a PR template.`,
+    ]) {
+      assert.equal(ownerDelivery(source), null, source);
+      assert.doesNotThrow(() => assertDeliveryAnswer({}, source), source);
+    }
   for (const connector of ["meanwhile", "meantime", "in the meantime", "subsequently", "afterward", "afterwards", "thereafter", "MEANWHILE",
     "therefore", "consequently", "accordingly", "thus", "hence", "THEREFORE",
-    "however", "nevertheless", "nonetheless", "instead", "otherwise", "HOWEVER"])
-    for (const action of ["the agent opens another PR", "our senior developer quickly creates another PR", "Alice King will submit another pull request"])
+    "however", "nevertheless", "nonetheless", "instead", "otherwise", "HOWEVER",
+    "moreover", "furthermore", "additionally", "also", "in addition", "MOREOVER", "albeit", "ALBEIT"])
+    for (const action of ["the agent files another PR", "the agent opens another PR", "our senior developer quickly creates another PR", "Alice King will submit another pull request"])
       for (const source of [
         `The button creates a PR after tests pass, ${connector} ${action}.`,
         `Ensure the button creates a PR after tests pass ${connector} ${action}.`,
@@ -708,7 +727,8 @@ test("conjunctive adverbs keep later actor publications outside product masks", 
       }
   for (const connector of ["meanwhile", "meantime", "in the meantime", "subsequently", "afterward", "afterwards", "thereafter",
     "therefore", "consequently", "accordingly", "thus", "hence",
-    "however", "nevertheless", "nonetheless", "instead", "otherwise"])
+    "however", "nevertheless", "nonetheless", "instead", "otherwise",
+    "moreover", "furthermore", "additionally", "also", "in addition", "albeit"])
     for (const source of [
       `The button creates a PR after tests pass, ${connector} the service opens another PR.`,
       `Ensure the button creates a PR after tests pass ${connector} the service opens another PR.`,
@@ -1760,9 +1780,9 @@ test("causal approval clauses validate their actions and business objects", () =
 });
 
 test("concessive approval clauses validate each action and its own business object", () => {
-  for (const connector of ["even though", "though", "although", "whereas", "EVEN THOUGH"]) {
-    for (const action of ["you proofread the invoice", "you must proofread the invoice", "our senior editor proofreads the invoice",
-      "Alice King proofreads the invoice", "carefully proofreading the invoice", "the invoice is proofread", "you email the report"])
+  for (const connector of ["albeit", "ALBEIT", "even though", "though", "although", "whereas", "EVEN THOUGH"]) {
+    for (const action of ["proofreading the invoice", "you proofread the invoice", "you must proofread the invoice", "our senior editor proofreads the invoice",
+      "Alice King proofreads the invoice", "carefully proofreading the invoice", "not carefully proofreading the invoice", "the invoice is proofread", "you email the report"])
       for (const source of [
         `If I approve the invoice, email the customer ${connector} ${action}.`,
         `Email the customer ${connector} ${action} after I approve the invoice.`,
@@ -1791,6 +1811,7 @@ test("concessive approval clauses validate each action and its own business obje
   for (const source of [
     "If I approve the invoice, email the customer even though you apply the discount and wait until the owner approves.",
     "Email the customer though if I approve the invoice, proofread the article.",
+    "Email the customer albeit if I approve the invoice, proofread the article.",
   ]) {
     assert.throws(() => ownerDelivery(source), { code: "TASK_DELIVERY_SCOPE" }, source);
     assert.throws(() => assertDeliveryAnswer({}, source), { code: "TASK_DELIVERY_SCOPE" }, source);
@@ -1798,7 +1819,9 @@ test("concessive approval clauses validate each action and its own business obje
   for (const source of [
     "Though the discount is applied, if I approve the invoice, email the customer.",
     "Email the customer though if I approve the invoice, apply the discount.",
+    "Email the customer albeit if I approve the invoice, apply the discount.",
     'If I approve the invoice, email the customer with the note "even though you proofread the invoice".',
+    'If I approve the invoice, email the customer with the note "albeit proofreading the invoice".',
   ]) {
     assert.equal(ownerDelivery(source), null, source);
     assert.doesNotThrow(() => assertDeliveryAnswer({}, source), source);
