@@ -1718,6 +1718,51 @@ test("upon clauses validate approval-gated actions and relative continuations", 
   assert.doesNotThrow(() => assertDeliveryAnswer({}, quoted));
 });
 
+test("following and possessive gerunds retain approval gates and own their objects", () => {
+  for (const connector of ["following", "FOLLOWING", "after", "before", "upon", "by", "despite", "notwithstanding"]) {
+    for (const action of ["your proofreading the invoice", "our carefully proofreading the invoice", "their editing the invoice",
+      "Alice's proofreading the invoice", "our editor’s proofreading the invoice", "your emailing the report"])
+      for (const source of [
+        `If I approve the invoice, email the customer ${connector} ${action}.`,
+        `Email the customer ${connector} ${action} after I approve the invoice.`,
+      ]) {
+        assert.throws(() => ownerDelivery(source), { code: "TASK_DELIVERY_SCOPE" }, source);
+        assert.throws(() => assertDeliveryAnswer({}, source), { code: "TASK_DELIVERY_SCOPE" }, source);
+      }
+    const borrowedObject = `If I approve the invoice, email the report ${connector} your applying the discount.`;
+    assert.throws(() => ownerDelivery(borrowedObject), { code: "TASK_DELIVERY_SCOPE" }, borrowedObject);
+    assert.throws(() => assertDeliveryAnswer({}, borrowedObject), { code: "TASK_DELIVERY_SCOPE" }, borrowedObject);
+    for (const complement of ["your applying the discount", "your carefully applying the discount", "your emailing the customer",
+      "Alice's emailing the customer", "our editor’s emailing the customer", "your recurring payment", "the recurring payment"])
+      for (const source of [
+        `If I approve the invoice, email the customer ${connector} ${complement}.`,
+        `Email the customer ${connector} ${complement} after I approve the invoice.`,
+      ]) {
+        assert.equal(ownerDelivery(source), null, source);
+        assert.doesNotThrow(() => assertDeliveryAnswer({}, source), source);
+        const original = source + " Open a PR for review.", contract = ownerDelivery(original);
+        assert.equal(validateOwnerDelivery(contract), contract, source);
+        assert.equal(ownerImplementation(contract).join(""), source + " ", source);
+        assert.equal(contract.spans.map(span => original.slice(span.start, span.end)).join(""), original, source);
+      }
+  }
+  for (const source of [
+    "If I approve the invoice, email the customer following proofreading the invoice.",
+    "If I approve the invoice, email the customer FOLLOWING Alice King proofreading the invoice.",
+    "If I approve the invoice, email the customer following which our archive specialist proofreads the invoice.",
+  ]) {
+    assert.throws(() => ownerDelivery(source), { code: "TASK_DELIVERY_SCOPE" }, source);
+    assert.throws(() => assertDeliveryAnswer({}, source), { code: "TASK_DELIVERY_SCOPE" }, source);
+  }
+  for (const source of [
+    "If I approve the invoice, email the customer FOLLOWING WHICH the receipt is sent.",
+    'If I approve the invoice, email the customer with the note "following your proofreading the invoice".',
+  ]) {
+    assert.equal(ownerDelivery(source), null, source);
+    assert.doesNotThrow(() => assertDeliveryAnswer({}, source), source);
+  }
+});
+
 test("temporal approval gerunds retain modifiers without hiding implementation", () => {
   for (const connector of ["before", "after", "while", "once", "until", "when", "as soon as", "by the time", "as"])
     for (const modifier of ["carefully", "very carefully", "not carefully"]) {
