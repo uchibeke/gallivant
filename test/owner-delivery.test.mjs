@@ -1635,6 +1635,56 @@ test("despite complements validate approval-gated gerunds and their own objects"
   assert.doesNotThrow(() => assertDeliveryAnswer({}, quoted));
 });
 
+test("upon clauses validate approval-gated actions and relative continuations", () => {
+  for (const connector of ["upon", "UPON"]) {
+    for (const action of ["proofreading the invoice", "carefully proofreading the invoice", "not carefully proofreading the invoice",
+      "you proofreading the invoice", "our senior editor proofreading the invoice", "Alice King proofreading the invoice",
+      "emailing the report", "applying the discount before proofreading the invoice"])
+      for (const source of [
+        `If I approve the invoice, email the customer ${connector} ${action}.`,
+        `Email the customer ${connector} ${action} after I approve the invoice.`,
+      ]) {
+        assert.throws(() => ownerDelivery(source), { code: "TASK_DELIVERY_SCOPE" }, source);
+        assert.throws(() => assertDeliveryAnswer({}, source), { code: "TASK_DELIVERY_SCOPE" }, source);
+      }
+    const borrowedObject = `If I approve the invoice, email the report ${connector} applying the discount.`;
+    assert.throws(() => ownerDelivery(borrowedObject), { code: "TASK_DELIVERY_SCOPE" }, borrowedObject);
+    assert.throws(() => assertDeliveryAnswer({}, borrowedObject), { code: "TASK_DELIVERY_SCOPE" }, borrowedObject);
+    for (const complement of ["applying the discount", "carefully applying the discount", "you applying the discount",
+      "our senior editor emailing the customer", "Alice King emailing the customer", "receipt of payment"])
+      for (const source of [
+        `If I approve the invoice, email the customer ${connector} ${complement}.`,
+        `Email the customer ${connector} ${complement} after I approve the invoice.`,
+      ]) {
+        assert.equal(ownerDelivery(source), null, source);
+        assert.doesNotThrow(() => assertDeliveryAnswer({}, source), source);
+        const original = source + " Open a PR for review.", contract = ownerDelivery(original);
+        assert.equal(validateOwnerDelivery(contract), contract, source);
+        assert.equal(ownerImplementation(contract).join(""), source + " ", source);
+        assert.equal(contract.spans.map(span => original.slice(span.start, span.end)).join(""), original, source);
+      }
+  }
+  for (const connector of ["upon which", "UPON WHICH"]) {
+    for (const action of ["you proofread the invoice", "Alice King must proofread the invoice", "the invoice is proofread", "our archive specialist proofreads the invoice"]) {
+      const source = `If I approve the invoice, email the customer ${connector} ${action}.`;
+      assert.throws(() => ownerDelivery(source), { code: "TASK_DELIVERY_SCOPE" }, source);
+      assert.throws(() => assertDeliveryAnswer({}, source), { code: "TASK_DELIVERY_SCOPE" }, source);
+    }
+    for (const action of ["you apply the discount", "Alice King must email the customer", "the receipt is sent"]) {
+      const source = `If I approve the invoice, email the customer ${connector} ${action}.`;
+      assert.equal(ownerDelivery(source), null, source);
+      assert.doesNotThrow(() => assertDeliveryAnswer({}, source), source);
+      const original = source + " Open a PR for review.", contract = ownerDelivery(original);
+      assert.equal(validateOwnerDelivery(contract), contract, source);
+      assert.equal(ownerImplementation(contract).join(""), source + " ", source);
+      assert.equal(contract.spans.map(span => original.slice(span.start, span.end)).join(""), original, source);
+    }
+  }
+  const quoted = 'If I approve the invoice, email the customer with the note "upon proofreading the invoice".';
+  assert.equal(ownerDelivery(quoted), null);
+  assert.doesNotThrow(() => assertDeliveryAnswer({}, quoted));
+});
+
 test("temporal approval gerunds retain modifiers without hiding implementation", () => {
   for (const connector of ["before", "after", "while", "once", "until", "when", "as soon as", "by the time", "as"])
     for (const modifier of ["carefully", "very carefully", "not carefully"]) {
