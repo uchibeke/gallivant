@@ -415,7 +415,7 @@ publication and review correction. Use the exact prerequisites above to record
 those phases; fixture passes alone are not end-to-end qualification.
 
 The original M5/M6 integration handoff points to
-[`aporthq/agent-passport#417`](https://github.com/aporthq/agent-passport/pull/417),
+[`aporthq/agent-passport#417`](https://github.com/aporthq/agent-passport/pull/417) (not publicly readable),
 merged on 2026-10-09. Its canonical brief is
 `docs/prds/aport-task-delivery-workflow-integration.md` in that repository, with
 job identity `aporthq/agent-passport/aport-task-delivery-workflow-integration`.

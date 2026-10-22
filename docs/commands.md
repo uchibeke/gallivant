@@ -9,7 +9,7 @@ Use `gallivant --help` (or `gallivant help`) for the installed CLI's syntax and
 
 | Intent | Command | Notes |
 |---|---|---|
-| Create config | `gallivant init` | Selected Codex or Claude installation; preserves existing config. |
+| Set up the current repository | `gallivant init` | Private config, this repository in `repos`, then the `doctor` report; safe to repeat. |
 | Check setup/connectivity | `gallivant doctor` | `--network` tests DNS/HTTPS; `--probe` is a real Claude run. |
 | Prepare a task | `gallivant task "request"` | Uses inference; implementation requires `--run` authorization. |
 | Inspect/continue a prepared task | `gallivant task list`, `inspect`, `answer`, `resume`, `validate`, `start` | Task IDs and exact revisions; see [task operations](#task-operations). |
@@ -46,12 +46,39 @@ select the configured harness in the PRD or task preparation.
 
 ## `gallivant init [--harness codex|claude] [--worktrees <directory>]`
 
-Create a private config from your authenticated GitHub login and the selected
-installed harness (Codex by default). Creates a separate checkouts directory,
-disables optional notifications initially, and prints the packaged template paths.
-Existing configs are refused, never replaced. Does not change credentials, global
-harness settings, reviewer installation or repository rules. Follow `doctor` and
-[installation](install.md) next. `--version` prints the installed package version.
+Set up the Git checkout you run it in. Published form:
+`npx --yes @uchibeke/gallivant init --harness codex`.
+
+Before writing anything it checks, in this order, that the directory is a Git
+checkout whose `origin` is a github.com repository, that `gh` is signed in, that
+the selected harness is installed at a supported version and signed in, and that
+the resolved run credential can push to the repository. A failed check stops the
+command with the exact fix (`gh auth login`, `codex login`, `claude auth login`,
+or the remote or permission to correct) and leaves no state behind.
+Classic credentials also need `public_repo` or `repo` scope; the account's push
+role alone does not grant that scope. If the scope lookup fails, setup asks you
+to retry before writing state. Fine-grained tokens have no OAuth scope header
+and still require the repository permission check.
+
+It then creates a private config from your authenticated GitHub login and the
+selected installed harness (Codex by default for a new config), creates a
+separate checkouts directory, disables optional notifications, records the
+repository in `repos` once, and prints the `doctor` report plus the packaged
+template paths. Its exit status is doctor's: `0` when every check passes, `1`
+while checks remain.
+
+Repeating it is safe. An existing config keeps every key as written; the only
+change is the one `repos` entry for the current repository, never duplicated.
+`--harness` adds a second supported harness without touching the first;
+when both Codex and Claude are configured, pass `--harness` to choose one.
+Concurrent updates use the same mutation lock as other CLI writes; if settings
+change during the prerequisite checks, setup rechecks them before writing.
+`--worktrees` is refused when it differs from the configured directory. `init`
+does not sign in, change credentials, global harness settings, reviewer
+installation or repository rules, and does not start a task. When run through
+`npx` it says that nothing was installed globally and prints both the next `npx`
+command and the optional `npm install -g @uchibeke/gallivant`. See
+[installation](install.md). `--version` prints the installed package version.
 
 ## `gallivant doctor [--send] [--probe]`
 
@@ -120,8 +147,9 @@ Preparation accepts `--repo`, `--base`, repeated `--context` files and `--verify
 commands, and a retry-safe `--request-id`. Answers may also add explicit context
 and verification commands. `--completion-target delivery_ready|integrated` selects
 whether the task tracks readiness or confirmed integration; neither grants merge
-permission. `--run` on initial preparation authorizes dispatch after readiness and
-any required answers. `--no-daemon` leaves monitoring startup to an existing host
+permission. Initial preparation returns the draft or questions for review even
+when `--run` is present; approve the visible revision separately with `task start
+--revision N --run`. `--no-daemon` leaves monitoring startup to an existing host
 or explicit coordinator. See [task operations](tasks.md) for revision conflicts,
 uncertain dispatch, evidence and authorization rules.
 

@@ -1,3 +1,4 @@
+import { CORE_VERSION } from '../lib/task_delivery_contract.mjs';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdtempSync, writeFileSync, mkdirSync, rmSync, symlinkSync, readFileSync } from 'node:fs';
@@ -83,7 +84,7 @@ test('runtime configuration changes invalidate deployment-dependent evidence onl
   input.manifest.resource = { uri: 'ui://task-delivery/app', domain: 'https://aport.io', connectDomains: [], resourceDomains: [] };
   input.manifest.requirements = { node: '>=22' };
   input.manifest.exports = { '.': './lib/index.mjs' };
-  Object.assign(input.manifest, { coreVersion: '0.2.0', operationVersion: 1, taskVersion: 1, executionVersion: 1 });
+  Object.assign(input.manifest, { coreVersion: CORE_VERSION, operationVersion: 1, taskVersion: 1, executionVersion: 1 });
   const evidence = observed(input), identity = releaseIdentity(input.manifest, input.deployment);
   const changes = [
     m => { m.resource.uri = 'ui://task-delivery/next'; },
@@ -262,7 +263,7 @@ test('release assembly reuses the packager and keeps evidence outside the public
   const sourceCommit = execFileSync('git', ['rev-parse', 'HEAD'], { encoding: 'utf8' }).trim();
   const { deployment } = candidate();
   const out = join(dir, 'release');
-  const built = assembleRelease({ config, sourceCommit, coreVersion: '0.2.0', out, internal: true, deployment });
+  const built = assembleRelease({ config, sourceCommit, coreVersion: CORE_VERSION, out, internal: true, deployment });
   assert.equal(built.evaluation.status, 'needs-human');
   assert.deepEqual(built.manifest.release.deployment, deployment);
   assert.equal(built.manifest.release.states.submissionReady, false);
@@ -301,7 +302,7 @@ test('release assembly reuses the packager and keeps evidence outside the public
   assert.deepEqual(built.manifest.packagingControlHashes, committedControls);
   assert.ok(committedControls['.gitignore'], 'actual build records controls omitted from npm payload');
   assert.equal(built.manifest.payloadHashes['.gitignore'], undefined);
-  const changed = assembleRelease({ config: { ...config, resource: { ...config.resource, uri: 'ui://task-delivery/next' } }, sourceCommit, coreVersion: '0.2.0', out: join(dir, 'changed-resource'), internal: true, deployment });
+  const changed = assembleRelease({ config: { ...config, resource: { ...config.resource, uri: 'ui://task-delivery/next' } }, sourceCommit, coreVersion: CORE_VERSION, out: join(dir, 'changed-resource'), internal: true, deployment });
   assert.equal(changed.manifest.coreSha256, built.manifest.coreSha256);
   assert.equal(changed.manifest.hashes.plugin, built.manifest.hashes.plugin);
   assert.equal(changed.manifest.hashes.operations, built.manifest.hashes.operations);
@@ -335,6 +336,6 @@ test('release assembly reuses the packager and keeps evidence outside the public
   assert.equal(installedVerification.status, 1);
   assert.match(installedVerification.stderr, /Candidate bytes changed: START-HERE.md/);
 
-  assert.throws(() => assembleRelease({ config, sourceCommit, coreVersion: '0.2.0', out, internal: true, deployment }), /empty bounded/);
+  assert.throws(() => assembleRelease({ config, sourceCommit, coreVersion: CORE_VERSION, out, internal: true, deployment }), /empty bounded/);
   assert.ok(readFileSync(join(out, 'manifest.json')).length, 'occupied output must survive');
 });

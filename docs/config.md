@@ -9,9 +9,10 @@ while apply and key setup refuse before activation. Key paths are separate expli
 operator paths, and OpenSSH is pinned outside worker writes. See [learning](learning.md)
 for the CLI, bounds, separate extraction allowance and backup/rotation limitations.
 
-`~/.gallivant/config.json`, mode 600. `gallivant init` creates a local Codex or
-Claude configuration; `gallivant doctor` prints a suggested configuration when
-none exists. Set `GALLIVANT_HOME` to use another directory. Hosted providers need
+`~/.gallivant/config.json`, mode 600. `gallivant init`, run inside a checkout,
+creates a local Codex or Claude configuration, records that repository in `repos`
+and prints the `doctor` report; repeated runs preserve every key you have edited.
+`gallivant doctor` prints a suggested configuration when none exists. Set `GALLIVANT_HOME` to use another directory. Hosted providers need
 explicit configuration; they are not discovered from local executable paths.
 See [installation](install.md) for the first-run sequence.
 

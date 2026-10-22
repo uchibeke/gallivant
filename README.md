@@ -2,68 +2,83 @@
 
 **Give an agent a task. Let the review loop run. Go outside.**
 
-Gallivant turns repository tasks into reviewed pull requests. It starts an agent,
-watches CI and reviewer feedback, and continues the same session to fix issues.
-You can follow progress and send corrections from a local dashboard. **You decide
-what gets merged.**
-
-Use it for code, documentation, research or content that belongs in a GitHub
-repository. Start with a plain-language request or a written brief.
+Gallivant turns a repository task into a reviewed pull request. It runs a coding
+agent in a separate checkout, opens the PR, watches CI and reviewer feedback, and
+continues the same session until the PR is ready for you. You decide what merges.
 
 ```text
 Your task → agent works → PR → review + CI → fixes → ready for you
                                  ↑___________|
 ```
 
-## Install
+## Set up in one command
 
-You need **macOS or Linux, Node 22+, Git, GitHub CLI and jq**. For your first run,
-use signed-in **Codex CLI 0.160.0+** or **Claude Code 2.1.263+**. Provider usage is
-billed to your own account. [Full prerequisites](docs/install.md).
-
-Check the [registry version](https://www.npmjs.com/package/@uchibeke/gallivant). Once a
-version is available, install it with `npm install -g @uchibeke/gallivant`. If the package
-is not published yet, install from source:
+Run this inside the Git checkout you want to work in:
 
 ```sh
-git clone https://github.com/uchibeke/gallivant.git
-cd gallivant
-npm ci --ignore-scripts
-npm link
-gallivant --version
+npx --yes @uchibeke/gallivant init --harness codex    # or: --harness claude
 ```
 
-[Release status and checks](docs/releasing.md).
+The setup flow below requires **0.2.1 or newer**. At verification on 2026-10-20,
+npm's `latest` was still 0.2.0, whose `init` only creates the config. A maintainer
+must [publish 0.2.1](docs/releasing.md) before this command provides repository
+registration, repeat safety and the diagnostic report described below.
 
-## Set up
+`init` writes a private config at `~/.gallivant/config.json`, records this
+repository, creates a separate directory for task checkouts, and ends with the
+same report as `gallivant doctor`: one line per check and the exact fix for each
+failing one. Run it again in another repository to add that repository; nothing
+else in the config changes.
+
+Before you run it you need:
+
+| Prerequisite | Check | If it fails |
+| --- | --- | --- |
+| macOS or Linux, Node 22+, Git, jq | `node --version`, `git --version`, `jq --version` | install from your package manager |
+| GitHub CLI signed in | `gh auth status` | `gh auth login` |
+| Codex CLI 0.160.0+ signed in | `codex login status` | `codex login` |
+| or Claude Code 2.1.263+ signed in | `claude auth status` | `claude auth login` |
+
+A signed-out `gh` or harness stops `init` before it writes anything, and the
+message repeats the login command above. `init` never asks for passwords, tokens
+or browser cookies; sign in with each tool's own flow. Inference is billed to
+your own provider account.
+
+`npx` downloads and runs the package on demand. Nothing is installed globally
+and no `gallivant` command is added to your PATH. If you want one:
 
 ```sh
-gh auth status
-codex login status                    # use Claude sign-in if you choose Claude
-gallivant init --harness codex         # or --harness claude
-gallivant doctor
+npm install -g @uchibeke/gallivant
 ```
 
-`init` creates local configuration and a separate task-checkout directory. It
-preserves existing config, credentials and global agent settings. Follow the
-fixes from `doctor`; [setup instructions](docs/install.md) cover authentication,
-harness permissions and repository protection.
+The rest of this page writes `gallivant`. With `npx`, read that as
+`npx --yes @uchibeke/gallivant`. Contributors who want to run from a source
+checkout: see [installing from source](docs/install.md#install-from-source).
 
-Enable the Codex GitHub review integration on the target repository, or choose
-another reviewer. If you want CI and trusted human feedback without a review bot,
-explicitly configure `"reviewer": null`. The default waits for Codex review.
+## Finish what setup cannot do for you
 
-**Prefer an agent to handle setup?** Give it the
-[setup-agent instructions](docs/agent-setup.md). They cover inspection, installation,
-configuration, verification and the points where your input is required.
+`doctor` names these. `init` does not do them, because each needs a decision
+from you or an account with a third party.
 
-## Run your first task
+- **Reviewer.** The default loop waits for the Codex GitHub review integration
+  (`chatgpt-codex-connector[bot]`). Enable it on the repository, configure
+  another reviewer, or set `"reviewer": null` in the config to rely on CI and
+  trusted human feedback. Without one of these, the first PR waits for a review
+  that never arrives. See [the reviewer key](docs/config.md#the-reviewer-object).
+- **Branch protection.** `doctor` prints the `gh api` call that creates a
+  ruleset blocking direct and force pushes to the default branch. Run it
+  yourself. Setup never changes repository settings.
+- **Harness guardrails.** The APort hook for Claude or Codex is installed by its
+  own `npx @aporthq/aport-agent-guardrails` command, and Codex asks you to trust
+  the hook inside its own interface. Setup does not install hooks.
+  [Guardrails](docs/guardrails.md) explains what each control covers.
+- **Spend.** Defaults are 30 fix rounds per PR and a 5 USD per-run cap that
+  only Claude enforces natively. Review [limits](docs/config.md) before
+  unattended work.
 
-Inside a repository you can push to. This example uses Codex; if you configured
-Claude, replace `--harness codex` with `--harness claude` before running it:
+## Run a first task
 
 ```sh
-cd /path/to/your/repository
 gallivant task "Document how to run the existing tests in CONTRIBUTING.md. Use the commands already defined in the repository. Change documentation only." \
   --harness codex --verify 'git diff --check'
 # Review the draft, then substitute its returned task ID and revision:
@@ -71,19 +86,21 @@ gallivant task start TASK_ID --revision REVISION --run
 gallivant start
 ```
 
-`task` prepares a brief and asks for missing information. Review the draft and
-answer any questions, then use the printed `Next` action to approve that revision
-with `task start --run`. Preparation always returns for review, even if its
-command includes `--run`. Preparation also uses inference.
+`task` uses your harness to prepare a brief, which is a paid inference call,
+and may ask you questions. Review the draft and answer any questions, then use
+its printed `Next` action to approve that revision with `task start --run`.
+Preparation always returns for review, even if its command includes `--run`.
+The agent then works in a clone under `~/.gallivant-worktrees`,
+pushes a branch, opens a PR against the default branch, and the daemon watches CI
+and the reviewer, sending each round of feedback back to the same session.
+`gallivant start` opens the dashboard at **http://127.0.0.1:8791** and keeps
+the daemon running; closing the browser does not stop the work.
 
-`gallivant start` opens **http://127.0.0.1:8791** and ensures the daemon is running.
-Without a PRD path, it does not submit another task. Closing the browser does not
-stop the work.
-
-With the default configuration, **ready** means the configured checks, reviewer
-and acceptance gate passed. Inspect status for skipped-gate warnings, review the
-PR and merge when you choose. Missing access, evidence or exhausted limits produce
-an inspectable stop instead.
+Expected outcome: a PR with a small CONTRIBUTING.md change and a completion
+receipt in its body, and `gallivant status` showing the entry as **ready** once
+checks, reviewer and the acceptance gate pass. You review and merge. Missing
+access, failing checks or an exhausted round allowance produce an inspectable
+stop instead; `gallivant why <handle>` explains it.
 
 ### Bring a written brief
 
@@ -97,6 +114,20 @@ gallivant start docs/prds/add-csv-export.md
 
 You do not have to write a PRD yourself. Both entry points use a validated brief
 and the same review loop. [Writing briefs](docs/prd.md) · [Task commands](docs/tasks.md).
+
+## How the review loop runs
+
+1. The agent implements the brief, runs the brief's verification commands and
+   opens the PR.
+2. Each tick (every two minutes by default) the daemon reads CI and reviewer
+   state. A blocking review or a failing check starts a fix round in the same
+   agent session, and the fix is pushed to the same PR.
+3. Rounds stop at `max_iterations` (30 by default), when the reviewer stays
+   silent for `stall_hours`, or when a run exceeds its timeout. Every stop is
+   recorded with a reason you can read with `gallivant why`.
+4. **Ready** means the configured checks, reviewer and acceptance gate passed.
+   Nothing merges automatically. Natural-language tasks stop at a review
+   handoff by default; choose `integrated` to keep watching until you merge.
 
 ## While it works
 
@@ -129,6 +160,9 @@ base. You can plan longer work while retaining the merge decision.
 [Chaining tasks](docs/chains.md).
 
 ## Harness support
+
+`init --harness` accepts `codex` and `claude`. Other adapters are configured by
+hand in `config.json`; see [configuration](docs/config.md#execution-providers).
 
 | Harness (`harness` key) | Runs on | Prepare requests | Implementation status |
 | --- | --- | --- | --- |
@@ -206,6 +240,11 @@ for the installed version's flags.
 | Understand internals or recorded qualification | [Documentation index](docs/README.md) |
 | Set up from an agent | [Agent setup](docs/agent-setup.md) |
 | Release, contribute or report a vulnerability | [Releasing](docs/releasing.md) · [Contributing](CONTRIBUTING.md) · [Security](SECURITY.md) |
+
+**Asking a coding agent to set this up?** Give it the
+[setup-agent instructions](docs/agent-setup.md). They cover inspection, the
+`npx` command, the points where your login or decision is required, and what a
+setup run may not do on its own.
 
 Embedding the same workflow in another application? See
 [task delivery](docs/task-delivery.md). Installing this CLI does not deploy a

@@ -1,3 +1,4 @@
+import { CORE_VERSION } from "../lib/task_delivery_contract.mjs";
 import { PNG } from "pngjs";
 import { test } from "node:test";
 import assert from "node:assert/strict";
@@ -11,11 +12,15 @@ import { tempHome } from "./helpers.mjs";
 
 const root = dirname(fileURLToPath(new URL("../package.json", import.meta.url)));
 const sourceCommit = "a".repeat(40);
+test("plugin contract version matches the installed package version", () => {
+  assert.equal(CORE_VERSION, JSON.parse(readFileSync(join(root, "package.json"))).version);
+});
+
 function fixture() {
   const home = tempHome(), ui = join(home, "ui.html"), image = join(home, "image.png");
   writeFileSync(ui, "<!doctype html><p>Unpaid package validation fixture.</p>");
   writeFileSync(image, PNG.sync.write({ width: 1, height: 1, data: Buffer.from([0, 0, 0, 255]) }));
-  return { out: join(home, "out"), coreVersion: "0.2.0", sourceCommit,
+  return { out: join(home, "out"), coreVersion: CORE_VERSION, sourceCommit,
     config: { publisher: "APort", supportEmail: "support@aport.io", endpoint: "https://aport.io/mcp",
       homepage: "https://aport.io", supportUrl: "https://aport.io/support", privacyUrl: "https://aport.io/privacy",
       termsUrl: "https://aport.io/terms", licenseUrl: "https://aport.io/license",
