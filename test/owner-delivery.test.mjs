@@ -208,6 +208,33 @@ test("fixture publication cannot target an explicit network endpoint on any forg
   }
 });
 
+test("scheme-less fixture endpoints retain live destination and local path boundaries", () => {
+  for (const endpoint of ["www.github.com/acme/widget", "github.com/acme/widget", "bitbucket.org/acme/widget",
+    "forge.example.net:8443/acme/widget", "localhost:3000/acme/widget", "127.0.0.1:3000/acme/widget",
+    "[::1]:3000/acme/widget", "//git.example.net/acme/widget"])
+    for (const action of ["at", "via", "inside", "within", "and open it at", "and upload it to"]) {
+      const source = `For tests, create a fake PR fixture ${action} ${endpoint}.`;
+      assert.throws(() => ownerDelivery(source), { code: "TASK_DELIVERY_SCOPE" }, source);
+      assert.throws(() => assertDeliveryAnswer({}, source), { code: "TASK_DELIVERY_SCOPE" }, source);
+    }
+  for (const source of [
+    "For tests, create a fake PR fixture and upload logs to www.github.com/acme/widget.",
+    "For tests, create a fake PR fixture before uploading logs to forge.example.net:8443/acme/widget.",
+    "For tests, create a fake PR fixture / upload logs to bitbucket.org/acme/widget.",
+    'For tests, create a fake PR fixture with the URL field "www.github.com/acme/widget".',
+    "For tests, create a fake PR fixture at fixtures/github.com/acme/widget.json.",
+    "For tests, create a fake PR fixture at ./www.github.com/acme/widget.json.",
+    "For tests, create a fake PR fixture at file:///tmp/www.github.com/acme/widget.json.",
+  ]) {
+    assert.equal(ownerDelivery(source), null, source);
+    assert.doesNotThrow(() => assertDeliveryAnswer({}, source), source);
+    const original = source + " Open a PR for review.", contract = ownerDelivery(original);
+    assert.equal(validateOwnerDelivery(contract), contract, source);
+    assert.equal(ownerImplementation(contract).join(""), source + " ", source);
+    assert.equal(contract.spans.map(span => original.slice(span.start, span.end)).join(""), original, source);
+  }
+});
+
 test("publication fixture masking cannot hide coordinated live PRs", () => {
   for (const connector of ["plus", "+", "/", "as well as", "along with", "alongside", "together with", "in addition to", "not to mention", "besides", "versus", "vs", "vs.", "compared with", "compared to", "but", "yet"]) {
     const source = `For tests, create a fake PR ${connector} a real PR.`;
@@ -361,6 +388,33 @@ test("passive merge controls recognize shared negative modals before product mas
     const original = source + " Open a PR for review.", contract = ownerDelivery(original);
     assert.equal(validateOwnerDelivery(contract), contract, source);
     assert.equal(ownerImplementation(contract).join(""), source + " ", source);
+  }
+});
+
+test("modified passive controls remain visible without swallowing application data", () => {
+  for (const restriction of [
+    "Changes cannot ever be merged.", "Work can't automatically be merged.", "Code can’t really ever be merged.",
+    "PRs must not immediately be silently merged.", "Changes must never again be merged.",
+    "Changes are not ever to be merged.", "Code is not to ever be merged.", "Work is not to be automatically merged.",
+    "Commits must not automatically be created.", "Commits must never again be written.", "Commits cannot naïvely be written.",
+    "Git branches cannot ever be generated.", "Git branches are not to ever be created.",
+  ])
+    for (const source of ["The button creates a PR after tests pass since " + restriction.toLowerCase(), restriction]) {
+      assert.throws(() => ownerDelivery(source), { code: "TASK_DELIVERY_SCOPE" }, source);
+      assert.throws(() => assertDeliveryAnswer({}, source), { code: "TASK_DELIVERY_SCOPE" }, source);
+    }
+  for (const source of [
+    "Customer records cannot ever be merged.",
+    "The button creates a PR after tests pass since customer records cannot ever be merged.",
+    "Bank branches cannot automatically be created without an address.",
+    'Show the warning "Changes cannot ever be merged" in the PR dialog.',
+  ]) {
+    assert.equal(ownerDelivery(source), null, source);
+    assert.doesNotThrow(() => assertDeliveryAnswer({}, source), source);
+    const original = source + " Open a PR for review.", contract = ownerDelivery(original);
+    assert.equal(validateOwnerDelivery(contract), contract, source);
+    assert.equal(ownerImplementation(contract).join(""), source + " ", source);
+    assert.equal(contract.spans.map(span => original.slice(span.start, span.end)).join(""), original, source);
   }
 });
 
