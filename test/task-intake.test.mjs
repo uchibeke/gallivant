@@ -62,6 +62,19 @@ const prepareAndStart = async (w, input, service = w.service) => {
   return service.start({ taskId: r.taskId, expectedRevision: r.revision, run: true, noDaemon: input.noDaemon });
 };
 const GREETING_REQUEST = 'In greeting.mjs, improve greeting(name): trim surrounding whitespace for string names; return "Hello, friend!" for an empty or whitespace-only string; preserve "Hello, Ada!" for "Ada"; reject non-string input with TypeError. Add native Node tests covering normal, trimmed, empty, whitespace-only and non-string inputs. Update README briefly with usage. Run node --test. Open one pull request for review; do not merge, release, modify workflows, add dependencies, or access other repositories. Scope: aporthq/task-delivery-onboarding-qualification only.';
+test("publication simulations reach review without delivery questions or implementation dispatch", async () => {
+  const w = world({ prepare: async (_ctx, task) => JSON.stringify(draftFor(task)) });
+  for (const text of ["Run npm publish --dry-run.", "Run cargo publish --dry-run.", "Run docker compose --dry-run push.", "Run docker buildx imagetools create --dry-run acme/base."]) {
+    const prepared = await w.service.prepare({ text, run: true });
+    assert.equal(prepared.status, "ready", text);
+    assert.deepEqual(prepared.questions, [], text);
+    const saved = taskStore(w.home).read(prepared.taskId);
+    assert.equal(saved.original, text); assert.equal(saved.runAuthorized, false);
+    assert.equal(prepared.approval, null);
+    assert.deepEqual(w.ctx.state.entries(), []); assert.equal(w.runners.size, 0); assert.equal(w.daemonCalls(), 0);
+  }
+});
+
 test("implementation lifecycle nouns reach ordinary preparation without changing delivery authority", async () => {
   let calls = 0;
   const w = world({ prepare: async (_ctx, task) => { calls++; return JSON.stringify(draftFor(task)); } });
@@ -4932,6 +4945,12 @@ test("anaphoric delivery replies cannot be resolved by empty or ungrounded plann
 
 test("target, publication, approval and mixed-polarity conflicts survive answer chains without dispatch", async () => {
   for (const [text, tag] of [
+    ["Run docker image push acme/app.", { action: "pull_request" }],
+    ["Run docker compose push.", { action: "pull_request" }],
+    ["Run docker buildx build --push .", { action: "pull_request" }],
+    ["Run docker buildx imagetools create acme/base.", { action: "pull_request" }],
+    ["Run npm publish --dry-run --no-dry-run.", { action: "pull_request" }],
+    ["Run cargo publish --dry-run=false.", { action: "pull_request" }],
     ["Open one PR; then another for the UI.", { action: "pull_request" }],
     ["Open one PR, then another PR.", { action: "pull_request" }],
     ["Open one PR, and then a second PR.", { action: "pull_request" }],
@@ -5106,7 +5125,7 @@ test("typed delivery inputs refuse merge, deployment and unknown routes before e
 });
 
 test("wrapped source and reply delivery instructions pause before readiness or dispatch", async () => {
-  for (const text of ["Open one PR,\nthen another PR", "Open one PR, then\nanother PR", "Run gh secret\nset API_KEY --body fixture-value", "Run gh variable\ndelete DEPLOY_ENV", "Do not\nopen a pull request", "Upload the package\nto npm", "Run gh workflow\nrun smoke.yml", "Run gh discussion\ncomment 123 --body Thanks", "Run gh repo\nautolink delete 123", "Run gh repo\ndelete acme/widget --yes", "Run gh repo\narchive acme/widget --yes", "Run gh ssh-key\nadd key.pub", "Run gh gpg-key\ndelete 123", "Run git push\n--force origin HEAD", "Run git push -u\n--force-with-lease origin HEAD"]) {
+  for (const text of ["Run docker image\npush acme/app", "Run docker buildx build\n--push .", "Open one PR,\nthen another PR", "Open one PR, then\nanother PR", "Run gh secret\nset API_KEY --body fixture-value", "Run gh variable\ndelete DEPLOY_ENV", "Do not\nopen a pull request", "Upload the package\nto npm", "Run gh workflow\nrun smoke.yml", "Run gh discussion\ncomment 123 --body Thanks", "Run gh repo\nautolink delete 123", "Run gh repo\ndelete acme/widget --yes", "Run gh repo\narchive acme/widget --yes", "Run gh ssh-key\nadd key.pub", "Run gh gpg-key\ndelete 123", "Run git push\n--force origin HEAD", "Run git push -u\n--force-with-lease origin HEAD"]) {
     const w = world({ prepare: async (_ctx, task) => JSON.stringify(draftFor(task, { delivery: Object.fromEntries(task.requirements.map(r => [r.id, { action: "pull_request" }])) })) });
     const first = await w.service.prepare({ text, run: true });
     assert.equal(first.status, "needs-input", text); assert.equal(first.readiness, null);

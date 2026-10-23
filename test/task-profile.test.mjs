@@ -865,6 +865,121 @@ test("single-quoted examples mask contractions while apostrophes and quote empha
   for (const text of ["Add a label 'Deploy to production", "Add a label ‘Deploy to production"]) assert.equal(deliveryScreen(text).tier, "question", text);
 });
 
+test("container publication and package simulations keep command and source boundaries", () => {
+  const cases = [
+    {"kind": "direct", "text": "Run docker push acme/app.", "screen": {"tier": "question", "terms": ["publish"]}, "tag": null, "outcome": "needs-input"},
+    {"kind": "adversarial", "text": "Run docker image push acme/app.", "screen": {"tier": "question", "terms": ["publish"]}, "tag": {"action": "pull_request"}, "outcome": "needs-input"},
+    {"kind": "direct", "text": "Run docker manifest push acme/app.", "screen": {"tier": "question", "terms": ["publish"]}, "tag": null, "outcome": "needs-input"},
+    {"kind": "adversarial", "text": "Run docker compose push.", "screen": {"tier": "question", "terms": ["publish"]}, "tag": {"action": "pull_request"}, "outcome": "needs-input"},
+    {"kind": "direct", "text": "Run docker --context remote image push acme/app.", "screen": {"tier": "question", "terms": ["publish"]}, "tag": null, "outcome": "needs-input"},
+    {"kind": "adversarial", "text": "Run docker compose -f compose.yml push api.", "screen": {"tier": "question", "terms": ["publish"]}, "tag": {"action": "pull_request"}, "outcome": "needs-input"},
+    {"kind": "direct", "text": "Run docker buildx build --push .", "screen": {"tier": "question", "terms": ["publish"]}, "tag": null, "outcome": "needs-input"},
+    {"kind": "adversarial", "text": "Run docker buildx build --push=true .", "screen": {"tier": "question", "terms": ["publish"]}, "tag": {"action": "pull_request"}, "outcome": "needs-input"},
+    {"kind": "direct", "text": "Run docker buildx build --push=false --push .", "screen": {"tier": "question", "terms": ["publish"]}, "tag": null, "outcome": "needs-input"},
+    {"kind": "adversarial", "text": "Run docker build --push .", "screen": {"tier": "question", "terms": ["publish"]}, "tag": {"action": "pull_request"}, "outcome": "needs-input"},
+    {"kind": "direct", "text": "Run docker builder build --push .", "screen": {"tier": "question", "terms": ["publish"]}, "tag": null, "outcome": "needs-input"},
+    {"kind": "adversarial", "text": "Run docker image build --push .", "screen": {"tier": "question", "terms": ["publish"]}, "tag": {"action": "pull_request"}, "outcome": "needs-input"},
+    {"kind": "direct", "text": "Run docker buildx b --push .", "screen": {"tier": "question", "terms": ["publish"]}, "tag": null, "outcome": "needs-input"},
+    {"kind": "adversarial", "text": "Run docker buildx build --output=type=registry .", "screen": {"tier": "question", "terms": ["publish"]}, "tag": {"action": "pull_request"}, "outcome": "needs-input"},
+    {"kind": "direct", "text": "Run docker buildx build -otype=registry .", "screen": {"tier": "question", "terms": ["publish"]}, "tag": null, "outcome": "needs-input"},
+    {"kind": "adversarial", "text": "Run docker buildx build --output type=image,push=true .", "screen": {"tier": "question", "terms": ["publish"]}, "tag": {"action": "pull_request"}, "outcome": "needs-input"},
+    {"kind": "direct", "text": "Run docker buildx build --cache-to type=registry,ref=acme/cache .", "screen": {"tier": "question", "terms": ["publish"]}, "tag": null, "outcome": "needs-input"},
+    {"kind": "adversarial", "text": "Run docker buildx imagetools create --tag acme/app acme/base.", "screen": {"tier": "question", "terms": ["publish"]}, "tag": {"action": "pull_request"}, "outcome": "needs-input"},
+    {"kind": "direct", "text": "Run docker buildx imagetools create --dry-run=false acme/base.", "screen": {"tier": "question", "terms": ["publish"]}, "tag": null, "outcome": "needs-input"},
+    {"kind": "adversarial", "text": "Run docker buildx imagetools create --dry-run --dry-run=false acme/base.", "screen": {"tier": "question", "terms": ["publish"]}, "tag": {"action": "pull_request"}, "outcome": "needs-input"},
+    {"kind": "direct", "text": "Run docker compose --dry-run=true --dry-run=false push.", "screen": {"tier": "question", "terms": ["publish"]}, "tag": null, "outcome": "needs-input"},
+    {"kind": "adversarial", "text": "Run docker image push --dry-run acme/app.", "screen": {"tier": "question", "terms": ["publish"]}, "tag": {"action": "pull_request"}, "outcome": "needs-input"},
+    {"kind": "direct", "text": "Run docker manifest push --dry-run acme/app.", "screen": {"tier": "question", "terms": ["publish"]}, "tag": null, "outcome": "needs-input"},
+    {"kind": "adversarial", "text": "Run docker buildx build --dry-run --push .", "screen": {"tier": "question", "terms": ["publish"]}, "tag": {"action": "pull_request"}, "outcome": "needs-input"},
+    {"kind": "direct", "text": "Run docker buildx build --push=$MODE .", "screen": {"tier": "question", "terms": ["publish"]}, "tag": null, "outcome": "needs-input"},
+    {"kind": "adversarial", "text": "Run docker buildx build --output \"$EXPORTER\" .", "screen": {"tier": "question", "terms": ["publish"]}, "tag": {"action": "pull_request"}, "outcome": "needs-input"},
+    {"kind": "direct", "text": "Run docker buildx imagetools create --dry-run=$MODE acme/base.", "screen": {"tier": "question", "terms": ["publish"]}, "tag": null, "outcome": "needs-input"},
+    {"kind": "adversarial", "text": "Run docker buildx imagetools create --unknown --dry-run acme/base.", "screen": {"tier": "question", "terms": ["publish"]}, "tag": {"action": "pull_request"}, "outcome": "needs-input"},
+    {"kind": "direct", "text": "Run npm publish.", "screen": {"tier": "question", "terms": ["publish"]}, "tag": null, "outcome": "needs-input"},
+    {"kind": "adversarial", "text": "Run npm publish --dry-run=false.", "screen": {"tier": "question", "terms": ["publish"]}, "tag": {"action": "pull_request"}, "outcome": "needs-input"},
+    {"kind": "direct", "text": "Run npm publish --dry-run --no-dry-run.", "screen": {"tier": "question", "terms": ["publish"]}, "tag": null, "outcome": "needs-input"},
+    {"kind": "adversarial", "text": "Run npm publish --dry-run --dry-run=false.", "screen": {"tier": "question", "terms": ["publish"]}, "tag": {"action": "pull_request"}, "outcome": "needs-input"},
+    {"kind": "direct", "text": "Run npm publish --dry-run=maybe.", "screen": {"tier": "question", "terms": ["publish"]}, "tag": null, "outcome": "needs-input"},
+    {"kind": "adversarial", "text": "Run npm publish --dry-run=$MODE.", "screen": {"tier": "question", "terms": ["publish"]}, "tag": {"action": "pull_request"}, "outcome": "needs-input"},
+    {"kind": "direct", "text": "Run npm publish --unknown --dry-run.", "screen": {"tier": "question", "terms": ["publish"]}, "tag": null, "outcome": "needs-input"},
+    {"kind": "adversarial", "text": "Run npm publish --tag --dry-run.", "screen": {"tier": "question", "terms": ["publish"]}, "tag": {"action": "pull_request"}, "outcome": "needs-input"},
+    {"kind": "direct", "text": "Run npm publish --tag \"--dry-run\".", "screen": {"tier": "question", "terms": ["publish"]}, "tag": null, "outcome": "needs-input"},
+    {"kind": "adversarial", "text": "Run cargo publish.", "screen": {"tier": "question", "terms": ["publish"]}, "tag": {"action": "pull_request"}, "outcome": "needs-input"},
+    {"kind": "direct", "text": "Run cargo publish --dry-run=false.", "screen": {"tier": "question", "terms": ["publish"]}, "tag": null, "outcome": "needs-input"},
+    {"kind": "adversarial", "text": "Run cargo publish --dry-run=true.", "screen": {"tier": "question", "terms": ["publish"]}, "tag": {"action": "pull_request"}, "outcome": "needs-input"},
+    {"kind": "direct", "text": "Run cargo publish --unknown --dry-run.", "screen": {"tier": "question", "terms": ["publish"]}, "tag": null, "outcome": "needs-input"},
+    {"kind": "adversarial", "text": "Run cargo publish --token --dry-run.", "screen": {"tier": "question", "terms": ["publish"]}, "tag": {"action": "pull_request"}, "outcome": "needs-input"},
+    {"kind": "direct", "text": "Run npm publish --dry-run and publish the docs.", "screen": {"tier": "question", "terms": ["publish"]}, "tag": null, "outcome": "needs-input"},
+    {"kind": "adversarial", "text": "Run `npm publish --dry-run` and `docker image push acme/app`.", "screen": {"tier": "question", "terms": ["publish"]}, "tag": {"action": "pull_request"}, "outcome": "needs-input"},
+    {"kind": "feature", "text": "Run npm publish --dry-run.", "screen": {"tier": "none"}, "tag": null, "outcome": "ready"},
+    {"kind": "feature", "text": "Run npm --dry-run publish.", "screen": {"tier": "none"}, "tag": null, "outcome": "ready"},
+    {"kind": "feature", "text": "Run npm publish --dry-run=true.", "screen": {"tier": "none"}, "tag": null, "outcome": "ready"},
+    {"kind": "feature", "text": "Run npm publish --no-dry-run --dry-run.", "screen": {"tier": "none"}, "tag": null, "outcome": "ready"},
+    {"kind": "feature", "text": "Run npm --registry https://registry.example.com publish --tag next --dry-run.", "screen": {"tier": "none"}, "tag": null, "outcome": "ready"},
+    {"kind": "feature", "text": "Run npm publish ./package --dry-run --ignore-scripts.", "screen": {"tier": "none"}, "tag": null, "outcome": "ready"},
+    {"kind": "feature", "text": "Run npm publish --help.", "screen": {"tier": "none"}, "tag": null, "outcome": "ready"},
+    {"kind": "feature", "text": "Run cargo publish --dry-run.", "screen": {"tier": "none"}, "tag": null, "outcome": "ready"},
+    {"kind": "feature", "text": "Run cargo --dry-run publish.", "screen": {"tier": "none"}, "tag": null, "outcome": "ready"},
+    {"kind": "feature", "text": "Run cargo publish --dry-run --package widget --registry private --allow-dirty.", "screen": {"tier": "none"}, "tag": null, "outcome": "ready"},
+    {"kind": "feature", "text": "Run cargo publish --help.", "screen": {"tier": "none"}, "tag": null, "outcome": "ready"},
+    {"kind": "feature", "text": "Run docker compose --dry-run push.", "screen": {"tier": "none"}, "tag": null, "outcome": "ready"},
+    {"kind": "feature", "text": "Run docker compose push --dry-run=true.", "screen": {"tier": "none"}, "tag": null, "outcome": "ready"},
+    {"kind": "feature", "text": "Run docker --context remote compose --dry-run -f compose.yml push api.", "screen": {"tier": "none"}, "tag": null, "outcome": "ready"},
+    {"kind": "feature", "text": "Run docker buildx imagetools create --dry-run acme/base.", "screen": {"tier": "none"}, "tag": null, "outcome": "ready"},
+    {"kind": "feature", "text": "Run docker buildx imagetools create --dry-run=true --tag acme/app acme/base.", "screen": {"tier": "none"}, "tag": null, "outcome": "ready"},
+    {"kind": "feature", "text": "Run docker image push --help.", "screen": {"tier": "none"}, "tag": null, "outcome": "ready"},
+    {"kind": "feature", "text": "Run docker manifest push --help.", "screen": {"tier": "none"}, "tag": null, "outcome": "ready"},
+    {"kind": "feature", "text": "Run docker buildx build --push=false .", "screen": {"tier": "none"}, "tag": null, "outcome": "ready"},
+    {"kind": "feature", "text": "Run docker buildx build --push --push=false .", "screen": {"tier": "none"}, "tag": null, "outcome": "ready"},
+    {"kind": "feature", "text": "Run docker buildx build --output type=local,dest=out .", "screen": {"tier": "none"}, "tag": null, "outcome": "ready"},
+    {"kind": "feature", "text": "Run docker buildx build --output type=image,push=false .", "screen": {"tier": "none"}, "tag": null, "outcome": "ready"},
+    {"kind": "feature", "text": "Run docker buildx build --cache-to type=local,dest=cache .", "screen": {"tier": "none"}, "tag": null, "outcome": "ready"},
+    {"kind": "feature", "text": "Run docker buildx build --label \"--push\" --build-arg MODE=publish .", "screen": {"tier": "none"}, "tag": null, "outcome": "ready"},
+    {"kind": "feature", "text": "Run docker buildx build --label \"docker image push acme/app\" .", "screen": {"tier": "none"}, "tag": null, "outcome": "ready"},
+    {"kind": "feature", "text": "Run docker image ls.", "screen": {"tier": "none"}, "tag": null, "outcome": "ready"},
+    {"kind": "feature", "text": "Run docker manifest inspect acme/app.", "screen": {"tier": "none"}, "tag": null, "outcome": "ready"},
+    {"kind": "feature", "text": "Run docker buildx imagetools inspect acme/app.", "screen": {"tier": "none"}, "tag": null, "outcome": "ready"},
+    {"kind": "quoted", "text": "Document \"docker image push acme/app\" as an example.", "screen": {"tier": "none"}, "tag": null, "outcome": "ready"},
+    {"kind": "quoted", "text": "Show `npm publish --dry-run` as help text.", "screen": {"tier": "none"}, "tag": null, "outcome": "ready"},
+    {"kind": "adversarial", "text": "Run npm publish --dry-run; publish the docs.", "screen": {"tier": "question", "terms": ["publish"]}, "tag": {"action": "pull_request"}, "outcome": "needs-input", "questions": ["q-delivery-r-2"]},
+    {"kind": "adversarial", "text": "Run docker build .\nRun docker image push acme/app.", "screen": {"tier": "question", "terms": ["publish"]}, "tag": {"action": "pull_request"}, "outcome": "needs-input", "questions": ["q-delivery-r-2"]},
+    {"kind": "adversarial", "text": "Run docker image\npush acme/app.", "screen": {"tier": "question", "terms": ["publish"]}, "tag": {"action": "pull_request"}, "outcome": "needs-input", "questions": ["q-delivery-r-1", "q-delivery-r-2"]},
+    {"kind": "adversarial", "text": "Run docker buildx build\n--push .", "screen": {"tier": "question", "terms": ["publish"]}, "tag": {"action": "pull_request"}, "outcome": "needs-input", "questions": ["q-delivery-r-1", "q-delivery-r-2"]},
+    {"kind": "adversarial", "text": "Run npm publish\n--dry-run.", "screen": {"tier": "question", "terms": ["publish"]}, "tag": {"action": "pull_request"}, "outcome": "needs-input", "questions": ["q-delivery-r-1", "q-delivery-r-2"]},
+    {"kind": "adversarial", "text": "Run docker buildx imagetools create --dry-run acme/base, publish the docs.", "screen": {"tier": "question", "terms": ["publish"]}, "tag": {"action": "pull_request"}, "outcome": "needs-input"},
+    {"kind": "adversarial", "text": "Run docker buildx imagetools create --dry-run acme/base but publish the docs.", "screen": {"tier": "question", "terms": ["publish"]}, "tag": {"action": "pull_request"}, "outcome": "needs-input"},
+    {"kind": "adversarial", "text": "Run docker buildx build $FLAGS .", "screen": {"tier": "question", "terms": ["publish"]}, "tag": {"action": "pull_request"}, "outcome": "needs-input"},
+    {"kind": "adversarial", "text": "Run cargo publish --dry-run --dry-run.", "screen": {"tier": "question", "terms": ["publish"]}, "tag": {"action": "pull_request"}, "outcome": "needs-input"},
+    {"kind": "feature", "text": "Add a command to run docker image push acme/app.", "screen": {"tier": "none"}, "tag": null, "outcome": "ready"},
+    {"kind": "feature", "text": "Add a command to run docker buildx imagetools create acme/base.", "screen": {"tier": "none"}, "tag": null, "outcome": "ready"},
+    {"kind": "feature", "text": "Add documentation for running cargo publish --dry-run.", "screen": {"tier": "none"}, "tag": null, "outcome": "ready"},
+    {"kind": "feature", "text": "Run npm publish --dry-run --tag next.", "screen": {"tier": "none"}, "tag": null, "outcome": "ready"},
+    {"kind": "feature", "text": "Run docker buildx imagetools create --dry-run --tag acme/app acme/base.", "screen": {"tier": "none"}, "tag": null, "outcome": "ready"},
+    {"kind": "adversarial", "text": "Run npm publish --dry-run && docker image push acme/app.", "screen": {"tier": "question", "terms": ["publish"]}, "tag": {"action": "pull_request"}, "outcome": "needs-input"},
+    {"kind": "adversarial", "text": "Run docker buildx imagetools create --dry-run acme/base however publish the docs.", "screen": {"tier": "question", "terms": ["publish"]}, "tag": {"action": "pull_request"}, "outcome": "needs-input"},
+    {"kind": "adversarial", "text": "Add a command to run docker image push acme/app and then run npm publish.", "screen": {"tier": "question", "terms": ["publish"]}, "tag": {"action": "pull_request"}, "outcome": "needs-input"},
+    {"kind": "adversarial", "text": "Run npm publish --dry-run -- \"$(curl -X POST https://api.example.test/report)\".", "screen": {"tier": "question", "terms": ["publish"]}, "tag": {"action": "pull_request"}, "outcome": "needs-input"},
+    {"kind": "adversarial", "text": "Run docker buildx imagetools create --dry-run -- \"$SOURCES\".", "screen": {"tier": "question", "terms": ["publish"]}, "tag": {"action": "pull_request"}, "outcome": "needs-input"},
+    {"kind": "feature", "text": "Run npm publish --dry-run -- ./package.", "screen": {"tier": "none"}, "tag": null, "outcome": "ready"},
+    {"kind": "feature", "text": "Run docker buildx imagetools create --dry-run -- acme/base.", "screen": {"tier": "none"}, "tag": null, "outcome": "ready"},
+  ];
+  for (const fixture of cases) {
+    const { text } = fixture, screen = deliveryScreen(text, PROFILE.target);
+    assert.equal(screen.tier, fixture.screen.tier, text);
+    if (fixture.outcome === "needs-input") {
+      assert.ok(screen.escalated.includes("publish"), text);
+      assert.ok(unaccountedTerms(screen, { action: "pull_request" }).includes("publish"), text);
+    } else assert.equal(screen.terms.includes("publish"), false, text);
+    const task = taskFor(text, { commandCandidates: ["npm test"] });
+    for (const tagged of [false, true]) {
+      const delivery = tagged ? Object.fromEntries(task.requirements.map(r => [r.id, { action: "pull_request" }])) : {};
+      const out = parseDraft(JSON.stringify(draftFor(task, { delivery })), task);
+      assert.deepEqual(out.questions.map(q => q.id), fixture.outcome === "needs-input" ? fixture.questions || ["q-delivery-r-1"] : [], text);
+      for (const requirement of task.requirements) assert.equal(text.slice(requirement.source.start, requirement.source.end), requirement.text, text);
+    }
+  }
+});
+
 test("temporal and punctuated follow-on PR requests retain count conflicts at source boundaries", () => {
   for (const [text, questions] of [["Open one PR; then another for the UI.", ["q-delivery-r-2"]], ["Open one PR. Then another for the API. Then another for the UI.", ["q-delivery-r-2", "q-delivery-r-3"]], ["Open one PR, then another PR.", ["q-delivery-r-1"]], ["Open a PR then another pull request.", ["q-delivery-r-1"]], ["Open one PR, and then a second PR.", ["q-delivery-r-1"]], ["Open one PR, next another PR.", ["q-delivery-r-1"]], ["Open one PR, afterwards another PR.", ["q-delivery-r-1"]], ["Open one PR, later an additional pull request.", ["q-delivery-r-1"]], ["Open one PR, subsequently one more PR.", ["q-delivery-r-1"]], ["Open one PR, after that another PR.", ["q-delivery-r-1"]], ["Open one PR, another PR.", ["q-delivery-r-1"]], ["Open one PR, then, another PR.", ["q-delivery-r-1"]], ["Open one PR, then another for the UI.", ["q-delivery-r-1"]], ["Open one PR for the API; then another PR for the UI.", ["q-delivery-r-2"]], ["Open one PR. Then another PR.", ["q-delivery-r-2"]], ["Open one PR.\nThen another PR.", ["q-delivery-r-2"]], ["Open one PR,\nthen another PR.", ["q-delivery-r-1", "q-delivery-r-2"]], ["Open one PR, then\nanother PR.", ["q-delivery-r-1", "q-delivery-r-2"]], ["Open one PR; another PR.", ["q-delivery-r-2"]], ["Open one PR for review, and afterwards a separate PR.", ["q-delivery-r-1"]], ["Run `gh pr create`, then another PR.", ["q-delivery-r-1"]], ["Open one PR, then another PR badge, then another PR.", ["q-delivery-r-1"]], ["Then another PR.", ["q-delivery-r-1"]], ["Another PR for the UI.", ["q-delivery-r-1"]], ["Then an additional pull request.", ["q-delivery-r-1"]]]) {
     const screen = deliveryScreen(text, PROFILE.target);
@@ -1805,6 +1920,11 @@ test("the screen and mapping stay fast at the request and mapping limits", () =>
     ["Run gh ssh-key add key.pub. ", "question"],
     ["Run gh gpg-key delete 123. ", "question"],
     ["Run gh ssh-key list. ", "none"],
+    ["Run docker image push acme/app. ", "question"],
+    ["Run docker buildx imagetools create acme/base. ", "question"],
+    ["Run npm publish --dry-run. ", "none"],
+    ["--tag next ", "none", "npm publish ", "--dry-run"],
+    ["--label x ", "question", "docker buildx build ", "--push ."],
     ["Open one PR, then another PR. ", "question"],
     ["Add a button to open one PR, then another PR. ", "assumption"],
     ["Then another PR badge is shown. ", "assumption"],
