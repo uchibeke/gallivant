@@ -865,6 +865,94 @@ test("single-quoted examples mask contractions while apostrophes and quote empha
   for (const text of ["Add a label 'Deploy to production", "Add a label ‘Deploy to production"]) assert.equal(deliveryScreen(text).tier, "question", text);
 });
 
+test("npm token and node-maintenance mutations retain typed delivery conflicts", () => {
+  const cases = [
+    {"kind": "direct", "text": "Run npm token create.", "screen": {"tier": "question", "terms": ["publish"]}, "tag": null, "outcome": "needs-input"},
+    {"kind": "adversarial", "text": "Run npm token revoke fixture-id.", "screen": {"tier": "question", "terms": ["publish"]}, "tag": {"action": "pull_request"}, "outcome": "needs-input"},
+    {"kind": "direct", "text": "Run npm token create --read-only.", "screen": {"tier": "question", "terms": ["publish"]}, "tag": null, "outcome": "needs-input"},
+    {"kind": "adversarial", "text": "Run npm --registry https://registry.example.com token revoke fixture-id.", "screen": {"tier": "question", "terms": ["publish"]}, "tag": {"action": "pull_request"}, "outcome": "needs-input"},
+    {"kind": "direct", "text": "Run npm token --otp 123456 create.", "screen": {"tier": "question", "terms": ["publish"]}, "tag": null, "outcome": "needs-input"},
+    {"kind": "adversarial", "text": "Run npm --name revoke token create.", "screen": {"tier": "question", "terms": ["publish"]}, "tag": {"action": "pull_request"}, "outcome": "needs-input"},
+    {"kind": "direct", "text": "Run npm token create --cidr 192.0.2.0/24.", "screen": {"tier": "question", "terms": ["publish"]}, "tag": null, "outcome": "needs-input"},
+    {"kind": "adversarial", "text": "Run npm token create --dry-run.", "screen": {"tier": "question", "terms": ["publish"]}, "tag": {"action": "pull_request"}, "outcome": "needs-input"},
+    {"kind": "direct", "text": "Run npm token revoke fixture-id --dry-run.", "screen": {"tier": "question", "terms": ["publish"]}, "tag": null, "outcome": "needs-input"},
+    {"kind": "adversarial", "text": "Run npm token revoke fixture-id --help=false.", "screen": {"tier": "question", "terms": ["publish"]}, "tag": {"action": "pull_request"}, "outcome": "needs-input"},
+    {"kind": "direct", "text": "Run npm token create --name \"--help\".", "screen": {"tier": "question", "terms": ["publish"]}, "tag": null, "outcome": "needs-input"},
+    {"kind": "adversarial", "text": "Run npm token revoke -- --help.", "screen": {"tier": "question", "terms": ["publish"]}, "tag": {"action": "pull_request"}, "outcome": "needs-input"},
+    {"kind": "direct", "text": "Run npm token -- create.", "screen": {"tier": "question", "terms": ["publish"]}, "tag": null, "outcome": "needs-input"},
+    {"kind": "adversarial", "text": "Run npm -- token revoke fixture-id.", "screen": {"tier": "question", "terms": ["publish"]}, "tag": {"action": "pull_request"}, "outcome": "needs-input"},
+    {"kind": "direct", "text": "Run npm token $ACTION.", "screen": {"tier": "question", "terms": ["publish"]}, "tag": null, "outcome": "needs-input"},
+    {"kind": "adversarial", "text": "Run kubectl drain node1.", "screen": {"tier": "question", "terms": ["deploy"]}, "tag": {"action": "pull_request"}, "outcome": "needs-input"},
+    {"kind": "direct", "text": "Run kubectl cordon node1.", "screen": {"tier": "question", "terms": ["deploy"]}, "tag": null, "outcome": "needs-input"},
+    {"kind": "adversarial", "text": "Run kubectl uncordon node1.", "screen": {"tier": "question", "terms": ["deploy"]}, "tag": {"action": "pull_request"}, "outcome": "needs-input"},
+    {"kind": "direct", "text": "Run kubectl taint nodes node1 dedicated=api:NoSchedule.", "screen": {"tier": "question", "terms": ["deploy"]}, "tag": null, "outcome": "needs-input"},
+    {"kind": "adversarial", "text": "Run kubectl taint nodes node1 dedicated-.", "screen": {"tier": "question", "terms": ["deploy"]}, "tag": {"action": "pull_request"}, "outcome": "needs-input"},
+    {"kind": "direct", "text": "Run kubectl --context prod drain node1.", "screen": {"tier": "question", "terms": ["deploy"]}, "tag": null, "outcome": "needs-input"},
+    {"kind": "adversarial", "text": "Run kubectl drain node1 --force --ignore-daemonsets.", "screen": {"tier": "question", "terms": ["deploy"]}, "tag": {"action": "pull_request"}, "outcome": "needs-input"},
+    {"kind": "direct", "text": "Run kubectl cordon node1 --dry-run=none.", "screen": {"tier": "question", "terms": ["deploy"]}, "tag": null, "outcome": "needs-input"},
+    {"kind": "adversarial", "text": "Run kubectl cordon node1 --dry-run=client --dry-run=none.", "screen": {"tier": "question", "terms": ["deploy"]}, "tag": {"action": "pull_request"}, "outcome": "needs-input"},
+    {"kind": "direct", "text": "Run kubectl drain node1 --dry-run.", "screen": {"tier": "question", "terms": ["deploy"]}, "tag": null, "outcome": "needs-input"},
+    {"kind": "adversarial", "text": "Run kubectl drain node1 --dry-run=server.", "screen": {"tier": "question", "terms": ["deploy"]}, "tag": {"action": "pull_request"}, "outcome": "needs-input"},
+    {"kind": "direct", "text": "Run kubectl drain node1 --dry-run=$MODE.", "screen": {"tier": "question", "terms": ["deploy"]}, "tag": null, "outcome": "needs-input"},
+    {"kind": "adversarial", "text": "Run kubectl drain node1 --dry-run=client --selector=$SELECTOR.", "screen": {"tier": "question", "terms": ["deploy"]}, "tag": {"action": "pull_request"}, "outcome": "needs-input"},
+    {"kind": "direct", "text": "Run kubectl drain node1 --selector --dry-run=client.", "screen": {"tier": "question", "terms": ["deploy"]}, "tag": null, "outcome": "needs-input"},
+    {"kind": "adversarial", "text": "Run kubectl drain node1 --pod-selector \"--dry-run=client\".", "screen": {"tier": "question", "terms": ["deploy"]}, "tag": {"action": "pull_request"}, "outcome": "needs-input"},
+    {"kind": "direct", "text": "Run kubectl cordon node1 -- --dry-run=client.", "screen": {"tier": "question", "terms": ["deploy"]}, "tag": null, "outcome": "needs-input"},
+    {"kind": "adversarial", "text": "Run kubectl drain node1 --dry-run=client --unknown.", "screen": {"tier": "question", "terms": ["deploy"]}, "tag": {"action": "pull_request"}, "outcome": "needs-input"},
+    {"kind": "direct", "text": "Run kubectl drain node1 --dry-run=client --unknown=value.", "screen": {"tier": "question", "terms": ["deploy"]}, "tag": null, "outcome": "needs-input"},
+    {"kind": "adversarial", "text": "Run kubectl cordon node1 --dry-run=\"client\".", "screen": {"tier": "question", "terms": ["deploy"]}, "tag": {"action": "pull_request"}, "outcome": "needs-input"},
+    {"kind": "feature", "text": "Run npm token list.", "screen": {"tier": "none"}, "tag": null, "outcome": "ready"},
+    {"kind": "feature", "text": "Run npm --registry https://registry.example.com token list.", "screen": {"tier": "none"}, "tag": null, "outcome": "ready"},
+    {"kind": "feature", "text": "Run npm token list --name create.", "screen": {"tier": "none"}, "tag": null, "outcome": "ready"},
+    {"kind": "feature", "text": "Run npm --cidr revoke token list.", "screen": {"tier": "none"}, "tag": null, "outcome": "ready"},
+    {"kind": "feature", "text": "Run npm token list --name \"npm token create\".", "screen": {"tier": "none"}, "tag": null, "outcome": "ready"},
+    {"kind": "feature", "text": "Run npm token create --help.", "screen": {"tier": "none"}, "tag": null, "outcome": "ready"},
+    {"kind": "feature", "text": "Run npm token revoke --help.", "screen": {"tier": "none"}, "tag": null, "outcome": "ready"},
+    {"kind": "feature", "text": "Run npm token --help.", "screen": {"tier": "none"}, "tag": null, "outcome": "ready"},
+    {"kind": "feature", "text": "Add a command to run npm token create.", "screen": {"tier": "none"}, "tag": null, "outcome": "ready"},
+    {"kind": "feature", "text": "Run kubectl drain node1 --dry-run=client.", "screen": {"tier": "none"}, "tag": null, "outcome": "ready"},
+    {"kind": "feature", "text": "Run kubectl cordon node1 --dry-run=client.", "screen": {"tier": "none"}, "tag": null, "outcome": "ready"},
+    {"kind": "feature", "text": "Run kubectl uncordon node1 --dry-run=client.", "screen": {"tier": "none"}, "tag": null, "outcome": "ready"},
+    {"kind": "feature", "text": "Run kubectl taint nodes node1 dedicated=api:NoSchedule --dry-run=client.", "screen": {"tier": "none"}, "tag": null, "outcome": "ready"},
+    {"kind": "feature", "text": "Run kubectl drain node1 --force --ignore-daemonsets --delete-emptydir-data --dry-run=client.", "screen": {"tier": "none"}, "tag": null, "outcome": "ready"},
+    {"kind": "feature", "text": "Run kubectl drain node1 --selector app=api --pod-selector tier=worker --dry-run=client.", "screen": {"tier": "none"}, "tag": null, "outcome": "ready"},
+    {"kind": "feature", "text": "Run kubectl drain node1 --grace-period=10 --timeout 30s --dry-run=client.", "screen": {"tier": "none"}, "tag": null, "outcome": "ready"},
+    {"kind": "feature", "text": "Run kubectl cordon --selector=app=api --dry-run=client.", "screen": {"tier": "none"}, "tag": null, "outcome": "ready"},
+    {"kind": "feature", "text": "Run kubectl taint nodes node1 dedicated- --overwrite --dry-run=client.", "screen": {"tier": "none"}, "tag": null, "outcome": "ready"},
+    {"kind": "feature", "text": "Run kubectl get nodes.", "screen": {"tier": "none"}, "tag": null, "outcome": "ready"},
+    {"kind": "feature", "text": "Run kubectl describe node node1.", "screen": {"tier": "none"}, "tag": null, "outcome": "ready"},
+    {"kind": "feature", "text": "Add a command to run kubectl drain node1.", "screen": {"tier": "none"}, "tag": null, "outcome": "ready"},
+    {"kind": "feature", "text": "Add support for running kubectl cordon.", "screen": {"tier": "none"}, "tag": null, "outcome": "ready"},
+    {"kind": "quoted", "text": "Document \"npm token revoke fixture-id\" in help.", "screen": {"tier": "none"}, "tag": null, "outcome": "ready"},
+    {"kind": "quoted", "text": "Show `kubectl drain node1` as an example.", "screen": {"tier": "none"}, "tag": null, "outcome": "ready"},
+    {"kind": "direct", "text": "Run npm token\nrevoke fixture-id.", "screen": {"tier": "question", "terms": ["publish"]}, "tag": null, "outcome": "needs-input", "questions": ["q-delivery-r-1", "q-delivery-r-2"]},
+    {"kind": "adversarial", "text": "Run npm\ntoken create.", "screen": {"tier": "question", "terms": ["publish"]}, "tag": {"action": "pull_request"}, "outcome": "needs-input", "questions": ["q-delivery-r-1", "q-delivery-r-2"]},
+    {"kind": "direct", "text": "Run npm --registry https://registry.example.com token\nrevoke fixture-id.", "screen": {"tier": "question", "terms": ["publish"]}, "tag": null, "outcome": "needs-input", "questions": ["q-delivery-r-1", "q-delivery-r-2"]},
+    {"kind": "adversarial", "text": "Run kubectl\ndrain node1.", "screen": {"tier": "question", "terms": ["deploy"]}, "tag": {"action": "pull_request"}, "outcome": "needs-input", "questions": ["q-delivery-r-1", "q-delivery-r-2"]},
+    {"kind": "direct", "text": "Run npm token list; then npm token revoke fixture-id.", "screen": {"tier": "question", "terms": ["publish"]}, "tag": null, "outcome": "needs-input", "questions": ["q-delivery-r-2"]},
+    {"kind": "adversarial", "text": "Run kubectl drain node1 --dry-run=client; then kubectl cordon node2.", "screen": {"tier": "question", "terms": ["deploy"]}, "tag": {"action": "pull_request"}, "outcome": "needs-input", "questions": ["q-delivery-r-2"]},
+    {"kind": "direct", "text": "Run npm token list and npm token create.", "screen": {"tier": "question", "terms": ["publish"]}, "tag": null, "outcome": "needs-input"},
+    {"kind": "adversarial", "text": "Run kubectl drain node1 --dry-run=client and kubectl cordon node2.", "screen": {"tier": "question", "terms": ["deploy"]}, "tag": {"action": "pull_request"}, "outcome": "needs-input"},
+  ];
+  for (const fixture of cases) {
+    const { text } = fixture, screen = deliveryScreen(text, PROFILE.target);
+    assert.equal(screen.tier, fixture.screen.tier, text);
+    if (fixture.outcome === "needs-input") {
+      for (const term of fixture.screen.terms) {
+        assert.ok(screen.escalated.includes(term), text);
+        assert.ok(unaccountedTerms(screen, { action: "pull_request" }).includes(term), text);
+      }
+    }
+    const task = taskFor(text, { commandCandidates: ["npm test"] });
+    for (const tagged of [false, true]) {
+      const delivery = tagged ? Object.fromEntries(task.requirements.map(r => [r.id, { action: "pull_request" }])) : {};
+      const out = parseDraft(JSON.stringify(draftFor(task, { delivery })), task);
+      assert.deepEqual(out.questions.map(q => q.id), fixture.outcome === "needs-input" ? fixture.questions || ["q-delivery-r-1"] : [], text);
+      for (const requirement of task.requirements) assert.equal(text.slice(requirement.source.start, requirement.source.end), requirement.text, text);
+    }
+  }
+});
+
 test("container publication and package simulations keep command and source boundaries", () => {
   const cases = [
     {"kind": "direct", "text": "Run docker push acme/app.", "screen": {"tier": "question", "terms": ["publish"]}, "tag": null, "outcome": "needs-input"},
@@ -1920,6 +2008,10 @@ test("the screen and mapping stay fast at the request and mapping limits", () =>
     ["Run gh ssh-key add key.pub. ", "question"],
     ["Run gh gpg-key delete 123. ", "question"],
     ["Run gh ssh-key list. ", "none"],
+    ["Run npm token revoke fixture-id. ", "question"],
+    ["Run npm token list. ", "none"],
+    ["Run kubectl drain node1. ", "question"],
+    ["Run kubectl drain node1 --dry-run=client. ", "none"],
     ["Run docker image push acme/app. ", "question"],
     ["Run docker buildx imagetools create acme/base. ", "question"],
     ["Run npm publish --dry-run. ", "none"],
