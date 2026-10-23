@@ -444,6 +444,91 @@ test("modified passive controls remain visible without swallowing application da
   }
 });
 
+test("passive branch merge controls distinguish application domains from Git", () => {
+  for (const source of [
+    "Syntax tree branches cannot ever be merged.",
+    "Bank branches must not ever be merged.",
+    "Syntax tree branch cannot ever be merged.",
+    "Bank branches are not to be silently merged.",
+    "Branches cannot ever be merged in the syntax tree.",
+    "Branches must not ever be merged across the bank network.",
+    "Bank branches cannot be created without an address. Syntax tree branches cannot ever be merged.",
+    "Syntax tree branches cannot ever be merged. Bank branches cannot be created without an address.",
+    "The button creates a PR after tests pass. Bank branches must not ever be merged.",
+  ]) {
+    assert.equal(ownerDelivery(source), null, source);
+    assert.doesNotThrow(() => assertDeliveryAnswer({}, source), source);
+    const original = source + " Open a PR for review.", contract = ownerDelivery(original);
+    assert.equal(validateOwnerDelivery(contract), contract, source);
+    assert.equal(ownerImplementation(contract).join(""), source + " ", source);
+    assert.equal(contract.spans.map(span => original.slice(span.start, span.end)).join(""), original, source);
+  }
+  for (const source of [
+    "Branches cannot ever be merged.",
+    "Branch must not ever be merged.",
+    "Git branches must not ever be merged.",
+    "Branches cannot ever be merged in the repository.",
+    "Branches cannot ever be merged in GitLab.",
+    "Branches cannot ever be generated in GitLab.",
+    "Syntax tree branches cannot ever be merged into origin/main.",
+    "The button creates a PR after tests pass since branches cannot ever be merged.",
+    "Syntax tree branches cannot ever be merged. Branches must not ever be merged.",
+    "Syntax tree branches cannot ever be merged. Changes cannot ever be merged.",
+    "Syntax tree branches cannot ever be merged and branches must not ever be merged.",
+    "Branches cannot ever be merged and customer records remain in the bank network.",
+    "Bank branches cannot be created without an address. Git branches cannot ever be generated.",
+    "Bank branches cannot be created without an address. Commits must not automatically be created.",
+  ]) {
+    assert.throws(() => ownerDelivery(source), { code: "TASK_DELIVERY_SCOPE" }, source);
+    assert.throws(() => assertDeliveryAnswer({}, source), { code: "TASK_DELIVERY_SCOPE" }, source);
+  }
+});
+
+test("passive code merges distinguish application destinations from Git controls", () => {
+  // Active merges share the destination validator with the passive exception.
+  for (const source of ["Merge arrays inside the editor.", "Merge records within the editor."]) {
+    assert.equal(ownerDelivery(source), null, source);
+    assert.doesNotThrow(() => assertDeliveryAnswer({}, source), source);
+  }
+  for (const subject of ["Code", "Changes", "Edits", "Work", "Implementation"])
+    for (const destination of ["into one cell", "in the editor", "within the document editor"])
+      for (const source of [
+        `${subject} cannot be merged ${destination}.`,
+        `${subject} must not ever be merged ${destination}.`,
+        `The button creates a PR after tests pass since ${subject.toLowerCase()} cannot be merged ${destination}.`,
+      ]) {
+        assert.equal(ownerDelivery(source), null, source);
+        assert.doesNotThrow(() => assertDeliveryAnswer({}, source), source);
+        const original = source + " Open a PR for review.", contract = ownerDelivery(original);
+        assert.equal(validateOwnerDelivery(contract), contract, source);
+        assert.equal(ownerImplementation(contract).join(""), source + " ", source);
+        assert.equal(contract.spans.map(span => original.slice(span.start, span.end)).join(""), original, source);
+      }
+  for (const source of [
+    "Code cannot be merged.",
+    "Changes cannot ever be merged.",
+    "Reviewed changes cannot be merged.",
+    "Code cannot be merged into main.",
+    "Changes cannot be merged into origin/main.",
+    "Work cannot be merged in the repository.",
+    "Implementation cannot be merged in GitLab.",
+    "Code cannot be merged in the editor into main.",
+    "Code cannot be merged into one cell and main.",
+    "Code cannot be merged in the editor or origin/main.",
+    "Merge arrays inside main.",
+    "Merge records within origin/main.",
+    "Changes cannot be merged into one cell in the repository.",
+    "PRs cannot be merged in the editor.",
+    "Code cannot be merged and records remain in the editor.",
+    "Code cannot be merged into one cell. Changes cannot be merged.",
+    "Code cannot be merged into one cell and changes cannot be merged.",
+    "The button creates a PR after tests pass since changes cannot be merged.",
+  ]) {
+    assert.throws(() => ownerDelivery(source), { code: "TASK_DELIVERY_SCOPE" }, source);
+    assert.throws(() => assertDeliveryAnswer({}, source), { code: "TASK_DELIVERY_SCOPE" }, source);
+  }
+});
+
 test("infinitive passive prohibitions stay visible before product masking", () => {
   for (const restriction of [
     "Changes are not to be merged.", "Work is not to be merged.", "PRs aren't to be merged.",
@@ -542,9 +627,169 @@ test("actor-led publication stays visible after coordinated product actions", ()
   }
 });
 
+test("actor publication uses every current publication verb and its inflections", () => {
+  const verbs = [
+    ["file", "files", "filed", "filing"], ["issue", "issues", "issued", "issuing"],
+    ["publish", "publishes", "published", "publishing"], ["deliver", "delivers", "delivered", "delivering"],
+    ["draft", "drafts", "drafted", "drafting"], ["generate", "generates", "generated", "generating"],
+    ["prepare", "prepares", "prepared", "preparing"], ["send", "sends", "sent", "sending"],
+    ["produce", "produces", "produced", "producing"], ["start", "starts", "started", "starting"],
+    ["begin", "begins", "began", "beginning"], ["open", "opens", "opened", "opening"],
+    ["create", "creates", "created", "creating"], ["raise", "raises", "raised", "raising"],
+    ["submit", "submits", "submitted", "submitting"], ["make", "makes", "made", "making"],
+  ];
+  for (const [base, third, past, gerund] of verbs) {
+    for (const source of [
+      `The button creates a PR after tests pass and the agent ${third} another PR.`,
+      `Ensure the button creates a PR after tests pass provided that Mary Jane Watson ${third} another PR.`,
+      `Mary Jane Watson quickly ${third} a PR.`,
+      `Ensure the agent ${base} a PR.`,
+      `The agent ${past} a PR.`,
+      `The agent ${gerund} a PR.`,
+    ]) {
+      assert.throws(() => ownerDelivery(source), { code: "TASK_DELIVERY_SCOPE" }, source);
+      assert.throws(() => assertDeliveryAnswer({}, source), { code: "TASK_DELIVERY_SCOPE" }, source);
+    }
+    for (const source of [
+      `The button ${third} a PR after tests pass.`,
+      `Ensure the button ${third} a PR after tests pass.`,
+      `The button can ${base} a PR after tests pass.`,
+      `The button creates a PR after tests pass and the service ${third} another PR.`,
+      `The button creates a PR after tests pass and the agent ${third} a PR template.`,
+      `The button creates a PR after tests pass and the agent ${third} a report about PRs.`,
+      `Show the example "the agent ${third} another PR" in the button help.`,
+    ]) {
+      assert.equal(ownerDelivery(source), null, source);
+      assert.doesNotThrow(() => assertDeliveryAnswer({}, source), source);
+      const original = source + " Open a PR for review.", contract = ownerDelivery(original);
+      assert.equal(validateOwnerDelivery(contract), contract, source);
+      assert.equal(ownerImplementation(contract).join(""), source + " ", source);
+      assert.equal(contract.spans.map(span => original.slice(span.start, span.end)).join(""), original, source);
+    }
+  }
+});
+
+test("API, parser and serializer product behavior retains implementation scope", () => {
+  for (const surface of ["API", "parser", "serializer"]) {
+    for (const source of [
+      `The ${surface} generates a PR object.`,
+      `The ${surface} creates a PR node.`,
+      `Ensure the ${surface} creates a PR object.`,
+      `The ${surface} generates a PR after tests pass.`,
+      `The button creates a PR after tests pass and the ${surface} creates another PR object.`,
+    ]) {
+      assert.equal(ownerDelivery(source), null, source);
+      assert.doesNotThrow(() => assertDeliveryAnswer({}, source), source);
+      const original = source + " Open a PR for review.", contract = ownerDelivery(original);
+      assert.equal(validateOwnerDelivery(contract), contract, source);
+      assert.equal(ownerImplementation(contract).join(""), source + " ", source);
+      assert.equal(contract.spans.map(span => original.slice(span.start, span.end)).join(""), original, source);
+    }
+    for (const control of ["and the agent opens another PR", "provided that you open another PR", "since changes cannot be merged"])
+      for (const text of [`The ${surface} generates a PR after tests pass ${control}.`, `Ensure the ${surface} creates a PR object ${control}.`]) {
+        assert.throws(() => ownerDelivery(text), { code: "TASK_DELIVERY_SCOPE" }, text);
+        assert.throws(() => assertDeliveryAnswer({}, text), { code: "TASK_DELIVERY_SCOPE" }, text);
+      }
+  }
+});
+
+test("conjunctive adverbs keep later actor publications outside product masks", () => {
+  for (const reviewed of [
+    "The button creates a PR after tests pass, alternatively the agent opens another PR.",
+    "The button creates a PR after tests pass, conversely the agent opens another PR.",
+    "The button creates a PR after tests pass, likewise the agent opens another PR.",
+  ]) {
+    assert.throws(() => ownerDelivery(reviewed), { code: "TASK_DELIVERY_SCOPE" }, reviewed);
+    assert.throws(() => assertDeliveryAnswer({}, reviewed), { code: "TASK_DELIVERY_SCOPE" }, reviewed);
+  }
+  for (const separator of ["&", "+", "/"])
+    for (const modifier of ["also", "additionally", "likewise", "similarly", "equally", "correspondingly", "analogously", "conversely", "contrariwise", "alternatively", "alternately"])
+      for (const actor of ["the agent", "Jane Doe"])
+        for (const source of [
+          `The button creates a PR after tests pass ${separator} ${actor} ${modifier} files another PR.`,
+          `Ensure the button creates a PR after tests pass ${separator} ${actor} ${modifier} files another PR.`,
+        ]) {
+          assert.throws(() => ownerDelivery(source), { code: "TASK_DELIVERY_SCOPE" }, source);
+          assert.throws(() => assertDeliveryAnswer({}, source), { code: "TASK_DELIVERY_SCOPE" }, source);
+        }
+  for (const separator of ["&", "+", "/"])
+    for (const source of [
+      `The button creates a PR after tests pass ${separator} the service additionally files another PR.`,
+      `The button creates a PR after tests pass ${separator} Jane Doe also creates a PR template.`,
+    ]) {
+      assert.equal(ownerDelivery(source), null, source);
+      assert.doesNotThrow(() => assertDeliveryAnswer({}, source), source);
+    }
+  for (const connector of ["meanwhile", "meantime", "in the meantime", "subsequently", "afterward", "afterwards", "thereafter", "MEANWHILE",
+    "therefore", "consequently", "accordingly", "thus", "hence", "THEREFORE",
+    "however", "nevertheless", "nonetheless", "instead", "otherwise", "HOWEVER",
+    "moreover", "furthermore", "additionally", "also", "in addition", "MOREOVER", "albeit", "ALBEIT",
+    "likewise", "similarly", "equally", "correspondingly", "analogously", "in the same way", "LIKEWISE",
+    "conversely", "contrariwise", "in contrast", "by contrast", "on the contrary", "on the other hand", "CONVERSELY",
+    "alternatively", "alternately", "as an alternative", "as another option", "or else", "ALTERNATIVELY"])
+    for (const action of ["the agent files another PR", "the agent opens another PR", "our senior developer quickly creates another PR", "Alice King will submit another pull request"])
+      for (const source of [
+        `The button creates a PR after tests pass, ${connector} ${action}.`,
+        `Ensure the button creates a PR after tests pass ${connector} ${action}.`,
+        `${connector} ${action}.`,
+      ]) {
+        assert.throws(() => ownerDelivery(source), { code: "TASK_DELIVERY_SCOPE" }, source);
+        assert.throws(() => assertDeliveryAnswer({}, source), { code: "TASK_DELIVERY_SCOPE" }, source);
+      }
+  for (const connector of ["meanwhile", "meantime", "in the meantime", "subsequently", "afterward", "afterwards", "thereafter",
+    "therefore", "consequently", "accordingly", "thus", "hence",
+    "however", "nevertheless", "nonetheless", "instead", "otherwise",
+    "moreover", "furthermore", "additionally", "also", "in addition", "albeit",
+    "likewise", "similarly", "equally", "correspondingly", "analogously", "in the same way",
+    "conversely", "contrariwise", "in contrast", "by contrast", "on the contrary", "on the other hand",
+    "alternatively", "alternately", "as an alternative", "as another option", "or else"])
+    for (const source of [
+      `The button creates a PR after tests pass, ${connector} the service opens another PR.`,
+      `Ensure the button creates a PR after tests pass ${connector} the service opens another PR.`,
+      `The button creates a PR after tests pass, ${connector} the agent creates a PR template.`,
+      `The button creates a PR after tests pass, ${connector} the agent generates a report about PRs.`,
+      `Show the example "${connector} the agent opens another PR" in the button help.`,
+    ]) {
+      assert.equal(ownerDelivery(source), null, source);
+      assert.doesNotThrow(() => assertDeliveryAnswer({}, source), source);
+      const original = source + " Open a PR for review.", contract = ownerDelivery(original);
+      assert.equal(validateOwnerDelivery(contract), contract, source);
+      assert.equal(ownerImplementation(contract).join(""), source + " ", source);
+      assert.equal(contract.spans.map(span => original.slice(span.start, span.end)).join(""), original, source);
+    }
+});
+
+test("multi-part actor names keep publication directives visible within their clause", () => {
+  for (const actor of ["Mary Jane Watson", "John Ronald Reuel Tolkien", "Jean-Luc Mary O’Neill", "Ana María De La Cruz"])
+    for (const source of [
+      `The button creates a PR after tests pass and ${actor} opens another PR.`,
+      `Ensure the button creates a PR after tests pass provided that ${actor} quickly opens another PR.`,
+      `Ensure ${actor} creates a PR.`,
+      `${actor} also opens another PR.`,
+    ]) {
+      assert.throws(() => ownerDelivery(source), { code: "TASK_DELIVERY_SCOPE" }, source);
+      assert.throws(() => assertDeliveryAnswer({}, source), { code: "TASK_DELIVERY_SCOPE" }, source);
+    }
+  for (const source of [
+    "The Mary Jane Watson button creates a PR after tests pass.",
+    "Ensure the Mary Jane Watson button creates a PR after tests pass.",
+    "The button creates a PR after tests pass and Mary Jane Watson creates a PR template.",
+    "The button creates a PR after tests pass and Mary Jane Watson generates a report about PRs.",
+    "Clicking submit creates a PR and the service opens another PR.",
+    'Show the example "Mary Jane Watson opens another PR" in the button help.',
+  ]) {
+    assert.equal(ownerDelivery(source), null, source);
+    assert.doesNotThrow(() => assertDeliveryAnswer({}, source), source);
+    const original = source + " Open a PR for review.", contract = ownerDelivery(original);
+    assert.equal(validateOwnerDelivery(contract), contract, source);
+    assert.equal(ownerImplementation(contract).join(""), source + " ", source);
+    assert.equal(contract.spans.map(span => original.slice(span.start, span.end)).join(""), original, source);
+  }
+});
+
 test("modified actor-led publication stays visible without changing product ownership", () => {
   for (const actor of ["the agent", "our developer", "the automation", "John", "Jane Doe", "alex"])
-    for (const lead of ["quickly", "also", "will quickly", "must not silently", "to immediately", "very carefully"])
+    for (const lead of ["quickly", "also", "likewise", "similarly", "equally", "correspondingly", "analogously", "conversely", "contrariwise", "will quickly", "must not silently", "to immediately", "very carefully"])
       for (const source of [
         `The button creates a PR after tests pass and ${actor} ${lead} opens another PR.`,
         `Ensure the button creates a PR after tests pass provided that ${actor} ${lead} opens another PR.`,
@@ -558,6 +803,11 @@ test("modified actor-led publication stays visible without changing product owne
     "The button creates a PR after tests pass and the service quickly opens another PR.",
     "Ensure the button quickly creates a PR after tests pass.",
     "The button quickly creates a PR after tests pass.",
+    "The button likewise creates a PR after tests pass.",
+    "The button conversely creates a PR after tests pass.",
+    "Ensure the button contrariwise creates a PR after tests pass.",
+    "Ensure the button likewise creates a PR after tests pass.",
+    "The button creates a PR after tests pass and the service likewise opens another PR.",
     "Have the submit button to immediately create a PR.",
     "The button creates a PR after tests pass and the agent quickly creates a PR template.",
     "Clicking submit quickly creates a PR and the service also opens another PR.",
@@ -577,6 +827,35 @@ test("modified actor-led publication stays visible without changing product owne
   ]) {
     assert.throws(() => ownerDelivery(source), { code: "TASK_DELIVERY_SCOPE" }, source);
     assert.throws(() => assertDeliveryAnswer({}, source), { code: "TASK_DELIVERY_SCOPE" }, source);
+  }
+});
+
+test("multiword automation subjects retain publication authority checks", () => {
+  for (const actor of ["the release workflow", "our automation workflow", "the CI pipeline", "the nightly job",
+    "our scheduled automation", "the release runner", "the CI scheduler", "our build daemon"])
+    for (const source of [
+      `The button creates a PR after tests pass and ${actor} opens another PR.`,
+      `Ensure the button creates a PR after tests pass provided that ${actor} quickly files another PR.`,
+      `The button creates a PR after tests pass & ${actor} alternatively submits another PR.`,
+      `Ensure ${actor} creates a PR.`,
+      `${actor} opens another PR.`,
+    ]) {
+      assert.throws(() => ownerDelivery(source), { code: "TASK_DELIVERY_SCOPE" }, source);
+      assert.throws(() => assertDeliveryAnswer({}, source), { code: "TASK_DELIVERY_SCOPE" }, source);
+    }
+  for (const source of [
+    "The release workflow button creates a PR after tests pass.",
+    "Ensure our automation workflow service creates a PR.",
+    "The button creates a PR after tests pass and the release workflow creates a PR template.",
+    "The button creates a PR after tests pass and our automation workflow generates a report about PRs.",
+    'Show the example "the release workflow opens another PR" in the button help.',
+  ]) {
+    assert.equal(ownerDelivery(source), null, source);
+    assert.doesNotThrow(() => assertDeliveryAnswer({}, source), source);
+    const original = source + " Open a PR for review.", contract = ownerDelivery(original);
+    assert.equal(validateOwnerDelivery(contract), contract, source);
+    assert.equal(ownerImplementation(contract).join(""), source + " ", source);
+    assert.equal(contract.spans.map(span => original.slice(span.start, span.end)).join(""), original, source);
   }
 });
 
@@ -1549,9 +1828,9 @@ test("causal approval clauses validate their actions and business objects", () =
 });
 
 test("concessive approval clauses validate each action and its own business object", () => {
-  for (const connector of ["even though", "though", "although", "whereas", "EVEN THOUGH"]) {
-    for (const action of ["you proofread the invoice", "you must proofread the invoice", "our senior editor proofreads the invoice",
-      "Alice King proofreads the invoice", "carefully proofreading the invoice", "the invoice is proofread", "you email the report"])
+  for (const connector of ["albeit", "ALBEIT", "even though", "though", "although", "whereas", "EVEN THOUGH"]) {
+    for (const action of ["proofreading the invoice", "you proofread the invoice", "you must proofread the invoice", "our senior editor proofreads the invoice",
+      "Alice King proofreads the invoice", "carefully proofreading the invoice", "not carefully proofreading the invoice", "the invoice is proofread", "you email the report"])
       for (const source of [
         `If I approve the invoice, email the customer ${connector} ${action}.`,
         `Email the customer ${connector} ${action} after I approve the invoice.`,
@@ -1580,6 +1859,7 @@ test("concessive approval clauses validate each action and its own business obje
   for (const source of [
     "If I approve the invoice, email the customer even though you apply the discount and wait until the owner approves.",
     "Email the customer though if I approve the invoice, proofread the article.",
+    "Email the customer albeit if I approve the invoice, proofread the article.",
   ]) {
     assert.throws(() => ownerDelivery(source), { code: "TASK_DELIVERY_SCOPE" }, source);
     assert.throws(() => assertDeliveryAnswer({}, source), { code: "TASK_DELIVERY_SCOPE" }, source);
@@ -1587,16 +1867,19 @@ test("concessive approval clauses validate each action and its own business obje
   for (const source of [
     "Though the discount is applied, if I approve the invoice, email the customer.",
     "Email the customer though if I approve the invoice, apply the discount.",
+    "Email the customer albeit if I approve the invoice, apply the discount.",
     'If I approve the invoice, email the customer with the note "even though you proofread the invoice".',
+    'If I approve the invoice, email the customer with the note "albeit proofreading the invoice".',
   ]) {
     assert.equal(ownerDelivery(source), null, source);
     assert.doesNotThrow(() => assertDeliveryAnswer({}, source), source);
   }
 });
 
-test("despite complements validate approval-gated gerunds and their own objects", () => {
-  for (const connector of ["despite", "DESPITE"]) {
-    for (const action of ["proofreading the invoice", "carefully proofreading the invoice", "not carefully proofreading the invoice",
+test("prepositional concessions validate approval-gated actions and their own objects", () => {
+  for (const connector of ["despite", "DESPITE", "notwithstanding", "NOTWITHSTANDING"]) {
+    for (const action of ["you proofread the invoice", "Alice King must proofread the invoice", "the invoice is proofread",
+      "proofreading the invoice", "carefully proofreading the invoice", "not carefully proofreading the invoice",
       "you proofreading the invoice", "our senior editor proofreading the invoice", "Alice King proofreading the invoice",
       "emailing the report", "applying the discount before proofreading the invoice"])
       for (const source of [
@@ -1609,7 +1892,8 @@ test("despite complements validate approval-gated gerunds and their own objects"
     const borrowedObject = `If I approve the invoice, email the report ${connector} applying the discount.`;
     assert.throws(() => ownerDelivery(borrowedObject), { code: "TASK_DELIVERY_SCOPE" }, borrowedObject);
     assert.throws(() => assertDeliveryAnswer({}, borrowedObject), { code: "TASK_DELIVERY_SCOPE" }, borrowedObject);
-    for (const complement of ["applying the discount", "carefully applying the discount", "you applying the discount",
+    for (const complement of ["you apply the discount", "Alice King must email the customer", "the receipt is sent",
+      "applying the discount", "carefully applying the discount", "you applying the discount",
       "our senior editor emailing the customer", "Alice King emailing the customer", "the discount", "a recurring payment"])
       for (const source of [
         `If I approve the invoice, email the customer ${connector} ${complement}.`,
@@ -1633,6 +1917,104 @@ test("despite complements validate approval-gated gerunds and their own objects"
   const quoted = 'If I approve the invoice, email the customer with the note "despite proofreading the invoice".';
   assert.equal(ownerDelivery(quoted), null);
   assert.doesNotThrow(() => assertDeliveryAnswer({}, quoted));
+  const quotedNotwithstanding = 'If I approve the invoice, email the customer with the note "notwithstanding you proofread the invoice".';
+  assert.equal(ownerDelivery(quotedNotwithstanding), null);
+  assert.doesNotThrow(() => assertDeliveryAnswer({}, quotedNotwithstanding));
+});
+
+test("upon clauses validate approval-gated actions and relative continuations", () => {
+  for (const connector of ["upon", "UPON"]) {
+    for (const action of ["proofreading the invoice", "carefully proofreading the invoice", "not carefully proofreading the invoice",
+      "you proofreading the invoice", "our senior editor proofreading the invoice", "Alice King proofreading the invoice",
+      "emailing the report", "applying the discount before proofreading the invoice"])
+      for (const source of [
+        `If I approve the invoice, email the customer ${connector} ${action}.`,
+        `Email the customer ${connector} ${action} after I approve the invoice.`,
+      ]) {
+        assert.throws(() => ownerDelivery(source), { code: "TASK_DELIVERY_SCOPE" }, source);
+        assert.throws(() => assertDeliveryAnswer({}, source), { code: "TASK_DELIVERY_SCOPE" }, source);
+      }
+    const borrowedObject = `If I approve the invoice, email the report ${connector} applying the discount.`;
+    assert.throws(() => ownerDelivery(borrowedObject), { code: "TASK_DELIVERY_SCOPE" }, borrowedObject);
+    assert.throws(() => assertDeliveryAnswer({}, borrowedObject), { code: "TASK_DELIVERY_SCOPE" }, borrowedObject);
+    for (const complement of ["applying the discount", "carefully applying the discount", "you applying the discount",
+      "our senior editor emailing the customer", "Alice King emailing the customer", "receipt of payment"])
+      for (const source of [
+        `If I approve the invoice, email the customer ${connector} ${complement}.`,
+        `Email the customer ${connector} ${complement} after I approve the invoice.`,
+      ]) {
+        assert.equal(ownerDelivery(source), null, source);
+        assert.doesNotThrow(() => assertDeliveryAnswer({}, source), source);
+        const original = source + " Open a PR for review.", contract = ownerDelivery(original);
+        assert.equal(validateOwnerDelivery(contract), contract, source);
+        assert.equal(ownerImplementation(contract).join(""), source + " ", source);
+        assert.equal(contract.spans.map(span => original.slice(span.start, span.end)).join(""), original, source);
+      }
+  }
+  for (const connector of ["upon which", "UPON WHICH"]) {
+    for (const action of ["you proofread the invoice", "Alice King must proofread the invoice", "the invoice is proofread", "our archive specialist proofreads the invoice"]) {
+      const source = `If I approve the invoice, email the customer ${connector} ${action}.`;
+      assert.throws(() => ownerDelivery(source), { code: "TASK_DELIVERY_SCOPE" }, source);
+      assert.throws(() => assertDeliveryAnswer({}, source), { code: "TASK_DELIVERY_SCOPE" }, source);
+    }
+    for (const action of ["you apply the discount", "Alice King must email the customer", "the receipt is sent"]) {
+      const source = `If I approve the invoice, email the customer ${connector} ${action}.`;
+      assert.equal(ownerDelivery(source), null, source);
+      assert.doesNotThrow(() => assertDeliveryAnswer({}, source), source);
+      const original = source + " Open a PR for review.", contract = ownerDelivery(original);
+      assert.equal(validateOwnerDelivery(contract), contract, source);
+      assert.equal(ownerImplementation(contract).join(""), source + " ", source);
+      assert.equal(contract.spans.map(span => original.slice(span.start, span.end)).join(""), original, source);
+    }
+  }
+  const quoted = 'If I approve the invoice, email the customer with the note "upon proofreading the invoice".';
+  assert.equal(ownerDelivery(quoted), null);
+  assert.doesNotThrow(() => assertDeliveryAnswer({}, quoted));
+});
+
+test("following and possessive gerunds retain approval gates and own their objects", () => {
+  for (const connector of ["following", "FOLLOWING", "after", "before", "upon", "by", "despite", "notwithstanding"]) {
+    for (const action of ["your proofreading the invoice", "our carefully proofreading the invoice", "their editing the invoice",
+      "Alice's proofreading the invoice", "our editor’s proofreading the invoice", "your emailing the report"])
+      for (const source of [
+        `If I approve the invoice, email the customer ${connector} ${action}.`,
+        `Email the customer ${connector} ${action} after I approve the invoice.`,
+      ]) {
+        assert.throws(() => ownerDelivery(source), { code: "TASK_DELIVERY_SCOPE" }, source);
+        assert.throws(() => assertDeliveryAnswer({}, source), { code: "TASK_DELIVERY_SCOPE" }, source);
+      }
+    const borrowedObject = `If I approve the invoice, email the report ${connector} your applying the discount.`;
+    assert.throws(() => ownerDelivery(borrowedObject), { code: "TASK_DELIVERY_SCOPE" }, borrowedObject);
+    assert.throws(() => assertDeliveryAnswer({}, borrowedObject), { code: "TASK_DELIVERY_SCOPE" }, borrowedObject);
+    for (const complement of ["your applying the discount", "your carefully applying the discount", "your emailing the customer",
+      "Alice's emailing the customer", "our editor’s emailing the customer", "your recurring payment", "the recurring payment"])
+      for (const source of [
+        `If I approve the invoice, email the customer ${connector} ${complement}.`,
+        `Email the customer ${connector} ${complement} after I approve the invoice.`,
+      ]) {
+        assert.equal(ownerDelivery(source), null, source);
+        assert.doesNotThrow(() => assertDeliveryAnswer({}, source), source);
+        const original = source + " Open a PR for review.", contract = ownerDelivery(original);
+        assert.equal(validateOwnerDelivery(contract), contract, source);
+        assert.equal(ownerImplementation(contract).join(""), source + " ", source);
+        assert.equal(contract.spans.map(span => original.slice(span.start, span.end)).join(""), original, source);
+      }
+  }
+  for (const source of [
+    "If I approve the invoice, email the customer following proofreading the invoice.",
+    "If I approve the invoice, email the customer FOLLOWING Alice King proofreading the invoice.",
+    "If I approve the invoice, email the customer following which our archive specialist proofreads the invoice.",
+  ]) {
+    assert.throws(() => ownerDelivery(source), { code: "TASK_DELIVERY_SCOPE" }, source);
+    assert.throws(() => assertDeliveryAnswer({}, source), { code: "TASK_DELIVERY_SCOPE" }, source);
+  }
+  for (const source of [
+    "If I approve the invoice, email the customer FOLLOWING WHICH the receipt is sent.",
+    'If I approve the invoice, email the customer with the note "following your proofreading the invoice".',
+  ]) {
+    assert.equal(ownerDelivery(source), null, source);
+    assert.doesNotThrow(() => assertDeliveryAnswer({}, source), source);
+  }
 });
 
 test("temporal approval gerunds retain modifiers without hiding implementation", () => {
