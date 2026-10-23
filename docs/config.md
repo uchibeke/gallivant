@@ -273,6 +273,11 @@ Gallivant was first driven against, and it is only a default:
 - `rereview_comment` is the entire text Gallivant posts to ask for another look. It is posted after every push that came from a fix run, and again as a nudge if the reviewer says nothing for `rereview_minutes`. Gallivant never inspects the string, so a bot mention, a slash command or a plain sentence all work.
 - `blocking_pattern` is a regex tested against each inline comment of the reviewer's newest review since the last request. A match, or a `CHANGES_REQUESTED` state, keeps the PR out of `ready-for-human`.
 
+Pushing a commit does not automatically request Codex review for a manually
+updated PR. Follow [the exact-head review procedure](codex-review.md) after each
+final push; the background loop only posts its configured request after runs it
+dispatches itself.
+
 ### Pointing it at a different reviewer
 
 Nothing beyond these three fields needs to change. Two worked examples.

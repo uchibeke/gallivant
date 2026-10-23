@@ -194,6 +194,8 @@ export const workflowRequests = [
 ];
 
 export const applicationRequests = [
+  "The CLI creates a PR when the command runs.",
+  "The webhook handler creates a PR when invoked.",
   "Merge invoices with tags.",
   "Merge customer records with references.",
   "Merge invoices using two extra tag name records.",

@@ -63,13 +63,41 @@ line, so a following line beginning with “title” or “body” cannot hide a
 PR instruction. Saved versions one through four retain their approved feature
 interpretation and exact source spans.
 
-This first recognizer supports one unqualified `open/create/raise/submit` review-PR
-clause outside quoted text/code. It is not a general natural-language permission
-parser. Conditional or negated publication clauses, owner approval prerequisites,
-destination qualifiers, multiple PRs and delivery-only requests return
-`TASK_DELIVERY_SCOPE` before inference. Unsupported publication actions also
-require clarification; they never become impossible provider obligations.
-Initial requests and later answers share the same bounded directive checks.
+The supported affirmative clause is one unqualified `open/create/raise/submit/make`
+review-PR instruction outside quoted text or code. This is not a general
+natural-language permission parser. Conditional or negated publication clauses
+(including a refusal ending in “ever” or “this time”), terminal timing such as
+“ASAP”, owner approval prerequisites, destination qualifiers, multiple PRs and
+open-ended requirements such as “obligatory” or “compulsory” return
+`TASK_DELIVERY_SCOPE` before inference.
+Multiple object modifiers and named recipients, including non-ASCII names, are
+detected as publication intent; unsupported forms clarify rather than becoming
+implementation instructions.
+Count phrases such as “dozens of PRs” and “a pair of PRs” are also detected as
+multiple-publication requests. Declarative feature subjects cover the recognized
+publication gerunds, including “generating” and “preparing a PR for review”; they
+remain product behavior when followed by an application requirement. An approval
+of a business object does not make subsequent editing work a product rule: for
+example, proofreading or polishing a referenced artifact after approval still
+requires clarification.
+Policy questions framed as “whether PRs are optional/required” are product
+metadata requirements. Causative directions such as “Have John create a PR” or
+“Ensure the team creates a PR” remain visible for clarification. Named coding
+agents such as Codex and Claude are treated like other workflow actors, not as
+application subjects. A labeled fake,
+mock, sample or synthetic PR is treated as test data only when the same sentence
+also names a test or fixture context, before or after the PR phrase; without that
+context, publication intent still requires clarification.
+Leading command adverbs such as “Kindly,” “Now,” and “Immediately” do not turn
+an imperative publication command into application behavior. Terminal temporal
+restrictions such as “anymore,” “henceforth,” “from now on,” “going forward,”
+and “no longer” remain attached to the publication target and fail closed when
+they prohibit or qualify publication.
+Broader construction verbs such as `send`, `prepare`, `generate`, `produce`,
+`publish` and `file` are recognized
+as publication intent, but require clarification unless they match the supported
+contract. They never become impossible provider obligations. Initial requests
+and later answers share the same bounded directive checks.
 Local-only, no-push, task-hold or patch-only directions cannot silently fall back
 to the default review-PR workflow. Preference wording such as “I don't want a PR”
 or “We don't need a pull request” also requires clarification.
@@ -80,6 +108,9 @@ merge authority. “Do not merge” remains a valid constraint.
 This includes subject-led requests such as “You need to merge it” and passive
 or nominal prohibitions such as “Commits are not allowed” and “Commit creation is
 forbidden.” Compound feature objects such as commit messages and branch reports
+remain implementation requirements. Passive branch wording is treated as a Git
+restriction when it names a bare branch artifact or supplies repository context;
+domain phrases such as “empty branches in the syntax tree” and “bank branches”
 remain implementation requirements.
 
 Implementation subjects such as a PR status badge, pull-request template,
@@ -88,7 +119,30 @@ commit SHA, diff viewer or branch selection
 remain ordinary requirements. Technical conditions also remain implementation
 scope: `If name is empty, return friend. Open a PR for review.` and the answer
 `Commit the database transaction after validation.` are supported. By contrast,
-`Wait for my approval. Open a PR for review.` requires clarification before work.
+`The button sends a PR for review.` and `Clicking submit generates a PR.` are
+declarative application behavior, not coordinator delivery commands; this
+distinction covers the recognized publication verb families. For conditional
+publication clauses, only clearly named product surfaces (such as a button, form,
+service or page) are treated as declarative app behavior; unknown people, roles and
+automation subjects remain visible and require clarification. An owner prerequisite
+such as
+`Wait for my approval. Open a PR for review.` still requires clarification.
+Later clauses introduced by “where” or “even though” are checked separately,
+so a product rule cannot hide a publication prohibition in the same sentence.
+Implementation work gated on approval is rejected even when that approval names
+a purchase or refund. Complete transaction rules such as approving a refund
+before emailing a customer stay implementation requirements, including leading
+conditions such as “After the owner approves the invoice, send a receipt” and
+“Provided the owner approves the invoice, send a confirmation.” The grammar also
+preserves a rule with an unfamiliar business object and result when the result
+refers back to that approved object: “After I approve the invoice, mark it paid.”
+This uses the sentence relationship rather than an allowlist of transaction
+nouns or outcome verbs. A separate implementation action after the approval
+still requires clarification.
+Ordinary approval modifiers such as “explicitly” and “personally” remain part
+of the approval condition and cannot be masked as implementation scope.
+Parenthetical application context does not change a declarative subject:
+“The service, when enabled, creates a PR” remains product behavior.
 An implementation may consist entirely of a prohibition, such as “Do not log API
 keys in error responses.” That requirement remains in the acceptance criteria.
 Application operations such as publishing events to a message bus, delivering
@@ -274,6 +328,14 @@ capacity is rejected before context reads or state changes; its operation ID and
 revision remain available for a corrected reply. Prepare a smaller intake if
 the remaining material questions cannot fit. Existing owned turns are reconciled
 with usage retained before oversized legacy state stops without a new turn.
+Each answer operation is also limited to 32 KiB of combined UTF-8 bytes across
+question IDs and answer strings. A new over-limit operation returns `TASK_INPUT`
+before signature hashing or delivery parsing, without changing the saved task.
+Exact receipts created by an older version still replay up to the largest batch
+the prior in-process service could accept: 128 answers of 32 KiB each with IDs up to 128
+bytes (4,210,688 bytes total). A changed input under an existing operation ID
+within that compatibility bound returns `TASK_CONFLICT`; larger input returns
+`TASK_INPUT` before signature hashing.
 The complete serialized preparation prompt is also limited to 120 KiB, including
 JSON escaping, runtime instructions, saved answers, previous output and repair
 feedback. This portable limit is checked before a harness probe or launch on every

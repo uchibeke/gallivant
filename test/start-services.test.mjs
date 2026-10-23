@@ -2,11 +2,14 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { createServer } from "node:http";
 import { execFileSync } from "node:child_process";
+import { EventEmitter } from "node:events";
 import { join } from "node:path";
-import { realpathSync } from "node:fs";
+import { realpathSync, readFileSync, statSync, symlinkSync, existsSync, writeFileSync, rmSync } from "node:fs";
+import { init } from "../lib/commands/init.mjs";
 import { startServices } from "../lib/commands/start_services.mjs";
 import { trackerInBackground, trackerForeground, stopTracker, readTracker, trackerPort, openTracker } from "../lib/tracker_process.mjs";
-import { writeJsonAtomic } from "../lib/fs.mjs";
+import { codeStamp, writeJsonAtomic } from "../lib/fs.mjs";
+import { processIdentity } from "../lib/daemon.mjs";
 import { makeContext } from "../lib/context.mjs";
 import { tempHome, CONFIG } from "./helpers.mjs";
 
@@ -65,9 +68,9 @@ test("standalone tracker starts once, verifies its home/port and stops without a
     assert.equal((await fetch(`http://127.0.0.1:${port}/`)).status, 200);
     await assert.rejects(trackerInBackground(ctx, { port: await freePort() }), /already uses port/);
     const other = fixture();
-    // The failed child can exit between ps and signal-0 on Linux. Either
-    // diagnostic refuses the unrelated listener; neither permits reuse/signals.
-    await assert.rejects(trackerInBackground(other, { port, waitMs: 2000 }), /failed to start|process identity cannot be verified/);
+    // The failed child can exit between ps and signal-0, or a reader can see
+    // its new lock before JSON is written. Each diagnostic refuses ownership.
+    await assert.rejects(trackerInBackground(other, { port, waitMs: 2000 }), /failed to start|process identity cannot be verified|tracker\.lock is not valid JSON/);
     assert.equal(readTracker(ctx.home).pid, first.pid);
     assert.equal((await fetch(`http://127.0.0.1:${port}/`)).status, 200);
   } finally {
@@ -75,6 +78,43 @@ test("standalone tracker starts once, verifies its home/port and stops without a
     for (let i = 0; i < 50 && readTracker(ctx.home)?.alive; i++) await new Promise(r => setTimeout(r, 50));
     assert.equal(readTracker(ctx.home), null);
   }
+});
+
+test("tracker startup waits only for its spawned child's incomplete lock", async () => {
+  for (const publishes of [true, false]) {
+    const ctx = fixture(), instance = "starting-tracker", owner = { pid: process.pid, identity: processIdentity(process.pid), instance };
+    const server = createServer((_request, response) => response.end(JSON.stringify({ instance })));
+    await new Promise(resolve => server.listen(0, "127.0.0.1", resolve));
+    const port = server.address().port;
+    let timer, spawns = 0, stops = 0;
+    const spawnFn = () => {
+      spawns++;
+      writeFileSync(join(ctx.home, "tracker.lock"), "{");
+      if (publishes) timer = setTimeout(() => {
+        writeJsonAtomic(join(ctx.home, "tracker.lock"), owner);
+        writeJsonAtomic(join(ctx.home, "tracker.json"), { ...owner, port, code: codeStamp() });
+      }, 10);
+      return Object.assign(new EventEmitter(), { pid: process.pid, exitCode: null, unref() {}, kill() { stops++; } });
+    };
+    try {
+      if (publishes) {
+        const record = await trackerInBackground(ctx, { port, spawnFn, waitMs: 1000 });
+        assert.equal(record.instance, instance);
+        assert.equal(stops, 0);
+      } else {
+        await assert.rejects(trackerInBackground(ctx, { port, spawnFn, waitMs: 20 }), /did not become ready/);
+        assert.equal(stops, 1);
+      }
+      assert.equal(spawns, 1);
+    } finally {
+      clearTimeout(timer);
+      rmSync(join(ctx.home, "tracker.lock"), { force: true });
+      await new Promise(resolve => server.close(resolve));
+    }
+  }
+  const ctx = fixture();
+  writeFileSync(join(ctx.home, "tracker.lock"), "{");
+  await assert.rejects(trackerInBackground(ctx, { spawnFn: () => assert.fail("must not replace an unknown lock") }), /tracker\.lock is not valid JSON/);
 });
 
 test("an unverifiable live tracker owner is neither replaced nor stopped", async () => {
