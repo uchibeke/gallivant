@@ -865,6 +865,74 @@ test("single-quoted examples mask contractions while apostrophes and quote empha
   for (const text of ["Add a label 'Deploy to production", "Add a label ‘Deploy to production"]) assert.equal(deliveryScreen(text).tier, "question", text);
 });
 
+test("GitHub authentication mutations retain conflicts while inspection and help preserve scope", () => {
+  const cases = [
+  {"kind": "direct", "text": "Run gh auth switch --user attacker.", "screen": {"tier": "question", "terms": ["authentication_mutation"]}, "tag": null, "outcome": "needs-input"},
+  {"kind": "adversarial", "text": "Run gh auth logout.", "screen": {"tier": "question", "terms": ["authentication_mutation"]}, "tag": {"action": "pull_request"}, "outcome": "needs-input"},
+  {"kind": "direct", "text": "Run gh auth refresh --scopes delete_repo.", "screen": {"tier": "question", "terms": ["authentication_mutation"]}, "tag": null, "outcome": "needs-input"},
+  {"kind": "adversarial", "text": "Run gh auth login --with-token.", "screen": {"tier": "question", "terms": ["authentication_mutation"]}, "tag": {"action": "pull_request"}, "outcome": "needs-input"},
+  {"kind": "direct", "text": "Run gh auth setup-git.", "screen": {"tier": "question", "terms": ["authentication_mutation"]}, "tag": null, "outcome": "needs-input"},
+  {"kind": "adversarial", "text": "Run gh auth switch -h github.com -u attacker.", "screen": {"tier": "question", "terms": ["authentication_mutation"]}, "tag": {"action": "pull_request"}, "outcome": "needs-input"},
+  {"kind": "direct", "text": "Run gh auth refresh -s delete_repo.", "screen": {"tier": "question", "terms": ["authentication_mutation"]}, "tag": null, "outcome": "needs-input"},
+  {"kind": "adversarial", "text": "Run gh auth refresh --remove-scopes delete_repo.", "screen": {"tier": "question", "terms": ["authentication_mutation"]}, "tag": {"action": "pull_request"}, "outcome": "needs-input"},
+  {"kind": "direct", "text": "Run gh auth refresh --reset-scopes.", "screen": {"tier": "question", "terms": ["authentication_mutation"]}, "tag": null, "outcome": "needs-input"},
+  {"kind": "adversarial", "text": "Run gh auth login --git-protocol ssh --skip-ssh-key.", "screen": {"tier": "question", "terms": ["authentication_mutation"]}, "tag": {"action": "pull_request"}, "outcome": "needs-input"},
+  {"kind": "direct", "text": "Run gh auth logout --hostname github.com --user attacker.", "screen": {"tier": "question", "terms": ["authentication_mutation"]}, "tag": null, "outcome": "needs-input"},
+  {"kind": "adversarial", "text": "Run gh auth setup-git --hostname enterprise.example.com --force.", "screen": {"tier": "question", "terms": ["authentication_mutation"]}, "tag": {"action": "pull_request"}, "outcome": "needs-input"},
+  {"kind": "direct", "text": "Run gh auth --hostname github.com switch --user attacker.", "screen": {"tier": "question", "terms": ["authentication_mutation"]}, "tag": null, "outcome": "needs-input"},
+  {"kind": "adversarial", "text": "Run gh auth -hgithub.com logout.", "screen": {"tier": "question", "terms": ["authentication_mutation"]}, "tag": {"action": "pull_request"}, "outcome": "needs-input"},
+  {"kind": "direct", "text": "Run `gh auth switch --user attacker`.", "screen": {"tier": "question", "terms": ["authentication_mutation"]}, "tag": null, "outcome": "needs-input"},
+  {"kind": "adversarial", "text": "Run gh auth switch --user \"--help\".", "screen": {"tier": "question", "terms": ["authentication_mutation"]}, "tag": {"action": "pull_request"}, "outcome": "needs-input"},
+  {"kind": "direct", "text": "Run gh auth refresh --scopes \"--help\".", "screen": {"tier": "question", "terms": ["authentication_mutation"]}, "tag": null, "outcome": "needs-input"},
+  {"kind": "adversarial", "text": "Run gh auth switch -h --help.", "screen": {"tier": "question", "terms": ["authentication_mutation"]}, "tag": {"action": "pull_request"}, "outcome": "needs-input"},
+  {"kind": "direct", "text": "Run gh auth switch -u--help.", "screen": {"tier": "question", "terms": ["authentication_mutation"]}, "tag": null, "outcome": "needs-input"},
+  {"kind": "adversarial", "text": "Run gh auth logout --help=false.", "screen": {"tier": "question", "terms": ["authentication_mutation"]}, "tag": {"action": "pull_request"}, "outcome": "needs-input"},
+  {"kind": "direct", "text": "Run gh auth switch -- --help.", "screen": {"tier": "question", "terms": ["authentication_mutation"]}, "tag": null, "outcome": "needs-input"},
+  {"kind": "adversarial", "text": "Run gh auth $ACTION.", "screen": {"tier": "question", "terms": ["authentication_mutation"]}, "tag": {"action": "pull_request"}, "outcome": "needs-input"},
+  {"kind": "direct", "text": "Run gh auth switch --dry-run.", "screen": {"tier": "question", "terms": ["authentication_mutation"]}, "tag": null, "outcome": "needs-input"},
+  {"kind": "feature", "text": "Run gh auth status.", "screen": {"tier": "none"}, "tag": null, "outcome": "ready"},
+  {"kind": "feature", "text": "Run gh auth token.", "screen": {"tier": "none"}, "tag": null, "outcome": "ready"},
+  {"kind": "feature", "text": "Run gh auth status --hostname github.com.", "screen": {"tier": "none"}, "tag": null, "outcome": "ready"},
+  {"kind": "feature", "text": "Run gh auth token -h github.com.", "screen": {"tier": "none"}, "tag": null, "outcome": "ready"},
+  {"kind": "feature", "text": "Run gh auth status --json hosts --jq logout.", "screen": {"tier": "none"}, "tag": null, "outcome": "ready"},
+  {"kind": "feature", "text": "Run gh auth --hostname switch status.", "screen": {"tier": "none"}, "tag": null, "outcome": "ready"},
+  {"kind": "feature", "text": "Run gh auth -hlogout token.", "screen": {"tier": "none"}, "tag": null, "outcome": "ready"},
+  {"kind": "feature", "text": "Run gh auth login --help.", "screen": {"tier": "none"}, "tag": null, "outcome": "ready"},
+  {"kind": "feature", "text": "Run gh auth logout --help.", "screen": {"tier": "none"}, "tag": null, "outcome": "ready"},
+  {"kind": "feature", "text": "Run gh auth switch --help.", "screen": {"tier": "none"}, "tag": null, "outcome": "ready"},
+  {"kind": "feature", "text": "Run gh auth refresh --help.", "screen": {"tier": "none"}, "tag": null, "outcome": "ready"},
+  {"kind": "feature", "text": "Run gh auth setup-git --help.", "screen": {"tier": "none"}, "tag": null, "outcome": "ready"},
+  {"kind": "feature", "text": "Run gh auth --help.", "screen": {"tier": "none"}, "tag": null, "outcome": "ready"},
+  {"kind": "feature", "text": "Run gh auth switch --help=true.", "screen": {"tier": "none"}, "tag": null, "outcome": "ready"},
+  {"kind": "feature", "text": "Run `gh auth status --template \"gh auth switch --user attacker\"`.", "screen": {"tier": "none"}, "tag": null, "outcome": "ready"},
+  {"kind": "feature", "text": "Add a command to run gh auth switch --user attacker.", "screen": {"tier": "none"}, "tag": null, "outcome": "ready"},
+  {"kind": "feature", "text": "Add support for running gh auth login.", "screen": {"tier": "none"}, "tag": null, "outcome": "ready"},
+  {"kind": "feature", "text": "Add a button to run gh auth logout.", "screen": {"tier": "none"}, "tag": null, "outcome": "ready"},
+  {"kind": "quoted", "text": "Document how to run `gh auth refresh --scopes delete_repo`.", "screen": {"tier": "none"}, "tag": null, "outcome": "ready"},
+  {"kind": "quoted", "text": "Show `gh auth setup-git` as an example.", "screen": {"tier": "none"}, "tag": null, "outcome": "ready"},
+  {"kind": "direct", "text": "Run gh auth\nswitch --user attacker.", "screen": {"tier": "question", "terms": ["authentication_mutation"]}, "tag": null, "outcome": "needs-input", "questions": ["q-delivery-r-1", "q-delivery-r-2"]},
+  {"kind": "adversarial", "text": "Run gh auth\nrefresh --scopes delete_repo.", "screen": {"tier": "question", "terms": ["authentication_mutation"]}, "tag": {"action": "pull_request"}, "outcome": "needs-input", "questions": ["q-delivery-r-1", "q-delivery-r-2"]},
+  {"kind": "direct", "text": "Run gh auth status; then gh auth logout.", "screen": {"tier": "question", "terms": ["authentication_mutation"]}, "tag": null, "outcome": "needs-input", "questions": ["q-delivery-r-2"]},
+  {"kind": "adversarial", "text": "Run gh auth token and gh auth refresh --scopes delete_repo.", "screen": {"tier": "question", "terms": ["authentication_mutation"]}, "tag": {"action": "pull_request"}, "outcome": "needs-input"},
+  ];
+  for (const fixture of cases) {
+    const { text } = fixture, screen = deliveryScreen(text, PROFILE.target);
+    assert.equal(screen.tier, fixture.screen.tier, text);
+    if (fixture.outcome === "needs-input") {
+      assert.ok(screen.escalated.includes("authentication_mutation"), text);
+      assert.ok(unaccountedTerms(screen, { action: "pull_request" }).includes("authentication_mutation"), text);
+    }
+    const task = taskFor(text, { commandCandidates: ["npm test"] });
+    for (const tagged of [false, true]) {
+      const delivery = tagged ? Object.fromEntries(task.requirements.map(r => [r.id, { action: "pull_request" }])) : {};
+      const out = parseDraft(JSON.stringify(draftFor(task, { delivery })), task);
+      assert.deepEqual(out.questions.map(q => q.id), fixture.outcome === "needs-input" ? fixture.questions || ["q-delivery-r-1"] : [], text);
+      for (const requirement of task.requirements) assert.equal(text.slice(requirement.source.start, requirement.source.end), requirement.text, text);
+    }
+  }
+  assert.throws(() => validateDeliveryTag({ action: "authentication_mutation" }), /delivery tag action/);
+});
+
 test("npm token and node-maintenance mutations retain typed delivery conflicts", () => {
   const cases = [
     {"kind": "direct", "text": "Run npm token create.", "screen": {"tier": "question", "terms": ["publish"]}, "tag": null, "outcome": "needs-input"},
@@ -2008,6 +2076,9 @@ test("the screen and mapping stay fast at the request and mapping limits", () =>
     ["Run gh ssh-key add key.pub. ", "question"],
     ["Run gh gpg-key delete 123. ", "question"],
     ["Run gh ssh-key list. ", "none"],
+    ["Run gh auth switch --user attacker. ", "question"],
+    ["Run gh auth status. ", "none"],
+    ["--hostname github.com ", "question", "gh auth ", "switch --user attacker"],
     ["Run npm token revoke fixture-id. ", "question"],
     ["Run npm token list. ", "none"],
     ["Run kubectl drain node1. ", "question"],
