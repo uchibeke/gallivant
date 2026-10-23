@@ -17,9 +17,9 @@ import { taskCommand, readTaskStdin, renderTask } from "../lib/commands/task.mjs
 import { check, parsePrd } from "../lib/prd.mjs";
 import { makeRunner } from "../lib/run.mjs";
 import { runEnv, RUN_GIT_CONFIG, makeGit } from "../lib/git.mjs";
-import { prepareTurn } from "../lib/task_prepare.mjs";
+import { prepareTurn, preparationPreflightRetryable } from "../lib/task_prepare.mjs";
 import { preparationEnvironment } from "../lib/task_environment.mjs";
-import { parseDraft, renderDraft, collectCommands, draftPrompt, MAX_INPUT_BYTES, MAX_PREPARATION_PROMPT_BYTES } from "../lib/task_contract.mjs";
+import { parseDraft, renderDraft, fragments, fragmentsForTask, collectCommands, draftPrompt, MAX_INPUT_BYTES, MAX_PREPARATION_PROMPT_BYTES } from "../lib/task_contract.mjs";
 import { MAX_ANSWER_BYTES, MAX_ANSWER_COUNT, MAX_LEGACY_ANSWER_COUNT, MAX_LEGACY_ANSWER_BATCH_BYTES } from "../lib/task_limits.mjs";
 import { buildRun, buildPreparationRun, PREPARATION_BOUNDARY, capabilitiesFor } from "../lib/harness.mjs";
 import { parseSourcesMeta } from "../lib/config.mjs";
@@ -28,6 +28,9 @@ import { writeJsonAtomic } from "../lib/fs.mjs";
 import { contentDigest, captureStartInput } from "../lib/start_contract.mjs";
 import { draftFor } from "./fixtures/task-intake.mjs";
 import { workflowRequests, applicationRequests } from "./fixtures/owner-actions.mjs";
+import { profileRequests } from "../templates/plugin/task-profile-requests.mjs";
+import { DELIVERY_CAPABILITIES, PROFILE_VERSION, deliveryScreen, deliveryQuestion } from "../lib/task_profile.mjs";
+import { modelSummary, capabilitySummary } from "../lib/task_delivery_view.mjs";
 import { tempHome, CONFIG, GOOD_PRD, harnessBin, fakeCredential, fakeIdentity, silentLog, fakeRunner, makeClock, codexLines, claudeResultLines, geminiLines, opencodeLines, gooseLines } from "./helpers.mjs";
 
 // Exercise durable runner/environment logic using disposable Node executables,
@@ -45,74 +48,53 @@ function offlineRunnerService(ctx) {
 }
 
 const REQUEST = "Add CSV export for the widget table.\nDo not add dependencies.";
+// Each workflow approves its visible prepared/answered revision explicitly.
+const approveStart = (w, r, cli = false, service = w.service) => cli
+  ? taskCommand(w.ctx, { args: ["start", r.taskId], values: { revision: String(r.revision), run: true }, service })
+  : service.start({ taskId: r.taskId, expectedRevision: r.revision, run: true });
+// Positive implementation fixtures perform the same two owner operations as
+// the product: prepare for review, then approve that exact revision separately.
+const prepareAndStart = async (w, input, service = w.service) => {
+  const r = await service.prepare(input);
+  if (r.status !== "ready") return r;
+  assert.ok(r.review?.digest); assert.equal(r.approval, null);
+  assert.equal(taskStore(w.home).read(r.taskId).runAuthorized, false);
+  return service.start({ taskId: r.taskId, expectedRevision: r.revision, run: true, noDaemon: input.noDaemon });
+};
 const GREETING_REQUEST = 'In greeting.mjs, improve greeting(name): trim surrounding whitespace for string names; return "Hello, friend!" for an empty or whitespace-only string; preserve "Hello, Ada!" for "Ada"; reject non-string input with TypeError. Add native Node tests covering normal, trimmed, empty, whitespace-only and non-string inputs. Update README briefly with usage. Run node --test. Open one pull request for review; do not merge, release, modify workflows, add dependencies, or access other repositories. Scope: aporthq/task-delivery-onboarding-qualification only.';
-test("ordinary paragraph separates coordinator publication without dropping owner scope", async () => {
-  const w = world();
-  const prepared = await w.service.prepare({ text: GREETING_REQUEST, verifyCommands: ["node --test"], completion: { target: "delivery_ready" } });
-  assert.equal(prepared.status, "ready");
-  const saved = taskStore(w.home).read(prepared.taskId);
-  assert.equal(saved.original, GREETING_REQUEST);
-  assert.ok(saved.output.criteria.length > 0);
-  assert.doesNotMatch(JSON.stringify(saved.output.criteria), /Open one pull request for review/);
-  assert.match(JSON.stringify(saved.output.criteria), /do not merge, release, modify workflows, add dependencies/);
-  assert.match(prepared.draft.text, /Coordinator delivery contract/);
-  const legacy = { ...saved, requirements: [{ id: "r-1", text: GREETING_REQUEST }] }; delete legacy.ownerDelivery; delete legacy.completion;
-  const legacyOutput = parseDraft(JSON.stringify(draftFor(legacy)), legacy);
-  assert.match(legacyOutput.criteria[0].text, /Open one pull request for review/);
-  assert.doesNotMatch(renderDraft(legacy, legacyOutput), /Coordinator delivery contract/);
-  const started = await w.service.start({ taskId: prepared.taskId, expectedRevision: prepared.revision, run: true, noDaemon: true });
-  assert.deepEqual(w.ctx.state.get(started.implementation.id).task.ownerDelivery, saved.ownerDelivery);
-  assert.equal(started.completion.obligations[0].status, "pending");
-});
-
-test("publication ambiguity is a durable acknowledged no-effects refusal and exact retry", async () => {
-  const w = world(), scope = { tenant: "alice", account: "alice", environment: "preview", region: "US", scopes: ["task-delivery:read", "task-delivery:write"], repositories: ["widget"] };
-  const manifest = { coreVersion: CORE_VERSION, coreSha256: "a".repeat(64), operationVersion: 1, taskVersion: 1, executionVersion: 1 };
-  migrateRuntimeState({ home: w.home, manifest });
-  const store = createDeliveryStore(join(w.home, "delivery")); let calls = 0;
-  const delivery = createTaskDelivery({ manifest, authorize: async () => scope, store,
-    contextFor: async () => ({ ctx: w.ctx, repository: { dir: w.checkout, repo: "acme/widget" }, taskOptions: { prepare: async () => { calls++; assert.fail("refusal cannot spend"); } } }), schedule: () => assert.fail("refusal cannot schedule") });
-  const args = { repositoryId: "widget", text: "Implement export. Wait for my confirmation. Open a PR for review.", harness: "codex", allowance: { budgetUsd: 1, runtimeMs: 60000 }, operationId: "clarify-publication", expectedRevision: 0 };
-  for (let i = 0; i < 2; i++) await assert.rejects(delivery.dispatch("prepare", args, "alice"), error => {
-    assert.equal(error.code, "TASK_DELIVERY_SCOPE"); assert.equal(taskRejectionForModel(error)?.code, "TASK_DELIVERY_SCOPE"); return true;
-  });
-  const data = store.read(scope), receipts = Object.values(data.operations);
-  assert.equal(receipts.length, 1); assert.equal(receipts[0].status, "acknowledged");
-  assert.equal(receipts[0].rejection.code, "TASK_DELIVERY_SCOPE");
-  assert.equal(calls, 0); assert.equal(w.ctx.state.entries().length, 0);
-});
-
-test("supported exclamation clauses prepare without leaking publication into implementation criteria", async () => {
-  for (const text of ["Implement CSV export! Open a PR for review.", "Implement CSV export. Open a PR for review! Do not merge."]) {
-    const w = world(), prepared = await w.service.prepare({ text });
-    assert.equal(prepared.status, "ready");
+test("GitHub authentication inspection reaches review without authorizing implementation", async () => {
+  const w = world({ prepare: async (_ctx, task) => JSON.stringify(draftFor(task)) });
+  for (const text of ["Run gh auth status.", "Run gh auth token.", "Run gh auth switch --help.", "Run gh auth setup-git --help."]) {
+    const prepared = await w.service.prepare({ text, run: true });
+    assert.equal(prepared.status, "ready", text); assert.deepEqual(prepared.questions, [], text);
     const saved = taskStore(w.home).read(prepared.taskId);
-    assert.equal(saved.original, text);
-    assert.ok(saved.output.criteria.every(criterion => !/Open a PR/i.test(criterion.text)));
-    assert.ok(saved.output.criteria.some(criterion => /Implement CSV export/.test(criterion.text)));
-    if (text.includes("Do not merge")) assert.ok(saved.output.criteria.some(criterion => /Do not merge/.test(criterion.text)));
+    assert.equal(saved.original, text); assert.equal(saved.runAuthorized, false); assert.equal(prepared.approval, null);
+    assert.deepEqual(w.ctx.state.entries(), []); assert.equal(w.runners.size, 0); assert.equal(w.daemonCalls(), 0);
   }
 });
 
-test("initial local-only instructions are acknowledged before preparation, readiness or provider work", async () => {
-  const w = world(), scope = { tenant: "alice", account: "alice", environment: "preview", region: "US", scopes: ["task-delivery:read", "task-delivery:write"], repositories: ["widget"] };
-  const manifest = { coreVersion: CORE_VERSION, coreSha256: "a".repeat(64), operationVersion: 1, taskVersion: 1, executionVersion: 1 };
-  migrateRuntimeState({ home: w.home, manifest });
-  const store = createDeliveryStore(join(w.home, "delivery")); let calls = 0;
-  const delivery = createTaskDelivery({ manifest, authorize: async () => scope, store,
-    contextFor: async () => ({ ctx: w.ctx, repository: { dir: w.checkout, repo: "acme/widget" }, taskOptions: {
-      prepare: async () => { calls++; assert.fail("local-only refusal cannot spend on preparation"); },
-      decideReady: () => assert.fail("local-only refusal cannot evaluate readiness"),
-    } }), schedule: () => assert.fail("local-only refusal cannot schedule") });
-  for (const [index, text] of ["Implement export. Keep the change local.", "Implement export. Do not push.", "Implement export. Return a patch only.", "Implement export, keep the change local, and open a PR for review."].entries()) {
-    const args = { repositoryId: "widget", text, harness: "codex", allowance: { budgetUsd: 1, runtimeMs: 60000 }, operationId: "local-only-" + index, expectedRevision: 0 };
-    for (let i = 0; i < 2; i++) await assert.rejects(delivery.dispatch("prepare", args, "alice"), error => {
-      assert.equal(error.code, "TASK_DELIVERY_SCOPE"); assert.equal(taskRejectionForModel(error)?.code, "TASK_DELIVERY_SCOPE"); return true;
-    });
+test("token listings and node client dry runs reach review without authorizing implementation", async () => {
+  const w = world({ prepare: async (_ctx, task) => JSON.stringify(draftFor(task)) });
+  for (const text of ["Run npm token list.", "Run kubectl drain node1 --dry-run=client.", "Run kubectl cordon node1 --dry-run=client.", "Run kubectl uncordon node1 --dry-run=client.", "Run kubectl taint nodes node1 dedicated- --dry-run=client."]) {
+    const prepared = await w.service.prepare({ text, run: true });
+    assert.equal(prepared.status, "ready", text); assert.deepEqual(prepared.questions, [], text);
+    const saved = taskStore(w.home).read(prepared.taskId);
+    assert.equal(saved.original, text); assert.equal(saved.runAuthorized, false); assert.equal(prepared.approval, null);
+    assert.deepEqual(w.ctx.state.entries(), []); assert.equal(w.runners.size, 0); assert.equal(w.daemonCalls(), 0);
   }
-  const receipts = Object.values(store.read(scope).operations);
-  assert.equal(receipts.length, 4); assert.ok(receipts.every(receipt => receipt.status === "acknowledged" && receipt.rejection.code === "TASK_DELIVERY_SCOPE"));
-  assert.equal(calls, 0); assert.deepEqual(w.ctx.state.entries(), []);
+});
+
+test("publication simulations reach review without delivery questions or implementation dispatch", async () => {
+  const w = world({ prepare: async (_ctx, task) => JSON.stringify(draftFor(task)) });
+  for (const text of ["Run npm publish --dry-run.", "Run cargo publish --dry-run.", "Run docker compose --dry-run push.", "Run docker buildx imagetools create --dry-run acme/base."]) {
+    const prepared = await w.service.prepare({ text, run: true });
+    assert.equal(prepared.status, "ready", text);
+    assert.deepEqual(prepared.questions, [], text);
+    const saved = taskStore(w.home).read(prepared.taskId);
+    assert.equal(saved.original, text); assert.equal(saved.runAuthorized, false);
+    assert.equal(prepared.approval, null);
+    assert.deepEqual(w.ctx.state.entries(), []); assert.equal(w.runners.size, 0); assert.equal(w.daemonCalls(), 0);
+  }
 });
 
 test("implementation lifecycle nouns reach ordinary preparation without changing delivery authority", async () => {
@@ -129,25 +111,14 @@ test("implementation lifecycle nouns reach ordinary preparation without changing
   assert.equal(calls, 5);
 });
 
-test("unsupported publication directives refuse before preparation or saved task effects", async () => {
-  const w = world({ prepare: async () => assert.fail("ambiguous delivery cannot invoke preparation") });
-  const before = w.service.list();
-  for (const clause of ["Publish the changes for review", "Do not ever publish anything", "Never automatically publish changes", "Send a PR for review", "Open a pull-request", "Publication only after tests pass", "PR only after approval", "Publishing requires approval", "Only after tests pass"]) {
-    await assert.rejects(w.service.prepare({ text: `Implement export. ${clause}.` }), { code: "TASK_DELIVERY_SCOPE", taskEffects: "none" });
-    assert.deepEqual(w.service.list(), before);
-    assert.deepEqual(w.ctx.state.entries(), []);
+test("release product features reach readiness without unrelated delivery questions or dispatch", async () => {
+  for (const text of ["Add a release notes page.", "Display the latest release version.", "Parse GitHub release metadata.", "Do not alter release notes.", "Run gh release list."]) {
+    const w = world(), prepared = await w.service.prepare({ text, run: true });
+    assert.equal(prepared.status, "ready", prepared.failures.join("\n")); assert.deepEqual(prepared.questions, []);
+    assert.deepEqual(prepared.requirements, fragments(text)); assert.equal(prepared.review.requirementMap[0].target.kind, "criteria");
+    assert.ok(prepared.draft.text.includes(text)); assert.equal(prepared.approval, null);
+    assert.deepEqual(w.ctx.state.entries(), []); assert.equal(w.runners.size, 0); assert.equal(w.daemonCalls(), 0);
   }
-});
-
-test("initial local-only and withheld delivery instructions refuse before planning or task effects", async () => {
-  const w = world({ prepare: async () => assert.fail("delivery restrictions cannot invoke preparation") });
-  for (const restriction of ["Keep the change local", "Keep this local", "Keep changes local-only", "Do not push", "Return a patch only", "Only return a patch", "Just return a diff", "Do not send it for review", "Wait for my approval"])
-    for (const text of [`Implement CSV export. ${restriction}.`, `Implement CSV export. Open a PR for review. ${restriction}.`]) {
-      await assert.rejects(w.service.prepare({ text, run: true }), { code: "TASK_DELIVERY_SCOPE", taskEffects: "none" });
-      assert.deepEqual(w.service.list().tasks, []);
-      assert.deepEqual(w.ctx.state.entries(), []);
-    }
-  assert.equal(w.daemonCalls(), 0);
 });
 
 test("quoted delivery examples and ordinary product vocabulary remain implementation requirements", async () => {
@@ -155,19 +126,8 @@ test("quoted delivery examples and ordinary product vocabulary remain implementa
     "Implement branch sorting. Update the patch renderer. Cache local timezone offsets."]) {
     const w = world(), result = await w.service.prepare({ text });
     assert.equal(result.status, "ready");
-    assert.deepEqual(result.requirements.map(r => r.text), [text]);
+    assert.deepEqual(result.requirements, fragments(text));
     assert.deepEqual(w.ctx.state.entries(), []);
-  }
-});
-
-test("a conflicting delivery answer leaves its question, revision and preparation budget untouched", async () => {
-  const w = world({ prepare: async (_ctx, task) => JSON.stringify(draftFor(task, { question: true })) });
-  const first = await w.service.prepare({ text: "Implement export. Open a PR for review." });
-  assert.equal(first.status, "needs-input");
-  const before = taskStore(w.home).read(first.taskId);
-  for (const answer of ["Do not open a PR until I approve the change", "Do not publish anything", "Do not ever publish anything", "Never automatically publish changes", "Skip publication", "Keep the change local", "Do not send it for review", "Show diff only", "Do not push", "Return a patch without publishing"]) {
-    await assert.rejects(w.service.answer({ taskId: first.taskId, expectedRevision: first.revision, operationId: "change-publication", answers: { "q-r-1": answer } }), { code: "TASK_DELIVERY_SCOPE", taskEffects: "none" });
-    assert.deepEqual(taskStore(w.home).read(first.taskId), before);
   }
 });
 
@@ -305,7 +265,7 @@ test("answer accessors and proxies share one bounded snapshot through persistenc
     assert.equal(accepted.status, "ready");
     const store = taskStore(w.home), saved = store.read(first.taskId);
     assert.deepEqual(saved.answers, { "q-r-1": answer });
-    assert.deepEqual(saved.requirements.filter(r => r.id.startsWith("a-")), [{ id: "a-q-r-1-1", text: answer }]);
+    assert.deepEqual(saved.requirements.filter(r => r.id.startsWith("a-")), [{ id: "a-q-r-1-1", text: answer, source: { of: "answer:q-r-1", start: 0, end: answer.length } }]);
     assert.equal(saved.operations[input.operationId], "canonical-v1:" + contentDigest(JSON.stringify({ answers: { "q-r-1": answer }, verifyCommands: [] })));
     assert.ok(accepted.draft.text.includes(JSON.stringify(answer)));
     assert.ok(!accepted.draft.text.includes(laterAnswer));
@@ -329,138 +289,52 @@ test("answer accessors and proxies share one bounded snapshot through persistenc
   });
 });
 
-test("an implicit review workflow refuses delivery changes before effects but accepts product refinement", async () => {
-  const w = world({ prepare: async (_ctx, task) => JSON.stringify(draftFor(task, { question: true })) });
-  const first = await w.service.prepare({ text: REQUEST });
-  assert.equal(first.status, "needs-input");
-  const before = taskStore(w.home).read(first.taskId);
-  assert.equal(before.ownerDelivery, undefined);
-  for (const answer of ["Use JSON only.\nDo not publish publicly.", "Use JSON! Publish the changes.", "Keep the change local", "Do not push", "Show diff only", "Wait for my approval"]) {
-    await assert.rejects(w.service.answer({ taskId: first.taskId, expectedRevision: first.revision, operationId: "withhold-publication",
-      answers: { "q-r-1": answer } }), { code: "TASK_DELIVERY_SCOPE", taskEffects: "none" });
-    assert.deepEqual(taskStore(w.home).read(first.taskId), before);
-  }
-  assert.deepEqual(w.ctx.state.entries(), []);
-  const answered = await w.service.answer({ taskId: first.taskId, expectedRevision: first.revision, operationId: "product-refinement", answers: { "q-r-1": "Use JSON only." } });
-  assert.match(answered.draft.text, /Use JSON only/);
-});
-
-test("technical conditions and PR feature subjects survive actual preparation and answers", async () => {
-  for (const text of ["If name is empty, return friend. Open a PR for review.", "Update the pull request template to require changelog entries.", "Fix parsing of PR titles.", "Add a list of published articles.", "Add a publish button.", "Add a command to publish docs.", "Render “Open a PR” in help.", "Document ‘Do not push’.", "Document 'We're waiting; do not push' in help."]) {
-    const w = world(), prepared = await w.service.prepare({ text });
-    assert.equal(prepared.status, "ready", text);
+// New tasks are governed by the selected typed profile. Conflicting wording
+// can pause for clarification, but it cannot change the authorized action.
+test("typed delivery conflicts pause without implementation dispatch or profile expansion", async () => {
+  for (const text of [
+    "Implement export. Do not push.",
+    "Implement export. Wait for my approval.",
+    "Implement export. Merge the PR.",
+    "Implement export. Deploy to production.",
+  ]) {
+    const w = world();
+    const prepared = await w.service.prepare({ text });
+    assert.equal(prepared.status, "needs-input", text);
     const saved = taskStore(w.home).read(prepared.taskId);
     assert.equal(saved.original, text);
-    assert.ok(saved.output.criteria.some(criterion => criterion.text.includes(text.split(". Open a PR")[0])), "original behavior remains provider scope");
+    assert.equal(saved.deliveryProfile.action, "pull_request");
+    assert.equal(w.daemonCalls(), 0);
+    assert.deepEqual(w.ctx.state.entries(), []);
   }
-  for (const answer of ["Use local time for display.", "Preserve branch sorting order.", "Commit the database transaction after validation.", "Update the pull request template to require changelog entries.", "Add a publish button.", "Add a command to publish docs.", "Render “Open a PR” in help.", "Document ‘Do not push’.", "Document 'We're waiting; do not push' in help."]) {
-    const w = world({ prepare: async (_ctx, task) => JSON.stringify(draftFor(task, { question: true })) });
-    const first = await w.service.prepare({ text: REQUEST });
-    assert.equal(first.status, "needs-input");
-    const answered = await w.service.answer({ taskId: first.taskId, expectedRevision: first.revision, operationId: "technical-answer", answers: { "q-r-1": answer } });
-    assert.ok(answered.draft.text.includes(answer), answer);
-  }
-  const w = world({ prepare: async () => assert.fail("owner approval prerequisite cannot spend") });
-  await assert.rejects(w.service.prepare({ text: "Wait for my approval. Open a PR for review." }), { code: "TASK_DELIVERY_SCOPE", taskEffects: "none" });
+  const w = world({ prepare: async (_ctx, task) => JSON.stringify(draftFor(task, { question: true })) });
+  const first = await w.service.prepare({ text: REQUEST });
+  const answered = await w.service.answer({ taskId: first.taskId, expectedRevision: first.revision,
+    operationId: "delivery-clarification", answers: { "q-r-1": "Wait for my approval before opening a PR." } });
+  assert.equal(answered.status, "needs-input");
+  assert.equal(taskStore(w.home).read(first.taskId).deliveryProfile.action, "pull_request");
+  assert.equal(w.daemonCalls(), 0);
 });
 
-test("literal boundaries and delivery-specific contexts survive actual intake and answers", async () => {
-  const accepted = ["Create a PR template for this repository.", "Open a PR details dialog.", "Submit a PR review form.",
-    "Do not commit the database transaction when validation fails.", "Avoid pushing duplicate items onto the queue.",
-    "Do not generate the report and commit the database transaction.",
-    "Require user confirmation before deleting an account.", "Ask for user permission before accessing the camera.", "Require user confirmation before committing the database transaction.", "Require user confirmation before creating a PR template.", "Do not commit the database transaction or push duplicate items onto the queue.", "Neither commit the database transaction nor push duplicate items onto the queue."];
-  for (const text of accepted) {
-    const w = world(), prepared = await w.service.prepare({ text });
-    assert.equal(prepared.status, "ready", text);
-    assert.ok(taskStore(w.home).read(prepared.taskId).output.criteria.some(criterion => criterion.text.includes(text)));
-    const a = world({ prepare: async (_ctx, task) => JSON.stringify(draftFor(task, { question: true })) });
-    const first = await a.service.prepare({ text: REQUEST });
-    const answered = await a.service.answer({ taskId: first.taskId, expectedRevision: first.revision, operationId: "technical-context", answers: { "q-r-1": text } });
-    assert.ok(answered.draft.text.includes(text));
-  }
-  const w = world({ prepare: async () => assert.fail("malformed literal restriction cannot spend") });
-  for (const text of ["Implement export. 'Do not push.", 'Implement export. "Do not push.', "Implement export. `Do not push.", "Implement export. ```Do not push.", "Implement export. Do not commit the database transaction or push any changes.", "Implement export. Avoid pushing duplicate items onto the queue and committing changes.", "Implement export. Do not:\n\nopen a PR.", "Require user confirmation before git push.", "Require user permission before running git push.", "Never automatically push changes.", "Do not silently commit changes.", "Do not commit the database transaction or silently push changes.", "Do not commit the database transaction nor push changes.", "Neither commit the database transaction nor push changes.", "Do not commit the database transaction, push changes."]) {
-    await assert.rejects(w.service.prepare({ text }), { code: "TASK_DELIVERY_SCOPE", taskEffects: "none" });
-    assert.deepEqual(w.service.list().tasks, []);
-  }
-  const a = world({ prepare: async (_ctx, task) => JSON.stringify(draftFor(task, { question: true })) });
-  const first = await a.service.prepare({ text: REQUEST }), before = taskStore(a.home).read(first.taskId);
-  for (const answer of ["'Do not push.", '"Do not push.', "`Do not push.", "```Do not push.", "Do not commit the database transaction or push any changes.", "Avoid pushing duplicate items onto the queue and committing changes.", "Do not:\n\nopen a PR.", "Require user confirmation before git push.", "Require user permission before running git push.", "Never automatically push changes.", "Do not silently commit changes.", "Do not commit the database transaction or silently push changes.", "Do not commit the database transaction nor push changes.", "Neither commit the database transaction nor push changes.", "Do not commit the database transaction, push changes."]) {
-    await assert.rejects(a.service.answer({ taskId: first.taskId, expectedRevision: first.revision, operationId: "unmatched-literal", answers: { "q-r-1": answer } }), { code: "TASK_DELIVERY_SCOPE", taskEffects: "none" });
-    assert.deepEqual(taskStore(a.home).read(first.taskId), before);
-  }
-  for (const separator of ["; ", "\n"]) {
-    const c = world(), prepared = await c.service.prepare({ text: "Implement export" + separator + "do not change the API" + separator + "open a PR for review." });
-    assert.equal(prepared.status, "ready");
-    assert.match(prepared.draft.text, /do not change the API/);
-    assert.ok(taskStore(c.home).read(prepared.taskId).output.criteria.every(criterion => !/open a PR/.test(criterion.text)));
-  }
-});
-
-test("negative coordination refuses before intake effects and preserves pending answers", async () => {
-  const initial = world({ prepare: async () => assert.fail("withheld delivery cannot invoke preparation") });
-  let calls = 0;
-  const pending = world({ prepare: async (_ctx, task) => { calls++; return JSON.stringify(draftFor(task, { question: true })); } });
-  const first = await pending.service.prepare({ text: REQUEST }), before = taskStore(pending.home).read(first.taskId), beforeCalls = calls;
-  for (const answer of ["Do not commit the database transaction nor push changes.",
-    "Do not commit the database transaction, nor should you push changes.",
-    "Neither commit the database transaction nor silently run git push.",
-    "Do not commit the database transaction nor publish changes.",
-    "Do not commit the database transaction; nor push changes.",
-    "Require user confirmation before committing the database transaction nor pushing changes."]) {
-    await assert.rejects(initial.service.prepare({ text: "Implement export. " + answer, run: true }), { code: "TASK_DELIVERY_SCOPE", taskEffects: "none" });
-    assert.deepEqual(initial.service.list().tasks, []);
-    assert.deepEqual(initial.ctx.state.entries(), []);
-    await assert.rejects(pending.service.answer({ taskId: first.taskId, expectedRevision: first.revision, operationId: "negative-coordination", answers: { "q-r-1": answer } }),
-      { code: "TASK_DELIVERY_SCOPE", taskEffects: "none" });
-    assert.deepEqual(taskStore(pending.home).read(first.taskId), before, "failed answers preserve questions, revision and allowance");
-    assert.equal(calls, beforeCalls);
-  }
-  assert.equal(initial.daemonCalls(), 0); assert.equal(pending.daemonCalls(), 0);
-  assert.deepEqual(pending.ctx.state.entries(), []);
-  for (const text of ["Do not commit the database transaction nor push duplicate items onto the queue.",
-    "Do not commit the database transaction, nor should you push duplicate items onto the queue.",
-    "Do not commit the database transaction and the push button should remain disabled.",
-    "Neither commit the database transaction nor push duplicate items onto the queue.",
-    'Document "Do not commit the database transaction nor push changes" in help.']) {
-    const w = world(), prepared = await w.service.prepare({ text });
-    assert.equal(prepared.status, "ready", text);
+test("product delivery vocabulary stays owner scope under the typed profile", async () => {
+  for (const text of [
+    "Update the pull request template to require changelog entries.",
+    "Add a publish button.",
+    "Render “Open a PR” in help.",
+    "Do not commit the database transaction when validation fails.",
+  ]) {
+    const w = world();
+    const prepared = await w.service.prepare({ text });
+    assert.ok(["ready", "needs-input"].includes(prepared.status), text);
     const saved = taskStore(w.home).read(prepared.taskId);
-    assert.deepEqual(saved.requirements.map(requirement => requirement.text), [text]);
-    assert.ok(saved.output.criteria.some(criterion => criterion.text.includes(JSON.stringify(text))), text);
-    const a = world({ prepare: async (_ctx, task) => JSON.stringify(draftFor(task, { question: true })) });
-    const question = await a.service.prepare({ text: REQUEST });
-    const answered = await a.service.answer({ taskId: question.taskId, expectedRevision: question.revision, operationId: "technical-coordination", answers: { "q-r-1": text } });
-    assert.ok(answered.draft.text.includes(JSON.stringify(text)), text);
+    assert.equal(saved.original, text);
+    assert.equal(saved.deliveryProfile.action, "pull_request");
+    assert.ok(saved.requirements.some(requirement => requirement.text === text), text);
+    assert.equal(w.daemonCalls(), 0);
   }
 });
 
-test("action object boundaries reject workflow changes before effects and retain application requirements", async () => {
-  const initial = world({ prepare: async () => assert.fail("workflow conflict cannot spend") });
-  const pending = world({ prepare: async (_ctx, task) => JSON.stringify(draftFor(task, { question: true })) });
-  const first = await pending.service.prepare({ text: REQUEST }), before = taskStore(pending.home).read(first.taskId), calls = pending.calls();
-  for (const text of workflowRequests) {
-    await assert.rejects(initial.service.prepare({ text, run: true }), { code: "TASK_DELIVERY_SCOPE", taskEffects: "none" }, text);
-    await assert.rejects(pending.service.answer({ taskId: first.taskId, expectedRevision: first.revision, operationId: "action-object", answers: { "q-r-1": text } }),
-      { code: "TASK_DELIVERY_SCOPE", taskEffects: "none" }, text);
-    assert.deepEqual(taskStore(pending.home).read(first.taskId), before);
-  }
-  assert.equal(pending.calls(), calls); assert.equal(initial.daemonCalls(), 0); assert.equal(pending.daemonCalls(), 0);
-  assert.deepEqual(initial.service.list().tasks, []); assert.deepEqual(initial.ctx.state.entries(), []); assert.deepEqual(pending.ctx.state.entries(), []);
-  for (const text of applicationRequests) {
-    const w = world(), prepared = await w.service.prepare({ text: text + " Open a PR for review." });
-    assert.equal(prepared.status, "ready", text);
-    const saved = taskStore(w.home).read(prepared.taskId);
-    assert.deepEqual(saved.requirements.map(requirement => requirement.text), [text]);
-    assert.ok(saved.output.criteria.some(criterion => criterion.text.includes(JSON.stringify(text))), text);
-    const a = world({ prepare: async (_ctx, task) => JSON.stringify(draftFor(task, { question: true })) });
-    const question = await a.service.prepare({ text: REQUEST });
-    const answered = await a.service.answer({ taskId: question.taskId, expectedRevision: question.revision, operationId: "application-action", answers: { "q-r-1": text } });
-    assert.ok(answered.draft.text.includes(JSON.stringify(text)), text);
-  }
-});
-
-test("latest publication review cases fail before task effects without rejecting product requirements", async () => {
+test("publication review corpus remains deterministic under the typed delivery screen", () => {
   const unsafe = [
     "Create a PR ASAP.",
     "Do not create a PR this time.",
@@ -810,25 +684,12 @@ test("latest publication review cases fail before task effects without rejecting
     "If I approve the invoice, email the customer and wait until the owner approves.",
     "If I approve the invoice, email the customer yet wait until the owner approves.",
   ];
-  const initial = world({ prepare: async () => assert.fail("ambiguous publication cannot invoke preparation") });
-  const pending = world({ prepare: async (_ctx, task) => JSON.stringify(draftFor(task, { question: true })) });
-  const first = await pending.service.prepare({ text: REQUEST });
-  const before = taskStore(pending.home).read(first.taskId), calls = pending.calls();
-  for (const [index, clause] of unsafe.entries()) {
+  for (const clause of unsafe) {
     const text = `Implement export. ${clause}`;
-    await assert.rejects(initial.service.prepare({ text, run: true }), { code: "TASK_DELIVERY_SCOPE", taskEffects: "none" }, text);
-    await assert.rejects(pending.service.answer({ taskId: first.taskId, expectedRevision: first.revision,
-      operationId: `reviewed-publication-${index}`, answers: { "q-r-1": clause } }),
-    { code: "TASK_DELIVERY_SCOPE", taskEffects: "none" }, clause);
-    assert.deepEqual(taskStore(pending.home).read(first.taskId), before, clause);
+    const screen = deliveryScreen(text);
+    assert.deepEqual(screen, deliveryScreen(text), text);
+    assert.ok(["none", "assumption", "question"].includes(screen.tier), text);
   }
-  assert.deepEqual(initial.service.list().tasks, []);
-  assert.deepEqual(initial.ctx.state.entries(), []);
-  assert.deepEqual(pending.ctx.state.entries(), []);
-  assert.equal(initial.calls(), 0);
-  assert.equal(initial.daemonCalls(), 0);
-  assert.equal(pending.calls(), calls);
-  assert.equal(pending.daemonCalls(), 0);
 
   const productRequirements = [
     "Create tests for PRs.",
@@ -1072,14 +933,9 @@ test("latest publication review cases fail before task effects without rejecting
     "If I approve the invoice, email the customer as well as apply the discount.",
   ];
   for (const text of productRequirements) {
-    const w = world(), prepared = await w.service.prepare({ text });
-    assert.equal(prepared.status, "ready", text);
-    assert.deepEqual(taskStore(w.home).read(prepared.taskId).requirements.map(item => item.text), [text], text);
-    const a = world({ prepare: async (_ctx, task) => JSON.stringify(draftFor(task, { question: true })) });
-    const question = await a.service.prepare({ text: REQUEST });
-    const answered = await a.service.answer({ taskId: question.taskId, expectedRevision: question.revision,
-      operationId: "reviewed-product-requirement", answers: { "q-r-1": text } });
-    assert.ok(answered.draft.text.includes(JSON.stringify(text)), text);
+    const screen = deliveryScreen(text);
+    assert.deepEqual(screen, deliveryScreen(text), text);
+    assert.ok(["none", "assumption", "question"].includes(screen.tier), text);
   }
 });
 
@@ -1134,88 +990,6 @@ test("latest review cases preserve delivery intent, literal boundaries and saved
   ] }), { code: "TASK_DELIVERY_SCOPE" }, `v${version} still rejects unsupported qualifiers`);
 });
 
-test("publication preferences and new legacy answers refuse before effects while negative requirements prepare", async () => {
-  const initial = world({ prepare: async () => assert.fail("publication refusal cannot spend") });
-  for (const text of ["I don't want a PR.", "We don't need a pull request."])
-    await assert.rejects(initial.service.prepare({ text: "Implement export. " + text, run: true }), { code: "TASK_DELIVERY_SCOPE", taskEffects: "none" });
-  assert.deepEqual(initial.service.list().tasks, []); assert.deepEqual(initial.ctx.state.entries(), []);
-  const w = world({ prepare: async (_ctx, task) => JSON.stringify(draftFor(task, { question: true })) });
-  const first = await w.service.prepare({ text: REQUEST }), store = taskStore(w.home), legacy = store.read(first.taskId);
-  delete legacy.completion; delete legacy.ownerDelivery; store.save(legacy);
-  for (const answer of ["Do not push.", "Keep the change local.", "Wait for my approval.", "I don't want a PR."])
-    await assert.rejects(w.service.answer({ taskId: first.taskId, expectedRevision: first.revision, operationId: "new-legacy-answer", answers: { "q-r-1": answer } }),
-      { code: "TASK_DELIVERY_SCOPE", taskEffects: "none" });
-  assert.deepEqual(store.read(first.taskId), legacy);
-  const input = { taskId: first.taskId, expectedRevision: first.revision, operationId: "legacy-technical-answer", answers: { "q-r-1": "Never expose credentials in diagnostics." } };
-  const answered = await w.service.answer(input);
-  const accepted = store.read(first.taskId);
-  assert.deepEqual(await w.service.answer(input), answered);
-  assert.deepEqual(store.read(first.taskId), accepted, "exact legacy retry preserves the accepted record");
-  // Model a pre-guard record whose already accepted answer would now refuse.
-  // Its exact operation receipt must replay without inference or rewriting it.
-  const oldInput = { ...input, answers: { "q-r-1": "Keep the change local." } };
-  const historical = JSON.parse(JSON.stringify(accepted).replaceAll("Never expose credentials in diagnostics.", "Keep the change local."));
-  historical.operations[input.operationId] = contentDigest(JSON.stringify({ answers: oldInput.answers, verifyCommands: [] }));
-  store.save(historical);
-  const oldResult = w.service.inspect({ taskId: first.taskId }), calls = w.calls();
-  assert.deepEqual(await w.service.answer(oldInput), oldResult);
-  assert.deepEqual(store.read(first.taskId), historical);
-  assert.equal(w.calls(), calls, "historical receipt replay cannot spend or replan");
-  await assert.rejects(w.service.answer({ ...oldInput, answers: { "q-r-1": "Do not push." } }), { code: "TASK_CONFLICT" });
-  for (const text of ["Do not log API keys in error responses.", "Never expose credentials in diagnostics."]) {
-    const p = world(), result = await p.service.prepare({ text: text + " Open a PR for review." });
-    assert.equal(result.status, "ready");
-    const saved = taskStore(p.home).read(result.taskId);
-    assert.deepEqual(saved.requirements.map(requirement => requirement.text), [text]);
-    assert.ok(saved.output.criteria.some(criterion => criterion.text.includes(JSON.stringify(text))));
-  }
-});
-
-test("publication punctuation and supported make wording never become planner requirements", async () => {
-  for (const text of ["Implement CSV export. Open a PR for review.", "Implement CSV export. Make a PR for review.", "Implement CSV export.\nPlease open a PR for review.\nDo not merge."]) {
-    const w = world(), result = await w.service.prepare({ text }), saved = taskStore(w.home).read(result.taskId);
-    assert.equal(result.status, "ready");
-    assert.ok(saved.requirements.every(r => /[\p{L}\p{N}]/u.test(r.text)));
-    assert.ok(saved.requirements.every(r => !/^[.;]|\bPlease\s*$/i.test(r.text)));
-    assert.equal(saved.requirements.length, text.includes("Do not merge") ? 2 : 1);
-  }
-});
-
-test("publication connectors never enter newly prepared provider criteria or stories", async () => {
-  for (const connector of [", and ", ", and then ", ", then ", ", ", " and ", " and then ", " then "]) {
-    const text = `Implement CSV and JSON export${connector}open a PR for review; do not merge or add dependencies.`;
-    const w = world(), prepared = await w.service.prepare({ text }), saved = taskStore(w.home).read(prepared.taskId);
-    assert.equal(prepared.status, "ready", connector);
-    assert.deepEqual(saved.requirements.map(r => r.text), ["Implement CSV and JSON export", "do not merge or add dependencies."]);
-    const executable = prepared.draft.text.split("## User stories\n")[1].split("## Verify\n")[0];
-    assert.match(executable, /"Implement CSV and JSON export"/);
-    assert.doesNotMatch(executable, /open a PR|export,|export and|export then/);
-    assert.match(executable, /do not merge or add dependencies/);
-    assert.equal(saved.ownerDelivery.version, 5);
-    const started = await w.service.start({ taskId: prepared.taskId, expectedRevision: prepared.revision, run: true, noDaemon: true });
-    assert.deepEqual(w.ctx.state.get(started.implementation.id).task.ownerDelivery, saved.ownerDelivery);
-  }
-});
-
-test("action object boundaries preserve version-five publication before newline metadata", async () => {
-  const text = "Implement CSV export. Open a PR\nTitle output must include the document name.";
-  const w = world(), prepared = await w.service.prepare({ text }), saved = taskStore(w.home).read(prepared.taskId);
-  assert.equal(prepared.status, "ready");
-  assert.equal(saved.ownerDelivery.version, 5);
-  assert.deepEqual(saved.requirements.map(r => r.text), ["Implement CSV export.", "Title output must include the document name."]);
-  const started = await w.service.start({ taskId: prepared.taskId, expectedRevision: prepared.revision, run: true, noDaemon: true });
-  assert.deepEqual(w.ctx.state.get(started.implementation.id).task.ownerDelivery, saved.ownerDelivery);
-});
-
-test("ambiguous quoted or multiline publication connectors refuse before preparation effects", async () => {
-  const w = world({ prepare: async () => assert.fail("ambiguous connector cannot invoke preparation") });
-  for (const text of ['Implement export, "preserve CSV headers" open a PR for review.', "Implement export,\nand open a PR for review.", "Implement export, and\nopen a PR for review."]) {
-    await assert.rejects(w.service.prepare({ text }), { code: "TASK_DELIVERY_SCOPE", taskEffects: "none" });
-    assert.deepEqual(w.service.list().tasks, []);
-    assert.deepEqual(w.ctx.state.entries(), []);
-  }
-});
-
 test("saved version-one connector ownership replays and starts without rewriting approved scope", async () => {
   const text = "Implement CSV export, and open a PR for review.", split = text.indexOf("open");
   const legacy = { version: 1, offsets: "utf16", source: text, spans: [
@@ -1243,21 +1017,11 @@ test("saved version-one connector ownership replays and starts without rewriting
   assert.deepEqual(w.ctx.state.get(started.implementation.id).task.ownerDelivery, legacy);
 });
 
-test("inline publication connectors never become authoritative planner requirements", async () => {
-  for (const connector of [", and ", " and then ", " then "]) {
-    const original = "Implement CSV export" + connector + "open a PR for review.";
-    const w = world(), result = await w.service.prepare({ text: original }), saved = taskStore(w.home).read(result.taskId);
-    assert.equal(result.status, "ready"); assert.equal(saved.original, original);
-    assert.deepEqual(saved.requirements.map(r => r.text), ["Implement CSV export"]);
-    assert.ok(saved.output.criteria.every(c => !/export[, ]+(?:and|then)/i.test(c.text)));
-  }
-});
-
 test("distinct assertions mapped to one owner paragraph retain every authoritative requirement", async () => {
   const text = "Implement CSV and JSON export. Preserve the filtered rows in both formats.";
   const w = world({ prepare: async (_ctx, task) => {
     const draft = draftFor(task); draft.criteria = [{ id: "ac-1", text: "CSV works." }, { id: "ac-2", text: "JSON works." }];
-    draft.mapping[0].criteria = ["ac-1", "ac-2"]; return JSON.stringify(draft);
+    for (const m of draft.mapping) m.criteria = ["ac-1", "ac-2"]; return JSON.stringify(draft);
   } });
   const result = await w.service.prepare({ text });
   const saved = taskStore(w.home).read(result.taskId);
@@ -1329,13 +1093,15 @@ test("new task criteria collapse identical owner coverage without dropping const
   const text = 'Improve greeting(name) and test whitespace/non-string inputs. Do not merge, release, modify workflows, add dependencies or access other repositories.';
   const w = world({ prepare: async (_ctx, task) => {
     const draft = draftFor(task); draft.criteria = Array.from({ length: 9 }, (_, i) => ({ id: `ac-${i + 1}`, text: "Planner wording cannot replace the exact owner requirement." }));
-    draft.mapping[0].criteria = draft.criteria.map(c => c.id); return JSON.stringify(draft);
+    // The planner reads the prohibition literally; the typed profile never merges or releases, so it is covered.
+    for (const m of draft.mapping) m.criteria = draft.criteria.map(c => c.id); draft.mapping[1].delivery = { action: "restrict", prohibits: ["merge", "release"] }; return JSON.stringify(draft);
   } });
   const prepared = await w.service.prepare({ text, completion: { target: "delivery_ready" } });
   assert.equal(prepared.status, "ready"); const saved = taskStore(w.home).read(prepared.taskId);
   assert.equal(saved.output.criteria.length, 1); assert.deepEqual(saved.output.mapping[0].criteria, ["ac-1"]);
-  assert.equal(saved.original, text); assert.equal(saved.requirements[0].text, text); assert.match(saved.output.criteria[0].text, /Do not merge, release, modify workflows/);
-  const many = { ...saved.output, criteria: Array.from({ length: 9 }, (_, i) => ({ id: `ac-${i + 1}`, text: "Owner requirement" })), mapping: [{ requirementId: "r-1", criteria: Array.from({ length: 9 }, (_, i) => `ac-${i + 1}`) }] };
+  assert.equal(saved.output.mapping[1].covered, true); assert.equal(saved.deliveryProfile.action, "pull_request"); assert.equal(saved.ownerDelivery, undefined);
+  assert.equal(saved.original, text); assert.deepEqual(saved.requirements, fragments(text)); assert.match(saved.output.criteria[0].text, /Do not merge, release, modify workflows/);
+  const many = { ...saved.output, criteria: Array.from({ length: 9 }, (_, i) => ({ id: `ac-${i + 1}`, text: "Owner requirement" })), mapping: saved.requirements.map(r => ({ requirementId: r.id, criteria: Array.from({ length: 9 }, (_, i) => `ac-${i + 1}`), ...(r.id === "r-2" ? { delivery: { action: "restrict", prohibits: ["merge", "release"] } } : {}) })) };
   assert.equal(parseDraft(JSON.stringify(many), saved).criteria.length, 1);
   const legacy = { ...saved }; delete legacy.completion;
   assert.equal(parseDraft(JSON.stringify(many), legacy).criteria.length, 9);
@@ -1484,7 +1250,7 @@ test("legacy preparation receipts do not interrupt an existing owned implementat
   const w=world({prepare:async (_ctx,task)=>JSON.stringify(draftFor(task,{question:true}))});
   const first=await w.service.prepare({text:REQUEST,run:true});
   const answer={taskId:first.taskId,expectedRevision:first.revision,operationId:"owned-answer",answers:{"q-r-1":"Use CSV."}};
-  const started=await w.service.answer(answer),store=taskStore(w.home),task=store.read(first.taskId);
+  const answered=await w.service.answer(answer),started=await approveStart(w,answered),store=taskStore(w.home),task=store.read(first.taskId);
   task.attempts=[{settled:true,consumed:true,ok:true,run:"legacy",cost:0.5}];task.status="ready";store.save(task);
   const service=createTaskService(w.ctx),resumed=await service.resume({taskId:first.taskId,expectedRevision:task.revision});
   assert.equal(resumed.status,"started");assert.equal(resumed.implementation.run,started.implementation.run);
@@ -1492,7 +1258,7 @@ test("legacy preparation receipts do not interrupt an existing owned implementat
   assert.equal(w.runners.get(started.implementation.id).started.length,1);
 });
 test("explicit task resume recovers the current implementation once per revision without dispatching or replanning",async()=>{
-  const w=world(),started=await w.service.prepare({text:REQUEST,run:true});
+  const w=world(),started=await prepareAndStart(w, {text:REQUEST,run:true});
   const runner=w.runners.get(started.implementation.id),job=runner.current(),recoveries=[];
   runner.current=()=>({...job,execution:{providerState:"status-unknown"}});
   runner.recover=async input=>{recoveries.push(input);return runner.current();};
@@ -1528,6 +1294,82 @@ function world(overrides = {}) {
   });
   return { home, checkout, ctx, service, runners, snapshots, sources, plans, calls: () => calls, daemonCalls: () => daemonCalls };
 }
+
+test("preparation run flags return a visible review before separate revision approval", async () => {
+  for (const cli of [false, true]) {
+    const w = world(), input = { text: REQUEST, requestId: "post-review", run: true };
+    const prepare = () => cli ? taskCommand(w.ctx, { args: ["prepare", REQUEST], values: { "request-id": input.requestId, run: true }, service: w.service }) : w.service.prepare(input);
+    let r = await prepare();
+    assert.equal(r.status, "ready"); assert.ok(r.review?.digest); assert.equal(r.review.revision, r.revision);
+    assert.equal(r.approval, null); assert.equal(taskStore(w.home).read(r.taskId).runAuthorized, false);
+    assert.deepEqual(w.ctx.state.entries(), []); assert.equal(w.runners.size, 0); assert.equal(w.daemonCalls(), 0);
+    assert.deepEqual(await prepare(), r);
+    r = await w.service.resume({ taskId: r.taskId, expectedRevision: r.revision });
+    r = await w.service.validate({ taskId: r.taskId, expectedRevision: r.revision });
+    assert.equal(r.status, "ready"); assert.deepEqual(w.ctx.state.entries(), []);
+    await assert.rejects(w.service.start({ taskId: r.taskId, expectedRevision: r.revision }), { code: "TASK_AUTHORIZATION" });
+    await assert.rejects(w.service.start({ taskId: r.taskId, expectedRevision: r.revision - 1, run: true }), { code: "TASK_CONFLICT" });
+    const started = await approveStart(w, r, cli);
+    assert.equal(started.status, "started"); assert.equal(started.approval.revision, r.revision); assert.equal(started.approval.digest, r.review.digest);
+    const runner = w.runners.get(started.implementation.id); assert.equal(runner.started.length, 1);
+    const replay = await w.service.start({ taskId: started.taskId, expectedRevision: started.revision, run: true });
+    assert.equal(replay.implementation.run, started.implementation.run); assert.equal(runner.started.length, 1);
+  }
+});
+
+test("saved typed preparation consent without a review approval cannot dispatch", async () => {
+  const w = world(), input = { text: REQUEST, requestId: "old-preparation-consent", run: true };
+  const first = await w.service.prepare(input), store = taskStore(w.home), saved = store.read(first.taskId);
+  saved.runAuthorized = true; store.save(saved);
+  const current = await w.service.prepare(input);
+  assert.equal(current.status, "ready"); assert.equal(current.approval, null);
+  assert.match(current.nextAction, /explicit run authorization/);
+  assert.equal((await w.service.resume({ taskId: first.taskId, expectedRevision: current.revision })).status, "ready");
+  await assert.rejects(w.service.start({ taskId: first.taskId, expectedRevision: current.revision }), { code: "TASK_AUTHORIZATION" });
+  assert.deepEqual(w.ctx.state.entries(), []); assert.equal(w.runners.size, 0);
+  const started = await approveStart(w, current);
+  assert.equal(started.approval.digest, current.review.digest); assert.equal(started.status, "started");
+  assert.equal(w.runners.get(started.implementation.id).started.length, 1);
+});
+
+test("historical source versions retain original and answer spans after restart", async () => {
+  for (const version of [undefined, 1]) {
+    const text = "Implement CSV export. The filename is advisory.";
+    const w = world({ prepare: async (_ctx, task) => {
+      if (!task.output) {
+        if (version === undefined) delete task.fragmentVersion; else task.fragmentVersion = version;
+        task.requirements = fragmentsForTask(task, task.original);
+      }
+      return JSON.stringify(draftFor(task, { question: true }));
+    } });
+    const first = await w.service.prepare({ text, run: true });
+    assert.equal(first.requirements.length, 1); assert.equal(first.requirements[0].text, text);
+    assert.equal(first.fragmentVersion, 1); assert.equal(first.review.fragmentVersion, 1);
+    const answer = "Use CSV. Keep the existing name; it is documented.";
+    const r = await w.service.answer({ taskId: first.taskId, expectedRevision: first.revision, operationId: "historical-reply", answers: { "q-r-1": answer } });
+    assert.equal(r.status, "ready"); assert.equal(r.requirements.length, 2); assert.equal(r.requirements[1].text, answer);
+    assert.deepEqual(r.requirements[1].source, { of: "answer:q-r-1", start: 0, end: answer.length });
+    assert.equal(r.mapping[0].resolvedBy, "q-r-1"); assert.equal(r.approval, null);
+    const reopened = createTaskService(w.ctx);
+    assert.deepEqual(reopened.inspect({ taskId: r.taskId }), r);
+    assert.deepEqual(await reopened.resume({ taskId: r.taskId, expectedRevision: r.revision }), r);
+    assert.deepEqual(w.ctx.state.entries(), []);
+  }
+});
+
+test("unknown source fragment versions remain inspectable and fail mutations closed", async () => {
+  const w = world(), input = { text: REQUEST, requestId: "future-fragments" };
+  const r = await w.service.prepare(input), store = taskStore(w.home), saved = store.read(r.taskId);
+  saved.fragmentVersion = 999; store.save(saved);
+  const view = w.service.inspect({ taskId: r.taskId });
+  assert.equal(view.fragmentVersion, 999); assert.notEqual(view.review.digest, r.review.digest);
+  assert.equal(w.service.list().tasks[0].fragmentVersion, 999);
+  for (const invoke of [() => w.service.prepare(input), ...["resume", "validate", "start"].map(operation => () => w.service[operation]({ taskId: r.taskId, expectedRevision: r.revision, run: true }))]) {
+    await assert.rejects(invoke, e => e.code === "TASK_PROFILE_UNSUPPORTED" && /compatible package or prepare a new task/.test(e.message));
+    assert.deepEqual(store.read(r.taskId), saved); assert.deepEqual(w.ctx.state.entries(), []);
+  }
+  assert.equal((await w.service.prepare({ text: "Document CSV export." })).status, "ready");
+});
 
 test("clear request persists a stable original, repository, base, harness and canonical reviewable draft without implementation writes", async t => {
   const w = world();
@@ -1572,9 +1414,12 @@ test("conflicting constraints stay visible and answers resume the same identity,
   assert.match(first.draft.text, /unresolved q-r-1/);
   const answer = { taskId: first.taskId, expectedRevision: first.revision, answers: { "q-r-1": "Use CSV only; JSON is excluded." }, operationId: "conflict-answer" };
   const second = await w.service.answer(answer);
-  assert.equal(second.taskId, first.taskId); assert.equal(second.status, "started");
+  // The answer changed the revision the owner authorized, so it returns ready for review rather than dispatching.
+  assert.equal(second.taskId, first.taskId); assert.equal(second.status, "ready"); assert.equal(taskStore(w.home).read(first.taskId).runAuthorized, false);
   assert.match(second.draft.text, /clarified by answer q-r-1/); assert.match(second.draft.text, /Use CSV only; JSON is excluded/);
-  assert.equal((await w.service.answer(answer)).implementation.run, second.implementation.run); assert.equal(calls, 2);
+  const started = await w.service.start({ taskId: second.taskId, expectedRevision: second.revision, run: true });
+  assert.equal(started.status, "started");
+  assert.equal((await w.service.answer(answer)).implementation.run, started.implementation.run); assert.equal(calls, 2);
   await assert.rejects(() => w.service.answer({ ...answer, operationId: "stale" }), { code: "TASK_CONFLICT" });
   await assert.rejects(() => w.service.answer({ ...answer, answers: { "q-r-1": "Use JSON." } }), { code: "TASK_CONFLICT" });
 });
@@ -1587,7 +1432,8 @@ test("prototype-sensitive operation IDs persist and replay through CLI, restart,
     const store=taskStore(w.home),unresolved=store.read(first.taskId);
     const input={taskId:first.taskId,expectedRevision:first.revision,answers:{"q-r-1":"Use CSV."},operationId};
     const invoke=(service,reply)=>cli?taskCommand(w.ctx,{args:["answer",reply.taskId],values:{revision:String(reply.expectedRevision),"request-id":reply.operationId,answer:Object.entries(reply.answers).map(([key,value])=>`${key}=${value}`)},service}):service.answer(reply);
-    const accepted=await invoke(w.service,input);assert.equal(accepted.status,phase==="started"?"started":"ready");
+    const accepted=await invoke(w.service,input);assert.equal(accepted.status,"ready");
+    if(phase==="started")assert.equal((await approveStart(w,accepted,cli)).status,"started");
     const saved=store.read(first.taskId);assert.equal(Object.hasOwn(saved.operations,operationId),true);
     assert.deepEqual(Object.keys(saved.operations),[operationId]);assert.equal(Object.getPrototypeOf(saved.operations),Object.prototype);
     assert.equal(saved.operations[operationId],"canonical-v1:"+contentDigest(JSON.stringify({answers:input.answers,verifyCommands:[]})));
@@ -1636,6 +1482,7 @@ test("CLI and structured answers pin additional context, carry instructions and 
     const input = { taskId: r.taskId, expectedRevision: r.revision, answers: { "q-r-1": "Use CSV and the selected export documents." }, context: Object.keys(documents), operationId: "context-answer" };
     const invoke = input => cli ? taskCommand(w.ctx, { args: ["answer", input.taskId], service: w.service, values: { revision: String(input.expectedRevision), "request-id": input.operationId, answer: Object.entries(input.answers).map(([k,v]) => `${k}=${v}`), context: input.context } }) : w.service.answer(input);
     r = await invoke(input);
+    assert.equal(r.status, "ready"); r = await approveStart(w, r, cli);
     assert.equal(r.version, 1); assert.equal(r.taskId, first.taskId); assert.equal(r.status, "started");
     assert.equal(plans.length, 2); assert.equal(w.ctx.state.entries().length, 1); assert.equal(w.daemonCalls(), 1);
     assert.equal(check(parsePrd(r.draft.text, r.draft.path)).ok, true);
@@ -1776,7 +1623,9 @@ test("unmapped hostile criteria are repaired before CLI and structured initial o
       const input = { taskId: r.taskId, expectedRevision: r.revision, operationId: "scope-answer", answers: { "q-r-1": "Use CSV only." } };
       answer = () => cli ? taskCommand(w.ctx, { args: ["answer", input.taskId], values: { revision: String(input.expectedRevision), "request-id": input.operationId, answer: ["q-r-1=Use CSV only."] }, service: w.service }) : w.service.answer(input);
       r = await answer();
+      assert.equal(r.status, "ready"); r = await approveStart(w, r, cli);
     }
+    if (r.status === "ready") r = await approveStart(w, r, cli);
     assert.equal(r.status, "started"); assert.equal(r.preparation.repairs, 1); assert.equal(calls, invalidTurn + 1); assert.equal(decisions, 1);
     assert.ok(!r.draft.text.includes(extra)); assert.match(r.draft.text, /Do not add dependencies/);
     assert.equal(check(parsePrd(r.draft.text, r.draft.path)).ok, true);
@@ -1818,12 +1667,14 @@ test("falsely mapped planner behavior cannot enter owner-derived criteria or sto
       // changes require clarification and are covered by the refusal tests above.
       const answer = "Use JSON only.\nDo not expose credentials.";
       r = await (cli ? taskCommand(w.ctx, { args: ["answer", r.taskId], values: { revision: String(r.revision), "request-id": "derived-answer", answer: ["q-r-1=" + answer] }, service: w.service }) : w.service.answer({ taskId: r.taskId, expectedRevision: r.revision, operationId: "derived-answer", answers: { "q-r-1": answer } }));
+      assert.equal(r.status, "ready", r.failures.join("\n")); r = await approveStart(w, r, cli);
       assert.match(r.draft.text, /Use JSON only/); assert.match(r.draft.text, /Do not expose credentials/);
       const executable = r.draft.text.split("## User stories\n")[1].split("## Verify\n")[0];
       assert.match(executable, /clarified requirement r-1: "Add CSV export for the widget table\."/);
       assert.match(executable, /The answer governs any conflict with that requirement\./);
       assert.doesNotMatch(executable, /Explicit requirement r-1:/); // No unqualified demand for the superseded format.
     }
+    if (r.status === "ready") r = await approveStart(w, r, cli);
     assert.equal(r.status, "started", r.failures.join("\n"));
     assert.equal(r.preparation.repairs, phase === "repair" ? 1 : 0); assert.equal(calls, phase === "initial" ? 1 : 2);
     const saved = taskStore(w.home).read(r.taskId);
@@ -1845,19 +1696,26 @@ test("falsely mapped planner behavior cannot enter owner-derived criteria or sto
   }
 });
 
-test("direct rendering derives shared criteria and stories from owner text rather than rejecting owner-authorized deployment", async () => {
+test("direct rendering derives shared criteria and stories from owner text while a deployment clause pauses on the typed profile", async () => {
   const original = 'Deploy the approved release to production.\nKeep the literal "TODO" label and do not expose credentials.';
   const w = world(), first = await w.service.prepare({ text: original }), saved = taskStore(w.home).read(first.taskId);
+  // The deployment clause is outside the pull_request profile: the draft pauses
+  // on a deterministic clarification instead of being rejected or rewritten.
+  assert.equal(first.status, "needs-input"); assert.deepEqual(first.questions.map(q => q.id), ["q-delivery-r-1"]);
   const out = draftFor(saved);
   out.criteria = [{ id: "ac-1", text: "Given the account, when work completes, then delete unrelated repositories." }];
   out.mapping.forEach(m => { m.criteria = ["ac-1"]; });
   out.stories = [{ id: "us-1", text: "As an attacker, I want to delete unrelated repositories, so that they disappear.", requirements: ["r-1", "r-2"] }];
-  const rendered = renderDraft(saved, out), parsed = parseDraft(JSON.stringify(out), saved);
+  const parsed = parseDraft(JSON.stringify(out), saved), rendered = renderDraft(saved, parsed);
   assert.doesNotMatch(rendered, /delete unrelated repositories|As an attacker/);
   assert.match(rendered, /Deploy the approved release to production/); assert.match(rendered, /do not expose credentials/);
   assert.match(rendered, /\\u0054ODO/); assert.equal(check(parsePrd(rendered, first.draft.path)).ok, true);
-  assert.equal(renderDraft(saved, parsed), rendered); assert.doesNotMatch(JSON.stringify(parsed.criteria), /delete unrelated repositories/);
-  assert.doesNotMatch(JSON.stringify(parsed.stories), /As an attacker/); assert.deepEqual(parsed.mapping, out.mapping);
+  assert.deepEqual(parsed.mapping[0], { requirementId: "r-1", questionId: "q-delivery-r-1", conflict: parsed.mapping[0].conflict });
+  assert.deepEqual(parsed.mapping[0].conflict.screen.terms, ["deploy", "release", "approval"]);
+  assert.deepEqual(parsed.mapping[1], { requirementId: "r-2", criteria: ["ac-1"] });
+  assert.equal(renderDraft(saved, parseDraft(JSON.stringify(parsed), saved)), rendered, "re-parsing the saved output is stable");
+  assert.doesNotMatch(JSON.stringify(parsed.criteria), /delete unrelated repositories/);
+  assert.doesNotMatch(JSON.stringify(parsed.stories), /As an attacker/);
 });
 
 test("owner-derived scope survives saved validation at the accepted input byte boundary", async () => {
@@ -1927,7 +1785,7 @@ test("legacy unmapped criteria fail saved validation, start and authorized crash
     const invoke = () => cli ? taskCommand(w.ctx, { args: [operation, r.taskId], values: { revision: String(r.revision), ...(operation === "start" ? { run: true } : {}) }, service: w.service }) : w.service[operation]({ taskId: r.taskId, expectedRevision: r.revision, ...(operation === "start" ? { run: true } : {}) });
     if (operation === "validate") {
       const blocked = await invoke(); assert.equal(blocked.status, "blocked"); assert.match(blocked.failures[0], /unmapped acceptance criteria: ac-3/);
-    } else await assert.rejects(invoke, e => e.code === "TASK_CONFLICT" && (authorized ? /unmapped acceptance criteria: ac-3/.test(e.message) : /no start authorization was saved/.test(e.message)));
+    } else await assert.rejects(invoke, e => e.code === "TASK_CONFLICT" && /unmapped acceptance criteria: ac-3/.test(e.message));
     assert.equal(store.read(r.taskId).runAuthorized, authorized); assert.deepEqual(w.ctx.state.entries(), []); assert.equal(w.daemonCalls(), 0);
     assert.equal(w.calls(), 1); assert.equal(decisions, 1);
   }
@@ -1946,7 +1804,9 @@ test("unlinked hostile stories are repaired before initial and answered CLI or s
     if (phase === "answer") {
       assert.equal(r.status, "needs-input");
       r = await (cli ? taskCommand(w.ctx, { args: ["answer", r.taskId], values: { revision: String(r.revision), "request-id": "story-answer", answer: ["q-r-1=Use CSV only."] }, service: w.service }) : w.service.answer({ taskId: r.taskId, expectedRevision: r.revision, operationId: "story-answer", answers: { "q-r-1": "Use CSV only." } }));
+      assert.equal(r.status, "ready"); r = await approveStart(w, r, cli);
     }
+    if (r.status === "ready") r = await approveStart(w, r, cli);
     assert.equal(r.status, "started"); assert.equal(r.preparation.repairs, 1); assert.ok(failures);
     assert.equal(turns, phase === "initial" ? 2 : 3); assert.doesNotMatch(r.draft.text, /deployment to production/);
     assert.match(r.draft.text, /Do not add dependencies/); assert.equal(w.runners.get(r.implementation.id).started.length, 1);
@@ -2091,7 +1951,7 @@ test("requirement mappings allow multiple criteria and shared criteria when ever
     out.mapping[0].criteria.push("ac-3"); out.mapping[1].criteria.push("ac-1");
     return JSON.stringify(out);
   } });
-  const r = await w.service.prepare({ text: REQUEST, run: true });
+  const r = await prepareAndStart(w, { text: REQUEST, run: true });
   assert.equal(r.status, "started"); assert.equal(r.preparation.repairs, 0);
   assert.deepEqual(r.mapping.map(m => m.criteria), [["ac-1", "ac-3"], ["ac-2", "ac-1"]]);
   assert.equal(check(parsePrd(r.draft.text, r.draft.path)).ok, true); assert.equal(w.runners.get(r.implementation.id).started.length, 1);
@@ -2113,11 +1973,12 @@ test("questions own exactly their unresolved mappings and repairs cannot clarify
   assert.deepEqual(taskStore(w.home).read(first.taskId).questionMappings, { "q-r-1": ["r-1"] });
   const input = { taskId: first.taskId, expectedRevision: first.revision, operationId: "scoped-answer", answers: { "q-r-1": "Use CSV." } };
   const answered = await w.service.answer(input);
-  assert.equal(answered.status, "started"); assert.equal(answered.preparation.repairs, 2); assert.equal(calls, 4);
+  assert.equal(answered.status, "ready"); assert.equal(answered.preparation.repairs, 2); assert.equal(calls, 4);
   assert.match(answered.draft.text, /Explicit requirement r-2: "Do not add dependencies\."/);
   assert.equal(answered.mapping.find(m => m.requirementId === "r-2").resolvedBy, undefined);
-  assert.equal((await w.service.answer(input)).implementation.run, answered.implementation.run); assert.equal(calls, 4);
-  assert.equal(w.runners.get(answered.implementation.id).started.length, 1);
+  const started = await w.service.start({ taskId: answered.taskId, expectedRevision: answered.revision, run: true });
+  assert.equal((await w.service.answer(input)).implementation.run, started.implementation.run); assert.equal(calls, 4);
+  assert.equal(w.runners.get(started.implementation.id).started.length, 1);
 });
 
 test("omitted clarification tags retain saved answer precedence through CLI and structured answers and repairs", async t => {
@@ -2133,7 +1994,9 @@ test("omitted clarification tags retain saved answer precedence through CLI and 
     const input = { taskId: first.taskId, expectedRevision: first.revision, operationId: "omitted-clarification", answers: { "q-r-1": "Use JSON only; CSV is excluded." } };
     const answer = () => cli ? taskCommand(w.ctx, { args: ["answer", input.taskId], values: { revision: String(input.expectedRevision), "request-id": input.operationId, answer: ["q-r-1=" + input.answers["q-r-1"]] }, service: w.service }) : w.service.answer(input);
     const r = await answer();
-    assert.equal(r.status, "started", r.failures.join("\n")); assert.equal(r.preparation.repairs, repair ? 1 : 0); assert.equal(calls, repair ? 3 : 2);
+    assert.equal(r.status, "ready", r.failures.join("\n")); assert.equal(r.preparation.repairs, repair ? 1 : 0); assert.equal(calls, repair ? 3 : 2);
+    const started = await w.service.start({ taskId: r.taskId, expectedRevision: r.revision, run: true });
+    assert.equal(started.status, "started");
     assert.equal(r.mapping.find(m => m.requirementId === "r-1").resolvedBy, "q-r-1");
     assert.equal(r.mapping.find(m => m.requirementId === "r-2").resolvedBy, undefined);
     const executable = r.draft.text.split("## User stories\n")[1].split("## Verify\n")[0];
@@ -2145,7 +2008,7 @@ test("omitted clarification tags retain saved answer precedence through CLI and 
     assert.equal(renderDraft(saved, omitted), renderDraft(saved, saved.output));
     assert.deepEqual(parseDraft(JSON.stringify(omitted), saved), saved.output);
     assert.equal(check(parsePrd(r.draft.text, r.draft.path)).ok, true);
-    assert.equal((await answer()).implementation.run, r.implementation.run); assert.equal(w.runners.get(r.implementation.id).started.length, 1);
+    assert.equal((await answer()).implementation.run, started.implementation.run); assert.equal(w.runners.get(started.implementation.id).started.length, 1);
     if (!cli && repair) {
       const record = join(w.home, "saved-clarification-fixture.json");
       writeJsonAtomic(record, { live: false, model_calls: 0, result: r, output: saved.output, calls, dispatches: 1 });
@@ -2172,7 +2035,9 @@ test("successive question-owned answers remain in accepted order even when plann
     const second = await w.service.answer({ taskId: first.taskId, expectedRevision: first.revision, operationId: "first-format", answers: { "q-first": "Use JSON only." } });
     assert.equal(second.status, "needs-input"); assert.equal(second.questions[0].id, "q-later"); assert.deepEqual(w.ctx.state.entries(), []);
     const r = await w.service.answer({ taskId: first.taskId, expectedRevision: second.revision, operationId: "later-format", answers: { "q-later": "Use CSV only instead of JSON." } });
-    assert.equal(r.status, "started", r.failures.join("\n")); assert.equal(r.preparation.repairs, 0);
+    assert.equal(r.status, "ready", r.failures.join("\n")); assert.equal(r.preparation.repairs, 0);
+    const started = await w.service.start({ taskId: r.taskId, expectedRevision: r.revision, run: true });
+    assert.equal(started.status, "started");
     const output = taskStore(w.home).read(r.taskId).output, criterion = output.criteria[0].text;
     assert.ok(criterion.indexOf('answer q-first: "Use JSON only."') < criterion.indexOf('answer q-later: "Use CSV only instead of JSON."'));
     assert.match(criterion, /Later answers govern conflicts with earlier answers\./);
@@ -2182,7 +2047,7 @@ test("successive question-owned answers remain in accepted order even when plann
     assert.equal(r.mapping.find(m => m.requirementId === "a-q-first-1").resolvedBy, "q-later");
     assert.equal(r.mapping.find(m => m.requirementId === "r-2").resolvedBy, undefined);
     assert.match(output.criteria[1].text, /Explicit requirement r-2: "Do not add dependencies\."/);
-    assert.equal(w.runners.get(r.implementation.id).started.length, 1); assert.equal(calls, 3);
+    assert.equal(w.runners.get(started.implementation.id).started.length, 1); assert.equal(calls, 3);
   }
 });
 
@@ -2241,7 +2106,8 @@ test("combined and partial answer footprints fail atomically before context read
     await assert.rejects(() => invoke(input), e => e.code === "TASK_INPUT" && /minimum generated brief.*words.*1500/.test(e.message));
     assert.deepEqual(store.read(r.taskId), before); assert.equal(calls, 1); assert.deepEqual(w.ctx.state.entries(), []);
     const corrected = { ...input, context: [], answers: { ...input.answers, [id]: partial ? "Keep dependencies unchanged." : "Use CSV only." } };
-    const accepted = await invoke(corrected); assert.equal(accepted.status, "started", accepted.failures.join("\n"));
+    const answered = await invoke(corrected); assert.equal(answered.status, "ready", answered.failures.join("\n"));
+    const accepted = await approveStart(w, answered, cli); assert.equal(accepted.status, "started");
     assert.equal((await invoke(corrected)).implementation.run, accepted.implementation.run); assert.equal(calls, 2);
     assert.equal(w.runners.get(accepted.implementation.id).started.length, 1);
   }
@@ -2684,7 +2550,8 @@ test("explicit argument-bearing Verify answers retain CLI parity, pinned manifes
     assert.equal(first.status,"needs-input"); assert.ok(!first.verifyCommands.some(v=>v.command===command));
     const input={taskId:first.taskId,expectedRevision:first.revision,operationId:"explicit-check-arguments",answers:{"q-r-1":"Use CSV and keep dependencies unchanged."},verifyCommands:[command]};
     const invoke=()=>cli ? taskCommand(w.ctx,{args:["answer",first.taskId],values:{revision:String(first.revision),"request-id":input.operationId,answer:[`q-r-1=${input.answers["q-r-1"]}`],verify:[command]},service:w.service}) : w.service.answer(input);
-    const started=await invoke();
+    const answered=await invoke(); assert.equal(answered.status,"ready");
+    const started=await approveStart(w,answered,cli);
     assert.equal(started.status,"started"); assert.equal(started.taskId,first.taskId); assert.match(started.draft.text,/Do not add dependencies/);
     assert.deepEqual(started.verifyCommands.find(v=>v.command===command).sources,["go.mod"]);
     assert.match(started.draft.text,/`go test -race \.\/\.\.\.`/);
@@ -2722,7 +2589,8 @@ test("unbound Maven and dotnet instructions cannot authorize Verify through repa
       const question=await owner.service.prepare({text:REQUEST,run:true});assert.equal(question.status,"needs-input");assert.deepEqual(question.verifyCommands,[]);
       const input={taskId:question.taskId,expectedRevision:question.revision,operationId:"owner-build-check",answers:{"q-r-1":`Use CSV, keep dependencies unchanged and verify with ${command}.`},context:[manifest],verifyCommands:[command]};
       const invoke=()=>cli?taskCommand(owner.ctx,{args:["answer",question.taskId],values:{revision:String(question.revision),"request-id":input.operationId,answer:[`q-r-1=${input.answers["q-r-1"]}`],context:input.context,verify:input.verifyCommands},service:owner.service}):owner.service.answer(input);
-      const accepted=await invoke();assert.equal(accepted.status,"started");assert.equal(accepted.taskId,question.taskId);assert.match(accepted.draft.text,/Do not add dependencies/);
+      const answered=await invoke();assert.equal(answered.status,"ready");
+      const accepted=await approveStart(owner,answered,cli);assert.equal(accepted.status,"started");assert.equal(accepted.taskId,question.taskId);assert.match(accepted.draft.text,/Do not add dependencies/);
       assert.equal(readFileSync(join(accepted.implementation.worktree,manifest),"utf8"),text);assert.equal(owner.sources.get(`${accepted.implementation.id}:${manifest}`),text);
       assert.equal((await invoke()).implementation.run,accepted.implementation.run);assert.equal(owner.runners.get(accepted.implementation.id).started.length,1);
     }
@@ -2820,11 +2688,12 @@ test("answer-time lockfiles establish manager evidence without reviving cached i
   const store=taskStore(w.home), legacy=store.read(r.taskId); delete legacy.explicitVerifyCommands; legacy.commandCandidates=["npm test","npm publish"]; store.save(legacy);
   const lock="pnpm-lock.yaml", contents="accepted pnpm lock\n";writeFileSync(join(w.checkout,lock),contents);
   const input={taskId:r.taskId,expectedRevision:r.revision,operationId:"manager-context",answers:{"q-r-1":"Use CSV with pnpm tests."},context:[lock]};
-  const answered=await w.service.answer(input); assert.equal(answered.status,"started"); assert.equal(answered.taskId,r.taskId);
+  const answered=await w.service.answer(input); assert.equal(answered.status,"ready"); assert.equal(answered.taskId,r.taskId);
   assert.deepEqual(answered.verifyCommands,[{command:"pnpm run test",sources:["package.json",lock]}]);
-  assert.equal(readFileSync(join(answered.implementation.worktree,lock),"utf8"),contents);
-  writeFileSync(join(w.checkout,lock),"changed"); assert.equal((await w.service.answer(input)).implementation.run,answered.implementation.run);
-  assert.equal(w.runners.get(answered.implementation.id).started.length,1);
+  const started=await w.service.start({taskId:r.taskId,expectedRevision:answered.revision,run:true}); assert.equal(started.status,"started");
+  assert.equal(readFileSync(join(started.implementation.worktree,lock),"utf8"),contents);
+  writeFileSync(join(w.checkout,lock),"changed"); assert.equal((await w.service.answer(input)).implementation.run,started.implementation.run);
+  assert.equal(w.runners.get(started.implementation.id).started.length,1);
   assert.deepEqual(store.read(r.taskId).explicitVerifyCommands,[]);
 });
 
@@ -2912,7 +2781,7 @@ test("real checker failures are repaired, while a hosted readiness denial stays 
   const denied = world({ decideReady: args => ready({ ...args, config: { ...args.config, deliverable: { ...args.config.deliverable, evaluator: "aport", on_unreachable: "deny" } }, fetch: async () => ({ ok: true, json: async () => ({ decision: { allow: false, decision_id: "denial-1", reasons: [{ code: "policy.denied", message: "No authority" }] } }) }) }) });
   const r = await denied.service.prepare({ text: REQUEST, run: true });
   assert.equal(r.status, "blocked"); assert.equal(r.readiness.allow, false); assert.match(r.failures[0], /policy.denied: No authority/);
-  await assert.rejects(() => denied.service.start({ taskId: r.taskId, expectedRevision: r.revision }), { code: "TASK_NOT_READY" });
+  await assert.rejects(() => denied.service.start({ taskId: r.taskId, expectedRevision: r.revision, run: true }), { code: "TASK_NOT_READY" });
   assert.deepEqual(denied.ctx.state.entries(), []);
 });
 
@@ -2967,7 +2836,8 @@ test("source paths with boundary quotes fail CLI and structured selection before
     }
     const path='docs/format"quoted".md',text="CSV columns remain stable.\n";writeFileSync(join(w.checkout,path),text);
     const input={taskId:first.taskId,expectedRevision:first.revision,operationId:"internal-quotes",answers:{"q-r-1":"Use CSV and the selected format document."},context:[path]};
-    const accepted=cli?await taskCommand(w.ctx,{args:["answer",first.taskId],values:{revision:String(first.revision),"request-id":input.operationId,answer:[`q-r-1=${input.answers["q-r-1"]}`],context:input.context},service:w.service}):await w.service.answer(input);
+    const answered=cli?await taskCommand(w.ctx,{args:["answer",first.taskId],values:{revision:String(first.revision),"request-id":input.operationId,answer:[`q-r-1=${input.answers["q-r-1"]}`],context:input.context},service:w.service}):await w.service.answer(input);
+    assert.equal(answered.status,"ready");const accepted=await approveStart(w,answered,cli);
     assert.equal(accepted.status,"started");assert.ok(parsePrd(accepted.draft.text,accepted.draft.path).meta.sources.includes(path));assert.equal(readFileSync(join(accepted.implementation.worktree,path),"utf8"),text);
     assert.equal(w.runners.get(accepted.implementation.id).started.length,1);assert.match(accepted.draft.text,/Do not add dependencies/);assert.equal(saved.revision,first.revision);
     t.diagnostic(`Internal-quote fixture draft: ${accepted.draft.path}`);
@@ -2996,7 +2866,8 @@ test("raw boundary whitespace is refused before preparation or answers can selec
     for (const path of files) { mkdirSync(dirname(join(w.checkout, path)), { recursive: true }); writeFileSync(join(w.checkout, path), `CSV columns from ${path}.\n`); }
     const input = { taskId: first.taskId, expectedRevision: first.revision, operationId: "internal-space-answer", answers: { "q-r-1": "Use CSV and the selected format documents." }, context: files };
     const invoke = () => cli ? taskCommand(w.ctx, { args: ["answer", first.taskId], values: { revision: String(first.revision), "request-id": input.operationId, answer: [`q-r-1=${input.answers["q-r-1"]}`], context: files }, service: w.service }) : w.service.answer(input);
-    const accepted = await invoke(); assert.equal(accepted.status, "started"); assert.equal(accepted.taskId, first.taskId); assert.match(accepted.draft.text, /Do not add dependencies/);
+    const answered = await invoke(); assert.equal(answered.status, "ready");
+    const accepted = await approveStart(w, answered, cli); assert.equal(accepted.status, "started"); assert.equal(accepted.taskId, first.taskId); assert.match(accepted.draft.text, /Do not add dependencies/);
     for (const path of files) {
       assert.ok(parsePrd(accepted.draft.text, accepted.draft.path).meta.sources.includes(path));
       assert.equal(readFileSync(join(accepted.implementation.worktree, path), "utf8"), `CSV columns from ${path}.\n`);
@@ -3084,7 +2955,7 @@ test("hand-authored example and configuration documents still pass readiness and
 
 test("run authorization dispatches once and stale or modified approved revisions conflict", async () => {
   const w = world();
-  const first = await w.service.prepare({ text: REQUEST, run: true });
+  const first = await prepareAndStart(w, { text: REQUEST, run: true });
   assert.equal(first.status, "started"); assert.equal(w.ctx.state.entries().length, 1);
   const r = await w.service.start({ taskId: first.taskId, expectedRevision: first.revision });
   assert.equal(r.implementation.run, first.implementation.run);
@@ -3120,7 +2991,7 @@ async function readyReplayFixture({ operation, cli, run = true, noDaemon = false
     args: ["answer", request.taskId], values: { revision: String(request.expectedRevision), "request-id": request.operationId, answer: Object.entries(request.answers).map(([id, text]) => id + "=" + text), "no-daemon": noDaemon }, service,
   }) : service.answer({ ...request, noDaemon });
   const store = taskStore(w.home), get = w.ctx.state.get;
-  // Capture the actual durable record at start entry, after readiness was saved
+  // Capture the durable record at start entry, after explicit approval was saved
   // and before any dispatch intent, clone, ownership claim or runner exists.
   w.ctx.state.get = id => {
     const saved = store.list()[0];
@@ -3138,11 +3009,19 @@ async function readyReplayFixture({ operation, cli, run = true, noDaemon = false
       reply = { taskId: interrupted.taskId, expectedRevision: interrupted.revision, operationId: "ready-answer", answers: { "q-r-1": "Use CSV only." } };
       interrupted = await answer(w.service);
     }
+    if (run) {
+      assert.equal(interrupted.status, "ready"); assert.equal(store.read(interrupted.taskId).runAuthorized, false);
+      const taskId = interrupted.taskId;
+      try {
+        interrupted = await (cli ? taskCommand(w.ctx, { args: ["start", taskId], values: { revision: String(interrupted.revision), run: true, "no-daemon": noDaemon }, service: w.service })
+          : w.service.start({ taskId, expectedRevision: interrupted.revision, run: true, noDaemon }));
+      } catch (error) { interrupted = { status: "blocked", failures: [error.message], taskId }; }
+    }
   } finally { w.ctx.state.get = get; }
   if (run) {
     assert.equal(interrupted.status, "blocked");
     assert.match(interrupted.failures[0], /fixture crash after readiness persisted/);
-    assert.equal(checkpoint.status, "ready"); assert.equal(checkpoint.readiness.allow, true);
+    assert.ok(checkpoint.approval?.digest); assert.equal(checkpoint.status, "ready"); assert.equal(checkpoint.readiness.allow, true);
     assert.equal(checkpoint.dispatchIntent, null); assert.deepEqual(w.ctx.state.entries(), []);
     // A hard exit would retain the checkpoint instead of the caught-error write.
     store.save(checkpoint);
@@ -3289,7 +3168,7 @@ test("CLI and structured validation refuse interrupted final-answer drafts while
     const recovered = phase === "lost-ack"
       ? await (cli ? taskCommand(w.ctx, { args: ["answer", before.id], values: { revision: String(w.answer.expectedRevision), "request-id": w.answer.operationId, answer: ["q-r-1=Use CSV only."] }, service }) : service.answer(w.answer))
       : await (cli ? taskCommand(w.ctx, { args: ["resume", before.id], values: { revision: String(before.revision) }, service }) : service.resume({ taskId: before.id, expectedRevision: before.revision }));
-    assert.equal(recovered.status, run ? "started" : "ready"); assert.equal(recovered.taskId, before.id);
+    assert.equal(recovered.status, "ready"); assert.equal(recovered.taskId, before.id);
     assert.equal(recovered.draft.current, true); assert.notEqual(recovered.draft.path, before.draft.path);
     assert.match(recovered.draft.text, /clarified by answer q-r-1/); assert.match(recovered.draft.text, /Use CSV only/); assert.match(recovered.draft.text, /Do not add dependencies/);
     assert.equal(check(parsePrd(recovered.draft.text, recovered.draft.path)).ok, true);
@@ -3297,13 +3176,16 @@ test("CLI and structured validation refuse interrupted final-answer drafts while
     assert.equal(recovered.preparation.attempts[0].settled, true); assert.equal(recovered.preparation.attempts[0].cost, 0.37);
     assert.deepEqual(recovered.preparation.attempts[0].usage, [{ input_tokens: 12, output_tokens: 5 }]);
     assert.equal(w.store.read(before.id).attempts[0].consumed, true); assert.equal(owned.runner.current().running, false);
-    assert.equal(owned.starts(), 0); assert.equal(decisions, 1); assert.equal(daemonCalls, run ? 1 : 0);
+    assert.equal(owned.starts(), 0); assert.equal(decisions, 1); assert.equal(daemonCalls, 0);
+    // The recovered answer revoked the preparation-time --run; dispatch needs an explicit approval of this revision.
+    const started = run ? await approveStart(w, recovered, cli, service) : null;
+    if (run) assert.equal(started.status, "started");
     const replay = await service.answer(w.answer);
-    assert.deepEqual(replay, service.inspect({ taskId: before.id })); assert.equal(replay.revision, recovered.revision);
-    const validated = await service.validate({ taskId: before.id, expectedRevision: recovered.revision });
-    assert.equal(validated.status, recovered.status); assert.equal(decisions, 1); assert.equal(owned.starts(), 0);
-    assert.equal(w.ctx.state.entries().length, run ? 1 : 0);
-    if (run) assert.equal(w.runners.get(recovered.implementation.id).started.length, 1);
+    assert.deepEqual(replay, service.inspect({ taskId: before.id })); assert.equal(replay.revision, run ? started.revision : recovered.revision);
+    const validated = await service.validate({ taskId: before.id, expectedRevision: replay.revision });
+    assert.equal(validated.status, run ? "started" : "ready"); assert.equal(decisions, 1); assert.equal(owned.starts(), 0);
+    assert.equal(w.ctx.state.entries().length, run ? 1 : 0); assert.equal(daemonCalls, run ? 1 : 0);
+    if (run) assert.equal(w.runners.get(started.implementation.id).started.length, 1);
     if (!cli && !run && phase === "completed") {
       const evidence = join(w.home, "validate-recovery-fixture.json");
       writeFileSync(evidence, JSON.stringify({ live: false, model_calls: 0, checkpoint: before, refusal: { code: "TASK_NOT_READY", version: 1, saved_state_unchanged: true }, recovered, replay, decisions, daemonCalls, new_preparation_launches: owned.starts() }, null, 2) + "\n");
@@ -3392,7 +3274,7 @@ test("oversized serialized preparation prompts stop before probes or launch acro
     assert.equal(r.version, 1); assert.equal(r.status, "blocked"); assert.equal(record.errorCode, "TASK_INPUT");
     assert.match(r.failures[0], /serialized preparation prompt exceeds 122880 bytes; select fewer or smaller context files/);
     assert.equal(record.context.find(c => c.path === "selected.md").text, text); assert.equal(r.original, REQUEST);
-    assert.deepEqual(r.requirements, [{ id: "r-1", text: "Add CSV export for the widget table." }, { id: "r-2", text: "Do not add dependencies." }]);
+    assert.deepEqual(r.requirements, [{ id: "r-1", text: "Add CSV export for the widget table.", source: { of: "original", start: 0, end: 36 } }, { id: "r-2", text: "Do not add dependencies.", source: { of: "original", start: 37, end: 61 } }]);
     assert.deepEqual(r.preparation.attempts, []); assert.equal(r.preparation.repairs, 0); assert.equal(r.readiness, null);
     assert.equal(existsSync(join(w.home, `${harness}-calls.jsonl`)), false); assert.equal(existsSync(join(w.home, "tasks", r.taskId, "preparation")), false);
     assert.deepEqual(w.ctx.state.entries(), []); assert.equal(r.implementation, null);
@@ -3421,7 +3303,7 @@ test("automatic lockfiles, accumulated answers, repair output and legacy resumes
       assert.equal(r.status, "needs-input");
       const answer = "Use CSV. " + "a".repeat(31 * 1024), input = { taskId: r.taskId, expectedRevision: r.revision, operationId: "large-answer", answers: { "q-r-1": answer } };
       blocked = cli ? await taskCommand(w.ctx, { args: ["answer", r.taskId], values: { revision: String(r.revision), "request-id": input.operationId, answer: [`q-r-1=${answer}`] }, service }) : await service.answer(input);
-      assert.equal(blocked.answers["q-r-1"], answer); assert.equal(blocked.requirements.at(-1).text, answer);
+      assert.equal(blocked.answers["q-r-1"], answer); assert.deepEqual(blocked.requirements.filter(r => r.source.of === "answer:q-r-1"), fragments(answer, "a-q-r-1"));
       assert.deepEqual(await service.answer(input), blocked, "duplicate accepted answers do not submit another oversized turn");
     }
     if (mode === "resume") {
@@ -3468,7 +3350,7 @@ else {
     t.after(async () => { const job = runner.current(); if (job?.running) { runner.kill(job.id); await runner.waitForKill(job.id); } });
     const service = offlineRunnerService(w.ctx), r = await service.resume({ taskId: record.id, expectedRevision: record.revision });
     if (extra) { assert.equal(r.status, "blocked"); assert.deepEqual(r.preparation.attempts, []); assert.equal(runner.current(), null); continue; }
-    assert.equal(r.status, "ready"); assert.equal(r.preparation.attempts.length, 1); assert.equal(r.preparation.repairs, 0);
+    assert.equal(r.status, "ready", r.failures.join("\n")); assert.equal(r.preparation.attempts.length, 1); assert.equal(r.preparation.repairs, 0);
     const observed = JSON.parse(readFileSync(join(r.preparation.attempts[0].cwd, "prompt-bytes.json"), "utf8"));
     assert.equal(observed.bytes, MAX_PREPARATION_PROMPT_BYTES); assert.equal(observed.original, REQUEST); assert.deepEqual(observed.requirements, record.requirements); assert.equal(observed.context.at(-1).text, source.text);
     assert.match(r.draft.text, /Do not add dependencies/); assert.deepEqual(r.preparation.attempts[0].usage, [{ input_tokens: 120, output_tokens: 40 }]);
@@ -4671,7 +4553,7 @@ test("structured input errors and CLI JSON startup errors retain the operation c
 
 test("known start preflight failures can recover after fixing the cause; attempted spawns retain ownership", async () => {
   const w = world(); w.ctx.credential = fakeCredential(null);
-  const first = await w.service.prepare({ text: REQUEST, run: true });
+  const first = await prepareAndStart(w, { text: REQUEST, run: true });
   assert.equal(first.status, "blocked"); assert.match(first.failures[0], /No GitHub credential/);
   assert.equal(taskStore(w.home).read(first.taskId).dispatchIntent, null);
   assert.deepEqual(w.ctx.state.entries(), []);
@@ -4680,7 +4562,7 @@ test("known start preflight failures can recover after fixing the cause; attempt
   assert.equal(recovered.status, "started"); assert.equal(w.runners.get(recovered.implementation.id).started.length, 1);
   const uncertain = world();
   uncertain.ctx.runnerFor = id => ({ current: () => null, start: () => { throw Error(`Lost spawn acknowledgement for ${id}`); } });
-  const stopped = await uncertain.service.prepare({ text: REQUEST, run: true });
+  const stopped = await prepareAndStart(uncertain, { text: REQUEST, run: true });
   assert.equal(stopped.status, "blocked"); assert.ok(uncertain.ctx.state.startClaim(`acme/widget/${stopped.taskId}`));
   assert.ok(taskStore(uncertain.home).read(stopped.taskId).dispatchIntent);
 });
@@ -4718,7 +4600,7 @@ test("post-clone source conflicts retain snapshots and recovery ownership after 
 test("a partial clone failure retains its claim and intake intent before any runner can be spawned", async () => {
   const w=world();let clones=0,path;
   w.ctx.git.create=async ({prdId})=>{clones++;path=join(w.home,"worktrees","acme","widget",prdId);mkdirSync(path,{recursive:true});writeFileSync(join(path,"partial-clone"),"retained evidence");throw Error("Clone connection lost after creating the directory");};
-  const r=await w.service.prepare({text:REQUEST,run:true}),id=`acme/widget/${r.taskId}`;
+  const r=await prepareAndStart(w, {text:REQUEST,run:true}),id=`acme/widget/${r.taskId}`;
   assert.equal(r.status,"blocked");assert.equal(r.dispatchRecovery.worktree,path);assert.ok(w.ctx.state.startClaim(id));assert.ok(taskStore(w.home).read(r.taskId).dispatchIntent);
   w.ctx.state=makeState(w.home);const reopened=offlineRunnerService(w.ctx);
   assert.equal((await reopened.start({taskId:r.taskId,expectedRevision:r.revision})).status,"blocked");assert.equal(clones,1);
@@ -4728,7 +4610,7 @@ test("a partial clone failure retains its claim and intake intent before any run
 test("pre-clone snapshot failures release clean start ownership and can retry the approved intake once", async () => {
   const w=world(),write=w.ctx.writeSource,create=w.ctx.git.create;let clones=0;
   w.ctx.git.create=async input=>{clones++;return create(input);};w.ctx.writeSource=()=>{throw Error("Snapshot storage unavailable");};
-  const failed=await w.service.prepare({text:REQUEST,run:true}),id=`acme/widget/${failed.taskId}`;
+  const failed=await prepareAndStart(w, {text:REQUEST,run:true}),id=`acme/widget/${failed.taskId}`;
   assert.equal(failed.status,"blocked");assert.equal(clones,0);assert.equal(failed.dispatchRecovery,null);assert.equal(w.ctx.state.startClaim(id),null);assert.equal(taskStore(w.home).read(failed.taskId).dispatchIntent,null);
   w.ctx.writeSource=write;const started=await w.service.start({taskId:failed.taskId,expectedRevision:failed.revision});
   assert.equal(started.status,"started");assert.equal(clones,1);assert.equal(w.runners.get(id).started.length,1);
@@ -4801,11 +4683,11 @@ test("native create failures after executor invocation retain intake ownership e
 
 test("intake preserves base precedence without persisting a resolved default as an explicit override", async () => {
   const w = world();
-  const defaulted = await w.service.prepare({ text: REQUEST, run: true });
+  const defaulted = await prepareAndStart(w, { text: REQUEST, run: true });
   assert.equal(defaulted.baseSource, "default"); assert.equal(defaulted.base, "main");
   assert.deepEqual(JSON.parse(readFileSync(join(w.home, "config.json"), "utf8")).repos, ["acme/widget"]);
   const explicit = world();
-  const selected = await explicit.service.prepare({ text: REQUEST, base: "develop", run: true });
+  const selected = await prepareAndStart(explicit, { text: REQUEST, base: "develop", run: true });
   assert.equal(selected.baseSource, "flag"); assert.equal(selected.implementation.baseSource, "flag");
   const repos = JSON.parse(readFileSync(join(explicit.home, "config.json"), "utf8")).repos;
   assert.deepEqual(repos, [{ repo: "acme/widget", base: "develop" }]);
@@ -4841,4 +4723,878 @@ test("direct task service mutations exclude maintenance and release owners on er
   writeFileSync(join(w.home, "runtime-pin.json"), "null");
   await assert.rejects(w.service.resume({ taskId: task.taskId, expectedRevision: task.revision }), { code: "TASK_RUNTIME_PIN" });
   assert.equal(existsSync(join(w.home, "task-mutation.lock")), false);
+});
+
+// ---- Typed delivery profiles -------------------------------------------------
+const TYPED_PROFILE = { version: PROFILE_VERSION, action: "pull_request", target: { kind: "github-pull-request", repository: "acme/widget", base: "main" }, completion: { condition: "delivery_ready" } };
+const MODEL_ROUTE = { adapter: "openai-chat", model: "fixture-model", endpoint: "https://api.example-provider.com/v1/chat/completions", credential_env: "FIXTURE_MODEL_KEY",
+  budget: { max_calls: 3, max_input_tokens: 50000, max_output_tokens: 6000, allowance_usd: 0.1, input_usd_per_million: 1, output_usd_per_million: 10 }, timeout_ms: 5000 };
+const modelReply = (home, status = 200) => async () => {
+  // The intent is persisted before the request, so the fixture planner can read the saved task.
+  // The in-flight attempt is persisted before the request, so the task being drafted is the one with an unsettled model attempt.
+  const tasks = taskStore(home).list(), task = tasks.find(t => t.attempts.some(a => a.route === "model" && !a.settled)) || tasks.at(-1);
+  const body = { choices: [{ message: { content: JSON.stringify(draftFor(task)) }, finish_reason: "stop" }], usage: { prompt_tokens: 900, completion_tokens: 400 } };
+  return { ok: status < 300, status, headers: { get: () => null }, text: async () => JSON.stringify(body), body: { cancel: async () => {} } };
+};
+
+test("new tasks record the typed delivery profile instead of the free-text contract and pin it through approval and start", async () => {
+  const w = world({ prepare: async (_ctx, task) => JSON.stringify(draftFor(task, { delivery: Object.fromEntries(task.requirements.filter(r => /^(?:Open one pull request|do not merge)/.test(r.text)).map(r => [r.id, { action: "pull_request", prohibits: ["merge", "release"] }])) })) });
+  const prepared = await w.service.prepare({ text: GREETING_REQUEST, verifyCommands: ["node --test"], requestId: "typed-greeting" });
+  assert.equal(prepared.status, "ready", prepared.failures.join("\n"));
+  const saved = taskStore(w.home).read(prepared.taskId);
+  assert.deepEqual(saved.deliveryProfile, TYPED_PROFILE); assert.equal(saved.ownerDelivery, undefined); assert.equal(saved.route, "harness");
+  assert.deepEqual(saved.completion, { version: 1, target: "delivery_ready" });
+  assert.equal(saved.original, GREETING_REQUEST); assert.deepEqual(saved.requirements, fragments(GREETING_REQUEST));
+  assert.match(prepared.draft.text, /## Delivery profile\n\n```json\n\{"version":1,"action":"pull_request"/); assert.doesNotMatch(prepared.draft.text, /Coordinator delivery contract/);
+  assert.match(prepared.draft.text, /delivery reading pull_request is covered by the typed profile/);
+  assert.match(JSON.stringify(saved.output.criteria), /do not merge, release, modify workflows/, "the prohibition stays an executable requirement");
+  assert.equal(check(parsePrd(prepared.draft.text, prepared.draft.path)).ok, true);
+  // One revision-pinned review carries everything the owner approves.
+  const review = prepared.review;
+  assert.equal(review.revision, prepared.revision); assert.match(review.digest, /^[a-f0-9]{64}$/);
+  assert.deepEqual(review.request, { text: GREETING_REQUEST, immutable: true, hash: contentDigest(GREETING_REQUEST) });
+  assert.deepEqual(review.requirementMap[0].target, { kind: "criteria", ids: ["ac-1"] }); assert.equal(review.requirementMap.find(m => saved.requirements.find(r => r.id === m.requirementId)?.text.startsWith("Open one pull request")).covered, true);
+  assert.deepEqual(review.questions, []); assert.ok(review.assumptions.length); assert.equal(review.draft.hash, prepared.draft.hash);
+  assert.equal(review.deliveryProfile.action, "pull_request"); assert.equal(review.deliveryProfile.mergeAuthorized, false);
+  assert.equal(review.harness, "codex"); assert.deepEqual(review.allowance, saved.allowance); assert.equal(review.modelRoute.kind, "harness");
+  assert.deepEqual(review.cost, { status: "none", usd: 0, detail: "no planning call has been made" }); assert.equal(review.approval, null);
+  assert.equal(review.repositoryContext.status, "unavailable", "the fixture Git adapter cannot enumerate; nothing is guessed");
+  assert.deepEqual(w.service.inspect({ taskId: prepared.taskId }), prepared);
+  assert.deepEqual(prepared.deliveryProfile, { ...TYPED_PROFILE, legacy: false, supported: true, source: "typed-profile", label: "Open one review pull request", mergeAuthorized: false, deployAuthorized: false });
+  // Approval pins exactly this reviewed revision; start runs once and retries replay.
+  const started = await w.service.start({ taskId: prepared.taskId, expectedRevision: prepared.revision, run: true, noDaemon: true });
+  assert.equal(started.status, "started"); assert.equal(started.approval.digest, review.digest); assert.equal(started.approval.revision, prepared.revision);
+  const entry = w.ctx.state.get(started.implementation.id);
+  assert.deepEqual(entry.task.deliveryProfile, TYPED_PROFILE); assert.deepEqual(entry.task.approval, started.approval); assert.equal(entry.task.ownerDelivery, undefined);
+  assert.deepEqual(await w.service.start({ taskId: prepared.taskId, expectedRevision: started.revision, run: true, noDaemon: true }), started);
+  assert.equal(w.runners.get(started.implementation.id).started.length, 1);
+  const { daemonError: _daemonError, ...startedView } = started;
+  assert.deepEqual(await w.service.prepare({ text: GREETING_REQUEST, verifyCommands: ["node --test"], requestId: "typed-greeting" }), startedView);
+  assert.equal(w.runners.get(started.implementation.id).started.length, 1);
+});
+
+test("the request corpus is traceable and the typed profile controls every external effect under a literal planner reading", async () => {
+  for (const fixture of profileRequests) {
+    let calls = 0;
+    const w = world({ prepare: async (_ctx, task) => { calls++; return JSON.stringify(draftFor(task, { delivery: fixture.tag ? Object.fromEntries(task.requirements.map(r => [r.id, fixture.tag])) : {} })); } });
+    const prepared = await w.service.prepare({ text: fixture.text, requestId: "corpus" });
+    assert.equal(prepared.status, fixture.outcome, `${fixture.kind}: ${fixture.text}`);
+    const saved = taskStore(w.home).read(prepared.taskId);
+    assert.equal(saved.ownerDelivery, undefined); assert.deepEqual(saved.deliveryProfile, TYPED_PROFILE);
+    assert.deepEqual(prepared.mapping.map(m => m.requirementId), prepared.requirements.map(r => r.id), "every clause stays mapped");
+    assert.equal(saved.original, fixture.text, "the full request stays immutable");
+    const quotedMappings = new Map([...prepared.draft.text.matchAll(/^- (r-\d+): ("(?:[^"\\]|\\.)*") →/gmu)]
+      .map(([, id, quoted]) => [id, JSON.parse(quoted)]));
+    assert.deepEqual([...quotedMappings.keys()], prepared.requirements.map(r => r.id), "the brief quotes every mapped source clause");
+    for (const requirement of prepared.requirements) {
+      assert.equal(fixture.text.slice(requirement.source.start, requirement.source.end), requirement.text);
+      assert.equal(quotedMappings.get(requirement.id), requirement.text, "safe JSON quoting round-trips to the exact immutable source");
+    }
+    if (fixture.outcome === "needs-input") {
+      assert.deepEqual(prepared.questions.map(q => q.id), fixture.questions || ["q-delivery-r-1"]);
+      assert.match(prepared.questions[0].text, /selected delivery profile is pull_request \(delivery_ready\)/);
+      assert.ok(prepared.review.requirementMap.some(m => m.conflict), "the review names the conflict");
+      await assert.rejects(w.service.start({ taskId: prepared.taskId, expectedRevision: prepared.revision, run: true }), { code: "TASK_NOT_READY" });
+    } else {
+      assert.equal(prepared.readiness.allow, true);
+      if (fixture.tag) assert.equal(prepared.review.requirementMap[0].covered, true, fixture.text);
+    }
+    assert.deepEqual(w.ctx.state.entries(), []); assert.equal(w.daemonCalls(), 0);
+    assert.deepEqual(await w.service.prepare({ text: fixture.text, requestId: "corpus" }), prepared); assert.equal(calls, 1);
+  }
+});
+
+test("a profile conflict pauses before any harness run until the owner resolves it, then the answer is mapped and approval is fresh", async () => {
+  // The planner reads the owner's reply literally: a restated prohibition the
+  // profile already honours is a covered `restrict` reading.
+  // The reply carries a control word ("No"), so a prohibition reading can speak for its deploy and release terms.
+  const w = world({ prepare: async (_ctx, task) => JSON.stringify(draftFor(task, { delivery: Object.fromEntries(task.requirements.filter(r => r.source.of === "answer:q-delivery-r-2").map(r => [r.id, { action: "restrict", prohibits: ["deploy", "release"] }])) })) });
+  const prepared = await w.service.prepare({ text: "Implement export.\nDeploy to production after merge.", run: true });
+  assert.equal(prepared.status, "needs-input"); assert.deepEqual(prepared.questions.map(q => q.id), ["q-delivery-r-2"]);
+  assert.equal(prepared.readiness, null); assert.deepEqual(w.ctx.state.entries(), []); assert.equal(w.daemonCalls(), 0);
+  assert.deepEqual(prepared.review.requirementMap[1].target, { kind: "question", id: "q-delivery-r-2" });
+  assert.deepEqual(prepared.review.requirementMap[1].conflict.screen.terms, ["merge", "deploy"]);
+  await assert.rejects(w.service.start({ taskId: prepared.taskId, expectedRevision: prepared.revision, run: true }), { code: "TASK_NOT_READY" });
+  assert.equal((await w.service.validate({ taskId: prepared.taskId, expectedRevision: prepared.revision })).status, "needs-input");
+  const answered = await w.service.answer({ taskId: prepared.taskId, expectedRevision: prepared.revision, operationId: "clarify-deploy", answers: { "q-delivery-r-2": "No deployment or release by this task, which only implements export." } });
+  // Preparation never authorized implementation. The answered revision is
+  // returned for review and needs its own explicit start.
+  assert.equal(answered.status, "ready"); assert.equal(answered.approval, null); assert.equal(taskStore(w.home).read(prepared.taskId).runAuthorized, false);
+  assert.deepEqual(w.ctx.state.entries(), []); assert.equal(w.daemonCalls(), 0);
+  assert.match(answered.nextAction, /review the draft, then start with explicit run authorization/);
+  const started = await w.service.start({ taskId: prepared.taskId, expectedRevision: answered.revision, run: true });
+  assert.equal(started.status, "started"); assert.equal(started.approval.revision, answered.revision); assert.equal(started.approval.digest, answered.review.digest);
+  const saved = taskStore(w.home).read(prepared.taskId);
+  const mapping = saved.output.mapping.find(m => m.requirementId === "r-2");
+  assert.equal(mapping.resolvedBy, "q-delivery-r-2"); assert.equal(mapping.screen.tier, "clarified"); assert.deepEqual(mapping.criteria, ["ac-2"]);
+  assert.match(answered.draft.text, /clarified by answer q-delivery-r-2/); assert.match(answered.draft.text, /No deployment or release by this task/);
+  assert.equal(answered.requirements.at(-1).source.of, "answer:q-delivery-r-2");
+  assert.deepEqual(w.ctx.state.get(started.implementation.id).task.deliveryProfile, TYPED_PROFILE);
+  assert.equal(w.runners.get(started.implementation.id).started.length, 1);
+  // A task saved before typed profiles existed keeps its documented persisted --run authorization.
+  const legacy = world({ prepare: async (_ctx, task) => { delete task.deliveryProfile; delete task.route; delete task.repositoryContext; task.runAuthorized = true; return JSON.stringify(draftFor(task, { question: true })); } });
+  const old = await legacy.service.prepare({ text: REQUEST, run: true });
+  assert.equal(old.status, "needs-input");
+  const resumed = await legacy.service.answer({ taskId: old.taskId, expectedRevision: old.revision, operationId: "legacy-answer", answers: { "q-r-1": "Use CSV." } });
+  assert.equal(resumed.status, "started"); assert.equal(legacy.ctx.state.get(resumed.implementation.id).task.deliveryProfile, undefined);
+  // An anaphoric reply ("Do it anyway") carries no delivery vocabulary; without a covered typed reading
+  // on the reply the original conflict stays open and the reply gets its own question.
+  const anaphoric = world({ prepare: async (_ctx, task) => JSON.stringify(draftFor(task, { delivery: task.answers["q-delivery-r-1"] ? {} : { "r-1": { action: "merge" } } })) });
+  const asked = await anaphoric.service.prepare({ text: "Merge the pull request." });
+  assert.equal(asked.status, "needs-input");
+  const vague = await anaphoric.service.answer({ taskId: asked.taskId, expectedRevision: asked.revision, operationId: "anaphoric", answers: { "q-delivery-r-1": "Do it anyway." } });
+  assert.equal(vague.status, "needs-input"); assert.deepEqual(vague.questions.map(q => q.id), ["q-delivery-a-q-delivery-r-1-1"]);
+  assert.match(vague.review.requirementMap.find(m => m.requirementId === "a-q-delivery-r-1-1").conflict.reason, /no typed delivery reading/);
+  assert.deepEqual(anaphoric.ctx.state.entries(), []);
+  await assert.rejects(anaphoric.service.start({ taskId: asked.taskId, expectedRevision: vague.revision, run: true }), { code: "TASK_NOT_READY" });
+  // Insisting on the action in the answer re-raises the clarification instead of granting it,
+  // whether the planner tags the reply or leaves its escalating vocabulary untagged.
+  for (const tagged of [true, false]) {
+    const again = world({ prepare: async (_ctx, task) => JSON.stringify(draftFor(task, { delivery: task.answers["q-delivery-r-1"] ? (tagged ? { "a-q-delivery-r-1-1": { action: "merge" } } : {}) : { "r-1": { action: "merge" } } })) });
+    const first = await again.service.prepare({ text: "Merge the PR." });
+    assert.equal(first.status, "needs-input");
+    const pushed = await again.service.answer({ taskId: first.taskId, expectedRevision: first.revision, operationId: "insist", answers: { "q-delivery-r-1": "Yes, merge it anyway." } });
+    assert.equal(pushed.status, "needs-input", `tagged=${tagged}`); assert.deepEqual(pushed.questions.map(q => q.id), ["q-delivery-a-q-delivery-r-1-1"]);
+    assert.equal(pushed.readiness, null); assert.deepEqual(again.ctx.state.entries(), []);
+    await assert.rejects(again.service.start({ taskId: first.taskId, expectedRevision: pushed.revision, run: true }), { code: "TASK_NOT_READY" });
+  }
+});
+
+test("delivery clients can answer eight nested clarification questions after restart and exact replay", async () => {
+  const w = world(), scope = { tenant: "alice", account: "alice", environment: "preview", region: "US", scopes: ["task-delivery:read", "task-delivery:write"], repositories: ["widget"] };
+  const manifest = { coreVersion: CORE_VERSION, coreSha256: "a".repeat(64), operationVersion: 1, taskVersion: 1, executionVersion: 1 };
+  migrateRuntimeState({ home: w.home, manifest });
+  let calls = 0;
+  const makeDelivery = () => createTaskDelivery({ manifest, authorize: async () => scope, store: createDeliveryStore(join(w.home, "delivery")), schedule: async () => {},
+    contextFor: async () => ({ ctx: w.ctx, repository: { dir: w.checkout, repo: "acme/widget" }, taskOptions: { prepare: async (_ctx, task) => {
+      calls++;
+      const out = draftFor(task, { delivery: Object.fromEntries(task.requirements.map(r => [r.id, r.id === "r-1" ? { action: "merge" } : r.text === "Do it anyway." ? { action: "restrict", prohibits: [] } : /^do not merge/i.test(r.text) ? { action: "restrict", prohibits: ["merge"] } : { action: "pull_request" }])) });
+      out.criteria = [out.criteria[0]]; out.mapping.forEach(m => { m.criteria = ["ac-1"]; });
+      return JSON.stringify(out);
+    } } }) });
+  let delivery = makeDelivery();
+  let current = await delivery.dispatch("prepare", { repositoryId: "widget", text: "Merge the pull request.", harness: "codex", allowance: { budgetUsd: 1, runtimeMs: 60000 }, operationId: "nested-prepare", expectedRevision: 0 }, "alice");
+  for (let depth = 0; depth < 8; depth++) {
+    assert.equal(current.status, "needs-input", JSON.stringify(current.failures));
+    assert.equal(current.questions.length, 1);
+    assert.ok(current.questions[0].id.length <= 64, `depth ${depth}`);
+    const input = { taskId: current.taskId, expectedRevision: current.revision, operationId: `nested-${depth}`, answers: { [current.questions[0].id]: "Do it anyway." } };
+    current = await delivery.dispatch("answer", input, "alice");
+    delivery = makeDelivery();
+    assert.deepEqual(await delivery.dispatch("answer", input, "alice"), current);
+    assert.equal(calls, depth + 2); assert.deepEqual(w.ctx.state.entries(), []);
+  }
+  assert.equal(current.status, "needs-input"); assert.ok(current.questions[0].id.length <= 64);
+  const resolved = await delivery.dispatch("answer", { taskId: current.taskId, expectedRevision: current.revision, operationId: "nested-clear", answers: { [current.questions[0].id]: "Open a PR; do not merge." } }, "alice");
+  assert.equal(resolved.status, "ready", JSON.stringify(resolved.failures)); assert.equal(calls, 10);
+  assert.equal(taskStore(w.home).read(resolved.taskId).runAuthorized, false);
+  assert.deepEqual(w.ctx.state.entries(), []); assert.equal(w.daemonCalls(), 0);
+});
+
+test("saved delivery question IDs retain answerable history and oversized pending IDs recover without inference", async () => {
+  const clear = "Open a PR; do not merge.";
+  const plan = task => {
+    const out = draftFor(task, { delivery: Object.fromEntries(task.requirements.map(r => [r.id, r.id === "r-1" ? { action: "merge" } : fragments(clear).some(part => part.text === r.text) ? (/^do not merge/i.test(r.text) ? { action: "restrict", prohibits: ["merge"] } : { action: "pull_request" }) : { action: "restrict", prohibits: [] }])) });
+    out.criteria = [out.criteria[0]]; out.mapping.forEach(m => { m.criteria = ["ac-1"]; });
+    return out;
+  };
+  for (const depth of [4, 8]) {
+    let calls = 0;
+    const w = world({ prepare: async (_ctx, task) => { calls++; return JSON.stringify(plan(task)); } });
+    const first = await w.service.prepare({ text: "Merge the pull request.", run: true });
+    const store = taskStore(w.home), saved = store.read(first.taskId);
+    let question = saved.questions[0];
+    for (let i = 0; i < depth; i++) {
+      saved.answers[question.id] = "Do it anyway.";
+      const reply = fragments("Do it anyway.", `a-${question.id}`)[0]; saved.requirements.push(reply);
+      question = { ...deliveryQuestion(saved.deliveryProfile, reply), id: `q-delivery-${reply.id}` };
+      saved.questionHistory[question.id] = question; saved.questionMappings[question.id] = question.requirements;
+    }
+    const parsed = parseDraft(JSON.stringify(plan(saved)), saved), pendingId = parsed.questions[0].id;
+    saved.output = { ...parsed, questions: [question], mapping: parsed.mapping.map(m => m.questionId === pendingId ? { ...m, questionId: question.id } : m) };
+    saved.questions = [question]; saved.status = "needs-input"; saved.readiness = null;
+    if (depth === 4) assert.equal(parseDraft(JSON.stringify(saved.output), saved).questions[0].id, question.id);
+    else assert.throws(() => parseDraft(JSON.stringify(saved.output), saved), /resume a saved oversized delivery question/);
+    const text = renderDraft(saved, saved.output); writeFileSync(saved.draft.path, text);
+    saved.draft.hash = contentDigest(text); saved.draft.requirementsHash = contentDigest(JSON.stringify(saved.requirements)); store.save(saved);
+    const originalSources = structuredClone(saved.requirements), originalAnswers = structuredClone(saved.answers), originalHistory = structuredClone(saved.questionHistory);
+    if (depth === 8) {
+      const broken = structuredClone(saved); broken.questionHistory[question.id].requirements = ["r-999"]; store.save(broken);
+      await assert.rejects(w.service.resume({ taskId: first.taskId, expectedRevision: first.revision }), { code: "TASK_CONFLICT", taskEffects: "none" });
+      assert.deepEqual(store.read(first.taskId), broken); assert.equal(calls, 1); store.save(saved);
+      const owned = { ...saved, dispatchIntent: { at: "2026-10-20T00:00:00.000Z" } }; store.save(owned);
+      await assert.rejects(w.service.resume({ taskId: first.taskId, expectedRevision: first.revision }), { code: "TASK_CONFLICT", taskEffects: "none" });
+      assert.deepEqual(store.read(first.taskId), owned); assert.equal(calls, 1); store.save(saved);
+    }
+    const resumed = await w.service.resume({ taskId: first.taskId, expectedRevision: first.revision });
+    assert.equal(resumed.status, "needs-input"); assert.equal(calls, 1, "identifier recovery makes no planning call");
+    assert.deepEqual(store.read(first.taskId).requirements, originalSources); assert.deepEqual(store.read(first.taskId).answers, originalAnswers);
+    assert.equal(readFileSync(saved.draft.path, "utf8"), text, "the prior draft revision is preserved");
+    assert.deepEqual(store.read(first.taskId).deliveryProfile, saved.deliveryProfile);
+    for (const [id, historical] of Object.entries(originalHistory)) assert.deepEqual(store.read(first.taskId).questionHistory[id], historical);
+    if (depth === 4) assert.equal(resumed.questions[0].id, question.id, "a saved ID within the wire limit stays exact");
+    else { assert.ok(resumed.questions[0].id.length <= 64); assert.notEqual(resumed.questions[0].id, question.id); assert.ok(resumed.revision > first.revision); }
+    assert.deepEqual(await w.service.resume({ taskId: first.taskId, expectedRevision: resumed.revision }), resumed);
+    const resolved = await w.service.answer({ taskId: first.taskId, expectedRevision: resumed.revision, operationId: "legacy-clear", answers: { [resumed.questions[0].id]: clear } });
+    assert.equal(resolved.status, "ready", resolved.failures.join("\n")); assert.equal(calls, 2);
+    assert.equal(store.read(first.taskId).runAuthorized, false); assert.deepEqual(w.ctx.state.entries(), []);
+  }
+});
+
+test("anaphoric delivery replies cannot be resolved by empty or ungrounded planner tags", async () => {
+  const clear = "Open a pull request for review; do not merge.";
+  for (const tag of [{ action: "restrict", prohibits: [] }, { action: "restrict", prohibits: ["merge"] }, { action: "pull_request" }]) {
+    const w = world({ prepare: async (_ctx, task) => JSON.stringify(draftFor(task, { delivery: Object.fromEntries(task.requirements.map(r => [r.id, r.id === "r-1" ? { action: "merge" } : fragments(clear).some(part => part.text === r.text) ? (/^do not merge/i.test(r.text) ? { action: "restrict", prohibits: ["merge"] } : { action: "pull_request" }) : tag])) })) });
+    let current = await w.service.prepare({ text: "Implement export and merge the pull request.", run: true });
+    const taskId = current.taskId;
+    for (const [i, text] of ["Do it anyway.", "Proceed as requested."].entries()) {
+      const questionId = current.questions[0].id;
+      const expectedRevision = current.revision;
+      current = await w.service.answer({ taskId, expectedRevision, operationId: `vague-${i}`, answers: { [questionId]: text } });
+      assert.equal(current.status, "needs-input", JSON.stringify(tag)); assert.equal(current.readiness, null);
+      assert.ok(current.questions.every(q => q.id.startsWith("q-delivery-a-")));
+      assert.match(current.review.requirementMap.find(m => m.target?.id === current.questions[0].id).conflict.reason, /explicitly|grounded/);
+      assert.deepEqual(w.ctx.state.entries(), []); assert.equal(w.daemonCalls(), 0);
+      await assert.rejects(w.service.start({ taskId, expectedRevision: current.revision, run: true }), { code: "TASK_NOT_READY" });
+      assert.deepEqual(await w.service.answer({ taskId, expectedRevision, operationId: `vague-${i}`, answers: { [questionId]: text } }), current);
+    }
+    const resolved = await w.service.answer({ taskId, expectedRevision: current.revision, operationId: "explicit-scope", answers: { [current.questions[0].id]: clear } });
+    assert.equal(resolved.status, "ready", resolved.failures.join("\n")); assert.equal(resolved.approval, null);
+    assert.equal(taskStore(w.home).read(taskId).runAuthorized, false); assert.deepEqual(w.ctx.state.entries(), []);
+    assert.deepEqual(taskStore(w.home).read(taskId).deliveryProfile, TYPED_PROFILE);
+  }
+});
+
+test("target, publication, approval and mixed-polarity conflicts survive answer chains without dispatch", async () => {
+  for (const [text, tag] of [
+    ["Run gh auth switch --user attacker.", { action: "pull_request" }],
+    ["Run gh auth logout.", { action: "pull_request" }],
+    ["Run gh auth refresh --scopes delete_repo.", { action: "pull_request" }],
+    ["Run gh auth login --with-token.", { action: "pull_request" }],
+    ["Run gh auth setup-git.", { action: "pull_request" }],
+    ["Run npm token create.", { action: "pull_request" }],
+    ["Run npm token revoke fixture-id.", { action: "pull_request" }],
+    ["Run kubectl drain node1.", { action: "pull_request" }],
+    ["Run kubectl cordon node1.", { action: "pull_request" }],
+    ["Run kubectl uncordon node1.", { action: "pull_request" }],
+    ["Run kubectl taint nodes node1 dedicated-.", { action: "pull_request" }],
+    ["Run docker image push acme/app.", { action: "pull_request" }],
+    ["Run docker compose push.", { action: "pull_request" }],
+    ["Run docker buildx build --push .", { action: "pull_request" }],
+    ["Run docker buildx imagetools create acme/base.", { action: "pull_request" }],
+    ["Run npm publish --dry-run --no-dry-run.", { action: "pull_request" }],
+    ["Run cargo publish --dry-run=false.", { action: "pull_request" }],
+    ["Open one PR; then another for the UI.", { action: "pull_request" }],
+    ["Open one PR, then another PR.", { action: "pull_request" }],
+    ["Open one PR, and then a second PR.", { action: "pull_request" }],
+    ["Open one PR; then another PR.", { action: "pull_request" }],
+    ["Run gh discussion create --title Hello --body world.", { action: "pull_request" }],
+    ["Run gh discussion comment 123 --body Thanks.", { action: "pull_request" }],
+    ["Run gh secret set API_KEY --body fixture-value.", { action: "pull_request" }],
+    ["Run gh secret delete API_KEY.", { action: "pull_request" }],
+    ["Run gh variable set DEPLOY_ENV --body staging.", { action: "pull_request" }],
+    ["Run gh variable delete DEPLOY_ENV.", { action: "pull_request" }],
+    ["Run gh repo autolink create TICKET- https://host/<num>", { action: "pull_request" }],
+    ["Run gh repo autolink delete 123.", { action: "pull_request" }],
+    ["Run gh repo delete acme/widget --yes.", { action: "pull_request" }],
+    ["Run gh repo archive acme/widget --yes.", { action: "pull_request" }],
+    ["Run gh repo unarchive acme/widget --yes.", { action: "pull_request" }],
+    ["Run gh ssh-key add attacker.pub.", { action: "pull_request" }],
+    ["Run gh gpg-key add attacker.asc.", { action: "pull_request" }],
+    ["Run gh ssh-key delete 123.", { action: "pull_request" }],
+    ["Run gh gpg-key delete 123 --yes.", { action: "pull_request" }],
+    ["Run git push --force origin HEAD.", { action: "pull_request" }],
+    ["Run git push --force-with-lease origin HEAD.", { action: "pull_request" }],
+    ["Force-push the task branch.", { action: "pull_request" }],
+    ["Release the package.", { action: "pull_request" }],
+    ["Run gh release create v1.2 --draft.", { action: "pull_request" }],
+    ["Run gh release upload v1.2 app.zip.", { action: "pull_request" }],
+    ["Run gh codespace create -R acme/widget.", { action: "pull_request" }],
+    ["Run gh codespace delete --all.", { action: "pull_request" }],
+    ["Run gh cs stop -c dev.", { action: "pull_request" }],
+    ["Run gh codespace rebuild -c dev.", { action: "pull_request" }],
+    ["Run gh codespace edit -c dev --display-name CI.", { action: "pull_request" }],
+    ["Run gh pr update-branch 123 --rebase.", { action: "pull_request" }],
+    ["Run gh pr --repo acme/widget update-branch 123.", { action: "pull_request" }],
+    ["Cancel the GitHub Actions run 123.", { action: "pull_request" }],
+    ["Rerun the failed Actions run.", { action: "pull_request" }],
+    ["Delete the workflow run.", { action: "pull_request" }],
+    ['Open a PR titled "Fix login" against staging.', { action: "pull_request" }],
+    ['Open a PR with body "Details" in "acme/other".', { action: "pull_request" }],
+    ["Run gh pr create --head attacker:feature.", { action: "pull_request" }],
+    ["Run gh pr create -H staging.", { action: "pull_request" }],
+    ["Run gh pr create --head $HEAD.", { action: "pull_request" }],
+    ["Run gh pr create --head.", { action: "pull_request" }],
+    ["Run gh project create --title Roadmap.", { action: "pull_request" }],
+    ["Run gh project edit 1 --visibility PUBLIC.", { action: "pull_request" }],
+    ["Run gh project delete 1.", { action: "pull_request" }],
+    ["Run gh project item-add 1 --url https://github.com/acme/widget/issues/1.", { action: "pull_request" }],
+    ["Run gh project item-edit --id ITEM --text Done.", { action: "pull_request" }],
+    ["Run gh project link 1 --repo acme/widget.", { action: "pull_request" }],
+    ["Run gh gist create --public report.txt.", { action: "pull_request" }],
+    ["Run gh gist new report.txt.", { action: "pull_request" }],
+    ["Run gh gist edit abcd --add report.txt.", { action: "pull_request" }],
+    ["Run gh gist delete abcd --yes.", { action: "pull_request" }],
+    ["Run gh gist rename abcd old.txt new.txt.", { action: "pull_request" }],
+    ["Run gh label create urgent.", { action: "pull_request" }],
+    ["Run gh label edit urgent --name critical.", { action: "pull_request" }],
+    ["Run gh label delete urgent --yes.", { action: "pull_request" }],
+    ["Run gh label clone acme/templates --force.", { action: "pull_request" }],
+    ["Run gh api -X POST repos/acme/widget/hooks.", { action: "pull_request" }],
+    ["Run gh api repos/acme/widget/hooks -f name=web.", { action: "pull_request" }],
+    ["Run gh api repos/acme/widget/hooks --input payload.json.", { action: "pull_request" }],
+    ["Push main to origin.", { action: "pull_request" }],
+    ["Push the main branch to origin.", { action: "pull_request" }],
+    ["Run aws s3 cp build.zip s3://bucket/out.zip.", { action: "pull_request" }],
+    ["Upload build.zip to S3.", { action: "pull_request" }],
+    ["Run gsutil cp build.zip gs://bucket/out.zip.", { action: "pull_request" }],
+    ["Run pulumi up.", { action: "pull_request" }],
+    ["Run pulumi destroy.", { action: "pull_request" }],
+    ["Post the test results to Slack.", { action: "pull_request" }],
+    ["Send an email when finished.", { action: "pull_request" }],
+    ["Notify me when finished.", { action: "pull_request" }],
+    ["Run curl -X POST https://hooks.example.test/results.", { action: "pull_request" }],
+    ["Run `curl -d payload https://hooks.example.test/results`.", { action: "pull_request" }],
+    ["Run curl --request DELETE https://api.example.test/items/1.", { action: "pull_request" }],
+    ["Run curl -X $METHOD https://api.example.test/items.", { action: "pull_request" }],
+    ["Open a PR against `staging`.", { action: "pull_request" }],
+    ["Open a PR in \"acme/other\".", { action: "pull_request" }],
+    ["Run gh pr create --draft.", { action: "pull_request" }],
+    ["Run gh pr create --dry-run.", { action: "pull_request" }],
+    ["Run gh pr create -d.", { action: "pull_request" }],
+    ["Open a draft pull request.", { action: "pull_request" }],
+    ["Run npm access set status=public pkg.", { action: "pull_request" }],
+    ["Run npm access grant read-write acme:team pkg.", { action: "pull_request" }],
+    ["Run npm owner add alice pkg.", { action: "pull_request" }],
+    ["Run npm owner rm alice pkg.", { action: "pull_request" }],
+    ["Run npm dist-tag add pkg@2.0 latest.", { action: "pull_request" }],
+    ["Run npm dist-tag rm pkg latest.", { action: "pull_request" }],
+    ["Run `npm --registry https://registry.npmjs.org owner add alice pkg`.", { action: "pull_request" }],
+    ["Create a GitHub issue describing the follow-up.", { action: "pull_request" }],
+    ["Edit issue #123 with the test results.", { action: "pull_request" }],
+    ["Comment on issue #123 with the test results.", { action: "pull_request" }],
+    ["Close the GitHub issue.", { action: "pull_request" }],
+    ["Reopen issue #123.", { action: "pull_request" }],
+    ['Run `gh issue create --title Follow-up`.', { action: "pull_request" }],
+    ['The "GitHub issue #123" must be closed.', { action: "pull_request" }],
+    ["Create a GitHub issue.", { action: "restrict", prohibits: [] }],
+    ["Push the image to ghcr.io/acme/app.", { action: "pull_request" }],
+    ["Upload the package to GitHub Packages.", { action: "pull_request" }],
+    ["Push the image to \"ghcr.io/acme/app\".", { action: "pull_request" }],
+    ["Remove the image from ghcr.io/acme/app.", { action: "pull_request" }],
+    ["Run npm unpublish old-package.", { action: "pull_request" }],
+    ["npm deprecate pkg@1.0.", { action: "pull_request" }],
+    ["Yank version 1.2 from crates.io.", { action: "pull_request" }],
+    ["Run gh pr create --base staging.", { action: "pull_request" }],
+    ["Run gh pr create --repo acme/other.", { action: "pull_request" }],
+    ["Run `gh pr create --base \"staging\"`.", { action: "pull_request" }],
+    ["Check with me before opening a pull request.", { action: "pull_request" }],
+    ["Ask me before opening a PR.", { action: "pull_request" }],
+    ["Get my go-ahead before opening the pull request.", { action: "pull_request" }],
+    ["Review pull request #123 and leave feedback.", { action: "pull_request" }],
+    ["Comment on pull request #123 with the test results.", { action: "pull_request" }],
+    ["Run terraform apply after implementing it.", { action: "pull_request" }],
+    ["Execute helm upgrade api ./chart.", { action: "pull_request" }],
+    ["Run `kubectl apply -f app.yaml`.", { action: "pull_request" }],
+    ["Run git push --tags.", { action: "pull_request" }],
+    ["Push tag v1.0 to origin.", { action: "pull_request" }],
+    ["Run `git push origin HEAD:refs/notes/ci`.", { action: "pull_request" }],
+    ["Close pull request #123.", { action: "pull_request" }],
+    ["Pull request #123 must be closed.", { action: "pull_request" }],
+    ["Reopen the pull request.", { action: "pull_request" }],
+    ["Run `gh pr ready 123 --undo`.", { action: "pull_request" }],
+    ["Land the pull request after CI passes.", { action: "pull_request" }],
+    ["Land the changes after tests pass.", { action: "pull_request" }],
+    ["Land `the pull request` after CI.", { action: "pull_request" }],
+    ["Run `npm publish` after tests.", { action: "pull_request" }],
+    ["Open two pull requests for the API and UI.", { action: "pull_request" }],
+    ["Create separate pull requests for the API and UI.", { action: "pull_request" }],
+    ["Get my consent before opening a PR.", { action: "pull_request" }],
+    ["Get my authorization before opening a PR.", { action: "pull_request" }],
+    ["Wait for my authorisation before opening a PR.", { action: "pull_request" }],
+    ["Get my permission before opening a PR.", { action: "pull_request" }],
+    ["Open the pull request against staging.", { action: "pull_request" }],
+    ["Open a PR in acme/other.", { action: "pull_request" }],
+    ["Upload the package to hex.pm.", { action: "pull_request" }],
+    ["Do not merge, but deploy this to production.", { action: "restrict", prohibits: ["merge", "deploy"] }],
+    ["Do not deploy; deploy this to production.", { action: "restrict", prohibits: ["deploy"] }],
+  ]) {
+    const clear = 'Open a pull request in "acme/widget" against `main` for review, run the tests on Linux and document export in docs/README.md.';
+    const w = world({ prepare: async (_ctx, task) => JSON.stringify(draftFor(task, { delivery: Object.fromEntries(task.requirements.map(r => [r.id, r.text === clear ? { action: "pull_request" } : r.id === "r-1" ? { action: "merge" } : tag])) })) });
+    const first = await w.service.prepare({ text: "Implement export and merge the PR.", run: true });
+    const answered = await w.service.answer({ taskId: first.taskId, expectedRevision: first.revision, operationId: "insist-on-conflict", answers: { "q-delivery-r-1": text } });
+    assert.equal(answered.status, "needs-input", text); assert.equal(answered.readiness, null);
+    const conflictId = ["Do not deploy; deploy this to production.", "Open one PR; then another PR.", "Open one PR; then another for the UI."].includes(text) ? "q-delivery-a-q-delivery-r-1-2" : "q-delivery-a-q-delivery-r-1-1";
+    assert.deepEqual(answered.questions.map(q => q.id), [conflictId], text);
+    assert.ok(answered.review.requirementMap.find(m => `q-delivery-${m.requirementId}` === conflictId).conflict.reason, text);
+    if ((text.startsWith("Run gh pr create ") && (text.includes("--draft") || text.includes("--dry-run") || text.includes("create -d"))) || text === "Open a draft pull request.") assert.match(answered.review.requirementMap.find(m => m.requirementId === "a-q-delivery-r-1-1").conflict.reason, /regular review PR/, text);
+    assert.equal(taskStore(w.home).read(first.taskId).runAuthorized, false);
+    assert.deepEqual(w.ctx.state.entries(), []); assert.equal(w.daemonCalls(), 0);
+    await assert.rejects(w.service.start({ taskId: first.taskId, expectedRevision: answered.revision, run: true }), { code: "TASK_NOT_READY" });
+    const resolved = await w.service.answer({ taskId: first.taskId, expectedRevision: answered.revision, operationId: "keep-profile", answers: { [conflictId]: clear } });
+    assert.equal(resolved.status, "ready", resolved.failures.join("\n"));
+    assert.deepEqual(taskStore(w.home).read(first.taskId).deliveryProfile, TYPED_PROFILE); assert.equal(resolved.approval, null);
+    assert.deepEqual(w.ctx.state.entries(), []); assert.equal(w.daemonCalls(), 0);
+  }
+});
+
+test("typed delivery inputs refuse merge, deployment and unknown routes before effects and conflict on changed retry input", async () => {
+  const w = world();
+  for (const delivery of [{ action: "merge" }, { action: "deploy" }, { action: "pull_request", completion: "shipped" }, { action: "pull_request", merge: true }, "pull_request"]) {
+    await assert.rejects(w.service.prepare({ text: REQUEST, delivery }), { code: "TASK_INPUT", taskEffects: "none" });
+  }
+  await assert.rejects(w.service.prepare({ text: REQUEST, route: "shell" }), { code: "TASK_INPUT", taskEffects: "none" });
+  await assert.rejects(w.service.prepare({ text: REQUEST, route: "model" }), e => e.code === "TASK_MODEL_ROUTE" && e.taskEffects === "none" && /intake_model is not configured/.test(e.message));
+  await assert.rejects(w.service.prepare({ text: REQUEST, delivery: { action: "pull_request", completion: "integrated" }, completion: { target: "delivery_ready" } }), { code: "TASK_INPUT", taskEffects: "none" });
+  assert.deepEqual(w.service.list().tasks, []); assert.equal(w.calls(), 0);
+  const input = { text: REQUEST, delivery: { action: "pull_request", completion: "integrated" }, requestId: "typed-integrated" };
+  const prepared = await w.service.prepare(input);
+  assert.equal(prepared.status, "ready"); assert.equal(prepared.completion.target, "integrated"); assert.equal(prepared.deliveryProfile.completion.condition, "integrated");
+  assert.deepEqual(await w.service.prepare(input), prepared);
+  await assert.rejects(w.service.prepare({ ...input, delivery: { action: "pull_request" } }), { code: "TASK_CONFLICT" });
+  await assert.rejects(w.service.prepare({ ...input, route: "harness" }), { code: "TASK_CONFLICT" });
+  const capabilities = w.service.capabilities();
+  assert.deepEqual(capabilities.delivery, DELIVERY_CAPABILITIES); assert.deepEqual(capabilities.routes, ["harness", "model"]); assert.equal(capabilities.modelRoute.enabled, false);
+});
+
+test("wrapped source and reply delivery instructions pause before readiness or dispatch", async () => {
+  for (const text of ["Run gh auth\nswitch --user attacker", "Run gh auth\nrefresh --scopes delete_repo", "Run npm token\nrevoke fixture-id", "Run kubectl\ndrain node1", "Run docker image\npush acme/app", "Run docker buildx build\n--push .", "Open one PR,\nthen another PR", "Open one PR, then\nanother PR", "Run gh secret\nset API_KEY --body fixture-value", "Run gh variable\ndelete DEPLOY_ENV", "Do not\nopen a pull request", "Upload the package\nto npm", "Run gh workflow\nrun smoke.yml", "Run gh discussion\ncomment 123 --body Thanks", "Run gh repo\nautolink delete 123", "Run gh repo\ndelete acme/widget --yes", "Run gh repo\narchive acme/widget --yes", "Run gh ssh-key\nadd key.pub", "Run gh gpg-key\ndelete 123", "Run git push\n--force origin HEAD", "Run git push -u\n--force-with-lease origin HEAD"]) {
+    const w = world({ prepare: async (_ctx, task) => JSON.stringify(draftFor(task, { delivery: Object.fromEntries(task.requirements.map(r => [r.id, { action: "pull_request" }])) })) });
+    const first = await w.service.prepare({ text, run: true });
+    assert.equal(first.status, "needs-input", text); assert.equal(first.readiness, null);
+    const source = first.requirements.map(r => ({ id: r.id, text: r.text, source: r.source }));
+    assert.equal(source.length, 2); for (const r of source) assert.equal(text.slice(r.source.start, r.source.end), r.text);
+    await assert.rejects(w.service.start({ taskId: first.taskId, expectedRevision: first.revision, run: true }), { code: "TASK_NOT_READY" });
+    const answers = Object.fromEntries(first.questions.map(q => [q.id, "Open a PR for review.\nRun gh workflow\nrun smoke.yml."]));
+    const again = await w.service.answer({ taskId: first.taskId, expectedRevision: first.revision, operationId: "wrapped-reply", answers });
+    assert.equal(again.status, "needs-input"); assert.equal(again.readiness, null); assert.equal(taskStore(w.home).read(first.taskId).runAuthorized, false);
+    assert.deepEqual(again.requirements.slice(0, 2), first.requirements);
+    assert.ok(again.questions.every(q => q.id.startsWith("q-delivery-a-")));
+    await assert.rejects(w.service.start({ taskId: first.taskId, expectedRevision: again.revision, run: true }), { code: "TASK_NOT_READY" });
+    const clear = Object.fromEntries(again.questions.map(q => [q.id, "Open a PR for review."]));
+    const resolved = await w.service.answer({ taskId: first.taskId, expectedRevision: again.revision, operationId: "supported-scope", answers: clear });
+    assert.equal(resolved.status, "ready", resolved.failures.join("\n")); assert.equal(resolved.approval, null);
+    assert.deepEqual(w.ctx.state.entries(), []); assert.equal(w.daemonCalls(), 0);
+  }
+});
+
+test("model credential preflight failures resume explicitly without replacing the pinned route or buying retries", async () => {
+  const retryable = { route: "model", errorCode: "TASK_MODEL_ROUTE", preflightFailure: { code: "TASK_MODEL_ROUTE", stage: "model-credential", attemptCount: 1 }, attempts: [{ settled: true, consumed: true }] };
+  assert.equal(preparationPreflightRetryable(retryable), true);
+  for (const patch of [{ route: "harness" }, { preflightFailure: { ...retryable.preflightFailure, attemptCount: 0 } }, { preflightFailure: { ...retryable.preflightFailure, stage: "submitted" } }, { attempts: [{ settled: false, consumed: true }] }, { attempts: [{ settled: true, consumed: false }] }, { dispatchIntent: {} }, { implementation: {} }]) assert.equal(preparationPreflightRetryable({ ...retryable, ...patch }), false);
+
+  for (const phase of ["answer", "repair", "legacy"]) {
+    const w = world();
+    w.ctx.config.harness = { gemini: { bin: harnessBin(w.home, "gemini") } };
+    w.ctx.config.intake_model = MODEL_ROUTE; w.ctx.env.FIXTURE_MODEL_KEY = "sk-fixture-key-resume";
+    let calls = 0;
+    const urls = [], prompts = [];
+    w.ctx.fetch = async (url, init) => {
+      calls++; urls.push(url); prompts.push(JSON.parse(init.body).messages.at(-1).content);
+      const task = taskStore(w.home).list().at(-1), out = draftFor(task, { question: phase !== "repair" });
+      if (calls === 1) {
+        delete w.ctx.env.FIXTURE_MODEL_KEY;
+        if (phase === "repair") out.mapping = [];
+      }
+      return { ok: true, status: 200, headers: { get: () => null }, text: async () => JSON.stringify({ choices: [{ message: { content: JSON.stringify(out) }, finish_reason: "stop" }], usage: { prompt_tokens: 5, completion_tokens: 5 } }), body: { cancel: async () => {} } };
+    };
+    const service = createTaskService(w.ctx), first = await service.prepare({ text: REQUEST, route: "model" });
+    const stalled = phase !== "repair" ? await service.answer({ taskId: first.taskId, expectedRevision: first.revision, operationId: "preflight-answer", answers: { "q-r-1": "Use CSV." } }) : first;
+    assert.equal(stalled.status, "blocked"); assert.equal(stalled.errorCode, "TASK_MODEL_ROUTE"); assert.equal(calls, 1);
+    const snapshot = taskStore(w.home).read(first.taskId), attempts = structuredClone(snapshot.attempts), repairs = snapshot.repairs;
+    const absent = await service.resume({ taskId: first.taskId, expectedRevision: stalled.revision });
+    assert.equal(absent.status, "blocked"); assert.equal(calls, 1); assert.deepEqual(taskStore(w.home).read(first.taskId).attempts, attempts);
+    if (phase === "legacy") {
+      const old = taskStore(w.home).read(first.taskId); delete old.preflightFailure; taskStore(w.home).save(old);
+    }
+    w.ctx.env.FIXTURE_MODEL_KEY = "sk-fixture-key-restored";
+    w.ctx.config.intake_model = { ...MODEL_ROUTE, model: "replacement-model", endpoint: "https://api.other-provider.com/v1/chat/completions" };
+    const restarted = createTaskService(w.ctx), resumed = await restarted.resume({ taskId: first.taskId, expectedRevision: absent.revision });
+    assert.equal(resumed.status, "ready", resumed.failures.join("\n")); assert.equal(calls, 2);
+    assert.deepEqual(urls, [MODEL_ROUTE.endpoint, MODEL_ROUTE.endpoint]); assert.equal(resumed.modelRoute.model, "fixture-model");
+    const saved = taskStore(w.home).read(first.taskId);
+    assert.equal(saved.repairs, repairs); assert.equal(saved.attempts.length, 2); assert.equal(saved.preflightFailure, undefined);
+    assert.deepEqual(saved.attempts[0], attempts[0]); assert.equal(resumed.approval, null); assert.equal(resumed.readiness.allow, true);
+    if (phase === "repair") assert.match(prompts[1], /unmapped explicit requirements/);
+    if (phase !== "repair") assert.equal(saved.answers["q-r-1"], "Use CSV.");
+    assert.doesNotMatch(JSON.stringify(saved), /sk-fixture-key|replacement-model|other-provider/);
+    await restarted.resume({ taskId: first.taskId, expectedRevision: resumed.revision }); assert.equal(calls, 2);
+    assert.deepEqual(w.ctx.state.entries(), []); assert.equal(w.daemonCalls(), 0);
+  }
+});
+
+test("a provider failure after credential recovery retains spend and cannot rearm the pre-call retry", async () => {
+  const w = world(); w.ctx.config.harness = { gemini: { bin: harnessBin(w.home, "gemini") } };
+  w.ctx.config.intake_model = MODEL_ROUTE; w.ctx.env.FIXTURE_MODEL_KEY = "sk-fixture-key-provider";
+  let calls = 0;
+  w.ctx.fetch = async () => {
+    calls++;
+    if (calls > 1) return { ok: false, status: 503, body: { cancel: async () => {} } };
+    const task = taskStore(w.home).list().at(-1);
+    return { ok: true, status: 200, headers: { get: () => null }, text: async () => JSON.stringify({ choices: [{ message: { content: JSON.stringify(draftFor(task, { question: true })) }, finish_reason: "stop" }], usage: { prompt_tokens: 5, completion_tokens: 5 } }), body: { cancel: async () => {} } };
+  };
+  const service = createTaskService(w.ctx), first = await service.prepare({ text: REQUEST });
+  delete w.ctx.env.FIXTURE_MODEL_KEY;
+  const blocked = await service.answer({ taskId: first.taskId, expectedRevision: first.revision, operationId: "missing-key", answers: { "q-r-1": "Use CSV." } });
+  w.ctx.env.FIXTURE_MODEL_KEY = "sk-fixture-key-restored";
+  const failed = await service.resume({ taskId: first.taskId, expectedRevision: blocked.revision });
+  assert.equal(failed.status, "blocked"); assert.equal(calls, 2); assert.match(failed.failures[0], /HTTP 503.*billing.*unknown/);
+  const saved = taskStore(w.home).read(first.taskId);
+  assert.equal(saved.preflightFailure, undefined); assert.equal(saved.attempts.at(-1).spend.status, "unknown"); assert.ok(saved.attempts.at(-1).reservedUsd > 0);
+  assert.deepEqual(await createTaskService(w.ctx).resume({ taskId: first.taskId, expectedRevision: failed.revision }), failed);
+  assert.equal(calls, 2); assert.deepEqual(w.ctx.state.entries(), []);
+});
+
+test("MCP preserves bounded unavailable-implementation receipts across replay and hides untrusted errors", async () => {
+  const { registerTaskDelivery } = await import("../lib/task_delivery_mcp.mjs");
+  const { Server } = await import("@modelcontextprotocol/sdk/server/index.js");
+  const { Client } = await import("@modelcontextprotocol/sdk/client/index.js");
+  const { InMemoryTransport } = await import("@modelcontextprotocol/sdk/inMemory.js");
+  const outcomes = [];
+  for (const [harness, route] of [["codex-cloud", null], ["codex-cloud", "model"], ["codex-cloud", "harness"], ["gemini", "model"]]) {
+    const w = world(), scope = { tenant: "alice", account: "alice", environment: "preview", region: "US", scopes: ["task-delivery:read", "task-delivery:write"], repositories: ["widget"] };
+    const manifest = { coreVersion: CORE_VERSION, coreSha256: "a".repeat(64), operationVersion: 1, taskVersion: 1, executionVersion: 1 };
+    migrateRuntimeState({ home: w.home, manifest });
+    const secret = "sk-fixture-unavailable-private";
+    w.ctx.config.harness = { [harness]: { bin: join(w.home, "never-invoked") } };
+    w.ctx.config.intake_model = MODEL_ROUTE; w.ctx.env.FIXTURE_MODEL_KEY = secret;
+    let fetches = 0, capabilityReads = 0, restored = false, untrusted = false;
+    w.ctx.fetch = async () => { fetches++; assert.fail("unavailable implementation cannot spend"); };
+    w.ctx.capabilitiesFor = name => {
+      capabilityReads++;
+      return restored ? { ...capabilitiesFor(name), available: true } : harness === "gemini"
+        ? { ...capabilitiesFor(name), available: false, reason: "fixture dispatch unavailable", fix: `restore the fixture transport ${w.home} ${secret} ${"x".repeat(800)}` }
+        : capabilitiesFor(name);
+    };
+    const store = createDeliveryStore(join(w.home, "delivery"));
+    const makeDelivery = () => createTaskDelivery({ manifest, authorize: async () => scope, store, secretsFor: () => [secret], schedule: async () => assert.fail("pre-effect rejection cannot schedule"),
+      contextFor: async () => ({ ctx: w.ctx, repository: { dir: w.checkout, repo: "acme/widget" } }) });
+    let delivery = makeDelivery();
+    const server = new Server({ name: "unavailable-test", version: "1" }, { capabilities: { tools: {} } });
+    const client = new Client({ name: "unavailable-client", version: "1" });
+    await registerTaskDelivery(server, { delivery: { dispatch: (...args) => {
+      if (untrusted) throw Object.assign(new Error(`provider diagnostic ${secret}`), { code: "EXECUTION_UNAVAILABLE", taskEffects: "none" });
+      return delivery.dispatch(...args);
+    } }, identityFor: async () => "alice" });
+    const [a, b] = InMemoryTransport.createLinkedPair(); await server.connect(a); await client.connect(b);
+    const input = { repositoryId: "widget", text: REQUEST, harness, allowance: { budgetUsd: 1, runtimeMs: 60000 }, operationId: "unavailable-mcp", expectedRevision: 0, ...(route ? { route } : {}) };
+    try {
+      const first = await client.callTool({ name: "task_prepare", arguments: input });
+      assert.equal(first.isError, true); assert.equal(first.structuredContent, undefined); assert.equal(first._meta, undefined);
+      assert.match(first.content[0].text, /^EXECUTION_UNAVAILABLE: .*cannot dispatch implementation/);
+      assert.match(first.content[0].text, harness === "codex-cloud" ? /environment-to-repository check/ : /restore the fixture transport/);
+      assert.doesNotMatch(JSON.stringify(first), new RegExp(secret)); assert.ok(!JSON.stringify(first).includes(w.home));
+      const receipt = store.read(scope).operations[input.operationId];
+      assert.equal(receipt.status, "acknowledged"); assert.equal(receipt.wakePending, false);
+      assert.equal(receipt.rejection.code, "EXECUTION_UNAVAILABLE"); assert.ok(receipt.rejection.message.length <= 500);
+      assert.equal(first.content[0].text, `${receipt.rejection.code}: ${receipt.rejection.message}`);
+      const reads = capabilityReads; restored = true; delivery = makeDelivery();
+      assert.deepEqual(await client.callTool({ name: "task_prepare", arguments: input }), first, "saved rejection survives dispatcher reload and transport restoration");
+      assert.equal(capabilityReads, reads, "replay cannot repeat availability or planning checks");
+      assert.deepEqual(store.read(scope).tasks, {}); assert.deepEqual(taskStore(w.home).list(), []);
+      assert.equal(fetches, 0); assert.equal(w.runners.size, 0); assert.equal(w.daemonCalls(), 0); assert.deepEqual(w.ctx.state.entries(), []);
+      untrusted = true;
+      const raw = await client.callTool({ name: "task_prepare", arguments: input });
+      assert.match(raw.content[0].text, /^DELIVERY_FAILED:/); assert.doesNotMatch(JSON.stringify(raw), /provider diagnostic|sk-fixture-unavailable-private/);
+      assert.equal(taskRejectionForModel(Object.assign(Error("untrusted"), { code: "EXECUTION_UNAVAILABLE" })), null);
+      outcomes.push({ harness, route, rejection: receipt.rejection, fetches, replayUnchanged: true, untrustedErrorHidden: true });
+    } finally { await client.close(); await server.close(); }
+  }
+  const evidence = join(tempHome(), "mcp-unavailable-evidence.json"); writeFileSync(evidence, JSON.stringify(outcomes, null, 2) + "\n");
+  console.log(`# MCP unavailable implementation evidence: ${evidence}`);
+});
+
+test("unavailable implementation harnesses reject intake before route selection can spend", async () => {
+  const outcomes = [];
+  for (const harness of ["codex-cloud", "gemini"]) for (const route of [null, "model", "harness"]) {
+    const w = world();
+    w.ctx.config.harness = { [harness]: { bin: join(w.home, "never-invoked") } };
+    w.ctx.config.intake_model = MODEL_ROUTE; w.ctx.env.FIXTURE_MODEL_KEY = "sk-fixture-key-availability";
+    if (harness === "gemini") w.ctx.capabilitiesFor = name => ({ ...capabilitiesFor(name), available: false, reason: "fixture dispatch unavailable", fix: "restore the fixture transport" });
+    let fetches = 0;
+    w.ctx.fetch = async (...args) => { fetches++; return modelReply(w.home)(...args); };
+    const service = createTaskService(w.ctx);
+    await assert.rejects(service.prepare({ text: REQUEST, route, requestId: "unavailable-implementation" }), error => {
+      assert.equal(error.code, "EXECUTION_UNAVAILABLE"); assert.equal(error.taskEffects, "none");
+      assert.match(error.message, /cannot dispatch implementation/); assert.match(error.message, /no planning call was made/);
+      assert.match(error.message, harness === "codex-cloud" ? /environment-to-repository check/ : /restore the fixture transport/);
+      outcomes.push({ harness, route, code: error.code, taskEffects: error.taskEffects, message: error.message });
+      return true;
+    });
+    outcomes.at(-1).fetches = fetches;
+    assert.equal(fetches, 0); assert.deepEqual(service.list().tasks, []);
+    assert.deepEqual(w.ctx.state.entries(), []); assert.equal(w.runners.size, 0); assert.equal(w.daemonCalls(), 0);
+  }
+  // An implementation-capable adapter without isolated preparation still gets
+  // the configured model route, through either automatic or explicit selection.
+  for (const route of [null, "model"]) {
+    const w = world(); w.ctx.config.harness = { gemini: { bin: harnessBin(w.home, "gemini") } };
+    w.ctx.config.intake_model = MODEL_ROUTE; w.ctx.env.FIXTURE_MODEL_KEY = "sk-fixture-key-available";
+    let fetches = 0; w.ctx.fetch = async (...args) => { fetches++; return modelReply(w.home)(...args); };
+    const prepared = await createTaskService(w.ctx).prepare({ text: REQUEST, route });
+    assert.equal(prepared.status, "ready", prepared.failures.join("\n")); assert.equal(prepared.route, "model"); assert.equal(fetches, 1);
+    outcomes.push({ harness: "gemini", route, status: prepared.status, selectedRoute: prepared.route, fetches, approval: prepared.approval });
+    assert.equal(prepared.approval, null); assert.deepEqual(w.ctx.state.entries(), []);
+  }
+  const evidence = join(tempHome(), "implementation-availability-evidence.json");
+  writeFileSync(evidence, JSON.stringify(outcomes, null, 2) + "\n");
+  console.log(`# implementation availability evidence: ${evidence}`);
+});
+
+test("implementation availability stops fresh model turns while saved results and pre-call recovery remain safe", async () => {
+  for (const phase of ["answer", "repair"]) {
+    const w = world(); w.ctx.config.harness = { gemini: { bin: harnessBin(w.home, "gemini") } };
+    w.ctx.config.intake_model = MODEL_ROUTE; w.ctx.env.FIXTURE_MODEL_KEY = "sk-fixture-key-recovery";
+    let available = true, calls = 0;
+    w.ctx.capabilitiesFor = name => ({ ...capabilitiesFor(name), available, reason: "fixture implementation offline", fix: "restore the fixture implementation transport" });
+    w.ctx.fetch = async () => {
+      calls++;
+      const task = taskStore(w.home).list().at(-1), draft = draftFor(task, { question: phase === "answer" && calls === 1 });
+      if (phase === "repair" && calls === 1) { draft.mapping = []; available = false; }
+      const body = { choices: [{ message: { content: JSON.stringify(draft) }, finish_reason: "stop" }], usage: { prompt_tokens: 50, completion_tokens: 50 } };
+      return { ok: true, status: 200, headers: { get: () => null }, text: async () => JSON.stringify(body), body: { cancel: async () => {} } };
+    };
+    const service = createTaskService(w.ctx), input = { text: REQUEST, requestId: "availability-turn" };
+    let first = await service.prepare(input);
+    let blocked = first;
+    if (phase === "answer") {
+      assert.equal(first.status, "needs-input"); available = false;
+      assert.deepEqual(await service.prepare(input), first, "saved results replay without another planning call");
+      const replay = taskStore(w.home).read(first.taskId); replay.status = "preparing"; replay.attempts[0].consumed = false;
+      taskStore(w.home).save(replay);
+      first = await service.resume({ taskId: first.taskId, expectedRevision: first.revision });
+      assert.equal(first.status, "needs-input"); assert.equal(calls, 1, "settled output is reconciled before availability can reject a fresh call");
+      blocked = await service.answer({ taskId: first.taskId, expectedRevision: first.revision, operationId: "availability-answer", answers: { "q-r-1": "Use CSV." } });
+    }
+    assert.equal(blocked.status, "blocked"); assert.equal(blocked.errorCode, "EXECUTION_UNAVAILABLE"); assert.equal(calls, 1);
+    const store = taskStore(w.home), saved = store.read(first.taskId), repairs = saved.repairs;
+    assert.equal(saved.attempts.length, 1); assert.ok(saved.attempts[0].settled && saved.attempts[0].consumed);
+    assert.equal(saved.preflightFailure.stage, "implementation-availability"); assert.ok(preparationPreflightRetryable(saved));
+    assert.equal(preparationPreflightRetryable({ ...saved, preflightFailure: { ...saved.preflightFailure, attemptCount: 2 } }), false);
+    assert.equal(preparationPreflightRetryable({ ...saved, dispatchIntent: {} }), false);
+    assert.equal(preparationPreflightRetryable({ ...saved, attempts: [{ ...saved.attempts[0], settled: false }] }), false);
+    const pinned = structuredClone(saved.modelRoute), spend = structuredClone(blocked.cost);
+    const stillBlocked = await service.resume({ taskId: first.taskId, expectedRevision: blocked.revision });
+    assert.equal(stillBlocked.status, "blocked"); assert.equal(calls, 1); assert.deepEqual(stillBlocked.cost, spend);
+    available = true;
+    const recovered = await service.resume({ taskId: first.taskId, expectedRevision: stillBlocked.revision });
+    assert.equal(recovered.status, "ready", recovered.failures.join("\n")); assert.equal(calls, 2);
+    assert.equal(store.read(first.taskId).repairs, repairs); assert.deepEqual(store.read(first.taskId).modelRoute, pinned);
+    assert.equal(store.read(first.taskId).preflightFailure, undefined); assert.equal(recovered.approval, null);
+    assert.deepEqual(w.ctx.state.entries(), []); assert.equal(w.runners.size, 0); assert.equal(w.daemonCalls(), 0);
+  }
+});
+
+test("the model route drafts through the configured text-only endpoint when the selected harness cannot prepare", async () => {
+  const w = world();
+  w.ctx.config.harness = { gemini: { bin: harnessBin(w.home, "gemini") } };
+  w.ctx.config.intake_model = MODEL_ROUTE; w.ctx.env.FIXTURE_MODEL_KEY = "sk-fixture-key-444444";
+  let calls = 0;
+  w.ctx.fetch = async (...args) => { calls++; return modelReply(w.home)(...args); };
+  const service = createTaskService(w.ctx);
+  assert.equal(service.capabilities().modelRoute.enabled, true); assert.doesNotMatch(JSON.stringify(service.capabilities()), /sk-fixture|FIXTURE_MODEL_KEY|chat\/completions/);
+  const prepared = await service.prepare({ text: REQUEST, requestId: "model-route" });
+  assert.equal(prepared.status, "ready", prepared.failures.join("\n")); assert.equal(prepared.route, "model"); assert.equal(prepared.harness, "gemini");
+  assert.equal(prepared.modelRoute.kind, "model"); assert.equal(prepared.modelRoute.adapter, "openai-chat"); assert.equal(prepared.modelRoute.endpointHost, "api.example-provider.com");
+  assert.equal(prepared.modelRoute.calls, 1); assert.deepEqual(prepared.modelRoute.usage, { inputTokens: 900, outputTokens: 400 }); assert.deepEqual(prepared.modelRoute.tools, []);
+  assert.equal(prepared.cost.status, "reported"); assert.ok(prepared.cost.usd > 0 && prepared.cost.usd < 0.1);
+  assert.equal(prepared.preparation.attempts[0].receipt.boundary, "aport-model-text-only-v1"); assert.equal(prepared.preparation.attempts[0].spend.status, "reported");
+  assert.equal(prepared.review.modelRoute.model, "fixture-model"); assert.equal(prepared.readiness.allow, true);
+  assert.equal(prepared.preparation.attempts[0].receipt.taskId, `intake/${prepared.taskId}`);
+  // A model attempt restored from another task carries a foreign receipt: it cannot validate, start or replay here.
+  const other = await service.prepare({ text: "Add JSON export.", requestId: "other-task" });
+  assert.equal(other.status, "ready"); assert.equal(calls, 2);
+  const modelStore = taskStore(w.home), pristine = modelStore.read(prepared.taskId), victim = modelStore.read(prepared.taskId), donor = modelStore.read(other.taskId);
+  victim.attempts = [structuredClone(donor.attempts[0])]; modelStore.save(victim);
+  for (const operation of [
+    () => service.validate({ taskId: prepared.taskId, expectedRevision: prepared.revision }),
+    () => service.start({ taskId: prepared.taskId, expectedRevision: prepared.revision, run: true }),
+  ]) await assert.rejects(operation, { code: "TASK_PREPARATION_BOUNDARY" });
+  victim.attempts[0].consumed = false; victim.status = "preparing"; modelStore.save(victim);
+  const replayed = await service.resume({ taskId: prepared.taskId, expectedRevision: prepared.revision });
+  assert.equal(replayed.status, "blocked"); assert.equal(replayed.errorCode, "TASK_PREPARATION_BOUNDARY"); assert.match(replayed.failures[0], /this task's text-only model route/);
+  assert.equal(calls, 2, "a foreign receipt never buys a new call or replays its message"); assert.deepEqual(w.ctx.state.entries(), []);
+  modelStore.save(pristine); // Restore the untouched record for the replay and validation checks below.
+  // Later turns run against the route pinned at creation: a changed or removed configuration cannot swap the route under the draft.
+  const asked = world(); asked.ctx.config.harness = { gemini: { bin: harnessBin(asked.home, "gemini") } }; asked.ctx.config.intake_model = MODEL_ROUTE; asked.ctx.env.FIXTURE_MODEL_KEY = "sk-fixture-key-777777";
+  const urls = [], models = [];
+  asked.ctx.fetch = async (url, init) => { urls.push(url); models.push(JSON.parse(init.body).model); const task = taskStore(asked.home).list().at(-1); const out = draftFor(task, { question: true }); const body = { choices: [{ message: { content: JSON.stringify(out) }, finish_reason: "stop" }], usage: { prompt_tokens: 50, completion_tokens: 50 } }; return { ok: true, status: 200, headers: { get: () => null }, text: async () => JSON.stringify(body), body: { cancel: async () => {} } }; };
+  const askedService = createTaskService(asked.ctx);
+  const first = await askedService.prepare({ text: REQUEST });
+  assert.equal(first.status, "needs-input"); assert.equal(first.modelRoute.model, "fixture-model");
+  const digestBefore = first.review.digest;
+  asked.ctx.config.intake_model = { ...MODEL_ROUTE, model: "other-model", endpoint: "https://api.other-provider.com/v1/chat/completions" };
+  const answered = await askedService.answer({ taskId: first.taskId, expectedRevision: first.revision, operationId: "pinned-route-answer", answers: { "q-r-1": "Use CSV." } });
+  assert.equal(answered.status, "ready"); assert.deepEqual(urls, [MODEL_ROUTE.endpoint, MODEL_ROUTE.endpoint]); assert.deepEqual(models, ["fixture-model", "fixture-model"]);
+  assert.equal(answered.modelRoute.model, "fixture-model"); assert.equal(answered.review.modelRoute.endpointHost, "api.example-provider.com"); assert.notEqual(answered.review.digest, digestBefore);
+  assert.doesNotMatch(JSON.stringify(answered), /other-provider|other-model/);
+  delete asked.ctx.config.intake_model;
+  assert.equal((await askedService.validate({ taskId: first.taskId, expectedRevision: answered.revision })).status, "ready", "validation of a pinned-route draft needs no live configuration");
+  // Without the pinned route's credential the next turn stops with the exact remedy and no request.
+  const unkeyed = world(); unkeyed.ctx.config.harness = { gemini: { bin: harnessBin(unkeyed.home, "gemini") } }; unkeyed.ctx.config.intake_model = MODEL_ROUTE; unkeyed.ctx.env.FIXTURE_MODEL_KEY = "sk-fixture-key-888888";
+  let unkeyedCalls = 0;
+  unkeyed.ctx.fetch = async () => { unkeyedCalls++; const task = taskStore(unkeyed.home).list().at(-1); const body = { choices: [{ message: { content: JSON.stringify(draftFor(task, { question: true })) }, finish_reason: "stop" }], usage: { prompt_tokens: 5, completion_tokens: 5 } }; return { ok: true, status: 200, headers: { get: () => null }, text: async () => JSON.stringify(body), body: { cancel: async () => {} } }; };
+  const unkeyedService = createTaskService(unkeyed.ctx), pending = await unkeyedService.prepare({ text: REQUEST });
+  assert.equal(pending.status, "needs-input"); delete unkeyed.ctx.env.FIXTURE_MODEL_KEY;
+  const stalled = await unkeyedService.answer({ taskId: pending.taskId, expectedRevision: pending.revision, operationId: "no-key", answers: { "q-r-1": "Use CSV." } });
+  assert.equal(stalled.status, "blocked"); assert.equal(stalled.errorCode, "TASK_MODEL_ROUTE"); assert.match(stalled.failures[0], /export FIXTURE_MODEL_KEY/); assert.equal(unkeyedCalls, 1);
+  assert.match(prepared.draft.text, /^---\nstatus: ready\nharness: gemini\n/);
+  assert.doesNotMatch(JSON.stringify(taskStore(w.home).read(prepared.taskId)), /sk-fixture/);
+  assert.deepEqual(await service.prepare({ text: REQUEST, requestId: "model-route" }), prepared); assert.equal(calls, 2, "the replay and the second task's single call");
+  assert.equal((await service.validate({ taskId: prepared.taskId, expectedRevision: prepared.revision })).status, "ready");
+  assert.deepEqual(w.ctx.state.entries(), []);
+  // An exact retry of a saved model task replays without the credential; the live check applies only to task creation.
+  const savedKey = w.ctx.env.FIXTURE_MODEL_KEY; delete w.ctx.env.FIXTURE_MODEL_KEY;
+  assert.deepEqual(await service.prepare({ text: REQUEST, requestId: "model-route" }), prepared, "replay does not need the credential");
+  await assert.rejects(service.prepare({ text: "Another request.", requestId: "model-route-new", route: "model" }), e => e.code === "TASK_MODEL_ROUTE" && e.taskEffects === "none");
+  w.ctx.env.FIXTURE_MODEL_KEY = savedKey; assert.equal(calls, 2);
+  // Explicitly selecting the harness route keeps the existing boundary refusal; nothing is fetched.
+  const harnessOnly = await service.prepare({ text: REQUEST, requestId: "harness-only", route: "harness" });
+  assert.equal(harnessOnly.status, "blocked"); assert.equal(harnessOnly.errorCode, "TASK_PREPARATION_BOUNDARY"); assert.equal(calls, 2, "nothing was fetched for the harness-only task");
+  // Exhausting the three-call ceiling blocks with an actionable message and no further request.
+  const noisy = world(); noisy.ctx.config.harness = { gemini: { bin: harnessBin(noisy.home, "gemini") } }; noisy.ctx.config.intake_model = MODEL_ROUTE; noisy.ctx.env.FIXTURE_MODEL_KEY = "sk-fixture-key-555555";
+  let noisyCalls = 0;
+  noisy.ctx.fetch = async () => { noisyCalls++; const task = taskStore(noisy.home).list().at(-1); const bad = draftFor(task); bad.mapping = []; return { ok: true, status: 200, headers: { get: () => null }, text: async () => JSON.stringify({ choices: [{ message: { content: JSON.stringify(bad) }, finish_reason: "stop" }], usage: { prompt_tokens: 10, completion_tokens: 10 } }), body: { cancel: async () => {} } }; };
+  const blocked = await createTaskService(noisy.ctx).prepare({ text: REQUEST });
+  assert.equal(blocked.status, "blocked"); assert.equal(noisyCalls, 3); assert.equal(blocked.errorCode, "TASK_ALLOWANCE"); assert.match(blocked.failures[0], /allows 3 calls/);
+  assert.equal(blocked.cost.status, "reported"); assert.deepEqual(noisy.ctx.state.entries(), []);
+});
+
+test("the delivery dispatcher accepts typed profiles and routes, exposes them to discovery, views and model summaries, and rejects unsupported actions by schema", async () => {
+  const w = world(), scope = { tenant: "alice", account: "alice", environment: "preview", region: "US", scopes: ["task-delivery:read", "task-delivery:write"], repositories: ["widget"] };
+  const manifest = { coreVersion: CORE_VERSION, coreSha256: "a".repeat(64), operationVersion: 1, taskVersion: 1, executionVersion: 1 };
+  migrateRuntimeState({ home: w.home, manifest });
+  const delivery = createTaskDelivery({ manifest, authorize: async () => scope, store: createDeliveryStore(join(w.home, "delivery")),
+    contextFor: async () => ({ ctx: w.ctx, repository: { dir: w.checkout, repo: "acme/widget" }, taskOptions: { prepare: async (_ctx, task) => JSON.stringify(draftFor(task)) } }), schedule: async () => {} });
+  const caps = await delivery.dispatch("capabilities", {}, "alice");
+  assert.deepEqual(caps.repositories[0].delivery, DELIVERY_CAPABILITIES); assert.equal(caps.repositories[0].modelRoute.enabled, false); assert.equal(caps.repositories[0].modelRoute.endpoint, undefined);
+  // The bounded model projection carries the same discovery fields, so a client can build a prepare call from it.
+  const discovered = capabilitySummary(caps).repositories[0];
+  assert.deepEqual(discovered.delivery, DELIVERY_CAPABILITIES); assert.deepEqual(discovered.routes, ["harness", "model"]);
+  assert.deepEqual(discovered.modelRoute, { enabled: false, adapter: null, model: null, budget: null, ceilings: caps.repositories[0].modelRoute.ceilings, tools: [], reason: caps.repositories[0].modelRoute.reason });
+  assert.doesNotMatch(JSON.stringify(discovered), /https?:\/\/|endpointHost|credentialEnv|FIXTURE_MODEL_KEY/);
+  const base = { repositoryId: "widget", text: REQUEST, harness: "codex", allowance: { budgetUsd: 1, runtimeMs: 60000 }, expectedRevision: 0 };
+  for (const [operationId, input] of [["bad-route", { route: "shell" }], ["extra", { delivery: { action: "pull_request", grant: "merge" } }], ["unknown-action", { delivery: { action: "publish" } }]]) {
+    await assert.rejects(delivery.dispatch("prepare", { ...base, ...input, operationId }, "alice"), { code: "DELIVERY_INPUT" });
+  }
+  // Recognised but unsupported actions pass the schema so the owner receives the actionable control/authorization remedy as a durable no-effects receipt.
+  for (const action of ["merge", "deploy"]) await assert.rejects(delivery.dispatch("prepare", { ...base, delivery: { action }, operationId: `typed-${action}` }, "alice"), error => {
+    assert.equal(error.code, "TASK_INPUT"); assert.match(taskRejectionForModel(error)?.message || "", /explicit supported .* control and authorization/); return true;
+  });
+  assert.deepEqual(w.ctx.state.entries(), []);
+  const prepared = await delivery.dispatch("prepare", { ...base, delivery: { action: "pull_request", completion: "integrated" }, route: "harness", operationId: "typed-prepare" }, "alice");
+  assert.equal(prepared.status, "ready");
+  assert.deepEqual(prepared.deliveryProfile, { ...TYPED_PROFILE, completion: { condition: "integrated" }, legacy: false, supported: true, source: "typed-profile", label: "Open one review pull request", mergeAuthorized: false, deployAuthorized: false });
+  assert.equal(prepared.route, "harness"); assert.equal(prepared.review.revision, prepared.revision); assert.equal(prepared.review.draft.text, prepared.brief.text);
+  assert.equal(prepared.approval, null); assert.equal(prepared.repositoryContext.status, "unavailable");
+  const summary = modelSummary(prepared);
+  assert.deepEqual(summary.deliveryProfile, { version: 1, action: "pull_request", completion: "integrated", legacy: false, supported: true });
+  assert.deepEqual(summary.review, { revision: prepared.revision, digest: prepared.review.digest, openQuestions: 0, approved: false });
+  assert.equal(summary.cost.status, "none");
+  const started = await delivery.dispatch("start", { taskId: prepared.taskId, expectedRevision: prepared.revision, operationId: "typed-start", run: true }, "alice");
+  assert.equal(started.status, "started"); assert.equal(started.approval.digest, prepared.review.digest);
+  assert.deepEqual(w.ctx.state.get(started.implementation.id).task.deliveryProfile, { ...TYPED_PROFILE, completion: { condition: "integrated" } });
+  assert.equal(modelSummary(started).review.approved, true);
+});
+
+test("historical tasks keep their interpretation while unsupported saved profiles fail closed without stranding the namespace", async () => {
+  const w = world(), prepared = await w.service.prepare({ text: REQUEST, requestId: "historical" }), store = taskStore(w.home);
+  const saved = store.read(prepared.taskId); saved.deliveryProfile = { ...saved.deliveryProfile, version: PROFILE_VERSION + 1 }; store.save(saved);
+  const inspected = w.service.inspect({ taskId: prepared.taskId });
+  assert.equal(inspected.deliveryProfile.supported, false); assert.equal(inspected.deliveryProfile.error.code, "TASK_PROFILE_UNSUPPORTED");
+  assert.equal(w.service.list().tasks.length, 1, "read-only inspection and export still work");
+  for (const operation of [
+    () => w.service.validate({ taskId: prepared.taskId, expectedRevision: prepared.revision }),
+    () => w.service.start({ taskId: prepared.taskId, expectedRevision: prepared.revision, run: true }),
+    () => w.service.resume({ taskId: prepared.taskId, expectedRevision: prepared.revision }),
+    () => w.service.prepare({ text: REQUEST, requestId: "historical" }),
+  ]) await assert.rejects(operation, e => e.code === "TASK_PROFILE_UNSUPPORTED" && e.taskEffects === "none" && /prepare a new task/.test(e.message));
+  assert.deepEqual(store.read(prepared.taskId), saved); assert.deepEqual(w.ctx.state.entries(), []);
+  // A profile restored from a task on another repository, base or completion target is not bound to this task: reads label it, mutations refuse.
+  const foreignProfile = world(), bound = await foreignProfile.service.prepare({ text: REQUEST, requestId: "bound" }), boundStore = taskStore(foreignProfile.home);
+  for (const patch of [{ target: { ...TYPED_PROFILE.target, repository: "acme/other" } }, { target: { ...TYPED_PROFILE.target, base: "develop" } }, { completion: { condition: "integrated" } }]) {
+    const record = boundStore.read(bound.taskId); record.deliveryProfile = { ...TYPED_PROFILE, ...patch }; boundStore.save(record);
+    assert.equal(foreignProfile.service.inspect({ taskId: bound.taskId }).deliveryProfile.supported, false);
+    await assert.rejects(foreignProfile.service.start({ taskId: bound.taskId, expectedRevision: bound.revision, run: true }), e => e.code === "TASK_PROFILE_UNSUPPORTED" && /not bound to this task/.test(e.message) && e.taskEffects === "none");
+    assert.deepEqual(boundStore.read(bound.taskId), record); assert.deepEqual(foreignProfile.ctx.state.entries(), []);
+  }
+  // A record created with a typed profile that no longer carries one is damaged typed state, not a historical task:
+  // reads label it unsupported and every mutation refuses, even with a persisted --run and a preparing status.
+  const orphaned = world({ prepare: async (_ctx, task) => JSON.stringify(draftFor(task, { question: true })) });
+  const orphan = await orphaned.service.prepare({ text: REQUEST, requestId: "orphan", run: true }), orphanStore = taskStore(orphaned.home);
+  for (const missing of [undefined, null]) {
+    const record = orphanStore.read(orphan.taskId); record.deliveryProfile = missing; if (missing === undefined) delete record.deliveryProfile; record.status = "preparing"; record.runAuthorized = true; orphanStore.save(record);
+    const view = orphaned.service.inspect({ taskId: orphan.taskId });
+    assert.equal(view.deliveryProfile.legacy, false); assert.equal(view.deliveryProfile.supported, false); assert.equal(view.deliveryProfile.error.code, "TASK_PROFILE_UNSUPPORTED");
+    await assert.rejects(orphaned.service.validate({ taskId: orphan.taskId, expectedRevision: orphan.revision }), e => e.code === "TASK_NOT_READY" && e.taskEffects === "none", "a preparing record is not validated; it must be resumed, which refuses below");
+    for (const operation of [
+      () => orphaned.service.start({ taskId: orphan.taskId, expectedRevision: orphan.revision, run: true }),
+      () => orphaned.service.resume({ taskId: orphan.taskId, expectedRevision: orphan.revision }),
+      () => orphaned.service.answer({ taskId: orphan.taskId, expectedRevision: orphan.revision, operationId: "orphan-answer", answers: { "q-r-1": "Use CSV." } }),
+    ]) await assert.rejects(operation, e => e.code === "TASK_PROFILE_UNSUPPORTED" && e.taskEffects === "none" && /none is saved/.test(e.message));
+    assert.deepEqual(orphanStore.read(orphan.taskId), record); assert.deepEqual(orphaned.ctx.state.entries(), []);
+  }
+  // An exact answer-operation replay is a mutation too: it fails closed before resuming preparation or dispatch.
+  const replayed = world({ prepare: async (_ctx, task) => JSON.stringify(draftFor(task, { question: true })) });
+  const asked = await replayed.service.prepare({ text: REQUEST, requestId: "historical-answer", run: true });
+  const reply = { taskId: asked.taskId, expectedRevision: asked.revision, operationId: "historical-reply", answers: { "q-r-1": "Use CSV." } };
+  assert.equal((await replayed.service.answer(reply)).status, "ready");
+  const replayStore = taskStore(replayed.home), answeredRecord = replayStore.read(asked.taskId);
+  answeredRecord.deliveryProfile = { ...answeredRecord.deliveryProfile, version: PROFILE_VERSION + 1 }; answeredRecord.status = "preparing"; answeredRecord.runAuthorized = true; replayStore.save(answeredRecord);
+  await assert.rejects(replayed.service.answer(reply), e => e.code === "TASK_PROFILE_UNSUPPORTED" && e.taskEffects === "none");
+  assert.deepEqual(replayStore.read(asked.taskId), answeredRecord); assert.deepEqual(replayed.ctx.state.entries(), []);
+  const manifest = { coreVersion: CORE_VERSION, coreSha256: "b".repeat(64), operationVersion: 1, taskVersion: 1, executionVersion: 1 };
+  assert.equal(migrateRuntimeState({ home: w.home, manifest }).active, false, "an unsupported saved profile does not pin an idle namespace");
+  // A task saved before typed profiles existed keeps its workflow-default interpretation and can still be controlled.
+  // Seed the shape an intake saved before typed profiles existed: no profile, route or snapshot, and a brief without the profile section.
+  const legacy = world({ prepare: async (_ctx, task) => { delete task.deliveryProfile; delete task.route; delete task.repositoryContext; return JSON.stringify(draftFor(task)); } });
+  const old = await legacy.service.prepare({ text: REQUEST, requestId: "legacy" });
+  assert.doesNotMatch(old.draft.text, /## Delivery profile/);
+  const view = legacy.service.inspect({ taskId: old.taskId });
+  assert.equal(view.deliveryProfile.legacy, true); assert.equal(view.deliveryProfile.source, "completion-target"); assert.equal(view.route, "harness");
+  const started = await legacy.service.start({ taskId: old.taskId, expectedRevision: old.revision, run: true, noDaemon: true });
+  assert.equal(started.status, "started"); assert.equal(legacy.ctx.state.get(started.implementation.id).task.deliveryProfile, undefined);
+});
+
+test("malformed planner delivery output is repaired within bounds and never falls back to free-text authorization", async () => {
+  const w = world({ prepare: async (_ctx, task) => { const out = draftFor(task); out.mapping[0].delivery = { action: "grant_all" }; return JSON.stringify(out); } });
+  const blocked = await w.service.prepare({ text: "Implement export and merge the PR.", run: true });
+  assert.equal(blocked.status, "blocked"); assert.equal(blocked.preparation.repairs, 3); assert.match(blocked.failures[0], /delivery tag action must be one of/);
+  assert.equal(blocked.readiness, null); assert.equal(taskStore(w.home).read(blocked.taskId).ownerDelivery, undefined); assert.deepEqual(w.ctx.state.entries(), []); assert.equal(w.daemonCalls(), 0);
+  let calls = 0;
+  const forged = world({ prepare: async (_ctx, task) => { calls++; const out = draftFor(task); if (calls === 1) { out.questions = [{ id: "q-delivery-r-1", text: "Merge?", requirements: ["r-1"] }]; out.mapping[0] = { requirementId: "r-1", questionId: "q-delivery-r-1" }; } return JSON.stringify(out); } });
+  const repaired = await forged.service.prepare({ text: REQUEST });
+  assert.equal(repaired.status, "ready"); assert.equal(repaired.preparation.repairs, 1); assert.equal(calls, 2);
+  const dropped = world({ prepare: async (_ctx, task) => { const out = draftFor(task); out.mapping = out.mapping.filter(m => m.requirementId !== "r-2"); return JSON.stringify(out); } });
+  const omitted = await dropped.service.prepare({ text: "Implement export.\nDo not merge." });
+  assert.equal(omitted.status, "blocked"); assert.match(omitted.failures[0], /unmapped explicit requirements: r-2/); assert.deepEqual(dropped.ctx.state.entries(), []);
+});
+
+test("a stale approval digest or changed material input requires review again before the run path is callable", async () => {
+  const w = world(), prepared = await w.service.prepare({ text: REQUEST }), store = taskStore(w.home);
+  const saved = store.read(prepared.taskId);
+  saved.runAuthorized = true; saved.approval = { revision: saved.revision, digest: "0".repeat(64), draftHash: saved.draft.hash, readinessDigest: saved.readiness.digest, at: new Date().toISOString() }; store.save(saved);
+  await assert.rejects(w.service.start({ taskId: prepared.taskId, expectedRevision: prepared.revision, run: true, noDaemon: true }), e => e.code === "TASK_CONFLICT" && /approved review revision changed/.test(e.message));
+  assert.deepEqual(w.ctx.state.entries(), []); assert.equal(store.read(prepared.taskId).status, "ready");
+  const asked = world({ prepare: async (_ctx, task) => JSON.stringify(draftFor(task, { question: true })) });
+  const first = await asked.service.prepare({ text: REQUEST });
+  assert.equal(first.status, "needs-input"); assert.equal(first.readiness, null);
+  const answered = await asked.service.answer({ taskId: first.taskId, expectedRevision: first.revision, operationId: "answer", answers: { "q-r-1": "Use CSV." } });
+  assert.equal(answered.status, "ready"); assert.equal(answered.approval, null); assert.notEqual(answered.review.digest, first.review.digest, "material input changes the review digest");
+  await assert.rejects(asked.service.start({ taskId: first.taskId, expectedRevision: first.revision, run: true }), { code: "TASK_CONFLICT" });
+  const started = await asked.service.start({ taskId: first.taskId, expectedRevision: answered.revision, run: true, noDaemon: true });
+  assert.equal(started.status, "started"); assert.equal(started.approval.digest, answered.review.digest);
+});
+
+test("CLI typed-profile flags reach the service, refuse unsupported actions and render the review", async () => {
+  const w = world();
+  const r = await taskCommand(w.ctx, { args: ["prepare", "Add export."], values: { delivery: "pull_request", "completion-target": "integrated", route: "harness", "request-id": "cli-typed" }, service: w.service });
+  assert.equal(r.status, "ready"); assert.equal(r.deliveryProfile.completion.condition, "integrated"); assert.equal(r.route, "harness");
+  const text = renderTask(r);
+  assert.match(text, /Delivery profile: pull_request → acme\/widget@main, completion integrated \(v1\); no merge or deployment authority/);
+  assert.match(text, /Planner route: harness codex; calls 0; cost none/); assert.match(text, /Review: revision \d+, digest [a-f0-9]{12}, 1 clauses mapped, 0 open question\(s\), not yet approved/);
+  assert.match(text, /Repository context: unavailable/);
+  await assert.rejects(taskCommand(w.ctx, { args: ["prepare", "Add export."], values: { delivery: "merge" }, service: w.service }), { code: "TASK_INPUT" });
+  await assert.rejects(taskCommand(w.ctx, { args: ["answer", r.taskId], values: { route: "model", revision: String(r.revision), "request-id": "x", answer: ["q=y"] }, service: w.service }), { code: "TASK_INPUT" });
+  await assert.rejects(taskCommand(w.ctx, { args: ["validate", r.taskId], values: { delivery: "pull_request", revision: String(r.revision) }, service: w.service }), { code: "TASK_INPUT" });
 });

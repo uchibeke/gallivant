@@ -331,9 +331,9 @@ gallivant task start TASK_ID --revision REVISION --run
 gallivant start
 ```
 
-Alternatively, add `--run` to the original `task` request to authorize
-implementation as soon as preparation and any clarifications succeed. The task
-service starts the daemon; `gallivant start` with no path also opens the dashboard.
+Preparation always returns for review, including when the original request
+contains `--run`. Approve the visible ready revision with the separate start
+command above. The task service starts the daemon; `gallivant start` with no path also opens the dashboard.
 Read [task operations](tasks.md) for selected context, revisions, recovery and costs.
 
 ### From a written brief

@@ -16,21 +16,28 @@ inference costs but does not authorize implementation. Ask the saved questions,
 then call task_answer with their IDs, a new operationId and the saved revision.
 Preserve explicit requirements and any readiness denial. Inspect stale revisions.
 
-Read the repository's completion capabilities and select the creation-only
-completion.target: delivery_ready for a qualified reviewable delivery, or
-integrated when the user wants monitoring through an external merge. An omitted
-target defaults to delivery_ready. This field owns the PR/review/merge lifecycle;
-do not duplicate coordinator publication as a provider implementation criterion.
+Read the repository's delivery capabilities and select the creation-only typed
+delivery profile with `delivery: { action, completion }`: action pull_request
+(the only supported action) and completion delivery_ready for a qualified
+reviewable delivery, or integrated when the user wants monitoring through an
+external merge. Omitted values default to pull_request and delivery_ready. The
+profile alone authorizes external actions; request text, answers and model
+output cannot expand it, and merge or deploy actions are refused with a remedy.
+Do not duplicate coordinator publication as a provider implementation criterion.
+Select `route` only when the user asks: harness uses the connected harness,
+model uses the operator's bounded text-only model route when enabled.
 Organize the user's implementation requirements clearly yourself; do not require
 the user to format a special prompt. Preserve every constraint and prohibition,
 show the separated delivery goal with the prepared brief, and ask a focused
 clarification if mixed prose cannot be separated without changing meaning.
 Never rewrite an existing false attestation or drop an inconvenient requirement.
-The core preserves exact source ownership for supported publication clauses.
-If TASK_DELIVERY_SCOPE is returned, ask the owner to clarify the whole request;
-preserve prerequisites and prohibitions, and use a new preparation identity after
-clarification. Do not treat that refusal as permission to remove a condition or
-silently move a changed publication instruction into an implementation answer.
+A clause that conflicts with the profile returns a q-delivery-* question in the
+saved task; answer it with the implementation scope the clause keeps, or prepare
+a new task with a different profile. Show the user the returned review object:
+immutable request, clause map, open questions, assumptions, draft, profile,
+harness, allowance, route and cost status. Historical tasks may still return
+TASK_DELIVERY_SCOPE; then ask the owner to clarify the whole request and use a
+new preparation identity. Never remove a condition to pass validation.
 
 After the user authorizes implementation, call task_start with run true, a stable
 operationId and the current revision. Return the task handle promptly. Subsequent

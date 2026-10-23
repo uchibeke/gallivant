@@ -20,13 +20,19 @@ test("answer tool description exposes the canonical answer batch limits", () => 
 });
 
 test("public contract, view and coordinator entries bundle for browsers without Node shims", async () => {
-  for (const name of ["task_delivery_contract", "task_delivery_view", "coordinator"]) {
+  for (const name of ["task_delivery_contract", "task_delivery_view", "coordinator", "task_profile"]) {
     const result = await build({ entryPoints: [fileURLToPath(new URL(`../lib/${name}.mjs`, import.meta.url))], platform: "browser", format: "esm", bundle: true, write: false, logLevel: "silent" });
     const bundled = await import(`data:text/javascript;base64,${Buffer.from(result.outputFiles[0].text).toString("base64")}`);
     if (name === "task_delivery_contract") {
       assert.equal(bundled.coordinatorEntryActive({ state: "done" }), false);
       assert.equal(bundled.coordinatorEntryActive({ state: "done", learning_deliveries: { pending: {} } }), true);
       assert.equal(bundled.COMPLETION_CAPABILITIES.defaultTarget, "delivery_ready");
+      assert.equal(bundled.DELIVERY_CAPABILITIES.defaultAction, "pull_request");
+    }
+    if (name === "task_profile") {
+      // The vendored validator must stay free of Node dependencies.
+      assert.equal(bundled.deliveryScreen("Merge it after CI passes.").tier, "question");
+      assert.throws(() => bundled.validateDeliveryProfile({ version: 99 }), { code: "TASK_PROFILE_UNSUPPORTED" });
     }
   }
 });

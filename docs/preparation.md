@@ -16,7 +16,7 @@ Preparation and implementation are separate capabilities:
 | Claude Code | Tools disabled | Local checkout |
 | Codex | Isolated native profile, Codex 0.160.0+ | Local checkout |
 | OpenAI Agents API | Text only, no tools or environment | Hosted sandbox |
-| Gemini CLI, OpenCode, Goose | Unavailable; use `new` → `ready` → `start` | Local checkout |
+| Gemini CLI, OpenCode, Goose | Unavailable through the harness; the configured [model route](task-profiles.md#planner-routes) can draft, or use `new` → `ready` → `start` | Local checkout |
 | Codex Cloud | Unavailable | New dispatch blocked on environment/repository verification |
 
 An adapter's presence does not prove the configured account can use its selected
