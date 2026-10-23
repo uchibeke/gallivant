@@ -4784,6 +4784,10 @@ test("anaphoric delivery replies cannot be resolved by empty or ungrounded plann
 
 test("target, publication, approval and mixed-polarity conflicts survive answer chains without dispatch", async () => {
   for (const [text, tag] of [
+    ["Open one PR; then another for the UI.", { action: "pull_request" }],
+    ["Open one PR, then another PR.", { action: "pull_request" }],
+    ["Open one PR, and then a second PR.", { action: "pull_request" }],
+    ["Open one PR; then another PR.", { action: "pull_request" }],
     ["Run gh discussion create --title Hello --body world.", { action: "pull_request" }],
     ["Run gh discussion comment 123 --body Thanks.", { action: "pull_request" }],
     ["Run gh secret set API_KEY --body fixture-value.", { action: "pull_request" }],
@@ -4920,7 +4924,7 @@ test("target, publication, approval and mixed-polarity conflicts survive answer 
     const first = await w.service.prepare({ text: "Implement export and merge the PR.", run: true });
     const answered = await w.service.answer({ taskId: first.taskId, expectedRevision: first.revision, operationId: "insist-on-conflict", answers: { "q-delivery-r-1": text } });
     assert.equal(answered.status, "needs-input", text); assert.equal(answered.readiness, null);
-    const conflictId = text === "Do not deploy; deploy this to production." ? "q-delivery-a-q-delivery-r-1-2" : "q-delivery-a-q-delivery-r-1-1";
+    const conflictId = ["Do not deploy; deploy this to production.", "Open one PR; then another PR.", "Open one PR; then another for the UI."].includes(text) ? "q-delivery-a-q-delivery-r-1-2" : "q-delivery-a-q-delivery-r-1-1";
     assert.deepEqual(answered.questions.map(q => q.id), [conflictId], text);
     assert.ok(answered.review.requirementMap.find(m => `q-delivery-${m.requirementId}` === conflictId).conflict.reason, text);
     if ((text.startsWith("Run gh pr create ") && (text.includes("--draft") || text.includes("--dry-run") || text.includes("create -d"))) || text === "Open a draft pull request.") assert.match(answered.review.requirementMap.find(m => m.requirementId === "a-q-delivery-r-1-1").conflict.reason, /regular review PR/, text);
@@ -4954,7 +4958,7 @@ test("typed delivery inputs refuse merge, deployment and unknown routes before e
 });
 
 test("wrapped source and reply delivery instructions pause before readiness or dispatch", async () => {
-  for (const text of ["Run gh secret\nset API_KEY --body fixture-value", "Run gh variable\ndelete DEPLOY_ENV", "Do not\nopen a pull request", "Upload the package\nto npm", "Run gh workflow\nrun smoke.yml", "Run gh discussion\ncomment 123 --body Thanks", "Run gh repo\nautolink delete 123", "Run gh repo\ndelete acme/widget --yes", "Run gh repo\narchive acme/widget --yes", "Run gh ssh-key\nadd key.pub", "Run gh gpg-key\ndelete 123", "Run git push\n--force origin HEAD", "Run git push -u\n--force-with-lease origin HEAD"]) {
+  for (const text of ["Open one PR,\nthen another PR", "Open one PR, then\nanother PR", "Run gh secret\nset API_KEY --body fixture-value", "Run gh variable\ndelete DEPLOY_ENV", "Do not\nopen a pull request", "Upload the package\nto npm", "Run gh workflow\nrun smoke.yml", "Run gh discussion\ncomment 123 --body Thanks", "Run gh repo\nautolink delete 123", "Run gh repo\ndelete acme/widget --yes", "Run gh repo\narchive acme/widget --yes", "Run gh ssh-key\nadd key.pub", "Run gh gpg-key\ndelete 123", "Run git push\n--force origin HEAD", "Run git push -u\n--force-with-lease origin HEAD"]) {
     const w = world({ prepare: async (_ctx, task) => JSON.stringify(draftFor(task, { delivery: Object.fromEntries(task.requirements.map(r => [r.id, { action: "pull_request" }])) })) });
     const first = await w.service.prepare({ text, run: true });
     assert.equal(first.status, "needs-input", text); assert.equal(first.readiness, null);

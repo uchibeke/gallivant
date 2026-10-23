@@ -865,6 +865,30 @@ test("single-quoted examples mask contractions while apostrophes and quote empha
   for (const text of ["Add a label 'Deploy to production", "Add a label ‘Deploy to production"]) assert.equal(deliveryScreen(text).tier, "question", text);
 });
 
+test("temporal and punctuated follow-on PR requests retain count conflicts at source boundaries", () => {
+  for (const [text, questions] of [["Open one PR; then another for the UI.", ["q-delivery-r-2"]], ["Open one PR. Then another for the API. Then another for the UI.", ["q-delivery-r-2", "q-delivery-r-3"]], ["Open one PR, then another PR.", ["q-delivery-r-1"]], ["Open a PR then another pull request.", ["q-delivery-r-1"]], ["Open one PR, and then a second PR.", ["q-delivery-r-1"]], ["Open one PR, next another PR.", ["q-delivery-r-1"]], ["Open one PR, afterwards another PR.", ["q-delivery-r-1"]], ["Open one PR, later an additional pull request.", ["q-delivery-r-1"]], ["Open one PR, subsequently one more PR.", ["q-delivery-r-1"]], ["Open one PR, after that another PR.", ["q-delivery-r-1"]], ["Open one PR, another PR.", ["q-delivery-r-1"]], ["Open one PR, then, another PR.", ["q-delivery-r-1"]], ["Open one PR, then another for the UI.", ["q-delivery-r-1"]], ["Open one PR for the API; then another PR for the UI.", ["q-delivery-r-2"]], ["Open one PR. Then another PR.", ["q-delivery-r-2"]], ["Open one PR.\nThen another PR.", ["q-delivery-r-2"]], ["Open one PR,\nthen another PR.", ["q-delivery-r-1", "q-delivery-r-2"]], ["Open one PR, then\nanother PR.", ["q-delivery-r-1", "q-delivery-r-2"]], ["Open one PR; another PR.", ["q-delivery-r-2"]], ["Open one PR for review, and afterwards a separate PR.", ["q-delivery-r-1"]], ["Run `gh pr create`, then another PR.", ["q-delivery-r-1"]], ["Open one PR, then another PR badge, then another PR.", ["q-delivery-r-1"]], ["Then another PR.", ["q-delivery-r-1"]], ["Another PR for the UI.", ["q-delivery-r-1"]], ["Then an additional pull request.", ["q-delivery-r-1"]]]) {
+    const screen = deliveryScreen(text, PROFILE.target);
+    assert.equal(screen.tier, "question", text); assert.ok(screen.terms.includes("pull_request_count"), text);
+    assert.ok(unaccountedTerms(screen, { action: "pull_request" }).includes("pull_request_count"), text);
+    const task = taskFor(text, { commandCandidates: ["npm test"] });
+    for (const tagged of [false, true]) {
+      const delivery = tagged ? Object.fromEntries(task.requirements.map(r => [r.id, { action: "pull_request" }])) : {};
+      const out = parseDraft(JSON.stringify(draftFor(task, { delivery })), task);
+      assert.deepEqual(out.questions.map(q => q.id), questions, text);
+      for (const requirement of task.requirements) assert.equal(text.slice(requirement.source.start, requirement.source.end), requirement.text);
+    }
+  }
+  for (const [text, tier] of [["List one PR; then another for the UI.", "assumption"], ["Add a button to open one PR; then another for the UI.", "assumption"], ["Open one PR, then run tests.", "assumption"], ["Open one PR for the API and UI.", "assumption"], ["Open one PR, then update its description.", "assumption"], ["Open one PR, then show another PR badge.", "assumption"], ["Add a button to open one PR, then another PR.", "assumption"], ["List one PR, then another PR in the table.", "assumption"], ["Document \"Open one PR, then another PR\" in help.", "none"], ["Show `Open one PR; then another PR` as an example.", "none"], ["Add an example that says then another PR.", "assumption"], ["Then another PR badge is shown.", "assumption"], ["Another PR selector is shown.", "assumption"], ["Open one PR, then another PR badge.", "assumption"], ["Open one PR, and another PR badge.", "assumption"]]) {
+    const screen = deliveryScreen(text, PROFILE.target);
+    assert.equal(screen.tier, tier, text); assert.equal(screen.terms.includes("pull_request_count"), false, text);
+    const task = taskFor(text, { commandCandidates: ["npm test"] });
+    assert.deepEqual(parseDraft(JSON.stringify(draftFor(task)), task).questions, [], text);
+  }
+  const chain = taskFor("Open one PR.\n" + "Then another for the UI.\n".repeat(63), { commandCandidates: ["npm test"] });
+  assert.equal(chain.requirements.length, 64);
+  assert.deepEqual(parseDraft(JSON.stringify(draftFor(chain)), chain).questions.map(q => q.id), chain.requirements.slice(1).map(r => `q-delivery-${r.id}`), "a bounded chain retains each source ID and its creation anchor");
+});
+
 test("multiple and separate PR requests remain conflicts with the one-PR profile", () => {
   for (const text of ["Open two pull requests, one for the API and one for the UI.", 'Open two `pull requests` for the API and UI.', "Open 2 PRs.", "Create separate pull requests for the API and UI.", "Use separate PRs for each component.", "I need two PRs.", "Separate PRs for the API and UI.", "Open a separate PR for each package.", "Open one PR per package.", "Open a PR for the API and another for the UI.", "Open a PR for the API and open a PR for the UI.", "Open pull requests for the changes.", 'Run `gh pr create` and `gh pr create`.', 'Run `gh pr create` twice.']) {
     const screen = deliveryScreen(text, PROFILE.target);
@@ -1781,6 +1805,9 @@ test("the screen and mapping stay fast at the request and mapping limits", () =>
     ["Run gh ssh-key add key.pub. ", "question"],
     ["Run gh gpg-key delete 123. ", "question"],
     ["Run gh ssh-key list. ", "none"],
+    ["Open one PR, then another PR. ", "question"],
+    ["Add a button to open one PR, then another PR. ", "assumption"],
+    ["Then another PR badge is shown. ", "assumption"],
     ["Run gh secret set API_KEY --body fixture-value. ", "question"],
     ["Run gh variable delete DEPLOY_ENV. ", "question"],
     ["Run gh secret set API_KEY --no-store. ", "none"],
