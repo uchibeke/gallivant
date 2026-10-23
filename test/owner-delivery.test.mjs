@@ -695,6 +695,7 @@ test("API, parser and serializer product behavior retains implementation scope",
 
 test("conjunctive adverbs keep later actor publications outside product masks", () => {
   for (const reviewed of [
+    "The button creates a PR after tests pass, alternatively the agent opens another PR.",
     "The button creates a PR after tests pass, conversely the agent opens another PR.",
     "The button creates a PR after tests pass, likewise the agent opens another PR.",
   ]) {
@@ -702,7 +703,7 @@ test("conjunctive adverbs keep later actor publications outside product masks", 
     assert.throws(() => assertDeliveryAnswer({}, reviewed), { code: "TASK_DELIVERY_SCOPE" }, reviewed);
   }
   for (const separator of ["&", "+", "/"])
-    for (const modifier of ["also", "additionally", "likewise", "similarly", "equally", "correspondingly", "analogously", "conversely", "contrariwise"])
+    for (const modifier of ["also", "additionally", "likewise", "similarly", "equally", "correspondingly", "analogously", "conversely", "contrariwise", "alternatively", "alternately"])
       for (const actor of ["the agent", "Jane Doe"])
         for (const source of [
           `The button creates a PR after tests pass ${separator} ${actor} ${modifier} files another PR.`,
@@ -724,7 +725,8 @@ test("conjunctive adverbs keep later actor publications outside product masks", 
     "however", "nevertheless", "nonetheless", "instead", "otherwise", "HOWEVER",
     "moreover", "furthermore", "additionally", "also", "in addition", "MOREOVER", "albeit", "ALBEIT",
     "likewise", "similarly", "equally", "correspondingly", "analogously", "in the same way", "LIKEWISE",
-    "conversely", "contrariwise", "in contrast", "by contrast", "on the contrary", "on the other hand", "CONVERSELY"])
+    "conversely", "contrariwise", "in contrast", "by contrast", "on the contrary", "on the other hand", "CONVERSELY",
+    "alternatively", "alternately", "as an alternative", "as another option", "or else", "ALTERNATIVELY"])
     for (const action of ["the agent files another PR", "the agent opens another PR", "our senior developer quickly creates another PR", "Alice King will submit another pull request"])
       for (const source of [
         `The button creates a PR after tests pass, ${connector} ${action}.`,
@@ -739,7 +741,8 @@ test("conjunctive adverbs keep later actor publications outside product masks", 
     "however", "nevertheless", "nonetheless", "instead", "otherwise",
     "moreover", "furthermore", "additionally", "also", "in addition", "albeit",
     "likewise", "similarly", "equally", "correspondingly", "analogously", "in the same way",
-    "conversely", "contrariwise", "in contrast", "by contrast", "on the contrary", "on the other hand"])
+    "conversely", "contrariwise", "in contrast", "by contrast", "on the contrary", "on the other hand",
+    "alternatively", "alternately", "as an alternative", "as another option", "or else"])
     for (const source of [
       `The button creates a PR after tests pass, ${connector} the service opens another PR.`,
       `Ensure the button creates a PR after tests pass ${connector} the service opens another PR.`,
@@ -824,6 +827,35 @@ test("modified actor-led publication stays visible without changing product owne
   ]) {
     assert.throws(() => ownerDelivery(source), { code: "TASK_DELIVERY_SCOPE" }, source);
     assert.throws(() => assertDeliveryAnswer({}, source), { code: "TASK_DELIVERY_SCOPE" }, source);
+  }
+});
+
+test("multiword automation subjects retain publication authority checks", () => {
+  for (const actor of ["the release workflow", "our automation workflow", "the CI pipeline", "the nightly job",
+    "our scheduled automation", "the release runner", "the CI scheduler", "our build daemon"])
+    for (const source of [
+      `The button creates a PR after tests pass and ${actor} opens another PR.`,
+      `Ensure the button creates a PR after tests pass provided that ${actor} quickly files another PR.`,
+      `The button creates a PR after tests pass & ${actor} alternatively submits another PR.`,
+      `Ensure ${actor} creates a PR.`,
+      `${actor} opens another PR.`,
+    ]) {
+      assert.throws(() => ownerDelivery(source), { code: "TASK_DELIVERY_SCOPE" }, source);
+      assert.throws(() => assertDeliveryAnswer({}, source), { code: "TASK_DELIVERY_SCOPE" }, source);
+    }
+  for (const source of [
+    "The release workflow button creates a PR after tests pass.",
+    "Ensure our automation workflow service creates a PR.",
+    "The button creates a PR after tests pass and the release workflow creates a PR template.",
+    "The button creates a PR after tests pass and our automation workflow generates a report about PRs.",
+    'Show the example "the release workflow opens another PR" in the button help.',
+  ]) {
+    assert.equal(ownerDelivery(source), null, source);
+    assert.doesNotThrow(() => assertDeliveryAnswer({}, source), source);
+    const original = source + " Open a PR for review.", contract = ownerDelivery(original);
+    assert.equal(validateOwnerDelivery(contract), contract, source);
+    assert.equal(ownerImplementation(contract).join(""), source + " ", source);
+    assert.equal(contract.spans.map(span => original.slice(span.start, span.end)).join(""), original, source);
   }
 });
 
