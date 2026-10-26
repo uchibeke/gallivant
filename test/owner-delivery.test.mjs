@@ -3558,3 +3558,14 @@ test("courtesy and actor control prefixes cannot hide publication restrictions",
     assert.doesNotThrow(()=>assertDeliveryAnswer({},source),source);
   }
 });
+
+test("a truncated policy prefix is never proof that a PR predicate is a feature", () => {
+  const modifiers="new experimental ".repeat(45);
+  for(const lead of ["Do not create", "Please do not create", "The agent must not create"]) {
+    const source=`${lead} a ${modifiers}PR visible to anyone.`;
+    assert.throws(()=>ownerDelivery(source),{code:"TASK_DELIVERY_SCOPE"});
+    assert.throws(()=>assertDeliveryAnswer({},source),{code:"TASK_DELIVERY_SCOPE"});
+  }
+  const field=`Please do not create a ${modifiers}PR visible field.`;
+  assert.equal(ownerDelivery(field),null);
+});
