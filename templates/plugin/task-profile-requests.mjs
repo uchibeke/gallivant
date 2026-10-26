@@ -1376,4 +1376,6 @@ export const profileRequests = [
   {"kind": "feature", "text": "Update the command to use the CLI to publish the package to npm.", "screen": {"tier": "assumption"}, "tag": null, "outcome": "ready"},
   {"kind": "feature", "text": "Refactor the script to use the CLI to publish the package to npm.", "screen": {"tier": "assumption"}, "tag": null, "outcome": "ready"},
   {"kind": "feature", "text": "Change the command to use the CLI to publish the package to npm.", "screen": {"tier": "assumption"}, "tag": null, "outcome": "ready"},
+  {"kind": "adversarial", "text": "Run the following command: `npm publish`.", "screen": {"tier": "question", "terms": ["publish"]}, "tag": null, "outcome": "needs-input"},
+  {"kind": "feature", "text": "Document how to run the following command: `npm publish`.", "screen": {"tier": "none"}, "tag": null, "outcome": "ready"},
 ];
