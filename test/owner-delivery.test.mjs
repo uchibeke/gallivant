@@ -3698,3 +3698,25 @@ test("causative passive publication retains fixture reference controls", () => {
       assert.throws(() => assertDeliveryAnswer({}, source), { code: "TASK_DELIVERY_SCOPE" }, source);
     }
 });
+
+test("passive publication bridges and passive human review retain fixture scope", () => {
+  for (const tail of ["and need it to be published", "and have it not be published", "and get it to be carefully submitted", "and need it to have been published", "and it must not be published", "and it needs to be published", "and it does not need to be published", "to be reviewed by the owner", "to be reviewed by a human", "to be reviewed after tests"])
+    for (const suffix of ["", " Open a PR for review."]) {
+      const source = `For tests, submit a fake PR ${tail}.${suffix}`;
+      assert.throws(() => ownerDelivery(source), { code: "TASK_DELIVERY_SCOPE" }, source);
+      assert.throws(() => assertDeliveryAnswer({}, source), { code: "TASK_DELIVERY_SCOPE" }, source);
+    }
+});
+
+test("quoted fixture field assignments do not become live publication destinations", () => {
+  for (const field of ["URL field set to", "URL field to", "URL property assigned to", "URL attribute set to", "URL column set to", "URL value equal to", "body set to", "title set to"])
+    for (const suffix of ["", " Open a PR."]) {
+      const sentence = `For tests, create a fake PR with ${field} "https://github.com/owner/repo".`;
+      const source = sentence + suffix, contract = ownerDelivery(source);
+      if (suffix) assert.equal(ownerImplementation(contract).join(""), sentence + " ", source);
+      else { assert.equal(contract, null, source); assert.doesNotThrow(() => assertDeliveryAnswer({}, source), source); }
+    }
+  const actual = 'For tests, create a fake PR with URL field set to "https://example.org/data" on "https://github.com/owner/repo".';
+  assert.throws(() => ownerDelivery(actual), { code: "TASK_DELIVERY_SCOPE" });
+  assert.throws(() => assertDeliveryAnswer({}, actual), { code: "TASK_DELIVERY_SCOPE" });
+});
