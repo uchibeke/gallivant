@@ -3621,3 +3621,31 @@ test("possessive gerunds validate prepositional and bare objects before business
       assert.doesNotThrow(() => assertDeliveryAnswer({}, source), source);
     }
 });
+
+test("publishing fixture references retains live scope without a destination", () => {
+  for (const continuation of ["have the agent publish it", "ask our assistant to publish it", "publish it", "publish the PR", "publish this fake PR", "publish these fixtures", "submit it", "send that PR", "it must be published", "that fixture should be submitted"])
+    for (const join of [" and ", ". "])
+      for (const suffix of ["", " Open a PR."]) {
+        const source = `For tests, create a fake PR${join}${continuation}.${suffix}`;
+        assert.throws(() => ownerDelivery(source), { code: "TASK_DELIVERY_SCOPE" }, source);
+        assert.throws(() => assertDeliveryAnswer({}, source), { code: "TASK_DELIVERY_SCOPE" }, source);
+      }
+  for (const source of ['For tests, create a fake PR with title "publish it".', "For tests, create a fake PR and format it as JSON.", "For tests, create a fake PR and show it in the local viewer."]) {
+    assert.equal(ownerDelivery(source), null, source);
+    assert.doesNotThrow(() => assertDeliveryAnswer({}, source), source);
+  }
+});
+
+test("billing and shipping addresses remain business data while actions stay checked", () => {
+  for (const connector of ["with", "pending", "following", "after"])
+    for (const field of ["your billing address", "your shipping address", "our billing addresses", "their shipping addresses"]) {
+      const source = `If I approve the purchase, send the receipt ${connector} ${field}.`;
+      assert.equal(ownerDelivery(source), null, source);
+      assert.doesNotThrow(() => assertDeliveryAnswer({}, source), source);
+    }
+  for (const action of ["your shipping of the package", "your billing of the customer", "your proofreading of the invoice"]) {
+    const source = `If I approve the purchase, send the receipt with ${action}.`;
+    assert.throws(() => ownerDelivery(source), { code: "TASK_DELIVERY_SCOPE" }, source);
+    assert.throws(() => assertDeliveryAnswer({}, source), { code: "TASK_DELIVERY_SCOPE" }, source);
+  }
+});
