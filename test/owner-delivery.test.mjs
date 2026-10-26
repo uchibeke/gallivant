@@ -3519,3 +3519,29 @@ test("pending business continuations validate their own action and preserve nomi
     assert.doesNotThrow(() => assertDeliveryAnswer({}, source), source);
   }
 });
+
+test("qualified publication policy objects retain their command and negation", () => {
+  for (const lead of ["a new", "another experimental", "the public review", "a draft-ready"])
+    for (const verb of ["create", "generate", "draft"])
+      for (const negative of ["", "Do not "]){
+        const source = `${negative}${verb} ${lead} PR visible to anyone.`;
+        assert.throws(() => ownerDelivery(source), { code: "TASK_DELIVERY_SCOPE" }, source);
+        assert.throws(() => assertDeliveryAnswer({}, source), { code: "TASK_DELIVERY_SCOPE" }, source);
+      }
+  for (const source of ["Make the new PR visible to users.", "Make PRs visible in the dashboard.", 'Show "Do not create a new PR visible to anyone" in help.']) {
+    assert.equal(ownerDelivery(source), null, source);
+    assert.doesNotThrow(() => assertDeliveryAnswer({}, source), source);
+  }
+});
+test("qualified fixture destination noun phrases cannot hide live targets", () => {
+  for (const target of ["the public GitHub repository", "our private GitLab repository", "the configured upstream repository", "the shared remote repository", "a public https://forge.example.org/acme/app"])
+    for (const relation of ["on", "to", "via"]) {
+      const source=`For tests, create a fake PR ${relation} ${target}.`;
+      assert.throws(() => ownerDelivery(source), { code: "TASK_DELIVERY_SCOPE" }, source);
+      assert.throws(() => assertDeliveryAnswer({}, source), { code: "TASK_DELIVERY_SCOPE" }, source);
+    }
+  for (const source of ["For tests, create a fake PR fixture in the local directory.", 'For tests, create a fake PR with the title "on the public GitHub repository".', "For tests, create a fake PR fixture and upload logs to the public GitHub repository."]) {
+    assert.equal(ownerDelivery(source), null, source);
+    assert.doesNotThrow(() => assertDeliveryAnswer({}, source), source);
+  }
+});
