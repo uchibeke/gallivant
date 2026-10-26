@@ -5693,3 +5693,12 @@ test("a query-bearing curl write cannot become executable criteria", async () =>
   await assert.rejects(w.service.start({taskId:task.taskId,expectedRevision:task.revision,run:true}),{code:"TASK_NOT_READY"});
   assert.deepEqual(w.ctx.state.entries(),[]); assert.equal(w.daemonCalls(),0);
 });
+
+test("passive and tool-mediated publication requests pause before dispatch", async () => {
+  for(const text of ["The package must be published to npm.","The build should be uploaded to the App Store.","Run a command to publish the package to npm.","Use the CLI to publish the package to npm."]) {
+    const w=world(), task=await w.service.prepare({text});
+    assert.equal(task.status,"needs-input",text);
+    await assert.rejects(w.service.start({taskId:task.taskId,expectedRevision:task.revision,run:true}),{code:"TASK_NOT_READY"});
+    assert.deepEqual(w.ctx.state.entries(),[]); assert.equal(w.daemonCalls(),0);
+  }
+});

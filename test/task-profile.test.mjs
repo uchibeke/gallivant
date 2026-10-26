@@ -2186,3 +2186,17 @@ test("curl query punctuation cannot hide later mutation flags", () => {
   for(const text of ["Run curl https://example.com/status?channel=stable -X GET.", "Run curl https://example.com/status? -I.", "Document how to run curl https://example.com/hooks?channel=stable -X POST."])
     assert.equal(deliveryScreen(text).tier,"none",text);
 });
+
+test("passive publication and execution infinitives cannot borrow feature authority", () => {
+  assert.equal(deliveryScreen("The package must be published to npm.").tier,"question");
+  assert.equal(deliveryScreen("The build should be uploaded to the App Store.").tier,"question");
+  assert.equal(deliveryScreen("Run a command to publish the package to npm.").tier,"question");
+  assert.equal(deliveryScreen("Use the CLI to publish the package to npm.").tier,"question");
+  assert.equal(deliveryScreen("Execute the script to publish the package to npm.").tier,"question");
+  assert.equal(deliveryScreen("Run code to publish the package to npm.").tier,"question");
+  for (const text of ["Run the build script to publish the package to npm.", "Use the test command to publish the package to npm."]) assert.equal(deliveryScreen(text).tier, "question", text);
+  assert.equal(deliveryScreen("Show a list of published articles.").tier,"assumption");
+  assert.equal(deliveryScreen("Add a command to publish the package to npm.").tier,"assumption");
+  assert.equal(deliveryScreen("Document how to publish the package to npm.").tier,"assumption");
+  assert.equal(deliveryScreen("Add a command to use the CLI to publish the package to npm.").tier,"assumption");
+});
