@@ -1353,4 +1353,8 @@ export const profileRequests = [
   {"kind": "feature", "text": "Run docker compose build --dry-run=true --push.", "screen": {"tier": "none"}, "tag": null, "outcome": "ready"},
   {"kind": "feature", "text": "Run npm publish --dry-run true.", "screen": {"tier": "none"}, "tag": null, "outcome": "ready"},
   {"kind": "feature", "text": "Run curl -sSfL https://example.com/status.", "screen": {"tier": "none"}, "tag": null, "outcome": "ready"},
+  {"kind": "adversarial", "text": "Run curl https://example.com/hooks?channel=stable -X POST --data payload.", "screen": {"tier": "question", "terms": ["http_mutation"]}, "tag": null, "outcome": "needs-input"},
+  {"kind": "adversarial", "text": "Run curl example.com/hooks?channel=stable --json payload.", "screen": {"tier": "question", "terms": ["http_mutation"]}, "tag": null, "outcome": "needs-input"},
+  {"kind": "adversarial", "text": "Run curl --url https://example.com/hooks?channel=stable --request DELETE.", "screen": {"tier": "question", "terms": ["http_mutation"]}, "tag": null, "outcome": "needs-input"},
+  {"kind": "feature", "text": "Run curl https://example.com/status?channel=stable -X GET.", "screen": {"tier": "none"}, "tag": null, "outcome": "ready"},
 ];

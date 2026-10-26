@@ -5686,3 +5686,10 @@ test("unresolved curl and npm false dry runs cannot reach dispatch, while proven
     assert.equal(task.status,"ready",text); assert.equal(task.approval,null); assert.deepEqual(w.ctx.state.entries(),[]);
   }
 });
+
+test("a query-bearing curl write cannot become executable criteria", async () => {
+  const w=world(), task=await w.service.prepare({text:"Run curl https://example.com/hooks?channel=stable -X POST --data payload."});
+  assert.equal(task.status,"needs-input");
+  await assert.rejects(w.service.start({taskId:task.taskId,expectedRevision:task.revision,run:true}),{code:"TASK_NOT_READY"});
+  assert.deepEqual(w.ctx.state.entries(),[]); assert.equal(w.daemonCalls(),0);
+});

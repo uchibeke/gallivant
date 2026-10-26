@@ -2179,3 +2179,10 @@ test("npm Boolean operands and Compose dry runs retain their actual modes", () =
   for (const text of ["Run npm publish --dry-run true.", "Run npm publish --dry-run false --dry-run true.", "Run docker compose --dry-run build --push.", "Run docker compose build --dry-run=true --push."])
     assert.equal(deliveryScreen(text).tier, "none", text);
 });
+
+test("curl query punctuation cannot hide later mutation flags", () => {
+  for(const text of ["Run curl https://example.com/hooks?channel=stable -X POST --data payload.", "Run curl example.com/hooks?channel=stable --json payload.", "Run curl --url https://example.com/hooks?channel=stable --request DELETE."])
+    assert.equal(deliveryScreen(text).tier,"question",text);
+  for(const text of ["Run curl https://example.com/status?channel=stable -X GET.", "Run curl https://example.com/status? -I.", "Document how to run curl https://example.com/hooks?channel=stable -X POST."])
+    assert.equal(deliveryScreen(text).tier,"none",text);
+});
