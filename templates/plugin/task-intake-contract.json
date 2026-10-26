@@ -6,7 +6,7 @@
   "validator": "lib/task_profile.mjs",
   "fixtures": "templates/plugin/task-profile-requests.mjs",
   "files": {
-    "lib/task_profile.mjs": "eb92f3e53ff8075e6035479966b03e8ddc24a729e99e7dc41deeb63f2cbbafdf",
+    "lib/task_profile.mjs": "703e9cf2226a1b68718f9fd4e3d142b8abe37ff2d016b6ecf413f1353bfa1b96",
     "templates/plugin/task-profile-requests.mjs": "c2220cb490d66897be8d01b00de7ec3a10c79ad24151d12410c0da6103e02a45"
   },
   "upgrade": "Vendor the listed files byte-for-byte. A profileVersion change requires the Agent Passport task-intake-vendor-sync PRD; saved tasks without a fragmentVersion pin retain line-based source references; older saved profiles keep their original interpretation and fail closed when unsupported."
