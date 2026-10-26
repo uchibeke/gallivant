@@ -4,7 +4,7 @@ import { ownerDelivery, ownerImplementation, validateOwnerDelivery, ownerDeliver
 import { completionView } from "../lib/task_completion.mjs";
 import { parsePrd, prdFingerprint, contractOf, contractDiff, check } from "../lib/prd.mjs";
 import { GOOD_PRD } from "./helpers.mjs";
-import { workflowRequests, applicationRequests } from "./fixtures/owner-actions.mjs";
+import { workflowRequests, applicationRequests, publicationTemporalConnectors, publicationTailConnectors } from "./fixtures/owner-actions.mjs";
 
 test("merge and Git artifact instructions cannot alter new-task delivery authority", () => {
   for (const text of workflowRequests) {
@@ -720,7 +720,7 @@ test("conjunctive adverbs keep later actor publications outside product masks", 
       assert.equal(ownerDelivery(source), null, source);
       assert.doesNotThrow(() => assertDeliveryAnswer({}, source), source);
     }
-  for (const connector of ["meanwhile", "meantime", "in the meantime", "subsequently", "afterward", "afterwards", "thereafter", "MEANWHILE",
+  for (const connector of [...publicationTailConnectors, "meanwhile", "meantime", "in the meantime", "subsequently", "afterward", "afterwards", "thereafter", "MEANWHILE",
     "therefore", "consequently", "accordingly", "thus", "hence", "THEREFORE",
     "however", "nevertheless", "nonetheless", "instead", "otherwise", "HOWEVER",
     "moreover", "furthermore", "additionally", "also", "in addition", "MOREOVER", "albeit", "ALBEIT",
@@ -731,12 +731,14 @@ test("conjunctive adverbs keep later actor publications outside product masks", 
       for (const source of [
         `The button creates a PR after tests pass, ${connector} ${action}.`,
         `Ensure the button creates a PR after tests pass ${connector} ${action}.`,
-        `${connector} ${action}.`,
+        // Only known transitions have standalone grammar; every transition
+        // below must preserve an actor inside an actual product-condition tail.
+        ...(!publicationTailConnectors.includes(connector) || publicationTemporalConnectors.includes(connector) ? [`${connector} ${action}.`] : []),
       ]) {
         assert.throws(() => ownerDelivery(source), { code: "TASK_DELIVERY_SCOPE" }, source);
         assert.throws(() => assertDeliveryAnswer({}, source), { code: "TASK_DELIVERY_SCOPE" }, source);
       }
-  for (const connector of ["meanwhile", "meantime", "in the meantime", "subsequently", "afterward", "afterwards", "thereafter",
+  for (const connector of [...publicationTailConnectors, "meanwhile", "meantime", "in the meantime", "subsequently", "afterward", "afterwards", "thereafter",
     "therefore", "consequently", "accordingly", "thus", "hence",
     "however", "nevertheless", "nonetheless", "instead", "otherwise",
     "moreover", "furthermore", "additionally", "also", "in addition", "albeit",

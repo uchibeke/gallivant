@@ -27,7 +27,7 @@ import { makeState } from "../lib/state.mjs";
 import { writeJsonAtomic } from "../lib/fs.mjs";
 import { contentDigest, captureStartInput } from "../lib/start_contract.mjs";
 import { draftFor } from "./fixtures/task-intake.mjs";
-import { workflowRequests, applicationRequests } from "./fixtures/owner-actions.mjs";
+import { workflowRequests, applicationRequests, publicationTailConnectors } from "./fixtures/owner-actions.mjs";
 import { tempHome, CONFIG, GOOD_PRD, harnessBin, fakeCredential, fakeIdentity, silentLog, fakeRunner, makeClock, codexLines, claudeResultLines, geminiLines, opencodeLines, gooseLines } from "./helpers.mjs";
 
 // Exercise durable runner/environment logic using disposable Node executables,
@@ -462,6 +462,10 @@ test("action object boundaries reject workflow changes before effects and retain
 
 test("latest publication review cases fail before task effects without rejecting product requirements", async () => {
   const unsafe = [
+    ...publicationTailConnectors.flatMap(connector => [
+      `The button creates a PR after tests pass, ${connector} the agent opens another PR.`,
+      `Ensure the button creates a PR after tests pass ${connector} our senior developer files another PR.`,
+    ]),
     "Create a PR ASAP.",
     "Do not create a PR this time.",
     "Make PRs obligatory.",
@@ -831,6 +835,10 @@ test("latest publication review cases fail before task effects without rejecting
   assert.equal(pending.daemonCalls(), 0);
 
   const productRequirements = [
+    ...publicationTailConnectors.flatMap(connector => [
+      `The button creates a PR after tests pass, ${connector} the service opens another PR.`,
+      `Show the example "${connector} the agent opens another PR" in the button help.`,
+    ]),
     "Create tests for PRs.",
     "Create a parser about PRs.",
     "Create tests using PRs.",
