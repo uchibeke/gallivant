@@ -2166,3 +2166,16 @@ test("Bake and Compose build namespaces retain publishing and proven print-only 
   for (const text of ["Run docker buildx bake --print.", "Run docker buildx bake --print --push.", "Run docker buildx bake --print --set=*.output=type=registry.", "Run docker compose build --print --push.", "Run docker compose build --push=false.", "Run docker compose build.", "Add a command to run docker buildx bake --push."])
     assert.equal(deliveryScreen(text).tier, "none", text);
 });
+
+test("unresolved curl options cannot prove a read-only request", () => {
+  for (const text of ["Run curl --data-b payload https://example.com/hooks.", "Run curl --unknown-option https://example.com/hooks.", "Run curl -zV https://example.com/hooks."])
+    assert.equal(deliveryScreen(text).tier, "question", text);
+  for (const text of ["Run curl -sSfL https://example.com/status.", "Run curl --silent --show-error --fail --location https://example.com/status.", "Run curl --header 'X-Note: --data-b' https://example.com/status."])
+    assert.equal(deliveryScreen(text).tier, "none", text);
+});
+test("npm Boolean operands and Compose dry runs retain their actual modes", () => {
+  for (const text of ["Run npm publish --dry-run false.", "Run npm publish --dry-run true --dry-run false.", "Run npm publish --dry-run false --dry-run=false.", "Run docker compose --dry-run=false build --push."])
+    assert.equal(deliveryScreen(text).tier, "question", text);
+  for (const text of ["Run npm publish --dry-run true.", "Run npm publish --dry-run false --dry-run true.", "Run docker compose --dry-run build --push.", "Run docker compose build --dry-run=true --push."])
+    assert.equal(deliveryScreen(text).tier, "none", text);
+});

@@ -5673,3 +5673,16 @@ test("CLI typed-profile flags reach the service, refuse unsupported actions and 
   await assert.rejects(taskCommand(w.ctx, { args: ["answer", r.taskId], values: { route: "model", revision: String(r.revision), "request-id": "x", answer: ["q=y"] }, service: w.service }), { code: "TASK_INPUT" });
   await assert.rejects(taskCommand(w.ctx, { args: ["validate", r.taskId], values: { delivery: "pull_request", revision: String(r.revision) }, service: w.service }), { code: "TASK_INPUT" });
 });
+
+test("unresolved curl and npm false dry runs cannot reach dispatch, while proven simulations remain reviewable", async () => {
+  for (const text of ["Run curl --data-b payload https://example.com/hooks.", "Run npm publish --dry-run false."]) {
+    const w=world(), task=await w.service.prepare({text});
+    assert.equal(task.status,"needs-input",text);
+    await assert.rejects(w.service.start({taskId:task.taskId,expectedRevision:task.revision,run:true}),{code:"TASK_NOT_READY"});
+    assert.deepEqual(w.ctx.state.entries(),[]); assert.equal(w.daemonCalls(),0);
+  }
+  for (const text of ["Run docker compose --dry-run build --push.", "Run npm publish --dry-run true."]) {
+    const w=world(), task=await w.service.prepare({text});
+    assert.equal(task.status,"ready",text); assert.equal(task.approval,null); assert.deepEqual(w.ctx.state.entries(),[]);
+  }
+});

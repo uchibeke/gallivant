@@ -1345,4 +1345,12 @@ export const profileRequests = [
   {"kind": "feature", "text": "Run docker buildx bake --print --push.", "screen": {"tier": "none"}, "tag": null, "outcome": "ready"},
   {"kind": "feature", "text": "Run docker compose build --print --push.", "screen": {"tier": "none"}, "tag": null, "outcome": "ready"},
   {"kind": "feature", "text": "Run docker compose build --push=false.", "screen": {"tier": "none"}, "tag": null, "outcome": "ready"},
+  {"kind": "adversarial", "text": "Run curl --data-b payload https://example.com/hooks.", "screen": {"tier": "question", "terms": ["http_mutation"]}, "tag": null, "outcome": "needs-input"},
+  {"kind": "adversarial", "text": "Run curl --unknown-option https://example.com/hooks.", "screen": {"tier": "question", "terms": ["http_mutation"]}, "tag": null, "outcome": "needs-input"},
+  {"kind": "adversarial", "text": "Run npm publish --dry-run false.", "screen": {"tier": "question", "terms": ["publish"]}, "tag": null, "outcome": "needs-input"},
+  {"kind": "adversarial", "text": "Run npm publish --dry-run true --dry-run false.", "screen": {"tier": "question", "terms": ["publish"]}, "tag": null, "outcome": "needs-input"},
+  {"kind": "feature", "text": "Run docker compose --dry-run build --push.", "screen": {"tier": "none"}, "tag": null, "outcome": "ready"},
+  {"kind": "feature", "text": "Run docker compose build --dry-run=true --push.", "screen": {"tier": "none"}, "tag": null, "outcome": "ready"},
+  {"kind": "feature", "text": "Run npm publish --dry-run true.", "screen": {"tier": "none"}, "tag": null, "outcome": "ready"},
+  {"kind": "feature", "text": "Run curl -sSfL https://example.com/status.", "screen": {"tier": "none"}, "tag": null, "outcome": "ready"},
 ];
