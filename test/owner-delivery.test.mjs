@@ -3649,3 +3649,52 @@ test("billing and shipping addresses remain business data while actions stay che
     assert.throws(() => assertDeliveryAnswer({}, source), { code: "TASK_DELIVERY_SCOPE" }, source);
   }
 });
+
+test("quoted fixture destinations remain arguments while titles and URL data stay literal", () => {
+  for (const [open, close] of [['"', '"'], ["'", "'"], ["`", "`"], ["“", "”"]])
+    for (const destination of ["https://github.com/owner/repo", "https://forge.example.org/acme/app", "git@github.com:owner/repo.git", "our remote repository", "GitHub"])
+      for (const relation of ["on", "in", "to", "against", "within"])
+        for (const suffix of ["", " Open a PR."]) {
+          const source = `For tests, create a fake PR ${relation} ${open}${destination}${close}.${suffix}`;
+          assert.throws(() => ownerDelivery(source), { code: "TASK_DELIVERY_SCOPE" }, source);
+          assert.throws(() => assertDeliveryAnswer({}, source), { code: "TASK_DELIVERY_SCOPE" }, source);
+        }
+  for (const source of ['For tests, create a fake PR with the title "on https://github.com/owner/repo".', 'For tests, create a fake PR with URL field "https://github.com/owner/repo".', 'For tests, create a fake PR in "file:///tmp/fixtures".', 'Show the text "For tests, create a fake PR on https://github.com/owner/repo".']) {
+    assert.equal(ownerDelivery(source), null, source);
+    assert.doesNotThrow(() => assertDeliveryAnswer({}, source), source);
+  }
+});
+
+test("declarative product assertions do not publish synthetic fixture references", () => {
+  for (const actor of ["the form", "the submit button", "our API", "the application"])
+    for (const verb of ["submits", "sends", "publishes"])
+      for (const suffix of ["", " Open a PR."]) {
+        const sentence = `For tests, create a fake PR and verify that ${actor} ${verb} it to the local mock server.`;
+        const source = sentence + suffix, contract = ownerDelivery(source);
+        if (suffix) assert.equal(ownerImplementation(contract).join(""), sentence + " ", source);
+        else assert.equal(contract, null, source);
+        if (!suffix) assert.doesNotThrow(() => assertDeliveryAnswer({}, source), source);
+      }
+});
+
+test("a contrastively excluded synthetic qualifier is never fixture authority", () => {
+  for (const object of ["a real rather than fake PR", "a real instead of fake PR", "a live in place of synthetic PR", "a real as opposed to mock PR", "anything but a fake PR", "neither fake nor mock PR", "not a fake PR"])
+    for (const suffix of ["", " Open a PR."]) {
+      const source = `For tests, create ${object}.${suffix}`;
+      assert.throws(() => ownerDelivery(source), { code: "TASK_DELIVERY_SCOPE" }, source);
+      assert.throws(() => assertDeliveryAnswer({}, source), { code: "TASK_DELIVERY_SCOPE" }, source);
+    }
+  for (const source of ["For tests, create a fake rather than real PR.", "For tests, create a fake instead of real PR."]) {
+    assert.equal(ownerDelivery(source), null, source);
+    assert.doesNotThrow(() => assertDeliveryAnswer({}, source), source);
+  }
+});
+
+test("causative passive publication retains fixture reference controls", () => {
+  for (const action of ["have it published", "get it submitted", "have the fixture published", "have that PR carefully published", "get it not published", "want it published", "need it published"])
+    for (const suffix of ["", " Open a PR."]) {
+      const source = `For tests, create a fake PR and ${action}.${suffix}`;
+      assert.throws(() => ownerDelivery(source), { code: "TASK_DELIVERY_SCOPE" }, source);
+      assert.throws(() => assertDeliveryAnswer({}, source), { code: "TASK_DELIVERY_SCOPE" }, source);
+    }
+});
