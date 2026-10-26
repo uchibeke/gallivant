@@ -27,7 +27,7 @@ import { makeState } from "../lib/state.mjs";
 import { writeJsonAtomic } from "../lib/fs.mjs";
 import { contentDigest, captureStartInput } from "../lib/start_contract.mjs";
 import { draftFor } from "./fixtures/task-intake.mjs";
-import { workflowRequests, applicationRequests } from "./fixtures/owner-actions.mjs";
+import { workflowRequests, applicationRequests, publicationTailConnectors } from "./fixtures/owner-actions.mjs";
 import { profileRequests } from "../templates/plugin/task-profile-requests.mjs";
 import { DELIVERY_CAPABILITIES, PROFILE_VERSION, deliveryScreen, deliveryQuestion } from "../lib/task_profile.mjs";
 import { modelSummary, capabilitySummary } from "../lib/task_delivery_view.mjs";
@@ -336,6 +336,10 @@ test("product delivery vocabulary stays owner scope under the typed profile", as
 
 test("publication review corpus remains deterministic under the typed delivery screen", () => {
   const unsafe = [
+    ...publicationTailConnectors.flatMap(connector => [
+      `The button creates a PR after tests pass, ${connector} the agent opens another PR.`,
+      `Ensure the button creates a PR after tests pass ${connector} our senior developer files another PR.`,
+    ]),
     "Create a PR ASAP.",
     "Do not create a PR this time.",
     "Make PRs obligatory.",
@@ -692,6 +696,10 @@ test("publication review corpus remains deterministic under the typed delivery s
   }
 
   const productRequirements = [
+    ...publicationTailConnectors.flatMap(connector => [
+      `The button creates a PR after tests pass, ${connector} the service opens another PR.`,
+      `Show the example "${connector} the agent opens another PR" in the button help.`,
+    ]),
     "Create tests for PRs.",
     "Create a parser about PRs.",
     "Create tests using PRs.",
