@@ -3569,3 +3569,55 @@ test("a truncated policy prefix is never proof that a PR predicate is a feature"
   const field=`Please do not create a ${modifiers}PR visible field.`;
   assert.equal(ownerDelivery(field),null);
 });
+
+test("qualified review destinations cannot turn a fixture into a submitted PR", () => {
+  for(const review of ["peer review", "a peer review", "external security review", "final design review"])
+    for(const source of [
+      `For tests, create a fake PR for ${review}.`,
+      `For tests, create a fake PR and submit it for ${review}.`,
+      `For tests, create a fake PR. Send that PR for ${review}.`,
+      `For tests, create a fake PR and submit it for ${review}. Open a PR.`,
+    ]) {
+      assert.throws(()=>ownerDelivery(source),{code:"TASK_DELIVERY_SCOPE"},source);
+      assert.throws(()=>assertDeliveryAnswer({},source),{code:"TASK_DELIVERY_SCOPE"},source);
+    }
+  for(const source of ['For tests, create a fake PR with the title "for peer review".', "For tests, create a fake PR fixture and upload logs for peer review."]) {
+    assert.equal(ownerDelivery(source),null,source);
+    assert.doesNotThrow(()=>assertDeliveryAnswer({},source),source);
+  }
+});
+
+test("spatial fixture destinations preserve explicit remote targets", () => {
+  for (const relation of ["in", "inside", "within", "on", "against", "into", "onto", "to", "at", "via", "through", "using"])
+    for (const target of ["our remote repository", "the configured origin repository", "the shared upstream repo"])
+      for (const source of [
+        `For tests, create a fake PR ${relation} ${target}.`,
+        `For tests, create a fake PR. Submit it ${relation} ${target}.`,
+        `For tests, create a fake PR ${relation} ${target}. Open a PR.`,
+      ]) {
+        assert.throws(() => ownerDelivery(source), { code: "TASK_DELIVERY_SCOPE" }, source);
+        assert.throws(() => assertDeliveryAnswer({}, source), { code: "TASK_DELIVERY_SCOPE" }, source);
+      }
+  for (const source of ["For tests, create a fake PR in our local repository fixture directory.", "For tests, create a fake PR inside the unit test.", 'For tests, create a fake PR with the title "in our remote repository".']) {
+    assert.equal(ownerDelivery(source), null, source);
+    assert.doesNotThrow(() => assertDeliveryAnswer({}, source), source);
+  }
+});
+
+test("possessive gerunds validate prepositional and bare objects before business masking", () => {
+  for (const connector of ["pending", "awaiting", "following", "after", "before", "upon", "by", "despite"])
+    for (const action of ["your proofreading of the invoice", "your proofreading invoices", "our carefully proofreading of invoices", "Alice's editing of the invoice"])
+      for (const source of [
+        `After I approve the purchase, send the receipt ${connector} ${action}.`,
+        `After I approve the purchase, send the receipt ${connector} ${action}. Open a PR.`,
+      ]) {
+        assert.throws(() => ownerDelivery(source), { code: "TASK_DELIVERY_SCOPE" }, source);
+        assert.throws(() => assertDeliveryAnswer({}, source), { code: "TASK_DELIVERY_SCOPE" }, source);
+      }
+  for (const complement of ["your recurring payment", "your upcoming payment", "your emailing the customer"])
+    for (const connector of ["pending", "following", "after"]) {
+      const source = `After I approve the purchase, send the receipt ${connector} ${complement}.`;
+      assert.equal(ownerDelivery(source), null, source);
+      assert.doesNotThrow(() => assertDeliveryAnswer({}, source), source);
+    }
+});
