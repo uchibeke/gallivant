@@ -3545,3 +3545,27 @@ test("qualified fixture destination noun phrases cannot hide live targets", () =
     assert.doesNotThrow(() => assertDeliveryAnswer({}, source), source);
   }
 });
+
+test("courtesy and actor control prefixes cannot hide publication restrictions", () => {
+  for(const prefix of ["Please do not", "Please never", "The agent must not", "Our senior developer should not", "Jane Doe cannot"])
+    for(const object of ["a PR", "a new experimental PR"]){
+      const source=`${prefix} create ${object} visible to anyone.`;
+      assert.throws(()=>ownerDelivery(source),{code:"TASK_DELIVERY_SCOPE"},source);
+      assert.throws(()=>assertDeliveryAnswer({},source),{code:"TASK_DELIVERY_SCOPE"},source);
+    }
+  for(const source of ["Please do not create a PR visible field.", "The agent must not create a PR configurable setting.", "The service must not create a PR visible to anyone.", "Please make PRs visible in the dashboard.", 'Show "Please do not create a PR visible to anyone" in help.']) {
+    assert.equal(ownerDelivery(source),null,source);
+    assert.doesNotThrow(()=>assertDeliveryAnswer({},source),source);
+  }
+});
+
+test("a truncated policy prefix is never proof that a PR predicate is a feature", () => {
+  const modifiers="new experimental ".repeat(45);
+  for(const lead of ["Do not create", "Please do not create", "The agent must not create"]) {
+    const source=`${lead} a ${modifiers}PR visible to anyone.`;
+    assert.throws(()=>ownerDelivery(source),{code:"TASK_DELIVERY_SCOPE"});
+    assert.throws(()=>assertDeliveryAnswer({},source),{code:"TASK_DELIVERY_SCOPE"});
+  }
+  const field=`Please do not create a ${modifiers}PR visible field.`;
+  assert.equal(ownerDelivery(field),null);
+});
