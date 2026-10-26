@@ -3501,3 +3501,21 @@ test("PR data representations remain implementation scope after product conditio
         assert.doesNotThrow(() => assertDeliveryAnswer({}, source), source);
       }
 });
+
+test("pending business continuations validate their own action and preserve nominal data", () => {
+  for (const connector of ["pending", "awaiting", "PENDING", "AWAITING"])
+    for (const action of ["your proofreading the invoice", "Alice King proofreading the invoice", "the invoice being proofread"]) {
+      const source = `If I approve the invoice, email the customer ${connector} ${action}.`;
+      assert.throws(() => ownerDelivery(source), { code: "TASK_DELIVERY_SCOPE" }, source);
+      assert.throws(() => assertDeliveryAnswer({}, source), { code: "TASK_DELIVERY_SCOPE" }, source);
+    }
+  for (const source of [
+    "If I approve the invoice, email the customer pending the payment.",
+    "If I approve the invoice, email the customer awaiting the receipt.",
+    "If I approve the invoice, email the customer pending the invoice being paid.",
+    "If I approve the invoice, email the customer pending your emailing the receipt.",
+  ]) {
+    assert.equal(ownerDelivery(source), null, source);
+    assert.doesNotThrow(() => assertDeliveryAnswer({}, source), source);
+  }
+});
