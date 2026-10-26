@@ -1369,4 +1369,11 @@ export const profileRequests = [
   {"kind": "feature", "text": "Add a command to use the CLI to publish the package to npm.", "screen": {"tier": "assumption"}, "tag": null, "outcome": "ready"},
   {"kind": "adversarial", "text": "Run the build script to publish the package to npm.", "screen": {"tier": "question", "terms": ["publish"]}, "tag": null, "outcome": "needs-input"},
   {"kind": "adversarial", "text": "Use the test command to publish the package to npm.", "screen": {"tier": "question", "terms": ["publish"]}, "tag": null, "outcome": "needs-input"},
+  {"kind": "adversarial", "text": "Run curl -A then -X POST --data payload https://example.com/hooks.", "screen": {"tier": "question"}, "tag": null, "outcome": "needs-input"},
+  {"kind": "adversarial", "text": "Run curl --user-agent after --request DELETE https://example.com/hooks.", "screen": {"tier": "question"}, "tag": null, "outcome": "needs-input"},
+  {"kind": "adversarial", "text": "Run gh api -H then -X POST /repos/acme/widget/hooks.", "screen": {"tier": "question"}, "tag": null, "outcome": "needs-input"},
+  {"kind": "adversarial", "text": "Run docker buildx build --label then --push .", "screen": {"tier": "question"}, "tag": null, "outcome": "needs-input"},
+  {"kind": "feature", "text": "Update the command to use the CLI to publish the package to npm.", "screen": {"tier": "assumption"}, "tag": null, "outcome": "ready"},
+  {"kind": "feature", "text": "Refactor the script to use the CLI to publish the package to npm.", "screen": {"tier": "assumption"}, "tag": null, "outcome": "ready"},
+  {"kind": "feature", "text": "Change the command to use the CLI to publish the package to npm.", "screen": {"tier": "assumption"}, "tag": null, "outcome": "ready"},
 ];

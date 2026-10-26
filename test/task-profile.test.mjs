@@ -2200,3 +2200,20 @@ test("passive publication and execution infinitives cannot borrow feature author
   assert.equal(deliveryScreen("Document how to publish the package to npm.").tier,"assumption");
   assert.equal(deliveryScreen("Add a command to use the CLI to publish the package to npm.").tier,"assumption");
 });
+
+test("command option values retain conjunctions before later mutation flags", () => {
+  for (const value of ["and", "then", "after", "once", "when", "before"])
+    for (const option of ["-A", "--user-agent", "-sA", "-H", "--header"])
+      for (const text of [
+        `Run curl ${option} ${value} -X POST --data payload https://example.com/hooks.`,
+        `Run curl ${option} ${value} -X DELETE https://example.com/hooks.`,
+      ]) assert.equal(deliveryScreen(text).tier, "question", text);
+  for (const text of ["Run gh api -H then -X POST /repos/acme/widget/hooks.", "Run gh api --header after --method DELETE /repos/acme/widget/hooks.", "Run docker buildx build --label then --push .", "Run npm publish --tag then --dry-run=false."])
+    assert.equal(deliveryScreen(text).tier, "question", text);
+  for (const text of ["Run curl -A then -X GET https://example.com/status.", "Run curl --user-agent and --head https://example.com/status.", "Run curl -sA before https://example.com/status then show the output.", "Run gh api -H after -X GET /repos/acme/widget."])
+    assert.equal(deliveryScreen(text).tier, "none", text);
+  for (const verb of ["Update", "Refactor", "Change", "Modify", "Adjust", "Enhance", "Redesign", "Rewrite"])
+    assert.equal(deliveryScreen(`${verb} the command to use the CLI to publish the package to npm.`).tier, "assumption", verb);
+  for (const text of ["Run the update command to publish the package to npm.", "Use the refactor script to publish the package to npm."])
+    assert.equal(deliveryScreen(text).tier, "question", text);
+});

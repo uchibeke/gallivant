@@ -5702,3 +5702,10 @@ test("passive and tool-mediated publication requests pause before dispatch", asy
     assert.deepEqual(w.ctx.state.entries(),[]); assert.equal(w.daemonCalls(),0);
   }
 });
+
+test("a conjunction-valued curl option cannot hide dispatching an HTTP write", async () => {
+  const w = world(), task = await w.service.prepare({ text: "Run curl -A then -X POST --data payload https://example.com/hooks." });
+  assert.equal(task.status, "needs-input");
+  await assert.rejects(w.service.start({ taskId: task.taskId, expectedRevision: task.revision, run: true }), { code: "TASK_NOT_READY" });
+  assert.deepEqual(w.ctx.state.entries(), []); assert.equal(w.daemonCalls(), 0);
+});
