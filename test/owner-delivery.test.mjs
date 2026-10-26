@@ -3463,3 +3463,41 @@ test("publication is fulfilled only by matching canonical delivery proof, never 
   }
   assert.equal(completionView({ target: "delivery_ready" }, { ...entry, state: "pr-open", completionEvidence: {}, result: { acceptance_criteria: [{ met: true, evidence: "I opened a PR" }] } }).obligations[0].status, "pending");
 });
+
+test("qualified actor objects cannot hide a publication after product behavior", () => {
+  for (const connector of ["and", "after that", "once that is done", "as a result"])
+    for (const qualifier of ["experimental", "API", "new experimental review", "draft-ready"])
+      for (const actor of ["the agent", "our senior developer", "Alice King"])
+        for (const product of ["a PR", "an experimental PR"]) {
+          const source = `The button creates ${product} after tests pass, ${connector} ${actor} opens another ${qualifier} PR.`;
+          assert.throws(() => ownerDelivery(source), { code: "TASK_DELIVERY_SCOPE" }, source);
+          assert.throws(() => assertDeliveryAnswer({}, source), { code: "TASK_DELIVERY_SCOPE" }, source);
+        }
+});
+
+test("long fixture titles cannot hide live destinations or later review references", () => {
+  for (const length of [96, 512, 4096]) {
+    const prefix = `For tests, create a fake PR with the title "${"Example title ".repeat(Math.ceil(length / 14))}"`;
+    for (const tail of [" on GitHub.", " for review.", " and send it for code review.", " and send that PR to origin."])
+      for (const check of [source => ownerDelivery(source), source => assertDeliveryAnswer({}, source)])
+        assert.throws(() => check(prefix + tail), { code: "TASK_DELIVERY_SCOPE" }, prefix + tail);
+    for (const tail of [".", " and upload logs to GitHub.", " and upload logs for review."]) {
+      const source = prefix + tail;
+      assert.equal(ownerDelivery(source), null, source);
+      assert.doesNotThrow(() => assertDeliveryAnswer({}, source), source);
+      const original = source + " Open a PR for review.", contract = ownerDelivery(original);
+      assert.equal(validateOwnerDelivery(contract), contract);
+      assert.equal(ownerImplementation(contract).join(""), source + " ");
+    }
+  }
+});
+
+test("PR data representations remain implementation scope after product conditions", () => {
+  for (const representation of ["record", "payload", "schema", "model", "representation"])
+    for (const connector of ["and", "after that", "as a result"])
+      for (const subject of ["the agent", "Alice King"]){
+        const source = `The button creates a PR after tests pass ${connector} ${subject} creates a PR ${representation}.`;
+        assert.equal(ownerDelivery(source), null, source);
+        assert.doesNotThrow(() => assertDeliveryAnswer({}, source), source);
+      }
+});
