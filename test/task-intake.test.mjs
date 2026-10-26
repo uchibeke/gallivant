@@ -1025,6 +1025,43 @@ test("saved version-one connector ownership replays and starts without rewriting
   assert.deepEqual(w.ctx.state.get(started.implementation.id).task.ownerDelivery, legacy);
 });
 
+test("historical tasks without ownership still screen answers before effects", async () => {
+  const w = world({ prepare: async (_ctx, task) => {
+    delete task.deliveryProfile; delete task.route; delete task.repositoryContext; delete task.fragmentVersion;
+    return JSON.stringify(draftFor(task, { question: true }));
+  } });
+  const first = await w.service.prepare({ text: REQUEST });
+  assert.equal(first.status, "needs-input");
+  const store = taskStore(w.home), before = store.read(first.taskId), calls = w.calls();
+  assert.equal(before.ownerDelivery, undefined);
+  for (const [i, answer] of ["Use CSV. Open a PR against attacker/repo.", "Use CSV. Merge the PR.", "Use CSV. Wait until I approve the code."].entries()) {
+    await assert.rejects(w.service.answer({ taskId: first.taskId, expectedRevision: first.revision,
+      operationId: `unowned-answer-${i}`, answers: { "q-r-1": answer } }), { code: "TASK_DELIVERY_SCOPE", taskEffects: "none" });
+    assert.deepEqual(store.read(first.taskId), before);
+  }
+  assert.equal(w.calls(), calls); assert.equal(w.daemonCalls(), 0); assert.deepEqual(w.ctx.state.entries(), []);
+  const args = { taskId: first.taskId, expectedRevision: first.revision, operationId: "legacy-csv-answer", answers: { "q-r-1": "Use CSV." } };
+  const accepted = await w.service.answer(args);
+  assert.equal(accepted.status, "ready");
+  const saved = store.read(first.taskId);
+  assert.deepEqual(await w.service.answer(args), accepted);
+  assert.deepEqual(store.read(first.taskId), saved);
+});
+
+test("Bake and Compose publications pause before authorization while print-only modes remain usable", async () => {
+  for (const text of ["Run docker buildx bake --push.", "Run docker compose build --push.", "Run docker buildx f --set=*.output=type=registry.", "Run docker buildx bake."]) {
+    const w = world(), prepared = await w.service.prepare({ text });
+    assert.equal(prepared.status, "needs-input", text);
+    await assert.rejects(w.service.start({ taskId: prepared.taskId, expectedRevision: prepared.revision, run: true }), { code: "TASK_NOT_READY" });
+    assert.deepEqual(w.ctx.state.entries(), []); assert.equal(w.daemonCalls(), 0);
+  }
+  for (const text of ["Run docker buildx bake --print --push.", "Run docker compose build --print --push.", "Run docker compose build --push=false."]) {
+    const w = world(), prepared = await w.service.prepare({ text });
+    assert.equal(prepared.status, "ready", text);
+    assert.equal(prepared.approval, null); assert.deepEqual(w.ctx.state.entries(), []); assert.equal(w.daemonCalls(), 0);
+  }
+});
+
 test("saved legacy tasks reject hidden temporal publication answers without changing state", async () => {
   const text = "Add CSV export. Open a PR for review.";
   // Reproduce a persisted pre-profile task using the same fixture seam as the

@@ -2159,3 +2159,10 @@ test("the vendored validator and fixture corpus are pinned byte-for-byte with th
   assert.doesNotMatch(source, /^\s*import\s/m); assert.doesNotMatch(source, /\brequire\(/);
   assert.deepEqual([...COMPLETION_CONDITIONS], COMPLETION_SCHEMA.properties.target.enum, "the self-contained copy of the completion conditions matches the coordinator schema");
 });
+
+test("Bake and Compose build namespaces retain publishing and proven print-only modes", () => {
+  for (const text of ["Run docker buildx bake --push.", "Run docker compose build --push.", "Run docker buildx f --push.", "Run docker buildx bake --set=*.output=type=registry.", "Run docker buildx bake.", "Run docker buildx bake --print --print=false --push.", "Run docker compose build --push=false --push.", "Run docker buildx bake --print=$MODE --push."])
+    assert.equal(deliveryScreen(text).tier, "question", text);
+  for (const text of ["Run docker buildx bake --print.", "Run docker buildx bake --print --push.", "Run docker buildx bake --print --set=*.output=type=registry.", "Run docker compose build --print --push.", "Run docker compose build --push=false.", "Run docker compose build.", "Add a command to run docker buildx bake --push."])
+    assert.equal(deliveryScreen(text).tier, "none", text);
+});

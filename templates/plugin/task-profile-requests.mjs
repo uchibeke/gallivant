@@ -1337,4 +1337,12 @@ export const profileRequests = [
   { kind: "feature", text: "Do not log API keys in error responses.", screen: { tier: "none" }, tag: null, outcome: "ready" },
   { kind: "feature", text: "Publish records to Kafka and do not deliver notifications twice.", screen: { tier: "question", terms: ["publish"] }, tag: null, outcome: "needs-input", note: "publish with a control marker asks once; the profile is unchanged either way" },
   { kind: "feature", text: "Add a merge button for duplicate contacts.", screen: { tier: "question", terms: ["merge"] }, tag: null, outcome: "needs-input", note: "merge vocabulary asks once; the profile never merges" },
+  {"kind": "adversarial", "text": "Run docker buildx bake --push.", "screen": {"tier": "question", "terms": ["publish"]}, "tag": null, "outcome": "needs-input"},
+  {"kind": "adversarial", "text": "Run docker compose build --push.", "screen": {"tier": "question", "terms": ["publish"]}, "tag": null, "outcome": "needs-input"},
+  {"kind": "adversarial", "text": "Run docker buildx f --push.", "screen": {"tier": "question", "terms": ["publish"]}, "tag": null, "outcome": "needs-input"},
+  {"kind": "adversarial", "text": "Run docker buildx bake --set=*.output=type=registry.", "screen": {"tier": "question", "terms": ["publish"]}, "tag": null, "outcome": "needs-input"},
+  {"kind": "adversarial", "text": "Run docker buildx bake.", "screen": {"tier": "question", "terms": ["publish"]}, "tag": null, "outcome": "needs-input"},
+  {"kind": "feature", "text": "Run docker buildx bake --print --push.", "screen": {"tier": "none"}, "tag": null, "outcome": "ready"},
+  {"kind": "feature", "text": "Run docker compose build --print --push.", "screen": {"tier": "none"}, "tag": null, "outcome": "ready"},
+  {"kind": "feature", "text": "Run docker compose build --push=false.", "screen": {"tier": "none"}, "tag": null, "outcome": "ready"},
 ];
