@@ -1025,6 +1025,36 @@ test("saved version-one connector ownership replays and starts without rewriting
   assert.deepEqual(w.ctx.state.get(started.implementation.id).task.ownerDelivery, legacy);
 });
 
+test("saved legacy tasks reject hidden temporal publication answers without changing state", async () => {
+  const text = "Add CSV export. Open a PR for review.";
+  // Reproduce a persisted pre-profile task using the same fixture seam as the
+  // other historical compatibility tests, not a new legacy intake route.
+  const w = world({ prepare: async (_ctx, task) => {
+    if (!task.ownerDelivery) {
+      delete task.deliveryProfile; delete task.route; delete task.repositoryContext; delete task.fragmentVersion;
+      task.ownerDelivery = ownerDelivery(text);
+      task.requirements = [{ id: "r-1", text: "Add CSV export." }];
+    }
+    return JSON.stringify(draftFor(task, { question: true }));
+  } });
+  const first = await w.service.prepare({ text });
+  assert.equal(first.status, "needs-input");
+  const store = taskStore(w.home), before = store.read(first.taskId), calls = w.calls();
+  for (const [index, connector] of publicationTailConnectors.entries()) {
+    await assert.rejects(w.service.answer({ taskId: first.taskId, expectedRevision: first.revision,
+      operationId: `legacy-temporal-${index}`, answers: { "q-r-1": `The button creates a PR after tests pass, ${connector} the agent opens another PR.` } }),
+    { code: "TASK_DELIVERY_SCOPE", taskEffects: "none" }, connector);
+    assert.deepEqual(store.read(first.taskId), before, connector);
+  }
+  assert.equal(w.calls(), calls); assert.equal(w.daemonCalls(), 0); assert.deepEqual(w.ctx.state.entries(), []);
+  const answered = await w.service.answer({ taskId: first.taskId, expectedRevision: first.revision,
+    operationId: "legacy-product-answer", answers: { "q-r-1": "The button creates a PR after tests pass, after that the service opens another PR." } });
+  assert.equal(answered.status, "ready");
+  assert.equal(store.read(first.taskId).original, text);
+  assert.deepEqual(store.read(first.taskId).ownerDelivery, before.ownerDelivery);
+  assert.deepEqual(w.ctx.state.entries(), []);
+});
+
 test("distinct assertions mapped to one owner paragraph retain every authoritative requirement", async () => {
   const text = "Implement CSV and JSON export. Preserve the filtered rows in both formats.";
   const w = world({ prepare: async (_ctx, task) => {
