@@ -3569,3 +3569,20 @@ test("a truncated policy prefix is never proof that a PR predicate is a feature"
   const field=`Please do not create a ${modifiers}PR visible field.`;
   assert.equal(ownerDelivery(field),null);
 });
+
+test("qualified review destinations cannot turn a fixture into a submitted PR", () => {
+  for(const review of ["peer review", "a peer review", "external security review", "final design review"])
+    for(const source of [
+      `For tests, create a fake PR for ${review}.`,
+      `For tests, create a fake PR and submit it for ${review}.`,
+      `For tests, create a fake PR. Send that PR for ${review}.`,
+      `For tests, create a fake PR and submit it for ${review}. Open a PR.`,
+    ]) {
+      assert.throws(()=>ownerDelivery(source),{code:"TASK_DELIVERY_SCOPE"},source);
+      assert.throws(()=>assertDeliveryAnswer({},source),{code:"TASK_DELIVERY_SCOPE"},source);
+    }
+  for(const source of ['For tests, create a fake PR with the title "for peer review".', "For tests, create a fake PR fixture and upload logs for peer review."]) {
+    assert.equal(ownerDelivery(source),null,source);
+    assert.doesNotThrow(()=>assertDeliveryAnswer({},source),source);
+  }
+});
