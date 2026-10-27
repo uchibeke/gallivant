@@ -3859,3 +3859,29 @@ test("approval acquisition stays an obligation unless fixture data or a product 
     assert.doesNotThrow(() => assertDeliveryAnswer({}, source), source);
   }
 });
+
+test("Markdown destinations remain live and formatted field data stays local", () => {
+  for (const destination of ["[GitHub](https://github.com/owner/repo)", "<https://github.com/owner/repo>", "[GitHub](<https://github.com/owner/repo>)", "![GitHub](https://github.com/owner/repo)", "**GitHub**", "*GitHub*", "__GitHub__", "_GitHub_", "~~GitHub~~", "**[forge](https://codeberg.org/owner/repo)**", "**public** \"https://github.com/owner/repo\""])
+    for (const suffix of ["", " Open a PR."]) {
+      const source = `For tests, create a fake PR on ${destination}.${suffix}`;
+      assert.throws(() => ownerDelivery(source), {code:"TASK_DELIVERY_SCOPE"}, source);
+      assert.throws(() => assertDeliveryAnswer({}, source), {code:"TASK_DELIVERY_SCOPE"}, source);
+    }
+  for (const source of ["For tests, create a fake PR with URL field set to [GitHub](https://github.com/owner/repo).", "For tests, create a fake PR with URL field set to <https://github.com/owner/repo>.", "For tests, create a fake PR with URL **field** set to **GitHub**.", "For tests, create a fake PR in [fixtures](file:///tmp/fixtures).", 'For tests, create a fake PR with title "on **GitHub**".']) {
+    assert.equal(ownerDelivery(source), null, source);
+    assert.doesNotThrow(() => assertDeliveryAnswer({}, source), source);
+  }
+});
+
+test("qualified approval objects retain the product subject without borrowing across clauses", () => {
+  for (const object of ["owner approval", "explicit human approval", "manual owner consent", "owner permission"])
+    {
+      const source = `For tests, create a fake PR and verify that the form requests ${object} for it in the local mock service.`;
+      assert.equal(ownerDelivery(source), null, source);
+      assert.doesNotThrow(() => assertDeliveryAnswer({}, source), source);
+    }
+  for (const source of ["For tests, create a fake PR and get owner approval for it.", "For tests, create a fake PR and verify that the form renders before the agent gets owner approval for it."]) {
+    assert.throws(() => ownerDelivery(source), {code:"TASK_DELIVERY_SCOPE"}, source);
+    assert.throws(() => assertDeliveryAnswer({}, source), {code:"TASK_DELIVERY_SCOPE"}, source);
+  }
+});
