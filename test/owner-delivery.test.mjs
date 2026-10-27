@@ -3909,3 +3909,19 @@ test("product approval lookup requires one noun phrase before the approval objec
   for (const noun of ["explicit owner", "the required human", "prior legal", "manual admin"])
     assert.doesNotThrow(() => assertDeliveryAnswer({}, `For tests, create a fake PR and verify that the form requests ${noun} approval for it in a local mock service.`));
 });
+
+
+test("an independent business object owns later pronouns but cannot hide explicit fixture references", () => {
+  for (const object of ["a report", "the invoice", "a new CSV", "some photos"])
+    for (const action of ["get owner approval for it", "send it to GitHub"])
+      for (const separator of [". ", " and ", "; "]) {
+        const source = `For tests, create a fake PR fixture${separator}Generate ${object} and ${action}.`;
+        assert.equal(ownerDelivery(source), null, source);
+        assert.doesNotThrow(() => assertDeliveryAnswer({}, source), source);
+      }
+  for (const source of ["For tests, create a fake PR fixture. Generate a report and get owner approval for the fixture.", "For tests, create a fake PR fixture. Generate a report. Publish the PR.", "For tests, create a fake PR fixture. Generate a title for it. Publish it.", "For tests, create a fake PR fixture. Get owner approval for it."])
+    {
+      assert.throws(() => ownerDelivery(source), {code:"TASK_DELIVERY_SCOPE"}, source);
+      assert.throws(() => assertDeliveryAnswer({}, source), {code:"TASK_DELIVERY_SCOPE"}, source);
+    }
+});
