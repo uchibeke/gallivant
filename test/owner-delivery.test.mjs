@@ -2355,7 +2355,9 @@ test("historical publication spans cannot leave timing, destination or condition
       { start, end, owner: "coordinator", kind: "pull_request" },
       { start: end, end: source.length, owner: "implementation" },
     ] };
-    assert.throws(() => validateOwnerDelivery(saved), { code: "TASK_DELIVERY_SCOPE" }, `v${version}: sentence-delimited ${suffix} qualifier remains outside coordinator ownership`);
+    // These exact independent sentences are accepted on main for v1–v4.
+    // A new generic-prefix check must not reinterpret saved scope as a gate.
+    assert.equal(validateOwnerDelivery(saved), saved, `v${version}: independent ${suffix} sentence retains historical interpretation`);
   }
   for (const version of [1, 2, 3, 4]) {
     const source = "Implement export. Open a PR. To make it usable, add UI tests.", start = source.indexOf("Open a PR."), end = start + "Open a PR.".length;
@@ -3744,5 +3746,34 @@ test("review obligations retain ownership across actor-led and relative compleme
   for (const source of ["For tests, create a fake PR with review status pending.", "For tests, create a fake PR with reviewer id 123.", "For tests, create a fake PR with status set to review.", 'For tests, create a fake PR with title "for the owner to review".', "For tests, create a fake PR and verify that the form reviews it in the local mock service."]) {
     assert.equal(ownerDelivery(source), null, source);
     assert.doesNotThrow(() => assertDeliveryAnswer({}, source), source);
+  }
+});
+
+test("bare destination hosts retain live scope and local paths remain fixtures", () => {
+  for (const host of ["codeberg.org", "forge.example.org", "127.0.0.1:8123", "localhost:8123"])
+    for (const target of [host, `"${host}"`, `\`${host}\``])
+      for (const relation of ["on", "in", "to", "against"])
+        for (const suffix of ["", " Open a PR."]) {
+          const source = `For tests, create a fake PR ${relation} ${target}.${suffix}`;
+          assert.throws(() => ownerDelivery(source), { code: "TASK_DELIVERY_SCOPE" }, source);
+          assert.throws(() => assertDeliveryAnswer({}, source), { code: "TASK_DELIVERY_SCOPE" }, source);
+        }
+  for (const source of ["For tests, create a fake PR in ./codeberg.org.", "For tests, create a fake PR in fixtures/codeberg.org.", 'For tests, create a fake PR in "file:///tmp/codeberg.org".', "For tests, create a fake PR with URL field set to codeberg.org.", "For tests, create a fake PR with review URL field set to https://codeberg.org."])
+    { assert.equal(ownerDelivery(source), null, source); assert.doesNotThrow(() => assertDeliveryAnswer({}, source), source); }
+});
+
+test("independent historical implementation sentences cannot qualify an ended PR clause", () => {
+  for (const version of [1, 2, 3, 4]) {
+    for (const tail of ["Only export visible rows.", "After parsing the CSV, reject invalid rows.", "Before rendering, sanitize the values."]) {
+      const source = `Implement export. Open a PR. ${tail}`;
+      const saved = { version, offsets: "utf16", source, spans: [
+        {start:0,end:18,owner:"implementation"}, {start:18,end:28,owner:"coordinator",kind:"pull_request"}, {start:28,end:source.length,owner:"implementation"}
+      ]};
+      assert.equal(validateOwnerDelivery(saved), saved, `v${version}: ${source}`);
+      assert.doesNotThrow(() => completionView({ target: "delivery_ready" }, { task: {ownerDelivery:saved} }), source);
+    }
+    const source = "Implement export. Open a PR; Only after my approval.";
+    const saved = { version, offsets:"utf16", source, spans:[{start:0,end:18,owner:"implementation"},{start:18,end:28,owner:"coordinator",kind:"pull_request"},{start:28,end:source.length,owner:"implementation"}]};
+    assert.throws(() => validateOwnerDelivery(saved), {code:"TASK_DELIVERY_SCOPE"}, `v${version} still rejects a clause continuation`);
   }
 });
