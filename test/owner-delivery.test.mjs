@@ -3885,3 +3885,27 @@ test("qualified approval objects retain the product subject without borrowing ac
     assert.throws(() => assertDeliveryAnswer({}, source), {code:"TASK_DELIVERY_SCOPE"}, source);
   }
 });
+
+
+test("reference-style Markdown retains live destinations and local field exceptions", () => {
+  for (const reference of ["[GitHub][forge]", "[forge][]", "[forge]", "![GitHub][forge]", "[GitHub][FORGE]", "[GitHub][the forge]"])
+    for (const suffix of ["", " Open a PR."]) {
+      const source = `For tests, create a fake PR on ${reference}.${suffix}\n\n[forge]: https://github.com/owner/repo\n[the forge]: <https://codeberg.org/owner/repo>`;
+      assert.throws(() => ownerDelivery(source), {code:"TASK_DELIVERY_SCOPE"}, source);
+      assert.throws(() => assertDeliveryAnswer({}, source), {code:"TASK_DELIVERY_SCOPE"}, source);
+    }
+  for (const source of ["For tests, create a fake PR with URL field set to [forge].\n\n[forge]: https://github.com/owner/repo", "For tests, create a fake PR in [fixtures].\n\n[fixtures]: file:///tmp/fixtures", "For tests, create a fake PR in [forge].\n\n[forge]: file:///tmp/fixtures\n[forge]: https://github.com/owner/repo"])
+    assert.doesNotThrow(() => assertDeliveryAnswer({}, source), source);
+});
+
+test("product approval lookup requires one noun phrase before the approval object", () => {
+  for (const connector of ["since", "whilst", "because", "although", "as", "when", "unless", "provided that"])
+    for (const actor of ["we need", "the agent obtains", "Jennifer seeks"])
+      for (const suffix of ["", " Open a PR."]) {
+        const source = `For tests, create a fake PR and verify that the form renders ${connector} ${actor} owner approval for it.${suffix}`;
+        assert.throws(() => ownerDelivery(source), {code:"TASK_DELIVERY_SCOPE"}, source);
+        assert.throws(() => assertDeliveryAnswer({}, source), {code:"TASK_DELIVERY_SCOPE"}, source);
+      }
+  for (const noun of ["explicit owner", "the required human", "prior legal", "manual admin"])
+    assert.doesNotThrow(() => assertDeliveryAnswer({}, `For tests, create a fake PR and verify that the form requests ${noun} approval for it in a local mock service.`));
+});
