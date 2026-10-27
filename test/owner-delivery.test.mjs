@@ -3791,3 +3791,16 @@ test("qualified and truncated quoted destinations cannot become fixture data", (
     assert.doesNotThrow(() => assertDeliveryAnswer({}, source), source);
   }
 });
+
+test("comma-delimited destination and review complements stay attached to fixture actions", () => {
+  for (const tail of ["using GitHub", "on the public GitHub repository", "for review by the owner", "for the owner to review", "to be carefully reviewed", "Alice will publish it"])
+    for (const suffix of ["", " Open a PR."]) {
+      const source = `For tests, create a fake PR, ${tail}.${suffix}`;
+      assert.throws(() => ownerDelivery(source), {code:"TASK_DELIVERY_SCOPE"}, source);
+      assert.throws(() => assertDeliveryAnswer({}, source), {code:"TASK_DELIVERY_SCOPE"}, source);
+    }
+  for (const source of ["For tests, create a fake PR, then upload logs to GitHub.", "For tests, create a fake PR, verify that the form reviews it in the local mock service.", "For tests, create a fake PR, format it as JSON."]) {
+    assert.equal(ownerDelivery(source), null, source);
+    assert.doesNotThrow(() => assertDeliveryAnswer({}, source), source);
+  }
+});
