@@ -2237,6 +2237,9 @@ test("historical delivery-prefixed planner questions retain ownership and remain
   const task = taskFor("Add CSV export.", { deliveryProfile: undefined, route: undefined, modelRoute: undefined, repositoryContext: undefined, commandCandidates: ["npm test"] });
   const q = { id: "q-delivery-format", text: "Which file format should export use?", requirements: ["r-1"] };
   task.questionHistory[q.id] = structuredClone(q);
+  const promptData = JSON.parse(draftPrompt(task).split("INTAKE DATA (JSON):\n")[1]);
+  assert.deepEqual(promptData.questionHistory[q.id], q);
+  assert.equal(Object.hasOwn(promptData, "deliveryProfile"), false);
   const out = draftFor(task, { question: true });
   out.questions = [q]; out.mapping[0].questionId = q.id;
   assert.deepEqual(parseDraft(JSON.stringify(out), task).questions, [q]);
