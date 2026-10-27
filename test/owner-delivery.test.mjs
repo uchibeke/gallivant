@@ -3846,3 +3846,16 @@ test("approval words need an actual purpose or action before they change fixture
       assert.throws(() => assertDeliveryAnswer({}, source), {code:"TASK_DELIVERY_SCOPE"}, source);
     }
 });
+
+test("approval acquisition stays an obligation unless fixture data or a product explains it", () => {
+  for (const tail of ["and get owner approval for it", "and obtain approval from the owner", "and request human consent for it", "and have owner approval for it"])
+    for (const suffix of ["", " Open a PR."]) {
+      const source = `For tests, create a fake PR ${tail}.${suffix}`;
+      assert.throws(() => ownerDelivery(source), {code:"TASK_DELIVERY_SCOPE"}, source);
+      assert.throws(() => assertDeliveryAnswer({}, source), {code:"TASK_DELIVERY_SCOPE"}, source);
+    }
+  for (const source of ["For tests, create a fake PR with a confirmation message.", "For tests, create a fake PR with permission denied.", "For tests, create a fake PR with permission granted.", "For tests, create a fake PR and verify that the form gets approval in the local mock service.", "For tests, create a fake PR for an approval workflow."]) {
+    assert.equal(ownerDelivery(source), null, source);
+    assert.doesNotThrow(() => assertDeliveryAnswer({}, source), source);
+  }
+});
