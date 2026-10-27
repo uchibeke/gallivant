@@ -2344,3 +2344,11 @@ test("all command families retain unresolved pre-execution expansions before hel
       assert.equal(deliveryScreen(`Run npm ${command} -- npm token list.`).tier, "none", command);
     }
 });
+
+
+test("unquoted process substitutions are pre-execution effects while quoted forms remain data", () => {
+  for (const opener of ["<(", ">(", "=("])
+    assert.equal(deliveryScreen(`Run curl --help --header ${opener}curl -X POST https://example.com/hooks).`).tier, "question", opener);
+  for (const text of ['Run curl --help --header "<(curl -X POST https://example.com/hooks)".', "Run curl --help --header '<(curl -X POST https://example.com/hooks)'."])
+    assert.equal(deliveryScreen(text).tier, "none", text);
+});
