@@ -3720,3 +3720,16 @@ test("quoted fixture field assignments do not become live publication destinatio
   assert.throws(() => ownerDelivery(actual), { code: "TASK_DELIVERY_SCOPE" });
   assert.throws(() => assertDeliveryAnswer({}, actual), { code: "TASK_DELIVERY_SCOPE" });
 });
+
+test("modified and referential human review retains synthetic publication boundaries", () => {
+  for (const tail of ["to be carefully reviewed by the owner", "to be very carefully reviewed by a human", "to have been thoroughly reviewed by the owner", "and get it reviewed by the owner", "and it must be reviewed by a human", "and have it not be reviewed", "and need it to be carefully reviewed"])
+    for (const suffix of ["", " Open a PR for review."]) {
+      const source = `For tests, create a fake PR ${tail}.${suffix}`;
+      assert.throws(() => ownerDelivery(source), { code: "TASK_DELIVERY_SCOPE" }, source);
+      assert.throws(() => assertDeliveryAnswer({}, source), { code: "TASK_DELIVERY_SCOPE" }, source);
+    }
+  for (const source of ["For tests, create a fake PR and verify that the form reviews it in the local mock service.", 'For tests, create a fake PR with title "to be carefully reviewed by the owner".']) {
+    assert.equal(ownerDelivery(source), null, source);
+    assert.doesNotThrow(() => assertDeliveryAnswer({}, source), source);
+  }
+});
