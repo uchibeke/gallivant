@@ -5723,3 +5723,10 @@ test("an unrelated implementation action cannot dispatch a publication clause", 
   await assert.rejects(w.service.start({ taskId: task.taskId, expectedRevision: task.revision, run: true }), { code: "TASK_NOT_READY" });
   assert.deepEqual(w.ctx.state.entries(), []); assert.equal(w.daemonCalls(), 0);
 });
+
+test("an interpreter program cannot hide publication before dispatch", async () => {
+  const w=world(), task=await w.service.prepare({text:"Run bash -c 'npm publish'."});
+  assert.equal(task.status,"needs-input");
+  await assert.rejects(w.service.start({taskId:task.taskId,expectedRevision:task.revision,run:true}),{code:"TASK_NOT_READY"});
+  assert.deepEqual(w.ctx.state.entries(),[]); assert.equal(w.daemonCalls(),0);
+});

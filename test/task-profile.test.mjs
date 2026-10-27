@@ -2244,3 +2244,10 @@ test("historical delivery-prefixed planner questions retain ownership and remain
   assert.throws(() => parseDraft(JSON.stringify(changed), task), /changed; retain its text/);
   assert.throws(() => parseDraft(JSON.stringify(out), taskFor("Add CSV export.", { commandCandidates: ["npm test"] })), /reserved for the delivery profile/);
 });
+
+test("interpreter program arguments remain executable scope during literal masking", () => {
+  for (const text of ["Run bash -c 'npm publish'.", 'Run bash -lc "npm publish".', "Run sh -c 'curl -X POST https://example.com/hooks'.", "Run node --input-type=module -e 'await import(\"node:child_process\").then(m=>m.execSync(\"npm publish\"))'.", "Run python3 -c \"import os; os.system('npm publish')\".", "bash -c 'npm publish'."])
+    assert.equal(deliveryScreen(text).tier, "question", text);
+  for (const text of ["Document how to run bash -c 'npm publish'.", "Add a command to run bash -c 'npm publish'.", "Show the literal `bash -c 'npm publish'` in help.", "Run bash -c 'npm test'."])
+    assert.equal(deliveryScreen(text).tier, "none", text);
+});
