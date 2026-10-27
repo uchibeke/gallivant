@@ -1,3 +1,4 @@
+import { MAX_ANSWER_BYTES, MAX_ANSWER_COUNT, MAX_LEGACY_ANSWER_COUNT, MAX_LEGACY_ANSWER_BATCH_BYTES } from "../lib/task_limits.mjs";
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { join, dirname } from "node:path";
@@ -4006,4 +4007,162 @@ test("direct task service mutations exclude maintenance and release owners on er
   writeFileSync(join(w.home, "runtime-pin.json"), "null");
   await assert.rejects(w.service.resume({ taskId: task.taskId, expectedRevision: task.revision }), { code: "TASK_RUNTIME_PIN" });
   assert.equal(existsSync(join(w.home, "task-mutation.lock")), false);
+});
+
+test("answer batches enforce aggregate bytes and item limits before parsing or mutating", async () => {
+  let calls = 0;
+  const w = world({ prepare: async (_ctx, task) => { calls++; return JSON.stringify(draftFor(task, { question: true })); } });
+  const first = await w.service.prepare({ text: "Implement export. Open a PR for review." });
+  assert.equal(first.status, "needs-input");
+  const store = taskStore(w.home), saved = store.read(first.taskId);
+  let tooManyReads = 0;
+  const tooMany = Object.fromEntries(Array.from({ length: MAX_ANSWER_COUNT + 1 }, (_, index) => [`q-r-${index + 1}`, index ? "Use CSV." : null]));
+  Object.defineProperty(tooMany, "q-r-1", { enumerable: true, get() { tooManyReads++; return "Use CSV."; } });
+  await assert.rejects(w.service.answer({ taskId: first.taskId, expectedRevision: first.revision, operationId: "answer-count-limit", answers: tooMany }), error => {
+    assert.equal(error.code, "TASK_INPUT"); assert.equal(error.taskEffects, "none"); return true;
+  });
+  assert.equal(tooManyReads, 0, "the question-count cap runs before reading any answer values");
+  const half = Math.floor(MAX_ANSWER_BYTES / 2) + 16;
+  await assert.rejects(w.service.answer({ taskId: first.taskId, expectedRevision: first.revision, operationId: "answer-byte-limit", answers: {
+    "q-r-1": "x".repeat(half), "q-r-2": `${"y".repeat(half)} Do not publish publicly`,
+  } }), error => {
+    assert.equal(error.code, "TASK_INPUT"); assert.match(error.message, /answer batch exceeds .* total UTF-8 bytes/); assert.equal(error.taskEffects, "none"); return true;
+  });
+  let oversizedReads = 0;
+  const oversizedAccessor = {};
+  Object.defineProperty(oversizedAccessor, "q-r-3", { enumerable: true, get() {
+    oversizedReads++;
+    return "x".repeat(MAX_ANSWER_BYTES + 1);
+  } });
+  await assert.rejects(w.service.answer({ taskId: first.taskId, expectedRevision: first.revision, operationId: "answer-byte-limit-before-hash", answers: oversizedAccessor }), error => {
+    assert.equal(error.code, "TASK_INPUT"); assert.equal(error.taskEffects, "none"); return true;
+  });
+  assert.equal(oversizedReads, 1, "the aggregate byte cap runs before canonical request hashing reads answer values again");
+  assert.deepEqual(store.read(first.taskId), saved);
+  assert.equal(calls, 1, "over-limit answers are rejected before owner-text parsing or another preparation turn");
+  assert.deepEqual(w.ctx.state.entries(), []);
+  const legacyHalf = Math.floor(MAX_ANSWER_BYTES / 2) + 32;
+  const legacyOversizedAnswers = { "q-r-1": "x".repeat(legacyHalf), "q-r-2": "y".repeat(legacyHalf) };
+  assert.ok(Object.entries(legacyOversizedAnswers).reduce((bytes, [id, value]) => bytes + Buffer.byteLength(id) + Buffer.byteLength(value), 0) > MAX_ANSWER_BYTES);
+  const legacyOperationId = "legacy-oversized-answer-replay";
+  const legacySignature = contentDigest(JSON.stringify({ answers: legacyOversizedAnswers, verifyCommands: [] }));
+  saved.operations[legacyOperationId] = legacySignature;
+  store.save(saved);
+  const legacyReplay = await w.service.answer({ taskId: first.taskId, expectedRevision: first.revision, operationId: legacyOperationId, answers: legacyOversizedAnswers });
+  assert.equal(legacyReplay.taskId, first.taskId, "an exact previously accepted operation remains replayable across the new batch bound");
+  for (const count of [MAX_ANSWER_COUNT + 1, MAX_LEGACY_ANSWER_COUNT]) {
+    const operationId = `legacy-${count}-answer-replay`;
+    const legacyAnswers = Object.fromEntries(Array.from({ length: count }, (_, index) => [`q-r-${index + 1}`, "Use CSV."]));
+    saved.operations[operationId] = contentDigest(JSON.stringify({ answers: legacyAnswers, verifyCommands: [] }));
+    store.save(saved);
+    const replay = await w.service.answer({ taskId: first.taskId, expectedRevision: first.revision, operationId, answers: legacyAnswers });
+    assert.equal(replay.taskId, first.taskId, `${count} previously accepted answers remain replayable`);
+    await assert.rejects(w.service.answer({ taskId: first.taskId, expectedRevision: first.revision, operationId,
+      answers: { ...legacyAnswers, "q-r-1": "Use JSON." } }), { code: "TASK_CONFLICT", taskEffects: "none" });
+  }
+  let overCountReads = 0;
+  const excessiveLegacyAnswers = Object.fromEntries(Array.from({ length: MAX_LEGACY_ANSWER_COUNT + 1 }, (_, index) => [`q-r-${index + 1}`, "Use CSV."]));
+  Object.defineProperty(excessiveLegacyAnswers, "q-r-1", { enumerable: true, get() { overCountReads++; return "Use CSV."; } });
+  await assert.rejects(w.service.answer({ taskId: first.taskId, expectedRevision: first.revision, operationId: legacyOperationId,
+    answers: excessiveLegacyAnswers }), { code: "TASK_INPUT", taskEffects: "none" });
+  assert.equal(overCountReads, 0, "legacy count limit runs before reading answer values");
+  await assert.rejects(w.service.answer({ taskId: first.taskId, expectedRevision: first.revision, operationId: legacyOperationId, answers: { "q-r-1": "y".repeat(legacyHalf), "q-r-2": "x".repeat(legacyHalf) } }), error => {
+    assert.equal(error.code, "TASK_CONFLICT", "a prior operation ID cannot authorize changed over-limit input");
+    assert.equal(error.taskEffects, "none"); return true;
+  });
+  let oversizedReplayReads = 0;
+  const oversizedReplay = {};
+  Object.defineProperty(oversizedReplay, "q-r-1", { enumerable: true, get() {
+    oversizedReplayReads++;
+    return "x".repeat(MAX_LEGACY_ANSWER_BATCH_BYTES + 1);
+  } });
+  await assert.rejects(w.service.answer({ taskId: first.taskId, expectedRevision: first.revision, operationId: legacyOperationId, answers: oversizedReplay }), error => {
+    assert.equal(error.code, "TASK_INPUT", "legacy retries are capped at the largest batch previous per-answer limits could accept");
+    assert.equal(error.taskEffects, "none"); return true;
+  });
+  assert.equal(oversizedReplayReads, 1, "oversized retries are rejected before canonical hashing reads answer values again");
+  assert.deepEqual(store.read(first.taskId), saved);
+  await w.service.answer({ taskId: first.taskId, expectedRevision: first.revision, operationId: "answer-replay", answers: { "q-r-1": "Use CSV." } });
+  const accepted = store.read(first.taskId);
+  await assert.rejects(w.service.answer({ taskId: first.taskId, expectedRevision: first.revision, operationId: "answer-replay", answers: { "q-r-1": null } }), error => {
+    assert.equal(error.code, "TASK_CONFLICT", "an idempotency-key reuse is checked before semantic answer validation");
+    assert.equal(error.taskEffects, "none"); return true;
+  });
+  assert.deepEqual(store.read(first.taskId), accepted);
+  assert.equal(calls, 2);
+});
+
+test("non-string answers stop before serialization and preserve saved retries", async () => {
+  let calls = 0, serializationCalls = 0, payloadReads = 0;
+  const w = world({ prepare: async (_ctx, task) => { calls++; return JSON.stringify(draftFor(task, { question: true })); } });
+  const first = await w.service.prepare({ text: REQUEST }), store = taskStore(w.home), initial = store.read(first.taskId);
+  const object = Object.defineProperty({}, "payload", { enumerable: true, get() { payloadReads++; return "x".repeat(MAX_ANSWER_BYTES * 4); } });
+  const custom = { toJSON() { serializationCalls++; return "Use CSV."; } };
+  const cyclic = {}; cyclic.self = cyclic;
+  const invalid = [object, custom, cyclic, [custom], new String("Use CSV."), null, undefined, 42, true, 1n, Symbol("answer"), () => "Use CSV."];
+  for (const [index, value] of invalid.entries()) {
+    await assert.rejects(w.service.answer({ taskId: first.taskId, expectedRevision: first.revision, operationId: `non-text-${index}`, answers: { "q-r-1": value } }), { code: "TASK_INPUT", taskEffects: "none" });
+    assert.equal(serializationCalls, 0);
+    assert.equal(payloadReads, 0);
+    assert.deepEqual(store.read(first.taskId), initial);
+    assert.equal(calls, 1);
+  }
+  const answers = { "q-r-1": "Use CSV." }, operationId = "text-answer";
+  const accepted = await w.service.answer({ taskId: first.taskId, expectedRevision: first.revision, operationId, answers });
+  const saved = store.read(first.taskId);
+  saved.operations["legacy-text-answer"] = contentDigest(JSON.stringify({ answers, verifyCommands: [] }));
+  store.save(saved);
+  for (const id of [operationId, "legacy-text-answer"]) {
+    for (const value of invalid) {
+      await assert.rejects(w.service.answer({ taskId: first.taskId, expectedRevision: first.revision, operationId: id, answers: { "q-r-1": value } }), { code: "TASK_CONFLICT", taskEffects: "none" });
+      assert.equal(serializationCalls, 0);
+      assert.equal(payloadReads, 0);
+      assert.deepEqual(store.read(first.taskId), saved);
+    }
+    assert.deepEqual(await w.service.answer({ taskId: first.taskId, expectedRevision: first.revision, operationId: id, answers }), accepted);
+  }
+  assert.equal(calls, 2);
+  assert.deepEqual(w.ctx.state.entries(), []);
+  assert.equal(w.daemonCalls(), 0);
+});
+
+test("answer accessors and proxies share one bounded snapshot through persistence and replay", async t => {
+  for (const kind of ["accessor", "proxy"]) await t.test(kind, async () => {
+    let calls = 0;
+    const w = world({ prepare: async (_ctx, task) => { calls++; return JSON.stringify(draftFor(task, { question: true })); } });
+    const first = await w.service.prepare({ text: REQUEST });
+    const answer = "Use CSV only.", laterAnswer = "x".repeat(MAX_ANSWER_BYTES + 1);
+    let reads = 0;
+    const value = () => ++reads === 1 ? answer : laterAnswer;
+    const answers = kind === "accessor"
+      ? Object.defineProperty({}, "q-r-1", { enumerable: true, get: value })
+      : new Proxy({ "q-r-1": answer }, { get(target, key, receiver) { return key === "q-r-1" ? value() : Reflect.get(target, key, receiver); } });
+    const input = { taskId: first.taskId, expectedRevision: first.revision, operationId: "bounded-answer-snapshot", answers };
+    const accepted = await w.service.answer(input);
+    assert.equal(reads, 1, "a caller-owned answer value is read once before hashing and requirement construction");
+    assert.equal(accepted.status, "ready");
+    const store = taskStore(w.home), saved = store.read(first.taskId);
+    assert.deepEqual(saved.answers, { "q-r-1": answer });
+    assert.deepEqual(saved.requirements.filter(r => r.id.startsWith("a-")), [{ id: "a-q-r-1-1", text: answer }]);
+    assert.equal(saved.operations[input.operationId], "canonical-v1:" + contentDigest(JSON.stringify({ answers: { "q-r-1": answer }, verifyCommands: [] })));
+    assert.ok(accepted.draft.text.includes(JSON.stringify(answer)));
+    assert.ok(!accepted.draft.text.includes(laterAnswer));
+    t.diagnostic(`Bounded snapshot fixture draft (${kind}): ${accepted.draft.path}`);
+    assert.deepEqual(await w.service.answer({ ...input, answers: { "q-r-1": answer } }), accepted);
+    reads = 0;
+    assert.deepEqual(await w.service.answer(input), accepted);
+    assert.equal(reads, 1, "an exact accessor/proxy retry also hashes only its captured value");
+    assert.equal(calls, 2, "an exact retry replays the accepted snapshot without another preparation turn");
+    let conflictingReads = 0;
+    const conflicting = Object.defineProperty({}, "q-r-1", { enumerable: true, get() { return ++conflictingReads === 1 ? "Use JSON only." : answer; } });
+    await assert.rejects(w.service.answer({ ...input, answers: conflicting }), { code: "TASK_CONFLICT", taskEffects: "none" });
+    assert.equal(conflictingReads, 1);
+    assert.deepEqual(store.read(first.taskId), saved);
+    const unreadable = Object.defineProperty({}, "q-r-1", { enumerable: true, get() { throw new Error("answer read failed"); } });
+    await assert.rejects(w.service.answer({ ...input, answers: unreadable }), /answer read failed/);
+    assert.deepEqual(store.read(first.taskId), saved);
+    assert.deepEqual(await w.service.answer({ ...input, answers: { "q-r-1": answer } }), accepted, "failed reads release mutation ownership for an exact retry");
+    assert.deepEqual(w.ctx.state.entries(), []);
+    assert.equal(w.daemonCalls(), 0);
+  });
 });
