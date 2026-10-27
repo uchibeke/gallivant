@@ -5756,3 +5756,24 @@ test("assumption-mapped owner constraints survive saved validation and approved 
   const saved = taskStore(w.home).read(started.taskId);
   assert.deepEqual(parseDraft(JSON.stringify(saved.output), saved), saved.output);
 });
+
+
+test("historical identity replay uses its saved fragment version before new clause limits", async () => {
+  const w = world({ prepare: async (_ctx, task) => JSON.stringify(draftFor(task, {question:true})) });
+  const requestId = "legacy-long-line", prepared = await w.service.prepare({ text: "Export CSV.", requestId });
+  const store = taskStore(w.home), task = store.read(prepared.taskId), original = "Export CSV. ".repeat(129).trim();
+  delete task.deliveryProfile; delete task.route; delete task.repositoryContext; delete task.modelRoute;
+  delete task.fragmentVersion;
+  task.original = original; task.requirements = fragmentsForTask(task, original);
+  task.signature = contentDigest(JSON.stringify({ text: original, checkout: w.checkout, base: "main", harness: "codex", context: [], verifyCommands: [], run: false }));
+  task.output = parseDraft(JSON.stringify(draftFor(task, {question:true})), task);
+  const text = renderDraft(task, task.output); writeFileSync(task.draft.path, text);
+  task.draft.hash = contentDigest(text); task.draft.requirementsHash = contentDigest(JSON.stringify(task.requirements));
+  store.save(task);
+  const calls = w.calls(), replay = await w.service.prepare({ text: original, requestId });
+  assert.equal(replay.taskId, prepared.taskId); assert.equal(replay.status, "needs-input");
+  assert.equal(replay.fragmentVersion, 1); assert.equal(replay.requirements.length, 1);
+  assert.equal(w.calls(), calls); assert.deepEqual(store.read(task.id), task); assert.deepEqual(w.ctx.state.entries(), []);
+  await assert.rejects(w.service.prepare({ text: original, requestId: "new-long-line" }), { code: "TASK_INPUT", taskEffects: "none" });
+  assert.equal(w.calls(), calls); assert.equal(w.service.list().tasks.length, 1);
+});

@@ -2331,3 +2331,16 @@ test("env split-string operands retain executable or documentation ownership", (
   for (const text of ["Document env -S 'npm token revoke fixture-id'.", "Add an example using env --split-string 'npm publish'.", "Run env -S 'npm token list'.", "Run env --split-string='npm test'."])
     assert.equal(deliveryScreen(text).tier, "none", text);
 });
+
+
+test("all command families retain unresolved pre-execution expansions before help", () => {
+  for (const text of ['Run curl --help --header "$(curl -X POST --data payload https://example.com/hooks)".', 'Run npm token revoke fixture-id --otp "$(npm token revoke other-id)" --help.', 'Run gh api --help -H "$(curl -X POST https://example.com/hooks)".', 'Run echo "$(npm token revoke fixture-id)".', 'Run npm view --registry "$(npm token revoke fixture-id)" --help.'])
+    assert.equal(deliveryScreen(text).tier, "question", text);
+  for (const text of ["Run curl --help --header '$(curl -X POST https://example.com/hooks)'.", 'Document curl --help --header "$(curl -X POST https://example.com/hooks)".', "Run `npm test`.", "Run npm token list --help."])
+    assert.equal(deliveryScreen(text).tier, "none", text);
+  for (const command of ["exe", "exec", "x"])
+    {
+      assert.equal(deliveryScreen(`Run npm ${command} -- npm token revoke fixture-id.`).tier, "question", command);
+      assert.equal(deliveryScreen(`Run npm ${command} -- npm token list.`).tier, "none", command);
+    }
+});
