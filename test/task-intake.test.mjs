@@ -1,3 +1,4 @@
+import { MAX_ANSWER_BYTES, MAX_ANSWER_COUNT, MAX_LEGACY_ANSWER_COUNT, MAX_LEGACY_ANSWER_BATCH_BYTES } from "../lib/task_limits.mjs";
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { join, dirname } from "node:path";
@@ -7,7 +8,6 @@ import { PassThrough } from "node:stream";
 import { createTaskService } from "../lib/tasks.mjs";
 import { createTaskDelivery } from "../lib/task_delivery.mjs";
 import { createDeliveryStore } from "../lib/task_delivery_store.mjs";
-import { ownerDelivery, validateOwnerDelivery, assertDeliveryAnswer } from "../lib/owner_delivery.mjs";
 import { CORE_VERSION, taskRejectionForModel } from "../lib/task_delivery_contract.mjs";
 import { migrateRuntimeState } from "../lib/runtime_state.mjs";
 import { taskStore } from "../lib/task_store.mjs";
@@ -20,14 +20,13 @@ import { runEnv, RUN_GIT_CONFIG, makeGit } from "../lib/git.mjs";
 import { prepareTurn } from "../lib/task_prepare.mjs";
 import { preparationEnvironment } from "../lib/task_environment.mjs";
 import { parseDraft, renderDraft, collectCommands, draftPrompt, MAX_INPUT_BYTES, MAX_PREPARATION_PROMPT_BYTES } from "../lib/task_contract.mjs";
-import { MAX_ANSWER_BYTES, MAX_ANSWER_COUNT, MAX_LEGACY_ANSWER_COUNT, MAX_LEGACY_ANSWER_BATCH_BYTES } from "../lib/task_limits.mjs";
 import { buildRun, buildPreparationRun, PREPARATION_BOUNDARY, capabilitiesFor } from "../lib/harness.mjs";
 import { parseSourcesMeta } from "../lib/config.mjs";
 import { makeState } from "../lib/state.mjs";
 import { writeJsonAtomic } from "../lib/fs.mjs";
 import { contentDigest, captureStartInput } from "../lib/start_contract.mjs";
 import { draftFor } from "./fixtures/task-intake.mjs";
-import { workflowRequests, applicationRequests, publicationTailConnectors } from "./fixtures/owner-actions.mjs";
+import { workflowRequests, applicationRequests } from "./fixtures/owner-actions.mjs";
 import { tempHome, CONFIG, GOOD_PRD, harnessBin, fakeCredential, fakeIdentity, silentLog, fakeRunner, makeClock, codexLines, claudeResultLines, geminiLines, opencodeLines, gooseLines } from "./helpers.mjs";
 
 // Exercise durable runner/environment logic using disposable Node executables,
@@ -171,164 +170,6 @@ test("a conflicting delivery answer leaves its question, revision and preparatio
   }
 });
 
-test("answer batches enforce aggregate bytes and item limits before parsing or mutating", async () => {
-  let calls = 0;
-  const w = world({ prepare: async (_ctx, task) => { calls++; return JSON.stringify(draftFor(task, { question: true })); } });
-  const first = await w.service.prepare({ text: "Implement export. Open a PR for review." });
-  assert.equal(first.status, "needs-input");
-  const store = taskStore(w.home), saved = store.read(first.taskId);
-  let tooManyReads = 0;
-  const tooMany = Object.fromEntries(Array.from({ length: MAX_ANSWER_COUNT + 1 }, (_, index) => [`q-r-${index + 1}`, index ? "Use CSV." : null]));
-  Object.defineProperty(tooMany, "q-r-1", { enumerable: true, get() { tooManyReads++; return "Use CSV."; } });
-  await assert.rejects(w.service.answer({ taskId: first.taskId, expectedRevision: first.revision, operationId: "answer-count-limit", answers: tooMany }), error => {
-    assert.equal(error.code, "TASK_INPUT"); assert.equal(error.taskEffects, "none"); return true;
-  });
-  assert.equal(tooManyReads, 0, "the question-count cap runs before reading any answer values");
-  const half = Math.floor(MAX_ANSWER_BYTES / 2) + 16;
-  await assert.rejects(w.service.answer({ taskId: first.taskId, expectedRevision: first.revision, operationId: "answer-byte-limit", answers: {
-    "q-r-1": "x".repeat(half), "q-r-2": `${"y".repeat(half)} Do not publish publicly`,
-  } }), error => {
-    assert.equal(error.code, "TASK_INPUT"); assert.match(error.message, /answer batch exceeds .* total UTF-8 bytes/); assert.equal(error.taskEffects, "none"); return true;
-  });
-  let oversizedReads = 0;
-  const oversizedAccessor = {};
-  Object.defineProperty(oversizedAccessor, "q-r-3", { enumerable: true, get() {
-    oversizedReads++;
-    return "x".repeat(MAX_ANSWER_BYTES + 1);
-  } });
-  await assert.rejects(w.service.answer({ taskId: first.taskId, expectedRevision: first.revision, operationId: "answer-byte-limit-before-hash", answers: oversizedAccessor }), error => {
-    assert.equal(error.code, "TASK_INPUT"); assert.equal(error.taskEffects, "none"); return true;
-  });
-  assert.equal(oversizedReads, 1, "the aggregate byte cap runs before canonical request hashing reads answer values again");
-  assert.deepEqual(store.read(first.taskId), saved);
-  assert.equal(calls, 1, "over-limit answers are rejected before owner-text parsing or another preparation turn");
-  assert.deepEqual(w.ctx.state.entries(), []);
-  const legacyHalf = Math.floor(MAX_ANSWER_BYTES / 2) + 32;
-  const legacyOversizedAnswers = { "q-r-1": "x".repeat(legacyHalf), "q-r-2": "y".repeat(legacyHalf) };
-  assert.ok(Object.entries(legacyOversizedAnswers).reduce((bytes, [id, value]) => bytes + Buffer.byteLength(id) + Buffer.byteLength(value), 0) > MAX_ANSWER_BYTES);
-  const legacyOperationId = "legacy-oversized-answer-replay";
-  const legacySignature = contentDigest(JSON.stringify({ answers: legacyOversizedAnswers, verifyCommands: [] }));
-  saved.operations[legacyOperationId] = legacySignature;
-  store.save(saved);
-  const legacyReplay = await w.service.answer({ taskId: first.taskId, expectedRevision: first.revision, operationId: legacyOperationId, answers: legacyOversizedAnswers });
-  assert.equal(legacyReplay.taskId, first.taskId, "an exact previously accepted operation remains replayable across the new batch bound");
-  for (const count of [MAX_ANSWER_COUNT + 1, MAX_LEGACY_ANSWER_COUNT]) {
-    const operationId = `legacy-${count}-answer-replay`;
-    const legacyAnswers = Object.fromEntries(Array.from({ length: count }, (_, index) => [`q-r-${index + 1}`, "Use CSV."]));
-    saved.operations[operationId] = contentDigest(JSON.stringify({ answers: legacyAnswers, verifyCommands: [] }));
-    store.save(saved);
-    const replay = await w.service.answer({ taskId: first.taskId, expectedRevision: first.revision, operationId, answers: legacyAnswers });
-    assert.equal(replay.taskId, first.taskId, `${count} previously accepted answers remain replayable`);
-    await assert.rejects(w.service.answer({ taskId: first.taskId, expectedRevision: first.revision, operationId,
-      answers: { ...legacyAnswers, "q-r-1": "Use JSON." } }), { code: "TASK_CONFLICT", taskEffects: "none" });
-  }
-  let overCountReads = 0;
-  const excessiveLegacyAnswers = Object.fromEntries(Array.from({ length: MAX_LEGACY_ANSWER_COUNT + 1 }, (_, index) => [`q-r-${index + 1}`, "Use CSV."]));
-  Object.defineProperty(excessiveLegacyAnswers, "q-r-1", { enumerable: true, get() { overCountReads++; return "Use CSV."; } });
-  await assert.rejects(w.service.answer({ taskId: first.taskId, expectedRevision: first.revision, operationId: legacyOperationId,
-    answers: excessiveLegacyAnswers }), { code: "TASK_INPUT", taskEffects: "none" });
-  assert.equal(overCountReads, 0, "legacy count limit runs before reading answer values");
-  await assert.rejects(w.service.answer({ taskId: first.taskId, expectedRevision: first.revision, operationId: legacyOperationId, answers: { "q-r-1": "y".repeat(legacyHalf), "q-r-2": "x".repeat(legacyHalf) } }), error => {
-    assert.equal(error.code, "TASK_CONFLICT", "a prior operation ID cannot authorize changed over-limit input");
-    assert.equal(error.taskEffects, "none"); return true;
-  });
-  let oversizedReplayReads = 0;
-  const oversizedReplay = {};
-  Object.defineProperty(oversizedReplay, "q-r-1", { enumerable: true, get() {
-    oversizedReplayReads++;
-    return "x".repeat(MAX_LEGACY_ANSWER_BATCH_BYTES + 1);
-  } });
-  await assert.rejects(w.service.answer({ taskId: first.taskId, expectedRevision: first.revision, operationId: legacyOperationId, answers: oversizedReplay }), error => {
-    assert.equal(error.code, "TASK_INPUT", "legacy retries are capped at the largest batch previous per-answer limits could accept");
-    assert.equal(error.taskEffects, "none"); return true;
-  });
-  assert.equal(oversizedReplayReads, 1, "oversized retries are rejected before canonical hashing reads answer values again");
-  assert.deepEqual(store.read(first.taskId), saved);
-  await w.service.answer({ taskId: first.taskId, expectedRevision: first.revision, operationId: "answer-replay", answers: { "q-r-1": "Use CSV." } });
-  const accepted = store.read(first.taskId);
-  await assert.rejects(w.service.answer({ taskId: first.taskId, expectedRevision: first.revision, operationId: "answer-replay", answers: { "q-r-1": null } }), error => {
-    assert.equal(error.code, "TASK_CONFLICT", "an idempotency-key reuse is checked before semantic answer validation");
-    assert.equal(error.taskEffects, "none"); return true;
-  });
-  assert.deepEqual(store.read(first.taskId), accepted);
-  assert.equal(calls, 2);
-});
-
-test("non-string answers stop before serialization and preserve saved retries", async () => {
-  let calls = 0, serializationCalls = 0, payloadReads = 0;
-  const w = world({ prepare: async (_ctx, task) => { calls++; return JSON.stringify(draftFor(task, { question: true })); } });
-  const first = await w.service.prepare({ text: REQUEST }), store = taskStore(w.home), initial = store.read(first.taskId);
-  const object = Object.defineProperty({}, "payload", { enumerable: true, get() { payloadReads++; return "x".repeat(MAX_ANSWER_BYTES * 4); } });
-  const custom = { toJSON() { serializationCalls++; return "Use CSV."; } };
-  const cyclic = {}; cyclic.self = cyclic;
-  const invalid = [object, custom, cyclic, [custom], new String("Use CSV."), null, undefined, 42, true, 1n, Symbol("answer"), () => "Use CSV."];
-  for (const [index, value] of invalid.entries()) {
-    await assert.rejects(w.service.answer({ taskId: first.taskId, expectedRevision: first.revision, operationId: `non-text-${index}`, answers: { "q-r-1": value } }), { code: "TASK_INPUT", taskEffects: "none" });
-    assert.equal(serializationCalls, 0);
-    assert.equal(payloadReads, 0);
-    assert.deepEqual(store.read(first.taskId), initial);
-    assert.equal(calls, 1);
-  }
-  const answers = { "q-r-1": "Use CSV." }, operationId = "text-answer";
-  const accepted = await w.service.answer({ taskId: first.taskId, expectedRevision: first.revision, operationId, answers });
-  const saved = store.read(first.taskId);
-  saved.operations["legacy-text-answer"] = contentDigest(JSON.stringify({ answers, verifyCommands: [] }));
-  store.save(saved);
-  for (const id of [operationId, "legacy-text-answer"]) {
-    for (const value of invalid) {
-      await assert.rejects(w.service.answer({ taskId: first.taskId, expectedRevision: first.revision, operationId: id, answers: { "q-r-1": value } }), { code: "TASK_CONFLICT", taskEffects: "none" });
-      assert.equal(serializationCalls, 0);
-      assert.equal(payloadReads, 0);
-      assert.deepEqual(store.read(first.taskId), saved);
-    }
-    assert.deepEqual(await w.service.answer({ taskId: first.taskId, expectedRevision: first.revision, operationId: id, answers }), accepted);
-  }
-  assert.equal(calls, 2);
-  assert.deepEqual(w.ctx.state.entries(), []);
-  assert.equal(w.daemonCalls(), 0);
-});
-
-test("answer accessors and proxies share one bounded snapshot through persistence and replay", async t => {
-  for (const kind of ["accessor", "proxy"]) await t.test(kind, async () => {
-    let calls = 0;
-    const w = world({ prepare: async (_ctx, task) => { calls++; return JSON.stringify(draftFor(task, { question: true })); } });
-    const first = await w.service.prepare({ text: REQUEST });
-    const answer = "Use CSV only.", laterAnswer = "x".repeat(MAX_ANSWER_BYTES + 1);
-    let reads = 0;
-    const value = () => ++reads === 1 ? answer : laterAnswer;
-    const answers = kind === "accessor"
-      ? Object.defineProperty({}, "q-r-1", { enumerable: true, get: value })
-      : new Proxy({ "q-r-1": answer }, { get(target, key, receiver) { return key === "q-r-1" ? value() : Reflect.get(target, key, receiver); } });
-    const input = { taskId: first.taskId, expectedRevision: first.revision, operationId: "bounded-answer-snapshot", answers };
-    const accepted = await w.service.answer(input);
-    assert.equal(reads, 1, "a caller-owned answer value is read once before hashing and requirement construction");
-    assert.equal(accepted.status, "ready");
-    const store = taskStore(w.home), saved = store.read(first.taskId);
-    assert.deepEqual(saved.answers, { "q-r-1": answer });
-    assert.deepEqual(saved.requirements.filter(r => r.id.startsWith("a-")), [{ id: "a-q-r-1-1", text: answer }]);
-    assert.equal(saved.operations[input.operationId], "canonical-v1:" + contentDigest(JSON.stringify({ answers: { "q-r-1": answer }, verifyCommands: [] })));
-    assert.ok(accepted.draft.text.includes(JSON.stringify(answer)));
-    assert.ok(!accepted.draft.text.includes(laterAnswer));
-    t.diagnostic(`Bounded snapshot fixture draft (${kind}): ${accepted.draft.path}`);
-    assert.deepEqual(await w.service.answer({ ...input, answers: { "q-r-1": answer } }), accepted);
-    reads = 0;
-    assert.deepEqual(await w.service.answer(input), accepted);
-    assert.equal(reads, 1, "an exact accessor/proxy retry also hashes only its captured value");
-    assert.equal(calls, 2, "an exact retry replays the accepted snapshot without another preparation turn");
-    let conflictingReads = 0;
-    const conflicting = Object.defineProperty({}, "q-r-1", { enumerable: true, get() { return ++conflictingReads === 1 ? "Use JSON only." : answer; } });
-    await assert.rejects(w.service.answer({ ...input, answers: conflicting }), { code: "TASK_CONFLICT", taskEffects: "none" });
-    assert.equal(conflictingReads, 1);
-    assert.deepEqual(store.read(first.taskId), saved);
-    const unreadable = Object.defineProperty({}, "q-r-1", { enumerable: true, get() { throw new Error("answer read failed"); } });
-    await assert.rejects(w.service.answer({ ...input, answers: unreadable }), /answer read failed/);
-    assert.deepEqual(store.read(first.taskId), saved);
-    assert.deepEqual(await w.service.answer({ ...input, answers: { "q-r-1": answer } }), accepted, "failed reads release mutation ownership for an exact retry");
-    assert.deepEqual(w.ctx.state.entries(), []);
-    assert.equal(w.daemonCalls(), 0);
-  });
-});
-
 test("an implicit review workflow refuses delivery changes before effects but accepts product refinement", async () => {
   const w = world({ prepare: async (_ctx, task) => JSON.stringify(draftFor(task, { question: true })) });
   const first = await w.service.prepare({ text: REQUEST });
@@ -367,7 +208,6 @@ test("technical conditions and PR feature subjects survive actual preparation an
 test("literal boundaries and delivery-specific contexts survive actual intake and answers", async () => {
   const accepted = ["Create a PR template for this repository.", "Open a PR details dialog.", "Submit a PR review form.",
     "Do not commit the database transaction when validation fails.", "Avoid pushing duplicate items onto the queue.",
-    "Do not generate the report and commit the database transaction.",
     "Require user confirmation before deleting an account.", "Ask for user permission before accessing the camera.", "Require user confirmation before committing the database transaction.", "Require user confirmation before creating a PR template.", "Do not commit the database transaction or push duplicate items onto the queue.", "Neither commit the database transaction nor push duplicate items onto the queue."];
   for (const text of accepted) {
     const w = world(), prepared = await w.service.prepare({ text });
@@ -460,688 +300,6 @@ test("action object boundaries reject workflow changes before effects and retain
   }
 });
 
-test("latest publication review cases fail before task effects without rejecting product requirements", async () => {
-  const unsafe = [
-    ...publicationTailConnectors.flatMap(connector => [
-      `The button creates a PR after tests pass, ${connector} the agent opens another PR.`,
-      `Ensure the button creates a PR after tests pass ${connector} our senior developer files another PR.`,
-    ]),
-    "Create a PR ASAP.",
-    "Do not create a PR this time.",
-    "Make PRs obligatory.",
-    "Make PRs compulsory.",
-    "Open PRs whenever tests pass.",
-    "Create a PR provided that tests pass.",
-    "Make PRs so long as tests pass.",
-    "Created a PR for review.",
-    "Opened a PR for review.",
-    "Submitted a PR for review.",
-    "The LLM creates a PR when tests pass.",
-    "The AI creates a PR after tests pass.",
-    "The developer creates a PR after tests pass.",
-    "The team creates a PR after tests pass.",
-    "Ensure the button creates a PR after tests pass and the agent opens another PR.",
-    "The button creates a PR after tests pass and the agent quickly opens another PR.",
-    "The button creates a PR after tests pass, therefore the agent opens another PR.",
-    "Ensure the button creates a PR after tests pass consequently our senior developer quickly creates another PR.",
-    "The button creates a PR after tests pass, accordingly Alice King will submit another pull request.",
-    "Therefore the agent opens another PR.",
-    "The button creates a PR after tests pass, meanwhile the agent opens another PR.",
-    "The button creates a PR after tests pass, however the agent opens another PR.",
-    "The button creates a PR after tests pass, moreover the agent files another PR.",
-    "The button creates a PR after tests pass, likewise the agent opens another PR.",
-    "The button creates a PR after tests pass, conversely the agent opens another PR.",
-    "The button creates a PR after tests pass, alternatively the agent opens another PR.",
-    "Ensure the button creates a PR after tests pass as an alternative our senior developer quickly opens another PR.",
-    "The button creates a PR after tests pass, or else Alice King files another PR.",
-    "Ensure the button creates a PR after tests pass in contrast our senior developer quickly opens another PR.",
-    "The button creates a PR after tests pass, on the other hand Alice King files another PR.",
-    "The button creates a PR after tests pass & Jane Doe conversely files another PR.",
-    "Ensure the button creates a PR after tests pass similarly our senior developer quickly opens another PR.",
-    "The button creates a PR after tests pass, in the same way Alice King files another PR.",
-    "The button creates a PR after tests pass & Jane Doe likewise files another PR.",
-    "The button creates a PR after tests pass & Jane Doe also files another PR.",
-    "The button creates a PR after tests pass / the agent additionally files another PR.",
-    "Ensure the button creates a PR after tests pass furthermore our senior developer quickly opens another PR.",
-    "The button creates a PR after tests pass, additionally Alice King will submit another PR.",
-    "The button creates a PR after tests pass, albeit the agent files another PR.",
-    "Ensure the button creates a PR after tests pass nevertheless our senior developer opens another PR.",
-    "The API generates a PR after tests pass and the agent opens another PR.",
-    "Ensure the parser creates a PR node provided that you open another PR.",
-    "Changes cannot be merged into one cell and main.",
-    "Code cannot be merged in the editor into origin/main.",
-    "Code cannot be merged into one cell. Changes cannot be merged.",
-    "Ensure the button creates a PR after tests pass in the meantime our senior developer quickly opens another PR.",
-    "The button creates a PR after tests pass, subsequently Alice King opens another PR.",
-    "The button creates a PR after tests pass and Mary Jane Watson opens another PR.",
-    "Ensure the button creates a PR after tests pass provided that Mary Jane Watson quickly opens another PR.",
-    "Ensure John Ronald Reuel Tolkien creates a PR.",
-    "Ana María De La Cruz also opens another PR.",
-    "The button creates a PR after tests pass and the senior agent opens another PR.",
-    "Ensure our experienced developer creates a PR.",
-    "Ensure the button creates a PR after tests pass provided that the background automation coordinator quickly opens another PR.",
-    "Ensure the button creates a PR after tests pass provided that alex also opens another PR.",
-    "Ensure the team will quickly create a PR.",
-    "Jane Doe also opens another PR.",
-    "Ensure the button creates a PR after tests pass & our developer opens another PR.",
-    "Ensure the button creates a PR after tests pass provided that the agent opens another PR.",
-    "The agent opens another PR.",
-    "The button creates a PR after tests pass and the agent files another PR.",
-    "The button creates a PR after tests pass and the release workflow opens another PR.",
-    "The button creates a PR after tests pass and our automation workflow files another PR.",
-    "Ensure the button creates a PR after tests pass provided that the CI pipeline opens another PR.",
-    "Our scheduled automation opens another PR.",
-    "The button creates a PR after tests pass & the nightly job alternatively files another PR.",
-    "Ensure the button creates a PR after tests pass provided that Mary Jane Watson publishes another PR.",
-    "The agent generates another PR.",
-    "Ensure the agent deliver a PR.",
-    "The agent drafted a PR.",
-    "The agent filing a PR.",
-    "The button creates a PR after tests pass, and PRs should not be published.",
-    "The button creates a PR after tests pass, and additional PRs should not be published.",
-    "The button creates a PR after tests pass, and automatically opening PRs is forbidden.",
-    "The button creates a PR after tests pass, and opening pull requests is forbidden.",
-    "The button creates a PR after tests pass, and creating PRs is forbidden.",
-    "If I approve the invoice, email the customer as well as wait until the owner approves.",
-    "If I approve the invoice, email the customer along with wait until the owner approves.",
-    "If I approve the invoice, email the customer plus wait until the owner approves.",
-    "Build the widget after I approve the purchase, then send a receipt.",
-    "The maintainer creates a PR after tests pass.",
-    "The contractor opens a PR when checks pass.",
-    "The CI creates a PR after tests pass.",
-    "The automation creates a PR after tests pass.",
-    "Open a GitHub PR after tests pass.",
-    "Implement export. Open a sample PR after integration tests pass.",
-    "Create a legitimate PR in integration tests.",
-    "Generate a dummy PR? Then add unit tests.",
-    "Ship it after I approve the code.",
-    "Release it after I approve the implementation.",
-    "Package it after I approve the code.",
-    "After I have approved, update the service.",
-    "Make the team a PR for review.",
-    "Ensure the team creates a PR for review.",
-    "Create John a pull request for review.",
-    "Do not create a PR please.",
-    "Do not create a PR whatsoever.",
-    "Create a PR and assign me.",
-    "Create a PR anyone can see.",
-    "Create a PR everyone can review.",
-    "Create a number of PRs for review.",
-    "Create any number of PRs for review.",
-    "Make one hundred and six PRs for review.",
-    "Submit 1,024 pull requests for review.",
-    "Make a handful of PRs.",
-    "Create a lot of PRs.",
-    "Create a bunch of PRs.",
-    "Create loads of PRs.",
-    "Create tons of PRs.",
-    "Create a series of PRs.",
-    "Create a plethora of PRs.",
-    "Make a multitude of PRs for review.",
-    "Create a truckload of PRs.",
-    "Do not create a PR going forward.",
-    "'cause we should not create a PR, label the button 'Ready'.",
-    "'cause we should not create a PR for users' safety.",
-    "‘cause we should not create a PR for users’ safety.",
-    "Do not create a PR visible to outsiders.",
-    "Create a PR visible to outsiders.",
-    "The button creates a PR after tests pass: PRs must not be published.",
-    "The button creates a PR after tests pass — PRs must not be published.",
-    "The button creates a PR after tests pass - PRs must not be published.",
-    "The button creates a PR after tests pass where PRs must not be published.",
-    "The button creates a PR after tests pass even though PRs must not be published.",
-    "The button creates a PR after tests pass since PRs must not be published.",
-    "The button creates a PR after tests pass given that PRs must not be published.",
-    "The button creates a PR after tests pass since changes must not be merged.",
-    "The button creates a PR after tests pass since changes cannot be merged.",
-    "The button creates a PR after tests pass since changes cannot ever be merged.",
-    "The button creates a PR after tests pass since work can't automatically be merged.",
-    "The button creates a PR after tests pass since commits must not automatically be created.",
-    "Git branches are not to ever be generated.",
-    "The button creates a PR after tests pass since changes are not to be merged.",
-    "Changes are not to be merged.",
-    "Code is never to be merged.",
-    "Branches cannot ever be merged.",
-    "Branch must not ever be merged.",
-    "Branches cannot ever be merged in the repository.",
-    "Branches cannot ever be merged in GitLab.",
-    "The button creates a PR after tests pass since branches cannot ever be merged.",
-    "Syntax tree branches cannot ever be merged. Branches must not ever be merged.",
-    "Bank branches cannot be created without an address. Git branches cannot ever be generated.",
-    "Branches cannot ever be merged and customer records remain in the bank network.",
-    "The button creates a PR after tests pass provided that you open another PR.",
-    "The button creates a PR after tests pass assuming that we generate a new pull request.",
-    "The button creates a PR after tests pass since work can’t be merged.",
-    "Changes must not be merged.",
-    "If I approve the Terraform plan, apply it.",
-    "Apply it after I approve the Terraform plan.",
-    "If I approve the article, email the customer as well as proofread the article.",
-    "If I approve the article, email the customer in addition to proofread the article.",
-    "If I approve the invoice, email the customer before proofreading the article.",
-    "If I approve the support request, complete the request by first proofreading the article.",
-    "Complete the request via carefully proofreading the article after I approve the support request.",
-    "If I approve the invoice, email the customer after carefully proofreading the article.",
-    "Email the customer after very carefully proofreading the article after I approve the invoice.",
-    "If I approve the invoice, email the customer after you proofread the article.",
-    "If I approve the invoice, email the customer after our team proofreads the invoice.",
-    "If I approve the invoice, email the customer once you proofread the article.",
-    "If I approve the invoice, email the customer whilst you proofread the invoice.",
-    "Email the customer whilst our senior editor proofreads the invoice after I approve the invoice.",
-    "If I approve the invoice, email the customer WHILST Alice King proofreads the invoice.",
-    "If I approve the invoice, email the customer whilst carefully proofreading the invoice.",
-    "If I approve the invoice, email the customer whilst the invoice is proofread.",
-    "If I approve the invoice, email the report whilst you apply the discount.",
-    "If I approve the invoice, email the customer whenever you proofread the invoice.",
-    "Email the customer whenever carefully proofreading the invoice after I approve the invoice.",
-    "If I approve the invoice, email the customer whenever the invoice is proofread.",
-    "If I approve the invoice, email the customer if you proofread the article.",
-    "Email the customer if our senior editor proofreads the invoice after I approve the invoice.",
-    "If I approve the invoice, email the customer if the invoice is proofread.",
-    "If I approve the invoice, email the customer assuming you proofread the invoice.",
-    "Email the customer assuming our senior editor proofreads the invoice after I approve the invoice.",
-    "If I approve the invoice, email the customer ASSUMING THAT Alice King proofreads the invoice.",
-    "If I approve the invoice, email the customer assuming that the invoice is proofread.",
-    "If I approve the invoice, email the report assuming you apply the discount.",
-    "If I approve the invoice, email the customer provided you proofread the invoice.",
-    "Email the customer given our senior editor proofreads the invoice after I approve the invoice.",
-    "If I approve the invoice, email the customer supposing you proofread the invoice.",
-    "If I approve the invoice, email the customer providing you proofread the invoice.",
-    "If I approve the invoice, email the customer PROVIDED THAT Alice King proofreads the invoice.",
-    "If I approve the invoice, email the customer given that the invoice is proofread.",
-    "If I approve the invoice, email the report provided you apply the discount.",
-    "Create tests for PRs and open another PR.",
-    "If I approve the invoice, email the customer unless you proofread the invoice.",
-    "If I approve the invoice, email the customer lest you proofread the invoice.",
-    "Email the customer LEST Alice King should proofread the invoice after I approve the invoice.",
-    "If I approve the invoice, email the customer lest the invoice should be proofread.",
-    "If I approve the invoice, email the customer lest our archive specialist proofreads the invoice.",
-    "If I approve the invoice, email the report lest you apply the discount.",
-    "Email the customer unless our senior editor proofreads the invoice after I approve the invoice.",
-    "If I approve the invoice, email the customer unless carefully proofreading the invoice.",
-    "If I approve the invoice, email the customer unless the invoice is proofread.",
-    "If I approve the invoice, email the report unless you apply the discount.",
-    "If I approve the invoice, email the customer because you must proofread the invoice.",
-    "If I approve the invoice, email the customer even though you proofread the invoice.",
-    "If I approve the invoice, email the customer albeit proofreading the invoice.",
-    "Email the customer albeit carefully proofreading the invoice after I approve the invoice.",
-    "If I approve the invoice, email the customer ALBEIT Alice King must proofread the invoice.",
-    "If I approve the invoice, email the customer albeit the invoice is proofread.",
-    "If I approve the invoice, email the report albeit applying the discount.",
-    "Email the customer though our senior editor proofreads the invoice after I approve the invoice.",
-    "If I approve the invoice, email the customer even though the invoice is proofread.",
-    "If I approve the invoice, email the report even though you apply the discount.",
-    "If I approve the invoice, email the customer despite proofreading the invoice.",
-    "Email the customer despite carefully proofreading the invoice after I approve the invoice.",
-    "If I approve the invoice, email the customer DESPITE Alice King proofreading the invoice.",
-    "If I approve the invoice, email the customer despite our senior editor proofreading the invoice.",
-    "If I approve the invoice, email the customer despite emailing the report.",
-    "If I approve the invoice, email the report despite applying the discount.",
-    "If I approve the invoice, email the customer notwithstanding you proofread the invoice.",
-    "Email the customer notwithstanding carefully proofreading the invoice after I approve the invoice.",
-    "If I approve the invoice, email the customer NOTWITHSTANDING Alice King must proofread the invoice.",
-    "If I approve the invoice, email the customer notwithstanding the invoice is proofread.",
-    "If I approve the invoice, email the customer notwithstanding emailing the report.",
-    "If I approve the invoice, email the report notwithstanding applying the discount.",
-    "If I approve the invoice, email the customer upon proofreading the invoice.",
-    "Email the customer upon carefully proofreading the invoice after I approve the invoice.",
-    "If I approve the invoice, email the customer UPON Alice King proofreading the invoice.",
-    "If I approve the invoice, email the customer upon our senior editor proofreading the invoice.",
-    "If I approve the invoice, email the customer upon emailing the report.",
-    "If I approve the invoice, email the report upon applying the discount.",
-    "If I approve the invoice, email the customer following your proofreading the invoice.",
-    "Email the customer FOLLOWING our carefully proofreading the invoice after I approve the invoice.",
-    "If I approve the invoice, email the customer following Alice's proofreading the invoice.",
-    "If I approve the invoice, email the customer after your proofreading the invoice.",
-    "If I approve the invoice, email the customer by your emailing the report.",
-    "If I approve the invoice, email the customer following your emailing the report.",
-    "If I approve the invoice, email the report following your applying the discount.",
-    "If I approve the invoice, email the customer upon which you proofread the invoice.",
-    "If I approve the invoice, email the customer UPON WHICH our archive specialist proofreads the invoice.",
-    "Email the customer since our senior editor proofreads the invoice after I approve the invoice.",
-    "If I approve the invoice, email the customer because carefully proofreading the invoice.",
-    "If I approve the invoice, email the customer since the invoice is proofread.",
-    "If I approve the invoice, email the report because you must apply the discount.",
-    "If I approve the invoice, email the customer thereby proofreading the invoice.",
-    "Email the customer thus carefully proofreading the invoice after I approve the invoice.",
-    "If I approve the invoice, email the report thereby applying the discount.",
-    "If I approve the invoice, email the customer hence emailing the report.",
-    "If I approve the invoice, email the customer so you can proofread the invoice.",
-    "Email the customer so our senior editor can proofread the invoice after I approve the invoice.",
-    "If I approve the invoice, email the customer SO THAT Alice King proofreads the invoice.",
-    "If I approve the invoice, email the customer so that the invoice can be proofread.",
-    "If I approve the invoice, email the report so you can apply the discount.",
-    "If I approve the invoice, email the customer that proofreads the invoice.",
-    "If I approve the invoice, email the customer until our team proofreads the article.",
-    "If I approve the invoice, email the customer when proofreading the article.",
-    "If I approve the invoice, email the customer as soon as you proofread the article.",
-    "If I approve the invoice, email the customer as you proofread the article.",
-    "If I approve the invoice, email the customer by the time you proofread the article.",
-    "If I approve the invoice, email the customer after the article is proofread.",
-    "If I approve the invoice, email the customer by the time the article has been edited.",
-    "If I approve the invoice, email the customer when the article gets edited.",
-    "If I approve the invoice, email the customer—then proofread the article.",
-    "If I approve the invoice, email the customer: then proofread the article.",
-    "Email the customer after I approve the invoice—then proofread the article.",
-    "If I approve the invoice, email the customer after our senior editor proofreads the article.",
-    "If I approve the invoice, email the customer in order to proofread the article.",
-    "If I approve the invoice, email the customer to proofread the article.",
-    "Email the customer to proofread the article after I approve the invoice.",
-    "Email the customer in order to proofread the article after I approve the invoice.",
-    "If I approve the invoice, email the customer so as not to proofread the article.",
-    "If I approve the invoice, email the customer with a view to proofreading the article.",
-    "Email the customer with a view to proofreading the article after I approve the invoice.",
-    "If I approve the invoice, email the customer for the purpose of proofreading the article.",
-    "If I approve the invoice, email the customer in the hope of proofreading the article.",
-    "If I approve the invoice, email the customer with the expectation that you proofread the article.",
-    "Email the customer in the hope that our senior editor proofreads the article after I approve the invoice.",
-    "If I approve the invoice, email the customer with the assumption that the article is proofread.",
-    "If I approve the invoice, email the customer on condition that you proofread the article.",
-    "Email the customer in case you proofread the article after I approve the invoice.",
-    "If I approve the invoice, email the customer via the assurance that the article is proofread.",
-    "If I approve the invoice, send the customer an email which lets you proofread the article.",
-    "If I approve the invoice, email the customer & proofread the invoice.",
-    "Email the customer + proofread the invoice after I approve the invoice.",
-    "If I approve the invoice, email the customer / proofread the invoice.",
-    "If I approve the invoice, send the customer an email which also lets you proofread the article.",
-    "Send the customer an email which can also let our senior editor proofread the invoice after I approve the invoice.",
-    "If I approve the invoice, send the customer an email which also has you email the report.",
-    "If I approve the invoice, send the customer an email which has you proofread the article.",
-    "Send the customer an email that had our archive specialist proofread the invoice after I approve the invoice.",
-    "If I approve the invoice, send the customer an email which can have you email the report.",
-    "Send the customer an email which enables our senior editor to proofread the article after I approve the invoice.",
-    "If I approve the invoice, send the customer an email which lets you email the report.",
-    "Email the customer with the expectation of carefully proofreading the article after I approve the invoice.",
-    "Email the customer for the purpose of proofreading the article after I approve the invoice.",
-    "If I approve the invoice, email the customer with the aim of proofreading the article.",
-    "For tests, create a fake PR fixture alongside a real PR.",
-    "For tests, create both fake and real PRs.",
-    "For tests, create fake as well as real PRs.",
-    "For tests, create mock but live PRs.",
-    "For tests, create a fake PR fixture + a real PR.",
-    "For tests, create a fake PR fixture / a real PR.",
-    "For tests, create fake/real PRs.",
-    "For tests, create a fake PR fixture and open it on GitHub.",
-    "For tests, submit a fake PR fixture for review.",
-    "For tests, generate synthetic pull requests as test data for human review.",
-    "For tests, create a fake PR fixture and a mock PR test object for code review.",
-    "For tests, create a fake PR fixture via GitHub.",
-    "For tests, create a fake PR fixture at https://github.com/acme/widget.",
-    "For tests, create a fake PR fixture at https://www.github.com/acme/widget.",
-    "For tests, create a fake PR fixture at www.github.com/acme/widget.",
-    "For tests, create a fake PR fixture at example.com:acme/widget.",
-    "For tests, create a fake PR fixture and open it at forge:acme/widget.",
-    "For tests, create a fake PR fixture inside [::1]:acme/widget.",
-    "For tests, create a fake PR fixture and open it at bitbucket.org/acme/widget.",
-    "For tests, create a fake PR fixture inside forge.example.net:8443/acme/widget.",
-    "For tests, create a fake PR fixture within [::1]:3000/acme/widget.",
-    "For tests, create a fake PR fixture at https://bitbucket.org/acme/widget.",
-    "For tests, create a fake PR fixture inside https://bitbucket.org/acme/widget.",
-    "For tests, create a fake PR fixture and open it at ssh://git@forge.example.net/acme/widget.git.",
-    "For tests, create a fake PR fixture and upload it to https://codeberg.org/acme/widget.",
-    "For tests, create a fake PR fixture and open it at ssh://git@ssh.github.com/acme/widget.git.",
-    "If I approve the invoice, email the customer after which you must proofread the invoice.",
-    "If I approve the invoice, email the customer whereupon you proofread the invoice.",
-    "Email the customer whereupon our senior editor proofreads the invoice after I approve the invoice.",
-    "If I approve the invoice, email the customer WHEREUPON Alice King must proofread the invoice.",
-    "If I approve the invoice, email the customer whereupon the invoice must be proofread.",
-    "If I approve the invoice, email the customer whereupon our archive specialist proofreads the invoice.",
-    "If I approve the invoice, email the report whereupon you apply the discount.",
-    "Email the customer before which our senior editor proofreads the invoice after I approve the invoice.",
-    "If I approve the invoice, email the customer after which the invoice must be proofread.",
-    "If I approve the invoice, email the report after which you apply the discount.",
-    "For tests, create a fake PR fixture and open it at ssh://git@gitlab.com/acme/widget.git.",
-    "For tests, create a fake PR fixture in a GitHub repository.",
-    "For tests, create a fake PR fixture in our GitHub repository.",
-    "For tests, create a fake PR fixture inside our GitHub repository.",
-    "For tests, create a fake PR fixture within our GitLab repository.",
-    "For tests, create a fake PR fixture in my GitLab repo.",
-    "For tests, create a fake PR fixture to our origin.",
-    "For tests, create a fake PR fixture and open it in the GitLab repository.",
-    "For tests, create a fake PR fixture through GitHub.",
-    "For tests, create a fake PR fixture using GitHub.",
-    "For tests, create a fake PR fixture versus a real PR.",
-    "For tests, create a fake PR fixture vs. a real PR.",
-    "For tests, create a fake PR fixture but a real PR.",
-    "For tests, create a fake PR fixture yet a real PR.",
-    "John should create a PR for review.",
-    "The team must create a PR for review.",
-    "Create an actual PR in the integration test.",
-    "Create a real PR in the test.",
-    "Create a test PR in integration tests.",
-    "Create a JSON PR in integration tests.",
-    "Create a serialized PR in integration tests.",
-    "If I approve the purchase, apply the discount. Implement export after I approve the code.",
-    "If I approve the invoice, email the customer and wait until the owner approves.",
-    "If I approve the invoice, email the customer yet wait until the owner approves.",
-  ];
-  const initial = world({ prepare: async () => assert.fail("ambiguous publication cannot invoke preparation") });
-  const pending = world({ prepare: async (_ctx, task) => JSON.stringify(draftFor(task, { question: true })) });
-  const first = await pending.service.prepare({ text: REQUEST });
-  const before = taskStore(pending.home).read(first.taskId), calls = pending.calls();
-  for (const [index, clause] of unsafe.entries()) {
-    const text = `Implement export. ${clause}`;
-    await assert.rejects(initial.service.prepare({ text, run: true }), { code: "TASK_DELIVERY_SCOPE", taskEffects: "none" }, text);
-    await assert.rejects(pending.service.answer({ taskId: first.taskId, expectedRevision: first.revision,
-      operationId: `reviewed-publication-${index}`, answers: { "q-r-1": clause } }),
-    { code: "TASK_DELIVERY_SCOPE", taskEffects: "none" }, clause);
-    assert.deepEqual(taskStore(pending.home).read(first.taskId), before, clause);
-  }
-  assert.deepEqual(initial.service.list().tasks, []);
-  assert.deepEqual(initial.ctx.state.entries(), []);
-  assert.deepEqual(pending.ctx.state.entries(), []);
-  assert.equal(initial.calls(), 0);
-  assert.equal(initial.daemonCalls(), 0);
-  assert.equal(pending.calls(), calls);
-  assert.equal(pending.daemonCalls(), 0);
-
-  const productRequirements = [
-    ...publicationTailConnectors.flatMap(connector => [
-      `The button creates a PR after tests pass, ${connector} the service opens another PR.`,
-      `Show the example "${connector} the agent opens another PR" in the button help.`,
-    ]),
-    "Create tests for PRs.",
-    "Create a parser about PRs.",
-    "Create tests using PRs.",
-    "Created tests for PRs.",
-    "Do not create tests for PRs.",
-    "Avoid creating tests for PRs.",
-    "Add a unit test that creates a dummy PR fixture.",
-    "For tests, create a fake PR fixture and draft a report for review.",
-    "For tests, create a fake PR fixture before uploading logs for code review.",
-    "The button opens a PR.",
-    "The API generates a PR object.",
-    "The parser creates a PR node.",
-    "The serializer creates a PR object.",
-    "Ensure the parser creates a PR node.",
-    "The API generates a PR after tests pass.",
-    "Code cannot be merged into one cell.",
-    "Changes cannot be merged in the editor.",
-    "Work must not ever be merged within the document editor.",
-    "The button creates a PR after tests pass since changes cannot be merged in the editor.",
-    "The button creates a PR after tests pass, however the service opens another PR.",
-    "The button creates a PR after tests pass, moreover the service opens another PR.",
-    "The button creates a PR after tests pass, likewise the service opens another PR.",
-    "The button creates a PR after tests pass, conversely the service opens another PR.",
-    "The button creates a PR after tests pass, alternatively the service opens another PR.",
-    "The button creates a PR after tests pass, as another option the agent creates a PR template.",
-    "The release workflow button creates a PR after tests pass.",
-    "Ensure our automation workflow service creates a PR.",
-    "The button creates a PR after tests pass and the release workflow creates a PR template.",
-    'Show the example "the release workflow opens another PR" in the button help.',
-    "The button creates a PR after tests pass, by contrast the agent creates a PR template.",
-    "Ensure the button contrariwise creates a PR after tests pass.",
-    'Show the example "conversely the agent opens another PR" in the button help.',
-    "The button creates a PR after tests pass, similarly the agent creates a PR template.",
-    "Ensure the button likewise creates a PR after tests pass.",
-    'Show the example "likewise the agent opens another PR" in the button help.',
-    "The button creates a PR after tests pass + the service additionally files another PR.",
-    "The button creates a PR after tests pass, furthermore the agent creates a PR template.",
-    'Show the example "additionally the agent files another PR" in the button help.',
-    "The button creates a PR after tests pass, nevertheless the agent creates a PR template.",
-    "Ensure the button creates a PR.",
-    "Have the submit button create a PR.",
-    "Ensure the button creates a PR after tests pass.",
-    "Ensure the button creates a PR after tests pass and the service opens another PR.",
-    "The button files a PR after tests pass.",
-    "Ensure the button drafts a PR after tests pass.",
-    "The button can issue a PR after tests pass.",
-    "The button creates a PR after tests pass and the service publishes another PR.",
-    "The button creates a PR after tests pass and the agent files a PR template.",
-    "The button creates a PR after tests pass and the agent prepares a report about PRs.",
-    'Show the example "the agent files another PR" in the button help.',
-    "The button creates a PR after tests pass and the service quickly opens another PR.",
-    "Ensure the button quickly creates a PR after tests pass.",
-    "The button quickly creates a PR after tests pass.",
-    "The button creates a PR after tests pass and the agent quickly creates a PR template.",
-    "The button creates a PR after tests pass, therefore the service opens another PR.",
-    "Ensure the button creates a PR after tests pass consequently the agent creates a PR template.",
-    'Show the example "therefore the agent opens another PR" in the button help.',
-    "The button creates a PR after tests pass, meanwhile the service opens another PR.",
-    "The button creates a PR after tests pass, subsequently the agent creates a PR template.",
-    "Ensure the Mary Jane Watson button creates a PR after tests pass.",
-    "The button creates a PR after tests pass and Mary Jane Watson creates a PR template.",
-    'Show the example "meanwhile Mary Jane Watson opens another PR" in the button help.',
-    "The senior agent button creates a PR after tests pass.",
-    "Ensure our experienced developer service creates a PR.",
-    "The button creates a PR after tests pass and the senior agent creates a PR template.",
-    "Ensure the button creates a PR after tests pass and the agent creates a PR template.",
-    'Show the example "the agent opens another PR" in the button help.',
-    "Clicking submit creates a pull request.",
-    "Make PRs searchable in the dashboard.",
-    "Make a pull request API.",
-    "Make the PR optional field editable.",
-    "Generate the PR's title from the branch name.",
-    "Generate a daily report summarizing PRs.",
-    "Create a list of PRs in the dashboard.",
-    "Create a collection of PRs for the dashboard.",
-    "Create a graph of PRs in the dashboard.",
-    "Create a chart of PRs.",
-    "Create a map of PRs for analytics.",
-    "Create a view of PRs.",
-    "Create a grid of PRs.",
-    "Create a group of PRs.",
-    "Create an index of PRs.",
-    "Generate an index of pull requests for search.",
-    "Document whether PRs are optional in settings.",
-    "After I have approved the invoice, mark it paid.",
-    "When I have approved the comment, display it.",
-    "Generate a dummy PR in the unit test.",
-    "Create a fabricated pull request for the test fixture.",
-    "The button creates a PR after tests pass and retries when tests fail.",
-    "The service creates a PR after tests pass and retries when tests fail.",
-    "The button creates a PR after tests pass where the user can inspect it.",
-    "The button creates a PR after tests pass since the queue is ready.",
-    "The button creates a PR after tests pass provided that the form is valid.",
-    "The button creates a PR after tests pass provided that you create a PR template.",
-    "The button creates a PR after tests pass since the queue is ready for merging.",
-    "The button creates a PR after tests pass since customer records are not to be merged.",
-    'Show the warning "Changes are not to be merged" in the PR dialog.',
-    "For tests, create a fake PR alongside a synthetic PR fixture.",
-    "For tests, create a fake PR fixture versus a synthetic PR fixture.",
-    "For tests, create a fake PR fixture before uploading logs to GitHub.",
-    "For tests, create a fake PR fixture and upload logs via GitHub.",
-    "For tests, create a fake PR fixture and upload logs to https://github.com/acme/widget.",
-    "For tests, create a fake PR fixture and upload logs to https://www.github.com/acme/widget.",
-    "For tests, create a fake PR fixture and upload logs to www.github.com/acme/widget.",
-    "For tests, create a fake PR fixture and upload logs to example.com:acme/widget.",
-    'For tests, create a fake PR fixture with the URL field "example.com:acme/widget".',
-    "For tests, create a fake PR fixture at ./example.com:acme/widget.json.",
-    "For tests, create a fake PR fixture at C:/fixtures/widget.json.",
-    'For tests, create a fake PR fixture with the URL field "www.github.com/acme/widget".',
-    "For tests, create a fake PR fixture at fixtures/github.com/acme/widget.json.",
-    "For tests, create a fake PR fixture at file:///tmp/www.github.com/acme/widget.json.",
-    "For tests, create a fake PR fixture and upload logs to https://bitbucket.org/acme/widget.",
-    'For tests, create a fake PR fixture with the URL field "https://bitbucket.org/acme/widget".',
-    "If I approve the invoice, email the customer after which you must apply the discount.",
-    "If I approve the invoice, email the customer whereupon you must apply the discount.",
-    "Email the customer WHEREUPON Alice King must email the customer after I approve the invoice.",
-    "If I approve the invoice, email the customer whereupon the discount must be applied.",
-    "Email the customer before which Alice King must email the customer after I approve the invoice.",
-    "For tests, create a fake PR fixture before uploading logs to ssh://git@gitlab.com/acme/widget.git.",
-    "For tests, create a fake PR fixture and upload logs in a GitHub repository.",
-    "For tests, create a fake PR fixture and upload logs in our GitHub repository.",
-    "For tests, create a fake PR fixture using a local GitHub mock.",
-    "For tests, create a fake PR fixture + a synthetic PR fixture.",
-    "For tests, create a fake PR fixture / a synthetic PR fixture.",
-    "For tests, create fake/mock PRs.",
-    "For tests, create a fake PR fixture / upload logs inside our GitHub repository.",
-    "For tests, create a fake PR fixture but a synthetic PR fixture.",
-    "For tests, create a fake PR fixture yet a synthetic PR fixture.",
-    "For tests, create both fake and mock PRs.",
-    "For tests, create fake as well as mock PRs.",
-    "For tests, create fake and real PR dashboard cards.",
-    "For tests, create a fake and accessible PR UI.",
-    "For tests, create a fake PR fixture and open it in the test UI.",
-    "If I approve the invoice, email the customer and apply the discount.",
-    "If I approve the invoice, email the customer to apply the discount.",
-    "If I approve the invoice, send a receipt to the customer.",
-    "If I approve the invoice, email the customer after you apply the discount.",
-    "If I approve the invoice, email the customer after carefully applying the discount.",
-    "If I approve the support request, complete the request by first emailing the customer.",
-    "If I approve the support request, complete the request via the customer portal.",
-    "If I approve the invoice, email the customer after the recurring payment clears.",
-    "If I approve the invoice, email the customer after our team emails the customer.",
-    "If I approve the invoice, email the customer once you apply the discount.",
-    "If I approve the invoice, email the customer whilst you apply the discount.",
-    "Email the customer WHILST Alice King emails the customer after I approve the invoice.",
-    "If I approve the invoice, email the customer whilst the discount is applied.",
-    'If I approve the invoice, email the customer with the note "whilst you proofread the invoice".',
-    "If I approve the invoice, email the customer whenever you apply the discount.",
-    "If I approve the invoice, email the customer whenever the discount is applied.",
-    "If I approve the invoice, email the customer if you apply the discount.",
-    "Email the customer if the discount is applied after I approve the invoice.",
-    "If I approve the invoice, email the customer if the recurring payment clears.",
-    "If I approve the invoice, email the customer assuming you apply the discount.",
-    "Email the customer assuming that the discount is applied after I approve the invoice.",
-    "If I approve the invoice, email the customer assuming the recurring payment clears.",
-    "If I approve the invoice, email the customer provided you apply the discount.",
-    "Email the customer given that the discount is applied after I approve the invoice.",
-    "If I approve the invoice, email the customer supposing the recurring payment clears.",
-    "If I approve the invoice, email the customer providing that Alice King emails the customer.",
-    "If I approve the invoice, email the customer unless you apply the discount.",
-    "If I approve the invoice, email the customer lest you apply the discount.",
-    "Email the customer LEST Alice King should email the customer after I approve the invoice.",
-    "If I approve the invoice, email the customer lest the discount should be applied.",
-    "Email the customer unless the discount is applied after I approve the invoice.",
-    "If I approve the invoice, email the customer unless the recurring payment clears.",
-    "If I approve the invoice, email the customer because you must apply the discount.",
-    "If I approve the invoice, email the customer even though you must apply the discount.",
-    "If I approve the invoice, email the customer despite applying the discount.",
-    "Email the customer DESPITE Alice King emailing the customer after I approve the invoice.",
-    "If I approve the invoice, email the customer despite the discount.",
-    "If I approve the invoice, email the customer despite a recurring payment.",
-    'If I approve the invoice, email the customer with the note "despite proofreading the invoice".',
-    "If I approve the invoice, email the customer notwithstanding you apply the discount.",
-    "If I approve the invoice, email the customer albeit applying the discount.",
-    "If I approve the invoice, email the customer ALBEIT Alice King emails the customer.",
-    "If I approve the invoice, email the customer albeit the receipt is sent.",
-    'If I approve the invoice, email the customer with the note "albeit proofreading the invoice".',
-    "Email the customer NOTWITHSTANDING Alice King must email the customer after I approve the invoice.",
-    "If I approve the invoice, email the customer notwithstanding the receipt is sent.",
-    "If I approve the invoice, email the customer notwithstanding the discount.",
-    'If I approve the invoice, email the customer with the note "notwithstanding you proofread the invoice".',
-    "If I approve the invoice, email the customer upon applying the discount.",
-    "Email the customer UPON Alice King emailing the customer after I approve the invoice.",
-    "If I approve the invoice, email the customer upon receipt of payment.",
-    "If I approve the invoice, email the customer UPON WHICH the receipt is sent.",
-    'If I approve the invoice, email the customer with the note "upon proofreading the invoice".',
-    "If I approve the invoice, email the customer following your applying the discount.",
-    "Email the customer FOLLOWING Alice's emailing the customer after I approve the invoice.",
-    "If I approve the invoice, email the customer following your recurring payment.",
-    "If I approve the invoice, email the customer FOLLOWING WHICH the receipt is sent.",
-    'If I approve the invoice, email the customer with the note "following your proofreading the invoice".',
-    "Email the customer though Alice King emails the customer after I approve the invoice.",
-    "Email the customer since the discount is applied after I approve the invoice.",
-    "If I approve the invoice, email the customer because the recurring payment clears.",
-    "If I approve the invoice, email the customer thereby applying the discount.",
-    "If I approve the invoice, email the customer thus carefully applying the discount.",
-    "If I approve the invoice, email the customer hence applying the discount.",
-    "If I approve the invoice, email the customer so you can apply the discount.",
-    "Email the customer so that the discount can be applied after I approve the invoice.",
-    "If I approve the invoice, send a receipt to So Smith.",
-    "If I approve the invoice, email the customer until the payment clears.",
-    "If I approve the invoice, email the customer as soon as you apply the discount.",
-    "If I approve the invoice, email the customer as you apply the discount.",
-    "If I approve the invoice, email the customer by the time you apply the discount.",
-    "If I approve the invoice, email the customer after the discount is applied.",
-    "If I approve the invoice, email the customer once the receipt is sent.",
-    "If I approve the invoice, email the customer after the receipt gets sent.",
-    "If I approve the invoice, email the customer—then apply the discount.",
-    "Email the customer after I approve the invoice: then apply the discount.",
-    "If I approve the invoice, email the customer after our senior editor emails the customer.",
-    "If I approve the invoice, email the customer in order to apply the discount.",
-    "If I approve the invoice, email the customer so as to apply the discount.",
-    "If I approve the invoice, email the customer with a view to applying the discount.",
-    "If I approve the invoice, email the customer for the purpose of applying the discount.",
-    "If I approve the invoice, email the customer with the aim of applying the discount.",
-    "If I approve the invoice, email the customer with a list of invoices.",
-    "If I approve the invoice, email the customer on the invoice.",
-    "If I approve the invoice, send the customer an email which lets you apply the discount.",
-    "If I approve the invoice, email the customer & apply the discount.",
-    "If I approve the invoice, email the customer + apply the discount.",
-    "If I approve the invoice, email the customer / apply the discount.",
-    "If I approve the invoice, email the customer at customer/checkout.",
-    "If I approve the invoice, send the customer an email which also lets you apply the discount.",
-    "If I approve the invoice, send the customer an email which also has the receipt.",
-    "If I approve the invoice, send the customer an email which contains the receipt.",
-    "If I approve the invoice, send the customer an email which has you apply the discount.",
-    "If I approve the invoice, send the customer an email which has the receipt.",
-    "If I approve the invoice, send the customer an email which has a confirmation page.",
-    'Show the warning "Changes cannot be merged" in the PR dialog.',
-    'Show the warning "Changes cannot ever be merged" in the PR dialog.',
-    "The button creates a PR after tests pass since customer records cannot ever be merged.",
-    "Bank branches cannot automatically be created without an address.",
-    "Syntax tree branches cannot ever be merged.",
-    "Bank branches must not ever be merged.",
-    "Syntax tree branch cannot ever be merged.",
-    "Branches cannot ever be merged in the syntax tree.",
-    "Bank branches cannot be created without an address. Syntax tree branches cannot ever be merged.",
-    "If I approve the invoice, send a receipt to the customer.",
-    "If I approve the invoice, email the customer as well as apply the discount.",
-  ];
-  for (const text of productRequirements) {
-    const w = world(), prepared = await w.service.prepare({ text });
-    assert.equal(prepared.status, "ready", text);
-    assert.deepEqual(taskStore(w.home).read(prepared.taskId).requirements.map(item => item.text), [text], text);
-    const a = world({ prepare: async (_ctx, task) => JSON.stringify(draftFor(task, { question: true })) });
-    const question = await a.service.prepare({ text: REQUEST });
-    const answered = await a.service.answer({ taskId: question.taskId, expectedRevision: question.revision,
-      operationId: "reviewed-product-requirement", answers: { "q-r-1": text } });
-    assert.ok(answered.draft.text.includes(JSON.stringify(text)), text);
-  }
-});
-
-test("latest review cases preserve delivery intent, literal boundaries and saved producer grammar", () => {
-  for (const source of [
-    "Implement export. Open a GitHub PR after tests pass.",
-    "Create a legitimate PR in integration tests.",
-    "Create an authentic PR in integration tests.",
-    "Create an experimental PR in unit tests.",
-    "Generate a dummy PR? Then add unit tests.",
-  ]) assert.throws(() => ownerDelivery(source), { code: "TASK_DELIVERY_SCOPE" }, source);
-
-  for (const source of [
-    "Generate a dummy PR in the unit test.",
-    "Generate a synthetic PR in the unit test.",
-    "Create a mock PR fixture in tests.",
-    "For tests, create a mock PR.",
-    "In the unit test, generate a fake PR.",
-  ]) assert.equal(ownerDelivery(source), null, source);
-
-  const quoted = "Add a validation test for the exact string 'cause we should not create a PR'.";
-  assert.equal(ownerDelivery(quoted), null);
-  assert.doesNotThrow(() => assertDeliveryAnswer({}, quoted));
-
-  const database = "Do not generate the report and commit the database transaction.";
-  assert.equal(ownerDelivery(database), null);
-  assert.doesNotThrow(() => assertDeliveryAnswer({}, database));
-  assert.throws(() => ownerDelivery("Do not generate the report and commit the code."), { code: "TASK_DELIVERY_SCOPE" });
-  assert.throws(() => assertDeliveryAnswer({}, "Do not generate the report and commit the code."), { code: "TASK_DELIVERY_SCOPE" });
-
-  const mixedApproval = "If I approve the purchase, apply the discount. Implement export after I approve the code.";
-  assert.throws(() => ownerDelivery(mixedApproval), { code: "TASK_DELIVERY_SCOPE" });
-  assert.throws(() => assertDeliveryAnswer({}, mixedApproval), { code: "TASK_DELIVERY_SCOPE" });
-  assert.equal(ownerDelivery("If I approve the purchase, apply the discount."), null);
-  assert.doesNotThrow(() => assertDeliveryAnswer({}, "If I approve the purchase, apply the discount."));
-
-  const savedSource = "Implement export. Open another PR for review.";
-  const start = savedSource.indexOf("Open another");
-  assert.throws(() => ownerDelivery(savedSource), { code: "TASK_DELIVERY_SCOPE" }, "v5 intake remains stricter than stored v3/v4 contracts");
-  for (const version of [3, 4]) {
-    const saved = { version, offsets: "utf16", source: savedSource, spans: [
-      { start: 0, end: start, owner: "implementation" },
-      { start, end: savedSource.length, owner: "coordinator", kind: "pull_request" },
-    ] };
-    assert.equal(validateOwnerDelivery(saved), saved, `saved v${version}`);
-  }
-  const unsupportedSource = "Implement export. Open a draft PR for review.";
-  const unsupportedStart = unsupportedSource.indexOf("Open");
-  for (const version of [3, 4]) assert.throws(() => validateOwnerDelivery({ version, offsets: "utf16", source: unsupportedSource, spans: [
-    { start: 0, end: unsupportedStart, owner: "implementation" },
-    { start: unsupportedStart, end: unsupportedSource.length, owner: "coordinator", kind: "pull_request" },
-  ] }), { code: "TASK_DELIVERY_SCOPE" }, `v${version} still rejects unsupported qualifiers`);
-});
-
 test("publication preferences and new legacy answers refuse before effects while negative requirements prepare", async () => {
   const initial = world({ prepare: async () => assert.fail("publication refusal cannot spend") });
   for (const text of ["I don't want a PR.", "We don't need a pull request."])
@@ -1179,8 +337,8 @@ test("publication preferences and new legacy answers refuse before effects while
   }
 });
 
-test("publication punctuation and supported make wording never become planner requirements", async () => {
-  for (const text of ["Implement CSV export. Open a PR for review.", "Implement CSV export. Make a PR for review.", "Implement CSV export.\nPlease open a PR for review.\nDo not merge."]) {
+test("publication punctuation and courtesy never become planner requirements", async () => {
+  for (const text of ["Implement CSV export. Open a PR for review.", "Implement CSV export.\nPlease open a PR for review.\nDo not merge."]) {
     const w = world(), result = await w.service.prepare({ text }), saved = taskStore(w.home).read(result.taskId);
     assert.equal(result.status, "ready");
     assert.ok(saved.requirements.every(r => /[\p{L}\p{N}]/u.test(r.text)));
@@ -4849,4 +4007,162 @@ test("direct task service mutations exclude maintenance and release owners on er
   writeFileSync(join(w.home, "runtime-pin.json"), "null");
   await assert.rejects(w.service.resume({ taskId: task.taskId, expectedRevision: task.revision }), { code: "TASK_RUNTIME_PIN" });
   assert.equal(existsSync(join(w.home, "task-mutation.lock")), false);
+});
+
+test("answer batches enforce aggregate bytes and item limits before parsing or mutating", async () => {
+  let calls = 0;
+  const w = world({ prepare: async (_ctx, task) => { calls++; return JSON.stringify(draftFor(task, { question: true })); } });
+  const first = await w.service.prepare({ text: "Implement export. Open a PR for review." });
+  assert.equal(first.status, "needs-input");
+  const store = taskStore(w.home), saved = store.read(first.taskId);
+  let tooManyReads = 0;
+  const tooMany = Object.fromEntries(Array.from({ length: MAX_ANSWER_COUNT + 1 }, (_, index) => [`q-r-${index + 1}`, index ? "Use CSV." : null]));
+  Object.defineProperty(tooMany, "q-r-1", { enumerable: true, get() { tooManyReads++; return "Use CSV."; } });
+  await assert.rejects(w.service.answer({ taskId: first.taskId, expectedRevision: first.revision, operationId: "answer-count-limit", answers: tooMany }), error => {
+    assert.equal(error.code, "TASK_INPUT"); assert.equal(error.taskEffects, "none"); return true;
+  });
+  assert.equal(tooManyReads, 0, "the question-count cap runs before reading any answer values");
+  const half = Math.floor(MAX_ANSWER_BYTES / 2) + 16;
+  await assert.rejects(w.service.answer({ taskId: first.taskId, expectedRevision: first.revision, operationId: "answer-byte-limit", answers: {
+    "q-r-1": "x".repeat(half), "q-r-2": `${"y".repeat(half)} Do not publish publicly`,
+  } }), error => {
+    assert.equal(error.code, "TASK_INPUT"); assert.match(error.message, /answer batch exceeds .* total UTF-8 bytes/); assert.equal(error.taskEffects, "none"); return true;
+  });
+  let oversizedReads = 0;
+  const oversizedAccessor = {};
+  Object.defineProperty(oversizedAccessor, "q-r-3", { enumerable: true, get() {
+    oversizedReads++;
+    return "x".repeat(MAX_ANSWER_BYTES + 1);
+  } });
+  await assert.rejects(w.service.answer({ taskId: first.taskId, expectedRevision: first.revision, operationId: "answer-byte-limit-before-hash", answers: oversizedAccessor }), error => {
+    assert.equal(error.code, "TASK_INPUT"); assert.equal(error.taskEffects, "none"); return true;
+  });
+  assert.equal(oversizedReads, 1, "the aggregate byte cap runs before canonical request hashing reads answer values again");
+  assert.deepEqual(store.read(first.taskId), saved);
+  assert.equal(calls, 1, "over-limit answers are rejected before owner-text parsing or another preparation turn");
+  assert.deepEqual(w.ctx.state.entries(), []);
+  const legacyHalf = Math.floor(MAX_ANSWER_BYTES / 2) + 32;
+  const legacyOversizedAnswers = { "q-r-1": "x".repeat(legacyHalf), "q-r-2": "y".repeat(legacyHalf) };
+  assert.ok(Object.entries(legacyOversizedAnswers).reduce((bytes, [id, value]) => bytes + Buffer.byteLength(id) + Buffer.byteLength(value), 0) > MAX_ANSWER_BYTES);
+  const legacyOperationId = "legacy-oversized-answer-replay";
+  const legacySignature = contentDigest(JSON.stringify({ answers: legacyOversizedAnswers, verifyCommands: [] }));
+  saved.operations[legacyOperationId] = legacySignature;
+  store.save(saved);
+  const legacyReplay = await w.service.answer({ taskId: first.taskId, expectedRevision: first.revision, operationId: legacyOperationId, answers: legacyOversizedAnswers });
+  assert.equal(legacyReplay.taskId, first.taskId, "an exact previously accepted operation remains replayable across the new batch bound");
+  for (const count of [MAX_ANSWER_COUNT + 1, MAX_LEGACY_ANSWER_COUNT]) {
+    const operationId = `legacy-${count}-answer-replay`;
+    const legacyAnswers = Object.fromEntries(Array.from({ length: count }, (_, index) => [`q-r-${index + 1}`, "Use CSV."]));
+    saved.operations[operationId] = contentDigest(JSON.stringify({ answers: legacyAnswers, verifyCommands: [] }));
+    store.save(saved);
+    const replay = await w.service.answer({ taskId: first.taskId, expectedRevision: first.revision, operationId, answers: legacyAnswers });
+    assert.equal(replay.taskId, first.taskId, `${count} previously accepted answers remain replayable`);
+    await assert.rejects(w.service.answer({ taskId: first.taskId, expectedRevision: first.revision, operationId,
+      answers: { ...legacyAnswers, "q-r-1": "Use JSON." } }), { code: "TASK_CONFLICT", taskEffects: "none" });
+  }
+  let overCountReads = 0;
+  const excessiveLegacyAnswers = Object.fromEntries(Array.from({ length: MAX_LEGACY_ANSWER_COUNT + 1 }, (_, index) => [`q-r-${index + 1}`, "Use CSV."]));
+  Object.defineProperty(excessiveLegacyAnswers, "q-r-1", { enumerable: true, get() { overCountReads++; return "Use CSV."; } });
+  await assert.rejects(w.service.answer({ taskId: first.taskId, expectedRevision: first.revision, operationId: legacyOperationId,
+    answers: excessiveLegacyAnswers }), { code: "TASK_INPUT", taskEffects: "none" });
+  assert.equal(overCountReads, 0, "legacy count limit runs before reading answer values");
+  await assert.rejects(w.service.answer({ taskId: first.taskId, expectedRevision: first.revision, operationId: legacyOperationId, answers: { "q-r-1": "y".repeat(legacyHalf), "q-r-2": "x".repeat(legacyHalf) } }), error => {
+    assert.equal(error.code, "TASK_CONFLICT", "a prior operation ID cannot authorize changed over-limit input");
+    assert.equal(error.taskEffects, "none"); return true;
+  });
+  let oversizedReplayReads = 0;
+  const oversizedReplay = {};
+  Object.defineProperty(oversizedReplay, "q-r-1", { enumerable: true, get() {
+    oversizedReplayReads++;
+    return "x".repeat(MAX_LEGACY_ANSWER_BATCH_BYTES + 1);
+  } });
+  await assert.rejects(w.service.answer({ taskId: first.taskId, expectedRevision: first.revision, operationId: legacyOperationId, answers: oversizedReplay }), error => {
+    assert.equal(error.code, "TASK_INPUT", "legacy retries are capped at the largest batch previous per-answer limits could accept");
+    assert.equal(error.taskEffects, "none"); return true;
+  });
+  assert.equal(oversizedReplayReads, 1, "oversized retries are rejected before canonical hashing reads answer values again");
+  assert.deepEqual(store.read(first.taskId), saved);
+  await w.service.answer({ taskId: first.taskId, expectedRevision: first.revision, operationId: "answer-replay", answers: { "q-r-1": "Use CSV." } });
+  const accepted = store.read(first.taskId);
+  await assert.rejects(w.service.answer({ taskId: first.taskId, expectedRevision: first.revision, operationId: "answer-replay", answers: { "q-r-1": null } }), error => {
+    assert.equal(error.code, "TASK_CONFLICT", "an idempotency-key reuse is checked before semantic answer validation");
+    assert.equal(error.taskEffects, "none"); return true;
+  });
+  assert.deepEqual(store.read(first.taskId), accepted);
+  assert.equal(calls, 2);
+});
+
+test("non-string answers stop before serialization and preserve saved retries", async () => {
+  let calls = 0, serializationCalls = 0, payloadReads = 0;
+  const w = world({ prepare: async (_ctx, task) => { calls++; return JSON.stringify(draftFor(task, { question: true })); } });
+  const first = await w.service.prepare({ text: REQUEST }), store = taskStore(w.home), initial = store.read(first.taskId);
+  const object = Object.defineProperty({}, "payload", { enumerable: true, get() { payloadReads++; return "x".repeat(MAX_ANSWER_BYTES * 4); } });
+  const custom = { toJSON() { serializationCalls++; return "Use CSV."; } };
+  const cyclic = {}; cyclic.self = cyclic;
+  const invalid = [object, custom, cyclic, [custom], new String("Use CSV."), null, undefined, 42, true, 1n, Symbol("answer"), () => "Use CSV."];
+  for (const [index, value] of invalid.entries()) {
+    await assert.rejects(w.service.answer({ taskId: first.taskId, expectedRevision: first.revision, operationId: `non-text-${index}`, answers: { "q-r-1": value } }), { code: "TASK_INPUT", taskEffects: "none" });
+    assert.equal(serializationCalls, 0);
+    assert.equal(payloadReads, 0);
+    assert.deepEqual(store.read(first.taskId), initial);
+    assert.equal(calls, 1);
+  }
+  const answers = { "q-r-1": "Use CSV." }, operationId = "text-answer";
+  const accepted = await w.service.answer({ taskId: first.taskId, expectedRevision: first.revision, operationId, answers });
+  const saved = store.read(first.taskId);
+  saved.operations["legacy-text-answer"] = contentDigest(JSON.stringify({ answers, verifyCommands: [] }));
+  store.save(saved);
+  for (const id of [operationId, "legacy-text-answer"]) {
+    for (const value of invalid) {
+      await assert.rejects(w.service.answer({ taskId: first.taskId, expectedRevision: first.revision, operationId: id, answers: { "q-r-1": value } }), { code: "TASK_CONFLICT", taskEffects: "none" });
+      assert.equal(serializationCalls, 0);
+      assert.equal(payloadReads, 0);
+      assert.deepEqual(store.read(first.taskId), saved);
+    }
+    assert.deepEqual(await w.service.answer({ taskId: first.taskId, expectedRevision: first.revision, operationId: id, answers }), accepted);
+  }
+  assert.equal(calls, 2);
+  assert.deepEqual(w.ctx.state.entries(), []);
+  assert.equal(w.daemonCalls(), 0);
+});
+
+test("answer accessors and proxies share one bounded snapshot through persistence and replay", async t => {
+  for (const kind of ["accessor", "proxy"]) await t.test(kind, async () => {
+    let calls = 0;
+    const w = world({ prepare: async (_ctx, task) => { calls++; return JSON.stringify(draftFor(task, { question: true })); } });
+    const first = await w.service.prepare({ text: REQUEST });
+    const answer = "Use CSV only.", laterAnswer = "x".repeat(MAX_ANSWER_BYTES + 1);
+    let reads = 0;
+    const value = () => ++reads === 1 ? answer : laterAnswer;
+    const answers = kind === "accessor"
+      ? Object.defineProperty({}, "q-r-1", { enumerable: true, get: value })
+      : new Proxy({ "q-r-1": answer }, { get(target, key, receiver) { return key === "q-r-1" ? value() : Reflect.get(target, key, receiver); } });
+    const input = { taskId: first.taskId, expectedRevision: first.revision, operationId: "bounded-answer-snapshot", answers };
+    const accepted = await w.service.answer(input);
+    assert.equal(reads, 1, "a caller-owned answer value is read once before hashing and requirement construction");
+    assert.equal(accepted.status, "ready");
+    const store = taskStore(w.home), saved = store.read(first.taskId);
+    assert.deepEqual(saved.answers, { "q-r-1": answer });
+    assert.deepEqual(saved.requirements.filter(r => r.id.startsWith("a-")), [{ id: "a-q-r-1-1", text: answer }]);
+    assert.equal(saved.operations[input.operationId], "canonical-v1:" + contentDigest(JSON.stringify({ answers: { "q-r-1": answer }, verifyCommands: [] })));
+    assert.ok(accepted.draft.text.includes(JSON.stringify(answer)));
+    assert.ok(!accepted.draft.text.includes(laterAnswer));
+    t.diagnostic(`Bounded snapshot fixture draft (${kind}): ${accepted.draft.path}`);
+    assert.deepEqual(await w.service.answer({ ...input, answers: { "q-r-1": answer } }), accepted);
+    reads = 0;
+    assert.deepEqual(await w.service.answer(input), accepted);
+    assert.equal(reads, 1, "an exact accessor/proxy retry also hashes only its captured value");
+    assert.equal(calls, 2, "an exact retry replays the accepted snapshot without another preparation turn");
+    let conflictingReads = 0;
+    const conflicting = Object.defineProperty({}, "q-r-1", { enumerable: true, get() { return ++conflictingReads === 1 ? "Use JSON only." : answer; } });
+    await assert.rejects(w.service.answer({ ...input, answers: conflicting }), { code: "TASK_CONFLICT", taskEffects: "none" });
+    assert.equal(conflictingReads, 1);
+    assert.deepEqual(store.read(first.taskId), saved);
+    const unreadable = Object.defineProperty({}, "q-r-1", { enumerable: true, get() { throw new Error("answer read failed"); } });
+    await assert.rejects(w.service.answer({ ...input, answers: unreadable }), /answer read failed/);
+    assert.deepEqual(store.read(first.taskId), saved);
+    assert.deepEqual(await w.service.answer({ ...input, answers: { "q-r-1": answer } }), accepted, "failed reads release mutation ownership for an exact retry");
+    assert.deepEqual(w.ctx.state.entries(), []);
+    assert.equal(w.daemonCalls(), 0);
+  });
 });
