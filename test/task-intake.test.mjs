@@ -5739,3 +5739,20 @@ test("npm abbreviations cannot dispatch registry effects", async () => {
     assert.deepEqual(w.ctx.state.entries(),[]); assert.equal(w.daemonCalls(),0);
   }
 });
+
+
+test("assumption-mapped owner constraints survive saved validation and approved dispatch", async () => {
+  const w = world({ prepare: async (_ctx, task) => JSON.stringify(draftFor(task, { assumptions: { "r-2": "Dependencies are contextual and may be changed as needed." } })) });
+  const prepared = await w.service.prepare({ text: REQUEST });
+  assert.equal(prepared.status, "ready", prepared.failures.join("\n"));
+  const implementationScope = prepared.draft.text.split("## User stories\n")[1].split("## Verify\n")[0];
+  assert.match(implementationScope, /Owner requirement r-2: "Do not add dependencies\."/);
+  assert.doesNotMatch(implementationScope, /may be changed as needed/);
+  assert.equal((await w.service.validate({ taskId: prepared.taskId, expectedRevision: prepared.revision })).status, "ready");
+  const started = await approveStart(w, prepared, false);
+  assert.equal(started.status, "started", started.failures.join("\n"));
+  assert.match(readFileSync(started.draft.path, "utf8").split("## Verify\n")[0], /Owner requirement r-2: "Do not add dependencies\."/);
+  assert.equal(w.runners.get(started.implementation.id).started.length, 1);
+  const saved = taskStore(w.home).read(started.taskId);
+  assert.deepEqual(parseDraft(JSON.stringify(saved.output), saved), saved.output);
+});

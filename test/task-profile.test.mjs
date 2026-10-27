@@ -2291,3 +2291,27 @@ test("all npm token removal aliases require a delivery decision", () => {
   for (const text of ["Run npm token list.", "Run npm token ls.", "Run npm token delete fixture-id --help.", "Document how to run npm token delete fixture-id."])
     assert.equal(deliveryScreen(text).tier, "none", text);
 });
+
+
+test("assumption mappings cannot erase the owner's original constraints", () => {
+  for (const constraint of ["Do not modify dependencies.", "Keep all customer data in Canada.", "Must remain compatible with Node 22.", "We use Postgres in production."])
+    {
+      const task = taskFor(`Add CSV export.\n${constraint}`, { commandCandidates: ["npm test"] });
+      const output = parseDraft(JSON.stringify(draftFor(task, {assumptions: {"r-2": "Context may be changed as needed."}})), task);
+      assert.ok(output.stories[0].requirements.includes("r-2"));
+      assert.ok(output.stories[0].text.includes(JSON.stringify(constraint)));
+      assert.deepEqual(parseDraft(JSON.stringify(output), task), output, "saved derivation stays stable");
+      const executable = renderDraft(task, output).split("## Verify")[0];
+      assert.ok(executable.includes(JSON.stringify(constraint)), "exact owner words remain executable");
+    }
+});
+
+test("npm execution wrappers expose their executable operands to the shared screen", () => {
+  for (const wrapper of ["npm exec --", "npm x --", "npx --", "npm --registry https://registry.example.com exec --", "npm exec --package npm --"])
+    for (const command of ["npm token revoke fixture-id", "npm token delete fixture-id", "npm publish", "npm x -- npm token rm fixture-id"])
+      assert.equal(deliveryScreen(`Run ${wrapper} ${command}.`).tier, "question", `${wrapper} ${command}`);
+  for (const text of ["Run npm exec --call 'npm token revoke fixture-id'.", "Run npm x -c 'npm token remove fixture-id'.", 'Run npm exec --call="npm publish".', "Run npm exec -c'npm token delete fixture-id'.", "Run npm exec --call '$COMMAND'."])
+    assert.equal(deliveryScreen(text).tier, "question", text);
+  for (const text of ["Run npm exec -- npm token list.", "Run npm exec -- tsc --noEmit.", "Run npm exec --help -- npm token revoke fixture-id.", "Run npm exec --call 'npm token list'.", 'Run npm exec -- echo "npm token revoke fixture-id".', "Document how to run npm exec -- npm token revoke fixture-id."])
+    assert.equal(deliveryScreen(text).tier, "none", text);
+});
