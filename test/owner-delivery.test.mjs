@@ -3938,3 +3938,21 @@ test("courteous independent actions use shared positive action evidence for pron
   for (const source of ["For tests, create a fake PR fixture. Please generate a report and send the fixture to GitHub.", "For tests, create a fake PR fixture. Do not generate a report. Send it to GitHub."])
     assert.throws(() => ownerDelivery(source), {code:"TASK_DELIVERY_SCOPE"}, source);
 });
+
+
+test("database commits require a standalone pronoun and its own database destination", () => {
+  for (const object of ["these changes", "those edits", "this code", "that patch", "it"])
+    for (const connector of ["until", "when", "after", "before", "because", "since", "whilst"])
+      for (const suffix of ["", " Open a PR."]) {
+        const source = `Do not commit ${object} ${connector} the audit logs are in the database.${suffix}`;
+        assert.throws(() => ownerDelivery(source), {code:"TASK_DELIVERY_SCOPE"}, source);
+        assert.throws(() => assertDeliveryAnswer({}, source), {code:"TASK_DELIVERY_SCOPE"}, source);
+      }
+  for (const object of ["it", "them", "this", "that", "these", "those"])
+    for (const destination of ["to the database", "into a database", "in the db", "atomically to the database"])
+      {
+        const source = `Do not commit ${object} ${destination} before validation.`;
+        assert.equal(ownerDelivery(source), null, source);
+        assert.doesNotThrow(() => assertDeliveryAnswer({}, source), source);
+      }
+});
