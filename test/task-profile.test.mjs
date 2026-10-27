@@ -2315,3 +2315,19 @@ test("npm execution wrappers expose their executable operands to the shared scre
   for (const text of ["Run npm exec -- npm token list.", "Run npm exec -- tsc --noEmit.", "Run npm exec --help -- npm token revoke fixture-id.", "Run npm exec --call 'npm token list'.", 'Run npm exec -- echo "npm token revoke fixture-id".', "Document how to run npm exec -- npm token revoke fixture-id."])
     assert.equal(deliveryScreen(text).tier, "none", text);
 });
+
+
+test("pre-execution dynamic wrapper arguments cannot be exempted by outer help", () => {
+  for (const text of ['Run npm exec --help --call "$(npm token revoke fixture-id)".', 'Run npm exec --call "$(npm token revoke fixture-id)" --help.', 'Run npm x --help -c "$(npm publish)".', 'Run npm exec --help --package "$(npm token delete fixture-id)" -- npm token list.'])
+    assert.equal(deliveryScreen(text).tier, "question", text);
+  for (const text of ["Run npm exec --help --call 'npm token revoke fixture-id'.", "Document npm exec --help --call \"$(npm token revoke fixture-id)\"."])
+    assert.equal(deliveryScreen(text).tier, "none", text);
+});
+
+test("env split-string operands retain executable or documentation ownership", () => {
+  for (const flag of ["-S", "--split-string", "--split-string="])
+    for (const prefix of ["env", "env -i", "env --unset SECRET", "env NODE_ENV=test"])
+      assert.equal(deliveryScreen(`Run ${prefix} ${flag} 'npm token revoke fixture-id'.`).tier, "question", `${prefix} ${flag}`);
+  for (const text of ["Document env -S 'npm token revoke fixture-id'.", "Add an example using env --split-string 'npm publish'.", "Run env -S 'npm token list'.", "Run env --split-string='npm test'."])
+    assert.equal(deliveryScreen(text).tier, "none", text);
+});

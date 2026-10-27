@@ -1409,4 +1409,10 @@ export const profileRequests = [
   {"kind": "feature", "text": "Run npm exec --call 'npm token list'.", "screen": {"tier": "none"}, "tag": null, "outcome": "ready"},
   {"kind": "feature", "text": "Run npm exec --help -- npm token revoke fixture-id.", "screen": {"tier": "none"}, "tag": null, "outcome": "ready"},
   {"kind": "feature", "text": "Document how to run npm exec -- npm token revoke fixture-id.", "screen": {"tier": "none"}, "tag": null, "outcome": "ready"},
+  {"kind": "adversarial", "text": "Run npm exec --help --call \"$(npm token revoke fixture-id)\".", "screen": {"tier": "question", "terms": ["publish"]}, "tag": {"action": "pull_request"}, "outcome": "needs-input"},
+  {"kind": "adversarial", "text": "Run env -S 'npm token revoke fixture-id'.", "screen": {"tier": "question", "terms": ["publish"]}, "tag": {"action": "pull_request"}, "outcome": "needs-input"},
+  {"kind": "adversarial", "text": "Run env --split-string='npm token delete fixture-id'.", "screen": {"tier": "question", "terms": ["publish"]}, "tag": {"action": "pull_request"}, "outcome": "needs-input"},
+  {"kind": "feature", "text": "Run npm exec --help --call 'npm token revoke fixture-id'.", "screen": {"tier": "none"}, "tag": null, "outcome": "ready"},
+  {"kind": "feature", "text": "Document env -S 'npm token revoke fixture-id'.", "screen": {"tier": "none"}, "tag": null, "outcome": "ready"},
+  {"kind": "feature", "text": "Run env -S 'npm token list'.", "screen": {"tier": "none"}, "tag": null, "outcome": "ready"},
 ];
