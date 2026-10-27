@@ -3833,3 +3833,16 @@ test("fixture references cannot acquire integration or human approval authority"
     assert.doesNotThrow(() => assertDeliveryAnswer({}, source), source);
   }
 });
+
+test("approval words need an actual purpose or action before they change fixture ownership", () => {
+  for (const source of ["For tests, create a fake PR with a confirmation message.", "For tests, create a fake PR with permission denied.", "For tests, create a fake PR for the approval workflow.", "For tests, create a fake PR for a confirmation message.", "For tests, create a fake PR with consent field empty."]) {
+    assert.equal(ownerDelivery(source), null, source);
+    assert.doesNotThrow(() => assertDeliveryAnswer({}, source), source);
+  }
+  for (const tail of ["for owner approval", "for the owner to approve", "and it must be approved", "and get it approved", "that the owner approves it"])
+    {
+      const source = `For tests, create a fake PR ${tail}.`;
+      assert.throws(() => ownerDelivery(source), {code:"TASK_DELIVERY_SCOPE"}, source);
+      assert.throws(() => assertDeliveryAnswer({}, source), {code:"TASK_DELIVERY_SCOPE"}, source);
+    }
+});
