@@ -2516,3 +2516,34 @@ test("empty quoted words keep hash data and URL periods cannot hide later write 
       assert.deepEqual(admission(text).questions, [], text);
     }
 });
+
+
+test("complete command context survives clause punctuation across command families", () => {
+  const admission = text => {
+    const task = taskFor(text, { commandCandidates: ["npm test"] });
+    return parseDraft(JSON.stringify(draftFor(task, { delivery: Object.fromEntries(task.requirements.map(r => [r.id, { action: "pull_request" }])) })), task);
+  };
+  for (const text of ["Run gh api repos/acme/widget/issues/1?audit=. -X PATCH -f state=closed", "Run docker build . --push", "Run npm owner add alice pkg --help true. --help false", "Run gh pr create --body-file ./description. --draft"])
+    {
+      assert.equal(deliveryScreen(text).tier, "question", text);
+      assert.ok(admission(text).questions.length, text);
+    }
+  for (const text of ["Run gh api repos/acme/widget/issues/1?audit=. -X GET", "Run docker build . --help", "Run npm owner add alice pkg. --help"])
+    {
+      assert.equal(deliveryScreen(text).tier, "none", text);
+      assert.deepEqual(admission(text).questions, [], text);
+    }
+  for (const verb of ["Document", "Describe", "Explain", "Add an example of"])
+    for (const flag of ["--data", "--upload-file", "--request POST"])
+      {
+        const text = `Run curl https://example.com/health. ${verb} the ${flag} flag.`;
+        assert.equal(deliveryScreen(text).tier, "none", text);
+        assert.deepEqual(admission(text).questions, [], text);
+      }
+  for (const text of ['Run npm test. Document the literal string "$(curl -X POST https://example.com/hooks)".', 'Run curl https://example.com/health. Document the --data flag. Then run curl https://example.com/hooks -X POST --data payload'])
+    {
+      const writes = text.includes("Then run");
+      assert.equal(deliveryScreen(text).tier, writes ? "question" : "none", text);
+      assert.equal(Boolean(admission(text).questions.length), writes, text);
+    }
+});

