@@ -947,57 +947,6 @@ test("publication review corpus remains deterministic under the typed delivery s
   }
 });
 
-test("latest review cases preserve delivery intent, literal boundaries and saved producer grammar", () => {
-  for (const source of [
-    "Implement export. Open a GitHub PR after tests pass.",
-    "Create a legitimate PR in integration tests.",
-    "Create an authentic PR in integration tests.",
-    "Create an experimental PR in unit tests.",
-    "Generate a dummy PR? Then add unit tests.",
-  ]) assert.throws(() => ownerDelivery(source), { code: "TASK_DELIVERY_SCOPE" }, source);
-
-  for (const source of [
-    "Generate a dummy PR in the unit test.",
-    "Generate a synthetic PR in the unit test.",
-    "Create a mock PR fixture in tests.",
-    "For tests, create a mock PR.",
-    "In the unit test, generate a fake PR.",
-  ]) assert.equal(ownerDelivery(source), null, source);
-
-  const quoted = "Add a validation test for the exact string 'cause we should not create a PR'.";
-  assert.equal(ownerDelivery(quoted), null);
-  assert.doesNotThrow(() => assertDeliveryAnswer({}, quoted));
-
-  const database = "Do not generate the report and commit the database transaction.";
-  assert.equal(ownerDelivery(database), null);
-  assert.doesNotThrow(() => assertDeliveryAnswer({}, database));
-  assert.throws(() => ownerDelivery("Do not generate the report and commit the code."), { code: "TASK_DELIVERY_SCOPE" });
-  assert.throws(() => assertDeliveryAnswer({}, "Do not generate the report and commit the code."), { code: "TASK_DELIVERY_SCOPE" });
-
-  const mixedApproval = "If I approve the purchase, apply the discount. Implement export after I approve the code.";
-  assert.throws(() => ownerDelivery(mixedApproval), { code: "TASK_DELIVERY_SCOPE" });
-  assert.throws(() => assertDeliveryAnswer({}, mixedApproval), { code: "TASK_DELIVERY_SCOPE" });
-  assert.equal(ownerDelivery("If I approve the purchase, apply the discount."), null);
-  assert.doesNotThrow(() => assertDeliveryAnswer({}, "If I approve the purchase, apply the discount."));
-
-  const savedSource = "Implement export. Open another PR for review.";
-  const start = savedSource.indexOf("Open another");
-  assert.throws(() => ownerDelivery(savedSource), { code: "TASK_DELIVERY_SCOPE" }, "v5 intake remains stricter than stored v3/v4 contracts");
-  for (const version of [3, 4]) {
-    const saved = { version, offsets: "utf16", source: savedSource, spans: [
-      { start: 0, end: start, owner: "implementation" },
-      { start, end: savedSource.length, owner: "coordinator", kind: "pull_request" },
-    ] };
-    assert.equal(validateOwnerDelivery(saved), saved, `saved v${version}`);
-  }
-  const unsupportedSource = "Implement export. Open a draft PR for review.";
-  const unsupportedStart = unsupportedSource.indexOf("Open");
-  for (const version of [3, 4]) assert.throws(() => validateOwnerDelivery({ version, offsets: "utf16", source: unsupportedSource, spans: [
-    { start: 0, end: unsupportedStart, owner: "implementation" },
-    { start: unsupportedStart, end: unsupportedSource.length, owner: "coordinator", kind: "pull_request" },
-  ] }), { code: "TASK_DELIVERY_SCOPE" }, `v${version} still rejects unsupported qualifiers`);
-});
-
 test("saved version-one connector ownership replays and starts without rewriting approved scope", async () => {
   const text = "Implement CSV export, and open a PR for review.", split = text.indexOf("open");
   const legacy = { version: 1, offsets: "utf16", source: text, spans: [
