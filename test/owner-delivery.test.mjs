@@ -3777,3 +3777,17 @@ test("independent historical implementation sentences cannot qualify an ended PR
     assert.throws(() => validateOwnerDelivery(saved), {code:"TASK_DELIVERY_SCOPE"}, `v${version} still rejects a clause continuation`);
   }
 });
+
+test("qualified and truncated quoted destinations cannot become fixture data", () => {
+  for (const prefix of ["on the public", "in our shared remote", "to the configured upstream", "on the " + "public experimental ".repeat(30)])
+    for (const target of ['"https://github.com/owner/repo"', "`codeberg.org`"])
+      for (const suffix of ["", " Open a PR."]) {
+        const source = `For tests, create a fake PR ${prefix} ${target}.${suffix}`;
+        assert.throws(() => ownerDelivery(source), {code:"TASK_DELIVERY_SCOPE"}, source);
+        assert.throws(() => assertDeliveryAnswer({}, source), {code:"TASK_DELIVERY_SCOPE"}, source);
+      }
+  for (const source of ['For tests, create a fake PR with URL field set to "https://github.com/owner/repo".', 'For tests, create a fake PR with title "on the public https://github.com/owner/repo".']) {
+    assert.equal(ownerDelivery(source), null, source);
+    assert.doesNotThrow(() => assertDeliveryAnswer({}, source), source);
+  }
+});
