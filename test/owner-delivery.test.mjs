@@ -3956,3 +3956,14 @@ test("database commits require a standalone pronoun and its own database destina
         assert.doesNotThrow(() => assertDeliveryAnswer({}, source), source);
       }
 });
+
+
+test("intervening qualifier modifiers cannot turn a negated synthetic object into fixture proof", () => {
+  for (const qualifier of ["not at all fake", "not remotely fake", "not even slightly synthetic", "never actually fake", "not completely fake", "not merely fake"])
+    for (const suffix of ["", " Open a PR for review."]) {
+      const source = `For tests, create a ${qualifier} PR.${suffix}`;
+      assert.throws(() => ownerDelivery(source), {code:"TASK_DELIVERY_SCOPE"}, source);
+      assert.throws(() => assertDeliveryAnswer({}, source), {code:"TASK_DELIVERY_SCOPE"}, source);
+    }
+  assert.equal(ownerDelivery("For tests, create a genuinely synthetic PR fixture."), null);
+});
