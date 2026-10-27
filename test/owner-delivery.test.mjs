@@ -3777,3 +3777,135 @@ test("independent historical implementation sentences cannot qualify an ended PR
     assert.throws(() => validateOwnerDelivery(saved), {code:"TASK_DELIVERY_SCOPE"}, `v${version} still rejects a clause continuation`);
   }
 });
+
+test("qualified and truncated quoted destinations cannot become fixture data", () => {
+  for (const prefix of ["on the public", "in our shared remote", "to the configured upstream", "on the " + "public experimental ".repeat(30)])
+    for (const target of ['"https://github.com/owner/repo"', "`codeberg.org`"])
+      for (const suffix of ["", " Open a PR."]) {
+        const source = `For tests, create a fake PR ${prefix} ${target}.${suffix}`;
+        assert.throws(() => ownerDelivery(source), {code:"TASK_DELIVERY_SCOPE"}, source);
+        assert.throws(() => assertDeliveryAnswer({}, source), {code:"TASK_DELIVERY_SCOPE"}, source);
+      }
+  for (const source of ['For tests, create a fake PR with URL field set to "https://github.com/owner/repo".', 'For tests, create a fake PR with title "on the public https://github.com/owner/repo".']) {
+    assert.equal(ownerDelivery(source), null, source);
+    assert.doesNotThrow(() => assertDeliveryAnswer({}, source), source);
+  }
+});
+
+test("comma-delimited destination and review complements stay attached to fixture actions", () => {
+  for (const tail of ["using GitHub", "on the public GitHub repository", "for review by the owner", "for the owner to review", "to be carefully reviewed", "Alice will publish it"])
+    for (const suffix of ["", " Open a PR."]) {
+      const source = `For tests, create a fake PR, ${tail}.${suffix}`;
+      assert.throws(() => ownerDelivery(source), {code:"TASK_DELIVERY_SCOPE"}, source);
+      assert.throws(() => assertDeliveryAnswer({}, source), {code:"TASK_DELIVERY_SCOPE"}, source);
+    }
+  for (const source of ["For tests, create a fake PR, then upload logs to GitHub.", "For tests, create a fake PR, verify that the form reviews it in the local mock service.", "For tests, create a fake PR, format it as JSON."]) {
+    assert.equal(ownerDelivery(source), null, source);
+    assert.doesNotThrow(() => assertDeliveryAnswer({}, source), source);
+  }
+});
+
+test("all fixture separators require an independent action before detaching destinations", () => {
+  for (const separator of [", ", "; ", ". ", "\n", " and ", " then ", " but ", " + ", " / "])
+    for (const tail of ["using GitHub", "for review by the owner", 'on the public "https://github.com/owner/repo"']) {
+      const source = `For tests, create a fake PR${separator}${tail}.`;
+      assert.throws(() => ownerDelivery(source), {code:"TASK_DELIVERY_SCOPE"}, source);
+      assert.throws(() => assertDeliveryAnswer({}, source), {code:"TASK_DELIVERY_SCOPE"}, source);
+    }
+  for (const separator of [", ", "; ", ". ", "\n", " and ", " + "])
+    for (const action of ["upload logs to GitHub", "the application uploads logs to GitHub", "verify that the form reviews it in the local mock service"])
+      {
+        const source = `For tests, create a fake PR${separator}${action}.`;
+        assert.equal(ownerDelivery(source), null, source);
+        assert.doesNotThrow(() => assertDeliveryAnswer({}, source), source);
+      }
+});
+
+test("fixture references cannot acquire integration or human approval authority", () => {
+  for (const tail of ["and have it merged", "and get it merged", "and it must be merged", "and merge it", "and have it carefully landed", "and it must be integrated", "for owner approval", "for the owner to approve", "for human permission", "for owner consent", "for owner sign-off"])
+    for (const suffix of ["", " Open a PR."]) {
+      const source = `For tests, create a fake PR ${tail}.${suffix}`;
+      assert.throws(() => ownerDelivery(source), {code:"TASK_DELIVERY_SCOPE"}, source);
+      assert.throws(() => assertDeliveryAnswer({}, source), {code:"TASK_DELIVERY_SCOPE"}, source);
+    }
+  for (const source of ["For tests, create a fake PR with approval status pending.", "For tests, create a fake PR with permission field empty.", "For tests, create a fake PR and verify that the form approves it in the local mock service.", "For tests, create a fake PR and verify that the form has it approved in the local mock service.", "For tests, create a fake PR and verify that the form merges it in the local mock service.", 'For tests, create a fake PR with title "for owner approval".']) {
+    assert.equal(ownerDelivery(source), null, source);
+    assert.doesNotThrow(() => assertDeliveryAnswer({}, source), source);
+  }
+});
+
+test("approval words need an actual purpose or action before they change fixture ownership", () => {
+  for (const source of ["For tests, create a fake PR with a confirmation message.", "For tests, create a fake PR with permission denied.", "For tests, create a fake PR for the approval workflow.", "For tests, create a fake PR for a confirmation message.", "For tests, create a fake PR with consent field empty."]) {
+    assert.equal(ownerDelivery(source), null, source);
+    assert.doesNotThrow(() => assertDeliveryAnswer({}, source), source);
+  }
+  for (const tail of ["for owner approval", "for the owner to approve", "and it must be approved", "and get it approved", "that the owner approves it"])
+    {
+      const source = `For tests, create a fake PR ${tail}.`;
+      assert.throws(() => ownerDelivery(source), {code:"TASK_DELIVERY_SCOPE"}, source);
+      assert.throws(() => assertDeliveryAnswer({}, source), {code:"TASK_DELIVERY_SCOPE"}, source);
+    }
+});
+
+test("approval acquisition stays an obligation unless fixture data or a product explains it", () => {
+  for (const tail of ["and get owner approval for it", "and obtain approval from the owner", "and request human consent for it", "and have owner approval for it"])
+    for (const suffix of ["", " Open a PR."]) {
+      const source = `For tests, create a fake PR ${tail}.${suffix}`;
+      assert.throws(() => ownerDelivery(source), {code:"TASK_DELIVERY_SCOPE"}, source);
+      assert.throws(() => assertDeliveryAnswer({}, source), {code:"TASK_DELIVERY_SCOPE"}, source);
+    }
+  for (const source of ["For tests, create a fake PR with a confirmation message.", "For tests, create a fake PR with permission denied.", "For tests, create a fake PR with permission granted.", "For tests, create a fake PR and verify that the form gets approval in the local mock service.", "For tests, create a fake PR for an approval workflow."]) {
+    assert.equal(ownerDelivery(source), null, source);
+    assert.doesNotThrow(() => assertDeliveryAnswer({}, source), source);
+  }
+});
+
+test("Markdown destinations remain live and formatted field data stays local", () => {
+  for (const destination of ["[GitHub](https://github.com/owner/repo)", "<https://github.com/owner/repo>", "[GitHub](<https://github.com/owner/repo>)", "![GitHub](https://github.com/owner/repo)", "**GitHub**", "*GitHub*", "__GitHub__", "_GitHub_", "~~GitHub~~", "**[forge](https://codeberg.org/owner/repo)**", "**public** \"https://github.com/owner/repo\""])
+    for (const suffix of ["", " Open a PR."]) {
+      const source = `For tests, create a fake PR on ${destination}.${suffix}`;
+      assert.throws(() => ownerDelivery(source), {code:"TASK_DELIVERY_SCOPE"}, source);
+      assert.throws(() => assertDeliveryAnswer({}, source), {code:"TASK_DELIVERY_SCOPE"}, source);
+    }
+  for (const source of ["For tests, create a fake PR with URL field set to [GitHub](https://github.com/owner/repo).", "For tests, create a fake PR with URL field set to <https://github.com/owner/repo>.", "For tests, create a fake PR with URL **field** set to **GitHub**.", "For tests, create a fake PR in [fixtures](file:///tmp/fixtures).", 'For tests, create a fake PR with title "on **GitHub**".']) {
+    assert.equal(ownerDelivery(source), null, source);
+    assert.doesNotThrow(() => assertDeliveryAnswer({}, source), source);
+  }
+});
+
+test("qualified approval objects retain the product subject without borrowing across clauses", () => {
+  for (const object of ["owner approval", "explicit human approval", "manual owner consent", "owner permission"])
+    {
+      const source = `For tests, create a fake PR and verify that the form requests ${object} for it in the local mock service.`;
+      assert.equal(ownerDelivery(source), null, source);
+      assert.doesNotThrow(() => assertDeliveryAnswer({}, source), source);
+    }
+  for (const source of ["For tests, create a fake PR and get owner approval for it.", "For tests, create a fake PR and verify that the form renders before the agent gets owner approval for it."]) {
+    assert.throws(() => ownerDelivery(source), {code:"TASK_DELIVERY_SCOPE"}, source);
+    assert.throws(() => assertDeliveryAnswer({}, source), {code:"TASK_DELIVERY_SCOPE"}, source);
+  }
+});
+
+
+test("reference-style Markdown retains live destinations and local field exceptions", () => {
+  for (const reference of ["[GitHub][forge]", "[forge][]", "[forge]", "![GitHub][forge]", "[GitHub][FORGE]", "[GitHub][the forge]"])
+    for (const suffix of ["", " Open a PR."]) {
+      const source = `For tests, create a fake PR on ${reference}.${suffix}\n\n[forge]: https://github.com/owner/repo\n[the forge]: <https://codeberg.org/owner/repo>`;
+      assert.throws(() => ownerDelivery(source), {code:"TASK_DELIVERY_SCOPE"}, source);
+      assert.throws(() => assertDeliveryAnswer({}, source), {code:"TASK_DELIVERY_SCOPE"}, source);
+    }
+  for (const source of ["For tests, create a fake PR with URL field set to [forge].\n\n[forge]: https://github.com/owner/repo", "For tests, create a fake PR in [fixtures].\n\n[fixtures]: file:///tmp/fixtures", "For tests, create a fake PR in [forge].\n\n[forge]: file:///tmp/fixtures\n[forge]: https://github.com/owner/repo"])
+    assert.doesNotThrow(() => assertDeliveryAnswer({}, source), source);
+});
+
+test("product approval lookup requires one noun phrase before the approval object", () => {
+  for (const connector of ["since", "whilst", "because", "although", "as", "when", "unless", "provided that"])
+    for (const actor of ["we need", "the agent obtains", "Jennifer seeks"])
+      for (const suffix of ["", " Open a PR."]) {
+        const source = `For tests, create a fake PR and verify that the form renders ${connector} ${actor} owner approval for it.${suffix}`;
+        assert.throws(() => ownerDelivery(source), {code:"TASK_DELIVERY_SCOPE"}, source);
+        assert.throws(() => assertDeliveryAnswer({}, source), {code:"TASK_DELIVERY_SCOPE"}, source);
+      }
+  for (const noun of ["explicit owner", "the required human", "prior legal", "manual admin"])
+    assert.doesNotThrow(() => assertDeliveryAnswer({}, `For tests, create a fake PR and verify that the form requests ${noun} approval for it in a local mock service.`));
+});
