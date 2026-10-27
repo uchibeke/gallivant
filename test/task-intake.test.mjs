@@ -27,7 +27,7 @@ import { makeState } from "../lib/state.mjs";
 import { writeJsonAtomic } from "../lib/fs.mjs";
 import { contentDigest, captureStartInput } from "../lib/start_contract.mjs";
 import { draftFor } from "./fixtures/task-intake.mjs";
-import { workflowRequests, applicationRequests, publicationTailConnectors } from "./fixtures/owner-actions.mjs";
+import { publicationTailConnectors } from "./fixtures/owner-actions.mjs";
 import { profileRequests } from "../templates/plugin/task-profile-requests.mjs";
 import { DELIVERY_CAPABILITIES, PROFILE_VERSION, deliveryScreen, deliveryQuestion } from "../lib/task_profile.mjs";
 import { modelSummary, capabilitySummary } from "../lib/task_delivery_view.mjs";
@@ -696,6 +696,8 @@ test("publication review corpus remains deterministic under the typed delivery s
   }
 
   const productRequirements = [
+    "The CLI creates a PR when the command runs.",
+    "The webhook handler creates a PR when invoked.",
     ...publicationTailConnectors.flatMap(connector => [
       `The button creates a PR after tests pass, ${connector} the service opens another PR.`,
       `Show the example "${connector} the agent opens another PR" in the button help.`,
@@ -1033,12 +1035,24 @@ test("saved legacy tasks reject hidden temporal publication answers without chan
     assert.deepEqual(store.read(first.taskId), before, connector);
   }
   assert.equal(w.calls(), calls); assert.equal(w.daemonCalls(), 0); assert.deepEqual(w.ctx.state.entries(), []);
+  const productAnswer = "The button creates a PR after tests pass, after that the service opens another PR.";
+  // Main's historical recognizer refuses this new wording. Do not enlarge an
+  // old contract to accept it; the typed path supports the product requirement.
+  await assert.rejects(w.service.answer({ taskId: first.taskId, expectedRevision: first.revision,
+    operationId: "legacy-product-answer", answers: { "q-r-1": productAnswer } }), { code: "TASK_DELIVERY_SCOPE", taskEffects: "none" });
+  assert.deepEqual(store.read(first.taskId), before);
   const answered = await w.service.answer({ taskId: first.taskId, expectedRevision: first.revision,
-    operationId: "legacy-product-answer", answers: { "q-r-1": "The button creates a PR after tests pass, after that the service opens another PR." } });
+    operationId: "legacy-csv-answer", answers: { "q-r-1": "Use CSV." } });
   assert.equal(answered.status, "ready");
   assert.equal(store.read(first.taskId).original, text);
   assert.deepEqual(store.read(first.taskId).ownerDelivery, before.ownerDelivery);
   assert.deepEqual(w.ctx.state.entries(), []);
+  const typed = world({ prepare: async (_ctx, task) => JSON.stringify(draftFor(task, { question: true })) });
+  const prepared = await typed.service.prepare({ text: "Add CSV export." });
+  const current = await typed.service.answer({ taskId: prepared.taskId, expectedRevision: prepared.revision,
+    operationId: "typed-product-answer", answers: { "q-r-1": productAnswer } });
+  assert.equal(current.status, "ready"); assert.deepEqual(typed.ctx.state.entries(), []);
+  assert.ok(current.requirements.some(r => r.text.includes("The button creates a PR")));
 });
 
 test("distinct assertions mapped to one owner paragraph retain every authoritative requirement", async () => {
