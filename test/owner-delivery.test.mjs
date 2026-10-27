@@ -3820,3 +3820,16 @@ test("all fixture separators require an independent action before detaching dest
         assert.doesNotThrow(() => assertDeliveryAnswer({}, source), source);
       }
 });
+
+test("fixture references cannot acquire integration or human approval authority", () => {
+  for (const tail of ["and have it merged", "and get it merged", "and it must be merged", "and merge it", "and have it carefully landed", "and it must be integrated", "for owner approval", "for the owner to approve", "for human permission", "for owner consent", "for owner sign-off"])
+    for (const suffix of ["", " Open a PR."]) {
+      const source = `For tests, create a fake PR ${tail}.${suffix}`;
+      assert.throws(() => ownerDelivery(source), {code:"TASK_DELIVERY_SCOPE"}, source);
+      assert.throws(() => assertDeliveryAnswer({}, source), {code:"TASK_DELIVERY_SCOPE"}, source);
+    }
+  for (const source of ["For tests, create a fake PR with approval status pending.", "For tests, create a fake PR with permission field empty.", "For tests, create a fake PR and verify that the form approves it in the local mock service.", "For tests, create a fake PR and verify that the form has it approved in the local mock service.", "For tests, create a fake PR and verify that the form merges it in the local mock service.", 'For tests, create a fake PR with title "for owner approval".']) {
+    assert.equal(ownerDelivery(source), null, source);
+    assert.doesNotThrow(() => assertDeliveryAnswer({}, source), source);
+  }
+});
