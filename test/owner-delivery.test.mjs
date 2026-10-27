@@ -3804,3 +3804,19 @@ test("comma-delimited destination and review complements stay attached to fixtur
     assert.doesNotThrow(() => assertDeliveryAnswer({}, source), source);
   }
 });
+
+test("all fixture separators require an independent action before detaching destinations", () => {
+  for (const separator of [", ", "; ", ". ", "\n", " and ", " then ", " but ", " + ", " / "])
+    for (const tail of ["using GitHub", "for review by the owner", 'on the public "https://github.com/owner/repo"']) {
+      const source = `For tests, create a fake PR${separator}${tail}.`;
+      assert.throws(() => ownerDelivery(source), {code:"TASK_DELIVERY_SCOPE"}, source);
+      assert.throws(() => assertDeliveryAnswer({}, source), {code:"TASK_DELIVERY_SCOPE"}, source);
+    }
+  for (const separator of [", ", "; ", ". ", "\n", " and ", " + "])
+    for (const action of ["upload logs to GitHub", "the application uploads logs to GitHub", "verify that the form reviews it in the local mock service"])
+      {
+        const source = `For tests, create a fake PR${separator}${action}.`;
+        assert.equal(ownerDelivery(source), null, source);
+        assert.doesNotThrow(() => assertDeliveryAnswer({}, source), source);
+      }
+});
