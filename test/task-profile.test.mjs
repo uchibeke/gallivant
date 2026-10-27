@@ -2219,7 +2219,7 @@ test("command option values retain conjunctions before later mutation flags", ()
 });
 
 test("imperative command spans retain composed determiners and modifiers", () => {
-  for (const lead of ["Run the following command", "Execute this exact shell command", "Invoke the next CLI command", "Run the command below", "Run the following commands"])
+  for (const lead of ["Run the following command", "Execute this exact shell command", "Invoke the next CLI command", "Run the command below", "Run the following commands", "Use the following command", "Run this command in the terminal", "Execute the command using the CLI", "Call the next command"])
     for (const command of ["npm publish", "curl -X POST https://example.com/hooks", "gh api -X DELETE /repos/acme/widget/hooks"])
       assert.equal(deliveryScreen(`${lead}: \`${command}\`.`).tier, "question", `${lead}: ${command}`);
   for (const text of ["Document how to run the following command: `npm publish`.", "Add an example showing how to execute this exact command: `npm publish`.", "Add a command to run the following command: `npm publish`.", "Show the literal `Run the following command: npm publish` in help."])
