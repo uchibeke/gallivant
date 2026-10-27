@@ -5730,3 +5730,12 @@ test("an interpreter program cannot hide publication before dispatch", async () 
   await assert.rejects(w.service.start({taskId:task.taskId,expectedRevision:task.revision,run:true}),{code:"TASK_NOT_READY"});
   assert.deepEqual(w.ctx.state.entries(),[]); assert.equal(w.daemonCalls(),0);
 });
+
+test("npm abbreviations cannot dispatch registry effects", async () => {
+  for (const text of ["Run npm pub.", "Run npm unpub fixture-package."]) {
+    const w=world(), task=await w.service.prepare({text});
+    assert.equal(task.status,"needs-input",text);
+    await assert.rejects(w.service.start({taskId:task.taskId,expectedRevision:task.revision,run:true}),{code:"TASK_NOT_READY"});
+    assert.deepEqual(w.ctx.state.entries(),[]); assert.equal(w.daemonCalls(),0);
+  }
+});

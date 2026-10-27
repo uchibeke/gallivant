@@ -2254,3 +2254,22 @@ test("interpreter program arguments remain executable scope during literal maski
   for (const text of ["Document how to run bash -c 'npm publish'.", "Add a command to run bash -c 'npm publish'.", "Show the literal `bash -c 'npm publish'` in help.", "Run bash -c 'npm test'."])
     assert.equal(deliveryScreen(text).tier, "none", text);
 });
+
+test("npm effect abbreviations retain canonical publication and dry-run behavior", () => {
+  for (const command of ["pu", "pub", "publ", "publi", "publis", "publish", "unp", "unpub", "unpublis", "dep", "depr", "deprecate"])
+    assert.equal(deliveryScreen(`Run npm ${command} fixture-package.`).tier, "question", command);
+  for (const command of ["pu", "pub", "publ", "publish"])
+    for (const flag of ["--dry-run", "--dry-run true", "--help"])
+      assert.equal(deliveryScreen(`Run npm ${command} ${flag}.`).tier, "none", `${command} ${flag}`);
+  for (const text of ["Run npm pub --dry-run false.", "Run npm -- pub.", "Run npm -- unpub fixture-package.", "Run npm -- publish --dry-run.", "Run npm ow add alice pkg.", "Run npm author add alice pkg.", "Run npm tok revoke fixture-id."])
+    assert.equal(deliveryScreen(text).tier, "question", text);
+  for (const text of ["Run npm pack.", "Run npm ow ls pkg.", "Run npm tok list.", "Document how to run npm pub."])
+    assert.equal(deliveryScreen(text).tier, "none", text);
+});
+
+test("interpreter examples retain their governing documentation context", () => {
+  for (const text of ["Document bash -c 'npm publish'.", "Add an example using bash -c 'npm publish'.", "Add a script using bash -c 'npm publish'.", "Show an example with sh -c 'npm publish'."])
+    assert.equal(deliveryScreen(text).tier, "none", text);
+  for (const text of ["Document the change, then run bash -c 'npm publish'.", "Add an example; run bash -c 'npm publish'."])
+    assert.equal(deliveryScreen(text).tier, "question", text);
+});

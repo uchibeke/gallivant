@@ -1384,4 +1384,9 @@ export const profileRequests = [
   {"kind": "adversarial", "text": "Fix the parser: use the CLI to publish the package to npm.", "screen": {"tier": "question", "terms": ["publish"]}, "tag": null, "outcome": "needs-input"},
   {"kind":"adversarial","text":"Run bash -c 'npm publish'.","screen":{"tier":"question","terms":["publish"]},"tag":null,"outcome":"needs-input"},
   {"kind":"feature","text":"Document how to run bash -c 'npm publish'.","screen":{"tier":"none"},"tag":null,"outcome":"ready"},
+  {"kind": "adversarial", "text": "Run npm pub.", "screen": {"tier": "question"}, "tag": null, "outcome": "needs-input"},
+  {"kind": "adversarial", "text": "Run npm unpub fixture-package.", "screen": {"tier": "question"}, "tag": null, "outcome": "needs-input"},
+  {"kind": "feature", "text": "Run npm pub --dry-run.", "screen": {"tier": "none"}, "tag": null, "outcome": "ready"},
+  {"kind": "feature", "text": "Document bash -c 'npm publish'.", "screen": {"tier": "none"}, "tag": null, "outcome": "ready"},
+  {"kind": "feature", "text": "Add an example using bash -c 'npm publish'.", "screen": {"tier": "none"}, "tag": null, "outcome": "ready"},
 ];
