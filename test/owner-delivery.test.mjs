@@ -3733,3 +3733,16 @@ test("modified and referential human review retains synthetic publication bounda
     assert.doesNotThrow(() => assertDeliveryAnswer({}, source), source);
   }
 });
+
+test("review obligations retain ownership across actor-led and relative complements", () => {
+  for (const tail of ["for the owner to review", "for a human to carefully review", "that the owner will review", "so the reviewer can review it", "to be carefully reviewed by the owner", "for external security review"])
+    for (const suffix of ["", " Open a PR for review."]) {
+      const source = `For tests, submit a fake PR ${tail}.${suffix}`;
+      assert.throws(() => ownerDelivery(source), { code: "TASK_DELIVERY_SCOPE" }, source);
+      assert.throws(() => assertDeliveryAnswer({}, source), { code: "TASK_DELIVERY_SCOPE" }, source);
+    }
+  for (const source of ["For tests, create a fake PR with review status pending.", "For tests, create a fake PR with reviewer id 123.", "For tests, create a fake PR with status set to review.", 'For tests, create a fake PR with title "for the owner to review".', "For tests, create a fake PR and verify that the form reviews it in the local mock service."]) {
+    assert.equal(ownerDelivery(source), null, source);
+    assert.doesNotThrow(() => assertDeliveryAnswer({}, source), source);
+  }
+});
