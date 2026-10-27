@@ -3925,3 +3925,16 @@ test("an independent business object owns later pronouns but cannot hide explici
       assert.throws(() => assertDeliveryAnswer({}, source), {code:"TASK_DELIVERY_SCOPE"}, source);
     }
 });
+
+
+test("courteous independent actions use shared positive action evidence for pronoun ownership", () => {
+  for (const prefix of ["Please ", "Kindly ", "Please first ", "Please just "])
+    for (const separator of [". ", " and ", "; "])
+      {
+        const source = `For tests, create a fake PR fixture${separator}${prefix}generate a report and send it to GitHub.`;
+        assert.equal(ownerDelivery(source), null, source);
+        assert.doesNotThrow(() => assertDeliveryAnswer({}, source), source);
+      }
+  for (const source of ["For tests, create a fake PR fixture. Please generate a report and send the fixture to GitHub.", "For tests, create a fake PR fixture. Do not generate a report. Send it to GitHub."])
+    assert.throws(() => ownerDelivery(source), {code:"TASK_DELIVERY_SCOPE"}, source);
+});
