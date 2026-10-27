@@ -2273,3 +2273,21 @@ test("interpreter examples retain their governing documentation context", () => 
   for (const text of ["Document the change, then run bash -c 'npm publish'.", "Add an example; run bash -c 'npm publish'."])
     assert.equal(deliveryScreen(text).tier, "question", text);
 });
+
+
+test("npm registry help honors Boolean values and later overrides", () => {
+  for (const family of ["token revoke fixture-id", "token create", "owner add alice pkg", "access set status=public pkg", "dist-tag add pkg@2 latest", "publish"])
+    for (const flags of ["--help false", "--help=true --help false", "--help --no-help", "--help=$HELP", "--help true --help=false"])
+      assert.equal(deliveryScreen(`Run npm ${family} ${flags}.`).tier, "question", `${family} ${flags}`);
+  for (const text of ["Run npm token revoke fixture-id --help true.", "Run npm token revoke fixture-id --help=false --help true.", "Run npm --help true token revoke fixture-id.", "Run npm token revoke fixture-id -h.", "Run npm token revoke fixture-id --no-help false.", "Run npm token list --help false.", "Run npm publish --help true."])
+    assert.equal(deliveryScreen(text).tier, "none", text);
+});
+
+test("all npm token removal aliases require a delivery decision", () => {
+  for (const command of ["token", "tok"])
+    for (const action of ["rm", "delete", "remove", "revoke"])
+      for (const bridge of [" ", "\n"])
+        assert.equal(deliveryScreen(`Run npm ${command}${bridge}${action} fixture-id.`).tier, "question", `${command}${bridge}${action}`);
+  for (const text of ["Run npm token list.", "Run npm token ls.", "Run npm token delete fixture-id --help.", "Document how to run npm token delete fixture-id."])
+    assert.equal(deliveryScreen(text).tier, "none", text);
+});
