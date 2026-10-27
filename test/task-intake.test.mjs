@@ -5716,3 +5716,10 @@ test("a following-command publication span cannot dispatch", async () => {
   await assert.rejects(w.service.start({ taskId: task.taskId, expectedRevision: task.revision, run: true }), { code: "TASK_NOT_READY" });
   assert.deepEqual(w.ctx.state.entries(), []); assert.equal(w.daemonCalls(), 0);
 });
+
+test("an unrelated implementation action cannot dispatch a publication clause", async () => {
+  const w = world(), task = await w.service.prepare({ text: "Fix the parser, use the CLI to publish the package to npm." });
+  assert.equal(task.status, "needs-input");
+  await assert.rejects(w.service.start({ taskId: task.taskId, expectedRevision: task.revision, run: true }), { code: "TASK_NOT_READY" });
+  assert.deepEqual(w.ctx.state.entries(), []); assert.equal(w.daemonCalls(), 0);
+});

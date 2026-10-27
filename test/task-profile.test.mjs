@@ -2225,3 +2225,22 @@ test("imperative command spans retain composed determiners and modifiers", () =>
   for (const text of ["Document how to run the following command: `npm publish`.", "Add an example showing how to execute this exact command: `npm publish`.", "Add a command to run the following command: `npm publish`.", "Show the literal `Run the following command: npm publish` in help."])
     assert.equal(deliveryScreen(text).tier, "none", text);
 });
+
+test("an unrelated implementation action cannot exempt later tool execution", () => {
+  for (const text of ["Fix the parser, use the CLI to publish the package to npm.", "Fix the parser: use the CLI to publish the package to npm.", "Fix the parser while attempting to use the CLI to publish the package to npm.", "Fix the parser before trying to use the CLI to publish the package to npm.", "Fix the parser while using the CLI to publish the package to npm.", "Fix the parser by using the CLI to publish the package to npm."])
+    assert.equal(deliveryScreen(text).tier, "question", text);
+  for (const text of ["Update the command to use the CLI to publish the package to npm.", "Refactor the script to use the CLI to publish the package to npm.", "Add a command to use the CLI to publish the package to npm.", "Add support for running the CLI to publish the package to npm.", "Add an example of using the CLI to publish the package to npm."])
+    assert.equal(deliveryScreen(text).tier, "assumption", text);
+});
+
+test("historical delivery-prefixed planner questions retain ownership and remain answerable", () => {
+  const task = taskFor("Add CSV export.", { deliveryProfile: undefined, route: undefined, modelRoute: undefined, repositoryContext: undefined, commandCandidates: ["npm test"] });
+  const q = { id: "q-delivery-format", text: "Which file format should export use?", requirements: ["r-1"] };
+  task.questionHistory[q.id] = structuredClone(q);
+  const out = draftFor(task, { question: true });
+  out.questions = [q]; out.mapping[0].questionId = q.id;
+  assert.deepEqual(parseDraft(JSON.stringify(out), task).questions, [q]);
+  const changed = structuredClone(out); changed.questions[0].text = "May I change the saved question?";
+  assert.throws(() => parseDraft(JSON.stringify(changed), task), /changed; retain its text/);
+  assert.throws(() => parseDraft(JSON.stringify(out), taskFor("Add CSV export.", { commandCandidates: ["npm test"] })), /reserved for the delivery profile/);
+});
