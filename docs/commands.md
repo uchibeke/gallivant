@@ -115,6 +115,11 @@ Requests can produce code, documentation, research or other repository artifacts
 A natural-language task still becomes an explicit, validated delivery contract;
 it does not require the user to write a PRD first.
 See [task operations](tasks.md) for examples, source delivery and stopping rules.
+`--delivery pull_request` selects the typed delivery profile that alone authorizes
+external actions for new tasks, `--completion-target` sets its completion
+condition, and `--route harness|model` chooses the planner route. The result's
+`review` object is the revision-pinned view an owner approves with `task start
+--run`. See [typed delivery profiles](task-profiles.md).
 
 
 ### Task operations
@@ -142,8 +147,9 @@ Preparation accepts `--repo`, `--base`, repeated `--context` files and `--verify
 commands, and a retry-safe `--request-id`. Answers may also add explicit context
 and verification commands. `--completion-target delivery_ready|integrated` selects
 whether the task tracks readiness or confirmed integration; neither grants merge
-permission. `--run` on initial preparation authorizes dispatch after readiness and
-any required answers. `--no-daemon` leaves monitoring startup to an existing host
+permission. Initial preparation returns the draft or questions for review even
+when `--run` is present; approve the visible revision separately with `task start
+--revision N --run`. `--no-daemon` leaves monitoring startup to an existing host
 or explicit coordinator. See [task operations](tasks.md) for revision conflicts,
 uncertain dispatch, evidence and authorization rules.
 

@@ -38,6 +38,10 @@ lib/events.mjs           pure rules: what counts as an event, trust, reviewer ve
 lib/prompt.mjs           start, register and fix prompts; quoting and caps
 lib/harness.mjs          capability registry plus local argv, session, outcome and sign-in adapters
 lib/tasks.mjs            natural-language intake, revisions, validation, readiness and explicit execution consent
+lib/task_profile.mjs     portable typed delivery profile, deterministic delivery screen and planner tag coverage (vendored by Agent Passport)
+lib/task_model_route.mjs bounded text-only model route for drafting; pre-call allowance checks, usage-derived cost
+lib/task_model_config.mjs operator configuration and absolute ceilings for that route
+lib/task_repository_context.mjs read-only, bounded repository snapshot pinned to the prepared revision
 lib/task_delivery.mjs    authenticated host operation boundary; delegates to the same task service
 lib/execution.mjs        durable local/remote dispatch, ownership, observations and recovery
 lib/execution_result.mjs owned hosted artifact verification and coordinator publication

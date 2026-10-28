@@ -39,5 +39,10 @@ jobs:
         run: sudo log show --last 2m --style compact --predicate 'eventMessage CONTAINS "Sandbox:"'
       - run: npm ci --ignore-scripts
       - run: npm run lint
-      - run: npm test
+      # CPU budgets need a quiet process after the concurrent functional suite.
+      # Both commands are required on every OS/Node combination; no test is lost.
+      - name: Run functional test suite
+        run: node --test --test-skip-pattern='^the screen and mapping stay fast at the request and mapping limits$' test/*.test.mjs
+      - name: Run isolated task-intake CPU budget
+        run: node --test --test-name-pattern='^the screen and mapping stay fast at the request and mapping limits$' test/task-profile.test.mjs
       - run: npm run test:install

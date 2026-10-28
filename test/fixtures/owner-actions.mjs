@@ -1,3 +1,14 @@
+// Temporal continuations share one corpus across parser and service checks.
+export const publicationTemporalConnectors = Object.freeze([
+  "after that", "after this", "before that", "before this", "following that", "following this",
+  "at that point", "at this point", "from then on", "from that point on", "from this point on", "AFTER THAT",
+]);
+export const publicationTailConnectors = Object.freeze([
+  ...publicationTemporalConnectors,
+  "next", "later", "eventually", "finally", "ultimately", "previously", "earlier", "first", "firstly",
+  "at that stage", "at this time", "after that step", "following this step", "once that is done", "as a result", "in consequence",
+]);
+
 export const workflowRequests = [
   "Merge invoices using SHA‑1‑abcd.",
   "Merge files using SHA–256:abcde.",

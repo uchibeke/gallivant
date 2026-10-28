@@ -80,14 +80,17 @@ from you or an account with a third party.
 
 ```sh
 gallivant task "Document how to run the existing tests in CONTRIBUTING.md. Use the commands already defined in the repository. Change documentation only." \
-  --harness codex --verify 'git diff --check' --run
+  --harness codex --verify 'git diff --check'
+# Review the draft, then substitute its returned task ID and revision:
+gallivant task start TASK_ID --revision REVISION --run
 gallivant start
 ```
 
-What happens: `task` uses your harness to prepare a brief, which is a paid
-inference call, and may ask you questions. `--run` authorizes implementation
-once the brief is ready; omit it to read the draft first and follow the printed
-`Next` action. The agent then works in a clone under `~/.gallivant-worktrees`,
+`task` uses your harness to prepare a brief, which is a paid inference call,
+and may ask you questions. Review the draft and answer any questions, then use
+its printed `Next` action to approve that revision with `task start --run`.
+Preparation always returns for review, even if its command includes `--run`.
+The agent then works in a clone under `~/.gallivant-worktrees`,
 pushes a branch, opens a PR against the default branch, and the daemon watches CI
 and the reviewer, sending each round of feedback back to the same session.
 `gallivant start` opens the dashboard at **http://127.0.0.1:8791** and keeps
@@ -223,9 +226,20 @@ for the installed version's flags.
 
 ## Documentation
 
-[Getting started](docs/install.md) · [Agent setup](docs/agent-setup.md) ·
-[Commands](docs/commands.md) · [Configuration](docs/config.md) ·
-[Dashboard](docs/app.md) · [All guides](docs/README.md)
+| Need | Guide |
+| --- | --- |
+| Install and run your first task | [Getting started](docs/install.md) |
+| Start from a request, answer questions, inspect results | [Natural-language tasks](docs/tasks.md) |
+| Select the typed delivery profile and planner route for a request | [Typed delivery profiles](docs/task-profiles.md) |
+| Write a brief or define noncoding acceptance checks | [PRD contract](docs/prd.md) |
+| Use API-backed hosted execution | [OpenAI Agents](docs/openai-agents.md) |
+| Dashboard messages, controls and recovery | [Dashboard](docs/app.md) · [Commands](docs/commands.md) |
+| Models, credentials, limits and notifications | [Configuration](docs/config.md) |
+| Plan sequential work | [Chains](docs/chains.md) |
+| Embed task delivery in another application | [Task-delivery package](docs/task-delivery.md) |
+| Understand internals or recorded qualification | [Documentation index](docs/README.md) |
+| Set up from an agent | [Agent setup](docs/agent-setup.md) |
+| Release, contribute or report a vulnerability | [Releasing](docs/releasing.md) · [Contributing](CONTRIBUTING.md) · [Security](SECURITY.md) |
 
 **Asking a coding agent to set this up?** Give it the
 [setup-agent instructions](docs/agent-setup.md). They cover inspection, the
