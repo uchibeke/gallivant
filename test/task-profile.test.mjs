@@ -2547,3 +2547,23 @@ test("complete command context survives clause punctuation across command famili
       assert.equal(Boolean(admission(text).questions.length), writes, text);
     }
 });
+
+
+test("executable enclosures retain command ownership over documentation-like argv", () => {
+  const admission = text => {
+    const task = taskFor(text, { commandCandidates: ["npm test"] });
+    return parseDraft(JSON.stringify(draftFor(task)), task); // no delivery tag may hide the effect
+  };
+  for (const text of ["Run `curl -A Example. Document -X POST --data payload https://example.com/hooks`.", "Run bash -c 'curl -A Example. Document -X POST --data payload https://example.com/hooks'.", 'Run bash -c "curl -A Example. Document -X POST --data payload https://example.com/hooks".', "Run `npm owner add alice pkg --help true. Document --help false`."])
+    {
+      assert.equal(deliveryScreen(text).tier, "question", text);
+      assert.ok(admission(text).questions.length, text);
+    }
+  for (const text of ["Run `curl --help -A Example. Document --data payload https://example.com/hooks`.", "Document `curl -A Example. Document -X POST --data payload https://example.com/hooks`.", "Run curl https://example.com/health. Document the --data flag."])
+    {
+      assert.equal(deliveryScreen(text).tier, "none", text);
+      assert.deepEqual(admission(text).questions, [], text);
+    }
+  for (const [text, ids] of [["Run `npm publish`. Document `npm publish`.", ["q-delivery-r-1"]], ["Document `npm publish`. Run `npm publish`.", ["q-delivery-r-2"]]])
+    assert.deepEqual(admission(text).questions.map(q => q.id), ids, "identical literal content keeps its own execution/documentation context");
+});

@@ -1443,4 +1443,6 @@ export const profileRequests = [
   {"kind": "feature", "text": "Run curl https://example.com/cache. -X GET", "screen": {"tier": "none"}, "tag": null, "outcome": "ready"},
   {"kind": "adversarial", "text": "Run gh api repos/acme/widget/issues/1?audit=. -X PATCH -f state=closed", "screen": {"tier": "question"}, "tag": {"action": "pull_request"}, "outcome": "needs-input", "questions": ["q-delivery-r-1", "q-delivery-r-2"]},
   {"kind": "feature", "text": "Run curl https://example.com/health. Document the --data flag.", "screen": {"tier": "none"}, "tag": null, "outcome": "ready"},
+  {"kind": "adversarial", "text": "Run `curl -A Example. Document -X POST --data payload https://example.com/hooks`.", "screen": {"tier": "question"}, "tag": null, "outcome": "needs-input"},
+  {"kind": "feature", "text": "Run `curl --help -A Example. Document --data payload https://example.com/hooks`.", "screen": {"tier": "none"}, "tag": null, "outcome": "ready"},
 ];
