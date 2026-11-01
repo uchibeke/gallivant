@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
 import { writeFileSync, readFileSync, chmodSync, realpathSync } from "node:fs";
 import { join } from "node:path";
-import { fixture, REPO, PATH, UUID, WORKSPACE, USER, HEAD, BASE, HOST_KEY, pr, page, json, comment, status } from "./bitbucket-fixture.mjs";
+import { fixture, REPO, PATH, UUID, WORKSPACE, USER, HEAD, BASE, HOST_KEY, pr, prSummary, page, json, comment, status } from "./bitbucket-fixture.mjs";
 import { makeHostRegistry, hosts, pullRequestUrl } from "../lib/hosts.mjs";
 import { validateHostRecord } from "../lib/host_contract.mjs";
 import { makeGit, runEnv } from "../lib/git.mjs";
@@ -61,6 +61,8 @@ test("Bitbucket preflight checks base, role, PR/comments and restrictions, disti
   const report = await f.api.preflight(PATH, { base: "release/v2" });
   assert.equal(report.base, "release/v2"); assert.equal(report.baseSha, BASE); assert.equal(report.accountPush, "proved");
   assert.equal(report.commentRead, "proved"); assert.equal(report.pullRequestCreate, "unknown"); assert.equal(report.archived, "unknown"); assert.equal(report.branchRestrictions.length, 1);
+  const detailRead = f.calls.findIndex(c => c.path === "/pullrequests/7");
+  assert.ok(detailRead >= 0 && detailRead < f.calls.findIndex(c => c.path === "/pullrequests/7/comments"));
   await assert.rejects(f.api.preflight(PATH, { base: "missing" }), /HTTP 404/);
   f.data.permission = "read"; await assert.rejects(f.api.preflight(PATH), /no repository push access/);
   f.data.permission = "write"; f.data.repository.is_archived = true; await assert.rejects(f.api.preflight(PATH), /archived/);
@@ -219,6 +221,64 @@ test("Bitbucket publishes or updates one same-repository PR, including read-afte
   assert.equal(timed.calls.at(-1).method, "GET");
 });
 
+test("Bitbucket expands paginated PR summaries into complete records by repository and ID", async () => {
+  const rows = [pr(), pr({ id: 8, links: { html: { href: "https://bitbucket.org/acme/widget/pull-requests/8" } } })];
+  const f = fixture({ intercept: c => {
+    if (c.path !== "/pullrequests") return;
+    const summary = prSummary(rows[c.url.includes("page=2") ? 1 : 0]);
+    assert.equal(summary.reviewers, undefined); assert.equal(summary.participants, undefined);
+    summary.links = { ...summary.links, self: { href: "https://evil.test/pullrequests/7" } };
+    return json({ values: [summary], size: 2, ...(c.url.includes("page=2") ? {} : { next: `${c.url}&page=2` }) });
+  } });
+  f.data.prs = rows;
+  const result = await f.api.prListByHead(PATH, "work/feature");
+  assert.deepEqual(result.map(p => p.number), [7, 8]);
+  for (const record of result) {
+    assert.equal(record.reviewers[0].login, USER.uuid);
+    assert.equal(record.participants[0].state, "changes_requested");
+    assert.equal(record.repositoryId, UUID);
+  }
+  assert.deepEqual(f.calls.filter(c => /^\/pullrequests\/\d+$/.test(c.path)).map(c => c.path), ["/pullrequests/7", "/pullrequests/8"]);
+  assert.ok(f.calls.every(c => c.method === "GET" && new URL(c.url).host === "api.bitbucket.org"));
+});
+
+test("Bitbucket PR detail failures stop listing, preflight and publication without dropping evidence", async () => {
+  const operations = [api => api.prListByHead(PATH, "work/feature"), api => api.preflight(PATH), api => api.publishResultPr(publication)];
+  for (const operation of operations) {
+    for (const [response, code] of [
+      [() => json({}, 403), "BB_HTTP"], [() => json({}, 404), "BB_HTTP"], [() => json({}, 429), "BB_RATE_LIMIT"],
+      [() => { throw new Error("detail unavailable"); }, "BB_TRANSPORT"],
+      [() => json(pr({ reviewers: undefined })), "BB_INCOMPLETE"], [() => json(pr({ participants: undefined })), "BB_INCOMPLETE"],
+      [() => json(pr({ id: 8, links: { html: { href: "https://bitbucket.org/acme/widget/pull-requests/8" } } })), "BB_IDENTITY"],
+      [() => json(pr({ destination: { ...pr().destination, repository: { uuid: WORKSPACE, full_name: PATH } } })), "BB_IDENTITY"],
+    ]) {
+      const f = fixture({ intercept: c => c.path === "/pullrequests/7" ? response() : undefined }); f.data.prs = [pr()];
+      await assert.rejects(operation(f.api), { code });
+      assert.ok(f.calls.every(c => c.method === "GET"));
+    }
+    for (const id of [undefined, "7", -1, 1.5]) {
+      const f = fixture({ intercept: c => c.path === "/pullrequests" ? json(page([{ ...prSummary(pr()), id }])) : undefined });
+      await assert.rejects(operation(f.api), { code: "BB_INCOMPLETE" });
+      assert.ok(!f.calls.some(c => /^\/pullrequests\//.test(c.path)));
+    }
+  }
+});
+
+test("Bitbucket retains uncertain publication when a post-write PR detail read fails", async () => {
+  let created = false, allowDetails = false;
+  const f = fixture({ intercept: c => {
+    if (c.method === "POST") created = true;
+    if (created && !allowDetails && c.path === "/pullrequests/7") return json({}, 403);
+  } });
+  await assert.rejects(f.api.publishResultPr(publication), /HTTP 403/);
+  f.data.prs = [];
+  await assert.rejects(f.api.publishResultPr(publication), /previous PR write/);
+  assert.equal(f.calls.filter(c => c.method === "POST").length, 1);
+  f.data.prs = [pr()]; allowDetails = true;
+  assert.equal((await f.api.publishResultPr(publication)).number, 7);
+  assert.equal(f.calls.filter(c => c.method === "POST").length, 1);
+});
+
 test("Bitbucket PR conflicts, forks and uncertain acceptance stop further writes", async () => {
   for (const rows of [[pr(), pr({ id: 8, links: { html: { href: "https://bitbucket.org/acme/widget/pull-requests/8" } } })], [pr({ destination: { ...pr().destination, branch: { name: "other" } } })], [pr({ source: { ...pr().source, repository: { uuid: WORKSPACE, full_name: "fork/widget" } } })]]) {
     const f = fixture(); f.data.prs = rows;
@@ -275,6 +335,7 @@ test("Bitbucket Git/API mismatch, unverified SSH pins, and foreign credential-he
 
 test("Bitbucket-only init and doctor need no gh and report disabled dispatch without a model call", async () => {
   const home = tempHome(), config = selectedConfig(home), f = fixture({ config });
+  f.data.prs = [pr()];
   writeFileSync(join(home, "config.json"), JSON.stringify(config), { mode: 0o600 });
   const git = { probeAccess: async (_repo, base, hash) => { assert.equal(base, "main"); assert.equal(hash, BASE); return { gitRead: "proved", gitPush: "unknown" }; } };
   const transportPreflight = (c, repo) => repositoryPreflight(c, repo, { registry: f.registry, git });

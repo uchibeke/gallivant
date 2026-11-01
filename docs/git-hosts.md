@@ -215,6 +215,11 @@ identity avoids nickname ambiguity. These observations do not qualify reviewer
 trust, CI policy, recovery or merge proof for dispatch.
 Build statuses use the [documented commit link](https://developer.atlassian.com/cloud/bitbucket/rest/api-group-commit-statuses/#api-repositories-workspace-repo-slug-commit-commit-statuses-get)
 to confirm the queried repository and head; missing or mismatched links stop the snapshot.
+PR list responses omit reviewer and participant collections. Bounded list results
+are expanded through repository-scoped PR detail reads before normalization;
+preflight also reads the selected PR's details before checking comment access.
+Missing or inaccessible detail records stop the operation, and a failed read after
+publication preserves the unresolved write until reconciliation succeeds.
 
 Reads are bounded to 100 pages and 10,000 items per collection, 4 MiB per JSON
 response, a diff smaller than 16 MiB, and 20 seconds per request. Missing fields,
