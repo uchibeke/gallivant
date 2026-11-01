@@ -309,3 +309,8 @@ that a tool call was denied. The historical findings are linked below.
 ## Follow-ups filed against APort
 
 The historical [decision record](https://github.com/uchibeke/gallivant/blob/main/docs/audit/DECISIONS.md) lists: multi-file `apply_patch` in the Codex hook, `git push` refspec parsing, control-plane paths blocked by default, a non-interactive local passport install, and a Repository Guard slice that blocks pushes rather than reporting merges.
+
+Repository identity, credential transport and PR evidence are defined by the
+[Git host contract](git-hosts.md). Only GitHub is qualified in this release;
+other hosts are refused before dispatch. Existing IDs and chain ownership are
+retained without a state migration.

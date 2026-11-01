@@ -287,6 +287,7 @@ function repoWithSomethingToMerge() {
 /** Real git for `makeGit`, with `fetch` answered locally: there is no remote, and the base ref is already in place. */
 const realGitExec = async (cmd, args, opts) => {
   if (args[0] === "fetch") return { stdout: "" };
+  if (args[0] === "remote" && args[1] === "get-url") return { stdout: "/fixture/local-origin" };
   try { return { stdout: execFileSync(cmd, args, { ...opts, stdio: ["ignore", "pipe", "pipe"], encoding: "utf8" }) }; }
   catch (e) { throw new Error(String(e.stderr || e.stdout || e.message)); }
 };

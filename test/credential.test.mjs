@@ -107,7 +107,7 @@ test("the token is only ever in GH_TOKEN, never in a git config value and never 
   // The helper names the variable rather than embedding a value, which is what makes the line above true. Found by KEY
   // and not by index: the identity pairs are appended per run now (a run commits as the operator, not as a bot), so the
   // helper's position in the numbering moves with them and an index here would pin an implementation detail.
-  const at = Object.keys(env).filter(k => k.startsWith("GIT_CONFIG_KEY_")).find(k => env[k] === "credential.helper");
+  const at = Object.keys(env).filter(k => k.startsWith("GIT_CONFIG_KEY_")).find(k => env[k] === "credential.helper" && env[k.replace("KEY", "VALUE")]);
   assert.ok(at, "the credential helper is somewhere in the numbered pairs");
   assert.match(env[at.replace("KEY", "VALUE")], /\$GH_TOKEN/);
 });
@@ -253,7 +253,7 @@ test("a run refuses to start when neither the file, the environment nor gh can a
   assert.match(c.why, /github_token_file/);
   assert.match(c.why, /Nothing was started/);
   // And runEnv given that refusal sets no token, so nothing downstream can mistake it for a credential.
-  assert.equal(runEnv(CONFIG, c).GH_TOKEN, undefined);
+  assert.equal(runEnv(CONFIG, c).GH_TOKEN, "", "an unresolved credential also clears inherited tokens");
 });
 
 test("a gh that fails or is not installed falls through instead of crashing the daemon", async () => {
@@ -288,7 +288,7 @@ test("the host is taken from the remote, for every remote shape git writes", () 
   assert.equal(hostFromRemote("https://x-access-token:tok@github.com/acme/widget"), "github.com");
   assert.equal(hostFromRemote("git@github.acme.com:acme/widget.git"), "github.acme.com");
   assert.equal(hostFromRemote("ssh://git@github.com/acme/widget.git"), "github.com");
-  assert.equal(hostFromRemote(""), "github.com");
+  assert.throws(() => hostFromRemote(""), /Invalid repository/);
   assert.equal(isDotCom("GitHub.com"), true);
   assert.equal(isDotCom("github.acme.com"), false);
 });
@@ -305,12 +305,12 @@ test("resolveCredentialFor reads the host from the entry's own checkout", async 
   // A checkout whose remote cannot be read is not worth failing over: it reads as github.com and git's own error
   // is what the operator sees.
   const broken = ghExec();
-  await resolveCredentialFor({
+  await assert.rejects(() => resolveCredentialFor({
     config: CONFIG,
     git: { originOf: async () => { throw new Error("not a git repository"); } },
     credential: opts => resolveCredential({ ...CONFIG, github_token_file: null }, { ...opts, env: {}, exec: broken.exec }),
-  }, { worktree: "/tmp/wt" });
-  assert.deepEqual(broken.calls, [["gh", "auth", "token"]]);
+  }, { worktree: "/tmp/wt" }), /not a git repository/);
+  assert.deepEqual(broken.calls, []);
 });
 
 test("describe names the source and a length, never the credential, because it is printed and logged", () => {

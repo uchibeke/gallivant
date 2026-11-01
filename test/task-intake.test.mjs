@@ -4551,7 +4551,7 @@ test("preparation and repairs refuse inherited Git helpers, askpass and SSH auth
     assert.equal(env.GIT_ALLOW_PROTOCOL, ""); assert.equal(env.GIT_SSH_COMMAND, "false"); assert.equal(env.GIT_TERMINAL_PROMPT, "0");
     const git = (args, input) => spawnSync("git", args, { cwd, env, input, encoding: "utf8", timeout: 2000 });
     const helpers = git(["config", "--get-all", "credential.helper"]);
-    assert.equal(helpers.status, 0, helpers.stderr); assert.equal(helpers.stdout.trim(), RUN_GIT_CONFIG.find(([key]) => key === "credential.helper")[1]);
+    assert.equal(helpers.status, 0, helpers.stderr); assert.equal(helpers.stdout.trim(), RUN_GIT_CONFIG.find(([key, value]) => key === "credential.helper" && value)[1]);
     const credential = git(["credential", "fill"], "protocol=https\nhost=fixture.invalid\n\n");
     assert.equal(credential.status, 128, credential.stderr); assert.equal(credential.stdout, ""); assert.match(credential.stderr, /terminal prompts disabled/);
     const ssh = git(["ls-remote", "ssh://fixture.invalid/repo"]);
@@ -4666,7 +4666,7 @@ test("CLI and structured known create preflight refusals release ownership and r
     const native = makeGit({ config: w.ctx.config,
       credential: async () => { if (failure === "credential" && envFailure) throw Error("Clone credential resolution unavailable"); return null; },
       identity: async () => { if (failure === "identity" && envFailure) throw Error("Clone identity resolution unavailable"); return null; },
-      exec: async (cmd, args) => { if (cmd === "gh") { clones++; mkdirSync(join(args[3], ".git"), { recursive: true }); } return { stdout: "" }; },
+      exec: async (cmd, args) => { if (cmd === "git" && args[0] === "clone") { clones++; mkdirSync(join(args.at(-1), ".git"), { recursive: true }); } return { stdout: args[0] === "remote" ? "https://github.com/acme/widget.git" : "" }; },
     });
     w.ctx.git.create = native.create;
     const invoke = (service, r, run = false) => cli ? taskCommand(w.ctx, { args: ["start", r.taskId], values: { revision: String(r.revision), ...(run ? { run: true } : {}) }, service }) : service.start({ taskId: r.taskId, expectedRevision: r.revision, ...(run ? { run: true } : {}) });
@@ -4702,9 +4702,9 @@ test("native create failures after executor invocation retain intake ownership e
     const w = world(), readyResult = await w.service.prepare({ text: REQUEST });
     const id = `acme/widget/${readyResult.taskId}`, path = join(w.home, "worktrees", id); let clones = 0;
     w.ctx.git.create = makeGit({ config: w.ctx.config, exec: async (cmd, args) => {
-      if (cmd === "gh") { clones++; mkdirSync(join(path, ".git"), { recursive: true }); writeFileSync(join(path, "partial-evidence"), "owned clone"); }
-      if ((phase === "clone" && cmd === "gh") || args[0] === phase) throw Error(`Lost ${phase} acknowledgement`);
-      return { stdout: "" };
+      if (cmd === "git" && args[0] === "clone") { clones++; mkdirSync(join(path, ".git"), { recursive: true }); writeFileSync(join(path, "partial-evidence"), "owned clone"); }
+      if ((phase === "clone" && cmd === "git" && args[0] === "clone") || args[0] === phase) throw Error(`Lost ${phase} acknowledgement`);
+      return { stdout: args[0] === "remote" ? "https://github.com/acme/widget.git" : "" };
     } }).create;
     const failed = await w.service.start({ taskId: readyResult.taskId, expectedRevision: readyResult.revision, run: true });
     const claim = w.ctx.state.startClaim(id);

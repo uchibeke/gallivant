@@ -499,7 +499,7 @@ test("live child environment strips Git and SSH credential channels and restores
     assert.equal(actual.gitTransport, "file");
     assert.equal(actual.gitSshCommand, "false");
     assert.equal(actual.gitConfigKeys.includes("http.extraheader"), false);
-    assert.equal(actual.gitConfigKeys.filter(key => key === "credential.helper").length, 1);
+    assert.equal(actual.gitConfigKeys.filter(key => key === "credential.helper").length, 2);
     assert.ok(actual.gitConfigKeys.includes("user.name") && actual.gitConfigKeys.includes("user.email"));
     assert.equal(read(join(root, "report.json")).cases[0].turns.length, 1);
   } finally { cleanup(root, run?.child); }

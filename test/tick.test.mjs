@@ -837,6 +837,53 @@ test("a run past the timeout is killed and the entry stops", async () => {
   assert.equal(w.entry().reason, "timeout");
 });
 
+test("host identity outages cannot postpone timeout enforcement", async () => {
+  const w = world();
+  const run = w.runner.start("fix", "claude", [], {});
+  w.state.update(w.id, { last: { run: run.id, exit: null } });
+  let identityReads = 0;
+  w.gh.userFor = async () => { identityReads++; throw new Error("HTTP 429"); };
+  w.gh.addLabel = async () => { throw new Error("host unreachable"); };
+  w.clock.advance(CONFIG.run_timeout_minutes + 1);
+  await w.tick.tick();
+  assert.equal(w.runner.current().killed, true);
+  assert.equal(w.entry().reason, "timeout");
+  assert.equal(w.entry().last.exit, 137);
+  assert.equal(w.entry().labels_pending, true);
+  assert.equal(identityReads, 0);
+  assert.equal(w.runner.started.length, 1);
+});
+
+test("finished runs settle locally before identity refresh and retry host decisions without duplicate accounting", async () => {
+  const w = world();
+  const run = w.runner.start("fix", "claude", [], {});
+  w.state.update(w.id, { last: { run: run.id, exit: null } });
+  w.runner.finish(claudeResultLines());
+  w.gh.data.pr = prFixture({ headRefOid: "d4e5f6a" });
+  const before = w.entry();
+  let identityReads = 0;
+  w.gh.userFor = async () => { identityReads++; throw new Error("HTTP 401"); };
+  const failed = await w.tick.tick();
+  assert.equal(failed.find(result => result.id === w.id).ok, false);
+  assert.equal(w.runner.current().exit, 0, "the owned process exit is persisted before identity I/O");
+  assert.equal(w.entry().last.exit, null, "host-dependent settlement remains pending");
+  assert.deepEqual(w.entry().cursor, before.cursor);
+  assert.equal(w.entry().iteration, before.iteration);
+  assert.equal(w.gh.calls.length, 0);
+  assert.equal(identityReads, 1);
+  identityReads = 0;
+  w.gh.userFor = async () => { identityReads++; return "me"; };
+  await w.tick.tick();
+  assert.equal(w.entry().last.exit, 0);
+  assert.equal(w.entry().iteration, before.iteration + 1);
+  assert.equal(identityReads, 1, "settlement and review share the same verified identity for this pass");
+  const comments = w.gh.calls.filter(call => call[0] === "comment").length;
+  await w.tick.tick();
+  assert.equal(w.entry().iteration, before.iteration + 1);
+  assert.equal(w.gh.calls.filter(call => call[0] === "comment").length, comments);
+  assert.equal(w.runner.started.length, 1);
+});
+
 for (const killed of [false, true]) test(`unverifiable shutdown stops visibly without duplicate notifications (already killed=${killed})`, async () => {
   const w = world({ last: { at: T0, run: "1-fix", exit: null, event: "review" } });
   w.runner.start("fix", "/bin/claude", [], {});
@@ -1151,9 +1198,9 @@ test("a registered PR without a session starts a fresh session that reads the PR
 
 test("one failing entry does not stop the others", async () => {
   const w = world();
-  w.state.put("widget/other", { ...w.entry(), pr: 999 });
+  w.state.put("widget/other", { ...w.entry(), pr: 999, url: "https://github.com/acme/widget/pull/999" });
   let n = 0;
-  w.gh.prView = async () => { if (n++ === 0) throw new Error("boom"); return prFixture({ state: "MERGED" }); };
+  w.gh.prView = async () => { if (n++ === 0) throw new Error("boom"); return prFixture({ number: 999, state: "MERGED" }); };
   const results = await w.tick.tick();
   assert.deepEqual(results.map(r => r.ok), [false, true]);
 });
@@ -1602,18 +1649,8 @@ test("a review the daemon already dispatched at the cursor's second does not als
   assert.deepEqual(w.gh.calls.filter(c => c[0] === "addLabel"), []);
 });
 
-test("a stop on an entry whose repo is not owner/name still notifies, with a handle a person can type", async () => {
-  // `shortRepo` was `repo.split("/")[1]`, so a repo with no owner produced the title `undefined#142` and a body
-  // telling the operator to run `gallivant why undefined#142`. With no repo at all it threw, inside `needsHuman`,
-  // after the state and labels were written and before `notify.needs`, where the tick's per-entry catch buried it and
-  // the stopped PR notified nobody.
-  for (const repo of ["widget", ""]) {
-    const w = world({ repo }, { pr: prFixture({ mergeable: "CONFLICTING" }) });
-    const results = await w.tick.tick();
-    assert.deepEqual(results.map(r => r.ok), [true], `repo ${JSON.stringify(repo)}: the tick did not throw`);
-    assert.deepEqual([w.entry().state, w.entry().reason], [STATES.needsHuman, "conflict"]);
-    assert.deepEqual(w.notify.sent, [["needs", 142, "conflict"]], `repo ${JSON.stringify(repo)}: the operator is told`);
-  }
+test("an ambiguous legacy repository stops before host reads or provider dispatch with recovery instructions", () => {
+  assert.throws(() => world({ repo: "widget" }, { pr: prFixture({ mergeable: "CONFLICTING" }) }), /Invalid repository.*restore/);
 });
 
 

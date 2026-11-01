@@ -144,10 +144,10 @@ test("automatic identity lookup has a cancellable bounded post-dispatch deadline
 test("bounded automatic observation rotates across stable watched order and failed writes", async t => {
   const seeded = seededState(); t.after(() => rmSync(seeded.home, { recursive: true, force: true }));
   const template = seeded.state.get(seeded.id), clock = makeClock(), runner = fakeRunner(clock);
-  const records = new Map(Array.from({ length: 201 }, (_, i) => [`entry-${i}`, { ...structuredClone(template), pr: i + 1 }]));
+  const records = new Map(Array.from({ length: 201 }, (_, i) => [`entry-${i}`, { ...structuredClone(template), pr: i + 1, url: `https://github.com/acme/widget/pull/${i + 1}` }]));
   const state = { ...seeded.state, entries: () => [...records], get: id => records.get(id), update: (id, patch) => { const old = records.get(id); const next = { ...old, ...(typeof patch === "function" ? patch(old) : patch) }; records.set(id, next); return next; } };
-  const gh = fakeGh(); gh.prView = async (_repo, pr) => ({ ...gh.data.pr, number: pr });
-  gh.setRecoveryMetadata = async (_repo, pr) => ({ ...gh.data.pr, number: pr });
+  const gh = fakeGh(); gh.prView = async (_repo, pr) => ({ ...gh.data.pr, number: pr, url: `https://github.com/acme/widget/pull/${pr}` });
+  gh.setRecoveryMetadata = async (_repo, pr) => ({ ...gh.data.pr, number: pr, url: `https://github.com/acme/widget/pull/${pr}` });
   let resolutions = 0;
   const observed = [], learning = { identityFor: () => repo, mode: () => "collect", resolveRepo: async () => { resolutions++; return repo; }, observe: async (_repo, snapshot) => { observed.push(snapshot.pr.number); if (snapshot.pr.number === 1) throw new Error("temporary write failure"); } };
   const tick = makeTick({ config: CONFIG, state, gh, git: fakeGit(), notify: fakeNotify(), log: silentLog, clock, ownLogin: "me", runnerFor: () => runner, executionFor: () => runner, readPrd: () => null, learning });

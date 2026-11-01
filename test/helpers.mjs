@@ -1,3 +1,4 @@
+import { normalizeCheck } from "../lib/hosts/github.mjs";
 // Fakes for the tick's dependencies. Each records what it was asked so a test can assert on calls, and each is
 // controllable so a test can move the world (a review arrives, a run ends, time passes).
 import { mkdtempSync, writeFileSync } from "node:fs";
@@ -71,14 +72,14 @@ export const review = ({ id, by, bot = false, state = "COMMENTED", at: when, bod
 export const inline = ({ id, reviewId = null, by, bot = false, at: when, path = "src/a.ts", line = 1, body = "fix this", reply = null, edited = false }) =>
   ({ id, pull_request_review_id: reviewId, in_reply_to_id: reply, user: user(by, bot), path, line, body, created_at: when, updated_at: edited ? at(1, when) : when });
 export const comment = ({ id, by, bot = false, at: when, body, edited = false }) => ({ id, user: user(by, bot), body, created_at: when, updated_at: edited ? at(1, when) : when });
-export const checkRun = ({ name, conclusion, status = "COMPLETED", runId = "9981", at: when = T0 }) =>
-  ({ __typename: "CheckRun", name, status, conclusion, detailsUrl: `https://github.com/acme/widget/actions/runs/${runId}/job/1`, completedAt: when });
+export const checkRun = ({ name = "fixture-check", conclusion, status = "COMPLETED", runId = "9981", at: when = T0 }) =>
+  normalizeCheck({ __typename: "CheckRun", name, status, conclusion, detailsUrl: `https://github.com/acme/widget/actions/runs/${runId}/job/1`, completedAt: when });
 
-export const prFixture = (over = {}) => ({
-  number: 142, url: "https://github.com/acme/widget/pull/142", title: "Widget export", state: "OPEN", isDraft: false, mergeable: "MERGEABLE",
+export const prFixture = (over = {}) => { const pr = {
+  number: 142, url: `https://github.com/acme/widget/pull/${over.number ?? 142}`, title: "Widget export", state: "OPEN", isDraft: false, mergeable: "MERGEABLE",
   headRefOid: "a1b2c3d", headRefName: "gallivant/widget-export", isCrossRepository: false, author: author("me"), createdAt: T0,
   statusCheckRollup: [], labels: [], body: "Adds export.\n", baseRefName: "main", ...over,
-});
+}; return { ...pr, statusCheckRollup: pr.statusCheckRollup?.map(c => c.outcome ? c : normalizeCheck({ name: "fixture-check", ...c }, pr.headRefOid)) }; };
 
 export function fakeGh({ pr = prFixture(), reviews = [], inline: inlineComments = [], comments = [], prsByHead = [], commitDates = {}, files = {} } = {}) {
   const calls = [];
@@ -89,7 +90,7 @@ export function fakeGh({ pr = prFixture(), reviews = [], inline: inlineComments 
     calls,
     data: { pr, reviews, inline: inlineComments, comments, prsByHead, commitDates, files },
     user: async () => "me",
-    prView: async () => { calls.push(["prView"]); return g.data.pr; },
+    prView: async () => { calls.push(["prView"]); return { ...g.data.pr, statusCheckRollup: g.data.pr.statusCheckRollup?.map(c => c.outcome ? c : normalizeCheck({ name: "fixture-check", ...c }, g.data.pr.headRefOid)) }; },
     reviews: async () => g.data.reviews,
     inlineComments: async (_r, _n, s) => since(g.data.inline, s),
     issueComments: async (_r, _n, s) => since(g.data.comments, s),
@@ -114,7 +115,7 @@ export function fakeGh({ pr = prFixture(), reviews = [], inline: inlineComments 
       const body = normalizePublicBody(source.body, { identity, taskId });
       if (body !== source.body) await g.setBody(repo, n, body);
       source.body = body;
-      return { ...source, body };
+      return { ...source, body, statusCheckRollup: source.statusCheckRollup?.map(c => c.outcome ? c : normalizeCheck({ name: "fixture-check", ...c }, source.headRefOid)) };
     },
   };
   return g;
