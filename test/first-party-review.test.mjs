@@ -160,6 +160,101 @@ test("restart and duplicate polls reuse one review job; timeouts and provider er
   const late=await service.reconcile(w.id,w.entry,w.pr); assert.equal(late.status,"failed"); assert.equal(late.errorCode,"REVIEW_TIMEOUT");
 });
 
+function reviewServiceWorld() {
+  const w = evidenceWorld(), clock = makeClock(), runners = new Map();
+  const calls = { downloads: 0, snapshots: 0, submits: 0, cancellations: 0, settlements: 0 };
+  w.gh.reviewEvidence = async () => { calls.downloads++; return { ...structuredClone(source), head: w.pr.headRefOid, base: w.pr.baseRefOid }; };
+  w.gh.prView = async () => { calls.snapshots++; return w.pr; };
+  const ctx = { home: tempHome(), config, gh: w.gh, readPrd: id => w.readPrd(id), executionFor: key => {
+    if (!runners.has(key)) {
+      const r = { job: null, result: null,
+        prepare: async () => ({ receipt: {}, spec: {} }),
+        submit: async input => { r.job = { id: `run-${++calls.submits}`, name: input.name, running: true }; return r.job; },
+        current: () => r.job, lines: () => [], outcome: () => r.result,
+        settle: () => { calls.settlements++; return r.job; },
+        cancel: async () => { calls.cancellations++; r.job.running = false; }, sanitize: value => value };
+      runners.set(key, r);
+    }
+    return runners.get(key);
+  } };
+  const service = () => createReviewService(ctx, { fingerprint: () => fp, clock });
+  return { ...w, w, calls, clock, service,
+    finish(job, { endedAt = job.startedAt + 150_000, ok = true, raw = JSON.stringify({ ...clear(job.evidence), reviewedHead: job.evidence.head }) } = {}) {
+      const r = [...runners.values()].find(r => r.job?.id === job.run);
+      r.job = { ...r.job, running: false, exit: ok ? 0 : 1, endedAt };
+      r.result = { ok, lastMessage: raw, denials: [], cost: null };
+    } };
+}
+
+test("expiry settles an on-time execution observed after its deadline and rejects late or invalid completions", async () => {
+  for (const scenario of ["on-time", "at-deadline", "late", "unknown-time", "provider-failed", "invalid-output", "running"]) {
+    const w = reviewServiceWorld();
+    let service = w.service();
+    const first = await service.reconcile(w.id, w.entry, w.pr);
+    if (scenario !== "running") w.finish(first, {
+      endedAt: scenario === "unknown-time" ? null : first.startedAt + (scenario === "late" ? 181_000 : scenario === "at-deadline" ? 180_000 : 150_000),
+      ok: scenario !== "provider-failed", ...(scenario === "invalid-output" ? { raw: "{}" } : {}),
+    });
+    w.clock.advance(4); // The 240-second poll observes a 180-second deadline.
+    service = w.service(); // Recover the same durable job after restart.
+    await service.expire(w.id);
+    const saved = service.inspect(w.id).jobs[first.key];
+    assert.equal(saved.status, ["on-time", "at-deadline"].includes(scenario) ? "completed" : scenario === "invalid-output" ? "incomplete" : "failed", scenario);
+    assert.equal(w.calls.cancellations, scenario === "running" ? 1 : 0, scenario);
+    const again = await service.reconcile(w.id, w.entry, w.pr);
+    assert.equal(again.status, saved.status, scenario);
+    assert.equal(w.calls.submits, 1); assert.equal(w.calls.downloads, 1);
+    await service.expire(w.id);
+    assert.equal(w.calls.settlements, scenario === "running" ? 0 : 1, "duplicate expiry never settles twice");
+  }
+});
+
+test("unchanged running and cleared inputs reuse persisted evidence without host downloads after restart", async () => {
+  const w = reviewServiceWorld();
+  let service = w.service();
+  const first = await service.reconcile(w.id, w.entry, w.pr);
+  w.gh.reviewEvidence = async () => { throw new Error("redundant download hit a host rate limit"); };
+  w.gh.prView = async () => { throw new Error("redundant PR snapshot failed"); };
+  service = w.service();
+  assert.equal((await service.reconcile(w.id, w.entry, w.pr)).status, "running");
+  w.finish(first);
+  assert.equal((await service.reconcile(w.id, w.entry, w.pr)).status, "completed");
+  assert.equal((await w.service().reconcile(w.id, w.entry, w.pr)).status, "completed");
+  assert.deepEqual(w.calls, { downloads: 1, snapshots: 1, submits: 1, cancellations: 0, settlements: 1 });
+  w.w.readPrd = () => null;
+  await assert.rejects(service.reconcile(w.id, w.entry, w.pr), /snapshot is unreadable/);
+});
+
+test("changed input needs a new verdict while immutable files are reused only for matching repository head and base", async () => {
+  for (const change of ["brief", "receipt", "checks", "policy", "head", "base", "repository"]) {
+    const w = reviewServiceWorld(), service = w.service();
+    const first = await service.reconcile(w.id, w.entry, w.pr);
+    w.finish(first); await service.reconcile(w.id, w.entry, w.pr);
+    if (change === "brief") w.w.readPrd = () => GOOD_PRD + "\nAdditional immutable context.\n";
+    if (change === "receipt") w.pr.body += "\nupdated";
+    if (change === "checks") w.pr.statusCheckRollup[0].conclusion = "FAILURE";
+    if (change === "policy") w.entry.reviewPolicy.specialist = "security";
+    if (change === "head") w.pr.headRefOid = "c".repeat(40);
+    if (change === "base") w.pr.baseRefOid = "d".repeat(40);
+    if (change === "repository") w.entry.repo = "acme/other";
+    const next = await w.service().reconcile(w.id, w.entry, w.pr);
+    assert.notEqual(next.key, first.key, change); assert.equal(next.status, "running", change);
+    assert.equal(w.calls.submits, 2, change); assert.equal(w.calls.snapshots, 2, change);
+    assert.equal(w.calls.downloads, ["head", "base", "repository"].includes(change) ? 2 : 1, change);
+  }
+});
+
+test("cached file content still enforces evidence limits and concurrent snapshot changes", async () => {
+  const w = reviewServiceWorld(), service = w.service();
+  await service.reconcile(w.id, w.entry, w.pr);
+  w.pr.body += "\nchanged";
+  w.gh.prView = async () => ({ ...w.pr, headRefOid: "c".repeat(40) });
+  await assert.rejects(service.reconcile(w.id, w.entry, w.pr), /moved during/);
+  w.gh.prView = async () => w.pr; w.entry.reviewPolicy.limits.maxInputBytes = 1024;
+  await assert.rejects(service.reconcile(w.id, w.entry, w.pr), /exceeds/);
+  assert.equal(w.calls.downloads, 1); assert.equal(w.calls.submits, 1);
+});
+
 test("qualification requires a native-issued fresh probe, not a config boolean; author disputes remain pending",async()=>{
   const home=tempHome(); const service=createReviewService({home,config,executionFor:()=>{throw new Error("must not infer");}},{fingerprint:()=>fp});
   assert.equal((await service.qualify("acme/widget")).qualified,false);
