@@ -1,0 +1,91 @@
+# Bitbucket Cloud review-loop qualification record
+
+Status: **unqualified; dispatch disabled**. This document records unavailable
+live prerequisites honestly. Offline tests are implementation evidence, not a
+substitute for repository writes, model access or a genuine review.
+
+## Observed prerequisites, 2026-11-01
+
+- Host: Darwin arm64; Node `v22.22.0`; Git `2.50.1 (Apple Git-155)`.
+- Requested executable: `/Users/uchi/.local/share/gallivant/codex/node_modules/.bin/codex`.
+  `--version` returned `codex-cli 0.160.0`. `exec --help` returned native command
+  help. These calls did not establish model access or consume inference.
+- Credential resolver: `resolveBitbucketCredential` against the operator config
+  returned `NO_CREDENTIAL: No Bitbucket account API credential selected`.
+- The operator config contained no `git_hosts["bitbucket.org"]`, no Bitbucket
+  repository, no reviewer actor, and no reviewer credential selection. A token
+  file's existence did not identify its account, scopes or authorized repository;
+  its contents were not printed or treated as authorization.
+- No disposable workspace/repository or reviewer identity was supplied. No
+  Bitbucket repository write, model invocation, merge, pipeline installation or
+  protection change was attempted. Browser capture is not a requirement of this
+  brief; no capture is offered as evidence of host or model access.
+
+Exact remedy: authorize disposable private/public Bitbucket Cloud repositories
+(or a named workspace for their creation); select the account email and private
+API-token path with repository and PR read/write scopes plus Git push access;
+select a non-default base and separate reviewer identity/credential outside the
+coding environment; authorize a bounded genuine Codex reviewer invocation with
+available model access and the chosen CI producer. Enable ordinary Pipelines
+only if that is the selected producer. The operator, not this implementation,
+merges the qualified predecessor to test chain continuation.
+
+## Live matrix — all pending
+
+| Required observation | Observed repository / PR / run | Result |
+| --- | --- | --- |
+| Private and public access, HTTPS and SSH | None authorized/configured | Unmet |
+| Non-default base and PR creation | None | Unmet |
+| Genuine Codex review posting current-head feedback | No inference invocation | Unmet |
+| Stable observed reviewer actor; blocking then clear | No reviewer selected | Unmet |
+| Trusted `/fix`; failed then passing CI/check names | No live PR/check producer | Unmet |
+| Same-session correction and receipt/readiness | No live run | Unmet |
+| Daemon restart recovery | No live run | Unmet |
+| Operator merge and merge-gated chain continuation | No authorized predecessor | Unmet |
+| Clean macOS and Linux installation qualification | Local development checkout only | Unmet |
+
+Do not populate repository/PR links, actor UUIDs, check names, scope confirmations
+or run IDs from fixtures. When available, append actual links, versions, declared
+and observed scope (without secrets), head SHAs, reviewer events, CI results,
+session continuity and merge ancestry evidence. Retain failures and unknowns.
+
+## Offline evidence
+
+- `test/bitbucket.test.mjs`: private/public wire shapes; HTTPS/SSH origins;
+  repository UUID binding; permissions; bounded pagination; current-head statuses;
+  credential isolation; idempotent publication; setup/doctor dispatch refusal.
+- `test/bitbucket-review.test.mjs`: exact-head verdict trust and stable actor IDs;
+  explicit no reviewer and no-CI grace; required checks; command/inline/task/check
+  deduplication; old heads and own replies; API outage cursor preservation;
+  same-session correction and restart; independent reviewer prepare/publish and
+  retry reconciliation; PR CLI binding; fresh setup/non-default base; merge proof.
+- `test/git-host.test.mjs`, `test/host-transport-contract.test.mjs`, and
+  `test/git-host-architecture.test.mjs`: shared host contract, synthetic third host,
+  GitHub regression coverage, and absence of host-specific scheduler branches.
+
+The production registry retains `dispatch: false`. The test-only injected adapter
+is never a qualification switch. In particular ac-1, ac-2, ac-3, ac-5, ac-6, ac-8,
+ac-9 and ac-11 cannot be attested as fully met from this evidence alone.
+
+## Local verification, 2026-11-01
+
+- `npm ci --cache /tmp/bitbucket-npm-cache --no-audit --no-fund`: installed the
+  locked dependencies (98 packages); no dependency versions changed.
+- `npm test`: exit 0; 1,952 tests, 1,951 passed, 0 failed, 1 skipped;
+  duration 460,661.5 ms. Local output: `/tmp/bitbucket-verify.log`.
+  The skipped test is `Linux verification enforces isolation and drops all
+  capabilities`, because this checkout was tested on macOS. This is not Linux
+  installation or sandbox qualification.
+- `npm run lint`: exit 0, including `task-intake contract pin matches the source`.
+  Local output: `/tmp/bitbucket-lint.log`.
+- `git diff --check` and `git diff --cached --check`: exit 0 after staging.
+- `node --test test/plugin-package.test.mjs test/release-package.test.mjs`:
+  65 passed, 0 failed. Local output: `/tmp/bitbucket-package-tests.log`.
+- `node --test test/docs-links.test.mjs`: 2 passed, 0 failed after the final
+  documentation edits.
+
+Source review checked publication/resume/settlement identity boundaries, snapshot
+ordering, reviewer credential scope, recovery failure paths and portable contract
+imports. Rendered start/fix prompts use `task-pr` with the selected base and
+Bitbucket links. Focused regressions cover those boundaries. None of these checks
+invoked inference or provided live Bitbucket evidence.

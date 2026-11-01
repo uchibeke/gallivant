@@ -19,7 +19,9 @@
       "bin": {
         "gallivant": "bin/gallivant.mjs",
         "task-delivery-package": "bin/package-plugin.mjs",
-        "task-delivery-state": "bin/task-delivery-state.mjs"
+        "task-delivery-state": "bin/task-delivery-state.mjs",
+        "task-pr": "bin/task-pr.mjs",
+        "task-review": "bin/task-review.mjs"
       },
       "devDependencies": {
         "@modelcontextprotocol/sdk": "1.32.1",

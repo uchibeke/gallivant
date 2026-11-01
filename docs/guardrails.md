@@ -314,3 +314,12 @@ Repository identity, credential transport and PR evidence are defined by the
 [Git host contract](git-hosts.md). Only GitHub is qualified in this release;
 other hosts are refused before dispatch. Existing IDs and chain ownership are
 retained without a state migration.
+
+## Independent Bitbucket reviewer credentials
+
+Coding sessions receive only their repository-bound coding credential. Reviewer
+credentials belong on an isolated reviewer machine, OS account, or container.
+The independent publisher accepts only the configured stable actor and prepared
+exact head; a successful Pipeline without a posted verdict is silence.
+See [reviewer isolation and publication](bitbucket-review.md#independent-codex-or-human-reviewer).
+Setup never installs a pipeline, creates a token, or authorizes inference.

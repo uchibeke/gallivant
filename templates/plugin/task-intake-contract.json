@@ -8,8 +8,9 @@
   "files": {
     "lib/task_profile.mjs": "18b51dbc87107295806d3125a306454f6ce22660b8758065ac559c2882511cf6",
     "lib/host_definitions.mjs": "1179cddc073e2a05aa603b7117c178ffe4fc057d7270931832fbf8733d3a84d6",
-    "lib/hosts/github_contract.mjs": "c0644688195d967b688da6ef8feb98332b38611c745886153e7d69b65b8f922e",
-    "lib/hosts/bitbucket_contract.mjs": "934b4714a25711ef91b90508096466bf7ef0a773fe0d67951c61c3891644b570",
+    "lib/review_policy_contract.mjs": "16cafa3b835a3fa8c3904b0cc577f46f6b7bb0c9a1697ad0438a32cac636f3f2",
+    "lib/hosts/github_contract.mjs": "f8910b07ddd0dca8c06780d78eb3b5a106da4604ba01cb25b7a205432e2fbe81",
+    "lib/hosts/bitbucket_contract.mjs": "14a7e53b9cb7985318e356ed2e3888404102f2d9b16034aa1ee36a7e8005a2cf",
     "lib/repository.mjs": "f397883ca04bae6c3d15e730fbef2fe267fb5d616566a9f4b724aee8f4925f97",
     "templates/plugin/task-profile-requests.mjs": "7cbc45263fce9025737b5b1709d463b21a853de5ad8d486a8ef8c96ff41e8da4"
   },

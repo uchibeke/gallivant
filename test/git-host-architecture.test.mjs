@@ -1,6 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
+import { execFileSync } from "node:child_process";
 
 const lifecycle = ["events", "tick", "chains", "git", "context", "control", "daemon", "prd", "prompt", "tasks", "task_completion", "task_delivery_view", "execution_result", "runtime_node",
   "task_profile", "task_prepare", "task_repository_context", "task_contract", "probe", "codex_cloud_input", "codex_cloud_result",
@@ -38,4 +39,11 @@ test("GitHub CLI, learning, and ruleset implementation stays in adapter-owned mo
   const transport = readFileSync(new URL("../lib/gh.mjs", import.meta.url), "utf8");
   assert.match(transport, /exec\("gh"/); assert.match(transport, /learningPage/); assert.match(transport, /rulesets:/);
   assert.match(readFileSync(new URL("../lib/hosts/github_doctor.mjs", import.meta.url), "utf8"), /protectsDefaultBranch/);
+});
+
+test("portable host declarations load independently without a registry initialization cycle", () => {
+  for (const file of ["hosts/bitbucket_contract", "hosts/github_contract", "host_definitions", "review_policy_contract"]) {
+    const url = new URL(`../lib/${file}.mjs`, import.meta.url).href;
+    assert.doesNotThrow(() => execFileSync(process.execPath, ["--input-type=module", "-e", `await import(${JSON.stringify(url)})`], { stdio: "pipe" }), file);
+  }
 });

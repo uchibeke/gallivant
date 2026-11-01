@@ -27,7 +27,7 @@ function selectedConfig(home, transport = "https") {
   const token = join(home, "token"), ssh = join(home, "selected key"), known = join(home, "known hosts");
   writeFileSync(token, "fixture-api-secret", { mode: 0o600 }); writeFileSync(ssh, "fixture-key", { mode: 0o600 }); writeFileSync(known, HOST_KEY);
   return { ...CONFIG, repos: [REPO], worktrees: tempHome(), harness: { codex: { bin: process.execPath } },
-    git_hosts: { "bitbucket.org": { api: { email: "operator@example.test", token_file: token }, git: { transport, ssh_key: ssh, known_hosts: known } } } };
+    git_hosts: { "bitbucket.org": { reviewer: null, trusted_authors: [USER.uuid], api: { email: "operator@example.test", token_file: token }, git: { transport, ssh_key: ssh, known_hosts: known } } } };
 }
 
 test("Bitbucket identity binds HTTPS, both Cloud SSH origins, mixed case and public/private UUIDs", async () => {
@@ -140,7 +140,7 @@ test("Bitbucket snapshot is complete, normalized and bounded across comments, ta
   assert.equal(snapshot.comments.length, 1); assert.equal(snapshot.tasks[0].state, "UNRESOLVED"); assert.equal(snapshot.participants[0].state, "changes_requested");
   assert.equal(snapshot.statusCheckRollup[0].outcome, "passed"); assert.match(snapshot.diff, /diff --git/);
   for (const [state, expected] of [["OPEN", "OPEN"], ["MERGED", "MERGED"], ["DECLINED", "CLOSED"]]) {
-    f.data.prs = [pr({ state, draft: state === "OPEN" })];
+    f.data.prs = [pr({ state, draft: state === "OPEN", merge_commit: state === "MERGED" ? { hash: BASE } : null })];
     const next = await f.api.prView(PATH, 7); assert.equal(next.state, expected); assert.equal(next.hostState, state); assert.equal(next.isDraft, state === "OPEN");
   }
 });
@@ -342,7 +342,7 @@ test("Bitbucket-only init and doctor need no gh and report disabled dispatch wit
   const results = await doctor({ home, registry: f.registry, transportPreflight, harnessCheck: ready, resolve: () => { throw new Error("GitHub resolver called"); } });
   assert.ok(results.some(r => /bitbucket.org access/.test(r.name) && r.ok)); assert.ok(!results.some(r => /gh auth/.test(r.name)));
   assert.match(renderDoctor(results).text, /Unknown until write.*PR creation/); assert.match(renderDoctor(results).text, /dispatch is disabled/);
-  const output = await init({ home, repository: () => ({ repo: REPO, origin: "git@bitbucket.org:acme/widget.git", checkout: home }), harnessCheck: ready, transportPreflight, doctor: async () => results });
+  const output = await init({ home, gh: f.api, repository: () => ({ repo: REPO, origin: "git@bitbucket.org:acme/widget.git", checkout: home }), harnessCheck: ready, transportPreflight, doctor: async () => results });
   assert.match(renderInit(output, renderDoctor(results)), /dispatch is disabled/); assert.doesNotMatch(renderInit(output, renderDoctor(results)), /First task|gh auth login/);
   const saved = JSON.parse(readFileSync(join(home, "config.json"), "utf8")); assert.deepEqual(saved.git_hosts["bitbucket.org"].repositories[PATH], { uuid: UUID, workspaceUuid: WORKSPACE });
   delete config.git_hosts["bitbucket.org"].api;

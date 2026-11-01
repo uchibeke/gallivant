@@ -248,3 +248,27 @@ separate milestone.
 API references: [repositories](https://developer.atlassian.com/cloud/bitbucket/rest/api-group-repositories/),
 [pull requests](https://developer.atlassian.com/cloud/bitbucket/rest/api-group-pullrequests/),
 and [account-token authentication](https://support.atlassian.com/bitbucket-cloud/docs/using-api-tokens/).
+
+## Review-loop implementation and ship gate
+
+The [Bitbucket review guide](bitbucket-review.md) supersedes transport-only setup
+examples for reviewer/trust/check policy. `init --host-config <json> --base <branch>`
+can bootstrap an empty config, with an explicit reviewer (or `null`) and stable
+trusted UUIDs. The adapter now implements review normalization, required task
+blockers, recovery operations and merge ancestry, while the static dispatch gate
+remains closed pending [live qualification](audit/bitbucket-review-qualification.md).
+
+`prView` may include `feedback: { complete: true, headSha, reviews, inline, comments }`.
+The shared loop consumes this one coherent snapshot; adapters without it retain
+the previous collection methods. Strict records declare `headBinding: "exact"`
+and an explicit `verdict`; PR-wide required tasks declare `required: true` and
+`headBinding: "pull-request"`. Stable `sequence` values disambiguate verdicts that
+share a timestamp. `strictIdentity` requests recorded branch/base/head and terminal
+merge checks. These are domain contract fields, not host-name branches in the
+scheduler. GitHub's historical event keys and review interpretation are retained.
+
+A future GitLab adapter must implement the same complete records, explicit policy,
+strict URL/credential binding, publication, file reads, and merge proof. Add its
+static definition/implementation and shared-contract tests, then qualify it live
+with a compatible provider. Until then GitLab and unregistered hosts fail before
+dispatch. Host, harness and inference provider remain separate configuration axes.

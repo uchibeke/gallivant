@@ -28,7 +28,7 @@ import { safeDisplay } from "../lib/learning_data.mjs";
 
 const HELP = `gallivant: give an agent a task, let the review loop run, go outside.
 
-  gallivant init [--harness codex|claude] [--worktrees <directory>]
+  gallivant init [--harness codex|claude] [--worktrees <directory>] [--host-config <json>] [--base <branch>]
                                          set up the repository you are in: private config, this repo in repos,
                                          then doctor's report. Safe to repeat; never signs in or overwrites settings
   gallivant --version                    print the installed version
@@ -105,6 +105,7 @@ const OPTIONS = {
   answer: { type: "string", multiple: true }, verify: { type: "string", multiple: true },
   since: { type: "string" }, until: { type: "string" }, "dry-run": { type: "boolean" },
   mode: { type: "string" }, status: { type: "string" }, from: { type: "string" }, reason: { type: "string" },
+  "host-config": { type: "string" },
   "key-path": { type: "string" }, "ssh-keygen": { type: "string" }, "learning-budget": { type: "string" },
 };
 
@@ -116,7 +117,7 @@ async function dispatch(argv) {
   if (values.help || !cmd || cmd === "help") { console.log(HELP); return 0; }
   if (cmd === "init") {
     if (arg) throw new Error("init takes no positional argument; run it from inside the target checkout");
-    const r = await init({ harness: values.harness, worktrees: values.worktrees });
+    const r = await init({ harness: values.harness, worktrees: values.worktrees, hostConfig: values["host-config"], base: values.base });
     const report = renderDoctor(r.doctor);
     console.log(renderInit(r, report));
     // Doctor's exit code, so a script or an agent reading only the status knows whether setup still has open items.

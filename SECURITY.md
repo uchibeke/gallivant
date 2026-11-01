@@ -17,3 +17,12 @@ they need. Automatic approval is not equivalent to an operating-system sandbox.
 The [OpenAI Agents API adapter](docs/openai-agents.md) keeps service credentials
 on the coordinator and publishes returned artifacts through that coordinator.
 Its hosted execution controls differ from local harness hooks and sandboxes.
+
+## Bitbucket reviewer isolation
+
+Use a separate reviewer account and keep its publication credential outside the
+coding process's filesystem and environment access. A private file readable by
+the coding identity does not provide isolation. The review model receives the
+prepared diff and a read-only checkout; an operator publishes its exact-head
+verdict. See [reviewer setup](docs/bitbucket-review.md#independent-codex-or-human-reviewer).
+Bitbucket dispatch remains disabled pending live qualification.

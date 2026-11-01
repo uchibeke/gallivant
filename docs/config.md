@@ -443,3 +443,12 @@ Nothing in that list is a path outside the worktree, and that is the point. Unti
 Both isolating variables are load-bearing, and `GIT_CONFIG_NOSYSTEM` is not decoration. `GIT_CONFIG_GLOBAL` replaces only git's global file; the system one still applies, and on a Mac with the Xcode command line tools `/Library/Developer/CommandLineTools/usr/share/git-core/gitconfig` sets `credential.helper = osxkeychain`. Without `GIT_CONFIG_NOSYSTEM` a run had a path to your keychain whatever else was set. With it, `git config --get-all credential.helper` in a run's environment returns nothing but the snippet above.
 
 The helper resets repository-local credential helpers and refuses other hosts, repository paths and redirects. Runs clear inherited API tokens and SSH transport settings. A run can read its own environment, so token scope and repository rulesets remain essential. See the [Git host contract](git-hosts.md) for identity, compatibility and provider binding.
+
+## Bitbucket repository policy
+
+Set `reviewer` (or explicit `null`), stable UUID `trusted_authors`, and
+`required_checks` under `git_hosts["bitbucket.org"]`. A host repository entry can
+override these settings, and a `repos` object takes precedence over both.
+GitHub's top-level reviewer defaults are never inherited by Bitbucket.
+See [configuration examples and credential scope](bitbucket-review.md).
+No configuration setting bypasses the pending live qualification gate.

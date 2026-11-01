@@ -252,3 +252,7 @@ hosted service or publish a chat plugin.
 
 [Contributing](CONTRIBUTING.md) · [Security reports](SECURITY.md) ·
 [Releasing](docs/releasing.md) · [Apache-2.0 license](LICENSE)
+
+## Bitbucket Cloud
+
+Bitbucket Cloud transport and the review protocol have offline coverage, but task dispatch remains disabled until live qualification passes. See the [setup, review and troubleshooting guide](docs/bitbucket-review.md) for prerequisites, tested boundaries and unmet evidence. No GitHub sign-in is required for Bitbucket-only setup; no pipeline, credential or repository setting is installed automatically.
