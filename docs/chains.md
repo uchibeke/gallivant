@@ -100,3 +100,8 @@ the ordinary review loop. It does not cancel or undo work that has already start
 
 Chain approval and unstarted milestones live in local `state.json`; unlike an open PR's identity, they cannot be
 reconstructed from GitHub. Preserve your Gallivant home when moving the daemon to another machine.
+
+Repository identity, credential transport and PR evidence are defined by the
+[Git host contract](git-hosts.md). Only GitHub is qualified in this release;
+other hosts are refused before dispatch. Existing IDs and chain ownership are
+retained without a state migration.

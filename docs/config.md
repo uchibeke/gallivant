@@ -425,14 +425,16 @@ Every run gets the resolved credential as `GH_TOKEN`, the git settings below, an
 
 ### Git settings for a run
 
-No file. Git's own `GIT_CONFIG_COUNT` with numbered `GIT_CONFIG_KEY_n`/`GIT_CONFIG_VALUE_n` pairs carries four settings:
+No file. Git's own `GIT_CONFIG_COUNT` with numbered `GIT_CONFIG_KEY_n`/`GIT_CONFIG_VALUE_n` pairs carries the following settings:
 
 | Key | Value |
 |---|---|
 | `user.name` | Your Git-configured name, resolved by the coordinator for each run |
 | `user.email` | Your Git-configured email, resolved by the coordinator for each run |
 | `push.default` | `current` |
-| `credential.helper` | a shell snippet that prints `GH_TOKEN` as the password, and prints nothing when there is no `GH_TOKEN` |
+| `credential.helper` | an empty entry resets inherited helpers, followed by a helper that answers only for the bound HTTPS host and repository |
+| `credential.useHttpPath` | `true` |
+| `http.followRedirects` | `false` |
 
 Plus `GIT_CONFIG_NOSYSTEM=1` and `GIT_CONFIG_GLOBAL=/dev/null`.
 
@@ -440,4 +442,4 @@ Nothing in that list is a path outside the worktree, and that is the point. Unti
 
 Both isolating variables are load-bearing, and `GIT_CONFIG_NOSYSTEM` is not decoration. `GIT_CONFIG_GLOBAL` replaces only git's global file; the system one still applies, and on a Mac with the Xcode command line tools `/Library/Developer/CommandLineTools/usr/share/git-core/gitconfig` sets `credential.helper = osxkeychain`. Without `GIT_CONFIG_NOSYSTEM` a run had a path to your keychain whatever else was set. With it, `git config --get-all credential.helper` in a run's environment returns nothing but the snippet above.
 
-What this does not bound, said plainly because it is easy to mistake for new: a run's own `.git/config` is still read, `credential.helper` is multi-valued, and a repo-local helper is consulted before this one. That was equally true when the helper lived in a global file, since local config always won there too. A run owns its worktree, so it can always add a helper. What bounds a run is the token's scope and the branch ruleset, not how the config travels.
+The helper resets repository-local credential helpers and refuses other hosts, repository paths and redirects. Runs clear inherited API tokens and SSH transport settings. A run can read its own environment, so token scope and repository rulesets remain essential. See the [Git host contract](git-hosts.md) for identity, compatibility and provider binding.

@@ -91,10 +91,10 @@ test("atomic repository writes preserve hard-link targets and restore the hook's
 
 test("fresh and adopted clones explicitly select HTTPS regardless of gh's configured protocol", async () => {
   const calls = [];
-  const git = makeGit({ config: { worktrees: tempHome() }, exec: async (cmd, args) => { calls.push([cmd, args]); return { stdout: "" }; } });
+  const git = makeGit({ config: { worktrees: tempHome() }, exec: async (cmd, args) => { calls.push([cmd, args]); return { stdout: args[0] === "remote" ? "https://github.com/acme/widget.git" : "" }; } });
   await git.create({ nameWithOwner: "acme/widget", prdId: "one", base: "main" });
   await git.fromBranch({ nameWithOwner: "acme/widget", prdId: "two", branch: "feature" });
-  assert.deepEqual(calls.filter(([cmd]) => cmd === "gh").map(([, args]) => args[2]), ["https://github.com/acme/widget.git", "https://github.com/acme/widget.git"]);
+  assert.deepEqual(calls.filter(([cmd, args]) => cmd === "git" && args[0] === "clone").map(([, args]) => args.at(-2)), ["https://github.com/acme/widget.git", "https://github.com/acme/widget.git"]);
 });
 
 test("existing SSH origins are normalized before a token-authenticated run", async () => {

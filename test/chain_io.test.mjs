@@ -56,7 +56,8 @@ test("the real create path cuts a successor from the current base and preserves 
   const exec = promisify(execFile);
   const g = makeGit({ config: { home, worktrees: join(home, "trees") }, exec: (cmd, args, opts) => {
     const options = { ...opts, env: { ...opts.env, ...env } };
-    return cmd === "gh" ? exec("git", ["clone", "--no-checkout", repo, args[3]], options) : exec(cmd, args, options);
+    if (args[0] === "remote") return Promise.resolve({ stdout: "https://github.com/acme/widget.git" });
+    return cmd === "git" && args[0] === "clone" ? exec("git", ["clone", "--no-checkout", repo, args.at(-1)], options) : exec(cmd, args, options);
   } });
   const dir = await g.create({ nameWithOwner: "acme/widget", prdId: "second-step", base: "main" });
   assert.equal(execFileSync("git", ["rev-parse", "HEAD"], { cwd: dir, env, encoding: "utf8" }).trim(), merged);

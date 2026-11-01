@@ -1602,18 +1602,8 @@ test("a review the daemon already dispatched at the cursor's second does not als
   assert.deepEqual(w.gh.calls.filter(c => c[0] === "addLabel"), []);
 });
 
-test("a stop on an entry whose repo is not owner/name still notifies, with a handle a person can type", async () => {
-  // `shortRepo` was `repo.split("/")[1]`, so a repo with no owner produced the title `undefined#142` and a body
-  // telling the operator to run `gallivant why undefined#142`. With no repo at all it threw, inside `needsHuman`,
-  // after the state and labels were written and before `notify.needs`, where the tick's per-entry catch buried it and
-  // the stopped PR notified nobody.
-  for (const repo of ["widget", ""]) {
-    const w = world({ repo }, { pr: prFixture({ mergeable: "CONFLICTING" }) });
-    const results = await w.tick.tick();
-    assert.deepEqual(results.map(r => r.ok), [true], `repo ${JSON.stringify(repo)}: the tick did not throw`);
-    assert.deepEqual([w.entry().state, w.entry().reason], [STATES.needsHuman, "conflict"]);
-    assert.deepEqual(w.notify.sent, [["needs", 142, "conflict"]], `repo ${JSON.stringify(repo)}: the operator is told`);
-  }
+test("an ambiguous legacy repository stops before host reads or provider dispatch with recovery instructions", () => {
+  assert.throws(() => world({ repo: "widget" }, { pr: prFixture({ mergeable: "CONFLICTING" }) }), /Invalid repository.*restore/);
 });
 
 

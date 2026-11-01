@@ -446,8 +446,8 @@ test("chain known create refusal releases start and dispatch ownership for an ex
   const w = world(), path = join(w.home, "worktrees", FIRST); let clones = 0;
   mkdirSync(join(path, ".git"), { recursive: true }); writeFileSync(join(path, "stale-evidence"), "retained operator files");
   w.ctx.git.create = makeGit({ config: w.ctx.config, exec: async (cmd, args) => {
-    if (cmd === "gh") { clones++; mkdirSync(join(args[3], ".git"), { recursive: true }); }
-    return { stdout: "" };
+    if (cmd === "git" && args[0] === "clone") { clones++; mkdirSync(join(args.at(-1), ".git"), { recursive: true }); }
+    return { stdout: args[0] === "remote" ? "https://github.com/acme/widget.git" : "" };
   } }).create;
   await w.queue(); await tickChains(w.ctx);
   const stopped = w.ctx.state.getChain("release");

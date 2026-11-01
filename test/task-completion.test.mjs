@@ -230,6 +230,7 @@ test("malformed owner proof cannot suppress work or prevent another entry from a
   w.state.put(w.id, broken);
   const otherId = w.id + "-other", healthy = structuredClone(broken);
   delete healthy.task.ownerDelivery; healthy.task.completion = completionPolicy({ target: "integrated" });
+  healthy.pr = 143; healthy.url = "https://github.com/acme/widget/pull/143";
   w.state.put(otherId, healthy);
   assert.equal(coordinatorEntryActive(w.entry()), true, "malformed proof never means finished");
   const results = await w.tick.tick();

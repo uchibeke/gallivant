@@ -107,8 +107,8 @@ test("hand-authored start releases a known stale-worktree refusal before cloning
   mkdirSync(join(w.worktree, ".git")); writeFileSync(join(w.worktree, "stale-evidence"), "operator-owned checkout");
   w.ctx.runnerFor = () => runner;
   w.ctx.git.create = makeGit({ config: w.ctx.config, exec: async (cmd, args) => {
-    if (cmd === "gh") { clones++; mkdirSync(join(args[3], ".git"), { recursive: true }); }
-    return { stdout: "" };
+    if (cmd === "git" && args[0] === "clone") { clones++; mkdirSync(join(args.at(-1), ".git"), { recursive: true }); }
+    return { stdout: args[0] === "remote" ? "https://github.com/acme/widget.git" : "" };
   } }).create;
   await assert.rejects(() => start(w.ctx, { path: w.prdPath }), error => {
     assert.match(error.message, /worktree already exists/); assert.equal(error.startUncertain, false); return true;
