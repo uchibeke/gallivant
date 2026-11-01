@@ -6,6 +6,22 @@ import { mkdirSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
 import { GOOD_PRD, tempHome, CONFIG, seededState } from "./helpers.mjs";
 import { processIdentity } from "../lib/daemon.mjs";
 import { codeStamp, writeJsonAtomic } from "../lib/fs.mjs";
+import { legacyReviewPolicy } from "../lib/review_policy.mjs";
+
+test("review status CLI emits one JSON record with the legacy no-review disclosure", () => {
+  const policy = legacyReviewPolicy({ reviewer: null });
+  const { home, id } = seededState({ reviewPolicy: policy });
+  writeJsonAtomic(join(home, "config.json"), { ...CONFIG, worktrees: tempHome(), notify: null });
+  const run = handle => spawnSync(process.execPath, [new URL("../bin/gallivant.mjs", import.meta.url).pathname, "review", "status", handle], {
+    env: { ...process.env, GALLIVANT_HOME: home }, encoding: "utf8", timeout: 5000,
+  });
+  const result = run(id);
+  assert.equal(result.status, 0, result.stderr); assert.equal(result.stderr, ""); assert.ok(result.stdout.endsWith("\n"));
+  const report = JSON.parse(result.stdout);
+  assert.equal(report.id, id); assert.deepEqual(report.policy, policy); assert.match(report.disclosure, /no semantic review required or claimed/);
+  const missing = run("missing/task");
+  assert.equal(missing.status, 1); assert.equal(missing.stdout, "");
+});
 
 test("chain CLI shows persisted progress, retries explicitly and cancels future work", () => {
   const { home, state } = seededState();

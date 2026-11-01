@@ -22,5 +22,5 @@ do {
   await new Promise(resolve=>setTimeout(resolve,1000));
 } while(Date.now()<deadline);
 writeFileSync(join(root,"qualification.json"),JSON.stringify(result,null,2));
-console.log(JSON.stringify({repository:repo,evidence:join(root,"qualification.json"),...result},null,2));
+process.stdout.write(JSON.stringify({repository:repo,evidence:join(root,"qualification.json"),...result},null,2) + "\n");
 if (!result.qualified) process.exitCode=1;

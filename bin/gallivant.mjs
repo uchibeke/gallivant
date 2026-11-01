@@ -194,7 +194,7 @@ async function dispatch(argv) {
   switch (cmd) {
     case "review": {
       const result = await reviewCommand(ctx, { action: arg, handle: positionals[2], repo: values.repo, mode: values.mode, reason: values.reason, finding: values.finding, run: values.run });
-      console.log(JSON.stringify(result, null, 2));
+      process.stdout.write(JSON.stringify(result, null, 2) + "\n");
       return result.qualified === false ? 1 : 0;
     }
     case "chain": {

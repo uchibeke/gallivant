@@ -1,6 +1,8 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync, writeFileSync } from "node:fs";
+import { spawnSync } from "node:child_process";
+import { join } from "node:path";
 import { evaluateReviews } from "../lib/review_evaluation.mjs";
 import { completionStopsAutomation, coordinatorEntryActive } from "../lib/task_completion.mjs";
 import { exactReviewerVerdict, makeTrust } from "../lib/events.mjs";
@@ -602,7 +604,7 @@ test("GitHub normalization refuses capped comparisons and omitted binary patches
   }
 });
 
-test("held-out metrics retain false positives, failures, unknown spend and absent independent baseline",()=>{
+test("held-out metrics retain false positives, failures, unknown spend and absent independent baseline",t=>{
   const corpus=JSON.parse(readFileSync(new URL("./fixtures/review-held-out.json",import.meta.url),"utf8"));
   for(const category of ["correctness","security","missing-criteria","deletion","regression","clean","prompt-injection","false-positive"]) assert.ok(corpus.cases.some(c=>c.category===category));
   const records=corpus.cases.map(c=>({caseId:c.id,verdict:c.defects.length?"findings":"clear",detectedDefects:c.defects,evidence:`offline-metric-fixture/${c.id}`,latencyMs:100,costUsd:null}));
@@ -612,6 +614,22 @@ test("held-out metrics retain false positives, failures, unknown spend and absen
   assert.equal(report.defaultChangeJustified,false);
   assert.throws(()=>evaluateReviews(corpus,records.slice(1),null),/one recorded result/);
   assert.throws(()=>evaluateReviews(corpus,records,{kind:"synthetic",evidence:"fixture",runs:records}),/baseline evidence/);
+  const home=tempHome(), input=join(home,"offline-records.json"), output=join(home,"evaluation-output.json");
+  writeFileSync(input,JSON.stringify(records));
+  const run=()=>spawnSync(process.execPath,[new URL("../scripts/review-evaluation.mjs",import.meta.url).pathname,input],{encoding:"utf8",timeout:5000});
+  const emitted=run();
+  assert.equal(emitted.status,0,emitted.stderr); assert.equal(emitted.stderr,""); assert.ok(emitted.stdout.endsWith("\n"));
+  assert.deepEqual(JSON.parse(emitted.stdout),report);
+  writeFileSync(output,emitted.stdout); t.diagnostic(`offline evaluation output evidence: ${output}`);
+  writeFileSync(input,JSON.stringify(records.slice(1)));
+  const incomplete=run();
+  assert.equal(incomplete.status,1); assert.equal(incomplete.stdout,""); assert.match(incomplete.stderr,/one recorded result/);
+});
+
+test("live review entry point refuses unapproved calls without emitting a qualification report",()=>{
+  const result=spawnSync(process.execPath,[new URL("./first-party-review-live.mjs",import.meta.url).pathname],{
+    env:{...process.env,REVIEW_LIVE:"0",GALLIVANT_HOME:tempHome()},encoding:"utf8",timeout:5000 });
+  assert.equal(result.status,1); assert.equal(result.stdout,""); assert.match(result.stderr,/only after authorizing a separate model call/);
 });
 
 test("disagreement and exhausted rounds stop for a person with the finding record",async()=>{
