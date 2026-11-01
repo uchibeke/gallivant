@@ -188,14 +188,18 @@ Run `init` from the checkout to bind the API repository UUID and workspace UUID
 under the host's `repositories` map, or run `doctor` for read-only diagnostics.
 Setup checks repository access, the selected base, effective account push role,
 PR reads, comments when a PR exists, branch restrictions where visible, and native
-Git access to the same base. An archive flag, if supplied, is enforced; the Cloud
+Git access to the same base. The account role comes from the
+[authenticated user's repository permissions](https://developer.atlassian.com/cloud/bitbucket/rest/api-group-repositories/#api-user-workspaces-workspace-permissions-repositories-get),
+filtered by repository UUID, using repository read scope without workspace-admin access.
+An archive flag, if supplied, is enforced; the Cloud
 repository schema does not currently expose that flag consistently, so absence
 is reported as unknown. A missing API credential reports missing PR/comment
 capability even when an SSH key is configured. A successful transport check is
 followed by an explicit failed dispatch check. No paid model probe is needed for
 this milestone, and `init` does not recommend starting a task on an unqualified host.
 
-API credentials are reread for every operation. A changed email, repository UUID,
+API credentials are reread for every operation. A changed email, account UUID on
+successive permission reads, repository UUID,
 workspace UUID, canonical slug or API clone target stops access. Restore the
 previous binding, or inspect the new identity and explicitly edit the binding;
 setup never silently migrates a renamed or transferred repository.
@@ -209,6 +213,8 @@ reviewer participants, tasks and statuses tied to the current head. Declined and
 superseded PRs normalize to `CLOSED`, preserving `hostState`. UUID-based actor
 identity avoids nickname ambiguity. These observations do not qualify reviewer
 trust, CI policy, recovery or merge proof for dispatch.
+Build statuses use the [documented commit link](https://developer.atlassian.com/cloud/bitbucket/rest/api-group-commit-statuses/#api-repositories-workspace-repo-slug-commit-commit-statuses-get)
+to confirm the queried repository and head; missing or mismatched links stop the snapshot.
 
 Reads are bounded to 100 pages and 10,000 items per collection, 4 MiB per JSON
 response, a diff smaller than 16 MiB, and 20 seconds per request. Missing fields,

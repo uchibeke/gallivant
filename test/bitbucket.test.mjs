@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
 import { writeFileSync, readFileSync, chmodSync, realpathSync } from "node:fs";
 import { join } from "node:path";
-import { fixture, REPO, PATH, UUID, WORKSPACE, HEAD, BASE, HOST_KEY, pr, page, json, comment, status } from "./bitbucket-fixture.mjs";
+import { fixture, REPO, PATH, UUID, WORKSPACE, USER, HEAD, BASE, HOST_KEY, pr, page, json, comment, status } from "./bitbucket-fixture.mjs";
 import { makeHostRegistry, hosts, pullRequestUrl } from "../lib/hosts.mjs";
 import { validateHostRecord } from "../lib/host_contract.mjs";
 import { makeGit, runEnv } from "../lib/git.mjs";
@@ -87,6 +87,39 @@ test("Bitbucket credentials never fall back to GitHub; refresh is per operation 
   await assert.rejects(f.api.inspectRepository(PATH), /account changed/); assert.equal(f.calls.length, count);
 });
 
+test("Bitbucket preflight uses the authenticated user's effective role without workspace administration", async () => {
+  const memberPath = "/2.0/workspaces/acme/permissions/repositories";
+  const userPath = "/2.0/user/workspaces/acme/permissions/repositories";
+  for (const permission of ["write", "admin", "read"]) {
+    const f = fixture({ intercept: (c, data) => {
+      // An administrator would see multiple members for the same repository here.
+      if (c.path === memberPath) return json(page([
+        { user: USER, repository: data.repository, permission },
+        { user: { uuid: WORKSPACE }, repository: data.repository, permission: "admin" },
+      ]));
+    } });
+    f.data.permission = permission;
+    if (permission === "read") await assert.rejects(f.api.preflight(PATH), /no repository push access/);
+    else assert.equal((await f.api.preflight(PATH)).accountPush, "proved");
+    assert.ok(!f.calls.some(c => c.path === memberPath));
+    const request = f.calls.find(c => c.path === userPath);
+    assert.equal(new URL(request.url).searchParams.get("q"), `repository.uuid=${JSON.stringify(UUID)}`);
+    assert.ok(f.calls.every(c => c.method === "GET"));
+  }
+  const missing = fixture({ intercept: c => c.path === userPath ? json(page([])) : undefined });
+  await assert.rejects(missing.api.preflight(PATH), /no repository push access/);
+  const denied = fixture({ intercept: c => c.path === userPath ? json({}, 403) : undefined });
+  await assert.rejects(denied.api.preflight(PATH), /restore the selected token/);
+  for (const row of [{ user: {}, repository: { uuid: UUID }, permission: "write" }, { user: USER, repository: { uuid: WORKSPACE }, permission: "write" }]) {
+    const malformed = fixture({ intercept: c => c.path === userPath ? json(page([row])) : undefined });
+    await assert.rejects(malformed.api.preflight(PATH), /incomplete.*permissions/);
+  }
+  const switched = fixture(); await switched.api.preflight(PATH);
+  switched.data.token = "rotated-token"; await switched.api.preflight(PATH);
+  switched.data.user.uuid = WORKSPACE;
+  await assert.rejects(switched.api.preflight(PATH), /account changed/);
+});
+
 test("Bitbucket API rejects redirects, foreign pagination, rates and transport secrets without leaking credentials", async () => {
   for (const response of [() => new Response(null, { status: 302, headers: { location: "https://evil.test/" } }), () => json({}, 429, { "Retry-After": "20" }), () => { throw new Error("fixture-api-secret Authorization: encoded-secret"); }]) {
     const f = fixture({ intercept: () => response() });
@@ -110,8 +143,40 @@ test("Bitbucket snapshot is complete, normalized and bounded across comments, ta
   }
 });
 
+test("Bitbucket reads documented paginated status links for prView and prDiff", async () => {
+  assert.equal(status().commit, undefined);
+  for (const [state, outcome] of [["SUCCESSFUL", "passed"], ["FAILED", "failed"], ["INPROGRESS", "pending"], ["STOPPED", "failed"]]) {
+    const f = fixture({ intercept: c => {
+      if (!c.path.endsWith("/statuses")) return;
+      assert.equal(c.path, `/commit/${HEAD}/statuses`);
+      return c.url.includes("page=2") ? json({ values: [{ ...status(), key: "lint", state }], size: 2 })
+        : json({ values: [status()], size: 2, next: `${c.url}&page=2` });
+    } });
+    const snapshot = await f.api.prView(PATH, 7);
+    assert.deepEqual(snapshot.statusCheckRollup.map(s => [s.eventId, s.headSha, s.outcome]), [["build", HEAD, "passed"], ["lint", HEAD, outcome]]);
+    assert.match(await f.api.prDiff(PATH, 7), /diff --git/);
+  }
+  const mixedCase = fixture();
+  mixedCase.data.statuses[0].links.commit.href = status().links.commit.href.replace("acme/widget", "Acme/Widget");
+  assert.equal((await mixedCase.api.prView(PATH, 7)).statusCheckRollup[0].headSha, HEAD);
+});
+
+test("Bitbucket rejects missing, foreign or stale status commit links on either snapshot read", async () => {
+  for (const href of [undefined, "invalid", status().links.commit.href.replace(HEAD, BASE), status().links.commit.href.replace("acme/widget", "acme/other"), status().links.commit.href.replace("api.bitbucket.org", "evil.test"), `${status().links.commit.href}?unexpected=true`]) {
+    for (const failedRead of [1, 2]) {
+      for (const method of ["prView", "prDiff"]) {
+        let reads = 0;
+        const f = fixture({ intercept: c => c.path.endsWith("/statuses") && ++reads === failedRead ? json(page([{ ...status(), links: { commit: { href } } }])) : undefined });
+        await assert.rejects(f.api[method](PATH, 7), { code: "BB_INCOMPLETE" });
+        assert.equal(reads, failedRead);
+        assert.ok(f.calls.every(c => c.method === "GET"));
+      }
+    }
+  }
+});
+
 test("Bitbucket incomplete, stale, oversized and truncated evidence never becomes an empty or green snapshot", async () => {
-  for (const mutate of [f => { f.data.comments = [{}]; }, f => { f.data.tasks = [{}]; }, f => { f.data.statuses = [{ ...status(), commit: { hash: BASE } }]; }, f => { f.data.statuses = [{ ...status(), state: "UNKNOWN" }]; }, f => { f.data.prs = [pr({ description: undefined })]; }, f => { f.data.prs = [pr({ draft: undefined })]; }]) {
+  for (const mutate of [f => { f.data.comments = [{}]; }, f => { f.data.tasks = [{}]; }, f => { f.data.statuses = [{ ...status(), links: undefined }]; }, f => { f.data.statuses = [{ ...status(), state: "UNKNOWN" }]; }, f => { f.data.prs = [pr({ description: undefined })]; }, f => { f.data.prs = [pr({ draft: undefined })]; }]) {
     const f = fixture(); mutate(f); await assert.rejects(f.api.prView(PATH, 7), /incomplete/);
   }
   const oversized = fixture({ limits: { diffBytes: 10 } }); await assert.rejects(oversized.api.prView(PATH, 7), /exceeds/);

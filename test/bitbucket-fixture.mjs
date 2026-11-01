@@ -14,12 +14,12 @@ export const pr = (extra = {}) => ({ id: 7, title: "Add transport", description:
   reviewers: [USER], participants: [{ user: USER, role: "REVIEWER", approved: false, state: "changes_requested" }], links: { html: { href: "https://bitbucket.org/acme/widget/pull-requests/7" } }, ...extra });
 export const comment = (id = 1) => ({ id, user: USER, content: { raw: "Check the implementation" }, deleted: false, created_on: NOW, updated_on: NOW });
 export const task = () => ({ id: 9, creator: USER, content: { raw: "Address comment" }, state: "UNRESOLVED", created_on: NOW, updated_on: NOW, comment: { id: 1 } });
-export const status = () => ({ key: "build", name: "Tests", state: "SUCCESSFUL", commit: { hash: HEAD }, url: "https://bitbucket.org/acme/widget/pipelines/results/1", created_on: NOW, updated_on: NOW });
+export const status = () => ({ key: "build", name: "Tests", state: "SUCCESSFUL", links: { commit: { href: `https://api.bitbucket.org/2.0/repositories/acme/widget/commit/${HEAD}` } }, url: "https://bitbucket.org/acme/widget/pipelines/results/1", created_on: NOW, updated_on: NOW });
 export const json = (value, status = 200, headers = {}) => new Response(JSON.stringify(value), { status, headers: { "Content-Type": "application/json", ...headers } });
 export const page = values => ({ values, size: values.length, pagelen: 50 });
 
 export function fixture({ config = {}, limits = {}, intercept = null, credential = null } = {}) {
-  const data = { repository: repository(), prs: [], comments: [comment()], tasks: [task()], statuses: [status()], restrictions: [], permission: "write", branch: "main", token: "fixture-api-secret", email: "operator@example.test" };
+  const data = { repository: repository(), user: { ...USER }, prs: [], comments: [comment()], tasks: [task()], statuses: [status()], restrictions: [], permission: "write", branch: "main", token: "fixture-api-secret", email: "operator@example.test" };
   const calls = [];
   const fetch = async (url, options) => {
     assert.equal(new URL(url).origin, "https://api.bitbucket.org");
@@ -35,7 +35,8 @@ export function fixture({ config = {}, limits = {}, intercept = null, credential
       const name = decodeURIComponent(path.slice("/refs/branches/".length));
       return [data.branch, "work/feature", "release/v2"].includes(name) ? json({ name, target: { hash: name === "work/feature" ? HEAD : BASE } }) : json({}, 404);
     }
-    if (u.pathname === "/2.0/workspaces/acme/permissions/repositories") return json(page([{ repository: data.repository, permission: data.permission }]));
+    if (u.pathname === "/2.0/user/workspaces/acme/permissions/repositories") return json(page([{ user: data.user, repository: data.repository, permission: data.permission }]));
+    if (u.pathname === "/2.0/workspaces/acme/permissions/repositories") return json({}, 403);
     if (path === "/branch-restrictions") return json(page(data.restrictions));
     if (path === "/pullrequests" && options.method === "GET") return json(page(data.prs.filter(p => u.searchParams.getAll("state").includes(p.state))));
     if (path === "/pullrequests" && options.method === "POST") { const row = pr({ title: call.body.title, description: call.body.description }); row.destination.branch.name = call.body.destination.branch.name; data.prs.push(row); return json(row, 201); }
