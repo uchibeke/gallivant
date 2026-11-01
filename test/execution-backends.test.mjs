@@ -788,12 +788,16 @@ test("shared start and resume recheck provider health after asynchronous prepara
       gh: fakeGh(), ownLogin: "me", git, log: silentLog, notify: fakeNotify(), readPrd: () => null, credential, identity, providerHealth: health,
       executionFor: () => provider === "codex" ? local : f.service };
     const tick = makeTick(ctx), attempts = Object.keys(f.service.state().operations).length;
-    await assert.rejects(tick.startRun(id, entry, { name: mode, prompt: "fixture" }), { code: "PROVIDER_UNAVAILABLE" });
+    let intents = 0;
+    const request = { name: mode, prompt: "fixture", beforeDispatch: () => { intents++; } };
+    await assert.rejects(tick.startRun(id, entry, request), { code: "PROVIDER_UNAVAILABLE" });
+    assert.equal(intents, 0, "pre-dispatch health waits do not record a review launch intent");
     assert.equal(local.started.length, 0); assert.equal(f.calls.length, 0);
     assert.equal(Object.keys(f.service.state().operations).length, attempts, `${provider}/${mode}/${phase} creates no intent or reservation`);
     assert.equal(prepared, phase === "prepare" ? 1 : 0);
     await health.refresh([[provider, account]]);
-    await tick.startRun(id, entry, { name: mode, prompt: "fixture" });
+    await tick.startRun(id, entry, request);
+    assert.equal(intents, 1, "both local and remote routes fence the actual launch");
     assert.equal(provider === "codex" ? local.started.length : f.calls.filter(c => ["submit", "continue"].includes(c[0])).length, 1);
     if (provider !== "codex") assert.equal(f.calls[0][0], mode === "resume" ? "continue" : "submit");
   }

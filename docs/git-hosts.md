@@ -65,6 +65,14 @@ body/title/recovery writes, ready-for-review and idempotent publication.
 content. The shared chain engine requires the exact merge commit to be an
 ancestor of the intended base; a closed PR never authorizes a successor.
 
+First-party review additionally requires `reviewEvidence(repo, pr, head, base,
+maxBytes)`: complete diff and before/after changed-file content, including
+deletions, bound to exact head, base and merge-base IDs. Qualification and
+reconciliation refuse adapters without this operation before launching a
+reviewer or reusing clearance. Evidence reads and policy/dispute label writes
+use the same repository registry and credential binding as other lifecycle
+operations. Review jobs and verdicts remain coordinator-owned.
+
 ## Domain records and completeness
 
 Every normalized record carries `source` (host and adapter), `actor` (login and

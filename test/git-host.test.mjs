@@ -18,6 +18,8 @@ import { startPrompt } from "../lib/prompt.mjs";
 import { resolveCredentialFor } from "../lib/credential.mjs";
 import { resume } from "../lib/commands/resume.mjs";
 import { validateRepos } from "../lib/config.mjs";
+import { reviewCommand } from "../lib/commands/review.mjs";
+import { selectReviewPolicy } from "../lib/review_policy.mjs";
 import { CONFIG, T0, at, tempHome, prFixture, review, fakeGh, fakeGit, fakeNotify, fakeRunner, makeClock, silentLog } from "./helpers.mjs";
 
 // Deliberately not a shipped adapter. No scheduler, event, completion or chain fork.
@@ -33,6 +35,27 @@ const synthetic = (api, overrides = {}) => ({
 });
 const thirdPr = extra => ({ ...normalizePr(prFixture()), source: { host: "forge.example", adapter: "fixture-pull-request" }, url: "https://forge.example/acme/widget/changes/142", ...extra });
 const thirdEntry = extra => ({ ...newEntry({ repo: "forge.example/acme/widget", harness: "codex", branch: "work/test", base: "main", worktree: "/fixture", pr: 142, url: "https://forge.example/acme/widget/changes/142", nowIso: T0, state: "pr-open" }), cursor: { since: T0, fixed_sha: "a1b2c3d", dispatched: [] }, rereview: { at: T0, nudged: false }, ...extra });
+const syntheticConfig = { ...CONFIG, git_hosts: { "forge.example": { reviewer: CONFIG.reviewer, trusted_authors: CONFIG.trusted_authors, required_checks: CONFIG.required_checks } } };
+
+test("review commands qualify canonical hosts and invalidate through their selected label adapter", async () => {
+  for (const action of ["policy", "dispute"]) for (const labels of [true, false]) {
+    const calls = [], adapter = synthetic({ removeLabel: async (...args) => calls.push(["remove", ...args]) });
+    adapter.capabilities = { ...adapter.capabilities, labels };
+    const registry = makeHostRegistry({ adapters: [adapter] }), state = makeState(tempHome()), id = "forge.example/acme/widget/test";
+    state.put(id, thirdEntry({ firstPartyReview: { result: { findings: [{ id: "finding" }] } } }));
+    const ctx = { state, hosts: registry, host: registry.api, runnerFor: () => ({ current: () => null }),
+      gh: new Proxy({}, { get: () => assert.fail("review command bypassed the selected adapter") }),
+      reviewService: { qualify: async repo => { calls.push(["qualify", repo]); return { qualified: false }; },
+        preflight: async repo => { calls.push(["preflight", repo]); return selectReviewPolicy(syntheticConfig, repo); } } };
+    await reviewCommand(ctx, { action: "qualify", repo: "FORGE.EXAMPLE/Acme/Widget" });
+    assert.deepEqual(calls.shift(), ["qualify", "forge.example/acme/widget"]);
+    await reviewCommand(ctx, { action, handle: id, finding: "finding", mode: "external-required", reason: "Operator requested re-evaluation" });
+    assert.equal(state.get(id).review_readiness, null);
+    assert.equal(calls.filter(c => c[0] === "remove").length, Number(labels));
+    if (labels) assert.deepEqual(calls.at(-1).slice(0, 3), ["remove", "acme/widget", 142]);
+    await assert.rejects(reviewCommand(ctx, { action: "qualify", repo: "unknown.example/acme/widget", run: true }), /Unsupported/);
+  }
+});
 
 test("canonical origins retain GitHub forms and reject ambiguous or secret-bearing diagnostics", () => {
   for (const url of ["https://GITHUB.com/Acme/Widget.git", "https://name:SECRET@github.com/acme/widget/", "http://github.com/acme/widget", "git@github.com:acme/widget.git", "ssh://git@github.com/acme/widget.git"]) {
@@ -206,7 +229,7 @@ test("synthetic host uses the shared readiness and merge-proof chain, with optio
   const api = fakeGh({ pr: thirdPr({ headRefName: "work/test", statusCheckRollup: [check] }), reviews: [approval] });
   const registry = makeHostRegistry({ adapters: [synthetic(api, { capabilities: { ...github.capabilities, labels: false } })] });
   const runner = fakeRunner(clock);
-  const ctx = { home, config: { ...CONFIG, deliverable: null }, hosts: registry, host: registry.api, state, clock, ownLogin: "me", git: fakeGit(), runnerFor: () => runner, log: silentLog, notify: fakeNotify(), readPrd: () => null };
+  const ctx = { home, config: { ...syntheticConfig, deliverable: null }, hosts: registry, host: registry.api, state, clock, ownLogin: "me", git: fakeGit(), runnerFor: () => runner, log: silentLog, notify: fakeNotify(), readPrd: () => null };
   assert.equal((await makeTick(ctx).tick())[0].ok, true);
   assert.equal(state.get(id).state, "ready-for-human");
   assert.ok(!api.calls.some(c => /Label/.test(c[0])));
