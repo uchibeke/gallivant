@@ -192,14 +192,14 @@ import { DEFAULTS } from "../lib/config.mjs";
 import { resolveCredential } from "../lib/credential.mjs";
 
 /** A Gallivant home complete enough for doctor to get past `config` and reach the credential checks. */
-function doctorHome({ tokenFile = null, repos = [] } = {}) {
+function doctorHome({ tokenFile = null, repos = [], reviewer = DEFAULTS.reviewer, review = DEFAULTS.review } = {}) {
   const home = mkdtempSync(pjoin(tmpdir(), "gallivant-doctor-"));
   const worktrees = mkdtempSync(pjoin(tmpdir(), "gallivant-doctor-wt-"));
   const bin = pjoin(home, "codex-stub");
   writeFileSync(bin, "#!/bin/sh\nexit 0\n", { mode: 0o755 });
   const cfg = {
     ...DEFAULTS, trusted_authors: ["me"], worktrees, notify: null,
-    harness: { codex: { bin } }, repos, github_token_file: tokenFile,
+    harness: { codex: { bin } }, repos, github_token_file: tokenFile, reviewer, review,
   };
   writeFileSync(pjoin(home, "config.json"), JSON.stringify(cfg), { mode: 0o600 });
   return home;
@@ -212,6 +212,14 @@ const probeOk = async () => ({ ok: true, detail: "acme/widget reachable with the
 const named = (results, name) => results.find(r => r.name === name);
 /** A resolver that cannot reach `gh`, so only the config file and the injected environment can answer. */
 const noGh = (cfg, opts) => resolveCredential(cfg, { ...opts, exec: async () => "" });
+
+test("adapter-owned doctor retains first-party route diagnostics after the host-boundary merge", async () => {
+  const home = doctorHome({ repos: ["acme/widget"], reviewer: null, review: { mode: "first-party-required" } });
+  const results = await doctor({ home, env: {}, resolve: async () => { throw new Error("offline fixture refuses host authorization"); } });
+  const result = named(results, "review acme/widget");
+  assert.equal(result.ok, false); assert.match(result.detail, /configure review.route/);
+  assert.match(result.fix, /repair the native reviewer boundary/);
+});
 
 test("doctor fails, with the fix, when a run could not push: the case the old check reported as ok", async () => {
   // No token file, nothing in the environment, and a `gh` that answers nothing. Before this change doctor printed

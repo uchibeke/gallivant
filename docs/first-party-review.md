@@ -41,6 +41,12 @@ Legacy records are snapshotted as version 0 on reconciliation using their last c
 
 ## Qualification and diagnostics
 
+The selected Git host must provide the complete review-evidence operation through
+the shared host registry. An unsupported host or missing operation stops
+qualification before native preparation, including when a saved clear exists.
+GitHub retains `owner/repo` identities; qualified additional adapters would use
+`host/owner/repo`. Only GitHub is currently shipped and qualified.
+
 Use the exact executable in `harness.codex.bin`. Only its restricted preparation profile is implemented as a reviewer route; other coding adapters are unqualified. The review service supplies text in a fresh isolated workspace, disables tools, MCP/plugins, hooks, skills, memories, delegation, telemetry and user/project instructions, denies escalation and network access from model tools, and verifies the effective native configuration including managed requirements. Provider authentication is confined to the native inference connection. The coding session and its context mounts are never reused.
 
 ```sh

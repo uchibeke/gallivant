@@ -11,6 +11,8 @@ import { buildReviewRun, createReviewService } from "../lib/first_party_review.m
 import { makeTick } from "../lib/tick.mjs";
 import { makeGh } from "../lib/gh.mjs";
 import { reviewCommand } from "../lib/commands/review.mjs";
+import { makeHostRegistry } from "../lib/hosts.mjs";
+import { github, normalizePr } from "../lib/hosts/github.mjs";
 import { CONFIG, GOOD_PRD, T0, tempHome, seededState, fakeGh, fakeGit, fakeRunner, fakeNotify, fakeCredential, fakeIdentity, makeClock, silentLog, prFixture, checkRun, comment, at, claudeResultLines } from "./helpers.mjs";
 
 const head = "a".repeat(40), base = "b".repeat(40), fp = "f".repeat(64);
@@ -98,6 +100,17 @@ test("abbreviated external reviewer heads require an unambiguous host resolution
   assert.equal((await exactReviewerVerdict(input,async()=>head)).verdict,"clear");
   for(const resolver of [null,async()=>"aaaaaaa"+"b".repeat(33),async()=>{throw new Error("ambiguous prefix");}]) assert.equal((await exactReviewerVerdict(input,resolver)).verdict,"waiting");
   assert.equal((await exactReviewerVerdict({...input,trust:makeTrust(CONFIG,CONFIG.reviewer.login)},async()=>head)).verdict,"waiting","own public bot text is not an independent review");
+});
+
+test("exact reviewer clearance uses the normalized full head without a redundant host lookup", async () => {
+  for (const fullHead of [head, "b".repeat(64)]) {
+    const record = { eventId: "7", actor: { login: CONFIG.reviewer.login, bot: true }, at: at(1),
+      state: "APPROVED", headSha: fullHead, body: `Reviewed commit: \`${fullHead.slice(0, 7)}\`` };
+    const input = { reviews: [record], inline: [], config: CONFIG, trust: makeTrust(CONFIG, "me"), headSha: fullHead, sinceIso: T0 };
+    const verdict = await exactReviewerVerdict(input, async () => assert.fail("normalized exact identity needs no lookup"));
+    assert.equal(verdict.verdict, "clear"); assert.equal(verdict.reviewedHead, fullHead);
+    assert.equal((await exactReviewerVerdict({ ...input, headSha: "c".repeat(40) })).verdict, "waiting");
+  }
 });
 
 function tickWorld({ mode="first-party-required", record, over={} }={}) {
@@ -316,13 +329,62 @@ function reviewServiceWorld() {
     return runners.get(key);
   } };
   const service = () => createReviewService(ctx, { fingerprint: () => fp, clock });
-  return { ...w, w, calls, clock, service,
+  return { ...w, w, ctx, calls, clock, service,
     finish(job, { endedAt = job.startedAt + 150_000, ok = true, raw = JSON.stringify({ ...clear(job.evidence), reviewedHead: job.evidence.head }) } = {}) {
       const r = [...runners.values()].find(r => r.job?.id === job.run);
       r.job = { ...r.job, running: false, exit: ok ? 0 : 1, endedAt };
       r.result = { ok, lastMessage: raw, denials: [], cost: null };
     } };
 }
+
+test("review evidence uses the selected host registry and keeps normalized check bindings", async t => {
+  const w = reviewServiceWorld(), calls = [];
+  w.w.pr = normalizePr(w.pr);
+  const api = w.ctx.gh;
+  const registry = makeHostRegistry({ adapters: [{ ...github, create: () => ({
+    prView: async repo => { calls.push(["snapshot", repo]); return api.prView(); },
+    reviewEvidence: async (...args) => { calls.push(["evidence", ...args]); return api.reviewEvidence(); },
+  }) }] });
+  w.ctx.hosts = registry; w.ctx.host = registry.api;
+  w.ctx.gh = new Proxy({}, { get: () => assert.fail("review must not bypass the host registry") });
+  const service = w.service(), job = await service.reconcile(w.id, w.entry, w.w.pr);
+  assert.equal(job.status, "running"); assert.equal(job.evidence.checks[0].outcome, "passed");
+  assert.deepEqual(calls.map(c => c.slice(0, 2)), [["evidence", "acme/widget"], ["snapshot", "acme/widget"]]);
+  assert.equal(calls[0][2], w.entry.pr); assert.equal(calls[0][3], head); assert.equal(calls[0][4], base);
+  w.finish(job); await service.expire(w.id);
+  const clearJob = await service.reconcile(w.id, w.entry, w.w.pr);
+  assert.equal(clearJob.result.verdict, "clear"); assert.equal(calls.length, 2, "registry integration retains immutable input reuse");
+  const output = `${tempHome()}/review-host-evidence.json`;
+  writeFileSync(output, JSON.stringify({ kind: "Offline host-boundary fixture; no live qualification", calls,
+    evidence: job.evidence, prompt: reviewPrompt(job.evidence), result: clearJob.result }, null, 2));
+  t.diagnostic(`review host evidence: ${output}`);
+});
+
+test("unsupported review evidence fails host qualification before native preparation or cached clearance", async () => {
+  const w = reviewServiceWorld(), service = w.service();
+  const job = await service.reconcile(w.id, w.entry, w.pr); w.finish(job);
+  await service.reconcile(w.id, w.entry, w.pr);
+  w.ctx.hosts = makeHostRegistry({ adapters: [{ ...github, create: () => ({}) }] });
+  w.ctx.host = w.ctx.hosts.api;
+  w.ctx.executionFor = () => assert.fail("unsupported evidence cannot reach inference");
+  await assert.rejects(service.qualify("acme/widget", { run: true }), /complete review evidence adapter/);
+  await assert.rejects(service.preflight("acme/widget"), /complete review evidence adapter/);
+  await assert.rejects(service.reconcile(w.id, w.entry, w.pr), /complete review evidence adapter/);
+  assert.equal(w.calls.submits, 1);
+});
+
+test("rate-limited evidence and a foreign host snapshot cannot reach reviewer dispatch", async () => {
+  for (const failure of ["rate-limit", "foreign-host"]) {
+    const w = reviewServiceWorld(); w.w.pr = normalizePr(w.pr);
+    const registry = makeHostRegistry({ adapters: [{ ...github, create: () => ({
+      reviewEvidence: async () => ({ ...source, ...(failure === "rate-limit" ? { rateLimited: true } : {}) }),
+      prView: async () => ({ ...w.w.pr, source: { host: "foreign.example", adapter: "foreign" } }),
+    }) }] });
+    w.ctx.hosts = registry; w.ctx.host = registry.api;
+    await assert.rejects(w.service().reconcile(w.id, w.entry, w.w.pr), /incomplete|Incomplete/);
+    assert.equal(w.calls.submits, 0);
+  }
+});
 
 test("expiry settles an on-time execution observed after its deadline and rejects late or invalid completions", async () => {
   for (const scenario of ["on-time", "at-deadline", "late", "unknown-time", "provider-failed", "invalid-output", "running"]) {
