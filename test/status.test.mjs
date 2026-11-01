@@ -54,7 +54,7 @@ test("a ready entry lands in needs_you too, because it is a person who merges it
   const w = world({ entries: { "acme/widget/widget-export": entryAt({ state: STATES.ready }) } });
   const m = model(w.ctx);
 
-  assert.deepEqual(m.needs_you.map(r => [r.label, r.detail]), [["ready", "green, no blocking findings, receipt accepted"]]);
+  assert.deepEqual(m.needs_you.map(r => [r.label, r.detail]), [["ready", "legacy review policy not yet snapshotted; receipt accepted"]]);
   assert.equal(m.needs_you[0].url, "https://github.com/acme/widget/pull/142", "the link a person opens to merge is in the row");
 });
 

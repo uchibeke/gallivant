@@ -309,3 +309,7 @@ that a tool call was denied. The historical findings are linked below.
 ## Follow-ups filed against APort
 
 The historical [decision record](https://github.com/uchibeke/gallivant/blob/main/docs/audit/DECISIONS.md) lists: multi-file `apply_patch` in the Codex hook, `git push` refspec parsing, control-plane paths blocked by default, a non-interactive local passport install, and a Repository Guard slice that blocks pushes rather than reporting merges.
+
+## Reviewer authority
+
+The opt-in first-party reviewer uses the restricted native preparation boundary in a fresh session with supplied text only. Its profile denies tools, escalation, delegation and tool network access; setup/start verify effective native policy and require a live qualification record. A private HOME or a prompt alone is not sufficient. The model cannot write task policy, state, files, Git refs, PRs or approvals. The coordinator validates exact-input structured output; public agent text is never an independent host actor. Unknown or partial output fails closed. See [review isolation, evidence and monetary limitations](first-party-review.md) and [unmet live qualification](audit/first-party-review.md). Review grants no merge or deployment authority.

@@ -62,8 +62,8 @@ from you or an account with a third party.
 
 - **Reviewer.** The default loop waits for the Codex GitHub review integration
   (`chatgpt-codex-connector[bot]`). Enable it on the repository, configure
-  another reviewer, or set `"reviewer": null` in the config to rely on CI and
-  trusted human feedback. Without one of these, the first PR waits for a review
+  another reviewer, or opt into a [qualified first-party reviewer](docs/first-party-review.md).
+  Explicit legacy no-review needs both `"reviewer": null` and `review.legacy_no_review: true`. Without one of these, the first PR waits for a review
   that never arrives. See [the reviewer key](docs/config.md#the-reviewer-object).
 - **Branch protection.** `doctor` prints the `gh api` call that creates a
   ruleset blocking direct and force pushes to the default branch. Run it
@@ -252,3 +252,7 @@ hosted service or publish a chat plugin.
 
 [Contributing](CONTRIBUTING.md) · [Security reports](SECURITY.md) ·
 [Releasing](docs/releasing.md) · [Apache-2.0 license](LICENSE)
+
+## First-party review (opt-in)
+
+New tasks can pin `external-required`, `first-party-required`, or `both-required`. Repositories with the configured external reviewer retain their existing default. First-party review requires a separately qualified restricted route; it never claims Git-host bot approval. See [selection, qualification and migration](docs/first-party-review.md) and the [current live qualification gap](docs/audit/first-party-review.md). Existing no-review runs keep that requirement and disclose the absence of semantic review.
