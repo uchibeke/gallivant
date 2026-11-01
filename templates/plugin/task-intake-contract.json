@@ -7,9 +7,10 @@
   "fixtures": "templates/plugin/task-profile-requests.mjs",
   "files": {
     "lib/task_profile.mjs": "18b51dbc87107295806d3125a306454f6ce22660b8758065ac559c2882511cf6",
-    "lib/host_definitions.mjs": "4f45767b20eeb090415e8d2b437e47cceb06fbb287de93f3763d617673fa1aa9",
+    "lib/host_definitions.mjs": "1179cddc073e2a05aa603b7117c178ffe4fc057d7270931832fbf8733d3a84d6",
     "lib/hosts/github_contract.mjs": "c0644688195d967b688da6ef8feb98332b38611c745886153e7d69b65b8f922e",
-    "lib/repository.mjs": "a30c5abd7a288437bb5132428e8556249c139346f714b2c3c56c4e6681b9645c",
+    "lib/hosts/bitbucket_contract.mjs": "934b4714a25711ef91b90508096466bf7ef0a773fe0d67951c61c3891644b570",
+    "lib/repository.mjs": "f397883ca04bae6c3d15e730fbef2fe267fb5d616566a9f4b724aee8f4925f97",
     "templates/plugin/task-profile-requests.mjs": "7cbc45263fce9025737b5b1709d463b21a853de5ad8d486a8ef8c96ff41e8da4"
   },
   "upgrade": "Vendor the listed files byte-for-byte. A profileVersion change requires the Agent Passport task-intake-vendor-sync PRD; saved tasks without a fragmentVersion pin retain line-based source references; older saved profiles keep their original interpretation and fail closed when unsupported."
