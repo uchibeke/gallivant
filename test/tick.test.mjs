@@ -1151,9 +1151,9 @@ test("a registered PR without a session starts a fresh session that reads the PR
 
 test("one failing entry does not stop the others", async () => {
   const w = world();
-  w.state.put("widget/other", { ...w.entry(), pr: 999 });
+  w.state.put("widget/other", { ...w.entry(), pr: 999, url: "https://github.com/acme/widget/pull/999" });
   let n = 0;
-  w.gh.prView = async () => { if (n++ === 0) throw new Error("boom"); return prFixture({ state: "MERGED" }); };
+  w.gh.prView = async () => { if (n++ === 0) throw new Error("boom"); return prFixture({ number: 999, state: "MERGED" }); };
   const results = await w.tick.tick();
   assert.deepEqual(results.map(r => r.ok), [false, true]);
 });
