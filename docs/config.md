@@ -309,12 +309,11 @@ account is what distinguishes a review tool from the trusted humans in `trusted_
 dispatches a fix run against rather than waiting on. So a human login in `reviewer.login` never matches, the verdict
 stays `waiting`, and the PR waits out `stall_hours` and then stops with `reviewer-silent` for a person to look at.
 That is a reasonable way to run a repo where a human gates every merge, but it is a wait, not a verdict. If you want
-the human's findings to drive fix rounds instead, put them in `trusted_authors` and set `reviewer` to null.
+the human's findings to drive fix rounds, put them in `trusted_authors`. New tasks without an external actor also need a qualified first-party policy or the explicit legacy no-review exception.
 
 ### No automated reviewer
 
-`"reviewer": null` means there is no review tool: only humans and CI drive the loop, and a PR is ready as soon as
-checks are green. Gallivant asks nobody for a re-review, so there is no nudge and no `reviewer-silent` stop. It still
+`"reviewer": null` means no external review tool is configured. For new tasks, select a qualified first-party route or set `review.legacy_no_review: true` explicitly. Legacy no-review readiness rests on checks and the configured completion gate and is labelled as absence of review, never clearance. No external re-review or nudge is requested. It still
 comments after a push, because the round comment is also how a recovery rebuilds the round count off the PR, but the
 comment says `Pushed a fix.` and mentions no one.
 
@@ -443,3 +442,7 @@ Nothing in that list is a path outside the worktree, and that is the point. Unti
 Both isolating variables are load-bearing, and `GIT_CONFIG_NOSYSTEM` is not decoration. `GIT_CONFIG_GLOBAL` replaces only git's global file; the system one still applies, and on a Mac with the Xcode command line tools `/Library/Developer/CommandLineTools/usr/share/git-core/gitconfig` sets `credential.helper = osxkeychain`. Without `GIT_CONFIG_NOSYSTEM` a run had a path to your keychain whatever else was set. With it, `git config --get-all credential.helper` in a run's environment returns nothing but the snippet above.
 
 The helper resets repository-local credential helpers and refuses other hosts, repository paths and redirects. Runs clear inherited API tokens and SSH transport settings. A run can read its own environment, so token scope and repository rulesets remain essential. See the [Git host contract](git-hosts.md) for identity, compatibility and provider binding.
+
+## Versioned review policy
+
+`review.mode` selects `external-required`, `first-party-required`, or `both-required` for new tasks. `review.route: "codex"` requires a successful isolated live qualification. `review.specialist` allows at most one of `security` or `regression`. Defaults and bounds, per-repository settings, separate review allowances, explicit zero-check CI policy and the `legacy_no_review` exception are documented in [First-party review](first-party-review.md). A config edit cannot change an existing task policy; use `review policy <handle> --mode <mode> --reason "..."` to revoke readiness and explicitly re-evaluate. `reviewer: null` alone no longer authorizes an unattended new start.

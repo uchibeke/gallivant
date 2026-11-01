@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 // CLI entry. Parses arguments, builds the context, calls one command. No logic lives here.
+import { reviewCommand } from "../lib/commands/review.mjs";
 import { acquireCliMutation } from "../lib/daemon.mjs";
 import { parseArgs } from "node:util";
 import { makeContext } from "../lib/context.mjs";
@@ -84,6 +85,13 @@ const HELP = `gallivant: give an agent a task, let the review loop run, go outsi
                                          --resnapshot makes an edited brief the one the gate judges
                                          --fresh-session replaces retired learned memory after settlement
   gallivant recheck <handle>           queue a PR recheck without resetting its budget
+  gallivant review qualify --repo <owner/repo> [--run]
+                                         inspect qualification; --run explicitly launches one bounded live probe
+  gallivant review status <handle>     show pinned policy, owned verdict and unresolved review evidence
+  gallivant review policy <handle> --mode external-required|first-party-required|both-required --reason "..."
+                                         explicitly replace policy and re-evaluate the current head
+  gallivant review dispute <handle> --finding <id> --reason "..."
+                                         record a dispute for a person; never accepts the author's own dispute
   gallivant cancel <handle>            stop further dispatch; request provider cancellation
   gallivant say <handle> --note "..." [--interrupt]
                                          send an update in the same session; --interrupt stops the active run first
@@ -106,6 +114,7 @@ const OPTIONS = {
   since: { type: "string" }, until: { type: "string" }, "dry-run": { type: "boolean" },
   mode: { type: "string" }, status: { type: "string" }, from: { type: "string" }, reason: { type: "string" },
   "key-path": { type: "string" }, "ssh-keygen": { type: "string" }, "learning-budget": { type: "string" },
+  finding: { type: "string" },
 };
 
 async function dispatch(argv) {
@@ -168,7 +177,7 @@ async function dispatch(argv) {
     }
   }
   const ctx = makeContext();
-  const mutating = ["start", "resume", "register", "remove", "recheck", "say", "cancel"].includes(cmd) || cmd === "chain" && (positionals.length > 2 || values.cancel || values.retry);
+  const mutating = ["start", "resume", "register", "remove", "recheck", "say", "cancel"].includes(cmd) || cmd === "review" && arg !== "status" || cmd === "chain" && (positionals.length > 2 || values.cancel || values.retry);
   const owner = mutating ? acquireCliMutation(ctx.home) : null;
   try {
   if (cmd === "recheck" || cmd === "say" || cmd === "cancel") {
@@ -183,6 +192,11 @@ async function dispatch(argv) {
     return 0;
   }
   switch (cmd) {
+    case "review": {
+      const result = await reviewCommand(ctx, { action: arg, handle: positionals[2], repo: values.repo, mode: values.mode, reason: values.reason, finding: values.finding, run: values.run });
+      console.log(JSON.stringify(result, null, 2));
+      return result.qualified === false ? 1 : 0;
+    }
     case "chain": {
       const paths = positionals.slice(2);
       const operation = paths.length > 0 || values.retry;
