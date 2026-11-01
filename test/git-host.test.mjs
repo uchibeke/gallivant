@@ -257,6 +257,8 @@ test("GitHub incomplete pages and bounded lists fail closed; recovery metadata w
   assert.equal(writes, 1);
   const incomplete = makeHostRegistry({ credential: async () => ({ token: "fixture-credential" }), exec: async () => ({ stdout: JSON.stringify(Array(100).fill(pr)) }) });
   await assert.rejects(() => incomplete.api.prListMine("acme/widget"), /Incomplete PR recovery list/);
+  const ambiguous = makeHostRegistry({ credential: async () => ({ token: "fixture-credential" }), exec: async () => ({ stdout: JSON.stringify([prFixture(), prFixture({ number: 143 })]) }) });
+  await assert.rejects(() => ambiguous.api.prListByHead("acme/widget", "work/test"), /Ambiguous PR ownership.*Do not redispatch/);
 });
 
 test("resume refuses an incompatible saved host/provider before checkout recovery", async () => {
