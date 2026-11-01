@@ -313,3 +313,8 @@ The historical [decision record](https://github.com/uchibeke/gallivant/blob/main
 ## Reviewer authority
 
 The opt-in first-party reviewer uses the restricted native preparation boundary in a fresh session with supplied text only. Its profile denies tools, escalation, delegation and tool network access; setup/start verify effective native policy and require a live qualification record. A private HOME or a prompt alone is not sufficient. The model cannot write task policy, state, files, Git refs, PRs or approvals. The coordinator validates exact-input structured output; public agent text is never an independent host actor. Unknown or partial output fails closed. See [review isolation, evidence and monetary limitations](first-party-review.md) and [unmet live qualification](audit/first-party-review.md). Review grants no merge or deployment authority.
+
+Repository identity, credential transport and PR evidence are defined by the
+[Git host contract](git-hosts.md). Only GitHub is qualified in this release;
+other hosts are refused before dispatch. Existing IDs and chain ownership are
+retained without a state migration.

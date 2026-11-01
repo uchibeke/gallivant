@@ -107,6 +107,57 @@ test("legacy control cancellation verifies cessation instead of trusting the kil
   }
 });
 
+test("host identity outages cannot delay local or hosted cancellation", async () => {
+  for (const failure of ["host unreachable", "HTTP 429", "HTTP 401"]) {
+    for (const transport of ["local", "remote-confirmed", "remote-unconfirmed"]) {
+      const w = world({ state: STATES.prOpen, reason: null });
+      const run = w.runner.start("fix", "claude", [], {});
+      w.state.update(w.id, { last: { run: run.id, exit: null } });
+      let identityReads = 0, cancellations = 0;
+      w.gh.userFor = async () => { identityReads++; throw new Error(failure); };
+      if (transport !== "local") {
+        w.runner.capabilities = { transport: "remote" };
+        w.runner.cancel = async () => {
+          cancellations++;
+          if (transport === "remote-confirmed") w.runner.kill(run.id);
+          return { confirmed: transport === "remote-confirmed" };
+        };
+        w.ctx.executionFor = () => w.runner;
+      }
+      requestControl(w.ctx, { handle: w.id, action: "cancel" });
+      await makeTick(w.ctx).tickEntry(w.id, w.state.get(w.id));
+      const saved = w.state.get(w.id);
+      assert.equal(saved.control.status, "applied", `${transport}: ${failure}`);
+      assert.equal(saved.reason, transport === "remote-unconfirmed" ? "cancellation-requested" : "cancelled");
+      assert.equal(saved.dispatch_stopped, "cancellation-requested");
+      assert.equal(w.runner.current().running, transport === "remote-unconfirmed");
+      assert.equal(cancellations, transport === "local" ? 0 : 1);
+      assert.equal(identityReads, 0);
+      assert.equal(w.gh.calls.length, 0);
+      assert.equal(w.runner.started.length, 1);
+    }
+  }
+});
+
+test("host outages cannot delay an operator interrupt or its local settlement", async () => {
+  const w = world({ state: STATES.prOpen, reason: null });
+  const run = w.runner.start("fix", "claude", [], {});
+  w.state.update(w.id, { last: { run: run.id, exit: null } });
+  let identityReads = 0;
+  w.gh.userFor = async () => { identityReads++; throw new Error("HTTP 401"); };
+  w.gh.prView = async () => { throw new Error("host unreachable"); };
+  requestControl(w.ctx, { handle: w.id, action: "message", note: "Preserve the work.", interrupt: true });
+  await w.tick.tick();
+  const saved = w.state.get(w.id);
+  assert.equal(w.runner.current().killed, true);
+  assert.equal(saved.last.exit, 137);
+  assert.equal(saved.reason, "operator-interrupted");
+  assert.equal(saved.control.status, "failed", "unavailable PR data still refuses the replacement run");
+  assert.equal(saved.control.note, "Preserve the work.");
+  assert.equal(identityReads, 0);
+  assert.equal(w.runner.started.length, 1);
+});
+
 test("requests survive a new context, refuse duplicates, and never silently truncate", () => {
   const w = world();
   const before = w.state.get(w.id);

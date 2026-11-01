@@ -496,16 +496,17 @@ to the free-text contract.
 
 ## Agent Passport packaging
 
-`lib/task_profile.mjs` is self-contained (no imports at all, so the vendored copy
-loads alone and its hash covers every rule it applies) and is the file Agent
-Passport vendors. Its copy of the completion conditions is checked against the
-coordinator schema by the focused suite. `templates/plugin/task-intake-contract.json` pins its exact
-bytes, the fixture corpus at `templates/plugin/task-profile-requests.mjs` and the
-profile schema version. Both pinned files ship in the published package, so a
-consumer can run the exact promised corpus. `npm run lint` fails when the pin is
-stale; `npm run contract:intake -- --write` refreshes it after a reviewed change.
-The plugin builder refuses to package when either packed file differs from the
-pin and records `intakeContract` in `runtime.json`. The
+`lib/task_profile.mjs` and its portable host identity/declaration dependencies
+are vendored together. They contain no Node transport or credential code. Its
+completion conditions are checked against the coordinator schema by the focused
+suite. `templates/plugin/task-intake-contract.json` pins the validator, every
+transitive declaration file, the fixture corpus at
+`templates/plugin/task-profile-requests.mjs` and the profile schema version.
+All pinned files ship in the published package, so a consumer can run the exact
+promised corpus. `npm run lint` fails when the pin is stale;
+`npm run contract:intake -- --write` refreshes it after a reviewed change.
+The plugin builder refuses to package when a pinned file differs and records
+`intakeContract` in `runtime.json`. The
 downstream `task-intake-vendor-sync` work in `aporthq/agent-passport` must pin
 the published package, regenerate its bundled validator from these bytes and
 run the same corpus before either repository's change is approved.

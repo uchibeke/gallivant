@@ -1722,7 +1722,7 @@ test("large queued local output uses bounded round-robin pages while unrelated j
   assert.deepEqual(readJson(queueFile).runs, ["second-old", f.id]);
   // A missing execution.current still projects queued pre-upgrade local output.
   const home = tempHome(), state = makeState(home), gh = fakeGh(), local = fakeRunner(f.clock);
-  for (const name of ["backlog", "unrelated", "review"]) state.put(`acme/widget/${name}`, newEntry({ repo: "acme/widget", harness: "codex", pr: 3, branch: "work/3", base: "main", worktree: tempHome(), state: name === "review" ? STATES.ready : STATES.done, nowIso: T0 }));
+  for (const name of ["backlog", "unrelated", "review"]) state.put(`acme/widget/${name}`, newEntry({ repo: "acme/widget", harness: "codex", pr: name === "review" ? 3 : null, branch: "work/3", base: "main", worktree: tempHome(), state: name === "review" ? STATES.ready : STATES.done, nowIso: T0 }));
   gh.prView = async () => prFixture({ number: 3, headRefName: "work/3", state: "MERGED" });
   let progress = 0; local.reconcile = async () => { progress++; };
   const ctx = { home, config: CONFIG, clock: f.clock, state, gh, git: fakeGit(), log: silentLog, notify: fakeNotify(), ownLogin: "me", readPrd: () => null, credential: fakeCredential(), identity: fakeIdentity(), executionFor: id => id.endsWith("/backlog") ? f.open() : local };
@@ -1834,7 +1834,7 @@ function resultFixture() {
   const entry = { ...newEntry({ repo: "acme/widget", harness: "codex", session: "22222222-2222-4222-8222-222222222222", branch: "work/result", base: "main", worktree, nowIso: T0, state: STATES.running }), execution: { runId, providerJobId: "j1", turnId: "t1", inputHead: revision } };
   const result = { taskId: id, runId, providerJobId: "j1", turnId: "t1", inputHead: revision, repo: entry.repo, branch: entry.branch, files: [{ path: "a.txt", beforeHash: sha("before"), afterHash: sha("after"), text: "after" }], pr: { title: "Apply result", body: "Verified execution artifacts." } };
   const calls = [], git = { head: async () => revision, trackedPaths: async () => ["a.txt"], resultModesMatch: async () => true, dirty: async () => ({ modified: 0, untracked: 0 }), currentBranch: async () => entry.branch, originOf: async () => "https://github.com/acme/widget.git", commitResult: async () => calls.push("commit"), pushResult: async () => calls.push("push") };
-  const gh = { publishResultPr: async () => { calls.push("PR"); return { number: 1, url: "https://example.test/pr/1" }; } };
+  const gh = { publishResultPr: async () => { calls.push("PR"); return { number: 1, url: "https://github.com/acme/widget/pull/1" }; } };
   const ctx = { git, gh, readPrd: () => "# Brief\n\n## Verify\n\n- `printf verified`\n" };
   const verify = async () => { calls.push("verify"); return { stdout: "verified", stderr: "" }; };
   return { id, entry, result, dir, ctx, verify, calls };
@@ -3095,7 +3095,7 @@ catch(error){process.stdout.write(JSON.stringify({code:error.code,message:error.
     };
     f.verify = async () => { f.calls.push("verify"); if (stage === "before") request(); return { stdout: "verified" }; };
     f.ctx.git.pushResult = async () => { f.calls.push("push"); if (["push", "process"].includes(stage)) await duringPublication(); };
-    f.ctx.gh.publishResultPr = async () => { f.calls.push("PR"); if (stage === "PR") await duringPublication(); return { number: 1, url: "https://example.test/pr/1" }; };
+    f.ctx.gh.publishResultPr = async () => { f.calls.push("PR"); if (stage === "PR") await duringPublication(); return { number: 1, url: "https://github.com/acme/widget/pull/1" }; };
     if (stage === "before") {
       await assert.rejects(reconcileExecutionResult(f.ctx, { ...f, result }), /concurrent stop/);
       assert.deepEqual(f.calls, ["commit", "verify"]); assert.equal(state.get(f.id).dispatch_stopped, "cancellation-requested");
@@ -3126,7 +3126,7 @@ test("publication exclusions release after I/O failures and still allow cancella
       f.calls.push("PR");
       if (failure === "PR") throw new Error("PR acknowledgement lost");
       if (failure === "checkpoint") { previous = readFileSync(checkpoint, "utf8"); rmSync(checkpoint); mkdirSync(checkpoint); }
-      return { number: 1, url: "https://example.test/pr/1" };
+      return { number: 1, url: "https://github.com/acme/widget/pull/1" };
     };
     const held = failure === "execution-lock" ? acquireProcessLock(join(f.service.root, "execution.lock"), "execution") : null;
     try { await assert.rejects(reconcileExecutionResult(f.ctx, { ...f, result })); }

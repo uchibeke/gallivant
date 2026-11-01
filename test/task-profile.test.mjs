@@ -1,6 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { join } from "node:path";
+import { join, dirname } from "node:path";
+import { buildSync } from "esbuild";
 import { mkdirSync, writeFileSync, readFileSync } from "node:fs";
 import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
@@ -2150,13 +2151,18 @@ test("the vendored validator and fixture corpus are pinned byte-for-byte with th
   assert.equal(saved.fragmentVersion, FRAGMENT_VERSION); assert.equal(saved.profileVersion, PROFILE_VERSION); assert.equal(saved.validator, "lib/task_profile.mjs");
   assert.equal(saved.files["lib/task_profile.mjs"], sha(readFileSync(new URL("../lib/task_profile.mjs", import.meta.url))));
   assert.equal(current.files["templates/plugin/task-profile-requests.mjs"], saved.files["templates/plugin/task-profile-requests.mjs"]);
-  // Both pinned files live under packaged paths, so the published artifact carries the exact corpus.
+  // Every pinned file lives under packaged paths, so the published artifact carries the exact corpus.
   const packaged = JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8")).files;
   for (const path of Object.keys(saved.files)) assert.ok(packaged.some(entry => path === entry || path.startsWith(entry + "/")), `${path} is inside the package allowlist`);
   assert.match(saved.upgrade, /task-intake-vendor-sync/);
-  // The vendored validator loads on its own: no imports, so the pinned hash covers every rule it applies.
-  const source = readFileSync(new URL("../lib/task_profile.mjs", import.meta.url), "utf8");
-  assert.doesNotMatch(source, /^\s*import\s/m); assert.doesNotMatch(source, /\brequire\(/);
+  // Vendor only the pinned set. Bundling for the browser refuses missing dependencies,
+  // Node imports and accidental credential/transport coupling in portable policy.
+  const vendored = tempHome();
+  for (const path of Object.keys(saved.files)) {
+    mkdirSync(dirname(join(vendored, path)), { recursive: true });
+    writeFileSync(join(vendored, path), readFileSync(new URL(`../${path}`, import.meta.url)));
+  }
+  assert.equal(buildSync({ entryPoints: [join(vendored, saved.validator)], bundle: true, platform: "browser", write: false }).errors.length, 0);
   assert.deepEqual([...COMPLETION_CONDITIONS], COMPLETION_SCHEMA.properties.target.enum, "the self-contained copy of the completion conditions matches the coordinator schema");
 });
 

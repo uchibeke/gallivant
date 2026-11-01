@@ -1,3 +1,4 @@
+import { normalizeCheck } from "../lib/hosts/github.mjs";
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { isFixCommand, deriveEvents, makeTrust, isGreen, reviewerVerdict, reviewerClock, countRounds, failingChecks, addedLines, hasOwnComment } from "../lib/events.mjs";
@@ -111,7 +112,7 @@ test("failed checks dispatch on a head whose failures were not dispatched yet, o
   const { events } = derive({ pr: prFixture({ headRefOid: "d4e5f6a", statusCheckRollup: rollup }) });
   assert.equal(events.length, 1);
   assert.equal(events[0].runId, "9981");
-  assert.deepEqual(failingChecks([{ __typename: "StatusContext", context: "ci/x", state: "FAILURE", targetUrl: "u" }]).map(c => c.name), ["ci/x"]);
+  assert.deepEqual(failingChecks([normalizeCheck({ __typename: "StatusContext", context: "ci/x", state: "FAILURE", targetUrl: "u" })]).map(c => c.name), ["ci/x"]);
 });
 
 test("green means every check concluded green; no checks is green; pending is not", () => {

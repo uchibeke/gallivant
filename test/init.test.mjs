@@ -211,12 +211,12 @@ test("init names an unmet repository prerequisite before changing any repo-speci
   mkdirSync(gitlab);
   execFileSync("git", ["init", "-q", gitlab]);
   execFileSync("git", ["-C", gitlab, "remote", "add", "origin", "https://gitlab.com/acme/widget.git"]);
-  assert.throws(() => targetRepository(gitlab), /not a github\.com repository URL/);
+  assert.throws(() => targetRepository(gitlab), /Unsupported repository host/);
   const ok = join(root, "ok");
   mkdirSync(ok);
   execFileSync("git", ["init", "-q", ok]);
   execFileSync("git", ["-C", ok, "remote", "add", "origin", "git@github.com:Acme/Widget.git"]);
-  assert.deepEqual(targetRepository(ok), { checkout: realpathSync(ok), origin: "git@github.com:Acme/Widget.git", repo: "acme/widget" });
+  assert.deepEqual(targetRepository(ok), { checkout: realpathSync(ok), origin: "git@github.com:acme/widget.git", repo: "acme/widget" });
   assert.throws(() => targetRepository(ok, () => { const e = new Error("spawn git ENOENT"); e.code = "ENOENT"; throw e; }), /git is not on PATH/);
   const untouched = gh();
   await assert.rejects(init(base({ home, worktrees, harness: "codex", gh: untouched, repository: () => targetRepository(plain) })), /not inside a Git checkout/);
@@ -239,19 +239,19 @@ test("init names an unmet repository prerequisite before changing any repo-speci
 
 test("origin URLs are printed without their userinfo, so a token embedded in a remote never reaches a terminal", async () => {
   assert.equal(safeOrigin("https://x-access-token:SECRET@github.com/acme/widget.git"), "https://github.com/acme/widget.git");
-  assert.equal(safeOrigin("ssh://git@github.com/acme/widget.git"), "ssh://github.com/acme/widget.git");
+  assert.equal(safeOrigin("ssh://git@github.com/acme/widget.git"), "git@github.com:acme/widget.git");
   assert.equal(safeOrigin("git@github.com:acme/widget.git"), "git@github.com:acme/widget.git");
   const { home, worktrees, root } = fresh();
   const withToken = join(root, "with-token");
   mkdirSync(withToken);
   execFileSync("git", ["init", "-q", withToken]);
   execFileSync("git", ["-C", withToken, "remote", "add", "origin", "https://x-access-token:SECRET@github.com/Acme/Widget.git"]);
-  assert.deepEqual(targetRepository(withToken), { checkout: realpathSync(withToken), origin: "https://github.com/Acme/Widget.git", repo: "acme/widget" });
+  assert.deepEqual(targetRepository(withToken), { checkout: realpathSync(withToken), origin: "https://github.com/acme/widget.git", repo: "acme/widget" });
   const foreign = join(root, "foreign");
   mkdirSync(foreign);
   execFileSync("git", ["init", "-q", foreign]);
   execFileSync("git", ["-C", foreign, "remote", "add", "origin", "https://user:SECRET@gitlab.com/acme/widget.git"]);
-  assert.throws(() => targetRepository(foreign), e => /not a github\.com repository URL/.test(e.message) && !e.message.includes("SECRET"));
+  assert.throws(() => targetRepository(foreign), e => /Unsupported repository host/.test(e.message) && !e.message.includes("SECRET"));
   // The permission refusal names the origin too, and must not leak even when handed an unredacted one.
   const leaky = () => ({ checkout: "/work/widget", origin: "https://x-access-token:SECRET@github.com/acme/widget.git", repo: "acme/widget" });
   await assert.rejects(init(base({ home, worktrees, harness: "codex", repository: leaky, gh: gh({ permissionsError: "HTTP 404: Not Found" }) })),

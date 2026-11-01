@@ -499,6 +499,7 @@ test("fromBranch reuses an existing checkout only when origin is exactly the rep
     const ran = [];
     const exec = async (cmd, args) => {
       ran.push([cmd, ...args]);
+      if (cmd === "git" && args[0] === "remote" && args[1] === "set-url") { origin = args[3]; return { stdout: "", stderr: "" }; }
       return { stdout: cmd === "git" && args[0] === "remote" ? `${origin}\n` : "", stderr: "" };
     };
     return { git: makeGit({ config, exec }), ran };
@@ -513,6 +514,7 @@ test("fromBranch reuses an existing checkout only when origin is exactly the rep
 
   const same = gitWith("git@github.com:Acme/Widget.git");
   assert.equal(await same.git.fromBranch({ nameWithOwner: "acme/widget", prdId: "export", branch: "gallivant/export", path }), path);
+  assert.ok(same.ran.some(c => c[1] === "remote" && c[2] === "set-url" && c[4] === "https://github.com/acme/widget.git"));
   assert.deepEqual(same.ran.at(-1), ["git", "checkout", "gallivant/export"]);
 });
 
@@ -526,16 +528,16 @@ test("create classifies failures before executor invocation separately from poss
       identity: async () => { if (phase === "identity") throw Error("Identity resolver failed"); return null; },
       exec: async (cmd, args) => {
         calls.push([cmd, ...args]);
-        if (cmd === "gh") mkdirSync(join(path, ".git"), { recursive: true });
-        if ((cmd === "gh" && phase === "clone") || args[0] === phase) throw Error(`${phase} executor failed`);
-        return { stdout: "" };
+        if (cmd === "git" && args[0] === "clone") mkdirSync(join(path, ".git"), { recursive: true });
+        if ((cmd === "git" && args[0] === "clone" && phase === "clone") || args[0] === phase) throw Error(`${phase} executor failed`);
+        return { stdout: args[0] === "remote" ? "https://github.com/acme/widget.git" : "" };
       },
     });
     const attempted = ["clone", "fetch", "checkout"].includes(phase);
     await assert.rejects(() => git.create({ nameWithOwner: "acme/widget", prdId: "export", base: "main" }), error => {
       assert.equal(error.cloneAttempted, attempted, phase); return true;
     });
-    assert.equal(calls.some(([cmd]) => cmd === "gh"), attempted, phase);
+    assert.equal(calls.some(([cmd, op]) => cmd === "git" && op === "clone"), attempted, phase);
     if (!attempted) assert.deepEqual(calls, [], "no executor was invoked");
   }
 });
