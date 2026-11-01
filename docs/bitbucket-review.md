@@ -59,8 +59,9 @@ gallivant doctor
 ```
 
 `--host-config` imports settings for the verified checkout's host. It creates a
-new config, or accepts identical existing host settings; it refuses to replace
-conflicting settings. `--base` is validated and saved on the repository entry.
+new config, or accepts unchanged settings while preserving UUID bindings added
+by setup. JSON member order does not matter; changed or omitted policy and
+conflicting identity bindings are refused. `--base` is validated and saved on the repository entry.
 `init` binds repository/workspace UUIDs, reads the selected base and account push
 role, and verifies Git's base SHA against the API. `doctor` distinguishes unknown
 write scopes from observed read access. Only an actual write can prove Git push,
@@ -137,8 +138,10 @@ task-review publish --config /private/reviewer-config.json \
 Publication verifies the authenticated actor differs from the coding author and
 matches `reviewer.actor_id`. It rechecks repository UUIDs, PR number, branches,
 base, full head SHA and diff hash against the prepared input. An explicit retry
-reuses an identical already-posted verdict. Uncertain comment writes are not
-silently retried. Keep the real model transcript/run ID with qualification
+reuses an identical verdict only while it remains the reviewer's latest decision.
+A superseded match causes a new publication, so blocking/clear/blocking decisions
+take effect even on the same head. Uncertain comment writes are not silently
+retried. Keep the real model transcript/run ID with qualification
 artifacts: a manually authored fixture result cannot prove a Codex review.
 An ordinary Pipeline can orchestrate these steps when an operator explicitly
 installs it, enables Pipelines, and configures provider and reviewer secrets in an

@@ -194,14 +194,52 @@ test("fresh Bitbucket setup imports explicit host settings and retains a non-def
   writeFileSync(token, "fixture-api-secret", { mode: 0o600 });
   writeFileSync(file, JSON.stringify({ ...settings, reviewer: null, api: { email: "operator@example.test", token_file: token } }));
   const f = cleanFixture();
-  const result = await init({ home, hostConfig: file, base: "release/v2", harness: "codex", worktrees: join(root, "trees"),
+  const options = { home, hostConfig: file, base: "release/v2", harness: "codex", worktrees: join(root, "trees"),
     gh: f.api, repository: () => ({ repo: REPO, origin: `git@bitbucket.org:${PATH}.git`, checkout: root }),
     discover: () => ({ codex: { bin: process.execPath } }), harnessCheck: async () => ({ ok: true }), doctor: async () => [],
     transportPreflight: async c => { assert.equal(c.repos[0].base, "release/v2"); return { identity: { uuid: UUID, workspaceUuid: WORKSPACE } }; },
-  });
+  };
+  const result = await init(options);
   const saved = JSON.parse(readFileSync(result.file, "utf8"));
   assert.equal(saved.repos[0].base, "release/v2"); assert.equal(saved.git_hosts["bitbucket.org"].reviewer, null);
   assert.deepEqual(validate(merge(saved, home), home), []);
+  assert.equal((await init(options)).changed, false, "the original file need not include the generated repositories map");
+});
+
+test("repeated host imports preserve generated bindings and refuse policy or identity replacement", async () => {
+  const root = realpathSync(tempHome()), home = join(root, "home"), file = join(root, "host.json"), f = cleanFixture();
+  const supplied = { ...settings, api: { email: "operator@example.test", token_file: join(root, "token") },
+    repositories: { [PATH]: { required_checks: ["Unit"] } } };
+  writeFileSync(file, JSON.stringify(supplied));
+  let probes = 0, reports = 0;
+  const options = { home, hostConfig: file, base: "release/v2", harness: "codex", worktrees: join(root, "trees"),
+    gh: f.api, repository: () => ({ repo: REPO, origin: `git@bitbucket.org:${PATH}.git`, checkout: root }),
+    discover: () => ({ codex: { bin: process.execPath } }), harnessCheck: async () => ({ ok: true }),
+    doctor: async () => { reports++; return [{ ok: false, detail: "live qualification pending" }]; },
+    transportPreflight: async c => {
+      probes++;
+      if (probes > 1) assert.equal(c.git_hosts["bitbucket.org"].repositories[PATH].uuid, UUID);
+      return { identity: { uuid: UUID, workspaceUuid: WORKSPACE } };
+    },
+  };
+  const first = await init(options), before = readFileSync(first.file, "utf8");
+  const repeated = await init(options);
+  assert.equal(repeated.changed, false); assert.equal(repeated.created, false); assert.equal(repeated.recorded, false);
+  assert.equal(reports, 2); assert.equal(readFileSync(first.file, "utf8"), before);
+  // JSON member order is presentation, while omitted policy or changed identity is a replacement.
+  writeFileSync(file, JSON.stringify(Object.fromEntries(Object.entries(supplied).reverse())));
+  assert.equal((await init(options)).changed, false);
+  for (const change of [
+    c => { c.reviewer = null; },
+    c => { c.api.email = "other@example.test"; },
+    c => { delete c.repositories; },
+    c => { c.repositories[PATH].uuid = REVIEWER.uuid; c.repositories[PATH].workspaceUuid = WORKSPACE; },
+  ]) {
+    const replacement = structuredClone(supplied); change(replacement); writeFileSync(file, JSON.stringify(replacement));
+    await assert.rejects(init(options), /Existing host settings differ/);
+    assert.equal(readFileSync(first.file, "utf8"), before);
+  }
+  assert.equal(probes, 3, "conflicting imports stop before access checks or writes");
 });
 
 test("shared tick uses exact-head Bitbucket feedback with no reviewer and no-CI grace, and survives restart", async () => {
@@ -246,6 +284,46 @@ test("separate reviewer prepare/publish verifies actor and input head, reconcile
   await assert.rejects(producer.publish(url, input, clear), /changed since review/);
   const other = cleanFixture();
   await assert.rejects(makeBitbucketReviewProducer({ config: config(), registry: other.registry }).prepare(url), /not the configured reviewer/);
+});
+
+test("review publication reconciles only unsuperseded verdicts, including uncertain writes", async () => {
+  let loseReply = false, nextId = 10;
+  const f = cleanFixture({ intercept: (call, data) => {
+    if (call.path.endsWith("/comments") && call.method === "POST") {
+      const row = { ...comment(nextId++), user: REVIEWER, content: call.body.content }; data.comments.push(row);
+      if (loseReply) { loseReply = false; throw new Error("reply lost after accepted write"); }
+      return json(row);
+    }
+  } });
+  f.data.user = REVIEWER;
+  const producer = makeBitbucketReviewProducer({ config: config(), registry: f.registry }), url = pr().links.html.href;
+  const input = await producer.prepare(url);
+  const blocking = { head_sha: HEAD, verdict: "blocking", summary: "Correct the return value." };
+  const clear = { ...blocking, verdict: "clear", summary: "Correction reviewed." };
+  for (const result of [blocking, clear, blocking, clear]) {
+    f.data.comments.reverse(); // Pages may reorder; every verdict has the same timestamp.
+    const count = f.calls.filter(c => c.method === "POST").length;
+    const published = await producer.publish(url, input, result);
+    assert.notEqual(published.reused, true, "a superseded match must not swallow the new decision");
+    assert.equal(f.calls.filter(c => c.method === "POST").length, count + 1);
+    const retry = await producer.publish(url, input, result);
+    assert.equal(retry.reused, true); assert.equal(retry.id, published.id);
+    assert.equal(verdict(await f.api.prView(PATH, 7)).verdict, result.verdict);
+  }
+  loseReply = true;
+  await assert.rejects(producer.publish(url, input, blocking), { code: "BB_TRANSPORT", uncertain: true });
+  const count = f.calls.filter(c => c.method === "POST").length;
+  assert.equal((await producer.publish(url, input, blocking)).reused, true);
+  assert.equal(f.calls.filter(c => c.method === "POST").length, count, "an accepted uncertain write is reconciled without another POST");
+  f.data.comments.push({ ...comment(nextId++), user: REVIEWER, content: { raw: verdictBody("clear", BASE) } });
+  assert.equal(verdict(await f.api.prView(PATH, 7)).verdict, "waiting");
+  assert.notEqual((await producer.publish(url, input, blocking)).reused, true, "a later old-head verdict also supersedes the old match");
+  assert.equal(verdict(await f.api.prView(PATH, 7)).verdict, "blocking");
+  const latest = (await producer.publish(url, input, blocking)).id;
+  const body = f.data.comments.find(c => c.id === latest).content;
+  f.data.comments.push({ ...comment(nextId++), user: REVIEWER, parent: { id: latest }, content: body },
+    { ...comment(nextId++), user: REVIEWER, deleted: true, content: body });
+  assert.equal((await producer.publish(url, input, blocking)).id, latest, "replies and deleted verdicts cannot replace the effective decision");
 });
 
 test("Bitbucket feedback resumes the saved session once across polling, reordering, retry and daemon restart", async () => {

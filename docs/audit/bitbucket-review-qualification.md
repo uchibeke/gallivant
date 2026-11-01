@@ -89,3 +89,36 @@ ordering, reviewer credential scope, recovery failure paths and portable contrac
 imports. Rendered start/fix prompts use `task-pr` with the selected base and
 Bitbucket links. Focused regressions cover those boundaries. None of these checks
 invoked inference or provided live Bitbucket evidence.
+
+## Review follow-up, 2026-11-01
+
+The follow-up prerequisite check still found no Bitbucket host settings, coding
+credential selection, repository, or reviewer in the operator configuration.
+No unchanged blocked API/model call was retried. The live matrix and required
+remedy above remain unchanged.
+
+Both review findings were reproduced before their fixes; local output is
+`/tmp/bitbucket-review-reproductions.log` (2 failed regressions). The corrections
+use the review consumer's timestamp/sequence ordering for publication retries,
+and preserve generated UUID bindings when comparing a repeated host import.
+Changed credentials, policy, and supplied identities still fail before probes
+or writes. The setup mutation lock and uncertain-write behavior are unchanged.
+
+Focused coverage in `test/bitbucket-review.test.mjs`:
+
+- `repeated host imports preserve generated bindings and refuse policy or identity replacement`
+- `review publication reconciles only unsuperseded verdicts, including uncertain writes`
+
+The focused review, event, setup and architecture suites passed all 61 tests
+(`/tmp/bitbucket-review-fixes-targeted.log`). Inspection of generated fixture
+comments confirmed blocking/clear/blocking produced IDs 10/11/12 and an immediate
+retry reused ID 12; this is offline protocol evidence, not a real review.
+
+Final follow-up verification:
+
+- `npm test`: exit 0; 1,954 tests, 1,953 passed, 0 failed, 1 skipped;
+  duration 672,524.4 ms. Output: `/tmp/bitbucket-review-fixes-test.log`.
+  The Linux isolation test remains skipped on this macOS checkout.
+- `npm run lint`: exit 0, including the portable contract pin check.
+  Output: `/tmp/bitbucket-review-fixes-lint.log`.
+- `git diff --check` and `git diff --cached --check`: exit 0.
