@@ -122,3 +122,61 @@ Final follow-up verification:
 - `npm run lint`: exit 0, including the portable contract pin check.
   Output: `/tmp/bitbucket-review-fixes-lint.log`.
 - `git diff --check` and `git diff --cached --check`: exit 0.
+
+## Merged policy integration, 2026-11-01
+
+The continuation inspected merge `e15eb66` and retained both original review
+fixes. Operator configuration still had no selected Bitbucket account/token,
+repository or reviewer; the live matrix remains pending and dispatch stays
+disabled. No inference call or unchanged blocked host request was retried.
+
+Source inspection found another occurrence of discarded repository policy:
+review preflight flattened scoped settings and then removed the repository
+entries before selecting policy again. A repository actor could become the host
+default, and explicit no-reviewer mode could disappear. The failing regression
+is recorded in `/private/tmp/pr32-merge-policy-reproduction.log`.
+
+The sibling diagnostics path also selected review mode from the global reviewer
+and normalized away repository actors, trusted authors and required checks.
+Its regression is `/private/tmp/pr32-merge-doctor-reproduction.log`. Preflight
+now passes explicit review-setting overrides without discarding configuration;
+normalization retains all review fields, and diagnostics use the shared mode
+selector. The mixed-host diagnostic fixture now supplies its required explicit
+Bitbucket policy instead of failing configuration validation before its check.
+
+Focused coverage includes:
+
+- `test/bitbucket-review.test.mjs`: `review preflight preserves repository actor
+  overrides and explicit no-reviewer policy`.
+- `test/first-party-review.test.mjs`: `review preflight retains GitHub repository
+  actors and explicit legacy overrides`.
+- `test/doctor.test.mjs`: `doctor selects first-party prerequisites from
+  repository reviewer overrides`.
+- `test/base.test.mjs`: `repository review overrides survive validation,
+  normalization and base updates without affecting siblings`.
+
+The caller review covered start, register, explicit policy changes, setup and
+diagnostics. Host qualification still precedes preflight and external/no-reviewer
+policies never prepare inference. These are offline implementation checks, not
+live host or reviewer qualification.
+
+Verification after the integration corrections:
+
+- The intermediate `npm test` run began before the diagnostic correction and
+  reported only the mixed-host fixture failure: 2,000 passed, 1 failed, 1 skipped.
+  Output: `/private/tmp/pr32-merge-policy-npm-test.log`. That fixture now supplies
+  explicit Bitbucket policy and passes in the focused run below.
+- Final `npm test`: exit 0; 2,003 tests, 2,002 passed, 0 failed, 1 skipped;
+  duration 439,146.8 ms. Output: `/private/tmp/pr32-merge-policy-final-test.log`.
+  The Linux isolation test remains skipped on macOS; this does not provide
+  clean Linux installation or live reviewer qualification.
+- Focused base, diagnostic, host, review, event and tick tests: 296 passed,
+  0 failed. Output: `/private/tmp/pr32-merge-policy-integration.log`.
+  The log also records the generated diagnostic files inspected before push:
+  repository overrides retain their expected review prerequisite, and mixed-host
+  output retains the Bitbucket no-reviewer disclosure and dispatch refusal.
+- `npm run lint`: exit 0, including the portable contract pin check.
+  Output: `/private/tmp/pr32-merge-policy-final-lint.log`.
+- `node --test test/docs-links.test.mjs`: exit 0.
+  Output: `/private/tmp/pr32-merge-policy-docs.log`.
+- `git diff --check`: exit 0.

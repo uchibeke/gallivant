@@ -8,6 +8,7 @@ import { bitbucket } from "../lib/hosts/bitbucket.mjs";
 import { bitbucketVerdict } from "../lib/hosts/bitbucket_review.mjs";
 import { makeBitbucketReviewProducer } from "../lib/hosts/bitbucket_review_producer.mjs";
 import { repositoryReviewConfig } from "../lib/review_policy.mjs";
+import { createReviewService } from "../lib/first_party_review.mjs";
 import { makeTrust, reviewerVerdict, deriveEvents, eventKey, requiredFeedback, isGreen, readFeedback } from "../lib/events.mjs";
 import { makeHostRegistry, hosts } from "../lib/hosts.mjs";
 import { observedIdentityProblem, terminalIdentityProblem, assertRepositoryAccess } from "../lib/host_contract.mjs";
@@ -20,7 +21,7 @@ import { resolveBitbucketCredential, BITBUCKET_REVIEW_SCOPES } from "../lib/host
 import { prOperation } from "../lib/pr_operation.mjs";
 import { startPrompt, fixPrompt } from "../lib/prompt.mjs";
 import { init } from "../lib/commands/init.mjs";
-import { merge, validate } from "../lib/config.mjs";
+import { merge, validate, repoEntries } from "../lib/config.mjs";
 
 const REVIEWER = { ...USER, uuid: "{44444444-4444-4444-4444-444444444444}" };
 const verdictBody = (verdict = "clear", head = HEAD) => '```work-review\n' + JSON.stringify({ head_sha: head, verdict, summary: verdict === "clear" ? "Reviewed the exact diff; no blocking findings." : "Fix the incorrect return value." }) + '\n```';
@@ -50,6 +51,29 @@ test("repository policy isolates defaults, same-named repositories, actor UUIDs 
   const trust = makeTrust(selected(config()), USER.uuid);
   assert.equal(trust.isReviewer({ login: REVIEWER.uuid, bot: false }), true, "a dedicated account need not have app_user type");
   assert.equal(trust.isReviewer({ login: USER.uuid, bot: true }), false);
+});
+
+test("review preflight preserves repository actor overrides and explicit no-reviewer policy", async () => {
+  const registry = makeHostRegistry({ adapters: [{ ...bitbucket, dispatch: true,
+    create: () => ({ reviewEvidence: () => assert.fail("external review preflight must not capture model evidence") }) }] });
+  const alternate = { ...reviewer, actor_id: "{55555555-5555-5555-5555-555555555555}" };
+  for (const hostDefaults of [true, false]) for (const external of [alternate, null]) {
+    const c = { ...config(), git_hosts: hostDefaults ? config().git_hosts : {}, repos: [
+      { repo: PATH, reviewer: CONFIG.reviewer, review: { mode: "both-required" } },
+      { repo: REPO, reviewer: external, trusted_authors: [USER.uuid], required_checks: ["Lint"],
+        review: { mode: external ? "external-required" : null, zero_checks: true } },
+    ] };
+    c.repos = repoEntries(c);
+    const service = createReviewService({ home: tempHome(), config: c, hosts: registry,
+      executionFor: () => assert.fail("external/no-reviewer preflight must not prepare inference") });
+    const selected = await service.preflight(REPO, { zero_checks: false });
+    assert.deepEqual(selected.external, external, `host defaults: ${hostDefaults}`);
+    assert.equal(selected.version, external ? 1 : 0);
+    assert.equal(selected.mode, external ? "external-required" : null);
+    if (external) assert.equal(selected.zeroChecks, false, "explicit policy edits override saved review settings");
+    else assert.match(selected.disclosure, /no semantic review required or claimed/);
+    assert.deepEqual(repositoryReviewConfig(c, PATH).reviewer, CONFIG.reviewer);
+  }
 });
 
 test("only explicit current full-SHA feedback from the configured stable reviewer clears a head", async () => {
