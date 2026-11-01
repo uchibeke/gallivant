@@ -837,6 +837,53 @@ test("a run past the timeout is killed and the entry stops", async () => {
   assert.equal(w.entry().reason, "timeout");
 });
 
+test("host identity outages cannot postpone timeout enforcement", async () => {
+  const w = world();
+  const run = w.runner.start("fix", "claude", [], {});
+  w.state.update(w.id, { last: { run: run.id, exit: null } });
+  let identityReads = 0;
+  w.gh.userFor = async () => { identityReads++; throw new Error("HTTP 429"); };
+  w.gh.addLabel = async () => { throw new Error("host unreachable"); };
+  w.clock.advance(CONFIG.run_timeout_minutes + 1);
+  await w.tick.tick();
+  assert.equal(w.runner.current().killed, true);
+  assert.equal(w.entry().reason, "timeout");
+  assert.equal(w.entry().last.exit, 137);
+  assert.equal(w.entry().labels_pending, true);
+  assert.equal(identityReads, 0);
+  assert.equal(w.runner.started.length, 1);
+});
+
+test("finished runs settle locally before identity refresh and retry host decisions without duplicate accounting", async () => {
+  const w = world();
+  const run = w.runner.start("fix", "claude", [], {});
+  w.state.update(w.id, { last: { run: run.id, exit: null } });
+  w.runner.finish(claudeResultLines());
+  w.gh.data.pr = prFixture({ headRefOid: "d4e5f6a" });
+  const before = w.entry();
+  let identityReads = 0;
+  w.gh.userFor = async () => { identityReads++; throw new Error("HTTP 401"); };
+  const failed = await w.tick.tick();
+  assert.equal(failed.find(result => result.id === w.id).ok, false);
+  assert.equal(w.runner.current().exit, 0, "the owned process exit is persisted before identity I/O");
+  assert.equal(w.entry().last.exit, null, "host-dependent settlement remains pending");
+  assert.deepEqual(w.entry().cursor, before.cursor);
+  assert.equal(w.entry().iteration, before.iteration);
+  assert.equal(w.gh.calls.length, 0);
+  assert.equal(identityReads, 1);
+  identityReads = 0;
+  w.gh.userFor = async () => { identityReads++; return "me"; };
+  await w.tick.tick();
+  assert.equal(w.entry().last.exit, 0);
+  assert.equal(w.entry().iteration, before.iteration + 1);
+  assert.equal(identityReads, 1, "settlement and review share the same verified identity for this pass");
+  const comments = w.gh.calls.filter(call => call[0] === "comment").length;
+  await w.tick.tick();
+  assert.equal(w.entry().iteration, before.iteration + 1);
+  assert.equal(w.gh.calls.filter(call => call[0] === "comment").length, comments);
+  assert.equal(w.runner.started.length, 1);
+});
+
 for (const killed of [false, true]) test(`unverifiable shutdown stops visibly without duplicate notifications (already killed=${killed})`, async () => {
   const w = world({ last: { at: T0, run: "1-fix", exit: null, event: "review" } });
   w.runner.start("fix", "/bin/claude", [], {});
