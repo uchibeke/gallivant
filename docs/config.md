@@ -443,6 +443,15 @@ Both isolating variables are load-bearing, and `GIT_CONFIG_NOSYSTEM` is not deco
 
 The helper resets repository-local credential helpers and refuses other hosts, repository paths and redirects. Runs clear inherited API tokens and SSH transport settings. A run can read its own environment, so token scope and repository rulesets remain essential. See the [Git host contract](git-hosts.md) for identity, compatibility and provider binding.
 
+## Bitbucket repository policy
+
+Set `reviewer` (or explicit `null`), stable UUID `trusted_authors`, and
+`required_checks` under `git_hosts["bitbucket.org"]`. A host repository entry can
+override these settings, and a `repos` object takes precedence over both.
+GitHub's top-level reviewer defaults are never inherited by Bitbucket.
+See [configuration examples and credential scope](bitbucket-review.md).
+No configuration setting bypasses the pending live qualification gate.
+
 ## Versioned review policy
 
 `review.mode` selects `external-required`, `first-party-required`, or `both-required` for new tasks. `review.route: "codex"` requires a successful isolated live qualification. `review.specialist` allows at most one of `security` or `regression`. Defaults and bounds, per-repository settings, separate review allowances, explicit zero-check CI policy and the `legacy_no_review` exception are documented in [First-party review](first-party-review.md). A config edit cannot change an existing task policy; use `review policy <handle> --mode <mode> --reason "..."` to revoke readiness and explicitly re-evaluate. `reviewer: null` alone no longer authorizes an unattended new start.

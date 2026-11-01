@@ -253,6 +253,10 @@ hosted service or publish a chat plugin.
 [Contributing](CONTRIBUTING.md) · [Security reports](SECURITY.md) ·
 [Releasing](docs/releasing.md) · [Apache-2.0 license](LICENSE)
 
+## Bitbucket Cloud
+
+Bitbucket Cloud transport and the review protocol have offline coverage, but task dispatch remains disabled until live qualification passes. See the [setup, review and troubleshooting guide](docs/bitbucket-review.md) for prerequisites, tested boundaries and unmet evidence. No GitHub sign-in is required for Bitbucket-only setup; no pipeline, credential or repository setting is installed automatically.
+
 ## First-party review (opt-in)
 
 New tasks can pin `external-required`, `first-party-required`, or `both-required`. Repositories with the configured external reviewer retain their existing default. First-party review requires a separately qualified restricted route; it never claims Git-host bot approval. See [selection, qualification and migration](docs/first-party-review.md) and the [current live qualification gap](docs/audit/first-party-review.md). Existing no-review runs keep that requirement and disclose the absence of semantic review.

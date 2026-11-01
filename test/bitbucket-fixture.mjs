@@ -11,7 +11,7 @@ export const repository = () => ({ uuid: UUID, workspace: { uuid: WORKSPACE, slu
 export const pr = (extra = {}) => ({ id: 7, title: "Add transport", description: "Approved change", state: "OPEN", draft: false, author: USER, created_on: NOW, updated_on: NOW,
   source: { branch: { name: "work/feature" }, commit: { hash: HEAD }, repository: { uuid: UUID, full_name: "acme/widget" } },
   destination: { branch: { name: "main" }, commit: { hash: BASE }, repository: { uuid: UUID, full_name: "acme/widget" } },
-  reviewers: [USER], participants: [{ user: USER, role: "REVIEWER", approved: false, state: "changes_requested" }], links: { html: { href: "https://bitbucket.org/acme/widget/pull-requests/7" } }, ...extra });
+  reviewers: [USER], participants: [{ user: USER, role: "REVIEWER", approved: false, state: "changes_requested", participated_on: NOW }], links: { html: { href: "https://bitbucket.org/acme/widget/pull-requests/7" } }, ...extra });
 export const prSummary = row => { const summary = { ...row }; delete summary.reviewers; delete summary.participants; return summary; };
 export const comment = (id = 1) => ({ id, user: USER, content: { raw: "Check the implementation" }, deleted: false, created_on: NOW, updated_on: NOW });
 export const task = () => ({ id: 9, creator: USER, content: { raw: "Address comment" }, state: "UNRESOLVED", created_on: NOW, updated_on: NOW, comment: { id: 1 } });
@@ -46,7 +46,13 @@ export function fixture({ config = {}, limits = {}, intercept = null, credential
       const id = Number(path.split("/").at(-1)), row = data.prs.find(p => p.id === id) ?? (id === 7 ? pr() : null);
       return row ? json(row) : json({}, 404);
     }
+    if (path === "/pullrequests/7/comments" && options.method === "POST") { const row = { ...comment(100 + data.comments.length), content: call.body.content, ...(call.body.parent ? { parent: call.body.parent } : {}) }; data.comments.push(row); return json(row); }
     if (path === "/pullrequests/7/comments") return json(page(data.comments));
+    if (/^\/pullrequests\/7\/comments\/\d+$/.test(path)) return json(data.comments.find(c => c.id === Number(path.split("/").at(-1))) ?? {}, 200);
+    if (path === `/commit/${HEAD}` || path === `/commit/${BASE}`) return json({ hash: path.split("/").at(-1), date: NOW });
+    if (path.startsWith("/merge-base/")) return json({ hash: BASE });
+    if (path.startsWith("/src/")) return u.searchParams.get("format") === "meta"
+      ? json({ type: "commit_file", path: decodeURIComponent(path.split("/").slice(3).join("/")), commit: { hash: path.split("/")[2] }, size: 13 }) : new Response("fixture file\n");
     if (path === "/pullrequests/7/tasks") return json(page(data.tasks));
     if (path === `/commit/${HEAD}/statuses`) return json(page(data.statuses));
     if (path === "/pullrequests/7/diff") return new Response("diff --git a/a b/a\n+change\n");

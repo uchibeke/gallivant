@@ -396,3 +396,12 @@ Watch `gallivant status` after the start run ends: the entry moves from `impleme
 | `<worktrees>/<repo>/<prd>` | one partial clone per PRD; durable until you delete it |
 
 Override the home directory with `GALLIVANT_HOME` to run a second instance.
+
+## Bitbucket-only first run
+
+Bitbucket setup uses Node, Git, a selected local harness, an account API token,
+and explicit reviewer or no-reviewer policy. It does not require `gh` sign-in.
+Follow the [first-run commands](bitbucket-review.md#first-setup-including-a-checkout-with-no-existing-configuration),
+including separate SSH and API credentials when using SSH Git. Setup checks
+transport access; unattended dispatch remains disabled until live qualification
+passes. Clean macOS/Linux qualification is still pending.

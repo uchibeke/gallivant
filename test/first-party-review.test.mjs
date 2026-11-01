@@ -494,6 +494,22 @@ test("Bitbucket transport availability cannot qualify or dispatch a first-party 
   assert.equal(w.calls.submits, 0);
 });
 
+test("review preflight retains GitHub repository actors and explicit legacy overrides", async () => {
+  for (const external of [{ ...CONFIG.reviewer, login: "repository-reviewer" }, null]) {
+    const w = reviewServiceWorld();
+    w.ctx.config = { ...CONFIG, git_hosts: { "github.com": { reviewer: CONFIG.reviewer } }, repos: [
+      { repo: "acme/widget", reviewer: external, review: { legacy_no_review: external === null, zero_checks: true } },
+    ] };
+    w.ctx.executionFor = () => assert.fail("external/legacy review cannot prepare inference");
+    const selected = await w.service().preflight("acme/widget", { zero_checks: false });
+    assert.deepEqual(selected.external, external);
+    assert.equal(selected.version, external ? 1 : 0);
+    if (external) assert.equal(selected.zeroChecks, false);
+    else assert.match(selected.disclosure, /no semantic review required or claimed/);
+    assert.equal(w.calls.submits, 0);
+  }
+});
+
 test("rate-limited evidence and a foreign host snapshot cannot reach reviewer dispatch", async () => {
   for (const failure of ["rate-limit", "foreign-host"]) {
     const w = reviewServiceWorld(); w.w.pr = normalizePr(w.pr);

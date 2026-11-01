@@ -653,3 +653,9 @@ Harnesses still invoke their own GitHub tools directly. A prompt and a later dae
 incorrect draft or branded phrase never appears briefly before correction. This implementation enforces daemon
 writes and readiness, not an exclusive network publication boundary. The encoded recovery record is also not secret:
 it can be decoded to inspect the precise existing branch/session identity.
+
+## Bitbucket setup and PR commands
+
+Bitbucket Cloud transport and the review protocol have offline coverage, but task dispatch remains disabled until live qualification passes. See the [setup, review and troubleshooting guide](bitbucket-review.md) for prerequisites, tested boundaries and unmet evidence. No GitHub sign-in is required for Bitbucket-only setup; no pipeline, credential or repository setting is installed automatically.
+
+`init` accepts `--host-config <json>` and `--base <branch>`. The installed `task-pr` command supports bound PR create/view/diff/edit/comment operations; `task-review` prepares and publishes independent reviewer results. These commands do not qualify a harness or authorize a model invocation.

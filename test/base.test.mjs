@@ -61,10 +61,11 @@ test("config validation refuses a repos entry that is neither form, and names a 
 
 test("repository review overrides survive validation, normalization and base updates without affecting siblings", () => {
   const review = { mode: "both-required", route: "codex", timeout_ms: 120000, zero_checks: true };
-  const cfg = { ...DEFAULTS, ...CONFIG, repos: [{ repo: "Acme/Widget", base: "main", review }, "acme/other"] };
+  const policy = { review, reviewer: { ...CONFIG.reviewer, login: "repository-reviewer" }, trusted_authors: ["repo-owner"], required_checks: ["CI"] };
+  const cfg = { ...DEFAULTS, ...CONFIG, repos: [{ repo: "Acme/Widget", base: "main", ...policy }, "acme/other"] };
   assert.deepEqual(validate(cfg), []);
   const normalized = { ...cfg, repos: repoEntries(cfg) };
-  assert.deepEqual(normalized.repos[0].review, review);
+  for (const [key, value] of Object.entries(policy)) assert.deepEqual(normalized.repos[0][key], value);
   assert.equal(reviewSettings(normalized, "acme/widget").mode, "both-required");
   assert.equal(selectReviewPolicy(normalized, "acme/other").mode, "external-required");
   for (const bad of [false, 0, "first-party-required", [], { mode: "unknown" }, { timeout_ms: 0 }, { zero_checks: "true" }, { typo: true }]) {
@@ -73,7 +74,8 @@ test("repository review overrides survive validation, normalization and base upd
   const home = tempHome(); writeJsonAtomic(configPath(home), cfg);
   rememberRepo("acme/widget", home, "release");
   const saved = readJson(configPath(home));
-  assert.deepEqual(saved.repos[0].review, review); assert.equal(saved.repos[0].base, "release");
+  for (const [key, value] of Object.entries(policy)) assert.deepEqual(saved.repos[0][key], value);
+  assert.equal(saved.repos[0].base, "release");
   assert.equal(saved.repos[1], "acme/other");
 });
 

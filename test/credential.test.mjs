@@ -353,7 +353,7 @@ test("a resumed session is told which commits are already made, so it pushes rat
 
 test("the no-credential stop reads as its own reason in a resume prompt, not as an unexplained cut", () => {
   const p = resumePrompt({ repo: "acme/widget", pr: null, reason: "no-credential" });
-  assert.match(p, /no GitHub credential could be resolved/);
+  assert.match(p, /no repository credential could be resolved/);
   assert.match(p, /one is available now/);
 });
 

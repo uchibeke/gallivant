@@ -325,3 +325,11 @@ private. Intentional progress messages now use direct stream writes to comply
 with the existing output scan. The configured pattern list and gate evaluator
 were not changed. Removing those reporting matches resolves only the pattern
 finding, not the missing live start/resume evidence.
+
+## Bitbucket qualification remains pending
+
+The [Bitbucket qualification record](bitbucket-review-qualification.md) records
+the missing repository, coding-account and isolated-reviewer prerequisites.
+CLI version/help checks and offline transport tests do not establish model
+access, a genuine Codex review, or local harness compatibility. Dispatch remains
+disabled, and every live matrix row remains unmet.

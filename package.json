@@ -5,6 +5,8 @@
   "type": "module",
   "bin": {
     "gallivant": "bin/gallivant.mjs",
+    "task-review": "bin/task-review.mjs",
+    "task-pr": "bin/task-pr.mjs",
     "task-delivery-package": "bin/package-plugin.mjs",
     "task-delivery-state": "bin/task-delivery-state.mjs"
   },
@@ -65,7 +67,7 @@
     "test:live-harnesses": "node test/live-harnesses.mjs",
     "test:plugin-package": "node test/plugin-package.mjs",
     "package:plugin": "node bin/package-plugin.mjs",
-    "lint": "node --check bin/release-package.mjs && node --check bin/release-live.mjs && node --check bin/gallivant.mjs && node --check bin/package-plugin.mjs && node --check bin/task-delivery-state.mjs && for f in lib/*.mjs lib/*/*.mjs scripts/*.mjs; do node --check \"$f\" || exit 1; done && node scripts/task-intake-contract.mjs --check",
+    "lint": "node --check bin/task-pr.mjs && node --check bin/task-review.mjs && node --check bin/release-package.mjs && node --check bin/release-live.mjs && node --check bin/gallivant.mjs && node --check bin/package-plugin.mjs && node --check bin/task-delivery-state.mjs && for f in lib/*.mjs lib/*/*.mjs scripts/*.mjs; do node --check \"$f\" || exit 1; done && node scripts/task-intake-contract.mjs --check",
     "test:release-package": "node --test test/release-package.test.mjs",
     "release:preflight": "node bin/release-package.mjs --mode preflight",
     "release:package": "node bin/release-package.mjs --mode build",

@@ -221,8 +221,28 @@ test("adapter-owned doctor retains first-party route diagnostics after the host-
   assert.match(result.fix, /repair the native reviewer boundary/);
 });
 
+test("doctor selects first-party prerequisites from repository reviewer overrides", async t => {
+  for (const external of [null, DEFAULTS.reviewer]) {
+    const home = doctorHome({ reviewer: external ? null : DEFAULTS.reviewer,
+      repos: [{ repo: "acme/widget", reviewer: external }] });
+    const results = await doctor({ home, env: {}, resolve: async () => { throw new Error("offline fixture refuses host authorization"); } });
+    const result = named(results, "review acme/widget");
+    if (external) assert.equal(result, undefined, "a repository external actor does not require first-party qualification");
+    else {
+      assert.ok(result, "a repository with no external actor must check the first-party route");
+      assert.equal(result.ok, false); assert.match(result.detail, /configure review.route/);
+    }
+    const file = pjoin(home, "repository-review-doctor.txt");
+    writeFileSync(file, renderDoctor(results).text);
+    t.diagnostic(`repository review doctor evidence: ${file}`);
+  }
+});
+
 test("mixed-host doctor preserves GitHub review diagnostics beside Bitbucket transport-only guidance", async t => {
-  const home = doctorHome({ repos: ["bitbucket.org/acme/widget", { repo: "acme/widget", review: { mode: "first-party-required" } }], reviewer: null });
+  const home = doctorHome({ repos: [
+    { repo: "bitbucket.org/acme/widget", reviewer: null, trusted_authors: ["{11111111-1111-1111-1111-111111111111}"] },
+    { repo: "acme/widget", review: { mode: "first-party-required" } },
+  ], reviewer: null });
   const observed = [];
   const results = await doctor({ home, env: {}, resolve: async () => { throw new Error("offline fixture refuses host authorization"); },
     transportPreflight: async (_config, repo) => {
