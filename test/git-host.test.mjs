@@ -62,7 +62,7 @@ test("canonical origins retain GitHub forms and reject ambiguous or secret-beari
     assert.equal(r.host, "github.com"); assert.equal(r.path, "acme/widget"); assert.equal(r.remoteIdentity, "github.com/acme/widget");
     assert.ok(remoteMatches(url, "acme/widget")); assert.doesNotMatch(JSON.stringify(r), /SECRET/);
   }
-  for (const url of ["https://github.com.evil/acme/widget.git", "git@bitbucket.org:acme/widget.git"]) {
+  for (const url of ["https://github.com.evil/acme/widget.git", "git@gitlab.com:acme/widget.git"]) {
     assert.throws(() => hosts.fromRemote(url), /Unsupported repository host/);
     assert.equal(remoteMatches(url, "acme/widget"), false);
   }
@@ -162,7 +162,7 @@ test("native clone uses only the verified host URL and a credential bound to tha
   assert.equal(calls[0].env.GIT_CREDENTIAL_HOST, "github.com"); assert.equal(calls[0].env.GIT_CREDENTIAL_REPOSITORY, "acme/widget");
   assert.doesNotMatch(JSON.stringify(calls.map(({ cmd, args }) => [cmd, args])), /fixture-credential|gh/);
   const before = calls.length;
-  await assert.rejects(() => git.create({ nameWithOwner: "bitbucket.org/acme/widget", prdId: "unsupported", base: "main" }), /Unsupported/);
+  await assert.rejects(() => git.create({ nameWithOwner: "gitlab.com/acme/widget", prdId: "unsupported", base: "main" }), /Unsupported/);
   assert.equal(calls.length, before);
 });
 

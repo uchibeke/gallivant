@@ -14,7 +14,7 @@ const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 export const CONTRACT_PATH = "templates/plugin/task-intake-contract.json";
 // The validator and its portable host-policy dependencies live under packaged paths, so the artifact carries the
 // exact corpus a consumer is told to run, not only its hash.
-export const VENDORED_FILES = ["lib/task_profile.mjs", "lib/host_definitions.mjs", "lib/hosts/github_contract.mjs", "lib/repository.mjs", "templates/plugin/task-profile-requests.mjs"];
+export const VENDORED_FILES = ["lib/task_profile.mjs", "lib/host_definitions.mjs", "lib/hosts/github_contract.mjs", "lib/hosts/bitbucket_contract.mjs", "lib/repository.mjs", "templates/plugin/task-profile-requests.mjs"];
 const sha = bytes => createHash("sha256").update(bytes).digest("hex");
 
 export function currentContract() {
