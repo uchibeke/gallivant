@@ -85,3 +85,9 @@ gallivant review policy <handle> --mode both-required --reason "Require both rev
 ```
 
 The command records the prior policy and reason, revokes readiness, and re-evaluates the current head. It cannot replace a missing required actor or unqualified route with clearance. No command here merges or advances a chain before its existing merge gate.
+
+Policy changes and disputes share per-task process exclusion with review decisions,
+including label publication and notification. If a decision is already in flight,
+the command refuses without changing the policy; retry after that operation
+finishes. A failed label removal leaves a durable obligation for later ticks to
+retry, even while the task is stopped. Clearance stays revoked during that wait.

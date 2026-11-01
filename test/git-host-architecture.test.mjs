@@ -5,7 +5,7 @@ import { readFileSync } from "node:fs";
 const lifecycle = ["events", "tick", "chains", "git", "context", "control", "daemon", "prd", "prompt", "tasks", "task_completion", "task_delivery_view", "execution_result", "runtime_node",
   "task_profile", "task_prepare", "task_repository_context", "task_contract", "probe", "codex_cloud_input", "codex_cloud_result",
   "commands/start", "commands/register", "commands/resume", "commands/up", "commands/init", "sources/prd",
-  "first_party_review", "review_evidence", "review_policy", "commands/review"];
+  "first_party_review", "review_evidence", "review_policy", "review_state", "commands/review"];
 // Comments document historical behavior; executable imports, literals and prompt text are guarded.
 const executable = source => source.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
 export function hostBoundaryViolations(source) {

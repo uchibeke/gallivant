@@ -13,6 +13,7 @@ import { makeGh } from "../lib/gh.mjs";
 import { reviewCommand } from "../lib/commands/review.mjs";
 import { makeHostRegistry } from "../lib/hosts.mjs";
 import { github, normalizePr } from "../lib/hosts/github.mjs";
+import { READY_LABEL } from "../lib/host_contract.mjs";
 import { CONFIG, GOOD_PRD, T0, tempHome, seededState, fakeGh, fakeGit, fakeRunner, fakeNotify, fakeCredential, fakeIdentity, makeClock, silentLog, prFixture, checkRun, comment, at, claudeResultLines } from "./helpers.mjs";
 
 const head = "a".repeat(40), base = "b".repeat(40), fp = "f".repeat(64);
@@ -128,6 +129,115 @@ test("qualified internal clear reaches ready honestly; changed receipt/base/chec
     const w=tickWorld(); await w.tick.tick(); assert.equal(w.entry().state,"ready-for-human", JSON.stringify(w.entry()));
     assert.match(w.entry().review_readiness.note,/first-party review/); assert.match(w.entry().review_readiness.note,/no Git-host bot approval/);
     change(w.gh.data.pr); await w.tick.tick(); assert.notEqual(w.entry().state,"ready-for-human");
+  }
+});
+
+function reviewMutationWorld() {
+  const w = tickWorld();
+  w.ctx.reviewService.preflight = async (_repo, overrides) => selectReviewPolicy({ ...config, reviewer: CONFIG.reviewer,
+    review: { ...config.review, ...overrides } }, "acme/widget", qualification);
+  return w;
+}
+function pauseCall(object, method) {
+  let release, reached;
+  const waiting = new Promise(resolve => { reached = resolve; }), resumed = new Promise(resolve => { release = resolve; });
+  const original = object[method];
+  object[method] = async (...args) => { object[method] = original; reached(); await resumed; return original(...args); };
+  return { waiting, release };
+}
+const changePolicy = w => reviewCommand(w.ctx, { action: "policy", handle: w.id, mode: "both-required", reason: "Require an external answer too" });
+
+test("policy mutations exclude in-flight review reads, readiness labels and notifications", async t => {
+  for (const phase of ["snapshot", "review", "label", "notification"]) {
+    const w = reviewMutationWorld();
+    const pause = phase === "snapshot" ? pauseCall(w.gh, "prView") : phase === "review" ? pauseCall(w.ctx.reviewService, "reconcile")
+      : phase === "label" ? pauseCall(w.gh, "addLabel") : pauseCall(w.notify, "ready");
+    const ticking = w.tick.tick(); await pause.waiting;
+    try {
+      await assert.rejects(changePolicy(w), /task review decision.*retry/);
+      assert.equal(w.entry().reviewPolicy.mode, "first-party-required", "a refused mutation cannot change the active policy");
+    } finally { pause.release(); await ticking; }
+    await changePolicy(w);
+    assert.equal(w.entry().reviewPolicy.mode, "both-required"); assert.equal(w.entry().state, "pr-open");
+    assert.equal(w.entry().firstPartyReview, null); assert.equal(w.entry().review_readiness, null);
+    const notified = w.notify.sent.length;
+    await w.tick.tick(); assert.equal(w.entry().state, "pr-open"); assert.equal(w.notify.sent.length, notified);
+    if (phase === "label") {
+      const output = `${tempHome()}/review-mutation-evidence.json`;
+      writeFileSync(output, JSON.stringify({ kind: "Offline policy serialization fixture; no live qualification",
+        policy: w.entry().reviewPolicy, state: w.entry().state, readiness: w.entry().review_readiness,
+        labelWrites: w.gh.calls.filter(c => ["addLabel", "removeLabel"].includes(c[0])), notifications: w.notify.sent }, null, 2));
+      t.diagnostic(`review mutation evidence: ${output}`);
+    }
+  }
+});
+
+test("policy and dispute label writes exclude stale ticks until revocation finishes", async () => {
+  for (const action of ["policy", "dispute"]) {
+    const w = reviewMutationWorld(); await w.tick.tick();
+    if (action === "dispute") w.state.update(w.id, { firstPartyReview: findingsRecord(w.entry(), w.gh.data.pr) });
+    const stale = w.entry(), pause = pauseCall(w.gh, "removeLabel");
+    const mutation = action === "policy" ? changePolicy(w) : reviewCommand(w.ctx, { action, handle: w.id, finding: finding.id, reason: "A person must resolve this finding" });
+    await pause.waiting;
+    try {
+      assert.equal(w.entry().state, "needs-human"); assert.equal(w.entry().review_label_pending, true);
+      await assert.rejects(w.tick.tickEntry(w.id, stale), /task review decision.*retry/);
+    } finally { pause.release(); await mutation; }
+    await w.tick.tickEntry(w.id, stale); // A caller's old snapshot cannot overwrite the committed policy/dispute.
+    assert.equal(w.entry().state, action === "policy" ? "pr-open" : "needs-human");
+    assert.equal(w.entry().review_readiness, null); assert.equal(w.entry().review_label_pending, false);
+    assert.equal(w.notify.sent.filter(n => n[0] === "ready").length, 1);
+  }
+});
+
+test("policy and dispute revocations retain label-removal debt across host failures and restart", async () => {
+  for (const action of ["policy", "dispute"]) {
+    const w = reviewMutationWorld(); await w.tick.tick();
+    if (action === "dispute") w.state.update(w.id, { firstPartyReview: findingsRecord(w.entry(), w.gh.data.pr) });
+    let failures = 2, removed = 0;
+    w.gh.removeLabel = async (_repo, _pr, label) => {
+      if (label === READY_LABEL) {
+        assert.equal(w.entry().review_label_pending, true, "debt must be durable before the host request");
+        if (failures-- > 0) throw new Error("temporary host outage");
+        removed++;
+      }
+    };
+    const mutation = () => action === "policy" ? changePolicy(w) : reviewCommand(w.ctx, { action, handle: w.id, finding: finding.id, reason: "A person must resolve this finding" });
+    await assert.rejects(mutation(), /temporary host outage/);
+    assert.equal(w.entry().state, "needs-human"); assert.equal(w.entry().review_readiness, null);
+    assert.equal(w.entry().review_label_pending, true);
+    await makeTick(w.ctx).tick(); assert.equal(w.entry().review_label_pending, true);
+    await makeTick(w.ctx).tick(); assert.equal(removed, 1); assert.equal(w.entry().review_label_pending, false);
+    await makeTick(w.ctx).tick(); assert.equal(removed, 1, "settled debt is not repeated");
+    assert.equal(w.entry().state, "needs-human"); assert.equal(w.notify.sent.filter(n => n[0] === "ready").length, 1);
+  }
+});
+
+test("failed policy preflight releases exclusion without revoking the previous decision", async () => {
+  const w = reviewMutationWorld(); await w.tick.tick();
+  const before = w.entry(), preflight = w.ctx.reviewService.preflight;
+  w.ctx.reviewService.preflight = async () => { throw new Error("route unavailable"); };
+  await assert.rejects(changePolicy(w), /route unavailable/);
+  assert.deepEqual(w.entry(), before);
+  w.ctx.reviewService.preflight = preflight;
+  await changePolicy(w); assert.equal(w.entry().reviewPolicy.mode, "both-required");
+});
+
+test("a review mutation during a provider-health wait invalidates the deferred findings dispatch", async () => {
+  for (const action of ["policy", "dispute"]) {
+    const w = reviewMutationWorld(); w.ctx.reviewService.reconcile = async (_id, entry, pr) => findingsRecord(entry, pr);
+    let release, reached;
+    const refreshed = new Promise(resolve => { release = resolve; }), waiting = new Promise(resolve => { reached = resolve; });
+    w.ctx.providerHealth = { get: () => ({ ok: false }), whenRefreshed: () => { reached(); return refreshed; } };
+    const ticking = w.tick.tick(); await waiting;
+    // Let the entry worker release its decision owner; only the health wait remains.
+    await new Promise(resolve => setImmediate(resolve));
+    try {
+      if (action === "policy") await changePolicy(w);
+      else await reviewCommand(w.ctx, { action, handle: w.id, finding: finding.id, reason: "A person must resolve this finding" });
+    } finally { release(); await ticking; }
+    assert.equal(w.runner.started.length, 0); assert.equal(w.entry().iteration, 0);
+    assert.equal(w.entry().review_readiness, null);
   }
 });
 
