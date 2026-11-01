@@ -483,6 +483,17 @@ test("unsupported review evidence fails host qualification before native prepara
   assert.equal(w.calls.submits, 1);
 });
 
+test("Bitbucket transport availability cannot qualify or dispatch a first-party reviewer", async () => {
+  const w = reviewServiceWorld();
+  w.ctx.executionFor = () => assert.fail("transport-only support must never reach reviewer preparation");
+  const service = w.service(), repo = "bitbucket.org/acme/widget";
+  await assert.rejects(service.qualify(repo, { run: true }), /task dispatch is disabled.*git-host-bitbucket/);
+  await assert.rejects(service.preflight(repo), /task dispatch is disabled/);
+  await assert.rejects(service.reconcile(w.id, { ...w.entry, repo }, w.pr), /task dispatch is disabled/);
+  await assert.rejects(reviewCommand({ ...w.ctx, reviewService: service }, { action: "qualify", repo, run: true }), /task dispatch is disabled/);
+  assert.equal(w.calls.submits, 0);
+});
+
 test("rate-limited evidence and a foreign host snapshot cannot reach reviewer dispatch", async () => {
   for (const failure of ["rate-limit", "foreign-host"]) {
     const w = reviewServiceWorld(); w.w.pr = normalizePr(w.pr);

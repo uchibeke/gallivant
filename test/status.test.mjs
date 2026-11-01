@@ -58,6 +58,23 @@ test("a ready entry lands in needs_you too, because it is a person who merges it
   assert.equal(m.needs_you[0].url, "https://github.com/acme/widget/pull/142", "the link a person opens to merge is in the row");
 });
 
+test("mixed-host status keeps first-party and legacy no-review disclosures beside disabled Bitbucket dispatch", async t => {
+  const { selectReviewPolicy, legacyReviewPolicy } = await import("../lib/review_policy.mjs");
+  for (const legacy of [false, true]) {
+    const policy = legacy ? legacyReviewPolicy({ ...CONFIG, reviewer: null }) : selectReviewPolicy({ ...CONFIG, reviewer: null,
+      review: { mode: "first-party-required", route: "codex" } }, "acme/widget", { qualified: true, route: "codex", fingerprint: "f".repeat(64), run: "fixture" });
+    const w = world({ entries: { "acme/widget/widget-export": entryAt({ state: STATES.ready, reviewPolicy: policy,
+      gate_skipped: "no PRD snapshot", ...(legacy ? {} : { review_readiness: { note: "first-party review (coordinator record; no Git-host bot approval)" } }) }) } });
+    w.ctx.config.repos = ["acme/widget", "bitbucket.org/acme/widget"];
+    const m = model(w.ctx), text = render(m);
+    assert.equal(m.repositoryGuidance.length, 1); assert.equal(m.repositoryGuidance[0].repo, "bitbucket.org/acme/widget");
+    assert.match(text, /task dispatch is disabled/); assert.match(text, /RECEIPT NOT CHECKED/);
+    assert.match(m.needs_you[0].detail, legacy ? /legacy no-review/ : /first-party review.*no Git-host bot approval/);
+    assert.doesNotMatch(m.needs_you[0].detail, /reviewer clear|review clearance/);
+    if (!legacy) { const file = join(w.home, "mixed-review-status.txt"); writeFileSync(file, text); t.diagnostic(`mixed review status evidence: ${file}`); }
+  }
+});
+
 test("a ready entry whose completion gate never ran says so, rather than reading like one that passed it", () => {
   // An entry with no PRD snapshot reaches ready on the checks and the reviewer alone, with nothing about what the PR
   // was supposed to deliver ever read. That used to be one line in errors.log and nothing on the row a person merges

@@ -184,7 +184,7 @@ test("legacy read blocked_paths cannot falsely pass a policy that evaluates bloc
 // reported "system gh auth: ok" while every run was unable to push, because a run is sandboxed and cannot reach the
 // keyring that `gh` was answering from. A check that passes while the thing it checks is broken is worse than no
 // check, so these assert that doctor now reports on what a RUN can do.
-import { doctor, gitPushProbe } from "../lib/commands/doctor.mjs";
+import { doctor, gitPushProbe, renderDoctor } from "../lib/commands/doctor.mjs";
 import { mkdtempSync, writeFileSync, existsSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join as pjoin } from "node:path";
@@ -219,6 +219,27 @@ test("adapter-owned doctor retains first-party route diagnostics after the host-
   const result = named(results, "review acme/widget");
   assert.equal(result.ok, false); assert.match(result.detail, /configure review.route/);
   assert.match(result.fix, /repair the native reviewer boundary/);
+});
+
+test("mixed-host doctor preserves GitHub review diagnostics beside Bitbucket transport-only guidance", async t => {
+  const home = doctorHome({ repos: ["bitbucket.org/acme/widget", { repo: "acme/widget", review: { mode: "first-party-required" } }], reviewer: null });
+  const observed = [];
+  const results = await doctor({ home, env: {}, resolve: async () => { throw new Error("offline fixture refuses host authorization"); },
+    transportPreflight: async (_config, repo) => {
+      observed.push(repo);
+      return { base: "main", baseSha: "b".repeat(40), pullRequestRead: "proved", commentRead: "proved", unknownAtWrite: ["PR creation"], branchRestrictions: [] };
+    }, harnessCheck: async () => ({ ok: true, detail: "offline installation fixture; no model call" }) });
+  assert.deepEqual(observed, ["bitbucket.org/acme/widget"]);
+  assert.ok(named(results, "review acme/widget"), JSON.stringify(results));
+  assert.equal(named(results, "review acme/widget").ok, false);
+  assert.match(named(results, "review acme/widget").detail, /configure review.route/);
+  assert.equal(named(results, "task dispatch").ok, false);
+  assert.match(named(results, "task dispatch").detail, /git-host-bitbucket/);
+  assert.equal(results.some(r => r.name === "review bitbucket.org/acme/widget"), false);
+  const rendered = renderDoctor(results).text;
+  assert.match(rendered, /review acme\/widget/); assert.match(rendered, /task dispatch is disabled/);
+  const file = pjoin(home, "mixed-review-doctor.txt"); writeFileSync(file, rendered);
+  t.diagnostic(`mixed review doctor evidence: ${file}`);
 });
 
 test("doctor fails, with the fix, when a run could not push: the case the old check reported as ok", async () => {
