@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { readFileSync, writeFileSync } from "node:fs";
 import { evaluateReviews } from "../lib/review_evaluation.mjs";
 import { completionStopsAutomation, coordinatorEntryActive } from "../lib/task_completion.mjs";
 import { exactReviewerVerdict, makeTrust } from "../lib/events.mjs";
@@ -11,7 +11,7 @@ import { buildReviewRun, createReviewService } from "../lib/first_party_review.m
 import { makeTick } from "../lib/tick.mjs";
 import { makeGh } from "../lib/gh.mjs";
 import { reviewCommand } from "../lib/commands/review.mjs";
-import { CONFIG, GOOD_PRD, T0, tempHome, seededState, fakeGh, fakeGit, fakeRunner, fakeNotify, fakeCredential, fakeIdentity, makeClock, silentLog, prFixture, checkRun, comment, at } from "./helpers.mjs";
+import { CONFIG, GOOD_PRD, T0, tempHome, seededState, fakeGh, fakeGit, fakeRunner, fakeNotify, fakeCredential, fakeIdentity, makeClock, silentLog, prFixture, checkRun, comment, at, claudeResultLines } from "./helpers.mjs";
 
 const head = "a".repeat(40), base = "b".repeat(40), fp = "f".repeat(64);
 const qualification = { route: "codex", fingerprint: fp, run: "qualification-run", qualified: true };
@@ -105,7 +105,7 @@ function tickWorld({ mode="first-party-required", record, over={} }={}) {
   const {state,id}=seededState({reviewPolicy:{...policy(),mode,external:mode==="both-required"?CONFIG.reviewer:null},...over});
   const gh=fakeGh({pr:prFixture({headRefOid:head,baseRefOid:base,body:receipt(id),statusCheckRollup:[checkRun({name:"test",conclusion:"SUCCESS"})]})});
   const runner=fakeRunner(clock), notify=fakeNotify(); let calls=0;
-  const service={reconcile:async(_id,entry,pr)=>{calls++;return record?.(entry,pr) || {key:"review-key",binding:reviewBinding(pr,entry.reviewPolicy),status:"completed",result:{verdict:"clear",reviewedHead:head,inputDigest:fp,findings:[]}};}};
+  const service={reconcile:async(_id,entry,pr)=>{calls++;return record?.(entry,pr) || {key:"review-key",binding:reviewBinding(pr,entry.reviewPolicy),status:"completed",result:{verdict:"clear",reviewedHead:pr.headRefOid,inputDigest:fp,findings:[]}};}};
   const ctx={config,state,gh,git:fakeGit(),clock,log:silentLog,notify,credential:fakeCredential(),identity:fakeIdentity(),ownLogin:"me",runnerFor:()=>runner,readPrd:()=>GOOD_PRD,reviewService:service};
   const tick=makeTick(ctx);
   return {ctx,tick,gh,runner,state,id,notify,entry:()=>state.get(id),calls:()=>calls};
@@ -116,6 +116,144 @@ test("qualified internal clear reaches ready honestly; changed receipt/base/chec
     assert.match(w.entry().review_readiness.note,/first-party review/); assert.match(w.entry().review_readiness.note,/no Git-host bot approval/);
     change(w.gh.data.pr); await w.tick.tick(); assert.notEqual(w.entry().state,"ready-for-human");
   }
+});
+
+const approval = (sha, minute, id = minute) => ({ id, user: { login: CONFIG.reviewer.login, type: "Bot" }, state: "APPROVED", submitted_at: at(minute), commit_id: sha, body: "" });
+function externalWorld() {
+  const w = tickWorld({ over: { reviewPolicy: selectReviewPolicy(CONFIG, "acme/widget"), cursor: { since: T0, fixed_sha: head, dispatched: [] } } });
+  w.ctx.clock.set(at(5)); w.gh.now = () => new Date(w.ctx.clock.now()).toISOString();
+  return w;
+}
+
+test("new-head approvals between polls retain the push window from ready and waiting entries", async () => {
+  for (const wasReady of [false, true]) for (const savedHead of [false, true]) {
+    const w = externalWorld();
+    if (wasReady) w.gh.data.reviews.push(approval(head, 1));
+    await w.tick.tick();
+    assert.equal(w.entry().state, wasReady ? "ready-for-human" : "pr-open");
+    if (!savedHead) w.state.update(w.id, { reviewHead: null }); // Upgrade an existing version-1 record.
+    const previousComments = w.gh.calls.filter(c => c[0] === "comment").length;
+    const nextHead = "c".repeat(40);
+    w.gh.data.pr.headRefOid = nextHead; w.gh.data.commitDates[nextHead] = at(8);
+    w.gh.data.reviews.push(approval(nextHead, 9)); w.ctx.clock.set(at(10));
+    await w.tick.tick();
+    assert.equal(w.entry().state, "ready-for-human"); assert.equal(w.entry().rereview.at, at(8));
+    assert.equal(w.entry().reviewHead, nextHead); assert.equal(w.entry().iteration, 0);
+    assert.equal(w.gh.calls.filter(c => c[0] === "comment").length, previousComments, "a timely exact-head approval needs no duplicate request");
+  }
+});
+
+test("a settled author push preserves its timely external approval after the cursor advances", async () => {
+  const w = externalWorld(); await w.tick.tick();
+  w.ctx.clock.set(at(6)); w.gh.data.comments.push(comment({ id: 73, by: "me", at: at(6), body: "/fix Preserve the exported function." }));
+  await w.tick.tick(); assert.equal(w.runner.started.length, 1);
+  const nextHead = "c".repeat(40);
+  w.runner.finish(claudeResultLines()); w.gh.data.pr.headRefOid = nextHead; w.gh.data.commitDates[nextHead] = at(8);
+  w.gh.data.reviews.push(approval(nextHead, 9)); w.ctx.clock.set(at(10));
+  await w.tick.tick();
+  assert.equal(w.entry().state, "ready-for-human"); assert.equal(w.entry().rereview.at, at(8));
+  assert.equal(w.entry().iteration, 1); assert.equal(w.entry().reviewHead, nextHead);
+  assert.equal(w.gh.calls.filter(c => c[0] === "comment").length, 1, "only the existing round announcement is posted");
+});
+
+test("same-head receipt base and check edits still require a later external review", async () => {
+  for (const edit of [pr => { pr.body += "\nupdated"; }, pr => { pr.baseRefOid = "c".repeat(40); }, pr => { pr.statusCheckRollup[0].detailsUrl = "https://example.test/check/2"; }]) {
+    const w = externalWorld(); w.gh.data.reviews.push(approval(head, 1)); await w.tick.tick();
+    edit(w.gh.data.pr); w.gh.data.reviews.push(approval(head, 9)); w.ctx.clock.set(at(10));
+    await w.tick.tick(); assert.equal(w.entry().rereview.at, at(10)); assert.equal(w.entry().state, "pr-open");
+    await w.tick.tick(); assert.equal(w.entry().state, "pr-open");
+    w.gh.data.reviews.push(approval(head, 11)); w.ctx.clock.set(at(12)); await w.tick.tick();
+    assert.equal(w.entry().state, "ready-for-human");
+  }
+});
+
+const findingsRecord = (entry, pr) => ({ key: "findings", binding: reviewBinding(pr, entry.reviewPolicy), status: "completed",
+  result: { verdict: "findings", reviewedHead: pr.headRefOid, inputDigest: fp, findings: [finding] } });
+
+test("known provider health waits keep findings pending across deferred attempts and restart", async () => {
+  for (const deferred of [false, true]) {
+    const w = tickWorld({ record: findingsRecord }); let healthy = false;
+    w.ctx.providerHealth = { get: () => ({ ok: healthy }), whenRefreshed: () => deferred ? Promise.resolve() : null };
+    for (let poll = 0; poll < 2; poll++) {
+      await makeTick(w.ctx).tick();
+      assert.equal(w.entry().state, "pr-open"); assert.equal(w.entry().firstPartyReview.disposition.status, "pending");
+      assert.equal(w.entry().iteration, 0); assert.equal(w.entry().firstPartyReview.disposition.round, null);
+      assert.equal(w.entry().reviewHistory.length, 1); assert.equal(w.runner.started.length, 0);
+    }
+    const start = w.runner.start;
+    w.runner.start = (...args) => { assert.equal(w.entry().firstPartyReview.disposition.status, "dispatch-intent"); return start(...args); };
+    healthy = true; await makeTick(w.ctx).tick();
+    assert.equal(w.runner.started.length, 1); assert.equal(w.entry().firstPartyReview.disposition.status, "dispatched");
+    assert.equal(w.entry().firstPartyReview.disposition.run, w.entry().last.run);
+    await makeTick(w.ctx).tick(); assert.equal(w.runner.started.length, 1);
+  }
+});
+
+test("a successful deferred findings dispatch records the run in its disposition", async t => {
+  const w = tickWorld({ record: findingsRecord }); let healthy = false, release, waiting;
+  const refreshed = new Promise(resolve => { release = resolve; }), observed = new Promise(resolve => { waiting = resolve; });
+  w.ctx.providerHealth = { get: () => ({ ok: healthy }), whenRefreshed: () => { waiting(); return refreshed; } };
+  const pending = w.tick.tick(); await observed;
+  assert.equal(w.entry().firstPartyReview.disposition.status, "pending"); assert.equal(w.runner.started.length, 0);
+  const waitingDisposition = structuredClone(w.entry().firstPartyReview.disposition);
+  healthy = true; release(); await pending;
+  assert.equal(w.runner.started.length, 1); assert.equal(w.entry().reviewHistory[0].disposition.status, "dispatched");
+  assert.equal(w.entry().reviewHistory[0].disposition.run, w.entry().last.run);
+  const evidence = `${tempHome()}/review-dispatch-evidence.json`;
+  writeFileSync(evidence, JSON.stringify({ kind: "Offline coordinator fixture; no live qualification", waitingDisposition,
+    dispatchedDisposition: w.entry().firstPartyReview.disposition, prompt: w.runner.started[0].args.at(-1) }, null, 2));
+  t.diagnostic(`review dispatch evidence: ${evidence}`);
+});
+
+test("health expiring during preparation and known busy refusals remain retryable before a fix is sent", async () => {
+  for (const reason of ["health", "busy"]) {
+    const w = tickWorld({ record: findingsRecord }); let healthy = true;
+    w.ctx.providerHealth = { get: () => ({ ok: healthy }) };
+    const start = w.runner.start;
+    if (reason === "health") w.ctx.git.ensureHttpsRemote = async () => { healthy = false; };
+    else w.runner.start = () => {
+      assert.equal(w.entry().firstPartyReview.disposition.status, "dispatch-intent");
+      throw Object.assign(new Error("owned runner busy before launch"), { code: "BUSY" });
+    };
+    await w.tick.tick(); assert.equal(w.runner.started.length, 0); assert.equal(w.entry().iteration, 0);
+    assert.equal(w.entry().firstPartyReview.disposition.status, "pending"); assert.equal(w.entry().state, "pr-open");
+    healthy = true; w.ctx.git.ensureHttpsRemote = async () => {}; w.runner.start = start;
+    await w.tick.tick(); assert.equal(w.runner.started.length, 1); assert.equal(w.entry().reviewHistory[0].disposition.status, "dispatched");
+  }
+});
+
+test("an ambiguous findings launch retains its durable intent and cannot be submitted again", async () => {
+  const w = tickWorld({ record: findingsRecord }); let attempts = 0;
+  w.runner.start = () => { attempts++; assert.equal(w.entry().firstPartyReview.disposition.status, "dispatch-intent"); throw new Error("launch acknowledgement unavailable"); };
+  await w.tick.tick(); assert.equal(w.entry().state, "needs-human"); assert.equal(w.entry().reviewHistory[0].disposition.status, "dispatch-intent");
+  w.state.update(w.id, { state: "pr-open", reason: null }); await makeTick(w.ctx).tick();
+  assert.equal(w.entry().reason, "repeated-review-findings"); assert.equal(attempts, 1);
+});
+
+test("a proven unsent findings launch clears intent and can dispatch after explicit resume", async () => {
+  const w = tickWorld({ record: findingsRecord }), start = w.runner.start;
+  w.runner.start = () => {
+    assert.equal(w.entry().firstPartyReview.disposition.status, "dispatch-intent");
+    throw Object.assign(new Error("provider request was not sent"), { dispatchNotSent: true });
+  };
+  await w.tick.tick(); assert.equal(w.entry().reason, "dispatch-refused"); assert.equal(w.runner.started.length, 0);
+  assert.equal(w.entry().reviewHistory[0].disposition.status, "pending"); assert.equal(w.entry().iteration, 0);
+  w.runner.start = start; w.state.update(w.id, { state: "pr-open", reason: null });
+  await makeTick(w.ctx).tick(); assert.equal(w.runner.started.length, 1);
+  assert.equal(w.entry().reviewHistory[0].disposition.status, "dispatched");
+});
+
+test("findings invalidated during launch retain accepted-run ownership without restoring stale evidence", async () => {
+  const w = tickWorld({ record: findingsRecord }), start = w.runner.start;
+  w.runner.start = (...args) => {
+    const job = start(...args);
+    w.state.update(w.id, { firstPartyReview: null });
+    return job;
+  };
+  await w.tick.tick();
+  assert.equal(w.entry().last.run, w.runner.started[0].id); assert.equal(w.entry().state, "pr-open");
+  assert.equal(w.entry().firstPartyReview, null); assert.equal(w.entry().reviewHistory[0].disposition.status, "dispatched");
+  assert.equal(w.entry().reviewHistory[0].disposition.run, w.entry().last.run);
 });
 test("internal findings use the existing fix path exactly once; failures consume no coding round",async()=>{
   const w=tickWorld({record:(entry,pr)=>({key:"findings",binding:reviewBinding(pr,entry.reviewPolicy),status:"completed",result:{verdict:"findings",reviewedHead:head,inputDigest:fp,findings:[finding]}})});

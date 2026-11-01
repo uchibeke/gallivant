@@ -66,7 +66,11 @@ Polling reuses the saved review input only when the current PR identity, checks,
 
 Findings use the existing fix dispatch and round counter. Their disposition is recorded. A subsequent push needs fresh evidence. Repeated findings on the same input, required-reviewer disagreement and exhausted fix rounds stop for a person. `review dispute <handle> --finding <id> --reason "..."` records a pending dispute and removes readiness; it has no self-accept operation. A person must resolve the defect or deliberately change policy and re-evaluate it.
 
+Findings remain `pending` during confirmed provider-health waits or a busy local runner. `dispatch-intent` is saved immediately before launch and becomes `dispatched` with the accepted run ID. A confirmed unsent refusal returns the findings to pending but still requires the existing explicit resume; an ambiguous launch retains its intent and requires a person before any retry. Waiting alone consumes no fix round.
+
 Changing head, base, checks, receipt or policy invalidates readiness. Configured external findings and trusted human feedback still enter the shared fix path, including feedback arriving after internal clearance on the same head. The external reviewer must answer again when its previously reviewed input changes. The completion gate remains independent of model opinion.
+
+A newly observed head retains the push-based review window, so a timely exact-head approval that arrived between polls still counts. The same rule applies when an author run settles and advances the feedback cursor. Changes to base, receipt or checks on the same head start a new review window when observed and require a later external answer.
 
 Config edits affect future tasks. For a stopped/settled existing task, use:
 
