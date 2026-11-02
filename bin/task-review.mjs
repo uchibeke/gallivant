@@ -8,7 +8,7 @@ try {
   const json = path => JSON.parse(readFileSync(path, "utf8"));
   const producer = makeBitbucketReviewProducer({ config: json(values.config) });
   const result = positionals[0] === "prepare" ? await producer.prepare(values.url) : await producer.publish(values.url, json(values.input), json(values.result));
-  console.log(JSON.stringify(result, null, 2));
+  process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
 } catch (error) {
   console.error(error.message);
   process.exitCode = 1;

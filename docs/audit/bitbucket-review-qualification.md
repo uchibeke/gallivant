@@ -180,3 +180,36 @@ Verification after the integration corrections:
 - `node --test test/docs-links.test.mjs`: exit 0.
   Output: `/private/tmp/pr32-merge-policy-docs.log`.
 - `git diff --check`: exit 0.
+
+## Completion-gate follow-up, 2026-11-01
+
+The prerequisite check still found no Bitbucket host settings, selected API
+account/token, reviewer identity or authorized repository. Criteria ac-1, ac-2,
+ac-3, ac-5, ac-6, ac-8, ac-9 and ac-11 remain valid and unmet. Their false
+attestations and the dispatch restriction are retained. The external remedy and
+live matrix above are unchanged; no model or host qualification was attempted.
+
+The output-pattern denial was traced to the two new CLI entry points,
+`bin/task-pr.mjs` and `bin/task-review.mjs`, using the actual PR diff. Both now
+write their payloads directly to stdout, preserving JSON indentation, raw diff
+text and the trailing newline. Failures still write to stderr and exit with
+status 1. The completion policy and its configured patterns were not changed.
+
+`test/host-cli.test.mjs` reproduces the denial against the existing completion
+evaluator and checks both entry points with local transport stubs. Coverage
+includes large Unicode/raw diff output, JSON, empty results, prepare/publish
+responses and operation errors. The pre-fix run had 1 failed policy regression
+and 2 passing stream tests: `/private/tmp/pr32-output-policy-reproduction.log`.
+These fixtures establish CLI behavior only, never live review qualification.
+
+- Focused output-policy, host-review and completion tests: 47 passed, 0 failed.
+  Output: `/private/tmp/pr32-output-policy-focused.log`.
+- Final `npm test`: exit 0; 2,006 tests, 2,005 passed, 0 failed, 1 skipped;
+  duration 460,000.5 ms. Output: `/private/tmp/pr32-output-policy-test.log`.
+  The macOS run still skips the Linux isolation test.
+- `npm run lint`: exit 0. Output: `/private/tmp/pr32-output-policy-lint.log`.
+- `git diff --check`: exit 0.
+- The local evaluator scanned added lines against the actual PR base
+  `46a17ff3f5be13e1924351dacea9c928078b0a13` and found no output-pattern denial.
+  `/private/tmp/pr32-output-policy-scan.json` retains the criteria denial and
+  pending-verification state. This is not a hosted completion approval.
