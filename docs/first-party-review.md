@@ -45,8 +45,10 @@ The selected Git host must provide the complete review-evidence operation throug
 the shared host registry. An unsupported host or missing operation stops
 qualification before native preparation, including when a saved clear exists.
 GitHub retains `owner/repo` identities; qualified additional adapters would use
-`host/owner/repo`. Task review remains GitHub-only. Bitbucket transport setup is
-available, but does not qualify review or enable task dispatch.
+`host/owner/repo`. First-party task review remains GitHub-only because the
+Bitbucket adapter has not qualified its complete review-evidence operation.
+Bitbucket task dispatch is available with an explicit external or no-reviewer
+policy; the live qualification so far covers no-reviewer mode.
 
 Use the exact executable in `harness.codex.bin`. Only its restricted preparation profile is implemented as a reviewer route; other coding adapters are unqualified. The review service supplies text in a fresh isolated workspace, disables tools, MCP/plugins, hooks, skills, memories, delegation, telemetry and user/project instructions, denies escalation and network access from model tools, and verifies the effective native configuration including managed requirements. Provider authentication is confined to the native inference connection. The coding session and its context mounts are never reused.
 
@@ -65,7 +67,7 @@ Codex does not expose a native USD hard cap or reliable cost receipt here. The c
 
 ## Evidence, fixes and migration
 
-The GitHub adapter captures exact head/base/merge-base IDs, a complete diff, full before/after content for changed files including deletions, the immutable PRD and every criterion, checks and the full completion receipt. Oversized evidence, binary/submodule content, omitted patches, API file limits, unreadable snapshots and concurrent PR changes produce incomplete review. No prefix is silently reviewed as the whole change. Other hosts must implement the same complete evidence interface and qualify task dispatch before reviewer qualification; Bitbucket's transport-only adapter remains ineligible.
+The GitHub adapter captures exact head/base/merge-base IDs, a complete diff, full before/after content for changed files including deletions, the immutable PRD and every criterion, checks and the full completion receipt. Oversized evidence, binary/submodule content, omitted patches, API file limits, unreadable snapshots and concurrent PR changes produce incomplete review. No prefix is silently reviewed as the whole change. Other hosts must implement the same complete evidence interface before first-party reviewer qualification; Bitbucket task dispatch does not itself qualify that route.
 
 The model receives this material as untrusted JSON. Its output must cover all criteria, identify the route/head/input digest, leave no unresolved scope, and report either `clear` or actionable findings with severity and a quote at an actual captured file/line. Invalid, partial, timed-out, failed or tool-attempting output cannot clear. The coordinator owns the ledger under `reviews/` and the separate execution namespace under `runs/review__...`. Public comments and agent-authored approval text are never an alternative source of internal clearance.
 

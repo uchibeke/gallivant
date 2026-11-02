@@ -403,5 +403,6 @@ Bitbucket setup uses Node, Git, a selected local harness, an account API token,
 and explicit reviewer or no-reviewer policy. It does not require `gh` sign-in.
 Follow the [first-run commands](bitbucket-review.md#first-setup-including-a-checkout-with-no-existing-configuration),
 including separate SSH and API credentials when using SSH Git. Setup checks
-transport access; unattended dispatch remains disabled until live qualification
-passes. Clean macOS/Linux qualification is still pending.
+transport access; a live public repository run has reached ready with explicit
+no-reviewer policy. Independent review and a clean Linux installation have not
+been qualified. Check `gallivant doctor` before starting your own repository.

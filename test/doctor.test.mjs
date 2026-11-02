@@ -238,7 +238,7 @@ test("doctor selects first-party prerequisites from repository reviewer override
   }
 });
 
-test("mixed-host doctor preserves GitHub review diagnostics beside Bitbucket transport-only guidance", async t => {
+test("mixed-host doctor preserves GitHub review diagnostics beside enabled Bitbucket dispatch", async t => {
   const home = doctorHome({ repos: [
     { repo: "bitbucket.org/acme/widget", reviewer: null, trusted_authors: ["{11111111-1111-1111-1111-111111111111}"] },
     { repo: "acme/widget", review: { mode: "first-party-required" } },
@@ -253,11 +253,11 @@ test("mixed-host doctor preserves GitHub review diagnostics beside Bitbucket tra
   assert.ok(named(results, "review acme/widget"), JSON.stringify(results));
   assert.equal(named(results, "review acme/widget").ok, false);
   assert.match(named(results, "review acme/widget").detail, /configure review.route/);
-  assert.equal(named(results, "task dispatch").ok, false);
-  assert.match(named(results, "task dispatch").detail, /git-host-bitbucket/);
+  assert.equal(named(results, "task dispatch").ok, true);
+  assert.match(named(results, "task dispatch").detail, /Enabled/);
   assert.equal(results.some(r => r.name === "review bitbucket.org/acme/widget"), false);
   const rendered = renderDoctor(results).text;
-  assert.match(rendered, /review acme\/widget/); assert.match(rendered, /task dispatch is disabled/);
+  assert.match(rendered, /review acme\/widget/); assert.match(rendered, /task dispatch\s+Enabled/);
   const file = pjoin(home, "mixed-review-doctor.txt"); writeFileSync(file, rendered);
   t.diagnostic(`mixed review doctor evidence: ${file}`);
 });

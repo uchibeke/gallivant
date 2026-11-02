@@ -255,7 +255,7 @@ hosted service or publish a chat plugin.
 
 ## Bitbucket Cloud
 
-Bitbucket Cloud transport and the review protocol have offline coverage, but task dispatch remains disabled until live qualification passes. See the [setup, review and troubleshooting guide](docs/bitbucket-review.md) for prerequisites, tested boundaries and unmet evidence. No GitHub sign-in is required for Bitbucket-only setup; no pipeline, credential or repository setting is installed automatically.
+Bitbucket Cloud tasks can run with an explicitly configured no-reviewer policy. A public disposable repository completed a live local Codex run, pushed its branch, opened a regular PR against a custom base, and reached ready after its completion receipt passed. Independent reviewer execution and a clean Linux installation remain unvalidated; no-reviewer readiness is disclosed as such. See the [setup, review and troubleshooting guide](docs/bitbucket-review.md). Bitbucket-only setup needs no GitHub sign-in and does not install a pipeline or alter repository settings.
 
 ## First-party review (opt-in)
 

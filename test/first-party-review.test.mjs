@@ -483,14 +483,16 @@ test("unsupported review evidence fails host qualification before native prepara
   assert.equal(w.calls.submits, 1);
 });
 
-test("Bitbucket transport availability cannot qualify or dispatch a first-party reviewer", async () => {
+test("Bitbucket dispatch does not qualify an unavailable first-party evidence adapter", async () => {
   const w = reviewServiceWorld();
-  w.ctx.executionFor = () => assert.fail("transport-only support must never reach reviewer preparation");
+  w.ctx.executionFor = () => assert.fail("unqualified host review must never reach reviewer preparation");
+  w.ctx.config = { ...w.ctx.config, review: { mode: "first-party-required", route: "codex" },
+    git_hosts: { "bitbucket.org": { reviewer: null, trusted_authors: ["{11111111-1111-1111-1111-111111111111}"], required_checks: [] } } };
   const service = w.service(), repo = "bitbucket.org/acme/widget";
-  await assert.rejects(service.qualify(repo, { run: true }), /task dispatch is disabled.*git-host-bitbucket/);
-  await assert.rejects(service.preflight(repo), /task dispatch is disabled/);
-  await assert.rejects(service.reconcile(w.id, { ...w.entry, repo }, w.pr), /task dispatch is disabled/);
-  await assert.rejects(reviewCommand({ ...w.ctx, reviewService: service }, { action: "qualify", repo, run: true }), /task dispatch is disabled/);
+  await assert.rejects(service.qualify(repo, { run: true }), /complete review evidence adapter/);
+  await assert.rejects(service.preflight(repo), /complete review evidence adapter/);
+  await assert.rejects(service.reconcile(w.id, { ...w.entry, repo }, w.pr), /complete review evidence adapter/);
+  await assert.rejects(reviewCommand({ ...w.ctx, reviewService: service }, { action: "qualify", repo, run: true }), /complete review evidence adapter/);
   assert.equal(w.calls.submits, 0);
 });
 

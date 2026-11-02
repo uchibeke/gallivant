@@ -231,3 +231,43 @@ Verification after the integration corrections:
 - `node --test test/docs-links.test.mjs`: exit 0.
   Output: `/private/tmp/pr32-merge-policy-docs.log`.
 - `git diff --check`: exit 0.
+
+## 2026-11-02: local Codex task loop with explicit no-reviewer policy
+
+The public disposable repository `webbabyshowers/gallivant-host-test-public`
+was used for one live task on a custom `qualification-base` branch. The
+operator-selected account API token and SSH key were kept outside the checkout.
+The coordinator cloned with its selected SSH key. The coding session did not
+receive that key; a repository-specific Git URL rewrite and bounded HTTPS
+credential helper let it push with the selected API token. The first two
+attempts exposed missing task PR helper discovery and Git credential transport;
+the same committed work and Codex session were resumed after each repair.
+
+The task committed `f58d6e3ce34a35a4ceac0541abdb4426faefe72f`, pushed
+`work/public-host-smoke-test`, and opened regular [PR #2](https://bitbucket.org/webbabyshowers/gallivant-host-test-public/pull-requests/2)
+against `qualification-base`. The Bitbucket API confirmed the exact head and
+base. The agent updated the work-attestations receipt after publication. The
+coordinator accepted the receipt and reported `ready` with `no reviewer
+configured; receipt accepted` and round `0/10`. No merge was attempted.
+
+The isolated test config deliberately set `reviewer: null`,
+`review.legacy_no_review: true`, `review.zero_checks: true`, and no required CI
+checks. Thus this run proves PR publication, shared state progression and
+receipt acceptance, but it does **not** prove CI integration or independent
+semantic review. The reviewer producer remains a documented, unvalidated next
+step; no second reviewer account is needed for the qualified no-reviewer path.
+The private repository has verified Git/API transport and manual PR operations,
+but has not completed a live unattended task loop. Clean Linux installation,
+other local harnesses and hosted providers remain unvalidated for Bitbucket.
+
+Verification of this dispatch change: the initial full suite ran 2,009 tests
+with 2,006 passing, one skipped and two portable-bundle failures. Both failures
+had the same cause: a Node-only helper path in the browser-consumed host
+contract. Path resolution was moved into the Node adapter. The exact affected
+portable, task-profile and Bitbucket suites then passed 150/150 tests. The
+focused review/status/doctor suites passed, `npm run lint`, documentation links,
+`git diff --check`, and the packaged `npx` installation test passed. The first
+package test attempt was blocked by the local npm cache permissions; the
+second could not reach npmjs.org inside the sandbox; the network-enabled run
+using a disposable cache passed. The entire suite was not repeated after the
+targeted portability fix.

@@ -1,12 +1,13 @@
 # Bitbucket Cloud review setup and qualification
 
-Bitbucket Cloud dispatch remains **disabled**. The transport, review protocol,
-PR command, and shared lifecycle have offline regression coverage, and the PR
-transport has a disposable live smoke test. There is no live task-loop
-qualification or claim of a genuine Codex review. `start`, `register`, and
-paid task preparation cannot bypass this release gate. See the
-[qualification record](audit/bitbucket-review-qualification.md) for the missing
-evidence. No configuration flag turns qualification on.
+Bitbucket Cloud dispatch is available. A disposable public repository completed
+a live local Codex task: the agent preserved the base, committed, pushed with
+the selected repository credential, opened a regular PR against a custom base,
+updated its receipt, and reached ready with **no reviewer configured**. This
+qualifies that path only. A separate automated reviewer, private-repository
+task loop, other harnesses, and a clean Linux installation remain unvalidated;
+none should be described as independently reviewed. See the
+[qualification record](audit/bitbucket-review-qualification.md).
 
 ## First setup, including a checkout with no existing configuration
 
@@ -43,10 +44,13 @@ and runs retain their previous review semantics.
 ```
 
 Replace the example UUID with the operator's stable Bitbucket UUID, not a nickname.
-Select `reviewer: null` deliberately, or use the independent reviewer below.
-No-reviewer mode still enforces CI, trusted commands, unresolved required feedback
-and the completion receipt. Its readiness record says `none`; it is never
-Codex-reviewed. The example check name must exactly match the repository's build
+Select `reviewer: null` deliberately. No separate reviewer account is needed to
+start a task. After `init`, record `"review": { "legacy_no_review": true }` in
+that repository's entry in `~/.gallivant/config.json`; keep `reviewer: null` in
+the host policy. This makes the no-review choice explicit in the local config.
+No-reviewer mode still enforces configured CI, trusted commands, unresolved
+required feedback and the completion receipt. Its readiness record says `none`;
+it is never independently reviewed. The example check name must exactly match the repository's build
 status name. An empty `required_checks` list permits the explicit no-CI behavior:
 zero checks waits for `checks_grace_minutes`, then passes the CI gate. Any named
 required check missing from a complete response remains pending indefinitely;
@@ -68,7 +72,7 @@ role, and verifies Git's base SHA against the API. `doctor` distinguishes unknow
 write scopes from observed read access. Only an actual write can prove Git push,
 PR creation and comment write permission. Setup never installs a pipeline,
 creates a credential, changes repository protection, or makes a paid model call.
-It reports the disabled dispatch gate even when transport checks pass.
+It reports dispatch availability separately from transport access.
 
 Host settings live under `git_hosts["bitbucket.org"]`. `repositories["workspace/repo"]`
 may override `api`, `git`, `reviewer`, `trusted_authors`, and `required_checks`,
@@ -80,6 +84,7 @@ Bitbucket must supply every required field; the GitHub mention is rejected.
 
 ## Independent Codex or human reviewer
 
+This is a possible later setup, not part of the live qualified no-reviewer path.
 Use a separate Bitbucket account for the automated reviewer. Configure its stable
 UUID, never its display name, nickname, the coding account, or a Pipeline label:
 
@@ -172,14 +177,14 @@ verifies the checkout origin and branch before every operation. It supports
 It has no merge, deployment or repository-settings operation. Credentials never
 enter arguments, prompt text, committed files or another host's default resolver.
 The PR CLI created and reconciled a disposable private PR, read its exact head,
-posted a comment and updated its body. This does not qualify a local harness or
-the unattended task loop. See the [qualification record](audit/bitbucket-review-qualification.md).
+posted a comment and updated its body. A separate live public task also used it
+to open and update a regular PR. See the [qualification record](audit/bitbucket-review-qualification.md).
 
-Once a release has passed live qualification, local PRD commands use the verified
-checkout, and `register` uses the exact PR URL. Host-qualified state/worktree keys
+Local PRD commands use the verified checkout, and `register` uses the exact PR
+URL. Host-qualified state/worktree keys
 prevent a same-named GitHub repository controlling a Bitbucket PR. Base overrides
-flow through clone, PR publication and later base updates. Today those dispatch
-commands stop at the qualification gate; do not modify source flags to run them.
+flow through clone, PR publication and later base updates. Use `gallivant doctor`
+to confirm access and policy before `gallivant start <prd> --base <branch>`.
 Hosted providers with a GitHub-bound environment are incompatible. A snapshot
 provider must pass the same publication and qualification checks as a local one.
 
@@ -204,8 +209,10 @@ No command merges the PR, force-pushes, deploys or alters protections.
 - `pr-identity`: inspect source/base/repository/head and restore the recorded
   identity. A decline or unproven merge needs operator reconciliation, not a new
   paid run or an automatic chain advance.
-- Dispatch disabled: complete the documented live qualification matrix. Editing
-  the receipt or passing fixture tests cannot remove this gate.
+- Access probe fails: check the selected SSH key for the coordinator clone and
+  the account API token for the coding session's repository-bound HTTPS push.
+  The coding session does not receive the SSH key. Re-run `doctor`, then resume
+  the existing task rather than starting a duplicate.
 
 API semantics are based on Atlassian's [PR APIs](https://developer.atlassian.com/cloud/bitbucket/rest/api-group-pullrequests/),
 [commit ancestry API](https://developer.atlassian.com/cloud/bitbucket/rest/api-group-commits/),

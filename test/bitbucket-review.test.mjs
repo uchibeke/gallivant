@@ -55,7 +55,7 @@ test("repository policy isolates defaults, same-named repositories, actor UUIDs 
 
 test("review preflight preserves repository actor overrides and explicit no-reviewer policy", async () => {
   const registry = makeHostRegistry({ adapters: [{ ...bitbucket, dispatch: true,
-    create: () => ({ reviewEvidence: () => assert.fail("external review preflight must not capture model evidence") }) }] });
+    create: () => ({}) }] });
   const alternate = { ...reviewer, actor_id: "{55555555-5555-5555-5555-555555555555}" };
   for (const hostDefaults of [true, false]) for (const external of [alternate, null]) {
     const c = { ...config(), git_hosts: hostDefaults ? config().git_hosts : {}, repos: [
@@ -180,10 +180,10 @@ test("Bitbucket PR operations bind checkout and API repository and provide safe 
   const prompts = bitbucket.prompts;
   const start = startPrompt({ host: prompts, prd: { text: "Implement change." }, repo: REPO, branch: "work/feature", base: "release/v2", verify: [] });
   const fix = fixPrompt({ host: prompts, repo: REPO, pr: 7, headSha: HEAD, events: [], verify: [] });
-  assert.match(start, /task-pr create --base 'release\/v2'/); assert.match(fix, /task-pr edit/);
+  assert.match(start, /task-pr\.mjs' create --base 'release\/v2'/); assert.match(fix, /task-pr\.mjs' edit/);
   assert.doesNotMatch(start + fix, /gh pr|github\.com|@codex review/);
   assert.throws(() => assertRepositoryAccess(capabilitiesFor("codex-cloud"), { host: "bitbucket.org" }), /cannot access/);
-  assert.throws(() => hosts.select(REPO), /dispatch is disabled/);
+  assert.equal(hosts.select(REPO).repository.key, REPO);
 });
 
 test("repository credentials refresh in isolation and coding environment excludes reviewer tokens", async () => {
@@ -370,7 +370,7 @@ test("Bitbucket feedback resumes the saved session once across polling, reorderi
   unavailable = false;
   assert.equal((await makeTick(ctx).tick())[0].ok, true);
   assert.equal(runner.started.length, 1); assert.ok(runner.started[0].args.includes(e.session));
-  assert.match(runner.started[0].args.join(" "), /task-pr edit/);
+  assert.match(runner.started[0].args.join(" "), /task-pr\.mjs' edit/);
   await makeTick({ ...ctx, state: makeState(home) }).tick();
   assert.equal(runner.started.length, 1, "running session owns the feedback batch");
   runner.finish(codexLines({ thread: e.session }));

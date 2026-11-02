@@ -656,6 +656,6 @@ it can be decoded to inspect the precise existing branch/session identity.
 
 ## Bitbucket setup and PR commands
 
-Bitbucket Cloud transport and the review protocol have offline coverage, but task dispatch remains disabled until live qualification passes. See the [setup, review and troubleshooting guide](bitbucket-review.md) for prerequisites, tested boundaries and unmet evidence. No GitHub sign-in is required for Bitbucket-only setup; no pipeline, credential or repository setting is installed automatically.
+Bitbucket Cloud dispatch is available with explicit repository credentials and review policy. A public disposable repository completed a live local Codex run through PR publication and receipt acceptance in no-reviewer mode. Independent reviewer execution and a clean Linux installation remain unvalidated. See the [setup, review and troubleshooting guide](bitbucket-review.md) for prerequisites and limits. Bitbucket-only setup needs no GitHub sign-in; it does not install a pipeline or alter repository settings.
 
 `init` accepts `--host-config <json>` and `--base <branch>`. The installed `task-pr` command supports bound PR create/view/diff/edit/comment operations; `task-review` prepares and publishes independent reviewer results. These commands do not qualify a harness or authorize a model invocation.
