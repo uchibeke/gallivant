@@ -135,6 +135,39 @@ test("many short patch lines stay partitionable when serialized source maps domi
   assert.equal(new Set(patchSlices.flatMap(slice => slice.sourceLocations).filter(location => location.side === "after").map(location => location.line)).size, 10_000);
 });
 
+test("Unicode line separators remain patch content with exact source mappings", async () => {
+  const captured = await captureReviewEvidence(evidenceWorld()), first = "first\u2028middle\u2029part", filler = "x".repeat(120_000);
+  const after = `${first}\nsecond\n${filler}\n`;
+  const patch = `diff --git a/unicode.txt b/unicode.txt\nnew file mode 100644\n--- /dev/null\n+++ b/unicode.txt\n@@ -0,0 +1,3 @@\n+${first}\n+second\n+${filler}\n`;
+  const evidence = { ...captured, diff: patch, context: [{ path: "unicode.txt", status: "added", patch, before: null, after }] };
+  delete evidence.digest;
+  const { pieces } = partitionReviewEvidence(evidence, { maxInputBytes: 100_000, maxJobs: 20 });
+  assert.ok(pieces.every(piece => Buffer.byteLength(reviewPrompt(piece)) <= 100_000));
+  assert.equal(pieces.flatMap(piece => piece.context).filter(slice => slice.kind === "patch").map(slice => slice.text).join(""), patch);
+  const piece = pieces.find(candidate => candidate.context.some(slice => slice.kind === "patch" && slice.sourceLocations.some(location =>
+    location.side === "after" && location.line === 1 && slice.text.slice(location.startOffset, location.endOffset).includes("first\u2028middle"))));
+  assert.ok(piece, "Unicode separators stay inside the mapped first source line");
+  const result = { ...clear(piece), verdict: "findings", findings: [{ id: "unicode-line", severity: "medium", description: "Mapped Unicode line finding.",
+    evidence: { path: "unicode.txt", line: 1, side: "after", quote: "first\u2028middle" } }] };
+  assert.equal(validateReviewResult(JSON.stringify(result), piece).verdict, "findings");
+});
+
+test("aggregate namespaces piece-local finding IDs and deduplicates exact defect evidence", async () => {
+  const captured = await captureReviewEvidence(evidenceWorld()), aggregateDigest = captured.digest;
+  const makePiece = (index, path, value) => ({ ...captured, version: 2, aggregateDigest, digest: `piece-${index}`, piece: { index, total: 3, coveredPaths: [path] },
+    context: [{ path, status: "added", kind: "after", startLine: 1, startColumn: 1, endLine: 2, endColumn: 1, text: `${value}\n` }] });
+  const pieces = [makePiece(1, "alpha.txt", "alpha defect"), makePiece(2, "beta.txt", "beta defect"), makePiece(3, "alpha.txt", "alpha defect")];
+  const local = (piece, description, severity = "medium") => validateReviewResult(JSON.stringify({ ...clear(piece), verdict: "findings", findings: [{ id: "finding-1", severity, description,
+    evidence: { path: piece.context[0].path, line: 1, side: "after", quote: piece.context[0].text.trim() } }] }), piece);
+  const jobs = pieces.map((piece, index) => ({ key: `job-${index}`, binding: captured.binding, status: "completed", evidence: piece,
+    result: local(piece, index === 2 ? "The alpha defect described differently." : `Defect in ${piece.context[0].path}.`, index === 2 ? "high" : "medium"), costUsd: null }));
+  const aggregate = aggregateReviewResults(captured, pieces, jobs);
+  assert.equal(aggregate.result.findings.length, 2);
+  assert.deepEqual(aggregate.result.findings.map(finding => finding.id), ["piece-1:finding-1", "piece-2:finding-1"]);
+  assert.equal(aggregate.result.findings[0].severity, "high", "duplicate evidence retains the most conservative verified severity");
+  assert.deepEqual(aggregate.result.findings.map(finding => finding.evidence.path), ["alpha.txt", "beta.txt"]);
+});
+
 test("partitioned modified and removed patches authenticate findings only on their mapped source sides", async () => {
   const captured = await captureReviewEvidence(evidenceWorld()), huge = "z".repeat(140_000);
   for (const fixture of [
