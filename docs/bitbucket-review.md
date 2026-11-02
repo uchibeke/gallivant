@@ -1,12 +1,15 @@
 # Bitbucket Cloud review setup and qualification
 
-Bitbucket Cloud dispatch is available. A disposable public repository completed
-a live local Codex task: the agent preserved the base, committed, pushed with
-the selected repository credential, opened a regular PR against a custom base,
-updated its receipt, and reached ready with **no reviewer configured**. This
-qualifies that path only. A separate automated reviewer, private-repository
-task loop, other harnesses, and a clean Linux installation remain unvalidated;
-none should be described as independently reviewed. See the
+Bitbucket Cloud dispatch remains **unqualified** and its enabling pull request is
+draft. Disposable public and private repositories completed live local Codex
+tasks through regular PR publication and receipt acceptance with **no reviewer
+configured**. The private coding session could still read the coordinator's
+merge-capable API-token file by path. Removing the token from its environment and
+using a bounded PR mailbox therefore does not isolate that credential. Do not
+start unattended tasks in other Bitbucket repositories until an OS-enforced
+credential boundary or a server-enforced non-merging coding identity is tested.
+An independent automated reviewer, clean Linux installation, and merge-gated
+chain remain unvalidated. See the
 [qualification record](audit/bitbucket-review-qualification.md).
 
 ## First setup, including a checkout with no existing configuration
@@ -22,11 +25,15 @@ and runs retain their previous review semantics.
    private file (`chmod 600`). Supply the account email separately. An account
    API token can be used with a free-plan repository; this does not require a
    workspace/repository access-token subscription or Agentic Pipelines.
-2. For HTTPS Git, the selected token authorizes Git as
+2. For HTTPS Git, the coordinator uses the selected token as
    `x-bitbucket-api-token-auth`; the API uses account email/token Basic auth.
    For SSH Git, keep the API token and select the explicit SSH key/verified
    known-hosts file described in [Git host setup](git-hosts.md). SSH authentication
-   alone cannot read or write PRs. HTTPS and Cloud SSH checkout origins identify
+   alone cannot read or write PRs. The coding session receives neither token nor
+   SSH key through environment variables: its bounded PR mailbox asks the
+   coordinator to push and publish. A same-user coding process can still read
+   the configured private files unless a separate boundary denies those reads.
+   HTTPS and Cloud SSH checkout origins identify
    the same repository; self-hosted servers and SSH aliases remain unsupported.
 3. Write a host settings file outside the coding checkout. Example:
 
@@ -170,12 +177,18 @@ is ignored. Replies authored by the coding account do not become new fix request
 
 ## Session PR operations and recovery
 
-`task-pr` is the bounded PR CLI used by Bitbucket start/fix/resume prompts. It takes
-the coding API credential from the session's explicitly bound environment and
-verifies the checkout origin and branch before every operation. It supports
-`create`, `view`, `diff`, `edit --body-file`, and `comment --body-file --reply-to`.
-It has no merge, deployment or repository-settings operation. Credentials never
-enter arguments, prompt text, committed files or another host's default resolver.
+`task-pr` is the bounded PR CLI used by Bitbucket start/fix/resume prompts. In a
+task session it writes a bounded request to the checkout's mailbox; the daemon
+verifies the saved repository, branch, base and PR identity, then uses its own
+Git and API credentials. `push`, `create`, `edit` and `comment` push committed
+HEAD through the coordinator before publication. `view` and `diff` are read
+operations. The agent receives no Git or PR token and no SSH key in its
+environment. Its observed ability to read the token file remains a dispatch
+blocker. The
+coordinator disables checkout hooks when running Git, so an agent-written
+pre-push hook cannot run with coordinator authority. The mailbox has no merge,
+deployment or repository-settings operation. Direct `task-pr` use outside an
+agent session still requires an explicitly bound API credential.
 The PR CLI created and reconciled a disposable private PR, read its exact head,
 posted a comment and updated its body. A separate live public task also used it
 to open and update a regular PR. See the [qualification record](audit/bitbucket-review-qualification.md).
@@ -209,10 +222,12 @@ No command merges the PR, force-pushes, deploys or alters protections.
 - `pr-identity`: inspect source/base/repository/head and restore the recorded
   identity. A decline or unproven merge needs operator reconciliation, not a new
   paid run or an automatic chain advance.
-- Access probe fails: check the selected SSH key for the coordinator clone and
-  the account API token for the coding session's repository-bound HTTPS push.
-  The coding session does not receive the SSH key. Re-run `doctor`, then resume
-  the existing task rather than starting a duplicate.
+- Access probe fails: check the selected coordinator SSH key or HTTPS token and
+  the account API token for PR operations. The coding session receives neither.
+  Re-run `doctor`, then resume the existing task rather than starting a duplicate.
+- PR mailbox timeout: confirm the daemon is running and can read the selected
+  repository; retry the same `task-pr` operation. Do not give the coding session
+  a token to work around the mailbox.
 
 API semantics are based on Atlassian's [PR APIs](https://developer.atlassian.com/cloud/bitbucket/rest/api-group-pullrequests/),
 [commit ancestry API](https://developer.atlassian.com/cloud/bitbucket/rest/api-group-commits/),

@@ -271,3 +271,34 @@ package test attempt was blocked by the local npm cache permissions; the
 second could not reach npmjs.org inside the sandbox; the network-enabled run
 using a disposable cache passed. The entire suite was not repeated after the
 targeted portability fix.
+
+## 2026-11-02: private mailbox test and credential boundary hold
+
+The private disposable repository completed a live local Codex task through a
+coordinator-owned PR mailbox. It committed and pushed a small change, opened
+[PR #3](https://bitbucket.org/webbabyshowers/gallivant-host-test/pull-requests/3)
+against `main`, updated its receipt, and reached `ready` with the explicit
+no-reviewer policy. This establishes the private task flow, not independent
+review, CI, merge, or deployment. The public [PR #2](https://bitbucket.org/webbabyshowers/gallivant-host-test-public/pull-requests/2)
+also remains ready for human review. Both runs used isolated Gallivant homes,
+which is why neither appears in the operator's normal dashboard.
+
+The mailbox removed `HOST_API_TOKEN`, `GIT_HOST_TOKEN`, and the selected SSH key
+from the coding session environment. A read-only probe in the actual private
+Codex session then ran `test -r` on the configured API-token file and returned
+exit status 0. The probe did not open, print, copy, hash, or use the token.
+Because the token has Bitbucket PR write scope, a session able to read it could
+call Bitbucket's merge API directly. A same-user private file plus environment
+scrubbing is therefore insufficient; the draft dispatch PR must not be merged
+or used for unattended work in other repositories. No secret exposure or
+malicious use was observed in these tests.
+
+The mailbox prototype's full suite reported 2,012 tests: 2,010 passed, one
+skipped and one failed (`git-host-architecture`: a host-specific decision in
+shared Git code). The focused mailbox and Bitbucket suites passed. This
+architecture failure is separate from, and does not override, the credential
+hold. An OS-enforced read boundary or a server-enforced non-merging coding
+identity must be implemented and verified in both disposable repositories
+before general dispatch. Independent review, required CI and a clean Linux
+installation remain separate unvalidated capabilities. The isolated test
+daemons were stopped after their runs completed.

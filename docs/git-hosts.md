@@ -1,9 +1,11 @@
 # Git host boundary
 
-`github.com` and Bitbucket Cloud support task dispatch. Bitbucket's explicit
-no-reviewer path completed a live local Codex task through PR publication and
-receipt acceptance on a disposable public repository. Independent Bitbucket
-review and clean Linux installation remain unvalidated. Other hosts remain
+`github.com` supports task dispatch. Bitbucket's explicit no-reviewer path
+completed live local Codex tasks through PR publication and receipt acceptance
+on disposable public and private repositories, but its coding session could
+read the selected merge-capable token file. General Bitbucket dispatch remains
+unqualified while credential isolation is repaired. Independent Bitbucket
+review and clean Linux installation also remain unvalidated. Other hosts remain
 unsupported. The synthetic adapter in
 `test/git-host.test.mjs` is an offline contract fixture, not a supported host.
 
@@ -113,9 +115,11 @@ redirects and receives secrets only through environment variables. Clone URLs,
 argv, committed files and public diagnostics contain no token. A run clears
 inherited API tokens and SSH channels. Bitbucket supports an explicitly selected
 SSH key for coordinator Git operations; an SSH key alone cannot authorize the PR
-API. The coordinator may clone over selected SSH while the coding session uses
-its repository-bound API token for HTTPS Git and PR operations; the SSH key is
-not passed to the coding session. Setup never grants a sandbox extra key paths.
+API. The coordinator may clone and push over selected SSH or HTTPS. The coding
+session receives neither the repository API token nor the SSH key. Its bounded
+checkout mailbox requests validated push and PR operations from the coordinator.
+Coordinator Git disables checkout hooks before using a privileged credential.
+Setup never grants a sandbox extra key paths.
 GitHub resolution order remains configured token file, daemon environment,
 then `gh auth token`, with explicit-file failure refusing fallback. Resolution
 happens for each operation so reauthentication works without restarting.
@@ -268,8 +272,9 @@ examples for reviewer/trust/check policy. `init --host-config <json> --base <bra
 can bootstrap an empty config, with an explicit reviewer (or `null`) and stable
 trusted UUIDs. The adapter now implements review normalization, required task
 blockers, recovery operations and merge ancestry. The explicit no-reviewer
-dispatch path has [live qualification](audit/bitbucket-review-qualification.md);
-independent review and clean Linux installation remain unvalidated.
+dispatch path has [disposable live observations](audit/bitbucket-review-qualification.md),
+but credential isolation failed; independent review and clean Linux installation
+remain unvalidated. Do not enable general dispatch from these observations.
 
 `prView` may include `feedback: { complete: true, headSha, reviews, inline, comments }`.
 The shared loop consumes this one coherent snapshot; adapters without it retain
