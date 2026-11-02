@@ -73,7 +73,8 @@ test("reviewer environment retains selected model access but excludes coding and
 });
 
 test("complete evidence includes deletion context, immutable brief, checks and receipt; changed capture and oversized input fail closed", async()=>{
-  const w=evidenceWorld(); w.gh.reviewEvidence=async()=>({...source,context:[{path:"a.js",status:"removed",patch:source.context[0].patch,before:"return allow;",after:null}]});
+  const w=evidenceWorld(), deletion="diff --git a/a.js b/a.js\ndeleted file mode 100644\n--- a/a.js\n+++ /dev/null\n@@ -1 +0,0 @@\n-return allow;";
+  w.gh.reviewEvidence=async()=>({...source,diff:deletion,context:[{path:"a.js",status:"removed",patch:deletion,before:"return allow;",after:null}]});
   const e=await captureReviewEvidence(w);
   assert.equal(e.context[0].before,"return allow;"); assert.equal(e.brief,GOOD_PRD); assert.equal(e.receipt,w.pr.body); assert.equal(e.checks.length,1);
   w.gh.prView=async()=>({...w.pr,baseRefOid:"c".repeat(40)});
@@ -106,10 +107,42 @@ test("a deterministic 340 KB lockfile is completely partitioned within configure
   assert.ok(pieces.every(piece => Buffer.byteLength(reviewPrompt(piece)) <= 100_000));
   assert.ok(pieces.every(piece => piece.criteria.length === evidence.criteria.length && piece.piece.coveredPaths.includes("package-lock.json")));
   assert.deepEqual(new Set(pieces.flatMap(piece => piece.context.map(slice => slice.kind))), new Set(["patch", "after"]));
+  const patchOnly = pieces.find(piece => piece.context.length && piece.context.every(slice => slice.kind === "patch") &&
+    piece.context.some(slice => slice.sourceLocations.some(location => location.side === "after" && location.line === 1)));
+  assert.ok(patchOnly, "large added files retain exact after-line locations in patch-only pieces");
+  const patchFinding = { id: "lockfile-line", severity: "medium", description: "The added lockfile line contains the reproduced defect marker.",
+    evidence: { path: "package-lock.json", line: 1, side: "after", quote: "xxxxxxxx" } };
+  assert.equal(validateReviewResult(JSON.stringify({ ...clear(patchOnly), verdict: "findings", findings: [patchFinding] }), patchOnly).verdict, "findings");
+  assert.throws(() => validateReviewResult(JSON.stringify({ ...clear(patchOnly), verdict: "findings", findings: [{ ...patchFinding,
+    evidence: { ...patchFinding.evidence, side: "before" } }] }), patchOnly), /not present/);
   const jobs = pieces.map((piece, index) => ({ key: `piece-${index}`, binding: evidence.binding, status: "completed", evidence: piece, result: clear(piece), run: `run-${index}`, costUsd: null }));
   const aggregate = aggregateReviewResults({ ...evidence, digest: pieces[0].aggregateDigest }, pieces, jobs);
   assert.equal(aggregate.status, "completed"); assert.equal(aggregate.result.verdict, "clear");
   assert.equal(aggregate.pieces.length, pieces.length);
+});
+
+test("partitioned modified and removed patches authenticate findings only on their mapped source sides", async () => {
+  const captured = await captureReviewEvidence(evidenceWorld()), huge = "z".repeat(140_000);
+  for (const fixture of [
+    { path: "modified.txt", status: "modified", before: `OLD_MARKER_${huge}\n`, after: `NEW_MARKER_${huge}\n`, side: "after", quote: "NEW_MARKER_" },
+    { path: "removed.txt", status: "removed", before: `REMOVED_MARKER_${huge}\n`, after: null, side: "before", quote: "REMOVED_MARKER_" },
+  ]) {
+    const oldLine = fixture.before.trimEnd(), newLine = fixture.after?.trimEnd();
+    const patch = fixture.status === "removed"
+      ? `diff --git a/${fixture.path} b/${fixture.path}\n--- a/${fixture.path}\n+++ /dev/null\n@@ -1 +0,0 @@\n-${oldLine}\n`
+      : `diff --git a/${fixture.path} b/${fixture.path}\n--- a/${fixture.path}\n+++ b/${fixture.path}\n@@ -1 +1 @@\n-${oldLine}\n+${newLine}\n`;
+    const evidence = { ...captured, diff: patch, context: [{ ...fixture, patch }] }; delete evidence.digest;
+    const { pieces } = partitionReviewEvidence(evidence, { maxInputBytes: 100_000, maxJobs: 20 });
+    const piece = pieces.find(candidate => candidate.context.some(slice => slice.kind === "patch" && slice.sourceLocations.some(location =>
+      location.side === fixture.side && location.line === 1 && slice.text.slice(location.startOffset, location.endOffset).includes(fixture.quote))));
+    assert.ok(piece, `${fixture.status} patch retains its ${fixture.side} source location`);
+    const result = { ...clear(piece), verdict: "findings", findings: [{ id: `${fixture.status}-line`, severity: "medium", description: "Mapped patch finding.",
+      evidence: { path: fixture.path, line: 1, side: fixture.side, quote: fixture.quote } }] };
+    assert.equal(validateReviewResult(JSON.stringify(result), piece).verdict, "findings");
+    const inconsistent = structuredClone(evidence);
+    inconsistent.context[0][fixture.side] = `DIFFERENT_${huge}\n`;
+    assert.throws(() => partitionReviewEvidence(inconsistent, { maxInputBytes: 100_000, maxJobs: 20 }), /differs from captured source/);
+  }
 });
 
 test("readiness is exact-input under every policy and host public prose is not an internal verdict",()=>{
