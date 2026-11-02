@@ -18,6 +18,7 @@ import { tickChains } from "../lib/chains.mjs";
 import { capabilitiesFor } from "../lib/harness.mjs";
 import { runEnv } from "../lib/git.mjs";
 import { resolveBitbucketCredential, BITBUCKET_REVIEW_SCOPES } from "../lib/hosts/bitbucket_credential.mjs";
+import { partitionReviewEvidence } from "../lib/review_evidence.mjs";
 import { prOperation } from "../lib/pr_operation.mjs";
 import { startPrompt, fixPrompt } from "../lib/prompt.mjs";
 import { init } from "../lib/commands/init.mjs";
@@ -55,7 +56,7 @@ test("repository policy isolates defaults, same-named repositories, actor UUIDs 
 
 test("review preflight preserves repository actor overrides and explicit no-reviewer policy", async () => {
   const registry = makeHostRegistry({ adapters: [{ ...bitbucket, dispatch: true,
-    create: () => ({ reviewEvidence: () => assert.fail("external review preflight must not capture model evidence") }) }] });
+    create: () => ({}) }] });
   const alternate = { ...reviewer, actor_id: "{55555555-5555-5555-5555-555555555555}" };
   for (const hostDefaults of [true, false]) for (const external of [alternate, null]) {
     const c = { ...config(), git_hosts: hostDefaults ? config().git_hosts : {}, repos: [
@@ -73,6 +74,99 @@ test("review preflight preserves repository actor overrides and explicit no-revi
     if (external) assert.equal(selected.zeroChecks, false, "explicit policy edits override saved review settings");
     else assert.match(selected.disclosure, /no semantic review required or claimed/);
     assert.deepEqual(repositoryReviewConfig(c, PATH).reviewer, CONFIG.reviewer);
+  }
+});
+
+test("Bitbucket first-party evidence binds exact PR commits and covers paginated added, modified, removed and renamed files", async () => {
+  const f = cleanFixture({ intercept: call => {
+    if (call.path.startsWith("/diffstat/")) {
+      const request = new URL(call.url), pageNumber = request.searchParams.get("page");
+      if (!pageNumber) { request.searchParams.set("page", "2"); return json({ values: f.data.diffstat.slice(0, 2), size: 4, pagelen: 2, next: request.href }); }
+      return json({ values: f.data.diffstat.slice(2), size: 4, pagelen: 2 });
+    }
+  } });
+  f.data.diffstat = [
+    { status: "added", old: null, new: { type: "commit_file", path: "added.txt" } },
+    { status: "modified", old: { type: "commit_file", path: "a" }, new: { type: "commit_file", path: "a" } },
+    { status: "removed", old: { type: "commit_file", path: "removed.txt" }, new: null },
+    { status: "renamed", old: { type: "commit_file", path: "old.txt" }, new: { type: "commit_file", path: "new.txt" } },
+  ];
+  f.data.comparisonDiff = [
+    "diff --git a/added.txt b/added.txt\nnew file mode 100644\n--- /dev/null\n+++ b/added.txt\n@@ -0,0 +1 @@\n+added\n",
+    "diff --git a/a b/a\n--- a/a\n+++ b/a\n@@ -1 +1 @@\n-before\n+fixture file\n",
+    "diff --git a/removed.txt b/removed.txt\ndeleted file mode 100644\n--- a/removed.txt\n+++ /dev/null\n@@ -1 +0,0 @@\n-removed\n",
+    "diff --git a/old.txt b/new.txt\nsimilarity index 100%\nrename from old.txt\nrename to new.txt\n",
+  ].join("");
+  Object.assign(f.data.sources, {
+    [`${HEAD}:added.txt`]: "added\n", [`${BASE}:removed.txt`]: "removed\n",
+    [`${BASE}:old.txt`]: "same\n", [`${HEAD}:new.txt`]: "same\n",
+  });
+  const evidence = await f.api.reviewEvidence(PATH, 7, HEAD, BASE, 100_000);
+  assert.deepEqual(evidence.context.map(file => [file.path, file.status]), [["added.txt", "added"], ["a", "modified"], ["removed.txt", "removed"], ["new.txt", "renamed"]]);
+  assert.equal(evidence.repositoryId, UUID); assert.equal(evidence.pr, 7); assert.equal(evidence.head, HEAD); assert.equal(evidence.base, BASE); assert.equal(evidence.mergeBase, BASE);
+  assert.equal(evidence.context[0].before, null); assert.equal(evidence.context[2].after, null);
+  assert.equal(evidence.context[3].before, "same\n"); assert.equal(evidence.context[3].after, "same\n");
+  assert.equal(f.calls.filter(call => call.path.startsWith("/diffstat/")).length, 2);
+  const comparison = f.calls.find(call => call.path.startsWith("/diff/"));
+  assert.match(comparison.path, new RegExp(`/diff/${HEAD}\\.\\.${BASE}`));
+  assert.equal(new URL(comparison.url).searchParams.get("topic"), "true");
+  assert.ok(f.calls.every(call => new URL(call.url).origin === "https://api.bitbucket.org"));
+});
+
+test("Bitbucket first-party evidence accepts empty, mode-only and delimited spaced-path changes", async () => {
+  const f = cleanFixture();
+  f.data.diffstat = [
+    { status: "added", old: null, new: { type: "commit_file", path: ".gitkeep" } },
+    { status: "removed", old: { type: "commit_file", path: "old-empty" }, new: null },
+    { status: "modified", old: { type: "commit_file", path: "script.sh" }, new: { type: "commit_file", path: "script.sh" } },
+    { status: "modified", old: { type: "commit_file", path: "space name.txt" }, new: { type: "commit_file", path: "space name.txt" } },
+  ];
+  f.data.comparisonDiff = [
+    "diff --git a/.gitkeep b/.gitkeep\nnew file mode 100644\nindex 0000000..e69de29\n",
+    "diff --git a/old-empty b/old-empty\ndeleted file mode 100644\nindex e69de29..0000000\n",
+    "diff --git a/script.sh b/script.sh\nold mode 100644\nnew mode 100755\n",
+    "diff --git a/space name.txt b/space name.txt\n--- a/space name.txt\t\n+++ b/space name.txt\t\n@@ -1 +1 @@\n-old\n+new\n",
+  ].join("");
+  Object.assign(f.data.sources, {
+    [`${HEAD}:.gitkeep`]: "", [`${BASE}:old-empty`]: "",
+    [`${BASE}:script.sh`]: "echo ok\n", [`${HEAD}:script.sh`]: "echo ok\n",
+    [`${BASE}:space name.txt`]: "old\n", [`${HEAD}:space name.txt`]: "new\n",
+  });
+  f.data.sourceAttributes[`${HEAD}:script.sh`] = ["executable"];
+  const evidence = await f.api.reviewEvidence(PATH, 7, HEAD, BASE, 100_000);
+  assert.deepEqual(evidence.context.map(file => [file.path, file.status]), [[".gitkeep", "added"], ["old-empty", "removed"], ["script.sh", "modified"], ["space name.txt", "modified"]]);
+  assert.equal(evidence.context[0].after, ""); assert.equal(evidence.context[1].before, "");
+  assert.equal(evidence.context[2].before, evidence.context[2].after);
+});
+
+test("Bitbucket first-party evidence preserves a UTF-8 BOM through bounded partitioning", async () => {
+  const f = cleanFixture(), first = "\ufefffirst", filler = "x".repeat(120_000), after = `${first}\n${filler}\n`;
+  f.data.diffstat = [{ status: "added", old: null, new: { type: "commit_file", path: "bom.txt" } }];
+  f.data.comparisonDiff = `diff --git a/bom.txt b/bom.txt\nnew file mode 100644\n--- /dev/null\n+++ b/bom.txt\n@@ -0,0 +1,2 @@\n+${first}\n+${filler}\n`;
+  f.data.sources[`${HEAD}:bom.txt`] = after;
+  const captured = await f.api.reviewEvidence(PATH, 7, HEAD, BASE, 400_000);
+  assert.equal(captured.context[0].after, after);
+  assert.equal(captured.context[0].after.codePointAt(0), 0xfeff);
+  const evidence = { ...captured, taskId: "bom-fixture", repository: REPO, brief: "# Fixture", criteria: [{ id: "ac-1", text: "Review all text." }],
+    checks: [], receipt: "receipt", policy: { route: { name: "codex" }, specialist: null, limits: { maxInputBytes: 100_000, maxJobs: 20 } }, binding: "fixture-binding" };
+  const { pieces } = partitionReviewEvidence(evidence);
+  assert.ok(pieces.length > 1);
+  assert.equal(pieces.flatMap(piece => piece.context).filter(slice => slice.kind === "patch").map(slice => slice.text).join(""), f.data.comparisonDiff);
+});
+
+test("Bitbucket first-party evidence refuses stale, duplicate, binary, missing-patch, redirected, rate-limited and oversized capture", async () => {
+  const cases = [
+    ["stale", f => f.api.reviewEvidence(PATH, 7, BASE, HEAD, 100_000)],
+    ["duplicate", f => { f.data.diffstat.push(structuredClone(f.data.diffstat[0])); return f.api.reviewEvidence(PATH, 7, HEAD, BASE, 100_000); }],
+    ["binary", f => { f.data.comparisonDiff += "GIT binary patch\n"; return f.api.reviewEvidence(PATH, 7, HEAD, BASE, 100_000); }],
+    ["binary metadata", f => { f.data.sourceAttributes[`${HEAD}:a`] = ["binary"]; return f.api.reviewEvidence(PATH, 7, HEAD, BASE, 100_000); }],
+    ["missing-patch", f => { f.data.comparisonDiff = "diff --git a/other b/other\n--- a/other\n+++ b/other\n@@ -1 +1 @@\n-a\n+b\n"; return f.api.reviewEvidence(PATH, 7, HEAD, BASE, 100_000); }],
+    ["oversized", f => f.api.reviewEvidence(PATH, 7, HEAD, BASE, 20)],
+  ];
+  for (const [name, attempt] of cases) await assert.rejects(attempt(cleanFixture()), /current open|stale|duplicate|binary|submodule|regular text-file|changed-path|patch|bound|exceeds|oversized/i, name);
+  for (const [name, response] of [["redirected", new Response(null, { status: 302, headers: { location: "https://evil.example/leak" } })], ["rate-limited", json({}, 429)]]) {
+    const f = cleanFixture({ intercept: call => call.path.startsWith("/diffstat/") ? response : undefined });
+    await assert.rejects(f.api.reviewEvidence(PATH, 7, HEAD, BASE, 100_000), /redirect|HTTP 429/i, name);
   }
 });
 
@@ -180,10 +274,10 @@ test("Bitbucket PR operations bind checkout and API repository and provide safe 
   const prompts = bitbucket.prompts;
   const start = startPrompt({ host: prompts, prd: { text: "Implement change." }, repo: REPO, branch: "work/feature", base: "release/v2", verify: [] });
   const fix = fixPrompt({ host: prompts, repo: REPO, pr: 7, headSha: HEAD, events: [], verify: [] });
-  assert.match(start, /task-pr create --base 'release\/v2'/); assert.match(fix, /task-pr edit/);
+  assert.match(start, /task-pr\.mjs' create --base 'release\/v2'/); assert.match(fix, /task-pr\.mjs' edit/);
   assert.doesNotMatch(start + fix, /gh pr|github\.com|@codex review/);
   assert.throws(() => assertRepositoryAccess(capabilitiesFor("codex-cloud"), { host: "bitbucket.org" }), /cannot access/);
-  assert.throws(() => hosts.select(REPO), /dispatch is disabled/);
+  assert.equal(hosts.select(REPO).repository.key, REPO);
 });
 
 test("repository credentials refresh in isolation and coding environment excludes reviewer tokens", async () => {
@@ -370,7 +464,7 @@ test("Bitbucket feedback resumes the saved session once across polling, reorderi
   unavailable = false;
   assert.equal((await makeTick(ctx).tick())[0].ok, true);
   assert.equal(runner.started.length, 1); assert.ok(runner.started[0].args.includes(e.session));
-  assert.match(runner.started[0].args.join(" "), /task-pr edit/);
+  assert.match(runner.started[0].args.join(" "), /task-pr\.mjs' edit/);
   await makeTick({ ...ctx, state: makeState(home) }).tick();
   assert.equal(runner.started.length, 1, "running session owns the feedback batch");
   runner.finish(codexLines({ thread: e.session }));

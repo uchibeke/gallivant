@@ -10,7 +10,7 @@
     "lib/host_definitions.mjs": "1179cddc073e2a05aa603b7117c178ffe4fc057d7270931832fbf8733d3a84d6",
     "lib/review_policy_contract.mjs": "16cafa3b835a3fa8c3904b0cc577f46f6b7bb0c9a1697ad0438a32cac636f3f2",
     "lib/hosts/github_contract.mjs": "f8910b07ddd0dca8c06780d78eb3b5a106da4604ba01cb25b7a205432e2fbe81",
-    "lib/hosts/bitbucket_contract.mjs": "14a7e53b9cb7985318e356ed2e3888404102f2d9b16034aa1ee36a7e8005a2cf",
+    "lib/hosts/bitbucket_contract.mjs": "89cbf40585fa81f7030adbe368c60f430af73b741e87d9518bbb8e3ffa03e02f",
     "lib/repository.mjs": "f397883ca04bae6c3d15e730fbef2fe267fb5d616566a9f4b724aee8f4925f97",
     "templates/plugin/task-profile-requests.mjs": "7cbc45263fce9025737b5b1709d463b21a853de5ad8d486a8ef8c96ff41e8da4"
   },

@@ -1,9 +1,12 @@
 # Git host boundary
 
-Only `github.com` is qualified for task dispatch in this release. Bitbucket Cloud
-repository and PR transport is available for setup and explicit adapter operations.
-`start` and `register` remain disabled for Bitbucket until `git-host-bitbucket`
-qualifies review, CI and completion semantics. Other hosts remain unsupported. The synthetic adapter in
+`github.com` supports task dispatch. Bitbucket's explicit no-reviewer path
+completed live local Codex tasks through PR publication and receipt acceptance
+on disposable public and private repositories, but its coding session could
+read the selected merge-capable token file. General Bitbucket dispatch remains
+unqualified while credential isolation is repaired. Independent Bitbucket
+review and clean Linux installation also remain unvalidated. Other hosts remain
+unsupported. The synthetic adapter in
 `test/git-host.test.mjs` is an offline contract fixture, not a supported host.
 
 `lib/host_definitions.mjs` owns the static host catalogue. `lib/hosts.mjs` binds
@@ -69,7 +72,8 @@ First-party review additionally requires `reviewEvidence(repo, pr, head, base,
 maxBytes)`: complete diff and before/after changed-file content, including
 deletions, bound to exact head, base and merge-base IDs. Qualification and
 reconciliation refuse adapters without this operation before launching a
-reviewer or reusing clearance. Evidence reads and policy/dispute label writes
+first-party reviewer or reusing its clearance. External-only and explicit
+no-reviewer policies do not require this method. Evidence reads and policy/dispute label writes
 use the same repository registry and credential binding as other lifecycle
 operations. Review jobs and verdicts remain coordinator-owned.
 
@@ -111,7 +115,11 @@ redirects and receives secrets only through environment variables. Clone URLs,
 argv, committed files and public diagnostics contain no token. A run clears
 inherited API tokens and SSH channels. Bitbucket supports an explicitly selected
 SSH key for coordinator Git operations; an SSH key alone cannot authorize the PR
-API. Dispatch remains disabled, so setup never grants a sandbox extra key paths.
+API. The coordinator may clone and push over selected SSH or HTTPS. The coding
+session receives neither the repository API token nor the SSH key. Its bounded
+checkout mailbox requests validated push and PR operations from the coordinator.
+Coordinator Git disables checkout hooks before using a privileged credential.
+Setup never grants a sandbox extra key paths.
 GitHub resolution order remains configured token file, daemon environment,
 then `gh auth token`, with explicit-file failure refusing fallback. Resolution
 happens for each operation so reauthentication works without restarting.
@@ -263,8 +271,10 @@ The [Bitbucket review guide](bitbucket-review.md) supersedes transport-only setu
 examples for reviewer/trust/check policy. `init --host-config <json> --base <branch>`
 can bootstrap an empty config, with an explicit reviewer (or `null`) and stable
 trusted UUIDs. The adapter now implements review normalization, required task
-blockers, recovery operations and merge ancestry, while the static dispatch gate
-remains closed pending [live qualification](audit/bitbucket-review-qualification.md).
+blockers, recovery operations and merge ancestry. The explicit no-reviewer
+dispatch path has [disposable live observations](audit/bitbucket-review-qualification.md),
+but credential isolation failed; independent review and clean Linux installation
+remain unvalidated. Do not enable general dispatch from these observations.
 
 `prView` may include `feedback: { complete: true, headSha, reviews, inline, comments }`.
 The shared loop consumes this one coherent snapshot; adapters without it retain

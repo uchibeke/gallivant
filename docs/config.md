@@ -450,7 +450,10 @@ Set `reviewer` (or explicit `null`), stable UUID `trusted_authors`, and
 override these settings, and a `repos` object takes precedence over both.
 GitHub's top-level reviewer defaults are never inherited by Bitbucket.
 See [configuration examples and credential scope](bitbucket-review.md).
-No configuration setting bypasses the pending live qualification gate.
+For a deliberate no-reviewer task, set `reviewer: null` and
+`review.legacy_no_review: true` on the repository entry. Readiness then reports
+that no independent review was performed; it still requires configured checks
+and the completion receipt.
 
 ## Versioned review policy
 

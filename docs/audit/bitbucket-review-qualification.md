@@ -1,8 +1,50 @@
 # Bitbucket Cloud review-loop qualification record
 
-Status: **unqualified; dispatch disabled**. This document records the original
-missing prerequisites and subsequent disposable transport tests. PR writes and
-offline tests are not substitutes for a real task run, model access or review.
+Status: **native route and live source review exercised; complete lifecycle qualification pending**.
+Dispatch is enabled only under an explicit repository review policy. This
+document records the original missing prerequisites, subsequent disposable
+transport tests, and the remaining private/public first-party matrix. PR writes
+and offline tests are not substitutes for a real model review.
+
+## Live source review follow-up, 2026-11-02
+
+The selected local `codex-cli 0.160.0`, model `gpt-6.1-sol`, reasoning `high`,
+passed a genuine restricted qualification in both disposable repositories.
+The private qualification run was `run-19c91f53-65d7-43ec-954e-a263b4846bea`;
+the public qualification run was `run-1073c551-c3e3-4bf6-b0b8-d05c030d7342`.
+Repeated CLI invocations recovered the same qualification instead of launching
+another model call after parent tool-call IDs were excluded from its fingerprint.
+The private config copy also removes the desktop `daybreak` field, rejected by
+the pinned CLI's strict parser. Operator configuration and managed policy are
+not rewritten. The native loopback regression advertised zero tools and rejected
+five hostile tool calls; all 152 targeted reviewer/preparation/chain tests passed.
+
+These were explicit operator-controlled review criteria applied to existing
+disposable PRs, not replacements for their original task acceptance contracts.
+The criterion required an explicit caveat that empty credential environment
+variables do not prove isolation from files readable under the same OS user.
+Verdicts remained in the coordinator ledger; no synthetic review was posted.
+
+| Live observation | Exact head | Owned reviewer run | Result |
+| --- | --- | --- | --- |
+| [Private PR #3](https://bitbucket.org/webbabyshowers/gallivant-host-test/pull-requests/3), missing caveat | `86cadad0e9f875f98ef1d161fede67f55ac6261d` | `run-93bd9964-899c-4205-8db8-5ef0a6c71d5c` | Concrete finding at `docs/mailbox-verification.md:5` |
+| Same private PR after documentation correction | `d5a492e6b381b40fd7aa98ac2b30e11d4c104e0a` | `run-baa2efa6-34ee-47bd-ab35-33832c8274ef` | Fresh clear verdict; previous-head result was not reused |
+| [Public PR #2](https://bitbucket.org/webbabyshowers/gallivant-host-test-public/pull-requests/2), initial branch/link criterion | `f58d6e3ce34a35a4ceac0541abdb4426faefe72f` | `run-8265d749-55ad-49a0-bbe1-73a9dd606665` | Clear |
+| Same public head, explicit missing-caveat criterion | `f58d6e3ce34a35a4ceac0541abdb4426faefe72f` | `run-013c3cef-0f0c-4a0a-adea-92972c0c7cde` | Finding; changed requirements did not reuse earlier clearance |
+
+Both adapters captured complete live source/diff evidence. The public correction
+request succeeded, but read-after-write verification encountered changing
+snapshots followed by HTTP 429. Its corrected head and fresh clear review remain
+unverified. Stop qualification API reads until rate-limit recovery; reconcile the
+existing correction before another write. Model-reported USD costs were absent
+(`null`), so costs are unknown and reservations remain consumed; this is not a
+native dollar hard cap.
+
+This does not qualify automatic author-session correction, live CI transitions,
+daemon interruption during a review, or merge-gated continuation under the new
+policy. Existing WebBabyShower runs retain their saved legacy policies and have
+not been claimed as independently reviewed. Complete the public correction check
+and outstanding lifecycle gates before activating their policy changes.
 
 ## Observed prerequisites, 2026-11-01
 
@@ -36,7 +78,7 @@ merges the qualified predecessor to test chain continuation.
 | --- | --- | --- |
 | Private and public access, HTTPS and SSH | Private and public disposable repos pass API/SSH reads; a private PR and public `qualification-base` push | Partial: HTTPS Git untested |
 | Non-default base and PR creation | A private PR targets `main`; public PR #1 targets `qualification-base` | Transport passed; agent dispatch untested |
-| Genuine Codex review posting current-head feedback | No inference invocation | Unmet |
+| Genuine Codex review posting current-head feedback | No authorized first-party inference invocation | Unmet |
 | Stable observed reviewer actor; blocking then clear | Coding actor observed; no separate reviewer selected | Unmet |
 | Trusted `/fix`; failed then passing CI/check names | No live PR/check producer | Unmet |
 | Same-session correction and receipt/readiness | No live run | Unmet |
@@ -231,3 +273,122 @@ Verification after the integration corrections:
 - `node --test test/docs-links.test.mjs`: exit 0.
   Output: `/private/tmp/pr32-merge-policy-docs.log`.
 - `git diff --check`: exit 0.
+
+## 2026-11-02: local Codex task loop with explicit no-reviewer policy
+
+The public disposable repository `webbabyshowers/gallivant-host-test-public`
+was used for one live task on a custom `qualification-base` branch. The
+operator-selected account API token and SSH key were kept outside the checkout.
+The coordinator cloned with its selected SSH key. The coding session did not
+receive that key; a repository-specific Git URL rewrite and bounded HTTPS
+credential helper let it push with the selected API token. The first two
+attempts exposed missing task PR helper discovery and Git credential transport;
+the same committed work and Codex session were resumed after each repair.
+
+The task committed `f58d6e3ce34a35a4ceac0541abdb4426faefe72f`, pushed
+`work/public-host-smoke-test`, and opened regular [PR #2](https://bitbucket.org/webbabyshowers/gallivant-host-test-public/pull-requests/2)
+against `qualification-base`. The Bitbucket API confirmed the exact head and
+base. The agent updated the work-attestations receipt after publication. The
+coordinator accepted the receipt and reported `ready` with `no reviewer
+configured; receipt accepted` and round `0/10`. No merge was attempted.
+
+The isolated test config deliberately set `reviewer: null`,
+`review.legacy_no_review: true`, `review.zero_checks: true`, and no required CI
+checks. Thus this run proves PR publication, shared state progression and
+receipt acceptance, but it does **not** prove CI integration or independent
+semantic review. The reviewer producer remains a documented, unvalidated next
+step; no second reviewer account is needed for the qualified no-reviewer path.
+The private repository has verified Git/API transport and manual PR operations,
+but has not completed a live unattended task loop. Clean Linux installation,
+other local harnesses and hosted providers remain unvalidated for Bitbucket.
+
+Verification of this dispatch change: the initial full suite ran 2,009 tests
+with 2,006 passing, one skipped and two portable-bundle failures. Both failures
+had the same cause: a Node-only helper path in the browser-consumed host
+contract. Path resolution was moved into the Node adapter. The exact affected
+portable, task-profile and Bitbucket suites then passed 150/150 tests. The
+focused review/status/doctor suites passed, `npm run lint`, documentation links,
+`git diff --check`, and the packaged `npx` installation test passed. The first
+package test attempt was blocked by the local npm cache permissions; the
+second could not reach npmjs.org inside the sandbox; the network-enabled run
+using a disposable cache passed. The entire suite was not repeated after the
+targeted portability fix.
+
+## 2026-11-02: private mailbox test and credential boundary hold
+
+The private disposable repository completed a live local Codex task through a
+coordinator-owned PR mailbox. It committed and pushed a small change, opened
+[PR #3](https://bitbucket.org/webbabyshowers/gallivant-host-test/pull-requests/3)
+against `main`, updated its receipt, and reached `ready` with the explicit
+no-reviewer policy. This establishes the private task flow, not independent
+review, CI, merge, or deployment. The public [PR #2](https://bitbucket.org/webbabyshowers/gallivant-host-test-public/pull-requests/2)
+also remains ready for human review. Both runs used isolated Gallivant homes,
+which is why neither appears in the operator's normal dashboard.
+
+The mailbox removed `HOST_API_TOKEN`, `GIT_HOST_TOKEN`, and the selected SSH key
+from the coding session environment. A read-only probe in the actual private
+Codex session then ran `test -r` on the configured API-token file and returned
+exit status 0. The probe did not open, print, copy, hash, or use the token.
+Because the token has Bitbucket PR write scope, a session able to read it could
+call Bitbucket's merge API directly. A same-user private file plus environment
+scrubbing is therefore insufficient; the draft dispatch PR must not be merged
+or used for unattended work in other repositories. No secret exposure or
+malicious use was observed in these tests.
+
+The mailbox prototype's full suite reported 2,012 tests: 2,010 passed, one
+skipped and one failed (`git-host-architecture`: a host-specific decision in
+shared Git code). The focused mailbox and Bitbucket suites passed. This
+architecture failure is separate from, and does not override, the credential
+hold. An OS-enforced read boundary or a server-enforced non-merging coding
+identity must be implemented and verified in both disposable repositories
+before general dispatch. Independent review, required CI and a clean Linux
+installation remain separate unvalidated capabilities. The isolated test
+daemons were stopped after their runs completed.
+
+## 2026-11-02: complete evidence and bounded local review implementation
+
+The Bitbucket adapter now implements the shared `reviewEvidence` contract. It
+binds the immutable repository UUID and PR number, expands full head/base object
+IDs, requests the documented `head..base` comparison with `topic=true` (Bitbucket
+orders this opposite to `git diff`), paginates diffstat, obtains the merge base,
+and reads source metadata/content at the merge base and head. It compares every
+changed path with the raw diff and refuses duplicate, missing, stale, binary,
+subrepository, symlink, redirected, rate-limited, truncated and oversized
+evidence. It re-reads the PR before returning, and the shared capture boundary
+rechecks body/check/policy binding afterward. The selected API credential never
+enters the model prompt or reviewer environment.
+
+The shared first-party service now partitions evidence above the 100,000-byte
+single-job cap into immutable source and patch slices. Every piece binds the same
+task/repository/PR/head/base/merge-base/body/check/policy/aggregate identities and
+repeats all criteria. Long lines and lockfiles are sliced with absolute source
+offsets. All pieces must complete; one finding, missing piece, malformed response,
+timeout, identity conflict or exhausted job/budget bound blocks readiness. An
+incomplete aggregate records `review-incomplete`. Head, body, checks and policy
+changes invalidate the prior aggregate, while durable piece keys prevent a
+restart from launching a duplicate.
+
+Offline regressions include:
+
+- `Bitbucket first-party evidence binds exact PR commits and covers paginated added, modified, removed and renamed files`
+- `Bitbucket first-party evidence refuses stale, duplicate, binary, missing-patch, redirected, rate-limited and oversized capture`
+- `a deterministic 340 KB lockfile is completely partitioned within configured jobs or refused explicitly`
+- `reviewer environment retains selected model access but excludes coding and Bitbucket credentials`
+- `explicit policy migration removes legacy no-review while preserving the existing Bitbucket run identity`
+
+The configured Codex executable reports version 0.160.0, meeting the implemented
+native-boundary minimum. No selected-model challenge was run in this implementation
+session because it was not authorized to start a paid nested job; version and
+sign-in status do not establish model access. No current WebBabyShower PR was
+captured or reviewed. The public [PR #2](https://bitbucket.org/webbabyshowers/gallivant-host-test-public/pull-requests/2)
+and private [PR #3](https://bitbucket.org/webbabyshowers/gallivant-host-test/pull-requests/3)
+remain historical no-review transport evidence only.
+
+The exact remaining live remedy is to authorize the bounded qualification job,
+then run a genuine first-party review on a fresh exact head in each disposable
+repository: record a blocking finding, correct the same PR/session, and record a
+fresh clear aggregate. The record must include repository/PR links, task and
+review run IDs, reviewed full SHA, selected model, provider-reported cost (or an
+explicit unknown-cost reservation), credential-isolation observation, restart
+deduplication, and a changed-head non-clearance check. Synthetic verdict JSON or
+the earlier no-review PRs cannot fill those rows.

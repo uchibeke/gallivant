@@ -6,7 +6,7 @@ import { join } from "node:path";
 import { fixture, REPO, PATH, UUID, WORKSPACE, USER, HEAD, BASE, NOW, HOST_KEY, pr, prSummary, page, json, comment, status } from "./bitbucket-fixture.mjs";
 import { makeHostRegistry, hosts, pullRequestUrl } from "../lib/hosts.mjs";
 import { validateHostRecord } from "../lib/host_contract.mjs";
-import { makeGit, runEnv } from "../lib/git.mjs";
+import { makeGit, runEnv, runSessionEnv } from "../lib/git.mjs";
 import { resolveBitbucketCredential, verifyBitbucketHostKeys } from "../lib/hosts/bitbucket_credential.mjs";
 import { resolveCredential } from "../lib/credential.mjs";
 import { parseRemote } from "../lib/repository.mjs";
@@ -411,13 +411,23 @@ test("Bitbucket Git/API mismatch, unverified SSH pins, and foreign credential-he
   const f = fixture(), git = makeGit({ config: { worktrees: tempHome() }, hosts: f.registry, exec: async () => ({ stdout: `${HEAD}\trefs/heads/main` }) });
   await assert.rejects(repositoryPreflight({}, REPO, { registry: f.registry, git }), /Git and API base identities differ/);
   const root = tempHome(); execFileSync("git", ["init", "-q", root]);
+  execFileSync("git", ["remote", "add", "origin", "git@ssh.bitbucket.org:acme/widget.git"], { cwd: root });
   const env = { PATH: process.env.PATH, HOME: root, GIT_TERMINAL_PROMPT: "0", ...runEnv(null, { host: "bitbucket.org", repository: PATH, username: "x-bitbucket-api-token-auth", token: "fixture-git-secret" }) };
+  const session = runSessionEnv({ PATH: "/fixture/bin", GIT_SSH_COMMAND: "unselected-key", GIT_HOST_TOKEN: "wrong-token", HOST_API_TOKEN: "wrong-api" }, null,
+    { host: "bitbucket.org", repository: PATH, username: "x-bitbucket-api-token-auth", token: "fixture-git-secret", environment: { HOST_API_TOKEN: "selected-api" } });
+  assert.equal(session.PATH, "/fixture/bin");
+  assert.equal(session.GIT_SSH_COMMAND, "false");
+  assert.equal(session.GIT_HOST_TOKEN, "fixture-git-secret");
+  assert.equal(session.HOST_API_TOKEN, "selected-api");
+  assert.equal(env.GIT_SSH_COMMAND, "false", "the coding session never receives the coordinator SSH key");
+  assert.equal(execFileSync("git", ["remote", "get-url", "origin"], { cwd: root, env, encoding: "utf8" }).trim(), "https://bitbucket.org/acme/widget.git");
   const fill = host => execFileSync("git", ["credential", "fill"], { cwd: root, env, input: `protocol=https\nhost=${host}\npath=acme/widget.git\n\n`, encoding: "utf8", stdio: ["pipe", "pipe", "pipe"] });
   assert.match(fill("bitbucket.org"), /username=x-bitbucket-api-token-auth\npassword=fixture-git-secret/);
   for (const host of ["github.com", "evil.test"]) assert.throws(() => fill(host), e => !String(e.stdout).includes("fixture-git-secret"));
+  assert.throws(() => execFileSync("git", ["credential", "fill"], { cwd: root, env, input: "protocol=https\nhost=bitbucket.org\npath=acme/other.git\n\n", encoding: "utf8", stdio: ["pipe", "pipe", "pipe"] }), e => !String(e.stdout).includes("fixture-git-secret"));
 });
 
-test("Bitbucket-only init and doctor need no gh and report disabled dispatch without a model call", async () => {
+test("Bitbucket-only init and doctor need no gh and report enabled dispatch without a model call", async () => {
   const home = tempHome(), config = selectedConfig(home), f = fixture({ config });
   f.data.prs = [pr()];
   writeFileSync(join(home, "config.json"), JSON.stringify(config), { mode: 0o600 });
@@ -425,9 +435,9 @@ test("Bitbucket-only init and doctor need no gh and report disabled dispatch wit
   const transportPreflight = (c, repo) => repositoryPreflight(c, repo, { registry: f.registry, git });
   const results = await doctor({ home, registry: f.registry, transportPreflight, harnessCheck: ready, resolve: () => { throw new Error("GitHub resolver called"); } });
   assert.ok(results.some(r => /bitbucket.org access/.test(r.name) && r.ok)); assert.ok(!results.some(r => /gh auth/.test(r.name)));
-  assert.match(renderDoctor(results).text, /Unknown until write.*PR creation/); assert.match(renderDoctor(results).text, /dispatch is disabled/);
+  assert.match(renderDoctor(results).text, /Unknown until write.*PR creation/); assert.match(renderDoctor(results).text, /task dispatch\s+Enabled/);
   const output = await init({ home, gh: f.api, repository: () => ({ repo: REPO, origin: "git@bitbucket.org:acme/widget.git", checkout: home }), harnessCheck: ready, transportPreflight, doctor: async () => results });
-  assert.match(renderInit(output, renderDoctor(results)), /dispatch is disabled/); assert.doesNotMatch(renderInit(output, renderDoctor(results)), /First task|gh auth login/);
+  assert.match(renderInit(output, renderDoctor(results)), /task dispatch\s+Enabled/); assert.doesNotMatch(renderInit(output, renderDoctor(results)), /gh auth login/);
   const saved = JSON.parse(readFileSync(join(home, "config.json"), "utf8")); assert.deepEqual(saved.git_hosts["bitbucket.org"].repositories[PATH], { uuid: UUID, workspaceUuid: WORKSPACE });
   delete config.git_hosts["bitbucket.org"].api;
   writeFileSync(join(home, "config.json"), JSON.stringify(config));
@@ -435,16 +445,16 @@ test("Bitbucket-only init and doctor need no gh and report disabled dispatch wit
   assert.match(renderDoctor(failed).text, /SSH key.*Git only.*PR\/comment/);
 });
 
-test("Bitbucket host gate survives config, status, dashboard and URL parsing without claiming review qualification", () => {
+test("Bitbucket dispatch survives config, status, dashboard and URL parsing without claiming external review", () => {
   const home = tempHome(), config = selectedConfig(home);
   assert.deepEqual(validate(merge(config, home), home), []);
   config.git_hosts["bitbucket.org"].api.token = "never-store";
   assert.ok(validate(merge(config, home), home).some(p => p.includes("private token file")));
   delete config.git_hosts["bitbucket.org"].api.token;
-  assert.throws(() => hosts.select(REPO), /dispatch is disabled/);
-  assert.throws(() => hosts.fromUrl("https://bitbucket.org/acme/widget/pull-requests/7"), /git-host-bitbucket/);
+  assert.equal(hosts.select(REPO).repository.key, REPO);
+  assert.equal(hosts.fromUrl("https://bitbucket.org/acme/widget/pull-requests/7").number, 7);
   const ctx = { home, config, state: makeState(home), log: silentLog };
-  const m = model(ctx); assert.match(render(m), /dispatch is disabled/); assert.match(dashboard(m), /dispatch is disabled/);
+  const m = model(ctx); assert.doesNotMatch(render(m), /dispatch is disabled/); assert.doesNotMatch(dashboard(m), /dispatch is disabled/);
   const checkout = tempHome(); execFileSync("git", ["init", "-q", checkout]); execFileSync("git", ["-C", checkout, "remote", "add", "origin", "git@ssh.bitbucket.org:Acme/Widget.git"]);
   assert.equal(targetRepository(checkout).repo, REPO); assert.equal(parseRemote("git@bitbucket.org:acme/widget.git").host, "bitbucket.org");
 });
@@ -483,15 +493,16 @@ test("Bitbucket honors only the documented same-repository diff redirect", async
   await assert.rejects(foreign.api.prView(PATH, 7), /refused API/);
 });
 
-test("Bitbucket start and register refuse before clone, publication or model dispatch", async () => {
-  const { register } = await import("../lib/commands/register.mjs");
+test("Bitbucket start reaches repository access preflight before any paid dispatch", async () => {
   const { start } = await import("../lib/commands/start.mjs");
   const f = fixture(), home = tempHome();
-  const ctx = { home, config: selectedConfig(home), state: makeState(home), hosts: f.registry, host: f.registry.api, log: silentLog, git: { create: () => { throw new Error("unexpected clone"); } } };
-  await assert.rejects(register(ctx, { url: "https://bitbucket.org/acme/widget/pull-requests/7" }), /dispatch is disabled/);
+  let probed = 0;
+  const ctx = { home, config: selectedConfig(home), state: makeState(home), hosts: f.registry, host: f.registry.api, log: silentLog,
+    git: { probeAccess: () => { probed++; throw new Error("intentional access stop"); } } };
   const request = { ...parsePrd(GOOD_PRD, "docs/prds/feature.md"), repo: REPO, harness: "codex", defaultBranch: "main" };
-  await assert.rejects(start(ctx, { request }), error => /dispatch is disabled/.test(error.message) && error.startUncertain === false);
-  assert.equal(f.calls.length, 0);
+  await assert.rejects(start(ctx, { request }), /intentional access stop/);
+  assert.equal(probed, 1);
+  assert.ok(f.calls.every(c => c.method === "GET"));
 });
 
 test("Bitbucket rejected HTTP and redirect responses release unread bodies", async () => {

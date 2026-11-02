@@ -25,6 +25,7 @@ Use `gallivant --help` (or `gallivant help`) for the installed CLI's syntax and
 | Diagnose a stop | `gallivant why HANDLE` | Shows state, failure and pending controls. |
 | Continue stopped execution | `gallivant resume HANDLE` | Preserves the session; explicit changed-brief acceptance uses `--resnapshot`. |
 | Re-evaluate PR gates | `gallivant recheck HANDLE` | No budget reset, no CI rerun, no replacement for execution recovery. |
+| Qualify or change review policy | `gallivant review qualify|status|policy|dispute` | Qualification is separate and may be paid only with `--run`; policy changes preserve the task and session. |
 | Send a correction | `gallivant say HANDLE --note "..."` | Queues same-session delivery; supported local runs can use `--interrupt`. |
 | Stop future dispatch | `gallivant cancel HANDLE` | Requests cancellation; inspect confirmation before assuming the process stopped. |
 | Forget tracking | `gallivant remove HANDLE` | Leaves the PR, branch, labels and checkout in place. |
@@ -656,6 +657,10 @@ it can be decoded to inspect the precise existing branch/session identity.
 
 ## Bitbucket setup and PR commands
 
-Bitbucket Cloud transport and the review protocol have offline coverage, but task dispatch remains disabled until live qualification passes. See the [setup, review and troubleshooting guide](bitbucket-review.md) for prerequisites, tested boundaries and unmet evidence. No GitHub sign-in is required for Bitbucket-only setup; no pipeline, credential or repository setting is installed automatically.
+Bitbucket Cloud dispatch is available with explicit repository credentials and review policy. Its complete first-party evidence adapter and the shared bounded review service are implemented; the private/public live reviewer matrix and clean Linux installation remain separate qualifications. A prior public disposable run proved PR publication and receipt acceptance in legacy no-reviewer mode only. See the [setup, review and troubleshooting guide](bitbucket-review.md) for prerequisites and limits. Bitbucket-only setup needs no GitHub sign-in; it does not install a pipeline or alter repository settings.
 
 `init` accepts `--host-config <json>` and `--base <branch>`. The installed `task-pr` command supports bound PR create/view/diff/edit/comment operations; `task-review` prepares and publishes independent reviewer results. These commands do not qualify a harness or authorize a model invocation.
+
+For the independent local reviewer, configure `review.mode: "first-party-required"` and `review.route: "codex"`, then run `gallivant review qualify --repo bitbucket.org/workspace/repository --run`. Run the same command without `--run` to inspect its durable result. A new task preflight refuses before author dispatch unless this exact executable/provider fingerprint qualified. To migrate a settled existing task, use `gallivant review policy HANDLE --mode first-party-required --reason "Enable the qualified independent local reviewer"`, then `gallivant recheck HANDLE`. That audited command preserves the task, PRD snapshot, PR and implementation session; editing config alone cannot remove its legacy policy.
+
+Review prompts remain at or below 100,000 bytes. Large changes are divided across at most `review.max_jobs` fresh restricted jobs and the reserved `review.budget_usd`; every path and criterion must be covered. A single large file is sliced or the aggregate stops explicitly as incomplete. Zero CI checks still require `review.zero_checks: true` and are never inferred from reviewer clearance.

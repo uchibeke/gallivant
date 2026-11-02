@@ -118,6 +118,24 @@ test("queue approves a plan without starting work; ticks start its first PRD exa
   assert.equal(w.clones.length, 1);
 });
 
+test("Bitbucket rate limiting pauses a queued chain without consuming its failure budget", async () => {
+  const w = world();
+  await w.queue();
+  w.ctx.gh.refSha = async () => {
+    const error = new Error("Bitbucket API rate limited");
+    error.code = "BB_RATE_LIMIT";
+    throw error;
+  };
+  await tickChains(w.ctx);
+  const paused = w.ctx.state.getChain("release");
+  assert.equal(paused.status, "active");
+  assert.equal(paused.failures, 0);
+  assert.ok(Date.parse(paused.rateLimitUntil) > Date.now() + 10 * 60_000);
+  for (let i = 0; i < 6; i++) await tickChains(w.ctx);
+  assert.equal(w.ctx.state.getChain("release").status, "active");
+  assert.equal(w.starts(), 0);
+});
+
 test("an active legacy-prefix milestone survives upgrade and its neutral-prefix successor still waits for merge", async () => {
   const w = world();
   await w.queue();

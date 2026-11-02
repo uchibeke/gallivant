@@ -102,6 +102,7 @@ Chain approval and unstarted milestones live in local `state.json`; unlike an op
 reconstructed from GitHub. Preserve your Gallivant home when moving the daemon to another machine.
 
 Repository identity, credential transport and PR evidence are defined by the
-[Git host contract](git-hosts.md). Only GitHub is qualified in this release;
-other hosts are refused before dispatch. Existing IDs and chain ownership are
-retained without a state migration.
+[Git host contract](git-hosts.md). GitHub and Bitbucket Cloud can dispatch;
+Bitbucket's live no-reviewer path has been qualified on a disposable public
+repository. Independent Bitbucket review remains unvalidated. Existing IDs and
+chain ownership are retained without a state migration.

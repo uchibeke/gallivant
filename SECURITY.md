@@ -24,5 +24,5 @@ Use a separate reviewer account and keep its publication credential outside the
 coding process's filesystem and environment access. A private file readable by
 the coding identity does not provide isolation. The review model receives the
 prepared diff and a read-only checkout; an operator publishes its exact-head
-verdict. See [reviewer setup](docs/bitbucket-review.md#independent-codex-or-human-reviewer).
+verdict. See [reviewer setup](docs/bitbucket-review.md#independent-local-codex-reviewer).
 Bitbucket dispatch remains disabled pending live qualification.

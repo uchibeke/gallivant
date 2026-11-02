@@ -20,7 +20,10 @@ export const json = (value, status = 200, headers = {}) => new Response(JSON.str
 export const page = values => ({ values, size: values.length, pagelen: 50 });
 
 export function fixture({ config = {}, limits = {}, intercept = null, credential = null } = {}) {
-  const data = { repository: repository(), user: { ...USER }, prs: [], comments: [comment()], tasks: [task()], statuses: [status()], restrictions: [], permission: "write", branch: "main", token: "fixture-api-secret", email: "operator@example.test" };
+  const data = { repository: repository(), user: { ...USER }, prs: [], comments: [comment()], tasks: [task()], statuses: [status()], restrictions: [], permission: "write", branch: "main", token: "fixture-api-secret", email: "operator@example.test",
+    comparisonDiff: "diff --git a/a b/a\n--- a/a\n+++ b/a\n@@ -1 +1 @@\n-before\n+fixture file\n",
+    diffstat: [{ status: "modified", old: { type: "commit_file", path: "a" }, new: { type: "commit_file", path: "a" } }],
+    sources: { [`${BASE}:a`]: "before\n", [`${HEAD}:a`]: "fixture file\n" }, sourceAttributes: {} };
   const calls = [];
   const fetch = async (url, options) => {
     assert.equal(new URL(url).origin, "https://api.bitbucket.org");
@@ -51,8 +54,15 @@ export function fixture({ config = {}, limits = {}, intercept = null, credential
     if (/^\/pullrequests\/7\/comments\/\d+$/.test(path)) return json(data.comments.find(c => c.id === Number(path.split("/").at(-1))) ?? {}, 200);
     if (path === `/commit/${HEAD}` || path === `/commit/${BASE}`) return json({ hash: path.split("/").at(-1), date: NOW });
     if (path.startsWith("/merge-base/")) return json({ hash: BASE });
-    if (path.startsWith("/src/")) return u.searchParams.get("format") === "meta"
-      ? json({ type: "commit_file", path: decodeURIComponent(path.split("/").slice(3).join("/")), commit: { hash: path.split("/")[2] }, size: 13 }) : new Response("fixture file\n");
+    if (path.startsWith("/diffstat/")) return json(page(data.diffstat));
+    if (path.startsWith("/diff/")) return new Response(data.comparisonDiff);
+    if (path.startsWith("/src/")) {
+      const hash = path.split("/")[2], file = decodeURIComponent(path.split("/").slice(3).join("/"));
+      const content = data.sources[`${hash}:${file}`] ?? (file === "docs/brief.md" ? "fixture file\n" : undefined);
+      if (content === undefined) return json({}, 404);
+      return u.searchParams.get("format") === "meta"
+        ? json({ type: "commit_file", path: file, commit: { hash }, size: Buffer.byteLength(content), attributes: data.sourceAttributes[`${hash}:${file}`] ?? [] }) : new Response(content);
+    }
     if (path === "/pullrequests/7/tasks") return json(page(data.tasks));
     if (path === `/commit/${HEAD}/statuses`) return json(page(data.statuses));
     if (path === "/pullrequests/7/diff") return new Response("diff --git a/a b/a\n+change\n");

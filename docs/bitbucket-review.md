@@ -1,12 +1,15 @@
 # Bitbucket Cloud review setup and qualification
 
-Bitbucket Cloud dispatch remains **disabled**. The transport, review protocol,
-PR command, and shared lifecycle have offline regression coverage, and the PR
-transport has a disposable live smoke test. There is no live task-loop
-qualification or claim of a genuine Codex review. `start`, `register`, and
-paid task preparation cannot bypass this release gate. See the
-[qualification record](audit/bitbucket-review-qualification.md) for the missing
-evidence. No configuration flag turns qualification on.
+Bitbucket Cloud dispatch and complete first-party evidence capture are implemented.
+The independent local review route is still **live-unqualified** until the public
+and private disposable repository matrix records a genuine blocking verdict,
+same-session correction and fresh exact-head clearance. Earlier disposable runs
+proved regular PR publication and receipt acceptance with **no reviewer
+configured**; they are not review evidence. The private coding session could also
+read the coordinator's merge-capable API-token file by path, so that historical
+coding-credential hold remains separate from reviewer credential isolation. Do
+not migrate an existing legacy run or start unattended work on the strength of
+offline fixtures. See the [qualification record](audit/bitbucket-review-qualification.md).
 
 ## First setup, including a checkout with no existing configuration
 
@@ -21,11 +24,15 @@ and runs retain their previous review semantics.
    private file (`chmod 600`). Supply the account email separately. An account
    API token can be used with a free-plan repository; this does not require a
    workspace/repository access-token subscription or Agentic Pipelines.
-2. For HTTPS Git, the selected token authorizes Git as
+2. For HTTPS Git, the coordinator uses the selected token as
    `x-bitbucket-api-token-auth`; the API uses account email/token Basic auth.
    For SSH Git, keep the API token and select the explicit SSH key/verified
    known-hosts file described in [Git host setup](git-hosts.md). SSH authentication
-   alone cannot read or write PRs. HTTPS and Cloud SSH checkout origins identify
+   alone cannot read or write PRs. The coding session receives neither token nor
+   SSH key through environment variables: its bounded PR mailbox asks the
+   coordinator to push and publish. A same-user coding process can still read
+   the configured private files unless a separate boundary denies those reads.
+   HTTPS and Cloud SSH checkout origins identify
    the same repository; self-hosted servers and SSH aliases remain unsupported.
 3. Write a host settings file outside the coding checkout. Example:
 
@@ -43,14 +50,33 @@ and runs retain their previous review semantics.
 ```
 
 Replace the example UUID with the operator's stable Bitbucket UUID, not a nickname.
-Select `reviewer: null` deliberately, or use the independent reviewer below.
-No-reviewer mode still enforces CI, trusted commands, unresolved required feedback
-and the completion receipt. Its readiness record says `none`; it is never
-Codex-reviewed. The example check name must exactly match the repository's build
-status name. An empty `required_checks` list permits the explicit no-CI behavior:
-zero checks waits for `checks_grace_minutes`, then passes the CI gate. Any named
-required check missing from a complete response remains pending indefinitely;
-missing/partial responses, rate limits, outages and pending checks never pass.
+Select `reviewer: null` deliberately; the local first-party path needs no separate
+Bitbucket reviewer account. After `init`, configure the repository entry for a
+new reviewed run:
+
+```json
+{
+  "repo": "bitbucket.org/workspace/repository",
+  "reviewer": null,
+  "review": {
+    "mode": "first-party-required",
+    "route": "codex",
+    "max_input_bytes": 100000,
+    "max_jobs": 4,
+    "budget_usd": 4,
+    "zero_checks": false
+  }
+}
+```
+
+Keep `review.legacy_no_review: true` only for a deliberately unreviewed legacy
+run while live qualification is unavailable. That mode still enforces configured
+CI, trusted commands, unresolved required feedback and the completion receipt,
+but its readiness record says `none`; it is never independently reviewed. The
+example check name must exactly match the repository's build status name. An
+empty `required_checks` list does not waive CI for a version-1 policy: a repository
+with no checks must explicitly set `review.zero_checks: true`. Missing/partial
+responses, rate limits, outages and pending checks never pass.
 
 From the intended checkout:
 
@@ -68,7 +94,7 @@ role, and verifies Git's base SHA against the API. `doctor` distinguishes unknow
 write scopes from observed read access. Only an actual write can prove Git push,
 PR creation and comment write permission. Setup never installs a pipeline,
 creates a credential, changes repository protection, or makes a paid model call.
-It reports the disabled dispatch gate even when transport checks pass.
+It reports dispatch availability separately from transport access.
 
 Host settings live under `git_hosts["bitbucket.org"]`. `repositories["workspace/repo"]`
 may override `api`, `git`, `reviewer`, `trusted_authors`, and `required_checks`,
@@ -78,8 +104,64 @@ precedence is repository entry, host repository binding, host settings. Historic
 top-level reviewer/trust defaults apply only to GitHub. Reviewer objects for
 Bitbucket must supply every required field; the GitHub mention is rejected.
 
-## Independent Codex or human reviewer
+## Independent local Codex reviewer
 
+The host adapter binds the repository UUID, PR number, full head and base object
+IDs, and merge base. It paginates `diffstat/<head>..<base>?topic=true`, compares
+that changed-path inventory to the complete raw comparison, and reads regular
+UTF-8 source at the merge base and head through `src/{commit}/{path}`. Added,
+modified, removed and renamed files all carry before/after text as applicable.
+Binary, subrepository, symlink, missing-patch, duplicate, truncated, stale,
+rate-limited, redirected and oversized evidence is refused. The PR binding is
+read again after capture. The API token stays behind the host boundary and is not
+part of the reviewer prompt or environment.
+
+Qualify the exact configured executable/provider route only after authorizing its
+separate paid challenge:
+
+```sh
+gallivant review qualify --repo bitbucket.org/workspace/repository
+gallivant review qualify --repo bitbucket.org/workspace/repository --run
+gallivant review qualify --repo bitbucket.org/workspace/repository
+```
+
+The first and last commands are read-only. `--run` starts at most the one durable
+qualification job for that fingerprint; CLI version and sign-in checks alone do
+not prove selected-model access. Start refuses before author dispatch if the route
+cannot qualify.
+
+Qualification fingerprints use the adapter's selected provider environment,
+configuration, credentials and executable. Parent-agent session and tool-call
+IDs do not invalidate an existing qualification. The private Codex profile drops
+the desktop-only `daybreak` flag for CLI compatibility; strict inspection of
+effective permissions and managed policy remains required.
+
+For a settled existing run that still has the explicit legacy snapshot, use the
+audited transition and then recheck the same PR:
+
+```sh
+gallivant review policy HANDLE --mode first-party-required \
+  --reason "Enable the qualified independent local reviewer"
+gallivant recheck HANDLE
+```
+
+This is the only path that removes the saved legacy policy. It retains the task
+identity, original PRD snapshot, PR, checkout and implementation session. A
+failed route preflight changes nothing and launches no review. Do not edit an
+active WebBabyShower brief or local policy as an implementation test.
+
+Each reviewer job is a fresh restricted Codex execution with no implementation
+session, context mounts, tools, network, host/Git credential or publication
+authority. The 100,000-byte input cap applies to every job. Large evidence is
+split into immutable source/patch slices, including a single large lockfile or
+line; every slice repeats the aggregate identities and all acceptance criteria.
+Clearance requires every piece to complete and match. `max_jobs`, `budget_usd`
+and per-job timeout bound the aggregate. If the full change does not fit those
+bounds, the run stops with `review-incomplete`; no path or suffix is omitted.
+
+## External Bitbucket reviewer account
+
+This is an alternative external-review setup, not required by the local path.
 Use a separate Bitbucket account for the automated reviewer. Configure its stable
 UUID, never its display name, nickname, the coding account, or a Pipeline label:
 
@@ -165,21 +247,28 @@ is ignored. Replies authored by the coding account do not become new fix request
 
 ## Session PR operations and recovery
 
-`task-pr` is the bounded PR CLI used by Bitbucket start/fix/resume prompts. It takes
-the coding API credential from the session's explicitly bound environment and
-verifies the checkout origin and branch before every operation. It supports
-`create`, `view`, `diff`, `edit --body-file`, and `comment --body-file --reply-to`.
-It has no merge, deployment or repository-settings operation. Credentials never
-enter arguments, prompt text, committed files or another host's default resolver.
+`task-pr` is the bounded PR CLI used by Bitbucket start/fix/resume prompts. In a
+task session it writes a bounded request to the checkout's mailbox; the daemon
+verifies the saved repository, branch, base and PR identity, then uses its own
+Git and API credentials. `push`, `create`, `edit` and `comment` push committed
+HEAD through the coordinator before publication. `view` and `diff` are read
+operations. The agent receives no Git or PR token and no SSH key in its
+environment. Its observed ability to read the token file remains a dispatch
+blocker. The
+coordinator disables checkout hooks when running Git, so an agent-written
+pre-push hook cannot run with coordinator authority. The mailbox has no merge,
+deployment or repository-settings operation. Direct `task-pr` use outside an
+agent session still requires an explicitly bound API credential.
 The PR CLI created and reconciled a disposable private PR, read its exact head,
-posted a comment and updated its body. This does not qualify a local harness or
-the unattended task loop. See the [qualification record](audit/bitbucket-review-qualification.md).
+posted a comment and updated its body. A separate live public task also used it
+to open and update a regular PR. See the [qualification record](audit/bitbucket-review-qualification.md).
 
-Once a release has passed live qualification, local PRD commands use the verified
-checkout, and `register` uses the exact PR URL. Host-qualified state/worktree keys
+After the credential boundary is qualified, local PRD commands use the verified
+checkout, and `register` uses the exact PR
+URL. Host-qualified state/worktree keys
 prevent a same-named GitHub repository controlling a Bitbucket PR. Base overrides
-flow through clone, PR publication and later base updates. Today those dispatch
-commands stop at the qualification gate; do not modify source flags to run them.
+flow through clone, PR publication and later base updates. Use `gallivant doctor`
+to confirm access and policy before `gallivant start <prd> --base <branch>`.
 Hosted providers with a GitHub-bound environment are incompatible. A snapshot
 provider must pass the same publication and qualification checks as a local one.
 
@@ -201,11 +290,24 @@ No command merges the PR, force-pushes, deploys or alters protections.
   configuration, or explicitly choose no-reviewer mode. Do not use `@codex review`.
 - `BB_INCOMPLETE`, `BB_STALE`, HTTP 429/5xx: restore API access or wait for the read
   retry. Never clear a cursor or turn missing evidence into an empty collection.
+- `REVIEW_UNQUALIFIED`: confirm the exact `harness.codex.bin`, selected model and
+  provider access, then explicitly run `review qualify --repo ... --run`. Do not
+  substitute `--version`, sign-in status or an offline fixture.
+- `review-incomplete` / `REVIEW_INCOMPLETE`: inspect the named missing identity,
+  path, patch or required job count. For a large complete text change, raise
+  `max_jobs` and `budget_usd` only within an operator-approved bound, then select
+  the new policy explicitly. Binary, subrepository, symlink, rate-limited,
+  redirected or stale evidence must be corrected; increasing a byte cap is not a
+  workaround.
 - `pr-identity`: inspect source/base/repository/head and restore the recorded
   identity. A decline or unproven merge needs operator reconciliation, not a new
   paid run or an automatic chain advance.
-- Dispatch disabled: complete the documented live qualification matrix. Editing
-  the receipt or passing fixture tests cannot remove this gate.
+- Access probe fails: check the selected coordinator SSH key or HTTPS token and
+  the account API token for PR operations. The coding session receives neither.
+  Re-run `doctor`, then resume the existing task rather than starting a duplicate.
+- PR mailbox timeout: confirm the daemon is running and can read the selected
+  repository; retry the same `task-pr` operation. Do not give the coding session
+  a token to work around the mailbox.
 
 API semantics are based on Atlassian's [PR APIs](https://developer.atlassian.com/cloud/bitbucket/rest/api-group-pullrequests/),
 [commit ancestry API](https://developer.atlassian.com/cloud/bitbucket/rest/api-group-commits/),
