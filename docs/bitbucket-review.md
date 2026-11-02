@@ -51,8 +51,9 @@ and runs retain their previous review semantics.
 ```
 
 Replace the example UUID with the operator's stable Bitbucket UUID, not a nickname.
-Select `reviewer: null` deliberately. No separate reviewer account is needed to
-start a task. After `init`, record `"review": { "legacy_no_review": true }` in
+Select `reviewer: null` deliberately. No separate reviewer account is required
+for this policy once dispatch qualifies. After `init`, record
+`"review": { "legacy_no_review": true }` in
 that repository's entry in `~/.gallivant/config.json`; keep `reviewer: null` in
 the host policy. This makes the no-review choice explicit in the local config.
 No-reviewer mode still enforces configured CI, trusted commands, unresolved
@@ -193,7 +194,8 @@ The PR CLI created and reconciled a disposable private PR, read its exact head,
 posted a comment and updated its body. A separate live public task also used it
 to open and update a regular PR. See the [qualification record](audit/bitbucket-review-qualification.md).
 
-Local PRD commands use the verified checkout, and `register` uses the exact PR
+After the credential boundary is qualified, local PRD commands use the verified
+checkout, and `register` uses the exact PR
 URL. Host-qualified state/worktree keys
 prevent a same-named GitHub repository controlling a Bitbucket PR. Base overrides
 flow through clone, PR publication and later base updates. Use `gallivant doctor`
