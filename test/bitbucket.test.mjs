@@ -314,6 +314,18 @@ test("Bitbucket expands paginated PR summaries into complete records by reposito
   assert.ok(f.calls.every(c => c.method === "GET" && new URL(c.url).host === "api.bitbucket.org"));
 });
 
+test("Bitbucket lists owned same-repository PRs despite an unrelated fork, while publication still refuses the fork", async () => {
+  const f = fixture();
+  f.data.prs = [pr(), pr({ id: 8,
+    author: { uuid: "{44444444-4444-4444-4444-444444444444}", type: "user" },
+    source: { ...pr().source, repository: { uuid: WORKSPACE, full_name: "fork/widget" } },
+    links: { html: { href: "https://bitbucket.org/acme/widget/pull-requests/8" } } })];
+  assert.deepEqual((await f.api.prListMine(PATH)).map(row => row.number), [7]);
+  assert.ok(!f.calls.some(c => c.path === "/pullrequests/8"));
+  await assert.rejects(f.api.publishResultPr(publication), /conflicting/);
+  assert.ok(f.calls.every(c => c.method === "GET"));
+});
+
 test("Bitbucket PR detail failures stop listing, preflight and publication without dropping evidence", async () => {
   const operations = [api => api.prListByHead(PATH, "work/feature"), api => api.preflight(PATH), api => api.publishResultPr(publication)];
   for (const operation of operations) {

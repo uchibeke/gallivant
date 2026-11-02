@@ -87,12 +87,15 @@ CI, session and merge rows stay unmet until independently observed.
 ## Follow-up verification, 2026-11-01
 
 - `npm ci --offline` installed the locked dependencies in the isolated fix
-  checkout. `npm test` then passed with host process access: 2,007 passed,
+  checkout. `npm test` then passed on the initial transport fix with host
+  process access: 2,007 passed,
   0 failed, 1 skipped (the Linux-only isolation test). The suite took 457 s.
   The sandboxed attempt could not identify its own process for daemon-lock
   tests because `ps` was restricted; it is not counted as a code regression.
-- `node --test test/bitbucket.test.mjs`: 30 passed, including abbreviated
-  commit resolution, description idempotency and fork-only preflight.
+- After review identified a fork PR listing edge case,
+  `node --test test/bitbucket.test.mjs`: 31 passed, including abbreviated
+  commit resolution, description idempotency, fork-only preflight and
+  repository-wide owned-PR discovery with an unrelated fork present.
 - `npm run lint`, documentation link tests and `git diff --check`: passed.
 
 ## Offline evidence
