@@ -135,6 +135,19 @@ test("many short patch lines stay partitionable when serialized source maps domi
   assert.equal(new Set(patchSlices.flatMap(slice => slice.sourceLocations).filter(location => location.side === "after").map(location => location.line)).size, 10_000);
 });
 
+test("partition sizes slices against the remaining immutable prompt capacity", async () => {
+  const captured = await captureReviewEvidence(evidenceWorld()), value = "x".repeat(30_000), after = `${value}\n`;
+  const patch = `diff --git a/a b/a\nnew file mode 100644\n--- /dev/null\n+++ b/a\n@@ -0,0 +1 @@\n+${value}\n`;
+  const evidence = { ...captured, brief: `# Large brief\n${"b".repeat(90_000)}`, diff: patch,
+    context: [{ path: "a", status: "added", patch, before: null, after }] };
+  delete evidence.digest;
+  const { pieces } = partitionReviewEvidence(evidence, { maxInputBytes: 100_000, maxJobs: 20 });
+  assert.ok(pieces.length > 1 && pieces.length <= 20);
+  assert.ok(pieces.every(piece => Buffer.byteLength(reviewPrompt(piece)) <= 100_000));
+  assert.equal(pieces.flatMap(piece => piece.context).filter(slice => slice.kind === "patch").map(slice => slice.text).join(""), patch);
+  assert.equal(pieces.flatMap(piece => piece.context).filter(slice => slice.kind === "after").map(slice => slice.text).join(""), after);
+});
+
 test("Unicode line separators remain patch content with exact source mappings", async () => {
   const captured = await captureReviewEvidence(evidenceWorld()), first = "first\u2028middle\u2029part", filler = "x".repeat(120_000);
   const after = `${first}\nsecond\n${filler}\n`;
@@ -789,6 +802,25 @@ test("GitHub review evidence accepts delimited spaced paths and complete header-
   assert.deepEqual(evidence.context.map(file => [file.path, file.status]), [[".gitkeep", "added"], ["space name.txt", "modified"], ["script.sh", "modified"]]);
   assert.equal(evidence.context[0].after, "");
   assert.equal(evidence.context[1].before, "old\n"); assert.equal(evidence.context[1].after, "new\n");
+});
+
+test("GitHub review evidence preserves a UTF-8 BOM through bounded partitioning", async () => {
+  const first = "\ufefffirst", filler = "x".repeat(120_000), after = `${first}\n${filler}\n`;
+  const patch = `diff --git a/bom.txt b/bom.txt\nnew file mode 100644\n--- /dev/null\n+++ b/bom.txt\n@@ -0,0 +1,2 @@\n+${first}\n+${filler}\n`;
+  const comparison = `repos/acme/widget/compare/${base}...${head}`;
+  const gh = makeGh({ exec: async (_cmd, args) => {
+    if (args.includes("-H")) return { stdout: patch };
+    if (args[1] === comparison) return { stdout: JSON.stringify({ merge_base_commit: { sha: base }, files: [{ filename: "bom.txt", status: "added", patch: `+${first}\n+${filler}` }] }) };
+    return { stdout: JSON.stringify({ type: "file", encoding: "base64", content: Buffer.from(after).toString("base64") }) };
+  } });
+  const captured = await gh.reviewEvidence("acme/widget", 1, head, base, 400_000);
+  assert.equal(captured.context[0].after, after);
+  assert.equal(captured.context[0].after.codePointAt(0), 0xfeff);
+  const evidence = { ...captured, taskId: "github-bom", repository: "acme/widget", pr: 1, repositoryId: null, brief: "# Fixture",
+    criteria: [{ id: "ac-1", text: "Review all text." }], checks: [], receipt: "receipt", policy: policy(), binding: "fixture-binding" };
+  const { pieces } = partitionReviewEvidence(evidence, { maxInputBytes: 100_000, maxJobs: 20 });
+  assert.ok(pieces.length > 1);
+  assert.equal(pieces.flatMap(piece => piece.context).filter(slice => slice.kind === "patch").map(slice => slice.text).join(""), patch);
 });
 
 test("held-out metrics retain false positives, failures, unknown spend and absent independent baseline",()=>{
