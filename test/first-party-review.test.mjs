@@ -7,7 +7,7 @@ import { exactReviewerVerdict, makeTrust } from "../lib/events.mjs";
 import { messages } from "../lib/notify.mjs";
 import { selectReviewPolicy, legacyReviewPolicy, policyConfig, reviewBinding, reviewVerdict, reviewDisclosure, REVIEW_DEFAULTS } from "../lib/review_policy.mjs";
 import { aggregateReviewResults, captureReviewEvidence, partitionReviewEvidence, validateReviewResult, reviewPrompt } from "../lib/review_evidence.mjs";
-import { buildReviewRun, createReviewService } from "../lib/first_party_review.mjs";
+import { buildReviewRun, createReviewService, reviewRouteFingerprint } from "../lib/first_party_review.mjs";
 import { makeTick } from "../lib/tick.mjs";
 import { makeGh } from "../lib/gh.mjs";
 import { reviewCommand } from "../lib/commands/review.mjs";
@@ -21,6 +21,17 @@ const head = "a".repeat(40), base = "b".repeat(40), fp = "f".repeat(64);
 const qualification = { route: "codex", fingerprint: fp, run: "qualification-run", qualified: true };
 const config = { ...CONFIG, reviewer: null, deliverable: { ...CONFIG.deliverable, evaluator: "local" }, review: { route: "codex", mode: "first-party-required" } };
 const policy = () => selectReviewPolicy(config, "acme/widget", qualification);
+test("review route survives parent tool calls but invalidates provider and credential changes", () => {
+  const home = tempHome();
+  const settings = { harness: { codex: { bin: process.execPath } } };
+  const env = { HOME: home, CODEX_HOME: home, CODEX_TOOL_CALL_ID: "one", OPENAI_API_KEY: "first" };
+  const original = reviewRouteFingerprint(settings, env);
+  assert.equal(reviewRouteFingerprint(settings, { ...env, CODEX_TOOL_CALL_ID: "two", CODEX_SESSION_ID: "another" }), original);
+  assert.notEqual(reviewRouteFingerprint(settings, { ...env, OPENAI_API_KEY: "second" }), original);
+  assert.notEqual(reviewRouteFingerprint(settings, { ...env, OPENAI_BASE_URL: "https://other.example" }), original);
+  writeFileSync(`${home}/auth.json`, "changed");
+  assert.notEqual(reviewRouteFingerprint(settings, env), original);
+});
 const source = { complete: true, head, base, mergeBase: base, diff: "diff --git a/a.js b/a.js\n--- a/a.js\n+++ b/a.js\n@@ -1 +1 @@\n-return allow;\n+return true;",
   context: [{ path: "a.js", status: "modified", patch: "diff --git a/a.js b/a.js\n--- a/a.js\n+++ b/a.js\n@@ -1 +1 @@\n-return allow;\n+return true;", before: "return allow;", after: "return true;" }] };
 function receipt(id) { return "```work-attestations\n" + JSON.stringify({ task_id: id, output_type: "code", summary: "Implemented the requested CSV export and empty-state handling with regression coverage and verified the relevant test and lint commands successfully locally.", criteria_attestations: [1,2].map(n => ({ criterion_id: `ac-${n}`, met: true, evidence: `test/export.test.mjs:${n}` })) }) + "\n```"; }

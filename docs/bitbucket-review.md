@@ -130,6 +130,12 @@ qualification job for that fingerprint; CLI version and sign-in checks alone do
 not prove selected-model access. Start refuses before author dispatch if the route
 cannot qualify.
 
+Qualification fingerprints use the adapter's selected provider environment,
+configuration, credentials and executable. Parent-agent session and tool-call
+IDs do not invalidate an existing qualification. The private Codex profile drops
+the desktop-only `daybreak` flag for CLI compatibility; strict inspection of
+effective permissions and managed policy remains required.
+
 For a settled existing run that still has the explicit legacy snapshot, use the
 audited transition and then recheck the same PR:
 

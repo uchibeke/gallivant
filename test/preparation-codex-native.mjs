@@ -66,6 +66,7 @@ try {
     writeFileSync(join(configHome, "config.toml"), [
       `model=${JSON.stringify(model)}`, 'model_provider="preparation_fixture"',
       'model_reasoning_effort="high"',
+      'daybreak=true',
       `model_catalog_json=${JSON.stringify(privateCatalog)}`,
       ...["instructions", "developer_instructions", "compact_prompt"].map((key, i) => `${key}=${JSON.stringify(inlineSentinels[i])}`),
       `model_instructions_file=${JSON.stringify(instructionFile)}`,
