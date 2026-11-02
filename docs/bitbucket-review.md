@@ -1,8 +1,9 @@
 # Bitbucket Cloud review setup and qualification
 
 Bitbucket Cloud dispatch remains **disabled**. The transport, review protocol,
-PR command, and shared lifecycle have offline regression coverage; there is no
-live qualification or claim of a genuine Codex review. `start`, `register`, and
+PR command, and shared lifecycle have offline regression coverage, and the PR
+transport has a disposable live smoke test. There is no live task-loop
+qualification or claim of a genuine Codex review. `start`, `register`, and
 paid task preparation cannot bypass this release gate. See the
 [qualification record](audit/bitbucket-review-qualification.md) for the missing
 evidence. No configuration flag turns qualification on.
@@ -105,8 +106,8 @@ access; CLI installation/sign-in alone cannot qualify it.
 
 The installed `task-review` tool separates preparation and publication from
 inference. It never invokes a model, changes model/provider settings, or posts a
-review request. These transport steps are covered by offline tests; the intervening
-Codex execution and end-to-end publication are still unqualified:
+review request. These review transport steps are covered by offline tests; the
+intervening Codex execution and end-to-end publication are still unqualified:
 
 ```sh
 task-review prepare --config /private/reviewer-config.json \
@@ -170,7 +171,9 @@ verifies the checkout origin and branch before every operation. It supports
 `create`, `view`, `diff`, `edit --body-file`, and `comment --body-file --reply-to`.
 It has no merge, deployment or repository-settings operation. Credentials never
 enter arguments, prompt text, committed files or another host's default resolver.
-This CLI's offline support does not by itself qualify any local harness.
+The PR CLI created and reconciled a disposable private PR, read its exact head,
+posted a comment and updated its body. This does not qualify a local harness or
+the unattended task loop. See the [qualification record](audit/bitbucket-review-qualification.md).
 
 Once a release has passed live qualification, local PRD commands use the verified
 checkout, and `register` uses the exact PR URL. Host-qualified state/worktree keys

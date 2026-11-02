@@ -40,8 +40,8 @@ export function fixture({ config = {}, limits = {}, intercept = null, credential
     if (u.pathname === "/2.0/workspaces/acme/permissions/repositories") return json({}, 403);
     if (path === "/branch-restrictions") return json(page(data.restrictions));
     if (path === "/pullrequests" && options.method === "GET") return json(page(data.prs.filter(p => u.searchParams.getAll("state").includes(p.state)).map(prSummary)));
-    if (path === "/pullrequests" && options.method === "POST") { const row = pr({ title: call.body.title, description: call.body.description }); row.destination.branch.name = call.body.destination.branch.name; data.prs.push(row); return json(row, 201); }
-    if (path === "/pullrequests/7" && options.method === "PUT") { Object.assign(data.prs[0], call.body); return json(data.prs[0]); }
+    if (path === "/pullrequests" && options.method === "POST") { const row = pr({ title: call.body.title.trim(), description: call.body.description.trimEnd() }); row.destination.branch.name = call.body.destination.branch.name; data.prs.push(row); return json(row, 201); }
+    if (path === "/pullrequests/7" && options.method === "PUT") { Object.assign(data.prs[0], call.body, { ...(call.body.title ? { title: call.body.title.trim() } : {}), ...(call.body.description !== undefined ? { description: call.body.description.trimEnd() } : {}) }); return json(data.prs[0]); }
     if (/^\/pullrequests\/\d+$/.test(path)) {
       const id = Number(path.split("/").at(-1)), row = data.prs.find(p => p.id === id) ?? (id === 7 ? pr() : null);
       return row ? json(row) : json({}, 404);
