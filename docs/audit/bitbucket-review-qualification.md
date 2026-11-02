@@ -1,14 +1,14 @@
 # Bitbucket Cloud review-loop qualification record
 
-Status: **unqualified; dispatch disabled**. This document records unavailable
-live prerequisites honestly. Offline tests are implementation evidence, not a
-substitute for repository writes, model access or a genuine review.
+Status: **unqualified; dispatch disabled**. This document records the original
+missing prerequisites and subsequent disposable transport tests. PR writes and
+offline tests are not substitutes for a real task run, model access or review.
 
 ## Observed prerequisites, 2026-11-01
 
 - Host: Darwin arm64; Node `v22.22.0`; Git `2.50.1 (Apple Git-155)`.
-- Requested executable: `/Users/uchi/.local/share/gallivant/codex/node_modules/.bin/codex`.
-  `--version` returned `codex-cli 0.160.0`. `exec --help` returned native command
+- The operator-installed local Codex CLI returned `codex-cli 0.160.0` from
+  `--version`. `exec --help` returned native command
   help. These calls did not establish model access or consume inference.
 - Credential resolver: `resolveBitbucketCredential` against the operator config
   returned `NO_CREDENTIAL: No Bitbucket account API credential selected`.
@@ -30,14 +30,14 @@ available model access and the chosen CI producer. Enable ordinary Pipelines
 only if that is the selected producer. The operator, not this implementation,
 merges the qualified predecessor to test chain continuation.
 
-## Live matrix — all pending
+## Live matrix — transport partly exercised
 
 | Required observation | Observed repository / PR / run | Result |
 | --- | --- | --- |
-| Private and public access, HTTPS and SSH | None authorized/configured | Unmet |
-| Non-default base and PR creation | None | Unmet |
+| Private and public access, HTTPS and SSH | Private and public disposable repos pass API/SSH reads; a private PR and public `qualification-base` push | Partial: HTTPS Git untested |
+| Non-default base and PR creation | A private PR targets `main`; public PR #1 targets `qualification-base` | Transport passed; agent dispatch untested |
 | Genuine Codex review posting current-head feedback | No inference invocation | Unmet |
-| Stable observed reviewer actor; blocking then clear | No reviewer selected | Unmet |
+| Stable observed reviewer actor; blocking then clear | Coding actor observed; no separate reviewer selected | Unmet |
 | Trusted `/fix`; failed then passing CI/check names | No live PR/check producer | Unmet |
 | Same-session correction and receipt/readiness | No live run | Unmet |
 | Daemon restart recovery | No live run | Unmet |
@@ -45,9 +45,55 @@ merges the qualified predecessor to test chain continuation.
 | Clean macOS and Linux installation qualification | Local development checkout only | Unmet |
 
 Do not populate repository/PR links, actor UUIDs, check names, scope confirmations
-or run IDs from fixtures. When available, append actual links, versions, declared
-and observed scope (without secrets), head SHAs, reviewer events, CI results,
-session continuity and merge ancestry evidence. Retain failures and unknowns.
+or run IDs from fixtures. The observations below are live; the remaining review,
+CI, session and merge rows stay unmet until independently observed.
+
+## Disposable live transport observations, 2026-11-01
+
+- An operator-controlled private disposable repository and the public
+  `webbabyshowers/gallivant-host-test-public` repository are bound in local
+  operator config with a selected account API token and dedicated SSH key.
+  The token file remained private and its value was not logged.
+- A private transport PR was created after an SSH push. The adapter reconciled
+  the existing PR without a duplicate, read a complete snapshot with zero
+  statuses/tasks, posted a comment as the coding actor, and updated the body.
+  This was a manual transport test, not an agent run or review verdict.
+- Bitbucket's PR detail API returned 12-character source/base commit hashes.
+  The commit endpoint returned matching full hashes; the adapter now resolves
+  and verifies those before using a PR snapshot. Bitbucket also stripped a
+  final newline from the submitted description; publication now normalizes that
+  text before read-after-write comparison. These two mismatches initially made
+  a successful PR create look unresolved. Fixture regressions cover open and
+  merged PRs, mismatched resolutions, idempotent publication and recovery text.
+  Preflight now leaves comment-read access unknown when only fork PRs exist,
+  rather than trying to resolve a fork commit through the selected repository.
+- The public repository's [transport PR #1](https://bitbucket.org/webbabyshowers/gallivant-host-test-public/pull-requests/1)
+  was opened against `qualification-base` at
+  `cce49dd38761f894cf2b41cd2cb8a5a9f2a4b6cc` from head
+  `99a8346352fefd3b501b4cfd7a8afec05774aa77`. Its SSH push, PR
+  publication, exact-head snapshot and setup preflight succeeded. The
+  base later advanced to `5311b17` to hold the public smoke PRD. The private
+  repository's `main` likewise advanced to `91e5783` to hold its smoke PRD.
+  Both PRDs pass the local structure check, but neither was dispatched. The
+  existing token could read both repositories and
+  create/comment/edit the private PR, but repository creation through the API
+  returned 403 for missing scope. The public repo was created in the browser
+  under existing workspace access. No HTTPS Git push, independent reviewer,
+  CI producer, task run, daemon recovery or merge
+  chain was tested.
+- The production `start` command refused both smoke PRDs before dispatch because
+  `lib/hosts/bitbucket_contract.mjs` still declares `dispatch: false`.
+
+## Follow-up verification, 2026-11-01
+
+- `npm ci --offline` installed the locked dependencies in the isolated fix
+  checkout. `npm test` then passed with host process access: 2,007 passed,
+  0 failed, 1 skipped (the Linux-only isolation test). The suite took 457 s.
+  The sandboxed attempt could not identify its own process for daemon-lock
+  tests because `ps` was restricted; it is not counted as a code regression.
+- `node --test test/bitbucket.test.mjs`: 30 passed, including abbreviated
+  commit resolution, description idempotency and fork-only preflight.
+- `npm run lint`, documentation link tests and `git diff --check`: passed.
 
 ## Offline evidence
 
@@ -92,10 +138,12 @@ invoked inference or provided live Bitbucket evidence.
 
 ## Review follow-up, 2026-11-01
 
-The follow-up prerequisite check still found no Bitbucket host settings, coding
-credential selection, repository, or reviewer in the operator configuration.
-No unchanged blocked API/model call was retried. The live matrix and required
-remedy above remain unchanged.
+Before the disposable transport test, the follow-up prerequisite check still
+found no Bitbucket host settings, coding credential selection, repository, or
+reviewer in the operator configuration. No unchanged blocked API/model call was
+retried. The later transport setup resolved the coding credential and repository
+prerequisites; the independent reviewer, CI and task-loop qualifications remain
+unmet as shown in the live matrix.
 
 Both review findings were reproduced before their fixes; local output is
 `/tmp/bitbucket-review-reproductions.log` (2 failed regressions). The corrections

@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
 import { writeFileSync, readFileSync, chmodSync, realpathSync } from "node:fs";
 import { join } from "node:path";
-import { fixture, REPO, PATH, UUID, WORKSPACE, USER, HEAD, BASE, HOST_KEY, pr, prSummary, page, json, comment, status } from "./bitbucket-fixture.mjs";
+import { fixture, REPO, PATH, UUID, WORKSPACE, USER, HEAD, BASE, NOW, HOST_KEY, pr, prSummary, page, json, comment, status } from "./bitbucket-fixture.mjs";
 import { makeHostRegistry, hosts, pullRequestUrl } from "../lib/hosts.mjs";
 import { validateHostRecord } from "../lib/host_contract.mjs";
 import { makeGit, runEnv } from "../lib/git.mjs";
@@ -19,6 +19,7 @@ import { CONFIG, GOOD_PRD, tempHome as temporaryHome, silentLog } from "./helper
 import { parsePrd } from "../lib/prd.mjs";
 import { makeState } from "../lib/state.mjs";
 import { validate, merge } from "../lib/config.mjs";
+import { parseBlock } from "../lib/block.mjs";
 
 const publication = { repo: PATH, branch: "work/feature", base: "main", title: "Add transport", body: "Approved change" };
 const tempHome = () => realpathSync(temporaryHome());
@@ -72,6 +73,15 @@ test("Bitbucket preflight checks base, role, PR/comments and restrictions, disti
     const denied = fixture({ intercept: c => c.path === path ? json({}, 403) : undefined }); denied.data.prs = [pr()];
     await assert.rejects(denied.api.preflight(PATH), /restore the selected token/);
   }
+});
+
+test("Bitbucket preflight leaves comment access unknown when only fork PRs can be sampled", async () => {
+  const f = fixture();
+  f.data.prs = [pr({ source: { ...pr().source, repository: { uuid: WORKSPACE, full_name: "fork/widget" } } })];
+  const report = await f.api.preflight(PATH);
+  assert.equal(report.accountPush, "proved");
+  assert.equal(report.commentRead, "unknown");
+  assert.ok(!f.calls.some(c => c.path === "/pullrequests/7"));
 });
 
 test("Bitbucket credentials never fall back to GitHub; refresh is per operation without changing API account", async () => {
@@ -219,6 +229,68 @@ test("Bitbucket publishes or updates one same-repository PR, including read-afte
   await timed.api.publishResultPr(publication); await timed.api.publishResultPr(publication);
   assert.equal(timed.calls.filter(c => c.method === "POST").length, 1);
   assert.equal(timed.calls.at(-1).method, "GET");
+});
+
+test("Bitbucket resolves abbreviated live PR commits before publication and snapshot decisions", async () => {
+  const shortHead = HEAD.slice(0, 12), shortBase = BASE.slice(0, 12);
+  const f = fixture({ intercept: (call, data) => {
+    if (call.path === "/pullrequests/7" && data.prs.length) {
+      const row = structuredClone(data.prs[0]);
+      row.source.commit.hash = shortHead; row.destination.commit.hash = shortBase;
+      return json(row);
+    }
+    if (call.path === `/commit/${shortHead}`) return json({ hash: HEAD, date: NOW });
+    if (call.path === `/commit/${shortBase}`) return json({ hash: BASE, date: NOW });
+  } });
+  const created = await f.api.publishResultPr(publication);
+  assert.equal(created.headRefOid, HEAD); assert.equal(created.baseRefOid, BASE);
+  assert.equal(f.calls.filter(c => c.method === "POST").length, 1);
+  const viewed = await f.api.prView(PATH, 7);
+  assert.equal(viewed.headRefOid, HEAD); assert.equal(viewed.baseRefOid, BASE);
+  assert.ok(f.calls.some(c => c.path === `/commit/${shortHead}`));
+  assert.ok(f.calls.some(c => c.path === `/commit/${shortBase}`));
+  f.data.prs[0].state = "MERGED"; f.data.prs[0].merge_commit = { hash: shortHead };
+  const merged = await f.api.prView(PATH, 7);
+  assert.equal(merged.mergeCommit.oid, HEAD);
+});
+
+test("Bitbucket's trimmed PR description remains idempotent for file-backed publication", async () => {
+  const f = fixture(), request = { ...publication, body: "Approved change\n\n" };
+  const first = await f.api.publishResultPr(request);
+  assert.equal(first.body, "Approved change");
+  await f.api.publishResultPr(request);
+  assert.equal(f.calls.filter(c => c.method === "POST").length, 1);
+  assert.equal(f.calls.filter(c => c.method === "PUT").length, 0);
+  const edited = await f.api.setBody(PATH, 7, "Updated receipt\n");
+  assert.equal(edited.body, "Updated receipt");
+  await f.api.setBody(PATH, 7, "Updated receipt\n");
+  assert.equal(f.calls.filter(c => c.method === "PUT").length, 1);
+});
+
+test("Bitbucket recovery metadata survives description normalization and remains bound to the PR head", async () => {
+  const f = fixture(), identity = { prd: "docs/prds/host-test.md", harness: "goose",
+    session: "gallivant-068021d7-3490-4f2e-a6f1-30e1c00498c9", branch: "work/feature" };
+  f.data.prs = [pr()];
+  const observed = await f.api.setRecoveryMetadata(PATH, 7, identity);
+  assert.deepEqual(parseBlock(observed.body).block, identity);
+  assert.equal(observed.headRefOid, HEAD);
+  assert.equal(observed.body.endsWith("\n"), false);
+  assert.equal(f.calls.filter(c => c.method === "PUT").length, 1);
+});
+
+test("Bitbucket refuses ambiguous or mismatched PR commit expansion before any write", async () => {
+  const shortHead = HEAD.slice(0, 12);
+  for (const resolved of [BASE, shortHead, null]) {
+    const f = fixture({ intercept: (call, data) => {
+      if (call.path === "/pullrequests/7") {
+        const row = structuredClone(data.prs[0]); row.source.commit.hash = shortHead; return json(row);
+      }
+      if (call.path === `/commit/${shortHead}`) return json({ hash: resolved, date: NOW });
+    } });
+    f.data.prs = [pr()];
+    await assert.rejects(f.api.publishResultPr(publication), { code: "BB_INCOMPLETE" });
+    assert.ok(f.calls.every(c => c.method === "GET"));
+  }
 });
 
 test("Bitbucket expands paginated PR summaries into complete records by repository and ID", async () => {
