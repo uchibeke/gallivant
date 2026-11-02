@@ -1,10 +1,50 @@
 # Bitbucket Cloud review-loop qualification record
 
-Status: **first-party implementation available; live review unqualified**.
+Status: **native route and live source review exercised; complete lifecycle qualification pending**.
 Dispatch is enabled only under an explicit repository review policy. This
 document records the original missing prerequisites, subsequent disposable
 transport tests, and the remaining private/public first-party matrix. PR writes
 and offline tests are not substitutes for a real model review.
+
+## Live source review follow-up, 2026-11-02
+
+The selected local `codex-cli 0.160.0`, model `gpt-6.1-sol`, reasoning `high`,
+passed a genuine restricted qualification in both disposable repositories.
+The private qualification run was `run-19c91f53-65d7-43ec-954e-a263b4846bea`;
+the public qualification run was `run-1073c551-c3e3-4bf6-b0b8-d05c030d7342`.
+Repeated CLI invocations recovered the same qualification instead of launching
+another model call after parent tool-call IDs were excluded from its fingerprint.
+The private config copy also removes the desktop `daybreak` field, rejected by
+the pinned CLI's strict parser. Operator configuration and managed policy are
+not rewritten. The native loopback regression advertised zero tools and rejected
+five hostile tool calls; all 152 targeted reviewer/preparation/chain tests passed.
+
+These were explicit operator-controlled review criteria applied to existing
+disposable PRs, not replacements for their original task acceptance contracts.
+The criterion required an explicit caveat that empty credential environment
+variables do not prove isolation from files readable under the same OS user.
+Verdicts remained in the coordinator ledger; no synthetic review was posted.
+
+| Live observation | Exact head | Owned reviewer run | Result |
+| --- | --- | --- | --- |
+| [Private PR #3](https://bitbucket.org/webbabyshowers/gallivant-host-test/pull-requests/3), missing caveat | `86cadad0e9f875f98ef1d161fede67f55ac6261d` | `run-93bd9964-899c-4205-8db8-5ef0a6c71d5c` | Concrete finding at `docs/mailbox-verification.md:5` |
+| Same private PR after documentation correction | `d5a492e6b381b40fd7aa98ac2b30e11d4c104e0a` | `run-baa2efa6-34ee-47bd-ab35-33832c8274ef` | Fresh clear verdict; previous-head result was not reused |
+| [Public PR #2](https://bitbucket.org/webbabyshowers/gallivant-host-test-public/pull-requests/2), initial branch/link criterion | `f58d6e3ce34a35a4ceac0541abdb4426faefe72f` | `run-8265d749-55ad-49a0-bbe1-73a9dd606665` | Clear |
+| Same public head, explicit missing-caveat criterion | `f58d6e3ce34a35a4ceac0541abdb4426faefe72f` | `run-013c3cef-0f0c-4a0a-adea-92972c0c7cde` | Finding; changed requirements did not reuse earlier clearance |
+
+Both adapters captured complete live source/diff evidence. The public correction
+request succeeded, but read-after-write verification encountered changing
+snapshots followed by HTTP 429. Its corrected head and fresh clear review remain
+unverified. Stop qualification API reads until rate-limit recovery; reconcile the
+existing correction before another write. Model-reported USD costs were absent
+(`null`), so costs are unknown and reservations remain consumed; this is not a
+native dollar hard cap.
+
+This does not qualify automatic author-session correction, live CI transitions,
+daemon interruption during a review, or merge-gated continuation under the new
+policy. Existing WebBabyShower runs retain their saved legacy policies and have
+not been claimed as independently reviewed. Complete the public correction check
+and outstanding lifecycle gates before activating their policy changes.
 
 ## Observed prerequisites, 2026-11-01
 
