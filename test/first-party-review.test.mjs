@@ -121,6 +121,20 @@ test("a deterministic 340 KB lockfile is completely partitioned within configure
   assert.equal(aggregate.pieces.length, pieces.length);
 });
 
+test("many short patch lines stay partitionable when serialized source maps dominate the text", async () => {
+  const captured = await captureReviewEvidence(evidenceWorld());
+  const lines = Array.from({ length: 10_000 }, (_, index) => `entry-${index}`), after = `${lines.join("\n")}\n`;
+  const patch = `diff --git a/a b/a\nnew file mode 100644\n--- /dev/null\n+++ b/a\n@@ -0,0 +1,10000 @@\n${lines.map(line => `+${line}\n`).join("")}`;
+  const evidence = { ...captured, diff: patch, context: [{ path: "a", status: "added", patch, before: null, after }] };
+  delete evidence.digest;
+  const { pieces } = partitionReviewEvidence(evidence, { maxInputBytes: 100_000, maxJobs: 20 });
+  assert.ok(pieces.length > 1 && pieces.length <= 20);
+  assert.ok(pieces.every(piece => Buffer.byteLength(reviewPrompt(piece)) <= 100_000));
+  const patchSlices = pieces.flatMap(piece => piece.context).filter(slice => slice.kind === "patch");
+  assert.equal(patchSlices.map(slice => slice.text).join(""), patch);
+  assert.equal(new Set(patchSlices.flatMap(slice => slice.sourceLocations).filter(location => location.side === "after").map(location => location.line)).size, 10_000);
+});
+
 test("partitioned modified and removed patches authenticate findings only on their mapped source sides", async () => {
   const captured = await captureReviewEvidence(evidenceWorld()), huge = "z".repeat(140_000);
   for (const fixture of [
@@ -702,6 +716,36 @@ test("GitHub normalization refuses capped comparisons and omitted binary patches
     const gh=makeGh({exec:async(_cmd,args)=>({stdout:args.includes("-H")?"diff --git a/bin b/bin":JSON.stringify({merge_base_commit:{sha:base},files})})});
     await assert.rejects(gh.reviewEvidence("acme/widget",1,head,base,REVIEW_DEFAULTS.max_input_bytes),/limit|omitted/);
   }
+});
+
+test("GitHub review evidence accepts delimited spaced paths and complete header-only changes", async () => {
+  const files = [
+    { filename: ".gitkeep", status: "added" },
+    { filename: "space name.txt", status: "modified", patch: "@@ -1 +1 @@\n-old\n+new" },
+    { filename: "script.sh", status: "modified" },
+  ];
+  const diff = [
+    "diff --git a/.gitkeep b/.gitkeep\nnew file mode 100644\nindex 0000000..e69de29\n",
+    "diff --git a/space name.txt b/space name.txt\n--- a/space name.txt\t\n+++ b/space name.txt\t\n@@ -1 +1 @@\n-old\n+new\n",
+    "diff --git a/script.sh b/script.sh\nold mode 100644\nnew mode 100755\n",
+  ].join("");
+  const content = { [`${base}:.gitkeep`]: null, [`${head}:.gitkeep`]: "", [`${base}:space name.txt`]: "old\n", [`${head}:space name.txt`]: "new\n",
+    [`${base}:script.sh`]: "echo ok\n", [`${head}:script.sh`]: "echo ok\n" };
+  const comparison = `repos/acme/widget/compare/${base}...${head}`;
+  const gh = makeGh({ exec: async (_cmd, args) => {
+    if (args.includes("-H")) return { stdout: diff };
+    const target = args[1];
+    if (target === comparison) return { stdout: JSON.stringify({ merge_base_commit: { sha: base }, files }) };
+    const url = new URL(`https://example.test/${target}`), marker = "/contents/", at = url.pathname.indexOf(marker);
+    assert.ok(at >= 0, target);
+    const path = decodeURIComponent(url.pathname.slice(at + marker.length)), value = content[`${url.searchParams.get("ref")}:${path}`];
+    assert.notEqual(value, undefined, `${url.searchParams.get("ref")}:${path}`);
+    return { stdout: JSON.stringify({ type: "file", encoding: "base64", content: Buffer.from(value).toString("base64") }) };
+  } });
+  const evidence = await gh.reviewEvidence("acme/widget", 1, head, base, 100_000);
+  assert.deepEqual(evidence.context.map(file => [file.path, file.status]), [[".gitkeep", "added"], ["space name.txt", "modified"], ["script.sh", "modified"]]);
+  assert.equal(evidence.context[0].after, "");
+  assert.equal(evidence.context[1].before, "old\n"); assert.equal(evidence.context[1].after, "new\n");
 });
 
 test("held-out metrics retain false positives, failures, unknown spend and absent independent baseline",()=>{

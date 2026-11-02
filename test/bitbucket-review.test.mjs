@@ -112,6 +112,32 @@ test("Bitbucket first-party evidence binds exact PR commits and covers paginated
   assert.ok(f.calls.every(call => new URL(call.url).origin === "https://api.bitbucket.org"));
 });
 
+test("Bitbucket first-party evidence accepts empty, mode-only and delimited spaced-path changes", async () => {
+  const f = cleanFixture();
+  f.data.diffstat = [
+    { status: "added", old: null, new: { type: "commit_file", path: ".gitkeep" } },
+    { status: "removed", old: { type: "commit_file", path: "old-empty" }, new: null },
+    { status: "modified", old: { type: "commit_file", path: "script.sh" }, new: { type: "commit_file", path: "script.sh" } },
+    { status: "modified", old: { type: "commit_file", path: "space name.txt" }, new: { type: "commit_file", path: "space name.txt" } },
+  ];
+  f.data.comparisonDiff = [
+    "diff --git a/.gitkeep b/.gitkeep\nnew file mode 100644\nindex 0000000..e69de29\n",
+    "diff --git a/old-empty b/old-empty\ndeleted file mode 100644\nindex e69de29..0000000\n",
+    "diff --git a/script.sh b/script.sh\nold mode 100644\nnew mode 100755\n",
+    "diff --git a/space name.txt b/space name.txt\n--- a/space name.txt\t\n+++ b/space name.txt\t\n@@ -1 +1 @@\n-old\n+new\n",
+  ].join("");
+  Object.assign(f.data.sources, {
+    [`${HEAD}:.gitkeep`]: "", [`${BASE}:old-empty`]: "",
+    [`${BASE}:script.sh`]: "echo ok\n", [`${HEAD}:script.sh`]: "echo ok\n",
+    [`${BASE}:space name.txt`]: "old\n", [`${HEAD}:space name.txt`]: "new\n",
+  });
+  f.data.sourceAttributes[`${HEAD}:script.sh`] = ["executable"];
+  const evidence = await f.api.reviewEvidence(PATH, 7, HEAD, BASE, 100_000);
+  assert.deepEqual(evidence.context.map(file => [file.path, file.status]), [[".gitkeep", "added"], ["old-empty", "removed"], ["script.sh", "modified"], ["space name.txt", "modified"]]);
+  assert.equal(evidence.context[0].after, ""); assert.equal(evidence.context[1].before, "");
+  assert.equal(evidence.context[2].before, evidence.context[2].after);
+});
+
 test("Bitbucket first-party evidence refuses stale, duplicate, binary, missing-patch, redirected, rate-limited and oversized capture", async () => {
   const cases = [
     ["stale", f => f.api.reviewEvidence(PATH, 7, BASE, HEAD, 100_000)],
