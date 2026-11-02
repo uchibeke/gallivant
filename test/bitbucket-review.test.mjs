@@ -18,6 +18,7 @@ import { tickChains } from "../lib/chains.mjs";
 import { capabilitiesFor } from "../lib/harness.mjs";
 import { runEnv } from "../lib/git.mjs";
 import { resolveBitbucketCredential, BITBUCKET_REVIEW_SCOPES } from "../lib/hosts/bitbucket_credential.mjs";
+import { partitionReviewEvidence } from "../lib/review_evidence.mjs";
 import { prOperation } from "../lib/pr_operation.mjs";
 import { startPrompt, fixPrompt } from "../lib/prompt.mjs";
 import { init } from "../lib/commands/init.mjs";
@@ -136,6 +137,21 @@ test("Bitbucket first-party evidence accepts empty, mode-only and delimited spac
   assert.deepEqual(evidence.context.map(file => [file.path, file.status]), [[".gitkeep", "added"], ["old-empty", "removed"], ["script.sh", "modified"], ["space name.txt", "modified"]]);
   assert.equal(evidence.context[0].after, ""); assert.equal(evidence.context[1].before, "");
   assert.equal(evidence.context[2].before, evidence.context[2].after);
+});
+
+test("Bitbucket first-party evidence preserves a UTF-8 BOM through bounded partitioning", async () => {
+  const f = cleanFixture(), first = "\ufefffirst", filler = "x".repeat(120_000), after = `${first}\n${filler}\n`;
+  f.data.diffstat = [{ status: "added", old: null, new: { type: "commit_file", path: "bom.txt" } }];
+  f.data.comparisonDiff = `diff --git a/bom.txt b/bom.txt\nnew file mode 100644\n--- /dev/null\n+++ b/bom.txt\n@@ -0,0 +1,2 @@\n+${first}\n+${filler}\n`;
+  f.data.sources[`${HEAD}:bom.txt`] = after;
+  const captured = await f.api.reviewEvidence(PATH, 7, HEAD, BASE, 400_000);
+  assert.equal(captured.context[0].after, after);
+  assert.equal(captured.context[0].after.codePointAt(0), 0xfeff);
+  const evidence = { ...captured, taskId: "bom-fixture", repository: REPO, brief: "# Fixture", criteria: [{ id: "ac-1", text: "Review all text." }],
+    checks: [], receipt: "receipt", policy: { route: { name: "codex" }, specialist: null, limits: { maxInputBytes: 100_000, maxJobs: 20 } }, binding: "fixture-binding" };
+  const { pieces } = partitionReviewEvidence(evidence);
+  assert.ok(pieces.length > 1);
+  assert.equal(pieces.flatMap(piece => piece.context).filter(slice => slice.kind === "patch").map(slice => slice.text).join(""), f.data.comparisonDiff);
 });
 
 test("Bitbucket first-party evidence refuses stale, duplicate, binary, missing-patch, redirected, rate-limited and oversized capture", async () => {

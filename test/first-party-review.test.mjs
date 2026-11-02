@@ -152,20 +152,30 @@ test("Unicode line separators remain patch content with exact source mappings", 
   assert.equal(validateReviewResult(JSON.stringify(result), piece).verdict, "findings");
 });
 
-test("aggregate namespaces piece-local finding IDs and deduplicates exact defect evidence", async () => {
+test("aggregate namespaces local IDs, deduplicates exact defects and preserves distinct defects at one location", async () => {
   const captured = await captureReviewEvidence(evidenceWorld()), aggregateDigest = captured.digest;
-  const makePiece = (index, path, value) => ({ ...captured, version: 2, aggregateDigest, digest: `piece-${index}`, piece: { index, total: 3, coveredPaths: [path] },
+  const makePiece = (index, path, value) => ({ ...captured, version: 2, aggregateDigest, digest: `piece-${index}`, piece: { index, total: 4, coveredPaths: [path] },
     context: [{ path, status: "added", kind: "after", startLine: 1, startColumn: 1, endLine: 2, endColumn: 1, text: `${value}\n` }] });
-  const pieces = [makePiece(1, "alpha.txt", "alpha defect"), makePiece(2, "beta.txt", "beta defect"), makePiece(3, "alpha.txt", "alpha defect")];
-  const local = (piece, description, severity = "medium") => validateReviewResult(JSON.stringify({ ...clear(piece), verdict: "findings", findings: [{ id: "finding-1", severity, description,
-    evidence: { path: piece.context[0].path, line: 1, side: "after", quote: piece.context[0].text.trim() } }] }), piece);
-  const jobs = pieces.map((piece, index) => ({ key: `job-${index}`, binding: captured.binding, status: "completed", evidence: piece,
-    result: local(piece, index === 2 ? "The alpha defect described differently." : `Defect in ${piece.context[0].path}.`, index === 2 ? "high" : "medium"), costUsd: null }));
+  const pieces = [makePiece(1, "alpha.txt", "alpha defect"), makePiece(2, "beta.txt", "beta defect"),
+    makePiece(3, "alpha.txt", "alpha defect"), makePiece(4, "alpha.txt", "alpha defect")];
+  const finding = (piece, id, description, severity = "medium") => ({ id, severity, description,
+    evidence: { path: piece.context[0].path, line: 1, side: "after", quote: piece.context[0].text.trim() } });
+  const descriptions = { authorization: "Enforce authorization before this operation.", injection: "Parameterize this operation to prevent injection." };
+  const local = (piece, findings) => validateReviewResult(JSON.stringify({ ...clear(piece), verdict: "findings", findings }), piece);
+  const results = [
+    local(pieces[0], [finding(pieces[0], "finding-1", descriptions.authorization), finding(pieces[0], "finding-2", descriptions.injection)]),
+    local(pieces[1], [finding(pieces[1], "finding-1", "Correct the beta defect.")]),
+    local(pieces[2], [finding(pieces[2], "finding-1", descriptions.authorization, "high")]),
+    local(pieces[3], [finding(pieces[3], "finding-1", "Close the separate audit gap at this operation.")]),
+  ];
+  const jobs = pieces.map((piece, index) => ({ key: `job-${index}`, binding: captured.binding, status: "completed", evidence: piece, result: results[index], costUsd: null }));
   const aggregate = aggregateReviewResults(captured, pieces, jobs);
-  assert.equal(aggregate.result.findings.length, 2);
-  assert.deepEqual(aggregate.result.findings.map(finding => finding.id), ["piece-1:finding-1", "piece-2:finding-1"]);
+  assert.equal(aggregate.result.findings.length, 4);
+  assert.deepEqual(aggregate.result.findings.map(finding => finding.id), ["piece-1:finding-1", "piece-1:finding-2", "piece-2:finding-1", "piece-4:finding-1"]);
   assert.equal(aggregate.result.findings[0].severity, "high", "duplicate evidence retains the most conservative verified severity");
-  assert.deepEqual(aggregate.result.findings.map(finding => finding.evidence.path), ["alpha.txt", "beta.txt"]);
+  assert.deepEqual(aggregate.result.findings.map(finding => finding.evidence.path), ["alpha.txt", "alpha.txt", "beta.txt", "alpha.txt"]);
+  assert.deepEqual(aggregate.result.findings.filter(finding => finding.evidence.path === "alpha.txt").map(finding => finding.description),
+    [descriptions.authorization, descriptions.injection, "Close the separate audit gap at this operation."]);
 });
 
 test("partitioned modified and removed patches authenticate findings only on their mapped source sides", async () => {
