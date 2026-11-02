@@ -97,7 +97,7 @@ test("structured verdict requires all criteria, exact identities and verifiable 
 });
 
 test("a deterministic 340 KB lockfile is completely partitioned within configured jobs or refused explicitly", async () => {
-  const captured = await captureReviewEvidence(evidenceWorld()), lock = "x".repeat(340_000);
+  const captured = await captureReviewEvidence(evidenceWorld()), lock = "lock".repeat(85_000);
   const patch = `diff --git a/package-lock.json b/package-lock.json\n--- a/package-lock.json\n+++ b/package-lock.json\n@@ -0,0 +1 @@\n+${lock}\n`;
   const evidence = { ...captured, diff: patch, context: [{ path: "package-lock.json", status: "added", patch, before: null, after: `${lock}\n` }] };
   delete evidence.digest;
@@ -111,7 +111,7 @@ test("a deterministic 340 KB lockfile is completely partitioned within configure
     piece.context.some(slice => slice.sourceLocations.some(location => location.side === "after" && location.line === 1)));
   assert.ok(patchOnly, "large added files retain exact after-line locations in patch-only pieces");
   const patchFinding = { id: "lockfile-line", severity: "medium", description: "The added lockfile line contains the reproduced defect marker.",
-    evidence: { path: "package-lock.json", line: 1, side: "after", quote: "xxxxxxxx" } };
+    evidence: { path: "package-lock.json", line: 1, side: "after", quote: "locklock" } };
   assert.equal(validateReviewResult(JSON.stringify({ ...clear(patchOnly), verdict: "findings", findings: [patchFinding] }), patchOnly).verdict, "findings");
   assert.throws(() => validateReviewResult(JSON.stringify({ ...clear(patchOnly), verdict: "findings", findings: [{ ...patchFinding,
     evidence: { ...patchFinding.evidence, side: "before" } }] }), patchOnly), /not present/);
