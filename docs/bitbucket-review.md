@@ -1,16 +1,15 @@
 # Bitbucket Cloud review setup and qualification
 
-Bitbucket Cloud dispatch remains **unqualified** and its enabling pull request is
-draft. Disposable public and private repositories completed live local Codex
-tasks through regular PR publication and receipt acceptance with **no reviewer
-configured**. The private coding session could still read the coordinator's
-merge-capable API-token file by path. Removing the token from its environment and
-using a bounded PR mailbox therefore does not isolate that credential. Do not
-start unattended tasks in other Bitbucket repositories until an OS-enforced
-credential boundary or a server-enforced non-merging coding identity is tested.
-An independent automated reviewer, clean Linux installation, and merge-gated
-chain remain unvalidated. See the
-[qualification record](audit/bitbucket-review-qualification.md).
+Bitbucket Cloud dispatch and complete first-party evidence capture are implemented.
+The independent local review route is still **live-unqualified** until the public
+and private disposable repository matrix records a genuine blocking verdict,
+same-session correction and fresh exact-head clearance. Earlier disposable runs
+proved regular PR publication and receipt acceptance with **no reviewer
+configured**; they are not review evidence. The private coding session could also
+read the coordinator's merge-capable API-token file by path, so that historical
+coding-credential hold remains separate from reviewer credential isolation. Do
+not migrate an existing legacy run or start unattended work on the strength of
+offline fixtures. See the [qualification record](audit/bitbucket-review-qualification.md).
 
 ## First setup, including a checkout with no existing configuration
 
@@ -51,18 +50,33 @@ and runs retain their previous review semantics.
 ```
 
 Replace the example UUID with the operator's stable Bitbucket UUID, not a nickname.
-Select `reviewer: null` deliberately. No separate reviewer account is required
-for this policy once dispatch qualifies. After `init`, record
-`"review": { "legacy_no_review": true }` in
-that repository's entry in `~/.gallivant/config.json`; keep `reviewer: null` in
-the host policy. This makes the no-review choice explicit in the local config.
-No-reviewer mode still enforces configured CI, trusted commands, unresolved
-required feedback and the completion receipt. Its readiness record says `none`;
-it is never independently reviewed. The example check name must exactly match the repository's build
-status name. An empty `required_checks` list permits the explicit no-CI behavior:
-zero checks waits for `checks_grace_minutes`, then passes the CI gate. Any named
-required check missing from a complete response remains pending indefinitely;
-missing/partial responses, rate limits, outages and pending checks never pass.
+Select `reviewer: null` deliberately; the local first-party path needs no separate
+Bitbucket reviewer account. After `init`, configure the repository entry for a
+new reviewed run:
+
+```json
+{
+  "repo": "bitbucket.org/workspace/repository",
+  "reviewer": null,
+  "review": {
+    "mode": "first-party-required",
+    "route": "codex",
+    "max_input_bytes": 100000,
+    "max_jobs": 4,
+    "budget_usd": 4,
+    "zero_checks": false
+  }
+}
+```
+
+Keep `review.legacy_no_review: true` only for a deliberately unreviewed legacy
+run while live qualification is unavailable. That mode still enforces configured
+CI, trusted commands, unresolved required feedback and the completion receipt,
+but its readiness record says `none`; it is never independently reviewed. The
+example check name must exactly match the repository's build status name. An
+empty `required_checks` list does not waive CI for a version-1 policy: a repository
+with no checks must explicitly set `review.zero_checks: true`. Missing/partial
+responses, rate limits, outages and pending checks never pass.
 
 From the intended checkout:
 
@@ -90,9 +104,58 @@ precedence is repository entry, host repository binding, host settings. Historic
 top-level reviewer/trust defaults apply only to GitHub. Reviewer objects for
 Bitbucket must supply every required field; the GitHub mention is rejected.
 
-## Independent Codex or human reviewer
+## Independent local Codex reviewer
 
-This is a possible later setup, not part of the live qualified no-reviewer path.
+The host adapter binds the repository UUID, PR number, full head and base object
+IDs, and merge base. It paginates `diffstat/<head>..<base>?topic=true`, compares
+that changed-path inventory to the complete raw comparison, and reads regular
+UTF-8 source at the merge base and head through `src/{commit}/{path}`. Added,
+modified, removed and renamed files all carry before/after text as applicable.
+Binary, subrepository, symlink, missing-patch, duplicate, truncated, stale,
+rate-limited, redirected and oversized evidence is refused. The PR binding is
+read again after capture. The API token stays behind the host boundary and is not
+part of the reviewer prompt or environment.
+
+Qualify the exact configured executable/provider route only after authorizing its
+separate paid challenge:
+
+```sh
+gallivant review qualify --repo bitbucket.org/workspace/repository
+gallivant review qualify --repo bitbucket.org/workspace/repository --run
+gallivant review qualify --repo bitbucket.org/workspace/repository
+```
+
+The first and last commands are read-only. `--run` starts at most the one durable
+qualification job for that fingerprint; CLI version and sign-in checks alone do
+not prove selected-model access. Start refuses before author dispatch if the route
+cannot qualify.
+
+For a settled existing run that still has the explicit legacy snapshot, use the
+audited transition and then recheck the same PR:
+
+```sh
+gallivant review policy HANDLE --mode first-party-required \
+  --reason "Enable the qualified independent local reviewer"
+gallivant recheck HANDLE
+```
+
+This is the only path that removes the saved legacy policy. It retains the task
+identity, original PRD snapshot, PR, checkout and implementation session. A
+failed route preflight changes nothing and launches no review. Do not edit an
+active WebBabyShower brief or local policy as an implementation test.
+
+Each reviewer job is a fresh restricted Codex execution with no implementation
+session, context mounts, tools, network, host/Git credential or publication
+authority. The 100,000-byte input cap applies to every job. Large evidence is
+split into immutable source/patch slices, including a single large lockfile or
+line; every slice repeats the aggregate identities and all acceptance criteria.
+Clearance requires every piece to complete and match. `max_jobs`, `budget_usd`
+and per-job timeout bound the aggregate. If the full change does not fit those
+bounds, the run stops with `review-incomplete`; no path or suffix is omitted.
+
+## External Bitbucket reviewer account
+
+This is an alternative external-review setup, not required by the local path.
 Use a separate Bitbucket account for the automated reviewer. Configure its stable
 UUID, never its display name, nickname, the coding account, or a Pipeline label:
 
@@ -221,6 +284,15 @@ No command merges the PR, force-pushes, deploys or alters protections.
   configuration, or explicitly choose no-reviewer mode. Do not use `@codex review`.
 - `BB_INCOMPLETE`, `BB_STALE`, HTTP 429/5xx: restore API access or wait for the read
   retry. Never clear a cursor or turn missing evidence into an empty collection.
+- `REVIEW_UNQUALIFIED`: confirm the exact `harness.codex.bin`, selected model and
+  provider access, then explicitly run `review qualify --repo ... --run`. Do not
+  substitute `--version`, sign-in status or an offline fixture.
+- `review-incomplete` / `REVIEW_INCOMPLETE`: inspect the named missing identity,
+  path, patch or required job count. For a large complete text change, raise
+  `max_jobs` and `budget_usd` only within an operator-approved bound, then select
+  the new policy explicitly. Binary, subrepository, symlink, rate-limited,
+  redirected or stale evidence must be corrected; increasing a byte cap is not a
+  workaround.
 - `pr-identity`: inspect source/base/repository/head and restore the recorded
   identity. A decline or unproven merge needs operator reconciliation, not a new
   paid run or an automatic chain advance.

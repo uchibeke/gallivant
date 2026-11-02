@@ -1,8 +1,10 @@
 # Bitbucket Cloud review-loop qualification record
 
-Status: **unqualified; dispatch disabled**. This document records the original
-missing prerequisites and subsequent disposable transport tests. PR writes and
-offline tests are not substitutes for a real task run, model access or review.
+Status: **first-party implementation available; live review unqualified**.
+Dispatch is enabled only under an explicit repository review policy. This
+document records the original missing prerequisites, subsequent disposable
+transport tests, and the remaining private/public first-party matrix. PR writes
+and offline tests are not substitutes for a real model review.
 
 ## Observed prerequisites, 2026-11-01
 
@@ -36,7 +38,7 @@ merges the qualified predecessor to test chain continuation.
 | --- | --- | --- |
 | Private and public access, HTTPS and SSH | Private and public disposable repos pass API/SSH reads; a private PR and public `qualification-base` push | Partial: HTTPS Git untested |
 | Non-default base and PR creation | A private PR targets `main`; public PR #1 targets `qualification-base` | Transport passed; agent dispatch untested |
-| Genuine Codex review posting current-head feedback | No inference invocation | Unmet |
+| Genuine Codex review posting current-head feedback | No authorized first-party inference invocation | Unmet |
 | Stable observed reviewer actor; blocking then clear | Coding actor observed; no separate reviewer selected | Unmet |
 | Trusted `/fix`; failed then passing CI/check names | No live PR/check producer | Unmet |
 | Same-session correction and receipt/readiness | No live run | Unmet |
@@ -302,3 +304,51 @@ identity must be implemented and verified in both disposable repositories
 before general dispatch. Independent review, required CI and a clean Linux
 installation remain separate unvalidated capabilities. The isolated test
 daemons were stopped after their runs completed.
+
+## 2026-11-02: complete evidence and bounded local review implementation
+
+The Bitbucket adapter now implements the shared `reviewEvidence` contract. It
+binds the immutable repository UUID and PR number, expands full head/base object
+IDs, requests the documented `head..base` comparison with `topic=true` (Bitbucket
+orders this opposite to `git diff`), paginates diffstat, obtains the merge base,
+and reads source metadata/content at the merge base and head. It compares every
+changed path with the raw diff and refuses duplicate, missing, stale, binary,
+subrepository, symlink, redirected, rate-limited, truncated and oversized
+evidence. It re-reads the PR before returning, and the shared capture boundary
+rechecks body/check/policy binding afterward. The selected API credential never
+enters the model prompt or reviewer environment.
+
+The shared first-party service now partitions evidence above the 100,000-byte
+single-job cap into immutable source and patch slices. Every piece binds the same
+task/repository/PR/head/base/merge-base/body/check/policy/aggregate identities and
+repeats all criteria. Long lines and lockfiles are sliced with absolute source
+offsets. All pieces must complete; one finding, missing piece, malformed response,
+timeout, identity conflict or exhausted job/budget bound blocks readiness. An
+incomplete aggregate records `review-incomplete`. Head, body, checks and policy
+changes invalidate the prior aggregate, while durable piece keys prevent a
+restart from launching a duplicate.
+
+Offline regressions include:
+
+- `Bitbucket first-party evidence binds exact PR commits and covers paginated added, modified, removed and renamed files`
+- `Bitbucket first-party evidence refuses stale, duplicate, binary, missing-patch, redirected, rate-limited and oversized capture`
+- `a deterministic 340 KB lockfile is completely partitioned within configured jobs or refused explicitly`
+- `reviewer environment retains selected model access but excludes coding and Bitbucket credentials`
+- `explicit policy migration removes legacy no-review while preserving the existing Bitbucket run identity`
+
+The configured Codex executable reports version 0.160.0, meeting the implemented
+native-boundary minimum. No selected-model challenge was run in this implementation
+session because it was not authorized to start a paid nested job; version and
+sign-in status do not establish model access. No current WebBabyShower PR was
+captured or reviewed. The public [PR #2](https://bitbucket.org/webbabyshowers/gallivant-host-test-public/pull-requests/2)
+and private [PR #3](https://bitbucket.org/webbabyshowers/gallivant-host-test/pull-requests/3)
+remain historical no-review transport evidence only.
+
+The exact remaining live remedy is to authorize the bounded qualification job,
+then run a genuine first-party review on a fresh exact head in each disposable
+repository: record a blocking finding, correct the same PR/session, and record a
+fresh clear aggregate. The record must include repository/PR links, task and
+review run IDs, reviewed full SHA, selected model, provider-reported cost (or an
+explicit unknown-cost reservation), credential-isolation observation, restart
+deduplication, and a changed-head non-clearance check. Synthetic verdict JSON or
+the earlier no-review PRs cannot fill those rows.

@@ -76,6 +76,58 @@ test("review preflight preserves repository actor overrides and explicit no-revi
   }
 });
 
+test("Bitbucket first-party evidence binds exact PR commits and covers paginated added, modified, removed and renamed files", async () => {
+  const f = cleanFixture({ intercept: call => {
+    if (call.path.startsWith("/diffstat/")) {
+      const request = new URL(call.url), pageNumber = request.searchParams.get("page");
+      if (!pageNumber) { request.searchParams.set("page", "2"); return json({ values: f.data.diffstat.slice(0, 2), size: 4, pagelen: 2, next: request.href }); }
+      return json({ values: f.data.diffstat.slice(2), size: 4, pagelen: 2 });
+    }
+  } });
+  f.data.diffstat = [
+    { status: "added", old: null, new: { type: "commit_file", path: "added.txt" } },
+    { status: "modified", old: { type: "commit_file", path: "a" }, new: { type: "commit_file", path: "a" } },
+    { status: "removed", old: { type: "commit_file", path: "removed.txt" }, new: null },
+    { status: "renamed", old: { type: "commit_file", path: "old.txt" }, new: { type: "commit_file", path: "new.txt" } },
+  ];
+  f.data.comparisonDiff = [
+    "diff --git a/added.txt b/added.txt\nnew file mode 100644\n--- /dev/null\n+++ b/added.txt\n@@ -0,0 +1 @@\n+added\n",
+    "diff --git a/a b/a\n--- a/a\n+++ b/a\n@@ -1 +1 @@\n-before\n+fixture file\n",
+    "diff --git a/removed.txt b/removed.txt\ndeleted file mode 100644\n--- a/removed.txt\n+++ /dev/null\n@@ -1 +0,0 @@\n-removed\n",
+    "diff --git a/old.txt b/new.txt\nsimilarity index 100%\nrename from old.txt\nrename to new.txt\n",
+  ].join("");
+  Object.assign(f.data.sources, {
+    [`${HEAD}:added.txt`]: "added\n", [`${BASE}:removed.txt`]: "removed\n",
+    [`${BASE}:old.txt`]: "same\n", [`${HEAD}:new.txt`]: "same\n",
+  });
+  const evidence = await f.api.reviewEvidence(PATH, 7, HEAD, BASE, 100_000);
+  assert.deepEqual(evidence.context.map(file => [file.path, file.status]), [["added.txt", "added"], ["a", "modified"], ["removed.txt", "removed"], ["new.txt", "renamed"]]);
+  assert.equal(evidence.repositoryId, UUID); assert.equal(evidence.pr, 7); assert.equal(evidence.head, HEAD); assert.equal(evidence.base, BASE); assert.equal(evidence.mergeBase, BASE);
+  assert.equal(evidence.context[0].before, null); assert.equal(evidence.context[2].after, null);
+  assert.equal(evidence.context[3].before, "same\n"); assert.equal(evidence.context[3].after, "same\n");
+  assert.equal(f.calls.filter(call => call.path.startsWith("/diffstat/")).length, 2);
+  const comparison = f.calls.find(call => call.path.startsWith("/diff/"));
+  assert.match(comparison.path, new RegExp(`/diff/${HEAD}\\.\\.${BASE}`));
+  assert.equal(new URL(comparison.url).searchParams.get("topic"), "true");
+  assert.ok(f.calls.every(call => new URL(call.url).origin === "https://api.bitbucket.org"));
+});
+
+test("Bitbucket first-party evidence refuses stale, duplicate, binary, missing-patch, redirected, rate-limited and oversized capture", async () => {
+  const cases = [
+    ["stale", f => f.api.reviewEvidence(PATH, 7, BASE, HEAD, 100_000)],
+    ["duplicate", f => { f.data.diffstat.push(structuredClone(f.data.diffstat[0])); return f.api.reviewEvidence(PATH, 7, HEAD, BASE, 100_000); }],
+    ["binary", f => { f.data.comparisonDiff += "GIT binary patch\n"; return f.api.reviewEvidence(PATH, 7, HEAD, BASE, 100_000); }],
+    ["binary metadata", f => { f.data.sourceAttributes[`${HEAD}:a`] = ["binary"]; return f.api.reviewEvidence(PATH, 7, HEAD, BASE, 100_000); }],
+    ["missing-patch", f => { f.data.comparisonDiff = "diff --git a/other b/other\n--- a/other\n+++ b/other\n@@ -1 +1 @@\n-a\n+b\n"; return f.api.reviewEvidence(PATH, 7, HEAD, BASE, 100_000); }],
+    ["oversized", f => f.api.reviewEvidence(PATH, 7, HEAD, BASE, 20)],
+  ];
+  for (const [name, attempt] of cases) await assert.rejects(attempt(cleanFixture()), /current open|stale|duplicate|binary|submodule|regular text-file|changed-path|patch|bound|exceeds|oversized/i, name);
+  for (const [name, response] of [["redirected", new Response(null, { status: 302, headers: { location: "https://evil.example/leak" } })], ["rate-limited", json({}, 429)]]) {
+    const f = cleanFixture({ intercept: call => call.path.startsWith("/diffstat/") ? response : undefined });
+    await assert.rejects(f.api.reviewEvidence(PATH, 7, HEAD, BASE, 100_000), /redirect|HTTP 429/i, name);
+  }
+});
+
 test("only explicit current full-SHA feedback from the configured stable reviewer clears a head", async () => {
   for (const [body, user, expected] of [
     [verdictBody(), REVIEWER, "clear"], [verdictBody("blocking"), REVIEWER, "blocking"],

@@ -44,17 +44,18 @@ Legacy records are snapshotted as version 0 on reconciliation using their last c
 The selected Git host must provide the complete review-evidence operation through
 the shared host registry. An unsupported host or missing operation stops
 qualification before native preparation, including when a saved clear exists.
-GitHub retains `owner/repo` identities; qualified additional adapters would use
-`host/owner/repo`. First-party task review remains GitHub-only because the
-Bitbucket adapter has not qualified its complete review-evidence operation.
-Bitbucket task dispatch is available with an explicit external or no-reviewer
-policy; the live qualification so far covers no-reviewer mode.
+GitHub retains `owner/repo` identities. Bitbucket uses
+`bitbucket.org/workspace/repository`; its evidence adapter is implemented, but its
+live private/public review matrix remains a separate qualification requirement.
+No other Git host is supported by this review path.
 
 Use the exact executable in `harness.codex.bin`. Only its restricted preparation profile is implemented as a reviewer route; other coding adapters are unqualified. The review service supplies text in a fresh isolated workspace, disables tools, MCP/plugins, hooks, skills, memories, delegation, telemetry and user/project instructions, denies escalation and network access from model tools, and verifies the effective native configuration including managed requirements. Provider authentication is confined to the native inference connection. The coding session and its context mounts are never reused.
 
 ```sh
 gallivant review qualify --repo owner/repo
 gallivant review qualify --repo owner/repo --run
+gallivant review qualify --repo bitbucket.org/workspace/repository
+gallivant review qualify --repo bitbucket.org/workspace/repository --run
 gallivant review status <task-handle>
 gallivant doctor
 ```
@@ -63,15 +64,17 @@ The first command only reads qualification. `--run` explicitly authorizes a sepa
 
 `npm run test:first-party-review:live` is the opt-in disposable-repository probe. It requires `REVIEW_LIVE=1`, the normal operator configuration, and an explicit review allowance; ordinary tests never call a model. Do not run it to work around an administrator or guardrail refusal.
 
-Codex does not expose a native USD hard cap or reliable cost receipt here. The coordinator reserves `budget_usd / max_jobs` before each review launch and consumes the reservation even when actual cost is unknown. Job count, wall time and known pre-dispatch retries are independently bounded. This is an accounting allowance, **not a guaranteed provider billing cap**. Cost qualification and live spend measurement remain outstanding; configure a provider-side limit before relying on a monetary ceiling. Provider failure requires a person; it never spends a coding fix round by itself.
+Codex does not expose a native USD hard cap or reliable cost receipt here. The coordinator reserves `budget_usd / max_jobs` before each review launch and consumes the reservation even when actual cost is unknown. `max_input_bytes` remains a hard per-job prompt cap (at most 100,000 bytes); it is never raised for a large PR. `max_jobs`, the reserved budget and the per-job timeout bound the complete aggregate. Job count, wall time and known pre-dispatch retries are independently bounded. This is an accounting allowance, **not a guaranteed provider billing cap**. Cost qualification and live spend measurement remain outstanding; configure a provider-side limit before relying on a monetary ceiling. Provider failure requires a person; it never spends a coding fix round by itself.
 
 ## Evidence, fixes and migration
 
-The GitHub adapter captures exact head/base/merge-base IDs, a complete diff, full before/after content for changed files including deletions, the immutable PRD and every criterion, checks and the full completion receipt. Oversized evidence, binary/submodule content, omitted patches, API file limits, unreadable snapshots and concurrent PR changes produce incomplete review. No prefix is silently reviewed as the whole change. Other hosts must implement the same complete evidence interface before first-party reviewer qualification; Bitbucket task dispatch does not itself qualify that route.
+The GitHub and Bitbucket adapters capture exact head/base/merge-base IDs, a complete diff, full before/after content for added, modified, removed and renamed files, the immutable PRD and every criterion, checks and the full completion receipt. Bitbucket additionally binds the repository UUID and PR number, consumes every diffstat page, compares that inventory to the raw commit comparison, reads source metadata/content at the merge base and head, and rechecks the PR after capture. Oversized evidence, binary/submodule/symlink content, omitted patches, duplicate or truncated pages, unreadable snapshots, rate limits and concurrent PR changes produce incomplete review. API credentials stay in the host adapter; reviewer jobs receive neither host nor Git credentials, and redirects outside the bound API repository are refused.
+
+When the full serialized evidence does not fit one job, the shared service creates immutable byte-bounded source and patch slices. Every piece repeats the same task, repository, PR, head, base, merge base, brief, criteria, checks, receipt, policy and aggregate digest. Long single lines and large lockfiles are sliced with absolute line/column offsets rather than omitted. Every changed path and every criterion must appear in the aggregate, every piece must return a valid matching identity, and all pieces must finish before clearance. A finding in any piece, a timeout, malformed output, missing piece, conflicting finding identity, exhausted job/budget bound or unresolved scope blocks readiness. If the configured aggregate cannot hold the evidence, the result says `review-incomplete`/`REVIEW_INCOMPLETE` with the required and configured job counts; it does not review a prefix.
 
 The model receives this material as untrusted JSON. Its output must cover all criteria, identify the route/head/input digest, leave no unresolved scope, and report either `clear` or actionable findings with severity and a quote at an actual captured file/line. Invalid, partial, timed-out, failed or tool-attempting output cannot clear. The coordinator owns the ledger under `reviews/` and the separate execution namespace under `runs/review__...`. Public comments and agent-authored approval text are never an alternative source of internal clearance.
 
-Polling reuses the saved review input only when the current PR identity, checks, receipt, policy and brief digest still match. Changed inputs require a new verdict; file content can be reused at the same repository, head and base. This also applies after restart. A delayed poll accepts a valid result whose recorded execution completion time met the deadline; missing completion times, late results and executions still running past the deadline cannot clear.
+Polling reuses captured source only when the repository, head and base still match, and rechecks the live PR binding before using it. Changed head, base, checks, receipt, policy or brief invalidates the whole aggregate, not only one piece. Piece keys make restart and repeated host pages idempotent; an old-head or partial aggregate cannot clear. A delayed poll accepts a valid result whose recorded execution completion time met the deadline; missing completion times, late results and executions still running past the deadline cannot clear.
 
 Findings use the existing fix dispatch and round counter. Their disposition is recorded. A subsequent push needs fresh evidence. Repeated findings on the same input, required-reviewer disagreement and exhausted fix rounds stop for a person. `review dispute <handle> --finding <id> --reason "..."` records a pending dispute and removes readiness; it has no self-accept operation. A person must resolve the defect or deliberately change policy and re-evaluate it.
 
@@ -85,9 +88,11 @@ Config edits affect future tasks. For a stopped/settled existing task, use:
 
 ```sh
 gallivant review policy <handle> --mode both-required --reason "Require both reviews for this task"
+gallivant review policy <handle> --mode first-party-required --reason "Enable the qualified independent local reviewer"
+gallivant recheck <handle>
 ```
 
-The command records the prior policy and reason, revokes readiness, and re-evaluates the current head. It cannot replace a missing required actor or unqualified route with clearance. No command here merges or advances a chain before its existing merge gate.
+The command first proves that the selected route is qualified, then records the prior policy and reason, revokes readiness, and re-evaluates the current head. For an existing Bitbucket legacy run, this is the only path that removes `legacy_no_review`; direct config edits do not change its snapshot. The original PRD snapshot, task/run identity, PR, checkout and implementation session are retained. A failed preflight changes none of them and starts no paid review. No command here merges or advances a chain before its existing merge gate.
 
 Policy changes and disputes share per-task process exclusion with review decisions,
 including label publication and notification. If a decision is already in flight,
