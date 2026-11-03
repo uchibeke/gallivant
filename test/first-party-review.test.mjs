@@ -899,6 +899,8 @@ test("captured reviewer progress settles locally without another host read and r
   w.ctx.gh.prView = async () => assert.fail("local progress cannot spend host API requests");
   const result = await w.service().progress(w.id, entry);
   assert.equal(result.status, "completed"); assert.equal(w.calls.submits, 1);
+  const changed = createReviewService(w.ctx, { fingerprint: () => "b".repeat(64), clock: w.clock });
+  await assert.rejects(changed.progress(w.id, entry), /qualified reviewer route changed/);
   assert.equal(await w.service().progress(w.id, { ...entry, reviewPolicy: { ...entry.reviewPolicy, zeroChecks: true } }), null);
   w.ctx.readPrd = () => "changed brief";
   assert.equal(await w.service().progress(w.id, entry), null);
