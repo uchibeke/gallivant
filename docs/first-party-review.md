@@ -101,9 +101,12 @@ multiline quotes never gain clearance from this correction.
 Malformed output or an unverifiable citation receives up to the configured
 `retries` fresh, tools-disabled reviewer attempts, using the same job, spend and
 time limits. Previous attempts stay in the ledger; an ambiguous launch, tool
-attempt, provider failure or genuine unresolved scope is never silently retried
-as a format error. Older completed outputs rejected only for citation numbering
-are revalidated once against the exact original input and owned execution.
+attempt or provider failure is never silently retried as a format error. A local
+scope concern is retained in the ledger and carried through any reductions to
+the final whole-PR reviewer; it is never accepted as clearance. Whole-PR
+unresolved scope remains blocking. Older outputs rejected for citation numbering
+or local-slice scope are revalidated once against the exact original input and
+owned execution.
 A new protocol identity retains old failed jobs
 for audit without reusing their incomplete verdicts.
 

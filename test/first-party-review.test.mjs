@@ -721,12 +721,26 @@ test("citation resolution is exact, scoped, unique and auditable for findings an
   assert.equal(validateReviewResult(JSON.stringify(local),patchPiece).observations[0].evidence.line,158);
 });
 
-test("only missing sibling-slice scope gets a bounded output retry; genuine scope remains blocking", async () => {
+test("local unresolved scope is retained for whole-PR review and cannot itself clear", async () => {
   const e = { ...await captureReviewEvidence(evidenceWorld()), version: 2, piece: { index: 1, total: 3 } };
   for (const scope of ["The supplied patch ends partway through the file; remaining behavior cannot be inspected in this piece.", "Only before-side context is supplied; no patch or after-side source is supplied."]) {
-    assert.throws(() => validateReviewResult(JSON.stringify({ ...clear(e), observations: [], unresolvedScope: [scope] }), e), error => error.code === "REVIEW_INCOMPLETE" && error.repairableReviewOutput === true);
+    assert.deepEqual(validateReviewResult(JSON.stringify({ ...clear(e), observations: [], unresolvedScope: [scope] }), e).unresolvedScope,[scope]);
   }
-  assert.throws(() => validateReviewResult(JSON.stringify({ ...clear(e), observations: [], unresolvedScope: ["Required payment authorization evidence is unavailable"] }), e), error => error.code === "REVIEW_INCOMPLETE" && !error.repairableReviewOutput);
+  assert.deepEqual(validateReviewResult(JSON.stringify({ ...clear(e), observations: [], unresolvedScope: ["Required payment authorization evidence is unavailable"] }), e).unresolvedScope,["Required payment authorization evidence is unavailable"]);
+  const whole = { ...e, version: 1 };
+  assert.throws(() => validateReviewResult(JSON.stringify({ ...clear(whole), unresolvedScope: ["Required payment authorization evidence is unavailable"] }), whole), error => error.code === "REVIEW_INCOMPLETE" && !error.repairableReviewOutput);
+});
+
+test("earlier local scope concerns remain visible through reduction and final review", async () => {
+  const e=await captureReviewEvidence(evidenceWorld()), piece={...e,version:2,piece:{index:1,total:1},digest:"piece-digest"};
+  const concern="The payment authorization evidence was not available in this slice.";
+  const jobs=[{status:"completed",binding:e.binding,evidence:piece,priorUnresolvedScope:[],result:{observations:[{criterionId:"ac-1",description:"Examined source.",evidence:finding.evidence}],findings:[],unresolvedScope:[concern]}}];
+  const reports=reviewReports(e,[piece],jobs);assert.deepEqual(reports[0].priorUnresolvedScope,[concern]);
+  const group={version:4,digest:"group",binding:e.binding,coverage:reports[0].coverage,reports};
+  const reduced=reducedReviewReport(group,{status:"completed",binding:e.binding,evidence:group,result:{observations:jobs[0].result.observations,findings:[]}});
+  assert.deepEqual(reduced.priorUnresolvedScope,[concern]);
+  const final=planReviewSynthesis(e,[reduced],100_000).final;
+  assert.ok(reviewPrompt(final).includes(concern));assert.match(reviewPrompt(final),/Evaluate every priorUnresolvedScope concern/);
 });
 
 test("final reviewer locations resolve only inside validated child reports", async () => {
@@ -776,6 +790,19 @@ test("upgrading citation validation rechecks a saved owned output once without a
   const recovered=await w.service().reconcile(w.id,w.entry,w.pr);
   assert.equal(recovered.status,"completed");assert.equal(recovered.result.verdict,"findings");assert.equal(w.calls.submits,1);
   const recorded=w.service().inspect(w.id).jobs[job.key];assert.equal(recorded.citationCorrections[0].reportedLine,99);assert.equal(recorded.validationHistory.length,1);
+});
+
+test("upgrading local scope validation recovers the owned slice and retains its question", async () => {
+  const w=reviewServiceWorld(), after=`${"a".repeat(110_000)}\n`, patch=`diff --git a/a.js b/a.js\nnew file mode 100644\n--- /dev/null\n+++ b/a.js\n@@ -0,0 +1 @@\n+${after}`;
+  w.ctx.gh.reviewEvidence=async()=>({...source,diff:patch,context:[{path:"a.js",status:"added",patch,before:null,after}]});
+  const service=w.service();await service.reconcile(w.id,w.entry,w.pr);
+  const first=Object.values(service.inspect(w.id).jobs)[0], concern="The other source slices are not present in this piece.";
+  w.finish(first,{raw:JSON.stringify({...scopedClear(first.evidence),unresolvedScope:[concern]})});
+  await service.reconcile(w.id,w.entry,w.pr);const calls=w.calls.submits;
+  const file=`${w.ctx.home}/reviews/${reviewDigest(w.id)}.json`, ledger=JSON.parse(readFileSync(file,"utf8")), old=ledger.jobs[first.key];
+  old.status="incomplete";old.errorCode="REVIEW_INCOMPLETE";old.error=`unresolved review scope: ${concern}`;old.validationProtocol=2;delete old.result;writeFileSync(file,JSON.stringify(ledger));
+  await w.service().reconcile(w.id,w.entry,w.pr);
+  const recovered=w.service().inspect(w.id).jobs[first.key];assert.equal(recovered.status,"completed");assert.deepEqual(recovered.result.unresolvedScope,[concern]);assert.equal(w.calls.submits,calls);
 });
 
 test("review retry command wakes the same task and preserves policy, PR and author session", async () => {
