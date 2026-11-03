@@ -112,8 +112,10 @@ that changed-path inventory to the complete raw comparison, and reads regular
 UTF-8 source at the merge base and head through `src/{commit}/{path}`. Added,
 modified, removed and renamed files all carry before/after text as applicable.
 Binary, subrepository, symlink, missing-patch, duplicate, truncated, stale,
-rate-limited, redirected and oversized evidence is refused. The PR binding is
-read again after capture. The API token stays behind the host boundary and is not
+rate-limited, redirected and oversized evidence is refused. An opt-in development
+interface can capture bounded symlink target data without following the link;
+the coordinator does not yet enable it, so changed links still block review.
+The PR binding is read again after capture. The API token stays behind the host boundary and is not
 part of the reviewer prompt or environment.
 
 This review route does not yet capture or inspect PNG or JPEG changes. An
