@@ -1,5 +1,10 @@
 # Network failures and recovery
 
+The coordinator normally retains a successful local provider health check for
+one minute, so a long coordinator cycle does not immediately expire it. A due,
+pending, failed or timed-out check still fences dispatch. An explicit
+`execution.progressMs` setting controls this interval and remains authoritative.
+
 `ENOTFOUND` means a hostname lookup failed. `EAI_AGAIN` indicates a temporary
 resolver failure. Neither proves that a provider is down, credentials expired,
 or APort denied a tool call. DNS can affect one hostname while other sites work.
