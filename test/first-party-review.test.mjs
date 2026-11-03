@@ -1,6 +1,8 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync, writeFileSync } from "node:fs";
+import { createHash } from "node:crypto";
+import { PNG } from "pngjs";
 import { evaluateReviews } from "../lib/review_evaluation.mjs";
 import { completionStopsAutomation, coordinatorEntryActive } from "../lib/task_completion.mjs";
 import { exactReviewerVerdict, makeTrust } from "../lib/events.mjs";
@@ -1289,6 +1291,44 @@ test("GitHub normalization refuses capped comparisons and omitted binary patches
     const gh=makeGh({exec:async(_cmd,args)=>({stdout:args.includes("-H")?"diff --git a/bin b/bin":JSON.stringify({merge_base_commit:{sha:base},files})})});
     await assert.rejects(gh.reviewEvidence("acme/widget",1,head,base,REVIEW_DEFAULTS.max_input_bytes),/limit|omitted/);
   }
+});
+
+test("opt-in GitHub image capture verifies commit trees, regular blobs and every changed side", async () => {
+  const image = PNG.sync.write({ width: 1, height: 1, data: Buffer.from([10, 20, 30, 255]) });
+  const oid = createHash("sha1").update(`blob ${image.length}\0`).update(image).digest("hex");
+  const baseTree = "c".repeat(40), headTree = "d".repeat(40);
+  const files = [{ filename: "added.png", status: "added" }, { filename: "modified.png", status: "modified" },
+    { filename: "removed.png", status: "removed" }, { filename: "new.png", previous_filename: "old.png", status: "renamed" }];
+  const diff = ["diff --git a/added.png b/added.png\nnew file mode 100644\nBinary files /dev/null and b/added.png differ\n",
+    "diff --git a/modified.png b/modified.png\nBinary files a/modified.png and b/modified.png differ\n",
+    "diff --git a/removed.png b/removed.png\ndeleted file mode 100644\nBinary files a/removed.png and /dev/null differ\n",
+    "diff --git a/old.png b/new.png\nsimilarity index 100%\nrename from old.png\nrename to new.png\n"].join("");
+  let mode = "100644", contents = image, comparisonDiff = diff;
+  const gh = makeGh({ exec: async (_cmd, args) => {
+    const target = args[1];
+    if (args.includes("-H")) return { stdout: comparisonDiff };
+    if (target.includes("/compare/")) return { stdout: JSON.stringify({ merge_base_commit: { sha: base }, files }) };
+    if (target.includes("/git/commits/")) { const ref = target.split("/").at(-1); return { stdout: JSON.stringify({ sha: ref, tree: { sha: ref === base ? baseTree : headTree } }) }; }
+    if (target.includes("/git/trees/")) {
+      const tree = target.split("/").at(-1), names = tree === baseTree ? ["modified.png", "removed.png", "old.png"] : ["added.png", "modified.png", "new.png"];
+      return { stdout: JSON.stringify({ sha: tree, truncated: false, tree: names.map(path => ({ path, type: "blob", mode, sha: oid, size: image.length })) }) };
+    }
+    return { stdout: JSON.stringify({ type: "file", encoding: "base64", content: contents.toString("base64"), sha: oid, size: image.length }) };
+  } });
+  await assert.rejects(gh.reviewEvidence("acme/widget", 1, head, base, 100_000), /binary/);
+  const evidence = await gh.reviewEvidence("acme/widget", 1, head, base, 100_000, { imageEvidence: true });
+  assert.deepEqual(evidence.context.map(row => [row.status, row.before?.revision ?? null, row.after?.revision ?? null]), [
+    ["added", null, head], ["modified", base, head], ["removed", base, null], ["renamed", base, head],
+  ]);
+  assert.equal(evidence.context[3].before.path, "old.png");
+  mode = "120000";
+  await assert.rejects(gh.reviewEvidence("acme/widget", 1, head, base, 100_000, { imageEvidence: true }), /regular blob/);
+  mode = "100644"; contents = Buffer.alloc(image.length);
+  await assert.rejects(gh.reviewEvidence("acme/widget", 1, head, base, 100_000, { imageEvidence: true }), /blob hash/);
+  contents = Buffer.alloc(image.length + 3);
+  await assert.rejects(gh.reviewEvidence("acme/widget", 1, head, base, 100_000, { imageEvidence: true }), /contents are incomplete/);
+  contents = image; comparisonDiff = diff.replace("new file mode 100644", "new file mode 160000");
+  await assert.rejects(gh.reviewEvidence("acme/widget", 1, head, base, 100_000, { imageEvidence: true }), /submodule/);
 });
 
 test("GitHub review evidence accepts delimited spaced paths and complete header-only changes", async () => {
