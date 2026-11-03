@@ -122,8 +122,9 @@ The coordinator requests bounded PNG and JPEG sides at the exact revisions and
 requires a separate image-capability qualification before launching visual jobs.
 It combines their validated reports with text review and whole-PR synthesis.
 The image qualification does not itself qualify the host or complete a PR review;
-the Bitbucket screenshot workflow remains unverified live. Preserve the original
-files and incomplete state when any capability or evidence is unavailable.
+the [disposable live screenshot attempt](audit/bitbucket-review-qualification.md#live-image-qualification-and-disposable-review-2026-11-03)
+stopped incomplete. Preserve the original files and incomplete state when any
+capability or evidence is unavailable.
 
 Qualify the exact configured executable/provider route only after authorizing its
 separate paid challenge:

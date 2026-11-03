@@ -102,8 +102,8 @@ test("visual plans cover each exact image side and validate findings without sou
 
 test("report reduction retains each exact image identity or fails closed", () => {
   const images = [identity("before"), identity("after")].map((value, index) => ({ ...value, sha256: String(index + 1).repeat(64) }));
-  const node = { version: 4, digest: "node", binding: "binding", coverage: { first: 1, last: 2, total: 2 }, reports: images.map(image => ({ images: [image] })) };
   const observations = images.map(image => ({ criterionId: "ac-1", description: "Observed the image.", evidence: image }));
+  const node = { version: 4, digest: "node", binding: "binding", coverage: { first: 1, last: 2, total: 2 }, reports: images.map((image, index) => ({ images: [image], observations: [observations[index]] })) };
   const job = { status: "completed", evidence: { digest: node.digest }, binding: node.binding, result: { observations, findings: [] } };
   assert.deepEqual(reducedReviewReport(node, job).images, images);
   assert.throws(() => reducedReviewReport(node, { ...job, result: { ...job.result, observations: observations.slice(0, 1) } }), /omitted an image/);
