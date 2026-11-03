@@ -143,6 +143,13 @@ test("Bitbucket API rejects redirects, foreign pagination, rates and transport s
   assert.ok(f.calls.every(c => c.url.startsWith("https://api.bitbucket.org/")));
 });
 
+test("Bitbucket transport sanitizes numeric DOMException codes", async () => {
+  const abort = () => { throw new DOMException("fixture-api-secret", "AbortError"); };
+  const f = fixture({ intercept: abort });
+  await assert.rejects(f.api.inspectRepository(PATH), error => error.code === "BB_TRANSPORT" && error.uncertain === false && !error.message.includes("secret"));
+  assert.equal(f.calls.length, 1);
+});
+
 test("Bitbucket snapshot is complete, normalized and bounded across comments, tasks, participants and current-head statuses", async () => {
   const f = fixture(); const snapshot = await f.registry.api.prView(REPO, 7);
   validateHostRecord(snapshot, "bitbucket.org", { pr: true, full: true });
