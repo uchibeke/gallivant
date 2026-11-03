@@ -1088,6 +1088,72 @@ test("3 MB review reports reduce hierarchically within every input cap with exac
   assert.equal(validateReviewResult(JSON.stringify(clear(final)), final).verdict, "clear");
 });
 
+test("32 image sides and text reduce across levels within observation limits and retain every identity", async t => {
+  const captured = await captureReviewEvidence(evidenceWorld());
+  const images = Array.from({ length: 32 }, (_, index) => ({ path: `screenshots/${index}.png`, side: "after", revision: head, sha256: reviewDigest(index) }));
+  const evidence = { ...captured, context: [...captured.context, ...images.map(image => ({ kind: "image", path: image.path, after: image }))] };
+  let reports = images.map((image, index) => ({ inputDigest: reviewDigest({ image, index }),
+    coverage: { first: index + 1, last: index + 1, total: images.length + 1, digest: reviewDigest({ index }) },
+    images: [image], observations: [{ criterionId: "ac-1", description: "Observed the screenshot.", evidence: image }], findings: [], priorUnresolvedScope: [] }));
+  reports.push({ inputDigest: reviewDigest("text"), coverage: { first: 33, last: 33, total: 33, digest: reviewDigest("text-coverage") },
+    observations: [{ criterionId: "ac-1", description: "Inspected source.", evidence: { path: "a.js", side: "after", line: 1, quote: "return true;" } }], findings: [], priorUnresolvedScope: [] });
+  let final, levels = 0;
+  for (let level = 0; level < 8; level++) {
+    let plan;
+    try { plan = planReviewSynthesis(evidence, reports, 12_000, level); }
+    catch (error) { t.diagnostic(`level ${level}, ${reports.length} reports, bytes ${reports.map(report => Buffer.byteLength(JSON.stringify(report))).join(",")}`); throw error; }
+    if (plan.final) { final = plan.final; break; }
+    levels++;
+    assert.ok(plan.groups.length < reports.length);
+    assert.deepEqual(plan.groups.flatMap(node => node.reports.map(report => report.inputDigest)), reports.map(report => report.inputDigest));
+    reports = plan.groups.map(node => {
+      assert.ok(node.reports.filter(report => report.images?.length).length <= 8);
+      assert.ok(Buffer.byteLength(reviewPrompt(node)) <= 12_000);
+      const observations = node.reports.filter(report => report.images?.length).map(report => ({ ...report.observations.find(item => item.evidence.sha256), description: "x" }));
+      if (!observations.length) observations.push(node.reports[0].observations[0]);
+      assert.ok(Buffer.byteLength(JSON.stringify(observations)) <= 2000);
+      const prompt = reviewPrompt(node);
+      for (const report of node.reports.filter(report => report.images?.length)) {
+        const proof = JSON.stringify({ count: report.images.length, digest: reviewDigest(report.images) });
+        assert.ok(prompt.includes(`"imageCoverage":${proof}`));
+      }
+      assert.ok(!prompt.includes('"images":['), "the prompt carries bounded coverage proofs rather than repeated full inventories");
+      const result = validateReviewResult(JSON.stringify({ ...clear(node), observations }), node);
+      const job = { status: "completed", binding: evidence.binding, evidence: node, result };
+      if (node.reports.some(report => report.images?.length)) {
+        assert.throws(() => reducedReviewReport(node, { ...job, result: { ...result, observations: observations.slice(1) } }), /omitted an image report/);
+        const forged = { ...observations[0], evidence: { ...observations[0].evidence, sha256: "0".repeat(64) } };
+        assert.throws(() => validateReviewResult(JSON.stringify({ ...clear(node), observations: [forged] }), node), /not grounded/);
+      }
+      return reducedReviewReport(node, job);
+    });
+  }
+  assert.ok(levels >= 2, "the regression exercises more than one reduction level");
+  assert.ok(final); assert.ok(Buffer.byteLength(reviewPrompt(final)) <= 12_000);
+  assert.deepEqual(final.reports.flatMap(report => report.images || []), images);
+  assert.deepEqual([final.coverage.first, final.coverage.last, final.coverage.total], [1, 33, 33]);
+  assert.equal(validateReviewResult(JSON.stringify(clear(final)), final).verdict, "clear");
+});
+
+test("image reduction also bounds the bytes needed to cite each child report", async () => {
+  const evidence = await captureReviewEvidence(evidenceWorld());
+  const reports = Array.from({ length: 16 }, (_, index) => {
+    const image = { path: `${"p".repeat(500)}-${index}.png`, side: "after", revision: head, sha256: reviewDigest(index) };
+    return { inputDigest: reviewDigest(image), coverage: { first: index + 1, last: index + 1, total: 16, digest: reviewDigest({ index }) },
+      images: [image], observations: [{ criterionId: "ac-1", description: "x", evidence: image }], findings: [] };
+  });
+  const plan = planReviewSynthesis(evidence, reports, 10_000);
+  assert.ok(plan.groups.length > 1);
+  for (const node of plan.groups) {
+    const observations = node.reports.map(report => report.observations[0]);
+    assert.ok(Buffer.byteLength(JSON.stringify(observations)) <= 2000);
+  }
+  const oversized = structuredClone(reports);
+  oversized[0].images[0].path = "p".repeat(2100);
+  oversized[0].observations[0].evidence.path = oversized[0].images[0].path;
+  assert.throws(() => planReviewSynthesis(evidence, oversized, 10_000), /input or observation cap/);
+});
+
 test("hierarchical review jobs recover after restart and cannot clear before final synthesis", async () => {
   const w = reviewServiceWorld(), after = `${"x".repeat(90_000)}\n`;
   w.entry.reviewPolicy.limits.maxInputBytes = 20000;
