@@ -1,3 +1,4 @@
+import { inspectReviewLink } from "../lib/review_link.mjs";
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
@@ -1502,4 +1503,78 @@ test("readiness is revoked before a failing label removal and before deferred fe
   w.gh.removeLabel=async()=>{throw new Error("host label unavailable");};
   w.gh.data.pr.body+="changed receipt"; await w.tick.tick();
   assert.notEqual(w.entry().state,"ready-for-human"); assert.equal(w.entry().review_readiness,null); assert.equal(w.entry().review_label_pending,true);
+});
+
+test("opt-in GitHub link capture reads Git blobs at both revisions without following targets", async () => {
+  const values = { added: "../../public", modifiedBefore: "../old", modifiedAfter: "../new", removed: "/outside", renamed: "../../shared" };
+  const blobs = Object.fromEntries(Object.values(values).map(value => {
+    const bytes = Buffer.from(value), sha = createHash("sha1").update(`blob ${bytes.length}\0`).update(bytes).digest("hex");
+    return [sha, bytes];
+  }));
+  const shaOf = value => Object.entries(blobs).find(([, bytes]) => bytes.toString() === value)[0];
+  const files = [{ filename: "added", status: "added" }, { filename: "modified", status: "modified", patch: "@@ -1 +1 @@" },
+    { filename: "removed", status: "removed" }, { filename: "renamed", previous_filename: "old", status: "renamed" }];
+  const diff = ["diff --git a/added b/added\nnew file mode 120000\n--- /dev/null\n+++ b/added\n@@ -0,0 +1 @@\n+../../public\n",
+    "diff --git a/modified b/modified\n--- a/modified\n+++ b/modified\n@@ -1 +1 @@\n-../old\n+../new\n",
+    "diff --git a/removed b/removed\ndeleted file mode 120000\n--- a/removed\n+++ /dev/null\n@@ -1 +0,0 @@\n-/outside\n",
+    "diff --git a/old b/renamed\nsimilarity index 100%\nrename from old\nrename to renamed\n"].join("");
+  const treeBase = "c".repeat(40), treeHead = "d".repeat(40), calls = [];
+  let corrupt = false;
+  const gh = makeGh({ exec: async (_cmd, args) => {
+    const target = args[1]; calls.push(target);
+    if (args.includes("-H")) return { stdout: diff };
+    if (target.includes("/compare/")) return { stdout: JSON.stringify({ merge_base_commit: { sha: base }, files }) };
+    if (target.includes("/git/commits/")) { const ref = target.split("/").at(-1); return { stdout: JSON.stringify({ sha: ref, tree: { sha: ref === base ? treeBase : treeHead } }) }; }
+    if (target.includes("/git/trees/")) {
+      const tree = target.split("/").at(-1), data = tree === treeBase ? { modified: values.modifiedBefore, removed: values.removed, old: values.renamed } : { added: values.added, modified: values.modifiedAfter, renamed: values.renamed };
+      return { stdout: JSON.stringify({ sha: tree, truncated: false, tree: Object.entries(data).map(([path, value]) => ({ path, type: "blob", mode: "120000", sha: shaOf(value), size: Buffer.byteLength(value) })) }) };
+    }
+    if (target.includes("/git/blobs/")) { const sha = target.split("/").at(-1), bytes = blobs[sha]; return { stdout: JSON.stringify({ sha, size: bytes.length, encoding: "base64", content: (corrupt ? Buffer.alloc(bytes.length, 65) : bytes).toString("base64") }) }; }
+    assert.fail(`unexpected endpoint ${target}`);
+  } });
+  await assert.rejects(gh.reviewEvidence("acme/widget", 1, head, base, 100_000), /symlink/);
+  const result = await gh.reviewEvidence("acme/widget", 1, head, base, 100_000, { linkEvidence: true });
+  assert.deepEqual(result.context.map(row => [row.status, row.before, row.after]), [["added", null, values.added], ["modified", values.modifiedBefore, values.modifiedAfter], ["removed", values.removed, null], ["renamed", values.renamed, values.renamed]]);
+  assert.equal(result.context[3].beforeLink.path, "old");
+  assert.equal(result.context[3].afterLink.revision, head);
+  assert.ok(!calls.some(target => target.includes("/contents/")));
+  corrupt = true;
+  await assert.rejects(gh.reviewEvidence("acme/widget", 1, head, base, 100_000, { linkEvidence: true }), /blob hash/);
+});
+
+
+test("shared link evidence checks revisions, hashes and complete mixed inventory without resolving targets", async () => {
+  const w = evidenceWorld(), target = "../../public", bytes = Buffer.from(target);
+  const link = inspectReviewLink(bytes, { path: "public", side: "after", revision: head });
+  const patch = "diff --git a/public b/public\nnew file mode 120000\n--- /dev/null\n+++ b/public\n@@ -0,0 +1 @@\n+../../public\n";
+  const textPatch = `${source.context[0].patch}\n`;
+  const mixed = { ...structuredClone(source), diff: textPatch + patch, context: [
+    { ...source.context[0], patch: textPatch }, { path: "public", status: "added", kind: "symlink", patch, before: null, beforeLink: null, after: target, afterLink: link },
+  ] };
+  w.gh.reviewEvidence = async () => structuredClone(mixed);
+  const captured = await captureReviewEvidence({ ...w, linkEvidence: true });
+  assert.equal(captured.context[1].after, target);
+  assert.match(reviewPrompt(captured), /Never follow or resolve a link target/);
+  await assert.rejects(captureReviewEvidence(w), /binary|submodule/);
+  for (const edit of [record => { record.context[1].afterLink.sha256 = "0".repeat(64); }, record => { record.context[1].afterLink.revision = base; }, record => { record.context[1].after = "elsewhere"; }, record => { record.diff += patch; }]) {
+    const changed = structuredClone(mixed); edit(changed);
+    await assert.rejects(captureReviewEvidence({ ...w, linkEvidence: true, cachedSource: changed }), /hash|identity|revision|target|inventory/);
+  }
+});
+
+test("mixed image and link capture retains every side and still cannot clear without visual integration", async () => {
+  const w = evidenceWorld(), target = "../../public", png = PNG.sync.write({ width: 1, height: 1, data: Buffer.from([3, 4, 5, 255]) });
+  const link = inspectReviewLink(Buffer.from(target), { path: "public", side: "after", revision: head });
+  const image = { ...inspectReviewImage(png, { path: "shot.png", side: "after", revision: head }), content: png.toString("base64") };
+  const linkPatch = "diff --git a/public b/public\nnew file mode 120000\n--- /dev/null\n+++ b/public\n@@ -0,0 +1 @@\n+../../public\n";
+  const imagePatch = "diff --git a/shot.png b/shot.png\nnew file mode 100644\nBinary files /dev/null and b/shot.png differ\n";
+  const textPatch = `${source.context[0].patch}\n`;
+  w.gh.reviewEvidence = async () => ({ ...source, diff: textPatch + linkPatch + imagePatch, context: [
+    { ...source.context[0], patch: textPatch },
+    { path: "public", status: "added", kind: "symlink", patch: linkPatch, before: null, beforeLink: null, after: target, afterLink: link },
+    { path: "shot.png", status: "added", kind: "image", patch: imagePatch, before: null, after: image },
+  ] });
+  const captured = await captureReviewEvidence({ ...w, imageEvidence: true, linkEvidence: true });
+  assert.deepEqual(captured.context.map(row => row.path), ["a.js", "public", "shot.png"]);
+  assert.throws(() => partitionReviewEvidence(captured), /integrated qualified visual reviewer/);
 });
