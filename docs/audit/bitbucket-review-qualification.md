@@ -28,9 +28,14 @@ ended `REVIEW_INCOMPLETE`: its visual output had missing criteria or unresolved
 scope. The recorded image output examined `ac-1` and identified `ac-2` as
 requiring companion Markdown outside its image-only scope. Local regression
 coverage now retains that concern and defers the unexamined criterion to the
-whole-PR reviewer without repeating the owned image execution. The corrected
-protocol has not yet been reconciled against this live record; no whole-PR
-clearance was recorded. Provider costs are unknown.
+whole-PR reviewer without repeating the owned image execution. A later live
+reconciliation recovered that image output and reached whole-PR synthesis,
+but its bounded attempts stopped incomplete because final output included
+observations rejected by the old schema. Recorded outputs
+`run-f50e47bb-6f10-43a5-ac09-0409ffff341e` and
+`run-6d3a449c-86ff-4584-a8f5-b02331d6f66f` now pass a read-only validation
+against their saved inputs. This is not a live reconciliation or whole-PR
+clearance. Provider costs are unknown.
 
 The owned ledger records are
 `~/.gallivant/reviews/3126d2628380b6179574f4b78f68ebfdc5816cae4c962a6ffb287ce722e66d26.json`
