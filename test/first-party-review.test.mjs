@@ -805,6 +805,24 @@ test("upgrading local scope validation recovers the owned slice and retains its 
   const recovered=w.service().inspect(w.id).jobs[first.key];assert.equal(recovered.status,"completed");assert.deepEqual(recovered.result.unresolvedScope,[concern]);assert.equal(w.calls.submits,calls);
 });
 
+test("upgraded observation limits recover a settled piece without another reviewer call", async () => {
+  const w=reviewServiceWorld(), after=`${"a".repeat(110_000)}\n`, patch=`diff --git a/a.js b/a.js\nnew file mode 100644\n--- /dev/null\n+++ b/a.js\n@@ -0,0 +1 @@\n+${after}`;
+  w.ctx.gh.reviewEvidence=async()=>({...source,diff:patch,context:[{path:"a.js",status:"added",patch,before:null,after}]});
+  const service=w.service();await service.reconcile(w.id,w.entry,w.pr);
+  const job=Object.values(service.inspect(w.id).jobs)[0], slice=job.evidence.context.find(s=>s.kind==="after"||s.kind==="patch"&&s.sourceLocations?.some(l=>l.endOffset-l.startOffset>=180));
+  const mapped=slice.kind==="patch"?slice.sourceLocations.find(l=>l.endOffset-l.startOffset>=180):null;
+  const quote=mapped?slice.text.slice(mapped.startOffset,mapped.startOffset+180):slice.text.split("\n")[0].slice(0,180);
+  const observation={criterionId:"ac-1",description:"Source observation ".repeat(8),evidence:{path:slice.path,side:"after",line:mapped?.line??slice.startLine,quote}};
+  const output={...clear(job.evidence),observations:Array.from({length:8},()=>observation)};
+  assert.ok(Buffer.byteLength(JSON.stringify(output.observations))>2000);
+  w.finish(job,{raw:JSON.stringify(output)});await service.reconcile(w.id,w.entry,w.pr);const calls=w.calls.submits;
+  assert.equal(service.inspect(w.id).jobs[job.key].status,"completed",service.inspect(w.id).jobs[job.key].error);
+  const file=`${w.ctx.home}/reviews/${reviewDigest(w.id)}.json`, ledger=JSON.parse(readFileSync(file,"utf8")), old=ledger.jobs[job.key];
+  old.status="incomplete";old.errorCode="REVIEW_INCOMPLETE";old.error="piece observations exceed their synthesis bound";old.validationProtocol=3;delete old.result;writeFileSync(file,JSON.stringify(ledger));
+  await w.service().reconcile(w.id,w.entry,w.pr);
+  const recovered=w.service().inspect(w.id).jobs[job.key];assert.equal(recovered.status,"completed",recovered.error);assert.equal(recovered.result.observations.length,8);assert.equal(w.calls.submits,calls);
+});
+
 test("review retry command wakes the same task and preserves policy, PR and author session", async () => {
   const w = tickWorld(), record = { status: "incomplete", errorCode: "REVIEW_INCOMPLETE", binding: "old-binding" };
   w.state.update(w.id, { state: "needs-human", reason: "review-incomplete", firstPartyReview: record, review_next_at: Number.MAX_SAFE_INTEGER });
@@ -968,6 +986,7 @@ test("piece observations are bounded source evidence and final findings cannot i
   assert.deepEqual(validateReviewResult(JSON.stringify(result), piece), result);
   assert.throws(() => validateReviewResult(JSON.stringify({ ...result, observations: [{ ...observation, evidence: { ...observation.evidence, quote: "private secret" } }] }), piece), /not present/);
   assert.throws(() => validateReviewResult(JSON.stringify({ ...result, observations: [{ ...observation, description: "x".repeat(241) }] }), piece), /observation schema/);
+  assert.throws(() => validateReviewResult(JSON.stringify({ ...result, observations: Array(9).fill(observation) }), piece), /synthesis bound/);
   const jobs = [{ status: "completed", binding: e.binding, evidence: piece, result }];
   const synthesis = synthesisReviewEvidence(e, [piece], jobs);
   assert.equal(validateReviewResult(JSON.stringify({ ...clear(synthesis), verdict: "findings", findings: [finding] }), synthesis).verdict, "findings");
