@@ -68,6 +68,9 @@ remain consistent across the locally stored ID and access token claims. A
 changed principal or provider invalidates qualification. The provider still
 validates the actual credentials; unknown formats and API keys use the full
 credential digest and fail closed on changes.
+Unrelated existing project trust records outside the review root do not change
+the review identity. Records covering the review root and all other effective
+configuration and managed policies remain bound.
 
 `npm run test:first-party-review:live` is the opt-in disposable-repository probe. It requires `REVIEW_LIVE=1`, the normal operator configuration, and an explicit review allowance; ordinary tests never call a model. Do not run it to work around an administrator or guardrail refusal.
 

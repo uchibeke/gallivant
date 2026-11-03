@@ -46,6 +46,18 @@ test("review qualification survives OAuth token refresh but not account, subject
   write({...auth,tokens:{...auth.tokens,id_token:"bad",access_token:"one"}});const fallback=reviewRouteFingerprint(settings,env);
   write({...auth,tokens:{...auth.tokens,id_token:"bad",access_token:"two"}});assert.notEqual(reviewRouteFingerprint(settings,env),fallback);
 });
+
+test("unrelated project trust additions do not invalidate the isolated reviewer", () => {
+  const home=tempHome(), settings={home,harness:{codex:{bin:process.execPath}}}, env={HOME:home,CODEX_HOME:home};
+  const unrelated=tempHome(), config=`${home}/config.toml`;
+  writeFileSync(config,'model = "example"\n'); const original=reviewRouteFingerprint(settings,env);
+  writeFileSync(config,`model = "example"\n[projects.${JSON.stringify(unrelated)}]\ntrust_level = "trusted"\n`);
+  assert.equal(reviewRouteFingerprint(settings,env),original);
+  writeFileSync(config,`model = "other-model"\n[projects.${JSON.stringify(unrelated)}]\ntrust_level = "trusted"\n`);
+  assert.notEqual(reviewRouteFingerprint(settings,env),original);
+  writeFileSync(config,`model = "example"\n[projects.${JSON.stringify(home)}]\ntrust_level = "trusted"\n`);
+  assert.notEqual(reviewRouteFingerprint(settings,env),original,"review root ancestor remains bound");
+});
 const source = { complete: true, head, base, mergeBase: base, diff: "diff --git a/a.js b/a.js\n--- a/a.js\n+++ b/a.js\n@@ -1 +1 @@\n-return allow;\n+return true;",
   context: [{ path: "a.js", status: "modified", patch: "diff --git a/a.js b/a.js\n--- a/a.js\n+++ b/a.js\n@@ -1 +1 @@\n-return allow;\n+return true;", before: "return allow;", after: "return true;" }] };
 function receipt(id) { return "```work-attestations\n" + JSON.stringify({ task_id: id, output_type: "code", summary: "Implemented the requested CSV export and empty-state handling with regression coverage and verified the relevant test and lint commands successfully locally.", criteria_attestations: [1,2].map(n => ({ criterion_id: `ac-${n}`, met: true, evidence: `test/export.test.mjs:${n}` })) }) + "\n```"; }
