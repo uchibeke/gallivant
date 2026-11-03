@@ -165,6 +165,10 @@ test("sanitizing context and native side effects preserves the operator profile 
   writeFileSync(join(native, "config.toml"), config);
   writeFileSync(join(native, "auth.json"), auth);
   writeFileSync(join(native, "AGENTS.md"), "owner instructions stay here");
+  for (const name of ["plugins", "skills"]) {
+    mkdirSync(join(native, name));
+    writeFileSync(join(native, name, "owner-cache"), "unselected cache");
+  }
   const env = preparationEnvironment("codex", dir, {}, { HOME: owner, CODEX_HOME: native });
   writeFileSync(join(env.CODEX_HOME, "AGENTS.md"), "stale private instructions");
   symlinkSync(join(native, "AGENTS.md"), join(env.CODEX_HOME, "AGENTS.override.md"));
@@ -174,6 +178,10 @@ test("sanitizing context and native side effects preserves the operator profile 
   assert.equal(readFileSync(join(native, "auth.json"), "utf8"), auth);
   assert.equal(readFileSync(join(env.CODEX_HOME, "auth.json"), "utf8"), auth);
   assert.equal(readFileSync(join(native, "AGENTS.md"), "utf8"), "owner instructions stay here");
+  for (const name of ["plugins", "skills"]) {
+    assert.equal(readFileSync(join(native, name, "owner-cache"), "utf8"), "unselected cache");
+    assert.equal(existsSync(join(env.CODEX_HOME, name)), false);
+  }
   assert.equal(existsSync(join(env.CODEX_HOME, "AGENTS.md")), false);
   assert.equal(existsSync(join(env.CODEX_HOME, "AGENTS.override.md")), false);
   assert.doesNotMatch(readFileSync(join(env.CODEX_HOME, "config.toml"), "utf8"), /private-|instructions|compact_prompt|sqlite_home|log_dir|otel/);

@@ -35,6 +35,12 @@ pieces and stale bindings remain failures. Prompt size remains 100,000 bytes;
 source capture has an independent 16 MiB cap instead of scaling indefinitely
 with the larger job count.
 
+Restricted Codex preparation no longer copies disabled plugin and skill caches
+into every piece's private home. Selected authentication, configuration and
+managed-policy files remain available and the native tools-off check remains
+mandatory. Operator caches are preserved. This bounds repeated startup and disk
+work instead of multiplying unrelated cache contents by the higher job count.
+
 Captured reviews advance locally between host polls. A terminal local result
 wakes the ordinary host lane, which must reread the live PR binding before
 readiness or corrective dispatch. Recheck and policy changes clear the old
