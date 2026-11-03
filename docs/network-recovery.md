@@ -1,7 +1,7 @@
 # Network failures and recovery
 
 The coordinator normally retains a successful local provider health check for
-one minute, so a long coordinator cycle does not immediately expire it. A due,
+five minutes, so a long coordinator cycle does not immediately expire it. A due,
 pending, failed or timed-out check still fences dispatch. An explicit
 `execution.progressMs` setting controls this interval and remains authoritative.
 

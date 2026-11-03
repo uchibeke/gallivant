@@ -9,9 +9,9 @@ const flush = () => new Promise(resolve => setImmediate(resolve));
 test("coordinator readiness remains usable during a slow tick and still expires", async () => {
   const home=tempHome(), clock=makeClock(), limits=coordinatorHealthLimits(undefined);
   const health=makeProviderHealth({home,clock,limits,probe:async()=>({ok:true,detail:"signed in"})});
-  await health.refresh([["codex","operator"]]);clock.advance(0.5);
-  assert.equal(health.get("codex").ok,true,"a 30-second coordinator tick does not invalidate a fresh probe");
-  clock.advance(0.51);assert.equal(health.get("codex").ok,false,"expired or pending probes cannot authorize dispatch");
+  await health.refresh([["codex","operator"]]);clock.advance(2);
+  assert.equal(health.get("codex").ok,true,"a two-minute coordinator tick does not invalidate a fresh probe");
+  clock.advance(3.01);assert.equal(health.get("codex").ok,false,"expired or pending probes cannot authorize dispatch");
   assert.equal(coordinatorHealthLimits({progressMs:5000,deadlineMs:1234}).progressMs,5000,"explicit operator limits remain authoritative");
   assert.equal(coordinatorHealthLimits({deadlineMs:1234}).deadlineMs,1234);
 });
