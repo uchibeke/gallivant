@@ -55,3 +55,25 @@ source-backed findings, five verified observations and no unresolved scope in
 native run `run-384d0d43-01f3-4979-8d21-5c759fb305df`, against head
 `34ba3a9786a2781058613e92a61de5f0c864d962`. This was a scoped diagnostic;
 it is not a whole-PR clear verdict. No production PR was merged or deployed.
+
+## Review follow-up
+
+Two additional regressions were reproduced and repaired. Removing duplicated
+diff text can yield one local-scope piece from an oversized original prompt; that
+piece now requires whole-PR synthesis just like a multi-piece partition. A
+35,000-character added-line regression exercises the full coordinator path.
+
+Large collections of individually bounded reports now use hierarchical scoped
+reductions before final review. A 3 MB added-line regression validates all source
+outputs and every reduction prompt against the 100,000-byte bound, proves exact
+coverage of the original ordered reports, rejects missing/duplicate ranges and
+unsupported parent quotes, and reaches a bounded final input. Coordinator tests
+also verify recovery of an in-flight reduction after restart and that no local
+or intermediate verdict can clear before final synthesis. All reduction jobs
+use the existing task allowance and durable execution namespace.
+
+The broader follow-up also exercises reused preparation homes: excluded caches
+and their old aliases are removed by rebuilding the private Codex root after
+validating source/private separation. Native authentication and resource files
+remain unchanged. A regression covers a private-root alias to the operator's
+profile and verifies overlap refusal occurs before cleanup.

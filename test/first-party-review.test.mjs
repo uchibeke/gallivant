@@ -7,7 +7,7 @@ import { exactReviewerVerdict, makeTrust } from "../lib/events.mjs";
 import { messages } from "../lib/notify.mjs";
 import { selectReviewPolicy, legacyReviewPolicy, policyConfig, reviewBinding, reviewVerdict, reviewDisclosure, REVIEW_DEFAULTS, validateReviewSettings } from "../lib/review_policy.mjs";
 import { DEFAULTS } from "../lib/config.mjs";
-import { aggregateReviewResults, captureReviewEvidence, partitionReviewEvidence, synthesisReviewEvidence, validateReviewResult, reviewPrompt } from "../lib/review_evidence.mjs";
+import { aggregateReviewResults, captureReviewEvidence, partitionReviewEvidence, planReviewSynthesis, reducedReviewReport, reviewReports, synthesisReviewEvidence, validateReviewResult, reviewPrompt } from "../lib/review_evidence.mjs";
 import { buildReviewRun, createReviewService, reviewRouteFingerprint } from "../lib/first_party_review.mjs";
 import { makeTick } from "../lib/tick.mjs";
 import { makeGh } from "../lib/gh.mjs";
@@ -42,7 +42,19 @@ function evidenceWorld() {
   const gh = { reviewEvidence: async () => structuredClone(source), prView: async () => pr };
   return { id:"task", entry, pr, gh, readPrd: () => GOOD_PRD };
 }
-const clear = evidence => ({ version:1, verdict:"clear", examinedCriteria:evidence.criteria.map(c=>c.id), findings:[], unresolvedScope:[], route:"codex", inputDigest:evidence.digest, reviewedHead:head, ...(evidence.version === 2 ? { observations: [] } : {}) });
+const clear = evidence => ({ version:1, verdict:"clear", examinedCriteria:evidence.criteria.map(c=>c.id), findings:[], unresolvedScope:[], route:"codex", inputDigest:evidence.digest, reviewedHead:head, ...([2, 4].includes(evidence.version) ? { observations: [] } : {}) });
+
+function scopedClear(evidence, dense = false) {
+  let quoted;
+  if (evidence.version === 4) quoted = evidence.reports.flatMap(r => r.observations)[0].evidence;
+  else {
+    const slice = evidence.context.find(s => s.kind === "after" || s.kind === "patch" && s.sourceLocations?.some(l => l.endOffset - l.startOffset >= 80));
+    const mapped = slice.kind === "patch" ? slice.sourceLocations.find(l => l.endOffset - l.startOffset >= 80) : null;
+    quoted = { path: slice.path, side: "after", line: mapped?.line ?? slice.startLine,
+      quote: mapped ? slice.text.slice(mapped.startOffset, mapped.endOffset).slice(0, 80) : slice.text.split("\n")[0].slice(0, 80) };
+  }
+  return { ...clear(evidence), observations: Array.from({ length: dense ? 5 : 1 }, (_, i) => ({ criterionId: "ac-1", description: dense ? `${i}: ${"Relevant source observation. ".repeat(4)}` : "Inspected the supplied source.", evidence: quoted })) };
+}
 const finding = { id:"authorization", severity:"high", description:"The unconditional return bypasses the authorization check; restore the allow predicate.", evidence:{path:"a.js", line:1, side:"after", quote:"return true;"} };
 
 test("new policy pins exactly one mode and actor; missing routes never fall back; legacy absence is disclosed", () => {
@@ -642,6 +654,88 @@ test("all local pieces clearing still requires a fresh whole-PR reviewer, includ
   assert.equal(record.status, "completed"); assert.equal(record.result.verdict, "clear");
 });
 
+test("a single local-scope partition never substitutes for a whole-PR verdict", async () => {
+  const w = reviewServiceWorld(), after = `${"x".repeat(35_000)}\n`;
+  const patch = `diff --git a/a.js b/a.js\nnew file mode 100644\n--- /dev/null\n+++ b/a.js\n@@ -0,0 +1 @@\n+${after}`;
+  w.ctx.gh.reviewEvidence = async () => ({ ...source, diff: patch, context: [{ path: "a.js", status: "added", patch, before: null, after }] });
+  const first = await w.service().reconcile(w.id, w.entry, w.pr);
+  assert.equal(first.pieces.length, 1);
+  const local = w.service().inspect(w.id).jobs[first.key];
+  assert.equal(local.evidence.version, 2, "the complete original prompt exceeded the cap despite only one resulting piece");
+  w.finish(local, { raw: JSON.stringify(scopedClear(local.evidence)) });
+  const pending = await w.service().reconcile(w.id, w.entry, w.pr);
+  assert.equal(pending.status, "running"); assert.equal(pending.result, undefined);
+  assert.equal(pending.phase, "whole-pr-review");
+  const final = w.service().inspect(w.id).jobs[pending.key];
+  assert.equal(final.evidence.version, 3);
+  w.finish(final);
+  assert.equal((await w.service().reconcile(w.id, w.entry, w.pr)).result.verdict, "clear");
+});
+
+test("3 MB review reports reduce hierarchically within every input cap with exact complete coverage", async () => {
+  const captured = await captureReviewEvidence(evidenceWorld()), after = `${"x".repeat(3_000_000)}\n`;
+  const patch = `diff --git a/a.js b/a.js\nnew file mode 100644\n--- /dev/null\n+++ b/a.js\n@@ -0,0 +1 @@\n+${after}`;
+  const evidence = { ...captured, diff: patch, context: [{ path: "a.js", status: "added", patch, before: null, after }] };
+  delete evidence.digest;
+  const { pieces, aggregateDigest } = partitionReviewEvidence(evidence, { maxInputBytes: 100000, maxJobs: 2048 });
+  evidence.digest = aggregateDigest;
+  const jobs = pieces.map((piece, i) => ({ status: "completed", binding: evidence.binding, evidence: piece, key: `source-${i}`,
+    result: validateReviewResult(JSON.stringify(scopedClear(piece, true)), piece) }));
+  assert.ok(pieces.length >= 60);
+  assert.ok(pieces.every(piece => Buffer.byteLength(reviewPrompt(piece)) <= 100000));
+  const original = reviewReports(evidence, pieces, jobs);
+  assert.ok(Buffer.byteLength(reviewPrompt(synthesisReviewEvidence(evidence, pieces, jobs))) > 100000);
+  assert.throws(() => planReviewSynthesis(evidence, original.slice(1), 100000), /cover every original piece/);
+  assert.throws(() => planReviewSynthesis(evidence, [original[0], ...original], 100000), /duplicate|out-of-order/);
+  let reports = original, final, reductions = 0;
+  for (let level = 0; level < 8; level++) {
+    const plan = planReviewSynthesis(evidence, reports, 100000, level);
+    if (plan.final) { final = plan.final; break; }
+    assert.ok(plan.groups.length < reports.length);
+    assert.deepEqual(plan.groups.flatMap(g => g.reports.map(r => r.inputDigest)), reports.map(r => r.inputDigest), "every report occurs exactly once, without prefix truncation");
+    reports = plan.groups.map(node => {
+      reductions++;
+      assert.equal(node.version, 4); assert.ok(Buffer.byteLength(reviewPrompt(node)) <= 100000);
+      const result = validateReviewResult(JSON.stringify(scopedClear(node, true)), node);
+      const job = { status: "completed", binding: evidence.binding, evidence: node, result };
+      assert.throws(() => reducedReviewReport(node, { ...job, status: "running" }), /incomplete/);
+      const invented = { ...clear(node), verdict: "findings", findings: [{ ...finding, evidence: { ...finding.evidence, quote: "x".repeat(81) } }] };
+      assert.throws(() => validateReviewResult(JSON.stringify(invented), node), /supplied piece report/);
+      return reducedReviewReport(node, job);
+    });
+  }
+  assert.ok(reductions > 0); assert.ok(final);
+  assert.equal(final.coverage.first, 1); assert.equal(final.coverage.last, pieces.length); assert.equal(final.coverage.total, pieces.length);
+  assert.ok(Buffer.byteLength(reviewPrompt(final)) <= 100000);
+  assert.equal(validateReviewResult(JSON.stringify(clear(final)), final).verdict, "clear");
+});
+
+test("hierarchical review jobs recover after restart and cannot clear before final synthesis", async () => {
+  const w = reviewServiceWorld(), after = `${"x".repeat(90_000)}\n`;
+  w.entry.reviewPolicy.limits.maxInputBytes = 20000;
+  const patch = `diff --git a/a.js b/a.js\nnew file mode 100644\n--- /dev/null\n+++ b/a.js\n@@ -0,0 +1 @@\n+${after}`;
+  w.ctx.gh.reviewEvidence = async () => ({ ...source, diff: patch, context: [{ path: "a.js", status: "added", patch, before: null, after }] });
+  let reducers = 0, final;
+  for (let i = 0; i < 100; i++) {
+    const service = w.service(), record = await service.reconcile(w.id, w.entry, w.pr);
+    assert.equal(record.status, "running"); assert.equal(record.result, undefined);
+    const job = Object.values(service.inspect(w.id).jobs).find(j => j.status === "running");
+    assert.ok(Buffer.byteLength(reviewPrompt(job.evidence)) <= 20000);
+    if (job.evidence.version === 3) { final = job; break; }
+    if (job.evidence.version === 4) {
+      reducers++;
+      const submitted = w.calls.submits;
+      await w.service().reconcile(w.id, w.entry, w.pr);
+      assert.equal(w.calls.submits, submitted, "restart reuses the same reducer job");
+    }
+    w.finish(job, { raw: JSON.stringify(scopedClear(job.evidence, true)) });
+  }
+  assert.ok(reducers > 0); assert.ok(final);
+  w.finish(final);
+  const complete = await w.service().reconcile(w.id, w.entry, w.pr);
+  assert.equal(complete.status, "completed"); assert.equal(complete.result.verdict, "clear");
+});
+
 test("captured reviewer progress settles locally without another host read and refuses changed policy", async () => {
   const w = reviewServiceWorld(), first = await w.service().reconcile(w.id, w.entry, w.pr);
   const entry = { ...w.entry, firstPartyReview: first };
@@ -673,7 +767,7 @@ test("local reviewer progress never clears readiness and wakes fresh host valida
 
 test("piece observations are bounded source evidence and final findings cannot invent unseen quotes", async () => {
   const e = await captureReviewEvidence(evidenceWorld());
-  const piece = { ...e, version: 2, piece: { index: 1, total: 2, coveredPaths: ["a.js"] }, context: [{ path: "a.js", status: "modified", kind: "after", text: "return true;", startLine: 1, endLine: 1 }] };
+  const piece = { ...e, version: 2, piece: { index: 1, total: 1, coveredPaths: ["a.js"] }, context: [{ path: "a.js", status: "modified", kind: "after", text: "return true;", startLine: 1, endLine: 1 }] };
   const observation = { criterionId: "ac-1", description: "Returns true unconditionally.", evidence: { path: "a.js", side: "after", line: 1, quote: "return true;" } };
   const result = { ...clear(piece), observations: [observation] };
   assert.deepEqual(validateReviewResult(JSON.stringify(result), piece), result);

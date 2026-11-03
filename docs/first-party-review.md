@@ -77,12 +77,26 @@ records concrete defects and supplies bounded, source-quoted observations for
 the final reviewer. Missing other pieces is expected and does not establish a
 missing implementation. Local clear verdicts cannot clear the PR. If every local
 inspection finishes without findings, a separate restricted whole-PR reviewer
-receives every validated report, the complete criteria, receipt and checks. It
+receives the complete criteria, receipt and checks plus reports or validated
+reductions covering every source piece. It
 must resolve cross-file questions and return its own clear verdict. Empty reports,
 unsupported quotes, unresolved scope and oversized synthesis never clear. Each
 observation is verified against its captured source; final findings must also be
 grounded in a supplied report. A new protocol identity retains old failed jobs
 for audit without reusing their incomplete verdicts.
+
+A local-scope inspection still requires final synthesis when partitioning happens
+to produce only one piece; only an actual unsplit whole-PR review may clear
+directly. If the combined reports exceed the prompt cap, the same restricted
+review service reduces them in bounded groups over as many levels as needed.
+Each node binds its child reports and a contiguous coverage range to the original
+aggregate. Missing, duplicate or out-of-order coverage is refused, and the root
+must cover every original piece. All original reports and intermediate jobs stay
+in the durable ledger. Each reduction preserves source-grounded observations;
+any concrete finding blocks instead of being summarized away. A reduction's
+local clear verdict never replaces the final whole-PR verdict. Reduction and
+final jobs consume the same task job, spend and timeout allowances, and restart
+reuses their exact saved inputs and executions.
 
 Source capture remains bounded to 16 MiB overall, independently of the higher
 job allowance. The per-job input remains 100,000 bytes; synthesis must fit the
