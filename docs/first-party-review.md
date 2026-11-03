@@ -139,6 +139,8 @@ The registry caches validated reads only while the underlying file identity and
 timestamps are unchanged. Returned records remain detached, and another
 process's atomic write invalidates the cache. This avoids repeatedly parsing a
 large registry during review polling without changing write ownership or gates.
+Each review advancement also reuses immutable completed jobs from one ledger
+read, while retaining the same policy, input, binding and reviewer checks.
 
 Between host polls, the coordinator advances an already captured review on its
 local progress cadence. It does not refetch the PR for every piece. Terminal
