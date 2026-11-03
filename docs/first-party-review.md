@@ -130,7 +130,17 @@ Config edits affect future tasks. For a stopped/settled existing task, use:
 gallivant review policy <handle> --mode both-required --reason "Require both reviews for this task"
 gallivant review policy <handle> --mode first-party-required --reason "Enable the qualified independent local reviewer"
 gallivant recheck <handle>
+gallivant review retry <handle> --reason "Retry the rejected citation with exact single-line source quotes"
 ```
+
+`review retry` explicitly authorizes fresh reviewer executions for incomplete
+output whose previous process exited successfully. It retains completed pieces,
+original attempts, reservations and an operator-reason audit. New attempts use
+the same job/spend/timeout limits and strict validation; recheck alone reuses the
+old terminal record. Ambiguous launches, active reviewers, provider failures,
+tool/boundary failures and unresolved cancellation cannot use this shortcut.
+The normal host lane rechecks the live binding before review can authorize
+readiness. No author session, PR or chain merge gate is reset.
 
 The command first proves that the selected route is qualified, then records the prior policy and reason, revokes readiness, and re-evaluates the current head. For an existing Bitbucket legacy run, this is the only path that removes `legacy_no_review`; direct config edits do not change its snapshot. The original PRD snapshot, task/run identity, PR, checkout and implementation session are retained. A failed preflight changes none of them and starts no paid review. No command here merges or advances a chain before its existing merge gate.
 

@@ -623,6 +623,62 @@ function reviewServiceWorld() {
     } };
 }
 
+test("explicit review retry retains completed pieces, failed evidence and allowances across restart", async () => {
+  const w = reviewServiceWorld(), after = `${"a".repeat(110_000)}\n`;
+  const patch = `diff --git a/a.js b/a.js\nnew file mode 100644\n--- /dev/null\n+++ b/a.js\n@@ -0,0 +1 @@\n+${after}`;
+  w.ctx.gh.reviewEvidence = async () => ({ ...source, diff: patch, context: [{ path: "a.js", status: "added", patch, before: null, after }] });
+  let service = w.service(), record = await service.reconcile(w.id, w.entry, w.pr);
+  const completed = Object.values(service.inspect(w.id).jobs)[0];
+  w.finish(completed, { raw: JSON.stringify(scopedClear(completed.evidence)) });
+  record = await service.reconcile(w.id, w.entry, w.pr);
+  const failed = Object.values(service.inspect(w.id).jobs).find(j => j.status === "running");
+  w.finish(failed, { raw: "invalid review JSON" });
+  record = await service.reconcile(w.id, w.entry, w.pr);
+  assert.equal(record.status, "incomplete");
+  const entry = { ...w.entry, firstPartyReview: record }, before = service.inspect(w.id);
+  const audit = await service.retry(w.id, entry, "Retry rejected source citations");
+  assert.equal(audit.retries.length, 1); assert.equal(audit.retries[0].from, failed.key);
+  await assert.rejects(service.retry(w.id, entry, "duplicate retry"), /already authorized/);
+  assert.equal(w.calls.submits, 2, "retry authorizes normal dispatch without launching directly");
+  service = w.service(); record = await service.reconcile(w.id, entry, w.pr);
+  const saved = service.inspect(w.id), retry = saved.jobs[audit.retries[0].to];
+  assert.equal(saved.jobs[completed.key].status, "completed"); assert.equal(saved.jobs[failed.key].status, "incomplete");
+  assert.equal(retry.retryOf, failed.key); assert.equal(record.status, "running");
+  assert.equal(w.calls.submits, 3); assert.equal(Object.keys(saved.jobs).length, 3);
+  assert.ok(saved.spentReservedUsd > before.spentReservedUsd);
+  await w.service().reconcile(w.id, entry, w.pr); assert.equal(w.calls.submits, 3);
+  w.finish(retry, { raw: JSON.stringify(scopedClear(retry.evidence)) });
+  await w.service().reconcile(w.id, entry, w.pr);
+  assert.equal(w.service().inspect(w.id).jobs[retry.key].status, "completed");
+});
+
+test("review retry refuses active or unresolved executions and changed requirements", async () => {
+  const w = reviewServiceWorld(), service = w.service(), first = await service.reconcile(w.id, w.entry, w.pr);
+  const job = service.inspect(w.id).jobs[first.key];
+  await assert.rejects(service.retry(w.id, { ...w.entry, firstPartyReview: first }, "retry"), /only an incomplete/);
+  w.finish(job, { raw: "invalid JSON" });
+  const record = await service.reconcile(w.id, w.entry, w.pr), entry = { ...w.entry, firstPartyReview: record };
+  await assert.rejects(service.retry(w.id, entry, ""), /explicit operator reason/);
+  const read = w.ctx.readPrd; w.ctx.readPrd = () => "changed brief";
+  await assert.rejects(service.retry(w.id, entry, "retry"), /brief changed/); w.ctx.readPrd = read;
+  const real = w.ctx.executionFor;
+  w.ctx.executionFor = () => ({ current: () => ({ id: job.run, running: true }) });
+  await assert.rejects(service.retry(w.id, entry, "retry"), /confirmed successful process exit/);
+  w.ctx.executionFor = real;
+  assert.equal(service.inspect(w.id).retryHistory, undefined); assert.equal(w.calls.submits, 1);
+});
+
+test("review retry command wakes the same task and preserves policy, PR and author session", async () => {
+  const w = tickWorld(), record = { status: "incomplete", errorCode: "REVIEW_INCOMPLETE", binding: "old-binding" };
+  w.state.update(w.id, { state: "needs-human", reason: "review-incomplete", firstPartyReview: record, review_next_at: Number.MAX_SAFE_INTEGER });
+  const before = w.entry(); let called = false;
+  w.ctx.reviewService.retry = async (id, entry, reason) => { called = true; assert.equal(id,w.id); assert.equal(entry.pr,before.pr); assert.equal(reason,"Retry bad citations"); return { at: at(20), retries: [{ from: "old", to: "new" }] }; };
+  await reviewCommand(w.ctx, { action: "retry", handle: w.id, reason: "Retry bad citations" });
+  const after = w.entry(); assert.equal(called,true); assert.equal(after.state,"pr-open"); assert.equal(after.review_next_at,0);
+  assert.equal(after.firstPartyReview,null); assert.deepEqual(after.reviewHistory.at(-1),record);
+  for (const key of ["pr","session","branch","worktree","iteration","reviewPolicy"]) assert.deepEqual(after[key],before[key]);
+});
+
 test("all local pieces clearing still requires a fresh whole-PR reviewer, including after restart", async () => {
   const w = reviewServiceWorld(), after = `${"a".repeat(110_000)}\n`;
   const patch = `diff --git a/a.js b/a.js\nnew file mode 100644\n--- /dev/null\n+++ b/a.js\n@@ -0,0 +1 @@\n+${after}`;

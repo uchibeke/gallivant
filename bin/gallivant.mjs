@@ -85,6 +85,8 @@ const HELP = `gallivant: give an agent a task, let the review loop run, go outsi
                                          --resnapshot makes an edited brief the one the gate judges
                                          --fresh-session replaces retired learned memory after settlement
   gallivant recheck <handle>           queue a PR recheck without resetting its budget
+  gallivant review retry <handle> --reason <text>
+                                         retry confirmed incomplete reviewer output; retain completed pieces and limits
   gallivant review qualify --repo <owner/repo> [--run]
                                          inspect qualification; --run explicitly launches one bounded live probe
   gallivant review status <handle>     show pinned policy, owned verdict and unresolved review evidence
