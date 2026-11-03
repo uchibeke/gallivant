@@ -60,6 +60,13 @@ gallivant review status <task-handle>
 gallivant doctor
 ```
 
+The run page shows a live reviewer activity feed with the current phase, job
+progress, findings count and handoff state. It is separate from the coding
+agent's log and updates while the page is open; it does not expose reviewer
+prompts, raw output or captured source. Its visible history starts when the
+page opens. The entries dashboard's last-activity time tracks a run, review or
+recorded event, rather than routine coordinator writes.
+
 The first command only reads qualification. `--run` explicitly authorizes a separate bounded live challenge. It returns a running record; repeating the command reconciles that same keyed execution. A failed qualification is retained, not silently retried as a new paid session. Repair the observed provider/native-policy failure before requalification; changed native configuration yields a different qualification identity. A credential/configuration/binary change invalidates qualification. Setup diagnostics and start preflight require qualification and recheck the effective native boundary before author launch. A version/sign-in result alone cannot qualify a route.
 
 For recognized ChatGPT OAuth profiles, routine token refresh retains the same
