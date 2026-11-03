@@ -116,7 +116,9 @@ rate-limited, redirected and oversized evidence is refused. The PR binding is
 read again after capture. The API token stays behind the host boundary and is not
 part of the reviewer prompt or environment.
 
-This route does not yet capture or inspect PNG or JPEG changes. A text-only
+This review route does not yet capture or inspect PNG or JPEG changes. An
+opt-in adapter capture interface exists for development but is not used by the
+review coordinator. A text-only
 qualification does not establish image capability, even if the configured CLI
 accepts image arguments. Preserve the original files and incomplete review until
 the image capture and restricted vision route are implemented and qualified.
