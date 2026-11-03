@@ -91,6 +91,13 @@ consumes the review allowance. The challenge verifies a coordinator-created copy
 at the execution boundary. It is not an end-to-end PR review or host qualification.
 All image sides, text slices and the whole-PR synthesis must complete under the
 same bounded allowance; missing or mismatched results cannot clear the review.
+An image inspection judges its own image, while a text-only requirement may be
+deferred to synthesis. The coordinator records criteria omitted by an image job
+and carries its unresolved concerns through reductions. The final reviewer must
+evaluate those concerns and all criteria against the combined evidence; an
+unresolved need for visual evidence still blocks clearance. A previously owned
+image output rejected solely for local scope can be revalidated against its
+original input and qualification without launching the image job again.
 
 When the full serialized evidence does not fit one job, the shared service creates immutable byte-bounded source and patch slices. Every piece repeats the same task, repository, PR, head, base, merge base, brief, criteria, checks, receipt, policy and aggregate digest. Long single lines and large lockfiles are sliced with absolute line/column offsets rather than omitted. Every changed path and every criterion must appear in the aggregate, every piece must return a valid matching identity, and all pieces must finish before clearance. A finding in any piece, a timeout, malformed output, missing piece, conflicting finding identity, exhausted job/budget bound or unresolved scope blocks readiness. If the configured aggregate cannot hold the evidence, the result says `review-incomplete`/`REVIEW_INCOMPLETE` with the required and configured job counts; it does not review a prefix.
 
@@ -152,7 +159,7 @@ explicitly funded settings: up to 12 calls, 100,000 input and 16,000 output
 tokens per call, $10 and a five-minute request timeout. Those higher ceilings
 do not enlarge a saved task's approved allowance.
 
-The model receives this material as untrusted JSON. Its output must cover all criteria, identify the route/head/input digest, leave no unresolved scope, and report either `clear` or actionable findings with severity and a quote at an actual captured file/line. Invalid, partial, timed-out, failed or tool-attempting output cannot clear. The coordinator owns the ledger under `reviews/` and the separate execution namespace under `runs/review__...`. Public comments and agent-authored approval text are never an alternative source of internal clearance.
+The model receives this material as untrusted JSON. The final output must cover all criteria, identify the route/head/input digest, leave no unresolved scope, and report either `clear` or actionable findings grounded in captured source or an exact image identity. Local concerns are carried to that final review. Invalid, partial, timed-out, failed or tool-attempting output cannot clear. The coordinator owns the ledger under `reviews/` and the separate execution namespace under `runs/review__...`. Public comments and agent-authored approval text are never an alternative source of internal clearance.
 
 Polling reuses captured source only when the repository, head and base still match, and rechecks the live PR binding before using it. Changed head, base, checks, receipt, policy or brief invalidates the whole aggregate, not only one piece. Piece keys make restart and repeated host pages idempotent; an old-head or partial aggregate cannot clear. A delayed poll accepts a valid result whose recorded execution completion time met the deadline; missing completion times, late results and executions still running past the deadline cannot clear.
 
