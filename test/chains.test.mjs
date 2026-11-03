@@ -399,6 +399,17 @@ test("replacing a pinned entry's branch or start token cannot substitute other w
   }
 });
 
+test("an active chain can refresh future briefs without restarting its current job or bypassing merge", async () => {
+  const w=world();await w.queue();await tickChains(w.ctx);
+  const before=w.ctx.state.getChain("release"), first=w.ctx.state.get(FIRST);
+  put(w.paths[1],readFileSync(w.paths[1],"utf8").replace("# second-step widget export", "# second-step revised export"));
+  await retryChain(w.ctx,{name:"release",resnapshot:true});
+  const after=w.ctx.state.getChain("release");assert.equal(after.status,"active");assert.equal(after.index,0);
+  assert.deepEqual(after.steps[0],before.steps[0]);assert.notEqual(after.steps[1].digest,before.steps[1].digest);
+  assert.equal(w.ctx.state.get(FIRST).start_token,first.start_token);await tickChains(w.ctx);
+  assert.equal(w.starts(),1);assert.equal(w.ctx.state.get(SECOND),null);
+});
+
 test("retrying a changed queued brief requires explicit resnapshot and starts it once after acceptance", async () => {
   const w = world();
   await w.queue();
