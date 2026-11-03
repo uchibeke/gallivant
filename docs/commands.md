@@ -664,3 +664,11 @@ Bitbucket Cloud dispatch is available with explicit repository credentials and r
 For the independent local reviewer, configure `review.mode: "first-party-required"` and `review.route: "codex"`, then run `gallivant review qualify --repo bitbucket.org/workspace/repository --run`. Run the same command without `--run` to inspect its durable result. A new task preflight refuses before author dispatch unless this exact executable/provider fingerprint qualified. To migrate a settled existing task, use `gallivant review policy HANDLE --mode first-party-required --reason "Enable the qualified independent local reviewer"`, then `gallivant recheck HANDLE`. That audited command preserves the task, PRD snapshot, PR and implementation session; editing config alone cannot remove its legacy policy.
 
 Review prompts remain at or below 100,000 bytes. Large changes are divided across at most `review.max_jobs` fresh restricted jobs and the reserved `review.budget_usd`; every path and criterion must be covered. A single large file is sliced or the aggregate stops explicitly as incomplete. Zero CI checks still require `review.zero_checks: true` and are never inferred from reviewer clearance.
+
+The default review allowance is 2,048 jobs and $100 in accounting reservations,
+with 15 minutes per job. Split inspections provide source-grounded reports;
+a separate whole-PR synthesis must clear before readiness. Coding fix rounds
+default to 60 with a $50 per-run allowance. Reviewer jobs and Git commits are
+not coding rounds: the displayed round advances when a corrective coding run
+settles, including a changed completion receipt. Existing task review limits
+remain pinned until an explicit `review policy` command and recheck.

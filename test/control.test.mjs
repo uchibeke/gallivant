@@ -190,6 +190,7 @@ test("messages require text and a session; fixed actions never accept a draft", 
 
 test("a stopped PR rechecks without spending a run, resetting budgets or changing its contract", async () => {
   const w = world();
+  w.state.update(w.id, { review_next_at: Number.MAX_SAFE_INTEGER });
   const before = w.state.get(w.id);
   requestControl(w.ctx, { handle: w.id, action: "recheck" });
   await applyControl(w.ctx, w.id);
@@ -197,6 +198,7 @@ test("a stopped PR rechecks without spending a run, resetting budgets or changin
   assert.equal(after.control.status, "applied");
   assert.equal(after.state, STATES.prOpen);
   assert.equal(after.reason, null);
+  assert.equal(after.review_next_at, 0, "explicit recheck wakes the host lane immediately");
   assert.equal(after.iteration, before.iteration);
   assert.deepEqual(after.cursor, before.cursor);
   assert.equal(after.prd_fingerprint, before.prd_fingerprint);

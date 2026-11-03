@@ -19,10 +19,10 @@ See [installation](install.md) for the first-run sequence.
 | Key | Default | Meaning |
 |---|---|---|
 | `poll_seconds` | 120 | GitHub review and chain-check cadence. Minimum 30. Provider progress and readiness use the separate `execution.progressMs` cadence; the daemon may tick more frequently. |
-| `max_iterations` | 30 | Automatic fix-round allowance per PR. A pushed fix or changed completion receipt consumes a round. At the cap, further automatic work stops with `needs-human`. Explicit operator resumes can exceed the cap; their progress still counts. |
+| `max_iterations` | 60 | Automatic fix-round allowance per PR. A pushed fix or changed completion receipt consumes a round. At the cap, further automatic work stops with `needs-human`. Explicit operator resumes can exceed the cap; their progress still counts. |
 | `checks_grace_minutes` | 5 | A head younger than this with no checks reported is not green yet; GitHub shows an empty check list for the first seconds after a push. A head older than this with no checks at all counts as green. |
 | `run_timeout_minutes` | 720 | Local runs exceeding this time are killed; remote execution uses provider cancellation/reconciliation where supported and preserves unknown ownership. It is a runtime allowance, not a provider billing cap. Overridable per repository; see below and [execution](execution.md). |
-| `max_budget_usd` | 5 | Passed to Claude as `--max-budget-usd` and used in task preparation/authorization accounting. Other local harnesses have no equivalent enforced dollar cap. Hosted dispatch also requires its explicit provider allowance; reservations are not a billing hard cap. |
+| `max_budget_usd` | 50 | Passed to Claude as `--max-budget-usd` and used in task preparation/authorization accounting. Other local harnesses have no equivalent enforced dollar cap. Hosted dispatch also requires its explicit provider allowance; reservations are not a billing hard cap. |
 | `rereview_minutes` | 6 | If the reviewer has not reviewed this long after a request, the request is posted once more. |
 | `stall_hours` | 6 | If the reviewer still has not reviewed, the PR stops with `reviewer-silent`. |
 | `trusted_authors` | required | GitHub logins whose reviews and comments may start a run. Everyone else is ignored. Your own login belongs here. |
@@ -41,10 +41,10 @@ See [installation](install.md) for the first-run sequence.
 | `harness.openai-agents` | absent | Explicit account, organization, project, model, API credential, hosted environment, network policy and allowance. See [Agents setup](openai-agents.md). |
 | `harness.codex-cloud` | absent | Recognized for configuration/recovery, but new dispatch is unavailable. See [Cloud blocker](codex-cloud.md). |
 | `execution` | bounded defaults | Transport/probe deadlines, progress cadence, concurrency, backoff and event limits. See [execution scheduling](execution.md#scheduling-and-limits). |
-| `intake_model` | absent | The APort-funded planner route for natural-language intake: `{ adapter, model, endpoint, credential_env, budget, timeout_ms }`. The key is read from the named environment variable at call time. Budget ceilings are three calls, 50,000 input and 6,000 output tokens per call and a $0.10 allowance; configuration can lower them only. See [typed delivery profiles](task-profiles.md#configuring-the-model-route). |
+| `intake_model` | absent | The explicitly funded planner route for natural-language intake: `{ adapter, model, endpoint, credential_env, budget, timeout_ms }`. The key is read from the named environment variable at call time. Configurable ceilings are 12 calls, 100,000 input and 16,000 output tokens per call and a $10 allowance; configuration can lower them. Timeout defaults to two minutes, configurable up to five. Existing approved route/task budgets remain pinned. See [typed delivery profiles](task-profiles.md#configuring-the-model-route). |
 | `repos` | [] | The repositories Gallivant watches, appended by `start` and `register` and read by `up` to recover from GitHub. Each entry is either `"owner/name"` or an object: `{ "repo": "owner/name", "base": "staging", "run_timeout_minutes": 90 }`. Both object keys are optional. See below. |
 
-The default allows 30 rounds as an upper allowance for unattended review. It is not a target or a promise of completion:
+The default allows 60 rounds as an upper allowance for unattended review. It is not a target or a promise of completion:
 large tasks can exhaust it, while missing external prerequisites cannot be solved by more rounds. Reaching the cap
 requires an operator decision, and it never increases itself.
 Existing explicit `max_iterations` settings keep their value. More rounds allow more time and model spend; they do

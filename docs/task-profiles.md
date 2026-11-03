@@ -411,17 +411,17 @@ without replacing the pinned route or retrying an unsettled call.
   "model": "gpt-5-mini",
   "endpoint": "https://api.openai.com/v1/chat/completions",
   "credential_env": "OPENAI_API_KEY",
-  "budget": { "max_calls": 3, "max_input_tokens": 50000, "max_output_tokens": 6000,
-              "allowance_usd": 0.10, "input_usd_per_million": 0.25, "output_usd_per_million": 2 },
-  "timeout_ms": 60000
+  "budget": { "max_calls": 12, "max_input_tokens": 100000, "max_output_tokens": 16000,
+              "allowance_usd": 10, "input_usd_per_million": 0.25, "output_usd_per_million": 2 },
+  "timeout_ms": 120000
 }
 ```
 
 `adapter` is `openai-chat` or `anthropic-messages`. The endpoint must be a
 public HTTPS URL without credentials. The API key is read from the named
 environment variable at call time and is never written to disk or returned by
-any view. Ceilings are absolute: at most three calls per task, 50,000 input and
-6,000 output tokens per call, and a $0.10 allowance. Configuration can lower
+any view. Ceilings are absolute: at most 12 calls per task, 100,000 input and
+16,000 output tokens per call, and a $10 allowance. Configuration can lower
 them and cannot raise them. The task's runtime allowance bounds each call too:
 the deadline is capped to the remaining runtime, and less than one second
 remaining refuses before the request. Before each call the route bounds input tokens at

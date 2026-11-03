@@ -62,8 +62,8 @@ new reviewed run:
     "mode": "first-party-required",
     "route": "codex",
     "max_input_bytes": 100000,
-    "max_jobs": 4,
-    "budget_usd": 4,
+    "max_jobs": 2048,
+    "budget_usd": 100,
     "zero_checks": false
   }
 }

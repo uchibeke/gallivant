@@ -23,17 +23,17 @@ For new tasks without a remote reviewer, set these keys in the operator configur
     "mode": "first-party-required",
     "route": "codex",
     "specialist": null,
-    "timeout_ms": 180000,
-    "max_jobs": 4,
-    "retries": 1,
-    "budget_usd": 4,
+    "timeout_ms": 900000,
+    "max_jobs": 2048,
+    "retries": 2,
+    "budget_usd": 100,
     "max_input_bytes": 100000,
     "zero_checks": false
   }
 }
 ```
 
-`review` can also be set on a `repos` object. The external actor remains the configured `reviewer` object and is copied into each task. `specialist` is either `null`, `security`, or `regression`; general correctness always applies. These are short rubrics, with no policy or requirements authority.
+`review` can also be set on a `repos` object. Defaults allow 2,048 total reviewer jobs per task, including fresh-head rereviews and final synthesis, a $100 accounting allowance, two known pre-dispatch retries and 15 minutes per job. Operators can select up to 8,192 jobs, $10,000 and one hour per job; explicit smaller limits remain enforced. Raising defaults does not silently rewrite saved task policies. The external actor remains the configured `reviewer` object and is copied into each task. `specialist` is either `null`, `security`, or `regression`; general correctness always applies. These are short rubrics, with no policy or requirements authority.
 
 `zero_checks: true` is an explicit operator CI policy for a repository with no required checks. An empty Git-host response alone never establishes that policy for new version-1 tasks. Missing CI stops as `missing-ci`; a missing/disabled completion gate stops separately as `completion-gate-skipped`.
 
@@ -72,9 +72,35 @@ The GitHub and Bitbucket adapters capture exact head/base/merge-base IDs, a comp
 
 When the full serialized evidence does not fit one job, the shared service creates immutable byte-bounded source and patch slices. Every piece repeats the same task, repository, PR, head, base, merge base, brief, criteria, checks, receipt, policy and aggregate digest. Long single lines and large lockfiles are sliced with absolute line/column offsets rather than omitted. Every changed path and every criterion must appear in the aggregate, every piece must return a valid matching identity, and all pieces must finish before clearance. A finding in any piece, a timeout, malformed output, missing piece, conflicting finding identity, exhausted job/budget bound or unresolved scope blocks readiness. If the configured aggregate cannot hold the evidence, the result says `review-incomplete`/`REVIEW_INCOMPLETE` with the required and configured job counts; it does not review a prefix.
 
+Split review has two stages. Each local inspection judges only supplied slices,
+records concrete defects and supplies bounded, source-quoted observations for
+the final reviewer. Missing other pieces is expected and does not establish a
+missing implementation. Local clear verdicts cannot clear the PR. If every local
+inspection finishes without findings, a separate restricted whole-PR reviewer
+receives every validated report, the complete criteria, receipt and checks. It
+must resolve cross-file questions and return its own clear verdict. Empty reports,
+unsupported quotes, unresolved scope and oversized synthesis never clear. Each
+observation is verified against its captured source; final findings must also be
+grounded in a supplied report. A new protocol identity retains old failed jobs
+for audit without reusing their incomplete verdicts.
+
+Source capture remains bounded to 16 MiB overall, independently of the higher
+job allowance. The per-job input remains 100,000 bytes; synthesis must fit the
+same bound. These are evidence and context limits, not spending defaults. Explicit
+task/provider authorizations remain pinned. The intake planner has separate,
+explicitly funded settings: up to 12 calls, 100,000 input and 16,000 output
+tokens per call, $10 and a five-minute request timeout. Those higher ceilings
+do not enlarge a saved task's approved allowance.
+
 The model receives this material as untrusted JSON. Its output must cover all criteria, identify the route/head/input digest, leave no unresolved scope, and report either `clear` or actionable findings with severity and a quote at an actual captured file/line. Invalid, partial, timed-out, failed or tool-attempting output cannot clear. The coordinator owns the ledger under `reviews/` and the separate execution namespace under `runs/review__...`. Public comments and agent-authored approval text are never an alternative source of internal clearance.
 
 Polling reuses captured source only when the repository, head and base still match, and rechecks the live PR binding before using it. Changed head, base, checks, receipt, policy or brief invalidates the whole aggregate, not only one piece. Piece keys make restart and repeated host pages idempotent; an old-head or partial aggregate cannot clear. A delayed poll accepts a valid result whose recorded execution completion time met the deadline; missing completion times, late results and executions still running past the deadline cannot clear.
+
+Between host polls, the coordinator advances an already captured review on its
+local progress cadence. It does not refetch the PR for every piece. Terminal
+local results wake the host lane, which must reread the current binding before
+readiness or author dispatch. An explicit recheck or policy change also wakes
+that lane immediately instead of waiting for the old polling deadline.
 
 Findings use the existing fix dispatch and round counter. Their disposition is recorded. A subsequent push needs fresh evidence. Repeated findings on the same input, required-reviewer disagreement and exhausted fix rounds stop for a person. `review dispute <handle> --finding <id> --reason "..."` records a pending dispute and removes readiness; it has no self-accept operation. A person must resolve the defect or deliberately change policy and re-evaluate it.
 
