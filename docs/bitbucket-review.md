@@ -118,7 +118,8 @@ part of the reviewer prompt or environment.
 
 This review route does not yet capture or inspect PNG or JPEG changes. An
 opt-in adapter capture interface exists for development but is not used by the
-review coordinator. A text-only
+review coordinator. The separate `review qualify --repo ... --capability image`
+status does not qualify Bitbucket capture or complete a PR review. A text-only
 qualification does not establish image capability, even if the configured CLI
 accepts image arguments. Preserve the original files and incomplete review until
 the image capture and restricted vision route are implemented and qualified.
