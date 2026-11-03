@@ -165,6 +165,10 @@ test("sanitizing context and native side effects preserves the operator profile 
   writeFileSync(join(native, "config.toml"), config);
   writeFileSync(join(native, "auth.json"), auth);
   writeFileSync(join(native, "AGENTS.md"), "owner instructions stay here");
+  for (const name of ["plugins", "skills"]) {
+    mkdirSync(join(native, name));
+    writeFileSync(join(native, name, "owner-cache"), "unselected cache");
+  }
   const env = preparationEnvironment("codex", dir, {}, { HOME: owner, CODEX_HOME: native });
   writeFileSync(join(env.CODEX_HOME, "AGENTS.md"), "stale private instructions");
   symlinkSync(join(native, "AGENTS.md"), join(env.CODEX_HOME, "AGENTS.override.md"));
@@ -174,9 +178,49 @@ test("sanitizing context and native side effects preserves the operator profile 
   assert.equal(readFileSync(join(native, "auth.json"), "utf8"), auth);
   assert.equal(readFileSync(join(env.CODEX_HOME, "auth.json"), "utf8"), auth);
   assert.equal(readFileSync(join(native, "AGENTS.md"), "utf8"), "owner instructions stay here");
+  for (const name of ["plugins", "skills"]) {
+    assert.equal(readFileSync(join(native, name, "owner-cache"), "utf8"), "unselected cache");
+    assert.equal(existsSync(join(env.CODEX_HOME, name)), false);
+  }
   assert.equal(existsSync(join(env.CODEX_HOME, "AGENTS.md")), false);
   assert.equal(existsSync(join(env.CODEX_HOME, "AGENTS.override.md")), false);
   assert.doesNotMatch(readFileSync(join(env.CODEX_HOME, "config.toml"), "utf8"), /private-|instructions|compact_prompt|sqlite_home|log_dir|otel/);
+});
+
+test("rebuilding a private Codex home unlinks a native-root alias without touching operator files", () => {
+  const owner = tempHome(), native = join(owner, ".codex"), cwd = tempHome();
+  mkdirSync(native); writeFileSync(join(native, "auth.json"), "original-auth");
+  mkdirSync(join(native, "skills")); writeFileSync(join(native, "skills", "original"), "native-resource");
+  mkdirSync(join(cwd, "home")); symlinkSync(native, join(cwd, "home", ".codex"));
+  const env = preparationEnvironment("codex", cwd, {}, { HOME: owner });
+  assert.equal(readFileSync(join(native, "auth.json"), "utf8"), "original-auth");
+  assert.equal(readFileSync(join(native, "skills", "original"), "utf8"), "native-resource");
+  assert.equal(readFileSync(join(env.CODEX_HOME, "auth.json"), "utf8"), "original-auth");
+  assert.equal(existsSync(join(env.CODEX_HOME, "skills")), false);
+  const { CODEX_HOME } = env;
+  assert.throws(() => preparationEnvironment("codex", cwd, {}, { HOME: owner, CODEX_HOME }), /overlaps/);
+  assert.equal(readFileSync(join(env.CODEX_HOME, "auth.json"), "utf8"), "original-auth", "overlap refusal precedes cleanup");
+});
+
+test("a private HOME alias cannot authorize cleanup of an outside operator profile", () => {
+  const operator = tempHome(), selected = tempHome(), cwd = tempHome();
+  for (const root of [operator, selected]) { mkdirSync(join(root, ".codex")); writeFileSync(join(root, ".codex", "auth.json"), "original-auth"); }
+  symlinkSync(operator, join(cwd, "home"));
+  assert.throws(() => preparationEnvironment("codex", cwd, {}, { HOME: selected }), /private preparation home/);
+  assert.equal(readFileSync(join(operator, ".codex", "auth.json"), "utf8"), "original-auth");
+  assert.equal(readFileSync(join(selected, ".codex", "auth.json"), "utf8"), "original-auth");
+});
+
+test("disabled Codex cache aliases are neither traversed nor exposed in private preparation", () => {
+  const owner = tempHome(), native = join(owner, ".codex"), cwd = tempHome();
+  mkdirSync(native); mkdirSync(join(owner, ".ssh"));
+  writeFileSync(join(owner, ".ssh", "id_ed25519"), "private-key-fixture");
+  symlinkSync(join(owner, ".ssh"), join(native, "plugins"));
+  symlinkSync(join(owner, "missing"), join(native, "skills"));
+  const env = preparationEnvironment("codex", cwd, {}, { HOME: owner });
+  assert.equal(existsSync(join(env.CODEX_HOME, "plugins")), false);
+  assert.equal(existsSync(join(env.CODEX_HOME, "skills")), false);
+  assert.equal(readFileSync(join(owner, ".ssh", "id_ed25519"), "utf8"), "private-key-fixture");
 });
 
 test("missing, malformed or unavailable requirements inspection cannot issue a receipt", async () => {

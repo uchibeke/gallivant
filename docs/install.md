@@ -302,7 +302,7 @@ bypassed. See [guardrails.md](guardrails.md#codex-git-writes-need-automatic-appr
 ## 9. First task
 
 Before dispatch, confirm the repository, target branch, permitted changes and
-spending limits. The default `max_iterations` is 30 automatic fix rounds;
+spending limits. The default `max_iterations` is 60 automatic fix rounds;
 `max_budget_usd` defaults to 5 and gives Claude a native per-run dollar cap.
 Other local harnesses do not enforce an equivalent dollar cap. Use your provider's
 spend controls and review [budget semantics](config.md) before unattended work.

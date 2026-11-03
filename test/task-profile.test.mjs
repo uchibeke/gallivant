@@ -1677,15 +1677,15 @@ test("mapping targets include explicit assumptions and planner output cannot aut
   }
 });
 
-test("intake model configuration is validated, ceilings cannot be raised and secrets stay in the environment", () => {
+test("intake model configuration enforces current ceilings and secrets stay in the environment", () => {
   assert.deepEqual(intakeModelProblems(ROUTE), []);
   const validated = validateIntakeModelConfig(ROUTE);
   assert.equal(validated.budget.maxCalls, 3); assert.equal(validated.credentialEnv, "FIXTURE_MODEL_KEY");
   for (const [patch, pattern] of [
-    [{ budget: { ...ROUTE.budget, max_calls: 4 } }, /max_calls must be an integer from 1 to 3/],
-    [{ budget: { ...ROUTE.budget, max_input_tokens: 50001 } }, /max_input_tokens/],
-    [{ budget: { ...ROUTE.budget, max_output_tokens: 6001 } }, /max_output_tokens/],
-    [{ budget: { ...ROUTE.budget, allowance_usd: 0.11 } }, /allowance_usd/],
+    [{ budget: { ...ROUTE.budget, max_calls: MODEL_ROUTE_CEILINGS.maxCalls + 1 } }, /max_calls must be an integer from 1 to/],
+    [{ budget: { ...ROUTE.budget, max_input_tokens: MODEL_ROUTE_CEILINGS.maxInputTokens + 1 } }, /max_input_tokens/],
+    [{ budget: { ...ROUTE.budget, max_output_tokens: MODEL_ROUTE_CEILINGS.maxOutputTokens + 1 } }, /max_output_tokens/],
+    [{ budget: { ...ROUTE.budget, allowance_usd: MODEL_ROUTE_CEILINGS.allowanceUsd + 0.01 } }, /allowance_usd/],
     [{ budget: { ...ROUTE.budget, input_usd_per_million: undefined } }, /input_usd_per_million/],
     [{ endpoint: "http://api.example-provider.com/v1" }, /HTTPS/],
     [{ endpoint: "https://localhost/v1" }, /public provider host/],
@@ -1696,7 +1696,7 @@ test("intake model configuration is validated, ceilings cannot be raised and sec
     [{ api_key: "sk-live-123" }, /unknown key api_key/],
     [{ timeout_ms: 999999 }, /timeout_ms/],
   ]) assert.match(intakeModelProblems({ ...ROUTE, ...patch }).join("\n"), pattern, JSON.stringify(patch));
-  assert.equal(MODEL_ROUTE_CEILINGS.allowanceUsd, 0.1);
+  assert.equal(validated.budget.allowanceUsd, ROUTE.budget.allowance_usd, "lower operator allowances stay unchanged");
   const disabled = intakeModelRoute({}, {});
   assert.equal(disabled.enabled, false); assert.match(disabled.reason, /intake_model is not configured/);
   const noKey = intakeModelRoute({ intake_model: ROUTE }, {});
@@ -1706,7 +1706,7 @@ test("intake model configuration is validated, ceilings cannot be raised and sec
   assert.doesNotMatch(JSON.stringify(summary), /secret-value|FIXTURE_MODEL_KEY|chat\/completions/);
   assert.equal(summary.endpointHost, "api.example-provider.com"); assert.deepEqual(summary.tools, []);
   // The whole operator config file validates the route together with everything else.
-  const cfg = mergeConfig({ ...CONFIG, intake_model: { ...ROUTE, budget: { ...ROUTE.budget, allowance_usd: 1 } } }, CONFIG.home);
+  const cfg = mergeConfig({ ...CONFIG, intake_model: { ...ROUTE, budget: { ...ROUTE.budget, allowance_usd: MODEL_ROUTE_CEILINGS.allowanceUsd + 1 } } }, CONFIG.home);
   assert.ok(validateConfig(cfg, CONFIG.home).some(problem => /allowance_usd/.test(problem)));
   assert.equal(validateConfig(mergeConfig({ ...CONFIG, intake_model: ROUTE }, CONFIG.home), CONFIG.home).filter(problem => /intake_model/.test(problem)).length, 0);
 });
@@ -1804,7 +1804,7 @@ test("the model route stops before a call that would exceed its limits and rejec
   // Disabled configuration is an actionable refusal, not a silent fallback.
   await assert.rejects(prepareModelTurn({ config: {}, env: key, fetch: ok }, taskFor("Add CSV export.", { modelRoute: undefined }), memoryStore(), []), e => e.code === "TASK_MODEL_ROUTE" && /no pinned model route/.test(e.message) && /no model call was made/.test(e.message));
   // A pinned route cannot carry budgets above the ceilings or run without its named credential.
-  assert.throws(() => savedModelRoute({ ...pinned(ROUTE), budget: { ...pinned(ROUTE).budget, maxCalls: 9 } }), { code: "TASK_MODEL_ROUTE" });
+  assert.throws(() => savedModelRoute({ ...pinned(ROUTE), budget: { ...pinned(ROUTE).budget, maxCalls: MODEL_ROUTE_CEILINGS.maxCalls + 1 } }), { code: "TASK_MODEL_ROUTE" });
   await assert.rejects(prepareModelTurn({ config: { intake_model: ROUTE }, env: {}, fetch: ok }, taskFor("Add CSV export."), memoryStore(), []), e => e.code === "TASK_MODEL_ROUTE" && /export FIXTURE_MODEL_KEY/.test(e.message));
   assert.equal(calls, 1);
   // Settled output replays from its saved receipt without the credential and without a request; only a new call needs the key.

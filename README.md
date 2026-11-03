@@ -122,7 +122,7 @@ and the same review loop. [Writing briefs](docs/prd.md) · [Task commands](docs/
 2. Each tick (every two minutes by default) the daemon reads CI and reviewer
    state. A blocking review or a failing check starts a fix round in the same
    agent session, and the fix is pushed to the same PR.
-3. Rounds stop at `max_iterations` (30 by default), when the reviewer stays
+3. Rounds stop at `max_iterations` (60 by default), when the reviewer stays
    silent for `stall_hours`, or when a run exceeds its timeout. Every stop is
    recorded with a reason you can read with `gallivant why`.
 4. **Ready** means the configured checks, reviewer and acceptance gate passed.
@@ -213,7 +213,7 @@ for the installed version's flags.
   daemon, including when execution is hosted. Gallivant is not a managed service.
 - **Your accounts pay for inference.** Subscriptions and API credits differ.
   There is no automatic provider fallback. Review [limits](docs/config.md) before
-  unattended work; the default review allowance is 30 rounds.
+  unattended work; the default review allowance is 60 rounds.
 - **Your permissions apply.** Scope GitHub access to the required repositories.
   Harness permissions, OS sandboxing and optional APort checks are different
   controls. [Security boundaries](docs/guardrails.md).
