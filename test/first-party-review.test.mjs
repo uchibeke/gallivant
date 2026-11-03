@@ -721,6 +721,14 @@ test("citation resolution is exact, scoped, unique and auditable for findings an
   assert.equal(validateReviewResult(JSON.stringify(local),patchPiece).observations[0].evidence.line,158);
 });
 
+test("only missing sibling-slice scope gets a bounded output retry; genuine scope remains blocking", async () => {
+  const e = { ...await captureReviewEvidence(evidenceWorld()), version: 2, piece: { index: 1, total: 3 } };
+  for (const scope of ["The supplied patch ends partway through the file; remaining behavior cannot be inspected in this piece.", "Only before-side context is supplied; no patch or after-side source is supplied."]) {
+    assert.throws(() => validateReviewResult(JSON.stringify({ ...clear(e), observations: [], unresolvedScope: [scope] }), e), error => error.code === "REVIEW_INCOMPLETE" && error.repairableReviewOutput === true);
+  }
+  assert.throws(() => validateReviewResult(JSON.stringify({ ...clear(e), observations: [], unresolvedScope: ["Required payment authorization evidence is unavailable"] }), e), error => error.code === "REVIEW_INCOMPLETE" && !error.repairableReviewOutput);
+});
+
 test("final reviewer locations resolve only inside validated child reports", async () => {
   const captured = await captureReviewEvidence(evidenceWorld());
   const e={...captured,version:3,context:[{path:"a.js",after:"not supplied\nunique needle\n",before:null}],reports:[{observations:[{evidence:{path:"a.js",side:"after",line:2,quote:"unique needle"}}],findings:[]}]};
