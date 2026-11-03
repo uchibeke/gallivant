@@ -178,8 +178,11 @@ gallivant review retry <handle> --reason "Retry the rejected citation with exact
 output whose previous process exited successfully. It retains completed pieces,
 original attempts, reservations and an operator-reason audit. New attempts use
 the same job/spend/timeout limits and strict validation; recheck alone reuses the
-old terminal record. Ambiguous launches, active reviewers, provider failures,
-tool/boundary failures and unresolved cancellation cannot use this shortcut.
+old terminal record. It also accepts a reviewer cancelled by the coordinator
+after a provider error only after confirming its identity, stopped process tree,
+recorded cancellation reason and absence of tool attempts or denials. Ambiguous
+launches, active reviewers, other provider failures, tool/boundary failures and
+unresolved cancellation cannot use this shortcut.
 The normal host lane rechecks the live binding before review can authorize
 readiness. No author session, PR or chain merge gate is reset.
 

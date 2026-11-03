@@ -627,6 +627,19 @@ test("restart and duplicate polls reuse one review job; timeouts and provider er
   const late=await service.reconcile(w.id,w.entry,w.pr); assert.equal(late.status,"failed"); assert.equal(late.errorCode,"REVIEW_TIMEOUT");
 });
 
+test("a transient stopped observation never cancels a reviewer confirmed running by settlement", async () => {
+  const w=reviewServiceWorld(),service=w.service(),first=await service.reconcile(w.id,w.entry,w.pr),job=service.inspect(w.id).jobs[first.key];
+  const runner=w.ctx.executionFor(`review/${reviewDigest({root:`${w.ctx.home}/reviews`,id:w.id})}/${job.key}`);
+  const current=runner.current,settle=runner.settle;
+  runner.current=()=>({...runner.job,running:false});
+  runner.settle=()=>({...runner.job,running:true});
+  const waiting=await service.reconcile(w.id,w.entry,w.pr);
+  assert.equal(waiting.status,"running");assert.equal(w.calls.cancellations,0);assert.equal(w.calls.submits,1);
+  runner.current=current;runner.settle=settle;
+  w.finish(job,{endedAt:w.clock.now(),raw:JSON.stringify(clear(job.evidence))});
+  assert.equal((await service.reconcile(w.id,w.entry,w.pr)).status,"completed");
+});
+
 function reviewServiceWorld() {
   const w = evidenceWorld(), clock = makeClock(), runners = new Map();
   const calls = { downloads: 0, snapshots: 0, submits: 0, cancellations: 0, settlements: 0 };
@@ -747,6 +760,20 @@ test("review retry refuses active or unresolved executions and changed requireme
   await assert.rejects(service.retry(w.id, entry, "retry"), /confirmed successful process exit/);
   w.ctx.executionFor = real;
   assert.equal(service.inspect(w.id).retryHistory, undefined); assert.equal(w.calls.submits, 1);
+});
+
+test("explicit retry of a coordinator-cancelled reviewer requires verified cessation and retained ownership", async () => {
+  const w=reviewServiceWorld(),service=w.service(),first=await service.reconcile(w.id,w.entry,w.pr),job=service.inspect(w.id).jobs[first.key];
+  w.finish(job,{ok:false,raw:null,error:"no turn.completed event",endedAt:w.clock.now()});
+  const record=await service.reconcile(w.id,w.entry,w.pr),entry={...w.entry,firstPartyReview:record};
+  const runner=w.ctx.executionFor(`review/${reviewDigest({root:`${w.ctx.home}/reviews`,id:w.id})}/${job.key}`);
+  runner.job={...runner.job,exit:137,killed:true,execution:{acceptance:"accepted"}};runner.state=()=>({stopped:"review failed; quarantine late output"});
+  runner.job.running=true;await assert.rejects(service.retry(w.id,entry,"retry cancelled review"),/confirmed ownership and cessation/);
+  runner.job.running=false;runner.state=()=>({stopped:"operator cancelled"});await assert.rejects(service.retry(w.id,entry,"retry cancelled review"),/confirmed ownership and cessation/);
+  runner.state=()=>({stopped:"review failed; quarantine late output"});runner.lines=()=>[JSON.stringify({item:{type:"command_execution"}})];
+  await assert.rejects(service.retry(w.id,entry,"retry cancelled review"),/confirmed ownership and cessation/);
+  runner.lines=()=>[];const audit=await service.retry(w.id,entry,"retry cancelled review");
+  assert.equal(audit.retries[0].from,job.key);assert.equal(w.calls.submits,1);
 });
 
 test("citation resolution is exact, scoped, unique and auditable for findings and observations", async () => {
