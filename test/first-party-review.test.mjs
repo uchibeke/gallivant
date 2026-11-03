@@ -53,6 +53,8 @@ test("unrelated project trust additions do not invalidate the isolated reviewer"
   writeFileSync(config,'model = "example"\n'); const original=reviewRouteFingerprint(settings,env);
   writeFileSync(config,`model = "example"\n[projects.${JSON.stringify(unrelated)}]\ntrust_level = "trusted"\n`);
   assert.equal(reviewRouteFingerprint(settings,env),original);
+  writeFileSync(config,`model = "example"\n[projects.${JSON.stringify(`${unrelated}/deleted-worktree`)}]\ntrust_level = "trusted"\n`);
+  assert.equal(reviewRouteFingerprint(settings,env),original,"deleted unrelated worktrees do not stall review");
   writeFileSync(config,`model = "other-model"\n[projects.${JSON.stringify(unrelated)}]\ntrust_level = "trusted"\n`);
   assert.notEqual(reviewRouteFingerprint(settings,env),original);
   writeFileSync(config,`model = "example"\n[projects.${JSON.stringify(home)}]\ntrust_level = "trusted"\n`);
