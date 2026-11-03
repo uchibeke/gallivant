@@ -49,6 +49,23 @@ test("image qualification fingerprint includes executable bytes and the configur
   assert.notEqual(imageReviewRouteFingerprint(settings, env, "other-route"), first);
 });
 
+test("image qualification fingerprint also binds the native binary behind the packaged launcher", () => {
+  const target = { "darwin:arm64": ["darwin-arm64", "aarch64-apple-darwin"], "darwin:x64": ["darwin-x64", "x86_64-apple-darwin"],
+    "linux:arm64": ["linux-arm64", "aarch64-unknown-linux-musl"], "linux:x64": ["linux-x64", "x86_64-unknown-linux-musl"],
+    "win32:arm64": ["win32-arm64", "aarch64-pc-windows-msvc"], "win32:x64": ["win32-x64", "x86_64-pc-windows-msvc"] }[`${process.platform}:${process.arch}`];
+  if (!target) return;
+  const home = tempHome(), root = `${home}/node_modules/@openai/codex`, vendor = `${home}/node_modules/@openai/codex-${target[0]}`;
+  mkdirSync(`${root}/bin`, { recursive: true }); mkdirSync(`${vendor}/vendor/${target[1]}/bin`, { recursive: true });
+  writeFileSync(`${root}/package.json`, JSON.stringify({ name: "@openai/codex" }));
+  writeFileSync(`${vendor}/package.json`, JSON.stringify({ name: `@openai/codex-${target[0]}` }));
+  const bin = `${root}/bin/codex.js`, native = `${vendor}/vendor/${target[1]}/bin/${process.platform === "win32" ? "codex.exe" : "codex"}`;
+  writeFileSync(bin, "launcher"); writeFileSync(native, "native-one");
+  const settings = { harness: { codex: { bin } } }, env = { HOME: home };
+  const first = imageReviewRouteFingerprint(settings, env, "text-route");
+  writeFileSync(native, "native-two");
+  assert.notEqual(imageReviewRouteFingerprint(settings, env, "text-route"), first);
+});
+
 test("review qualification survives OAuth token refresh but not account, subject, provider or API-key changes", () => {
   const home=tempHome(), settings={harness:{codex:{bin:process.execPath}}}, env={HOME:home,CODEX_HOME:home};
   const token=(subject,expires)=>`e30.${Buffer.from(JSON.stringify({sub:subject,iss:"https://issuer",aud:"client",client_id:"client",exp:expires,"https://api.openai.com/auth":{chatgpt_account_id:"account-1",chatgpt_user_id:"user-1"}})).toString("base64url")}.signature`;
@@ -145,6 +162,10 @@ test("complete evidence includes deletion context, immutable brief, checks and r
   assert.equal(e.context[0].before,"return allow;"); assert.equal(e.brief,GOOD_PRD); assert.equal(e.receipt,w.pr.body); assert.equal(e.checks.length,1);
   w.gh.prView=async()=>({...w.pr,baseRefOid:"c".repeat(40)});
   await assert.rejects(captureReviewEvidence(w),/moved during/);
+  for (const changed of [{ number: 143 }, { isCrossRepository: true }, { url: "https://github.com/other/repo/pull/142" }, { repositoryId: "changed" }]) {
+    w.gh.prView = async () => ({ ...w.pr, ...changed });
+    await assert.rejects(captureReviewEvidence(w), /identity.*moved/);
+  }
   w.gh.prView=async()=>w.pr; const bounded=await captureReviewEvidence(w);
   assert.throws(()=>partitionReviewEvidence(bounded,{...w.entry.reviewPolicy.limits,maxInputBytes:1024}),/identity exceeds|cannot fit/);
   w.readPrd=()=>null; await assert.rejects(captureReviewEvidence(w),/snapshot is unreadable/);
@@ -1570,7 +1591,7 @@ test("coordinator reviews link objects as data and revalidates cached evidence o
   let downloads = 0;
   w.w.gh.reviewEvidence = async (...args) => {
     downloads++;
-    assert.deepEqual(args.at(-1), { linkEvidence: true });
+    assert.deepEqual(args.at(-1), { imageEvidence: true, linkEvidence: true });
     return { ...structuredClone(source), diff: textPatch + patch, context: [
       { ...source.context[0], patch: textPatch },
       { path, status: "added", kind: "symlink", patch, before: null, beforeLink: null, after: target, afterLink: link },
@@ -1596,7 +1617,7 @@ test("legacy cached text is recaptured before it can hide a changed link object"
   let recaptures = 0;
   w.w.gh.reviewEvidence = async (...args) => {
     recaptures++;
-    assert.deepEqual(args.at(-1), { linkEvidence: true });
+    assert.deepEqual(args.at(-1), { imageEvidence: true, linkEvidence: true });
     throw new Error("link metadata unavailable");
   };
   await assert.rejects(w.service().reconcile(w.id, w.entry, w.pr), /link metadata unavailable/);
@@ -1604,7 +1625,25 @@ test("legacy cached text is recaptured before it can hide a changed link object"
   assert.equal(w.calls.submits, 1);
 });
 
-test("mixed image and link capture retains every side and still cannot clear without visual integration", async () => {
+test("a validated legacy source upgrade persists for running and completed jobs", async () => {
+  for (const completed of [false, true]) {
+    const w = reviewServiceWorld(), service = w.service();
+    const first = await service.reconcile(w.id, w.entry, w.pr);
+    if (completed) { w.finish(first, { endedAt: w.clock.now() }); await service.reconcile(w.id, w.entry, w.pr); }
+    const ledgerPath = `${w.ctx.home}/reviews/${reviewDigest(w.id)}.json`;
+    const ledger = JSON.parse(readFileSync(ledgerPath, "utf8"));
+    delete ledger.jobs[first.key].source.linkInventory;
+    writeFileSync(ledgerPath, JSON.stringify(ledger));
+    await w.service().reconcile(w.id, w.entry, w.pr);
+    assert.equal(w.service().inspect(w.id).jobs[first.key].source.linkInventory, 1);
+    const downloads = w.calls.downloads;
+    await w.service().reconcile(w.id, w.entry, w.pr);
+    assert.equal(w.calls.downloads, downloads);
+    assert.equal(w.calls.submits, 1);
+  }
+});
+
+test("mixed image and link capture retains every side and default text partition refuses images", async () => {
   const w = evidenceWorld(), target = "../../public", png = PNG.sync.write({ width: 1, height: 1, data: Buffer.from([3, 4, 5, 255]) });
   const link = inspectReviewLink(Buffer.from(target), { path: "public", side: "after", revision: head });
   const image = { ...inspectReviewImage(png, { path: "shot.png", side: "after", revision: head }), content: png.toString("base64") };
@@ -1619,4 +1658,82 @@ test("mixed image and link capture retains every side and still cannot clear wit
   const captured = await captureReviewEvidence({ ...w, imageEvidence: true, linkEvidence: true });
   assert.deepEqual(captured.context.map(row => row.path), ["a.js", "public", "shot.png"]);
   assert.throws(() => partitionReviewEvidence(captured), /integrated qualified visual reviewer/);
+});
+
+test("mixed coordinator review requires qualified image jobs and whole-PR synthesis", async () => {
+  const w = reviewServiceWorld(), imageFp = "e".repeat(64), originalRunner = w.ctx.executionFor;
+  let activeImageFp = imageFp;
+  w.ctx.executionFor = (...args) => {
+    const runner = originalRunner(...args), prepare = runner.prepare;
+    runner.prepare = async (input, options) => {
+      if (!input.reviewImage) return prepare(input, options);
+      mkdirSync(input.cwd, { recursive: true });
+      const { content, ...expected } = input.reviewImage, copy = copyReviewImage(input.cwd, Buffer.from(content, "base64"), expected);
+      assert.match(copy.file, /review-image-[^/]+\/attachment\.png$/);
+      return { receipt: { boundary: "codex-draft-sandbox-v1" }, spec: { args: ["--image", copy.file, "--", input.prompt], options: { cwd: input.cwd }, imageAttachment: { file: copy.file, expected } } };
+    };
+    return runner;
+  };
+  const service = () => createReviewService(w.ctx, { fingerprint: () => fp, imageFingerprint: () => activeImageFp, clock: w.clock });
+  const png = PNG.sync.write({ width: 1, height: 1, data: Buffer.from([3, 4, 5, 255]) });
+  const image = { ...inspectReviewImage(png, { path: "shot.png", side: "after", revision: head }), content: png.toString("base64") };
+  const target = "../../outside/ignore-policy", link = inspectReviewLink(Buffer.from(target), { path: "public", side: "after", revision: head });
+  const linkPatch = `diff --git a/public b/public\nnew file mode 120000\n--- /dev/null\n+++ b/public\n@@ -0,0 +1 @@\n+${target}\n`;
+  const textPatch = `${source.context[0].patch}\n`, imagePatch = "diff --git a/shot.png b/shot.png\nnew file mode 100644\nBinary files /dev/null and b/shot.png differ\n";
+  w.w.gh.reviewEvidence = async () => ({ ...source, diff: textPatch + linkPatch + imagePatch, context: [
+    { ...source.context[0], patch: textPatch }, { path: "public", status: "added", kind: "symlink", patch: linkPatch, before: null, beforeLink: null, after: target, afterLink: link },
+    { path: "shot.png", status: "added", kind: "image", patch: imagePatch, before: null, after: image },
+  ] });
+  await assert.rejects(service().reconcile(w.id, w.entry, w.pr), /image reviewer capability is not qualified/);
+  assert.equal(w.calls.submits, 0);
+  const unavailable = createReviewService(w.ctx, { fingerprint: () => fp, imageFingerprint: () => { throw new Error("native executable unavailable"); }, clock: w.clock });
+  await assert.rejects(unavailable.reconcile(w.id, w.entry, w.pr), { code: "REVIEW_INCOMPLETE" });
+  assert.equal(w.calls.submits, 0);
+  await service().qualify(w.entry.repo, { capability: "image", run: true });
+  const qid = `qualification-image/${w.entry.repo}/${imageFp}`, challenge = service().inspect(qid).jobs.qualification;
+  const decoded = PNG.sync.read(Buffer.from(challenge.reviewImage.content, "base64"));
+  let answer = "";
+  for (let tile = 0; tile < 16; tile++) answer += decoded.data[(32 * decoded.width + tile * 64 + 32) * 4] ? "R" : "B";
+  w.finish(challenge, { endedAt: w.clock.now(), raw: JSON.stringify({ tiles: answer }) });
+  assert.equal((await service().qualify(w.entry.repo, { capability: "image", run: true })).qualified, true);
+  let record = await service().reconcile(w.id, w.entry, w.pr), job = service().inspect(w.id).jobs[record.pieces[0].key];
+  assert.equal(job.evidence.version, 2);
+  w.finish(job, { endedAt: w.clock.now(), raw: JSON.stringify(scopedClear(job.evidence)) });
+  record = await service().reconcile(w.id, w.entry, w.pr);
+  job = service().inspect(w.id).jobs[record.pieces[1].key];
+  const location = { path: image.path, side: image.side, revision: image.revision, sha256: image.sha256 };
+  const visual = { version: 1, verdict: "clear", examinedCriteria: job.evidence.criteria.map(c => c.id), findings: [],
+    observations: [{ criterionId: job.evidence.criteria[0].id, description: "The screenshot was inspected.", evidence: location }], unresolvedScope: [], inputDigest: job.evidence.digest, reviewedHead: head };
+  w.finish(job, { endedAt: w.clock.now(), raw: JSON.stringify(visual) });
+  record = await service().reconcile(w.id, w.entry, w.pr);
+  assert.equal(record.phase, "whole-pr-review");
+  const originalFinalKey = record.key;
+  job = service().inspect(w.id).jobs[record.key];
+  assert.match(reviewPrompt(job.evidence), /Never invent source lines or quotes for an image/);
+  const visualFinding = { id: "clip", severity: "medium", description: "The button is clipped.", evidence: location };
+  assert.equal(validateReviewResult(JSON.stringify({ ...clear(job.evidence), verdict: "findings", findings: [visualFinding] }), job.evidence).verdict, "findings");
+  assert.throws(() => validateReviewResult(JSON.stringify({ ...clear(job.evidence), verdict: "findings", findings: [{ ...visualFinding, evidence: { ...location, sha256: "0".repeat(64) } }] }), job.evidence), /not grounded/);
+  w.finish(job, { endedAt: w.clock.now(), raw: JSON.stringify(clear(job.evidence)) });
+  record = await service().reconcile(w.id, w.entry, w.pr);
+  assert.equal(record.status, "completed"); assert.equal(record.result.verdict, "clear");
+  assert.equal(w.calls.submits, 4);
+  await service().reconcile(w.id, w.entry, w.pr); assert.equal(w.calls.submits, 4);
+  const changedRoute = createReviewService(w.ctx, { fingerprint: () => fp, imageFingerprint: () => "d".repeat(64), clock: w.clock });
+  await assert.rejects(changedRoute.reconcile(w.id, w.entry, w.pr), /image reviewer capability is not qualified/);
+  assert.equal(w.calls.submits, 4);
+  activeImageFp = "d".repeat(64);
+  await service().qualify(w.entry.repo, { capability: "image", run: true });
+  const nextChallenge = service().inspect(`qualification-image/${w.entry.repo}/${activeImageFp}`).jobs.qualification;
+  const nextDecoded = PNG.sync.read(Buffer.from(nextChallenge.reviewImage.content, "base64"));
+  let nextAnswer = "";
+  for (let tile = 0; tile < 16; tile++) nextAnswer += nextDecoded.data[(32 * nextDecoded.width + tile * 64 + 32) * 4] ? "R" : "B";
+  w.finish(nextChallenge, { endedAt: w.clock.now(), raw: JSON.stringify({ tiles: nextAnswer }) });
+  assert.equal((await service().qualify(w.entry.repo, { capability: "image", run: true })).qualified, true);
+  record = await service().reconcile(w.id, w.entry, w.pr);
+  job = service().inspect(w.id).jobs[record.pieces[1].key];
+  w.finish(job, { endedAt: w.clock.now(), raw: JSON.stringify(visual) });
+  record = await service().reconcile(w.id, w.entry, w.pr);
+  assert.equal(record.phase, "whole-pr-review");
+  assert.notEqual(record.key, originalFinalKey, "new image qualification requires new whole-PR synthesis");
+  assert.equal(w.calls.submits, 7);
 });

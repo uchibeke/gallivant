@@ -8,6 +8,7 @@ import jpeg from "jpeg-js";
 import { copyReviewImage, inspectReviewImage, inspectReviewImageSet, REVIEW_IMAGE_LIMITS, verifyReviewImage, verifyReviewImageCopy } from "../lib/review_image.mjs";
 import { planVisualReview, validateVisualReviewResult, visualReviewPrompt } from "../lib/review_visual.mjs";
 import { reviewDigest } from "../lib/review_policy.mjs";
+import { reducedReviewReport } from "../lib/review_evidence.mjs";
 
 const head = "a".repeat(40), base = "b".repeat(40);
 const png = () => PNG.sync.write({ width: 2, height: 1, data: Buffer.from([255, 0, 0, 255, 0, 0, 255, 255]) });
@@ -97,4 +98,13 @@ test("visual plans cover each exact image side and validate findings without sou
   assert.throws(() => planVisualReview({ ...tampered, digest: reviewDigest(tampered) }), /identity differs/);
   assert.throws(() => planVisualReview(evidence, { maxJobs: 1, maxInputBytes: 20_000 }), /job limit/);
   assert.throws(() => planVisualReview({ ...evidence, head: base }), /aggregate digest/);
+});
+
+test("report reduction retains each exact image identity or fails closed", () => {
+  const images = [identity("before"), identity("after")].map((value, index) => ({ ...value, sha256: String(index + 1).repeat(64) }));
+  const node = { version: 4, digest: "node", binding: "binding", coverage: { first: 1, last: 2, total: 2 }, reports: images.map(image => ({ images: [image] })) };
+  const observations = images.map(image => ({ criterionId: "ac-1", description: "Observed the image.", evidence: image }));
+  const job = { status: "completed", evidence: { digest: node.digest }, binding: node.binding, result: { observations, findings: [] } };
+  assert.deepEqual(reducedReviewReport(node, job).images, images);
+  assert.throws(() => reducedReviewReport(node, { ...job, result: { ...job.result, observations: observations.slice(0, 1) } }), /omitted an image/);
 });
