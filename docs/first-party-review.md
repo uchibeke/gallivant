@@ -111,6 +111,11 @@ the final whole-PR reviewer; it is never accepted as clearance. Whole-PR
 unresolved scope remains blocking. Older outputs rejected for citation numbering
 or local-slice scope are revalidated once against the exact original input and
 owned execution.
+A confirmed, terminal Codex model-capacity response receives bounded retries
+after one and five minutes, within the same reviewer job and spend allowances.
+The saved evidence and completed pieces are retained. Authentication, quota,
+policy denials, ambiguous ownership and unrecognized provider errors still stop
+for inspection; no model or provider is switched automatically.
 A new protocol identity retains old failed jobs
 for audit without reusing their incomplete verdicts.
 

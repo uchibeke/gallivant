@@ -170,6 +170,11 @@ test("Bitbucket first-party evidence refuses stale, duplicate, binary, missing-p
   }
 });
 
+test("binary review refusal identifies the actual limitation without implying clearance", async () => {
+  const f=cleanFixture();f.data.comparisonDiff+="GIT binary patch\n";
+  await assert.rejects(f.api.reviewEvidence(PATH,7,HEAD,BASE,100_000),error=>error.code==="BB_INCOMPLETE" && /binary files/.test(error.message) && /text-only/.test(error.message));
+});
+
 test("only explicit current full-SHA feedback from the configured stable reviewer clears a head", async () => {
   for (const [body, user, expected] of [
     [verdictBody(), REVIEWER, "clear"], [verdictBody("blocking"), REVIEWER, "blocking"],

@@ -4,6 +4,8 @@ The coordinator normally retains a successful local provider health check for
 five minutes, so a long coordinator cycle does not immediately expire it. A due,
 pending, failed or timed-out check still fences dispatch. An explicit
 `execution.progressMs` setting controls this interval and remains authoritative.
+Provider readiness refreshes on its own timer while a long coordinator cycle
+is still processing. A pending or failed refresh continues to block dispatch.
 
 `ENOTFOUND` means a hostname lookup failed. `EAI_AGAIN` indicates a temporary
 resolver failure. Neither proves that a provider is down, credentials expired,

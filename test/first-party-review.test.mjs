@@ -646,12 +646,60 @@ function reviewServiceWorld() {
   } };
   const service = () => createReviewService(ctx, { fingerprint: () => fp, clock });
   return { ...w, w, ctx, calls, clock, service,
-    finish(job, { endedAt = job.startedAt + 150_000, ok = true, raw = JSON.stringify({ ...clear(job.evidence), reviewedHead: job.evidence.head }) } = {}) {
+    finish(job, { endedAt = job.startedAt + 150_000, ok = true, error = null, raw = JSON.stringify({ ...clear(job.evidence), reviewedHead: job.evidence.head }) } = {}) {
       const r = [...runners.values()].find(r => r.job?.id === job.run);
       r.job = { ...r.job, running: false, exit: ok ? 0 : 1, endedAt };
-      r.result = { ok, lastMessage: raw, denials: [], cost: null };
+      r.result = { ok, finished: true, error, lastMessage: raw, denials: [], cost: null };
     } };
 }
+
+test("confirmed reviewer capacity failure retries with persisted backoff and the same evidence", async () => {
+  const w=reviewServiceWorld();let service=w.service(), record=await service.reconcile(w.id,w.entry,w.pr);
+  const original=service.inspect(w.id).jobs[record.key];
+  w.finish(original,{ok:false,raw:null,error:"Selected model is at capacity. Please try a different model.",endedAt:w.clock.now()});
+  record=await service.reconcile(w.id,w.entry,w.pr);
+  assert.equal(record.status,"running");assert.ok(record.retryAt>w.clock.now());assert.equal(w.calls.submits,1);
+  const before=service.inspect(w.id);assert.equal(before.jobs[original.key].status,"failed");assert.equal(before.retryHistory.at(-1).automatic,true);
+  service=w.service();await service.reconcile(w.id,w.entry,w.pr);assert.equal(w.calls.submits,1,"restart does not skip the backoff");
+  w.clock.advance(1);record=await service.reconcile(w.id,w.entry,w.pr);assert.equal(w.calls.submits,2);
+  const retry=service.inspect(w.id).jobs[record.key];assert.equal(retry.capacityRetries,1);assert.equal(retry.evidence.digest,original.evidence.digest);
+  w.finish(retry,{endedAt:w.clock.now(),raw:JSON.stringify(clear(retry.evidence))});
+  record=await service.reconcile(w.id,w.entry,w.pr);assert.equal(record.status,"completed");
+});
+
+test("a previously stopped capacity failure can recover the exact owned job after upgrade", async () => {
+  const w=reviewServiceWorld(),service=w.service(), first=await service.reconcile(w.id,w.entry,w.pr), job=service.inspect(w.id).jobs[first.key];
+  w.finish(job,{ok:false,raw:null,error:"Selected model is at capacity. Please try a different model.",endedAt:w.clock.now()});
+  const file=`${w.ctx.home}/reviews/${reviewDigest(w.id)}.json`, ledger=JSON.parse(readFileSync(file,"utf8"));
+  Object.assign(ledger.jobs[job.key],{status:"failed",errorCode:"REVIEW_PROVIDER",error:"review provider failed"});writeFileSync(file,JSON.stringify(ledger));
+  const recovered=await w.service().reconcile(w.id,w.entry,w.pr);
+  assert.equal(recovered.status,"running");assert.ok(recovered.retryAt>w.clock.now());assert.equal(w.calls.submits,1);
+});
+
+test("reviewer provider failures other than confirmed capacity do not automatically retry", async () => {
+  for(const error of ["Authentication failed", "Rate limit 429", "Selected model is at capacity. Please try a different model. Unexpected detail"]) {
+    const w=reviewServiceWorld(),service=w.service(), first=await service.reconcile(w.id,w.entry,w.pr), job=service.inspect(w.id).jobs[first.key];
+    w.finish(job,{ok:false,raw:null,error,endedAt:w.clock.now()});const result=await service.reconcile(w.id,w.entry,w.pr);
+    assert.equal(result.status,"failed");assert.equal(w.calls.submits,1);assert.equal(service.inspect(w.id).retryHistory,undefined);
+  }
+});
+
+test("capacity recovery stops at the configured bound and never replays ambiguous ownership or tool attempts", async () => {
+  for(const unsafe of ["ambiguous", "tool"]) {
+    const w=reviewServiceWorld(),service=w.service(),first=await service.reconcile(w.id,w.entry,w.pr),job=service.inspect(w.id).jobs[first.key];
+    w.finish(job,{ok:false,raw:null,error:"Selected model is at capacity. Please try a different model.",endedAt:w.clock.now()});
+    const runner=w.ctx.executionFor(`review/${reviewDigest({root:`${w.ctx.home}/reviews`,id:w.id})}/${job.key}`);
+    if(unsafe==="ambiguous")runner.job.execution={acceptance:"unknown"};else runner.lines=()=>[JSON.stringify({item:{type:"command_execution"}})];
+    const stopped=await service.reconcile(w.id,w.entry,w.pr);assert.equal(stopped.status,"failed");assert.equal(w.calls.submits,1);
+  }
+  const w=reviewServiceWorld(),service=w.service();let record=await service.reconcile(w.id,w.entry,w.pr);
+  for(let n=0;n<3;n++){
+    const job=service.inspect(w.id).jobs[record.key];w.finish(job,{ok:false,raw:null,error:"Selected model is at capacity. Please try a different model.",endedAt:w.clock.now()});
+    record=await service.reconcile(w.id,w.entry,w.pr);
+    if(n<2){assert.equal(record.status,"running");w.clock.advance(n===0?1:5);record=await service.reconcile(w.id,w.entry,w.pr);}else assert.equal(record.status,"failed");
+  }
+  assert.equal(w.calls.submits,3,"original plus two bounded retries");
+});
 
 test("explicit review retry retains completed pieces, failed evidence and allowances across restart", async () => {
   const w = reviewServiceWorld(), after = `${"a".repeat(110_000)}\n`;
