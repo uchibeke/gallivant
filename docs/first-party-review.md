@@ -97,6 +97,10 @@ exact single-line quote occurs at one unique line in the supplied file, side and
 slice (or, for synthesis, a supplied report). The original and corrected line
 and a quote digest are retained in the review ledger. Ambiguous, absent or
 multiline quotes never gain clearance from this correction.
+When execution sanitization masks a secret-looking value in a quote, the
+coordinator compares it with the same sanitized form of the captured source
+line. The review result retains the masked quote; matching still requires the
+specified file, side and line or a unique source location.
 
 Malformed output or an unverifiable citation receives up to the configured
 `retries` fresh, tools-disabled reviewer attempts, using the same job, spend and

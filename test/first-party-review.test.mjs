@@ -7,6 +7,7 @@ import { exactReviewerVerdict, makeTrust } from "../lib/events.mjs";
 import { messages } from "../lib/notify.mjs";
 import { selectReviewPolicy, legacyReviewPolicy, policyConfig, reviewBinding, reviewVerdict, reviewDisclosure, reviewDigest, REVIEW_DEFAULTS, validateReviewSettings } from "../lib/review_policy.mjs";
 import { DEFAULTS } from "../lib/config.mjs";
+import { redact } from "../lib/execution_io.mjs";
 import { aggregateReviewResults, captureReviewEvidence, partitionReviewEvidence, planReviewSynthesis, reducedReviewReport, reviewReports, synthesisReviewEvidence, validateReviewResult, reviewPrompt } from "../lib/review_evidence.mjs";
 import { buildReviewRun, createReviewService, reviewRouteFingerprint } from "../lib/first_party_review.mjs";
 import { makeTick } from "../lib/tick.mjs";
@@ -719,6 +720,24 @@ test("citation resolution is exact, scoped, unique and auditable for findings an
   const patchPiece = { ...piece, context:[{path:"a.js",kind:"patch",text:"+unique needle",sourceLocations:[{side:"after",line:158,startOffset:1,endOffset:14}]}] };
   local.observations[0].evidence={path:"a.js",side:"after",line:159,quote:"unique needle"};
   assert.equal(validateReviewResult(JSON.stringify(local),patchPiece).observations[0].evidence.line,158);
+});
+
+test("sanitized review citations match only the same sanitized captured source", async () => {
+  const captured=await captureReviewEvidence(evidenceWorld());
+  const original="const testUrl = '/invite?token=private';", safe=redact(original);
+  const e={...captured,version:2,piece:{index:1,total:1},context:[{path:"a.js",kind:"after",startLine:1,endLine:1,text:original}]};
+  const citation={path:"a.js",side:"after",line:1,quote:safe};
+  const r={...clear(e),verdict:"findings",findings:[{...finding,evidence:citation}],observations:[{criterionId:"ac-1",description:"Inspect token handling.",evidence:citation}]};
+  assert.throws(()=>validateReviewResult(JSON.stringify(r),e),/not present/);
+  const validated=validateReviewResult(JSON.stringify(r),e,{sanitizeSource:redact});
+  assert.equal(validated.findings[0].evidence.quote,safe);assert.ok(!JSON.stringify(validated).includes("token=private"));
+  for(const patch of [{path:"other.js"},{side:"before"},{quote:safe.replace("testUrl","otherUrl")}]) {
+    const bad={...r,findings:[{...finding,evidence:{...citation,...patch}}]};
+    assert.throws(()=>validateReviewResult(JSON.stringify(bad),e,{sanitizeSource:redact}),/not present/);
+  }
+  const duplicated={...e,context:[{...e.context[0],text:`${original}\n${original}`,endLine:2}]};
+  const wrong={...r,findings:[{...finding,evidence:{...citation,line:3}}]};
+  assert.throws(()=>validateReviewResult(JSON.stringify(wrong),duplicated,{sanitizeSource:redact}),/ambiguous/);
 });
 
 test("local unresolved scope is retained for whole-PR review and cannot itself clear", async () => {
