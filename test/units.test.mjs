@@ -163,6 +163,20 @@ test("state writes atomically and resolves handles", () => {
   assert.equal(s.get("widget/export").iteration, 2);
 });
 
+test("registry reads are detached and observe atomic writes from another instance", () => {
+  const home=tempHome(), a=makeState(home), b=makeState(home), id="acme/widget/task";
+  a.put(id,{repo:"acme/widget",pr:1,iteration:0,nested:{value:"original"}});
+  const entry=a.get(id);entry.nested.value="modified outside registry";
+  const all=a.entries();all[0][1].nested.value="also modified";
+  assert.equal(a.get(id).nested.value,"original");
+  assert.throws(()=>a.update(id,cur=>{cur.nested.value="failed callback";throw new Error("fixture failure");}),/fixture failure/);
+  assert.equal(a.get(id).nested.value,"original");
+  b.update(id,{iteration:1,nested:{value:"other writer"}});
+  assert.equal(a.get(id).iteration,1);assert.equal(a.get(id).nested.value,"other writer");
+  writeFileSync(a.file,JSON.stringify({version:999,entries:{}}));
+  assert.throws(()=>a.get(id),/unsupported registry version/);
+});
+
 test("the PR block round-trips and rejects anything malformed", () => {
   const block = { prd: "docs/prds/x.md", harness: "codex", session: "22222222-2222-4222-8222-222222222222", branch: "gallivant/x" };
   const body = upsertBlock("Adds x.", block);

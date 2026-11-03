@@ -135,6 +135,11 @@ The model receives this material as untrusted JSON. Its output must cover all cr
 
 Polling reuses captured source only when the repository, head and base still match, and rechecks the live PR binding before using it. Changed head, base, checks, receipt, policy or brief invalidates the whole aggregate, not only one piece. Piece keys make restart and repeated host pages idempotent; an old-head or partial aggregate cannot clear. A delayed poll accepts a valid result whose recorded execution completion time met the deadline; missing completion times, late results and executions still running past the deadline cannot clear.
 
+The registry caches validated reads only while the underlying file identity and
+timestamps are unchanged. Returned records remain detached, and another
+process's atomic write invalidates the cache. This avoids repeatedly parsing a
+large registry during review polling without changing write ownership or gates.
+
 Between host polls, the coordinator advances an already captured review on its
 local progress cadence. It does not refetch the PR for every piece. Terminal
 local results wake the host lane, which must reread the current binding before
