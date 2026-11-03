@@ -116,6 +116,11 @@ rate-limited, redirected and oversized evidence is refused. The PR binding is
 read again after capture. The API token stays behind the host boundary and is not
 part of the reviewer prompt or environment.
 
+This route does not yet capture or inspect PNG or JPEG changes. A text-only
+qualification does not establish image capability, even if the configured CLI
+accepts image arguments. Preserve the original files and incomplete review until
+the image capture and restricted vision route are implemented and qualified.
+
 Qualify the exact configured executable/provider route only after authorizing its
 separate paid challenge:
 
@@ -299,6 +304,10 @@ No command merges the PR, force-pushes, deploys or alters protections.
   the new policy explicitly. Binary, subrepository, symlink, rate-limited,
   redirected or stale evidence must be corrected; increasing a byte cap is not a
   workaround.
+- Screenshot or other image evidence: the current independent reviewer is
+  text-only. Neither rerunning its qualification nor increasing limits enables
+  image review; preserve the PR and use the existing incomplete state until a
+  qualified image-capable route is available.
 - `pr-identity`: inspect source/base/repository/head and restore the recorded
   identity. A decline or unproven merge needs operator reconciliation, not a new
   paid run or an automatic chain advance.
