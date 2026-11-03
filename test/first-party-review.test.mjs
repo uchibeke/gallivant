@@ -136,6 +136,23 @@ test("complete evidence includes deletion context, immutable brief, checks and r
   w.readPrd=()=>null; await assert.rejects(captureReviewEvidence(w),/snapshot is unreadable/);
 });
 
+test("shared capture rejects binary, submodule and oversized evidence from adapters and recovered sources", async () => {
+  const variants = [
+    s => { s.diff += "\nBinary files a/image.png and b/image.png differ\n"; },
+    s => { s.context[0].patch += "\nGIT binary patch\n"; },
+    s => { s.diff += "\nnew file mode 160000\n"; },
+    s => { s.context[0].after = "image\0bytes"; },
+    s => { s.context[0].after = "x".repeat(17 * 1024 * 1024); },
+  ];
+  for (const mutate of variants) {
+    const w = evidenceWorld(), malformed = structuredClone(source);
+    mutate(malformed);
+    w.gh.reviewEvidence = async () => malformed;
+    await assert.rejects(captureReviewEvidence(w), /binary|submodule|capture limit/);
+    await assert.rejects(captureReviewEvidence({ ...w, cachedSource: malformed }), /binary|submodule|capture limit/);
+  }
+});
+
 test("structured verdict requires all criteria, exact identities and verifiable findings; injections cannot add policy fields",async()=>{
   const e=await captureReviewEvidence(evidenceWorld()); const r=clear(e);
   assert.deepEqual(validateReviewResult(JSON.stringify(r),e),r);
