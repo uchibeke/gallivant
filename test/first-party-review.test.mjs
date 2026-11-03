@@ -1,6 +1,8 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { readFileSync, writeFileSync } from "node:fs";
+import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { createHash } from "node:crypto";
+import { PNG } from "pngjs";
 import { evaluateReviews } from "../lib/review_evaluation.mjs";
 import { completionStopsAutomation, coordinatorEntryActive } from "../lib/task_completion.mjs";
 import { exactReviewerVerdict, makeTrust } from "../lib/events.mjs";
@@ -9,7 +11,8 @@ import { selectReviewPolicy, legacyReviewPolicy, policyConfig, reviewBinding, re
 import { DEFAULTS } from "../lib/config.mjs";
 import { redact } from "../lib/execution_io.mjs";
 import { aggregateReviewResults, captureReviewEvidence, partitionReviewEvidence, planReviewSynthesis, reducedReviewReport, reviewReports, synthesisReviewEvidence, validateReviewResult, reviewPrompt } from "../lib/review_evidence.mjs";
-import { buildReviewRun, createReviewService, reviewRouteFingerprint } from "../lib/first_party_review.mjs";
+import { buildReviewRun, createReviewService, imageReviewRouteFingerprint, reviewRouteFingerprint } from "../lib/first_party_review.mjs";
+import { copyReviewImage, inspectReviewImage } from "../lib/review_image.mjs";
 import { makeTick } from "../lib/tick.mjs";
 import { makeGh } from "../lib/gh.mjs";
 import { reviewCommand } from "../lib/commands/review.mjs";
@@ -33,6 +36,16 @@ test("review route survives parent tool calls but invalidates provider and crede
   assert.notEqual(reviewRouteFingerprint(settings, { ...env, OPENAI_BASE_URL: "https://other.example" }), original);
   writeFileSync(`${home}/auth.json`, "changed");
   assert.notEqual(reviewRouteFingerprint(settings, env), original);
+});
+
+test("image qualification fingerprint includes executable bytes and the configured route", () => {
+  const home = tempHome(), bin = `${home}/reviewer`;
+  writeFileSync(bin, "first");
+  const settings = { harness: { codex: { bin } } }, env = { HOME: home };
+  const first = imageReviewRouteFingerprint(settings, env, "text-route");
+  writeFileSync(bin, "other");
+  assert.notEqual(imageReviewRouteFingerprint(settings, env, "text-route"), first);
+  assert.notEqual(imageReviewRouteFingerprint(settings, env, "other-route"), first);
 });
 
 test("review qualification survives OAuth token refresh but not account, subject, provider or API-key changes", () => {
@@ -134,6 +147,44 @@ test("complete evidence includes deletion context, immutable brief, checks and r
   w.gh.prView=async()=>w.pr; const bounded=await captureReviewEvidence(w);
   assert.throws(()=>partitionReviewEvidence(bounded,{...w.entry.reviewPolicy.limits,maxInputBytes:1024}),/identity exceeds|cannot fit/);
   w.readPrd=()=>null; await assert.rejects(captureReviewEvidence(w),/snapshot is unreadable/);
+});
+
+test("shared capture rejects binary, submodule and oversized evidence from adapters and recovered sources", async () => {
+  const variants = [
+    s => { s.diff += "\nBinary files a/image.png and b/image.png differ\n"; },
+    s => { s.context[0].patch += "\nGIT binary patch\n"; },
+    s => { s.diff += "\nnew file mode 160000\n"; },
+    s => { s.context[0].after = "image\0bytes"; },
+    s => { s.context[0].after = "x".repeat(17 * 1024 * 1024); },
+  ];
+  for (const mutate of variants) {
+    const w = evidenceWorld(), malformed = structuredClone(source);
+    mutate(malformed);
+    w.gh.reviewEvidence = async () => malformed;
+    await assert.rejects(captureReviewEvidence(w), /binary|submodule|capture limit/);
+    await assert.rejects(captureReviewEvidence({ ...w, cachedSource: malformed }), /binary|submodule|capture limit/);
+  }
+});
+
+test("opt-in shared image capture rechecks revisions, hashes and binding but cannot reach text-only partitioning", async () => {
+  const w = evidenceWorld(), bytes = PNG.sync.write({ width: 1, height: 1, data: Buffer.from([20, 30, 40, 255]) });
+  const image = { ...inspectReviewImage(bytes, { path: "added.png", side: "after", revision: head }), content: bytes.toString("base64") };
+  const textPatch = `${source.context[0].patch}\n`, imagePatch = "diff --git a/added.png b/added.png\nnew file mode 100644\nBinary files /dev/null and b/added.png differ\n";
+  const mixed = { ...structuredClone(source), diff: textPatch + imagePatch, context: [
+    { ...source.context[0], patch: textPatch }, { path: "added.png", status: "added", kind: "image", patch: imagePatch, before: null, after: image },
+  ] };
+  w.gh.reviewEvidence = async (...args) => { assert.deepEqual(args.at(-1), { imageEvidence: true }); return structuredClone(mixed); };
+  const captured = await captureReviewEvidence({ ...w, imageEvidence: true });
+  assert.equal(captured.context[1].after.sha256, image.sha256);
+  assert.throws(() => partitionReviewEvidence(captured), /integrated qualified visual reviewer/);
+  await assert.rejects(captureReviewEvidence({ ...w, cachedSource: mixed }), /binary|unqualified/);
+  for (const patch of [{ sha256: "0".repeat(64) }, { revision: base }, { side: "before" }, { content: image.content.slice(0, -4) }]) {
+    const changed = structuredClone(mixed); Object.assign(changed.context[1].after, patch);
+    await assert.rejects(captureReviewEvidence({ ...w, imageEvidence: true, cachedSource: changed }), /hash|identity|revision|side|incomplete/);
+  }
+  await assert.rejects(captureReviewEvidence({ ...w, imageEvidence: true, cachedSource: { ...mixed, diff: `GIT binary patch\n${mixed.diff}` } }), /inventory/);
+  w.gh.prView = async () => ({ ...w.pr, headRefOid: "c".repeat(40) });
+  await assert.rejects(captureReviewEvidence({ ...w, imageEvidence: true, cachedSource: mixed }), /moved during/);
 });
 
 test("structured verdict requires all criteria, exact identities and verifiable findings; injections cannot add policy fields",async()=>{
@@ -1257,6 +1308,67 @@ test("qualification requires a native-issued fresh probe, not a config boolean; 
   assert.equal(dispute.status,"pending-human"); assert.equal(w.entry().state,"needs-human");
 });
 
+test("image qualification is a separate owned visual challenge and cannot reuse text qualification", async () => {
+  let current = null, outcome = null, submitted = 0, preparedInput;
+  const clock = makeClock();
+  const runner = { prepare: async input => {
+    preparedInput = input; mkdirSync(input.cwd, { recursive: true });
+    const { content, ...expected } = input.reviewImage, copy = copyReviewImage(input.cwd, Buffer.from(content, "base64"), expected);
+    return { receipt: { boundary: "codex-draft-sandbox-v1" }, spec: { args: ["--image", copy.file, "--", input.prompt], options: { cwd: input.cwd }, imageAttachment: { file: copy.file, expected } } };
+  },
+    submit: async input => { submitted++; current = { id: "image-run", name: input.name, running: true }; return current; },
+    current: () => current, lines: () => [], outcome: () => outcome, settle: () => current, sanitize: value => value };
+  const service = createReviewService({ home: tempHome(), config, executionFor: () => runner }, { fingerprint: () => fp, imageFingerprint: () => "e".repeat(64), clock });
+  assert.equal((await service.qualify("acme/widget", { capability: "image" })).qualified, false);
+  const running = await service.qualify("acme/widget", { capability: "image", run: true });
+  assert.equal(running.status, "running"); assert.equal(submitted, 1);
+  assert.notEqual(running.fingerprint, fp);
+  assert.equal(preparedInput.reviewImage.path, "qualification.png");
+  const decoded = PNG.sync.read(Buffer.from(preparedInput.reviewImage.content, "base64"));
+  let answer = "";
+  for (let tile = 0; tile < 16; tile++) answer += decoded.data[(32 * decoded.width + tile * 64 + 32) * 4] ? "R" : "B";
+  assert.ok(!preparedInput.prompt.includes(answer));
+  clock.advance(1);
+  current = { ...current, running: false, exit: 0, endedAt: clock.now() };
+  outcome = { ok: true, denials: [], lastMessage: JSON.stringify({ tiles: answer }), cost: null };
+  const qualified = await service.qualify("acme/widget", { capability: "image", run: true });
+  assert.equal(qualified.qualified, true); assert.equal(qualified.run, "image-run");
+  assert.equal((await service.qualify("acme/widget")).qualified, false);
+  assert.equal((await service.qualify("acme/widget", { capability: "image" })).qualified, true);
+  assert.equal(submitted, 1);
+});
+
+test("image qualification refuses an unattached challenge without launching or retrying", async () => {
+  let preparations = 0, submissions = 0;
+  const runner = { prepare: async () => { preparations++; return { receipt: { boundary: "codex-draft-sandbox-v1" }, spec: {} }; },
+    submit: async () => { submissions++; }, current: () => null, lines: () => [] };
+  const service = createReviewService({ home: tempHome(), config, executionFor: () => runner }, { fingerprint: () => fp, imageFingerprint: () => "e".repeat(64) });
+  const result = await service.qualify("acme/widget", { capability: "image", run: true });
+  assert.equal(result.qualified, false); assert.equal(result.status, "incomplete");
+  assert.match(result.reason, /attachment was not prepared/);
+  await service.qualify("acme/widget", { capability: "image", run: true });
+  assert.equal(preparations, 1); assert.equal(submissions, 0);
+});
+
+test("image qualification rejects a text-only response and retains the owned failed run", async () => {
+  let current = null, submitted = 0;
+  const clock = makeClock();
+  const runner = { prepare: async input => {
+    mkdirSync(input.cwd, { recursive: true });
+    const { content, ...expected } = input.reviewImage, copy = copyReviewImage(input.cwd, Buffer.from(content, "base64"), expected);
+    return { receipt: { boundary: "codex-draft-sandbox-v1" }, spec: { args: ["--image", copy.file, "--", input.prompt], options: { cwd: input.cwd }, imageAttachment: { file: copy.file, expected } } };
+  }, submit: async input => { submitted++; current = { id: "image-run", name: input.name, running: true }; return current; },
+  current: () => current, lines: () => [], settle: () => current, outcome: () => ({ ok: true, denials: [], lastMessage: '{"tiles":"cannot see image"}', cost: null }), sanitize: value => value };
+  const service = createReviewService({ home: tempHome(), config, executionFor: () => runner }, { fingerprint: () => fp, imageFingerprint: () => "e".repeat(64), clock });
+  await service.qualify("acme/widget", { capability: "image", run: true });
+  clock.advance(1); current = { ...current, running: false, exit: 0, endedAt: clock.now() };
+  const result = await service.qualify("acme/widget", { capability: "image", run: true });
+  assert.equal(result.qualified, false); assert.equal(result.status, "failed");
+  assert.match(result.reason, /response differs/);
+  await service.qualify("acme/widget", { capability: "image", run: true });
+  assert.equal(submitted, 1);
+});
+
 test("native preflight refusal is recorded before a run exists and unchanged qualification never retries it",async()=>{
   let preparations=0,submissions=0;
   const runner={prepare:async()=>{preparations++;throw Object.assign(new Error("effective native boundary unavailable"),{code:"TASK_PREPARATION_BOUNDARY"});},
@@ -1272,6 +1384,44 @@ test("GitHub normalization refuses capped comparisons and omitted binary patches
     const gh=makeGh({exec:async(_cmd,args)=>({stdout:args.includes("-H")?"diff --git a/bin b/bin":JSON.stringify({merge_base_commit:{sha:base},files})})});
     await assert.rejects(gh.reviewEvidence("acme/widget",1,head,base,REVIEW_DEFAULTS.max_input_bytes),/limit|omitted/);
   }
+});
+
+test("opt-in GitHub image capture verifies commit trees, regular blobs and every changed side", async () => {
+  const image = PNG.sync.write({ width: 1, height: 1, data: Buffer.from([10, 20, 30, 255]) });
+  const oid = createHash("sha1").update(`blob ${image.length}\0`).update(image).digest("hex");
+  const baseTree = "c".repeat(40), headTree = "d".repeat(40);
+  const files = [{ filename: "added.png", status: "added" }, { filename: "modified.png", status: "modified" },
+    { filename: "removed.png", status: "removed" }, { filename: "new.png", previous_filename: "old.png", status: "renamed" }];
+  const diff = ["diff --git a/added.png b/added.png\nnew file mode 100644\nBinary files /dev/null and b/added.png differ\n",
+    "diff --git a/modified.png b/modified.png\nBinary files a/modified.png and b/modified.png differ\n",
+    "diff --git a/removed.png b/removed.png\ndeleted file mode 100644\nBinary files a/removed.png and /dev/null differ\n",
+    "diff --git a/old.png b/new.png\nsimilarity index 100%\nrename from old.png\nrename to new.png\n"].join("");
+  let mode = "100644", contents = image, comparisonDiff = diff;
+  const gh = makeGh({ exec: async (_cmd, args) => {
+    const target = args[1];
+    if (args.includes("-H")) return { stdout: comparisonDiff };
+    if (target.includes("/compare/")) return { stdout: JSON.stringify({ merge_base_commit: { sha: base }, files }) };
+    if (target.includes("/git/commits/")) { const ref = target.split("/").at(-1); return { stdout: JSON.stringify({ sha: ref, tree: { sha: ref === base ? baseTree : headTree } }) }; }
+    if (target.includes("/git/trees/")) {
+      const tree = target.split("/").at(-1), names = tree === baseTree ? ["modified.png", "removed.png", "old.png"] : ["added.png", "modified.png", "new.png"];
+      return { stdout: JSON.stringify({ sha: tree, truncated: false, tree: names.map(path => ({ path, type: "blob", mode, sha: oid, size: image.length })) }) };
+    }
+    return { stdout: JSON.stringify({ type: "file", encoding: "base64", content: contents.toString("base64"), sha: oid, size: image.length }) };
+  } });
+  await assert.rejects(gh.reviewEvidence("acme/widget", 1, head, base, 100_000), /binary/);
+  const evidence = await gh.reviewEvidence("acme/widget", 1, head, base, 100_000, { imageEvidence: true });
+  assert.deepEqual(evidence.context.map(row => [row.status, row.before?.revision ?? null, row.after?.revision ?? null]), [
+    ["added", null, head], ["modified", base, head], ["removed", base, null], ["renamed", base, head],
+  ]);
+  assert.equal(evidence.context[3].before.path, "old.png");
+  mode = "120000";
+  await assert.rejects(gh.reviewEvidence("acme/widget", 1, head, base, 100_000, { imageEvidence: true }), /regular blob/);
+  mode = "100644"; contents = Buffer.alloc(image.length);
+  await assert.rejects(gh.reviewEvidence("acme/widget", 1, head, base, 100_000, { imageEvidence: true }), /blob hash/);
+  contents = Buffer.alloc(image.length + 3);
+  await assert.rejects(gh.reviewEvidence("acme/widget", 1, head, base, 100_000, { imageEvidence: true }), /contents are incomplete/);
+  contents = image; comparisonDiff = diff.replace("new file mode 100644", "new file mode 160000");
+  await assert.rejects(gh.reviewEvidence("acme/widget", 1, head, base, 100_000, { imageEvidence: true }), /submodule/);
 });
 
 test("GitHub review evidence accepts delimited spaced paths and complete header-only changes", async () => {

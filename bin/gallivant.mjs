@@ -87,7 +87,7 @@ const HELP = `gallivant: give an agent a task, let the review loop run, go outsi
   gallivant recheck <handle>           queue a PR recheck without resetting its budget
   gallivant review retry <handle> --reason <text>
                                          retry confirmed incomplete or coordinator-cancelled review; retain pieces and limits
-  gallivant review qualify --repo <owner/repo> [--run]
+  gallivant review qualify --repo <owner/repo> [--capability text|image] [--run]
                                          inspect qualification; --run explicitly launches one bounded live probe
   gallivant review status <handle>     show pinned policy, owned verdict and unresolved review evidence
   gallivant review policy <handle> --mode external-required|first-party-required|both-required --reason "..."
@@ -117,7 +117,7 @@ const OPTIONS = {
   mode: { type: "string" }, status: { type: "string" }, from: { type: "string" }, reason: { type: "string" },
   "host-config": { type: "string" },
   "key-path": { type: "string" }, "ssh-keygen": { type: "string" }, "learning-budget": { type: "string" },
-  finding: { type: "string" },
+  finding: { type: "string" }, capability: { type: "string" },
 };
 
 async function dispatch(argv) {
@@ -196,7 +196,7 @@ async function dispatch(argv) {
   }
   switch (cmd) {
     case "review": {
-      const result = await reviewCommand(ctx, { action: arg, handle: positionals[2], repo: values.repo, mode: values.mode, reason: values.reason, finding: values.finding, run: values.run });
+      const result = await reviewCommand(ctx, { action: arg, handle: positionals[2], repo: values.repo, mode: values.mode, reason: values.reason, finding: values.finding, run: values.run, capability: values.capability });
       console.log(JSON.stringify(result, null, 2));
       return result.qualified === false ? 1 : 0;
     }
