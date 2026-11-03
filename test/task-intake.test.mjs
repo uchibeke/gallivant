@@ -4414,7 +4414,7 @@ test("Gemini Vertex preparation carries only ADC into its private profile and pr
 
 test("unsafe native profile roots stop before launch intent and are not retried", async () => {
   const w = world();
-  mkdirSync(join(w.home, ".codex")); symlinkSync(w.home, join(w.home, ".codex/plugins"));
+  mkdirSync(join(w.home, ".codex")); symlinkSync(w.home, join(w.home, ".codex/rules"));
   const runner = fakeRunner({ now: Date.now }); w.ctx.runnerFor = () => runner;
   const service = offlineRunnerService(w.ctx), r = await service.prepare({ text: REQUEST });
   assert.equal(r.status, "blocked"); assert.match(r.failures[0], /selected provider entry is a symbolic link/);
