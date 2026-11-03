@@ -25,7 +25,12 @@ findings. The image job `run-957aad23-9eb0-4c66-b3ba-4555e0bdd4e3` received the
 captured after-side identity for `review-fixture.png`, with SHA-256
 `0d177f076d3ba1a136fb66f8fc88d1e99ab8467517854ef958c9cfbc0747f410`, and
 ended `REVIEW_INCOMPLETE`: its visual output had missing criteria or unresolved
-scope. No whole-PR clearance was recorded. Provider costs are unknown.
+scope. The recorded image output examined `ac-1` and identified `ac-2` as
+requiring companion Markdown outside its image-only scope. Local regression
+coverage now retains that concern and defers the unexamined criterion to the
+whole-PR reviewer without repeating the owned image execution. The corrected
+protocol has not yet been reconciled against this live record; no whole-PR
+clearance was recorded. Provider costs are unknown.
 
 The owned ledger records are
 `~/.gallivant/reviews/3126d2628380b6179574f4b78f68ebfdc5816cae4c962a6ffb287ce722e66d26.json`
