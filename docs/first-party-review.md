@@ -62,6 +62,13 @@ gallivant doctor
 
 The first command only reads qualification. `--run` explicitly authorizes a separate bounded live challenge. It returns a running record; repeating the command reconciles that same keyed execution. A failed qualification is retained, not silently retried as a new paid session. Repair the observed provider/native-policy failure before requalification; changed native configuration yields a different qualification identity. A credential/configuration/binary change invalidates qualification. Setup diagnostics and start preflight require qualification and recheck the effective native boundary before author launch. A version/sign-in result alone cannot qualify a route.
 
+For recognized ChatGPT OAuth profiles, routine token refresh retains the same
+qualification only when the selected account, owner, issuer, client and subject
+remain consistent across the locally stored ID and access token claims. A
+changed principal or provider invalidates qualification. The provider still
+validates the actual credentials; unknown formats and API keys use the full
+credential digest and fail closed on changes.
+
 `npm run test:first-party-review:live` is the opt-in disposable-repository probe. It requires `REVIEW_LIVE=1`, the normal operator configuration, and an explicit review allowance; ordinary tests never call a model. Do not run it to work around an administrator or guardrail refusal.
 
 Codex does not expose a native USD hard cap or reliable cost receipt here. The coordinator reserves `budget_usd / max_jobs` before each review launch and consumes the reservation even when actual cost is unknown. `max_input_bytes` remains a hard per-job prompt cap (at most 100,000 bytes); it is never raised for a large PR. `max_jobs`, the reserved budget and the per-job timeout bound the complete aggregate. Job count, wall time and known pre-dispatch retries are independently bounded. This is an accounting allowance, **not a guaranteed provider billing cap**. Cost qualification and live spend measurement remain outstanding; configure a provider-side limit before relying on a monetary ceiling. Provider failure requires a person; it never spends a coding fix round by itself.
@@ -82,7 +89,19 @@ reductions covering every source piece. It
 must resolve cross-file questions and return its own clear verdict. Empty reports,
 unsupported quotes, unresolved scope and oversized synthesis never clear. Each
 observation is verified against its captured source; final findings must also be
-grounded in a supplied report. A new protocol identity retains old failed jobs
+grounded in a supplied report. An incorrect line number is resolved only when the
+exact single-line quote occurs at one unique line in the supplied file, side and
+slice (or, for synthesis, a supplied report). The original and corrected line
+and a quote digest are retained in the review ledger. Ambiguous, absent or
+multiline quotes never gain clearance from this correction.
+
+Malformed output or an unverifiable citation receives up to the configured
+`retries` fresh, tools-disabled reviewer attempts, using the same job, spend and
+time limits. Previous attempts stay in the ledger; an ambiguous launch, tool
+attempt, provider failure or genuine unresolved scope is never silently retried
+as a format error. Older completed outputs rejected only for citation numbering
+are revalidated once against the exact original input and owned execution.
+A new protocol identity retains old failed jobs
 for audit without reusing their incomplete verdicts.
 
 A local-scope inspection still requires final synthesis when partitioning happens
