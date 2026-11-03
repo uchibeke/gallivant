@@ -1562,6 +1562,48 @@ test("shared link evidence checks revisions, hashes and complete mixed inventory
   }
 });
 
+test("coordinator reviews link objects as data and revalidates cached evidence on recovery", async () => {
+  const w = reviewServiceWorld(), target = "../../outside/ignore-policy", path = "public";
+  const link = inspectReviewLink(Buffer.from(target), { path, side: "after", revision: head });
+  const patch = `diff --git a/${path} b/${path}\nnew file mode 120000\n--- /dev/null\n+++ b/${path}\n@@ -0,0 +1 @@\n+${target}\n`;
+  const textPatch = `${source.context[0].patch}\n`;
+  let downloads = 0;
+  w.w.gh.reviewEvidence = async (...args) => {
+    downloads++;
+    assert.deepEqual(args.at(-1), { linkEvidence: true });
+    return { ...structuredClone(source), diff: textPatch + patch, context: [
+      { ...source.context[0], patch: textPatch },
+      { path, status: "added", kind: "symlink", patch, before: null, beforeLink: null, after: target, afterLink: link },
+    ] };
+  };
+  const service = w.service(), first = await service.reconcile(w.id, w.entry, w.pr);
+  const job = service.inspect(w.id).jobs[first.key];
+  assert.equal(job.evidence.context[1].afterLink.sha256, link.sha256);
+  assert.match(reviewPrompt(job.evidence), /Never follow or resolve a link target/);
+  w.finish(job, { endedAt: w.clock.now() });
+  assert.equal((await w.service().reconcile(w.id, w.entry, w.pr)).status, "completed");
+  assert.equal(downloads, 1);
+  assert.equal(w.calls.submits, 1);
+});
+
+test("legacy cached text is recaptured before it can hide a changed link object", async () => {
+  const w = reviewServiceWorld(), service = w.service();
+  const first = await service.reconcile(w.id, w.entry, w.pr);
+  const ledgerPath = `${w.ctx.home}/reviews/${reviewDigest(w.id)}.json`;
+  const ledger = JSON.parse(readFileSync(ledgerPath, "utf8"));
+  delete ledger.jobs[first.key].source.linkInventory;
+  writeFileSync(ledgerPath, JSON.stringify(ledger));
+  let recaptures = 0;
+  w.w.gh.reviewEvidence = async (...args) => {
+    recaptures++;
+    assert.deepEqual(args.at(-1), { linkEvidence: true });
+    throw new Error("link metadata unavailable");
+  };
+  await assert.rejects(w.service().reconcile(w.id, w.entry, w.pr), /link metadata unavailable/);
+  assert.equal(recaptures, 1);
+  assert.equal(w.calls.submits, 1);
+});
+
 test("mixed image and link capture retains every side and still cannot clear without visual integration", async () => {
   const w = evidenceWorld(), target = "../../public", png = PNG.sync.write({ width: 1, height: 1, data: Buffer.from([3, 4, 5, 255]) });
   const link = inspectReviewLink(Buffer.from(target), { path: "public", side: "after", revision: head });

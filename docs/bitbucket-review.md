@@ -111,10 +111,10 @@ IDs, and merge base. It paginates `diffstat/<head>..<base>?topic=true`, compares
 that changed-path inventory to the complete raw comparison, and reads regular
 UTF-8 source at the merge base and head through `src/{commit}/{path}`. Added,
 modified, removed and renamed files all carry before/after text as applicable.
-Binary, subrepository, symlink, missing-patch, duplicate, truncated, stale,
-rate-limited, redirected and oversized evidence is refused. An opt-in development
-interface can capture bounded symlink target data without following the link;
-the coordinator does not yet enable it, so changed links still block review.
+Binary, subrepository, missing-patch, duplicate, truncated, stale,
+rate-limited, redirected and oversized evidence is refused. The coordinator
+captures bounded symlink target data as untrusted Git objects without following
+the link. Unsupported targets or ambiguous type transitions block review.
 The PR binding is read again after capture. The API token stays behind the host boundary and is not
 part of the reviewer prompt or environment.
 
@@ -306,7 +306,7 @@ No command merges the PR, force-pushes, deploys or alters protections.
 - `review-incomplete` / `REVIEW_INCOMPLETE`: inspect the named missing identity,
   path, patch or required job count. For a large complete text change, raise
   `max_jobs` and `budget_usd` only within an operator-approved bound, then select
-  the new policy explicitly. Binary, subrepository, symlink, rate-limited,
+  the new policy explicitly. Unsupported binary, subrepository, malformed link, rate-limited,
   redirected or stale evidence must be corrected; increasing a byte cap is not a
   workaround.
 - Screenshot or other image evidence: the current independent reviewer is
