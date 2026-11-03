@@ -6,6 +6,8 @@ pending, failed or timed-out check still fences dispatch. An explicit
 `execution.progressMs` setting controls this interval and remains authoritative.
 Provider readiness refreshes on its own timer while a long coordinator cycle
 is still processing. A pending or failed refresh continues to block dispatch.
+Messages and resume requests remain queued while a readiness check is pending;
+an actual failed check still reports failure for the operator to repair.
 
 `ENOTFOUND` means a hostname lookup failed. `EAI_AGAIN` indicates a temporary
 resolver failure. Neither proves that a provider is down, credentials expired,

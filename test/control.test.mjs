@@ -250,6 +250,24 @@ test("a message waits for a live run, then uses the existing resume with the sam
   assert.equal(w.state.get(w.id).iteration, before.iteration);
 });
 
+test("messages retain their exact request while provider readiness is pending, including a preparation race", async () => {
+  for(const phase of ["already-pending","becomes-pending"]) {
+    const w=world();let calls=0,ready=false;
+    w.ctx.providerHealth={get:()=>ready?{ok:true}:phase==="becomes-pending"&&calls++===0?{ok:true}:{ok:false,pending:true,detail:"provider/account check pending"}};
+    const request=requestControl(w.ctx,{handle:w.id,action:"message",note:"Correct the resend issue."});
+    await applyControl(w.ctx,w.id);
+    const waiting=w.state.get(w.id).control;assert.equal(waiting.id,request.id);assert.equal(waiting.status,"queued");assert.match(waiting.message,/readiness/);assert.equal(w.runner.started.length,0);
+    ready=true;await applyControl(w.ctx,w.id);assert.equal(w.state.get(w.id).control.status,"applied");assert.equal(w.runner.started.length,1);
+    assert.match(w.runner.started[0].args.at(-1),/Correct the resend issue/);
+  }
+});
+
+test("a failed provider health check still fails the message without automatic replay", async () => {
+  const w=world();w.ctx.providerHealth={get:()=>({ok:false,pending:false,detail:"authentication unavailable"})};
+  requestControl(w.ctx,{handle:w.id,action:"message",note:"One correction."});await applyControl(w.ctx,w.id);
+  assert.equal(w.state.get(w.id).control.status,"failed");assert.equal(w.runner.started.length,0);
+});
+
 test("message delivery preserves dirty work; later fixed actions retain the message", async () => {
   const w = world();
   w.ctx.git.dirty = async () => ({ modified: 2, untracked: 0 });
