@@ -1097,7 +1097,7 @@ test("32 image sides and text reduce across levels within observation limits and
     images: [image], observations: [{ criterionId: "ac-1", description: "Observed the screenshot.", evidence: image }], findings: [], priorUnresolvedScope: [] }));
   reports.push({ inputDigest: reviewDigest("text"), coverage: { first: 33, last: 33, total: 33, digest: reviewDigest("text-coverage") },
     observations: [{ criterionId: "ac-1", description: "Inspected source.", evidence: { path: "a.js", side: "after", line: 1, quote: "return true;" } }], findings: [], priorUnresolvedScope: [] });
-  let final, levels = 0;
+  let final, levels = 0, mixedGroups = 0;
   for (let level = 0; level < 8; level++) {
     let plan;
     try { plan = planReviewSynthesis(evidence, reports, 12_000, level); }
@@ -1110,7 +1110,9 @@ test("32 image sides and text reduce across levels within observation limits and
       assert.ok(node.reports.filter(report => report.images?.length).length <= 8);
       assert.ok(Buffer.byteLength(reviewPrompt(node)) <= 12_000);
       const observations = node.reports.filter(report => report.images?.length).map(report => ({ ...report.observations.find(item => item.evidence.sha256), description: "x" }));
-      if (!observations.length) observations.push(node.reports[0].observations[0]);
+      const sourceObservation = node.reports.flatMap(report => report.observations || []).find(item => item.evidence.quote);
+      if (sourceObservation) observations.push(sourceObservation);
+      if (sourceObservation && node.reports.some(report => report.images?.length)) mixedGroups++;
       assert.ok(Buffer.byteLength(JSON.stringify(observations)) <= 2000);
       const prompt = reviewPrompt(node);
       for (const report of node.reports.filter(report => report.images?.length)) {
@@ -1124,13 +1126,16 @@ test("32 image sides and text reduce across levels within observation limits and
         assert.throws(() => reducedReviewReport(node, { ...job, result: { ...result, observations: observations.slice(1) } }), /omitted an image report/);
         const forged = { ...observations[0], evidence: { ...observations[0].evidence, sha256: "0".repeat(64) } };
         assert.throws(() => validateReviewResult(JSON.stringify({ ...clear(node), observations: [forged] }), node), /not grounded/);
+        if (sourceObservation) assert.throws(() => reducedReviewReport(node, { ...job, result: { ...result, observations: observations.filter(item => !item.evidence.quote) } }), /omitted a source observation/);
       }
       return reducedReviewReport(node, job);
     });
   }
   assert.ok(levels >= 2, "the regression exercises more than one reduction level");
+  assert.ok(mixedGroups > 0, "the regression reserves capacity for text alongside image observations");
   assert.ok(final); assert.ok(Buffer.byteLength(reviewPrompt(final)) <= 12_000);
   assert.deepEqual(final.reports.flatMap(report => report.images || []), images);
+  assert.ok(final.reports.some(report => report.observations?.some(item => item.evidence.quote === "return true;")));
   assert.deepEqual([final.coverage.first, final.coverage.last, final.coverage.total], [1, 33, 33]);
   assert.equal(validateReviewResult(JSON.stringify(clear(final)), final).verdict, "clear");
 });
