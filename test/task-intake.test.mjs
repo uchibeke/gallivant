@@ -3640,7 +3640,7 @@ test("settled preparation replay refuses old over-budget output without another 
 test("preparation environments admit only selected provider settings and isolate native profiles for every adapter", () => {
   const root = tempHome(), operator = join(root, "operator-home");
   const profiles = {
-    codex: [".codex/auth.json", ".codex/config.toml", ".codex/hooks.json", ".codex/skills/example/SKILL.md"],
+    codex: [".codex/auth.json", ".codex/config.toml", ".codex/hooks.json"],
     claude: [".claude/.credentials.json", ".claude/settings.json", ".claude.json"],
     gemini: [".gemini/oauth_creds.json", ".gemini/settings.json"],
     opencode: [".config/opencode/opencode.json", ".local/share/opencode/auth.json", ".local/state/opencode/model.json"],
@@ -3705,6 +3705,14 @@ test("preparation snapshots provider directories across adapters without native 
     mkdirSync(dirname(target), { recursive: true }); symlinkSync(native, target);
     const source = { HOME: operator, ...mode };
     const env = preparationEnvironment(harness, cwd, {}, source);
+    if (harness === "codex") {
+      assert.equal(existsSync(target), false, "disabled resources and stale aliases are removed");
+      assert.equal(readFileSync(join(native, "resource"), "utf8"), "fixture-native-resource");
+      assert.throws(() => readFileSync(`${target}/${"../".repeat(path.split("/").length)}.ssh/id_ed25519`), { code: "ENOENT" });
+      preparationEnvironment(harness, cwd, {}, source);
+      assert.equal(existsSync(target), false);
+      continue;
+    }
     assert.ok(lstatSync(target).isDirectory()); assert.equal(lstatSync(target).isSymbolicLink(), false);
     assert.equal(realpathSync(target), realpathSync(join(env.HOME, path)));
     assert.throws(() => readFileSync(`${target}/${"../".repeat(path.split("/").length)}.ssh/id_ed25519`), { code: "ENOENT" });
@@ -3748,7 +3756,7 @@ test("preparation materializes internal directory and executable links into deta
 
 test("top-level allowlisted provider symlinks refuse unrelated credentials before launch across adapters", async () => {
   const cases=[
-    ["codex",".codex/auth.json",false,{}], ["codex",".codex/plugins",true,{}],
+    ["codex",".codex/auth.json",false,{}], ["codex",".codex/rules",true,{}],
     ["claude",".claude/.credentials.json",false,{}], ["claude",".claude/plugins",true,{}], ["claude",".claude.json",false,{}],
     ["gemini",".gemini/oauth_creds.json",false,{}], ["gemini",".gemini/extensions",true,{}],
     ["opencode",".local/share/opencode/auth.json",false,{}], ["opencode",".config/opencode/node_modules",true,{}],
@@ -3756,7 +3764,7 @@ test("top-level allowlisted provider symlinks refuse unrelated credentials befor
     ["claude",".aws",true,{CLAUDE_CODE_USE_BEDROCK:"1"}], ["goose",".aws",true,{GOOSE_PROVIDER:"bedrock"}],
     ["claude",".config/gcloud/application_default_credentials.json",false,{CLAUDE_CODE_USE_VERTEX:"1"}],
     ["gemini",".config/gcloud/application_default_credentials.json",false,{GOOGLE_GENAI_USE_VERTEXAI:"true"}],
-    ["codex",".codex/skills",true,{},"broken"], ["codex",".codex/config.toml",false,{},"internal"],
+    ["codex",".codex/rules",true,{},"broken"], ["codex",".codex/config.toml",false,{},"internal"],
   ];
   for(const [harness,path,directory,mode,kind] of cases){
     const w=world(),native=join(w.home,".ssh/id_ed25519");mkdirSync(dirname(native));writeFileSync(native,"fixture-private-key");
@@ -3805,7 +3813,7 @@ test("explicit provider file aliases refuse before initial or repair launch with
 
 test("escaping, cyclic, broken and special provider resources stop before launch and clean partial snapshots", async () => {
   for (const kind of ["file-escape", "directory-escape", "cycle", "broken", "special"]) {
-    const w = world(), resources = join(w.home, ".codex/plugins");
+    const w = world(), resources = join(w.home, ".codex/rules");
     mkdirSync(resources, { recursive: true }); mkdirSync(join(w.home, ".ssh"));
     writeFileSync(join(w.home, ".ssh/id_ed25519"), "fixture-private-key");
     writeFileSync(join(resources, "a-safe"), "safe-resource");
@@ -3822,7 +3830,7 @@ test("escaping, cyclic, broken and special provider resources stop before launch
     assert.equal(result.preparation.repairs, 0); assert.equal(result.preparation.attempts.length, 0);
     assert.equal(runner.started.length, 0); assert.deepEqual(w.ctx.state.entries(), []);
     const privateProfile = join(w.home, "tasks", result.taskId, "preparation/turn-1/home/.codex");
-    assert.equal(existsSync(join(privateProfile, "plugins")), false);
+    assert.equal(existsSync(join(privateProfile, "rules")), false);
     assert.equal(readdirSync(privateProfile).some(name => name.startsWith(".profile-copy-")), false);
     await service.resume({ taskId: result.taskId, expectedRevision: result.revision });
     assert.equal(runner.started.length, 0, "blocked resources are not retried on resume");
