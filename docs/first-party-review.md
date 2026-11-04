@@ -185,7 +185,9 @@ under the Gallivant home. The registry retains compact references and dispatch
 dispositions; `gallivant review status <handle>` verifies and displays the full
 history. Existing inline history migrates on the next registry write. Back up and
 restore the registry and the review directory together. Missing or changed archive
-files are reported as errors rather than treated as review clearance.
+files are reported as errors rather than treated as review clearance. Migration
+upgrades the registry format: older releases refuse it rather than changing
+references they do not understand. Stop older coordinators before upgrading.
 
 Transient Bitbucket read timeouts, rate limits and server errors during evidence
 capture are retried through the bounded coordinator retry path. Authentication,

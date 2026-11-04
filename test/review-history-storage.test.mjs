@@ -14,13 +14,16 @@ test("legacy reviews migrate under registry write, preserving distinct versions 
   const home = tempHome(), pending = record("pending"), intent = record("dispatch-intent"), done = record("dispatched");
   seed(home, [pending, intent, pending, pending, done, done]);
   const before = statSync(join(home, "state.json")).size, state = makeState(home);
+  assert.equal(state.load().version, 1, "legacy registry remains readable before migration");
   const committed = state.update("acme/repo/task", { marker: 1 });
   assert.ok(committed.reviewHistory.every(r => !r.evidence && r._gallivantReviewArchive));
   assert.ok(statSync(join(home, "state.json")).size < before / 20);
   const saved = state.get("acme/repo/task");
+  assert.equal(JSON.parse(readFileSync(join(home, "state.json"))).version, 2, "old readers must reject compact references");
   assert.deepEqual(saved.reviewHistory.map(r => r.disposition.status), ["pending", "dispatch-intent", "pending", "dispatched"]);
   assert.ok(saved.reviewHistory.every(r => !r.evidence && r._gallivantReviewArchive));
   assert.deepEqual(makeState(home).reviewHistory("acme/repo/task"), [pending, intent, pending, done]);
+  assert.throws(() => { const oldReaderVersion = JSON.parse(readFileSync(join(home, "state.json"))).version; if (oldReaderVersion !== 1) throw new Error("unsupported registry version"); }, /unsupported registry version/);
   assert.equal(statSync(join(home, "reviews", "history")).mode & 0o777, 0o700);
   for (const name of readdirSync(join(home, "reviews", "history"))) assert.equal(statSync(join(home, "reviews", "history", name)).mode & 0o777, 0o600);
 });
