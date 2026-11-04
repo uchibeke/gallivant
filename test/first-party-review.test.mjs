@@ -739,10 +739,11 @@ function reviewServiceWorld() {
     } };
 }
 
-test("confirmed reviewer capacity failure retries with persisted backoff and the same evidence", async () => {
+test("confirmed reviewer capacity and routing failures retry with persisted backoff and the same evidence", async () => {
+  for (const error of ["Selected model is at capacity. Please try a different model.", "workspace routing discovery failed"]) {
   const w=reviewServiceWorld();let service=w.service(), record=await service.reconcile(w.id,w.entry,w.pr);
   const original=service.inspect(w.id).jobs[record.key];
-  w.finish(original,{ok:false,raw:null,error:"Selected model is at capacity. Please try a different model.",endedAt:w.clock.now()});
+  w.finish(original,{ok:false,raw:null,error,endedAt:w.clock.now()});
   record=await service.reconcile(w.id,w.entry,w.pr);
   assert.equal(record.status,"running");assert.ok(record.retryAt>w.clock.now());assert.equal(w.calls.submits,1);
   const before=service.inspect(w.id);assert.equal(before.jobs[original.key].status,"failed");assert.equal(before.retryHistory.at(-1).automatic,true);
@@ -751,6 +752,7 @@ test("confirmed reviewer capacity failure retries with persisted backoff and the
   const retry=service.inspect(w.id).jobs[record.key];assert.equal(retry.capacityRetries,1);assert.equal(retry.evidence.digest,original.evidence.digest);
   w.finish(retry,{endedAt:w.clock.now(),raw:JSON.stringify(clear(retry.evidence))});
   record=await service.reconcile(w.id,w.entry,w.pr);assert.equal(record.status,"completed");
+  }
 });
 
 test("a previously stopped capacity failure can recover the exact owned job after upgrade", async () => {
@@ -763,7 +765,7 @@ test("a previously stopped capacity failure can recover the exact owned job afte
 });
 
 test("reviewer provider failures other than confirmed capacity do not automatically retry", async () => {
-  for(const error of ["Authentication failed", "Rate limit 429", "Selected model is at capacity. Please try a different model. Unexpected detail"]) {
+  for(const error of ["Authentication failed", "Rate limit 429", "workspace routing discovery failed: unexpected detail", "Selected model is at capacity. Please try a different model. Unexpected detail"]) {
     const w=reviewServiceWorld(),service=w.service(), first=await service.reconcile(w.id,w.entry,w.pr), job=service.inspect(w.id).jobs[first.key];
     w.finish(job,{ok:false,raw:null,error,endedAt:w.clock.now()});const result=await service.reconcile(w.id,w.entry,w.pr);
     assert.equal(result.status,"failed");assert.equal(w.calls.submits,1);assert.equal(service.inspect(w.id).retryHistory,undefined);
@@ -1910,7 +1912,7 @@ test("mixed coordinator review requires qualified image jobs and whole-PR synthe
   job = service().inspect(w.id).jobs[record.pieces[1].key];
   const location = { path: image.path, side: image.side, revision: image.revision, sha256: image.sha256 };
   const visual = { version: 1, verdict: "clear", examinedCriteria: ["ac-1"], findings: [],
-    observations: [{ criterionId: "ac-1", description: "The screenshot shows a confirmation dialog for resending a saved invitation.", evidence: location }],
+    observations: [{ criterionId: "ac-1", description: "The screenshot shows a confirmation dialog. ".repeat(6), evidence: location }],
     unresolvedScope: ["ac-2 requires review of the companion Markdown, which was outside the requested image-only scope."], inputDigest: job.evidence.digest, reviewedHead: head };
   w.finish(job, { endedAt: w.clock.now(), raw: JSON.stringify(visual) });
   // Revalidate the owned output rejected by protocol 5 without another image launch.
@@ -1922,6 +1924,18 @@ test("mixed coordinator review requires qualified image jobs and whole-PR synthe
   assert.equal(record.phase, "whole-pr-review");
   assert.equal(service().inspect(w.id).jobs[record.pieces[1].key].run, ownedImageRun);
   assert.equal(service().inspect(w.id).jobs[record.pieces[1].key].validationHistory.at(-1).protocol, 5);
+  // Recover a 254-character visual observation rejected by protocol 9, with
+  // the same owned image and without launching another reviewer.
+  assert.ok(visual.observations[0].description.length > 240);
+  const saved = JSON.parse(readFileSync(ledgerPath, "utf8"));
+  Object.assign(saved.jobs[record.pieces[1].key], { status: "incomplete", errorCode: "REVIEW_INCOMPLETE", error: "visual observation schema is invalid", validationProtocol: 9 });
+  delete saved.jobs[record.pieces[1].key].result;
+  writeFileSync(ledgerPath, JSON.stringify(saved));
+  const submitted = w.calls.submits;
+  record = await service().reconcile(w.id, w.entry, w.pr);
+  assert.equal(service().inspect(w.id).jobs[record.pieces[1].key].run, ownedImageRun);
+  assert.equal(service().inspect(w.id).jobs[record.pieces[1].key].validationHistory.at(-1).protocol, 9);
+  assert.equal(w.calls.submits, submitted);
   const originalFinalKey = record.key;
   job = service().inspect(w.id).jobs[record.key];
   const visualReport = job.evidence.reports.find(report => report.images);

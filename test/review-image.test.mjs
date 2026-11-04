@@ -113,6 +113,10 @@ test("visual scope preserves the recorded image-only result and defers companion
     unresolvedScope: ["ac-2 requires review of the companion Markdown, which was outside the requested image-only scope."], inputDigest: piece.digest, reviewedHead: head };
   const result = validateVisualReviewResult(JSON.stringify(recorded), piece);
   assert.deepEqual(result, recorded);
+  const longer = { ...recorded, observations: [{ ...recorded.observations[0], description: "Observed the supplied image. ".repeat(9) }] };
+  assert.ok(longer.observations[0].description.length > 240);
+  assert.deepEqual(validateVisualReviewResult(JSON.stringify(longer), piece), longer);
+  assert.throws(() => validateVisualReviewResult(JSON.stringify({ ...longer, observations: [{ ...longer.observations[0], description: "x".repeat(513) }] }), piece), /observation schema/);
   assert.deepEqual(deferredVisualCriteria(result, piece), ["ac-2"]);
   assert.match(visualReviewPrompt(piece), /Missing other pieces alone is expected/);
   assert.throws(() => validateVisualReviewResult(JSON.stringify({ ...recorded, observations: [{ ...recorded.observations[0], criterionId: "ac-2" }] }), piece), /observation schema/);
