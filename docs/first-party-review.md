@@ -53,9 +53,9 @@ Use the exact executable in `harness.codex.bin`. Only its restricted preparation
 
 ```sh
 gallivant review qualify --repo owner/repo
-gallivant review qualify --repo owner/repo --run
+gallivant review qualify --repo owner/repo --run --wait
 gallivant review qualify --repo bitbucket.org/workspace/repository
-gallivant review qualify --repo bitbucket.org/workspace/repository --run
+gallivant review qualify --repo bitbucket.org/workspace/repository --run --wait
 gallivant review status <task-handle>
 gallivant doctor
 ```
@@ -212,3 +212,23 @@ including label publication and notification. If a decision is already in flight
 the command refuses without changing the policy; retry after that operation
 finishes. A failed label removal leaves a durable obligation for later ticks to
 retry, even while the task is stopped. Clearance stays revoked during that wait.
+
+### Waiting for qualification and explicitly retrying a stopped probe
+
+Use `gallivant review qualify --repo OWNER/REPO --run --wait` to keep the CLI
+alive until its bounded challenge settles. This retains the process exit
+callback; a short-lived launcher can otherwise lose the precise exit time and
+later reject an on-time response as a late observed completion. Normal daemon
+review continues to use its existing lifecycle.
+
+After inspecting a failed qualification, use
+`gallivant review qualify --repo OWNER/REPO --run --wait --retry --reason "explanation"`
+to authorize a fresh bounded attempt. Only a recorded timeout/provider failure
+with matching ownership, confirmed process cessation and no recorded tool
+attempt or policy denial qualifies for this operation. A legacy dispatch-ID
+conflict rejected before launch can also recover after confirming its archived
+process has stopped. Each retry uses a distinct execution identity and preserves earlier attempts and costs,
+reserves another configured qualification allowance, and requires a new native
+challenge to pass. It never turns failed output into clearance. Unknown or
+active processes, missing completion records and boundary failures remain
+blocked. The default without `--wait` still returns the running record promptly.

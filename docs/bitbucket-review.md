@@ -132,7 +132,7 @@ separate paid challenge:
 
 ```sh
 gallivant review qualify --repo bitbucket.org/workspace/repository
-gallivant review qualify --repo bitbucket.org/workspace/repository --run
+gallivant review qualify --repo bitbucket.org/workspace/repository --run --wait
 gallivant review qualify --repo bitbucket.org/workspace/repository
 ```
 
