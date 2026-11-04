@@ -1123,10 +1123,16 @@ test("32 image sides and text reduce across levels within observation limits and
       const result = validateReviewResult(JSON.stringify({ ...clear(node), observations }), node);
       const job = { status: "completed", binding: evidence.binding, evidence: node, result };
       if (node.reports.some(report => report.images?.length)) {
+        assert.throws(() => validateReviewResult(JSON.stringify({ ...clear(node), observations: observations.filter(item => item !== observations.find(value => value.evidence.sha256)) }), node), /omitted an image report/);
         assert.throws(() => reducedReviewReport(node, { ...job, result: { ...result, observations: observations.slice(1) } }), /omitted an image report/);
         const forged = { ...observations[0], evidence: { ...observations[0].evidence, sha256: "0".repeat(64) } };
         assert.throws(() => validateReviewResult(JSON.stringify({ ...clear(node), observations: [forged] }), node), /not grounded/);
-        if (sourceObservation) assert.throws(() => reducedReviewReport(node, { ...job, result: { ...result, observations: observations.filter(item => !item.evidence.quote) } }), /omitted a source observation/);
+        if (sourceObservation) {
+          assert.throws(() => validateReviewResult(JSON.stringify({ ...clear(node), observations: observations.filter(item => !item.evidence.quote) }), node), /omitted a source observation/);
+          assert.throws(() => reducedReviewReport(node, { ...job, result: { ...result, observations: observations.filter(item => !item.evidence.quote) } }), /omitted a source observation/);
+        }
+        const visual = observations.find(item => item.evidence.sha256);
+        assert.equal(validateReviewResult(JSON.stringify({ ...clear(node), verdict: "findings", observations: [], findings: [{ id: "clip", severity: "medium", description: "Image is clipped.", evidence: visual.evidence }] }), node).verdict, "findings");
       }
       return reducedReviewReport(node, job);
     });
@@ -1729,6 +1735,92 @@ test("mixed image and link capture retains every side and default text partition
   const captured = await captureReviewEvidence({ ...w, imageEvidence: true, linkEvidence: true });
   assert.deepEqual(captured.context.map(row => row.path), ["a.js", "public", "shot.png"]);
   assert.throws(() => partitionReviewEvidence(captured), /integrated qualified visual reviewer/);
+});
+
+test("incomplete image reductions remain retryable, including previously completed records", async () => {
+  for (const scenario of ["missing image", "missing source", "legacy completed", "legacy valid"]) {
+    const w = reviewServiceWorld(), imageFp = "e".repeat(64), originalRunner = w.ctx.executionFor;
+    w.entry.reviewPolicy = { ...w.entry.reviewPolicy, limits: { ...w.entry.reviewPolicy.limits, retries: 0, maxInputBytes: 12_000 } };
+    w.ctx.executionFor = (...args) => {
+      const runner = originalRunner(...args), prepare = runner.prepare;
+      runner.prepare = async (input, options) => {
+        if (!input.reviewImage) return prepare(input, options);
+        mkdirSync(input.cwd, { recursive: true });
+        const { content, ...expected } = input.reviewImage, copy = copyReviewImage(input.cwd, Buffer.from(content, "base64"), expected);
+        return { receipt: { boundary: "codex-draft-sandbox-v1" }, spec: { args: ["--image", copy.file, "--", input.prompt], options: { cwd: input.cwd }, imageAttachment: { file: copy.file, expected } } };
+      };
+      return runner;
+    };
+    const service = () => createReviewService(w.ctx, { fingerprint: () => fp, imageFingerprint: () => imageFp, clock: w.clock });
+    const png = PNG.sync.write({ width: 1, height: 1, data: Buffer.from([3, 4, 5, 255]) });
+    const imageFiles = Array.from({ length: 16 }, (_, index) => {
+      const path = `shot-${index}.png`, image = { ...inspectReviewImage(png, { path, side: "after", revision: head }), content: png.toString("base64") };
+      const patch = `diff --git a/${path} b/${path}\nnew file mode 100644\nBinary files /dev/null and b/${path} differ\n`;
+      return { path, status: "added", kind: "image", patch, before: null, after: image };
+    });
+    const textPatch = `${source.context[0].patch}\n`;
+    w.w.gh.reviewEvidence = async () => ({ ...source, diff: textPatch + imageFiles.map(file => file.patch).join(""), context: [{ ...source.context[0], patch: textPatch }, ...imageFiles] });
+    await service().qualify(w.entry.repo, { capability: "image", run: true });
+    const challenge = service().inspect(`qualification-image/${w.entry.repo}/${imageFp}`).jobs.qualification;
+    const decoded = PNG.sync.read(Buffer.from(challenge.reviewImage.content, "base64"));
+    let answer = "";
+    for (let tile = 0; tile < 16; tile++) answer += decoded.data[(32 * decoded.width + tile * 64 + 32) * 4] ? "R" : "B";
+    w.finish(challenge, { endedAt: w.clock.now(), raw: JSON.stringify({ tiles: answer }) });
+    assert.equal((await service().qualify(w.entry.repo, { capability: "image", run: true })).qualified, true);
+    let record = await service().reconcile(w.id, w.entry, w.pr);
+    while (record.phase !== "summary-review") {
+      assert.equal(record.status, "running", scenario);
+      const active = record.pieces.find(piece => piece.status === "running");
+      const job = service().inspect(w.id).jobs[active.key];
+      let result;
+      if (job.evidence.version === 2) result = scopedClear(job.evidence);
+      else {
+        const image = job.evidence.image, location = { path: image.path, side: image.side, revision: image.revision, sha256: image.sha256 };
+        result = { version: 1, verdict: "clear", examinedCriteria: job.evidence.criteria.map(c => c.id), findings: [], observations: [{ criterionId: "ac-1", description: "Observed screenshot.", evidence: location }], unresolvedScope: [], inputDigest: job.evidence.digest, reviewedHead: head };
+      }
+      w.finish(job, { endedAt: w.clock.now(), raw: JSON.stringify(result) });
+      record = await service().reconcile(w.id, w.entry, w.pr);
+    }
+    const job = service().inspect(w.id).jobs[record.key], sourceObservation = job.evidence.reports.flatMap(report => report.observations || []).find(item => item.evidence.quote);
+    const imageObservations = job.evidence.reports.filter(report => report.images?.length).map(report => report.observations.find(item => item.evidence.sha256));
+    assert.ok(sourceObservation && imageObservations.length, "first reduction contains both source and images");
+    const valid = { ...clear(job.evidence), observations: [sourceObservation, ...imageObservations] };
+    const invalid = scenario === "legacy valid" ? valid : { ...valid, observations: scenario === "missing source" ? imageObservations : [sourceObservation, ...imageObservations.slice(1)] };
+    const submits = w.calls.submits;
+    w.finish(job, { endedAt: w.clock.now(), raw: JSON.stringify(invalid) });
+    if (scenario.startsWith("legacy ")) {
+      const ledgerPath = `${w.ctx.home}/reviews/${reviewDigest(w.id)}.json`, ledger = JSON.parse(readFileSync(ledgerPath, "utf8"));
+      Object.assign(ledger.jobs[job.key], { status: "completed", result: invalid, validationProtocol: 7 });
+      if (scenario === "legacy valid") ledger.jobs[job.key].citationCorrections = [{ path: "a.js", side: "after", reportedLine: 2, line: 1, quoteDigest: reviewDigest("return true;") }];
+      writeFileSync(ledgerPath, JSON.stringify(ledger));
+      if (scenario === "legacy valid") {
+        const executionKey = `review/${reviewDigest({ root: `${w.ctx.home}/reviews`, id: w.id })}/${job.key}`;
+        originalRunner(executionKey).outcome = () => null; // Private provider output expired after settlement.
+      }
+    }
+    record = await service().reconcile(w.id, w.entry, w.pr);
+    if (scenario === "legacy valid") {
+      const recovered = service().inspect(w.id).jobs[job.key];
+      assert.equal(recovered.status, "completed"); assert.equal(recovered.run, job.run);
+      assert.equal(recovered.validationProtocol, 8); assert.equal(recovered.validationHistory.at(-1).protocol, 7);
+      assert.equal(recovered.citationCorrections[0].reportedLine, 2);
+      assert.equal(w.calls.submits, submits + 1, "valid prior work is reused and only the next group launches");
+      continue;
+    }
+    assert.equal(record.status, "incomplete", scenario);
+    assert.match(record.error, scenario === "missing source" ? /omitted a source observation/ : /omitted an image report/);
+    assert.equal(service().inspect(w.id).jobs[job.key].repairableReviewOutput, true);
+    if (scenario === "legacy completed") assert.deepEqual(service().inspect(w.id).jobs[job.key].result, invalid);
+    assert.equal(w.calls.submits, submits, "no review is relaunched during validation");
+    await service().retry(w.id, { ...w.entry, firstPartyReview: record }, "retry incomplete reduction");
+    record = await service().reconcile(w.id, w.entry, w.pr);
+    assert.equal(record.status, "running"); assert.notEqual(record.key, job.key);
+    const retry = service().inspect(w.id).jobs[record.key];
+    w.finish(retry, { endedAt: w.clock.now(), raw: JSON.stringify({ ...valid, inputDigest: retry.evidence.digest }) });
+    await service().reconcile(w.id, w.entry, w.pr);
+    assert.equal(service().inspect(w.id).jobs[retry.key].status, "completed");
+    assert.equal(w.calls.submits, submits + 2, "only the authorized retry and next synthesis group launch");
+  }
 });
 
 test("mixed coordinator review requires qualified image jobs and whole-PR synthesis", async () => {
