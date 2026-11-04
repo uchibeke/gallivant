@@ -78,7 +78,7 @@ Codex does not expose a native USD hard cap or reliable cost receipt here. The c
 
 ## Evidence, fixes and migration
 
-The GitHub and Bitbucket adapters capture exact head/base/merge-base IDs, a complete diff, full before/after content for added, modified, removed and renamed files, the immutable PRD and every criterion, checks and the full completion receipt. Bitbucket additionally binds the repository UUID and PR number, consumes every diffstat page, compares that inventory to the raw commit comparison, reads source metadata/content at the merge base and head, and rechecks the PR after capture. Oversized evidence, unsupported binaries or submodule content, omitted patches, duplicate or truncated pages, unreadable snapshots, rate limits and concurrent PR changes produce incomplete review. API credentials stay in the host adapter; reviewer jobs receive neither host nor Git credentials, and redirects outside the bound API repository are refused.
+The GitHub and Bitbucket adapters capture exact head/base/merge-base IDs, a complete diff, full before/after content for added, modified, removed and renamed files, the immutable PRD and every criterion, checks and the full completion receipt. Bitbucket additionally binds the repository UUID and PR number, consumes every diffstat page, compares that inventory to the raw commit comparison, reads source metadata/content at the merge base and head, and rechecks the PR after capture. Oversized evidence, unsupported binaries or submodule content, omitted patches, duplicate or truncated pages, unreadable snapshots and concurrent PR changes produce incomplete review. API credentials stay in the host adapter; reviewer jobs receive neither host nor Git credentials, and redirects outside the bound API repository are refused.
 
 The coordinator requests PNG and JPEG evidence and plans one restricted visual job per changed side alongside text slices. Captures are limited to 32 image sides, 5 MiB per side and 16 MiB total, with dimensions at most 8192 by 8192 and 16 million pixels. Corrupt, unsupported, oversized or incomplete images fail closed. Text qualification alone does not qualify image attachment, model vision or isolation. Each visual job receives a coordinator-created copy, and its exact image identity is checked again at execution; image text and metadata are untrusted data. A [disposable live screenshot review](audit/bitbucket-review-qualification.md#live-image-qualification-and-disposable-review-2026-11-03) reached a clear whole-PR verdict after recovering its owned outputs; the resend PR remains unverified. Preserve screenshots and an incomplete status when qualification or evidence is missing.
 
@@ -179,6 +179,18 @@ that lane immediately instead of waiting for the old polling deadline.
 Findings use the existing fix dispatch and round counter. Their disposition is recorded. A subsequent push needs fresh evidence. Repeated findings on the same input, required-reviewer disagreement and exhausted fix rounds stop for a person. `review dispute <handle> --finding <id> --reason "..."` records a pending dispute and removes readiness; it has no self-accept operation. A person must resolve the defect or deliberately change policy and re-evaluate it.
 
 Findings remain `pending` during confirmed provider-health waits or a busy local runner. `dispatch-intent` is saved immediately before launch and becomes `dispatched` with the accepted run ID. A confirmed unsent refusal returns the findings to pending but still requires the existing explicit resume; an ambiguous launch retains its intent and requires a person before any retry. Waiting alone consumes no fix round.
+
+Historical review records are stored in the private `reviews/history/` directory
+under the Gallivant home. The registry retains compact references and dispatch
+dispositions; `gallivant review status <handle>` verifies and displays the full
+history. Existing inline history migrates on the next registry write. Back up and
+restore the registry and the review directory together. Missing or changed archive
+files are reported as errors rather than treated as review clearance.
+
+Transient Bitbucket read timeouts, rate limits and server errors during evidence
+capture are retried through the bounded coordinator retry path. Authentication,
+identity, incomplete evidence and uncertain write failures remain blocking; each
+attempt still captures and verifies the current PR before review or readiness.
 
 Changing head, base, checks, receipt or policy invalidates readiness. Configured external findings and trusted human feedback still enter the shared fix path, including feedback arriving after internal clearance on the same head. The external reviewer must answer again when its previously reviewed input changes. The completion gate remains independent of model opinion.
 
