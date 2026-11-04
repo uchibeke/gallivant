@@ -78,18 +78,26 @@ Codex does not expose a native USD hard cap or reliable cost receipt here. The c
 
 ## Evidence, fixes and migration
 
-The GitHub and Bitbucket adapters capture exact head/base/merge-base IDs, a complete diff, full before/after content for added, modified, removed and renamed files, the immutable PRD and every criterion, checks and the full completion receipt. Bitbucket additionally binds the repository UUID and PR number, consumes every diffstat page, compares that inventory to the raw commit comparison, reads source metadata/content at the merge base and head, and rechecks the PR after capture. Oversized evidence, binary/submodule/symlink content, omitted patches, duplicate or truncated pages, unreadable snapshots, rate limits and concurrent PR changes produce incomplete review. API credentials stay in the host adapter; reviewer jobs receive neither host nor Git credentials, and redirects outside the bound API repository are refused.
+The GitHub and Bitbucket adapters capture exact head/base/merge-base IDs, a complete diff, full before/after content for added, modified, removed and renamed files, the immutable PRD and every criterion, checks and the full completion receipt. Bitbucket additionally binds the repository UUID and PR number, consumes every diffstat page, compares that inventory to the raw commit comparison, reads source metadata/content at the merge base and head, and rechecks the PR after capture. Oversized evidence, unsupported binaries or submodule content, omitted patches, duplicate or truncated pages, unreadable snapshots, rate limits and concurrent PR changes produce incomplete review. API credentials stay in the host adapter; reviewer jobs receive neither host nor Git credentials, and redirects outside the bound API repository are refused.
 
-PNG and JPEG changes are currently binary evidence and cannot be reviewed by this route. The host adapters have an opt-in capture interface for development, but the coordinator does not use it for review. It limits captures to 32 image sides, 5 MiB per side and 16 MiB total, with dimensions at most 8192 by 8192 and 16 million pixels. Text qualification alone does not qualify image attachment, model vision or isolation. Keep screenshots in the PR and retain the incomplete result until image capture and a restricted reviewer are integrated and qualified; do not treat a fixture or a model's assertion as a live review.
+The coordinator requests PNG and JPEG evidence and plans one restricted visual job per changed side alongside text slices. Captures are limited to 32 image sides, 5 MiB per side and 16 MiB total, with dimensions at most 8192 by 8192 and 16 million pixels. Corrupt, unsupported, oversized or incomplete images fail closed. Text qualification alone does not qualify image attachment, model vision or isolation. Each visual job receives a coordinator-created copy, and its exact image identity is checked again at execution; image text and metadata are untrusted data. A [disposable live screenshot review](audit/bitbucket-review-qualification.md#live-image-qualification-and-disposable-review-2026-11-03) reached a clear whole-PR verdict after recovering its owned outputs; the resend PR remains unverified. Preserve screenshots and an incomplete status when qualification or evidence is missing.
 
-The host adapters also expose opt-in link-object capture for development. It records bounded target bytes as untrusted data at each revision; it does not resolve the target. The normal coordinator does not yet enable this path, so changed symlinks still block review.
+The coordinator requests link-object capture from both host adapters. Bounded UTF-8 target bytes are reviewed as untrusted Git object data at each revision; targets are never resolved or followed. Unsupported targets, ambiguous type transitions, incomplete inventories or mismatched hashes and revisions fail closed. Host and reviewer qualification still applies.
 
 Image qualification is recorded independently for the configured executable bytes,
 model and reviewer configuration. `review qualify --repo OWNER/REPO --capability image`
 reads its status; adding `--run` explicitly starts one bounded image challenge and
 consumes the review allowance. The challenge verifies a coordinator-created copy
-at the execution boundary. It is not an end-to-end PR review and does not enable
-image clearance while capture, coverage and whole-PR synthesis are unintegrated.
+at the execution boundary. It is not an end-to-end PR review or host qualification.
+All image sides, text slices and the whole-PR synthesis must complete under the
+same bounded allowance; missing or mismatched results cannot clear the review.
+An image inspection judges its own image, while a text-only requirement may be
+deferred to synthesis. The coordinator records criteria omitted by an image job
+and carries its unresolved concerns through reductions. The final reviewer must
+evaluate those concerns and all criteria against the combined evidence; an
+unresolved need for visual evidence still blocks clearance. A previously owned
+image output rejected solely for local scope can be revalidated against its
+original input and qualification without launching the image job again.
 
 When the full serialized evidence does not fit one job, the shared service creates immutable byte-bounded source and patch slices. Every piece repeats the same task, repository, PR, head, base, merge base, brief, criteria, checks, receipt, policy and aggregate digest. Long single lines and large lockfiles are sliced with absolute line/column offsets rather than omitted. Every changed path and every criterion must appear in the aggregate, every piece must return a valid matching identity, and all pieces must finish before clearance. A finding in any piece, a timeout, malformed output, missing piece, conflicting finding identity, exhausted job/budget bound or unresolved scope blocks readiness. If the configured aggregate cannot hold the evidence, the result says `review-incomplete`/`REVIEW_INCOMPLETE` with the required and configured job counts; it does not review a prefix.
 
@@ -151,7 +159,7 @@ explicitly funded settings: up to 12 calls, 100,000 input and 16,000 output
 tokens per call, $10 and a five-minute request timeout. Those higher ceilings
 do not enlarge a saved task's approved allowance.
 
-The model receives this material as untrusted JSON. Its output must cover all criteria, identify the route/head/input digest, leave no unresolved scope, and report either `clear` or actionable findings with severity and a quote at an actual captured file/line. Invalid, partial, timed-out, failed or tool-attempting output cannot clear. The coordinator owns the ledger under `reviews/` and the separate execution namespace under `runs/review__...`. Public comments and agent-authored approval text are never an alternative source of internal clearance.
+The model receives this material as untrusted JSON. The final output must cover all criteria, identify the route/head/input digest, leave no unresolved scope, and report either `clear` or actionable findings grounded in captured source or an exact image identity. Local concerns are carried to that final review. Invalid, partial, timed-out, failed or tool-attempting output cannot clear. The coordinator owns the ledger under `reviews/` and the separate execution namespace under `runs/review__...`. Public comments and agent-authored approval text are never an alternative source of internal clearance.
 
 Polling reuses captured source only when the repository, head and base still match, and rechecks the live PR binding before using it. Changed head, base, checks, receipt, policy or brief invalidates the whole aggregate, not only one piece. Piece keys make restart and repeated host pages idempotent; an old-head or partial aggregate cannot clear. A delayed poll accepts a valid result whose recorded execution completion time met the deadline; missing completion times, late results and executions still running past the deadline cannot clear.
 
