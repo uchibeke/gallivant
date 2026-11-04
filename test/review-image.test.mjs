@@ -6,8 +6,9 @@ import { join } from "node:path";
 import { PNG } from "pngjs";
 import jpeg from "jpeg-js";
 import { copyReviewImage, inspectReviewImage, inspectReviewImageSet, REVIEW_IMAGE_LIMITS, verifyReviewImage, verifyReviewImageCopy } from "../lib/review_image.mjs";
-import { planVisualReview, validateVisualReviewResult, visualReviewPrompt } from "../lib/review_visual.mjs";
+import { deferredVisualCriteria, planVisualReview, validateVisualReviewResult, visualReviewPrompt } from "../lib/review_visual.mjs";
 import { reviewDigest } from "../lib/review_policy.mjs";
+import { reducedReviewReport } from "../lib/review_evidence.mjs";
 
 const head = "a".repeat(40), base = "b".repeat(40);
 const png = () => PNG.sync.write({ width: 2, height: 1, data: Buffer.from([255, 0, 0, 255, 0, 0, 255, 255]) });
@@ -87,7 +88,8 @@ test("visual plans cover each exact image side and validate findings without sou
       findings: [{ id: "visual", severity: "medium", description: "The button is clipped.", evidence: location }],
       observations: [{ criterionId: "ac-1", description: "The button is visible.", evidence: location }], unresolvedScope: [], inputDigest: piece.digest, reviewedHead: head };
     assert.deepEqual(validateVisualReviewResult(JSON.stringify(result), piece), result);
-    for (const bad of [{ ...result, examinedCriteria: [] }, { ...result, inputDigest: "wrong" }, { ...result, unresolvedScope: ["missing image"] },
+    assert.deepEqual(validateVisualReviewResult(JSON.stringify({ ...result, unresolvedScope: ["missing image"] }), piece).unresolvedScope, ["missing image"]);
+    for (const bad of [{ ...result, examinedCriteria: [] }, { ...result, examinedCriteria: ["ac-1", "ac-1"] }, { ...result, examinedCriteria: ["unknown"] }, { ...result, inputDigest: "wrong" }, { ...result, unresolvedScope: [""] }, { ...result, unresolvedScope: ["x".repeat(2001)] },
       { ...result, findings: [{ ...result.findings[0], evidence: { ...location, line: 1, quote: "invented" } }] },
       { ...result, findings: [{ ...result.findings[0], evidence: { ...location, sha256: "0".repeat(64) } }] }]) {
       assert.throws(() => validateVisualReviewResult(JSON.stringify(bad), piece), { code: "REVIEW_INCOMPLETE" });
@@ -97,4 +99,36 @@ test("visual plans cover each exact image side and validate findings without sou
   assert.throws(() => planVisualReview({ ...tampered, digest: reviewDigest(tampered) }), /identity differs/);
   assert.throws(() => planVisualReview(evidence, { maxJobs: 1, maxInputBytes: 20_000 }), /job limit/);
   assert.throws(() => planVisualReview({ ...evidence, head: base }), /aggregate digest/);
+});
+
+test("visual scope preserves the recorded image-only result and defers companion Markdown", () => {
+  const bytes = png(), image = { ...inspectReviewImage(bytes, identity("after")), content: bytes.toString("base64") };
+  const original = { taskId: "task", repository: "acme/widget", pr: 1, head, base, mergeBase: base, binding: "binding",
+    brief: "Inspect the screenshot and companion Markdown", criteria: [{ id: "ac-1", text: "Inspect screenshot" }, { id: "ac-2", text: "Inspect Markdown" }],
+    policy: { route: { name: "codex" }, limits: { maxJobs: 3, maxInputBytes: 20_000 } }, context: [{ kind: "image", path: image.path, status: "added", before: null, after: image }] };
+  const [piece] = planVisualReview({ ...original, digest: reviewDigest(original) });
+  const location = { path: image.path, side: image.side, revision: image.revision, sha256: image.sha256 };
+  const recorded = { version: 1, verdict: "clear", examinedCriteria: ["ac-1"], findings: [],
+    observations: [{ criterionId: "ac-1", description: "The screenshot shows a confirmation dialog for resending a saved invitation.", evidence: location }],
+    unresolvedScope: ["ac-2 requires review of the companion Markdown, which was outside the requested image-only scope."], inputDigest: piece.digest, reviewedHead: head };
+  const result = validateVisualReviewResult(JSON.stringify(recorded), piece);
+  assert.deepEqual(result, recorded);
+  const longer = { ...recorded, observations: [{ ...recorded.observations[0], description: "Observed the supplied image. ".repeat(9) }] };
+  assert.ok(longer.observations[0].description.length > 240);
+  assert.deepEqual(validateVisualReviewResult(JSON.stringify(longer), piece), longer);
+  assert.throws(() => validateVisualReviewResult(JSON.stringify({ ...longer, observations: [{ ...longer.observations[0], description: "x".repeat(513) }] }), piece), /observation schema/);
+  assert.deepEqual(deferredVisualCriteria(result, piece), ["ac-2"]);
+  assert.match(visualReviewPrompt(piece), /Missing other pieces alone is expected/);
+  assert.throws(() => validateVisualReviewResult(JSON.stringify({ ...recorded, observations: [{ ...recorded.observations[0], criterionId: "ac-2" }] }), piece), /observation schema/);
+});
+
+test("report reduction retains each exact image identity or fails closed", () => {
+  const images = [identity("before"), identity("after")].map((value, index) => ({ ...value, sha256: String(index + 1).repeat(64) }));
+  const observations = images.map(image => ({ criterionId: "ac-1", description: "Observed the image.", evidence: image }));
+  const node = { version: 4, digest: "node", binding: "binding", coverage: { first: 1, last: 2, total: 2 }, reports: images.map((image, index) => ({ images: [image], observations: [observations[index]], deferredCriteria: index ? ["ac-2"] : [], priorUnresolvedScope: index ? ["Image is obscured."] : [] })) };
+  const job = { status: "completed", evidence: { digest: node.digest }, binding: node.binding, result: { observations, findings: [] } };
+  assert.deepEqual(reducedReviewReport(node, job).images, images);
+  assert.deepEqual(reducedReviewReport(node, job).deferredCriteria, ["ac-2"]);
+  assert.deepEqual(reducedReviewReport(node, job).priorUnresolvedScope, ["Image is obscured."]);
+  assert.throws(() => reducedReviewReport(node, { ...job, result: { ...job.result, observations: observations.slice(0, 1) } }), /omitted an image/);
 });

@@ -87,8 +87,8 @@ const HELP = `gallivant: give an agent a task, let the review loop run, go outsi
   gallivant recheck <handle>           queue a PR recheck without resetting its budget
   gallivant review retry <handle> --reason <text>
                                          retry confirmed incomplete or coordinator-cancelled review; retain pieces and limits
-  gallivant review qualify --repo <owner/repo> [--capability text|image] [--run]
-                                         inspect qualification; --run explicitly launches one bounded live probe
+  gallivant review qualify --repo <owner/repo> [--capability text|image] [--run [--wait] [--retry --reason <text>]]
+                                         inspect qualification; --run launches a bounded probe; --wait records its exit before returning
   gallivant review status <handle>     show pinned policy, owned verdict and unresolved review evidence
   gallivant review policy <handle> --mode external-required|first-party-required|both-required --reason "..."
                                          explicitly replace policy and re-evaluate the current head
@@ -108,7 +108,7 @@ const OPTIONS = {
   "no-server": { type: "boolean" }, "no-open": { type: "boolean" }, foreground: { type: "boolean" }, worktrees: { type: "string" },
   "no-daemon": { type: "boolean" }, note: { type: "string" }, resnapshot: { type: "boolean" }, "fresh-session": { type: "boolean" }, interrupt: { type: "boolean" },
   base: { type: "string" }, harness: { type: "string" }, session: { type: "string" }, worktree: { type: "string" }, dir: { type: "string" }, port: { type: "string" },
-  cancel: { type: "boolean" }, retry: { type: "boolean" },
+  cancel: { type: "boolean" }, retry: { type: "boolean" }, wait: { type: "boolean" },
   run: { type: "boolean" }, stdin: { type: "boolean" }, repo: { type: "string" }, revision: { type: "string" },
   "request-id": { type: "string" }, context: { type: "string", multiple: true },
   "completion-target": { type: "string" }, delivery: { type: "string" }, route: { type: "string" },
@@ -196,7 +196,7 @@ async function dispatch(argv) {
   }
   switch (cmd) {
     case "review": {
-      const result = await reviewCommand(ctx, { action: arg, handle: positionals[2], repo: values.repo, mode: values.mode, reason: values.reason, finding: values.finding, run: values.run, capability: values.capability });
+      const result = await reviewCommand(ctx, { action: arg, handle: positionals[2], repo: values.repo, mode: values.mode, reason: values.reason, finding: values.finding, run: values.run, capability: values.capability, retry: values.retry, wait: values.wait });
       console.log(JSON.stringify(result, null, 2));
       return result.qualified === false ? 1 : 0;
     }

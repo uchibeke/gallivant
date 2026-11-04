@@ -569,3 +569,38 @@ test("changed PR identity stops explicit resume, initial publication settlement 
     assert.ok(f.calls.every(c => c.method === "GET"));
   }
 });
+
+test("opt-in Bitbucket link capture treats bounded Git targets as data and fails closed on ambiguous types", async () => {
+  const f = cleanFixture();
+  const file = path => ({ type: "commit_file", path });
+  f.data.diffstat = [
+    { status: "added", old: null, new: file("public") },
+    { status: "removed", old: file("old-link"), new: null },
+    { status: "modified", old: file("modified"), new: file("modified") },
+    { status: "renamed", old: file("prior"), new: file("renamed") },
+  ];
+  f.data.comparisonDiff = [
+    "diff --git a/public b/public\nnew file mode 120000\n--- /dev/null\n+++ b/public\n@@ -0,0 +1 @@\n+../../public\n\\ No newline at end of file\n",
+    "diff --git a/old-link b/old-link\ndeleted file mode 120000\n--- a/old-link\n+++ /dev/null\n@@ -1 +0,0 @@\n-../outside\n\\ No newline at end of file\n",
+    "diff --git a/modified b/modified\n--- a/modified\n+++ b/modified\n@@ -1 +1 @@\n-../old\n+../new\n",
+    "diff --git a/prior b/renamed\nsimilarity index 100%\nrename from prior\nrename to renamed\n",
+  ].join("");
+  for (const [rev, path, value] of [[HEAD, "public", "../../public"], [BASE, "old-link", "../outside"], [BASE, "modified", "../old"], [HEAD, "modified", "../new"], [BASE, "prior", "../../shared"], [HEAD, "renamed", "../../shared"]]) {
+    f.data.sources[`${rev}:${path}`] = value;
+    f.data.sourceAttributes[`${rev}:${path}`] = ["link"];
+  }
+  await assert.rejects(f.api.reviewEvidence(PATH, 7, HEAD, BASE, 100_000), /symlink/);
+  const result = await f.api.reviewEvidence(PATH, 7, HEAD, BASE, 100_000, { linkEvidence: true });
+  assert.deepEqual(result.context.map(row => [row.kind, row.before, row.after]), [
+    ["symlink", null, "../../public"], ["symlink", "../outside", null], ["symlink", "../old", "../new"], ["symlink", "../../shared", "../../shared"],
+  ]);
+  assert.equal(result.context[0].afterLink.revision, HEAD);
+  assert.equal(result.context[1].beforeLink.revision, BASE);
+  assert.equal(result.context[3].beforeLink.path, "prior");
+  assert.ok(f.calls.filter(call => call.path.includes("/src/")).every(call => !call.path.includes("outside")));
+  f.data.sourceAttributes[`${HEAD}:public`] = [];
+  await assert.rejects(f.api.reviewEvidence(PATH, 7, HEAD, BASE, 100_000, { linkEvidence: true }), /metadata/);
+  f.data.sourceAttributes[`${HEAD}:public`] = ["link"];
+  f.data.sources[`${HEAD}:public`] = "x".repeat(4097);
+  await assert.rejects(f.api.reviewEvidence(PATH, 7, HEAD, BASE, 100_000, { linkEvidence: true }), /link target size/);
+});
