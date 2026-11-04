@@ -221,6 +221,11 @@ callback; a short-lived launcher can otherwise lose the precise exit time and
 later reject an on-time response as a late observed completion. Normal daemon
 review continues to use its existing lifecycle.
 
+Captured local reviews advance alongside provider and Git-host polling. They
+wait for their own task's decision lock, not unrelated provider reconciliation.
+This progress does not clear readiness: the coordinator still fetches the
+current PR head and evaluates the complete review and acceptance gates.
+
 After inspecting a failed qualification, use
 `gallivant review qualify --repo OWNER/REPO --run --wait --retry --reason "explanation"`
 to authorize a fresh bounded attempt. Only a recorded timeout/provider failure

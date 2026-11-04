@@ -1268,6 +1268,24 @@ test("local reviewer progress never clears readiness and wakes fresh host valida
   assert.notEqual(w.entry().state, "ready-for-human", "an old captured result cannot clear a changed live head");
 });
 
+test("local reviewer progress is not held behind unrelated provider reconciliation", async () => {
+  const old = { key: "captured-review", binding: "old-binding", status: "running" };
+  const w = tickWorld({ over: { firstPartyReview: old, review_next_at: Number.MAX_SAFE_INTEGER } });
+  w.ctx.executionFor = () => w.runner;
+  w.runner.reconcile = async () => {};
+  const paused = pauseCall(w.runner, "reconcile");
+  let progress = 0;
+  w.ctx.reviewService.progress = async () => { progress++; return old; };
+  w.gh.prView = async () => assert.fail("local review cannot fetch a new host snapshot");
+  const ticking = w.tick.tick();
+  try {
+    await paused.waiting;
+    await new Promise(resolve => setImmediate(resolve));
+    assert.equal(progress, 1, "a pending provider read must not delay captured review settlement");
+    assert.notEqual(w.entry().state, "ready-for-human");
+  } finally { paused.release(); await ticking; }
+});
+
 test("piece observations are bounded source evidence and final findings cannot invent unseen quotes", async () => {
   const e = await captureReviewEvidence(evidenceWorld());
   const piece = { ...e, version: 2, piece: { index: 1, total: 1, coveredPaths: ["a.js"] }, context: [{ path: "a.js", status: "modified", kind: "after", text: "return true;", startLine: 1, endLine: 1 }] };
