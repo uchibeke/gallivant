@@ -11,7 +11,7 @@ import { messages } from "../lib/notify.mjs";
 import { selectReviewPolicy, legacyReviewPolicy, policyConfig, reviewBinding, reviewVerdict, reviewDisclosure, reviewDigest, REVIEW_DEFAULTS, validateReviewSettings } from "../lib/review_policy.mjs";
 import { DEFAULTS } from "../lib/config.mjs";
 import { redact } from "../lib/execution_io.mjs";
-import { aggregateReviewResults, captureReviewEvidence, partitionReviewEvidence, planReviewSynthesis, reducedReviewReport, reviewReports, synthesisReviewEvidence, validateReviewResult, reviewPrompt } from "../lib/review_evidence.mjs";
+import { aggregateReviewResults, captureReviewEvidence, partitionReviewEvidence, planReviewSynthesis, reducedReviewReport, reviewReports, synthesisReviewEvidence, validateReviewResult, reviewPrompt, REVIEW_VALIDATION_VERSION } from "../lib/review_evidence.mjs";
 import { buildReviewRun, createReviewService, imageReviewRouteFingerprint, reviewRouteFingerprint } from "../lib/first_party_review.mjs";
 import { copyReviewImage, inspectReviewImage } from "../lib/review_image.mjs";
 import { makeTick } from "../lib/tick.mjs";
@@ -898,6 +898,22 @@ test("local unresolved scope is retained for whole-PR review and cannot itself c
   assert.throws(() => validateReviewResult(JSON.stringify({ ...clear(whole), unresolvedScope: ["Required payment authorization evidence is unavailable"] }), whole), error => error.code === "REVIEW_INCOMPLETE" && !error.repairableReviewOutput);
 });
 
+test("final unresolved scope retains bounded details without granting review clearance", async () => {
+  const captured = await captureReviewEvidence(evidenceWorld());
+  const whole = { ...captured, version: 3 };
+  const concerns = Array.from({ length: 7 }, (_, index) => `Concern ${index}: ${"unresolved evidence ".repeat(18)}`);
+  assert.ok(Buffer.byteLength(JSON.stringify(concerns)) > 2000);
+  assert.throws(() => validateReviewResult(JSON.stringify({ ...clear(whole), unresolvedScope: concerns }), whole), error => {
+    assert.equal(error.code, "REVIEW_INCOMPLETE");
+    assert.deepEqual(error.unresolvedScope, concerns);
+    return true;
+  });
+  const oversized = ["unresolved ".repeat(1000)];
+  assert.throws(() => validateReviewResult(JSON.stringify({ ...clear(whole), unresolvedScope: oversized }), whole), /safe retention bound/);
+  const local = { ...whole, version: 2, piece: { index: 1, total: 1 } };
+  assert.throws(() => validateReviewResult(JSON.stringify({ ...clear(local), unresolvedScope: concerns }), local), /safe retention bound/);
+});
+
 test("earlier local scope concerns remain visible through reduction and final review", async () => {
   const e=await captureReviewEvidence(evidenceWorld()), piece={...e,version:2,piece:{index:1,total:1},digest:"piece-digest"};
   const concern="The payment authorization evidence was not available in this slice.";
@@ -1030,6 +1046,34 @@ test("all local pieces clearing still requires a fresh whole-PR reviewer, includ
   w.finish(finalJob);
   record = await w.service().reconcile(w.id, w.entry, w.pr);
   assert.equal(record.status, "completed"); assert.equal(record.result.verdict, "clear");
+});
+
+test("older oversized final scope is recovered without another launch or clearance", async () => {
+  const w = reviewServiceWorld(), after = `${"a".repeat(110_000)}\n`;
+  const patch = `diff --git a/a.js b/a.js\nnew file mode 100644\n--- /dev/null\n+++ b/a.js\n@@ -0,0 +1 @@\n+${after}`;
+  w.ctx.gh.reviewEvidence = async () => ({ ...source, diff: patch, context: [{ path: "a.js", status: "added", patch, before: null, after }] });
+  let final;
+  for (let n = 0; n < 30; n++) {
+    const service = w.service();
+    await service.reconcile(w.id, w.entry, w.pr);
+    const job = Object.values(service.inspect(w.id).jobs).find(j => j.status === "running");
+    assert.ok(job);
+    if (job.evidence.version === 3) { final = job; break; }
+    const slice = job.evidence.context.find(s => s.kind === "after" || s.kind === "patch" && s.sourceLocations?.length);
+    const location = slice.kind === "patch" ? slice.sourceLocations[0] : null;
+    const observation = { criterionId: "ac-1", description: "Inspected the supplied source.", evidence: { path: slice.path, side: "after", line: location?.line ?? slice.startLine, quote: location ? slice.text.slice(location.startOffset, location.endOffset).slice(0, 80) : slice.text.split("\n")[0].slice(0, 80) } };
+    w.finish(job, { raw: JSON.stringify({ ...clear(job.evidence), observations: [observation] }) });
+  }
+  assert.ok(final);
+  const concerns = Array.from({ length: 7 }, (_, index) => `Concern ${index}: ${"unresolved evidence ".repeat(18)}`);
+  w.finish(final, { raw: JSON.stringify({ ...clear(final.evidence), unresolvedScope: concerns }) });
+  const file = `${w.ctx.home}/reviews/${reviewDigest(w.id)}.json`, ledger = JSON.parse(readFileSync(file, "utf8"));
+  Object.assign(ledger.jobs[final.key], { status: "incomplete", errorCode: "REVIEW_INCOMPLETE", error: "unresolved review scope exceeds its safe retention bound", validationProtocol: 8 });
+  writeFileSync(file, JSON.stringify(ledger));
+  const calls = w.calls.submits, recovered = await w.service().reconcile(w.id, w.entry, w.pr);
+  assert.equal(recovered.status, "incomplete");
+  assert.deepEqual(recovered.unresolvedScope, concerns);
+  assert.equal(w.calls.submits, calls);
 });
 
 test("a single local-scope partition never substitutes for a whole-PR verdict", async () => {
@@ -1802,7 +1846,7 @@ test("incomplete image reductions remain retryable, including previously complet
     if (scenario === "legacy valid") {
       const recovered = service().inspect(w.id).jobs[job.key];
       assert.equal(recovered.status, "completed"); assert.equal(recovered.run, job.run);
-      assert.equal(recovered.validationProtocol, 8); assert.equal(recovered.validationHistory.at(-1).protocol, 7);
+      assert.equal(recovered.validationProtocol, REVIEW_VALIDATION_VERSION); assert.equal(recovered.validationHistory.at(-1).protocol, 7);
       assert.equal(recovered.citationCorrections[0].reportedLine, 2);
       assert.equal(w.calls.submits, submits + 1, "valid prior work is reused and only the next group launches");
       continue;
