@@ -340,8 +340,10 @@ never treated as clean. A prohibited file schedules a normal corrective round wi
 
 Requested audit reports, screenshots and other evidence are still valid deliverables. The operator names exact
 paths in the approved brief's [`publish_files`](prd.md) list. The coordinator uses its saved snapshot, never a
-session-edited whitelist. Existing runs with explicitly requested files in reserved directories need those exact
-exceptions approved through the usual brief-repair flow before resuming under this policy.
+session-edited whitelist. Before upgrading or restarting the daemon for existing runs, review retained deliverables in reserved directories.
+The operator must name their exact paths in `publish_files` and accept the updated saved brief through the usual
+`resume --resnapshot` flow at a safe resume boundary. Do not edit a running session's snapshot or grandfather all
+existing files. Without those prior approved exceptions, the new guard will request cleanup instead of readiness.
 
 Use a temporary directory outside the repository for scratch files. Runner command/session logs remain in task
 storage; concise verification results belong in the PR receipt. Keep durable release/rollback instructions in the
