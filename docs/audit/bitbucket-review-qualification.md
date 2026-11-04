@@ -15,7 +15,7 @@ the current configuration has model `gpt-6.1-terra` and reasoning `xhigh`, and
 the current image fingerprint matches that record. This challenge is separate
 from review of a real PR and does not establish a clear review verdict.
 
-The recorded disposable private PR #4 used `first-party-required`, route
+The recorded [disposable private PR #4](https://bitbucket.org/webbabyshowers/gallivant-host-test/pull-requests/4) used `first-party-required`, route
 `codex`, no external reviewer, a 900,000 ms timeout, 2,048 maximum jobs,
 two retries, a $100 reserved allowance, a 100,000-byte prompt limit and no
 zero-checks waiver. Its exact head was `81b41234f8892e93dc0df08d977bc372e054847e`;
@@ -33,16 +33,23 @@ reconciliation recovered that image output and reached whole-PR synthesis,
 but its bounded attempts stopped incomplete because final output included
 observations rejected by the old schema. Recorded outputs
 `run-f50e47bb-6f10-43a5-ac09-0409ffff341e` and
-`run-6d3a449c-86ff-4584-a8f5-b02331d6f66f` now pass a read-only validation
-against their saved inputs. This is not a live reconciliation or whole-PR
-clearance. Provider costs are unknown.
+`run-6d3a449c-86ff-4584-a8f5-b02331d6f66f` passed read-only validation
+against their saved inputs. The operator subsequently reconciled the existing
+review: the ledger records the original text and image jobs as completed and
+the latter synthesis run as completed with a `clear` verdict, zero findings,
+no unresolved scope and both criteria examined. Its coverage includes both
+original pieces at the stated head, base and merge base. The prior owned
+image and synthesis executions were reused; no new inference was needed for
+that reconciliation. This is a genuine disposable PR review, not a review of
+the resend PR or proof of the outstanding host lifecycle matrix. Provider
+costs are unknown.
 
 The owned ledger records are
 `~/.gallivant/reviews/3126d2628380b6179574f4b78f68ebfdc5816cae4c962a6ffb287ce722e66d26.json`
 and `~/.gallivant/reviews/d88d224fc8f68fbc5acbbb50a160558a008a55b64461e54f895b4db6df0561fa.json`.
-Inspect the owned incomplete output and resolve the reported scope before any
-separately authorized retry. This observation does not establish that the
-resend PR #311 was reviewed or that either disposable host matrix is complete.
+Earlier incomplete attempts remain in the ledger for audit; the completed
+synthesis used the saved retry alias. This observation does not establish that
+the resend PR #311 was reviewed or that either disposable host matrix is complete.
 
 ## Live source review follow-up, 2026-11-02
 
