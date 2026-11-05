@@ -1833,12 +1833,35 @@ function resultFixture() {
   writeFileSync(join(worktree, "a.txt"), "before");
   const entry = { ...newEntry({ repo: "acme/widget", harness: "codex", session: "22222222-2222-4222-8222-222222222222", branch: "work/result", base: "main", worktree, nowIso: T0, state: STATES.running }), execution: { runId, providerJobId: "j1", turnId: "t1", inputHead: revision } };
   const result = { taskId: id, runId, providerJobId: "j1", turnId: "t1", inputHead: revision, repo: entry.repo, branch: entry.branch, files: [{ path: "a.txt", beforeHash: sha("before"), afterHash: sha("after"), text: "after" }], pr: { title: "Apply result", body: "Verified execution artifacts." } };
-  const calls = [], git = { head: async () => revision, trackedPaths: async () => ["a.txt"], resultModesMatch: async () => true, dirty: async () => ({ modified: 0, untracked: 0 }), currentBranch: async () => entry.branch, originOf: async () => "https://github.com/acme/widget.git", commitResult: async () => calls.push("commit"), pushResult: async () => calls.push("push") };
+  const calls = [], git = { head: async () => revision, trackedPaths: async () => ["a.txt"], publicationPaths: async () => ["a.txt"], resultModesMatch: async () => true, dirty: async () => ({ modified: 0, untracked: 0 }), currentBranch: async () => entry.branch, originOf: async () => "https://github.com/acme/widget.git", commitResult: async () => calls.push("commit"), pushResult: async () => calls.push("push") };
   const gh = { publishResultPr: async () => { calls.push("PR"); return { number: 1, url: "https://github.com/acme/widget/pull/1" }; } };
   const ctx = { git, gh, readPrd: () => "# Brief\n\n## Verify\n\n- `printf verified`\n" };
   const verify = async () => { calls.push("verify"); return { stdout: "verified", stderr: "" }; };
   return { id, entry, result, dir, ctx, verify, calls };
 }
+
+test("hosted work artifacts are rejected before filesystem mutation and before publication of pushed branches", async () => {
+  const f = resultFixture();
+  f.result.files = [{ path: "WORK_LOG.md", beforeHash: null, afterHash: sha("notes"), text: "notes" }];
+  await assert.rejects(reconcileExecutionResult(f.ctx, f), /Task work artifacts/);
+  assert.equal(existsSync(join(f.entry.worktree, "WORK_LOG.md")), false);
+  assert.deepEqual(f.calls, []);
+  const pushed = resultFixture();
+  pushed.result.pushedHead = pushed.result.inputHead; pushed.result.files = [];
+  pushed.ctx.gh.refSha = async () => pushed.result.pushedHead;
+  pushed.ctx.gh.containsCommit = async () => true;
+  pushed.ctx.git.publicationPaths = async () => ["docs/audit/round-7.md"];
+  await assert.rejects(reconcileExecutionResult(pushed.ctx, pushed), /Task work artifacts/);
+  assert.deepEqual(pushed.calls, []);
+});
+
+test("hosted publication fails closed when complete branch paths cannot be read", async () => {
+  const f = resultFixture();
+  f.ctx.git.publicationPaths = async () => { throw new Error("missing base"); };
+  await assert.rejects(reconcileExecutionResult(f.ctx, f), /complete branch publication paths unavailable/);
+  assert.equal(f.calls.includes("push"), false);
+  assert.equal(f.calls.includes("PR"), false);
+});
 
 async function collectedArtifactFixture(secrets = [], { providerName = "openai-agents", accepted } = {}) {
   const f = resultFixture(), provider = remote(providerName), home = tempHome(), root = join(home, "runs", idSlug(f.id));
@@ -2476,6 +2499,7 @@ async function nativeResultFixture() {
   writeFileSync(join(worktree, "b.txt"), "unchanged");
   await git.commitResult(worktree, ["a.txt", "b.txt"]);
   const head = await git.head(worktree); f.result.inputHead = head; f.entry.execution.inputHead = head;
+  await nativeExec("git", ["update-ref", `refs/remotes/origin/${f.entry.base}`, head], { cwd: worktree, env: process.env });
   f.ctx.git = { ...git, commitResult: async (...args) => { f.calls.push("commit"); return git.commitResult(...args); }, pushResult: async () => f.calls.push("push") };
   return { ...f, verify: async (...args) => { f.calls.push("verify"); return execFileAsync(...args); } };
 }
@@ -2882,6 +2906,50 @@ test("pre-existing dirty files and unavailable status fail closed even with an e
     await assert.rejects(reconcileExecutionResult(bad.ctx, bad), { code: "EXECUTION_RESULT_BLOCKED" });
     assert.deepEqual(bad.calls, ["commit"]);
     assert.equal(readJson(join(bad.dir, "result-application.json")).reason, "verification-state-unavailable");
+  }
+});
+
+test("hosted publication verifies unchanged private carried inputs without committing them", async () => {
+  for (const source of ["untracked", "tracked", "approved-output"]) {
+    const f = await nativeResultFixture(), path = source === "tracked" ? "b.txt" : "context.md", text = "Approved private context\n";
+    f.entry.sources = [path]; writeFileSync(join(f.entry.worktree, path), text); f.ctx.readSource = () => text;
+    f.ctx.readPrd = () => `---\nsources: [${path}]${source === "approved-output" ? `\npublish_files: [${path}]` : ""}\n---\n# Brief\n\n## Verify\n\n- \`cat ${path}\`\n`;
+    if (source === "approved-output") f.result.files.push({ path, beforeHash: sha(text), afterHash: sha(text), text });
+    await reconcileExecutionResult(f.ctx, f);
+    assert.equal(readFileSync(join(f.entry.worktree, path), "utf8"), text);
+    const paths = await f.ctx.git.publicationPaths(f.entry.worktree, f.entry.base);
+    assert.equal(paths.includes(path), source === "approved-output");
+    assert.equal(readJson(join(f.dir, "result-application.json")).phase, "published");
+    assert.deepEqual(f.calls, ["commit", "verify", "push", "PR"]);
+  }
+});
+
+test("private input exceptions cannot hide verifier writes, staging, missing snapshots or recovery changes", async () => {
+  for (const mutation of ["content", "ignored-content", "delete", "mode", "source-symlink", "ignored-source-symlink", "unrelated", "unrelated-symlink", "stage", "missing-snapshot", "recovery"]) {
+    const f = await nativeResultFixture(), path = "context.md", text = "Approved private context\n";
+    f.entry.sources = [path]; f.ctx.readSource = () => mutation === "missing-snapshot" ? null : text;
+    if (mutation.startsWith("ignored-")) writeFileSync(join(f.entry.worktree, ".git/info/exclude"), `${path}\n`);
+    writeFileSync(join(f.entry.worktree, path), text);
+    f.ctx.readPrd = () => `---\nsources: [${path}]\n---\n# Brief\n\n## Verify\n\n- \`printf verified\`\n`;
+    const mutate = async () => {
+      if (["content", "ignored-content", "recovery"].includes(mutation)) writeFileSync(join(f.entry.worktree, path), "changed context");
+      if (mutation === "delete") rmSync(join(f.entry.worktree, path));
+      if (mutation === "mode") chmodSync(join(f.entry.worktree, path), 0o755);
+      if (mutation === "unrelated") writeFileSync(join(f.entry.worktree, "unexpected.txt"), "unrelated");
+      if (mutation.endsWith("source-symlink")) {
+        const target = join(f.dir, "linked-context.txt"); writeFileSync(target, text); rmSync(join(f.entry.worktree, path)); symlinkSync(target, join(f.entry.worktree, path));
+      }
+      if (mutation === "unrelated-symlink") symlinkSync(path, join(f.entry.worktree, "unexpected-link"));
+      if (mutation === "stage") await execFileAsync("git", ["add", "--", path], { cwd: f.entry.worktree });
+    };
+    if (mutation === "recovery") {
+      f.ctx.git.pushResult = async () => { throw new Error("push unavailable"); };
+      await assert.rejects(reconcileExecutionResult(f.ctx, f), /push unavailable/); await mutate(); f.calls.length = 0;
+    } else if (mutation !== "missing-snapshot") f.verify = async () => { f.calls.push("verify"); await mutate(); return { stdout: "verified", stderr: "" }; };
+    await assert.rejects(reconcileExecutionResult(f.ctx, f), { code: "EXECUTION_RESULT_BLOCKED" });
+    assert.equal(readJson(join(f.dir, "result-application.json")).reason, "verification-dirty", mutation);
+    assert.equal(f.calls.includes("push") || f.calls.includes("PR"), false, mutation);
+    if (["missing-snapshot", "recovery"].includes(mutation)) assert.equal(f.calls.includes("verify"), false, mutation);
   }
 });
 

@@ -101,6 +101,29 @@ function evidenceWorld() {
   const gh = { reviewEvidence: async () => structuredClone(source), prView: async () => pr };
   return { id:"task", entry, pr, gh, readPrd: () => GOOD_PRD };
 }
+test("untracked carried inputs reach review only from immutable snapshots and bind every review piece", async () => {
+  const w = evidenceWorld(), path = "docs/research/task-context.md";
+  w.readPrd = () => GOOD_PRD.replace("status: ready", `status: ready\nsources: [${path}]`);
+  let snapshot = "Approved private input, kept outside the remote PR.";
+  w.readSource = (id, rel) => { assert.equal(id, w.id); assert.equal(rel, path); return snapshot; };
+  w.gh.fileAt = async () => { throw new Error("untracked inputs must never be fetched from remote HEAD"); };
+  const evidence = await captureReviewEvidence(w);
+  assert.deepEqual(evidence.context.map(file => file.path), ["a.js"]);
+  assert.equal(evidence.supportingSources[0].content, snapshot);
+  assert.match(reviewPrompt(evidence), /They need not be committed/);
+  assert.match(reviewPrompt(evidence), /Approved private input/);
+  const large = { ...evidence, context: [{ ...evidence.context[0], after: "return true;\n" + "context\n".repeat(5000) }] };
+  const { pieces } = partitionReviewEvidence(large, { maxInputBytes: 12_000, maxJobs: 100 });
+  assert.ok(pieces.length > 1);
+  assert.ok(pieces.every(piece => piece.supportingSources[0].digest === evidence.supportingSources[0].digest));
+  snapshot = "An explicitly accepted replacement snapshot.";
+  assert.notEqual((await captureReviewEvidence(w)).digest, evidence.digest, "same Git head cannot reuse review of a different approved source");
+  snapshot = "x".repeat(110_000);
+  const oversized = await captureReviewEvidence(w);
+  assert.throws(() => partitionReviewEvidence(oversized, { maxInputBytes: 100_000, maxJobs: 100 }), /immutable review identity exceeds/);
+  w.readSource = () => null;
+  await assert.rejects(captureReviewEvidence(w), /immutable source snapshot is unreadable/);
+});
 const clear = evidence => ({ version:1, verdict:"clear", examinedCriteria:evidence.criteria.map(c=>c.id), findings:[], unresolvedScope:[], route:"codex", inputDigest:evidence.digest, reviewedHead:head, ...([2, 4].includes(evidence.version) ? { observations: [] } : {}) });
 
 function scopedClear(evidence, dense = false) {
@@ -394,6 +417,36 @@ function tickWorld({ mode="first-party-required", record, over={} }={}) {
   const tick=makeTick(ctx);
   return {ctx,tick,gh,runner,state,id,notify,entry:()=>state.get(id),calls:()=>calls};
 }
+test("work-artifact cleanup precedes paid review and ignores session-only publication exceptions", async () => {
+  const w = tickWorld();
+  w.gh.prDiff = async () => "diff --git a/WORK_LOG.md b/WORK_LOG.md\nnew file mode 100644\n--- /dev/null\n+++ b/WORK_LOG.md\n@@ -0,0 +1 @@\n+notes\n" +
+    "diff --git a/docs/prds/widget-export.md b/docs/prds/widget-export.md\n--- a/docs/prds/widget-export.md\n+++ b/docs/prds/widget-export.md\n@@ -1 +1 @@\n+publish_files: [WORK_LOG.md]\n";
+  await w.tick.tick();
+  assert.equal(w.calls(), 0, "do not capture/review scratch files only to invalidate that review during cleanup");
+  assert.equal(w.runner.started.length, 1);
+  assert.match(w.runner.started[0].args.at(-1), /WORK_LOG\.md/);
+  assert.equal(w.entry().publication_check, undefined);
+});
+test("clean path proofs survive coordinator restart without polling Bitbucket diffs during review", async () => {
+  const w = tickWorld({ record: (entry, pr) => ({ key: "pending", binding: reviewBinding(pr, entry.reviewPolicy), status: "running" }) });
+  let reads = 0;
+  w.gh.prDiff = async () => { reads++; return ""; };
+  await w.tick.tick();
+  for (let i = 0; i < 3; i++) await makeTick(w.ctx).tick();
+  assert.equal(reads, 1);
+  assert.equal(w.calls(), 4);
+  w.gh.data.pr.baseRefOid = "c".repeat(40);
+  await makeTick(w.ctx).tick(); await makeTick(w.ctx).tick();
+  assert.equal(reads, 2, "a moved base invalidates the cached proof");
+});
+test("a PR moving while its diff is read cannot produce a cached clean proof or start review", async () => {
+  const w = tickWorld();
+  w.gh.prDiff = async () => { w.gh.data.pr.headRefOid = "d".repeat(40); return ""; };
+  await w.tick.tick();
+  assert.equal(w.calls(), 0);
+  assert.equal(w.entry().publication_check, undefined);
+  assert.match(w.entry().retry.error, /head\/base changed/);
+});
 test("qualified internal clear reaches ready honestly; changed receipt/base/checks revoke on the same head",async()=>{
   for(const change of [pr=>{pr.body+="\nupdated";},pr=>{pr.baseRefOid="c".repeat(40);},pr=>{pr.statusCheckRollup[0].conclusion="FAILURE";}]) {
     const w=tickWorld(); await w.tick.tick(); assert.equal(w.entry().state,"ready-for-human", JSON.stringify(w.entry()));
