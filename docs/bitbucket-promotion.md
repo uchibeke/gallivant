@@ -28,7 +28,7 @@ npm run promote:bitbucket -- \
   --out accepted-promotion.json
 ```
 
-The default is a remote read-only dry run. It fetches into a disposable temporary Git repository and prints the source and destination heads, bases, exact title/body, review policy, check count and a SHA-256 `digest`. `--out` saves that plan locally with mode 600 and refuses to overwrite an existing file. Keep private plans outside your repository; they can contain private PR prose. They contain no credentials or source session records.
+The default is a remote read-only dry run. It fetches into a disposable temporary Git repository and prints the source and destination heads, bases, exact title/body, review policy, check count and a SHA-256 `digest`. `--out` saves that plan locally with mode 600 and refuses to overwrite an existing file. Keep private plans outside your repository; they contain private PR prose and the previous destination PR text, which may include its task metadata. Transport credentials are never added to the plan.
 
 Inspect the complete plan, then rerun the same mapping with its digest:
 
@@ -40,7 +40,7 @@ npm run promote:bitbucket -- \
   --apply --expected-plan DIGEST_FROM_THE_DRY_RUN
 ```
 
-The digest is an exact human approval pin, not a substitute for fresh review evidence. Changed source code, review, checks, public text, destination branch, base or existing PR text requires another dry run. Nothing reads or writes the run registry or starts another agent.
+The digest is an exact human approval pin, not a substitute for fresh review evidence. Changed source code, review, checks, public text, destination branch, base or existing PR text requires another dry run. The command reads accepted state and operator controls from the run registry; it never writes that registry or starts another agent.
 
 For a new PR, omit `--bitbucket-pr`. The default destination branch is `work/github-OWNER-REPO-pr-N`; `--branch` and `--base` select explicit alternatives. Subsequent runs reuse an existing PR only when its repository, branch/base and source-review provenance match. Otherwise supply an explicit PR mapping. Closed, cross-repository or duplicate targets are rejected.
 
