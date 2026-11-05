@@ -209,6 +209,18 @@ test("the dashboard groups every entry the way status already groups them, and l
   assert.match(body, /daemon has never run here/, "no daemon.json says so plainly rather than implying health");
 });
 
+test("review activity exposes only bounded progress, never the reviewer evidence", async () => {
+  const w=world({entry:{reviewPolicy:{version:1,mode:"first-party-required",route:{name:"codex",fingerprint:"f".repeat(64),qualification:"run-1"},external:null,specialist:null,zeroChecks:true,limits:{timeoutMs:900000,maxJobs:2048,retries:2,budgetUsd:100,maxInputBytes:100000}},firstPartyReview:{status:"running",phase:"source-review",pieces:[{status:"completed"},{status:"running"}],evidence:{brief:"private review evidence"}}}});
+  const page=res();handle(w.ctx,req(`/run?id=${encodeURIComponent(ID)}`),page);await page.ended;
+  assert.match(page.body(),/Reviewer activity/);assert.match(page.body(),/Agent log/);assert.doesNotMatch(page.body(),/private review evidence/);
+  const response=res();handle(w.ctx,req(`/api/run/review-activity?id=${encodeURIComponent(ID)}`),response);await response.ended;
+  assert.equal(response.code,200);assert.match(response.body(),/reviewing job 2 of 2/);assert.doesNotMatch(response.body(),/private review evidence/);
+  w.state.update(ID,{firstPartyReview:{status:"completed",pieces:[{status:"completed"}],result:{verdict:"findings",findings:[{description:"private finding details"},{description:"other private finding"}]},disposition:{status:"dispatched"}}});
+  const complete=res();handle(w.ctx,req(`/api/run/review-activity?id=${encodeURIComponent(ID)}`),complete);await complete.ended;
+  assert.match(complete.body(),/2 findings; findings sent to agent/);assert.doesNotMatch(complete.body(),/private finding/);
+  const missing=res();handle(w.ctx,req("/api/run/review-activity?id=not-registered"),missing);await missing.ended;assert.equal(missing.code,404);
+});
+
 test("the run page shows the entry's facts and the log pane, and 404s for an id the registry does not have", async () => {
   const w = world({ runs: { "2026-09-24T02-00-00-000-fix": { lines: ["working"], live: true } }, latest: "2026-09-24T02-00-00-000-fix" });
   const ok = res();
