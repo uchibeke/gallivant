@@ -1,5 +1,7 @@
 # Git host boundary
 
+For a GitHub review mirror that delivers through Bitbucket, see the [explicit branch promotion workflow](bitbucket-promotion.md). It preserves reviewed commits and uses the existing host/review services.
+
 `github.com` supports task dispatch. Bitbucket's explicit no-reviewer path
 completed live local Codex tasks through PR publication and receipt acceptance
 on disposable public and private repositories, but its coding session could

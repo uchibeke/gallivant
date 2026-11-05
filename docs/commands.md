@@ -657,6 +657,8 @@ it can be decoded to inspect the precise existing branch/session identity.
 
 ## Bitbucket setup and PR commands
 
+For an explicitly mapped GitHub review mirror, `npm run promote:bitbucket -- --github-pr URL --bitbucket-repo bitbucket.org/WORKSPACE/REPO --bitbucket-pr N` previews a commit-preserving handoff from a source checkout. It requires exact accepted source readiness, then refreshes the shared review/check policy. Apply requires the inspected plan digest. See [GitHub-to-Bitbucket promotion](bitbucket-promotion.md) for retained post-merge plans, idempotent PR updates and race handling. It never merges or deploys.
+
 Bitbucket Cloud dispatch is available with explicit repository credentials and review policy. Its complete first-party evidence adapter and the shared bounded review service are implemented; the private/public live reviewer matrix and clean Linux installation remain separate qualifications. A prior public disposable run proved PR publication and receipt acceptance in legacy no-reviewer mode only. See the [setup, review and troubleshooting guide](bitbucket-review.md) for prerequisites and limits. Bitbucket-only setup needs no GitHub sign-in; it does not install a pipeline or alter repository settings.
 
 `init` accepts `--host-config <json>` and `--base <branch>`. The installed `task-pr` command supports bound PR create/view/diff/edit/comment operations; `task-review` prepares and publishes independent reviewer results. These commands do not qualify a harness or authorize a model invocation.
