@@ -7,6 +7,7 @@ This is an operator command from a Gallivant source checkout. Install dependenci
 ## Before promotion
 
 - Register and finish the GitHub run. It must retain an exact accepted completion and review binding under an explicit review policy. A label, green CI or the PR author's statement alone is insufficient.
+- Stopped dispatch and queued/applying operator controls block promotion. Cancellation, messages, resume and recheck requests must be reconciled before accepted work can be delivered. These controls are checked again after plan validation and after a push; a cancellation during an already-running push can leave the branch updated, but prevents subsequent PR publication when observed.
 - Only the exact remotely reviewed commit is transferred. Local checkout edits, untracked carried research inputs, environment files and session logs are neither read nor included. The transfer uses its own disposable bare Git repository, so an operator checkout may remain dirty or may already have been removed after merge.
 - Specify the destination repository explicitly. No organization or repository mapping is inferred.
 - For an existing Bitbucket PR, supply its number. This updates that PR rather than creating a duplicate.

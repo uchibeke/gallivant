@@ -107,6 +107,40 @@ test("a remotely accepted push with a lost response reports the possible partial
   assert.deepEqual(w.calls(), { pushes: 1, publications: 0 });
 });
 
+for (const action of ["cancel", "message", "resume", "recheck"]) for (const status of ["queued", "applying"]) test(`pending ${action}/${status} invalidates an already approved plan`, async () => {
+  const w = world(), plan = await planPromotion(w.ctx, w.options, w.transfer);
+  w.entry.control = { action, status };
+  await assert.rejects(promote(w.ctx, { ...w.options, apply: true, expectedPlan: plan.digest }, w.transfer), /operator control is pending/);
+  assert.deepEqual(w.calls(), { pushes: 0, publications: 0 });
+});
+
+test("dispatch stop blocks promotion even after cancellation control is applied", async () => {
+  const w = world(), plan = await planPromotion(w.ctx, w.options, w.transfer);
+  w.entry.dispatch_stopped = "cancellation-requested"; w.entry.control = { action: "cancel", status: "applied" };
+  await assert.rejects(promote(w.ctx, { ...w.options, apply: true, expectedPlan: plan.digest }, w.transfer), /dispatch is stopped/);
+  assert.deepEqual(w.calls(), { pushes: 0, publications: 0 });
+});
+
+test("cancellation queued during final plan validation is caught before push", async () => {
+  const w = world(), plan = await planPromotion(w.ctx, w.options, w.transfer);
+  let reads = 0;
+  w.transfer.validate = async () => { if (++reads === 2) { w.entry.dispatch_stopped = "cancellation-requested"; w.entry.control = { action: "cancel", status: "queued" }; } };
+  await assert.rejects(promote(w.ctx, { ...w.options, apply: true, expectedPlan: plan.digest }, w.transfer), /dispatch is stopped/);
+  assert.deepEqual(w.calls(), { pushes: 0, publications: 0 });
+});
+
+test("cancellation arriving during push prevents PR publication", async () => {
+  const w = world(), plan = await planPromotion(w.ctx, w.options, w.transfer), push = w.transfer.push;
+  w.transfer.push = async p => { await push(p); w.entry.dispatch_stopped = "cancellation-requested"; w.entry.control = { action: "cancel", status: "queued" }; };
+  await assert.rejects(promote(w.ctx, { ...w.options, apply: true, expectedPlan: plan.digest }, w.transfer), /dispatch is stopped.*branch may already contain/s);
+  assert.deepEqual(w.calls(), { pushes: 1, publications: 0 });
+});
+
+test("completed controls do not permanently block fresh accepted readiness", async () => {
+  const w = world(); w.entry.control = { action: "recheck", status: "applied" };
+  assert.equal((await planPromotion(w.ctx, w.options, w.transfer)).source.head, head);
+});
+
 for (const kind of ["command", "inline", "review"]) test(`new trusted ${kind} invalidates an approved plan before coordinator polling`, async () => {
   const w = world(), plan = await planPromotion(w.ctx, w.options, w.transfer);
   const feedback = { id: 42, user: { login: "owner", type: "User" }, created_at: "2026-11-05T00:00:01Z", submitted_at: "2026-11-05T00:00:01Z", body: kind === "command" ? "/fix Please correct this" : "Please correct this", state: "CHANGES_REQUESTED", commit_id: head, path: "app.js", line: 1 };
