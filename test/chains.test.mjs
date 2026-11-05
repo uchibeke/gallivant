@@ -101,6 +101,175 @@ function world({ sources = false, count = 2 } = {}) {
   return { ctx, home, checkout, paths, clones, runners, remoteFiles, snapshots, sourceSnapshots, prs, ancestry, kills, markPr, queue, starts };
 }
 
+async function anchoredWorld(options = {}) {
+  const w = world(options);
+  await start(w.ctx, { path: w.paths[0] });
+  w.markPr();
+  w.anchor = selector => queueChain(w.ctx, { name: "follow-on", paths: w.paths.slice(1), after: selector ?? `${REPO}#1` });
+  return w;
+}
+
+test("an existing registered PR gates one new milestone without adopting or restarting its run", async () => {
+  const w = await anchoredWorld();
+  const predecessor = w.ctx.state.get(FIRST);
+  await w.anchor(predecessor.url);
+  assert.equal(w.ctx.state.getChain("follow-on").steps.length, 1);
+  await tickChains(w.ctx);
+  w.ctx.state = makeState(w.home);
+  await tickChains(w.ctx);
+  assert.equal(w.starts(), 1, "ready with an open PR cannot start its successor");
+  assert.deepEqual(w.ctx.state.get(FIRST), predecessor, "ownership, session, review policy and counters stay untouched");
+  const row = chainRows(w.ctx)[0];
+  assert.equal(row.current, FIRST);
+  assert.equal(row.url, predecessor.url);
+  assert.match(row.reason, /predecessor PR #1/);
+  assert.match(renderChains(w.ctx, "follow-on"), /after acme\/widget\/first-step/);
+  w.markPr(FIRST, { state: "MERGED", entryState: STATES.done });
+  await tickChains(w.ctx);
+  assert.equal(w.starts(), 1, "merge observation and dispatch are separate ticks");
+  assert.equal(w.ctx.state.getChain("follow-on").after.merged.sha, MERGE);
+  await tickChains(w.ctx);
+  await tickChains(w.ctx);
+  assert.equal(w.starts(), 2);
+  assert.equal(w.ctx.state.get(SECOND).chain.index, 0);
+  assert.ok(w.ancestry.some(call => call[0] === REPO && call.includes(MERGE)));
+  assert.ok(w.ancestry.some(call => call[0] === "clone" && call.includes(MERGE)));
+  w.markPr(SECOND, { number: 2, state: "MERGED", entryState: STATES.done });
+  await tickChains(w.ctx);
+  assert.equal(w.ctx.state.getChain("follow-on").status, "done");
+  assert.equal(w.starts(), 2);
+});
+
+test("a chain can depend on an existing owned milestone without stealing its original ownership", async () => {
+  const w = world({ count: 3 });
+  await w.queue("original", w.paths.slice(0, 2));
+  await tickChains(w.ctx);
+  w.markPr();
+  const before = w.ctx.state.get(FIRST);
+  await queueChain(w.ctx, { name: "follow-on", paths: [w.paths[2]], after: FIRST });
+  await tickChains(w.ctx);
+  assert.deepEqual(w.ctx.state.get(FIRST), before);
+  assert.equal(w.starts(), 1);
+  assert.equal(w.ctx.state.getChain("original").steps[0].id, FIRST);
+  assert.equal(w.ctx.state.getChain("follow-on").steps[0].id, `${REPO}/third-step`);
+});
+
+test("queueing after a PR refuses unknown, cross-base, changed remote and closed identities", async () => {
+  for (const change of [
+    w => w.ctx.state.remove(FIRST),
+    w => w.ctx.state.update(FIRST, { base: "other" }),
+    w => w.prs.set(1, { ...w.prs.get(1), headRefName: "replacement" }),
+    w => w.prs.set(1, { ...w.prs.get(1), state: "CLOSED" }),
+  ]) {
+    const w = await anchoredWorld();
+    change(w);
+    await assert.rejects(() => w.anchor());
+    assert.equal(w.ctx.state.chains().length, 0);
+    assert.equal(w.starts(), 1);
+  }
+  const w = await anchoredWorld();
+  await assert.rejects(() => w.anchor(`https://github.com/${REPO}/pull/999`), /registered/);
+  await assert.rejects(() => w.anchor(""), /requires a registered/);
+  await assert.rejects(() => queueChain(w.ctx, { name: "empty", paths: [], after: FIRST }), /at least one/);
+  await assert.rejects(() => queueChain(w.ctx, { name: "duplicate", paths: [w.paths[0]], after: FIRST }), /already exists/);
+});
+
+test("local or remote predecessor identity changes fail closed, including after its merge was recorded", async () => {
+  const changes = [
+    w => w.ctx.state.remove(FIRST),
+    ...[{ branch: "work/replacement" }, { base: "other" }, { pr: 9 }, { url: `https://github.com/${REPO}/pull/9` }, { repo: "acme/other", url: "https://github.com/acme/other/pull/1" }]
+      .map(patch => w => w.ctx.state.update(FIRST, patch)),
+  ];
+  for (const merged of [false, true]) for (const change of changes) {
+    const w = await anchoredWorld();
+    await w.anchor();
+    if (merged) { w.markPr(FIRST, { state: "MERGED" }); await tickChains(w.ctx); }
+    change(w);
+    await tickChains(w.ctx);
+    assert.equal(w.ctx.state.getChain("follow-on").status, "stopped");
+    assert.equal(w.starts(), 1);
+  }
+  for (const patch of [
+    { state: "CLOSED" }, { number: 9 }, { headRefName: "other" }, { baseRefName: "other" },
+    { url: `https://github.com/acme/other/pull/1` }, { url: "not a URL" }, { isCrossRepository: true },
+    { mergeCommit: null }, { mergedAt: null }, { strictIdentity: true, headRefOid: "different" },
+  ]) {
+    const w = await anchoredWorld();
+    await w.anchor();
+    w.markPr(FIRST, { state: "MERGED", ...patch });
+    await tickChains(w.ctx);
+    assert.equal(w.ctx.state.getChain("follow-on").status, "stopped", JSON.stringify(patch));
+    assert.equal(w.starts(), 1);
+  }
+});
+
+test("a merged anchor still waits for an active author and uses the strict host head contract", async () => {
+  const w = await anchoredWorld();
+  await w.anchor();
+  w.markPr(FIRST, { state: "MERGED", strictIdentity: true });
+  w.ctx.state.update(FIRST, e => ({ cursor: { ...e.cursor, fixed_sha: w.prs.get(1).headRefOid }, last: { ...e.last, exit: null } }));
+  await tickChains(w.ctx);
+  assert.equal(w.ctx.state.getChain("follow-on").after.merged, null);
+  w.ctx.state.update(FIRST, e => ({ last: { ...e.last, exit: 0 } }));
+  await tickChains(w.ctx);
+  await tickChains(w.ctx);
+  assert.equal(w.starts(), 2);
+});
+
+test("remote ancestry loss and stale successor clones cannot satisfy the existing-PR dependency", async () => {
+  for (const stage of ["observation", "dispatch", "clone"]) {
+    const w = await anchoredWorld();
+    await w.anchor();
+    w.markPr(FIRST, { state: "MERGED" });
+    if (stage !== "observation") await tickChains(w.ctx);
+    if (stage === "clone") w.ctx.git.containsCommit = async () => false;
+    else w.ctx.gh.containsCommit = async () => false;
+    await tickChains(w.ctx);
+    assert.equal(w.ctx.state.getChain("follow-on").status, "stopped", stage);
+    assert.equal(w.starts(), 1);
+    assert.equal(w.ctx.state.get(SECOND), null);
+  }
+});
+
+test("predecessor changes during queueing or clone preparation cannot race the identity pins", async () => {
+  const queued = await anchoredWorld();
+  const read = queued.ctx.gh.fileAtStrict;
+  queued.ctx.gh.fileAtStrict = async (...args) => { queued.ctx.state.update(FIRST, { branch: "other" }); return read(...args); };
+  await assert.rejects(() => queued.anchor(), /predecessor identity changed/);
+  assert.equal(queued.ctx.state.chains().length, 0);
+
+  const w = await anchoredWorld();
+  await w.anchor();
+  w.markPr(FIRST, { state: "MERGED" });
+  await tickChains(w.ctx);
+  const create = w.ctx.git.create;
+  w.ctx.git.create = async spec => { const dir = await create(spec); w.ctx.state.update(FIRST, { branch: "other" }); return dir; };
+  await tickChains(w.ctx);
+  assert.equal(w.ctx.state.getChain("follow-on").status, "stopped");
+  assert.equal(w.starts(), 1, "lock-time validation prevents spawning after the asynchronous clone");
+});
+
+test("resnapshot only reapproves future inputs and cancellation cannot be undone by a pending merge check", async () => {
+  const w = await anchoredWorld();
+  await w.anchor();
+  const before = w.ctx.state.getChain("follow-on");
+  put(w.paths[1], readFileSync(w.paths[1], "utf8") + "\nUpdated successor instructions.\n");
+  await retryChain(w.ctx, { name: "follow-on", resnapshot: true });
+  const after = w.ctx.state.getChain("follow-on");
+  assert.deepEqual(after.after, before.after);
+  assert.notEqual(after.steps[0].digest, before.steps[0].digest);
+  await tickChains(w.ctx);
+  assert.equal(w.starts(), 1);
+  w.markPr(FIRST, { state: "MERGED" });
+  const view = w.ctx.gh.prView;
+  w.ctx.gh.prView = async (...args) => { cancelChain(w.ctx, "follow-on"); return view(...args); };
+  await tickChains(w.ctx);
+  await tickChains(w.ctx);
+  assert.equal(w.ctx.state.getChain("follow-on").status, "cancelled");
+  assert.equal(w.ctx.state.getChain("follow-on").after.merged, null);
+  assert.equal(w.starts(), 1);
+});
+
 test("queue approves a plan without starting work; ticks start its first PRD exactly once across registry reloads", async () => {
   const w = world();
   await w.queue();
