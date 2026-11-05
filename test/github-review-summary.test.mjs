@@ -11,7 +11,8 @@ const base = { reviews: [], inline: [], config: CONFIG, trust, sinceIso: T0, hea
 function summary({ code = {}, time = at(3), created = at(1), updated = at(4), by = bot, isBot = true, transform = body => body } = {}) {
   const state = { code_review: { commit_sha: head, status: "completed", has_any_findings: false, has_unresolved_findings: false, ...code },
     security_review: { commit_sha: head, status: "failed", has_any_findings: true, has_unresolved_findings: true } };
-  const body = `<!-- codex-pull-request-review-summary -->\n<!-- codex-review-state:v1 ${JSON.stringify(state)} -->\n\n## Codex Review Summary\n\n| Review | Status | Commit | Review trigger |\n| --- | --- | --- | --- |\n| 📝 **Code Review** | ✅ **Completed** <relative-time datetime="${time}">${time}</relative-time> | \`${state.code_review.commit_sha.slice(0, 7)}\` | PR opened |\n| 🔒 **Security Review** | ⚠️ **Failed** <relative-time datetime="${updated}">${updated}</relative-time> | \`${head.slice(0, 7)}\` | PR opened |`;
+  const security = { blockingSeverityThreshold: "P0", headSha: head, mergeGateEnabled: false, pullRequestNumber: 3, repository: "acme/widget", status: "completed" };
+  const body = `<!-- codex-pull-request-review-summary -->\n<!-- codex-review-state:v1 ${JSON.stringify(state)} -->\n<!-- codex-security-review:v1 ${JSON.stringify(security)} -->\n\n## Codex Review Summary\n\n| Review | Status | Commit | Review trigger |\n| --- | --- | --- | --- |\n| 📝 **Code Review** | ✅ **Completed** <relative-time datetime="${time}">${time}</relative-time> | \`${state.code_review.commit_sha.slice(0, 7)}\` | PR opened |\n| 🔒 **Security Review** | ⚠️ **Failed** <relative-time datetime="${updated}">${updated}</relative-time> | \`${head.slice(0, 7)}\` | PR opened |`;
   return normalizeEvent({ ...comment({ id: 91, by, bot: isBot, at: created, body: transform(body) }), updated_at: updated }, "comment");
 }
 const verdict = (record, extra = {}) => reviewerVerdict({ ...base, comments: [record], ...extra });
@@ -20,6 +21,28 @@ test("current-head Codex structured code review clears despite an optional secur
   const result = await exactReviewerVerdict({ ...base, comments: [summary()] }, () => { throw new Error("full identity needs no lookup"); });
   assert.equal(result.verdict, "clear");
   assert.equal(result.reviewedHead, head);
+});
+
+test("security threshold metadata does not override an authenticated structured code verdict", () => {
+  for (const threshold of ["P0", "P1"]) {
+    const row = summary({ transform: body => body.replace('"blockingSeverityThreshold":"P0"', `"blockingSeverityThreshold":"${threshold}"`) });
+    assert.equal(verdict(row).verdict, "clear");
+    assert.equal(verdict(row, { headSha: "b".repeat(40) }).verdict, "waiting");
+  }
+});
+
+test("plain review prose and legacy receipts retain severity-pattern blocking", () => {
+  const body = `P0 security issue.\n**Reviewed commit:** \`${head}\``;
+  const plain = normalizeEvent(comment({ id: 92, by: bot, bot: true, at: at(5), body }), "comment");
+  assert.equal(verdict(plain).verdict, "blocking");
+  const approved = { ...review({ id: 93, by: bot, bot: true, state: "APPROVED", at: at(5), body }), commit_id: head };
+  assert.equal(verdict(summary(), { reviews: [approved] }).verdict, "blocking");
+});
+
+test("a newer native review with inline findings still blocks a structured clean summary", () => {
+  const newer = { ...review({ id: 94, by: bot, bot: true, state: "COMMENTED", at: at(5), body: "See inline finding." }), commit_id: head };
+  const inline = [{ id: 95, pull_request_review_id: 94, body: "P1: do not publish this failure", path: "app.js", line: 1 }];
+  assert.equal(verdict(summary(), { reviews: [newer], inline }).verdict, "blocking");
 });
 
 test("structured summaries require the genuine configured Codex bot", () => {
