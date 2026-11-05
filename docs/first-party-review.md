@@ -53,14 +53,24 @@ Use the exact executable in `harness.codex.bin`. Only its restricted preparation
 
 ```sh
 gallivant review qualify --repo owner/repo
-gallivant review qualify --repo owner/repo --run
+gallivant review qualify --repo owner/repo --run --wait
 gallivant review qualify --repo bitbucket.org/workspace/repository
-gallivant review qualify --repo bitbucket.org/workspace/repository --run
+gallivant review qualify --repo bitbucket.org/workspace/repository --run --wait
 gallivant review status <task-handle>
 gallivant doctor
 ```
 
 The first command only reads qualification. `--run` explicitly authorizes a separate bounded live challenge. It returns a running record; repeating the command reconciles that same keyed execution. A failed qualification is retained, not silently retried as a new paid session. Repair the observed provider/native-policy failure before requalification; changed native configuration yields a different qualification identity. A credential/configuration/binary change invalidates qualification. Setup diagnostics and start preflight require qualification and recheck the effective native boundary before author launch. A version/sign-in result alone cannot qualify a route.
+
+For recognized ChatGPT OAuth profiles, routine token refresh retains the same
+qualification only when the selected account, owner, issuer, client and subject
+remain consistent across the locally stored ID and access token claims. A
+changed principal or provider invalidates qualification. The provider still
+validates the actual credentials; unknown formats and API keys use the full
+credential digest and fail closed on changes.
+Unrelated absolute project trust records outside the review root do not change
+the review identity. Records covering the review root and all other effective
+configuration and managed policies remain bound.
 
 `npm run test:first-party-review:live` is the opt-in disposable-repository probe. It requires `REVIEW_LIVE=1`, the normal operator configuration, and an explicit review allowance; ordinary tests never call a model. Do not run it to work around an administrator or guardrail refusal.
 
@@ -68,7 +78,26 @@ Codex does not expose a native USD hard cap or reliable cost receipt here. The c
 
 ## Evidence, fixes and migration
 
-The GitHub and Bitbucket adapters capture exact head/base/merge-base IDs, a complete diff, full before/after content for added, modified, removed and renamed files, the immutable PRD and every criterion, checks and the full completion receipt. Bitbucket additionally binds the repository UUID and PR number, consumes every diffstat page, compares that inventory to the raw commit comparison, reads source metadata/content at the merge base and head, and rechecks the PR after capture. Oversized evidence, binary/submodule/symlink content, omitted patches, duplicate or truncated pages, unreadable snapshots, rate limits and concurrent PR changes produce incomplete review. API credentials stay in the host adapter; reviewer jobs receive neither host nor Git credentials, and redirects outside the bound API repository are refused.
+The GitHub and Bitbucket adapters capture exact head/base/merge-base IDs, a complete diff, full before/after content for added, modified, removed and renamed files, the immutable PRD and every criterion, checks and the full completion receipt. Bitbucket additionally binds the repository UUID and PR number, consumes every diffstat page, compares that inventory to the raw commit comparison, reads source metadata/content at the merge base and head, and rechecks the PR after capture. Oversized evidence, unsupported binaries or submodule content, omitted patches, duplicate or truncated pages, unreadable snapshots, rate limits and concurrent PR changes produce incomplete review. API credentials stay in the host adapter; reviewer jobs receive neither host nor Git credentials, and redirects outside the bound API repository are refused.
+
+The coordinator requests PNG and JPEG evidence and plans one restricted visual job per changed side alongside text slices. Captures are limited to 32 image sides, 5 MiB per side and 16 MiB total, with dimensions at most 8192 by 8192 and 16 million pixels. Corrupt, unsupported, oversized or incomplete images fail closed. Text qualification alone does not qualify image attachment, model vision or isolation. Each visual job receives a coordinator-created copy, and its exact image identity is checked again at execution; image text and metadata are untrusted data. A [disposable live screenshot review](audit/bitbucket-review-qualification.md#live-image-qualification-and-disposable-review-2026-11-03) reached a clear whole-PR verdict after recovering its owned outputs; the resend PR remains unverified. Preserve screenshots and an incomplete status when qualification or evidence is missing.
+
+The coordinator requests link-object capture from both host adapters. Bounded UTF-8 target bytes are reviewed as untrusted Git object data at each revision; targets are never resolved or followed. Unsupported targets, ambiguous type transitions, incomplete inventories or mismatched hashes and revisions fail closed. Host and reviewer qualification still applies.
+
+Image qualification is recorded independently for the configured executable bytes,
+model and reviewer configuration. `review qualify --repo OWNER/REPO --capability image`
+reads its status; adding `--run` explicitly starts one bounded image challenge and
+consumes the review allowance. The challenge verifies a coordinator-created copy
+at the execution boundary. It is not an end-to-end PR review or host qualification.
+All image sides, text slices and the whole-PR synthesis must complete under the
+same bounded allowance; missing or mismatched results cannot clear the review.
+An image inspection judges its own image, while a text-only requirement may be
+deferred to synthesis. The coordinator records criteria omitted by an image job
+and carries its unresolved concerns through reductions. The final reviewer must
+evaluate those concerns and all criteria against the combined evidence; an
+unresolved need for visual evidence still blocks clearance. A previously owned
+image output rejected solely for local scope can be revalidated against its
+original input and qualification without launching the image job again.
 
 When the full serialized evidence does not fit one job, the shared service creates immutable byte-bounded source and patch slices. Every piece repeats the same task, repository, PR, head, base, merge base, brief, criteria, checks, receipt, policy and aggregate digest. Long single lines and large lockfiles are sliced with absolute line/column offsets rather than omitted. Every changed path and every criterion must appear in the aggregate, every piece must return a valid matching identity, and all pieces must finish before clearance. A finding in any piece, a timeout, malformed output, missing piece, conflicting finding identity, exhausted job/budget bound or unresolved scope blocks readiness. If the configured aggregate cannot hold the evidence, the result says `review-incomplete`/`REVIEW_INCOMPLETE` with the required and configured job counts; it does not review a prefix.
 
@@ -82,7 +111,31 @@ reductions covering every source piece. It
 must resolve cross-file questions and return its own clear verdict. Empty reports,
 unsupported quotes, unresolved scope and oversized synthesis never clear. Each
 observation is verified against its captured source; final findings must also be
-grounded in a supplied report. A new protocol identity retains old failed jobs
+grounded in a supplied report. An incorrect line number is resolved only when the
+exact single-line quote occurs at one unique line in the supplied file, side and
+slice (or, for synthesis, a supplied report). The original and corrected line
+and a quote digest are retained in the review ledger. Ambiguous, absent or
+multiline quotes never gain clearance from this correction.
+When execution sanitization masks a secret-looking value in a quote, the
+coordinator compares it with the same sanitized form of the captured source
+line. The review result retains the masked quote; matching still requires the
+specified file, side and line or a unique source location.
+
+Malformed output or an unverifiable citation receives up to the configured
+`retries` fresh, tools-disabled reviewer attempts, using the same job, spend and
+time limits. Previous attempts stay in the ledger; an ambiguous launch, tool
+attempt or provider failure is never silently retried as a format error. A local
+scope concern is retained in the ledger and carried through any reductions to
+the final whole-PR reviewer; it is never accepted as clearance. Whole-PR
+unresolved scope remains blocking. Older outputs rejected for citation numbering
+or local-slice scope are revalidated once against the exact original input and
+owned execution.
+A confirmed, terminal Codex model-capacity response receives bounded retries
+after one and five minutes, within the same reviewer job and spend allowances.
+The saved evidence and completed pieces are retained. Authentication, quota,
+policy denials, ambiguous ownership and unrecognized provider errors still stop
+for inspection; no model or provider is switched automatically.
+A new protocol identity retains old failed jobs
 for audit without reusing their incomplete verdicts.
 
 A local-scope inspection still requires final synthesis when partitioning happens
@@ -106,9 +159,16 @@ explicitly funded settings: up to 12 calls, 100,000 input and 16,000 output
 tokens per call, $10 and a five-minute request timeout. Those higher ceilings
 do not enlarge a saved task's approved allowance.
 
-The model receives this material as untrusted JSON. Its output must cover all criteria, identify the route/head/input digest, leave no unresolved scope, and report either `clear` or actionable findings with severity and a quote at an actual captured file/line. Invalid, partial, timed-out, failed or tool-attempting output cannot clear. The coordinator owns the ledger under `reviews/` and the separate execution namespace under `runs/review__...`. Public comments and agent-authored approval text are never an alternative source of internal clearance.
+The model receives this material as untrusted JSON. The final output must cover all criteria, identify the route/head/input digest, leave no unresolved scope, and report either `clear` or actionable findings grounded in captured source or an exact image identity. Local concerns are carried to that final review. Invalid, partial, timed-out, failed or tool-attempting output cannot clear. The coordinator owns the ledger under `reviews/` and the separate execution namespace under `runs/review__...`. Public comments and agent-authored approval text are never an alternative source of internal clearance.
 
 Polling reuses captured source only when the repository, head and base still match, and rechecks the live PR binding before using it. Changed head, base, checks, receipt, policy or brief invalidates the whole aggregate, not only one piece. Piece keys make restart and repeated host pages idempotent; an old-head or partial aggregate cannot clear. A delayed poll accepts a valid result whose recorded execution completion time met the deadline; missing completion times, late results and executions still running past the deadline cannot clear.
+
+The registry caches validated reads only while the underlying file identity and
+timestamps are unchanged. Returned records remain detached, and another
+process's atomic write invalidates the cache. This avoids repeatedly parsing a
+large registry during review polling without changing write ownership or gates.
+Each review advancement also reuses immutable completed jobs from one ledger
+read, while retaining the same policy, input, binding and reviewer checks.
 
 Between host polls, the coordinator advances an already captured review on its
 local progress cadence. It does not refetch the PR for every piece. Terminal
@@ -130,7 +190,20 @@ Config edits affect future tasks. For a stopped/settled existing task, use:
 gallivant review policy <handle> --mode both-required --reason "Require both reviews for this task"
 gallivant review policy <handle> --mode first-party-required --reason "Enable the qualified independent local reviewer"
 gallivant recheck <handle>
+gallivant review retry <handle> --reason "Retry the rejected citation with exact single-line source quotes"
 ```
+
+`review retry` explicitly authorizes fresh reviewer executions for incomplete
+output whose previous process exited successfully. It retains completed pieces,
+original attempts, reservations and an operator-reason audit. New attempts use
+the same job/spend/timeout limits and strict validation; recheck alone reuses the
+old terminal record. It also accepts a reviewer cancelled by the coordinator
+after a provider error only after confirming its identity, stopped process tree,
+recorded cancellation reason and absence of tool attempts or denials. Ambiguous
+launches, active reviewers, other provider failures, tool/boundary failures and
+unresolved cancellation cannot use this shortcut.
+The normal host lane rechecks the live binding before review can authorize
+readiness. No author session, PR or chain merge gate is reset.
 
 The command first proves that the selected route is qualified, then records the prior policy and reason, revokes readiness, and re-evaluates the current head. For an existing Bitbucket legacy run, this is the only path that removes `legacy_no_review`; direct config edits do not change its snapshot. The original PRD snapshot, task/run identity, PR, checkout and implementation session are retained. A failed preflight changes none of them and starts no paid review. No command here merges or advances a chain before its existing merge gate.
 
@@ -139,3 +212,28 @@ including label publication and notification. If a decision is already in flight
 the command refuses without changing the policy; retry after that operation
 finishes. A failed label removal leaves a durable obligation for later ticks to
 retry, even while the task is stopped. Clearance stays revoked during that wait.
+
+### Waiting for qualification and explicitly retrying a stopped probe
+
+Use `gallivant review qualify --repo OWNER/REPO --run --wait` to keep the CLI
+alive until its bounded challenge settles. This retains the process exit
+callback; a short-lived launcher can otherwise lose the precise exit time and
+later reject an on-time response as a late observed completion. Normal daemon
+review continues to use its existing lifecycle.
+
+Captured local reviews advance alongside provider and Git-host polling. They
+wait for their own task's decision lock, not unrelated provider reconciliation.
+This progress does not clear readiness: the coordinator still fetches the
+current PR head and evaluates the complete review and acceptance gates.
+
+After inspecting a failed qualification, use
+`gallivant review qualify --repo OWNER/REPO --run --wait --retry --reason "explanation"`
+to authorize a fresh bounded attempt. Only a recorded timeout/provider failure
+with matching ownership, confirmed process cessation and no recorded tool
+attempt or policy denial qualifies for this operation. A legacy dispatch-ID
+conflict rejected before launch can also recover after confirming its archived
+process has stopped. Each retry uses a distinct execution identity and preserves earlier attempts and costs,
+reserves another configured qualification allowance, and requires a new native
+challenge to pass. It never turns failed output into clearance. Unknown or
+active processes, missing completion records and boundary failures remain
+blocked. The default without `--wait` still returns the running record promptly.

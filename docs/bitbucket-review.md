@@ -111,17 +111,28 @@ IDs, and merge base. It paginates `diffstat/<head>..<base>?topic=true`, compares
 that changed-path inventory to the complete raw comparison, and reads regular
 UTF-8 source at the merge base and head through `src/{commit}/{path}`. Added,
 modified, removed and renamed files all carry before/after text as applicable.
-Binary, subrepository, symlink, missing-patch, duplicate, truncated, stale,
-rate-limited, redirected and oversized evidence is refused. The PR binding is
-read again after capture. The API token stays behind the host boundary and is not
+Unsupported binary, subrepository, missing-patch, duplicate, truncated, stale,
+rate-limited, redirected and oversized evidence is refused. The coordinator
+captures bounded symlink target data as untrusted Git objects without following
+the link. Unsupported targets or ambiguous type transitions block review.
+The PR binding is read again after capture. The API token stays behind the host boundary and is not
 part of the reviewer prompt or environment.
+
+The coordinator requests bounded PNG and JPEG sides at the exact revisions and
+requires a separate image-capability qualification before launching visual jobs.
+It combines their validated reports with text review and whole-PR synthesis.
+The image qualification does not itself qualify the host or complete a PR review;
+the [disposable live screenshot review](audit/bitbucket-review-qualification.md#live-image-qualification-and-disposable-review-2026-11-03)
+reached a clear verdict after its owned outputs were recovered; the resend PR
+has not been rechecked. Preserve the original files and incomplete state when any
+capability or evidence is unavailable.
 
 Qualify the exact configured executable/provider route only after authorizing its
 separate paid challenge:
 
 ```sh
 gallivant review qualify --repo bitbucket.org/workspace/repository
-gallivant review qualify --repo bitbucket.org/workspace/repository --run
+gallivant review qualify --repo bitbucket.org/workspace/repository --run --wait
 gallivant review qualify --repo bitbucket.org/workspace/repository
 ```
 
@@ -296,9 +307,13 @@ No command merges the PR, force-pushes, deploys or alters protections.
 - `review-incomplete` / `REVIEW_INCOMPLETE`: inspect the named missing identity,
   path, patch or required job count. For a large complete text change, raise
   `max_jobs` and `budget_usd` only within an operator-approved bound, then select
-  the new policy explicitly. Binary, subrepository, symlink, rate-limited,
+  the new policy explicitly. Unsupported binary, subrepository, malformed link, rate-limited,
   redirected or stale evidence must be corrected; increasing a byte cap is not a
   workaround.
+- Screenshot evidence: check `review qualify --repo ... --capability image` for
+  the exact route. Repair the reported native or provider issue before a separately
+  authorized `--run`; do not repeat an unchanged failed launch. PNG/JPEG limits
+  and all image sides still apply. Unsupported formats remain incomplete.
 - `pr-identity`: inspect source/base/repository/head and restore the recorded
   identity. A decline or unproven merge needs operator reconciliation, not a new
   paid run or an automatic chain advance.

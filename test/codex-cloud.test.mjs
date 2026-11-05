@@ -533,6 +533,7 @@ test("Cloud envelope-only corrections share one PR, restart recovery and bounded
   writeFileSync(join(worktree, "answer.txt"), "old\n");
   const git = makeGit({ config: {}, identity: async () => ({ name: "Fixture", email: "fixture@example.test" }) });
   await git.commitResult(worktree, ["answer.txt"]);
+  native(["update-ref", "refs/remotes/origin/main", "HEAD"]);
   const inputHead = await git.head(worktree), source = JSON.parse(gunzipSync(bytes).toString());
   source.inputHead = inputHead;
   const snapshot = gzipSync(Buffer.from(JSON.stringify(source)));
@@ -633,7 +634,7 @@ function sourceFixture(t) {
   git("init", "-b", branch); git("config", "user.name", "Fixture"); git("config", "user.email", "fixture@localhost");
   writeFileSync(join(root, "answer.txt"), "old\n"); git("add", "answer.txt"); git("commit", "-qm", "Input source"); git("remote", "add", "origin", "https://github.com/acme/widget.git");
   const gitService = makeGit({ identity: async () => ({ name: "Fixture", email: "fixture@localhost" }) }), refs = new Map(), calls = [];
-  const ctx = { config: { harness: { "codex-cloud": config } }, readPrd: () => "approved brief\n", readSource: () => "approved source\n", git: { ...gitService,
+  const ctx = { config: { harness: { "codex-cloud": config } }, readPrd: () => "---\npublish_files: [source.md]\n---\napproved brief\n", readSource: () => "approved source\n", git: { ...gitService,
     pushResult: async (dir, ref) => { calls.push(["task", ref]); refs.set(ref, git("rev-parse", "HEAD")); },
     pushSnapshotRef: async (dir, ref) => { calls.push(["snapshot", ref]); refs.set(ref, git("rev-parse", "HEAD")); } },
     gh: { refSha: async (_, ref) => refs.get(ref), fileAtStrict: async (_, path, revision) => execFileSync("git", ["show", `${revision}:${path}`], { cwd: root, encoding: "utf8" }) } };
@@ -668,6 +669,16 @@ test("Cloud input publishes only approved snapshots, verifies remote bytes and p
   chmodSync(join(root, "brief.md"), 0o755); await assert.rejects(cloudInput(ctx, "task", entry, { ...input, inputHead: delivered.inputHead }), /snapshot mode changed/); chmodSync(join(root, "brief.md"), 0o644);
   writeFileSync(join(root, "private.txt"), "unrelated"); await assert.rejects(cloudInput(ctx, "task", entry, { ...input, inputHead: delivered.inputHead }), /unfinished repository/);
   assert.equal(calls.length, 2);
+});
+test("Cloud private carried overlays refuse before commit/push instead of silently publishing context", async t => {
+  const { root, git, calls, ctx, entry } = sourceFixture(t);
+  ctx.readPrd = () => "approved brief without publication exceptions\n";
+  writeFileSync(join(root, "brief.md"), ctx.readPrd());
+  const before = git("rev-parse", "HEAD");
+  await assert.rejects(cloudInput(ctx, "task", entry, { ...input, inputHead: before }), /cannot privately deliver new or changed carried inputs/);
+  assert.equal(git("rev-parse", "HEAD"), before);
+  assert.equal(git("ls-files", "source.md"), "");
+  assert.deepEqual(calls, []);
 });
 test("Cloud adapter and operator instructions ship in a clean installed package without provider calls", async t => {
   const root = mkdtempSync(join(tmpdir(), "cloud-package-")); t.after(() => rmSync(root, { recursive: true, force: true }));

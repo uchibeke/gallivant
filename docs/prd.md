@@ -76,6 +76,27 @@ These keys beyond `status` and `harness` are read if present:
   editing a document it was handed, and the list is part of the contract: adding or removing a file stops the entry
   the way an edited criterion does. See [config.md](config.md#files-a-brief-carries-sources) for how it differs from
   `context_paths`.
+- `publish_files` is an optional list of **exact output files** that would otherwise match the task-artifact policy:
+
+  ```yaml
+  publish_files:
+    - docs/audit/requested-security-report.md
+    - docs/evidence/export-dialog.png
+  ```
+
+  Use it only for reports, evidence or carried documents the operator explicitly wants in the PR. It does not list
+  ordinary implementation files or tests. No globs, directories, absolute paths or more than 100 entries are accepted.
+  The saved, approved brief supplies these exceptions; editing the session's copy cannot grant permission. Changing
+  the list changes the contract and uses the normal `prd-changed` repair/approval flow.
+
+  Task work logs, session transcripts, scratch files, audit chronology and review/handoff notes belong outside Git.
+  Create scratch space with `mktemp -d`; put concise verification results in the PR receipt. Keep lasting project
+  documentation and release/rollback instructions concise. The commit hook and final remote PR-diff check reject
+  conventional work-artifact paths (including `docs/audit/`, `docs/evidence/`, `docs/verification/`, `WORK_LOG.md`,
+  `NOTES.md`, and carried `sources`) unless listed here. Deletions remain allowed so an existing PR can be cleaned.
+  Required image evidence must remain committed at its explicitly approved paths; deleting it would invalidate review.
+  This is a path hygiene check, not a semantic content scanner: do not rename work logs to evade it.
+
 - `context_paths` gives this one brief read access to directories outside its checkout, added to whatever
   `config.json` already lists rather than replacing it. Comma-separated, or a `[a, b]` list:
 
@@ -128,7 +149,7 @@ file in your checkout are two files, and until this existed nothing compared the
 the run finished against criteria nobody was asking for and the PR arrived satisfying a document that had changed.
 
 So the two are compared, and what happens depends on what you changed. The comparison is in the contract's own terms:
-the acceptance criteria, Verify commands, `harness`, `context_paths`, `sources`,
+the acceptance criteria, Verify commands, `harness`, `context_paths`, `sources`, `publish_files`,
 and the **Coordinator delivery contract** when present. The ownership section
 keeps a natural-language publication instruction separate from provider work.
 It is validated and fingerprinted too; malformed edits cannot be silently ignored.
@@ -138,7 +159,7 @@ request bytes remain exact.
 | What you changed | What happens |
 |---|---|
 | Anything outside those contract fields: the Problem prose, a reworded story, a new Out of scope bullet | Nothing stops. The snapshot follows your edit so later prompts carry your current wording, the log says it happened, and you are not told. Stopping a run to ask about a typo fix would be worse than useless. |
-| A criterion, a Verify command, the harness, `context_paths`, `sources` or coordinator delivery ownership | The entry stops with `prd-changed` before the gate runs, and `gallivant why` names each difference. |
+| A criterion, a Verify command, the harness, `context_paths`, `sources`, `publish_files` or coordinator delivery ownership | The entry stops with `prd-changed` before the gate runs, and `gallivant why` names each difference. |
 | The ORDER of two criteria, without changing a word of either | Also `prd-changed`. Criteria are numbered by position, and the receipt on the open PR attests `ac-1` and `ac-2` by those numbers, so swapping two of them leaves the receipt attesting each criterion with the other's evidence. |
 | The file no longer passes the contract | `prd-illegal`. Fix the file and `gallivant ready` it again; it cannot become the brief the gate judges as it stands. |
 | The file is gone from your checkout | `prd-gone`. Restore it, or `gallivant remove` the entry. |

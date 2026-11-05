@@ -17,6 +17,13 @@ tasks remain available. Its implementation is offline tested; live qualification
 is **unverified**. Local Codex and `openai-agents` retain their existing defaults
 and continuation behavior.
 
+The Git-based Cloud input transport cannot privately deliver new or changed carried
+source files. It refuses before committing or pushing them; use a local harness or
+`openai-agents` for those tasks. Existing repository files with unchanged bytes are
+usable inputs. `publish_files` is only for output documents the operator explicitly
+wants in the PR, never a workaround for publishing private task context. This remains
+a separate limitation from the repository-binding requirement that currently disables dispatch.
+
 ## Trusted worker setup
 
 Use a trusted operator or self-hosted Node 22+ worker with persistent private

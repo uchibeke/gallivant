@@ -1,10 +1,30 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { makeProviderHealth } from "../lib/provider_health.mjs";
+import { makeProviderHealth, coordinatorHealthLimits, scheduleProviderHealth } from "../lib/provider_health.mjs";
 import { EXECUTION_LIMITS } from "../lib/execution_io.mjs";
 import { tempHome, makeClock } from "./helpers.mjs";
 
 const flush = () => new Promise(resolve => setImmediate(resolve));
+
+test("independent health lane refreshes during a slow coordinator tick and stops cleanly", async () => {
+  const home=tempHome(),clock=makeClock(),limits=coordinatorHealthLimits(undefined);let tick, cancelled=false,probes=0;
+  const health=makeProviderHealth({home,clock,limits,probe:async()=>({ok:true,detail:`probe ${++probes}`})});
+  await health.refresh([["codex","operator"]]);
+  const stop=scheduleProviderHealth(health,[["codex","operator"]],{intervalMs:30_000,schedule:fn=>(tick=fn,42),cancel:id=>{assert.equal(id,42);cancelled=true;}});
+  clock.advance(5.01);assert.equal(health.get("codex").ok,false,"due checks still fence dispatch");
+  tick();await flush();assert.equal(health.get("codex").ok,true);assert.equal(probes,2);
+  stop();assert.equal(cancelled,true);
+});
+
+test("coordinator readiness remains usable during a slow tick and still expires", async () => {
+  const home=tempHome(), clock=makeClock(), limits=coordinatorHealthLimits(undefined);
+  const health=makeProviderHealth({home,clock,limits,probe:async()=>({ok:true,detail:"signed in"})});
+  await health.refresh([["codex","operator"]]);clock.advance(2);
+  assert.equal(health.get("codex").ok,true,"a two-minute coordinator tick does not invalidate a fresh probe");
+  clock.advance(3.01);assert.equal(health.get("codex").ok,false,"expired or pending probes cannot authorize dispatch");
+  assert.equal(coordinatorHealthLimits({progressMs:5000,deadlineMs:1234}).progressMs,5000,"explicit operator limits remain authoritative");
+  assert.equal(coordinatorHealthLimits({deadlineMs:1234}).deadlineMs,1234);
+});
 
 test("readiness permits cold startup beyond the former two-second budget while fencing dispatch", async t => {
   t.mock.timers.enable({ apis: ["setTimeout"] });

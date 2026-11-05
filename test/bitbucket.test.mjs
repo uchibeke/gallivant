@@ -143,6 +143,45 @@ test("Bitbucket API rejects redirects, foreign pagination, rates and transport s
   assert.ok(f.calls.every(c => c.url.startsWith("https://api.bitbucket.org/")));
 });
 
+test("Bitbucket transport sanitizes numeric DOMException codes", async () => {
+  const abort = () => { throw new DOMException("fixture-api-secret", "AbortError"); };
+  const f = fixture({ intercept: abort });
+  await assert.rejects(f.api.inspectRepository(PATH), error => error.code === "BB_TRANSPORT" && error.uncertain === false && !error.message.includes("secret"));
+  assert.equal(f.calls.length, 1);
+});
+
+test("Bitbucket enforces the deadline when a transport ignores abort or response cleanup hangs", async () => {
+  let resolveLate, signal;
+  const hanging = fixture({ limits: { timeoutMs: 30 }, intercept: (_call, _data, options) => {
+    signal = options.signal;
+    return new Promise(resolve => { resolveLate = resolve; });
+  } });
+  await assert.rejects(hanging.api.inspectRepository(PATH), error => error.code === "BB_TRANSPORT" && error.uncertain === false);
+  assert.equal(signal.aborted, true);
+  resolveLate(json(hanging.data.repository));
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(hanging.calls.length, 1, "late GET cannot trigger another operation");
+
+  let cancelled = false;
+  const cleanup = fixture({ limits: { timeoutMs: 30 }, intercept: () => new Response(new ReadableStream({
+    cancel() { cancelled = true; return new Promise(() => {}); },
+  }), { status: 500 }) });
+  await assert.rejects(cleanup.api.inspectRepository(PATH), error => error.code === "BB_TRANSPORT" && error.uncertain === false);
+  assert.equal(cancelled, true);
+});
+
+test("Bitbucket keeps an unresolved timed-out write uncertain without replaying it", async () => {
+  let signal;
+  const f = fixture({ limits: { timeoutMs: 30 }, intercept: (call, _data, options) => {
+    if (call.method !== "POST") return;
+    signal = options.signal;
+    return new Promise(() => {});
+  } });
+  await assert.rejects(f.api.comment(PATH, 7, "Review this change"), error => error.code === "BB_TRANSPORT" && error.uncertain === true);
+  assert.equal(signal.aborted, true);
+  assert.equal(f.calls.filter(call => call.method === "POST").length, 1);
+});
+
 test("Bitbucket snapshot is complete, normalized and bounded across comments, tasks, participants and current-head statuses", async () => {
   const f = fixture(); const snapshot = await f.registry.api.prView(REPO, 7);
   validateHostRecord(snapshot, "bitbucket.org", { pr: true, full: true });

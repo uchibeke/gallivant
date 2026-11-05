@@ -2,6 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { writeFileSync, readFileSync, realpathSync } from "node:fs";
 import { join } from "node:path";
+import { PNG } from "pngjs";
 import { fixture, REPO, PATH, UUID, WORKSPACE, USER, HEAD, BASE, NOW, pr, comment, status, page, json } from "./bitbucket-fixture.mjs";
 import { CONFIG, tempHome, makeClock, fakeRunner, fakeGit, fakeNotify, fakeIdentity, silentLog, codexLines } from "./helpers.mjs";
 import { bitbucket } from "../lib/hosts/bitbucket.mjs";
@@ -113,6 +114,50 @@ test("Bitbucket first-party evidence binds exact PR commits and covers paginated
   assert.ok(f.calls.every(call => new URL(call.url).origin === "https://api.bitbucket.org"));
 });
 
+test("opt-in Bitbucket image capture binds additions, modifications, removals and renames to exact sides", async () => {
+  const f = cleanFixture();
+  const bytes = PNG.sync.write({ width: 1, height: 1, data: Buffer.from([1, 2, 3, 255]) });
+  const file = path => ({ type: "commit_file", path });
+  f.data.diffstat = [
+    { status: "added", old: null, new: file("added.png") },
+    { status: "modified", old: file("modified.png"), new: file("modified.png") },
+    { status: "removed", old: file("removed.png"), new: null },
+    { status: "renamed", old: file("old.png"), new: file("new.png") },
+  ];
+  f.data.comparisonDiff = [
+    "diff --git a/added.png b/added.png\nnew file mode 100644\nBinary files /dev/null and b/added.png differ\n",
+    "diff --git a/modified.png b/modified.png\nBinary files a/modified.png and b/modified.png differ\n",
+    "diff --git a/removed.png b/removed.png\ndeleted file mode 100644\nBinary files a/removed.png and /dev/null differ\n",
+    "diff --git a/old.png b/new.png\nsimilarity index 100%\nrename from old.png\nrename to new.png\n",
+  ].join("");
+  for (const [rev, name] of [[HEAD, "added.png"], [BASE, "modified.png"], [HEAD, "modified.png"], [BASE, "removed.png"], [BASE, "old.png"], [HEAD, "new.png"]]) {
+    f.data.sources[`${rev}:${name}`] = bytes;
+    f.data.sourceAttributes[`${rev}:${name}`] = ["binary"];
+  }
+  await assert.rejects(f.api.reviewEvidence(PATH, 7, HEAD, BASE, 100_000), /text-only/);
+  const captured = await f.api.reviewEvidence(PATH, 7, HEAD, BASE, 100_000, { imageEvidence: true });
+  assert.deepEqual(captured.context.map(row => [row.status, row.kind, row.before?.revision ?? null, row.after?.revision ?? null]), [
+    ["added", "image", null, HEAD], ["modified", "image", BASE, HEAD], ["removed", "image", BASE, null], ["renamed", "image", BASE, HEAD],
+  ]);
+  assert.equal(captured.context[3].before.path, "old.png"); assert.equal(captured.context[3].after.path, "new.png");
+  assert.deepEqual(Buffer.from(captured.context[0].after.content, "base64"), bytes);
+  f.data.sources[`${HEAD}:added.png`] = Buffer.from("not an image");
+  await assert.rejects(f.api.reviewEvidence(PATH, 7, HEAD, BASE, 100_000, { imageEvidence: true }), /unsupported image/);
+  f.data.sources[`${HEAD}:added.png`] = bytes;
+  f.data.sourceAttributes[`${HEAD}:added.png`] = ["link"];
+  await assert.rejects(f.api.reviewEvidence(PATH, 7, HEAD, BASE, 100_000, { imageEvidence: true }), /regular text-file/);
+  f.data.sourceAttributes[`${HEAD}:added.png`] = ["binary"];
+  f.data.comparisonDiff = f.data.comparisonDiff.replace("new file mode 100644", "new file mode 120000");
+  await assert.rejects(f.api.reviewEvidence(PATH, 7, HEAD, BASE, 100_000, { imageEvidence: true }), /symlink/);
+});
+
+test("Bitbucket review evidence rejects unsafe inventory paths before fetching source", async () => {
+  const f = cleanFixture();
+  f.data.diffstat[0].new.path = "../outside.png";
+  await assert.rejects(f.api.reviewEvidence(PATH, 7, HEAD, BASE, 100_000, { imageEvidence: true }), /unsafe changed path/);
+  assert.equal(f.calls.some(call => call.path.includes("/src/")), false);
+});
+
 test("Bitbucket first-party evidence accepts empty, mode-only and delimited spaced-path changes", async () => {
   const f = cleanFixture();
   f.data.diffstat = [
@@ -168,6 +213,11 @@ test("Bitbucket first-party evidence refuses stale, duplicate, binary, missing-p
     const f = cleanFixture({ intercept: call => call.path.startsWith("/diffstat/") ? response : undefined });
     await assert.rejects(f.api.reviewEvidence(PATH, 7, HEAD, BASE, 100_000), /redirect|HTTP 429/i, name);
   }
+});
+
+test("binary review refusal identifies the actual limitation without implying clearance", async () => {
+  const f=cleanFixture();f.data.comparisonDiff+="GIT binary patch\n";
+  await assert.rejects(f.api.reviewEvidence(PATH,7,HEAD,BASE,100_000),error=>error.code==="BB_INCOMPLETE" && /binary files/.test(error.message) && /text-only/.test(error.message));
 });
 
 test("only explicit current full-SHA feedback from the configured stable reviewer clears a head", async () => {
@@ -518,4 +568,39 @@ test("changed PR identity stops explicit resume, initial publication settlement 
     assert.equal(runner.started.length, mode === "settlement" ? 1 : 0);
     assert.ok(f.calls.every(c => c.method === "GET"));
   }
+});
+
+test("opt-in Bitbucket link capture treats bounded Git targets as data and fails closed on ambiguous types", async () => {
+  const f = cleanFixture();
+  const file = path => ({ type: "commit_file", path });
+  f.data.diffstat = [
+    { status: "added", old: null, new: file("public") },
+    { status: "removed", old: file("old-link"), new: null },
+    { status: "modified", old: file("modified"), new: file("modified") },
+    { status: "renamed", old: file("prior"), new: file("renamed") },
+  ];
+  f.data.comparisonDiff = [
+    "diff --git a/public b/public\nnew file mode 120000\n--- /dev/null\n+++ b/public\n@@ -0,0 +1 @@\n+../../public\n\\ No newline at end of file\n",
+    "diff --git a/old-link b/old-link\ndeleted file mode 120000\n--- a/old-link\n+++ /dev/null\n@@ -1 +0,0 @@\n-../outside\n\\ No newline at end of file\n",
+    "diff --git a/modified b/modified\n--- a/modified\n+++ b/modified\n@@ -1 +1 @@\n-../old\n+../new\n",
+    "diff --git a/prior b/renamed\nsimilarity index 100%\nrename from prior\nrename to renamed\n",
+  ].join("");
+  for (const [rev, path, value] of [[HEAD, "public", "../../public"], [BASE, "old-link", "../outside"], [BASE, "modified", "../old"], [HEAD, "modified", "../new"], [BASE, "prior", "../../shared"], [HEAD, "renamed", "../../shared"]]) {
+    f.data.sources[`${rev}:${path}`] = value;
+    f.data.sourceAttributes[`${rev}:${path}`] = ["link"];
+  }
+  await assert.rejects(f.api.reviewEvidence(PATH, 7, HEAD, BASE, 100_000), /symlink/);
+  const result = await f.api.reviewEvidence(PATH, 7, HEAD, BASE, 100_000, { linkEvidence: true });
+  assert.deepEqual(result.context.map(row => [row.kind, row.before, row.after]), [
+    ["symlink", null, "../../public"], ["symlink", "../outside", null], ["symlink", "../old", "../new"], ["symlink", "../../shared", "../../shared"],
+  ]);
+  assert.equal(result.context[0].afterLink.revision, HEAD);
+  assert.equal(result.context[1].beforeLink.revision, BASE);
+  assert.equal(result.context[3].beforeLink.path, "prior");
+  assert.ok(f.calls.filter(call => call.path.includes("/src/")).every(call => !call.path.includes("outside")));
+  f.data.sourceAttributes[`${HEAD}:public`] = [];
+  await assert.rejects(f.api.reviewEvidence(PATH, 7, HEAD, BASE, 100_000, { linkEvidence: true }), /metadata/);
+  f.data.sourceAttributes[`${HEAD}:public`] = ["link"];
+  f.data.sources[`${HEAD}:public`] = "x".repeat(4097);
+  await assert.rejects(f.api.reviewEvidence(PATH, 7, HEAD, BASE, 100_000, { linkEvidence: true }), /link target size/);
 });

@@ -672,3 +672,10 @@ default to 60 with a $50 per-run allowance. Reviewer jobs and Git commits are
 not coding rounds: the displayed round advances when a corrective coding run
 settles, including a changed completion receipt. Existing task review limits
 remain pinned until an explicit `review policy` command and recheck.
+
+Reviewer qualification can use `review qualify --repo OWNER/REPO --run --wait`
+to keep the launch process alive until settlement. An explicitly inspected,
+owned stopped timeout/provider failure can be retried with `--retry --reason
+"explanation"` on that same command. This preserves its history and reserves a
+new bounded allowance; it never accepts a failed result or bypasses review.
+See [first-party review](first-party-review.md#waiting-for-qualification-and-explicitly-retrying-a-stopped-probe).
