@@ -827,6 +827,22 @@ test("conflict, merged and closed are terminal", async () => {
   }
 });
 
+test("ready and terminal transitions record activity without refreshing it on polling", async () => {
+  const w = world({}, { pr: prFixture({ statusCheckRollup: [checkRun({ name: "test", conclusion: "SUCCESS" })] }), reviews: clearReviewer() });
+  w.clock.advance(5); await w.tick.tick();
+  assert.equal(w.entry().state, STATES.ready);
+  assert.equal(w.entry().activity_at, at(5));
+  w.clock.advance(1); await w.tick.tick();
+  assert.equal(w.entry().activity_at, at(5));
+  for (const state of ["MERGED", "CLOSED"]) {
+    const terminal = world({}, { pr: prFixture({ state }) });
+    terminal.clock.advance(10); await terminal.tick.tick();
+    assert.equal(terminal.entry().activity_at, at(10));
+    terminal.clock.advance(1); await terminal.tick.tick();
+    assert.equal(terminal.entry().activity_at, at(10));
+  }
+});
+
 test("a run past the timeout is killed and the entry stops", async () => {
   const w = world({}, { reviews: [review({ id: 1, by: BOT, bot: true, state: "CHANGES_REQUESTED", at: at(5) })] });
   w.clock.advance(6);
