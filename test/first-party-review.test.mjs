@@ -1,7 +1,7 @@
 import { inspectReviewLink } from "../lib/review_link.mjs";
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { mkdirSync, readFileSync, writeFileSync, statSync } from "node:fs";
 import { createHash } from "node:crypto";
 import { PNG } from "pngjs";
 import { evaluateReviews } from "../lib/review_evaluation.mjs";
@@ -101,6 +101,29 @@ function evidenceWorld() {
   const gh = { reviewEvidence: async () => structuredClone(source), prView: async () => pr };
   return { id:"task", entry, pr, gh, readPrd: () => GOOD_PRD };
 }
+test("untracked carried inputs reach review only from immutable snapshots and bind every review piece", async () => {
+  const w = evidenceWorld(), path = "docs/research/task-context.md";
+  w.readPrd = () => GOOD_PRD.replace("status: ready", `status: ready\nsources: [${path}]`);
+  let snapshot = "Approved private input, kept outside the remote PR.";
+  w.readSource = (id, rel) => { assert.equal(id, w.id); assert.equal(rel, path); return snapshot; };
+  w.gh.fileAt = async () => { throw new Error("untracked inputs must never be fetched from remote HEAD"); };
+  const evidence = await captureReviewEvidence(w);
+  assert.deepEqual(evidence.context.map(file => file.path), ["a.js"]);
+  assert.equal(evidence.supportingSources[0].content, snapshot);
+  assert.match(reviewPrompt(evidence), /They need not be committed/);
+  assert.match(reviewPrompt(evidence), /Approved private input/);
+  const large = { ...evidence, context: [{ ...evidence.context[0], after: "return true;\n" + "context\n".repeat(5000) }] };
+  const { pieces } = partitionReviewEvidence(large, { maxInputBytes: 12_000, maxJobs: 100 });
+  assert.ok(pieces.length > 1);
+  assert.ok(pieces.every(piece => piece.supportingSources[0].digest === evidence.supportingSources[0].digest));
+  snapshot = "An explicitly accepted replacement snapshot.";
+  assert.notEqual((await captureReviewEvidence(w)).digest, evidence.digest, "same Git head cannot reuse review of a different approved source");
+  snapshot = "x".repeat(110_000);
+  const oversized = await captureReviewEvidence(w);
+  assert.throws(() => partitionReviewEvidence(oversized, { maxInputBytes: 100_000, maxJobs: 100 }), /immutable review identity exceeds/);
+  w.readSource = () => null;
+  await assert.rejects(captureReviewEvidence(w), /immutable source snapshot is unreadable/);
+});
 const clear = evidence => ({ version:1, verdict:"clear", examinedCriteria:evidence.criteria.map(c=>c.id), findings:[], unresolvedScope:[], route:"codex", inputDigest:evidence.digest, reviewedHead:head, ...([2, 4].includes(evidence.version) ? { observations: [] } : {}) });
 
 function scopedClear(evidence, dense = false) {
@@ -169,6 +192,18 @@ test("complete evidence includes deletion context, immutable brief, checks and r
   w.gh.prView=async()=>w.pr; const bounded=await captureReviewEvidence(w);
   assert.throws(()=>partitionReviewEvidence(bounded,{...w.entry.reviewPolicy.limits,maxInputBytes:1024}),/identity exceeds|cannot fit/);
   w.readPrd=()=>null; await assert.rejects(captureReviewEvidence(w),/snapshot is unreadable/);
+});
+
+test("only known read failures during evidence capture are marked retryable", async () => {
+  for (const [fault, retryable] of [
+    [{ code: "BB_TRANSPORT", uncertain: false }, true], [{ code: "BB_TRANSPORT", uncertain: true }, false],
+    [{ code: "BB_RATE_LIMIT" }, true], [{ code: "BB_HTTP", status: 503 }, true], [{ code: "BB_HTTP", status: 403 }, false],
+    [{ code: "BB_OVERSIZED" }, false], [{ code: "BB_IDENTITY" }, false],
+  ]) {
+    const w = evidenceWorld(), error = Object.assign(new Error("capture failed"), fault);
+    w.gh.reviewEvidence = async () => { throw error; };
+    await assert.rejects(captureReviewEvidence(w), e => e === error && Boolean(e.retryableReviewCapture) === retryable);
+  }
 });
 
 test("shared capture rejects binary, submodule and oversized evidence from adapters and recovered sources", async () => {
@@ -382,12 +417,55 @@ function tickWorld({ mode="first-party-required", record, over={} }={}) {
   const tick=makeTick(ctx);
   return {ctx,tick,gh,runner,state,id,notify,entry:()=>state.get(id),calls:()=>calls};
 }
+test("work-artifact cleanup precedes paid review and ignores session-only publication exceptions", async () => {
+  const w = tickWorld();
+  w.gh.prDiff = async () => "diff --git a/WORK_LOG.md b/WORK_LOG.md\nnew file mode 100644\n--- /dev/null\n+++ b/WORK_LOG.md\n@@ -0,0 +1 @@\n+notes\n" +
+    "diff --git a/docs/prds/widget-export.md b/docs/prds/widget-export.md\n--- a/docs/prds/widget-export.md\n+++ b/docs/prds/widget-export.md\n@@ -1 +1 @@\n+publish_files: [WORK_LOG.md]\n";
+  await w.tick.tick();
+  assert.equal(w.calls(), 0, "do not capture/review scratch files only to invalidate that review during cleanup");
+  assert.equal(w.runner.started.length, 1);
+  assert.match(w.runner.started[0].args.at(-1), /WORK_LOG\.md/);
+  assert.equal(w.entry().publication_check, undefined);
+});
+test("clean path proofs survive coordinator restart without polling Bitbucket diffs during review", async () => {
+  const w = tickWorld({ record: (entry, pr) => ({ key: "pending", binding: reviewBinding(pr, entry.reviewPolicy), status: "running" }) });
+  let reads = 0;
+  w.gh.prDiff = async () => { reads++; return ""; };
+  await w.tick.tick();
+  for (let i = 0; i < 3; i++) await makeTick(w.ctx).tick();
+  assert.equal(reads, 1);
+  assert.equal(w.calls(), 4);
+  w.gh.data.pr.baseRefOid = "c".repeat(40);
+  await makeTick(w.ctx).tick(); await makeTick(w.ctx).tick();
+  assert.equal(reads, 2, "a moved base invalidates the cached proof");
+});
+test("a PR moving while its diff is read cannot produce a cached clean proof or start review", async () => {
+  const w = tickWorld();
+  w.gh.prDiff = async () => { w.gh.data.pr.headRefOid = "d".repeat(40); return ""; };
+  await w.tick.tick();
+  assert.equal(w.calls(), 0);
+  assert.equal(w.entry().publication_check, undefined);
+  assert.match(w.entry().retry.error, /head\/base changed/);
+});
 test("qualified internal clear reaches ready honestly; changed receipt/base/checks revoke on the same head",async()=>{
   for(const change of [pr=>{pr.body+="\nupdated";},pr=>{pr.baseRefOid="c".repeat(40);},pr=>{pr.statusCheckRollup[0].conclusion="FAILURE";}]) {
     const w=tickWorld(); await w.tick.tick(); assert.equal(w.entry().state,"ready-for-human", JSON.stringify(w.entry()));
     assert.match(w.entry().review_readiness.note,/first-party review/); assert.match(w.entry().review_readiness.note,/no Git-host bot approval/);
     change(w.gh.data.pr); await w.tick.tick(); assert.notEqual(w.entry().state,"ready-for-human");
   }
+});
+
+test("a transient capture read retries without clearance, then reviews the fresh PR", async () => {
+  const w = tickWorld(), reconcile = w.ctx.reviewService.reconcile; let attempts = 0;
+  w.ctx.reviewService.reconcile = async (...args) => {
+    if (++attempts === 1) throw Object.assign(new Error("GET timed out"), { code: "BB_TRANSPORT", uncertain: false, retryableReviewCapture: true });
+    return reconcile(...args);
+  };
+  await w.tick.tick(); assert.equal(w.entry().state, "pr-open"); assert.equal(w.entry().retry.op, "review evidence capture");
+  assert.equal(w.entry().review_readiness, undefined); assert.equal(w.runner.started.length, 0);
+  await w.tick.tick(); assert.equal(w.entry().state, "ready-for-human"); assert.equal(w.entry().retry, null); assert.equal(attempts, 2);
+  const denied = tickWorld(); denied.ctx.reviewService.reconcile = async () => { throw Object.assign(new Error("access denied"), { code: "BB_HTTP", status: 403 }); };
+  await denied.tick.tick(); assert.equal(denied.entry().reason, "first-party-review-failed");
 });
 
 function reviewMutationWorld() {
@@ -597,8 +675,8 @@ test("a successful deferred findings dispatch records the run in its disposition
   assert.equal(w.entry().firstPartyReview.disposition.status, "pending"); assert.equal(w.runner.started.length, 0);
   const waitingDisposition = structuredClone(w.entry().firstPartyReview.disposition);
   healthy = true; release(); await pending;
-  assert.equal(w.runner.started.length, 1); assert.equal(w.entry().reviewHistory[0].disposition.status, "dispatched");
-  assert.equal(w.entry().reviewHistory[0].disposition.run, w.entry().last.run);
+  assert.equal(w.runner.started.length, 1); assert.equal(w.entry().reviewHistory.at(-1).disposition.status, "dispatched");
+  assert.equal(w.entry().reviewHistory.at(-1).disposition.run, w.entry().last.run);
   const evidence = `${tempHome()}/review-dispatch-evidence.json`;
   writeFileSync(evidence, JSON.stringify({ kind: "Offline coordinator fixture; no live qualification", waitingDisposition,
     dispatchedDisposition: w.entry().firstPartyReview.disposition, prompt: w.runner.started[0].args.at(-1) }, null, 2));
@@ -618,14 +696,14 @@ test("health expiring during preparation and known busy refusals remain retryabl
     await w.tick.tick(); assert.equal(w.runner.started.length, 0); assert.equal(w.entry().iteration, 0);
     assert.equal(w.entry().firstPartyReview.disposition.status, "pending"); assert.equal(w.entry().state, "pr-open");
     healthy = true; w.ctx.git.ensureHttpsRemote = async () => {}; w.runner.start = start;
-    await w.tick.tick(); assert.equal(w.runner.started.length, 1); assert.equal(w.entry().reviewHistory[0].disposition.status, "dispatched");
+    await w.tick.tick(); assert.equal(w.runner.started.length, 1); assert.equal(w.entry().reviewHistory.at(-1).disposition.status, "dispatched");
   }
 });
 
 test("an ambiguous findings launch retains its durable intent and cannot be submitted again", async () => {
   const w = tickWorld({ record: findingsRecord }); let attempts = 0;
   w.runner.start = () => { attempts++; assert.equal(w.entry().firstPartyReview.disposition.status, "dispatch-intent"); throw new Error("launch acknowledgement unavailable"); };
-  await w.tick.tick(); assert.equal(w.entry().state, "needs-human"); assert.equal(w.entry().reviewHistory[0].disposition.status, "dispatch-intent");
+  await w.tick.tick(); assert.equal(w.entry().state, "needs-human"); assert.equal(w.entry().reviewHistory.at(-1).disposition.status, "dispatch-intent");
   w.state.update(w.id, { state: "pr-open", reason: null }); await makeTick(w.ctx).tick();
   assert.equal(w.entry().reason, "repeated-review-findings"); assert.equal(attempts, 1);
 });
@@ -637,10 +715,10 @@ test("a proven unsent findings launch clears intent and can dispatch after expli
     throw Object.assign(new Error("provider request was not sent"), { dispatchNotSent: true });
   };
   await w.tick.tick(); assert.equal(w.entry().reason, "dispatch-refused"); assert.equal(w.runner.started.length, 0);
-  assert.equal(w.entry().reviewHistory[0].disposition.status, "pending"); assert.equal(w.entry().iteration, 0);
+  assert.equal(w.entry().reviewHistory.at(-1).disposition.status, "pending"); assert.equal(w.entry().iteration, 0);
   w.runner.start = start; w.state.update(w.id, { state: "pr-open", reason: null });
   await makeTick(w.ctx).tick(); assert.equal(w.runner.started.length, 1);
-  assert.equal(w.entry().reviewHistory[0].disposition.status, "dispatched");
+  assert.equal(w.entry().reviewHistory.at(-1).disposition.status, "dispatched");
 });
 
 test("findings invalidated during launch retain accepted-run ownership without restoring stale evidence", async () => {
@@ -652,13 +730,13 @@ test("findings invalidated during launch retain accepted-run ownership without r
   };
   await w.tick.tick();
   assert.equal(w.entry().last.run, w.runner.started[0].id); assert.equal(w.entry().state, "pr-open");
-  assert.equal(w.entry().firstPartyReview, null); assert.equal(w.entry().reviewHistory[0].disposition.status, "dispatched");
-  assert.equal(w.entry().reviewHistory[0].disposition.run, w.entry().last.run);
+  assert.equal(w.entry().firstPartyReview, null); assert.equal(w.entry().reviewHistory.at(-1).disposition.status, "dispatched");
+  assert.equal(w.entry().reviewHistory.at(-1).disposition.run, w.entry().last.run);
 });
 test("internal findings use the existing fix path exactly once; failures consume no coding round",async()=>{
   const w=tickWorld({record:(entry,pr)=>({key:"findings",binding:reviewBinding(pr,entry.reviewPolicy),status:"completed",result:{verdict:"findings",reviewedHead:head,inputDigest:fp,findings:[finding]}})});
   await w.tick.tick(); assert.equal(w.runner.started.length,1); assert.match(w.runner.started[0].args.at(-1),/First-party review findings/);
-  assert.equal(w.entry().reviewHistory[0].disposition.status,"dispatched");
+  assert.equal(w.entry().reviewHistory.at(-1).disposition.status,"dispatched");
   const failed=tickWorld({record:()=>({status:"failed",error:"provider quota unavailable"})});
   await failed.tick.tick(); assert.equal(failed.entry().reason,"first-party-review-failed"); assert.equal(failed.runner.started.length,0); assert.equal(failed.entry().iteration,0);
   const incomplete=tickWorld({record:()=>({status:"incomplete",error:"complete review needs 9 bounded jobs, above the configured max_jobs 4"})});
@@ -1015,8 +1093,60 @@ test("review retry command wakes the same task and preserves policy, PR and auth
   w.ctx.reviewService.retry = async (id, entry, reason) => { called = true; assert.equal(id,w.id); assert.equal(entry.pr,before.pr); assert.equal(reason,"Retry bad citations"); return { at: at(20), retries: [{ from: "old", to: "new" }] }; };
   await reviewCommand(w.ctx, { action: "retry", handle: w.id, reason: "Retry bad citations" });
   const after = w.entry(); assert.equal(called,true); assert.equal(after.state,"pr-open"); assert.equal(after.review_next_at,0);
-  assert.equal(after.firstPartyReview,null); assert.deepEqual(after.reviewHistory.at(-1),record);
+  assert.equal(after.firstPartyReview,null); assert.deepEqual(w.state.reviewHistory(w.id).at(-1),record);
   for (const key of ["pr","session","branch","worktree","iteration","reviewPolicy"]) assert.deepEqual(after[key],before[key]);
+});
+
+test("retrying local output retains an exact-head external approval and its review window", async () => {
+  const w = tickWorld({ mode: "both-required", over: { cursor: { since: T0, fixed_sha: head, dispatched: [] }, rereview: { at: at(1), nudged: true } } });
+  w.gh.data.reviews.push(approval(head, 2));
+  w.state.update(w.id, { state: "needs-human", reason: "review-incomplete", firstPartyReview: { status: "incomplete" } });
+  w.ctx.reviewService.retry = async () => ({ at: at(20), retries: [{ from: "old", to: "new" }] });
+  await reviewCommand(w.ctx, { action: "retry", handle: w.id, reason: "Repair local output only" });
+  assert.deepEqual(w.entry().rereview, { at: at(1), nudged: true });
+  await w.tick.tick();
+  assert.equal(w.entry().state, "ready-for-human");
+  assert.equal(w.gh.calls.filter(call => call[0] === "comment").length, 0);
+});
+
+test("retry keeps the evidence binding so same-head changes require a fresh external answer", async () => {
+  for (const edit of [pr => { pr.body += "\nupdated"; }, pr => { pr.baseRefOid = "c".repeat(40); }, pr => { pr.statusCheckRollup[0].detailsUrl = "https://example.test/check/changed"; }]) {
+    const w = tickWorld({ mode: "both-required", over: { cursor: { since: T0, fixed_sha: head, dispatched: [] }, rereview: { at: at(1), nudged: false } } });
+    const binding = reviewBinding(w.gh.data.pr, w.entry().reviewPolicy);
+    w.state.update(w.id, { state: "needs-human", reason: "review-incomplete", reviewBinding: binding, reviewHead: head,
+      firstPartyReview: { status: "incomplete", binding } });
+    w.gh.data.reviews.push(approval(head, 2));
+    w.ctx.reviewService.retry = async () => ({ at: at(9), retries: [{ from: "old", to: "new" }] });
+    await reviewCommand(w.ctx, { action: "retry", handle: w.id, reason: "Repair local output" });
+    edit(w.gh.data.pr); await w.tick.tick();
+    assert.equal(w.entry().state, "pr-open"); assert.equal(w.entry().rereview.at, at(10));
+    w.gh.data.reviews.push(approval(head, 11)); w.ctx.clock.set(at(12)); await w.tick.tick();
+    assert.equal(w.entry().state, "ready-for-human");
+  }
+});
+
+test("local format repairs retain validated scope concerns through whole-PR synthesis", async () => {
+  const w = reviewServiceWorld(), after = `${"x".repeat(35_000)}\n`;
+  const patch = `diff --git a/a.js b/a.js\nnew file mode 100644\n--- /dev/null\n+++ b/a.js\n@@ -0,0 +1 @@\n+${after}`;
+  w.ctx.gh.reviewEvidence = async () => ({ ...source, diff: patch, context: [{ path: "a.js", status: "added", patch, before: null, after }] });
+  const service = w.service(), first = await service.reconcile(w.id, w.entry, w.pr);
+  const job = service.inspect(w.id).jobs[first.key], concern = "Caller authorization must be checked across files.";
+  assert.equal(job.evidence.version, 2);
+  const bad = { ...scopedClear(job.evidence), unresolvedScope: [concern], observations: [{ criterionId: "ac-1", description: "Inspect caller", evidence: { path: "a.js", side: "after", line: 1, quote: "absent source quote" } }] };
+  for (const output of [bad, { ...bad, observations: [{}] }, { ...bad, observations: Array(9).fill(bad.observations[0]) }]) {
+    assert.throws(() => validateReviewResult(JSON.stringify(output), job.evidence), error => {
+      assert.equal(error.repairableReviewOutput, true); assert.deepEqual(error.unresolvedScope, [concern]); return true;
+    });
+  }
+  assert.throws(() => validateReviewResult(JSON.stringify({ ...bad, reviewedHead: "wrong-head" }), job.evidence), error => !error.unresolvedScope);
+  w.finish(job, { raw: JSON.stringify(bad) });
+  const retry = await service.reconcile(w.id, w.entry, w.pr), repaired = service.inspect(w.id).jobs[retry.key];
+  assert.deepEqual(repaired.priorUnresolvedScope, [concern]);
+  w.finish(repaired, { raw: JSON.stringify(scopedClear(repaired.evidence)) });
+  const final = await w.service().reconcile(w.id, w.entry, w.pr), finalJob = service.inspect(w.id).jobs[final.key];
+  assert.equal(finalJob.evidence.version, 3);
+  assert.ok(reviewPrompt(finalJob.evidence).includes(concern));
+  assert.equal(final.status, "running", "format repair cannot substitute for whole-PR review");
 });
 
 test("all local pieces clearing still requires a fresh whole-PR reviewer, including after restart", async () => {
@@ -1268,6 +1398,26 @@ test("local reviewer progress never clears readiness and wakes fresh host valida
   assert.notEqual(w.entry().state, "ready-for-human", "an old captured result cannot clear a changed live head");
 });
 
+test("unchanged reviewer polls do not write the registry or refresh the task timestamp", async () => {
+  let record = { key: "captured-review", binding: "old-binding", status: "running", pieces: [{ key: "piece", status: "running" }] };
+  const w = tickWorld({ over: { firstPartyReview: record, review_next_at: Number.MAX_SAFE_INTEGER } });
+  w.ctx.executionFor = () => w.runner;
+  w.ctx.reviewService.progress = async () => structuredClone(record);
+  w.gh.prView = async () => assert.fail("between-poll progress must not read the host");
+  const signature = () => { const s = statSync(w.state.file, { bigint: true }); return [s.ino, s.mtimeNs, s.ctimeNs]; };
+  await w.tick.tick();
+  const before = signature(), timestamp = w.entry().updated_at;
+  for (let i = 0; i < 5; i++) { w.ctx.clock.advance(1 / 6); await makeTick(w.ctx).tick(); }
+  assert.deepEqual(signature(), before);
+  assert.equal(w.entry().updated_at, timestamp);
+  record = { ...record, pieces: [{ key: "piece", status: "completed" }] };
+  await w.tick.tick();
+  assert.notDeepEqual(signature(), before);
+  assert.notEqual(w.entry().updated_at, timestamp);
+  assert.equal(w.entry().firstPartyReview.pieces[0].status, "completed");
+  assert.equal(w.entry().state, "pr-open", "a progress update does not grant readiness");
+});
+
 test("local reviewer progress is not held behind unrelated provider reconciliation", async () => {
   const old = { key: "captured-review", binding: "old-binding", status: "running" };
   const w = tickWorld({ over: { firstPartyReview: old, review_next_at: Number.MAX_SAFE_INTEGER } });
@@ -1306,7 +1456,9 @@ test("piece observations are bounded source evidence and final findings cannot i
 test("runtime defaults allow long unattended work while explicit operator ceilings still apply", () => {
   assert.equal(DEFAULTS.max_iterations, 60); assert.equal(DEFAULTS.max_budget_usd, 50);
   assert.equal(REVIEW_DEFAULTS.max_jobs, 2048); assert.equal(REVIEW_DEFAULTS.budget_usd, 100);
-  assert.equal(REVIEW_DEFAULTS.timeout_ms, 900000);
+  assert.equal(REVIEW_DEFAULTS.timeout_ms, 3600000);
+  assert.equal(selectReviewPolicy({ ...config, review: { ...config.review, timeout_ms: 900000 } }, "acme/widget", qualification).limits.timeoutMs, 900000);
+  assert.throws(() => validateReviewSettings({ ...REVIEW_DEFAULTS, timeout_ms: 3600001 }), /timeout_ms/);
   assert.equal(validateReviewSettings({ ...REVIEW_DEFAULTS, max_jobs: 2, budget_usd: 1 }).max_jobs, 2);
   assert.equal(validateReviewSettings({ ...REVIEW_DEFAULTS, max_jobs: 8192, budget_usd: 10000 }).max_jobs, 8192);
   assert.throws(() => validateReviewSettings({ ...REVIEW_DEFAULTS, max_jobs: 8193 }), /max_jobs/);

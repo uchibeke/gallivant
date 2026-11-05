@@ -233,7 +233,7 @@ test("a hook that cannot be written is logged and does not fail the run", async 
   w.git.installHooks = () => ({ installed: false, why: "EACCES" });
   const entry = w.entry();
   await w.tick.startRun(w.id, entry, { name: "fix", prompt: "carry on" });
-  assert.ok(w.logged.some(l => /commit-msg hook could not be written/.test(l) && /nothing enforces it/.test(l)),
+  assert.ok(w.logged.some(l => /commit-msg hook could not be written/.test(l) && /coordinator publication checks remain mandatory/.test(l)),
     "the operator is told the guard is missing for this run, rather than the run being refused");
 });
 
@@ -827,6 +827,22 @@ test("conflict, merged and closed are terminal", async () => {
   }
 });
 
+test("ready and terminal transitions record activity without refreshing it on polling", async () => {
+  const w = world({}, { pr: prFixture({ statusCheckRollup: [checkRun({ name: "test", conclusion: "SUCCESS" })] }), reviews: clearReviewer() });
+  w.clock.advance(5); await w.tick.tick();
+  assert.equal(w.entry().state, STATES.ready);
+  assert.equal(w.entry().activity_at, at(5));
+  w.clock.advance(1); await w.tick.tick();
+  assert.equal(w.entry().activity_at, at(5));
+  for (const state of ["MERGED", "CLOSED"]) {
+    const terminal = world({}, { pr: prFixture({ state }) });
+    terminal.clock.advance(10); await terminal.tick.tick();
+    assert.equal(terminal.entry().activity_at, at(10));
+    terminal.clock.advance(1); await terminal.tick.tick();
+    assert.equal(terminal.entry().activity_at, at(10));
+  }
+});
+
 test("a run past the timeout is killed and the entry stops", async () => {
   const w = world({}, { reviews: [review({ id: 1, by: BOT, bot: true, state: "CHANGES_REQUESTED", at: at(5) })] });
   w.clock.advance(6);
@@ -1393,10 +1409,10 @@ test("a diff the gate cannot read is no decision, not a clean scan: the PR stays
   assert.equal(w.entry().iteration, 0);
   assert.deepEqual(w.gh.calls.filter(c => c[0] === "addLabel"), []);
   assert.deepEqual(w.notify.sent, []);
-  assert.ok(w.logged.some(l => /completion gate failed \(diff unreadable: .*Bad gateway/.test(l)), `the reason is logged (got ${w.logged})`);
+  assert.ok(w.logged.some(l => /completion gate failed \(publication diff unreadable: .*Bad gateway/.test(l)), `the reason is logged (got ${w.logged})`);
 });
 
-test("with the output scan off, a failing prDiff cannot affect the gate, because no diff is fetched at all", async () => {
+test("publication paths remain mandatory when the optional output-content scan is off", async () => {
   const config = { ...CONFIG, deliverable: { ...CONFIG.deliverable, evaluator: "local", scan_output: false } };
   const w = world({ rereview: { at: T0, nudged: false } }, {
     pr: prFixture({ statusCheckRollup: [checkRun({ name: "test", conclusion: "SUCCESS" })] }),
@@ -1407,9 +1423,38 @@ test("with the output scan off, a failing prDiff cannot affect the gate, because
   w.clock.advance(4);
   await w.tick.tick();
 
-  assert.equal(asked, 0, "scan_output off means the diff is never requested");
-  assert.equal(w.runner.started.length, 1, "the gate ran and denied the missing receipt, as it would with any diff");
-  assert.match(w.runner.started[0].args.at(-1), /oap\.receipt_missing/);
+  assert.equal(asked, 1, "publication hygiene always requires the full remote diff");
+  assert.equal(w.runner.started.length, 0, "an unreadable diff does not spend a correction round");
+  assert.equal(w.entry().state, STATES.prOpen);
+});
+
+test("remote work artifacts trigger cleanup even after bypassing the commit hook and disabling content scans", async () => {
+  for (const deliverable of [false, { ...CONFIG.deliverable, evaluator: "local", scan_output: false }]) {
+    const w = world({ rereview: { at: T0, nudged: false } }, {
+      pr: prFixture({ statusCheckRollup: [checkRun({ name: "test", conclusion: "SUCCESS" })], body: "Adds export." + receiptBlock() }),
+      reviews: clearReviewer(),
+    }, { config: { ...CONFIG, deliverable }, readPrd: () => GOOD_PRD });
+    w.gh.prDiff = async () => "diff --git a/WORK_LOG.md b/WORK_LOG.md\nnew file mode 100644\n--- /dev/null\n+++ b/WORK_LOG.md\n@@ -0,0 +1 @@\n+working notes\n";
+    w.clock.advance(4); await w.tick.tick();
+    assert.equal(w.runner.started.length, 1);
+    assert.match(w.runner.started[0].args.at(-1), /WORK_LOG\.md/);
+    assert.match(w.runner.started[0].args.at(-1), /outside the repository/);
+    assert.equal(w.gh.calls.some(call => call[0] === "addLabel" && call[2] === READY_LABEL), false);
+  }
+});
+
+test("saved brief exceptions preserve explicitly requested evidence without trusting session-edited PRD text", async () => {
+  const brief = GOOD_PRD.replace("status: ready", "status: ready\npublish_files:\n  - docs/evidence/export.png");
+  const w = world({ rereview: { at: T0, nudged: false } }, {
+    pr: prFixture({ statusCheckRollup: [checkRun({ name: "test", conclusion: "SUCCESS" })], body: "Adds export." + receiptBlock() }),
+    reviews: clearReviewer(),
+  }, { config: { ...CONFIG, deliverable: { ...CONFIG.deliverable, evaluator: "local" } }, readPrd: () => brief });
+  let reads = 0;
+  w.gh.prDiff = async () => { reads++; return "diff --git a/docs/evidence/export.png b/docs/evidence/export.png\nnew file mode 100644\nBinary files /dev/null and b/docs/evidence/export.png differ\n"; };
+  w.clock.advance(4); await w.tick.tick();
+  assert.equal(reads, 1, "publication and content checks share a complete diff read");
+  assert.equal(w.runner.started.length, 0);
+  assert.equal(w.entry().state, STATES.ready);
 });
 
 test("a PR that was ready and then stops loses the ready label as it gains needs-human", async () => {
@@ -1538,14 +1583,15 @@ test("a diff at the scan cap leaves the entry pending with the scan cap named, a
   assert.deepEqual(big.gh.calls.filter(c => c[0] === "addLabel"), [], "a partial scan never becomes an allow");
   assert.deepEqual(big.notify.sent, []);
   assert.equal(big.runner.started.length, 0, "and no receipt round, so the round budget is untouched");
-  assert.ok(big.logged.some(l => /completion gate failed \(diff unreadable: .*scan cap/.test(l)), `the scan cap is named (got ${big.logged})`);
+  assert.ok(big.logged.some(l => /completion gate failed \(publication diff unreadable: .*scan cap/.test(l)), `the scan cap is named (got ${big.logged})`);
 
   // The same diff a byte under the cap is read whole, and the pattern in it is found rather than missed.
   const small = world({ rereview: { at: T0, nudged: false } }, {
     pr: prFixture({ statusCheckRollup: [checkRun({ name: "test", conclusion: "SUCCESS" })], body: "Adds export." + receiptBlock() }),
     reviews: clearReviewer(),
   }, { readPrd: () => GOOD_PRD });
-  const under = "+" + "a".repeat(MAX_DIFF_BYTES - 30) + "\n+TODO under the cutoff\n";
+  const header = "diff --git a/output.txt b/output.txt\n--- a/output.txt\n+++ b/output.txt\n@@ -1 +1,2 @@\n";
+  const under = header + "+" + "a".repeat(MAX_DIFF_BYTES - header.length - 30) + "\n+TODO under the cutoff\n";
   small.gh.prDiff = makeGh({ exec: async () => ({ stdout: under, stderr: "" }) }).prDiff;
   small.clock.advance(4);
   await small.tick.tick();
