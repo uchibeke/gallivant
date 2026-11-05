@@ -5,10 +5,47 @@ import { mkdirSync, readFileSync, readdirSync, statSync, unlinkSync, utimesSync,
 import { join } from "node:path";
 import { spawn } from "node:child_process";
 import { makeState } from "../lib/state.mjs";
+import { reviewHistoryStore } from "../lib/review_history.mjs";
 import { tempHome } from "./helpers.mjs";
 
 const record = status => ({ key: "review-1", status: "completed", disposition: { status }, evidence: { diff: "private evidence ".repeat(20000) } });
 const seed = (home, history) => writeFileSync(join(home, "state.json"), JSON.stringify({ version: 1, entries: { "acme/repo/task": { repo: "acme/repo", reviewHistory: history } } }));
+
+test("unchanged registry and chain updates do not write, including after another writer or a restart", () => {
+  const home = tempHome(), state = makeState(home), other = makeState(home), id = "acme/repo/task";
+  const signature = () => { const s = statSync(state.file, { bigint: true }); return [s.ino, s.mtimeNs, s.ctimeNs]; };
+  state.put(id, { repo: "acme/repo", execution: { version: 1, providerState: "running" }, cursor: { since: "first" } });
+  state.createChain({ name: "chain", status: "active", steps: [] });
+  const before = signature();
+  state.update(id, { execution: { version: 1, providerState: "running" } });
+  state.update(id, entry => ({ cursor: { ...entry.cursor } }));
+  other.put(id, other.get(id));
+  other.updateChain("chain", { status: "active" });
+  other.remove("missing");
+  assert.deepEqual(signature(), before);
+  other.update(id, { cursor: { since: "second" } });
+  const changed = signature(); assert.notDeepEqual(changed, before);
+  const returned = state.update(id, { execution: { version: 1, providerState: "running" } });
+  assert.equal(returned.cursor.since, "second", "no-op observes the other writer under the lock");
+  returned.cursor.since = "detached";
+  assert.equal(state.get(id).cursor.since, "second");
+  assert.deepEqual(signature(), changed);
+  state.update(id, entry => { entry.cursor.since = "third"; return {}; });
+  assert.equal(makeState(home).get(id).cursor.since, "third", "mutation callbacks still commit their edits");
+  state.updateChain("chain", () => ({ status: "done" }));
+  assert.equal(makeState(home).getChain("chain").status, "done");
+});
+
+test("reusing historical evidence verifies it without creating another temporary archive", () => {
+  const home = tempHome(), store = reviewHistoryStore(home), evidence = record("pending");
+  const ref = store.archive(evidence), directory = join(home, "reviews", "history");
+  utimesSync(directory, new Date(0), new Date(0));
+  const before = statSync(directory, { bigint: true }).mtimeNs;
+  assert.deepEqual(reviewHistoryStore(home).archive(structuredClone(evidence)), ref);
+  assert.equal(statSync(directory, { bigint: true }).mtimeNs, before, "no temporary create/unlink or directory write");
+  writeFileSync(join(directory, `${ref._gallivantReviewArchive.digest}.json`), "corrupt");
+  assert.throws(() => store.archive(evidence), { code: "REVIEW_HISTORY" });
+});
 
 test("legacy reviews migrate under registry write, preserving distinct versions and restart hydration", () => {
   const home = tempHome(), pending = record("pending"), intent = record("dispatch-intent"), done = record("dispatched");

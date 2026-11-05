@@ -1,7 +1,7 @@
 import { inspectReviewLink } from "../lib/review_link.mjs";
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { mkdirSync, readFileSync, writeFileSync, statSync } from "node:fs";
 import { createHash } from "node:crypto";
 import { PNG } from "pngjs";
 import { evaluateReviews } from "../lib/review_evaluation.mjs";
@@ -1346,6 +1346,26 @@ test("local reviewer progress never clears readiness and wakes fresh host valida
   assert.notEqual(w.entry().state, "ready-for-human", "an old captured result cannot clear a changed live head");
 });
 
+test("unchanged reviewer polls do not write the registry or refresh the task timestamp", async () => {
+  let record = { key: "captured-review", binding: "old-binding", status: "running", pieces: [{ key: "piece", status: "running" }] };
+  const w = tickWorld({ over: { firstPartyReview: record, review_next_at: Number.MAX_SAFE_INTEGER } });
+  w.ctx.executionFor = () => w.runner;
+  w.ctx.reviewService.progress = async () => structuredClone(record);
+  w.gh.prView = async () => assert.fail("between-poll progress must not read the host");
+  const signature = () => { const s = statSync(w.state.file, { bigint: true }); return [s.ino, s.mtimeNs, s.ctimeNs]; };
+  await w.tick.tick();
+  const before = signature(), timestamp = w.entry().updated_at;
+  for (let i = 0; i < 5; i++) { w.ctx.clock.advance(1 / 6); await makeTick(w.ctx).tick(); }
+  assert.deepEqual(signature(), before);
+  assert.equal(w.entry().updated_at, timestamp);
+  record = { ...record, pieces: [{ key: "piece", status: "completed" }] };
+  await w.tick.tick();
+  assert.notDeepEqual(signature(), before);
+  assert.notEqual(w.entry().updated_at, timestamp);
+  assert.equal(w.entry().firstPartyReview.pieces[0].status, "completed");
+  assert.equal(w.entry().state, "pr-open", "a progress update does not grant readiness");
+});
+
 test("local reviewer progress is not held behind unrelated provider reconciliation", async () => {
   const old = { key: "captured-review", binding: "old-binding", status: "running" };
   const w = tickWorld({ over: { firstPartyReview: old, review_next_at: Number.MAX_SAFE_INTEGER } });
@@ -1384,7 +1404,9 @@ test("piece observations are bounded source evidence and final findings cannot i
 test("runtime defaults allow long unattended work while explicit operator ceilings still apply", () => {
   assert.equal(DEFAULTS.max_iterations, 60); assert.equal(DEFAULTS.max_budget_usd, 50);
   assert.equal(REVIEW_DEFAULTS.max_jobs, 2048); assert.equal(REVIEW_DEFAULTS.budget_usd, 100);
-  assert.equal(REVIEW_DEFAULTS.timeout_ms, 900000);
+  assert.equal(REVIEW_DEFAULTS.timeout_ms, 3600000);
+  assert.equal(selectReviewPolicy({ ...config, review: { ...config.review, timeout_ms: 900000 } }, "acme/widget", qualification).limits.timeoutMs, 900000);
+  assert.throws(() => validateReviewSettings({ ...REVIEW_DEFAULTS, timeout_ms: 3600001 }), /timeout_ms/);
   assert.equal(validateReviewSettings({ ...REVIEW_DEFAULTS, max_jobs: 2, budget_usd: 1 }).max_jobs, 2);
   assert.equal(validateReviewSettings({ ...REVIEW_DEFAULTS, max_jobs: 8192, budget_usd: 10000 }).max_jobs, 8192);
   assert.throws(() => validateReviewSettings({ ...REVIEW_DEFAULTS, max_jobs: 8193 }), /max_jobs/);

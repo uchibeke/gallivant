@@ -1100,6 +1100,35 @@ function localTimeoutFixture({ immediate = false, provider = "codex" } = {}) {
   return { home, root, clock, id, session, runner, stops, open, setDescendants: value => { descendants = value; }, setInspectable: value => { inspectable = value; } };
 }
 
+test("local reconciliation coalesces idle observations but persists transitions and repairs projections immediately", async () => {
+  const f = localTimeoutFixture();
+  const service = f.open();
+  const job = await service.submit({ operationId: "initial", name: "initial", sessionId: f.session, spec: { cmd: "codex", args: [], options: {} } });
+  await service.reconcile();
+  const signature = path => { const s = statSync(path, { bigint: true }); return [s.ino, s.mtimeNs, s.ctimeNs]; };
+  const ledger = join(f.root, "execution.json"), projection = join(f.root, job.id, "job.json");
+  const before = { ledger: signature(ledger), projection: signature(projection) };
+  for (let i = 0; i < 5; i++) { f.clock.advance(1 / 6); await f.open().reconcile(); }
+  assert.deepEqual(signature(ledger), before.ledger);
+  assert.deepEqual(signature(projection), before.projection);
+  f.clock.advance(1 / 6); await f.open().reconcile();
+  assert.notDeepEqual(signature(ledger), before.ledger, "live observation gets a one-minute checkpoint");
+  const afterHeartbeat = signature(ledger);
+  delete f.runner.started[0].execution;
+  await f.open().reconcile();
+  assert.deepEqual(signature(ledger), afterHeartbeat, "projection recovery does not rewrite an unchanged ledger");
+  assert.equal(readJson(projection).execution.providerState, "running");
+  f.clock.advance(1 / 60);
+  f.runner.finish(localSessionLines("codex", f.session), { exit: 0 });
+  await f.open().reconcile();
+  assert.equal(f.open().current().execution.providerState, "retrieving-results", "exit is persisted before the heartbeat is due");
+  f.open().settle(job.id);
+  const settled = signature(ledger);
+  f.clock.advance(10); await f.open().reconcile(); await f.open().reconcile();
+  assert.deepEqual(signature(ledger), settled, "terminal executions need no repeated heartbeat");
+  assert.equal(f.open().current().execution.providerState, "succeeded");
+});
+
 test("local network recovery survives execution-ledger reopening without duplicate sessions", async () => {
   const f = localTimeoutFixture({ provider: "claude" });
   const state = makeState(f.home), worktree = join(f.home, "worktree");
