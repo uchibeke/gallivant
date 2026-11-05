@@ -289,7 +289,7 @@ test("a current-head Codex clean comment and a large output reach ready after a 
   const pr = prFixture({ statusCheckRollup: [checkRun({ name: "test", conclusion: "SUCCESS" })], body: receiptBlock() });
   const gh = fakeGh({ pr, comments: [comment({ id: 3, by: "chatgpt-codex-connector[bot]", bot: true, at: at(3),
     body: "Codex Review: Didn't find any major issues. Already looking forward to the next diff.\n\n**Reviewed commit:** `a1b2c3d`" })] });
-  gh.prDiff = async () => "+" + "z".repeat(5_000_000) + "\n+last line\n";
+  gh.prDiff = async () => "diff --git a/output.txt b/output.txt\n--- a/output.txt\n+++ b/output.txt\n@@ -1 +1,2 @@\n+" + "z".repeat(5_000_000) + "\n+last line\n";
   const runner = fakeRunner(clock), notify = fakeNotify();
   let fail = true, calls = 0, lastOutput;
   const tick = makeTick({ credential: fakeCredential(), identity: fakeIdentity(), config: CONFIG, state, gh, git: fakeGit(), notify, log: silentLog, clock, ownLogin: "me", runnerFor: () => runner, readPrd: () => GOOD_PRD,

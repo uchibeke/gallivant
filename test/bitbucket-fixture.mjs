@@ -65,7 +65,7 @@ export function fixture({ config = {}, limits = {}, intercept = null, credential
     }
     if (path === "/pullrequests/7/tasks") return json(page(data.tasks));
     if (path === `/commit/${HEAD}/statuses`) return json(page(data.statuses));
-    if (path === "/pullrequests/7/diff") return new Response("diff --git a/a b/a\n+change\n");
+    if (path === "/pullrequests/7/diff") return new Response(data.comparisonDiff);
     throw new Error(`Unexpected fixture request: ${options.method} ${path}`);
   };
   const registry = makeHostRegistry({ config, limits, fetch, credential: credential ?? (async ({ host, path, operation }) => ({ host, repository: path, token: operation === "git" ? "fixture-git-secret" : data.token, email: data.email, username: "x-bitbucket-api-token-auth" })) });

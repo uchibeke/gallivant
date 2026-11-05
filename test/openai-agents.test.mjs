@@ -14,6 +14,8 @@ import { agentsHttp } from "../lib/openai_agents_http.mjs";
 import { contentHash, prepareAgentsSources, AGENTS_WORKSPACE_HELPER } from "../lib/openai_agents_sources.mjs";
 import { start } from "../lib/commands/start.mjs";
 import { agentsInput } from "../lib/openai_agents_input.mjs";
+import { publicationPolicyOf, assertPublicationPaths } from "../lib/work_artifacts.mjs";
+import { parsePrd } from "../lib/prd.mjs";
 import { makeState, newEntry, STATES } from "../lib/state.mjs";
 import { makeTick } from "../lib/tick.mjs";
 import { makeGit } from "../lib/git.mjs";
@@ -839,10 +841,11 @@ for (const format of ["sha1", "sha256"]) test(format === "sha1" ? "source snapsh
   git(["init", "-q", "-b", "work/source", `--object-format=${format}`]); writeFileSync(join(dir, "answer.txt"), initial); writeFileSync(join(dir, "binary.dat"), Buffer.from([0, 128, 255])); git(["add", "."]); git(["-c", "user.name=Fixture", "-c", "user.email=fixture@example.com", "commit", "-qm", "Input"]);
   writeFileSync(join(dir, "brief.md"), "Approved carried requirements\n"); const revision = git(["rev-parse", "HEAD"]).trim();
   const source = await prepareAgentsSources({ worktree: dir, inputHead: revision, repo: "acme/widget", branch: "work/source", base: "main", overlays: [{ path: "brief.md", text: "Approved carried requirements\n" }] });
-  const decoded = JSON.parse(gunzipSync(source.bytes)); assert.equal(decoded.inputHead, revision); assert.deepEqual(decoded.deliveryPaths, ["brief.md"]); assert.deepEqual(Buffer.from(decoded.files.find(f => f.path === "binary.dat").data, "base64"), Buffer.from([0, 128, 255])); assert.equal(source.hashes["brief.md"], contentHash("Approved carried requirements\n"));
+  const decoded = JSON.parse(gunzipSync(source.bytes)); assert.equal(decoded.inputHead, revision); assert.deepEqual(decoded.deliveryPaths, [], "readable inputs are not implicitly publication outputs"); assert.deepEqual(Buffer.from(decoded.files.find(f => f.path === "binary.dat").data, "base64"), Buffer.from([0, 128, 255])); assert.equal(source.hashes["brief.md"], contentHash("Approved carried requirements\n"));
   assert.equal(revision.length, format === "sha1" ? 40 : 64); assert.equal(git(["rev-parse", "--show-object-format"]).trim(), format);
   await assert.rejects(prepareAgentsSources({ worktree: dir, inputHead: revision, repo: "acme/widget", branch: "work/source", base: "main", overlays: [{ path: "brief.md", text: "tampered" }] }), { code: "AGENTS_SOURCE" });
   const request = { worktree: dir, inputHead: revision, repo: "acme/widget", branch: "work/source", base: "main", overlays: [{ path: "brief.md", text: "Approved carried requirements\n" }] };
+  for (const deliveryPaths of [["missing.md"], ["brief.md", "brief.md"], ["../brief.md"]]) await assert.rejects(prepareAgentsSources({ ...request, deliveryPaths }), { code: "AGENTS_SOURCE" });
   for (const length of [39, 41, 63, 65]) await assert.rejects(prepareAgentsSources({ ...request, inputHead: "a".repeat(length) }), { code: "AGENTS_SOURCE" });
   let blobs = 0;
   await assert.rejects(prepareAgentsSources(request, async (file, args, options) => {
@@ -863,6 +866,42 @@ for (const format of ["sha1", "sha256"]) test(format === "sha1" ? "source snapsh
     t.diagnostic(`SHA-256 source evidence: ${report}`);
   }
   rmSync(dir, { recursive: true, force: true });
+});
+test("hosted preparation and transport keep carried inputs private unless exact outputs are approved", async t => {
+  for (const approved of [false, true]) {
+    const f = fixture(), worktree = join(f.root, "coordinator"), prd = "brief.md", context = "context.md", other = "other-context.md";
+    t.after(() => rmSync(f.root, { recursive: true, force: true })); mkdirSync(worktree);
+    const git = args => execFileSync("git", args, { cwd: worktree, encoding: "utf8", stdio: "pipe" }).trim();
+    git(["init", "-q", "-b", input.branch]); writeFileSync(join(worktree, "answer.txt"), initial); git(["add", "."]);
+    git(["-c", "user.name=Fixture", "-c", "user.email=fixture@example.test", "commit", "-qm", "Input"]);
+    const revision = git(["rev-parse", "HEAD"]), contextText = "Approved context, preserved for reading.\n";
+    const brief = GOOD_PRD.replace("status: ready", `status: ready\nsources: [${context}, ${other}]${approved ? `\npublish_files: [${context}]` : ""}`);
+    writeFileSync(join(worktree, prd), brief); for (const path of [context, other]) writeFileSync(join(worktree, path), contextText);
+    const entry = { repo: input.repo, branch: input.branch, base: "main", harness: "openai-agents", worktree, prd, sources: [context, other] };
+    const ctx = { config: { harness: { "openai-agents": config } }, readPrd: () => brief, readSource: () => contextText };
+    const request = await agentsInput(ctx, "acme/widget/task", entry, { ...input, inputHead: revision }, []);
+    const manifest = JSON.parse(gunzipSync(Buffer.from(request.sources.data, "base64")));
+    assert.deepEqual(manifest.deliveryPaths, [prd, ...(approved ? [context] : [])]);
+    for (const path of [context, other]) assert.equal(request.sources.hashes[path], contentHash(contextText));
+    const workspace = join(f.root, "workspace"); mkdirSync(workspace);
+    const helper = join(f.root, "helper.py"), snapshot = join(f.root, "snapshot.gz");
+    writeFileSync(helper, AGENTS_WORKSPACE_HELPER.replaceAll("/workspace", workspace)); writeFileSync(snapshot, Buffer.from(request.sources.data, "base64"));
+    execFileSync("python3", [helper, "restore", snapshot, request.sources.hash], { stdio: "pipe" });
+    assert.equal(readFileSync(join(workspace, "repo", other), "utf8"), contextText);
+    writeFileSync(join(workspace, "repo/answer.txt"), changed);
+    writeFileSync(join(f.root, "pr.json"), JSON.stringify({ title: "Implement answer", body: "Verified output." })); writeFileSync(join(f.root, "tests.json"), "[]");
+    execFileSync("python3", [helper, "publish", join(f.root, "pr.json"), join(f.root, "tests.json")], { stdio: "pipe" });
+    const output = readJson(join(workspace, "outputs/result.json"));
+    assert.deepEqual(output.files.map(file => file.path), ["answer.txt", prd, ...(approved ? [context] : [])]);
+    assertPublicationPaths(output.files.map(file => file.path), publicationPolicyOf(parsePrd(brief, prd), { sources: entry.sources }));
+    const job = await f.service().submit(request);
+    const sent = f.calls.find(call => call.route === "/agents/sessions" && call.method === "POST");
+    assert.deepEqual(JSON.parse(gunzipSync(Buffer.from(sent.body.environment.files[0].data, "base64"))).deliveryPaths, manifest.deliveryPaths);
+    f.finish(); f.artifact(job); Object.assign(f.getResult(), output); f.syncArtifactSize();
+    await f.service().reconcile({ force: true }); const result = await f.service().collect();
+    assert.deepEqual(result.files, output.files, "the real helper's result passes source-hash validation through transport");
+    assert.equal(readFileSync(join(worktree, other), "utf8"), contextText); assert.equal(git(["ls-files", other]), "");
+  }
 });
 test("hosted snapshots refuse unfinished tracked, staged, deleted, renamed and untracked files without uploading them", async t => {
   const observations = [];
@@ -945,7 +984,7 @@ test("managed artifacts reach the single PR writer with actual file and current-
   const f = fixture(), job = await f.service().submit(input); f.finish(); f.artifact(job); await f.service().reconcile({ force: true }); const result = await f.service().collect();
   const worktree = mkdtempSync(join(tmpdir(), "agents-publish-")); writeFileSync(join(worktree, "answer.txt"), initial);
   const calls = [], entry = { repo: input.repo, branch: input.branch, base: "main", harness: "openai-agents", session: job.execution.sessionId, worktree, prd: "docs/prds/task.md", execution: f.service().current().execution };
-  const ctx = { git: { head: async () => head, trackedPaths: async () => ["answer.txt"], resultModesMatch: async () => true, dirty: async () => ({ modified: 0, untracked: 0 }), currentBranch: async () => input.branch, originOf: async () => "https://github.com/acme/widget.git", commitResult: async () => calls.push("commit"), pushResult: async () => calls.push("push") }, gh: { publishResultPr: async () => { calls.push("PR"); return { number: 42, url: "https://example.test/pr/42" }; } }, executionFor: f.service, readPrd: () => "# Approved brief\n\n## Verify\n\n- `printf verified`\n" };
+  const ctx = { git: { head: async () => head, trackedPaths: async () => ["answer.txt"], publicationPaths: async () => ["answer.txt"], resultModesMatch: async () => true, dirty: async () => ({ modified: 0, untracked: 0 }), currentBranch: async () => input.branch, originOf: async () => "https://github.com/acme/widget.git", commitResult: async () => calls.push("commit"), pushResult: async () => calls.push("push") }, gh: { publishResultPr: async () => { calls.push("PR"); return { number: 42, url: "https://example.test/pr/42" }; } }, executionFor: f.service, readPrd: () => "# Approved brief\n\n## Verify\n\n- `printf verified`\n" };
   const published = await reconcileExecutionResult(ctx, { id: "acme/widget/task", entry, result, dir: f.service().dirOf(job.id), verify: async () => { assert.equal(readFileSync(join(worktree, "answer.txt"), "utf8"), changed); calls.push("verify"); return { stdout: "verified", stderr: "" }; } });
   assert.deepEqual(calls, ["commit", "verify", "push", "PR"]); assert.equal(published.pr.number, 42); assert.equal(published.evidence[0].source, "coordinator-executed"); assert.equal(published.evidence[0].head, head);
   await reconcileExecutionResult(ctx, { id: "acme/widget/task", entry, result, dir: f.service().dirOf(job.id) }); assert.equal(calls.length, 4);

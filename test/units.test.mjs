@@ -177,6 +177,21 @@ test("registry reads are detached and observe atomic writes from another instanc
   assert.throws(()=>a.get(id),/unsupported registry version/);
 });
 
+test("registry updates isolate callbacks and return values while retaining other entries", () => {
+  const home = tempHome(), state = makeState(home), other = makeState(home);
+  state.put("acme/one/task", { repo: "acme/one", nested: { value: 1 } });
+  state.put("acme/two/task", { repo: "acme/two", nested: { value: 2 } });
+  assert.throws(() => state.update("acme/one/task", entry => { entry.nested.value = 9; throw new Error("cancel update"); }), /cancel update/);
+  assert.equal(state.get("acme/one/task").nested.value, 1);
+  const updated = state.update("acme/one/task", entry => { entry.nested.value = 3; return { nested: entry.nested }; });
+  updated.nested.value = 99;
+  assert.equal(state.get("acme/one/task").nested.value, 3);
+  assert.equal(state.get("acme/two/task").nested.value, 2);
+  other.update("acme/two/task", { nested: { value: 4 } });
+  state.update("acme/one/task", { flag: true });
+  assert.equal(state.get("acme/two/task").nested.value, 4);
+});
+
 test("the PR block round-trips and rejects anything malformed", () => {
   const block = { prd: "docs/prds/x.md", harness: "codex", session: "22222222-2222-4222-8222-222222222222", branch: "gallivant/x" };
   const body = upsertBlock("Adds x.", block);
