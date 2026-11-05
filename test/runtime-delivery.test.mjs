@@ -5,7 +5,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { join } from "node:path";
 import { existsSync, readFileSync, mkdirSync, writeFileSync, symlinkSync, lstatSync } from "node:fs";
-import { checkRuntimeState, migrateRuntimeState, backupRuntimeState, restoreRuntimeState } from "../lib/runtime_state.mjs";
+import { assertRuntimePin, checkRuntimeState, migrateRuntimeState, backupRuntimeState, restoreRuntimeState } from "../lib/runtime_state.mjs";
 import { createNodeCoordinator, createNodeOwnerStore } from "../lib/runtime_node.mjs";
 import { CORE_VERSION } from "../lib/task_delivery_contract.mjs";
 import { makeExecution } from "../lib/execution.mjs";
@@ -18,6 +18,42 @@ const manifest = { coreVersion: CORE_VERSION, operationVersion: 1, taskVersion: 
 const update = { ...manifest, coreSha256: "b".repeat(64) };
 const taskId = "task-" + "1".repeat(24);
 const remote = { transport: "remote", provider: "openai-agents", acceptance: "accepted", providerJobId: "owned", turnId: "root", providerState: "succeeded", collected: true };
+
+test("archived v2 registry supports coordinator wake and integrity-checked backup and restore", async () => {
+  const home = tempHome(), id = "acme/widget/history", state = makeState(home);
+  const review = { key: "review-1", status: "completed", evidence: { diff: "private historical evidence" }, disposition: { status: "dispatched" } };
+  migrateRuntimeState({ home, manifest });
+  state.put(id, { repo: "acme/widget", state: "done", reviewHistory: [review] });
+  assert.equal(readJson(join(home, "state.json")).version, 2);
+  assert.equal(checkRuntimeState({ home, manifest }).active, false); assert.doesNotThrow(() => assertRuntimePin({ home, manifest }));
+  const ctx = { home, state, config: CONFIG, clock: makeClock(), ownLogin: "me", log: silentLog, gh: fakeGh(), git: fakeGit(), notify: fakeNotify() };
+  let scheduled = 0; await createNodeCoordinator({ ctx, store: createNodeOwnerStore({ home, durable: true }), manifest, schedule: async () => { scheduled++; } }).wake();
+  assert.equal(scheduled, 2);
+  const archive = `reviews/history/${state.get(id).reviewHistory[0]._gallivantReviewArchive.digest}.json`;
+  const ledger = `reviews/${"a".repeat(64)}.json`, lock = `${ledger}.lock`;
+  writeJsonAtomic(join(home, ledger), { version: 1, id, jobs: {} }); writeFileSync(join(home, lock), "process lock");
+  // Reviewer preparation contains arbitrary links and scratch; it is neither
+  // traversed by runtime checks nor copied into the durable backup.
+  const scratch = join(home, "reviews", "preflight", "nested"); mkdirSync(scratch, { recursive: true });
+  symlinkSync(tempHome(), join(scratch, "external-link")); writeFileSync(join(scratch, "scratch.json"), "not durable");
+  assert.equal(checkRuntimeState({ home, manifest }).active, false);
+  const backup = join(tempHome(), "backup"), restored = join(tempHome(), "restored");
+  backupRuntimeState({ home, out: backup, manifest });
+  const hashes = readJson(join(backup, "backup.json")).hashes;
+  assert.ok(hashes[archive]); assert.ok(hashes[ledger]); assert.equal(hashes[lock], undefined);
+  assert.equal(Object.keys(hashes).some(path => path.startsWith("reviews/preflight/")), false);
+  restoreRuntimeState({ backup, out: restored, manifest });
+  assert.deepEqual(makeState(restored).reviewHistory(id), [review]);
+  assert.deepEqual(readJson(join(restored, ledger)), readJson(join(home, ledger)));
+  assert.equal(existsSync(join(restored, lock)), false);
+  const missing = join(tempHome(), "missing"); delete hashes[archive]; writeJsonAtomic(join(backup, "backup.json"), { version: 1, coreSha256: manifest.coreSha256, hashes });
+  assert.throws(() => restoreRuntimeState({ backup, out: missing, manifest }), { code: "RUNTIME_STATE" });
+  assert.equal(existsSync(missing), false, "restore removes a namespace with missing referenced evidence");
+  writeFileSync(join(home, archive), "corrupt");
+  const rejected = join(tempHome(), "bad-backup");
+  assert.throws(() => backupRuntimeState({ home, out: rejected, manifest }), { code: "RUNTIME_STATE" });
+  assert.equal(existsSync(rejected), false);
+});
 
 test("qualified handoffs release artifact pins while unresolved work still retains them", () => {
   const id = "acme/widget/review", repo = "acme/widget", head = "approved-head";
