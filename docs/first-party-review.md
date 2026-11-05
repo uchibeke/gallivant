@@ -99,15 +99,6 @@ unresolved need for visual evidence still blocks clearance. A previously owned
 image output rejected solely for local scope can be revalidated against its
 original input and qualification without launching the image job again.
 
-PNG and JPEG changes are currently binary evidence and cannot be reviewed by this route. The host adapters have an opt-in capture interface for development, but the coordinator does not use it for review. It limits captures to 32 image sides, 5 MiB per side and 16 MiB total, with dimensions at most 8192 by 8192 and 16 million pixels. The saved qualification covers text only: an image option in a CLI or a successful text challenge does not qualify image attachment, model vision or isolation. Keep screenshots in the PR and retain the incomplete result until image capture and a restricted reviewer are integrated and qualified; do not treat a fixture or a model's assertion as a live review.
-
-Image qualification is recorded independently for the configured executable bytes,
-model and reviewer configuration. `review qualify --repo OWNER/REPO --capability image`
-reads its status; adding `--run` explicitly starts one bounded image challenge and
-consumes the review allowance. The challenge verifies a coordinator-created copy
-at the execution boundary. It is not an end-to-end PR review and does not enable
-image clearance while capture, coverage and whole-PR synthesis are unintegrated.
-
 When the full serialized evidence does not fit one job, the shared service creates immutable byte-bounded source and patch slices. Every piece repeats the same task, repository, PR, head, base, merge base, brief, criteria, checks, receipt, policy and aggregate digest. Long single lines and large lockfiles are sliced with absolute line/column offsets rather than omitted. Every changed path and every criterion must appear in the aggregate, every piece must return a valid matching identity, and all pieces must finish before clearance. A finding in any piece, a timeout, malformed output, missing piece, conflicting finding identity, exhausted job/budget bound or unresolved scope blocks readiness. If the configured aggregate cannot hold the evidence, the result says `review-incomplete`/`REVIEW_INCOMPLETE` with the required and configured job counts; it does not review a prefix.
 
 Split review has two stages. Each local inspection judges only supplied slices,

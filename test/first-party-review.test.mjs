@@ -1072,6 +1072,42 @@ test("review retry command wakes the same task and preserves policy, PR and auth
   for (const key of ["pr","session","branch","worktree","iteration","reviewPolicy"]) assert.deepEqual(after[key],before[key]);
 });
 
+test("retrying local output retains an exact-head external approval and its review window", async () => {
+  const w = tickWorld({ mode: "both-required", over: { cursor: { since: T0, fixed_sha: head, dispatched: [] }, rereview: { at: at(1), nudged: true } } });
+  w.gh.data.reviews.push(approval(head, 2));
+  w.state.update(w.id, { state: "needs-human", reason: "review-incomplete", firstPartyReview: { status: "incomplete" } });
+  w.ctx.reviewService.retry = async () => ({ at: at(20), retries: [{ from: "old", to: "new" }] });
+  await reviewCommand(w.ctx, { action: "retry", handle: w.id, reason: "Repair local output only" });
+  assert.deepEqual(w.entry().rereview, { at: at(1), nudged: true });
+  await w.tick.tick();
+  assert.equal(w.entry().state, "ready-for-human");
+  assert.equal(w.gh.calls.filter(call => call[0] === "comment").length, 0);
+});
+
+test("local format repairs retain validated scope concerns through whole-PR synthesis", async () => {
+  const w = reviewServiceWorld(), after = `${"x".repeat(35_000)}\n`;
+  const patch = `diff --git a/a.js b/a.js\nnew file mode 100644\n--- /dev/null\n+++ b/a.js\n@@ -0,0 +1 @@\n+${after}`;
+  w.ctx.gh.reviewEvidence = async () => ({ ...source, diff: patch, context: [{ path: "a.js", status: "added", patch, before: null, after }] });
+  const service = w.service(), first = await service.reconcile(w.id, w.entry, w.pr);
+  const job = service.inspect(w.id).jobs[first.key], concern = "Caller authorization must be checked across files.";
+  assert.equal(job.evidence.version, 2);
+  const bad = { ...scopedClear(job.evidence), unresolvedScope: [concern], observations: [{ criterionId: "ac-1", description: "Inspect caller", evidence: { path: "a.js", side: "after", line: 1, quote: "absent source quote" } }] };
+  for (const output of [bad, { ...bad, observations: [{}] }, { ...bad, observations: Array(9).fill(bad.observations[0]) }]) {
+    assert.throws(() => validateReviewResult(JSON.stringify(output), job.evidence), error => {
+      assert.equal(error.repairableReviewOutput, true); assert.deepEqual(error.unresolvedScope, [concern]); return true;
+    });
+  }
+  assert.throws(() => validateReviewResult(JSON.stringify({ ...bad, reviewedHead: "wrong-head" }), job.evidence), error => !error.unresolvedScope);
+  w.finish(job, { raw: JSON.stringify(bad) });
+  const retry = await service.reconcile(w.id, w.entry, w.pr), repaired = service.inspect(w.id).jobs[retry.key];
+  assert.deepEqual(repaired.priorUnresolvedScope, [concern]);
+  w.finish(repaired, { raw: JSON.stringify(scopedClear(repaired.evidence)) });
+  const final = await w.service().reconcile(w.id, w.entry, w.pr), finalJob = service.inspect(w.id).jobs[final.key];
+  assert.equal(finalJob.evidence.version, 3);
+  assert.ok(reviewPrompt(finalJob.evidence).includes(concern));
+  assert.equal(final.status, "running", "format repair cannot substitute for whole-PR review");
+});
+
 test("all local pieces clearing still requires a fresh whole-PR reviewer, including after restart", async () => {
   const w = reviewServiceWorld(), after = `${"a".repeat(110_000)}\n`;
   const patch = `diff --git a/a.js b/a.js\nnew file mode 100644\n--- /dev/null\n+++ b/a.js\n@@ -0,0 +1 @@\n+${after}`;
