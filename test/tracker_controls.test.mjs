@@ -2,6 +2,19 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { ASSETS } from "../lib/tracker/assets.mjs";
 
+test("review activity updates as text and reports connection failures without disturbing a draft", async () => {
+  const lines=[{textContent:"source review: running; 1/2 jobs complete"}],timers=[];
+  const log={get firstElementChild(){return lines[0];},get childElementCount(){return lines.length;},appendChild(line){lines.push(line);}};
+  const status={textContent:""},pane={dataset:{entry:"acme/widget/task"}};
+  const elements={"review-activity":pane,"review-activity-log":log,"review-activity-state":status};
+  const document={body:{dataset:{base:"/gallivant"}},getElementById:id=>elements[id]??null,createElement:()=>({textContent:""})};
+  let ok=true;const fetch=async url=>{assert.match(url,/^\/gallivant\/api\/run\/review-activity\?/);if(!ok)throw new Error("offline");return {ok:true,json:async()=>({message:"<script>not markup</script>"})};};
+  new Function("document","fetch","setTimeout",ASSETS["/tracker.js"].body)(document,fetch,fn=>timers.push(fn));
+  await new Promise(setImmediate);
+  assert.match(lines.at(-1).textContent,/<script>not markup<\/script>/);assert.match(status.textContent,/10 seconds/);
+  ok=false;await timers.shift()();assert.match(status.textContent,/unavailable; retrying/);assert.equal(lines.length,2);
+});
+
 // Run the actual browser script; these elements only supply events, values and attributes.
 function controls({ session = true, pending = false } = {}) {
   const el = props => ({ value: "", textContent: "", hidden: true, on: {}, focus() {},

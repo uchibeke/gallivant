@@ -299,3 +299,6 @@ dl.facts code { background: var(--gv-bench); padding: 1px 6px; border-radius: 6p
 .ll.h, .ll.skip { color: var(--gv-subtle); font-size: 11px; padding-bottom: 8px; margin-bottom: 6px; border-bottom: 1px dashed var(--gv-line); }
 @media (max-width: 700px) { .ll.t { grid-template-columns: 1fr; gap: 0; } .ll.t .n { text-align: left; } }
 .note { font-size: 12px; color: var(--gv-subtle); margin: 8px 0 0; font-family: var(--gv-mono); }
+#review-activity { margin: 24px 0; }
+#review-activity-log { max-height: 12rem; overflow-y: auto; font-family: var(--gv-mono); font-size: 12px; overflow-wrap: anywhere; }
+#review-activity-log p { margin: 6px 0; }
