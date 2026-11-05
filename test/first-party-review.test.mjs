@@ -1084,6 +1084,22 @@ test("retrying local output retains an exact-head external approval and its revi
   assert.equal(w.gh.calls.filter(call => call[0] === "comment").length, 0);
 });
 
+test("retry keeps the evidence binding so same-head changes require a fresh external answer", async () => {
+  for (const edit of [pr => { pr.body += "\nupdated"; }, pr => { pr.baseRefOid = "c".repeat(40); }, pr => { pr.statusCheckRollup[0].detailsUrl = "https://example.test/check/changed"; }]) {
+    const w = tickWorld({ mode: "both-required", over: { cursor: { since: T0, fixed_sha: head, dispatched: [] }, rereview: { at: at(1), nudged: false } } });
+    const binding = reviewBinding(w.gh.data.pr, w.entry().reviewPolicy);
+    w.state.update(w.id, { state: "needs-human", reason: "review-incomplete", reviewBinding: binding, reviewHead: head,
+      firstPartyReview: { status: "incomplete", binding } });
+    w.gh.data.reviews.push(approval(head, 2));
+    w.ctx.reviewService.retry = async () => ({ at: at(9), retries: [{ from: "old", to: "new" }] });
+    await reviewCommand(w.ctx, { action: "retry", handle: w.id, reason: "Repair local output" });
+    edit(w.gh.data.pr); await w.tick.tick();
+    assert.equal(w.entry().state, "pr-open"); assert.equal(w.entry().rereview.at, at(10));
+    w.gh.data.reviews.push(approval(head, 11)); w.ctx.clock.set(at(12)); await w.tick.tick();
+    assert.equal(w.entry().state, "ready-for-human");
+  }
+});
+
 test("local format repairs retain validated scope concerns through whole-PR synthesis", async () => {
   const w = reviewServiceWorld(), after = `${"x".repeat(35_000)}\n`;
   const patch = `diff --git a/a.js b/a.js\nnew file mode 100644\n--- /dev/null\n+++ b/a.js\n@@ -0,0 +1 @@\n+${after}`;
