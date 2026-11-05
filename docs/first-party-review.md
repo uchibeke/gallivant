@@ -23,7 +23,7 @@ For new tasks without a remote reviewer, set these keys in the operator configur
     "mode": "first-party-required",
     "route": "codex",
     "specialist": null,
-    "timeout_ms": 900000,
+    "timeout_ms": 3600000,
     "max_jobs": 2048,
     "retries": 2,
     "budget_usd": 100,
@@ -33,7 +33,7 @@ For new tasks without a remote reviewer, set these keys in the operator configur
 }
 ```
 
-`review` can also be set on a `repos` object. Defaults allow 2,048 total reviewer jobs per task, including fresh-head rereviews and final synthesis, a $100 accounting allowance, two known pre-dispatch retries and 15 minutes per job. Operators can select up to 8,192 jobs, $10,000 and one hour per job; explicit smaller limits remain enforced. Raising defaults does not silently rewrite saved task policies. The external actor remains the configured `reviewer` object and is copied into each task. `specialist` is either `null`, `security`, or `regression`; general correctness always applies. These are short rubrics, with no policy or requirements authority.
+`review` can also be set on a `repos` object. Defaults allow 2,048 total reviewer jobs per task, including fresh-head rereviews and final synthesis, a $100 accounting allowance, two known pre-dispatch retries and 60 minutes per job. Each source piece, reduction and whole-PR synthesis has its own deadline; the limit is not a deadline for the entire PR review. Operators can select up to 8,192 jobs, $10,000 and one hour per job; explicit smaller limits remain enforced. Raising defaults does not silently rewrite saved task policies. The external actor remains the configured `reviewer` object and is copied into each task. `specialist` is either `null`, `security`, or `regression`; general correctness always applies. These are short rubrics, with no policy or requirements authority.
 
 `zero_checks: true` is an explicit operator CI policy for a repository with no required checks. An empty Git-host response alone never establishes that policy for new version-1 tasks. Missing CI stops as `missing-ci`; a missing/disabled completion gate stops separately as `completion-gate-skipped`.
 
@@ -78,7 +78,7 @@ Codex does not expose a native USD hard cap or reliable cost receipt here. The c
 
 ## Evidence, fixes and migration
 
-The GitHub and Bitbucket adapters capture exact head/base/merge-base IDs, a complete diff, full before/after content for added, modified, removed and renamed files, the immutable PRD and every criterion, checks and the full completion receipt. Bitbucket additionally binds the repository UUID and PR number, consumes every diffstat page, compares that inventory to the raw commit comparison, reads source metadata/content at the merge base and head, and rechecks the PR after capture. Oversized evidence, unsupported binaries or submodule content, omitted patches, duplicate or truncated pages, unreadable snapshots, rate limits and concurrent PR changes produce incomplete review. API credentials stay in the host adapter; reviewer jobs receive neither host nor Git credentials, and redirects outside the bound API repository are refused.
+The GitHub and Bitbucket adapters capture exact head/base/merge-base IDs, a complete diff, full before/after content for added, modified, removed and renamed files, the immutable PRD and every criterion, checks and the full completion receipt. Bitbucket additionally binds the repository UUID and PR number, consumes every diffstat page, compares that inventory to the raw commit comparison, reads source metadata/content at the merge base and head, and rechecks the PR after capture. Oversized evidence, unsupported binaries or submodule content, omitted patches, duplicate or truncated pages, unreadable snapshots and concurrent PR changes produce incomplete review. API credentials stay in the host adapter; reviewer jobs receive neither host nor Git credentials, and redirects outside the bound API repository are refused.
 
 The coordinator requests PNG and JPEG evidence and plans one restricted visual job per changed side alongside text slices. Captures are limited to 32 image sides, 5 MiB per side and 16 MiB total, with dimensions at most 8192 by 8192 and 16 million pixels. Corrupt, unsupported, oversized or incomplete images fail closed. Text qualification alone does not qualify image attachment, model vision or isolation. Each visual job receives a coordinator-created copy, and its exact image identity is checked again at execution; image text and metadata are untrusted data. A [disposable live screenshot review](audit/bitbucket-review-qualification.md#live-image-qualification-and-disposable-review-2026-11-03) reached a clear whole-PR verdict after recovering its owned outputs; the resend PR remains unverified. Preserve screenshots and an incomplete status when qualification or evidence is missing.
 
@@ -180,6 +180,20 @@ Findings use the existing fix dispatch and round counter. Their disposition is r
 
 Findings remain `pending` during confirmed provider-health waits or a busy local runner. `dispatch-intent` is saved immediately before launch and becomes `dispatched` with the accepted run ID. A confirmed unsent refusal returns the findings to pending but still requires the existing explicit resume; an ambiguous launch retains its intent and requires a person before any retry. Waiting alone consumes no fix round.
 
+Historical review records are stored in the private `reviews/history/` directory
+under the Gallivant home. The registry retains compact references and dispatch
+dispositions; `gallivant review status <handle>` verifies and displays the full
+history. Existing inline history migrates on the next registry write. Back up and
+restore the registry and the review directory together. Missing or changed archive
+files are reported as errors rather than treated as review clearance. Migration
+upgrades the registry format: older releases refuse it rather than changing
+references they do not understand. Stop older coordinators before upgrading.
+
+Transient Bitbucket read timeouts, rate limits and server errors during evidence
+capture are retried through the bounded coordinator retry path. Authentication,
+identity, incomplete evidence and uncertain write failures remain blocking; each
+attempt still captures and verifies the current PR before review or readiness.
+
 Changing head, base, checks, receipt or policy invalidates readiness. Configured external findings and trusted human feedback still enter the shared fix path, including feedback arriving after internal clearance on the same head. The external reviewer must answer again when its previously reviewed input changes. The completion gate remains independent of model opinion.
 
 A newly observed head retains the push-based review window, so a timely exact-head approval that arrived between polls still counts. The same rule applies when an author run settles and advances the feedback cursor. Changes to base, receipt or checks on the same head start a new review window when observed and require a later external answer.
@@ -237,3 +251,9 @@ reserves another configured qualification allowance, and requires a new native
 challenge to pass. It never turns failed output into clearance. Unknown or
 active processes, missing completion records and boundary failures remain
 blocked. The default without `--wait` still returns the running record promptly.
+
+## Persistence and polling
+
+The coordinator saves changed task and reviewer records immediately. Unchanged progress polls do not rewrite the registry or refresh the task’s change timestamp. Native process liveness and output are still checked each tick; unchanged live execution observations are persisted at most once per minute, and settled executions need no heartbeat. Provider health checks, remote-provider cursors, launch/stop intents, result collection and readiness gates retain their existing persistence and polling.
+
+Historical review evidence is kept in the private, content-addressed archive described above. Reusing an identical archived record verifies the existing file without writing another copy. No review evidence or logs are deleted by these optimizations.
