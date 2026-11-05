@@ -18,7 +18,8 @@ function world() {
   const policy = selectReviewPolicy(config, "owner/app");
   const pr = { number: 1, url: "https://github.com/owner/app/pull/1", title: "Fix invitation state", body: "Describe the fix.", state: "OPEN", isDraft: false, isCrossRepository: false, headRefName: "work/fix", baseRefName: "main", headRefOid: head, baseRefOid: base, statusCheckRollup: [] };
   const target = { ...pr, number: 93, url: "https://bitbucket.org/team/app/pull-requests/93", headRefOid: old };
-  const entry = { repo: "owner/app", branch: pr.headRefName, base: "main", state: "ready-for-human", worktree: "/fixture", reviewPolicy: policy };
+  const entry = { repo: "owner/app", branch: pr.headRefName, base: "main", state: "ready-for-human", worktree: "/fixture", reviewPolicy: policy,
+    cursor: { since: "2026-11-04T00:00:00Z", dispatched: [], checks_sha: head } };
   const reviews = [{ id: 1, user: { login: "chatgpt-codex-connector[bot]" }, submitted_at: "2026-11-05T00:00:00Z", state: "APPROVED", commit_id: head, body: "No issues found." }];
   let targetHead = old, dirty = false, candidates = [target], pushes = 0, publications = 0;
   const refresh = () => { entry.review_readiness = { binding: reviewBinding(pr, policy), completion: "accepted" }; };
@@ -30,7 +31,12 @@ function world() {
       userFor: async () => "owner", reviews: async () => reviews, inlineComments: async () => [], issueComments: async () => [],
       refSha: async (_repo, ref) => ref === "main" ? base : targetHead, branchExists: async () => targetHead !== null,
       prListByHead: async () => candidates,
-      publishResultPr: async options => { publications++; assert.equal(options.expectedNumber, candidates.length ? 93 : null); target.body = options.body; return { ...target, headRefOid: targetHead }; },
+      publishResultPr: async options => {
+        assert.equal(options.expectedNumber, candidates.length ? 93 : null);
+        assert.equal(options.expectAbsent, candidates.length === 0);
+        assert.deepEqual(options.expectedPreviousText, candidates.length ? { title: target.title, body: target.body } : null);
+        publications++; target.body = options.body; return { ...target, headRefOid: targetHead };
+      },
     },
   };
   const transfer = { validate: async () => {}, push: async plan => { pushes++; targetHead = plan.source.head; } };
@@ -53,7 +59,7 @@ test("dry run is read-only; exact plan applies once and reuses the mapped PR", a
 for (const [name, change, pattern] of [
   ["missing reviewer", w => { w.reviews.length = 0; }, /Review is not clear/],
   ["review of old head", w => { w.reviews[0].commit_id = old; }, /Review is not clear/],
-  ["new blocking reviewer", w => { w.reviews[0].state = "CHANGES_REQUESTED"; }, /Review is not clear/],
+  ["new blocking reviewer", w => { w.reviews[0].state = "CHANGES_REQUESTED"; }, /Pending trusted feedback|Review is not clear/],
   ["zero CI without explicit policy", w => { w.policy.zeroChecks = false; w.refresh(); }, /zero checks/],
   ["required CI missing", w => { w.ctx.config.required_checks = ["tests"]; }, /required checks/],
   ["failed CI", w => { w.pr.statusCheckRollup = [{ name: "tests", outcome: "failed" }]; w.refresh(); }, /Checks are not green/],
@@ -91,6 +97,34 @@ test("post-push race stops before PR publication and discloses partial result", 
   const w = world(), plan = await planPromotion(w.ctx, w.options, w.transfer), push = w.transfer.push;
   w.transfer.push = async p => { await push(p); w.pr.title = "Moved during push"; };
   await assert.rejects(promote(w.ctx, { ...w.options, apply: true, expectedPlan: plan.digest }, w.transfer), /changed after push.*branch may already/s);
+  assert.deepEqual(w.calls(), { pushes: 1, publications: 0 });
+});
+
+test("a remotely accepted push with a lost response reports the possible partial write", async () => {
+  const w = world(), plan = await planPromotion(w.ctx, w.options, w.transfer), push = w.transfer.push;
+  w.transfer.push = async p => { await push(p); throw new Error("push response lost"); };
+  await assert.rejects(promote(w.ctx, { ...w.options, apply: true, expectedPlan: plan.digest }, w.transfer), /response lost.*branch may already contain/s);
+  assert.deepEqual(w.calls(), { pushes: 1, publications: 0 });
+});
+
+for (const kind of ["command", "inline", "review"]) test(`new trusted ${kind} invalidates an approved plan before coordinator polling`, async () => {
+  const w = world(), plan = await planPromotion(w.ctx, w.options, w.transfer);
+  const feedback = { id: 42, user: { login: "owner", type: "User" }, created_at: "2026-11-05T00:00:01Z", submitted_at: "2026-11-05T00:00:01Z", body: kind === "command" ? "/fix Please correct this" : "Please correct this", state: "CHANGES_REQUESTED", commit_id: head, path: "app.js", line: 1 };
+  if (kind === "command") w.ctx.host.issueComments = async () => [feedback];
+  if (kind === "inline") w.ctx.host.inlineComments = async () => [feedback];
+  if (kind === "review") w.reviews.push(feedback);
+  await assert.rejects(promote(w.ctx, { ...w.options, apply: true, expectedPlan: plan.digest }, w.transfer), /Pending trusted feedback/);
+  assert.deepEqual(w.calls(), { pushes: 0, publications: 0 });
+  w.entry.cursor.dispatched = [`${kind}:42`];
+  assert.equal((await planPromotion(w.ctx, w.options, w.transfer)).digest, plan.digest);
+  w.entry.cursor.dispatched = []; w.entry.cursor.since = "2026-11-05T00:00:02Z";
+  assert.equal((await planPromotion(w.ctx, w.options, w.transfer)).digest, plan.digest);
+});
+
+test("trusted feedback arriving during push blocks publication", async () => {
+  const w = world(), plan = await planPromotion(w.ctx, w.options, w.transfer), push = w.transfer.push;
+  w.transfer.push = async p => { await push(p); w.ctx.host.issueComments = async () => [{ id: 51, user: { login: "owner" }, created_at: "2026-11-05T01:00:00Z", body: "/fix New issue" }]; };
+  await assert.rejects(promote(w.ctx, { ...w.options, apply: true, expectedPlan: plan.digest }, w.transfer), /Pending trusted feedback.*branch may already contain/s);
   assert.deepEqual(w.calls(), { pushes: 1, publications: 0 });
 });
 

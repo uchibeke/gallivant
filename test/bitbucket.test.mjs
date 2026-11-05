@@ -270,6 +270,39 @@ test("Bitbucket publishes or updates one same-repository PR, including read-afte
   assert.equal(timed.calls.at(-1).method, "GET");
 });
 
+test("Bitbucket publication enforces approved previous text at its final read", async () => {
+  for (const field of ["title", "description"]) {
+    let edit = false;
+    const f = fixture({ intercept: (c, data) => {
+      if (edit && c.method === "GET" && c.path === "/pullrequests/7") data.prs[0][field] = "Concurrent human edit";
+    } });
+    f.data.prs = [pr()];
+    const before = await f.api.prView(PATH, 7);
+    edit = true;
+    await assert.rejects(f.api.publishResultPr({ ...publication, title: "Promoted title", expectedNumber: 7, expectedPreviousText: { title: before.title, body: before.body } }), /text changed after approval/);
+    assert.ok(f.calls.every(c => c.method === "GET"));
+    assert.equal(f.data.prs[0][field], "Concurrent human edit");
+  }
+});
+
+test("Bitbucket publication rejects a concurrent same-branch PR after approved absence", async () => {
+  const f = fixture();
+  assert.deepEqual(await f.api.prListByHead(PATH, "work/feature"), []);
+  f.data.prs = [pr()];
+  await assert.rejects(f.api.publishResultPr({ ...publication, expectAbsent: true }), /appeared after approval/);
+  assert.ok(f.calls.every(c => c.method === "GET"));
+});
+
+test("Bitbucket strict publication allows unchanged existing text and an absent create", async () => {
+  const create = fixture();
+  assert.equal((await create.api.publishResultPr({ ...publication, expectAbsent: true })).number, 7);
+  const before = await create.api.prView(PATH, 7);
+  const changed = await create.api.publishResultPr({ ...publication, title: "Promoted title", expectedNumber: 7, expectedPreviousText: { title: before.title, body: before.body } });
+  assert.equal(changed.title, "Promoted title");
+  assert.equal(create.calls.filter(c => c.method === "POST").length, 1);
+  assert.equal(create.calls.filter(c => c.method === "PUT").length, 1);
+});
+
 test("Bitbucket resolves abbreviated live PR commits before publication and snapshot decisions", async () => {
   const shortHead = HEAD.slice(0, 12), shortBase = BASE.slice(0, 12);
   const f = fixture({ intercept: (call, data) => {
