@@ -312,7 +312,7 @@ The historical [decision record](https://github.com/uchibeke/gallivant/blob/main
 
 ## Reviewer authority
 
-The opt-in first-party reviewer uses the restricted native preparation boundary in a fresh session with supplied text only. Its profile denies tools, escalation, delegation and tool network access; setup/start verify effective native policy and require a live qualification record. A private HOME or a prompt alone is not sufficient. The model cannot write task policy, state, files, Git refs, PRs or approvals. The coordinator validates exact-input structured output; public agent text is never an independent host actor. Unknown or partial output fails closed. See [review isolation, evidence and monetary limitations](first-party-review.md) and [unmet live qualification](audit/first-party-review.md). Review grants no merge or deployment authority.
+The opt-in first-party reviewer uses the restricted native preparation boundary in a fresh session with supplied evidence only. Image jobs additionally require their own capability qualification and a verified coordinator-created copy. Its profile denies tools, escalation, delegation and tool network access; setup/start verify effective native policy and require a live qualification record. A private HOME or a prompt alone is not sufficient. The model cannot write task policy, state, files, Git refs, PRs or approvals. The coordinator validates exact-input structured output; public agent text is never an independent host actor. Unknown or partial output fails closed. See [review isolation, evidence and monetary limitations](first-party-review.md) and [unmet live qualification](audit/first-party-review.md). Review grants no merge or deployment authority.
 
 Repository identity, credential transport and PR evidence are defined by the
 [Git host contract](git-hosts.md). GitHub and Bitbucket Cloud can dispatch;
@@ -328,3 +328,40 @@ The independent publisher accepts only the configured stable actor and prepared
 exact head; a successful Pipeline without a posted verdict is silence.
 See [reviewer isolation and publication](bitbucket-review.md#independent-local-codex-reviewer).
 Setup never installs a pipeline, creates a token, or authorizes inference.
+
+## Keep working artifacts out of pull requests
+
+Every local harness receives the same publication policy and generated `commit-msg` hook. The hook examines the
+NUL-delimited staged file list and rejects task scratch directories, conventional work logs, audit/evidence notes,
+and carried task inputs. Removing those files is allowed; preserve any carried files locally because the brief and
+snapshot checks still need them. The hook is refreshed at start and on every resumed/fix run. Hosted file results
+are checked before writing them, and the coordinator checks the complete remote PR diff before expensive first-party review and before readiness, even when the optional output-content scan is disabled. An unreadable or malformed diff is retried and
+never treated as clean. A prohibited file schedules a normal corrective round with its exact path.
+
+Requested audit reports, screenshots and other evidence are still valid deliverables. The operator names exact
+paths in the approved brief's [`publish_files`](prd.md) list. The coordinator uses its saved snapshot, never a
+session-edited whitelist. Before upgrading or restarting the daemon for existing runs, review retained deliverables in reserved directories.
+The operator must name their exact paths in `publish_files` and accept the updated saved brief through the usual
+`resume --resnapshot` flow at a safe resume boundary. Do not edit a running session's snapshot or grandfather all
+existing files. Without those prior approved exceptions, the new guard will request cleanup instead of readiness.
+
+Use a temporary directory outside the repository for scratch files. Runner command/session logs remain in task
+storage; concise verification results belong in the PR receipt. Keep durable release/rollback instructions in the
+project docs without appending a running execution diary. This policy does not inspect arbitrary prose or provide
+an isolation boundary: an agent with Git credentials can bypass local hooks and push, but reserved work-artifact
+paths will not pass the coordinator's readiness check. A clean check is cached only for its exact head, base and approved policy, so review polls do not repeatedly fetch
+the diff. Normal rechecks also inspect legacy ready entries; no PR is automatically rewritten.
+
+First-party reviewers receive carried text inputs from the coordinator's immutable `readSource` snapshots, with
+content digests in their private evidence. They do not fetch those files from remote HEAD or the mutable session
+checkout. These inputs follow the existing capture, per-job input and review-job caps; missing or oversized input
+is reported explicitly, never silently omitted. Keep source context concise: it accompanies each source/visual
+review piece and the final synthesis. The complete brief plus private source context and review metadata must fit the
+configured per-job input cap (at most 100,000 serialized UTF-8 bytes). Larger private sources must be narrowed or
+split into separately approved tasks; do not commit them as a workaround. Required image evidence remains in Git at its approved output paths.
+
+`openai-agents` transports all approved inputs privately with their original hashes, but only explicit output overlays
+are forced into a result. Verification permits private inputs to remain untracked or unstaged only while their bytes
+and modes exactly match the coordinator snapshots. Editing, staging, deleting or substituting them fails publication.
+Codex Cloud's Git-only input transport cannot provide this privacy for new/changed inputs and refuses before commit
+or push; its dispatch is separately unavailable until repository binding is qualified. See [codex-cloud.md](codex-cloud.md).

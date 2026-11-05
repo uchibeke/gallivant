@@ -350,7 +350,9 @@ tree. That is the same rule the brief follows: the daemon judges what it recorde
 given by editing a document it was handed. Editing one in your own tree afterwards is reported by `gallivant why` the
 same way an edited brief is, and the list itself is part of the contract, so adding or removing a file is a contract
 change even though no criterion moved. Changes to either the manifest or file bytes block readiness and resume until
-accepted with `resume --resnapshot`; accepted snapshots are also restored when a checkout is recreated.
+accepted with `resume --resnapshot`; accepted snapshots are also restored when a checkout is recreated. Carried inputs
+remain local and untracked unless explicitly requested as output in the approved brief's [`publish_files`](prd.md) list.
+Keep those local copies when removing accidental commits; the task still reads them.
 
 `sources` and `context_paths` answer different questions and neither replaces the other. `sources` puts named files
 INSIDE the checkout, so it works on every harness because it needs no flag at all. `context_paths` grants a session read

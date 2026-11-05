@@ -6,6 +6,51 @@ document records the original missing prerequisites, subsequent disposable
 transport tests, and the remaining private/public first-party matrix. PR writes
 and offline tests are not substitutes for a real model review.
 
+## Live image qualification and disposable review, 2026-11-03
+
+The local ledger records an image-capability challenge for the configured route
+as completed in `run-7e5570d0-8085-40fa-9c9b-a71560c5d25f`. Its image route
+fingerprint is `00a627eb3da8df9fb9f9d6dd158b2add8563984f6c591d74770055a327b2d118`;
+the current configuration has model `gpt-6.1-terra` and reasoning `xhigh`, and
+the current image fingerprint matches that record. This challenge is separate
+from review of a real PR and does not establish a clear review verdict.
+
+The recorded [disposable private PR #4](https://bitbucket.org/webbabyshowers/gallivant-host-test/pull-requests/4) used `first-party-required`, route
+`codex`, no external reviewer, a 900,000 ms timeout, 2,048 maximum jobs,
+two retries, a $100 reserved allowance, a 100,000-byte prompt limit and no
+zero-checks waiver. Its exact head was `81b41234f8892e93dc0df08d977bc372e054847e`;
+base and merge base were `ea78292d50091d38e824a86fb6d7487c516c523f`.
+The text job `run-b23a2306-b8ad-4a75-abc0-bf5f22e9cc2d` completed without
+findings. The image job `run-957aad23-9eb0-4c66-b3ba-4555e0bdd4e3` received the
+captured after-side identity for `review-fixture.png`, with SHA-256
+`0d177f076d3ba1a136fb66f8fc88d1e99ab8467517854ef958c9cfbc0747f410`, and
+ended `REVIEW_INCOMPLETE`: its visual output had missing criteria or unresolved
+scope. The recorded image output examined `ac-1` and identified `ac-2` as
+requiring companion Markdown outside its image-only scope. Local regression
+coverage now retains that concern and defers the unexamined criterion to the
+whole-PR reviewer without repeating the owned image execution. A later live
+reconciliation recovered that image output and reached whole-PR synthesis,
+but its bounded attempts stopped incomplete because final output included
+observations rejected by the old schema. Recorded outputs
+`run-f50e47bb-6f10-43a5-ac09-0409ffff341e` and
+`run-6d3a449c-86ff-4584-a8f5-b02331d6f66f` passed read-only validation
+against their saved inputs. The operator subsequently reconciled the existing
+review: the ledger records the original text and image jobs as completed and
+the latter synthesis run as completed with a `clear` verdict, zero findings,
+no unresolved scope and both criteria examined. Its coverage includes both
+original pieces at the stated head, base and merge base. The prior owned
+image and synthesis executions were reused; no new inference was needed for
+that reconciliation. This is a genuine disposable PR review, not a review of
+the resend PR or proof of the outstanding host lifecycle matrix. Provider
+costs are unknown.
+
+The owned ledger records are
+`~/.gallivant/reviews/3126d2628380b6179574f4b78f68ebfdc5816cae4c962a6ffb287ce722e66d26.json`
+and `~/.gallivant/reviews/d88d224fc8f68fbc5acbbb50a160558a008a55b64461e54f895b4db6df0561fa.json`.
+Earlier incomplete attempts remain in the ledger for audit; the completed
+synthesis used the saved retry alias. This observation does not establish that
+the resend PR #311 was reviewed or that either disposable host matrix is complete.
+
 ## Live source review follow-up, 2026-11-02
 
 The selected local `codex-cli 0.160.0`, model `gpt-6.1-sol`, reasoning `high`,
