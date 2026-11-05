@@ -67,7 +67,7 @@ for (const [name, change, pattern] of [
   ["gate skipped", w => { w.entry.review_readiness.completion = "skipped"; }, /completion gate/],
   ["fork source", w => { w.pr.isCrossRepository = true; }, /same-repository/],
   ["closed source", w => { w.pr.state = "CLOSED"; }, /open/],
-  ["merged source without captured acceptance", w => { w.pr.state = "MERGED"; }, /accepted pre-merge plan/],
+  ["merged source without retained acceptance", w => { w.pr.state = "MERGED"; delete w.entry.review_readiness; }, /readiness is stale/],
   ["duplicate target PRs", w => { w.setCandidates([w.target, { ...w.target, number: 94 }]); }, /duplicate/],
   ["fork destination", w => { w.target.isCrossRepository = true; }, /same-repository/],
   ["changed destination base", w => { w.options.base = "staging"; }, /mapping conflicts/],
@@ -158,7 +158,27 @@ test("new targets get a deterministic branch; an unclaimed existing PR needs exp
   assert.equal((await planPromotion(w.ctx, w.options, w.transfer)).target.pr, 93);
 });
 
-test("merged/squashed source preserves original reviewed head with retained acceptance", async () => {
+test("merged source with an unchanged accepted binding needs no pre-merge plan", async () => {
+  const w = world(), plan = await planPromotion(w.ctx, w.options, w.transfer);
+  w.pr.state = "MERGED"; w.entry.state = "done";
+  w.pr.mergeCommit = { oid: "e".repeat(40) };
+  const result = await promote(w.ctx, { ...w.options, apply: true, expectedPlan: plan.digest }, w.transfer);
+  assert.equal(result.head, head);
+  assert.equal(result.plan.source.baseHead, base);
+  assert.deepEqual(w.calls(), { pushes: 1, publications: 1 });
+});
+
+for (const field of ["head", "base", "body", "checks"]) test(`merged source rejects changed ${field} without an accepted base fallback`, async () => {
+  const w = world(); w.pr.state = "MERGED"; w.entry.state = "done";
+  if (field === "head") w.pr.headRefOid = old;
+  if (field === "base") w.pr.baseRefOid = old;
+  if (field === "body") w.pr.body += " Changed evidence.";
+  if (field === "checks") w.pr.statusCheckRollup = [{ name: "test", outcome: "passed" }];
+  await assert.rejects(planPromotion(w.ctx, w.options, w.transfer), /readiness is stale/);
+  assert.deepEqual(w.calls(), { pushes: 0, publications: 0 });
+});
+
+test("merged/squashed source uses a captured plan only to reconstruct its accepted base", async () => {
   const w = world(), plan = await planPromotion(w.ctx, w.options, w.transfer);
   w.pr.state = "MERGED"; w.pr.baseRefOid = "d".repeat(40); w.pr.mergeCommit = { oid: "e".repeat(40) }; w.entry.state = "done";
   const merged = await planPromotion(w.ctx, { ...w.options, acceptedPlan: plan }, w.transfer);
@@ -167,6 +187,11 @@ test("merged/squashed source preserves original reviewed head with retained acce
   assert.equal(merged.digest, plan.digest);
   w.pr.body += "changed after acceptance";
   await assert.rejects(planPromotion(w.ctx, { ...w.options, acceptedPlan: plan }, w.transfer), /readiness is stale/);
+  w.pr.body = "Describe the fix.";
+  w.pr.statusCheckRollup = [{ name: "test", outcome: "passed" }];
+  await assert.rejects(planPromotion(w.ctx, { ...w.options, acceptedPlan: plan }, w.transfer), /readiness is stale/);
+  w.pr.statusCheckRollup = []; delete w.entry.review_readiness;
+  await assert.rejects(planPromotion(w.ctx, { ...w.options, acceptedPlan: plan }, w.transfer), /retained exact readiness/);
 });
 
 test("public prose survives; source runtime identity and task receipt do not", async () => {

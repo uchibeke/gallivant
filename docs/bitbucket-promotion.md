@@ -47,13 +47,15 @@ The Bitbucket title and human-readable body come from the GitHub PR, with a sour
 
 ## After merging on GitHub
 
-Capture `--out accepted-promotion.json` **while the GitHub PR is accepted and still open**. You may then merge it to advance its GitHub chain. To promote later, run another dry run with the same mapping plus:
+Run the same dry-run command after merge. When GitHub still supplies the original reviewed base, the coordinator's retained acceptance hash is checked directly against the original head, base, body, checks and policy. No pre-merge plan file is required. The accepted local record and fresh clear reviewer/check evidence remain mandatory; merging a PR before it was accepted does not manufacture that authority.
+
+Optionally save `--out accepted-promotion.json` while the PR is accepted and still open. If GitHub later reports a different base, that archived plan can reconstruct the original base using:
 
 ```sh
 --accepted-plan /absolute/path/to/accepted-promotion.json
 ```
 
-Use the new printed digest for `--apply --expected-plan ...`, keeping `--accepted-plan` on that command too. The plan supplies the original reviewed base; the coordinator's retained acceptance hash must still match the original head, body, checks and policy, and current reviewer/check evidence must remain clear. A missing acceptance plan, missing local record or changed evidence blocks this path.
+Use the new printed digest for `--apply --expected-plan ...`, keeping `--accepted-plan` on that command too when using the fallback. The reconstructed binding must exactly match the coordinator's retained acceptance hash. The plan cannot replace a missing local acceptance record or authorize changed code, body, checks or policy.
 
 The transferred head is the original reviewed PR head even when GitHub used squash or merge commits. The GitHub merge/squash commit is never described as reviewed or silently substituted. Squash merges can make subsequent branch histories diverge between hosts; prefer history-preserving merges for this bridge. A future branch that is not a fast-forward of its mapped Bitbucket branch must be reconciled and reviewed, not force-pushed.
 

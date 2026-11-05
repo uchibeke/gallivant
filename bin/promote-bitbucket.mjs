@@ -7,7 +7,7 @@ import { makePromotionTransfer } from "../lib/promotion_git.mjs";
 
 const help = `Usage: npm run promote:bitbucket -- --github-pr URL --bitbucket-repo bitbucket.org/workspace/repo [--bitbucket-pr N] [--base main] [--branch name] [--out plan.json]
 Default: read-only dry run. Inspect the plan, then add --apply --expected-plan DIGEST.
-To promote after GitHub merge, retain the accepted pre-merge --out plan.json and pass --accepted-plan plan.json.
+Merged sources use retained exact acceptance. If the reported base changed, --accepted-plan plan.json supplies an optional archived-base fallback.
 No force push, merge or deployment. See docs/bitbucket-promotion.md.`;
 let transfer;
 try {
