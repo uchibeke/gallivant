@@ -12,6 +12,43 @@
 // and cannot be told at build time where it lives.
 const BASE = document.body.dataset.base || "";
 
+// A live, bounded status feed; it never opens raw reviewer output or submits work.
+const reviewActivity = document.getElementById("review-activity");
+if (reviewActivity) {
+  const log = document.getElementById("review-activity-log"), status = document.getElementById("review-activity-state");
+  const url = `${BASE}/api/run/review-activity?id=${encodeURIComponent(reviewActivity.dataset.entry)}`;
+  let previous = log.firstElementChild?.textContent || "";
+  const pollReview = async () => {
+    try {
+      const response = await fetch(url, { cache: "no-store" });
+      if (!response.ok) throw new Error("Review status unavailable");
+      const data = await response.json();
+      if (typeof data.message !== "string") throw new Error("Review status unavailable");
+      if (data.message !== previous) {
+        const line = document.createElement("p");
+        line.textContent = `${new Date().toLocaleTimeString()} — ${data.message}`;
+        log.appendChild(line); previous = data.message;
+        while (log.childElementCount > 40) log.firstElementChild.remove();
+      }
+      status.textContent = "Updates every 10 seconds while this page is open.";
+    } catch { status.textContent = "Review status unavailable; retrying."; }
+    setTimeout(pollReview, 10_000);
+  };
+  pollReview();
+}
+
+// Relative times must age while the dashboard stays open.
+const relativeTimes = document.querySelectorAll?.("time[data-relative-time]") || [];
+if (relativeTimes.length) {
+  const refreshTimes = () => relativeTimes.forEach(el => {
+    const at = Date.parse(el.getAttribute("datetime"));
+    if (!Number.isFinite(at)) { el.textContent = "unknown"; return; }
+    const ms = Math.max(0, Date.now() - at), minutes = Math.round(ms / 60_000), hours = Math.round(minutes / 60);
+    el.textContent = ms < 45_000 ? "just now" : minutes < 60 ? `${minutes}m ago` : hours < 48 ? `${hours}h ago` : `${Math.round(hours / 24)}d ago`;
+  });
+  refreshTimes(); setInterval(refreshTimes, 30_000);
+}
+
 // Fixed actions and messages share delivery, but only Send message reads the composer's draft.
 const runControls = document.getElementById("run-controls");
 if (runControls) {
@@ -127,6 +164,7 @@ if (side) {
       }
       g.hidden = rows.length > 0 && hits === 0;
       g.classList.toggle("closed", !!shut[g.dataset.group]);
+      g.querySelector("h3")?.setAttribute("aria-expanded", String(!shut[g.dataset.group]));
       const tally = g.querySelector("h3 small");
       if (tally) tally.textContent = term ? hits + "/" + rows.length : String(rows.length);
       shown += hits;

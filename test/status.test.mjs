@@ -25,6 +25,25 @@ test("a completion gate wait names its cause instead of waiting on an already-cl
   assert.doesNotMatch(row.detail, /on reviewer/);
 });
 
+test("activity time ignores routine registry updates and tracks the active reviewer", () => {
+  const id="acme/widget/widget-export", w=world({entries:{[id]:entryAt({updated_at:at(9),last:{at:at(1),event:"review requested"}})}});
+  assert.equal(model(w.ctx).running[0].since,at(1));
+  w.state.update(id,{updated_at:at(10),firstPartyReview:{status:"running",startedAt:Date.parse(at(3)),pieces:[]}});
+  assert.equal(model(w.ctx).running[0].since,at(3));
+  w.state.update(id,{updated_at:at(11)});
+  assert.equal(model(w.ctx).running[0].since,at(3),"poll writes do not reset the activity clock");
+});
+
+test("status includes recorded readiness and terminal activity instead of polling timestamps", () => {
+  for (const state of [STATES.ready, STATES.done]) {
+    const id = "acme/widget/widget-export", w = world({ entries: { [id]: entryAt({ state, last: { at: at(1) }, activity_at: at(5), updated_at: at(9) }) } });
+    const row = [...model(w.ctx).needs_you, ...model(w.ctx).done][0];
+    assert.equal(row.since, at(5));
+    w.state.update(id, { updated_at: at(10) });
+    assert.equal([...model(w.ctx).needs_you, ...model(w.ctx).done][0].since, at(5));
+  }
+});
+
 /** A registry, a daemon file if the test asks for one, and a runner fake per entry. */
 function world({ entries = {}, daemon = null, runs = {} } = {}) {
   const home = tempHome();
