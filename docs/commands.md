@@ -219,11 +219,13 @@ with exit code 1. Retry `gallivant start` without a PRD, not the original submis
 processes continue; restart monitoring with `gallivant start`. Embedded trackers
 are owned by their host and are not stopped by this command.
 
-## `gallivant chain [<name> [<first.md> <next.md> ...]] [--base <branch>]`
+## `gallivant chain [<name> [<first.md> <next.md> ...]] [--base <branch>] [--after <pr-url|handle>]`
 
 Queue at least two ready PRDs in order. All must be new tasks in one checkout of the same repository and on the same
 resolved base. `--base` selects the base for a new chain; otherwise the repository config or default branch applies.
-The daemon starts the first task and starts each successor only after GitHub confirms the preceding PR was merged
+With `--after`, queue one or more new PRDs behind an already registered PR in that same repository and base.
+The existing run is preserved; its exact PR, branch and base are pinned, and its merge must precede all queued tasks.
+The daemon starts the first task and starts each successor only after the Git host confirms the preceding PR was merged
 into that base. The final merge completes the chain. `ready-for-human`, a completed agent process and a local `done`
 entry never satisfy the dependency; closing without merging stops the chain. Gallivant never merges for you.
 
@@ -233,6 +235,7 @@ brings the existing daemon up if needed. Independent runs continue alongside it.
 | Command | Effect |
 |---|---|
 | `gallivant chain launch first.md next.md` | Approve the order and current brief/source fingerprints, then queue dispatch. |
+| `gallivant chain launch --after your-org/repo#123 next.md` | Wait for the registered predecessor's verified merge, then start the new task. |
 | `gallivant chain launch --retry` | Recheck a stopped chain after its cause is resolved. |
 | `gallivant chain launch --retry --resnapshot` | Explicitly accept updated briefs and carried sources for unstarted tasks. |
 | `gallivant chain launch --cancel` | Stop future dispatch; preserve already started work and its review loop. |

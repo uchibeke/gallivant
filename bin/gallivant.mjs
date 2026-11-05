@@ -71,6 +71,7 @@ const HELP = `gallivant: give an agent a task, let the review loop run, go outsi
   gallivant register <pr-url> [--harness <name>] [--session <id>] [--worktree <dir>]
                                          watch a hand-made PR; on an existing entry, reset it
   gallivant chain <name> <prd1.md> <prd2.md> ... [--base <branch>]
+  gallivant chain <name> --after <pr-url|handle> <next.md> ...
                                          queue ready PRDs; each starts after the previous PR is merged
   gallivant chain [<name>] [--cancel | --retry [--resnapshot]]
                                          inspect chains, stop future work, or retry after fixing a blocker
@@ -107,7 +108,7 @@ const OPTIONS = {
   send: { type: "boolean" }, probe: { type: "boolean" }, help: { type: "boolean", short: "h" }, version: { type: "boolean", short: "v" },
   "no-server": { type: "boolean" }, "no-open": { type: "boolean" }, foreground: { type: "boolean" }, worktrees: { type: "string" },
   "no-daemon": { type: "boolean" }, note: { type: "string" }, resnapshot: { type: "boolean" }, "fresh-session": { type: "boolean" }, interrupt: { type: "boolean" },
-  base: { type: "string" }, harness: { type: "string" }, session: { type: "string" }, worktree: { type: "string" }, dir: { type: "string" }, port: { type: "string" },
+  base: { type: "string" }, after: { type: "string" }, harness: { type: "string" }, session: { type: "string" }, worktree: { type: "string" }, dir: { type: "string" }, port: { type: "string" },
   cancel: { type: "boolean" }, retry: { type: "boolean" }, wait: { type: "boolean" },
   run: { type: "boolean" }, stdin: { type: "boolean" }, repo: { type: "string" }, revision: { type: "string" },
   "request-id": { type: "string" }, context: { type: "string", multiple: true },
@@ -126,6 +127,7 @@ async function dispatch(argv) {
   const [cmd, arg] = positionals;
   if (values.version) { console.log(VERSION); return 0; }
   if (values.help || !cmd || cmd === "help") { console.log(HELP); return 0; }
+  if (values.after !== undefined && (cmd !== "chain" || !values.after.trim())) throw new Error("--after requires a registered PR URL or handle when queuing a new chain");
   if (cmd === "init") {
     if (arg) throw new Error("init takes no positional argument; run it from inside the target checkout");
     const r = await init({ harness: values.harness, worktrees: values.worktrees, hostConfig: values["host-config"], base: values.base });
@@ -208,7 +210,8 @@ async function dispatch(argv) {
       if (values.retry && paths.length) throw new Error("--retry uses the existing plan; do not pass PRD paths");
       if ((values.cancel || values.retry) && !arg) throw new Error("a chain name is required");
       if (values.base && !paths.length) throw new Error("--base is set when queuing a new chain");
-      if (paths.length) await queueChain(ctx, { name: arg, paths, base: values.base });
+      if (values.after && (!paths.length || values.retry || values.cancel)) throw new Error("--after is set only when queuing a new chain with ready PRD paths");
+      if (paths.length) await queueChain(ctx, { name: arg, paths, base: values.base, after: values.after });
       else if (values.cancel) cancelChain(ctx, arg);
       else if (values.retry) await retryChain(ctx, { name: arg, resnapshot: values.resnapshot });
       console.log(renderChains(ctx, arg));
