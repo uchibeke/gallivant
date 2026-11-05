@@ -1,6 +1,6 @@
 # PRD chains
 
-**Gallivant automates delivery; humans approve integration.** A chain starts its next PRD only after GitHub confirms
+**Gallivant automates delivery; humans approve integration.** A chain starts its next PRD only after the Git host confirms
 that the preceding PR was merged into the planned base branch. Gallivant never merges PRs. Passing tests, an accepted
 receipt, `ready-for-human`, and a finished agent session are progress toward that decision; none starts the next task.
 
@@ -37,6 +37,29 @@ the chain; closing any milestone's PR without merging stops it.
 
 The scope is deliberately linear: one repository, one base, one active milestone per chain. There is no dependency
 graph, stacked-PR mode or automatic merge. Unrelated tasks and other chains can run independently.
+
+## Continue after an existing PR
+
+If the first task already has a registered PR, keep its current run and queue only the new work:
+
+```sh
+gallivant chain launch --after https://github.com/your-org/your-repo/pull/123 docs/prds/launch.md
+# A registered handle also works:
+gallivant chain integration --after your-org/your-repo#123 docs/prds/integration.md docs/prds/next.md
+```
+
+`--after` accepts a PR URL from a supported Git host or a registered run handle. Register the PR first if it is not
+already tracked. At least one **new** ready PRD is required, in the same repository and approved base as the PR.
+The predecessor is a dependency, not a newly started milestone: its session, review policy, counters and any existing
+chain ownership stay unchanged. The usual `say`, `recheck` and `resume` commands still manage that run.
+
+The chain records the exact registered PR, repository, branch and base. It waits for the author process to finish
+and the host to confirm a merge, then checks that merge commit in both the remote base and the successor's clone.
+An open PR marked ready does not release the dependency. A removed or retargeted registration, a closed unmerged PR,
+or missing merge ancestry stops dispatch. Retry and resnapshot cannot replace the predecessor; cancel and create a
+new chain to change it. Progress counts only the newly queued milestones and displays the predecessor separately.
+Keep the predecessor registered until the chain finishes. Run a version supporting `--after` on every coordinator
+using this home; do not downgrade while these chains remain active.
 
 ## Inspect progress
 

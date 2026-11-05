@@ -26,6 +26,11 @@ test("chain CLI shows persisted progress, retries explicitly and cancels future 
   assert.equal(state.getChain("launch").status, "cancelled");
   assert.equal(run(["launch", "--retry"]).status, 1);
   assert.equal(run(["launch", "--cancel", "--retry"]).status, 1);
+  for (const flags of [[], ["--retry"], ["--cancel"]]) {
+    const invalid = run(["launch", "--after", "acme/widget#142", ...flags]);
+    assert.equal(invalid.status, 1);
+    assert.match(invalid.stderr, /--after.*new chain/);
+  }
 });
 
 test("ready --check ignores invalid runtime config and leaves the brief and home unchanged", () => {
