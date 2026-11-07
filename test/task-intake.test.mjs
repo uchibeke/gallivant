@@ -1193,10 +1193,12 @@ test("native preparation removes Claude tools and refuses unsupported adapters b
     assert.deepEqual(await service.resume({taskId:r.taskId,expectedRevision:r.revision}),r);assert.deepEqual(w.ctx.state.entries(),[]);assert.equal(w.daemonCalls(),0);
   }
   const opts={harness:"claude",config:CONFIG,mode:"start",session:"6f1c2d3e-1111-4111-8111-111111111111",prompt:"draft",cwd:"/tmp/fixture"};
-  const normal=buildRun(opts),spec=buildPreparationRun(opts);
+  const normal=buildRun(opts),spec=buildPreparationRun(opts),toolFreeBase=buildRun({...opts,runtimeSetup:false});
   assert.equal(spec.boundary,PREPARATION_BOUNDARY);
   assert.deepEqual(spec.args.slice(0,9),["--restricted","--tools","","--disallowedTools","*","--strict-mcp-config","--mcp-config",'{"mcpServers":{}}',"--disable-slash-commands"]);
-  assert.deepEqual(spec.args.slice(9),normal.args);assert.deepEqual(spec.env,normal.env);assert.ok(!normal.args.includes("--tools"));
+  assert.deepEqual(spec.args.slice(9),toolFreeBase.args);assert.deepEqual(spec.env,normal.env);assert.ok(!normal.args.includes("--tools"));
+  assert.equal(normal.args[normal.args.indexOf("--disallowedTools")+1],"Monitor");
+  assert.equal(spec.args.filter(a=>a==="--disallowedTools").length,1,"deny-all preparation must not acquire implementation's narrower tool rule");
 });
 
 test("tool-free Claude preparation and repair use the normal runner without implementation changes", async t => {
