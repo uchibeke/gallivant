@@ -384,6 +384,27 @@ test("outcomes: claude result event and codex turn events", () => {
   assert.ok(compareVersions("2.1.263", "2.1.257") > 0 && compareVersions("0.155.1", "0.155.1") === 0);
 });
 
+test("Claude background notifications cannot complete or replace the main task result", () => {
+  const notification = JSON.stringify({ type: "result", subtype: "success", is_error: false,
+    result: "", num_turns: 0, total_cost_usd: 0, origin: { kind: "task-notification" } });
+  const pending = adapters.claude.outcome([claudeResultLines()[0], notification,
+    JSON.stringify({ type: "system", subtype: "api_retry", attempt: 1, error: "unknown" })]);
+  assert.equal(pending.ok, false);
+  assert.equal(pending.finished, false);
+  assert.equal(pending.error, "no result event");
+  const failed = claudeResultLines({ ok: false, cost: 0.7, text: "API Error: connect ENOTFOUND" });
+  for (const lines of [[notification, ...failed], [...failed, notification]]) {
+    const outcome = adapters.claude.outcome(lines);
+    assert.equal(outcome.ok, false);
+    assert.equal(outcome.error, "API Error: connect ENOTFOUND");
+    assert.equal(outcome.cost, 0.7);
+  }
+  const ok = adapters.claude.outcome([...claudeResultLines({ text: "Pushed.", cost: 0.8 }), notification]);
+  assert.equal(ok.ok, true);
+  assert.equal(ok.lastMessage, "Pushed.");
+  assert.equal(ok.cost, 0.8);
+});
+
 test("the start prompt carries the branch, base and Verify commands", () => {
   const prd = parsePrd(GOOD_PRD, "/r/docs/prds/widget-export.md");
   assert.deepEqual([prd.id, prd.status, prd.harness, prd.title], ["widget-export", "ready", "codex", "Widget export to CSV"]);

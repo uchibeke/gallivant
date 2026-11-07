@@ -1124,6 +1124,37 @@ test("a start run with no PR stops with no-pr; a codex start records the thread 
   assert.deepEqual(w.notify.sent, [["needs", null, "no-pr"]], "exactly one message, and it carries no PR number because there is none");
 });
 
+test("an incomplete or failed worker without a PR reports harness-error without automatic replay", async () => {
+  for (const mode of ["notification-only", "terminal-error", "nonzero-exit"]) {
+    const w = world({ state: STATES.running, pr: null, last: { at: T0, run: "1-start", exit: null } }, { prsByHead: [] });
+    w.runner.start("start", "/bin/claude", [], { cwd: "/tmp/wt" });
+    w.runner.finish(mode === "notification-only" ? [JSON.stringify({ type: "result", is_error: false, result: "", origin: { kind: "task-notification" } })]
+      : claudeResultLines({ ok: mode !== "terminal-error", text: "Provider unavailable" }),
+    { exit: mode === "nonzero-exit" ? 1 : null });
+    await w.tick.tick();
+    assert.equal(w.entry().reason, "harness-error", mode);
+    assert.match(w.entry().last.error, /owned run log/, mode);
+    await w.tick.tick();
+    assert.equal(w.runner.started.length, 1, mode);
+  }
+});
+
+test("a previously failed owned interrupt becomes resumable without replaying its failed message", async () => {
+  const w = world({ state: STATES.running, pr: null,
+    last: { run: "1-start", exit: 137 }, control: { id: "old-interrupt", action: "message", interrupt: true,
+      stop_run: "1-start", status: "failed", note: "Preserve this message." } }, { prsByHead: [] });
+  w.runner.start("start", "/bin/claude", [], {});
+  w.runner.finish([], { exit: 137 });
+  const current = w.runner.current;
+  w.runner.current = () => ({ ...current(), execution: { quarantined: true, collected: true } });
+  await w.tick.tick();
+  assert.equal(w.entry().state, STATES.needsHuman);
+  assert.equal(w.entry().reason, "operator-interrupted");
+  assert.equal(w.entry().control.status, "failed");
+  assert.equal(w.entry().control.note, "Preserve this message.");
+  assert.equal(w.runner.started.length, 1);
+});
+
 test("a start run that left work uncommitted says so, because no-pr alone reads as did nothing", async () => {
   // From a live run: a start run produced a 33-file research package, passed both of its Verify commands and never
   // committed. The entry recorded `no-pr` and nothing else, so an operator reading it had no reason to look in the

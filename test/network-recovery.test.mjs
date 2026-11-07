@@ -41,6 +41,21 @@ test("only recognized terminal connectivity errors qualify, never prose, permiss
   for (const patch of [{ ok: true }, { finished: false }, { denials: ["blocked"] }, { error: "We should simulate ENOTFOUND" }, { error: "no result event" }, { error: "API Error: 401 ENOTFOUND" }, { error: "API Error: policy denied ENOTFOUND" }, { error: "API Error: 429 ETIMEDOUT" }]) assert.equal(networkFailure({ ...failed, ...patch }), null);
 });
 
+test("an auxiliary Claude success cannot hide a terminal network failure from recovery", async () => {
+  const w = world({ state: STATES.running, pr: null, url: null });
+  w.ctx.gh.prListByHead = async () => [];
+  const run = w.runner.start("start", "unused", [], {});
+  w.state.update(w.id, { last: { at: T0, run: run.id, exit: null } });
+  w.runner.finish([...claudeResultLines({ ok: false, text: ERROR }), JSON.stringify({
+    type: "result", is_error: false, result: "", origin: { kind: "task-notification" },
+  })]);
+  await w.tick();
+  assert.equal(w.entry().reason, "provider-network");
+  assert.equal(w.entry().network_retry.code, "ENOTFOUND");
+  assert.equal(w.entry().network_retry.phase, "waiting");
+  assert.equal(w.runner.started.length, 1, "backoff still applies; no immediate duplicate launch");
+});
+
 test("backoff survives daemon restart, resumes the same session once and preserves dirty work and cursors", async () => {
   const w = world();
   w.git.dirty = async () => ({ modified: 2, untracked: 1 });
