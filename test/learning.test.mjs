@@ -90,7 +90,7 @@ test("historical merges reconcile concurrent source revisions without losing dis
 });
 
 test("candidate review, exact rejection suppression, revision and overlap conflicts persist", async t => {
-  const { service, store, root } = fixture(t);
+  const { service, store, root, clock } = fixture(t);
   const c = await pending(service, store);
   await service.reject(repo, c.content.id, c.digest, "contested correction");
   assert.equal((await service.revise(repo, c.content.id, c.content)).status, "rejected");
@@ -99,7 +99,7 @@ test("candidate review, exact rejection suppression, revision and overlap confli
   assert.throws(() => service.show(repo, c.content.id), /exact/);
   await service.revise(repo, "lesson-overlap", { ...c.content, id: "lesson-overlap", guidance: "Validate records as one transaction." });
   assert.equal(service.show(repo, c.content.id, revision.digest).conflicts.length, 1);
-  const restarted = createLearningService({ root });
+  const restarted = createLearningService({ root, clock });
   assert.equal(restarted.show(repo, c.content.id, c.digest).reason, "contested correction");
 });
 
@@ -168,7 +168,7 @@ test("historical dismissals preserve retraction metadata and exclude stale extra
     return { items: kind === "pulls" ? [snapshot().pr] : kind === "reviews" ? [{ ...review, state: dismissed ? "DISMISSED" : review.state }] : kind === "inline" && !removed ? [{ ...snapshot().inline[0], pull_request_review_id: 9 }] : [], complete: true };
   } };
   let extracted;
-  const { service, store, root } = fixture(t, { gh, clock: { now: () => time }, qualify: () => ({ qualified: true, fixtureOnly: true }), extractor: { dataOnly: true, execute: async input => { extracted = input.observations; return { json: "[]" }; } } });
+  const { service, store, root, clock } = fixture(t, { gh, clock: { now: () => time }, qualify: () => ({ qualified: true, fixtureOnly: true }), extractor: { dataOnly: true, execute: async input => { extracted = input.observations; return { json: "[]" }; } } });
   await service.configure(repo, "collect"); await service.collect(repo, "example/project");
   const original = store.load(repo), evidence = Object.keys(original.observations);
   assert.equal(evidence.length, 2);
@@ -180,7 +180,7 @@ test("historical dismissals preserve retraction metadata and exclude stale extra
   duringScan = () => service.reject(repo, c.content.id, c.digest, "Review was dismissed");
   await service.collect(repo, "example/project");
   const retractedAt = new Date(time).toISOString();
-  const restarted = createLearningService({ root });
+  const restarted = createLearningService({ root, clock });
   const shown = restarted.show(repo, c.content.id, c.digest);
   assert.equal(shown.status, "rejected"); assert.equal(shown.digest, c.digest);
   for (const e of shown.evidence) {
@@ -198,7 +198,7 @@ test("historical dismissals preserve retraction metadata and exclude stale extra
 test("resolved visibility survives CLI collection, review and extraction without widening identity", async t => {
   let visibility = "private", resolvedId = repo.id, extracted;
   const gh = { learningRepository: async () => ({ ...repo, id: resolvedId, visibility }), learningPage: async (_name, kind) => ({ items: kind === "pulls" ? [snapshot().pr] : kind === "inline" ? snapshot().inline : [], complete: true }) };
-  const { service, store, root } = fixture(t, { gh, qualify: () => ({ qualified: true, fixtureOnly: true }), extractor: { dataOnly: true, execute: async input => { extracted = input.observations; return { json: "[]" }; } } });
+  const { service, store, root, clock } = fixture(t, { gh, qualify: () => ({ qualified: true, fixtureOnly: true }), extractor: { dataOnly: true, execute: async input => { extracted = input.observations; return { json: "[]" }; } } });
   const ctx = { learning: service };
   await learnCommand(ctx, { args: [], values: { repo: "example/project", "dry-run": true } });
   assert.equal(readdirSync(join(root, "..")).includes("state"), false);
@@ -207,7 +207,7 @@ test("resolved visibility survives CLI collection, review and extraction without
   assert.deepEqual(service.identityFor("example/project"), repo);
   const evidence = Object.keys(store.load(repo).observations)[0];
   const c = await service.revise(repo, "lesson-validation", proposed(evidence));
-  const restarted = createLearningService({ root });
+  const restarted = createLearningService({ root, clock });
   assert.equal(restarted.show(repo, c.content.id, c.digest).evidence[0].content.visibility, "private");
   await service.extract(repo, { allowanceUsd: 0.1 });
   assert.equal(extracted[0].visibility, "private"); assert.deepEqual(extracted[0].repo, repo);
@@ -247,10 +247,11 @@ test("relative reviewed JSON files work and read-only CLI explain accepts --run 
 
 test("expired evidence is hidden in inspection before a mutation and raw retention is applied on observation", async t => {
   let time = Date.parse(now);
-  const { service, store } = fixture(t, { clock: { now: () => time } });
+  const { service, store, root, clock } = fixture(t, { clock: { now: () => time } });
   const c = await pending(service, store);
   time += 31 * 86400_000;
-  const shown = service.show(repo, c.content.id, c.digest); assert.equal(shown.evidence[0].expired, true); assert.equal(shown.evidence[0].content.excerpt, "[raw excerpt expired]");
+  const restarted = createLearningService({ root, clock });
+  const shown = restarted.show(repo, c.content.id, c.digest); assert.equal(shown.evidence[0].expired, true); assert.equal(shown.evidence[0].content.excerpt, "[raw excerpt expired]");
   await service.observe(repo, snapshot("fresh source", { updated_at: "2026-11-07T00:00:00Z" }));
   assert.equal(store.load(repo).observations[c.content.evidence[0]].expired, true);
 });
@@ -364,12 +365,12 @@ test("CLI disables locally during GitHub outages and invokes revocation controls
 
 test("disabled modes retry revocation after a committed mode and failed controls across restart", async t => {
   for (const mode of ["off", "collect"]) {
-    const { service, store, root } = fixture(t, { onRevocation: async () => { throw new Error("registry locked"); } });
+    const { service, store, root, clock } = fixture(t, { onRevocation: async () => { throw new Error("registry locked"); } });
     await store.transaction(repo, s => { s.mode = "apply"; });
     await assert.rejects(service.configure(repo, mode), /registry locked/);
     assert.equal(service.mode(repo), mode);
     let calls = 0;
-    const restarted = createLearningService({ root, store, onRevocation: async intent => {
+    const restarted = createLearningService({ root, store, clock, onRevocation: async intent => {
       calls++; assert.deepEqual(intent.repo, repo); assert.equal(intent.removed, null);
       return [{ cancellation: { confirmed: true } }];
     } });
@@ -668,7 +669,7 @@ test("failed extraction result merge retains its reservation across restart", as
   f = fixture(t, { extractor, qualify }); await observed(f.service);
   try { await assert.rejects(f.service.extract(repo, { allowanceUsd: 0.1 }), /already running/); }
   finally { release?.(); }
-  const restarted = createLearningService({ store: f.store, extractor, qualify });
+  const restarted = createLearningService({ store: f.store, clock: f.clock, extractor, qualify });
   assert.equal((await restarted.extract(repo, { allowanceUsd: 0.1 })).status, "intent");
   assert.equal(calls, 1); assert.equal(f.service.list(repo).length, 0);
   await restarted.configure(repo, "off"); assert.equal(f.store.load(repo).mode, "off");
