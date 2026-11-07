@@ -129,7 +129,7 @@ test("recovery commits exactly signed prepared bytes after an interrupted atomic
   await assert.rejects(f.service.approve(repo, [{ id: f.candidate.content.id, digest: f.candidate.digest }], { confirm: () => true }), /fixture crash/);
   assert.equal(f.store.load(repo).sequence, 0); assert(Object.values(f.store.load(repo).prepared)[0].signature);
   f.store.saveLocked = originalSave;
-  const restarted = createLearningService({ store: f.store, signer: signer(), qualify: () => ({ qualified: true, fixtureOnly: true }) });
+  const restarted = createLearningService({ clock: f.clock, store: f.store, signer: signer(), qualify: () => ({ qualified: true, fixtureOnly: true }) });
   assert.equal((await restarted.recover(repo))[0].sequence, 1); assert.deepEqual(await restarted.recover(repo), []);
 });
 
@@ -162,12 +162,12 @@ test("retirement and disabled modes durably fence prepared launch admission", as
     const selection = [{ id: f.candidate.content.id, digest: f.candidate.digest }];
     await f.service.approve(repo, selection, { confirm: () => true }); await f.service.configure(repo, "apply");
     const snapshot = await f.service.context(repo, { taskId: "example/project/new", operationId: "prepared", profile: "codex", inputDigest: "a".repeat(64) });
-    const unqualifiedService = createLearningService({ store: f.store, signer: signer() });
+    const unqualifiedService = createLearningService({ clock: f.clock, store: f.store, signer: signer() });
     await assert.rejects(learningDispatch({ learning: unqualifiedService }, "example/project/new", { learning: { ...snapshot, repo } }, () => assert.fail("unqualified profile")), e => e.code === "LEARNING_UNQUALIFIED" && e.dispatchNotSent);
     if (action === "retire") await f.service.approve(repo, selection, { action, reason: "Retire before launch", confirm: () => true });
     else await f.service.configure(repo, action);
     assert(f.store.load(repo).deliveries[snapshot.key].revoked);
-    const restarted = createLearningService({ store: f.store, signer: signer(), qualify: () => ({ qualified: true, fixtureOnly: true }) });
+    const restarted = createLearningService({ clock: f.clock, store: f.store, signer: signer(), qualify: () => ({ qualified: true, fixtureOnly: true }) });
     await restarted.configure(repo, "apply");
     await assert.rejects(learningDispatch({ learning: restarted }, "example/project/new", { learning: { ...snapshot, repo } }, () => assert.fail("retired guidance must never launch")), e => e.code === "LEARNING_STALE_CONTEXT" && e.dispatchNotSent === true);
   }
@@ -211,7 +211,7 @@ test("recovery retries committed retirement controls without signing another tra
   f.service.rememberRepo("example/project", repo);
   const committed = canonical(f.store.load(repo));
   assert.equal(f.store.load(repo).sequence, 2); assert.deepEqual(f.store.load(repo).active, []);
-  const calls = [], restarted = createLearningService({ store: f.store, gh: { learningRepository() { assert.fail("offline recovery must not resolve GitHub identity"); } }, signer: { ...signer(), sign() { throw new Error("must not sign during recovery"); } }, qualify: () => ({ qualified: true, fixtureOnly: true }), onRevocation: async intent => {
+  const calls = [], restarted = createLearningService({ clock: f.clock, store: f.store, gh: { learningRepository() { assert.fail("offline recovery must not resolve GitHub identity"); } }, signer: { ...signer(), sign() { throw new Error("must not sign during recovery"); } }, qualify: () => ({ qualified: true, fixtureOnly: true }), onRevocation: async intent => {
     const release = f.store.lock(); release(); // Controls run after the atomic transaction.
     calls.push(intent); return [{ cancellation: { confirmed: true } }];
   } });
@@ -260,7 +260,7 @@ test("obsolete signed preparations cannot poison later recovery and retirement i
   await assert.rejects(f.service.recover(repo), /verification failed/);
   assert.equal(canonical(f.store.load(repo)), corrupt);
   await transaction(repo, s => { s.prepared[obsoleteKey] = obsolete; });
-  const restarted = createLearningService({ store: f.store, signer: { ...signer(), sign() { assert.fail("recovery cannot sign"); } }, qualify: () => ({ qualified: true, fixtureOnly: true }) });
+  const restarted = createLearningService({ clock: f.clock, store: f.store, signer: { ...signer(), sign() { assert.fail("recovery cannot sign"); } }, qualify: () => ({ qualified: true, fixtureOnly: true }) });
   const results = await restarted.recover(repo), state = f.store.load(repo);
   assert.equal(results[0].disposition, "obsolete"); assert.equal(results[1].sequence, 2);
   assert.equal(state.sequence, 2); assert.equal(state.active.length, 2); assert.deepEqual(state.prepared, {});
@@ -280,7 +280,7 @@ test("trust substitution and missing checkpoint fail before any context, includi
   f.store.writeAuthority(substitute);
   const input = { operationId: "substituted-trust", profile: "fixture", inputDigest: "a".repeat(64) };
   await assert.rejects(f.service.context(repo, input), /trust root changed/);
-  const restarted = createLearningService({ store: f.store, signer: signer(), qualify: () => ({ qualified: true, fixtureOnly: true }) });
+  const restarted = createLearningService({ clock: f.clock, store: f.store, signer: signer(), qualify: () => ({ qualified: true, fixtureOnly: true }) });
   await assert.rejects(restarted.context(repo, input));
   f.store.writeAuthority(authority);
   const s = f.store.load(repo); s.checkpoint = null;
@@ -341,7 +341,7 @@ test("the hostile-signature security oracle detects a deliberately bypassed veri
   const release = f.store.lock(); try { f.store.saveLocked(repo, s); } finally { release(); }
   const oracle = service => assert.rejects(service.context(repo, { operationId: "oracle", profile: "fixture", inputDigest: "a".repeat(64) }), /verification failed/);
   await oracle(f.service);
-  const bypassed = createLearningService({ store: f.store, signer: { ...signer(), verify() { return true; } }, qualify: () => ({ qualified: true, fixtureOnly: true }) });
+  const bypassed = createLearningService({ clock: f.clock, store: f.store, signer: { ...signer(), verify() { return true; } }, qualify: () => ({ qualified: true, fixtureOnly: true }) });
   await assert.rejects(oracle(bypassed), /Missing expected rejection/);
 });
 
@@ -350,7 +350,7 @@ test("batch approval refuses duplicate candidate IDs before terminal or signing"
   const f = await enrolled(t);
   const revision = await f.service.revise(repo, f.candidate.content.id, { ...f.candidate.content, guidance: "Validate the complete record before persisting it." });
   const before = canonical(f.store.load(repo));
-  const service = createLearningService({ store: f.store, signer: { ...signer(), terminal() { assert.fail("must reject before terminal"); }, sign() { assert.fail("must not sign"); } } });
+  const service = createLearningService({ clock: f.clock, store: f.store, signer: { ...signer(), terminal() { assert.fail("must reject before terminal"); }, sign() { assert.fail("must not sign"); } } });
   const first = { id: f.candidate.content.id, digest: f.candidate.digest };
   for (const second of [first, { id: revision.content.id, digest: revision.digest }]) {
     for (const action of ["approve", "retire"]) await assert.rejects(service.approve(repo, [first, second], { action, confirm() { assert.fail("must not preview"); } }), { code: "LEARNING_INPUT" });
@@ -365,10 +365,10 @@ test("setup retries pending encrypted key enrollment after signing failure", asy
   const keyPath = join(approval, "key");
   const firstSigner = { ...signer(), probe() {}, createKey(path) { creates++; copyFileSync(key, path); copyFileSync(key + ".pub", path + ".pub"); return encryptedKey(path); }, sign() { throw new Error("signing cancelled"); } };
   const qualify = () => ({ qualified: true, fixtureOnly: true });
-  const first = createLearningService({ store: f.store, signer: firstSigner, qualify });
+  const first = createLearningService({ clock: f.clock, store: f.store, signer: firstSigner, qualify });
   await assert.rejects(first.setup({ keyPath, confirm: () => true }), /signing cancelled/);
   const intent = canonical(f.store.readEnrollment()); assert.equal(f.store.readAuthority(), null);
-  const restarted = createLearningService({ store: f.store, signer: { ...signer(), probe() {}, createKey() { assert.fail("retry must not recreate key"); } }, qualify });
+  const restarted = createLearningService({ clock: f.clock, store: f.store, signer: { ...signer(), probe() {}, createKey() { assert.fail("retry must not recreate key"); } }, qualify });
   await assert.rejects(restarted.setup({ keyPath, confirm: () => false }), { code: "LEARNING_CANCELLED" });
   assert.equal(canonical(f.store.readEnrollment()), intent); assert.equal(f.store.readAuthority(), null);
   copyFileSync(otherKey, keyPath);
@@ -390,7 +390,7 @@ test("setup releases the shared lock for prompts and refuses changed enrollment 
     if (!changed) { changed = true; const release = f.store.lock(); try { const intent = f.store.readEnrollment(); intent.id = "22222222-2222-4222-8222-222222222222"; f.store.writeEnrollment(intent); } finally { release(); } }
     return signFixture(bytes);
   } };
-  const service = createLearningService({ store: f.store, signer: setupSigner, qualify });
+  const service = createLearningService({ clock: f.clock, store: f.store, signer: setupSigner, qualify });
   await assert.rejects(service.setup({ keyPath, confirm: async () => { await f.service.configure(repo, "collect"); await f.service.prune(repo); return true; } }), /concurrent enrollment changed/);
   assert.equal(f.store.readAuthority(), null); assert.equal(f.service.mode(repo), "collect");
   assert.equal((await service.setup({ keyPath, confirm: () => { checkUnlocked(); return true; } })).enrolled, true);
@@ -402,7 +402,7 @@ test("recovery retries committed revocations before refusing unqualified prepare
   await f.service.approve(repo, selection, { confirm: () => true });
   await assert.rejects(f.service.approve(repo, selection, { action: "retire", reason: "Remove stale advice", confirm: () => true }), /controls unavailable/);
   let controls = 0;
-  const recovery = createLearningService({ store: f.store, signer: signer(), qualify: () => ({ qualified: false }), onRevocation: async () => { controls++; return [{ cancellation: { confirmed: true } }]; } });
+  const recovery = createLearningService({ clock: f.clock, store: f.store, signer: signer(), qualify: () => ({ qualified: false }), onRevocation: async () => { controls++; return [{ cancellation: { confirmed: true } }]; } });
   assert.equal((await recovery.recover(repo))[0].controls[0].cancellation.confirmed, true);
   const candidate = await f.service.revise(repo, f.candidate.content.id, { ...f.candidate.content, guidance: "Validate complete records before writing any fields." });
   const save = f.store.saveLocked; let writes = 0;
@@ -497,13 +497,13 @@ test("pending apply cannot overwrite a later disable across mode cycles and lega
       let release, entered;
       const started = new Promise(resolve => { entered = resolve; });
       const waiting = new Promise(resolve => { release = resolve; });
-      const enabling = createLearningService({ store: f.store, signer: signer(), qualify: async () => {
+      const enabling = createLearningService({ clock: f.clock, store: f.store, signer: signer(), qualify: async () => {
         entered(); await waiting; return { qualified: true, fixtureOnly: true };
       } });
       const pendingApply = enabling.configure(repo, "apply");
       await started;
       let controls = 0;
-      const restarted = createLearningService({ store: f.store, signer: signer(), qualify: () => ({ qualified: true, fixtureOnly: true }), onRevocation: async () => { controls++; return []; } });
+      const restarted = createLearningService({ clock: f.clock, store: f.store, signer: signer(), qualify: () => ({ qualified: true, fixtureOnly: true }), onRevocation: async () => { controls++; return []; } });
       await restarted.configure(repo, disabled);
       assert.equal(controls, 1);
       // ABA must remain stale even if another explicit request restores the mode.
@@ -547,7 +547,7 @@ test("custom enrolled signer survives CLI restart and refuses changed executable
   const ctx = { learningFor(_login, options) {
     selectedPath = options.signerExecutable;
     const actual = storedOpenSshSigner(f.store, { executable: selectedPath });
-    return createLearningService({ store: f.store, qualify, signer: { ...actual, terminal() {},
+    return createLearningService({ clock: f.clock, store: f.store, qualify, signer: { ...actual, terminal() {},
       createKey(path) { copyFileSync(key, path); copyFileSync(key + ".pub", path + ".pub"); return encryptedKey(path); },
       sign: bytes => signFixture(bytes),
     } });
@@ -555,17 +555,17 @@ test("custom enrolled signer survives CLI restart and refuses changed executable
   await learnCommand(ctx, { args: ["setup"], values: { "key-path": keyPath, "ssh-keygen": executable }, confirm: () => true });
   assert.equal(selectedPath, executable); assert.equal(f.store.readAuthority().signer.path, executable);
   const c = await pending(f.service, f.store);
-  const reviewer = createLearningService({ store: f.store, qualify, signer: { ...storedOpenSshSigner(f.store), terminal() {}, sign: bytes => signFixture(bytes) } });
+  const reviewer = createLearningService({ clock: f.clock, store: f.store, qualify, signer: { ...storedOpenSshSigner(f.store), terminal() {}, sign: bytes => signFixture(bytes) } });
   await reviewer.approve(repo, [{ id: c.content.id, digest: c.digest }], { confirm: () => true });
   f.service.rememberRepo("example/project", repo);
-  const restarted = createLearningService({ store: f.store, qualify, probeIsolation: async () => ({ qualified: false }) });
+  const restarted = createLearningService({ clock: f.clock, store: f.store, qualify, probeIsolation: async () => ({ qualified: false }) });
   const doctor = await restarted.doctor(); assert.equal(doctor.enrollment.enrolled, true); assert.equal(doctor.openssh.signer.path, executable);
   assert.deepEqual(await learnCommand({ learning: restarted }, { args: ["recover"], values: { repo: "example/project" } }), []);
   await restarted.configure(repo, "apply");
   assert.equal((await restarted.context(repo, { operationId: "after-restart", profile: "fixture", inputDigest: "a".repeat(64) })).rules.length, 1);
   const marker = join(f.dir, "must-not-execute");
   writeFileSync(executable, `#!/bin/sh\ntouch '${marker}'\n`);
-  const changed = createLearningService({ store: f.store, qualify, probeIsolation: async () => ({ qualified: false }) });
+  const changed = createLearningService({ clock: f.clock, store: f.store, qualify, probeIsolation: async () => ({ qualified: false }) });
   assert.equal((await changed.doctor()).openssh.available, false);
   await assert.rejects(changed.recover(repo), /pinned signer changed/);
   assert.equal(existsSync(marker), false);

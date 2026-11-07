@@ -195,7 +195,30 @@ Local task submission:
 8. Copies those snapshots into the checkout at their original repository paths, creating directories as needed. The PRD is usually only in your own checkout; this copy lets the session commit it with the implementation. Copies in the session's checkout are writable and are never read back for a decision.
 9. Starts the session detached with the PRD as its prompt, records the session id, and remembers the repo for recovery.
 
-The entry is `running` until the daemon sees the run end. Then either a PR exists on the branch and the entry enters `pr-open`, or it stops with `no-pr`.
+The entry is `running` until the daemon sees the run end. Then either a PR exists on the branch and the entry enters `pr-open`, or a successful worker that did not open one stops with `no-pr`. A failed or incomplete worker without a PR stops with `harness-error`; inspect its run log. Recognized terminal connection failures use the bounded [network recovery](network-recovery.md) path instead.
+
+Workers must collect verification results before returning. Claude launches disable
+native background shell/subagent execution and disallow `Monitor`, which otherwise
+remains available despite that setting. This applies to both new and resumed
+implementation/review runs, without changing the operator's global settings,
+sandbox, APort hooks or task allowances. Temporary development servers may still
+be used within a run, with their tests collected and processes cleaned up before
+returning. Shell checks need explicit timeouts sufficient for the check and within
+the approved limits; a timed-out check is not a pass. Tool-free preparation keeps
+its existing deny-all boundary. These native controls are described in Claude's
+[environment reference](https://code.claude.com/docs/en/env-vars) and
+[Monitor documentation](https://code.claude.com/docs/en/tools-reference#monitor-tool).
+
+A background-task notification's result cannot settle the main task or hide its
+failure. Gallivant owns durable wakeups and review polling. It does not blindly
+restart every `no-pr` or missing-result failure, which could repeat external
+effects or run unchanged blocked work indefinitely. After upgrading, explicitly
+resume an already stopped run once; future launches receive the lifecycle policy.
+An interrupted pre-PR session becomes resumable only after its owned process tree
+has stopped. Late results stay quarantined; the coordinator still discovers any
+PR already opened before delivering the queued correction to the same session.
+An older failed interrupt is repaired to a stopped state, preserving its message
+for an explicit retry instead of replaying that failed request automatically.
 
 It also brings the daemon up in the background if one is not already running, and waits until the daemon reports
 itself before returning. That is not a convenience: `start` opens a session that will open a pull request, and the

@@ -16,8 +16,11 @@ export const proposed = (evidence, changes = {}) => ({ version: 1, id: "lesson-v
 export function fixture(t, extra = {}) {
   const dir = mkdtempSync(join(realpathSync(tmpdir()), "learning-test-")), root = join(dir, "state");
   t.after(() => rmSync(dir, { recursive: true, force: true }));
-  const store = learningStore(root), service = createLearningService({ root, store, clock: { now: () => Date.parse(now) }, trust, ...extra });
-  return { dir, root, store, service };
+  // Reopened services must reuse this clock too. Host wall time would otherwise
+  // expire fixed-date evidence as the suite ages; retention tests advance it explicitly.
+  const clock = extra.clock ?? { now: () => Date.parse(now) };
+  const store = learningStore(root), service = createLearningService({ root, store, clock, trust, ...extra });
+  return { dir, root, store, service, clock };
 }
 export async function observed(service) { await service.configure(repo, "collect"); await service.observe(repo, snapshot()); return service.report(repo); }
 export async function pending(service, store, changes = {}) { await observed(service); const evidence = Object.keys(store.load(repo).observations)[0]; return service.revise(repo, changes.id || "lesson-validation", proposed(evidence, changes)); }

@@ -30,13 +30,14 @@ test("shell exports quote spaces and apostrophes and preserve the rest of PATH",
 test("Claude runtime hook preserves security settings and appends session exports", () => {
   const dir = mkdtempSync(join(tmpdir(), "runtime-settings-"));
   const path = join(dir, "settings.json"), envFile = join(dir, "session.env");
-  const settings = { sandbox: { enabled: true }, permissions: { deny: ["Read(.env)"] }, hooks: { PreToolUse: [{ hooks: [{ type: "command", command: "guard" }] }], SessionStart: [{ hooks: [{ type: "command", command: "existing" }] }] } };
+  const settings = { env: { KEEP_ME: "retained", CLAUDE_CODE_DISABLE_BACKGROUND_TASKS: "0" }, sandbox: { enabled: true }, permissions: { deny: ["Read(.env)"] }, hooks: { PreToolUse: [{ hooks: [{ type: "command", command: "guard" }] }], SessionStart: [{ hooks: [{ type: "command", command: "existing" }] }] } };
   writeFileSync(path, JSON.stringify(settings)); writeFileSync(envFile, "export EXISTING=kept\n");
   const merged = JSON.parse(readFileSync(claudeRuntimeSettings(path, join(dir, RUNTIME_SETTINGS_FILE)), "utf8"));
   assert.equal(merged.sandbox.enabled, true);
   assert.deepEqual(merged.sandbox.filesystem.allowRead, runtimeReadPaths());
   assert.equal(merged.sandbox.filesystem.allowWrite, undefined);
   assert.deepEqual(merged.permissions, settings.permissions);
+  assert.deepEqual(merged.env, { KEEP_ME: "retained", CLAUDE_CODE_DISABLE_BACKGROUND_TASKS: "1" });
   assert.deepEqual(merged.hooks.PreToolUse, settings.hooks.PreToolUse);
   assert.deepEqual(merged.hooks.SessionStart[0], settings.hooks.SessionStart[0]);
   assert.deepEqual(JSON.parse(readFileSync(path)), settings);
@@ -120,6 +121,13 @@ test("every local adapter receives identical runtime environment on start and re
       assert.equal(spec.env.NPM_CONFIG_CACHE, join(dir, ".cache/gallivant/npm"));
       assert.equal(spec.env.npm_config_cache, spec.env.NPM_CONFIG_CACHE);
       assertSafeArgv(spec.args); assertSafeEnv(spec.env);
+      if (harness === "claude") {
+        assert.equal(spec.env.CLAUDE_CODE_DISABLE_BACKGROUND_TASKS, "1");
+        assert.equal(spec.args[spec.args.indexOf("--disallowedTools") + 1], "Monitor");
+      } else {
+        assert.equal(spec.env.CLAUDE_CODE_DISABLE_BACKGROUND_TASKS, undefined);
+        assert.ok(!spec.args.includes("--disallowedTools"));
+      }
       assert.equal(spec.cmd, `/bin/${harness}`);
       assert.deepEqual(spec.runtimeSettings, harness === "claude" ? { settings, node: process.execPath } : undefined);
     }
@@ -147,6 +155,8 @@ test("tool-free preparation does not receive runtime hooks or new read grants", 
   const spec = buildPreparationRun({ harness: "claude", mode: "start", config: { max_budget_usd: 2, harness: { claude: { bin: "/bin/claude", settings } } }, session: "11111111-1111-4111-8111-111111111111", cwd: dir, prompt: "test" });
   assert.equal(spec.args[spec.args.indexOf("--settings") + 1], settings);
   assert.ok(spec.args.includes("--restricted"));
+  assert.equal(spec.args.filter(a => a === "--disallowedTools").length, 1, "execution policy cannot replace preparation's deny-all flag");
+  assert.equal(spec.args[spec.args.indexOf("--disallowedTools") + 1], "*");
   assert.equal(spec.runtimeSettings, undefined);
   assert.deepEqual(readdirSync(dir), ["settings.json"]);
 });
@@ -166,7 +176,7 @@ function ownedFixture(t) {
 
 for (const mode of ["start", "resume"]) test(`actual ${mode} owns a private snapshot until native process exit`, async t => {
   const { dir, cwd, settings } = ownedFixture(t), bin = join(dir, "claude.mjs"), release = join(dir, "release");
-  writeFileSync(bin, `#!${process.execPath}\nimport fs from 'node:fs'; const path=process.argv[process.argv.indexOf('--settings')+1]; console.log(JSON.stringify({path,settings:JSON.parse(fs.readFileSync(path))})); const timer=setInterval(()=>{if(fs.existsSync(${JSON.stringify(release)}))clearInterval(timer)},20);`, { mode: 0o755 });
+  writeFileSync(bin, `#!${process.execPath}\nimport fs from 'node:fs'; const path=process.argv[process.argv.indexOf('--settings')+1]; console.log(JSON.stringify({path,settings:JSON.parse(fs.readFileSync(path)),background:process.env.CLAUDE_CODE_DISABLE_BACKGROUND_TASKS,denied:process.argv[process.argv.indexOf('--disallowedTools')+1]})); const timer=setInterval(()=>{if(fs.existsSync(${JSON.stringify(release)}))clearInterval(timer)},20);`, { mode: 0o755 });
   const spec = buildRun({ harness: "claude", mode, config: { max_budget_usd: 2, harness: { claude: { bin, settings } } }, session: "11111111-1111-4111-8111-111111111111", cwd, prompt: "fixture" });
   const runner = makeRunner(join(dir, "runs"));
   const job = await runner.start(mode, spec.cmd, spec.args, { cwd, env: spec.env, runtimeSettings: spec.runtimeSettings });
@@ -178,6 +188,9 @@ for (const mode of ["start", "resume"]) test(`actual ${mode} owns a private snap
   assert.equal(statSync(snapshot).mode & 0o777, 0o600);
   assert.equal(statSync(runner.dirOf(job.id)).mode & 0o777, 0o700);
   assert.ok(observed.settings.hooks.SessionStart.length);
+  assert.equal(observed.background, "1");
+  assert.equal(observed.settings.env.CLAUDE_CODE_DISABLE_BACKGROUND_TASKS, "1");
+  assert.equal(observed.denied, "Monitor");
   assert.equal(runner.read(job.id).runtimeSettings, true);
   assert.equal(spec.args[spec.args.indexOf("--settings") + 1], settings, "launch does not mutate the reusable description");
   writeFileSync(release, "done");

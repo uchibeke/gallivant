@@ -45,8 +45,8 @@ test("retired native session memory blocks resume while preserving logical task 
 });
 
 test("default migrated profiles cannot activate with forged configuration or fixture flags", async t => {
-  const { root } = fixture(t);
-  const service = createLearningService({ root });
+  const { root, clock } = fixture(t);
+  const service = createLearningService({ root, clock });
   await assert.rejects(service.configure(repo, "apply", { qualified: true, fixtureOnly: true, tty: true }));
   assert.equal(service.mode(repo), "off");
 });
@@ -87,11 +87,11 @@ test("automatic observations retain configured private and internal visibility a
     const clock = makeClock(), runner = fakeRunner(clock);
     const gh = fakeGh({ inline: [inline({ id: 9, by: "maintainer", at: at(1), body: "Validate the error path" })] });
     gh.learningRepository = async () => ({ ...repo, visibility });
-    const { service, store, root } = fixture(t, { gh });
+    const { service, store, root, clock: learningClock } = fixture(t, { gh });
     await learnCommand({ learning: service }, { args: ["configure"], values: { repo: "acme/widget", mode: "collect" } });
     let resolutions = 0;
     gh.learningRepository = async (_name, { signal }) => { resolutions++; assert(signal instanceof AbortSignal); return { ...repo, visibility }; };
-    const restarted = createLearningService({ root, store, gh, trust: makeTrust({ trusted_authors: ["maintainer"], reviewer: null }, "me") });
+    const restarted = createLearningService({ root, store, clock: learningClock, gh, trust: makeTrust({ trusted_authors: ["maintainer"], reviewer: null }, "me") });
     const tick = makeTick({ config: CONFIG, state, gh, git: fakeGit(), notify: fakeNotify(), log: silentLog, clock, ownLogin: "me", runnerFor: () => runner, readPrd: () => null, learning: restarted });
     const results = await tick.tick(); assert(results.every(r => r.ok));
     const observations = Object.values(store.load(repo).observations);

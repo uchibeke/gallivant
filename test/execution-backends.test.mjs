@@ -1129,6 +1129,60 @@ test("local reconciliation coalesces idle observations but persists transitions 
   assert.equal(f.open().current().execution.providerState, "succeeded");
 });
 
+test("managed local interrupts resume a pre-PR worker only after its quarantined process tree stops", async () => {
+  for (const provider of ["claude", "codex"]) for (const continuing of [false, true]) {
+    const warnings = [];
+    const f = localTimeoutFixture({ provider }), state = makeState(f.home), worktree = join(f.home, "worktree");
+    mkdirSync(worktree);
+    state.put(f.id, newEntry({ repo: "acme/widget", branch: "work/task", worktree, harness: provider,
+      session: continuing ? f.session : null, pr: null, state: STATES.running, nowIso: T0 }));
+    let service = f.open();
+    if (continuing) {
+      const prior = await service.submit({ operationId: "prior", name: "prior", sessionId: f.session,
+        spec: { cmd: provider, args: [], options: { cwd: worktree } } });
+      f.runner.finish(localSessionLines(provider, f.session), { exit: 0 });
+      service.settle(prior.id);
+    }
+    const ctx = { home: f.home, config: { ...CONFIG, harness: { ...CONFIG.harness,
+      [provider]: { ...CONFIG.harness[provider], bin: harnessBin(f.home, provider) } } },
+      state, clock: f.clock, executionFor: () => service, runnerFor: () => f.runner, gh: fakeGh({ prsByHead: [] }),
+      git: fakeGit(), log: { ...silentLog, warn: message => warnings.push(message) }, notify: fakeNotify(), readPrd: () => null, ownLogin: "me",
+      credential: fakeCredential(), identity: fakeIdentity() };
+    let tick = makeTick(ctx);
+    const { job, session } = await tick.startRun(f.id, state.get(f.id), { name: "start", prompt: "Implement the approved task" });
+    f.runner.current().lines.push(...localSessionLines(provider, session || f.session).slice(0, 1));
+    state.update(f.id, { session: session || f.session, last: { run: job.id, exit: null, at: T0 } });
+    const request = requestControl(ctx, { handle: f.id, action: "message", note: "Preserve the implementation and finish verification.", interrupt: true });
+    await tick.tick();
+    assert.equal(f.runner.started.length, continuing ? 2 : 1, "surviving tools exclude another writer");
+    assert.equal(state.get(f.id).control.status, "queued");
+    f.setDescendants(false);
+    service = f.open(); tick = makeTick(ctx); // Recover the saved interrupt after a coordinator restart.
+    await tick.tick();
+    const entry = state.get(f.id);
+    assert.equal(f.runner.started.length, continuing ? 3 : 2, JSON.stringify({ provider, continuing, reason: entry.reason, warnings }));
+    assert.equal(entry.control.id, request.id);
+    assert.equal(entry.control.status, "applied", provider);
+    assert.equal(entry.session, session || f.session);
+    assert.match(f.runner.started.at(-1).args.at(-1), /Preserve the implementation and finish verification/);
+    await tick.tick();
+    assert.equal(f.runner.started.length, continuing ? 3 : 2, "the message must not replay");
+  }
+});
+
+test("local interrupt identity checkpoint refuses another run or a foreign native session before signalling", async () => {
+  const f = localTimeoutFixture({ provider: "claude" }), service = f.open();
+  const job = await service.submit({ operationId: "owned", name: "owned", sessionId: f.session,
+    spec: { cmd: "claude", args: [], options: {} } });
+  assert.throws(() => service.kill("another-run"), { code: "EXECUTION_OWNERSHIP" });
+  f.runner.current().lines.push(JSON.stringify({ type: "system", subtype: "init",
+    session_id: "11111111-1111-4111-8111-111111111111" }));
+  assert.throws(() => service.kill(job.id), { code: "EXECUTION_RESULT" });
+  assert.deepEqual(f.stops, []);
+  assert.equal(service.current().running, true);
+  assert.equal(service.current().execution.sessionId, f.session);
+});
+
 test("local network recovery survives execution-ledger reopening without duplicate sessions", async () => {
   const f = localTimeoutFixture({ provider: "claude" });
   const state = makeState(f.home), worktree = join(f.home, "worktree");
