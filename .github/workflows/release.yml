@@ -11,6 +11,8 @@ concurrency:
 jobs:
   validate:
     uses: ./.github/workflows/runtime-portability.yml
+    with:
+      full: true
   publish:
     needs: validate
     if: github.repository == 'uchibeke/gallivant'

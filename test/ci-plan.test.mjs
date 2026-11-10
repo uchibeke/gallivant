@@ -1,0 +1,92 @@
+import { test } from "node:test";
+import assert from "node:assert/strict";
+import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { execFileSync, spawnSync } from "node:child_process";
+import { fileURLToPath } from "node:url";
+import { indexFile, selection, testUnits, shardUnits, parallelShards, changedPaths, CPU_TEST } from "../scripts/ci-plan.mjs";
+
+const fixture = t => {
+  const root = mkdtempSync(join(tmpdir(), "ci-plan-"));
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  const put = (path, source) => { mkdirSync(join(root, path, ".."), { recursive: true }); writeFileSync(join(root, path), source); };
+  put("test/a.test.mjs", 'import {test} from "node:test"; import "../lib/a.mjs"; test("a",()=>{});');
+  put("test/b.test.mjs", 'import {test} from "node:test"; test("b",()=>{});');
+  put("lib/a.mjs", 'import "./leaf.mjs";'); put("lib/leaf.mjs", "export const value=1;");
+  return { root, put };
+};
+
+test("docs avoid runtime duplication; unknown paths, dependencies and releases never produce empty coverage", t => {
+  const { root } = fixture(t);
+  assert.equal(selection(root, ["docs/prds/example.md"], "pull_request").mode, "docs");
+  assert.deepEqual(selection(root, ["docs/prds/example.md"], "pull_request").files, []);
+  for (const path of ["package.json", "npm-shrinkwrap.json", ".github/workflows/runtime-portability.yml", "unrecognized.config", "lib/runtime_node.mjs"]) {
+    const selected = selection(root, [path], "pull_request");
+    assert.equal(selected.files.length, 2, path); assert.equal(selected.platforms.length, 4, path);
+  }
+  for (const event of ["release", "schedule"]) {
+    const selected = selection(root, ["README.md"], event);
+    assert.equal(selected.files.length, 2); assert.equal(selected.platforms.length, 4);
+  }
+});
+
+test("affected tests follow transitive imports while new and deleted dependencies fail closed", t => {
+  const { root } = fixture(t);
+  assert.deepEqual(selection(root, ["lib/leaf.mjs"], "pull_request").files, ["test/a.test.mjs"]);
+  for (const path of ["lib/new.mjs", "lib/deleted.mjs"]) assert.equal(selection(root, [path], "pull_request").files.length, 2);
+});
+
+test("indexing parses JavaScript rather than treating string examples as registrations", () => {
+  const source = `import { test as scenario } from 'node:test';
+    const example = 'test("fake",()=>{})';
+    scenario('literal',()=>{});
+    for (const name of ['dynamic']) scenario(name,()=>{});
+    const alias=scenario; alias('indirect',()=>{});`;
+  assert.deepEqual(indexFile(source).names, ["literal"]);
+});
+
+test("every selected registration has a named shard or an exhaustive dynamic residual; CPU work stays alone", t => {
+  const { root, put } = fixture(t);
+  put("test/a.test.mjs", `import {test} from 'node:test'; test('alpha',()=>{}); test('alpha beta',()=>{}); test(${JSON.stringify(CPU_TEST)},()=>{}); for(const n of ['dynamic']) test(n,()=>{});`);
+  const units = testUnits(root, ["test/a.test.mjs"]);
+  assert.equal(units.filter(u => u.residual).length, 1);
+  const names = units.flatMap(u => u.names || []);
+  assert.deepEqual([...names].sort(), ["alpha", "alpha beta", CPU_TEST].sort());
+  const shards = shardUnits(units);
+  assert.equal(shards.flatMap(s => s.units).length, units.length);
+  assert.equal(shards.find(s => s.isolated).units.length, 1);
+  assert.ok(parallelShards(shards).some(s => s.lanes.length === 1 && s.lanes[0][0].isolated));
+  assert.throws(() => shardUnits([{ file: "test/a.test.mjs", names: ["too slow"], seconds: 96 }]), /Split that test/);
+});
+
+test("real sharded Node execution retains nested, dynamic, aliased and prefix-overlapping tests exactly once", t => {
+  const { root, put } = fixture(t);
+  put("package.json", '{"type":"module"}');
+  put("test/a.test.mjs", `import {test} from 'node:test'; import {appendFileSync} from 'node:fs';
+    const mark=n=>appendFileSync('marks.txt',n+'\\n');
+    test('alpha',async t=>{mark('alpha');await t.test('nested',()=>mark('nested'));});
+    test('alpha beta',()=>mark('prefix'));
+    test('other',()=>mark('other'));
+    for(const n of ['dynamic']) test(n,()=>mark(n));
+    const alias=test; alias('aliased',()=>mark('aliased'));`);
+  const env = { ...process.env, GIT_CONFIG_GLOBAL: "/dev/null", GIT_CONFIG_NOSYSTEM: "1" };
+  const git = args => execFileSync("git", args, { cwd: root, env, stdio: "pipe" });
+  git(["init", "-q"]); git(["add", "."]); git(["-c", "user.name=Fixture", "-c", "user.email=fixture@example.invalid", "commit", "-qm", "fixture"]);
+  const sha = git(["rev-parse", "HEAD"]).toString().trim();
+  const plan = { version: 1, sha, shards: parallelShards(shardUnits(testUnits(root, ["test/a.test.mjs"], {other:30}), 2)) };
+  put("plan.json", JSON.stringify(plan));
+  const runner = fileURLToPath(new URL("../scripts/ci.mjs", import.meta.url));
+  for (let i=0;i<plan.shards.length;i++) {
+    const r = spawnSync(process.execPath, [runner, "run", join(root, "plan.json")], { cwd: root, env: { ...env, CI_SHARD: String(i) }, encoding: "utf8" });
+    assert.equal(r.status, 0, r.stdout+r.stderr);
+  }
+  assert.deepEqual(readFileSync(join(root,"marks.txt"),"utf8").trim().split("\n").sort(), ["alpha","nested","prefix","other","dynamic","aliased"].sort());
+  plan.shards=[{lanes:[[{file:"test/a.test.mjs",names:["does not exist"]}]]}]; put("plan.json",JSON.stringify(plan));
+  const missing=spawnSync(process.execPath,[runner,"run",join(root,"plan.json")],{cwd:root,env:{...env,CI_SHARD:"0"},encoding:"utf8"});
+  assert.notEqual(missing.status,0,"zero matching tests cannot be green");
+});
+
+test("changed paths require a commit identity rather than shell input or a guessed base", () => {
+  for (const base of [null, "main", "HEAD; echo unsafe", "f".repeat(39)]) assert.throws(() => changedPaths(process.cwd(),base), /exact base commit/);
+});

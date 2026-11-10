@@ -4821,8 +4821,12 @@ test("new tasks record the typed delivery profile instead of the free-text contr
   assert.equal(w.runners.get(started.implementation.id).started.length, 1);
 });
 
-test("the request corpus is traceable and the typed profile controls every external effect under a literal planner reading", async () => {
-  for (const fixture of profileRequests) {
+// These fixtures are independent. Named batches let CI distribute the slow
+// corpus while the ordinary suite still exercises every original request.
+const PROFILE_CORPUS_BATCHES = 8;
+async function checkProfileCorpusBatch(batch) {
+  for (let index = batch; index < profileRequests.length; index += PROFILE_CORPUS_BATCHES) {
+    const fixture = profileRequests[index];
     let calls = 0;
     const w = world({ prepare: async (_ctx, task) => { calls++; return JSON.stringify(draftFor(task, { delivery: fixture.tag ? Object.fromEntries(task.requirements.map(r => [r.id, fixture.tag])) : {} })); } });
     const prepared = await w.service.prepare({ text: fixture.text, requestId: "corpus" });
@@ -4850,7 +4854,15 @@ test("the request corpus is traceable and the typed profile controls every exter
     assert.deepEqual(w.ctx.state.entries(), []); assert.equal(w.daemonCalls(), 0);
     assert.deepEqual(await w.service.prepare({ text: fixture.text, requestId: "corpus" }), prepared); assert.equal(calls, 1);
   }
-});
+}
+test("typed delivery request corpus preserves traceability and authority (1/8)", () => checkProfileCorpusBatch(0));
+test("typed delivery request corpus preserves traceability and authority (2/8)", () => checkProfileCorpusBatch(1));
+test("typed delivery request corpus preserves traceability and authority (3/8)", () => checkProfileCorpusBatch(2));
+test("typed delivery request corpus preserves traceability and authority (4/8)", () => checkProfileCorpusBatch(3));
+test("typed delivery request corpus preserves traceability and authority (5/8)", () => checkProfileCorpusBatch(4));
+test("typed delivery request corpus preserves traceability and authority (6/8)", () => checkProfileCorpusBatch(5));
+test("typed delivery request corpus preserves traceability and authority (7/8)", () => checkProfileCorpusBatch(6));
+test("typed delivery request corpus preserves traceability and authority (8/8)", () => checkProfileCorpusBatch(7));
 
 test("a profile conflict pauses before any harness run until the owner resolves it, then the answer is mapped and approval is fresh", async () => {
   // The planner reads the owner's reply literally: a restated prohibition the

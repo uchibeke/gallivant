@@ -107,6 +107,7 @@
   "devDependencies": {
     "@axe-core/playwright": "4.11.1",
     "@modelcontextprotocol/sdk": "1.32.1",
+    "acorn": "8.19.0",
     "esbuild": "0.28.2",
     "playwright": "1.58.2"
   },

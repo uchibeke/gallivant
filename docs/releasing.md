@@ -115,8 +115,10 @@ git push origin v0.3.0
 gh workflow run release.yml --repo uchibeke/gallivant --ref main
 ```
 
-Every release runs the Node 22/24 × Linux/macOS matrix: lint, the offline test
-suite, native isolation checks, and a clean installation of the actual tarball.
+Every release runs the full Node 22/24 × Linux/macOS matrix in bounded shards:
+lint, every offline regression and dynamic residual, browser checks, native
+isolation and clean tarball installation. See [CI policy](ci.md). Ordinary PRs
+use affected coverage; release calls explicitly request full qualification.
 Publishing requires a public repository, an exact tag/version match (or manual
 dispatch from `main`), and a commit reachable from `main`. An existing tag must
 point to that exact commit. The protected environment gates publication.

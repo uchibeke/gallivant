@@ -96,7 +96,9 @@ navigation, axe WCAG AA rules, malicious text, CSP and protected controls.
 The existing transport tests additionally cover remote peers and port mismatch.
 Browser checks complement those tests; automated accessibility is not a complete
 manual accessibility audit. Firefox/WebKit qualification belongs to milestone 9.
-The runtime OS/Node matrix and release workflow remain separate and unchanged.
+The browser job now shares the change-aware runtime workflow; release validation
+still requires full qualification. See [CI policy](ci.md) for selection, bounded
+shards and the preserved native isolation gates.
 
 ## Capture provenance
 
