@@ -41,6 +41,10 @@ new send. Cancellation requests remain separate from confirmed provider stops.
 
 ## APort schema intake and rollback
 
+Package compatibility remains the existing 0.3.x window; a 0.2.x runtime
+manifest still fails the handshake. The combinations below describe additive
+schema fields within an otherwise compatible runtime pin.
+
 | Consumer / stored state | Supported behavior |
 | --- | --- |
 | Existing client / new runtime | Omit `diagnostics`; the existing response fields and operation version 1 remain unchanged. Clients may ignore additive fields. |
