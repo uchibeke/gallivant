@@ -40,7 +40,9 @@ rewrites test bodies or skips a corpus because it is expensive.
 `scripts/ci-weights.json` contains advisory timings from a completed macOS CI
 run. They balance work, not decide correctness. New tests receive a small default
 weight; new files and unsupported syntax do not disappear. Jobs run up to two
-independent 60-second lanes, sharing setup and leaving room for process startup.
+independent 50-second lanes, sharing setup and leaving room for process startup.
+Measured whole-file timings account for suites whose dynamic cases are absent
+from the literal test index.
 The runner has a
 100-second execution ceiling within the job's two-minute deadline. A single
 known test over 95 seconds is refused with an instruction to split that test,

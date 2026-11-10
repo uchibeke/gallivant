@@ -5,7 +5,7 @@ import { execFileSync } from "node:child_process";
 import { parse } from "acorn";
 
 export const CPU_TEST = "the screen and mapping stay fast at the request and mapping limits";
-export const SHARD_SECONDS = 60;
+export const SHARD_SECONDS = 50;
 const escape = text => text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 export const patternFor = names => `^(?:${names.map(escape).join("|")})(?:$| )`;
 const walk = (node, visit) => {
@@ -92,7 +92,10 @@ export function testUnits(root, files, weights = {}) {
     const seconds = names.reduce((n, name) => n + (weights[name] || 0.03), 2);
     // Keep ordinary files intact: only measured slow suites need name sharding.
     // Whole-file execution naturally includes dynamic and future registrations.
-    if (seconds <= 25 && !names.includes(CPU_TEST)) { units.push({ file, whole: true, seconds }); continue; }
+    if (seconds <= 25 && !names.includes(CPU_TEST)) {
+      units.push({ file, whole: true, seconds: Math.max(seconds, weights[file] || 0) });
+      continue;
+    }
     const clusters = [];
     for (const name of names.sort((a, b) => a.length - b.length || a.localeCompare(b))) {
       const existing = clusters.find(cluster => name.startsWith(cluster.names[0] + " "));
