@@ -39,7 +39,7 @@ function world({ question = true, schedule = async () => {} } = {}) {
       writeFileSync(join(checkout, "AGENTS.md"), "Verify with `npm test` and `npm run lint`.\n");
       migrateRuntimeState({ home, manifest });
       const runners = new Map(), snapshots = new Map(), sources = new Map();
-      const ctx = { home, config: { ...CONFIG, home, worktrees: join(home, "worktrees"), harness: { claude: { bin: harnessBin(home, "claude"), settings: null } }, deliverable: { ...CONFIG.deliverable, evaluator: "local", enabled: false }, reviewer: null },
+      const ctx = { home, config: { ...CONFIG, home, worktrees: join(home, "worktrees"), harness: { claude: { bin: harnessBin(home, "claude"), settings: null } }, deliverable: { ...CONFIG.deliverable, evaluator: "local", enabled: false }, reviewer: null, review: { legacy_no_review: true } },
         state: makeState(home), log: silentLog, clock: makeClock(), ownLogin: "me", credential: fakeCredential(), identity: fakeIdentity(), notify: fakeNotify(),
         gh: { ...fakeGh({ pr: prFixture({ number: 7, headRefName: "work/widget", statusCheckRollup: [checkRun({ name: "unit", conclusion: "SUCCESS" })] }) }), repoInfo: async () => ({ nameWithOwner: "acme/widget", defaultBranch: "main" }), branchExists: async () => true, ensureLabels: async () => {} },
         git: { ...fakeGit(), toplevel: async () => checkout, create: async ({ prdId }) => { const p = join(home, "worktrees/acme/widget", prdId); mkdirSync(p, { recursive: true }); return p; } },
@@ -173,9 +173,13 @@ test("scoped selected context and preparation output cannot carry resolved crede
 for (const provider of ["codex-cloud"]) test(`${provider} inherited missing bounded preparation remains a visible production gate`, async () => {
   const w = world(); await w.contextFor(scope("alice"), "widget");
   const bound = w.worlds.get("alice"); bound.ctx.config.harness[provider] = { account: "operator" }; bound.taskOptions = {};
-  const task = await w.delivery.dispatch("prepare", { ...prepare(provider), harness: provider }, "alice");
-  assert.equal(task.status, "blocked"); assert.equal(task.implementation, null); assert.equal(task.brief, null);
-  assert.match(task.failures.join("\n"), /preparation.*unavailable|boundary/);
+  await assert.rejects(w.delivery.dispatch("prepare", { ...prepare(provider), harness: provider }, "alice"), error => {
+    assert.equal(error.code, "EXECUTION_UNAVAILABLE");
+    assert.match(error.message, /cannot dispatch implementation.*no planning call was made/);
+    return true;
+  });
+  assert.equal(bound.ctx.state.entries().length, 0);
+  assert.equal(Object.keys(w.opts.store.read(scope("alice")).tasks).length, 0, "unavailable transport cannot allocate a task");
   const capability = (await w.delivery.dispatch("capabilities", {}, "alice")).repositories[0].providers.find(p => p.name === provider);
   assert.equal(capability.canPrepare, false); assert.match(capability.preparationSetup, /unavailable/);
 });

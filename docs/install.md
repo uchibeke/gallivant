@@ -49,10 +49,10 @@ cd /path/to/your/repository
 npx --yes @uchibeke/gallivant init --harness codex    # or: --harness claude
 ```
 
-This setup flow requires **0.2.1 or newer**. On 2026-10-20, npm's `latest` was
-still 0.2.0: its `init` creates the config only, so repository registration and
-`doctor` must be done separately. A maintainer must [publish 0.2.1](releasing.md)
-before the command above provides the flow below; setup does not publish it.
+This setup flow requires **0.2.1 or newer**. Check npm's current release with
+`npm view @uchibeke/gallivant version`. Source changes on `main` reach this
+command through a [versioned release](releasing.md); setup itself does not publish
+a package.
 
 `npx` downloads the published `@uchibeke/gallivant` package into npm's cache and
 runs its `gallivant` command. Nothing is installed globally, no `gallivant`
