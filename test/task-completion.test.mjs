@@ -35,6 +35,19 @@ test("completion schemas advertise only supported portable milestones and never 
   assert.ok(validate(input)); assert.ok(validate({ ...input, completion: { target: "integrated" } })); assert.equal(validate({ ...input, completion: { target: "integrated", merge: true } }), false);
   assert.deepEqual(capabilitySummary({ repositories: [{ id: "repo", completion: COMPLETION_CAPABILITIES, providers: [] }] }).repositories[0].completion, COMPLETION_CAPABILITIES);
 });
+test("coordinator records bounded current-head check and external-review observations for presentation", async t => {
+  const w = world(t, "integrated");
+  await w.tick.tick();
+  const before = w.entry(), observation = before.reviewObservation;
+  assert.equal(observation.head, "a1b2c3d");
+  assert.equal(observation.binding, before.reviewBinding);
+  assert.deepEqual(observation.checks, { settled: true, count: 1 });
+  assert.equal(observation.external, "clear");
+  assert.ok(JSON.stringify(observation).length < 500);
+  w.clock.advance(2); await w.tick.tick();
+  assert.notEqual(w.entry().reviewObservation.observedAt, observation.observedAt);
+  assert.equal(w.entry().activity_at, before.activity_at, "poll observations cannot reset meaningful activity");
+});
 test("fulfilled delivery-ready stops automatic provider/GitHub observation and late fixes", async t => {
   const w = world(t, "delivery_ready"); await w.tick.tick();
   assert.equal(w.view().status, "fulfilled");

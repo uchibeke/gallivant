@@ -202,7 +202,7 @@ test("the dashboard groups every entry the way status already groups them, and l
   const body = r.body();
   assert.match(body, /<h2>needs you<\/h2>/);
   assert.match(body, /<h2>running<\/h2>/);
-  assert.match(body, /<h2>done<\/h2>/);
+  assert.match(body, /<h2>closed or ended<\/h2>/);
   assert.match(body, /widget#7/, "the needs-human entry is listed");
   assert.match(body, /conflict/, "with the reason status would show");
   assert.match(body, /href="\/run\?id=acme%2Fwidget%2Fwidget-export"/, "every row links to its run page");
@@ -267,7 +267,7 @@ test("the sidebar lists every entry in a collapsible group with a count, on both
   // The groups are the sections status already uses, each with the number of rows in it.
   const groups = [...body.matchAll(/data-group="([^"]+)">\s*<h2 class="group-heading"><button type="button" class="group-toggle" aria-expanded="true"><i class="caret" aria-hidden="true"><\/i><span class="n">([^<]*)<\/span><small>(\d+)<\/small>/g)]
     .map(([, key, label, n]) => [key, label, Number(n)]);
-  assert.deepEqual(groups, [["needs_you", "needs you", 1], ["running", "running", 1], ["done", "done", 1]]);
+  assert.deepEqual(groups, [["needs_you", "needs you", 1], ["running", "running", 1], ["done", "closed or ended", 1]]);
   // Every row in the sidebar is a link to that entry's page, carrying text a filter can match on.
   const rows = [...body.matchAll(/<a class="row" href="([^"]+)"[^>]*data-hay="([^"]*)"/g)];
   assert.equal(rows.length, 3, "one row per entry");
@@ -514,7 +514,8 @@ test("hostile text in a reason or a log line is escaped, not rendered", async ()
     handle(w.ctx, req(path), r);
     await r.ended;
     const body = r.body();
-    assert.ok(body.includes("&lt;script&gt;alert"), `${path} shows the payload as text, escaped`);
+    assert.ok(!body.includes("&lt;script&gt;alert"), `${path} omits arbitrary reason prose from summaries`);
+    if (path.startsWith("/run")) assert.ok(body.includes("&lt;img"), "explicit branch facts remain escaped");
     // The property that matters is not "the bytes are absent" but "no tag came from the payload". So read every tag
     // the browser would see and check it against what the templates write: the payload's img and script are gone,
     // and no tag anywhere carries an event handler.

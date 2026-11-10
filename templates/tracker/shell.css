@@ -45,6 +45,7 @@ th { text-align: left; color: var(--gv-subtle); font-size: 10px; text-transform:
 td { padding: 17px 16px; border-top: 1px solid var(--gv-line); vertical-align: top; }
 td a { font-weight: 600; }
 td:first-child, td:nth-child(2) { min-width: 100px; }
+.task-section th, .task-section td:nth-child(4), .task-section td:nth-child(5) { white-space: nowrap; }
 tbody tr:hover { background: var(--gv-hover); }
 td.num { text-align: right; font-variant-numeric: tabular-nums; }
 dl.facts { display: grid; grid-template-columns: minmax(100px, 160px) minmax(0, 1fr); gap: 12px 20px; margin: 0 0 24px; padding: 20px; background: var(--gv-surface); border: 1px solid var(--gv-line); border-radius: var(--gv-r); }
