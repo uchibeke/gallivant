@@ -68,13 +68,14 @@
     "test:live-harnesses": "node test/live-harnesses.mjs",
     "test:plugin-package": "node test/plugin-package.mjs",
     "package:plugin": "node bin/package-plugin.mjs",
-    "lint": "node --check bin/promote-bitbucket.mjs && node --check bin/task-pr.mjs && node --check bin/task-review.mjs && node --check bin/release-package.mjs && node --check bin/release-live.mjs && node --check bin/gallivant.mjs && node --check bin/package-plugin.mjs && node --check bin/task-delivery-state.mjs && for f in lib/*.mjs lib/*/*.mjs scripts/*.mjs; do node --check \"$f\" || exit 1; done && node scripts/task-intake-contract.mjs --check",
+    "lint": "node --check bin/promote-bitbucket.mjs && node --check bin/task-pr.mjs && node --check bin/task-review.mjs && node --check bin/release-package.mjs && node --check bin/release-live.mjs && node --check bin/gallivant.mjs && node --check bin/package-plugin.mjs && node --check bin/task-delivery-state.mjs && for f in lib/*.mjs lib/*/*.mjs scripts/*.mjs templates/tracker/*.js test/ui/*.mjs; do node --check \"$f\" || exit 1; done && node scripts/task-intake-contract.mjs --check",
     "test:release-package": "node --test test/release-package.test.mjs",
     "release:preflight": "node bin/release-package.mjs --mode preflight",
     "release:package": "node bin/release-package.mjs --mode build",
     "release:validate": "node bin/release-package.mjs --mode validate",
     "test:release:live": "node bin/release-live.mjs",
-    "test:release:host": "node bin/release-live.mjs --host"
+    "test:release:host": "node bin/release-live.mjs --host",
+    "test:ui": "node --test --test-concurrency=1 test/ui/*.test.mjs"
   },
   "keywords": [
     "claude-code",
@@ -104,10 +105,15 @@
     }
   },
   "devDependencies": {
+    "@axe-core/playwright": "4.11.1",
     "@modelcontextprotocol/sdk": "1.32.1",
-    "esbuild": "0.28.2"
+    "esbuild": "0.28.2",
+    "playwright": "1.58.2"
   },
   "bundledDependencies": [
     "smol-toml"
-  ]
+  ],
+  "overrides": {
+    "playwright-core": "1.58.2"
+  }
 }

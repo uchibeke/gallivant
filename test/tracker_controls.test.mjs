@@ -45,7 +45,7 @@ function controls({ session = true, pending = false } = {}) {
     async poll() { assert.ok(timers.length); await timers.shift()(); },
   };
   const fetch = async (url, options) => {
-    if (!options) return { ok: true, json: async () => ui.result };
+    if (!options?.method) return { ok: true, json: async () => ui.result };
     requests.push({ url, ...JSON.parse(options.body) });
     return ui.response;
   };

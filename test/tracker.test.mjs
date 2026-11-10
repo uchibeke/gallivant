@@ -254,10 +254,10 @@ test("the sidebar lists every entry in a collapsible group with a count, on both
     handle(w.ctx, req(path), r);
     await r.ended;
     const body = r.body();
-    assert.match(body, /<aside id="side" data-view="(entries|runs)">/, `${path} has a sidebar the script can find`);
+    assert.match(body, /<aside id="side" data-view="(entries|runs)" aria-label="Browse (entries|runs)">/, `${path} has a sidebar the script can find`);
     assert.match(body, /<input type="search" id="filter"/, `${path} has one filter input`);
     assert.match(body, /<div class="group" data-group="/, `${path} groups its rows`);
-    assert.match(body, /<h3><i class="caret"><\/i><span class="n">[^<]*<\/span><small>\d+<\/small><\/h3>/, `${path} shows a count per group`);
+    assert.match(body, /<h2 class="group-heading"><button type="button" class="group-toggle" aria-expanded="true"><i class="caret" aria-hidden="true"><\/i><span class="n">[^<]*<\/span><small>\d+<\/small><\/button><\/h2>/, `${path} shows a count per group`);
   }
 
   const dash = res();
@@ -265,7 +265,7 @@ test("the sidebar lists every entry in a collapsible group with a count, on both
   await dash.ended;
   const body = dash.body();
   // The groups are the sections status already uses, each with the number of rows in it.
-  const groups = [...body.matchAll(/data-group="([^"]+)">\s*<h3><i class="caret"><\/i><span class="n">([^<]*)<\/span><small>(\d+)<\/small>/g)]
+  const groups = [...body.matchAll(/data-group="([^"]+)">\s*<h2 class="group-heading"><button type="button" class="group-toggle" aria-expanded="true"><i class="caret" aria-hidden="true"><\/i><span class="n">([^<]*)<\/span><small>(\d+)<\/small>/g)]
     .map(([, key, label, n]) => [key, label, Number(n)]);
   assert.deepEqual(groups, [["needs_you", "needs you", 1], ["running", "running", 1], ["done", "done", 1]]);
   // Every row in the sidebar is a link to that entry's page, carrying text a filter can match on.
@@ -330,7 +330,7 @@ test("grouping switches between state and harness, and nothing else", async () =
   assert.match(body, /href="\/runs\?by=harness"/, "so does the nav");
 
   // Two options, no more: the switch is a small enumeration, not a grouping engine.
-  const options = [...body.matchAll(/<option value="([^"]+)"/g)].map(m => m[1]);
+  const options = [...body.match(/<select id="groupby"[^>]*>(.*?)<\/select>/s)[1].matchAll(/<option value="([^"]+)"/g)].map(m => m[1]);
   assert.deepEqual(options, ["state", "harness"]);
 
   // A grouping nobody offers falls back to the default rather than rendering an empty sidebar.
@@ -519,8 +519,9 @@ test("hostile text in a reason or a log line is escaped, not rendered", async ()
     // the browser would see and check it against what the templates write: the payload's img and script are gone,
     // and no tag anywhere carries an event handler.
     const tags = [...body.matchAll(/<\/?([a-zA-Z][\w-]*)\b([^>]*)>/g)];
-    const injected = tags.filter(([, name]) => ["img", "iframe", "object", "embed", "svg"].includes(name.toLowerCase()));
+    const injected = tags.filter(([, name]) => ["img", "iframe", "object", "embed"].includes(name.toLowerCase()));
     assert.deepEqual(injected, [], `${path} renders no tag the payload asked for`);
+    assert.ok(tags.filter(([, name]) => name === "svg").every(([tag]) => tag === "</svg>" || tag.startsWith('<svg class="icon" aria-hidden="true"')), "only renderer-owned icons appear");
     const handlers = tags.filter(([, , attrs]) => /\bon[a-z]+\s*=/i.test(attrs));
     assert.deepEqual(handlers.map(t => t[0]), [], `${path} has no inline event handler, on a tag of ours or theirs`);
     // The only script element on the page is the one that loads /tracker.js, with no body of its own.
@@ -994,7 +995,7 @@ async function served(w) {
   const src = r.body();
   const from = src.indexOf("const ARG_KEYS");
   assert.ok(from > 0, "the served script carries the spliced reader");
-  const body = src.slice(from, src.indexOf("// Where this tracker is mounted")) + src.slice(src.indexOf("// ---- log lines"));
+  const body = src.slice(from, src.indexOf("// Browser controllers")) + src.slice(src.indexOf("// ---- log lines"));
   return new Function(body + "; return { renderLine, parseLine, harnessLine };")();
 }
 
