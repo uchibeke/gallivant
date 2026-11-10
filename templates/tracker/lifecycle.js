@@ -1,7 +1,8 @@
 // Browser controllers share cancellation and bounded, non-overlapping timers.
 function trackerLifecycle() {
-  let stopped = false;
+  let stopped = false, cached = false, generation = 0;
   const timers = new Set(), requests = new Set();
+  const resumes = [], waiting = new Set();
   const schedule = (work, delay) => {
     if (stopped) return;
     const timer = setTimeout(() => {
@@ -22,13 +23,27 @@ function trackerLifecycle() {
     }
     finally { requests.delete(request); }
   };
-  const stop = () => {
+  const stop = event => {
     stopped = true;
+    cached = event?.persisted === true;
+    generation++;
     timers.forEach(timer => clearTimeout(timer)); timers.clear();
     requests.forEach(request => request.abort()); requests.clear();
+    if (!cached) { waiting.forEach(resolve => resolve(false)); waiting.clear(); }
   };
-  globalThis.addEventListener?.("pagehide", stop, { once: true });
-  // A restored back/forward-cache document reconnects through its normal load.
-  globalThis.addEventListener?.("pageshow", event => { if (event.persisted) location.reload(); });
-  return { schedule, read, active: () => !stopped };
+  globalThis.addEventListener?.("pagehide", stop);
+  globalThis.addEventListener?.("pageshow", event => {
+    if (!event.persisted || !stopped || !cached) return;
+    stopped = cached = false;
+    waiting.forEach(resolve => resolve(true)); waiting.clear();
+    resumes.forEach(work => work());
+  });
+  return {
+    schedule, read,
+    // An aborted read must stay stale even if its rejection arrives after restore.
+    guard: () => { const started = generation; return () => !stopped && started === generation; },
+    onResume: work => resumes.push(work),
+    // A POST is never replayed: settle its original response after restoration.
+    whenActive: () => stopped && cached ? new Promise(resolve => waiting.add(resolve)) : Promise.resolve(!stopped),
+  };
 }

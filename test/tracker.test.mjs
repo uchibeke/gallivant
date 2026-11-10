@@ -1292,10 +1292,28 @@ test("a reconnect does not draw the closing line twice", async () => {
   const r = res();
   handle(w.ctx, req("/tracker.js"), r);
   await r.ended;
-  const terminalBlock = /if \(\/\^\\\[\(exit\|no run\|ended\)\\b\/\.test\(text\)\) \{([\s\S]*?)\n    \}/.exec(r.body());
+  const terminalBlock = /if \(\/\^\\\[\(exit\|no run\|ended\)\\b\/\.test\(text\)\) \{([\s\S]*?)\n\s+\}/.exec(r.body());
   assert.ok(terminalBlock, "the script still has one place where a terminal frame is handled");
   assert.ok(terminalBlock[1].indexOf("if (closed) return;") < terminalBlock[1].indexOf("note("),
     "the already-closed check must come before the line is drawn, or the second frame draws a second row");
+});
+
+test("a replacement EventSource resumes by URL cursor and later retry headers take precedence", async () => {
+  const w = world({ runs: { "2026-09-24T02-00-00-000-fix": { lines: ["first", "second", "third"], exit: 0, endedAt: 1 } }, latest: "2026-09-24T02-00-00-000-fix" });
+  const url = `/api/run/output?id=${encodeURIComponent(ID)}`;
+  const initial = sink(); handle(w.ctx, req(url), initial); await initial.ended;
+  const ids = initial.frames.filter(frame => frame.id).map(frame => frame.id);
+  for (const [cursor, headers, expected] of [
+    [ids[0], {}, ["second", "third"]],
+    [ids[0], { "last-event-id": ids[1] }, ["third"]],
+    ["0", {}, ["first", "second", "third"]],
+    ["", {}, ["first", "second", "third"]],
+    ["-1", {}, ["first", "second", "third"]],
+    ["invalid", {}, ["first", "second", "third"]],
+  ]) {
+    const resumed = sink(); handle(w.ctx, req(`${url}&after=${cursor}`, headers), resumed); await resumed.ended;
+    assert.deepEqual(resumed.lines(), expected);
+  }
 });
 
 test("markdown in a model's prose is rendered, and only the subset a log line actually contains", async () => {
@@ -1875,7 +1893,7 @@ test("the pane corrects its scroll after prepending, and the cap spares what the
   // The history fetch goes to the read route, never to the stream, and addresses the run the way the pane was told to.
   assert.match(js, /BASE \+ "\/api\/run\/history\?"/, "the range route is a read, not the SSE endpoint");
   assert.match(js, /h\.set\("before", String\(recovering \? cursor : oldest\)\)/, "and asks for the window before what it holds");
-  assert.match(js, /new EventSource\(url\)/, "the live stream is untouched");
+  assert.match(js, /new EventSource\(/, "the live stream still uses EventSource");
 });
 
 /**
@@ -1950,7 +1968,10 @@ async function paneOf(w, { fetchJson = async () => ({ lines: [], before: 0, from
     requestAnimationFrame: f => rafs.push(f),
     URLSearchParams, URL, Number, Math, Array, JSON, String, Object, Boolean, isNaN, parseInt, parseFloat,
     fetch: async url => ({ ok: true, status: 200, json: async () => fetchJson(String(url)) }),
-    console, globalThis: { addEventListener: (event, fn) => { dom.frames[event] = fn; } },
+    console, globalThis: { addEventListener: (event, fn) => {
+      const previous = dom.frames[event];
+      dom.frames[event] = value => { previous?.(value); fn(value); };
+    } },
   };
   const names = Object.keys(sandbox);
   new Function(...names, r.body())(...names.map(n => sandbox[n]));
@@ -2073,6 +2094,34 @@ test("history failures and a burst during a fetch retain recovery cursors and bo
   p.line("queued", 1201); p.frames.pagehide(); p.flush();
   assert.equal(p.es().readyState, 2); assert.ok(!p.pane.children.some(row => row._text.includes("queued")));
   p.line("late", 1202); p.flush(); assert.ok(!p.pane.children.some(row => row._text.includes("late")));
+});
+
+test("cached log restoration ignores an old history response while its replacement is pending", async () => {
+  const replies = [];
+  const p = await paneOf(world(), { fetchJson: url => new Promise(resolve => {
+    const before = Number(new URL(url, "http://localhost").searchParams.get("before"));
+    replies.push(() => resolve(historyPage(before)));
+  }) });
+  for (let id = 401; id <= 410; id++) p.line(`live ${id}`, id);
+  p.flush();
+  const first = p.els.earlier._on.click();
+  await new Promise(setImmediate);
+  const oldSource = p.es();
+  p.frames.pagehide({ persisted: true });
+  p.frames.pageshow({ persisted: true });
+  assert.equal(oldSource.readyState, 2);
+  assert.match(p.els.earlierstate.textContent, /Loading paused/);
+  assert.equal(new URL(p.es().url, "http://localhost").searchParams.get("after"), "410");
+  oldSource.onmessage({ data: JSON.stringify("stale stream frame"), lastEventId: "411" });
+  const second = p.els.earlier._on.click();
+  await new Promise(setImmediate);
+  replies[0](); await first;
+  p.flush();
+  assert.equal(p.pane.childElementCount, 10, "late frames and history cannot mutate the restored pane");
+  assert.equal(p.els.earlier.disabled, true, "an old finally block cannot unlock the replacement request");
+  replies[1](); await second;
+  assert.equal(p.pane.childElementCount, 410);
+  assert.equal(p.els.earlier.disabled, true, "the first line is already loaded");
 });
 
 test("live DOM eviction preserves replay history even after the oldest page was loaded", async () => {

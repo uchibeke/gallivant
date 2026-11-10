@@ -12,9 +12,10 @@ if (reviewActivity) {
   const url = `${BASE}/api/run/review-activity?id=${encodeURIComponent(reviewActivity.dataset.entry)}`;
   let previous = log.firstElementChild?.textContent || "";
   const pollReview = async () => {
+    const active = lifecycle.guard();
     try {
       const data = await lifecycle.read(url, "Review status unavailable");
-      if (!lifecycle.active()) return;
+      if (!active()) return;
       if (typeof data.message !== "string") throw new Error("Review status unavailable");
       if (data.message !== previous) {
         const line = document.createElement("p");
@@ -24,9 +25,10 @@ if (reviewActivity) {
       }
       status.classList?.remove("loading");
       status.textContent = "Updates every 10 seconds while this page is open.";
-    } catch { if (!lifecycle.active()) return; status.classList?.remove("loading"); status.textContent = "Review status unavailable; retrying."; }
+    } catch { if (!active()) return; status.classList?.remove("loading"); status.textContent = "Review status unavailable; retrying."; }
     lifecycle.schedule(pollReview, 10_000);
   };
+  lifecycle.onResume(pollReview);
   pollReview();
 }
 
@@ -40,6 +42,7 @@ if (relativeTimes.length) {
     el.textContent = ms < 45_000 ? "just now" : minutes < 60 ? `${minutes}m ago` : hours < 48 ? `${hours}h ago` : `${Math.round(hours / 24)}d ago`;
   });
   const tickTimes = () => { refreshTimes(); lifecycle.schedule(tickTimes, 30_000); };
+  lifecycle.onResume(tickTimes);
   tickTimes();
 }
 
@@ -59,7 +62,7 @@ if (runControls) {
   });
   const endpoint = `${BASE}/api/run/control?id=${encodeURIComponent(runControls.dataset.entry)}`;
   let pending = runControls.dataset.pending === "true";
-  let closed = false;
+  let closed = false, sending = false;
   const syncButtons = () => buttons.forEach(button => {
     button.setAttribute?.("aria-busy", String(pending));
     button.disabled = pending || closed || button.dataset.available !== "true"
@@ -67,9 +70,10 @@ if (runControls) {
   });
   const label = action => buttons.find(b => b.dataset.action === action)?.textContent || "Request";
   const poll = async () => {
+    const active = lifecycle.guard();
     try {
       const data = await lifecycle.read(endpoint, "Could not check the request. Reload to see its status.");
-      if (!lifecycle.active()) return;
+      if (!active()) return;
       const control = data.control;
       if (!control) throw new Error("Request status is unavailable. Reload before retrying.");
       status.setAttribute?.("data-state", control.status === "failed" ? "error" : control.status === "applied" ? "success" : "pending");
@@ -86,13 +90,14 @@ if (runControls) {
       // Follow the newest run unless that would discard a draft or interrupt typing.
       if (!note.value && document.activeElement !== note) { location.replace(refresh.href); return; }
       refresh.hidden = false;
-    } catch (e) { if (!lifecycle.active()) return; status.textContent = e.message; lifecycle.schedule(poll, 5000); }
+    } catch (e) { if (!active()) return; status.textContent = e.message; lifecycle.schedule(poll, 5000); }
   };
+  lifecycle.onResume(() => { if (pending && !sending) poll(); });
   const submit = async action => {
     const button = buttons.find(b => b.dataset.action === action);
     if (!button || button.disabled) return;
     const draft = action === "message" ? note.value : "";
-    pending = true; syncButtons(); refresh.hidden = true;
+    pending = sending = true; syncButtons(); refresh.hidden = true;
     status.setAttribute?.("data-state", "pending");
     status.textContent = `${label(action)} — queuing…`;
     try {
@@ -101,7 +106,7 @@ if (runControls) {
         body: JSON.stringify(action === "message" ? { action, note: draft, ...(interrupt?.checked ? { interrupt: true } : {}) } : { action }),
       });
       const data = await response.json();
-      if (!lifecycle.active()) return;
+      if (!await lifecycle.whenActive()) return;
       if (!response.ok) throw new Error(data.error || "Request failed. Reload to check its status before retrying.");
       if (action === "message") {
         // A user can keep composing while delivery is pending. Never erase newer edits.
@@ -112,11 +117,11 @@ if (runControls) {
       status.textContent = `${label(action)} — queued. Waiting for the daemon and any active run.`;
       lifecycle.schedule(poll, 1000);
     } catch (e) {
-      if (!lifecycle.active()) return;
+      if (!await lifecycle.whenActive()) return;
       status.setAttribute?.("data-state", "error");
       status.textContent = `${label(action)} — ${e.message}`;
       pending = false; syncButtons();
-    }
+    } finally { sending = false; }
   };
   for (const button of buttons.filter(b => b.dataset.action !== "message")) {
     button.addEventListener("click", () => submit(button.dataset.action));

@@ -1,8 +1,11 @@
 import { test, before, after } from "node:test";
 import assert from "node:assert/strict";
+import { appendFileSync, readFileSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
 import { chromium } from "playwright";
 import AxeBuilder from "@axe-core/playwright";
 import { fixture, NOW, TASK, RUN, MALICIOUS } from "./fixture.mjs";
+import { idSlug } from "../../lib/state.mjs";
 
 let browser;
 before(async () => { browser = await chromium.launch(); }, { timeout: 30_000 });
@@ -265,13 +268,114 @@ test("read failures preserve content and drafts; page exit stops refresh", { tim
 });
 
 
-test("page exit aborts a read whose headers arrived but JSON body is still pending", { timeout: 30_000 }, async t => {
+test("cached page exit aborts a pending JSON body and restoration restarts the read", { timeout: 30_000 }, async t => {
   const { page, origin, holdReviewBody } = await open(t);
   holdReviewBody();
   const headers = page.waitForResponse(response => response.url().includes("/api/run/review-activity"));
   await page.goto(origin + runPath(""));
   await headers;
   const aborted = page.waitForEvent("requestfailed", { predicate: request => request.url().includes("/api/run/review-activity") });
-  await page.evaluate(() => dispatchEvent(new PageTransitionEvent("pagehide")));
+  await page.evaluate(() => dispatchEvent(new PageTransitionEvent("pagehide", { persisted: true })));
   assert.match((await aborted).failure().errorText, /ABORTED|CANCELLED/);
+  holdReviewBody(false);
+  const restored = page.waitForResponse(response => response.url().includes("/api/run/review-activity"));
+  await page.evaluate(() => dispatchEvent(new PageTransitionEvent("pageshow", { persisted: true })));
+  await restored;
+  await page.waitForFunction(() => document.querySelector("#review-activity-state").textContent.includes("10 seconds"));
+});
+
+test("cached page restoration preserves the composer and resumes one refresh loop without resubmitting actions", { timeout: 30_000 }, async t => {
+  const { page, origin, state } = await open(t);
+  let reads = 0, posts = 0, documents = 0;
+  page.on("request", request => {
+    if (request.url().includes("/api/run/review-activity")) reads++;
+    if (request.method() === "POST") posts++;
+    if (request.isNavigationRequest()) documents++;
+  });
+  for (const base of ["", "/gallivant"]) {
+    state.update(TASK, { control: null });
+    await page.goto(origin + runPath(base));
+    await page.waitForFunction(() => document.querySelector("#review-activity-state").textContent.includes("10 seconds"));
+    await page.locator("#run-note").fill("A cached draft stays with this task.\nKeep the selection too.");
+    const accepted = page.waitForResponse(r => r.request().method() === "POST");
+    await page.getByRole("button", { name: "Recheck PR", exact: true }).click();
+    assert.equal((await accepted).status(), 202);
+    await page.waitForFunction(() => document.querySelector("#control-status").textContent.includes("queued."));
+    await page.locator("#run-note").focus();
+    const before = await page.evaluate(() => {
+      const note = document.getElementById("run-note");
+      note.setSelectionRange(2, 12, "backward");
+      window.cachedNote = note;
+      return { value: note.value, scroll: scrollY, url: location.href };
+    });
+    const navigations = documents, submissions = posts;
+    for (let restore = 0; restore < 2; restore++) {
+      // Exercise the browser lifecycle events against the actual served script.
+      // Explicit persisted events are deterministic under the default browser flags.
+      await page.evaluate(() => dispatchEvent(new PageTransitionEvent("pagehide", { persisted: true })));
+      const stoppedAt = reads;
+      await page.clock.runFor(60_000);
+      assert.equal(reads, stoppedAt, "cached pages stop polling");
+      state.update(TASK, { control: { ...state.get(TASK).control, status: "applied", message: "Applied while away." } });
+      const refreshed = page.waitForResponse(r => r.url().includes("/api/run/review-activity"));
+      await page.evaluate(() => dispatchEvent(new PageTransitionEvent("pageshow", { persisted: true })));
+      await refreshed;
+      await page.waitForFunction(() => document.querySelector("#control-status").dataset.state === "success");
+      assert.deepEqual(await page.evaluate(() => {
+        const note = document.getElementById("run-note");
+        return { same: note === window.cachedNote, value: note.value, start: note.selectionStart,
+          end: note.selectionEnd, direction: note.selectionDirection, focused: document.activeElement === note, scroll: scrollY, url: location.href };
+      }), { same: true, value: before.value, start: 2, end: 12, direction: "backward", focused: true, scroll: before.scroll, url: before.url });
+      assert.equal(documents, navigations, "restoration does not reload the document");
+      assert.equal(posts, submissions, "restoration never replays an action");
+      await page.waitForFunction(() => document.querySelector("#review-activity-state").textContent.includes("10 seconds"));
+      const resumedAt = reads;
+      const tick = page.waitForResponse(r => r.url().includes("/api/run/review-activity"));
+      await page.clock.runFor(10_100);
+      await tick;
+      assert.equal(reads, resumedAt + 1, "exactly one refresh loop resumes");
+    }
+  }
+});
+
+test("restored live logs resume from their cursor and preserve rows, history and drafts", { timeout: 30_000 }, async t => {
+  const { page, origin, home } = await open(t, { live: true });
+  const dir = join(home, "runs", idSlug(TASK), RUN);
+  // A bounded tail with older history, using only synthetic files and liveness.
+  appendFileSync(join(dir, "job.log"), Array.from({ length: 600 }, (_, i) => `Fixture line ${i + 1}\n`).join(""));
+  for (const base of ["", "/gallivant"]) {
+    await page.goto(origin + runPath(base));
+    await page.waitForFunction(() => document.querySelector("#log").textContent.includes("Fixture line 600"));
+    await page.getByRole("button", { name: "load earlier lines", exact: true }).click();
+    await page.waitForFunction(() => document.querySelector("#log").textContent.includes("Fixture run:"));
+    await page.locator("#run-note").fill("Keep the draft while the log reconnects.");
+    const before = await page.locator("#log").evaluate(el => {
+      el.scrollTop = 50;
+      window.savedLogRow = el.querySelector("[data-replay]");
+      return { rows: [...el.querySelectorAll("[data-replay]")].map(row => row.textContent), scroll: el.scrollTop };
+    });
+    const restoredLine = `Output recorded while away from ${base || "root"}.`;
+    await page.evaluate(() => dispatchEvent(new PageTransitionEvent("pagehide", { persisted: true })));
+    appendFileSync(join(dir, "job.log"), restoredLine + "\n");
+    const stream = page.waitForRequest(request => request.url().includes("/api/run/output"));
+    await page.evaluate(() => dispatchEvent(new PageTransitionEvent("pageshow", { persisted: true })));
+    const cursor = new URL((await stream).url()).searchParams.get("after");
+    assert.ok(Number(cursor) > 0, "a new connection resumes after the last delivered event");
+    await page.waitForFunction(line => document.querySelector("#log").textContent.includes(line), restoredLine);
+    assert.deepEqual(await page.locator("#log").evaluate(el => ({
+      same: el.querySelector("[data-replay]") === window.savedLogRow,
+      rows: [...el.querySelectorAll("[data-replay]")].map(row => row.textContent), scroll: el.scrollTop,
+    })), { same: true, rows: [...before.rows, restoredLine], scroll: before.scroll });
+    assert.equal(await page.locator("#run-note").inputValue(), "Keep the draft while the log reconnects.");
+  }
+  const job = JSON.parse(readFileSync(join(dir, "job.json"), "utf8"));
+  writeFileSync(join(dir, "job.json"), JSON.stringify({ ...job, exit: 0,
+    execution: { ...job.execution, providerState: "succeeded", collected: true } }));
+  await page.waitForFunction(() => document.querySelector("#logstate").textContent === "finished");
+  const rows = await page.locator("#log > *").count();
+  await page.evaluate(() => {
+    dispatchEvent(new PageTransitionEvent("pagehide", { persisted: true }));
+    dispatchEvent(new PageTransitionEvent("pageshow", { persisted: true }));
+  });
+  assert.equal(await page.locator("#log > *").count(), rows, "finished logs stay intact on restore");
 });

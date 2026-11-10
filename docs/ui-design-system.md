@@ -56,7 +56,13 @@ regions. Text and paths wrap without widening the page. Reduced motion disables
 nonessential animation and transitions. `shell.js` handles navigation and list
 controls; `controls.js` owns request feedback and review polling; `tracker.js`
 keeps bounded log rendering. `lifecycle.js` pauses scheduled reads when hidden
-and cancels timers/active reads on page exit. Never reload over an unsent draft.
+and cancels timers/active reads on page exit. A cached-page restoration restarts
+each read loop in place, retaining the draft, focus, selection and scroll. Late
+responses from the previous lifecycle cannot update the restored page. Pending
+POSTs settle their original response without being resent. Log streams reconnect
+using the last delivered event ID; `Last-Event-ID` on subsequent network retries
+takes precedence over the initial `after` URL cursor. Finished logs stay intact.
+Never reload over an unsent draft or persist control tokens.
 
 ## Browser verification
 

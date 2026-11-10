@@ -10,7 +10,7 @@ export const TASK = "acme/atlas/search-index";
 export const RUN = "2026-09-24T14-00-00-000-fix";
 export const MALICIOUS = '<img src=x onerror="window.injected=true">';
 
-export async function fixture({ runtime = new URL("../../", import.meta.url), empty = false, hostile = false } = {}) {
+export async function fixture({ runtime = new URL("../../", import.meta.url), empty = false, hostile = false, live = false } = {}) {
   if (typeof runtime === "string") runtime = pathToFileURL(`${runtime}/`);
   const [transport, stateModule, runnerModule, configModule] = await Promise.all([
     import(new URL("lib/commands/serve.mjs", runtime)), import(new URL("lib/state.mjs", runtime)),
@@ -46,7 +46,10 @@ export async function fixture({ runtime = new URL("../../", import.meta.url), em
       const dir = join(home, "runs", idSlug(id), RUN);
       mkdirSync(dir, { recursive: true });
       writeFileSync(join(dir, "job.json"), JSON.stringify({ id: RUN, name: "fix", bin: "/fixture/no-executable",
-        pid: 0, startedAt: Date.parse(NOW) - 1_800_000, endedAt: Date.parse(NOW) - 600_000, exit: 0 }));
+        pid: 0, startedAt: Date.parse(NOW) - 1_800_000, endedAt: Date.parse(NOW) - 600_000, exit: 0,
+        ...(live && i === 0 ? { bin: null, pid: null, exit: null, endedAt: null,
+          execution: { provider: "fixture", transport: "remote", providerState: "running", acceptance: "accepted", providerJobId: "fixture-job", turnId: "fixture-turn" } } : {}),
+      }));
       writeFileSync(join(dir, "job.log"), JSON.stringify({ type: "item.completed", item: { type: "agent_message",
         text: hostile ? MALICIOUS : "Fixture run: inspected the search index and recorded the migration decision." } }) + "\n");
       writeFileSync(join(home, "runs", idSlug(id), "latest-run"), RUN);
@@ -69,7 +72,7 @@ export async function fixture({ runtime = new URL("../../", import.meta.url), em
   });
   try { await new Promise((resolve, reject) => { server.once("error", reject); server.listen(0, "127.0.0.1", resolve); }); }
   catch (error) { rmSync(home, { recursive: true, force: true }); throw error; }
-  return { ctx, state, home, holdReviewBody: () => { holdReviewBody = true; }, origin: `http://127.0.0.1:${server.address().port}`,
+  return { ctx, state, home, holdReviewBody: (hold = true) => { holdReviewBody = hold; }, origin: `http://127.0.0.1:${server.address().port}`,
     async close() { server.closeAllConnections(); await new Promise(resolve => server.close(resolve)); rmSync(home, { recursive: true, force: true }); },
   };
 }

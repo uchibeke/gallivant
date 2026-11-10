@@ -16,6 +16,7 @@ if (pane) {
   // refreshes. Appending per line stalled the main thread badly enough that the browser dropped the stream and
   // retried, which replayed the burst, which stalled it again. Buffer and paint once per frame instead.
   let pending = [], painting = false, closed = false, disconnected = false;
+  let es, lastEventId = null;
   // Reaching back: `oldest` is the id of the oldest line the pane holds (what the history route takes as
   // `?before=`), `loaded` is how many rows the reader explicitly loaded, which the cap exempts, and `busy`
   // keeps two presses of the button from fetching the same window twice. Declared with the rest of the pane's
@@ -160,18 +161,19 @@ if (pane) {
    */
   const loadEarlier = async () => {
     if (disconnected || busy || (recoveryBefore ?? oldest ?? 0) <= 1) return;
+    const active = lifecycle.guard();
     const recovering = recoveryBefore !== null, cursor = recoveryBefore ?? oldest;
     busy = true;
-    historyRequest = new AbortController();
+    const request = historyRequest = new AbortController();
     if (earlier) earlier.disabled = true;
     tell("loading");
     try {
       const h = new URLSearchParams(q);
       h.set("before", String(recovering ? cursor : oldest));
-      const r = await fetch(BASE + "/api/run/history?" + h.toString(), { headers: { accept: "application/json" }, signal: historyRequest.signal });
+      const r = await fetch(BASE + "/api/run/history?" + h.toString(), { headers: { accept: "application/json" }, signal: request.signal });
       if (!r.ok) throw new Error("history " + r.status);
       const got = await r.json();
-      if (disconnected) return;
+      if (disconnected || !active()) return;
       const lines = Array.isArray(got.lines) ? got.lines : [];
       const present = new Set([...pane.children].filter(row => replayId(row.dataset.replay) !== null).map(row => `${row.dataset.replay}:${row.dataset.replayRow ?? 0}`));
       const queued = new Set(pending.map(event => event.id).filter(id => id !== null));
@@ -217,49 +219,75 @@ if (pane) {
       if (got.gap) { note(got.gap, "skip"); tell("some history is unavailable; saved results are separate from logs"); }
       else if (recoveryBefore === null && (got.before ?? 0) <= 0) tell("this is the first line of the run");
     } catch {
+      if (disconnected || !active()) return;
       // The pane is the only place a reader sees this, so it says what happened rather than going quiet. The button
       // stays available: a failed fetch is worth retrying and nothing was consumed.
       tell("could not load earlier lines");
     } finally {
-      busy = false; historyRequest = null;
-      if (earlier) earlier.disabled = (recoveryBefore ?? oldest ?? 0) <= 1;
+      if (historyRequest === request) {
+        busy = false; historyRequest = null;
+        if (earlier) earlier.disabled = (recoveryBefore ?? oldest ?? 0) <= 1;
+      }
     }
   };
   earlier?.addEventListener("click", loadEarlier);
 
-  const es = new EventSource(url);
-  globalThis.addEventListener?.("pagehide", () => { disconnected = closed = true; es.close(); pending = []; historyRequest?.abort(); }, { once: true });
-  es.addEventListener("gap", e => { note(JSON.parse(e.data), "skip"); tell("some history is unavailable; saved results are separate from logs"); });
-  const say = text => { if (state) { state.textContent = text; state.classList?.toggle("loading", text === "reconnecting"); } };
-  es.addEventListener("skipped", e => {
-    const n = Number(e.data);
-    if (!Number.isFinite(n) || n <= 0) return;
-    note(n + ' earlier lines not shown; "load earlier lines" above fetches them, and the whole log is in the run folder', "skip");
-    // The tail starts at line n+1, so the oldest line the pane holds is n+1 and the window before it starts at n.
-    oldest ??= n + 1;
-    offer(recoveryBefore !== null ? recoveryBefore - 1 : n);
+  globalThis.addEventListener?.("pagehide", event => {
+    // Finish the bounded display batch before recording the reconnect cursor.
+    if (event?.persisted) paint();
+    disconnected = true; es.close(); pending = [];
+    if (historyRequest) tell("Loading paused; load earlier lines to retry.");
+    historyRequest?.abort(); historyRequest = null; busy = false;
   });
-  es.onmessage = e => {
-    const text = JSON.parse(e.data);
-    // A terminal frame is the one thing the stream sends that is not a log line, and it is where the pane stops
-    // reconnecting. Every one of them is bracketed and nothing else the server sends is.
-    if (/^\[(exit|no run|ended)\b/.test(text)) {
-      // Once, however many times it arrives. A reconnect resumes from Last-Event-ID and the server re-sends the
-      // terminal frame for a run that is already over, so a pane that had reconnected printed the closing line
-      // twice. `closed` is the record that the end was already drawn, and it is checked before anything is drawn.
-      if (closed) return;
-      paint();
-      closed = true;
-      es.close();
-      note(text.slice(1, -1), "d " + (text === "[exit 0]" ? "ok" : "bad"));
-      say(text === "[no run]" ? "no run on disk" : text === "[exit 0]" ? "finished" : text.slice(1, -1));
-      return;
-    }
-    if (!closed) push(text, replayId(e.lastEventId));
+  lifecycle.onResume(() => {
+    disconnected = false;
+    if (earlier) earlier.disabled = (recoveryBefore ?? oldest ?? 0) <= 1;
+    if (!closed) connect();
+  });
+  const say = text => { if (state) { state.textContent = text; state.classList?.toggle("loading", text === "reconnecting"); } };
+  const connect = () => {
+    const active = lifecycle.guard();
+    // EventSource cannot set Last-Event-ID on a new connection. Its initial URL
+    // carries the same cursor; subsequent network retries use the normal header.
+    say("reconnecting");
+    es = new EventSource(lastEventId === null ? url : url + "&after=" + lastEventId);
+    es.addEventListener("gap", e => { if (!active()) return; note(JSON.parse(e.data), "skip"); tell("some history is unavailable; saved results are separate from logs"); });
+    es.addEventListener("skipped", e => {
+      if (!active()) return;
+      const n = Number(e.data);
+      if (!Number.isFinite(n) || n <= 0) return;
+      note(n + ' earlier lines not shown; "load earlier lines" above fetches them, and the whole log is in the run folder', "skip");
+      // The tail starts at line n+1, so the oldest line the pane holds is n+1 and the window before it starts at n.
+      oldest ??= n + 1;
+      offer(recoveryBefore !== null ? recoveryBefore - 1 : n);
+    });
+    es.onmessage = e => {
+      if (!active()) return;
+      const text = JSON.parse(e.data);
+      // A terminal frame is the one thing the stream sends that is not a log line, and it is where the pane stops
+      // reconnecting. Every one of them is bracketed and nothing else the server sends is.
+      if (/^\[(exit|no run|ended)\b/.test(text)) {
+        // Once, however many times it arrives. A reconnect resumes from Last-Event-ID and the server re-sends the
+        // terminal frame for a run that is already over, so a pane that had reconnected printed the closing line
+        // twice. `closed` is the record that the end was already drawn, and it is checked before anything is drawn.
+        if (closed) return;
+        paint();
+        closed = true;
+        es.close();
+        note(text.slice(1, -1), "d " + (text === "[exit 0]" ? "ok" : "bad"));
+        say(text === "[no run]" ? "no run on disk" : text === "[exit 0]" ? "finished" : text.slice(1, -1));
+        return;
+      }
+      if (!closed) {
+        lastEventId = replayId(e.lastEventId) ?? lastEventId;
+        push(text, replayId(e.lastEventId));
+      }
+    };
+    es.onopen = () => { if (active()) say("live"); };
+    // readyState 2 is closed, which is the normal end of a finished run and not a failure to report.
+    es.onerror = () => { if (active() && es.readyState !== 2) say("reconnecting"); };
   };
-  es.onopen = () => say("live");
-  // readyState 2 is closed, which is the normal end of a finished run and not a failure to report.
-  es.onerror = () => { if (es.readyState !== 2) say("reconnecting"); };
+  connect();
 }
 
 // ---- log lines ------------------------------------------------------------------
