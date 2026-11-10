@@ -16,6 +16,10 @@ try {
   assert.equal(packed.name, "@uchibeke/gallivant");
   for (const f of packed.files) assert.ok(!/(^|\/)(?:\.env[^/]*|\.git|\.npmrc|test|audit|prds|plans|design)(?:\/|$)/.test(f.path), `private/test payload: ${f.path}`);
   assert.ok(packed.files.some(f => f.path === "README.md"), "README is packaged");
+  for (const name of ["tokens.css", "primitives.css", "shell.css", "tracker.css", "lifecycle.js", "shell.js", "controls.js", "tracker.js"])
+    assert.ok(packed.files.some(f => f.path === `templates/tracker/${name}`), `runtime asset: ${name}`);
+  for (const file of packed.files)
+    assert.ok(!/(?:playwright|axe-core|chromium|docs\/ui\/previews|test-results)/.test(file.path), `development-only payload: ${file.path}`);
   const tarball = join(root, packed.filename);
   const consumer = join(root, "consumer"), prefix = join(root, "prefix"), bin = join(root, "fixtures"), home = join(root, "home-dir"),
     ghome = join(root, "gallivant-home"), repo = join(root, "repo"), cache = join(root, "npm-cache");
@@ -126,5 +130,22 @@ esac
     if (name.includes("*") || path.endsWith(".json")) continue;
     run(process.execPath, ["--input-type=module", "-e", `await import(${JSON.stringify(join(installed, path))})`], { cwd: consumer, env });
   }
+  // Load the installed transport/assets outside the checkout, through the same
+  // synthetic fixture used by the browser suite. No production context exists.
+  const { fixture, TASK, RUN } = await import("./ui/fixture.mjs");
+  const ui = await fixture({ runtime: installed });
+  try {
+    for (const base of ["", "/gallivant"]) {
+      for (const path of ["/", `/run?id=${encodeURIComponent(TASK)}&run=${RUN}`, "/runs", "/api/status", "/api/runs", "/tracker.css", "/tracker.js"]) {
+        const response = await fetch(ui.origin + base + path);
+        assert.equal(response.status, 200, `installed UI: ${base}${path}`);
+        const body = await response.text();
+        assert.ok(body.length > 20);
+        if (path === "/tracker.css") assert.match(body, /--gv-focus/);
+        if (path === "/tracker.js") assert.match(body, /trackerLifecycle/);
+        if (path === "/") assert.match(body, /Skip to main content/);
+      }
+    }
+  } finally { await ui.close(); }
   console.log(`Installed ${packed.name}@${packed.version}: npx fast path (binary, config permissions, repository registration, repeat safety, next steps), credential-scope refusals before writes, version, help, packaged PRD, validation and all module exports passed.`);
 } finally { rmSync(root, { recursive: true, force: true }); }

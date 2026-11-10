@@ -1,209 +1,4 @@
-// The tracker's one script, served as a file so the CSP is `script-src 'self'` with no nonce and no hash, and so
-// nothing here needs an inline event handler.
-//
-// Two jobs: the sidebar (filter, collapse, persist) and the log pane (stream, auto-scroll). Both are wired from
-// data attributes the server rendered, so this file knows no ids or paths of its own.
-//
-// lib/harness_log.mjs is spliced in ahead of this file by lib/tracker/assets.mjs, so `harnessLine` is in scope here
-// and strict mode is declared there, at the top of the served script where a directive counts.
-
-// Where this tracker is mounted: empty when it owns the origin, something like "/gallivant" when a host server
-// delegates a prefix to it. The server publishes it on <body data-base> because this file is served from one route
-// and cannot be told at build time where it lives.
-const BASE = document.body.dataset.base || "";
-
-// A live, bounded status feed; it never opens raw reviewer output or submits work.
-const reviewActivity = document.getElementById("review-activity");
-if (reviewActivity) {
-  const log = document.getElementById("review-activity-log"), status = document.getElementById("review-activity-state");
-  const url = `${BASE}/api/run/review-activity?id=${encodeURIComponent(reviewActivity.dataset.entry)}`;
-  let previous = log.firstElementChild?.textContent || "";
-  const pollReview = async () => {
-    try {
-      const response = await fetch(url, { cache: "no-store" });
-      if (!response.ok) throw new Error("Review status unavailable");
-      const data = await response.json();
-      if (typeof data.message !== "string") throw new Error("Review status unavailable");
-      if (data.message !== previous) {
-        const line = document.createElement("p");
-        line.textContent = `${new Date().toLocaleTimeString()} — ${data.message}`;
-        log.appendChild(line); previous = data.message;
-        while (log.childElementCount > 40) log.firstElementChild.remove();
-      }
-      status.textContent = "Updates every 10 seconds while this page is open.";
-    } catch { status.textContent = "Review status unavailable; retrying."; }
-    setTimeout(pollReview, 10_000);
-  };
-  pollReview();
-}
-
-// Relative times must age while the dashboard stays open.
-const relativeTimes = document.querySelectorAll?.("time[data-relative-time]") || [];
-if (relativeTimes.length) {
-  const refreshTimes = () => relativeTimes.forEach(el => {
-    const at = Date.parse(el.getAttribute("datetime"));
-    if (!Number.isFinite(at)) { el.textContent = "unknown"; return; }
-    const ms = Math.max(0, Date.now() - at), minutes = Math.round(ms / 60_000), hours = Math.round(minutes / 60);
-    el.textContent = ms < 45_000 ? "just now" : minutes < 60 ? `${minutes}m ago` : hours < 48 ? `${hours}h ago` : `${Math.round(hours / 24)}d ago`;
-  });
-  refreshTimes(); setInterval(refreshTimes, 30_000);
-}
-
-// Fixed actions and messages share delivery, but only Send message reads the composer's draft.
-const runControls = document.getElementById("run-controls");
-if (runControls) {
-  const buttons = [...runControls.querySelectorAll("button[data-action]")];
-  const note = document.getElementById("run-note");
-  const form = document.getElementById("message-form");
-  const status = document.getElementById("control-status");
-  const refresh = document.getElementById("control-refresh");
-  const lastMessage = document.getElementById("last-message");
-  const interrupt = document.getElementById("interrupt-run");
-  document.getElementById("restore-message")?.addEventListener("click", () => {
-    if (!note.value.trim()) note.value = lastMessage.querySelector("pre").textContent;
-    note.focus(); syncButtons();
-  });
-  const endpoint = `${BASE}/api/run/control?id=${encodeURIComponent(runControls.dataset.entry)}`;
-  let pending = runControls.dataset.pending === "true";
-  let closed = false;
-  const syncButtons = () => buttons.forEach(button => {
-    button.disabled = pending || closed || button.dataset.available !== "true"
-      || (button.dataset.action === "message" && !note.value.trim());
-  });
-  const label = action => buttons.find(b => b.dataset.action === action)?.textContent || "Request";
-  const poll = async () => {
-    try {
-      const response = await fetch(endpoint);
-      if (!response.ok) throw new Error("Could not check the request. Reload to see its status.");
-      const data = await response.json();
-      const control = data.control;
-      if (!control) throw new Error("Request status is unavailable. Reload before retrying.");
-      status.textContent = `${label(control.action)} — ${control.status}: ${control.message || "Waiting for the daemon and any active run."}`;
-      if (control.status === "queued" || control.status === "applying") { setTimeout(poll, 3000); return; }
-      pending = false;
-      closed = data.state === "done";
-      if (data.lastMessage?.note) {
-        lastMessage.querySelector("pre").textContent = data.lastMessage.note;
-        lastMessage.hidden = false;
-      }
-      if (control.status === "failed" && control.action === "message" && !note.value) note.value = control.note || lastMessage.querySelector("pre").textContent;
-      syncButtons();
-      // Follow the newest run unless that would discard a draft or interrupt typing.
-      if (!note.value && document.activeElement !== note) { location.replace(refresh.href); return; }
-      refresh.hidden = false;
-    } catch (e) { status.textContent = e.message; setTimeout(poll, 5000); }
-  };
-  const submit = async action => {
-    const button = buttons.find(b => b.dataset.action === action);
-    if (!button || button.disabled) return;
-    const draft = action === "message" ? note.value : "";
-    pending = true; syncButtons(); refresh.hidden = true;
-    status.textContent = `${label(action)} — queuing…`;
-    try {
-      const response = await fetch(endpoint, {
-        method: "POST", headers: { "Content-Type": "application/json", "X-Gallivant-Token": runControls.dataset.token },
-        body: JSON.stringify(action === "message" ? { action, note: draft, ...(interrupt?.checked ? { interrupt: true } : {}) } : { action }),
-      });
-      const data = await response.json();
-      if (!response.ok) throw new Error(data.error || "Request failed. Reload to check its status before retrying.");
-      if (action === "message") {
-        // A user can keep composing while delivery is pending. Never erase newer edits.
-        if (note.value === draft) note.value = "";
-        lastMessage.querySelector("pre").textContent = draft;
-        lastMessage.hidden = false;
-      }
-      status.textContent = `${label(action)} — queued. Waiting for the daemon and any active run.`;
-      setTimeout(poll, 1000);
-    } catch (e) {
-      status.textContent = `${label(action)} — ${e.message}`;
-      pending = false; syncButtons();
-    }
-  };
-  for (const button of buttons.filter(b => b.dataset.action !== "message")) {
-    button.addEventListener("click", () => submit(button.dataset.action));
-  }
-  form.addEventListener("submit", event => { event.preventDefault(); submit("message"); });
-  note.addEventListener("input", syncButtons);
-  syncButtons();
-  if (pending) setTimeout(poll, 1000);
-}
-
-// localStorage can throw, not only return null: a private window, a browser set to block site data, or a frame whose
-// storage the embedder partitioned away. Every read and write is guarded and the page works with no stored value.
-const LS = {
-  get: (k, d) => { try { const v = localStorage.getItem(k); return v === null ? d : JSON.parse(v); } catch { return d; } },
-  set: (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch { /* the page works without it */ } },
-};
-
-// ---- sidebar --------------------------------------------------------------------
-// Groups collapse, a filter searches every row's text, and collapsed state survives a reload. The one detail that
-// makes a filter feel right, taken from command-center's explorer: while a filter is active, collapsed state is
-// ignored and every match shows expanded. Otherwise a match hidden inside a closed group reads as "no results".
-const side = document.getElementById("side");
-if (side) {
-  const key = "gallivant.tracker.collapsed:" + (side.dataset.view || "default");
-  const closed = () => LS.get(key, {});
-  const groups = [...side.querySelectorAll(".group")];
-  const q = document.getElementById("filter");
-  const count = document.getElementById("matches");
-
-  const render = () => {
-    const term = (q?.value || "").trim().toLowerCase();
-    const shut = term ? {} : closed();          // a filter ignores collapsed state, so every match is visible
-    let shown = 0;
-    for (const g of groups) {
-      const rows = [...g.querySelectorAll("a.row")];
-      let hits = 0;
-      for (const row of rows) {
-        // The row's own text is what is searched: its handle, its detail and its badge, whatever the server put
-        // there. `hay` is filled in by the server so a filter matches fields the row does not display in full.
-        const hay = ((row.dataset.hay || "") + " " + row.textContent).toLowerCase();
-        const hit = !term || hay.includes(term);
-        row.hidden = !hit;
-        if (hit) hits++;
-      }
-      g.hidden = rows.length > 0 && hits === 0;
-      g.classList.toggle("closed", !!shut[g.dataset.group]);
-      g.querySelector("h3")?.setAttribute("aria-expanded", String(!shut[g.dataset.group]));
-      const tally = g.querySelector("h3 small");
-      if (tally) tally.textContent = term ? hits + "/" + rows.length : String(rows.length);
-      shown += hits;
-    }
-    if (count) count.textContent = term ? shown + (shown === 1 ? " match" : " matches") : "";
-  };
-
-  for (const g of groups) {
-    const head = g.querySelector("h3");
-    if (!head) continue;
-    head.setAttribute("role", "button");
-    head.tabIndex = 0;
-    const toggle = () => {
-      // A toggle while a filter is active would be invisible (the filter overrides collapse), so it only records
-      // the intent for when the filter is cleared.
-      const c = closed();
-      if (c[g.dataset.group]) delete c[g.dataset.group]; else c[g.dataset.group] = true;
-      LS.set(key, c);
-      render();
-    };
-    head.addEventListener("click", toggle);
-    head.addEventListener("keydown", e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); toggle(); } });
-  }
-  q?.addEventListener("input", render);
-  // Escape clears the filter, which is what every filter box does and costs one line.
-  q?.addEventListener("keydown", e => { if (e.key === "Escape") { q.value = ""; render(); } });
-  render();
-}
-
-// ---- grouping switch ------------------------------------------------------------
-// Two groupings, so this is a navigation, not a state machine: the server renders the grouping the URL asks for and
-// the page reloads into it. Nothing to keep in sync, and a grouped view is a link somebody can bookmark or frame.
-const by = document.getElementById("groupby");
-if (by) by.addEventListener("change", () => {
-  const u = new URL(location.href);
-  u.searchParams.set("by", by.value);
-  location.assign(u.pathname + "?" + u.searchParams.toString());     // same document, never the top-level window
-});
-
+// Log stream, bounded history and local text rendering.
 // ---- log pane -------------------------------------------------------------------
 const pane = document.getElementById("log"), state = document.getElementById("logstate");
 // The most LIVE rows the pane keeps. Beyond this the oldest live rows are dropped; the complete log is on disk and the
@@ -221,6 +16,7 @@ if (pane) {
   // refreshes. Appending per line stalled the main thread badly enough that the browser dropped the stream and
   // retried, which replayed the burst, which stalled it again. Buffer and paint once per frame instead.
   let pending = [], painting = false, closed = false, disconnected = false;
+  let es, lastEventId = null;
   // Reaching back: `oldest` is the id of the oldest line the pane holds (what the history route takes as
   // `?before=`), `loaded` is how many rows the reader explicitly loaded, which the cap exempts, and `busy`
   // keeps two presses of the button from fetching the same window twice. Declared with the rest of the pane's
@@ -365,18 +161,19 @@ if (pane) {
    */
   const loadEarlier = async () => {
     if (disconnected || busy || (recoveryBefore ?? oldest ?? 0) <= 1) return;
+    const active = lifecycle.guard();
     const recovering = recoveryBefore !== null, cursor = recoveryBefore ?? oldest;
     busy = true;
-    historyRequest = new AbortController();
+    const request = historyRequest = new AbortController();
     if (earlier) earlier.disabled = true;
     tell("loading");
     try {
       const h = new URLSearchParams(q);
       h.set("before", String(recovering ? cursor : oldest));
-      const r = await fetch(BASE + "/api/run/history?" + h.toString(), { headers: { accept: "application/json" }, signal: historyRequest.signal });
+      const r = await fetch(BASE + "/api/run/history?" + h.toString(), { headers: { accept: "application/json" }, signal: request.signal });
       if (!r.ok) throw new Error("history " + r.status);
       const got = await r.json();
-      if (disconnected) return;
+      if (disconnected || !active()) return;
       const lines = Array.isArray(got.lines) ? got.lines : [];
       const present = new Set([...pane.children].filter(row => replayId(row.dataset.replay) !== null).map(row => `${row.dataset.replay}:${row.dataset.replayRow ?? 0}`));
       const queued = new Set(pending.map(event => event.id).filter(id => id !== null));
@@ -422,49 +219,75 @@ if (pane) {
       if (got.gap) { note(got.gap, "skip"); tell("some history is unavailable; saved results are separate from logs"); }
       else if (recoveryBefore === null && (got.before ?? 0) <= 0) tell("this is the first line of the run");
     } catch {
+      if (disconnected || !active()) return;
       // The pane is the only place a reader sees this, so it says what happened rather than going quiet. The button
       // stays available: a failed fetch is worth retrying and nothing was consumed.
       tell("could not load earlier lines");
     } finally {
-      busy = false; historyRequest = null;
-      if (earlier) earlier.disabled = (recoveryBefore ?? oldest ?? 0) <= 1;
+      if (historyRequest === request) {
+        busy = false; historyRequest = null;
+        if (earlier) earlier.disabled = (recoveryBefore ?? oldest ?? 0) <= 1;
+      }
     }
   };
   earlier?.addEventListener("click", loadEarlier);
 
-  const es = new EventSource(url);
-  globalThis.addEventListener?.("pagehide", () => { disconnected = closed = true; es.close(); pending = []; historyRequest?.abort(); }, { once: true });
-  es.addEventListener("gap", e => { note(JSON.parse(e.data), "skip"); tell("some history is unavailable; saved results are separate from logs"); });
-  const say = text => { if (state) state.textContent = text; };
-  es.addEventListener("skipped", e => {
-    const n = Number(e.data);
-    if (!Number.isFinite(n) || n <= 0) return;
-    note(n + ' earlier lines not shown; "load earlier lines" above fetches them, and the whole log is in the run folder', "skip");
-    // The tail starts at line n+1, so the oldest line the pane holds is n+1 and the window before it starts at n.
-    oldest ??= n + 1;
-    offer(recoveryBefore !== null ? recoveryBefore - 1 : n);
+  globalThis.addEventListener?.("pagehide", event => {
+    // Finish the bounded display batch before recording the reconnect cursor.
+    if (event?.persisted) paint();
+    disconnected = true; es.close(); pending = [];
+    if (historyRequest) tell("Loading paused; load earlier lines to retry.");
+    historyRequest?.abort(); historyRequest = null; busy = false;
   });
-  es.onmessage = e => {
-    const text = JSON.parse(e.data);
-    // A terminal frame is the one thing the stream sends that is not a log line, and it is where the pane stops
-    // reconnecting. Every one of them is bracketed and nothing else the server sends is.
-    if (/^\[(exit|no run|ended)\b/.test(text)) {
-      // Once, however many times it arrives. A reconnect resumes from Last-Event-ID and the server re-sends the
-      // terminal frame for a run that is already over, so a pane that had reconnected printed the closing line
-      // twice. `closed` is the record that the end was already drawn, and it is checked before anything is drawn.
-      if (closed) return;
-      paint();
-      closed = true;
-      es.close();
-      note(text.slice(1, -1), "d " + (text === "[exit 0]" ? "ok" : "bad"));
-      say(text === "[no run]" ? "no run on disk" : text === "[exit 0]" ? "finished" : text.slice(1, -1));
-      return;
-    }
-    if (!closed) push(text, replayId(e.lastEventId));
+  lifecycle.onResume(() => {
+    disconnected = false;
+    if (earlier) earlier.disabled = (recoveryBefore ?? oldest ?? 0) <= 1;
+    if (!closed) connect();
+  });
+  const say = text => { if (state) { state.textContent = text; state.classList?.toggle("loading", text === "reconnecting"); } };
+  const connect = () => {
+    const active = lifecycle.guard();
+    // EventSource cannot set Last-Event-ID on a new connection. Its initial URL
+    // carries the same cursor; subsequent network retries use the normal header.
+    say("reconnecting");
+    es = new EventSource(lastEventId === null ? url : url + "&after=" + lastEventId);
+    es.addEventListener("gap", e => { if (!active()) return; note(JSON.parse(e.data), "skip"); tell("some history is unavailable; saved results are separate from logs"); });
+    es.addEventListener("skipped", e => {
+      if (!active()) return;
+      const n = Number(e.data);
+      if (!Number.isFinite(n) || n <= 0) return;
+      note(n + ' earlier lines not shown; "load earlier lines" above fetches them, and the whole log is in the run folder', "skip");
+      // The tail starts at line n+1, so the oldest line the pane holds is n+1 and the window before it starts at n.
+      oldest ??= n + 1;
+      offer(recoveryBefore !== null ? recoveryBefore - 1 : n);
+    });
+    es.onmessage = e => {
+      if (!active()) return;
+      const text = JSON.parse(e.data);
+      // A terminal frame is the one thing the stream sends that is not a log line, and it is where the pane stops
+      // reconnecting. Every one of them is bracketed and nothing else the server sends is.
+      if (/^\[(exit|no run|ended)\b/.test(text)) {
+        // Once, however many times it arrives. A reconnect resumes from Last-Event-ID and the server re-sends the
+        // terminal frame for a run that is already over, so a pane that had reconnected printed the closing line
+        // twice. `closed` is the record that the end was already drawn, and it is checked before anything is drawn.
+        if (closed) return;
+        paint();
+        closed = true;
+        es.close();
+        note(text.slice(1, -1), "d " + (text === "[exit 0]" ? "ok" : "bad"));
+        say(text === "[no run]" ? "no run on disk" : text === "[exit 0]" ? "finished" : text.slice(1, -1));
+        return;
+      }
+      if (!closed) {
+        lastEventId = replayId(e.lastEventId) ?? lastEventId;
+        push(text, replayId(e.lastEventId));
+      }
+    };
+    es.onopen = () => { if (active()) say("live"); };
+    // readyState 2 is closed, which is the normal end of a finished run and not a failure to report.
+    es.onerror = () => { if (active() && es.readyState !== 2) say("reconnecting"); };
   };
-  es.onopen = () => say("live");
-  // readyState 2 is closed, which is the normal end of a finished run and not a failure to report.
-  es.onerror = () => { if (es.readyState !== 2) say("reconnecting"); };
+  connect();
 }
 
 // ---- log lines ------------------------------------------------------------------

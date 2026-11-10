@@ -254,10 +254,10 @@ test("the sidebar lists every entry in a collapsible group with a count, on both
     handle(w.ctx, req(path), r);
     await r.ended;
     const body = r.body();
-    assert.match(body, /<aside id="side" data-view="(entries|runs)">/, `${path} has a sidebar the script can find`);
+    assert.match(body, /<aside id="side" data-view="(entries|runs)" aria-label="Browse (entries|runs)">/, `${path} has a sidebar the script can find`);
     assert.match(body, /<input type="search" id="filter"/, `${path} has one filter input`);
     assert.match(body, /<div class="group" data-group="/, `${path} groups its rows`);
-    assert.match(body, /<h3><i class="caret"><\/i><span class="n">[^<]*<\/span><small>\d+<\/small><\/h3>/, `${path} shows a count per group`);
+    assert.match(body, /<h2 class="group-heading"><button type="button" class="group-toggle" aria-expanded="true"><i class="caret" aria-hidden="true"><\/i><span class="n">[^<]*<\/span><small>\d+<\/small><\/button><\/h2>/, `${path} shows a count per group`);
   }
 
   const dash = res();
@@ -265,7 +265,7 @@ test("the sidebar lists every entry in a collapsible group with a count, on both
   await dash.ended;
   const body = dash.body();
   // The groups are the sections status already uses, each with the number of rows in it.
-  const groups = [...body.matchAll(/data-group="([^"]+)">\s*<h3><i class="caret"><\/i><span class="n">([^<]*)<\/span><small>(\d+)<\/small>/g)]
+  const groups = [...body.matchAll(/data-group="([^"]+)">\s*<h2 class="group-heading"><button type="button" class="group-toggle" aria-expanded="true"><i class="caret" aria-hidden="true"><\/i><span class="n">([^<]*)<\/span><small>(\d+)<\/small>/g)]
     .map(([, key, label, n]) => [key, label, Number(n)]);
   assert.deepEqual(groups, [["needs_you", "needs you", 1], ["running", "running", 1], ["done", "done", 1]]);
   // Every row in the sidebar is a link to that entry's page, carrying text a filter can match on.
@@ -330,7 +330,7 @@ test("grouping switches between state and harness, and nothing else", async () =
   assert.match(body, /href="\/runs\?by=harness"/, "so does the nav");
 
   // Two options, no more: the switch is a small enumeration, not a grouping engine.
-  const options = [...body.matchAll(/<option value="([^"]+)"/g)].map(m => m[1]);
+  const options = [...body.match(/<select id="groupby"[^>]*>(.*?)<\/select>/s)[1].matchAll(/<option value="([^"]+)"/g)].map(m => m[1]);
   assert.deepEqual(options, ["state", "harness"]);
 
   // A grouping nobody offers falls back to the default rather than rendering an empty sidebar.
@@ -519,8 +519,9 @@ test("hostile text in a reason or a log line is escaped, not rendered", async ()
     // the browser would see and check it against what the templates write: the payload's img and script are gone,
     // and no tag anywhere carries an event handler.
     const tags = [...body.matchAll(/<\/?([a-zA-Z][\w-]*)\b([^>]*)>/g)];
-    const injected = tags.filter(([, name]) => ["img", "iframe", "object", "embed", "svg"].includes(name.toLowerCase()));
+    const injected = tags.filter(([, name]) => ["img", "iframe", "object", "embed"].includes(name.toLowerCase()));
     assert.deepEqual(injected, [], `${path} renders no tag the payload asked for`);
+    assert.ok(tags.filter(([, name]) => name === "svg").every(([tag]) => tag === "</svg>" || tag.startsWith('<svg class="icon" aria-hidden="true"')), "only renderer-owned icons appear");
     const handlers = tags.filter(([, , attrs]) => /\bon[a-z]+\s*=/i.test(attrs));
     assert.deepEqual(handlers.map(t => t[0]), [], `${path} has no inline event handler, on a tag of ours or theirs`);
     // The only script element on the page is the one that loads /tracker.js, with no body of its own.
@@ -994,7 +995,7 @@ async function served(w) {
   const src = r.body();
   const from = src.indexOf("const ARG_KEYS");
   assert.ok(from > 0, "the served script carries the spliced reader");
-  const body = src.slice(from, src.indexOf("// Where this tracker is mounted")) + src.slice(src.indexOf("// ---- log lines"));
+  const body = src.slice(from, src.indexOf("// Browser controllers")) + src.slice(src.indexOf("// ---- log lines"));
   return new Function(body + "; return { renderLine, parseLine, harnessLine };")();
 }
 
@@ -1291,10 +1292,28 @@ test("a reconnect does not draw the closing line twice", async () => {
   const r = res();
   handle(w.ctx, req("/tracker.js"), r);
   await r.ended;
-  const terminalBlock = /if \(\/\^\\\[\(exit\|no run\|ended\)\\b\/\.test\(text\)\) \{([\s\S]*?)\n    \}/.exec(r.body());
+  const terminalBlock = /if \(\/\^\\\[\(exit\|no run\|ended\)\\b\/\.test\(text\)\) \{([\s\S]*?)\n\s+\}/.exec(r.body());
   assert.ok(terminalBlock, "the script still has one place where a terminal frame is handled");
   assert.ok(terminalBlock[1].indexOf("if (closed) return;") < terminalBlock[1].indexOf("note("),
     "the already-closed check must come before the line is drawn, or the second frame draws a second row");
+});
+
+test("a replacement EventSource resumes by URL cursor and later retry headers take precedence", async () => {
+  const w = world({ runs: { "2026-09-24T02-00-00-000-fix": { lines: ["first", "second", "third"], exit: 0, endedAt: 1 } }, latest: "2026-09-24T02-00-00-000-fix" });
+  const url = `/api/run/output?id=${encodeURIComponent(ID)}`;
+  const initial = sink(); handle(w.ctx, req(url), initial); await initial.ended;
+  const ids = initial.frames.filter(frame => frame.id).map(frame => frame.id);
+  for (const [cursor, headers, expected] of [
+    [ids[0], {}, ["second", "third"]],
+    [ids[0], { "last-event-id": ids[1] }, ["third"]],
+    ["0", {}, ["first", "second", "third"]],
+    ["", {}, ["first", "second", "third"]],
+    ["-1", {}, ["first", "second", "third"]],
+    ["invalid", {}, ["first", "second", "third"]],
+  ]) {
+    const resumed = sink(); handle(w.ctx, req(`${url}&after=${cursor}`, headers), resumed); await resumed.ended;
+    assert.deepEqual(resumed.lines(), expected);
+  }
 });
 
 test("markdown in a model's prose is rendered, and only the subset a log line actually contains", async () => {
@@ -1874,7 +1893,7 @@ test("the pane corrects its scroll after prepending, and the cap spares what the
   // The history fetch goes to the read route, never to the stream, and addresses the run the way the pane was told to.
   assert.match(js, /BASE \+ "\/api\/run\/history\?"/, "the range route is a read, not the SSE endpoint");
   assert.match(js, /h\.set\("before", String\(recovering \? cursor : oldest\)\)/, "and asks for the window before what it holds");
-  assert.match(js, /new EventSource\(url\)/, "the live stream is untouched");
+  assert.match(js, /new EventSource\(/, "the live stream still uses EventSource");
 });
 
 /**
@@ -1949,7 +1968,10 @@ async function paneOf(w, { fetchJson = async () => ({ lines: [], before: 0, from
     requestAnimationFrame: f => rafs.push(f),
     URLSearchParams, URL, Number, Math, Array, JSON, String, Object, Boolean, isNaN, parseInt, parseFloat,
     fetch: async url => ({ ok: true, status: 200, json: async () => fetchJson(String(url)) }),
-    console, globalThis: { addEventListener: (event, fn) => { dom.frames[event] = fn; } },
+    console, globalThis: { addEventListener: (event, fn) => {
+      const previous = dom.frames[event];
+      dom.frames[event] = value => { previous?.(value); fn(value); };
+    } },
   };
   const names = Object.keys(sandbox);
   new Function(...names, r.body())(...names.map(n => sandbox[n]));
@@ -2072,6 +2094,34 @@ test("history failures and a burst during a fetch retain recovery cursors and bo
   p.line("queued", 1201); p.frames.pagehide(); p.flush();
   assert.equal(p.es().readyState, 2); assert.ok(!p.pane.children.some(row => row._text.includes("queued")));
   p.line("late", 1202); p.flush(); assert.ok(!p.pane.children.some(row => row._text.includes("late")));
+});
+
+test("cached log restoration ignores an old history response while its replacement is pending", async () => {
+  const replies = [];
+  const p = await paneOf(world(), { fetchJson: url => new Promise(resolve => {
+    const before = Number(new URL(url, "http://localhost").searchParams.get("before"));
+    replies.push(() => resolve(historyPage(before)));
+  }) });
+  for (let id = 401; id <= 410; id++) p.line(`live ${id}`, id);
+  p.flush();
+  const first = p.els.earlier._on.click();
+  await new Promise(setImmediate);
+  const oldSource = p.es();
+  p.frames.pagehide({ persisted: true });
+  p.frames.pageshow({ persisted: true });
+  assert.equal(oldSource.readyState, 2);
+  assert.match(p.els.earlierstate.textContent, /Loading paused/);
+  assert.equal(new URL(p.es().url, "http://localhost").searchParams.get("after"), "410");
+  oldSource.onmessage({ data: JSON.stringify("stale stream frame"), lastEventId: "411" });
+  const second = p.els.earlier._on.click();
+  await new Promise(setImmediate);
+  replies[0](); await first;
+  p.flush();
+  assert.equal(p.pane.childElementCount, 10, "late frames and history cannot mutate the restored pane");
+  assert.equal(p.els.earlier.disabled, true, "an old finally block cannot unlock the replacement request");
+  replies[1](); await second;
+  assert.equal(p.pane.childElementCount, 410);
+  assert.equal(p.els.earlier.disabled, true, "the first line is already loaded");
 });
 
 test("live DOM eviction preserves replay history even after the oldest page was loaded", async () => {

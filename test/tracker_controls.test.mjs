@@ -31,7 +31,8 @@ function controls({ session = true, pending = false } = {}) {
     "restore-message": el(), "interrupt-run": el({ checked: false }),
   };
   const document = { body: { dataset: { base: "/gallivant" } }, getElementById: id => elements[id] ?? null, activeElement: null };
-  const requests = [], timers = [], navigations = [];
+  const requests = [], timers = new Map(), navigations = [], listeners = {};
+  let nextTimer = 0;
   const ui = {
     buttons, elements, last, document, requests, navigations,
     response: { ok: true, json: async () => ({}) },
@@ -42,15 +43,19 @@ function controls({ session = true, pending = false } = {}) {
       else await buttons.find(b => b.dataset.action === action).on.click();
       await new Promise(setImmediate);
     },
-    async poll() { assert.ok(timers.length); await timers.shift()(); },
+    async poll() { assert.ok(timers.size); const [id, work] = timers.entries().next().value; timers.delete(id); await work(); },
+    hide() { listeners.pagehide({ persisted: true }); },
+    show() { listeners.pageshow({ persisted: true }); },
+    get timerCount() { return timers.size; },
   };
   const fetch = async (url, options) => {
-    if (!options) return { ok: true, json: async () => ui.result };
+    if (!options?.method) return ui.readResponse ?? { ok: true, json: async () => ui.result };
     requests.push({ url, ...JSON.parse(options.body) });
     return ui.response;
   };
-  new Function("document", "fetch", "setTimeout", "location", ASSETS["/tracker.js"].body)(
-    document, fetch, f => timers.push(f), { replace: url => navigations.push(url) },
+  new Function("document", "fetch", "setTimeout", "clearTimeout", "location", "globalThis", ASSETS["/tracker.js"].body)(
+    document, fetch, f => { timers.set(++nextTimer, f); return nextTimer; }, id => timers.delete(id),
+    { replace: url => navigations.push(url) }, { addEventListener: (event, fn) => { listeners[event] = fn; } },
   );
   return ui;
 }
@@ -69,6 +74,47 @@ test("fixed actions never send or discard a draft, including after the daemon ap
     assert.equal(ui.elements["control-refresh"].hidden, false);
     assert.ok(ui.buttons.every(b => !b.disabled));
   }
+});
+
+test("cached controls settle the original POST on return without replaying it or losing newer drafts", async () => {
+  for (const ok of [true, false]) {
+    const ui = controls();
+    ui.input("The submitted draft");
+    let complete;
+    ui.response = new Promise(resolve => { complete = resolve; });
+    await ui.click("message");
+    ui.input("A newer unsent draft");
+    ui.hide();
+    complete({ ok, json: async () => ({ error: "Fixture rejection" }) });
+    await new Promise(setImmediate);
+    assert.equal(ui.timerCount, 0, "no background polls while cached");
+    ui.show();
+    await new Promise(setImmediate);
+    assert.equal(ui.requests.length, 1, "the original action is never resent");
+    assert.equal(ui.elements["run-note"].value, "A newer unsent draft");
+    assert.equal(ui.timerCount, ok ? 1 : 0, "only an accepted action starts polling");
+    if (!ok) assert.match(ui.elements["control-status"].textContent, /Fixture rejection/);
+    else assert.equal(ui.last.textContent, "The submitted draft");
+  }
+});
+
+test("a pre-cache control read cannot overwrite its resumed poll or start another timer", async () => {
+  const ui = controls({ pending: true });
+  ui.input("Keep the draft");
+  let complete;
+  ui.readResponse = { ok: true, json: () => new Promise(resolve => { complete = resolve; }) };
+  const oldPoll = ui.poll();
+  await new Promise(setImmediate);
+  ui.hide();
+  ui.readResponse = null;
+  ui.show();
+  await new Promise(setImmediate);
+  const restored = ui.elements["control-status"].textContent;
+  complete({ control: { status: "queued", action: "message" } });
+  await oldPoll;
+  assert.equal(ui.elements["control-status"].textContent, restored);
+  assert.equal(ui.timerCount, 0);
+  assert.equal(ui.elements["run-note"].value, "Keep the draft");
 });
 
 test("only sending delivers text; rejection preserves it and acceptance preserves newer edits", async () => {

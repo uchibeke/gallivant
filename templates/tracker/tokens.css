@@ -1,0 +1,37 @@
+/* Public --gv-* properties remain the host override contract. Low-specificity
+   defaults let host :root rules win in either stylesheet order. */
+:where(:root) {
+  color-scheme: dark;
+  --gv-canvas: #14171b; --gv-surface: #1b1f24; --gv-bench: #111418;
+  --gv-text: #edf0f3; --gv-muted: #b0b8c2; --gv-subtle: #9da8b5;
+  --gv-line: #343b44; --gv-line-strong: #75808d; --gv-hover: #252b33;
+  --gv-accent: #22d3ee; --gv-accent-soft: #19343b;
+  --gv-success: #75dbad; --gv-warning: #f1c16c; --gv-danger: #ff9a9d;
+  --gv-focus: var(--gv-accent); --gv-action: var(--gv-accent); --gv-on-action: #102126;
+  --gv-font: Inter, -apple-system, system-ui, "Segoe UI", sans-serif;
+  --gv-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+  --gv-size: 14px; --gv-r: 12px; --gv-pad: 32px; --gv-sidebar: 264px;
+  --gv-space-1: 4px; --gv-space-2: 8px; --gv-space-3: 12px;
+  --gv-space-4: 16px; --gv-space-6: 24px; --gv-space-8: 32px;
+}
+/* :root[data-theme="light"] is explicit; an absent theme follows the OS. */
+:where(:root[data-theme="light"]) {
+  color-scheme: light;
+  --gv-canvas: #f4f3ef; --gv-surface: #fffefa; --gv-bench: #eeede8;
+  --gv-text: #242a30; --gv-muted: #4d5863; --gv-subtle: #5a6570;
+  --gv-line: #d7d7d0; --gv-line-strong: #7b858c; --gv-hover: #e8e9e3;
+  --gv-accent: #006778; --gv-accent-soft: #dceff0;
+  --gv-success: #176b49; --gv-warning: #805006; --gv-danger: #ae2c3b;
+  --gv-on-action: #ffffff;
+}
+@media (prefers-color-scheme: light) {
+  :where(:root:not([data-theme="dark"]):not([data-theme="light"])) {
+    color-scheme: light;
+    --gv-canvas: #f4f3ef; --gv-surface: #fffefa; --gv-bench: #eeede8;
+    --gv-text: #242a30; --gv-muted: #4d5863; --gv-subtle: #5a6570;
+    --gv-line: #d7d7d0; --gv-line-strong: #7b858c; --gv-hover: #e8e9e3;
+    --gv-accent: #006778; --gv-accent-soft: #dceff0;
+    --gv-success: #176b49; --gv-warning: #805006; --gv-danger: #ae2c3b;
+    --gv-on-action: #ffffff;
+  }
+}
