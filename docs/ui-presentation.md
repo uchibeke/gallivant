@@ -24,6 +24,12 @@ its finer phase. Transcript prose is never searched for phases or verdicts.
 Missing or malformed observations produce bounded diagnostics and unknown
 values; no timestamps, percentages, usage, costs or ETAs are invented.
 
+Control status polls include fresh canonical availability. When a queued or
+applying request settles, the composer and action buttons use that snapshot,
+preserving failed messages for editing while unresolved ownership keeps writer
+controls disabled. Snapshot freshness may advance between API reads or operation
+replays without changing meaningful activity.
+
 Selectors accept values, not contexts or service clients. They do not read files,
 probe providers, query hosts, dispatch work or write state. Existing adapters
 collect saved facts before calling them. The coordinator's bounded

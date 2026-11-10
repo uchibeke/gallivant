@@ -312,6 +312,58 @@ test("protected requests reject cross-origin and missing tokens; real controls q
 });
 
 
+test("pages opened during queued or applying messages restore current controls after failure", { timeout: 45_000 }, async t => {
+  for (const live of [false, true]) {
+    const { page, origin, state, ctx } = await open(t, { live });
+    if (live) {
+      const runnerFor = ctx.runnerFor;
+      ctx.runnerFor = id => { const runner = runnerFor(id); return { ...runner, current: () => ({ ...runner.current(), running: id === TASK }) }; };
+      state.update(TASK, { last: { run: RUN, exit: null } });
+    }
+    for (const base of ["", "/gallivant"]) for (const status of ["queued", "applying"]) {
+      state.update(TASK, { control: { id: "fixture-pending", action: "message", status, note: "Saved failed message." } });
+      await page.goto(origin + runPath(base));
+      assert.equal(await page.locator("#run-note").isDisabled(), true);
+      if (live) assert.equal(await page.locator("#interrupt-run").isDisabled(), true);
+      for (const button of await page.locator("#run-controls button[data-action]").all()) assert.equal(await button.isDisabled(), true);
+      state.update(TASK, { control: { ...state.get(TASK).control, status: "failed", message: "Fixture request failed." } });
+      await page.waitForFunction(() => document.querySelector("#control-status").dataset.state === "error");
+      assert.equal(await page.locator("#run-note").isDisabled(), false);
+      if (live) assert.equal(await page.locator("#interrupt-run").isDisabled(), false);
+      assert.match(await page.locator("#message-help").textContent(), /Continues the same session with your correction/);
+      assert.equal(await page.locator("#run-note").inputValue(), "Saved failed message.");
+      for (const button of await page.locator("#run-controls button[data-action]").all()) assert.equal(await button.isDisabled(), false);
+      assert.equal(await page.locator("#control-refresh").isVisible(), true);
+      assert.equal(page.url(), origin + runPath(base), "draft recovery preserves the selected attempt and query");
+      await page.locator("#run-note").fill("Edited retry message.");
+      const accepted = page.waitForResponse(r => r.request().method() === "POST");
+      await page.getByRole("button", { name: "Send message", exact: true }).click();
+      assert.equal((await accepted).status(), 202);
+      assert.equal(state.get(TASK).control.note, "Edited retry message.");
+    }
+  }
+});
+
+test("settled requests refresh controls from current ownership rather than the selected historical attempt", { timeout: 45_000 }, async t => {
+  const { page, origin, state } = await open(t);
+  const original = state.get(TASK);
+  for (const base of ["", "/gallivant"]) for (const change of [
+    { state: "done" }, { session: null }, { last: { run: RUN, exit: null } },
+    { execution: { version: 1, provider: "fixture", transport: "remote", acceptance: "unknown", providerState: "status-unknown" } },
+  ]) {
+    state.put(TASK, { ...original, control: { id: "fixture-pending", action: "message", status: "applying", note: "Preserve this message." } });
+    await page.goto(origin + runPath(base));
+    state.update(TASK, { ...change, control: { ...state.get(TASK).control, status: "failed", message: "Fixture ownership changed." } });
+    await page.waitForFunction(() => document.querySelector("#control-status").dataset.state === "error").catch(async error => {
+      assert.fail(`${JSON.stringify(change)}: ${await page.locator("#control-status").textContent()}; ${error.message}`);
+    });
+    assert.equal(await page.locator("#run-note").inputValue(), "Preserve this message.");
+    assert.equal(await page.locator("#run-note").isDisabled(), true);
+    for (const action of ["message", "resume"]) assert.equal(await page.locator(`[data-action="${action}"]`).isDisabled(), true);
+    assert.equal(await page.locator('[data-action="cancel"]').isDisabled(), change.state === "done");
+  }
+});
+
 test("read failures preserve content and drafts; page exit stops refresh", { timeout: 30_000 }, async t => {
   const { page, origin, state } = await open(t);
   let reads = 0;

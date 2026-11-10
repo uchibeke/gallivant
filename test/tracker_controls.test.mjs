@@ -19,13 +19,13 @@ test("review activity updates as text and reports connection failures without di
 function controls({ session = true, pending = false } = {}) {
   const el = props => ({ value: "", textContent: "", hidden: true, on: {}, focus() {},
     addEventListener(event, fn) { this.on[event] = fn; }, ...props });
-  const buttons = ["recheck", "resume", "message"].map(action => el({
-    textContent: action, dataset: { action, available: String(action === "recheck" || session) },
+  const buttons = ["recheck", "resume", "message", "cancel"].map(action => el({
+    textContent: action, dataset: { action, available: String(!pending && (action === "recheck" || action === "cancel" || session)) },
   }));
   const last = el();
   const elements = {
     "run-controls": el({ dataset: { entry: "acme/widget/task", token: "local", pending: String(pending) }, querySelectorAll: () => buttons }),
-    "run-note": el(), "message-form": el(), "control-status": el(),
+    "run-note": el({ disabled: pending || !session }), "message-form": el(), "control-status": el(),
     "control-refresh": el({ href: "http://localhost/gallivant/run?id=acme%2Fwidget%2Ftask" }),
     "last-message": el({ querySelector: () => last }),
     "restore-message": el(), "interrupt-run": el({ checked: false }),
@@ -49,7 +49,7 @@ function controls({ session = true, pending = false } = {}) {
     get timerCount() { return timers.size; },
   };
   const fetch = async (url, options) => {
-    if (!options?.method) return ui.readResponse ?? { ok: true, json: async () => ui.result };
+    if (!options?.method) return ui.readResponse ?? { ok: true, json: async () => ({ controls: { recheck: true, resume: session, message: session, cancel: true, interrupt: session }, ...ui.result }) };
     requests.push({ url, ...JSON.parse(options.body) });
     return ui.response;
   };
@@ -182,4 +182,36 @@ test("interrupt is explicit and failed messages can be edited and resent", async
   ui.input("New draft");
   ui.elements["restore-message"].on.click();
   assert.equal(ui.elements["run-note"].value, "New draft");
+});
+
+test("settled polls refresh initially disabled controls and the composer without losing failed messages", async () => {
+  const ui = controls({ pending: true });
+  ui.result = { state: "needs-human", control: { action: "message", status: "applying" } };
+  await ui.poll();
+  assert.ok(ui.buttons.every(b => b.disabled));
+  ui.result.control = { action: "message", status: "failed", note: "Retry this saved message." };
+  await ui.poll();
+  assert.ok(ui.buttons.every(b => !b.disabled));
+  assert.equal(ui.elements["run-note"].disabled, false);
+  assert.equal(ui.elements["run-note"].value, "Retry this saved message.");
+  assert.deepEqual(ui.navigations, []);
+  ui.input("Edited message");
+  await ui.click("message");
+  assert.equal(ui.requests[0].note, "Edited message");
+});
+
+test("settled polls cannot enable controls from missing or unresolved ownership observations", async () => {
+  for (const available of [null, { recheck: true, cancel: true, resume: false, message: false, interrupt: false }]) {
+    const ui = controls({ pending: true });
+    ui.elements["interrupt-run"].checked = true;
+    ui.result = { state: "needs-human", controls: available, control: { action: "message", status: "failed", note: "Preserved draft" } };
+    await ui.poll();
+    assert.equal(ui.buttons[1].disabled, true);
+    assert.equal(ui.buttons[2].disabled, true);
+    assert.equal(ui.elements["run-note"].disabled, true);
+    assert.equal(ui.elements["interrupt-run"].disabled, true);
+    assert.equal(ui.elements["interrupt-run"].checked, false);
+    assert.equal(ui.elements["run-note"].value, "Preserved draft");
+    assert.deepEqual(ui.navigations, []);
+  }
 });

@@ -101,6 +101,17 @@ test("checks keep absent, explicitly unconfigured, pending and passed observatio
   }
 });
 
+test("network retry explanations use validated facts and normalize source timestamps", () => {
+  const entry = { ...base(), network_retry: { phase: "waiting", attempts: 1, first_at: START, run: "attempt", code: "ENOTFOUND",
+    next_at: "Sep 24 2026 14:30:00 GMT (private-provider-payload)" } };
+  const p = project({ entry });
+  assert.match(p.nextAction, /waiting for API connectivity \(ENOTFOUND\); 1\/3 retries used/);
+  assert.ok(p.nextAction.endsWith(NOW));
+  assert.doesNotMatch(JSON.stringify(p), /private-provider-payload/);
+  assert.equal(project({ entry: { ...entry, network_retry: { ...entry.network_retry, code: "private-provider-payload" } } }).nextAction,
+    "Wait for the scheduled retry; inspect its saved failure if it persists.");
+});
+
 test("attempt durations and round accounting never borrow from a different attempt", () => {
   const entry = { ...base(), last: { run: "attempt", exit: null } };
   const active = attemptPresentation(running, { entry, maxIterations: 5, now: NOW });

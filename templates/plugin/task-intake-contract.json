@@ -8,7 +8,7 @@
   "files": {
     "lib/task_profile.mjs": "548263a334b1ba3c374f0e64d1b2b9917996705fe72fda6fba7dd9ce73ac96e6",
     "lib/host_definitions.mjs": "1179cddc073e2a05aa603b7117c178ffe4fc057d7270931832fbf8733d3a84d6",
-    "lib/review_policy_contract.mjs": "16cafa3b835a3fa8c3904b0cc577f46f6b7bb0c9a1697ad0438a32cac636f3f2",
+    "lib/review_policy_contract.mjs": "cd33ddf9db7627ca582fbb57aa2db3f0e2c2691a4dd67cd21886a838d871b97e",
     "lib/hosts/github_contract.mjs": "f8910b07ddd0dca8c06780d78eb3b5a106da4604ba01cb25b7a205432e2fbe81",
     "lib/hosts/bitbucket_contract.mjs": "89cbf40585fa81f7030adbe368c60f430af73b741e87d9518bbb8e3ffa03e02f",
     "lib/repository.mjs": "f397883ca04bae6c3d15e730fbef2fe267fb5d616566a9f4b724aee8f4925f97",
