@@ -6,7 +6,7 @@
   "validator": "lib/task_profile.mjs",
   "fixtures": "templates/plugin/task-profile-requests.mjs",
   "files": {
-    "lib/task_profile.mjs": "18b51dbc87107295806d3125a306454f6ce22660b8758065ac559c2882511cf6",
+    "lib/task_profile.mjs": "548263a334b1ba3c374f0e64d1b2b9917996705fe72fda6fba7dd9ce73ac96e6",
     "lib/host_definitions.mjs": "1179cddc073e2a05aa603b7117c178ffe4fc057d7270931832fbf8733d3a84d6",
     "lib/review_policy_contract.mjs": "16cafa3b835a3fa8c3904b0cc577f46f6b7bb0c9a1697ad0438a32cac636f3f2",
     "lib/hosts/github_contract.mjs": "f8910b07ddd0dca8c06780d78eb3b5a106da4604ba01cb25b7a205432e2fbe81",

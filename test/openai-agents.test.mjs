@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { join } from "node:path";
-import { mkdtempSync, readFileSync, writeFileSync, mkdirSync, rmSync, chmodSync, symlinkSync, unlinkSync, existsSync, statSync } from "node:fs";
+import { mkdtempSync, readFileSync, writeFileSync, mkdirSync, rmSync, chmodSync, symlinkSync, unlinkSync, existsSync, statSync, readdirSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { execFileSync } from "node:child_process";
 import { gzipSync, gunzipSync } from "node:zlib";
@@ -35,6 +35,9 @@ import { createDeliveryStore } from "../lib/task_delivery_store.mjs";
 import { CORE_VERSION } from "../lib/task_delivery_contract.mjs";
 import { migrateRuntimeState } from "../lib/runtime_state.mjs";
 import { createNodeCoordinator, createNodeOwnerStore } from "../lib/runtime_node.mjs";
+import { RECOVERY_REASONS, safeProviderError } from "../lib/execution_diagnostics.mjs";
+import { redact } from "../lib/execution_io.mjs";
+import { modelSummary } from "../lib/task_delivery_view.mjs";
 const config = { account: "fixture", organization: "org-fixture", project: "proj-fixture", model: "fixture-model", environment: "openai_hosted", container_size: "small", network: { access: "disabled" }, allowance: { remainingUsd: 2, reservedUsd: 0.1 } };
 const head = "a".repeat(40), initial = "original\n", changed = "corrected\n";
 const sources = { data: Buffer.from("snapshot").toString("base64"), hash: contentHash("snapshot"), hashes: { "answer.txt": contentHash(initial) }, modes: { "answer.txt": 0o644 }, inputHead: head, repo: "acme/widget", branch: "work/widget" };
@@ -124,6 +127,204 @@ async function prepareIntake(f) {
   const input = intakeInput(), prepared = await f.service().prepare(input);
   return { ...input, prepared, preparation: prepared.receipt, operationId: "prepare-1", name: "prepare-1" };
 }
+
+const retainedBytes = root => Object.fromEntries(readdirSync(root, { recursive: true }).sort()
+  .filter(path => statSync(join(root, path)).isFile()).map(path => [path, readFileSync(join(root, path)).toString("base64")]));
+
+async function localDelivery(f, { preparation = false } = {}) {
+  const taskId = "task-" + "d".repeat(24), adapter = f.transport(), calls = [];
+  let reached = 0;
+  for (const method of Object.keys(adapter)) {
+    const real = adapter[method];
+    adapter[method] = (...args) => { calls.push(method); if (method === "inspectLocal") reached++; return real(...args); };
+  }
+  const executionId = preparation ? `intake/${taskId}` : "acme/widget/task";
+  const execution = makeExecution({ root: f.root, taskId: executionId, account: config.account,
+    provider: "openai-agents", transport: adapter, clock: f.clock });
+  const entry = { state: "needs-human", session: execution.current()?.execution.sessionId, last: { run: execution.current()?.id }, harness: "openai-agents" };
+  const saved = { id: taskId, revision: 7, status: preparation ? "preparing" : "started", repo: "acme/widget", harness: "openai-agents", requirements: [], context: [], questions: [],
+    attempts: preparation ? [{ execution: execution.current()?.execution }] : [],
+    ...(preparation ? {} : { implementation: { id: executionId, run: execution.current()?.id } }) };
+  let authorized = true;
+  const delivery = createTaskDelivery({ manifest: { coreVersion: CORE_VERSION, operationVersion: 1, taskVersion: 1, executionVersion: 1, coreSha256: "a".repeat(64) },
+    authorize: async () => ({ tenant: "tenant", account: "fixture", region: "ca", environment: "preview", scopes: ["task-delivery:read"], repositories: authorized ? ["widget"] : [] }),
+    secretsFor: () => ["private-canary-value"],
+    store: { read: async () => ({ tasks: { [taskId]: { repositoryId: "widget" } } }), transaction: () => assert.fail("local inspection cannot write receipts") },
+    schedule: () => assert.fail("local inspection cannot schedule recovery"),
+    contextFor: async () => ({ ctx: { home: f.root, config: {}, state: { get: () => entry, startClaim: () => null }, executionFor: id => { assert.equal(id, executionId); return execution; } },
+      repository: { dir: f.root, repo: "acme/widget" }, taskOptions: { store: { read: () => saved } } }),
+  });
+  return { inspect: diagnostics => delivery.dispatch("inspect", { taskId, ...(diagnostics === undefined ? {} : { diagnostics }) }, "fixture"),
+    revoke: () => { authorized = false; }, calls, reached: () => reached };
+}
+
+test("local diagnostics specific-stage assertion reaches real adapter, execution and authorized task projection without writes", async t => {
+  for (const stage of ["dispatch-missing", "recovery-circuit-blocked", "session-before-input", "send-intent-unacknowledged", "input-acknowledged-root-unowned", "root-owned", "unknown"]) {
+    await t.test(stage, async () => {
+      const f = fixture(); t.after(() => rmSync(f.root, { recursive: true, force: true }));
+      await f.service().submit(input);
+      const file = join(f.root, "agents.json"), saved = readJson(file), op = Object.values(saved.operations)[0];
+      if (stage === "dispatch-missing") saved.operations = {};
+      else if (stage === "recovery-circuit-blocked") {
+        op.recoveryBlocked = RECOVERY_REASONS.observationCircuit; op.recoveryFailures = 3; op.recoveryErrorCode = "AGENTS_AUTH";
+        const ledger = readJson(join(f.root, "execution.json")); ledger.current.execution.providerState = "status-unknown";
+        writeJsonAtomic(join(f.root, "execution.json"), ledger);
+      }
+      else if (stage !== "root-owned") {
+        op.turnId = null; op.acceptance = "unknown"; delete op.rootOwnedAt;
+        const ledger = readJson(join(f.root, "execution.json"));
+        ledger.current.execution.turnId = null; ledger.current.execution.acceptance = "unknown";
+        writeJsonAtomic(join(f.root, "execution.json"), ledger);
+        op.sendIntent = stage !== "session-before-input"; op.sendAcknowledged = stage === "input-acknowledged-root-unowned";
+        if (stage === "session-before-input") op.recoveryBlocked = RECOVERY_REASONS.legacyPreInput;
+        if (stage === "unknown") for (const key of ["diagnosticsVersion", "sendIntent", "sendAcknowledged", "createdAt", "sessionSavedAt", "sendIntentAt", "sendAcknowledgedAt"]) delete op[key];
+      }
+      writeJsonAtomic(file, saved);
+      const delivery = await localDelivery(f), before = retainedBytes(f.root), count = f.calls.length;
+      const view = await delivery.inspect(true), evidence = view.progress.diagnostics;
+      assert.equal(evidence.stage, stage, "specific-stage assertion");
+      assert.equal(delivery.reached(), 1, "real saved adapter state path reached");
+      assert.deepEqual(delivery.calls, ["inspectLocal"], "no submit, answer, reconnect, cancel, reset or remote inspect");
+      assert.equal(f.calls.length, count, "zero provider requests, including reads/subscriptions");
+      assert.deepEqual(retainedBytes(f.root), before, "all retained bytes unchanged, including intent, allocation, retries and pins");
+      assert.equal(evidence.version, 1); assert.ok(JSON.stringify(evidence).length < 2500);
+      assert.equal(evidence.acceptanceAndCharge, "not-established-by-local-inspection");
+      assert.deepEqual(modelSummary(view).diagnostics, evidence);
+      if (stage === "recovery-circuit-blocked") {
+        assert.deepEqual(evidence.actions[1], { code: "retry-observation", effect: "remote-reconciliation", requiresExplicitAuthorization: true });
+        t.diagnostic(`saved circuit projection: ${JSON.stringify(evidence)}`);
+      }
+      if (stage === "unknown") { assert.equal(evidence.sendIntent, null); assert.equal(evidence.sendAcknowledged, null); assert.ok(Object.values(evidence.timestamps).every(value => value === null)); }
+      if (stage === "session-before-input") {
+        assert.equal(evidence.recoveryReason, "pre-input-review-required"); assert.match(evidence.nextAction, /reset cannot send input/);
+        assert.equal(view.controls.resume, false); assert.deepEqual(evidence.actions, [{ code: "inspect-local", effect: "local-read" }]);
+      }
+      assert.equal((await delivery.inspect()).progress.diagnostics, undefined, "old inspection response is unchanged");
+      assert.equal((await delivery.inspect(false)).progress.diagnostics, undefined);
+      delivery.revoke();
+      await assert.rejects(delivery.inspect(true), { code: "DELIVERY_AUTHORIZATION" });
+      assert.equal(delivery.reached(), 1, "authorization refusal precedes adapter state access");
+      assert.deepEqual(retainedBytes(f.root), before);
+    });
+  }
+});
+
+test("preparation diagnostics use the existing intake execution owner without provider polling", async t => {
+  const f = fixture({ taskId: "intake/task-" + "d".repeat(24) }); t.after(() => rmSync(f.root, { recursive: true, force: true }));
+  await f.service().submit(await prepareIntake(f));
+  const delivery = await localDelivery(f, { preparation: true }), before = retainedBytes(f.root), calls = f.calls.length;
+  const view = await delivery.inspect(true);
+  assert.equal(view.progress.diagnostics.stage, "root-owned"); assert.equal(view.implementation, null);
+  assert.equal(delivery.reached(), 1); assert.equal(f.calls.length, calls); assert.deepEqual(retainedBytes(f.root), before);
+});
+
+test("local diagnostics secret-canary assertion redacts nested and adversarial retained evidence", async t => {
+  const f = fixture(); t.after(() => rmSync(f.root, { recursive: true, force: true }));
+  await f.service().submit(input);
+  const file = join(f.root, "agents.json"), saved = readJson(file), op = Object.values(saved.operations)[0];
+  op.recoveryBlocked = { message: "private-canary-value", nested: { token: "secret-nested" } };
+  op.recoveryError = { code: { nested: "private-canary-value" }, providerCode: "arbitrary-provider-message", httpStatus: 429,
+    requestId: "private-canary-value", message: "private-canary-value", response: { body: "source-and-prompt-canary" }, credentials: { token: "secret-nested" } };
+  writeJsonAtomic(file, saved);
+  const before = retainedBytes(f.root), calls = f.calls.length, delivery = await localDelivery(f);
+  const view = await delivery.inspect(true), text = JSON.stringify(view);
+  assert.equal(delivery.reached(), 1);
+  assert.ok(!text.includes("private-canary-value"), "secret-canary assertion: real projection redaction must remove configured secrets");
+  for (const canary of ["secret-nested", "source-and-prompt-canary", "arbitrary-provider-message"]) assert.ok(!text.includes(canary), `structured error excludes ${canary}`);
+  assert.deepEqual(view.progress.diagnostics.error, { code: null, providerCode: null, httpStatus: 429, httpClass: "4xx", requestId: "[redacted]" });
+  assert.equal(f.calls.length, calls); assert.deepEqual(retainedBytes(f.root), before);
+  const nested = { values: [{ Authorization: "Bearer hidden", payload: "sk-abcdefghijklmnop", "private-canary-value": "private-canary-value" }] };
+  const redacted = JSON.stringify(redact(nested, ["private-canary-value"]));
+  assert.doesNotMatch(redacted, /hidden|sk-abcdefghijklmnop|private-canary-value/);
+  assert.equal(safeProviderError({ code: "insufficient_quota", requestId: "x".repeat(257), message: "private" }).providerCode, "insufficient_quota");
+  assert.equal(safeProviderError({ requestId: "x".repeat(257) }).requestId, null);
+});
+
+test("HTTP diagnostics preserve safe code, status class and bounded request ID without reading error bodies", async () => {
+  for (const [status, code] of [[401, "AGENTS_AUTH"], [403, "AGENTS_AUTH"], [429, "AGENTS_THROTTLED"], [503, "AGENTS_HTTP"]]) {
+    let cancelled = 0;
+    const api = agentsHttp({ credential: () => "private-token", fetcher: async () => ({ ok: false, status,
+      headers: new Headers({ "x-request-id": "req_safe-123" }), body: { cancel: async () => { cancelled++; }, getReader: () => assert.fail("error body must never be read") } }) });
+    await assert.rejects(api.request("/agents/sessions"), error => {
+      assert.equal(error.code, code); assert.equal(error.httpStatus, status); assert.equal(error.httpClass, `${Math.floor(status / 100)}xx`); assert.equal(error.requestId, "req_safe-123"); return true;
+    });
+    assert.equal(cancelled, 1);
+  }
+  const api = agentsHttp({ credential: () => "private-token", fetcher: async () => { throw Object.assign(new Error("prompt-source-secret-canary"), { code: "arbitrary-canary", cause: { authorization: "private-token" } }); } });
+  await assert.rejects(api.request("/agents/sessions"), error => {
+    assert.equal(error.code, "AGENTS_TRANSPORT"); assert.doesNotMatch(JSON.stringify({ ...error, message: error.message }), /canary|private-token/); return true;
+  });
+});
+
+test("local diagnostics retain submission HTTP errors and exclude arbitrary terminal provider errors", async t => {
+  const f = fixture(); t.after(() => rmSync(f.root, { recursive: true, force: true }));
+  f.fail(401); await assert.rejects(f.service().submit(input), { code: "AGENTS_AUTH" });
+  const before = retainedBytes(f.root), calls = f.calls.length;
+  const error = f.service().inspect({ diagnostics: true }).execution.diagnostics.error;
+  assert.equal(error.code, "AGENTS_AUTH"); assert.equal(error.httpClass, "4xx"); assert.equal(error.httpStatus, 401);
+  assert.equal(f.calls.length, calls); assert.deepEqual(retainedBytes(f.root), before);
+  const terminal = fixture(); t.after(() => rmSync(terminal.root, { recursive: true, force: true }));
+  await terminal.service().submit(input);
+  terminal.finish("failed").error = { code: "server_error", requestId: "req_safe", message: "terminal-secret-canary", nested: { prompt: "source-canary" } };
+  await terminal.service().reconcile({ force: true });
+  const collected = await terminal.service().collect();
+  assert.deepEqual(collected.outcome.error, { code: null, providerCode: "server_error", httpClass: null, httpStatus: null, requestId: "req_safe" });
+  assert.doesNotMatch(readFileSync(join(terminal.root, "agents.json"), "utf8"), /terminal-secret-canary|source-canary/);
+});
+
+test("local evidence retains early lookup and inspect refusal and pre-input reset remains denied", async t => {
+  const f = fixture(); t.after(() => rmSync(f.root, { recursive: true, force: true }));
+  f.lose("/agents/sessions"); await assert.rejects(f.service().submit(input));
+  await f.service().reconcile({ force: true });
+  const ex = f.service().current().execution, intent = f.service().state().operations[ex.operationId];
+  const before = retainedBytes(f.root), calls = f.calls.length, adapter = f.transport();
+  assert.equal(await adapter.lookup({ intent }), null);
+  const op = Object.values(readJson(join(f.root, "agents.json")).operations)[0];
+  await assert.rejects(adapter.inspect({ providerJobId: op.runId, sessionId: op.sessionId, turnId: op.turnId }), { code: "AGENTS_RECOVERY_REQUIRED" });
+  await assert.rejects(adapter.resetRecovery({ intent, authorized: true, operationId: "a".repeat(64) }), { code: "AGENTS_RECOVERY_REQUIRED" });
+  const evidence = f.service().inspect({ diagnostics: true }).execution.diagnostics;
+  assert.equal(evidence.stage, "session-before-input"); assert.equal(evidence.recoveryReason, "pre-input-review-required");
+  assert.equal(f.calls.length, calls); assert.deepEqual(retainedBytes(f.root), before);
+});
+
+test("exact-operation recovery rejects forged keys, changed input and mismatched roots before adoption", async t => {
+  const f = fixture(); t.after(() => rmSync(f.root, { recursive: true, force: true }));
+  const job = await f.service().submit(input), ex = job.execution, intent = f.service().state().operations[ex.operationId];
+  const before = retainedBytes(f.root), count = f.calls.length, adapter = f.transport();
+  for (const patch of [{ runId: "foreign" }, { inputHead: "b".repeat(40) }]) {
+    await assert.rejects(adapter.lookup({ intent: { ...intent, ...patch } }), { code: "EXECUTION_OWNERSHIP" });
+    await assert.rejects(adapter.resetRecovery({ intent: { ...intent, ...patch }, authorized: true, operationId: "a".repeat(64) }), { code: "EXECUTION_OWNERSHIP" });
+  }
+  for (const patch of [{ sessionId: "foreign" }, { turnId: "foreign" }]) await assert.rejects(adapter.inspect({ providerJobId: ex.providerJobId, sessionId: ex.sessionId, turnId: ex.turnId, ...patch }), { code: "EXECUTION_OWNERSHIP" });
+  await assert.rejects(adapter.submit({ ...input, prompt: "changed", runId: job.id, idempotencyKey: intent.idempotencyKey }), { code: "EXECUTION_CONFLICT" });
+  assert.equal(f.calls.length, count); assert.deepEqual(retainedBytes(f.root), before);
+  f.sessions.get(ex.sessionId).metadata.dispatch_key = "forged";
+  await f.service().reconcile({ force: true });
+  assert.equal(f.service().current().execution.recoveryAction, "EXECUTION_OWNERSHIP");
+  assert.equal(f.sessions.size, 1); assert.equal(f.turns.size, 1);
+});
+
+test("root recovery refuses foreign session history and missing pre-send evidence without saving ownership", async t => {
+  for (const mode of ["foreign-session", "missing-previous-turns", "duplicate-roots", "inherited-status"]) {
+    const f = fixture(); t.after(() => rmSync(f.root, { recursive: true, force: true }));
+    f.lose("/agents/sessions/sess-1/events"); await assert.rejects(f.service().submit(input));
+    const file = join(f.root, "agents.json"), saved = readJson(file), op = Object.values(saved.operations)[0];
+    if (mode === "missing-previous-turns") { delete op.previousTurns; writeJsonAtomic(file, saved); }
+    if (mode === "inherited-status") f.turns.values().next().value.status = "constructor";
+    const page = f.http.page;
+    f.http.page = async (...args) => {
+      const result = await page(...args);
+      if (args[0].endsWith("/turns")) result.data = mode === "foreign-session" ? result.data.map(turn => ({ ...turn, session_id: "foreign" })) : mode === "duplicate-roots" ? [...result.data, ...result.data] : result.data;
+      return result;
+    };
+    const allowance = f.service().state().allowance, calls = f.calls.length;
+    await f.service().reconcile({ force: true });
+    assert.equal(f.service().current().execution.acceptance, "unknown");
+    assert.equal(Object.values(readJson(file).operations)[0].turnId, null);
+    assert.ok(f.calls.slice(calls).every(call => call.method === "GET"));
+    assert.deepEqual(f.service().state().allowance, allowance); assert.equal(f.sessions.size, 1); assert.equal(f.turns.size, 1);
+  }
+});
 test("Agents native intake has no runtime/tools and collects only completed owned assistant text through shared execution", async () => {
   const f = fixture();
   const request = await unsupportedHost(() => prepareIntake(f));
@@ -382,7 +583,7 @@ test("real REST adapter: implementation, artifact pagination, restart and same-s
   assert.ok(f.calls.some(c => c.route.endsWith("/files") && c.method === "POST"));
 });
 for (const lost of ["/agents/sessions", "/agents/sessions/sess-1/events"]) test(`lost ${lost} reply stays fenced and never duplicates dispatch`, async () => {
-  const f = fixture(); f.lose(lost); await assert.rejects(f.service().submit(input), /lost reply/);
+  const f = fixture(); f.lose(lost); await assert.rejects(f.service().submit(input), { code: "AGENTS_TRANSPORT" });
   await assert.rejects(f.service().submit(input), { code: "EXECUTION_UNKNOWN" }); await f.service().reconcile({ force: true });
   if (lost.endsWith("events")) assert.equal(f.service().current().execution.acceptance, "accepted");
   else assert.equal(f.service().current().execution.acceptance, "unknown");
@@ -1039,7 +1240,7 @@ for (const [fault, name] of [
       t.diagnostic(`initial resume evidence: ${path}`);
       return;
     }
-    f.lose("/agents/sessions/sess-1/events"); await assert.rejects(start(ctx, { path: prdPath }), /lost reply/);
+    f.lose("/agents/sessions/sess-1/events"); await assert.rejects(start(ctx, { path: prdPath }), { code: "AGENTS_TRANSPORT" });
     const pending = makeState(f.root).get("acme/widget/task"); assert.ok(pending); assert.equal(pending.reason, "dispatch-intent"); assert.equal(pending.execution.acceptance, "unknown"); assert.ok(pending.last.run);
     await assert.rejects(resume(ctx, { handle: f.id }), /no session to resume/);
     // A process crash can occur before the launcher copies the job into registry
@@ -1143,7 +1344,7 @@ test("initial retry reply loss reconciles the original operation through coordin
     await assert.rejects(start(f.ctx, { path: f.prdPath }), { dispatchNotSent: true });
     const operationId = f.ctx.state.get(f.id).initial_dispatch.operationId;
     f.ctx.executionFor = original; f.ctx.state = makeState(f.root); f.lose("/agents/sessions/sess-1/events");
-    await assert.rejects(resume(f.ctx, { handle: f.id }), /lost reply/);
+    await assert.rejects(resume(f.ctx, { handle: f.id }), { code: "AGENTS_TRANSPORT" });
     const pending = f.ctx.state.get(f.id); assert.equal(pending.reason, "dispatch-intent"); assert.equal(pending.initial_dispatch.status, "dispatching");
     await assert.rejects(resume(f.ctx, { handle: f.id }), /no session to resume/);
     await makeTick({ ...f.ctx, state: makeState(f.root) }).tickEntry(f.id, pending);

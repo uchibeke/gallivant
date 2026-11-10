@@ -22,6 +22,18 @@ test("preparation progress uses saved provider evidence until implementation tak
   assert.equal(taskView(task, { entry: { execution: { providerState: "succeeded" } } }).progress.providerState, "succeeded");
   assert.equal(taskView({}).progress.providerState, null);
 });
+
+test("optional diagnostics remain unavailable for old execution adapters without inferring acceptance", () => {
+  const task = { status: "blocked", preparation: { attempts: [{ execution: { providerState: "status-unknown" } }] } };
+  const before = structuredClone(task);
+  assert.equal(taskView(task).progress.diagnostics, undefined);
+  const view = taskView(task, { diagnostics: true });
+  assert.equal(view.progress.diagnostics.stage, "unavailable");
+  assert.equal(view.progress.diagnostics.sendIntent, null);
+  assert.equal(view.progress.diagnostics.sendAcknowledged, null);
+  assert.ok(Object.values(view.progress.diagnostics.timestamps).every(value => value === null));
+  assert.deepEqual(task, before);
+});
 import { createTaskDelivery } from "../lib/task_delivery.mjs";
 
 test("MCP resource serves the full packaged UI under the shared UTF-8 byte limit", async () => {
