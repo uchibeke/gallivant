@@ -60,6 +60,16 @@ test("every selected registration has a named shard or an exhaustive dynamic res
   assert.throws(() => shardUnits([{ file: "test/a.test.mjs", names: ["too slow"], seconds: 96 }]), /Split that test/);
 });
 
+test("a measured slow residual gets its own lane even when literal cases are cheap", t => {
+  const { root } = fixture(t);
+  const file = "test/a.test.mjs";
+  const units = testUnits(root, [file], { [`${file}:residual`]: 48, [`${file}:case`]: 2 });
+  const lanes = shardUnits(units);
+  assert.equal(lanes.length, 2);
+  assert.deepEqual(lanes[0].units, [{ file, residual: true, exclude: ["a"], seconds: 48 }]);
+  assert.deepEqual(lanes[1].units[0].names, ["a"]);
+});
+
 test("real sharded Node execution retains nested, dynamic, aliased and prefix-overlapping tests exactly once", t => {
   const { root, put } = fixture(t);
   put("package.json", '{"type":"module"}');

@@ -89,7 +89,9 @@ export function testUnits(root, files, weights = {}) {
   const units = [];
   for (const file of files) {
     const { names } = indexFile(readFileSync(resolve(root, file), "utf8"));
-    const seconds = names.reduce((n, name) => n + (weights[name] || 0.03), 2);
+    const caseSeconds = name => weights[name] ?? weights[`${file}:case`] ?? 0.03;
+    const residualSeconds = weights[`${file}:residual`] ?? 2;
+    const seconds = names.reduce((n, name) => n + caseSeconds(name), residualSeconds);
     // Keep ordinary files intact: only measured slow suites need name sharding.
     // Whole-file execution naturally includes dynamic and future registrations.
     if (seconds <= 25 && !names.includes(CPU_TEST)) {
@@ -102,8 +104,8 @@ export function testUnits(root, files, weights = {}) {
       if (existing) existing.names.push(name);
       else clusters.push({ names: [name] });
     }
-    for (const { names: group } of clusters) units.push({ file, names: group, seconds: group.reduce((n, name) => n + (weights[name] || 0.03), 0), isolated: group.includes(CPU_TEST) });
-    units.push({ file, residual: true, exclude: names, seconds: 2 });
+    for (const { names: group } of clusters) units.push({ file, names: group, seconds: group.reduce((n, name) => n + caseSeconds(name), 0), isolated: group.includes(CPU_TEST) });
+    units.push({ file, residual: true, exclude: names, seconds: residualSeconds });
   }
   return units;
 }
