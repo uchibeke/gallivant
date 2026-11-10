@@ -16,7 +16,7 @@ the accessible actual demo recording URL. Do not substitute generated images.
 
 ```sh
 npm run release:preflight -- --config "$PACKAGE_CONFIG" --setup "$SETUP_EVIDENCE"
-npm run release:package -- --config "$PACKAGE_CONFIG" --out "$RELEASE_DIR" --core-version 0.2.0 --source-commit "$SOURCE_COMMIT" --deployment "$DEPLOYMENT_RECORD" --evidence "$LIVE_EVIDENCE"
+npm run release:package -- --config "$PACKAGE_CONFIG" --out "$RELEASE_DIR" --core-version 0.3.0 --source-commit "$SOURCE_COMMIT" --deployment "$DEPLOYMENT_RECORD" --evidence "$LIVE_EVIDENCE"
 npm run release:validate -- --out "$RELEASE_DIR"
 ```
 

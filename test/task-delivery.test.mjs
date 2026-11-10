@@ -69,7 +69,8 @@ test("unknown cost/duration, exhausted allowance and absent durable ledger refus
 test("compatibility handshake binds the pre-1.0 package window and every wire schema", () => {
   const manifest = { coreVersion: CORE_VERSION, operationVersion: 1, taskVersion: 1, executionVersion: 1 };
   assertCompatible(manifest);
-  for (const changed of [{ coreVersion: "1.0.0" }, { coreVersion: "0.3.0" }, { operationVersion: 2 }, { taskVersion: 2 }, { executionVersion: 2 }]) {
+  assertCompatible({ ...manifest, coreVersion: "0.3.1" });
+  for (const changed of [{ coreVersion: "1.0.0" }, { coreVersion: "0.2.1" }, { coreVersion: "0.4.0" }, { coreVersion: "0.3.0-beta.1" }, { operationVersion: 2 }, { taskVersion: 2 }, { executionVersion: 2 }]) {
     assert.throws(() => assertCompatible({ ...manifest, ...changed }), { code: "DELIVERY_VERSION" });
   }
 });

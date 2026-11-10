@@ -39,7 +39,11 @@ execFileSync("npm", ["install", "--ignore-scripts", "--omit=dev", "--no-audit", 
 cpSync(new URL("fixtures/plugin-installed-flow.mjs", import.meta.url), join(consumer, "flow.mjs"));
 let helpers = readFileSync(new URL("helpers.mjs", import.meta.url), "utf8");
 helpers = helpers.replace(/"\.\.\/lib\/(?:state|log|config|identity|harness|block)\.mjs"/g, '"@uchibeke/gallivant/runtime/node/dependencies"');
+// New helper dependencies must resolve from the installed artifact as well;
+// never fall back to a sibling source checkout when the shared helper evolves.
+helpers = helpers.replace(/"\.\.\/lib\//g, '"@uchibeke/gallivant/lib/');
 writeFileSync(join(consumer, "helpers.mjs"), helpers);
+cpSync(new URL("codex-config-fixture.mjs", import.meta.url), join(consumer, "codex-config-fixture.mjs"));
 const draft = readFileSync(new URL("fixtures/task-intake.mjs", import.meta.url), "utf8").replace('"../../lib/task_contract.mjs"', '"@uchibeke/gallivant/runtime/node/dependencies"');
 writeFileSync(join(consumer, "draft.mjs"), draft);
 mkdirSync(join(consumer, "fixtures"));

@@ -92,6 +92,14 @@ Update the version with `npm version patch --no-git-tag-version` (or `minor`),
 which updates `package.json` and `npm-shrinkwrap.json`. Include release notes in
 the PR and merge it after CI passes. Do not bump the version for a retry.
 
+Update `CORE_VERSION` in `lib/task_delivery_contract.mjs` to the same version.
+For a minor release, review and update its pre-1.0 compatibility window, the
+handshake tests and the packaging examples in [task delivery](task-delivery.md)
+and [release qualification](release-qualification.md). Other minor versions
+require explicit migration; keep the exact artifact pin and wire-schema guards.
+Run the full portability suite, including plugin packaging and release assembly,
+before publishing: the npm install smoke alone does not exercise those builders.
+
 The workflow follows the guardrails repository's pattern: validate the release
 ref, test before publishing, and permit recovery without replacing published
 versions. This single-package project does not need its multi-registry dispatcher.
