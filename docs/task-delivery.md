@@ -170,6 +170,11 @@ empty-input calls. Restart discovery to include newly granted IDs before a curso
 APort owns transport-level OAuth discovery/challenges, origin/audience validation,
 credential rotation, request limits, quota, retention and production authorization.
 
+`inspect` optionally accepts `diagnostics: true` for versioned saved hosted
+recovery evidence. This local read never polls or resets the provider. See
+[hosted recovery diagnostics](hosted-recovery-diagnostics.md) for stage codes,
+explicit recovery actions and old/new schema compatibility.
+
 Full UI views include questions, brief, harness/cost/setup, allowance, progress,
 bounded logs, artifact IDs/hashes, source snapshots, PR URLs and supported controls.
 They remove configured private path prefixes and redact resolved secrets;
