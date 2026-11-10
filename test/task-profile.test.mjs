@@ -1998,6 +1998,32 @@ test("landing candidates preserve context after long non-instruction prefixes", 
   assert.deepEqual(deliveryScreen("landed ".repeat(1024) + suffix, PROFILE.target), deliveryScreen(suffix, PROFILE.target), "the unpunctuated CI input keeps its merge conflict");
 });
 
+test("family screening preserves late writes, aliases and literal boundaries after repeated run instructions", () => {
+  const prefix = "Run tests. ".repeat(256);
+  const families = [
+    ["pull_request_lifecycle", ["Close the pull-request.", "PRs must be closed.", "Run `gh pr update-branch 12`."], "Add a button to close the PR."],
+    ["workflow_mutation", ["Cancel the Actions run 12.", "Workflow runs must be rerun.", "Run `gh\nrun cancel 12`.", "Run gh workflow disable checks.yml."], "Run gh run view 12."],
+    ["codespace_mutation", ["Delete Codespaces.", "Codespaces must be stopped.", "Run `gh cs stop -c dev`.", "Run gh cſ stop -c dev."], 'Run gh codespace list --template "gh codespace delete --all".'],
+    ["project_mutation", ["Delete GitHub projects.", "GitHub projects must be closed.", "Run `gh project item-delete 1 --id item`."], "Run gh project item-list 1."],
+    ["label_mutation", ["Delete repository labels.", "Repo labels must be removed.", "Run `gh label clone acme/source`."], 'Run gh label list --template "gh label delete urgent".'],
+    ["gist_mutation", ["Delete gists.", "Gists must be deleted.", "Run `gh gist new report.txt`.", "Delete giſts."], "Run gh gist clone abc."],
+  ];
+  for (const [term, writes, read] of families) {
+    for (const ending of writes) {
+      for (const input of [ending, prefix + ending]) {
+        const screen = deliveryScreen(input, PROFILE.target);
+        assert.equal(screen.tier, "question", input);
+        assert.ok(screen.escalated.includes(term), `${ending} retains ${term}`);
+      }
+    }
+    for (const ending of [read, `Show "${writes[0]}" as an example.`]) {
+      const screen = deliveryScreen(prefix + ending, PROFILE.target);
+      assert.ok(!screen.escalated.includes(term), `${ending} cannot supply ${term}`);
+      assert.deepEqual(screen, deliveryScreen(ending, PROFILE.target), "unrelated run instructions cannot alter command/data boundaries");
+    }
+  }
+});
+
 test("the screen and mapping stay fast at the request and mapping limits", () => {
   const wrapped = "Do not\n" + ("context ".repeat(31).trim() + "\n").repeat(126) + "open a pull request";
   assert.ok(Buffer.byteLength(wrapped) <= MAX_INPUT_BYTES);
