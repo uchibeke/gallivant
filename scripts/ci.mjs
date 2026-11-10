@@ -21,9 +21,12 @@ async function runLane(units, deadline) {
   }
   const env = { ...process.env };
   delete env.NODE_TEST_CONTEXT; // Explicit child runners cannot inherit a parent's internal test protocol.
+  env.FORCE_COLOR = "0";
   for (const group of files.values()) {
     const names = group.residual ? group.exclude : group.names;
-    const args = ["--test", "--test-concurrency=1"];
+    // Node 22 and 24 do not use the same default reporter. Verify one stable
+    // output contract on both release lines.
+    const args = ["--test", "--test-concurrency=1", "--test-reporter=tap"];
     if (names.length) args.push(`${group.residual ? "--test-skip-pattern" : "--test-name-pattern"}=${patternFor(names)}`);
     args.push(group.file);
     const remaining = deadline - Date.now();
