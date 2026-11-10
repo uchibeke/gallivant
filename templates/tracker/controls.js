@@ -76,11 +76,19 @@ if (runControls) {
       if (!active()) return;
       const control = data.control;
       if (!control) throw new Error("Request status is unavailable. Reload before retrying.");
+      pending = control.status === "queued" || control.status === "applying";
       status.setAttribute?.("data-state", control.status === "failed" ? "error" : control.status === "applied" ? "success" : "pending");
       status.textContent = `${label(control.action)} — ${control.status}: ${control.message || "Waiting for the daemon and any active run."}`;
-      if (control.status === "queued" || control.status === "applying") { lifecycle.schedule(poll, 3000); return; }
-      pending = false;
+      if (pending) { syncButtons(); lifecycle.schedule(poll, 3000); return; }
+      // Availability belongs to the server's current ownership/capability snapshot.
+      // Pending flags in the initial HTML are not permanent authorization facts.
+      for (const button of buttons) button.dataset.available = String(data.controls?.[button.dataset.action] === true);
       closed = data.state === "done";
+      note.disabled = closed || data.controls?.message !== true;
+      if (interrupt) {
+        interrupt.disabled = pending || closed || data.controls?.interrupt !== true;
+        if (interrupt.disabled) interrupt.checked = false;
+      }
       if (data.lastMessage?.note) {
         lastMessage.querySelector("pre").textContent = data.lastMessage.note;
         lastMessage.hidden = false;
