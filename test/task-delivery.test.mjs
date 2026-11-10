@@ -22,6 +22,18 @@ test("preparation progress uses saved provider evidence until implementation tak
   assert.equal(taskView(task, { entry: { execution: { providerState: "succeeded" } } }).progress.providerState, "succeeded");
   assert.equal(taskView({}).progress.providerState, null);
 });
+
+test("optional diagnostics remain unavailable for old execution adapters without inferring acceptance", () => {
+  const task = { status: "blocked", preparation: { attempts: [{ execution: { providerState: "status-unknown" } }] } };
+  const before = structuredClone(task);
+  assert.equal(taskView(task).progress.diagnostics, undefined);
+  const view = taskView(task, { diagnostics: true });
+  assert.equal(view.progress.diagnostics.stage, "unavailable");
+  assert.equal(view.progress.diagnostics.sendIntent, null);
+  assert.equal(view.progress.diagnostics.sendAcknowledged, null);
+  assert.ok(Object.values(view.progress.diagnostics.timestamps).every(value => value === null));
+  assert.deepEqual(task, before);
+});
 import { createTaskDelivery } from "../lib/task_delivery.mjs";
 
 test("MCP resource serves the full packaged UI under the shared UTF-8 byte limit", async () => {
@@ -69,7 +81,8 @@ test("unknown cost/duration, exhausted allowance and absent durable ledger refus
 test("compatibility handshake binds the pre-1.0 package window and every wire schema", () => {
   const manifest = { coreVersion: CORE_VERSION, operationVersion: 1, taskVersion: 1, executionVersion: 1 };
   assertCompatible(manifest);
-  for (const changed of [{ coreVersion: "1.0.0" }, { coreVersion: "0.3.0" }, { operationVersion: 2 }, { taskVersion: 2 }, { executionVersion: 2 }]) {
+  assertCompatible({ ...manifest, coreVersion: "0.3.1" });
+  for (const changed of [{ coreVersion: "1.0.0" }, { coreVersion: "0.2.1" }, { coreVersion: "0.4.0" }, { coreVersion: "0.3.0-beta.1" }, { operationVersion: 2 }, { taskVersion: 2 }, { executionVersion: 2 }]) {
     assert.throws(() => assertCompatible({ ...manifest, ...changed }), { code: "DELIVERY_VERSION" });
   }
 });

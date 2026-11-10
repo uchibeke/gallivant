@@ -19,7 +19,7 @@ runner.
 
 ## Installed exports
 
-Core `0.2.0`, task schema `1`, execution schema `1`, operation schema `1`.
+Core `0.3.0`, task schema `1`, execution schema `1`, operation schema `1`.
 The candidate digest comes from the emitted `runtime.json`/`manifest.json`;
 pin the artifact produced from the eventual human-merged commit, not this branch.
 
@@ -170,6 +170,11 @@ empty-input calls. Restart discovery to include newly granted IDs before a curso
 APort owns transport-level OAuth discovery/challenges, origin/audience validation,
 credential rotation, request limits, quota, retention and production authorization.
 
+`inspect` optionally accepts `diagnostics: true` for versioned saved hosted
+recovery evidence. This local read never polls or resets the provider. See
+[hosted recovery diagnostics](hosted-recovery-diagnostics.md) for stage codes,
+explicit recovery actions and old/new schema compatibility.
+
 Full UI views include questions, brief, harness/cost/setup, allowance, progress,
 bounded logs, artifact IDs/hashes, source snapshots, PR URLs and supported controls.
 They remove configured private path prefixes and redact resolved secrets;
@@ -218,7 +223,7 @@ Before wake-up, migrate/pin the exact runtime artifact. Supply the emitted
 The coordinator refuses a different active-job digest. Compatible patches keep
 task/provider/brief identities; drain jobs before staging a different artifact.
 No running code is silently upgraded. The public API's pre-1.0 compatibility
-window is `0.2.x`, with operation/task/execution wire schemas all `1`; other
+window is `0.3.x`, with operation/task/execution wire schemas all `1`; other
 versions need migration.
 
 The portable contracts/views/wake envelope have no Node dependencies. The complete
@@ -267,9 +272,9 @@ changes and remain development fixtures:
 npm ci --ignore-scripts
 node bin/package-plugin.mjs --config /private/aport-package.json --validate-public
 npm run package:plugin -- --config /private/aport-package.json --out /private/candidate \
-  --core-version 0.2.0 --source-commit <40-character-merged-commit>
+  --core-version 0.3.0 --source-commit <40-character-merged-commit>
 # For development only, add --internal; keep fixture:true in the config.
-npm install --ignore-scripts --prefix /private/candidate-runtime /private/candidate/uchibeke-gallivant-0.2.0.tgz
+npm install --ignore-scripts --prefix /private/candidate-runtime /private/candidate/uchibeke-gallivant-0.3.0.tgz
 node /private/candidate-runtime/node_modules/@uchibeke/gallivant/bin/task-delivery-state.mjs check \
   --home /durable/preview --manifest /private/candidate/runtime.json
 node /private/previous-runtime/node_modules/@uchibeke/gallivant/bin/task-delivery-state.mjs backup \
