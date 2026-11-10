@@ -81,6 +81,13 @@ GitHub release. Until then, use the documented CI bootstrap credential route.
 
 ## Release a version
 
+Merging a PR to `main` does not bump the version, create a tag or publish a
+package. There is no scheduled release or automatic version-bump PR. Prepare a
+version-bump PR, wait for its checks, merge it, then trigger the workflow and
+approve the protected `npm` environment. A newer source checkout with an already
+published version cannot refresh that npm version: the tag and tarball guards
+deliberately require the original commit and bytes.
+
 Update the version with `npm version patch --no-git-tag-version` (or `minor`),
 which updates `package.json` and `npm-shrinkwrap.json`. Include release notes in
 the PR and merge it after CI passes. Do not bump the version for a retry.
@@ -93,8 +100,8 @@ Choose one trigger:
 
 ```sh
 # From an up-to-date main checkout; replace the example with package.json's version.
-git tag -a v0.2.1 -m 'Release 0.2.1'
-git push origin v0.2.1
+git tag -a v0.3.0 -m 'Release 0.3.0'
+git push origin v0.3.0
 
 # Or dispatch against main; the workflow uses main's package version.
 gh workflow run release.yml --repo uchibeke/gallivant --ref main
