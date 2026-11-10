@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { checkGh, checkHarness, checkSignIn, checkVersion, probeAll, probeFix, allOk } from "../lib/probe.mjs";
+import { providerPresentation } from "../lib/tracker/provider_presentation.mjs";
 import { up } from "../lib/commands/up.mjs";
 import { makeState, newEntry, STATES } from "../lib/state.mjs";
 import { makeGh } from "../lib/gh.mjs";
@@ -29,7 +30,10 @@ test("supported harnesses pass only when signed in, and authentication failures 
     const probes = await probeAll({ config, gh: fakeGh() });
     assert.equal(allOk(probes), signedIn);
     assert.equal(probes.codex.ok, signedIn);
-    if (!signedIn) assert.equal(probeFix("codex", probes.codex), "codex login");
+    if (!signedIn) {
+      assert.equal(probeFix("codex", probes.codex), "codex login");
+      assert.equal(providerPresentation(probes.codex).status, "credentials-unavailable");
+    }
     assert.deepEqual(readFileSync(join(home, "codex-calls.jsonl"), "utf8").trim().split("\n").map(JSON.parse), [["--version"], ["login", "status"]]);
   }
 });

@@ -1,6 +1,7 @@
 import { test, before, after } from "node:test";
 import assert from "node:assert/strict";
 import { appendFileSync, readFileSync, writeFileSync } from "node:fs";
+
 import { join } from "node:path";
 import { chromium } from "playwright";
 import AxeBuilder from "@axe-core/playwright";
@@ -188,7 +189,7 @@ test("malicious rendered text is inert and CSP blocks inline script and external
   const { page, origin } = await open(t, { hostile: true });
   for (const base of ["", "/gallivant"]) {
     await page.goto(`${origin}${base}/`);
-    assert.ok((await page.locator("main").textContent()).includes(MALICIOUS));
+    assert.ok(!(await page.locator("main").textContent()).includes(MALICIOUS), "summary excludes arbitrary source prose");
     assert.equal(await page.locator("img, [onerror]").count(), 0);
     await page.goto(origin + runPath(base));
     await page.waitForFunction(() => document.querySelector("#log").textContent.includes("<img"));
@@ -201,6 +202,73 @@ test("malicious rendered text is inert and CSP blocks inline script and external
     });
     assert.deepEqual(blocked, { injected: false, externalBlocked: true });
   }
+});
+
+test("overview and detail show the same canonical presentation as the status API", { timeout: 30_000 }, async t => {
+  const { page, origin, state, context } = await open(t);
+  state.update(TASK, { state: "ready-for-human", reason: null, base: "main", cursor: { fixed_sha: "fixture-head" },
+    last: { run: RUN, exit: 0, at: NOW }, task: { completion: { version: 1, target: "integrated" } },
+    completionEvidence: { delivery: { repository: "acme/atlas", pr: 42, head: "fixture-head", base: "main", gate: { allow: true } } } });
+  const saved = JSON.stringify(state.entries());
+  for (const base of ["", "/gallivant"]) {
+    const snapshot = await (await context.request.get(`${origin}${base}/api/status`)).json();
+    const row = snapshot.needs_you.find(row => row.id === TASK), p = row.presentation;
+    assert.equal(row.label, "ready", "legacy API code remains available");
+    assert.equal(p.readiness.status, "awaiting_integration");
+    await page.goto(`${origin}${base}/`);
+    const overview = await page.locator("main").textContent();
+    for (const value of [p.phase.label, p.actor, p.readiness.status, p.delivery.target, p.nextAction]) assert.ok(overview.includes(value), value);
+    await page.goto(origin + runPath(base));
+    for (const [key, value] of [["phase", p.phase.label], ["actor", p.actor], ["readiness", p.readiness.status],
+      ["delivery target", p.delivery.target], ["last meaningful activity", p.activity.at], ["next action", p.nextAction]]) {
+      assert.equal(await page.locator(`[data-fact="${key}"]`).textContent(), value);
+    }
+    assert.match(await page.locator("main").textContent(), /selected attempt duration20m/);
+  }
+  assert.equal(JSON.stringify(state.entries()), saved, "presentation GETs cannot write state");
+});
+
+test("malformed review observations remain bounded and unresolved ownership disables writing controls", { timeout: 30_000 }, async t => {
+  const { page, origin, state, context } = await open(t);
+  state.update(TASK, { state: "running", reason: null, last: { run: RUN, exit: null },
+    reviewPolicy: { version: 1, mode: "first-party-required", route: { name: "codex", fingerprint: "f".repeat(64), qualification: "fixture" }, external: null, specialist: null, zeroChecks: true, limits: { timeoutMs: 900000, maxJobs: 2048, retries: 2, budgetUsd: 100, maxInputBytes: 100000 } },
+    firstPartyReview: { pieces: {}, retryAt: "invalid", status: "private-provider-payload".repeat(1000), error: MALICIOUS } });
+  await page.goto(origin + runPath(""));
+  assert.equal(await page.locator('[data-fact="phase"]').textContent(), "Awaiting reconciliation");
+  for (const action of ["resume", "message"]) assert.equal(await page.locator(`[data-action="${action}"]`).isDisabled(), true);
+  const review = await context.request.get(`${origin}/api/run/review-activity?id=${encodeURIComponent(TASK)}`);
+  assert.equal(review.status(), 200); const body = await review.text();
+  assert.ok(body.length < 1000); assert.doesNotMatch(body, /private-provider-payload|onerror/);
+  assert.equal(await page.locator('[data-fact="ownership"]').textContent(), "reconciling");
+});
+
+test("1000 tasks use bounded real DOM pages with no probe, host, model or state writes", { timeout: 60_000 }, async t => {
+  const { page, origin, home, ctx } = await open(t, { empty: true });
+  const entries = Object.fromEntries(Array.from({ length: 1000 }, (_, i) => [`acme/atlas/task-${i}`, {
+    repo: "acme/atlas", state: "pr-open", harness: "codex", iteration: 0, created_at: NOW,
+  }]));
+  const path = join(home, "state.json");
+  writeFileSync(path, JSON.stringify({ version: 1, entries, chains: {} }));
+  const saved = readFileSync(path, "utf8");
+  let runReads = 0;
+  const forbidden = () => assert.fail("presentation must not invoke external services or dispatch");
+  ctx.runnerFor = () => ({ current: () => { runReads++; return null; }, start: forbidden, kill: forbidden });
+  ctx.gh = new Proxy({}, { get: () => forbidden }); ctx.git = ctx.gh;
+  ctx.providerHealth = { refresh: forbidden }; ctx.probe = forbidden;
+  for (const base of ["", "/gallivant"]) {
+    runReads = 0;
+    await page.goto(`${origin}${base}/?theme=light`);
+    assert.equal(runReads, 1000, "one existing saved-run read per task; projection adds none");
+    assert.equal(await page.locator("tbody tr").count(), 100);
+    assert.equal(await page.locator("#side .row").count(), 100);
+    assert.ok(await page.locator("body").evaluate(el => el.outerHTML.length) < 300000);
+    await page.getByRole("link", { name: "Next tasks", exact: true }).click();
+    assert.equal(new URL(page.url()).searchParams.get("offset"), "100");
+    assert.match(await page.locator("tbody tr").first().textContent(), /task-100/);
+    assert.equal(new URL(page.url()).searchParams.get("theme"), "light");
+    await page.goBack(); assert.match(await page.locator("tbody tr").first().textContent(), /task-0/);
+  }
+  assert.equal(readFileSync(path, "utf8"), saved);
 });
 
 test("protected requests reject cross-origin and missing tokens; real controls queue only fixture state", { timeout: 45_000 }, async t => {
@@ -243,6 +311,58 @@ test("protected requests reject cross-origin and missing tokens; real controls q
   }
 });
 
+
+test("pages opened during queued or applying messages restore current controls after failure", { timeout: 45_000 }, async t => {
+  for (const live of [false, true]) {
+    const { page, origin, state, ctx } = await open(t, { live });
+    if (live) {
+      const runnerFor = ctx.runnerFor;
+      ctx.runnerFor = id => { const runner = runnerFor(id); return { ...runner, current: () => ({ ...runner.current(), running: id === TASK }) }; };
+      state.update(TASK, { last: { run: RUN, exit: null } });
+    }
+    for (const base of ["", "/gallivant"]) for (const status of ["queued", "applying"]) {
+      state.update(TASK, { control: { id: "fixture-pending", action: "message", status, note: "Saved failed message." } });
+      await page.goto(origin + runPath(base));
+      assert.equal(await page.locator("#run-note").isDisabled(), true);
+      if (live) assert.equal(await page.locator("#interrupt-run").isDisabled(), true);
+      for (const button of await page.locator("#run-controls button[data-action]").all()) assert.equal(await button.isDisabled(), true);
+      state.update(TASK, { control: { ...state.get(TASK).control, status: "failed", message: "Fixture request failed." } });
+      await page.waitForFunction(() => document.querySelector("#control-status").dataset.state === "error");
+      assert.equal(await page.locator("#run-note").isDisabled(), false);
+      if (live) assert.equal(await page.locator("#interrupt-run").isDisabled(), false);
+      assert.match(await page.locator("#message-help").textContent(), /Continues the same session with your correction/);
+      assert.equal(await page.locator("#run-note").inputValue(), "Saved failed message.");
+      for (const button of await page.locator("#run-controls button[data-action]").all()) assert.equal(await button.isDisabled(), false);
+      assert.equal(await page.locator("#control-refresh").isVisible(), true);
+      assert.equal(page.url(), origin + runPath(base), "draft recovery preserves the selected attempt and query");
+      await page.locator("#run-note").fill("Edited retry message.");
+      const accepted = page.waitForResponse(r => r.request().method() === "POST");
+      await page.getByRole("button", { name: "Send message", exact: true }).click();
+      assert.equal((await accepted).status(), 202);
+      assert.equal(state.get(TASK).control.note, "Edited retry message.");
+    }
+  }
+});
+
+test("settled requests refresh controls from current ownership rather than the selected historical attempt", { timeout: 45_000 }, async t => {
+  const { page, origin, state } = await open(t);
+  const original = state.get(TASK);
+  for (const base of ["", "/gallivant"]) for (const change of [
+    { state: "done" }, { session: null }, { last: { run: RUN, exit: null } },
+    { execution: { version: 1, provider: "fixture", transport: "remote", acceptance: "unknown", providerState: "status-unknown" } },
+  ]) {
+    state.put(TASK, { ...original, control: { id: "fixture-pending", action: "message", status: "applying", note: "Preserve this message." } });
+    await page.goto(origin + runPath(base));
+    state.update(TASK, { ...change, control: { ...state.get(TASK).control, status: "failed", message: "Fixture ownership changed." } });
+    await page.waitForFunction(() => document.querySelector("#control-status").dataset.state === "error").catch(async error => {
+      assert.fail(`${JSON.stringify(change)}: ${await page.locator("#control-status").textContent()}; ${error.message}`);
+    });
+    assert.equal(await page.locator("#run-note").inputValue(), "Preserve this message.");
+    assert.equal(await page.locator("#run-note").isDisabled(), true);
+    for (const action of ["message", "resume"]) assert.equal(await page.locator(`[data-action="${action}"]`).isDisabled(), true);
+    assert.equal(await page.locator('[data-action="cancel"]').isDisabled(), change.state === "done");
+  }
+});
 
 test("read failures preserve content and drafts; page exit stops refresh", { timeout: 30_000 }, async t => {
   const { page, origin, state } = await open(t);

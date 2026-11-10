@@ -20,7 +20,7 @@ test("answer tool description exposes the canonical answer batch limits", () => 
 });
 
 test("public contract, view and coordinator entries bundle for browsers without Node shims", async () => {
-  for (const name of ["task_delivery_contract", "task_delivery_view", "coordinator", "task_profile"]) {
+  for (const name of ["task_delivery_contract", "task_delivery_view", "coordinator", "task_profile", "tracker/presentation"]) {
     const result = await build({ entryPoints: [fileURLToPath(new URL(`../lib/${name}.mjs`, import.meta.url))], platform: "browser", format: "esm", bundle: true, write: false, logLevel: "silent" });
     const bundled = await import(`data:text/javascript;base64,${Buffer.from(result.outputFiles[0].text).toString("base64")}`);
     if (name === "task_delivery_contract") {
@@ -33,6 +33,12 @@ test("public contract, view and coordinator entries bundle for browsers without 
       // The vendored validator must stay free of Node dependencies.
       assert.equal(bundled.deliveryScreen("Merge it after CI passes.").tier, "question");
       assert.throws(() => bundled.validateDeliveryProfile({ version: 99 }), { code: "TASK_PROFILE_UNSUPPORTED" });
+    }
+    if (name === "tracker/presentation") {
+      const p = bundled.taskPresentation({ entry: { state: "pr-open", reviewPolicy: { version: 1, mode: "first-party-required" },
+        reviewBinding: "current", reviewHead: "head", cursor: { fixed_sha: "head" }, firstPartyReview: { status: "running", binding: "current" } } });
+      assert.equal(p.phase.id, "independent_review");
+      assert.equal(p.review.status, "running");
     }
   }
 });

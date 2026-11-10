@@ -1105,6 +1105,7 @@ test("completion target is creation-only, survives canonical start and conflicts
 
 test("scoped delivery API carries the selected milestone through durable prepare/start and saved projections", async () => {
   const w = world(), scope = { tenant: "alice", account: "alice", environment: "preview", region: "US", scopes: ["task-delivery:read", "task-delivery:write"], repositories: ["widget"] };
+  w.ctx.clock = makeClock(); // Compare the same snapshot on operation replay.
   const manifest = { coreVersion: CORE_VERSION, coreSha256: "a".repeat(64), operationVersion: 1, taskVersion: 1, executionVersion: 1 };
   migrateRuntimeState({ home: w.home, manifest });
   let scheduled = 0;
@@ -1116,6 +1117,12 @@ test("scoped delivery API carries the selected milestone through durable prepare
   const prepared = await delivery.dispatch("prepare", input, "alice");
   assert.equal(prepared.status, "ready"); assert.equal(prepared.completion.target, "integrated");
   assert.deepEqual(await delivery.dispatch("prepare", input, "alice"), prepared);
+  w.ctx.clock.advance(1000);
+  const refreshed = await delivery.dispatch("inspect", { taskId: prepared.taskId }, "alice");
+  assert.notEqual(refreshed.presentation.freshness.snapshotAt, prepared.presentation.freshness.snapshotAt);
+  assert.deepEqual(refreshed.presentation.activity, prepared.presentation.activity);
+  assert.equal(refreshed.presentation.since, prepared.presentation.since);
+  assert.deepEqual(refreshed.presentation.phase, prepared.presentation.phase);
   await assert.rejects(delivery.dispatch("prepare", { ...input, completion: { target: "delivery_ready" } }, "alice"), { code: "DELIVERY_CONFLICT" });
   const start = { taskId: prepared.taskId, expectedRevision: prepared.revision, operationId: "approved-start", run: true };
   const started = await delivery.dispatch("start", start, "alice");
@@ -4922,6 +4929,7 @@ test("a profile conflict pauses before any harness run until the owner resolves 
 
 test("delivery clients can answer eight nested clarification questions after restart and exact replay", async () => {
   const w = world(), scope = { tenant: "alice", account: "alice", environment: "preview", region: "US", scopes: ["task-delivery:read", "task-delivery:write"], repositories: ["widget"] };
+  w.ctx.clock = makeClock(); // Compare the same snapshot on operation replay.
   const manifest = { coreVersion: CORE_VERSION, coreSha256: "a".repeat(64), operationVersion: 1, taskVersion: 1, executionVersion: 1 };
   migrateRuntimeState({ home: w.home, manifest });
   let calls = 0;

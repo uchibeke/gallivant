@@ -52,6 +52,7 @@ function world({ entries = {}, daemon = null, runs = {} } = {}) {
   if (daemon) writeJsonAtomic(join(home, "daemon.json"), { identity: processIdentity(daemon.pid), ...daemon });
   const ctx = {
     home,
+    clock: makeClock(),
     config: { ...CONFIG, home },
     state,
     log: silentLog,
@@ -73,7 +74,7 @@ test("a ready entry lands in needs_you too, because it is a person who merges it
   const w = world({ entries: { "acme/widget/widget-export": entryAt({ state: STATES.ready }) } });
   const m = model(w.ctx);
 
-  assert.deepEqual(m.needs_you.map(r => [r.label, r.detail]), [["ready", "legacy review policy not yet snapshotted; receipt accepted"]]);
+  assert.deepEqual(m.needs_you.map(r => [r.label, r.detail]), [["ready", "legacy review policy not yet snapshotted; completion evidence unverified"]]);
   assert.equal(m.needs_you[0].url, "https://github.com/acme/widget/pull/142", "the link a person opens to merge is in the row");
 });
 
@@ -87,7 +88,7 @@ test("mixed-host status keeps first-party and legacy no-review disclosures with 
     w.ctx.config.repos = ["acme/widget", "bitbucket.org/acme/widget"];
     const m = model(w.ctx), text = render(m);
     assert.equal(m.repositoryGuidance.length, 0);
-    assert.doesNotMatch(text, /task dispatch is disabled/); assert.match(text, /RECEIPT NOT CHECKED/);
+    assert.doesNotMatch(text, /task dispatch is disabled/); assert.match(text, /Receipt: skipped/);
     assert.match(m.needs_you[0].detail, legacy ? /legacy no-review/ : /first-party review.*no Git-host bot approval/);
     assert.doesNotMatch(m.needs_you[0].detail, /reviewer clear|review clearance/);
     if (!legacy) { const file = join(w.home, "mixed-review-status.txt"); writeFileSync(file, text); t.diagnostic(`mixed review status evidence: ${file}`); }
@@ -186,9 +187,9 @@ test("the rendered text carries each entry's handle, label and round, under the 
 
   assert.match(text, /^gallivant {2}daemon up since 1m ago {2}last tick 1m ago {2}next in 60s {2}gh ok$/m);
   assert.match(text, /^NEEDS YOU$/m);
-  assert.match(line("needs-human"), /widget#142\s+needs-human\s+conflict\s+round 1\/3\s+1m ago\s+gallivant why widget#142/, "with the command that explains it");
+  assert.match(line("Needs attention"), /widget#142\s+Needs attention conflict;.*Readiness: blocked;.*round 1\/3\s+1m ago\s+gallivant why widget#142/, "with the command that explains it");
   assert.match(text, /^RUNNING$/m);
-  assert.match(line("waiting"), /widget#143\s+waiting\s+on reviewer\s+round 2\/3\s+1m ago/);
+  assert.match(line("Phase unknown"), /widget#143\s+Phase unknown Actor: unknown;.*round 2\/3\s+1m ago/);
   assert.ok(text.indexOf("NEEDS YOU") < text.indexOf("RUNNING"), "what needs a person comes first");
 });
 
@@ -200,8 +201,8 @@ test("a down daemon is the first thing the text says, with the command that star
 test("done entries are hidden unless --all asks for them", () => {
   const w = world({ entries: { "acme/widget/widget-export": entryAt({ state: STATES.done }) } });
   const m = model(w.ctx);
-  assert.ok(!/^DONE$/m.test(render(m, { clock: makeClock() })));
-  assert.match(render(m, { all: true, clock: makeClock() }), /^DONE$/m);
+  assert.ok(!/^CLOSED OR ENDED$/m.test(render(m, { clock: makeClock() })));
+  assert.match(render(m, { all: true, clock: makeClock() }), /^CLOSED OR ENDED$/m);
 });
 
 test("--json prints the model itself, so a script and the text view cannot disagree", () => {
