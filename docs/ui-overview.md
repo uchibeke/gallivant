@@ -79,10 +79,11 @@ cover both themes, 360/390/768/1280/1440 CSS-pixel widths, landscape, 200% conte
 zoom, keyboard, axe WCAG AA checks, 1,000-task pagination/search bounds, slow and
 failed reads, selection, focus, disclosure, scroll, and lifecycle cleanup.
 Cross-platform font rasterization is not a pixel gate. The existing CI pins its
-browser on Ubuntu; Firefox and WebKit qualification remains the final milestone.
+browser environment; [final qualification](ui-qualification.md) adds Firefox and
+WebKit journeys and pinned Chromium visual comparisons.
 
 Restart the tracker server after upgrading its assets. There is no state-schema
 change. To roll back, revert the overview code/assets and its additive
 presentation fields together; task state and saved execution evidence remain
-compatible. Browser tools, fixtures, and captures remain excluded from the
-published runtime package.
+compatible. Browser tools and fixtures stay development-only; approved captures
+ship with the public guides.

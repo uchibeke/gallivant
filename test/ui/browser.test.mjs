@@ -258,7 +258,9 @@ test("1000 tasks use bounded real DOM pages with no probe, host, model or state 
   ctx.providerHealth = { refresh: forbidden }; ctx.probe = forbidden;
   for (const base of ["", "/gallivant"]) {
     runReads = 0;
+    const started = performance.now();
     await page.goto(`${origin}${base}/?theme=light`);
+    t.diagnostic(`1000 tasks ${base || "/"}: navigation ${(performance.now() - started).toFixed(1)}ms; ${process.platform}/${process.arch}, ${process.version}, Chromium ${browser.version()}`);
     assert.equal(runReads, 1000, "one existing saved-run read per task; projection adds none");
     assert.equal(await page.locator("[data-task-id]").count(), 25);
     assert.equal(await page.locator("#side .row").count(), 0);

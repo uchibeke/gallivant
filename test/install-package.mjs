@@ -7,6 +7,8 @@ import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, readdirSync, rmSyn
 import { tmpdir } from "node:os";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
+import { chromium } from "playwright";
+import { runtimeFile } from "../lib/plugin_package.mjs";
 const source = realpathSync(fileURLToPath(new URL("..", import.meta.url)));
 const root = realpathSync(mkdtempSync(join(tmpdir(), "install-consumer-")));
 const run = (cmd, args, options = {}) => execFileSync(cmd, args, { encoding: "utf8", timeout: 120_000, stdio: ["ignore", "pipe", "pipe"], ...options });
@@ -19,7 +21,20 @@ try {
   for (const name of ["tokens.css", "primitives.css", "shell.css", "tracker.css", "lifecycle.js", "shell.js", "control-drafts.js", "controls.js", "tracker.js", "overview.js", "overview.css", "workspace.js", "workspace.css", "activity-render.js", "chains.js", "chains.css", "intake.js", "intake.css", "health.css"])
     assert.ok(packed.files.some(f => f.path === `templates/tracker/${name}`), `runtime asset: ${name}`);
   for (const file of packed.files)
-    assert.ok(!/(?:playwright|axe-core|chromium|docs\/ui\/previews|test-results)/.test(file.path), `development-only payload: ${file.path}`);
+    assert.ok(!/(?:playwright|axe-core|chromium|firefox|webkit|test-results|fixtures)/.test(file.path), `development-only payload: ${file.path}`);
+  const packedPaths = new Set(packed.files.map(f => f.path));
+  for (const path of packedPaths) assert.ok(runtimeFile(path), `shared release allowlist: ${path}`);
+  for (const name of ["final-overview-dark", "final-overview-light", "final-task-mobile", "final-chain-desktop"])
+    assert.ok(packedPaths.has(`docs/ui/previews/${name}.png`), `approved guide asset: ${name}`);
+  // Every relative image linked from a shipped guide must exist in the tarball.
+  for (const file of packed.files.filter(f => f.path.endsWith(".md"))) {
+    const markdown = readFileSync(join(source, file.path), "utf8");
+    for (const [, target] of markdown.matchAll(/\]\(([^\s)]+\.(?:png|svg|jpe?g))(?:\s+[^)]*)?\)/g)) {
+      if (/^https?:/.test(target)) continue;
+      const asset = new URL(target, `https://package.invalid/${file.path}`).pathname.slice(1);
+      assert.ok(packedPaths.has(asset), `packaged guide ${file.path} requires ${asset}`);
+    }
+  }
   const tarball = join(root, packed.filename);
   const consumer = join(root, "consumer"), prefix = join(root, "prefix"), bin = join(root, "fixtures"), home = join(root, "home-dir"),
     ghome = join(root, "gallivant-home"), repo = join(root, "repo"), cache = join(root, "npm-cache");
@@ -134,10 +149,33 @@ esac
   // synthetic fixture used by the browser suite. No production context exists.
   const { fixture, TASK, RUN } = await import("./ui/fixture.mjs");
   const ui = await fixture({ runtime: installed });
+  let browser;
   try {
     const { seedChains, CHAIN } = await import("./ui/chains-fixture.mjs");
     await seedChains(ui);
+    // The driver stays in this development checkout. The consumer has only
+    // production dependencies; pages/scripts/styles come from the installed tarball.
+    assert.equal(existsSync(join(prefix, "node_modules/playwright")), false);
+    let page;
+    const errors = [];
+    if (process.env.UI_INSTALL_BROWSER === "1") {
+      browser = await chromium.launch({ timeout: 30_000 });
+      const context = await browser.newContext();
+      await context.route("**/*", route => new URL(route.request().url()).origin === ui.origin ? route.continue() : route.abort());
+      page = await context.newPage(); page.setDefaultTimeout(10_000);
+      page.on("pageerror", error => errors.push(error.message));
+    }
     for (const base of ["", "/gallivant"]) {
+      if (page) {
+        await page.goto(`${ui.origin}${base}/?theme=light`);
+        await page.getByRole("navigation", { name: "Workspace" }).getByRole("link", { name: "Tasks", exact: true }).click();
+        assert.equal(await page.locator(":focus").getAttribute("id"), "overview-q");
+        await page.goto(`${ui.origin}${base}/run?id=${encodeURIComponent(TASK)}&run=${RUN}`);
+        await page.waitForFunction(() => document.getElementById("workspace-state").textContent.includes("snapshot current"));
+        await page.locator("#run-note").fill("Installed package draft");
+        await page.reload(); assert.equal(await page.locator("#run-note").inputValue(), "Installed package draft");
+        assert.equal(await page.locator("#run-note").evaluate(el => getComputedStyle(el).minHeight), "44px");
+      }
       for (const path of ["/", "/health", "/api/system-health", "/task/new", `/run?id=${encodeURIComponent(TASK)}&run=${RUN}`, "/runs", `/chains?chain=${CHAIN}`, `/api/chains?chain=${CHAIN}`, "/api/status", "/api/overview?attention=attention", "/api/runs", `/api/run/control?id=${encodeURIComponent(TASK)}&requestId=not-submitted`, `/api/run/workspace?id=${encodeURIComponent(TASK)}&run=${RUN}`, "/tracker.css", "/tracker.js"]) {
         const response = await fetch(ui.origin + base + path);
         assert.equal(response.status, 200, `installed UI: ${base}${path}`);
@@ -166,6 +204,8 @@ esac
         }
       }
     }
-  } finally { await ui.close(); }
+    assert.deepEqual(errors, []);
+    if (page) console.log("Installed UI browser smoke: root and mounted navigation, scripts, styles and draft recovery passed.");
+  } finally { await browser?.close(); await ui.close(); }
   console.log(`Installed ${packed.name}@${packed.version}: npx fast path (binary, config permissions, repository registration, repeat safety, next steps), credential-scope refusals before writes, version, help, packaged PRD, validation and all module exports passed.`);
 } finally { rmSync(root, { recursive: true, force: true }); }

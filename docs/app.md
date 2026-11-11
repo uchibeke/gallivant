@@ -48,16 +48,21 @@ the brief, permissions and consumed budget; they do not authorize a new scope,
 merge or deployment. Changing the delivery contract requires the explicit
 resnapshot flow. Closed or merged PRs require a new task.
 
-The current dashboard controls existing registered runs. Prepare new work through
-`gallivant task` or `new` → `ready` → `start`. The exported
+Use **New task** on the overview for [guided preparation](task-intake-ui.md),
+or use `gallivant task` or `new` → `ready` → `start`. Preparation may incur
+inference charges; the review screen requires an explicit Start of the saved
+revision. Coding, documentation and research share the same repository delivery
+and readiness gates. The exported
 [task-delivery package](task-delivery.md) lets an authenticated host provide its own
 intake UI/MCP surface without implementing another runner. That package is not
 evidence that a hosted service or plugin integration is deployed.
 
 ## The browser boundary
 
-GET routes read saved state. One `POST /api/run/control` route queues a bounded
+GET routes read saved state. `POST /api/run/control` queues a bounded
 operator request under the shared mutation lock; the daemon performs the action.
+Intake and chain recovery use their own thin protected adapters to the existing
+task and chain services, with revision and operation identity checks.
 The POST requires a loopback peer, a loopback Host with the actual serving port,
 an exact same-origin header and the server's CSRF token. Remote readers receive
 no control token. There is no arbitrary shell command route.
@@ -73,6 +78,21 @@ repository, reviewer and agent-controlled text.
 a path prefix. The tracker provides SSE logs with a bounded initial tail,
 `Last-Event-ID` continuation and explicit history gaps. The CLI, standalone UI and
 mounted UI retain one coordinator and one set of run identities.
+
+Standalone URLs are `/`, `/run?id=…`, `/runs`, `/chains`, `/task/new` and
+`/health`. A host mounting at `/gallivant` serves the same paths under that
+prefix, including assets and APIs. **Tasks** goes to the overview's searchable
+task list. Theme (`?theme=dark|light`), filters, chain selection and historical
+attempts remain in shareable URLs. Ctrl/⌘ K opens navigation, `/` focuses the
+current search, and Escape closes dialogs. Safari on macOS may use Option-Tab
+to include links when full keyboard access is off.
+
+Connection failures retain the last snapshot with stale/disconnected feedback.
+Use the shown refresh action after repairing access. Keep an uncertain request's
+saved identity and check its status; submitting a new task is not a retry.
+Applied controls confirm coordinator application, not model acknowledgement or
+completion. See [task controls](ui-task-controls.md) and
+[qualification and real captures](ui-qualification.md).
 
 ## Local and hosted harnesses
 
