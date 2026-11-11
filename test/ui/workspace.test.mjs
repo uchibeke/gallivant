@@ -107,10 +107,12 @@ test("10000 mixed events keep bounded ordered history, deduplicate, search local
   for (let i = 0; i < lines.length; i++) { index.writeBigUInt64LE(BigInt(offset + 1), i * 8); offset += Buffer.byteLength(lines[i]) + 1; }
   writeFileSync(join(dir, "job.idx"), index);
   writeFileSync(join(dir, "log-meta.json"), JSON.stringify({ version: 2, firstSequence: 1, lastSequence: lines.length, size: offset }));
+  const started = performance.now();
   await page.goto(origin + path()); await ready(page);
   await page.locator("#workspace-activity > summary").click();
   await page.waitForFunction(() => document.querySelector("#log").textContent.includes("event 10000"));
   assert.ok(await page.locator("#log > div").count() <= 402);
+  t.diagnostic(`10000 events: initial tail ${(performance.now() - started).toFixed(1)}ms; ${process.platform}/${process.arch}, ${process.version}, Chromium ${browser.version()}`);
   assert.match(await page.locator("#earlierstate").innerText(), /9600 earlier/);
   for (let i = 0; i < 6; i++) { await page.locator("#earlier").click(); await page.waitForFunction(() => !document.querySelector("#earlier").disabled); }
   const ids = await page.locator("#log [data-replay]").evaluateAll(rows => rows.map(r => Number(r.dataset.replay)));

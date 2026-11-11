@@ -129,7 +129,7 @@ test('record-only changes preserve qualification and never infer publication', (
 });
 
 test('packaging controls are source inputs and invalidate core evidence', () => {
-  for (const path of ['.npmignore', '.gitignore', '.npmrc', 'lib/nested/.npmignore', 'templates/plugin/.gitignore', 'templates/plugin/.npmrc', 'docs/.npmignore']) {
+  for (const path of ['.npmignore', '.gitignore', '.npmrc', 'lib/nested/.npmignore', 'templates/plugin/.gitignore', 'templates/plugin/.npmrc', 'docs/.npmignore', 'docs/ui/.npmignore', 'docs/ui/previews/.gitignore']) {
     assert.equal(packagingControl(path), true);
     assert.equal(runtimeFile(path), false, 'controls must not enter the runtime payload');
   }

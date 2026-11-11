@@ -14,6 +14,7 @@ requirements and checks.
 
 | Need | Guide |
 | --- | --- |
+| Qualify browser behavior, accessibility, captures and package assets | [UI qualification](ui-qualification.md) |
 | Install, configure access and complete a first task | [Getting started](install.md) |
 | Ask an agent to inspect, install and verify setup | [Agent setup](agent-setup.md) |
 | Describe work, answer questions, inspect a draft and authorize execution | [Natural-language tasks](tasks.md) |

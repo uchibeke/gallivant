@@ -7,7 +7,7 @@ import { syncBuiltinESMExports } from "node:module";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { existsSync, readFileSync, writeFileSync, mkdirSync, symlinkSync, readdirSync } from "node:fs";
-import { buildPluginPackage, validatePublicRelease } from "../lib/plugin_package.mjs";
+import { buildPluginPackage, validatePublicRelease, runtimeFile, payloadChange, packagingControl } from "../lib/plugin_package.mjs";
 import { tempHome } from "./helpers.mjs";
 
 const root = dirname(fileURLToPath(new URL("../package.json", import.meta.url)));
@@ -281,7 +281,7 @@ test("source commit mismatch remains an explicit refusal in public and internal 
   }
 });
 
-for (const path of [".npmignore", ".gitignore", ".npmrc", "lib/.npmignore", "lib/nested/.gitignore", "bin/.npmignore", "templates/plugin/.npmignore", "docs/.npmignore"]) test(`public packaging refuses uncommitted npm control ${path}`, t => {
+for (const path of [".npmignore", ".gitignore", ".npmrc", "lib/.npmignore", "lib/nested/.gitignore", "bin/.npmignore", "templates/plugin/.npmignore", "docs/.npmignore", "docs/ui/.npmignore", "docs/ui/previews/.npmignore"]) test(`public packaging refuses uncommitted npm control ${path}`, t => {
   gitFixture(t, { status: `?? ${path}\0` });
   const input = fixture();
   assert.throws(() => buildPluginPackage(input), { code: "PACKAGE_SOURCE", message: /packaging-control/ });
@@ -472,7 +472,7 @@ for (const missing of ["node_modules/smol-toml/dist/index.js", "node_modules/smo
 });
 
 
-for (const missing of ["lib/tasks.mjs", "bin/package-plugin.mjs", "templates/plugin/task-delivery.SKILL.md", "docs/tasks.md", "LICENSE", "CONTRIBUTING.md", "SECURITY.md"]) test(`public packaging requires every committed first-party path: ${missing}`, t => {
+for (const missing of ["lib/tasks.mjs", "bin/package-plugin.mjs", "templates/plugin/task-delivery.SKILL.md", "docs/tasks.md", "docs/ui/previews/final-overview-dark.png", "LICENSE", "CONTRIBUTING.md", "SECURITY.md"]) test(`public packaging requires every committed first-party path: ${missing}`, t => {
   gitFixture(t);
   const original = childProcess.execFileSync;
   t.mock.method(childProcess, "execFileSync", (file, args, options) => {
@@ -485,5 +485,20 @@ for (const missing of ["lib/tasks.mjs", "bin/package-plugin.mjs", "templates/plu
   syncBuiltinESMExports();
   const input = fixture();
   assert.throws(() => buildPluginPackage(input), { code: "PACKAGE_SOURCE", message: /complete selected commit payload/ });
+  assert.equal(existsSync(input.out), false);
+});
+
+test("guide captures share source verification without admitting diagnostic images", t => {
+  for (const path of ["docs/ui/previews/final-overview-dark.png", "docs/ui/previews/foundation-overview-dark.png"]) {
+    assert.equal(runtimeFile(path), true); assert.equal(payloadChange(path), true);
+  }
+  for (const path of ["docs/ui/previews/private.png", "docs/ui/previews/final-overview-dark.png.js", "docs/ui/previews/../private.png", "docs/audit/private.png"]) assert.equal(runtimeFile(path), false);
+  for (const path of ["docs/ui/.npmignore", "docs/ui/previews/.npmrc"]) {
+    assert.equal(packagingControl(path), true); assert.equal(runtimeFile(path), false);
+  }
+  assert.equal(payloadChange("docs/ui/previews/"), true);
+  gitFixture(t, { status: " M docs/ui/previews/final-overview-dark.png\0!! docs/ui/previews/\0" });
+  const input = fixture();
+  assert.throws(() => buildPluginPackage(input), { code: "PACKAGE_SOURCE" });
   assert.equal(existsSync(input.out), false);
 });

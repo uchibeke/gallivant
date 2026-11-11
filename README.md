@@ -97,7 +97,7 @@ from you or an account with a third party.
   own `npx @aporthq/aport-agent-guardrails` command, and Codex asks you to trust
   the hook inside its own interface. Setup does not install hooks.
   [Guardrails](docs/guardrails.md) explains what each control covers.
-- **Spend.** Defaults are 60 fix rounds per PR and a 5 USD per-run cap that
+- **Spend.** Defaults are 60 fix rounds per PR and a 50 USD per-run cap that
   only Claude enforces natively. Review [limits](docs/config.md) before
   unattended work.
 
@@ -171,6 +171,18 @@ The steps below describe the same flow for readers without Mermaid rendering.
 
 ## While it works
 
+The workspace puts decisions and blockers first. **Tasks** focuses the existing
+search and filters; **Chains** explains merge waits; **System health** separates
+saved capability observations from unknown account access. **New task** prepares
+code, documentation or research for a repository pull request, asks questions,
+and requires approval of the exact revision before implementation starts.
+
+![Dark overview with attention, progress and waiting lanes](docs/ui/previews/final-overview-dark.png)
+
+This is the real served interface with identifiable synthetic tasks and a fixed
+clock, not production activity. See the [light overview and mobile task view](docs/ui-qualification.md#approved-captures)
+and [browser guide](docs/app.md) for standalone and mounted access.
+
 | What you need | Action |
 | --- | --- |
 | Follow runs | `gallivant start` or `gallivant status` |
@@ -178,6 +190,7 @@ The steps below describe the same flow for readers without Mermaid rendering.
 | Inspect a stop | `gallivant why <handle>` |
 | Continue after fixing a blocker | `gallivant resume <handle>` or **Resume agent** |
 | Refresh review and CI | **Recheck PR**; this does not resume a failed agent |
+| Stop a task | **Cancel task**, then review and confirm the cancellation scope |
 | Keep the dashboard without opening a browser | `gallivant start --no-open` |
 | Run only the daemon | `gallivant start --no-server` |
 | Stop monitoring and the standalone dashboard | `gallivant down`; existing agent processes continue |

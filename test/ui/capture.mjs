@@ -6,8 +6,22 @@ import { seedWorkspace } from "./workspace-fixture.mjs";
 import { fixture, NOW, TASK, RUN } from "./fixture.mjs";
 import { CONTROL_NOTE, settleControl } from "./controls-fixture.mjs";
 import { intakeFixture, INTAKE_REQUEST } from "./intake-fixture.mjs";
+import { finalCaptures, finalSurface } from "./final-captures.mjs";
 
 const name = process.argv[2];
+if (finalCaptures.includes(name) || name === "--all-final") {
+  const browser = await chromium.launch();
+  try {
+    for (const capture of name === "--all-final" ? finalCaptures : [name]) {
+      const ui = await finalSurface(browser, capture);
+      try {
+        mkdirSync("docs/ui/previews", { recursive: true });
+        await ui.page.screenshot({ path: `docs/ui/previews/${capture}.png`, fullPage: true, animations: "disabled" });
+      } finally { await ui.close(); }
+    }
+  } finally { await browser.close(); }
+  process.exit(0);
+}
 if (!["health-desktop", "health-mobile", "task-intake-desktop", "task-intake-mobile", "chains-desktop", "chains-mobile", "before-overview-desktop", "foundation-overview-dark", "overview-desktop", "overview-mobile", "task-workspace-desktop", "task-workspace-mobile", "task-controls-desktop", "task-controls-mobile"].includes(name)) throw new Error("Choose an approved capture name");
 const intakeCapture = name.startsWith("task-intake-");
 const world = intakeCapture ? await intakeFixture() : await fixture();

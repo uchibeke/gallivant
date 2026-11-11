@@ -139,6 +139,13 @@ const restoreCommandFocus = () => (returnFocus?.isConnected ? returnFocus : open
 const closeCommands = () => { commands.close(); restoreCommandFocus(); };
 opener?.addEventListener("click", () => openCommands(opener));
 document.getElementById("commands-close")?.addEventListener("click", closeCommands);
+commands?.querySelector(".command-links")?.addEventListener("click", event => {
+  // Fragment navigation keeps this document alive. Dismiss the modal before
+  // the link's native action moves focus to its destination; modified clicks
+  // opening another tab leave the current navigation context intact.
+  if (event.button !== 0 || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey || !event.target.closest("a[href]")) return;
+  commands.close();
+});
 commands?.addEventListener("keydown", event => {
   if (event.key === "Escape") { event.preventDefault(); event.stopPropagation(); closeCommands(); }
 });

@@ -6,6 +6,14 @@ before opening a pull request. Native isolation tests need Command Line Tools on
 macOS or Bubblewrap with user namespaces allowed on Linux; see
 `.github/workflows/runtime-portability.yml` for the tested host setup.
 
+For interface changes, install the locked browser revisions with
+`npx --no-install playwright install chromium firefox webkit` (add `--with-deps`
+on Linux), then run `npm run test:ui` and
+`UI_INSTALL_BROWSER=1 npm run test:install`. Follow the
+[UI qualification guide](docs/ui-qualification.md) for pinned pixel comparisons,
+approved captures and the separate manual accessibility review. Keep browser
+tooling development-only and diagnostics outside Git.
+
 `npm test` uses fixtures and disposable repositories. Live harness suites are
 separate opt-in commands: they need authenticated provider access and can spend
 credits. Do not include credentials, private run logs, local config or customer
