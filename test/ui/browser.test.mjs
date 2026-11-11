@@ -45,7 +45,7 @@ test("root and mounted routes serve real assets, APIs, links and historical sele
     assert.match(response.headers()["content-security-policy"], /script-src 'self'/);
     assert.equal(await page.locator("main").count(), 1);
     assert.equal(await page.locator("h1").textContent(), "Overview");
-    assert.equal(await page.locator("#side .row").count(), 6);
+    assert.equal(await page.locator("[data-task-id]").count(), 6);
     for (const href of await page.locator("nav a").evaluateAll(links => links.map(a => a.href))) {
       const url = new URL(href); assert.equal(url.searchParams.get("theme"), "dark"); assert.equal(url.searchParams.get("by"), "harness");
       assert.equal((await context.request.get(href)).status(), 200);
@@ -113,7 +113,7 @@ test("five viewport widths, landscape and 200 percent zoom contain long content 
       for (const path of [`${base}/`, runPath(base), `${base}/runs`]) {
         await page.goto(origin + path);
         assert.deepEqual(await noOverflow(page), { width, scroll: width }, path);
-        for (const element of await page.locator("nav a, .menu summary, #groupby, #filter, .run-actions button, #run-note").all()) {
+        for (const element of await page.locator("nav a:visible, .menu summary:visible, #groupby:visible, #filter:visible, .run-actions button:visible, #run-note:visible").all()) {
           const rect = await element.boundingBox();
           assert.ok(rect && rect.x >= 0 && rect.x + rect.width <= width + 1, `${path}: control fits ${width}`);
           assert.ok(rect.height >= 44, `${path}: touch target ${rect.height}`);
@@ -128,6 +128,7 @@ test("five viewport widths, landscape and 200 percent zoom contain long content 
     await page.setViewportSize({ width: 1280, height: 900 });
     await page.addStyleTag({ url: `${origin}/zoom.css` });
     assert.deepEqual(await noOverflow(page), { width: 1280, scroll: 1280 });
+    await page.locator("#run-note").fill("");
     await page.locator("#run-note").focus();
     await page.keyboard.type("Keyboard at 200 percent");
     assert.equal(await page.locator("#run-note").inputValue(), "Keyboard at 200 percent");
@@ -148,15 +149,15 @@ test("keyboard skip, disclosure return, grouping, filter and reduced motion", { 
   assert.equal(await page.locator(".menu").getAttribute("open"), null);
   assert.equal(await summary.evaluate(el => el === document.activeElement), true);
   assert.equal(await summary.evaluate(el => getComputedStyle(el).outlineStyle), "solid");
-  const toggle = page.locator(".group-toggle").first();
+  const toggle = page.locator(".task-context > summary").first();
   await toggle.focus(); await page.keyboard.press("Space");
-  assert.equal(await toggle.getAttribute("aria-expanded"), "false");
-  await page.keyboard.press("Enter"); assert.equal(await toggle.getAttribute("aria-expanded"), "true");
-  await page.locator("#filter").fill("no match for this");
-  assert.equal(await page.locator("#matches").textContent(), "0 matches");
-  await page.keyboard.press("Escape"); assert.equal(await page.locator("#side a.row:visible").count(), 6);
-  await page.locator("#groupby").selectOption("harness");
-  await page.waitForURL(/by=harness/);
+  assert.equal(await page.locator(".task-context").first().getAttribute("open"), "");
+  await page.keyboard.press("Enter"); assert.equal(await page.locator(".task-context").first().getAttribute("open"), null);
+  await page.locator("#overview-q").fill("no match for this");
+  await page.getByRole("button", { name: "Apply filters", exact: true }).click();
+  assert.match(await page.locator(".overview-scope").textContent(), /0 match/);
+  await page.getByRole("link", { name: "Clear filters", exact: true }).click();
+  assert.equal(await page.locator("[data-task-id]").count(), 6);
   assert.equal(new URL(page.url()).searchParams.get("theme"), "dark");
   const motion = await page.locator("*").evaluateAll(els => els.every(el => {
     const s = getComputedStyle(el); return s.animationName === "none" && s.transitionDuration.split(",").every(v => parseFloat(v) === 0);
@@ -259,14 +260,24 @@ test("1000 tasks use bounded real DOM pages with no probe, host, model or state 
     runReads = 0;
     await page.goto(`${origin}${base}/?theme=light`);
     assert.equal(runReads, 1000, "one existing saved-run read per task; projection adds none");
-    assert.equal(await page.locator("tbody tr").count(), 100);
-    assert.equal(await page.locator("#side .row").count(), 100);
+    assert.equal(await page.locator("[data-task-id]").count(), 25);
+    assert.equal(await page.locator("#side .row").count(), 0);
     assert.ok(await page.locator("body").evaluate(el => el.outerHTML.length) < 300000);
     await page.getByRole("link", { name: "Next tasks", exact: true }).click();
-    assert.equal(new URL(page.url()).searchParams.get("offset"), "100");
-    assert.match(await page.locator("tbody tr").first().textContent(), /task-100/);
+    assert.equal(new URL(page.url()).searchParams.get("offset"), "25");
+    assert.match(await page.locator("[data-task-id]").first().textContent(), /task-25/);
     assert.equal(new URL(page.url()).searchParams.get("theme"), "light");
-    await page.goBack(); assert.match(await page.locator("tbody tr").first().textContent(), /task-0/);
+    await page.goBack(); assert.match(await page.locator("[data-task-id]").first().textContent(), /task-0/);
+    assert.match(await page.locator(".overview-scope").textContent(), /all 1000 registered tasks/);
+    const requests = [];
+    const track = request => requests.push(new URL(request.url()).pathname);
+    page.on("request", track);
+    await page.locator("#overview-q").fill("task-999");
+    await page.getByRole("button", { name: "Apply filters", exact: true }).click();
+    assert.equal(await page.locator("[data-task-id]").count(), 1);
+    assert.match(await page.locator(".overview-scope").textContent(), /all 1000 registered tasks.*1 match/);
+    assert.ok(requests.every(path => !path.includes("/api/run/")), "search loads no per-row data or transcripts");
+    page.off("request", track);
   }
   assert.equal(readFileSync(path, "utf8"), saved);
 });
@@ -321,6 +332,9 @@ test("pages opened during queued or applying messages restore current controls a
       state.update(TASK, { last: { run: RUN, exit: null } });
     }
     for (const base of ["", "/gallivant"]) for (const status of ["queued", "applying"]) {
+      // Leave the old task before resetting storage: pagehide persists its draft.
+      await page.goto(`${origin}${base}/`);
+      await page.evaluate(() => localStorage.clear());
       state.update(TASK, { control: { id: "fixture-pending", action: "message", status, note: "Saved failed message." } });
       await page.goto(origin + runPath(base));
       assert.equal(await page.locator("#run-note").isDisabled(), true);
@@ -367,20 +381,20 @@ test("settled requests refresh controls from current ownership rather than the s
 test("read failures preserve content and drafts; page exit stops refresh", { timeout: 30_000 }, async t => {
   const { page, origin, state } = await open(t);
   let reads = 0;
-  page.on("request", request => { if (request.url().includes("/api/run/review-activity")) reads++; });
+  page.on("request", request => { if (request.url().includes("/api/run/workspace")) reads++; });
   await page.goto(origin + runPath(""));
-  await page.waitForFunction(() => document.querySelector("#review-activity-state").textContent.includes("10 seconds"));
-  const saved = await page.locator("#review-activity-log").textContent();
+  await page.waitForFunction(() => document.querySelector("#workspace-state").textContent.includes("snapshot current"));
+  const saved = await page.locator("#workspace-review-content").textContent();
   await page.locator("#run-note").fill("A draft survives a read outage.");
-  const originalRead = state.reviewActivityEntry.bind(state);
-  state.reviewActivityEntry = () => { throw new Error("Fixture read unavailable"); };
+  const originalRead = state.entries.bind(state);
+  state.entries = () => { throw new Error("Fixture read unavailable"); };
   await page.clock.runFor(10_100);
-  await page.waitForFunction(() => document.querySelector("#review-activity-state").textContent.includes("unavailable"));
-  assert.equal(await page.locator("#review-activity-log").textContent(), saved);
+  await page.waitForFunction(() => document.querySelector("#workspace-state").textContent.includes("disconnected"));
+  assert.equal(await page.locator("#workspace-review-content").textContent(), saved);
   assert.equal(await page.locator("#run-note").inputValue(), "A draft survives a read outage.");
-  state.reviewActivityEntry = originalRead;
-  await page.clock.runFor(10_100);
-  await page.waitForFunction(() => document.querySelector("#review-activity-state").textContent.includes("10 seconds"));
+  state.entries = originalRead;
+  await page.getByRole("button", { name: "Refresh evidence", exact: true }).click();
+  await page.waitForFunction(() => document.querySelector("#workspace-state").textContent.includes("snapshot current"));
   await page.evaluate(() => dispatchEvent(new PageTransitionEvent("pagehide")));
   const stoppedAt = reads;
   await page.clock.runFor(60_000);
@@ -391,31 +405,31 @@ test("read failures preserve content and drafts; page exit stops refresh", { tim
 test("cached page exit aborts a pending JSON body and restoration restarts the read", { timeout: 30_000 }, async t => {
   const { page, origin, holdReviewBody } = await open(t);
   holdReviewBody();
-  const headers = page.waitForResponse(response => response.url().includes("/api/run/review-activity"));
+  const headers = page.waitForResponse(response => response.url().includes("/api/run/workspace"));
   await page.goto(origin + runPath(""));
   await headers;
-  const aborted = page.waitForEvent("requestfailed", { predicate: request => request.url().includes("/api/run/review-activity") });
+  const aborted = page.waitForEvent("requestfailed", { predicate: request => request.url().includes("/api/run/workspace") });
   await page.evaluate(() => dispatchEvent(new PageTransitionEvent("pagehide", { persisted: true })));
   assert.match((await aborted).failure().errorText, /ABORTED|CANCELLED/);
   holdReviewBody(false);
-  const restored = page.waitForResponse(response => response.url().includes("/api/run/review-activity"));
+  const restored = page.waitForResponse(response => response.url().includes("/api/run/workspace"));
   await page.evaluate(() => dispatchEvent(new PageTransitionEvent("pageshow", { persisted: true })));
   await restored;
-  await page.waitForFunction(() => document.querySelector("#review-activity-state").textContent.includes("10 seconds"));
+  await page.waitForFunction(() => document.querySelector("#workspace-state").textContent.includes("snapshot current"));
 });
 
 test("cached page restoration preserves the composer and resumes one refresh loop without resubmitting actions", { timeout: 30_000 }, async t => {
   const { page, origin, state } = await open(t);
   let reads = 0, posts = 0, documents = 0;
   page.on("request", request => {
-    if (request.url().includes("/api/run/review-activity")) reads++;
+    if (request.url().includes("/api/run/workspace")) reads++;
     if (request.method() === "POST") posts++;
     if (request.isNavigationRequest()) documents++;
   });
   for (const base of ["", "/gallivant"]) {
     state.update(TASK, { control: null });
     await page.goto(origin + runPath(base));
-    await page.waitForFunction(() => document.querySelector("#review-activity-state").textContent.includes("10 seconds"));
+    await page.waitForFunction(() => document.querySelector("#workspace-state").textContent.includes("snapshot current"));
     await page.locator("#run-note").fill("A cached draft stays with this task.\nKeep the selection too.");
     const accepted = page.waitForResponse(r => r.request().method() === "POST");
     await page.getByRole("button", { name: "Recheck PR", exact: true }).click();
@@ -437,7 +451,7 @@ test("cached page restoration preserves the composer and resumes one refresh loo
       await page.clock.runFor(60_000);
       assert.equal(reads, stoppedAt, "cached pages stop polling");
       state.update(TASK, { control: { ...state.get(TASK).control, status: "applied", message: "Applied while away." } });
-      const refreshed = page.waitForResponse(r => r.url().includes("/api/run/review-activity"));
+      const refreshed = page.waitForResponse(r => r.url().includes("/api/run/workspace"));
       await page.evaluate(() => dispatchEvent(new PageTransitionEvent("pageshow", { persisted: true })));
       await refreshed;
       await page.waitForFunction(() => document.querySelector("#control-status").dataset.state === "success");
@@ -448,9 +462,9 @@ test("cached page restoration preserves the composer and resumes one refresh loo
       }), { same: true, value: before.value, start: 2, end: 12, direction: "backward", focused: true, scroll: before.scroll, url: before.url });
       assert.equal(documents, navigations, "restoration does not reload the document");
       assert.equal(posts, submissions, "restoration never replays an action");
-      await page.waitForFunction(() => document.querySelector("#review-activity-state").textContent.includes("10 seconds"));
+      await page.waitForFunction(() => document.querySelector("#workspace-state").textContent.includes("snapshot current"));
       const resumedAt = reads;
-      const tick = page.waitForResponse(r => r.url().includes("/api/run/review-activity"));
+      const tick = page.waitForResponse(r => r.url().includes("/api/run/workspace"));
       await page.clock.runFor(10_100);
       await tick;
       assert.equal(reads, resumedAt + 1, "exactly one refresh loop resumes");
@@ -466,6 +480,7 @@ test("restored live logs resume from their cursor and preserve rows, history and
   for (const base of ["", "/gallivant"]) {
     await page.goto(origin + runPath(base));
     await page.waitForFunction(() => document.querySelector("#log").textContent.includes("Fixture line 600"));
+    await page.locator("#workspace-activity").evaluate(el => { el.open = true; });
     await page.getByRole("button", { name: "load earlier lines", exact: true }).click();
     await page.waitForFunction(() => document.querySelector("#log").textContent.includes("Fixture run:"));
     await page.locator("#run-note").fill("Keep the draft while the log reconnects.");
@@ -498,4 +513,91 @@ test("restored live logs resume from their cursor and preserve rows, history and
     dispatchEvent(new PageTransitionEvent("pageshow", { persisted: true }));
   });
   assert.equal(await page.locator("#log > *").count(), rows, "finished logs stay intact on restore");
+});
+
+test("cached full paused output keeps buffered events and recovers overflow in order", { timeout: 45_000 }, async t => {
+  const { page, origin, home } = await open(t, { live: true });
+  const log = join(home, "runs", idSlug(TASK), RUN, "job.log");
+  const lines = (from, count) => Array.from({ length: count }, (_, i) => `Cached fixture event ${from + i}\n`).join("");
+  for (const base of ["", "/gallivant"]) {
+    writeFileSync(log, lines(1, 400));
+    await page.goto(origin + runPath(base));
+    await page.locator("#workspace-activity").evaluate(el => { el.open = true; });
+    await page.waitForFunction(() => document.querySelector('#log [data-replay="400"]'));
+    for (let from = 401; from < 2000; from += 400) {
+      appendFileSync(log, lines(from, 400));
+      await page.waitForFunction(id => document.querySelector(`#log [data-replay="${id}"]`), from + 399);
+    }
+    assert.equal(await page.locator("#log > *").count(), 2000);
+    const pause = () => page.locator("#log").evaluate(el => {
+      el.focus(); el.scrollTop = 0; el.dispatchEvent(new Event("scroll"));
+      window.cachedFirstRow = el.firstElementChild;
+    });
+    await pause();
+    appendFileSync(log, lines(2001, 1));
+    await page.waitForFunction(() => document.querySelector("#follow-output").textContent.startsWith("1 new events"));
+    await page.evaluate(() => dispatchEvent(new PageTransitionEvent("pagehide", { persisted: true })));
+    appendFileSync(log, lines(2002, 1));
+    const stream = page.waitForRequest(request => request.url().includes("/api/run/output"));
+    await page.evaluate(() => dispatchEvent(new PageTransitionEvent("pageshow", { persisted: true })));
+    assert.equal(new URL((await stream).url()).searchParams.get("after"), "2001");
+    await page.waitForFunction(() => document.querySelector("#follow-output").textContent.startsWith("2 new events"));
+    assert.deepEqual(await page.locator("#log").evaluate(el => ({
+      same: el.firstElementChild === window.cachedFirstRow, count: el.childElementCount,
+      top: el.scrollTop, focus: document.activeElement.id,
+    })), { same: true, count: 2000, top: 0, focus: "log" });
+    await page.locator("#follow-output").click();
+    assert.equal(await page.locator('#log [data-replay="2001"]').count(), 1, "the event received before caching is retained");
+    assert.equal(await page.locator('#log [data-replay="2002"]').count(), 1, "reconnected output follows the retained queue");
+
+    // Overflow still uses the existing gap cursor, including after another cache cycle.
+    await pause();
+    appendFileSync(log, lines(2003, 401));
+    await page.waitForFunction(() => document.querySelector("#follow-output").textContent.startsWith("401 new events"));
+    assert.match(await page.locator("#earlierstate").textContent(), /display buffer full/);
+    await page.evaluate(() => {
+      dispatchEvent(new PageTransitionEvent("pagehide", { persisted: true }));
+      dispatchEvent(new PageTransitionEvent("pageshow", { persisted: true }));
+    });
+    await page.locator("#follow-output").click();
+    assert.equal(await page.locator('#log [data-replay="2403"]').count(), 1);
+    assert.equal(await page.locator("#log > *").count(), 2000);
+    await page.locator("#earlier").click();
+    await page.waitForFunction(() => document.querySelector('#log [data-replay="2003"]'));
+    const ids = await page.locator("#log [data-replay]").evaluateAll(rows => rows.map(row => Number(row.dataset.replay)));
+    assert.ok(ids.length <= 4000);
+    assert.equal(new Set(ids).size, ids.length);
+    assert.deepEqual(ids, [...ids].sort((a, b) => a - b));
+  }
+});
+
+test("cached selected output retains its pending terminal batch without reconnecting a finished run", { timeout: 30_000 }, async t => {
+  const { page, origin, home } = await open(t, { live: true });
+  const dir = join(home, "runs", idSlug(TASK), RUN);
+  await page.goto(origin + runPath(""));
+  await page.locator("#workspace-activity").evaluate(el => { el.open = true; });
+  await page.waitForFunction(() => document.querySelector("#log [data-replay]"));
+  const selected = await page.locator("#log").evaluate(el => {
+    el.focus();
+    const range = document.createRange(); range.selectNodeContents(el.querySelector("[data-replay]"));
+    getSelection().removeAllRanges(); getSelection().addRange(range);
+    return getSelection().toString();
+  });
+  appendFileSync(join(dir, "job.log"), "Buffered final fixture output\n");
+  await page.waitForFunction(() => document.querySelector("#follow-output").textContent.startsWith("1 new events"));
+  const job = JSON.parse(readFileSync(join(dir, "job.json"), "utf8"));
+  writeFileSync(join(dir, "job.json"), JSON.stringify({ ...job, exit: 0,
+    execution: { ...job.execution, providerState: "succeeded", collected: true } }));
+  await page.waitForFunction(() => document.querySelector("#logstate").textContent === "finished");
+  const streams = []; page.on("request", request => { if (request.url().includes("/api/run/output")) streams.push(request.url()); });
+  await page.evaluate(() => {
+    dispatchEvent(new PageTransitionEvent("pagehide", { persisted: true }));
+    dispatchEvent(new PageTransitionEvent("pageshow", { persisted: true }));
+  });
+  await page.clock.runFor(100);
+  assert.equal(await page.evaluate(() => getSelection().toString()), selected);
+  assert.equal(await page.locator("#log [data-replay]").count(), 1);
+  await page.locator("#follow-output").click();
+  assert.deepEqual(await page.locator("#log > *").allTextContents(), [selected, "Buffered final fixture output", "exit 0"]);
+  assert.deepEqual(streams, [], "finished output is restored locally without another stream");
 });

@@ -191,7 +191,7 @@ function world({ entry = {}, runs = {}, latest = null, entries = {} } = {}) {
   return { home, ctx, state, root, clock };
 }
 
-test("the dashboard groups every entry the way status already groups them, and links each to its log", async () => {
+test("the overview groups canonical attention and links each task to its workspace", async () => {
   const w = world({ runs: { "2026-09-24T02-00-00-000-fix": { lines: ["hello"], exit: 0, endedAt: Date.parse(T0) + 4000 } }, latest: "2026-09-24T02-00-00-000-fix" });
   w.state.put("acme/widget/other", { ...w.state.get(ID), pr: 7, state: STATES.needsHuman, reason: "conflict" });
   w.state.put("acme/widget/shipped", { ...w.state.get(ID), pr: 9, state: STATES.done });
@@ -200,9 +200,9 @@ test("the dashboard groups every entry the way status already groups them, and l
   await r.ended;
   assert.equal(r.code, 200);
   const body = r.body();
-  assert.match(body, /<h2>needs you<\/h2>/);
-  assert.match(body, /<h2>running<\/h2>/);
-  assert.match(body, /<h2>closed or ended<\/h2>/);
+  assert.match(body, /<h2>Needs attention<\/h2>/);
+  assert.match(body, /<h2>Progressing<\/h2>/);
+  assert.match(body, /<h2>Closed or integrated<\/h2>/);
   assert.match(body, /widget#7/, "the needs-human entry is listed");
   assert.match(body, /conflict/, "with the reason status would show");
   assert.match(body, /href="\/run\?id=acme%2Fwidget%2Fwidget-export"/, "every row links to its run page");
@@ -249,7 +249,7 @@ test("the sidebar lists every entry in a collapsible group with a count, on both
   w.state.put("acme/widget/stuck", { ...w.state.get(ID), pr: 7, state: STATES.needsHuman, reason: "conflict", harness: "codex" });
   w.state.put("acme/widget/shipped", { ...w.state.get(ID), pr: 9, state: STATES.done, harness: "codex" });
 
-  for (const path of ["/", "/runs", `/run?id=${encodeURIComponent(ID)}`]) {
+  for (const path of ["/runs", `/run?id=${encodeURIComponent(ID)}`]) {
     const r = res();
     handle(w.ctx, req(path), r);
     await r.ended;
@@ -261,7 +261,7 @@ test("the sidebar lists every entry in a collapsible group with a count, on both
   }
 
   const dash = res();
-  handle(w.ctx, req("/"), dash);
+  handle(w.ctx, req(`/run?id=${encodeURIComponent(ID)}`), dash);
   await dash.ended;
   const body = dash.body();
   // The groups are the sections status already uses, each with the number of rows in it.
@@ -312,13 +312,13 @@ test("grouping switches between state and harness, and nothing else", async () =
   w.state.put("acme/widget/stuck", { ...w.state.get(ID), pr: 7, state: STATES.needsHuman, reason: "conflict", harness: "codex" });
 
   const byState = res();
-  handle(w.ctx, req("/"), byState);
+  handle(w.ctx, req(`/run?id=${encodeURIComponent(ID)}`), byState);
   await byState.ended;
   assert.match(byState.body(), /data-group="needs_you"/, "state is the default, matching what the dashboard leads with");
   assert.match(byState.body(), /<option value="state" selected>/);
 
   const byHarness = res();
-  handle(w.ctx, req("/?by=harness"), byHarness);
+  handle(w.ctx, req(`/run?id=${encodeURIComponent(ID)}&by=harness`), byHarness);
   await byHarness.ended;
   const body = byHarness.body();
   assert.match(body, /data-group="harness:claude"/);
@@ -335,7 +335,7 @@ test("grouping switches between state and harness, and nothing else", async () =
 
   // A grouping nobody offers falls back to the default rather than rendering an empty sidebar.
   const junk = res();
-  handle(w.ctx, req("/?by=" + encodeURIComponent("'; drop--")), junk);
+  handle(w.ctx, req(`/run?id=${encodeURIComponent(ID)}&by=` + encodeURIComponent("'; drop--")), junk);
   await junk.ended;
   assert.match(junk.body(), /data-group="needs_you"/);
   assert.ok(!junk.body().includes("drop--"), "and is not echoed into the page");
@@ -2197,4 +2197,46 @@ test("unrecoverable burst history reports a retention gap instead of claiming th
   assert.ok(p.pane.children.some(row => row.textContent === "projection history expired"));
   assert.match(p.els.earlierstate.textContent, /some history is unavailable/);
   assert.equal(p.els.earlier.hidden, true);
+});
+
+test("protected chain adapter rejects unauthorized, stale, oversized and pinned mutations at root and mount", async () => {
+  const { chainRevision } = await import("../lib/chains.mjs");
+  const w = world();
+  w.state.createChain({ name: "recovery", status: "stopped", repo: "acme/widget", base: "main", index: 0,
+    steps: [{ id: "acme/widget/future", digest: "a".repeat(64) }], reason: "repair prerequisite" });
+  const before = w.state.getChain("recovery");
+  for (const base of ["", "/gallivant"]) {
+    const route = base ? mount(w.ctx).handle : (req, res) => handle(w.ctx, req, res);
+    const page = res(); await route({ ...req(`${base}/chains?chain=recovery`, localHeaders), socket: localSocket }, page);
+    const token = /data-token="([a-f0-9]+)"/.exec(page.body())?.[1]; assert.ok(token);
+    const input = { action: "retry", stage: "review", revision: chainRevision(before), requestId: "chain-protected-request" };
+    async function post(body = input, change = {}) {
+      const request = Readable.from([typeof body === "string" ? body : JSON.stringify(body)]);
+      Object.assign(request, { method: "POST", url: `${base}/api/chain/control?chain=recovery`, headers: { ...localHeaders, "x-gallivant-token": token }, socket: localSocket, ...change });
+      const response = res(); await route(request, response); await response.ended; return response;
+    }
+    for (const change of [
+      { headers: { ...localHeaders, "x-gallivant-token": "wrong" } },
+      { headers: { ...localHeaders, "x-gallivant-token": token, origin: "https://evil.example" } },
+      { headers: { ...localHeaders, "x-gallivant-token": token, host: "evil.example:8791", origin: "http://evil.example:8791" } },
+      { socket: { ...localSocket, remoteAddress: "192.168.1.9" } },
+    ]) assert.equal((await post(input, change)).code, 403);
+    assert.equal((await post("x".repeat(33000))).code, 413);
+    assert.equal((await post("{")).code, 400);
+    assert.equal((await post({ ...input, action: "start" })).code, 409);
+    assert.equal((await post({ ...input, revision: "b".repeat(64) })).code, 409);
+    assert.equal((await post({ ...input, path: "/etc/passwd" })).code, 409);
+    assert.equal((await post(input, { headers: { ...localHeaders, "x-gallivant-token": token, "content-type": "text/plain" } })).code, 415);
+    const acceptedReview = await post(); assert.equal(acceptedReview.code, 200, acceptedReview.body());
+    assert.deepEqual(w.state.getChain("recovery"), before);
+  }
+  writeJsonAtomic(join(w.home, "runtime-pin.json"), { version: 1 });
+  const page = res(); await handle(w.ctx, { ...req("/chains?chain=recovery", localHeaders), socket: localSocket }, page);
+  assert.match(page.body(), /artifact-pinned/);
+  assert.match(page.body(), /data-chain-action="retry" disabled/);
+  const token = /data-token="([a-f0-9]+)"/.exec(page.body())[1];
+  const request = Readable.from([JSON.stringify({ action: "cancel", stage: "confirm", revision: chainRevision(before), requestId: "pinned-cancel-request" })]);
+  Object.assign(request, { method: "POST", url: "/api/chain/control?chain=recovery", headers: { ...localHeaders, "x-gallivant-token": token }, socket: localSocket });
+  const response = res(); await handle(w.ctx, request, response); assert.equal(response.code, 409);
+  assert.deepEqual(w.state.getChain("recovery"), before);
 });

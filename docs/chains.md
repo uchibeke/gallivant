@@ -129,3 +129,10 @@ Repository identity, credential transport and PR evidence are defined by the
 Bitbucket's live no-reviewer path has been qualified on a disposable public
 repository. Independent Bitbucket review remains unvalidated. Existing IDs and
 chain ownership are retained without a state migration.
+
+## Browser workspace
+
+The [chain workspace](ui-chains.md) provides an ordered dependency list, saved
+merge evidence, task and PR links, and explicit review/confirmation for future
+retry, changed-input approval and cancellation. It uses the same chain services
+and merge gates as the CLI. New chains are still created with CLI intake.

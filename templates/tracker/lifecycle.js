@@ -5,23 +5,29 @@ function trackerLifecycle() {
   const resumes = [], waiting = new Set();
   const schedule = (work, delay) => {
     if (stopped) return;
-    const timer = setTimeout(() => {
-      timers.delete(timer);
-      if (stopped) return;
-      if (document.hidden) { schedule(work, delay); return; }
-      return work();
-    }, delay);
-    timers.add(timer);
+    let timer;
+    const arm = () => {
+      timer = setTimeout(() => {
+        timers.delete(timer);
+        if (stopped) return;
+        if (document.hidden) { arm(); return; }
+        return work();
+      }, delay);
+      timers.add(timer);
+    };
+    arm();
+    return () => { clearTimeout(timer); timers.delete(timer); };
   };
-  const read = async (url, failure) => {
+  const read = async (url, failure, timeoutMs = 10_000) => {
     const request = new AbortController();
     requests.add(request);
+    const deadline = setTimeout(() => request.abort(), timeoutMs);
     try {
       const response = await fetch(url, { cache: "no-store", signal: request.signal });
       if (!response.ok) throw new Error(failure);
       return await response.json();
     }
-    finally { requests.delete(request); }
+    finally { clearTimeout(deadline); requests.delete(request); }
   };
   const stop = event => {
     stopped = true;

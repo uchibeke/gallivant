@@ -53,10 +53,10 @@ dl.facts dt { color: var(--gv-subtle); font-size: 12px; }
 dl.facts dd { margin: 0; min-width: 0; }
 .run-controls { padding: 20px; margin: 24px 0; border: 1px solid var(--gv-line); border-radius: var(--gv-r); background: var(--gv-surface); }
 .run-controls h2 { margin-top: 0; }
-.run-actions { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
+.run-actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
 .run-controls label { display: block; margin: 0 0 8px; font-weight: 600; }
 .run-controls .note { font-family: var(--gv-font); font-size: 12px; }
-.message-composer { margin-top: 20px; padding-top: 20px; border-top: 1px solid var(--gv-line); }
+.message-composer { margin-top: 20px; }
 .run-controls .interrupt-option { display: flex; align-items: center; gap: 12px; min-height: 44px; margin: 12px 0 0; font-weight: 400; }
 .message-footer { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-top: 12px; }
 .message-footer button { flex: none; }
@@ -108,4 +108,20 @@ summary { min-height: 44px; padding: 10px 0; }
   .task-section td:nth-child(3) { grid-column: 1 / -1; }
   .task-section td:nth-child(6):empty { display: none; }
   .task-section td:first-child a { display: inline-flex; align-items: center; min-height: 44px; }
+}
+
+/* Task controls retain their nodes during polling so typing and reading stay put. */
+.control-target { margin: -8px 0 20px; }
+.control-gate { padding: 12px 16px; border-left: 3px solid var(--gv-warning); background: var(--gv-bench); }
+.composer-buttons { display: flex; flex-wrap: wrap; gap: 8px; flex: none; }
+.control-result { margin-top: 20px; padding: 16px; border: 1px solid var(--gv-line); border-radius: 8px; background: var(--gv-bench); }
+.control-result p:first-child { margin-top: 0; }
+.control-result button, .control-result a { margin: 4px 8px 0 0; }
+.control-result a { display: inline-flex; align-items: center; min-height: 44px; }
+.recovery-controls { margin-top: 24px; padding-top: 16px; border-top: 1px solid var(--gv-line); }
+.recovery-controls h3 { margin: 0; font-size: 16px; }
+.cancel-controls { margin-top: 16px; padding-top: 8px; border-top: 1px solid var(--gv-line); }
+@media (max-width: 760px) {
+  .run-controls { padding: 16px; }
+  .composer-buttons { display: grid; grid-template-columns: 1fr; }
 }
