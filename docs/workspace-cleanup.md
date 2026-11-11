@@ -11,12 +11,22 @@ Removing a clone also removes its installed dependencies, build outputs and
 private per-task credential configuration. No separate cleanup command or
 provider-specific setting is needed.
 
+Local implementation harnesses receive task-scoped `TMPDIR`, `TMP` and `TEMP`
+through a short `/tmp/gvt-…` alias into `.cache/gallivant/tmp` in their clone.
+The short path keeps Unix socket names within platform limits; an occupied or
+changed alias is refused rather than overwritten. The existing private npm cache stays
+under `.cache/gallivant/npm`. Both are materialized at dispatch and ignored by Git.
+Tools that honor these environment variables therefore keep their scratch files
+inside the workspace that is removed on merge, together with its verified alias.
+Explicit absolute paths such as
+`/private/tmp/custom-test-output` remain the task author's responsibility.
+
 The coordinator preserves:
 
 - Operator checkouts and directories still referenced by another task or chain.
 - Open PRs and PRs closed without merging.
 - Local changes, untracked files, stashes, unpublished branches, changed origins
-  or heads, linked worktrees and in-progress Git operations.
+  or heads, linked worktrees, submodules, hidden index flags and in-progress Git operations.
 - Live author/reviewer processes, uncollected results and ambiguous cancellations.
 - Task/PRD snapshots, registry and chain records, execution logs, receipts,
   review metadata and immutable review history.
@@ -27,6 +37,13 @@ it does not start another agent or consume a review round. Before deletion start
 the coordinator saves the exact directory identity. After a crash, cleanup can
 finish deleting that same directory even if `.git` was already removed. A
 replacement directory does not inherit that permission.
+
+Cleanup Git probes use a credential-free environment, disable filesystem-monitor
+and other execution hooks, and disable configured clean/process filters and
+network transports. Repository-local configuration cannot authorize a callback in
+the coordinator. Reviewer cleanup collects already-exited recorded jobs without
+dispatching another review, and pending learning-audit deliveries remain retryable
+after workspace cleanup settles.
 
 Inspect the result with:
 

@@ -4,7 +4,7 @@ import { mkdtempSync, writeFileSync, readFileSync, mkdirSync, symlinkSync, realp
 import { tmpdir } from "node:os";
 import { join, dirname } from "node:path";
 import { execFileSync } from "node:child_process";
-import { runtimeEnvironment, prepareRuntimeCache, sessionExports, claudeRuntimeSettings, shellQuote, runtimeReadPaths, RUNTIME_SETTINGS_FILE } from "../lib/runtime-environment.mjs";
+import { runtimeEnvironment, prepareRuntimeCache, sessionExports, claudeRuntimeSettings, shellQuote, runtimeReadPaths, RUNTIME_SETTINGS_FILE, runtimeTemporaryPath, removeRuntimeTemporaryAlias } from "../lib/runtime-environment.mjs";
 import { findExecutable } from "../lib/executable.mjs";
 import { buildRun, buildPreparationRun, assertSafeArgv, assertSafeEnv } from "../lib/harness.mjs";
 import { makeRunner } from "../lib/run.mjs";
@@ -77,12 +77,14 @@ test("portable fallback ignores login profiles while a selected shell retains ve
 
 test("checkout cache survives a real offline npm ci and stays out of Git changes", t => {
   const cwd = mkdtempSync(join(tmpdir(), "runtime-cache-"));
-  t.after(() => rmSync(cwd, { recursive: true, force: true }));
+  t.after(() => { removeRuntimeTemporaryAlias(cwd); rmSync(cwd, { recursive: true, force: true }); });
   const env = { ...process.env, ...runtimeEnvironment(process.env, process.execPath, cwd), NPM_CONFIG_USERCONFIG: "/dev/null" };
   prepareRuntimeCache(cwd, env);
   prepareRuntimeCache(cwd, env);
   const sentinel = join(env.NPM_CONFIG_CACHE, "cached-data");
   writeFileSync(sentinel, "retained");
+  const temporary = execFileSync(process.execPath, ["--input-type=module", "-e", "import {mkdtempSync,writeFileSync} from 'node:fs';import {tmpdir} from 'node:os';import {join} from 'node:path';const p=mkdtempSync(join(tmpdir(),'tool-output-'));writeFileSync(join(p,'fixture'),'generated');process.stdout.write(p)"], { cwd, env, encoding: "utf8" });
+  assert.ok(realpathSync(temporary).startsWith(join(realpathSync(cwd), ".cache/gallivant/tmp/tool-output-")));
   writeFileSync(join(cwd, "package.json"), JSON.stringify({ name: "offline-cache-fixture", version: "1.0.0" }));
   writeFileSync(join(cwd, "package-lock.json"), JSON.stringify({ name: "offline-cache-fixture", version: "1.0.0", lockfileVersion: 3, packages: { "": { name: "offline-cache-fixture", version: "1.0.0" } } }));
   mkdirSync(join(cwd, "node_modules", "stale"), { recursive: true });
@@ -96,7 +98,7 @@ test("checkout cache survives a real offline npm ci and stays out of Git changes
 
 test("cache preparation refuses symlinks and preserves existing ignore rules", t => {
   const cwd = mkdtempSync(join(tmpdir(), "runtime-cache-boundary-"));
-  t.after(() => rmSync(cwd, { recursive: true, force: true }));
+  t.after(() => { removeRuntimeTemporaryAlias(cwd); rmSync(cwd, { recursive: true, force: true }); });
   const env = runtimeEnvironment({}, process.execPath, cwd);
   const outside = join(cwd, "outside"); mkdirSync(outside);
   symlinkSync(outside, join(cwd, ".cache"));
@@ -110,6 +112,29 @@ test("cache preparation refuses symlinks and preserves existing ignore rules", t
   assert.equal(readFileSync(ignore, "utf8"), "keep existing rules\n");
 });
 
+test("task temporary aliases preserve Unix sockets in long worktree paths", { skip: process.platform === "win32" }, t => {
+  const root = mkdtempSync(join(tmpdir(), "runtime-socket-")), cwd = join(root, "long-task-name-".repeat(10));
+  mkdirSync(cwd);
+  t.after(() => { removeRuntimeTemporaryAlias(cwd); rmSync(root, { recursive: true, force: true }); });
+  const env = { ...process.env, ...runtimeEnvironment(process.env, process.execPath, cwd) };
+  prepareRuntimeCache(cwd, env);
+  const output = execFileSync(process.execPath, ["-e", "const net=require('net'),os=require('os'),path=require('path');const s=net.createServer();s.on('error',e=>{console.error(e);process.exit(1)});s.listen(path.join(os.tmpdir(),'tool.sock'),()=>s.close(()=>process.stdout.write('ok')))"], { env, cwd, encoding: "utf8", timeout: 10000 });
+  assert.equal(output, "ok");
+});
+
+test("occupied and redirected temporary aliases are never overwritten or recursively deleted", t => {
+  const cwd = mkdtempSync(join(tmpdir(), "runtime-temp-boundary-")), outside = join(cwd, "outside");
+  const env = runtimeEnvironment(process.env, process.execPath, cwd), alias = env.TMPDIR;
+  t.after(() => { rmSync(alias, { force: true }); rmSync(cwd, { recursive: true, force: true }); });
+  mkdirSync(outside); writeFileSync(join(outside, "keep"), "keep");
+  mkdirSync(alias);
+  assert.throws(() => prepareRuntimeCache(cwd, env), /alias is occupied/);
+  rmSync(alias, { recursive: true }); symlinkSync(outside, alias, "dir");
+  assert.throws(() => prepareRuntimeCache(cwd, env), /alias is occupied/);
+  assert.throws(() => removeRuntimeTemporaryAlias(cwd), /alias is occupied/);
+  assert.equal(readFileSync(join(outside, "keep"), "utf8"), "keep");
+});
+
 test("every local adapter receives identical runtime environment on start and resume", () => {
   const dir = mkdtempSync(join(tmpdir(), "runtime-adapters-"));
   const settings = join(dir, "settings.json");
@@ -120,6 +145,8 @@ test("every local adapter receives identical runtime environment on start and re
       assert.equal(spec.env.PATH.split(":")[0], dirname(process.execPath), `${harness} ${mode}`);
       assert.equal(spec.env.NPM_CONFIG_CACHE, join(dir, ".cache/gallivant/npm"));
       assert.equal(spec.env.npm_config_cache, spec.env.NPM_CONFIG_CACHE);
+      assert.equal(spec.env.TMPDIR, runtimeTemporaryPath(dir));
+      assert.equal(spec.env.TMP, spec.env.TMPDIR); assert.equal(spec.env.TEMP, spec.env.TMPDIR);
       assertSafeArgv(spec.args); assertSafeEnv(spec.env);
       if (harness === "claude") {
         assert.equal(spec.env.CLAUDE_CODE_DISABLE_BACKGROUND_TASKS, "1");

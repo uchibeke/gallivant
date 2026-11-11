@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, lstatSync, symlinkSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, lstatSync, symlinkSync, writeFileSync, utimesSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { cleanupMergedWorkspace, removeOwnedDirectory } from "../lib/workspace_cleanup.mjs";
@@ -9,6 +9,7 @@ import { makeGit } from "../lib/git.mjs";
 import { createReviewService } from "../lib/first_party_review.mjs";
 import { reviewDigest } from "../lib/review_policy.mjs";
 import { makeTick } from "../lib/tick.mjs";
+import { runtimeEnvironment, prepareRuntimeCache } from "../lib/runtime-environment.mjs";
 import { CONFIG, T0, at, fakeGh, fakeGit, fakeRunner, fakeNotify, makeClock, prFixture, seededState, silentLog, STATES } from "./helpers.mjs";
 
 function fixture(t, repo = "acme/widget") {
@@ -43,8 +44,13 @@ test("confirmed merged clones are removed for both hosts; durable evidence survi
     writeFileSync(evidence, "immutable receipt");
     mkdirSync(join(w.path, "node_modules", "large-package"), { recursive: true });
     writeFileSync(join(w.path, "node_modules", "large-package", "generated"), "cache");
+    const env = runtimeEnvironment(process.env, process.execPath, w.path); prepareRuntimeCache(w.path, env);
+    const scratch = execFileSync(process.execPath, ["-e", "const fs=require('fs'),os=require('os'),path=require('path');const p=fs.mkdtempSync(path.join(os.tmpdir(),'fixture-'));fs.writeFileSync(path.join(p,'output'),'scratch');process.stdout.write(p)"], { env: { ...process.env, ...env }, encoding: "utf8" });
+    assert.ok(existsSync(scratch));
     assert.equal((await cleanupMergedWorkspace(w.ctx, w.id, w.entry, w.pr)).status, "done");
     assert.equal(existsSync(w.path), false);
+    assert.equal(existsSync(scratch), false);
+    assert.throws(() => lstatSync(env.TMPDIR), { code: "ENOENT" });
     assert.equal(readFileSync(evidence, "utf8"), "immutable receipt");
     assert.equal((await cleanupMergedWorkspace(w.ctx, w.id, w.entry, w.pr)).status, "done");
   }
@@ -54,6 +60,7 @@ test("local edits, untracked files, unpublished branches, stashes and Git locks 
   for (const change of [
     w => writeFileSync(join(w.path, "app.txt"), "unfinished fix"),
     w => writeFileSync(join(w.path, "notes.md"), "unpublished notes"),
+    w => { w.git("update-index", "--assume-unchanged", "app.txt"); writeFileSync(join(w.path, "app.txt"), "hidden local work"); },
     w => { w.git("checkout", "-b", "unfinished"); writeFileSync(join(w.path, "extra"), "work"); w.git("add", "."); w.git("commit", "-m", "Unpublished"); w.git("checkout", "work/task"); },
     w => { writeFileSync(join(w.path, "app.txt"), "stashed"); w.git("stash", "push"); },
     w => writeFileSync(join(w.path, ".git", "index.lock"), "locked"),
@@ -64,6 +71,17 @@ test("local edits, untracked files, unpublished branches, stashes and Git locks 
     assert.equal((await cleanupMergedWorkspace(w.ctx, w.id, w.entry, w.pr)).status, "retained");
     assert.equal(existsSync(w.path), true); assert.equal(w.reviewCalls(), 0);
   }
+});
+
+test("cleanup Git probes never execute worker-defined fsmonitor hooks or clean/process filters", async t => {
+  const w = fixture(t), marker = join(w.home, "callback-executed"), script = join(w.path, ".git", "worker-callback");
+  writeFileSync(join(w.path, ".gitattributes"), "app.txt filter=probe\n");
+  w.git("add", ".gitattributes"); w.git("commit", "-m", "Attributes");
+  writeFileSync(script, `#!${process.execPath}\nrequire('fs').writeFileSync(${JSON.stringify(marker)},'executed');process.stdin.pipe(process.stdout);\n`, { mode: 0o755 });
+  for (const key of ["core.fsmonitor", "filter.probe.clean", "filter.probe.process"]) w.git("config", key, script);
+  const later = new Date(Date.now() + 2000); utimesSync(join(w.path, "app.txt"), later, later);
+  const proof = await w.ctx.git.cleanupProof(w.path);
+  assert.equal(proof.dirty, false); assert.equal(existsSync(marker), false);
 });
 
 test("operator paths, shared task inputs, chain inputs, linked worktrees and symlink ancestors are preserved", async t => {
@@ -140,6 +158,22 @@ test("review cleanup removes only recorded settled preparation directories, reta
   assert.equal((await service.cleanup(id)).status, "pending");
 });
 
+test("terminal cleanup collects exited running and launch-intent reviewers without dispatching replacements", async t => {
+  for (const status of ["running", "launch-intent"]) {
+    const home = mkdtempSync(join(tmpdir(), "workspace-cleanup-review-settle-")); t.after(() => rmSync(home, { recursive: true, force: true }));
+    const id = "acme/widget/task", key = "a".repeat(64), root = join(home, "reviews"), file = join(root, `${reviewDigest(id)}.json`);
+    const path = join(root, reviewDigest(id), key); mkdirSync(path, { recursive: true });
+    const clock = makeClock(), now = clock.now();
+    writeFileSync(file, JSON.stringify({ id, jobs: { [key]: { key, status, run: status === "running" ? "run-1" : null, startedAt: now, deadline: now + 60_000, evidence: {} } } }));
+    const current = { id: "run-1", name: `review-${key}`, running: false, exit: 0, endedAt: now + 100 };
+    const runner = { current: () => current, settle: () => current, lines: () => [], outcome: () => ({ ok: true, lastMessage: "invalid report remains a failed review" }),
+      start: () => assert.fail("no replacement"), submit: () => assert.fail("no replacement"), cancel: () => assert.fail("exited process must not be cancelled") };
+    const service = createReviewService({ home, config: CONFIG, executionFor: () => runner }, { clock });
+    assert.equal((await service.cleanup(id)).status, "done"); assert.equal(existsSync(path), false);
+    const saved = JSON.parse(readFileSync(file)).jobs[key]; assert.equal(saved.status, "incomplete"); assert.equal(saved.run, "run-1");
+  }
+});
+
 test("the terminal tick waits for cleanup, retries without an agent, and only then records done", async () => {
   const { state, id } = seededState(); const gh = fakeGh({ pr: prFixture({ state: "MERGED" }) });
   const clock = makeClock(), runner = fakeRunner(clock); let calls = 0;
@@ -171,6 +205,17 @@ test("cleanup backfill preserves the original integration decision and meaningfu
   const tick = makeTick({ config: CONFIG, state, gh, git: fakeGit(), notify: fakeNotify(), log: silentLog, clock,
     runnerFor: () => fakeRunner(clock), readPrd: () => null, cleanupMergedWorkspace: async () => ({ status: "done" }) });
   await tick.tick(); assert.deepEqual(state.get(id).completionEvidence, proof); assert.equal(state.get(id).activity_at, T0);
+});
+
+test("settled cleanup still drains the accepted-run learning outbox after a transient store failure", async () => {
+  const delivery = { repo: "acme/widget", key: "advice", runId: "accepted-run" };
+  const { state, id } = seededState({ state: STATES.done, workspace_cleanup: { status: "done" }, learning_deliveries: { audit: delivery } });
+  const clock = makeClock(); let locked = true, calls = 0;
+  const learning = { identityFor: () => null, delivered: async () => { calls++; if (locked) throw new Error("store locked"); return { delivered: true }; } };
+  const tick = makeTick({ config: CONFIG, state, gh: fakeGh(), git: fakeGit(), notify: fakeNotify(), log: silentLog, clock, learning,
+    runnerFor: () => assert.fail("no provider work for a settled task"), readPrd: () => null, cleanupMergedWorkspace: async () => assert.fail("already cleaned") });
+  await tick.tick(); assert.deepEqual(state.get(id).learning_deliveries.audit, delivery);
+  locked = false; await tick.tick(); assert.deepEqual(state.get(id).learning_deliveries, {}); assert.equal(calls, 2);
 });
 
 test("delivery-ready tasks can observe a later merge for cleanup without restarting implementation", async () => {
