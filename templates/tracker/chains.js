@@ -2,6 +2,12 @@
 (() => {
   const root = document.querySelector?.('[data-chains]');
   if (!root) return;
+  // Pin the server-preselected chain so polling/back navigation keep its context.
+  const initialChain = root.querySelector('.chain-workspace[data-chain]')?.dataset.chain;
+  const initialUrl = new URL(location.href);
+  if (initialChain && !initialUrl.searchParams.has('chain')) {
+    initialUrl.searchParams.set('chain', initialChain); history.replaceState(history.state, '', initialUrl);
+  }
   const status = document.getElementById('chains-status'), refresh = document.getElementById('chains-refresh');
   const apply = document.getElementById('chains-apply'), dialog = document.getElementById('chain-confirm');
   const review = document.getElementById('chain-review'), actionStatus = document.getElementById('chain-action-status');

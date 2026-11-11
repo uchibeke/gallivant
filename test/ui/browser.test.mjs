@@ -156,7 +156,7 @@ test("keyboard skip, disclosure return, grouping, filter and reduced motion", { 
   await page.locator("#overview-q").fill("no match for this");
   await page.getByRole("button", { name: "Apply filters", exact: true }).click();
   assert.match(await page.locator(".overview-scope").textContent(), /0 match/);
-  await page.getByRole("link", { name: "Clear filters", exact: true }).click();
+  await page.getByRole("link", { name: "Reset filters", exact: true }).click();
   assert.equal(await page.locator("[data-task-id]").count(), 6);
   assert.equal(new URL(page.url()).searchParams.get("theme"), "dark");
   const motion = await page.locator("*").evaluateAll(els => els.every(el => {
@@ -265,17 +265,17 @@ test("1000 tasks use bounded real DOM pages with no probe, host, model or state 
     assert.ok(await page.locator("body").evaluate(el => el.outerHTML.length) < 300000);
     await page.getByRole("link", { name: "Next tasks", exact: true }).click();
     assert.equal(new URL(page.url()).searchParams.get("offset"), "25");
-    assert.match(await page.locator("[data-task-id]").first().textContent(), /task-25/);
+    assert.equal(await page.locator("[data-task-id]").first().getAttribute('data-task-id'), Object.keys(entries).sort((a, b) => a.localeCompare(b))[25]);
     assert.equal(new URL(page.url()).searchParams.get("theme"), "light");
     await page.goBack(); assert.match(await page.locator("[data-task-id]").first().textContent(), /task-0/);
-    assert.match(await page.locator(".overview-scope").textContent(), /all 1000 registered tasks/);
+    assert.match(await page.locator(".overview-scope").textContent(), /1000 matching tasks/);
     const requests = [];
     const track = request => requests.push(new URL(request.url()).pathname);
     page.on("request", track);
     await page.locator("#overview-q").fill("task-999");
     await page.getByRole("button", { name: "Apply filters", exact: true }).click();
     assert.equal(await page.locator("[data-task-id]").count(), 1);
-    assert.match(await page.locator(".overview-scope").textContent(), /all 1000 registered tasks.*1 match/);
+    assert.match(await page.locator(".overview-scope").textContent(), /1 matching task.*1000 registered/);
     assert.ok(requests.every(path => !path.includes("/api/run/")), "search loads no per-row data or transcripts");
     page.off("request", track);
   }
