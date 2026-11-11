@@ -17,7 +17,8 @@ Answers are saved using the service's question IDs, including partial batches an
 explicit additional verification commands. Saving answers may continue
 paid preparation but never approves implementation. Review requirements,
 acceptance criteria, verification, delivery destination, assumptions and the exact
-brief. Coding, documentation and research all use the existing pull-request
+brief. Verification lists the checks selected in that saved brief. Coding,
+documentation and research all use the existing pull-request
 profile and its verification and ownership gates. Selecting completion after
 integration waits for a human merge; it does not grant merge authority.
 

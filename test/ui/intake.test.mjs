@@ -89,6 +89,23 @@ for (const base of ["", "/gallivant"]) test(`protected intake adapters reuse CLI
   assert.equal(next.body.task.status, "needs-input", JSON.stringify(next.body));
 });
 
+for (const base of ["", "/gallivant"]) test(`verification review matches the saved brief at ${base || "/"}`, { timeout: 30_000 }, async t => {
+  const { page, origin, calls, home } = await open(t, { selectedVerify: ["npm test"] });
+  await page.goto(`${origin}${base}/task/new`); await prepare(page); await answer(page);
+  const checks = page.getByRole("heading", { name: "Verification", exact: true }).locator("xpath=following-sibling::ul[1]/li");
+  assert.deepEqual(await checks.allTextContents(), ["npm test"]);
+  const task = taskStore(home).list()[0];
+  assert.ok(task.commandCandidates.includes("npm run lint"));
+  assert.deepEqual(task.output.verify, ["npm test"]);
+  const response = await fetch(`${origin}${base}/api/task/intake?taskId=${task.id}`), view = await response.json();
+  assert.deepEqual(view.task.selectedVerifyCommands, ["npm test"]);
+  await page.reload(); assert.deepEqual(await checks.allTextContents(), ["npm test"]);
+  await page.getByRole("button", { name: "Refresh saved status", exact: true }).click();
+  await page.waitForFunction(() => !document.getElementById("intake-refresh").disabled);
+  assert.deepEqual(await checks.allTextContents(), ["npm test"]);
+  assert.equal(calls.start, 0);
+});
+
 test("competing tabs and draft checkpoints cannot replace an unresolved preparation identity", { timeout: 30_000 }, async t => {
   const { page, context, origin, calls } = await open(t), other = await context.newPage();
   await page.goto(`${origin}/task/new`); await other.goto(`${origin}/gallivant/task/new`);

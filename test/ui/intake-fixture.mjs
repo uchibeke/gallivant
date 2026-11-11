@@ -11,7 +11,7 @@ import { ready } from "../../lib/commands/ready.mjs";
 import { start } from "../../lib/commands/start.mjs";
 
 export const INTAKE_REQUEST = "Add CSV export for the widget table.\nDo not add dependencies.";
-export async function intakeFixture({ question = true, unsupported = false, missing = false, ...options } = {}) {
+export async function intakeFixture({ question = true, unsupported = false, missing = false, selectedVerify = null, ...options } = {}) {
   const world = await fixture({ ...options, empty: true }), { ctx, home, state } = world;
   try {
     const checkout = join(home, "operator"); mkdirSync(checkout);
@@ -33,7 +33,12 @@ export async function intakeFixture({ question = true, unsupported = false, miss
     if (!missing) state.put("acme/widget/source", newEntry({ repo: "acme/widget", prd: "docs/prds/source.md", branch: "work/source", harness: "codex", checkout, state: STATES.done }));
     let preparationFailure = null;
     ctx.taskIntakeOptions = {
-      prepare: async (_ctx, task) => { calls.prepare++; if (preparationFailure) throw preparationFailure; return JSON.stringify(draftFor(task, { question })); },
+      prepare: async (_ctx, task) => {
+        calls.prepare++; if (preparationFailure) throw preparationFailure;
+        const output = draftFor(task, { question });
+        if (selectedVerify) output.verify = selectedVerify;
+        return JSON.stringify(output);
+      },
       decideReady: async options => { calls.ready++; return ready(options); },
       dispatch: async (context, options) => { calls.start++; return start(context, options); },
       daemon: async () => { calls.daemon++; },
