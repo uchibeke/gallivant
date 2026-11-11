@@ -27,6 +27,9 @@ One lifecycle-managed reader requests `/api/overview` every ten seconds while
 visible. The endpoint renders a bounded window from the same status model; it
 makes no per-row network requests and reads no transcripts. Both standalone and
 mounted routes work. Task controls continue through the existing protected POST.
+Each snapshot also refreshes filter choices from the full registry. Unsaved search
+and selections stay intact; a selected value with no remaining tasks stays visible
+and is labelled accordingly. An active native picker receives new choices on blur.
 
 A read has an eight-second deadline, including response-body consumption. A
 failure leaves the last good snapshot visible with its observation time. Retries

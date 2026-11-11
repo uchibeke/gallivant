@@ -144,7 +144,11 @@ esac
         if (path === "/tracker.css") assert.match(body, /--gv-focus/);
         if (path === "/tracker.js") assert.match(body, /trackerLifecycle/);
         if (path === "/") assert.match(body, /Skip to main content/);
-        if (path.startsWith("/api/overview")) assert.match(JSON.parse(body).content, /data-task-id=/);
+        if (path.startsWith("/api/overview")) {
+          const snapshot = JSON.parse(body);
+          assert.match(snapshot.content, /data-task-id=/);
+          for (const key of ["repo", "phase", "harness", "attention", "chain"]) assert.ok(snapshot.filters.includes(`id="overview-${key}"`));
+        }
       }
     }
   } finally { await ui.close(); }

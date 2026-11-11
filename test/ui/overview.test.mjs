@@ -91,12 +91,78 @@ test("all overview filters and page context survive task navigation, theme, relo
   assert.equal(JSON.stringify(state.entries()), saved);
 });
 
+test("snapshot refresh reconciles filter choices without replacing drafts, selections or focused controls", { timeout: 30_000 }, async t => {
+  const { page, origin, state, ids } = await open(t);
+  const repo = "acme/new-repository", id = `${repo}/new-task`, chain = "next-release", harness = "fixture-harness";
+  // A completed synthetic chain permits registration/removal without any dispatch.
+  state.createChain({ name: chain, repo, base: "main", status: "done", index: 0, steps: [{ id }] });
+  const entry = { ...state.get(ids[7]), repo, harness, pr: 52, url: `https://github.com/${repo}/pull/52`,
+    reviewObservation: { head: "head", binding: "binding", external: "waiting", checks: { count: 1, settled: false }, observedAt: NOW } };
+  const choices = { repo, phase: "ci_wait", harness, chain };
+  for (const base of ["", "/gallivant"]) {
+    await page.goto(`${origin}${base}/?${new URLSearchParams({ repo: LONG_REPO, theme: "dark" })}`);
+    const url = page.url();
+    await page.evaluate(() => { window.savedForm = document.querySelector(".overview-filters"); window.savedSearch = document.querySelector("#overview-q"); });
+    for (const [key, value] of Object.entries({ phase: "operator_attention", harness: "claude", attention: "ready", chain: "release" }))
+      await page.locator(`#overview-${key}`).selectOption(value);
+    await page.locator("#overview-q").fill("unfinished search");
+    await page.locator("#overview-q").evaluate(el => el.setSelectionRange(1, 5));
+    state.put(id, entry);
+    await page.clock.runFor(10_000); await updated(page);
+    for (const [key, value] of Object.entries(choices))
+      assert.equal(await page.locator(`#overview-${key} option`).evaluateAll((options, value) => options.some(option => option.value === value), value), true, `${key} gains its new choice`);
+    assert.deepEqual(await page.evaluate(() => ({ form: window.savedForm === document.querySelector(".overview-filters"),
+      search: window.savedSearch === document.activeElement, value: window.savedSearch.value, start: window.savedSearch.selectionStart, end: window.savedSearch.selectionEnd })),
+    { form: true, search: true, value: "unfinished search", start: 1, end: 5 });
+    for (const [key, value] of Object.entries({ repo: LONG_REPO, phase: "operator_attention", harness: "claude", attention: "ready", chain: "release" }))
+      assert.equal(await page.locator(`#overview-${key}`).inputValue(), value);
+    assert.equal(page.url(), url);
+    assert.equal(await page.locator(".overview-filter-options").getAttribute("open"), "");
+
+    // Removed choices remain selected, including unsaved choices absent from the URL.
+    await page.locator("#overview-q").fill("");
+    for (const [key, value] of Object.entries({ ...choices, attention: "waiting" })) await page.locator(`#overview-${key}`).selectOption(value);
+    await page.locator("#overview-harness").focus();
+    const activeOptions = await page.locator("#overview-harness").innerHTML();
+    state.remove(id);
+    await page.clock.runFor(10_000); await updated(page);
+    assert.equal(await page.locator("#overview-harness").evaluate(el => el === document.activeElement), true);
+    assert.equal(await page.locator("#overview-harness").innerHTML(), activeOptions, "an active native picker is not rewritten");
+    await page.locator("#overview-q").focus();
+    for (const [key, value] of Object.entries(choices)) {
+      assert.equal(await page.locator(`#overview-${key}`).inputValue(), value);
+      assert.match(await page.locator(`#overview-${key} option:checked`).textContent(), /no current tasks/);
+    }
+    assert.equal(page.url(), url);
+
+    // Manual refresh brings the choices back without resetting the unsaved form.
+    state.put(id, entry);
+    await page.locator("#overview-refresh").click(); await updated(page);
+    for (const [key, value] of Object.entries(choices)) {
+      assert.equal(await page.locator(`#overview-${key}`).inputValue(), value);
+      assert.doesNotMatch(await page.locator(`#overview-${key} option:checked`).textContent(), /no current tasks/);
+    }
+    const saved = JSON.stringify(state.entries());
+    await page.getByRole("button", { name: "Apply filters", exact: true }).click();
+    await page.waitForURL(url => url.searchParams.get("repo") === repo);
+    assert.equal(await row(page, id).count(), 1);
+    await page.reload();
+    for (const [key, value] of Object.entries(choices)) assert.equal(await page.locator(`#overview-${key}`).inputValue(), value);
+    assert.equal(JSON.stringify(state.entries()), saved);
+    state.remove(id);
+  }
+});
+
 test("overview retains its last snapshot on failed and slow reads with bounded retry and recovery", { timeout: 30_000 }, async t => {
   const { page, origin } = await open(t);
   let requests = 0, mode = "fail";
-  await page.route("**/api/overview*", route => {
+  await page.route("**/api/overview*", async route => {
     requests++;
     if (mode === "slow") return; // The real read's AbortController owns its deadline.
+    if (mode === "invalid") {
+      const response = await route.fetch(), data = await response.json();
+      return route.fulfill({ response, json: { ...data, filters: "" } });
+    }
     return mode === "fail" ? route.fulfill({ status: 503, body: "offline" }) : route.continue();
   });
   await page.goto(`${origin}/`);
@@ -114,6 +180,11 @@ test("overview retains its last snapshot on failed and slow reads with bounded r
   assert.equal(await page.locator("#overview-refresh").isDisabled(), true);
   await page.clock.runFor(8001); await updated(page);
   assert.match(await page.locator("#overview-status").textContent(), /Stale/);
+  const filters = await page.locator(".overview-filters").innerHTML();
+  mode = "invalid"; await page.locator("#overview-refresh").click(); await updated(page);
+  assert.match(await page.locator("#overview-status").textContent(), /Stale/);
+  assert.equal(await page.locator("#overview-results").innerHTML(), initial);
+  assert.equal(await page.locator(".overview-filters").innerHTML(), filters);
   mode = "ok"; await page.locator("#overview-refresh").click(); await updated(page);
   assert.match(await page.locator("#overview-status").textContent(), /^Current/);
 });
@@ -190,13 +261,16 @@ test("overview themes, five widths, landscape, zoom and expanded long names are 
 test("overview lifecycle cancels slow reads, pauses hidden polling and resumes one controller", { timeout: 30_000 }, async t => {
   const { page, origin } = await open(t);
   let requests = 0;
+  const firstRead = Promise.withResolvers();
   await page.route("**/api/overview*", route => {
     requests++;
-    if (requests === 1) return;
+    if (requests === 1) { firstRead.resolve(); return; }
     return route.continue();
   });
   await page.goto(`${origin}/`);
   await page.clock.runFor(10_000);
+  // Advancing browser time does not wait for the driver's route callback.
+  await firstRead.promise;
   assert.equal(requests, 1);
   await page.evaluate(() => dispatchEvent(new PageTransitionEvent("pagehide", { persisted: true })));
   await page.clock.runFor(120_000);

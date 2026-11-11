@@ -4,6 +4,8 @@
   if (!root) return;
   const status = document.getElementById("overview-status");
   const refresh = document.getElementById("overview-refresh"), apply = document.getElementById("overview-apply");
+  const filterSelects = [...root.querySelectorAll(".overview-filters select")];
+  const deferredChoices = new Map();
   let busy = false, failures = 0, pending = null, cancelTimer = null;
   let observedAt = status.querySelector("time").dateTime;
   const announce = (message, state) => { status.textContent = message; status.dataset.state = state; };
@@ -37,10 +39,27 @@
     }
     while (cursor) { const next = cursor.nextSibling; cursor.remove(); cursor = next; }
   }
+  function reconcileChoices(current, next) {
+    // Native pickers must not change under a keyboard or pointer interaction.
+    if (current === document.activeElement) { deferredChoices.set(current, next); return; }
+    deferredChoices.delete(current);
+    const value = current.value, options = [...next.options].map(option => option.cloneNode(true));
+    if (!options.some(option => option.value === value)) options.push(new Option(`${value} (no current tasks)`, value));
+    for (const option of options) option.selected = option.defaultSelected = option.value === value;
+    const same = options.length === current.options.length && options.every((option, i) => option.value === current.options[i].value && option.text === current.options[i].text);
+    if (!same) current.replaceChildren(...options);
+    current.value = value;
+  }
+  for (const select of filterSelects) select.addEventListener("blur", () => {
+    const next = deferredChoices.get(select);
+    if (next) reconcileChoices(select, next);
+  });
   const prepare = data => {
-    if (typeof data?.content !== "string" || !Number.isFinite(Date.parse(data.observedAt))) throw new Error("Invalid overview snapshot");
+    if (typeof data?.content !== "string" || typeof data.filters !== "string" || !Number.isFinite(Date.parse(data.observedAt))) throw new Error("Invalid overview snapshot");
     const parsed = new DOMParser().parseFromString(data.content, "text/html").getElementById("overview-results");
-    if (!parsed) throw new Error("Invalid overview snapshot");
+    const filters = new DOMParser().parseFromString(data.filters, "text/html");
+    const choices = filterSelects.map(select => filters.getElementById(select.id));
+    if (!parsed || choices.some(select => select?.tagName !== "SELECT" || !select.options.length)) throw new Error("Invalid overview snapshot");
     // Appearance can change during a read; navigation keeps the current choice.
     const theme = new URL(location.href).searchParams.get("theme");
     for (const link of parsed.querySelectorAll("a[href]")) {
@@ -49,10 +68,12 @@
       if (theme) url.searchParams.set("theme", theme); else url.searchParams.delete("theme");
       link.setAttribute("href", url.pathname + url.search + url.hash);
     }
-    return parsed;
+    return { next: parsed, choices };
   };
   function render(data, force = false) {
-    const next = prepare(data), current = document.getElementById("overview-results");
+    const { next, choices } = prepare(data), current = document.getElementById("overview-results");
+    // Only options change: unsaved search, selected values, focus and disclosure stay local.
+    choices.forEach((select, i) => reconcileChoices(filterSelects[i], select));
     const order = el => [...el.querySelectorAll("[data-task-id]")].map(row => row.closest("section").dataset.kind + ":" + row.dataset.taskId).join("|");
     const structureChanged = order(current) !== order(next);
     if (!force && (held() || structureChanged && (scrollY > current.offsetTop || current.querySelector("details[open]")))) {
