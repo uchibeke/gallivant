@@ -1,3 +1,4 @@
+import { seedHealth } from "./health-fixture.mjs";
 import { chromium } from "playwright";
 import { mkdirSync } from "node:fs";
 import { seedChains, CHAIN } from "./chains-fixture.mjs";
@@ -7,7 +8,7 @@ import { CONTROL_NOTE, settleControl } from "./controls-fixture.mjs";
 import { intakeFixture, INTAKE_REQUEST } from "./intake-fixture.mjs";
 
 const name = process.argv[2];
-if (!["task-intake-desktop", "task-intake-mobile", "chains-desktop", "chains-mobile", "before-overview-desktop", "foundation-overview-dark", "overview-desktop", "overview-mobile", "task-workspace-desktop", "task-workspace-mobile", "task-controls-desktop", "task-controls-mobile"].includes(name)) throw new Error("Choose an approved capture name");
+if (!["health-desktop", "health-mobile", "task-intake-desktop", "task-intake-mobile", "chains-desktop", "chains-mobile", "before-overview-desktop", "foundation-overview-dark", "overview-desktop", "overview-mobile", "task-workspace-desktop", "task-workspace-mobile", "task-controls-desktop", "task-controls-mobile"].includes(name)) throw new Error("Choose an approved capture name");
 const intakeCapture = name.startsWith("task-intake-");
 const world = intakeCapture ? await intakeFixture() : await fixture();
 const controlsCapture = name.startsWith("task-controls-");
@@ -15,6 +16,7 @@ const workspaceCapture = name.startsWith("task-workspace-") || controlsCapture;
 let browser;
 try {
   if (workspaceCapture) seedWorkspace(world);
+  if (name.startsWith("health-")) seedHealth(world);
   if (name.startsWith("chains-")) await seedChains(world);
   browser = await chromium.launch();
   const viewport = name.endsWith("-mobile") ? { width: 390, height: 844 } : { width: 1440, height: 1000 };
@@ -23,6 +25,7 @@ try {
   const page = await context.newPage();
   await page.clock.setFixedTime(new Date(NOW));
   await page.goto(name.startsWith("chains-") ? `${world.origin}/chains?chain=${CHAIN}&milestone=${encodeURIComponent(TASK)}&theme=${name.endsWith("-mobile") ? "light" : "dark"}` : `${world.origin}${workspaceCapture ? `/run?id=${encodeURIComponent(TASK)}&run=${RUN}` : "/?"}${workspaceCapture ? "&" : ""}theme=dark`, { waitUntil: "networkidle", timeout: 15_000 });
+  if (name.startsWith("health-")) await page.goto(`${world.origin}/health?theme=${name.endsWith("-mobile") ? "light" : "dark"}`, { waitUntil: "networkidle", timeout: 15000 });
   await page.evaluate(() => document.fonts.ready);
   if (intakeCapture) {
     await page.goto(`${world.origin}/task/new?theme=${name.endsWith("-mobile") ? "light" : "dark"}`);
