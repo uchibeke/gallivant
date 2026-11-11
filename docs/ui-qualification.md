@@ -25,6 +25,12 @@ Node 22/24 runtime matrix. `UI_INSTALL_BROWSER=1` additionally launches the
 development checkout's driver against the clean installed runtime. It fails if
 the browser is unavailable. Neither mode installs browser tooling in the consumer.
 
+The pinned CI container runs as root and sets `HOME=/root` for the job. GitHub's
+mounted `/github/home` can belong to a different user; Firefox refuses that
+ownership mismatch before any test executes. Keep the container user and its
+home consistent for both the source suite and installed-package browser smoke.
+This setting applies only to the browser CI container.
+
 `test/ui/fixture.mjs` supplies the real serve/mount handlers, isolated state,
 fixed clock and fake execution boundaries. The intake fixture substitutes
 inference and execution only; preparation, revision, readiness and control
