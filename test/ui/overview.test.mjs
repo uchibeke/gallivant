@@ -36,7 +36,7 @@ test("overview prioritizes decisions with qualified readiness, meaningful summar
     const groups = await page.locator(".overview-section:visible").evaluateAll(els => els.map(el => el.dataset.kind));
     assert.deepEqual(groups, ["attention", "ready", "progressing", "waiting"]);
     assert.equal(await page.locator('.overview-section[data-kind="attention"] [data-task-id]').count(), 4);
-    assert.equal(await page.getByRole("button", { name: "New task", exact: true }).isDisabled(), true);
+    assert.match(await page.getByRole("link", { name: "New task", exact: true }).getAttribute("href"), /\/task\/new/);
     for (const id of ids) {
       const p = models.find(r => r.id === id).presentation;
       const task = row(page, id);

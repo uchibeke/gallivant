@@ -4,10 +4,12 @@ import { seedChains, CHAIN } from "./chains-fixture.mjs";
 import { seedWorkspace } from "./workspace-fixture.mjs";
 import { fixture, NOW, TASK, RUN } from "./fixture.mjs";
 import { CONTROL_NOTE, settleControl } from "./controls-fixture.mjs";
+import { intakeFixture, INTAKE_REQUEST } from "./intake-fixture.mjs";
 
 const name = process.argv[2];
-if (!["chains-desktop", "chains-mobile", "before-overview-desktop", "foundation-overview-dark", "overview-desktop", "overview-mobile", "task-workspace-desktop", "task-workspace-mobile", "task-controls-desktop", "task-controls-mobile"].includes(name)) throw new Error("Choose an approved capture name");
-const world = await fixture();
+if (!["task-intake-desktop", "task-intake-mobile", "chains-desktop", "chains-mobile", "before-overview-desktop", "foundation-overview-dark", "overview-desktop", "overview-mobile", "task-workspace-desktop", "task-workspace-mobile", "task-controls-desktop", "task-controls-mobile"].includes(name)) throw new Error("Choose an approved capture name");
+const intakeCapture = name.startsWith("task-intake-");
+const world = intakeCapture ? await intakeFixture() : await fixture();
 const controlsCapture = name.startsWith("task-controls-");
 const workspaceCapture = name.startsWith("task-workspace-") || controlsCapture;
 let browser;
@@ -22,6 +24,17 @@ try {
   await page.clock.setFixedTime(new Date(NOW));
   await page.goto(name.startsWith("chains-") ? `${world.origin}/chains?chain=${CHAIN}&milestone=${encodeURIComponent(TASK)}&theme=${name.endsWith("-mobile") ? "light" : "dark"}` : `${world.origin}${workspaceCapture ? `/run?id=${encodeURIComponent(TASK)}&run=${RUN}` : "/?"}${workspaceCapture ? "&" : ""}theme=dark`, { waitUntil: "networkidle", timeout: 15_000 });
   await page.evaluate(() => document.fonts.ready);
+  if (intakeCapture) {
+    await page.goto(`${world.origin}/task/new?theme=${name.endsWith("-mobile") ? "light" : "dark"}`);
+    await page.locator("#intake-repository").selectOption("acme/widget");
+    await page.locator("#intake-harness").selectOption("codex");
+    await page.locator("#intake-text").fill(INTAKE_REQUEST);
+    await page.locator("#intake-prepare").click();
+    await page.getByLabel("Which file format should export use?").fill("Use CSV.");
+    await page.getByRole("button", { name: "Save answers and prepare", exact: true }).click();
+    await page.waitForFunction(() => document.getElementById("intake-review")?.dataset.status === "ready");
+    await page.evaluate(() => { document.activeElement.blur(); scrollTo(0, 0); });
+  }
   if (controlsCapture) {
     await page.locator("#run-note").fill(CONTROL_NOTE);
     const accepted = page.waitForResponse(r => r.request().method() === "POST");
