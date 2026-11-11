@@ -128,6 +128,7 @@ test("five viewport widths, landscape and 200 percent zoom contain long content 
     await page.setViewportSize({ width: 1280, height: 900 });
     await page.addStyleTag({ url: `${origin}/zoom.css` });
     assert.deepEqual(await noOverflow(page), { width: 1280, scroll: 1280 });
+    await page.locator("#run-note").fill("");
     await page.locator("#run-note").focus();
     await page.keyboard.type("Keyboard at 200 percent");
     assert.equal(await page.locator("#run-note").inputValue(), "Keyboard at 200 percent");
@@ -331,6 +332,9 @@ test("pages opened during queued or applying messages restore current controls a
       state.update(TASK, { last: { run: RUN, exit: null } });
     }
     for (const base of ["", "/gallivant"]) for (const status of ["queued", "applying"]) {
+      // Leave the old task before resetting storage: pagehide persists its draft.
+      await page.goto(`${origin}${base}/`);
+      await page.evaluate(() => localStorage.clear());
       state.update(TASK, { control: { id: "fixture-pending", action: "message", status, note: "Saved failed message." } });
       await page.goto(origin + runPath(base));
       assert.equal(await page.locator("#run-note").isDisabled(), true);
