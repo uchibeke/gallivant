@@ -94,7 +94,7 @@ if (theme) theme.addEventListener("change", () => {
   if (theme.value) document.documentElement.dataset.theme = theme.value;
   else delete document.documentElement.dataset.theme;
   history.replaceState(null, "", url.pathname + url.search + url.hash);
-  const form = document.querySelector?.(".overview-filters");
+  const form = document.querySelector?.(".overview-filters, .chain-filters");
   if (form) {
     let input = form.querySelector('[name="theme"]');
     if (!input) { input = document.createElement("input"); input.type = "hidden"; input.name = "theme"; form.append(input); }
@@ -104,7 +104,7 @@ if (theme) theme.addEventListener("change", () => {
   for (const link of document.querySelectorAll("a[href]")) {
     if (link.getAttribute("href").startsWith("#")) continue;
     const target = new URL(link.href);
-    if (target.origin !== url.origin || ![base + "/", base + "/run", base + "/runs"].includes(target.pathname)) continue;
+    if (target.origin !== url.origin || ![base + "/", base + "/run", base + "/runs", base + "/chains"].includes(target.pathname)) continue;
     if (theme.value) target.searchParams.set("theme", theme.value); else target.searchParams.delete("theme");
     link.href = target.pathname + target.search + target.hash;
   }

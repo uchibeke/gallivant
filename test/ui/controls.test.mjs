@@ -138,7 +138,9 @@ test("unaccepted requests retry only after a saved read using their original imm
   await check(page, "uncertain");
   disconnected = false;
   await check(page, "uncertain");
+  const acceptedRetry = page.waitForResponse(r => r.request().method() === "POST");
   await page.getByRole("button", { name: "Retry same request", exact: true }).click();
+  assert.equal((await acceptedRetry).status(), 202);
   await page.waitForFunction(() => document.getElementById("control-status").textContent.includes("Waiting for the coordinator"));
   assert.equal(payloads.length, 2); assert.deepEqual(payloads[0], payloads[1]);
   assert.equal(state.get(TASK).control.id, payloads[0].requestId);

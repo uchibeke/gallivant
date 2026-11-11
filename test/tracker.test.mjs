@@ -2198,3 +2198,45 @@ test("unrecoverable burst history reports a retention gap instead of claiming th
   assert.match(p.els.earlierstate.textContent, /some history is unavailable/);
   assert.equal(p.els.earlier.hidden, true);
 });
+
+test("protected chain adapter rejects unauthorized, stale, oversized and pinned mutations at root and mount", async () => {
+  const { chainRevision } = await import("../lib/chains.mjs");
+  const w = world();
+  w.state.createChain({ name: "recovery", status: "stopped", repo: "acme/widget", base: "main", index: 0,
+    steps: [{ id: "acme/widget/future", digest: "a".repeat(64) }], reason: "repair prerequisite" });
+  const before = w.state.getChain("recovery");
+  for (const base of ["", "/gallivant"]) {
+    const route = base ? mount(w.ctx).handle : (req, res) => handle(w.ctx, req, res);
+    const page = res(); await route({ ...req(`${base}/chains?chain=recovery`, localHeaders), socket: localSocket }, page);
+    const token = /data-token="([a-f0-9]+)"/.exec(page.body())?.[1]; assert.ok(token);
+    const input = { action: "retry", stage: "review", revision: chainRevision(before), requestId: "chain-protected-request" };
+    async function post(body = input, change = {}) {
+      const request = Readable.from([typeof body === "string" ? body : JSON.stringify(body)]);
+      Object.assign(request, { method: "POST", url: `${base}/api/chain/control?chain=recovery`, headers: { ...localHeaders, "x-gallivant-token": token }, socket: localSocket, ...change });
+      const response = res(); await route(request, response); await response.ended; return response;
+    }
+    for (const change of [
+      { headers: { ...localHeaders, "x-gallivant-token": "wrong" } },
+      { headers: { ...localHeaders, "x-gallivant-token": token, origin: "https://evil.example" } },
+      { headers: { ...localHeaders, "x-gallivant-token": token, host: "evil.example:8791", origin: "http://evil.example:8791" } },
+      { socket: { ...localSocket, remoteAddress: "192.168.1.9" } },
+    ]) assert.equal((await post(input, change)).code, 403);
+    assert.equal((await post("x".repeat(33000))).code, 413);
+    assert.equal((await post("{")).code, 400);
+    assert.equal((await post({ ...input, action: "start" })).code, 409);
+    assert.equal((await post({ ...input, revision: "b".repeat(64) })).code, 409);
+    assert.equal((await post({ ...input, path: "/etc/passwd" })).code, 409);
+    assert.equal((await post(input, { headers: { ...localHeaders, "x-gallivant-token": token, "content-type": "text/plain" } })).code, 415);
+    const acceptedReview = await post(); assert.equal(acceptedReview.code, 200, acceptedReview.body());
+    assert.deepEqual(w.state.getChain("recovery"), before);
+  }
+  writeJsonAtomic(join(w.home, "runtime-pin.json"), { version: 1 });
+  const page = res(); await handle(w.ctx, { ...req("/chains?chain=recovery", localHeaders), socket: localSocket }, page);
+  assert.match(page.body(), /artifact-pinned/);
+  assert.match(page.body(), /data-chain-action="retry" disabled/);
+  const token = /data-token="([a-f0-9]+)"/.exec(page.body())[1];
+  const request = Readable.from([JSON.stringify({ action: "cancel", stage: "confirm", revision: chainRevision(before), requestId: "pinned-cancel-request" })]);
+  Object.assign(request, { method: "POST", url: "/api/chain/control?chain=recovery", headers: { ...localHeaders, "x-gallivant-token": token }, socket: localSocket });
+  const response = res(); await handle(w.ctx, request, response); assert.equal(response.code, 409);
+  assert.deepEqual(w.state.getChain("recovery"), before);
+});
