@@ -60,6 +60,37 @@ test("overview prioritizes decisions with qualified readiness, meaningful summar
   assert.equal(JSON.stringify(state.entries()), saved);
 });
 
+test("stopped tasks with missing owned runs stay actionable without enabling another writer", { timeout: 30_000 }, async t => {
+  const { page, origin, state, context, ids } = await open(t);
+  const id = ids[1], at = "2026-09-24T14:10:00.000Z";
+  state.update(id, { reason: "run-stop-unverified", last: { run: "missing-attempt", exit: null, at } });
+  const saved = JSON.stringify(state.entries());
+  for (const base of ["", "/gallivant"]) {
+    await page.goto(`${origin}${base}/?attention=attention`);
+    const task = row(page, id);
+    assert.equal(await task.count(), 1);
+    assert.equal(await task.evaluate(el => el.closest("section").dataset.kind), "attention");
+    assert.equal(await task.locator(".task-decision strong").textContent(), "Execution stop unconfirmed");
+    assert.match(await task.locator(".task-decision p").textContent(), /reconcile its status before starting another writer/);
+    assert.equal(await task.locator("time").getAttribute("datetime"), at);
+    const snapshot = await (await context.request.get(`${origin}${base}/api/status`)).json();
+    const p = snapshot.needs_you.find(task => task.id === id).presentation;
+    assert.equal(p.phase.id, "reconciling");
+    assert.equal(p.ownership, "reconciling");
+    assert.equal(p.attention.actor, "operator");
+    for (const action of ["resume", "message", "interrupt"]) assert.equal(p.controls[action], false);
+    await task.locator(".task-context > summary").click();
+    assert.match(await task.locator(".task-context-body").textContent(), /previous execution has not been confirmed stopped/);
+    await task.locator(".technical-reason > summary").click();
+    assert.match(await task.locator(".technical-reason").textContent(), /run-stop-unverified/);
+    await task.locator(".task-open").click();
+    assert.equal(await page.getByRole("button", { name: "Resume agent", exact: true }).isDisabled(), true);
+    assert.equal(await page.locator("#run-note").isDisabled(), true);
+    assert.equal(await page.getByRole("button", { name: "Send message", exact: true }).isDisabled(), true);
+  }
+  assert.equal(JSON.stringify(state.entries()), saved);
+});
+
 test("all overview filters and page context survive task navigation, theme, reload and browser back", { timeout: 30_000 }, async t => {
   const { page, origin, state } = await open(t);
   const saved = JSON.stringify(state.entries());

@@ -145,6 +145,40 @@ test("ended and uncertain runs expose ownership without authorizing another writ
   }
 });
 
+test("operator stops retain attention independently of unresolved ownership and automatic waits", () => {
+  for (const run of [null, { ...running, id: "different-attempt" }, { ...running, running: false, exit: 1 },
+    { ...running, execution: { providerState: "status-unknown" } }]) {
+    for (const reason of ["run-stop-unverified", "dispatch-refused", null]) {
+      const entry = { ...base(), state: "needs-human", reason, last: { run: "attempt", exit: null, at: START } };
+      const p = project({ entry, run });
+      assert.equal(p.phase.id, "reconciling");
+      assert.equal(p.attention.group, "attention");
+      assert.equal(p.attention.actor, "operator");
+      assert.equal(p.attention.source, "entry.reason/task.status");
+      assert.match(p.nextAction, /reconcile/i);
+      assert.doesNotMatch(p.attention.explanation, /Waiting on automatic/);
+      if (reason === "run-stop-unverified") assert.equal(p.attention.title, "Execution stop unconfirmed");
+      for (const key of ["resume", "message", "interrupt"]) {
+        assert.equal(p.controls[key], false);
+        assert.equal(controlAvailability(entry, run, {})[key], false);
+      }
+      assert.deepEqual(taskView({ repo: entry.repo }, { entry, run, now: NOW, maxIterations: 5 }).presentation.attention, p.attention);
+    }
+  }
+  // A task-level stop uses the same projection even without a registry stop.
+  const entry = { ...base(), last: { run: "attempt", exit: null } };
+  for (const status of ["blocked", "needs-input"]) assert.equal(project({ entry, task: { status } }).attention.group, "attention");
+  // An unresolved run alone, or an actual retry allowance, remains a wait.
+  assert.equal(project({ entry }).attention.group, "waiting");
+  for (const retry of [{ network_retry: { phase: "waiting", attempts: 1, first_at: START, run: "attempt", code: "ENOTFOUND", next_at: NOW } },
+    { retry: { op: "ready-label-write", count: 1 } }]) {
+    const stopped = { ...entry, state: "needs-human", reason: "provider-network", ...retry };
+    assert.equal(project({ entry: stopped }).attention.group, "waiting");
+    assert.equal(project({ entry: { ...stopped, last: { run: "attempt", exit: 1 } } }).phase.id, "retry_wait");
+    assert.equal(project({ entry: { ...stopped, dispatch_stopped: true } }).attention.group, "attention");
+  }
+});
+
 test("active work takes precedence over older check waits and supplied completion cannot upgrade current evidence", () => {
   const entry = { ...base(), last: { run: "attempt", exit: null }, reviewObservation: { head: "head", binding: "binding", checks: { settled: false, count: 1 } } };
   assert.equal(project({ entry, run: running }).phase.id, "implementing");

@@ -4,6 +4,9 @@ The overview uses the shared task presentation model. Operator decisions and
 repairs appear first, followed by qualified handoff, progressing work, automatic
 or external waits, and recorded outcomes. Unknown evidence stays explicitly
 unknown. A finished process or a legacy done flag cannot qualify delivery.
+An operator stop remains in **Needs attention** when its owned run is missing or
+unresolved. The ownership phase still shows reconciliation, and writer controls
+remain unavailable until ownership is settled. Automatic retry waits stay separate.
 
 Each compact record shows the repository, task, phase, harness, meaningful
 activity age, delivery/check/review evidence, round usage, and recorded chain
