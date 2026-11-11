@@ -196,16 +196,16 @@ test("the overview groups canonical attention and links each task to its workspa
   w.state.put("acme/widget/other", { ...w.state.get(ID), pr: 7, state: STATES.needsHuman, reason: "conflict" });
   w.state.put("acme/widget/shipped", { ...w.state.get(ID), pr: 9, state: STATES.done });
   const r = res();
-  handle(w.ctx, req("/"), r);
+  handle(w.ctx, req("/?sort=attention"), r);
   await r.ended;
   assert.equal(r.code, 200);
   const body = r.body();
   assert.match(body, /<h2>Needs attention<\/h2>/);
-  assert.match(body, /<h2>Progressing<\/h2>/);
-  assert.match(body, /<h2>Closed or integrated<\/h2>/);
+  assert.match(body, /<h2>In progress<\/h2>/);
+  assert.match(body, /<h2>Completed<\/h2>/);
   assert.match(body, /widget#7/, "the needs-human entry is listed");
   assert.match(body, /conflict/, "with the reason status would show");
-  assert.match(body, /href="\/run\?id=acme%2Fwidget%2Fwidget-export"/, "every row links to its run page");
+  assert.match(body, /href="\/run\?[^\"]*id=acme%2Fwidget%2Fwidget-export"/, "every row links to its run page");
   assert.match(body, /No coordinator observation is recorded/, "no daemon.json says so plainly rather than implying health");
 });
 

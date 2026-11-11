@@ -1,6 +1,9 @@
 # Chain workspace
 
-Open **Chains** in the workspace navigation, then choose a chain. The ordered
+Open **Chains** in the workspace navigation. When no chain is specified, the first
+matching chain is selected: active chains first, then stopped, completed and cancelled,
+with most recently updated first within a status. Its selection is pinned in the URL
+so refreshes do not move the workspace beneath you. Choose another chain as needed. The ordered
 list shows the selected milestone, its predecessor gate, and links to its task
 and recorded PR. `/chains` and mounted `/gallivant/chains` URLs retain chain
 search/status filters, list pages, theme and the selected milestone across task

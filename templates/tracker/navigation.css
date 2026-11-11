@@ -1,0 +1,8 @@
+.external-link-mark { display: inline-block; margin-left: .3em; font-size: .95em; line-height: 1; text-decoration: none; }
+.page-loading { position: sticky; z-index: 200; top: 16px; margin: 16px 16px 16px auto; width: 380px; max-width: calc(100% - 32px); padding: 16px; background: var(--gv-surface); border: 1px solid var(--gv-line-strong); border-top: 3px solid var(--gv-accent); border-radius: var(--gv-r); box-shadow: 0 8px 30px #0003; }
+.page-loading p { margin: 0 0 10px; font-size: 14px; color: var(--gv-text); }
+.page-loading button { min-height: 44px; padding: 6px 12px; }
+.loading[data-skeleton="true"]::after { content: ""; display: block; height: 42px; margin-top: 12px; border-radius: 4px; opacity: .55; background: linear-gradient(var(--gv-line) 0 0) 0 0 / 90% 8px no-repeat, linear-gradient(var(--gv-line) 0 0) 0 17px / 65% 8px no-repeat, linear-gradient(var(--gv-line) 0 0) 0 34px / 78% 8px no-repeat; }
+#log:empty::before { content: "Activity will appear here when it is recorded."; display: block; padding: 24px; color: var(--gv-muted); font: 14px/1.6 var(--gv-font); }
+
+.sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
