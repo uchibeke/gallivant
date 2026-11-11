@@ -762,3 +762,84 @@ test("fast progress ticks retain chain review cadence, bound outage retries and 
     chain: { status: w.ctx.state.getChain("release").status, index: w.ctx.state.getChain("release").index, failures: w.ctx.state.getChain("release").failures } });
   t.diagnostic(`scheduler chain evidence: ${evidence}`);
 });
+
+test("reviewed retry binds candidate bytes, base files and chain identity without accepting changes", async () => {
+  const { chainRevision, reviewChainRetry } = await import("../lib/chains.mjs");
+  const { chainControl } = await import("../lib/tracker/chain_controls.mjs");
+  const w = world({ sources: true });
+  await w.queue();
+  w.ctx.state.updateChain("release", { status: "stopped", reason: "sources changed" });
+  put(join(w.checkout, "docs/context.md"), "Reviewed updated context\n");
+  const before = w.ctx.state.getChain("release");
+  const review = await chainControl(w.ctx, "release", { stage: "review", action: "resnapshot", revision: chainRevision(before), requestId: "chain-review-123" });
+  assert.deepEqual(w.ctx.state.getChain("release"), before);
+  assert.notEqual(review.differences[0].fingerprint.before, review.differences[0].fingerprint.after);
+  const sourceDiff = review.differences[0].files.find(f => f.path === "docs/context.md");
+  assert.notEqual(sourceDiff.inputBefore, sourceDiff.inputAfter);
+  assert.doesNotMatch(JSON.stringify(review), /Reviewed updated context|operator\//);
+  put(join(w.checkout, "docs/context.md"), "Changed after review\n");
+  await assert.rejects(chainControl(w.ctx, "release", { stage: "confirm", action: "resnapshot", revision: review.revision, requestId: review.requestId }), /inputs changed after review/);
+  assert.deepEqual(w.ctx.state.getChain("release"), before);
+  const plan = await reviewChainRetry(w.ctx, { name: "release", resnapshot: true });
+  w.remoteFiles.set("docs/context.md", "New base input\n");
+  await assert.rejects(retryChain(w.ctx, { name: "release", resnapshot: true, revision: plan.revision }), /inputs changed after review/);
+  const last = await reviewChainRetry(w.ctx, { name: "release", resnapshot: true });
+  w.ctx.state.updateChain("release", { base: "release" });
+  await assert.rejects(retryChain(w.ctx, { name: "release", resnapshot: true, revision: last.revision }), /inputs changed after review/);
+  assert.equal(w.starts(), 0);
+});
+
+test("chain controls apply exact reviewed recovery once and preserve active workers and budgets", async () => {
+  const { chainRevision } = await import("../lib/chains.mjs");
+  const { chainControl } = await import("../lib/tracker/chain_controls.mjs");
+  const w = world(); await w.queue(); await tickChains(w.ctx);
+  w.ctx.state.updateChain("release", { status: "stopped", reason: "repair prerequisite" });
+  const entry = w.ctx.state.get(FIRST), runs = w.starts();
+  for (const action of ["retry", "cancel"]) {
+    const review = await chainControl(w.ctx, "release", { action, stage: "review", revision: chainRevision(w.ctx.state.getChain("release")), requestId: `chain-${action}-request` });
+    const input = { action, stage: "confirm", revision: review.revision, requestId: review.requestId };
+    assert.equal((await chainControl(w.ctx, "release", input)).status, "applied");
+    const saved = w.ctx.state.getChain("release");
+    assert.equal((await chainControl(w.ctx, "release", input)).status, "applied");
+    assert.deepEqual(w.ctx.state.getChain("release"), saved, "duplicate request observes receipt only");
+    await assert.rejects(chainControl(w.ctx, "release", { ...input, revision: "a".repeat(64) }), /different input/);
+    assert.deepEqual(w.ctx.state.get(FIRST), entry);
+    assert.equal(w.starts(), runs); assert.equal(w.kills.length, 0);
+  }
+});
+
+test("chain projection distinguishes every dependency state from worker and delivery completion", async () => {
+  const { milestoneProjection, chainsSnapshot } = await import("../lib/tracker/chains.mjs");
+  const w = world(); await w.queue(); await tickChains(w.ctx); w.markPr();
+  let c = w.ctx.state.getChain("release"), s = c.steps[0];
+  let entry = w.ctx.state.get(FIRST);
+  assert.equal(milestoneProjection(c, c.steps[1], 1).status, "queued");
+  assert.match(milestoneProjection(c, s, 0, entry).label, /Worker ended/);
+  const evidence = { delivery: { repository: REPO, pr: 1, head: "head", base: "main", gate: { allow: true } } };
+  entry = { ...entry, cursor: { fixed_sha: "head" }, completionEvidence: evidence };
+  assert.equal(milestoneProjection(c, s, 0, entry).status, "delivery-ready");
+  assert.equal(c.index, 0);
+  assert.equal(milestoneProjection(c, s, 0, { ...entry, completionEvidence: { terminal: { state: "CLOSED" } } }).status, "closed-unmerged");
+  assert.equal(milestoneProjection({ ...c, status: "stopped", reason: "queued sources changed" }, s, 0, entry).status, "changed-brief");
+  assert.equal(milestoneProjection({ ...c, status: "stopped", reason: "repair access" }, s, 0, entry).status, "stopped");
+  assert.equal(milestoneProjection({ ...c, status: "cancelled" }, c.steps[1], 1).status, "cancelled");
+  assert.equal(milestoneProjection(c, { ...s, merged: { sha: MERGE } }, 0, entry).status, "merged");
+  w.ctx.gh = new Proxy({}, { get() { throw new Error("GET must not query host"); } });
+  const page = chainsSnapshot(w.ctx, { query: { chain: "release" } });
+  assert.match(page.content, /0 of 2 dependencies merged/);
+  assert.match(page.content, /Worker ended/);
+});
+
+test("chain review hides protected paths, preserves legacy unknowns and refuses altered repository identity", async () => {
+  const { chainReviewDifferences } = await import("../lib/tracker/chain_controls.mjs");
+  const { reviewChainRetry } = await import("../lib/chains.mjs");
+  const c = { index: 0, steps: [{ id: FIRST, relPath: "docs/prds/first-step.md", digest: "a".repeat(64), baseFiles: { ".env": null, "docs/context.md": "b".repeat(64) } }] };
+  const differences = chainReviewDifferences(c, c.steps);
+  assert.equal(differences[0].files[0].path, "Protected source path");
+  assert.equal(differences[0].files[1].inputBefore, null);
+  assert.doesNotMatch(JSON.stringify(differences), /\.env/);
+  const w = world(); await w.queue(); w.ctx.state.updateChain("release", { status: "stopped" });
+  w.ctx.gh.repoInfo = async () => ({ nameWithOwner: "other/widget", defaultBranch: "main" });
+  await assert.rejects(reviewChainRetry(w.ctx, { name: "release", resnapshot: true }), /repository or task identity/);
+  assert.equal(w.ctx.state.getChain("release").status, "stopped"); assert.equal(w.starts(), 0);
+});
