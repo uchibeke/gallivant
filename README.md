@@ -1,17 +1,51 @@
 # Gallivant
 
+[![npm version](https://img.shields.io/npm/v/%40uchibeke%2Fgallivant)](https://www.npmjs.com/package/@uchibeke/gallivant)
+[![Runtime portability](https://github.com/uchibeke/gallivant/actions/workflows/runtime-portability.yml/badge.svg?branch=main)](https://github.com/uchibeke/gallivant/actions/workflows/runtime-portability.yml)
+[![Node.js 22 or newer](https://img.shields.io/badge/node-%3E%3D22-339933)](package.json)
+[![License: Apache-2.0](https://img.shields.io/badge/license-Apache--2.0-blue)](LICENSE)
+
 **Give an agent a task. Let the review loop run. Go outside.**
 
 Gallivant turns a repository task into a reviewed pull request. It runs a coding
 agent in a separate checkout, opens the PR, watches CI and reviewer feedback, and
 continues the same session until the PR is ready for you. You decide what merges.
 
-```text
-Your task → agent works → PR → review + CI → fixes → ready for you
-                                 ↑___________|
-```
+Use it when you want to:
+
+- Turn a request or written brief into work with explicit acceptance criteria.
+- Keep implementation and review fixes in a separate checkout and one PR.
+- Follow progress in a local dashboard, steer the agent and retain the merge decision.
+
+## Contents
+
+- [Set up in one command](#set-up-in-one-command)
+- [Finish setup](#finish-what-setup-cannot-do-for-you)
+- [Run a first task](#run-a-first-task)
+- [How the review loop runs](#how-the-review-loop-runs)
+- [While it works](#while-it-works)
+- [More than one task](#more-than-one-task)
+- [Harness support](#harness-support)
+- [Bitbucket Cloud](#bitbucket-cloud)
+- [First-party review](#first-party-review-opt-in)
+- [Feature map](#feature-map)
+- [What to expect](#what-to-expect)
+- [Documentation](#documentation)
+- [Support](#support)
+- [Contributing](#contributing)
+- [License](#license)
 
 ## Set up in one command
+
+For the recommended GitHub setup, you need the shared tools and **one** of the
+two local coding agents below:
+
+| Prerequisite | Check | If it fails |
+| --- | --- | --- |
+| macOS or Linux, Node 22+, Git, jq | `node --version`, `git --version`, `jq --version` | install from your package manager |
+| GitHub CLI signed in | `gh auth status` | `gh auth login` |
+| Codex CLI 0.160.0+ signed in | `codex login status` | `codex login` |
+| or Claude Code 2.1.263+ signed in | `claude auth status` | `claude auth login` |
 
 Run this inside the Git checkout you want to work in:
 
@@ -19,7 +53,7 @@ Run this inside the Git checkout you want to work in:
 npx --yes @uchibeke/gallivant init --harness codex    # or: --harness claude
 ```
 
-The setup flow below requires **0.2.1 or newer**. `npx` runs npm's latest published
+The setup flow requires **0.2.1 or newer**. `npx` runs npm's latest published
 version. Changes merged on `main` become available through npm after a
 [versioned release](docs/releasing.md); check the registry with
 `npm view @uchibeke/gallivant version`.
@@ -29,15 +63,6 @@ repository, creates a separate directory for task checkouts, and ends with the
 same report as `gallivant doctor`: one line per check and the exact fix for each
 failing one. Run it again in another repository to add that repository; nothing
 else in the config changes.
-
-Before you run it you need:
-
-| Prerequisite | Check | If it fails |
-| --- | --- | --- |
-| macOS or Linux, Node 22+, Git, jq | `node --version`, `git --version`, `jq --version` | install from your package manager |
-| GitHub CLI signed in | `gh auth status` | `gh auth login` |
-| Codex CLI 0.160.0+ signed in | `codex login status` | `codex login` |
-| or Claude Code 2.1.263+ signed in | `claude auth status` | `claude auth login` |
 
 A signed-out `gh` or harness stops `init` before it writes anything, and the
 message repeats the login command above. `init` never asks for passwords, tokens
@@ -116,6 +141,21 @@ You do not have to write a PRD yourself. Both entry points use a validated brief
 and the same review loop. [Writing briefs](docs/prd.md) · [Task commands](docs/tasks.md).
 
 ## How the review loop runs
+
+```mermaid
+flowchart TD
+    brief["You approve a task brief"] --> work["Agent implements and verifies"]
+    work --> pr["Pull request"]
+    pr --> gate{"CI, review and acceptance checks"}
+    gate -->|Changes needed| fix["Agent fixes in the same session"]
+    fix -->|Push to the same PR| gate
+    gate -->|Pass| ready["Ready for your review"]
+    ready --> merge["You decide whether to merge"]
+    gate -->|Blocker or limit reached| stop["Inspect the stop and resolve the cause"]
+    stop -->|You resume| fix
+```
+
+The steps below describe the same flow for readers without Mermaid rendering.
 
 1. The agent implements the brief, runs the brief's verification commands and
    opens the PR.
@@ -202,6 +242,14 @@ requires an explicit authorized model; there is no automatic model fallback.
 [Detailed capabilities](docs/config.md#execution-providers) ·
 [Recorded qualification](https://github.com/uchibeke/gallivant/blob/main/docs/audit/harness-live-validation.md).
 
+## Bitbucket Cloud
+
+Bitbucket Cloud tasks support the same independent local Codex review service as GitHub. The adapter captures an exact same-repository PR comparison through Bitbucket's commit, diffstat, merge-base and source APIs, then the shared service divides large evidence into bounded jobs. Activation still requires a successful live route qualification; until that and the disposable private/public review matrix pass, keep an existing run's explicit legacy no-review policy. A prior public disposable run qualified PR publication and receipt acceptance only, not semantic review. See the [setup, activation limits and troubleshooting guide](docs/bitbucket-review.md). Bitbucket-only setup needs no GitHub sign-in and does not install a pipeline or alter repository settings.
+
+## First-party review (opt-in)
+
+New tasks can pin `external-required`, `first-party-required`, or `both-required`. Repositories with the configured external reviewer retain their existing default. First-party review requires a separately qualified restricted route; it never claims Git-host bot approval. GitHub and Bitbucket Cloud are the only evidence adapters currently implemented. See [selection, qualification and migration](docs/first-party-review.md) and the [current live qualification gap](docs/audit/first-party-review.md). Existing no-review runs keep that requirement until the audited policy command changes them and disclose the absence of semantic review.
+
 ## Feature map
 
 | Capability | What you can do | Guide |
@@ -263,13 +311,45 @@ Embedding the same workflow in another application? See
 [task delivery](docs/task-delivery.md). Installing this CLI does not deploy a
 hosted service or publish a chat plugin.
 
-[Contributing](CONTRIBUTING.md) · [Security reports](SECURITY.md) ·
-[Releasing](docs/releasing.md) · [Apache-2.0 license](LICENSE)
+## Support
 
-## Bitbucket Cloud
+Start with `gallivant doctor` for setup checks and `gallivant why <handle>` for a
+stopped run. The [recovery guide](docs/network-recovery.md) covers connection
+failures and safe continuation.
 
-Bitbucket Cloud tasks support the same independent local Codex review service as GitHub. The adapter captures an exact same-repository PR comparison through Bitbucket's commit, diffstat, merge-base and source APIs, then the shared service divides large evidence into bounded jobs. Activation still requires a successful live route qualification; until that and the disposable private/public review matrix pass, keep an existing run's explicit legacy no-review policy. A prior public disposable run qualified PR publication and receipt acceptance only, not semantic review. See the [setup, activation limits and troubleshooting guide](docs/bitbucket-review.md). Bitbucket-only setup needs no GitHub sign-in and does not install a pipeline or alter repository settings.
+For bugs, feature requests or questions, [search existing issues](https://github.com/uchibeke/gallivant/issues)
+or [open an issue](https://github.com/uchibeke/gallivant/issues/new). Include the
+version, operating system, command, expected result and a minimal reproduction.
+Remove credentials and private run content before sharing diagnostics.
+Report vulnerabilities through the private channel in [SECURITY.md](SECURITY.md).
 
-## First-party review (opt-in)
+## Contributing
 
-New tasks can pin `external-required`, `first-party-required`, or `both-required`. Repositories with the configured external reviewer retain their existing default. First-party review requires a separately qualified restricted route; it never claims Git-host bot approval. GitHub and Bitbucket Cloud are the only evidence adapters currently implemented. See [selection, qualification and migration](docs/first-party-review.md) and the [current live qualification gap](docs/audit/first-party-review.md). Existing no-review runs keep that requirement until the audited policy command changes them and disclose the absence of semantic review.
+Documentation improvements, bug reports and pull requests are welcome. Read
+[CONTRIBUTING.md](CONTRIBUTING.md) for the contribution workflow and test-host
+requirements. To work from source with Node 22 or 24:
+
+```sh
+git clone https://github.com/uchibeke/gallivant.git
+cd gallivant
+npm ci --ignore-scripts
+npm run lint
+npm test
+npm run test:install
+```
+
+Native isolation tests require macOS Command Line Tools or Linux Bubblewrap with
+user namespaces enabled. The default suite uses fixtures and disposable
+repositories; live provider tests are separate opt-in commands that can spend
+credits. See the [CI host setup](.github/workflows/runtime-portability.yml) and
+[source installation guide](docs/install.md#install-from-source).
+
+## License
+
+Licensed under the [Apache License 2.0](LICENSE).
+
+## Acknowledgments
+
+This README follows [Make a README](https://www.makeareadme.com/), adapted for a
+CLI with an existing documentation set: prerequisites, runnable examples,
+expected outcomes, support, contribution instructions and licensing.

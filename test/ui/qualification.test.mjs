@@ -52,6 +52,9 @@ for (const type of [chromium, firefox, webkit]) {
     assert.equal(denied, 403);
     await page.getByRole("button", { name: "Send message", exact: true }).focus(); await page.keyboard.press("Enter");
     await page.waitForFunction(() => document.getElementById("control-status").dataset.status === "queued");
+    // Queued is also the optimistic sending state. Wait for the server's
+    // acknowledgement (which clears the note) before observing coordinator state.
+    await page.waitForFunction(() => document.getElementById("run-note").value === "");
     const requestId = world.state.get(TASK).control.id;
     settleControl(world, "failed", "Restore the approved brief before retrying.");
     await page.getByRole("button", { name: "Check request status", exact: true }).click();
