@@ -16,7 +16,7 @@ try {
   assert.equal(packed.name, "@uchibeke/gallivant");
   for (const f of packed.files) assert.ok(!/(^|\/)(?:\.env[^/]*|\.git|\.npmrc|test|audit|prds|plans|design)(?:\/|$)/.test(f.path), `private/test payload: ${f.path}`);
   assert.ok(packed.files.some(f => f.path === "README.md"), "README is packaged");
-  for (const name of ["tokens.css", "primitives.css", "shell.css", "tracker.css", "lifecycle.js", "shell.js", "control-drafts.js", "controls.js", "tracker.js", "overview.js", "overview.css", "workspace.js", "workspace.css", "activity-render.js", "chains.js", "chains.css", "intake.js", "intake.css"])
+  for (const name of ["tokens.css", "primitives.css", "shell.css", "tracker.css", "lifecycle.js", "shell.js", "control-drafts.js", "controls.js", "tracker.js", "overview.js", "overview.css", "workspace.js", "workspace.css", "activity-render.js", "chains.js", "chains.css", "intake.js", "intake.css", "health.css"])
     assert.ok(packed.files.some(f => f.path === `templates/tracker/${name}`), `runtime asset: ${name}`);
   for (const file of packed.files)
     assert.ok(!/(?:playwright|axe-core|chromium|docs\/ui\/previews|test-results)/.test(file.path), `development-only payload: ${file.path}`);
@@ -138,7 +138,7 @@ esac
     const { seedChains, CHAIN } = await import("./ui/chains-fixture.mjs");
     await seedChains(ui);
     for (const base of ["", "/gallivant"]) {
-      for (const path of ["/", "/task/new", `/run?id=${encodeURIComponent(TASK)}&run=${RUN}`, "/runs", `/chains?chain=${CHAIN}`, `/api/chains?chain=${CHAIN}`, "/api/status", "/api/overview?attention=attention", "/api/runs", `/api/run/control?id=${encodeURIComponent(TASK)}&requestId=not-submitted`, `/api/run/workspace?id=${encodeURIComponent(TASK)}&run=${RUN}`, "/tracker.css", "/tracker.js"]) {
+      for (const path of ["/", "/health", "/api/system-health", "/task/new", `/run?id=${encodeURIComponent(TASK)}&run=${RUN}`, "/runs", `/chains?chain=${CHAIN}`, `/api/chains?chain=${CHAIN}`, "/api/status", "/api/overview?attention=attention", "/api/runs", `/api/run/control?id=${encodeURIComponent(TASK)}&requestId=not-submitted`, `/api/run/workspace?id=${encodeURIComponent(TASK)}&run=${RUN}`, "/tracker.css", "/tracker.js"]) {
         const response = await fetch(ui.origin + base + path);
         assert.equal(response.status, 200, `installed UI: ${base}${path}`);
         const body = await response.text();
@@ -147,6 +147,8 @@ esac
         if (path === "/tracker.js") assert.match(body, /trackerLifecycle/);
         if (path.startsWith("/api/run/control")) { const control = JSON.parse(body); assert.equal(control.request, null); assert.equal(control.requestId, "not-submitted"); }
         if (path === "/") assert.match(body, /Skip to main content/);
+        if (path === "/health") assert.match(body, /data-health/);
+        if (path === "/api/system-health") assert.equal(JSON.parse(body).health.coordinator.state, "unknown");
         if (path === "/task/new") {
           assert.match(body, /Prepare requirements/);
           assert.match(body, /No registered source checkout/);
