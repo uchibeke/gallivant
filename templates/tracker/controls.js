@@ -63,10 +63,10 @@ if (runControls) {
   const store = taskControlDrafts(runControls.dataset.instance, runControls.dataset.entry);
   const endpoint = `${BASE}/api/run/control?id=${encodeURIComponent(runControls.dataset.entry)}`;
   let operation = store.initial.operation, latestId = runControls.dataset.requestId || "";
-  let pending = runControls.dataset.pending === "true", uncertain = Boolean(operation), closed = false, sending = false;
+  let pending = runControls.dataset.pending === "true", uncertain = Boolean(operation), closed = runControls.dataset.closed === "true", sending = false;
   let reading = null, cancelTimer, failures = 0, canReplay = false, restoredFailure = null, deliveryGeneration = 0;
   const saved = store.initial;
-  if (saved.value) {
+  if (note && saved.value) {
     note.value = saved.value;
     note.setSelectionRange(saved.start || 0, saved.end || 0, saved.direction || "none");
     note.scrollTop = saved.top || 0;
@@ -76,11 +76,12 @@ if (runControls) {
       globalThis.scrollTo?.(0, saved.pageY || 0);
     });
   }
-  const persist = () => {
+  const persist = (options = {}) => {
+    if (!note) return true; // Closed tasks reconcile identities without changing drafts.
     const sensitiveDraft = redact(note.value) !== note.value;
     const ok = store.save({ value: sensitiveDraft ? "" : note.value, start: note.selectionStart, end: note.selectionEnd,
       direction: note.selectionDirection, top: note.scrollTop, pageY: globalThis.scrollY || 0,
-      focused: document.activeElement === note, operation });
+      focused: document.activeElement === note }, options);
     if (draftStatus) draftStatus.textContent = sensitiveDraft ? "A credential pattern was detected. This draft stays only on this page; remove credentials before saving or sending."
       : ok ? "Draft saved only in this browser for this task · up to 7 days. Discard clears it."
       : store.error;
@@ -92,7 +93,7 @@ if (runControls) {
       button.disabled = pending || sending || uncertain || closed || button.dataset.available !== "true"
         || (button.dataset.action === "message" && !note.value.trim());
     }
-    if (retry) { retry.hidden = !uncertain; retry.disabled = sending || !canReplay; retry.setAttribute("aria-busy", String(Boolean(reading))); }
+    if (retry) { retry.hidden = closed || !uncertain; retry.disabled = closed || sending || !canReplay; retry.setAttribute("aria-busy", String(Boolean(reading))); }
     if (check) { check.disabled = sending; check.setAttribute("aria-busy", String(Boolean(reading))); }
   };
   const feedback = (control, reason) => {
@@ -114,7 +115,7 @@ if (runControls) {
     for (const button of buttons) button.dataset.available = String(data.controls?.[button.dataset.action] === true);
     // While our accepted request is pending, allow a newer draft in an already
     // enabled composer. Never enable an initially unavailable capability.
-    if (!pending || closed) note.disabled = closed || data.controls?.message !== true;
+    if (note && (!pending || closed)) note.disabled = closed || data.controls?.message !== true;
     if (interrupt) {
       interrupt.disabled = pending || closed || data.controls?.interrupt !== true;
       if (interrupt.disabled) interrupt.checked = false;
@@ -125,21 +126,33 @@ if (runControls) {
       const element = document.getElementById(id);
       if (element && typeof value === "string") { element.textContent = value; if (id === "control-gate") element.hidden = !value; }
     }
-    if (data.lastMessage?.note) { lastMessage.querySelector("pre").textContent = data.lastMessage.note; lastMessage.hidden = false; }
+    if (lastMessage && data.lastMessage?.note) { lastMessage.querySelector("pre").textContent = data.lastMessage.note; lastMessage.hidden = false; }
   };
-  const accept = control => {
-    if (operation?.action === "message" && !operation.acknowledged) {
-      if (note.value === operation.note) note.value = "";
+  const accept = async control => {
+    if (operation && control.id !== operation.requestId || !["queued", "applying", "applied", "failed"].includes(control.status)) {
+      markUncertain("The saved receipt has an unknown state or mismatched identity. Check request status before further work; the retry identity is retained.");
+      return false;
+    }
+    let cleared;
+    if (note && operation?.action === "message" && !operation.acknowledged) {
+      if (note.value === operation.note) { cleared = note.value; note.value = ""; }
       lastMessage.querySelector("pre").textContent = operation.note; lastMessage.hidden = false;
     }
-    if (control.status === "failed" && control.action === "message" && restoredFailure !== control.id) {
+    if (note && control.status === "failed" && control.action === "message" && restoredFailure !== control.id) {
       if (!note.value) note.value = control.note || lastMessage.querySelector("pre").textContent;
       restoredFailure = control.id;
     }
-    if (operation) operation.acknowledged = true;
+    if (operation) {
+      if (["queued", "applying"].includes(control.status)) operation = await store.acknowledge(operation);
+      else operation = await store.settle(operation.requestId);
+    }
+    persist(cleared === undefined ? {} : { ifValue: cleared });
+    if (operation && operation.requestId !== control.id) {
+      markUncertain("Another tab submitted a newer request. Check request status to reconcile it; your draft is retained.");
+      return false;
+    }
     uncertain = false; canReplay = false;
-    if (!["queued", "applying"].includes(control.status)) operation = null;
-    persist();
+    return true;
   };
   async function poll() {
     if (reading || sending) return;
@@ -155,10 +168,14 @@ if (runControls) {
         // History is bounded. A different latest request may mean our identity
         // was evicted; never replay it as new paid work in that case.
         canReplay = data.requestId === operation.requestId && latestId === operation.previousId && !pending && !closed && data.controls?.[operation.action] === true;
-        if (!canReplay) status.textContent += " Inspect the current request and execution before further work; replay is unavailable.";
+        if (closed && data.requestId === operation.requestId) {
+          operation = await store.settle(operation.requestId);
+          uncertain = Boolean(operation);
+          status.textContent = "This task is closed or merged. The request is no longer in retained history, so its outcome is unknown. Its local retry identity has been retired; use a follow-up brief for further work.";
+        } else if (!canReplay) status.textContent += " Inspect the current request and execution before further work; replay is unavailable.";
       } else {
         const control = operation ? data.request : data.control;
-        if (control) { accept(control); feedback(control, data.reason); refresh.hidden = ["queued", "applying"].includes(control.status); }
+        if (control) { if (await accept(control)) feedback(control, data.reason); refresh.hidden = ["queued", "applying"].includes(control.status); }
         else feedback(null);
       }
       failures = 0;
@@ -191,13 +208,13 @@ if (runControls) {
       if (!response.ok) {
         if (response.status >= 400 && response.status < 500) {
           feedback({ action: operation.action, status: "failed", message: data.error || "The server refused this request. Repair the prerequisite and try again." });
-          operation = null; uncertain = pending = false; persist(); schedule(10_000); return;
+          operation = await store.settle(operation.requestId); uncertain = Boolean(operation); pending = false; persist(); schedule(10_000); return;
         }
         throw new Error("Response unconfirmed");
       }
       if (data.id !== operation.requestId || !["queued", "applying", "applied", "failed"].includes(data.status)) throw new Error("Receipt identity unavailable");
       latestId = data.id; pending = ["queued", "applying"].includes(data.status);
-      accept(data); feedback(data); schedule(1000);
+      if (await accept(data)) feedback(data); schedule(1000);
     } catch {
       if (!await lifecycle.whenActive()) return;
       markUncertain("Delivery response was lost or timed out. Your draft is retained. Check saved status before retrying.");
@@ -208,15 +225,26 @@ if (runControls) {
     const button = buttons.find(b => b.dataset.action === action);
     if (!button || button.disabled) return;
     if (action === "cancel" && !globalThis.confirm(`Cancel task ${runControls.dataset.entry}? This stops further dispatch and requests cancellation of its current work, not the selected historical attempt. Unfinished files remain. Remote execution may continue until provider confirmation.`)) return;
-    operation = { requestId: crypto.randomUUID(), action, note: action === "message" ? note.value : "",
+    if (!persist()) return;
+    const candidate = { requestId: crypto.randomUUID(), action, note: action === "message" ? note.value : "",
       interrupt: action === "message" && Boolean(interrupt?.checked), previousId: latestId };
-    if (!persist()) { operation = null; return; }
-    await deliver();
+    sending = true; syncButtons();
+    try {
+      operation = await store.claim(candidate);
+      deliveryGeneration++; // Invalidate any read started before the cross-tab claim.
+      if (operation.requestId !== candidate.requestId) {
+        markUncertain("Another tab has an unresolved request for this task. Checking its saved identity; your draft is retained.");
+        schedule(1000); return;
+      }
+      await deliver();
+    } catch {
+      if (draftStatus) draftStatus.textContent = store.error;
+    } finally { sending = false; syncButtons(); }
   };
   for (const button of buttons.filter(b => b.dataset.action !== "message")) button.addEventListener("click", () => submit(button.dataset.action));
-  form.addEventListener("submit", event => { event.preventDefault(); submit("message"); });
-  note.addEventListener("input", () => { persist(); syncButtons(); });
-  for (const event of ["select", "keyup", "click", "scroll", "blur"]) note.addEventListener(event, persist);
+  form?.addEventListener("submit", event => { event.preventDefault(); submit("message"); });
+  note?.addEventListener("input", () => { persist(); syncButtons(); });
+  for (const event of ["select", "keyup", "click", "scroll", "blur"]) note?.addEventListener(event, persist);
   globalThis.addEventListener?.("pagehide", persist);
   document.getElementById("discard-draft")?.addEventListener("click", () => { note.value = ""; persist(); syncButtons(); note.focus(); });
   document.getElementById("restore-message")?.addEventListener("click", () => {
@@ -229,7 +257,19 @@ if (runControls) {
     await poll(); // Reconcile again immediately before an explicit retry.
     if (uncertain && canReplay) await deliver();
   });
-  lifecycle.onResume(() => { reading = null; if (!sending) poll(); });
+  const synchronize = () => {
+    if (sending) return;
+    try {
+      const current = store.operation;
+      if (current && current.requestId !== operation?.requestId) {
+        operation = current; deliveryGeneration++;
+        markUncertain("Another tab has an unresolved request for this task. Checking its saved identity; your draft is retained.");
+        schedule(1000);
+      }
+    } catch { markUncertain("Browser storage unavailable. Check request status before further work."); }
+  };
+  globalThis.addEventListener?.("storage", event => { if (store.changed(event)) synchronize(); });
+  lifecycle.onResume(() => { reading = null; synchronize(); if (!sending) poll(); });
   if (uncertain) markUncertain("Restored an unconfirmed request. Checking its saved identity before further work.");
   syncButtons();
   schedule(pending || uncertain ? 1000 : 10_000);

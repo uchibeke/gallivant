@@ -79,7 +79,10 @@ test("historical attempt survives applied controls, refresh, reload and browser 
     assert.match(await page.locator("#workspace-execution-content").textContent(), /historical-fixture-session/);
     assert.doesNotMatch(await page.locator("#workspace-execution-content").textContent(), /current-fixture-session/);
     await page.getByRole("button", { name: "Recheck PR", exact: true }).click();
-    await page.waitForFunction(() => document.querySelector("#control-status").textContent.includes("queued"));
+    // The sending label is optimistic; wait for the saved receipt and its local
+    // identity checkpoint before advancing the synthetic coordinator/clock.
+    await page.waitForFunction(() => !document.getElementById("control-check").disabled && document.getElementById("control-status").dataset.status === "queued");
+    assert.ok(state.get(TASK).control?.id);
     state.update(TASK, { control: { ...state.get(TASK).control, status: "applied", message: "Fixture applied" } });
     await page.clock.runFor(3100);
     await page.waitForFunction(() => document.querySelector("#control-status").dataset.state === "success").catch(async error => { throw new Error(`${error.message}: ${await page.locator("#control-status").textContent()}`); });

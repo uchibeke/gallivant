@@ -26,13 +26,27 @@ Check request status reads saved state without starting work.
 
 Drafts use browser local storage, scoped to the server instance and task. They
 retain text, selection and reading position across reloads and navigation.
-Storage holds at most twenty task entries; ordinary drafts expire after seven
-days and older drafts make room first. Discard draft clears only the draft.
+Storage holds at most twenty drafts and twenty unresolved request identities;
+ordinary drafts expire after seven days and older drafts make room first.
+Discard draft clears only the draft.
 Control tokens are not part of the storage record. The shared credential
 detector keeps drafts with recognized credential patterns only on the current
 page and asks for their removal before saving or sending. If storage
 is disabled or all entries hold unresolved requests, sending is refused until
-storage is available or those requests are reconciled.
+storage is available or those requests are reconciled. Open a task with a saved
+request and use Check request status to reconcile it, including after its PR
+closes or merges. Closed tasks expose read-only request status without a composer
+or task actions. Terminal results release the matching local identity; if a
+closed task's bounded history no longer includes it, the UI retires that identity
+while explicitly leaving its outcome unknown. Failed reads retain the identity.
+
+Tabs share immutable retry identities separately from draft checkpoints. Web
+Locks serialize claims and settlement across tabs; a competing submission reads
+the existing identity before any POST. Storage notifications and return-to-page
+checks synchronize the visible controls. Poll, blur and page-exit saves cannot
+remove identities or overwrite a newer draft from another tab. Browsers without
+Web Locks support show a remedy and refuse submissions. Existing embedded
+identities migrate on the first locked update; no server task state changes.
 
 A delivery timeout preserves the original immutable input and request ID.
 Check request status reconciles that ID against the current request and bounded

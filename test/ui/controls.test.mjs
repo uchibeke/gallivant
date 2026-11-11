@@ -300,3 +300,101 @@ test("capability gates, current-run interruption, mobile layouts and keyboard co
   for (const action of ["resume", "message"]) assert.equal(await page.locator(`[data-action="${action}"]`).isDisabled(), true);
   assert.match(await page.locator("#cancel-help").textContent(), /provider cannot confirm cancellation/);
 });
+
+test("two tabs preserve an uncertain identity through stale saves and reconcile before another submission", { timeout: 30_000 }, async t => {
+  const world = await open(t), { page, context, origin, state } = world;
+  const stale = await context.newPage();
+  await stale.clock.install({ time: new Date(NOW) });
+  // A suspended tab may miss notifications. The submission lock must still read
+  // current storage instead of trusting either the event or its initial snapshot.
+  await stale.addInitScript(() => addEventListener("storage", event => event.stopImmediatePropagation(), true));
+  await page.goto(origin + path()); await stale.goto(origin + path());
+  let posts = 0;
+  await context.route("**/api/run/control?*", async route => {
+    if (route.request().method() !== "POST") return route.continue();
+    posts++;
+    await route.fetch(); // Persist through the real protected handler; lose its receipt.
+    await route.abort();
+  });
+  await page.locator("#run-note").fill("Only this immutable correction is submitted.");
+  await page.getByRole("button", { name: "Send message", exact: true }).click();
+  await status(page, "uncertain");
+  const id = state.get(TASK).control.id;
+  await stale.locator("#run-note").fill("Keep this competing draft.");
+  await stale.getByRole("button", { name: "Send message", exact: true }).click();
+  await status(stale, "uncertain");
+  assert.match(await stale.locator("#control-status").textContent(), /Another tab/);
+  assert.equal(posts, 1);
+  await stale.goto(origin + "/"); // Its pagehide checkpoint cannot erase the identity.
+  await page.reload(); await check(page, "queued");
+  assert.equal(state.get(TASK).control.id, id);
+  assert.equal(posts, 1);
+  settle(world, "applied"); await check(page, "applied");
+  await stale.goto(origin + path());
+  assert.equal(await stale.locator("#run-note").inputValue(), "Keep this competing draft.");
+  assert.deepEqual(await stale.evaluate(() => JSON.parse(localStorage.getItem("task-control-requests-v1"))), []);
+  // The normal storage notification synchronizes an already open competing tab.
+  await stale.close();
+  const observing = await context.newPage(); await observing.goto(origin + path());
+  await page.locator("#run-note").fill("Next explicit correction.");
+  await page.getByRole("button", { name: "Send message", exact: true }).click();
+  await status(observing, "uncertain");
+  assert.equal(await observing.locator('[data-action="message"]').isDisabled(), true);
+  assert.equal(posts, 2);
+});
+
+test("closed tasks reconcile full saved-request storage without dispatch, including missing history and failed reads", { timeout: 30_000 }, async t => {
+  const { page, origin, state } = await open(t);
+  await page.goto(origin + path());
+  const closed = "acme/atlas/settings-layout", expired = "acme/atlas/repository-picker";
+  state.update(closed, { control: { id: "saved-0", action: "message", status: "applied", note: "Saved correction", at: NOW, finished_at: NOW } });
+  await page.evaluate(({ closed, expired }) => {
+    const instance = document.getElementById("run-controls").dataset.instance;
+    // Legacy entries reproduce the original exhaustion and exercise migration.
+    localStorage.setItem("task-control-drafts-v1", JSON.stringify(Array.from({ length: 20 }, (_, i) => ({
+      key: JSON.stringify([instance, i === 0 ? closed : i === 1 ? expired : `fixture/pending/${i}`]), updated: Date.now(), value: "Saved correction",
+      operation: { requestId: `saved-${i}`, action: "message", note: "Saved correction", interrupt: false, previousId: "" },
+    }))));
+  }, { closed, expired });
+  let posts = 0, disconnected = true;
+  await page.route("**/api/run/control?*", route => {
+    if (route.request().method() === "POST") { posts++; return route.continue(); }
+    return disconnected ? route.abort() : route.continue();
+  });
+  // Full storage refuses even fixed actions with a concrete reconciliation remedy.
+  await page.locator(".cancel-controls summary").click();
+  page.on("dialog", dialog => dialog.accept());
+  await page.getByRole("button", { name: "Cancel task", exact: true }).click();
+  await page.waitForFunction(() => document.getElementById("draft-status").textContent.includes("including closed tasks"));
+  assert.equal(posts, 0);
+  await page.goto(origin + path("", closed));
+  assert.equal(await page.locator("#run-note, button[data-action]").count(), 0);
+  await check(page, "uncertain");
+  assert.equal(await page.evaluate(() => JSON.parse(localStorage.getItem("task-control-drafts-v1")).filter(row => row.operation).length), 20, "failed reads retain identities");
+  disconnected = false;
+  state.update(closed, { control: { ...state.get(closed).control, status: "uncertain" } });
+  await check(page, "uncertain");
+  assert.equal(await page.evaluate(() => JSON.parse(localStorage.getItem("task-control-drafts-v1")).filter(row => row.operation).length), 20, "unknown states cannot settle identities");
+  state.update(closed, { control: { ...state.get(closed).control, status: "applying" } });
+  await check(page, "applying");
+  assert.equal(await page.locator("#control-retry").isVisible(), false);
+  assert.equal(await page.evaluate(() => JSON.parse(localStorage.getItem("task-control-requests-v1")).length), 20, "unfinished server requests retain their slots");
+  state.update(closed, { control: { ...state.get(closed).control, status: "applied" } });
+  await check(page, "applied");
+  assert.match(await page.locator("#control-status").textContent(), /does not confirm model acknowledgement/);
+  assert.match(await page.locator("#control-times").textContent(), /Finished:/);
+  assert.equal(await page.evaluate(() => JSON.parse(localStorage.getItem("task-control-requests-v1")).length), 19);
+  const axe = await new AxeBuilder({ page }).include("#run-controls").withTags(["wcag2a", "wcag2aa", "wcag21aa", "wcag22aa"]).analyze();
+  assert.deepEqual(axe.violations, []);
+  await page.goto(origin + path("/gallivant", expired));
+  await check(page, "uncertain");
+  assert.match(await page.locator("#control-status").textContent(), /outcome is unknown.*identity has been retired/);
+  assert.equal(await page.locator("#control-retry").isVisible(), false);
+  assert.equal(await page.evaluate(() => JSON.parse(localStorage.getItem("task-control-requests-v1")).length), 18);
+  assert.equal(posts, 0, "completed-task reconciliation only reads the existing handler");
+  await page.goto(origin + path()); await page.locator(".cancel-controls summary").click();
+  await page.getByRole("button", { name: "Cancel task", exact: true }).click();
+  await page.waitForFunction(() => !document.getElementById("control-check").disabled);
+  assert.equal(posts, 1, "a reclaimed slot allows an authorized fixed action again");
+  assert.equal(state.get(TASK).control.action, "cancel");
+});
