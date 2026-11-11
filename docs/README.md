@@ -30,6 +30,7 @@ requirements and checks.
 | Understand permissions, credentials and completion checks | [Guardrails](guardrails.md) |
 | Keep Node, Git and dependency execution consistent | [Runtime environment](runtime-environment.md) |
 | Diagnose DNS/HTTPS failures and understand automatic recovery | [Network recovery](network-recovery.md) |
+| Reclaim merged task workspaces and understand what remains protected | [Workspace cleanup](workspace-cleanup.md) |
 | Collect review feedback and understand why learned-rule activation is unavailable | [Learning](learning.md) |
 | Integrate the shared services or package a task-delivery plugin | [Task delivery](task-delivery.md) |
 | Qualify a specific task-delivery plugin release and its actual host evidence | [Release qualification](release-qualification.md) |
