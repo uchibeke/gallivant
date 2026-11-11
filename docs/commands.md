@@ -370,6 +370,46 @@ Two things to know about it:
 - **GET is read-only; run controls require a local POST.** The run page groups Recheck PR, Resume agent and Cancel task separately from the message composer and its Send message button. These enqueue one request in the existing registry; the daemon applies it after any active run settles. The write requires a loopback peer, a loopback Host matching the serving port, an exact same-origin request and a per-server CSRF token. Mounted trackers keep the host's authentication, and remote readers do not receive controls.
 - **It binds to 127.0.0.1 and has no password.** Loopback is a local-machine boundary, not account authentication or isolation from other local processes. Do not expose it through an unauthenticated tunnel or public proxy: pages show repository state, local paths and agent output.
 
+### System health and keyboard navigation
+
+Open **System health** at `/health` (or `/gallivant/health` when mounted).
+It reads saved coordinator and selected-account observations through
+`/api/system-health`. The standalone server identity endpoint `/api/health`
+and existing ports are unchanged. Refresh never runs a provider probe or model.
+An expired success becomes pending until the coordinator's scheduled check;
+installation, configured entries, declared support, live qualification and
+account readiness remain separate. Unknown model access is not a successful
+inference check. Use the shown CLI remedy or the existing task controls after
+repairing a prerequisite. Health reads do not change task activity timestamps.
+
+The overview and health page retain the last good snapshot after a read failure,
+retry with bounded backoff, and pause automatic retries after three failures.
+Use **Refresh** to retry. Scheduled reads pause while the page is hidden or
+offline and resume when visible and connected. **Apply updates** lets you keep
+reading focused content before accepting a newer snapshot.
+
+**Navigate** or **Ctrl/⌘ K** opens existing destinations and the task-list search.
+**/** focuses the current view's search, or opens navigation if it has none.
+Typing fields keep their shortcuts. Escape closes navigation and restores focus.
+Search and filter state travels in the URL for reload, copied links and browser
+history. Appearance keeps theme in the URL and density in local storage scoped
+to the mount; host theme tokens remain authoritative.
+
+Empty workspaces show copyable CLI commands for supported repository setup,
+setup diagnosis and the written-brief workflow. Commands are copied only;
+review them in the target repository's terminal before executing. `init` supports
+GitHub with Codex or Claude; hosted providers and Bitbucket use their documented
+operator configuration. Preparation and Start still enforce existing readiness
+and explicit authorization.
+
+The health previews in `docs/ui/previews/health-desktop.png` and
+`docs/ui/previews/health-mobile.png` are real Chromium renders of the synthetic
+observations in `test/ui/health-fixture.mjs`. Regenerate with
+`node test/ui/capture.mjs health-desktop` and `node test/ui/capture.mjs health-mobile`.
+They demonstrate stale, pending, quota and unsupported states, not live account
+qualification. Deploy this UI by restarting the existing serving process; rollback
+uses the preceding package without a state migration.
+
 ### Rechecking and updating a run
 
 `needs-human` stops normal review and check processing. GitHub labels may trigger a repository's workflows, but they do not restart Gallivant. For a resolved review/CI blocker use **Recheck PR** on `/run?id=...`, or:

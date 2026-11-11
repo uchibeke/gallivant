@@ -352,9 +352,9 @@ test("overview lifecycle cancels slow reads, pauses hidden polling and resumes o
   await updated(page);
   assert.equal(requests, 2);
   assert.match(await page.locator("#overview-status").textContent(), /^Current/);
-  await page.evaluate(() => Object.defineProperty(document, "hidden", { configurable: true, get: () => true }));
+  await page.evaluate(() => { Object.defineProperty(document, "hidden", { configurable: true, get: () => true }); document.dispatchEvent(new Event("visibilitychange")); });
   await page.clock.runFor(60_000); assert.equal(requests, 2);
-  await page.evaluate(() => delete document.hidden);
+  await page.evaluate(() => { delete document.hidden; document.dispatchEvent(new Event("visibilitychange")); });
   await page.clock.runFor(10_000); await updated(page); assert.equal(requests, 3);
   await page.getByRole("link", { name: "Run history", exact: true }).click();
   await page.clock.runFor(60_000); assert.equal(requests, 3);

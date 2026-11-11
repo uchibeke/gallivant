@@ -1,7 +1,7 @@
 (() => {
   const root = document.querySelector?.("[data-intake]");
   if (!root) return;
-  const base = document.body.dataset.base || "", lifecycle = trackerLifecycle();
+  const base = document.body.dataset.base || "";
   const $ = id => document.getElementById(id), caps = JSON.parse(root.dataset.capabilities);
   const form = $("intake-request"), status = $("intake-status"), retry = $("intake-retry"), dialog = $("intake-confirm");
   const initialTask = $("intake-review")?.dataset.task;
