@@ -1,0 +1,8 @@
+name: Configure Ubuntu package downloads
+description: Use official Ubuntu archives and bounded download retries on hosted runners.
+runs:
+  using: composite
+  steps:
+    - name: Select official Ubuntu archives
+      shell: bash
+      run: sudo -- "$(command -v node)" "$GITHUB_ACTION_PATH/configure.mjs"
