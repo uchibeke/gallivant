@@ -510,3 +510,90 @@ test("restored live logs resume from their cursor and preserve rows, history and
   });
   assert.equal(await page.locator("#log > *").count(), rows, "finished logs stay intact on restore");
 });
+
+test("cached full paused output keeps buffered events and recovers overflow in order", { timeout: 45_000 }, async t => {
+  const { page, origin, home } = await open(t, { live: true });
+  const log = join(home, "runs", idSlug(TASK), RUN, "job.log");
+  const lines = (from, count) => Array.from({ length: count }, (_, i) => `Cached fixture event ${from + i}\n`).join("");
+  for (const base of ["", "/gallivant"]) {
+    writeFileSync(log, lines(1, 400));
+    await page.goto(origin + runPath(base));
+    await page.locator("#workspace-activity").evaluate(el => { el.open = true; });
+    await page.waitForFunction(() => document.querySelector('#log [data-replay="400"]'));
+    for (let from = 401; from < 2000; from += 400) {
+      appendFileSync(log, lines(from, 400));
+      await page.waitForFunction(id => document.querySelector(`#log [data-replay="${id}"]`), from + 399);
+    }
+    assert.equal(await page.locator("#log > *").count(), 2000);
+    const pause = () => page.locator("#log").evaluate(el => {
+      el.focus(); el.scrollTop = 0; el.dispatchEvent(new Event("scroll"));
+      window.cachedFirstRow = el.firstElementChild;
+    });
+    await pause();
+    appendFileSync(log, lines(2001, 1));
+    await page.waitForFunction(() => document.querySelector("#follow-output").textContent.startsWith("1 new events"));
+    await page.evaluate(() => dispatchEvent(new PageTransitionEvent("pagehide", { persisted: true })));
+    appendFileSync(log, lines(2002, 1));
+    const stream = page.waitForRequest(request => request.url().includes("/api/run/output"));
+    await page.evaluate(() => dispatchEvent(new PageTransitionEvent("pageshow", { persisted: true })));
+    assert.equal(new URL((await stream).url()).searchParams.get("after"), "2001");
+    await page.waitForFunction(() => document.querySelector("#follow-output").textContent.startsWith("2 new events"));
+    assert.deepEqual(await page.locator("#log").evaluate(el => ({
+      same: el.firstElementChild === window.cachedFirstRow, count: el.childElementCount,
+      top: el.scrollTop, focus: document.activeElement.id,
+    })), { same: true, count: 2000, top: 0, focus: "log" });
+    await page.locator("#follow-output").click();
+    assert.equal(await page.locator('#log [data-replay="2001"]').count(), 1, "the event received before caching is retained");
+    assert.equal(await page.locator('#log [data-replay="2002"]').count(), 1, "reconnected output follows the retained queue");
+
+    // Overflow still uses the existing gap cursor, including after another cache cycle.
+    await pause();
+    appendFileSync(log, lines(2003, 401));
+    await page.waitForFunction(() => document.querySelector("#follow-output").textContent.startsWith("401 new events"));
+    assert.match(await page.locator("#earlierstate").textContent(), /display buffer full/);
+    await page.evaluate(() => {
+      dispatchEvent(new PageTransitionEvent("pagehide", { persisted: true }));
+      dispatchEvent(new PageTransitionEvent("pageshow", { persisted: true }));
+    });
+    await page.locator("#follow-output").click();
+    assert.equal(await page.locator('#log [data-replay="2403"]').count(), 1);
+    assert.equal(await page.locator("#log > *").count(), 2000);
+    await page.locator("#earlier").click();
+    await page.waitForFunction(() => document.querySelector('#log [data-replay="2003"]'));
+    const ids = await page.locator("#log [data-replay]").evaluateAll(rows => rows.map(row => Number(row.dataset.replay)));
+    assert.ok(ids.length <= 4000);
+    assert.equal(new Set(ids).size, ids.length);
+    assert.deepEqual(ids, [...ids].sort((a, b) => a - b));
+  }
+});
+
+test("cached selected output retains its pending terminal batch without reconnecting a finished run", { timeout: 30_000 }, async t => {
+  const { page, origin, home } = await open(t, { live: true });
+  const dir = join(home, "runs", idSlug(TASK), RUN);
+  await page.goto(origin + runPath(""));
+  await page.locator("#workspace-activity").evaluate(el => { el.open = true; });
+  await page.waitForFunction(() => document.querySelector("#log [data-replay]"));
+  const selected = await page.locator("#log").evaluate(el => {
+    el.focus();
+    const range = document.createRange(); range.selectNodeContents(el.querySelector("[data-replay]"));
+    getSelection().removeAllRanges(); getSelection().addRange(range);
+    return getSelection().toString();
+  });
+  appendFileSync(join(dir, "job.log"), "Buffered final fixture output\n");
+  await page.waitForFunction(() => document.querySelector("#follow-output").textContent.startsWith("1 new events"));
+  const job = JSON.parse(readFileSync(join(dir, "job.json"), "utf8"));
+  writeFileSync(join(dir, "job.json"), JSON.stringify({ ...job, exit: 0,
+    execution: { ...job.execution, providerState: "succeeded", collected: true } }));
+  await page.waitForFunction(() => document.querySelector("#logstate").textContent === "finished");
+  const streams = []; page.on("request", request => { if (request.url().includes("/api/run/output")) streams.push(request.url()); });
+  await page.evaluate(() => {
+    dispatchEvent(new PageTransitionEvent("pagehide", { persisted: true }));
+    dispatchEvent(new PageTransitionEvent("pageshow", { persisted: true }));
+  });
+  await page.clock.runFor(100);
+  assert.equal(await page.evaluate(() => getSelection().toString()), selected);
+  assert.equal(await page.locator("#log [data-replay]").count(), 1);
+  await page.locator("#follow-output").click();
+  assert.deepEqual(await page.locator("#log > *").allTextContents(), [selected, "Buffered final fixture output", "exit 0"]);
+  assert.deepEqual(streams, [], "finished output is restored locally without another stream");
+});

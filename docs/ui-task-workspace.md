@@ -30,7 +30,9 @@ rows plus 2,000 explicitly loaded history rows, with truncation and gap notices.
 Scrolling away pauses following; Follow live output explicitly returns to the
 tail. Selected text, focus and drafts survive incoming observations. A full
 paused window buffers at most 400 events; overflow remains recoverable through
-history rather than silently growing the DOM.
+history rather than silently growing the DOM. Cached-page navigation retains
+that paused buffer, including final output from an attempt that has ended;
+Follow live output reveals it after returning.
 
 Task snapshots refresh every ten seconds while visible, backing off to at most
 sixty seconds after errors. A read failure retains the last good snapshot and

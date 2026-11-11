@@ -127,7 +127,7 @@ test("10000 mixed events keep bounded ordered history, deduplicate, search local
 
 test("workspace hostile metadata stays bounded, redacted, inert and within both themes at all widths", { timeout: 60_000 }, async t => {
   const { page, origin, state, context, home } = await open(t);
-  const token = "ghp_abcdefghijklmnopqrstuvwxyz012345";
+  const token = "ghp_" + "fixture".repeat(6);
   state.update(TASK, { branch: `<script>${token}</script>`,
     firstPartyReview: { ...state.get(TASK).firstPartyReview, result: { verdict: "findings", findings: Array.from({ length: 500 }, () => ({ severity: "high", description: `<img src=x onerror=alert(1)> ${token} ${"long/".repeat(300)}` })) } } });
   const response = await context.request.get(origin + `/api/run/workspace?id=${encodeURIComponent(TASK)}&run=${RUN}`);

@@ -130,7 +130,7 @@ if (pane) {
   };
   const paint = () => {
     painting = false;
-    if (!pending.length) return;
+    if (disconnected || !pending.length) return;
     const selection = globalThis.getSelection?.();
     const selecting = selection && !selection.isCollapsed && pane.contains?.(selection.anchorNode);
     if (selecting && follow && !paused) { paused = true; announce(pending.length); }
@@ -276,9 +276,11 @@ if (pane) {
   earlier?.addEventListener("click", loadEarlier);
 
   globalThis.addEventListener?.("pagehide", event => {
-    // Finish the bounded display batch before recording the reconnect cursor.
+    // The reconnect cursor includes received but unpainted events. Keep the
+    // bounded paused queue with the cached document so following cannot skip it.
     if (event?.persisted) paint();
-    disconnected = true; es.close(); pending = [];
+    else pending = [];
+    disconnected = true; es.close();
     if (historyRequest) tell("Loading paused; load earlier lines to retry.");
     historyRequest?.abort(); historyRequest = null; busy = false;
   });
