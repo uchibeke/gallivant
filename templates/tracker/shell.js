@@ -94,6 +94,12 @@ if (theme) theme.addEventListener("change", () => {
   if (theme.value) document.documentElement.dataset.theme = theme.value;
   else delete document.documentElement.dataset.theme;
   history.replaceState(null, "", url.pathname + url.search + url.hash);
+  const form = document.querySelector?.(".overview-filters");
+  if (form) {
+    let input = form.querySelector('[name="theme"]');
+    if (!input) { input = document.createElement("input"); input.type = "hidden"; input.name = "theme"; form.append(input); }
+    input.value = theme.value;
+  }
   const base = document.body.dataset.base || "";
   for (const link of document.querySelectorAll("a[href]")) {
     if (link.getAttribute("href").startsWith("#")) continue;

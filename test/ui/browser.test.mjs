@@ -45,7 +45,7 @@ test("root and mounted routes serve real assets, APIs, links and historical sele
     assert.match(response.headers()["content-security-policy"], /script-src 'self'/);
     assert.equal(await page.locator("main").count(), 1);
     assert.equal(await page.locator("h1").textContent(), "Overview");
-    assert.equal(await page.locator("#side .row").count(), 6);
+    assert.equal(await page.locator("[data-task-id]").count(), 6);
     for (const href of await page.locator("nav a").evaluateAll(links => links.map(a => a.href))) {
       const url = new URL(href); assert.equal(url.searchParams.get("theme"), "dark"); assert.equal(url.searchParams.get("by"), "harness");
       assert.equal((await context.request.get(href)).status(), 200);
@@ -148,15 +148,15 @@ test("keyboard skip, disclosure return, grouping, filter and reduced motion", { 
   assert.equal(await page.locator(".menu").getAttribute("open"), null);
   assert.equal(await summary.evaluate(el => el === document.activeElement), true);
   assert.equal(await summary.evaluate(el => getComputedStyle(el).outlineStyle), "solid");
-  const toggle = page.locator(".group-toggle").first();
+  const toggle = page.locator(".task-context > summary").first();
   await toggle.focus(); await page.keyboard.press("Space");
-  assert.equal(await toggle.getAttribute("aria-expanded"), "false");
-  await page.keyboard.press("Enter"); assert.equal(await toggle.getAttribute("aria-expanded"), "true");
-  await page.locator("#filter").fill("no match for this");
-  assert.equal(await page.locator("#matches").textContent(), "0 matches");
-  await page.keyboard.press("Escape"); assert.equal(await page.locator("#side a.row:visible").count(), 6);
-  await page.locator("#groupby").selectOption("harness");
-  await page.waitForURL(/by=harness/);
+  assert.equal(await page.locator(".task-context").first().getAttribute("open"), "");
+  await page.keyboard.press("Enter"); assert.equal(await page.locator(".task-context").first().getAttribute("open"), null);
+  await page.locator("#overview-q").fill("no match for this");
+  await page.getByRole("button", { name: "Apply filters", exact: true }).click();
+  assert.match(await page.locator(".overview-scope").textContent(), /0 match/);
+  await page.getByRole("link", { name: "Clear filters", exact: true }).click();
+  assert.equal(await page.locator("[data-task-id]").count(), 6);
   assert.equal(new URL(page.url()).searchParams.get("theme"), "dark");
   const motion = await page.locator("*").evaluateAll(els => els.every(el => {
     const s = getComputedStyle(el); return s.animationName === "none" && s.transitionDuration.split(",").every(v => parseFloat(v) === 0);
@@ -259,14 +259,24 @@ test("1000 tasks use bounded real DOM pages with no probe, host, model or state 
     runReads = 0;
     await page.goto(`${origin}${base}/?theme=light`);
     assert.equal(runReads, 1000, "one existing saved-run read per task; projection adds none");
-    assert.equal(await page.locator("tbody tr").count(), 100);
-    assert.equal(await page.locator("#side .row").count(), 100);
+    assert.equal(await page.locator("[data-task-id]").count(), 25);
+    assert.equal(await page.locator("#side .row").count(), 0);
     assert.ok(await page.locator("body").evaluate(el => el.outerHTML.length) < 300000);
     await page.getByRole("link", { name: "Next tasks", exact: true }).click();
-    assert.equal(new URL(page.url()).searchParams.get("offset"), "100");
-    assert.match(await page.locator("tbody tr").first().textContent(), /task-100/);
+    assert.equal(new URL(page.url()).searchParams.get("offset"), "25");
+    assert.match(await page.locator("[data-task-id]").first().textContent(), /task-25/);
     assert.equal(new URL(page.url()).searchParams.get("theme"), "light");
-    await page.goBack(); assert.match(await page.locator("tbody tr").first().textContent(), /task-0/);
+    await page.goBack(); assert.match(await page.locator("[data-task-id]").first().textContent(), /task-0/);
+    assert.match(await page.locator(".overview-scope").textContent(), /all 1000 registered tasks/);
+    const requests = [];
+    const track = request => requests.push(new URL(request.url()).pathname);
+    page.on("request", track);
+    await page.locator("#overview-q").fill("task-999");
+    await page.getByRole("button", { name: "Apply filters", exact: true }).click();
+    assert.equal(await page.locator("[data-task-id]").count(), 1);
+    assert.match(await page.locator(".overview-scope").textContent(), /all 1000 registered tasks.*1 match/);
+    assert.ok(requests.every(path => !path.includes("/api/run/")), "search loads no per-row data or transcripts");
+    page.off("request", track);
   }
   assert.equal(readFileSync(path, "utf8"), saved);
 });

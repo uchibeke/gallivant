@@ -145,6 +145,40 @@ test("ended and uncertain runs expose ownership without authorizing another writ
   }
 });
 
+test("operator stops retain attention independently of unresolved ownership and automatic waits", () => {
+  for (const run of [null, { ...running, id: "different-attempt" }, { ...running, running: false, exit: 1 },
+    { ...running, execution: { providerState: "status-unknown" } }]) {
+    for (const reason of ["run-stop-unverified", "dispatch-refused", null]) {
+      const entry = { ...base(), state: "needs-human", reason, last: { run: "attempt", exit: null, at: START } };
+      const p = project({ entry, run });
+      assert.equal(p.phase.id, "reconciling");
+      assert.equal(p.attention.group, "attention");
+      assert.equal(p.attention.actor, "operator");
+      assert.equal(p.attention.source, "entry.reason/task.status");
+      assert.match(p.nextAction, /reconcile/i);
+      assert.doesNotMatch(p.attention.explanation, /Waiting on automatic/);
+      if (reason === "run-stop-unverified") assert.equal(p.attention.title, "Execution stop unconfirmed");
+      for (const key of ["resume", "message", "interrupt"]) {
+        assert.equal(p.controls[key], false);
+        assert.equal(controlAvailability(entry, run, {})[key], false);
+      }
+      assert.deepEqual(taskView({ repo: entry.repo }, { entry, run, now: NOW, maxIterations: 5 }).presentation.attention, p.attention);
+    }
+  }
+  // A task-level stop uses the same projection even without a registry stop.
+  const entry = { ...base(), last: { run: "attempt", exit: null } };
+  for (const status of ["blocked", "needs-input"]) assert.equal(project({ entry, task: { status } }).attention.group, "attention");
+  // An unresolved run alone, or an actual retry allowance, remains a wait.
+  assert.equal(project({ entry }).attention.group, "waiting");
+  for (const retry of [{ network_retry: { phase: "waiting", attempts: 1, first_at: START, run: "attempt", code: "ENOTFOUND", next_at: NOW } },
+    { retry: { op: "ready-label-write", count: 1 } }]) {
+    const stopped = { ...entry, state: "needs-human", reason: "provider-network", ...retry };
+    assert.equal(project({ entry: stopped }).attention.group, "waiting");
+    assert.equal(project({ entry: { ...stopped, last: { run: "attempt", exit: 1 } } }).phase.id, "retry_wait");
+    assert.equal(project({ entry: { ...stopped, dispatch_stopped: true } }).attention.group, "attention");
+  }
+});
+
 test("active work takes precedence over older check waits and supplied completion cannot upgrade current evidence", () => {
   const entry = { ...base(), last: { run: "attempt", exit: null }, reviewObservation: { head: "head", binding: "binding", checks: { settled: false, count: 1 } } };
   assert.equal(project({ entry, run: running }).phase.id, "implementing");
@@ -173,7 +207,7 @@ test("overview, detail, CLI and task summaries share facts and retain API fields
   }
 });
 
-test("1000 frozen tasks project purely with bounded data and at most 100 rendered rows", () => {
+test("1000 frozen tasks project purely with bounded data and at most 25 overview rows", () => {
   const entry = base();
   const deepFreeze = object => { Object.freeze(object); Object.values(object).filter(v => v && typeof v === "object").forEach(deepFreeze); return object; };
   deepFreeze(entry); const before = JSON.stringify(entry);
@@ -181,8 +215,8 @@ test("1000 frozen tasks project purely with bounded data and at most 100 rendere
   assert.equal(JSON.stringify(entry), before);
   assert.ok(rows.every(row => JSON.stringify(row.presentation).length < 4000));
   const m = { needs_you: [], running: rows, done: [] }, html = dashboard(m);
-  assert.equal((html.match(/<tr>/g) || []).length, 101); // One populated section header, 100 rows.
-  assert.equal((html.match(/class="row"/g) || []).length, 100);
+  assert.equal((html.match(/data-task-id=/g) || []).length, 25);
+  assert.equal((html.match(/class="row"/g) || []).length, 0);
   assert.equal(taskWindow(m, 100).model.running[0].id, "task-100");
   assert.ok(html.length < 300000);
 });
@@ -197,4 +231,30 @@ test("malformed and legacy observations stay usable with bounded diagnostics and
   const html = runPage({ id: "task", entry, handle: "task", run: null, model: m, maxIterations: 5 });
   assert.doesNotMatch(html, /secret-provider-payload/);
   assert.match(html, /Phase unknown/);
+});
+
+test("attention remains visible across active ownership, failed controls, review disposition and qualified readiness", () => {
+  const entry = { ...base(), last: { run: "attempt", exit: null } };
+  for (const run of [running, { ...running, execution: { providerState: "status-unknown" } }]) {
+    const p = project({ entry, run, divergence: { reason: "prd-changed" } });
+    assert.equal(p.attention.group, "attention"); assert.equal(p.attention.title, "Approved brief changed");
+    assert.match(p.attention.nextAction, /approved copy/);
+  }
+  const failed = project({ entry: { ...entry, control: { status: "failed", action: "message", message: "private detail" } }, run: running });
+  assert.equal(failed.attention.group, "attention"); assert.equal(failed.attention.title, "Control request failed");
+  assert.doesNotMatch(JSON.stringify(failed), /private detail/);
+  assert.equal(project({ entry: qualified() }).attention.group, "ready");
+  const integrated = project({ entry: { ...qualified(), state: "done", control: { status: "failed" }, completionEvidence: { integration: { qualified: true } } } });
+  assert.equal(integrated.attention.group, "ended", "historical control failures do not reopen an integrated delivery");
+  assert.equal(project({ entry: { ...base(), network_retry: { phase: "waiting" } } }).attention.group, "waiting");
+  const review = { ...base(), reviewPolicy: { version: 1, mode: "first-party-required" }, firstPartyReview: { binding: "binding", status: "completed", result: { verdict: "findings" } } };
+  assert.equal(project({ entry: review }).attention.group, "attention");
+  assert.equal(project({ entry: { ...review, reviewHead: "old" } }).review.verdict, "unknown");
+  assert.notEqual(project({ entry: { ...review, reviewHead: "old" } }).attention.group, "attention");
+  const dispatched = project({ entry: { ...review, last: entry.last, firstPartyReview: { ...review.firstPartyReview, disposition: { status: "dispatched" } } }, run: running });
+  assert.equal(dispatched.attention.group, "progressing");
+  for (const status of ["pending", "dispatch-intent"]) {
+    const waiting = project({ entry: { ...review, firstPartyReview: { ...review.firstPartyReview, disposition: { status } } } });
+    assert.equal(waiting.attention.group, "waiting"); assert.equal(waiting.attention.actor, "coordinator");
+  }
 });

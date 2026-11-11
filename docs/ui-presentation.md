@@ -14,9 +14,10 @@ available; presentation labels are not lifecycle transitions.
 | CI and external review wait | `reviewObservation`, recorded by the coordinator from its existing check/review decisions; tied to head and binding. |
 | Provider readiness | Saved provider-health observations and declared capabilities. Pending refresh, quota, credentials, unsupported dispatch and unchecked API access remain distinct. Read access never proves inference access. |
 | Controls and ownership | `controlAvailability` and execution ownership. Ended but unreconciled runs and uncertain cancellation disable writer controls; requests still use the protected canonical service. |
-| Meaningful activity | Recorded task/run/review event instants, with source pointers. Routine `updated_at` and provider poll times only affect freshness. |
+| Meaningful activity | Recorded task/run/review/control-result event instants, with source pointers. Routine `updated_at` and provider poll times only affect freshness. |
 | Attempt duration and rounds | The selected run's timestamps and matching current registry accounting. Historical rounds without matching accounting remain unknown. |
-| Chain position | Existing `chainRows` projection. |
+| Chain position | Existing chain summaries plus each registered step’s index; all recorded members retain their position. |
+| Attention | Shared attention projection of divergence, controls, review disposition, phase and canonical readiness. |
 
 Planning and brief validation use typed preparation states. An active matching
 implementation run establishes that an agent is working, but does not establish
@@ -37,16 +38,17 @@ collect saved facts before calling them. The coordinator's bounded
 Arbitrary provider messages stay out of summary diagnostics. HTML escapes values;
 task delivery views additionally apply their existing scoped secret redaction.
 
-The overview and its sidebar render at most 100 tasks per page, preserving theme
-and grouping in previous/next links. The existing status API retains its complete
+The [overview](ui-overview.md) renders at most 25 tasks per page and preserves
+filters and theme in navigation. The task workspace sidebar retains its 100-row
+window. The existing status API retains its complete
 row collections for compatibility. Run history keeps its existing 200-row limit.
 
 Regression coverage lives in `test/tracker-presentation.test.mjs`, the existing
 status/completion/control tests, and `test/ui/browser.test.mjs`. Browser tests use
 the foundation's synthetic fixture server at root and mounted paths, including
 API/detail agreement, malformed review records, unresolved execution and 1,000
-tasks. They do not establish live provider/model access. No new published PNG
-captures are required for this milestone.
+tasks. They do not establish live provider/model access. Overview-specific
+coverage and capture provenance are documented in the overview guide.
 
 Rollback consists of reverting the presentation changes. Older versions ignore
 the additive observation; no task data migration or budget/policy reset is needed.

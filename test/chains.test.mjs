@@ -9,6 +9,8 @@ import { makeState, STATES } from "../lib/state.mjs";
 import { writeJsonAtomic } from "../lib/fs.mjs";
 import { start } from "../lib/commands/start.mjs";
 import { makeTick } from "../lib/tick.mjs";
+import { model } from "../lib/commands/status.mjs";
+import { overviewWindow } from "../lib/tracker/overview.mjs";
 import { CONFIG, GOOD_PRD, T0, tempHome, fakeRunner, makeClock, silentLog, fakeCredential, fakeIdentity, harnessBin, prFixture, codexLines } from "./helpers.mjs";
 
 const REPO = "acme/widget";
@@ -152,6 +154,33 @@ test("a chain can depend on an existing owned milestone without stealing its ori
   assert.equal(w.starts(), 1);
   assert.equal(w.ctx.state.getChain("original").steps[0].id, FIRST);
   assert.equal(w.ctx.state.getChain("follow-on").steps[0].id, `${REPO}/third-step`);
+  const summary = model(w.ctx), task = summary.needs_you.find(row => row.id === FIRST);
+  assert.deepEqual(task.presentation.chains.map(c => [c.name, c.position, c.predecessor]), [["original", 1, false], ["follow-on", null, true]]);
+  assert.equal(task.presentation.chain.name, "original", "the owned milestone remains the primary association");
+  for (const chain of ["original", "follow-on"]) assert.equal(overviewWindow(summary, { chain }).rows[0].id, FIRST);
+  assert.equal(overviewWindow(summary, { q: "follow-on" }).rows[0].id, FIRST);
+  assert.deepEqual(w.ctx.state.get(FIRST), before, "reading associations cannot transfer ownership");
+});
+
+test("status preserves a pending predecessor until merge and then shows successor positions", async () => {
+  const w = await anchoredWorld({ count: 3 });
+  await w.anchor();
+  const saved = readFileSync(w.ctx.state.file, "utf8");
+  let summary = model(w.ctx);
+  const predecessor = summary.needs_you.find(row => row.id === FIRST);
+  assert.deepEqual(predecessor.presentation.chain, { name: "follow-on", status: "active", total: 2, position: null, predecessor: true });
+  assert.equal(overviewWindow(summary, { chain: "follow-on" }).matched, 1);
+  assert.equal(readFileSync(w.ctx.state.file, "utf8"), saved);
+  w.markPr(FIRST, { state: "MERGED", entryState: STATES.done });
+  await tickChains(w.ctx);
+  summary = model(w.ctx);
+  assert.equal(summary.done.find(row => row.id === FIRST).presentation.chain, null);
+  assert.equal(overviewWindow(summary, { chain: "follow-on" }).matched, 0);
+  await tickChains(w.ctx);
+  summary = model(w.ctx);
+  const successor = summary.running.find(row => row.id === SECOND);
+  assert.deepEqual(successor.presentation.chain, { name: "follow-on", status: "active", total: 2, position: 1, predecessor: false });
+  assert.equal(overviewWindow(summary, { chain: "follow-on" }).rows[0].id, SECOND);
 });
 
 test("queueing after a PR refuses unknown, cross-base, changed remote and closed identities", async () => {
