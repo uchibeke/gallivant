@@ -36,7 +36,10 @@ test("chain journey preserves selection, filters, PR and task context across roo
     assert.equal(await page.locator(".milestone-detail").getByRole("link", { name: "Open PR", exact: true }).getAttribute("href"), "https://github.com/acme/atlas/pull/42");
     // A local response supplies the synthetic PR page while exercising real link/history navigation.
     await context.route("https://github.com/acme/atlas/pull/42", route => route.fulfill({ body: "<h1>Fixture PR</h1>", contentType: "text/html" }));
-    await page.getByRole("link", { name: "Open PR", exact: true }).click(); await page.goBack();
+    const original = page.url(), popupOpened = context.waitForEvent('page');
+    await page.getByRole("link", { name: "Open PR", exact: true }).click();
+    const popup = await popupOpened; await popup.waitForLoadState('domcontentloaded'); await popup.close();
+    assert.equal(page.url(), original, 'PR opens in a separate tab without leaving the selected chain');
     assert.equal(await page.locator('[aria-current="step"]').textContent(), "search-index");
     await page.getByRole("link", { name: "Open task", exact: true }).click();
     assert.equal(new URL(page.url()).pathname, `${base}/run`);

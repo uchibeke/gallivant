@@ -1,24 +1,28 @@
-# Attention-first overview
+# Task overview
 
-The overview uses the shared task presentation model. Operator decisions and
-repairs appear first, followed by qualified handoff, progressing work, automatic
-or external waits, and recorded outcomes. Unknown evidence stays explicitly
-unknown. A finished process or a legacy done flag cannot qualify delivery.
-An operator stop remains in **Needs attention** when its owned run is missing or
-unresolved. The ownership phase still shows reconciliation, and writer controls
-remain unavailable until ownership is settled. Automatic retry waits stay separate.
+The overview uses the shared task presentation model and defaults to newest
+meaningful activity first across every status. Poll freshness does not move a
+task up the list. Missing activity dates sort last, with stable task-ID ties.
+Choose **Needs attention first** in **Sort tasks** to group decisions and repairs
+before readiness, progress, waits and recorded outcomes.
+
+**All tasks** and the status filters show one clearly selected link. Counts follow
+other active search and filter choices. **Completed** includes tasks recorded as
+`done`, integrated deliveries and closed outcomes. This lifecycle label does not
+certify missing acceptance or review evidence: a legacy completed task can still
+show unverified delivery. Active or unresolved execution ownership takes precedence
+over a saved done flag. Genuinely unclassified observations remain **Unknown**.
 
 Each compact record shows the repository, task, phase, harness, meaningful
 activity age, delivery/check/review evidence, round usage, and recorded chain
 position. Expand **Context & next step** for the explanation, responsible actor,
 approved base and delivery target, activity and observation times, attempt
-information, and task/PR links. **Technical reason & evidence** exposes the
+information, and task links. The PR link stays visible on the record and opens in a new tab. **Technical reason & evidence** exposes the
 saved reason and provenance. The task workspace retains the protected controls;
-opening the overview never starts work. New task remains unavailable pending
-intake implementation.
+opening the overview never starts work. **New task** opens the existing prepare-and-review intake; starting requires confirmation.
 
 Search and the **Filters** disclosure support repository, phase, harness,
-attention, and chain. Apply filters to search the whole registry, rather than
+attention, chain, and sort order. Apply filters to search the whole registry, rather than
 just the displayed page. The URL carries these choices, pagination, and theme
 through task/run-history navigation, reload, and browser back. Counts explicitly
 label all registered tasks, current matches, and rows on this page. Pages hold
@@ -55,8 +59,8 @@ never changes saved activity timestamps or replays a control request.
 
 `test/ui/fixture.mjs` remains the foundation's version 1 comparison fixture.
 The desktop and mobile PNGs use those same six records and the fixed clock
-2026-09-24 14:30 UTC. Their unknown/unverified rows are intentional: the fixture
-has no qualified completion evidence. `test/ui/overview-fixture.mjs` adds isolated
+2026-09-24 14:30 UTC. Their completed/unverified rows are intentional: the fixture records finished tasks
+without qualified completion evidence. `test/ui/overview-fixture.mjs` adds isolated
 synthetic attention, retry, readiness, multi-harness, long-name, and chain cases
 for browser assertions; it shares the same server and fake service boundaries.
 
@@ -87,3 +91,18 @@ change. To roll back, revert the overview code/assets and its additive
 presentation fields together; task state and saved execution evidence remain
 compatible. Browser tools and fixtures stay development-only; approved captures
 ship with the public guides.
+
+## Navigation and loading
+
+Outgoing HTTP(S) links use the shared safe-link policy, open in a new tab with
+`noopener noreferrer`, and include a visible arrow and an accessible hint. This
+also applies to links added by live updates. Internal navigation stays in the
+current view. Native navigation displays a dismissible loading placeholder; slow
+navigation retains the current page and never replays an action. Saved artifacts
+show a loading placeholder until their bounded metadata read settles. Empty lists
+explain what is missing and offer the existing filter, setup or preparation paths.
+
+`test/ui/usability.test.mjs` covers completed/unknown filters, chronological order,
+selected-link history, new-tab safety, delayed navigation, default chain selection,
+320–1440px layouts, light/dark themes, keyboard focus, axe and JavaScript-disabled
+rendering. It uses synthetic state and cannot dispatch real work.

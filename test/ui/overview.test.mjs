@@ -30,7 +30,7 @@ test("overview prioritizes decisions with qualified readiness, meaningful summar
   const { page, origin, state, context, ids } = await open(t);
   const saved = JSON.stringify(state.entries());
   for (const base of ["", "/gallivant"]) {
-    await page.goto(`${origin}${base}/?theme=dark`);
+    await page.goto(`${origin}${base}/?theme=dark&sort=attention`);
     const snapshot = await (await context.request.get(`${origin}${base}/api/status`)).json();
     const models = [...snapshot.needs_you, ...snapshot.running, ...snapshot.done];
     const groups = await page.locator(".overview-section:visible").evaluateAll(els => els.map(el => el.dataset.kind));
@@ -66,7 +66,7 @@ test("stopped tasks with missing owned runs stay actionable without enabling ano
   state.update(id, { reason: "run-stop-unverified", last: { run: "missing-attempt", exit: null, at } });
   const saved = JSON.stringify(state.entries());
   for (const base of ["", "/gallivant"]) {
-    await page.goto(`${origin}${base}/?attention=attention`);
+    await page.goto(`${origin}${base}/?attention=attention&sort=attention`);
     const task = row(page, id);
     assert.equal(await task.count(), 1);
     assert.equal(await task.evaluate(el => el.closest("section").dataset.kind), "attention");
@@ -98,7 +98,7 @@ test("all overview filters and page context survive task navigation, theme, relo
     const params = new URLSearchParams({ q: "brief", repo: LONG_REPO, phase: "operator_attention", harness: "codex", attention: "attention", chain: "release", theme: "dark" });
     await page.goto(`${origin}${base}/?${params}`);
     assert.equal(await page.locator("[data-task-id]").count(), 1);
-    assert.match(await page.locator(".overview-scope").textContent(), /all 8 registered tasks.*1 match/);
+    assert.match(await page.locator(".overview-scope").textContent(), /1 matching task.*8 registered/);
     for (const [key, value] of params) if (key !== "theme") assert.equal(await page.locator(`#overview-${key}`).inputValue(), value);
     await page.locator("[data-task-id] h3 a").click();
     await page.getByRole("link", { name: "Overview", exact: true }).click();
@@ -108,7 +108,7 @@ test("all overview filters and page context survive task navigation, theme, relo
     await page.locator(".menu summary").click(); await page.locator("#theme").selectOption("light");
     await page.getByRole("button", { name: "Apply filters", exact: true }).click();
     assert.equal(new URL(page.url()).searchParams.get("theme"), "light");
-    await page.getByRole("link", { name: "Clear filters", exact: true }).click();
+    await page.getByRole("link", { name: "Reset filters", exact: true }).click();
     assert.equal(await page.locator("[data-task-id]").count(), 8);
     await page.goBack(); assert.equal(await page.locator("#overview-q").inputValue(), "brief");
     await page.goto(`${origin}${base}/?${params}&offset=25`);
@@ -295,7 +295,7 @@ test("keyed refresh preserves disclosure, selection, focus, scroll and meaningfu
   assert.equal(await page.evaluate(() => scrollY), y);
   // Structural changes while reading are offered, never forced into the scrolled list.
   await page.locator("#main").evaluate(el => el.focus({ preventScroll: true }));
-  state.update(ids[0], { state: "pr-open", reason: null });
+  state.update(ids[0], { state: "pr-open", reason: null, activity_at: "2026-09-24T14:29:00.000Z" });
   await page.clock.runFor(10_000); await updated(page);
   assert.equal(await page.evaluate(() => scrollY), y);
   assert.equal(await details.getAttribute("open"), "");

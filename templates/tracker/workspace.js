@@ -62,10 +62,13 @@ if (workspace) {
   if (artifacts) {
     const state = document.getElementById("artifact-state"), list = document.getElementById("artifact-list");
     const retryResult = document.getElementById("artifact-retry");
-    let reading = false, loaded = false;
+    let reading = null, loaded = false;
     const readResult = async () => {
       if (reading) return;
-      reading = true; retryResult.disabled = true;
+      const request = reading = {}; retryResult.disabled = true;
+      state.textContent = loaded ? 'Refreshing saved artifacts…' : 'Loading saved artifacts…';
+      state.classList.add('loading'); state.dataset.skeleton = loaded ? 'false' : 'true';
+      list.setAttribute('aria-busy', 'true');
       const active = lifecycle.guard();
       try {
         const result = await lifecycle.read(artifacts.dataset.url, "Saved result unavailable");
@@ -81,9 +84,15 @@ if (workspace) {
         state.textContent = `Saved result · showing ${Math.min(result.artifacts.length, 20)} of ${result.artifacts.length} projected artifacts (projection capped at 100). Output source: selected run result; total inventory may be unknown.`;
       } catch {
         if (active()) state.textContent = "Saved result unavailable or not collected. Last good artifact metadata retained. Retry result after collection or restoring the local connection; worker outcome remains separate.";
-      } finally { reading = false; retryResult.disabled = false; retryResult.hidden = false; }
+      } finally {
+        if (reading === request) {
+          reading = null; retryResult.disabled = false; retryResult.hidden = false;
+          state.classList.remove('loading'); delete state.dataset.skeleton; list.removeAttribute('aria-busy');
+        }
+      }
     };
     document.getElementById("execution-details").addEventListener("toggle", event => { if (event.target.open && !loaded) readResult(); });
     retryResult.addEventListener("click", readResult);
+    lifecycle.onResume(() => { reading = null; if (document.getElementById('execution-details').open && !loaded) readResult(); });
   }
 }

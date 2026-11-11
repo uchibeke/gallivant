@@ -121,3 +121,13 @@ images ship with the guides so relative image links remain usable.
 
 To roll back the foundation, revert its code/assets and dev-tooling commit;
 there is no state migration or task-engine change to reverse.
+
+## Shared navigation feedback
+
+`links.mjs` supplies one safe outgoing-link contract for SSR and browser decoration.
+`navigation.js` applies it to initial and dynamically inserted links, with a visible
+new-tab hint. Internal navigation, downloads and modified clicks retain native
+browser behavior. The shell supplies a dismissible, sticky loading panel inside
+the document; it does not depend on a parent viewport or a second router. Loading
+uses text plus static skeleton bars and respects reduced motion. Page restoration
+clears pending feedback. It never retries a control or changes task authority.
