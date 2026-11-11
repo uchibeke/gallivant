@@ -184,6 +184,48 @@ test("snapshot refresh reconciles filter choices without replacing drafts, selec
   }
 });
 
+test("pending predecessor chains appear in refreshed choices and filters alongside owned milestones", { timeout: 30_000 }, async t => {
+  const { page, origin, state, context, ids } = await open(t);
+  const id = ids[5];
+  state.update(id, { branch: "work/ready" });
+  const entry = state.get(id);
+  for (const [i, base] of ["", "/gallivant"].entries()) {
+    const name = `follow-on-${i}`;
+    await page.goto(`${origin}${base}/?theme=dark`);
+    const after = { id, ...Object.fromEntries(["repo", "base", "branch", "pr", "url"].map(key => [key, entry[key]])), merged: null };
+    state.createChain({ name, repo: entry.repo, base: entry.base, status: "active", index: 0, after,
+      steps: [{ id: `${LONG_REPO}/next-${i}` }, { id: `${LONG_REPO}/last-${i}` }] });
+    const saved = JSON.stringify(state.entries());
+    await page.clock.runFor(10_000); await updated(page);
+    const task = row(page, id);
+    assert.match(await task.locator(".task-progress").textContent(), /release · 6\/8 · active/);
+    assert.ok((await task.locator(".task-progress").textContent()).includes(`${name} · Predecessor · active`));
+    const snapshot = await (await context.request.get(`${origin}${base}/api/status`)).json();
+    const p = snapshot.needs_you.find(row => row.id === id).presentation;
+    assert.deepEqual(p.chains.map(c => [c.name, c.position, c.predecessor]), [["release", 6, false], [name, null, true]]);
+    await page.locator(".overview-filter-options > summary").click();
+    await page.locator("#overview-chain").selectOption(name);
+    await page.getByRole("button", { name: "Apply filters", exact: true }).click();
+    await page.waitForURL(url => url.searchParams.get("chain") === name);
+    assert.equal(await page.locator("[data-task-id]").count(), 1);
+    assert.equal(await row(page, id).count(), 1);
+    await row(page, id).locator("h3 a").click();
+    await page.getByRole("link", { name: "Overview", exact: true }).click();
+    assert.equal(new URL(page.url()).searchParams.get("chain"), name);
+    assert.equal(await row(page, id).count(), 1);
+    assert.equal(JSON.stringify(state.entries()), saved);
+    // Once the recorded predecessor merge is observed, only owned membership remains.
+    state.updateChain(name, { after: { ...after, merged: { sha: "a".repeat(40), at: NOW } } });
+    await page.locator("#overview-refresh").click(); await updated(page);
+    assert.equal(await page.locator("[data-task-id]").count(), 0);
+    assert.equal(await page.locator("#overview-chain").inputValue(), name);
+    assert.match(await page.locator("#overview-chain option:checked").textContent(), /no current tasks/);
+    const refreshed = await (await context.request.get(`${origin}${base}/api/status`)).json();
+    assert.deepEqual(refreshed.needs_you.find(row => row.id === id).presentation.chains.map(chain => chain.name), ["release"]);
+    assert.equal(JSON.stringify(state.entries()), saved);
+  }
+});
+
 test("overview retains its last snapshot on failed and slow reads with bounded retry and recovery", { timeout: 30_000 }, async t => {
   const { page, origin } = await open(t);
   let requests = 0, mode = "fail";

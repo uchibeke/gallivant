@@ -23,6 +23,9 @@ just the displayed page. The URL carries these choices, pagination, and theme
 through task/run-history navigation, reload, and browser back. Counts explicitly
 label all registered tasks, current matches, and rows on this page. Pages hold
 at most 25 tasks. An emptied page stays selected and offers a first-page link.
+Chains queued after an existing PR show that task as **Predecessor** until its
+merge is recorded. If the task already owns a milestone in another chain, both
+associations appear and either chain filter finds it; its owned position is unchanged.
 
 ## Refresh and recovery
 
