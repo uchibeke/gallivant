@@ -1,9 +1,10 @@
 // Server-composed snapshots: no state mapping, task mutation or per-row requests here.
 (() => {
-  const root = document.querySelector?.("[data-overview]");
+  const root = document.querySelector?.("[data-overview], [data-health]");
   if (!root) return;
-  const status = document.getElementById("overview-status");
-  const refresh = document.getElementById("overview-refresh"), apply = document.getElementById("overview-apply");
+  const surface = root.hasAttribute("data-health") ? "health" : "overview";
+  const status = document.getElementById(`${surface}-status`);
+  const refresh = document.getElementById(`${surface}-refresh`), apply = document.getElementById(`${surface}-apply`);
   const filterSelects = [...root.querySelectorAll(".overview-filters select")];
   const deferredChoices = new Map();
   let busy = false, failures = 0, pending = null, cancelTimer = null;
@@ -12,7 +13,7 @@
   const held = () => {
     const selection = getSelection();
     return selection && !selection.isCollapsed && (root.contains(selection.anchorNode) || root.contains(selection.focusNode)) ||
-      document.getElementById("overview-results").contains(document.activeElement);
+      document.getElementById(`${surface}-results`).contains(document.activeElement);
   };
   // Keyed nodes and native details survive. Never replace the list or an open disclosure.
   const key = node => node.nodeType === 1 ? node.getAttribute("data-key") : null;
@@ -55,11 +56,11 @@
     if (next) reconcileChoices(select, next);
   });
   const prepare = data => {
-    if (typeof data?.content !== "string" || typeof data.filters !== "string" || !Number.isFinite(Date.parse(data.observedAt))) throw new Error("Invalid overview snapshot");
-    const parsed = new DOMParser().parseFromString(data.content, "text/html").getElementById("overview-results");
-    const filters = new DOMParser().parseFromString(data.filters, "text/html");
+    if (typeof data?.content !== "string" || surface === "overview" && typeof data.filters !== "string" || !Number.isFinite(Date.parse(data.observedAt))) throw new Error("Invalid snapshot");
+    const parsed = new DOMParser().parseFromString(data.content, "text/html").getElementById(`${surface}-results`);
+    const filters = new DOMParser().parseFromString(data.filters || "", "text/html");
     const choices = filterSelects.map(select => filters.getElementById(select.id));
-    if (!parsed || choices.some(select => select?.tagName !== "SELECT" || !select.options.length)) throw new Error("Invalid overview snapshot");
+    if (!parsed || choices.some(select => select?.tagName !== "SELECT" || !select.options.length)) throw new Error("Invalid snapshot");
     // Appearance can change during a read; navigation keeps the current choice.
     const theme = new URL(location.href).searchParams.get("theme");
     for (const link of parsed.querySelectorAll("a[href]")) {
@@ -71,7 +72,7 @@
     return { next: parsed, choices };
   };
   function render(data, force = false) {
-    const { next, choices } = prepare(data), current = document.getElementById("overview-results");
+    const { next, choices } = prepare(data), current = document.getElementById(`${surface}-results`);
     // Only options change: unsaved search, selected values, focus and disclosure stay local.
     choices.forEach((select, i) => reconcileChoices(filterSelects[i], select));
     const order = el => [...el.querySelectorAll("[data-task-id]")].map(row => row.closest("section").dataset.kind + ":" + row.dataset.taskId).join("|");
@@ -98,7 +99,7 @@
     announce(`Refreshing · showing snapshot ${observedAt}`, "pending");
     try {
       const url = new URL(location.href);
-      const data = await lifecycle.read(`${BASE}/api/overview${url.search}`, "Overview unavailable", 8000);
+      const data = await lifecycle.read(`${BASE}/api/${surface === "health" ? "system-health" : "overview"}${url.search}`, "Snapshot unavailable", 8000);
       if (!active()) return;
       render(data); failures = 0;
     } catch {

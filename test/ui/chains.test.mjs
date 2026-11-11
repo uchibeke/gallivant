@@ -182,9 +182,9 @@ test("chain refresh defers focused content, pauses while hidden and cleans up on
   assert.equal(await page.getByRole("button", { name: "Apply chain updates", exact: true }).isVisible(), true);
   await page.route("**/api/chains?*", async route => { reads++; receive(); await new Promise(resolve => { release = resolve; }); await route.abort().catch(() => {}); });
   t.after(() => release?.());
-  await page.evaluate(() => Object.defineProperty(document, "hidden", { configurable: true, get: () => true }));
+  await page.evaluate(() => { Object.defineProperty(document, "hidden", { configurable: true, get: () => true }); document.dispatchEvent(new Event("visibilitychange")); });
   await page.clock.runFor(30001); assert.equal(reads, 0);
-  await page.evaluate(() => delete document.hidden);
+  await page.evaluate(() => { delete document.hidden; document.dispatchEvent(new Event("visibilitychange")); });
   await page.clock.runFor(10001); await received; assert.equal(reads, 1);
   await page.clock.runFor(1000); assert.equal(reads, 1, "no overlapping read");
   await page.getByRole("link", { name: "Overview", exact: true }).click(); release();

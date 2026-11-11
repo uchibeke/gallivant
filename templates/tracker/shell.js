@@ -7,6 +7,18 @@ const LS = {
   set: (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch { /* the page works without it */ } },
 };
 
+function carryNavigation(key, value) {
+  const url = new URL(location.href);
+  const base = document.body.dataset.base || "";
+  for (const link of document.querySelectorAll("a[href]")) {
+    if (link.getAttribute("href").startsWith("#")) continue;
+    const target = new URL(link.href);
+    if (target.origin !== url.origin || ![base + "/", base + "/run", base + "/runs", base + "/chains", base + "/task/new", base + "/health"].includes(target.pathname)) continue;
+    if (value) target.searchParams.set(key, value); else target.searchParams.delete(key);
+    link.href = target.pathname + target.search + target.hash;
+  }
+}
+
 // ---- sidebar --------------------------------------------------------------------
 // Groups collapse, a filter searches every row's text, and collapsed state survives a reload. The one detail that
 // makes a filter feel right, taken from command-center's explorer: while a filter is active, collapsed state is
@@ -21,6 +33,7 @@ if (side) {
   const groups = [...side.querySelectorAll(".group")];
   const q = document.getElementById("filter");
   const count = document.getElementById("matches");
+  if (q) q.value = new URL(location.href).searchParams.get("listq") || "";
 
   const render = () => {
     const term = (q?.value || "").trim().toLowerCase();
@@ -60,9 +73,15 @@ if (side) {
     };
     head.addEventListener("click", toggle);
   }
-  q?.addEventListener("input", render);
+  const remember = () => {
+    const url = new URL(location.href);
+    if (q.value) url.searchParams.set("listq", q.value); else url.searchParams.delete("listq");
+    history.replaceState(null, "", url.pathname + url.search + url.hash); carryNavigation("listq", q.value); render();
+  };
+  q?.addEventListener("input", remember);
+  globalThis.addEventListener?.("popstate", () => { if (q) q.value = new URL(location.href).searchParams.get("listq") || ""; render(); });
   // Escape clears the filter, which is what every filter box does and costs one line.
-  q?.addEventListener("keydown", e => { if (e.key === "Escape") { q.value = ""; render(); } });
+  q?.addEventListener("keydown", e => { if (e.key === "Escape") { q.value = ""; remember(); } });
   render();
 }
 
@@ -84,7 +103,7 @@ for (const menu of document.querySelectorAll?.(".menu") || []) {
     if (event.key !== "Escape" || !menu.open) return;
     event.preventDefault(); menu.open = false; menu.querySelector("summary").focus();
   });
-  document.addEventListener("click", event => { if (!menu.contains(event.target)) menu.open = false; });
+  document.addEventListener?.("click", event => { if (!menu.contains(event.target)) menu.open = false; });
 }
 const theme = document.getElementById("theme");
 if (theme) theme.addEventListener("change", () => {
@@ -94,20 +113,57 @@ if (theme) theme.addEventListener("change", () => {
   if (theme.value) document.documentElement.dataset.theme = theme.value;
   else delete document.documentElement.dataset.theme;
   history.replaceState(null, "", url.pathname + url.search + url.hash);
-  const form = document.querySelector?.(".overview-filters, .chain-filters");
-  if (form) {
+  for (const form of document.querySelectorAll?.(".overview-filters, .chain-filters, .command-search") || []) {
     let input = form.querySelector('[name="theme"]');
     if (!input) { input = document.createElement("input"); input.type = "hidden"; input.name = "theme"; form.append(input); }
     input.value = theme.value;
   }
-  const base = document.body.dataset.base || "";
-  for (const link of document.querySelectorAll("a[href]")) {
-    if (link.getAttribute("href").startsWith("#")) continue;
-    const target = new URL(link.href);
-    if (target.origin !== url.origin || ![base + "/", base + "/run", base + "/runs", base + "/chains", base + "/task/new"].includes(target.pathname)) continue;
-    if (theme.value) target.searchParams.set("theme", theme.value); else target.searchParams.delete("theme");
-    link.href = target.pathname + target.search + target.hash;
-  }
+  carryNavigation("theme", theme.value);
 });
 
+const density = document.getElementById("density");
+const densityKey = "gallivant.tracker.density:" + (document.body.dataset.base || "/");
+if (density) {
+  const saved = LS.get(densityKey, "comfortable");
+  density.value = saved === "compact" ? "compact" : "comfortable";
+  document.documentElement.dataset.density = density.value;
+  density.addEventListener("change", () => { document.documentElement.dataset.density = density.value; LS.set(densityKey, density.value); });
+}
+const commands = document.getElementById("commands"), opener = document.getElementById("commands-open");
+let returnFocus;
+const openCommands = (invoker = document.activeElement) => {
+  if (!commands || commands.open || document.querySelector("dialog[open]")) return;
+  returnFocus = invoker; commands.showModal(); document.getElementById("command-search").focus();
+};
+const restoreCommandFocus = () => (returnFocus?.isConnected ? returnFocus : opener)?.focus({ preventScroll: true });
+const closeCommands = () => { commands.close(); restoreCommandFocus(); };
+opener?.addEventListener("click", () => openCommands(opener));
+document.getElementById("commands-close")?.addEventListener("click", closeCommands);
+commands?.addEventListener("keydown", event => {
+  if (event.key === "Escape") { event.preventDefault(); event.stopPropagation(); closeCommands(); }
+});
+commands?.addEventListener("close", () => {
+  // Native close events are queued. Do not steal focus if the reader has
+  // already moved on after our synchronous Escape/button restoration.
+  if (document.activeElement === document.body || commands.contains(document.activeElement)) restoreCommandFocus();
+});
+document.addEventListener?.("keydown", event => {
+  if (event.defaultPrevented || event.isComposing || event.altKey || document.querySelector("dialog[open]")) return;
+  const target = event.target;
+  if (target.closest?.("input, textarea, select, [contenteditable]:not([contenteditable=false]), [role=textbox]")) return;
+  if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "k") { event.preventDefault(); openCommands(); }
+  else if (!event.ctrlKey && !event.metaKey && event.key === "/") {
+    event.preventDefault();
+    const search = document.querySelector("main input[type=search], #filter");
+    if (search) search.focus(); else openCommands();
+  }
+});
+// Delegate copy handling so refreshed onboarding keeps the same behaviour.
+document.addEventListener?.("click", async event => {
+  const button = event.target.closest?.("[data-copy-command]");
+  if (!button) return;
+  const status = button.closest(".onboarding").querySelector("[data-copy-status]");
+  try { await navigator.clipboard.writeText(button.dataset.copyCommand); status.textContent = "Command copied. Review it in your terminal before running."; }
+  catch { status.textContent = "Clipboard unavailable. Select and copy the command text above."; }
+});
 })();
