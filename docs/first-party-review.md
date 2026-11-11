@@ -196,6 +196,11 @@ files are reported as errors rather than treated as review clearance. Migration
 upgrades the registry format: older releases refuse it rather than changing
 references they do not understand. Stop older coordinators before upgrading.
 
+After a confirmed PR merge, [workspace cleanup](workspace-cleanup.md) removes
+recorded reviewer preparation directories only when their executions are settled.
+Review ledgers, immutable evidence, history and run logs remain available. Cleanup
+does not delete unknown directories or infer that an ambiguous cancellation ended.
+
 Transient Bitbucket read timeouts, rate limits and server errors during evidence
 capture are retried through the bounded coordinator retry path. Authentication,
 identity, incomplete evidence and uncertain write failures remain blocking; each
