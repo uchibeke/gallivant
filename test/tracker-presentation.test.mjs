@@ -59,7 +59,7 @@ test("completion projection never upgrades exit, skipped receipts, stale heads, 
   }
   const stale = project({ entry: { ...base(), reviewObservation: { head: "old", binding: "old", checks: { settled: true }, external: "clear" },
     reviewPolicy: { version: 1, mode: "first-party-required" }, firstPartyReview: { binding: "old", status: "completed", result: { verdict: "clear" } } } });
-  assert.equal(stale.review.status, "unknown"); assert.equal(stale.phase.id, "unknown");
+  assert.equal(stale.review.status, "stale-head"); assert.equal(stale.phase.id, "unknown");
 });
 
 test("provider observations distinguish pending, unchecked, quota, dispatch and credentials without inferring access", () => {
@@ -97,7 +97,7 @@ test("checks keep absent, explicitly unconfigured, pending and passed observatio
   for (const [count, settled, zeroChecks, expected] of [[0, false, false, "not-observed"], [0, true, true, "not-configured"], [1, false, false, "pending"], [1, true, false, "passed"]]) {
     const entry = { ...base(), reviewPolicy: { version: 1, zeroChecks }, reviewObservation: { head: "head", binding: "binding", checks: { count, settled } } };
     assert.equal(project({ entry }).checks.status, expected);
-    assert.equal(project({ entry: { ...entry, cursor: { fixed_sha: "new" } } }).checks.status, "unknown");
+    assert.equal(project({ entry: { ...entry, cursor: { fixed_sha: "new" } } }).checks.status, "stale-head");
   }
 });
 
@@ -257,4 +257,35 @@ test("attention remains visible across active ownership, failed controls, review
     const waiting = project({ entry: { ...review, firstPartyReview: { ...review.firstPartyReview, disposition: { status } } } });
     assert.equal(waiting.attention.group, "waiting"); assert.equal(waiting.attention.actor, "coordinator");
   }
+});
+
+test("workspace metadata stays bound to the selected attempt and preserves hosted limitations", async () => {
+  const { workspaceProjection, workspaceExecution } = await import("../lib/tracker/workspace.mjs");
+  const { capabilitiesFor } = await import("../lib/capabilities.mjs");
+  const entry = { repo: "acme/atlas", state: "pr-open", session: "current-session", last: { run: "new" },
+    execution: { model: "new-model", costUsd: 500 } };
+  const p = taskPresentation({ entry });
+  const old = workspaceProjection({ id: "task", entry, run: { id: "old" }, presentation: p });
+  assert.equal(old.execution.model, null); assert.equal(old.execution.session, null); assert.equal(old.execution.costUsd, null);
+  const hosted = workspaceProjection({ id: "task", entry, run: { id: "old", execution: { provider: "codex-cloud", model: "recorded-model", sessionId: "old-session", costUsd: 0.5, usage: { input_tokens: 12, output_tokens: 3, arbitrary: "must not leak" } } }, presentation: p, capabilities: capabilitiesFor("codex-cloud") });
+  assert.equal(hosted.execution.available, "unavailable"); assert.equal(hosted.execution.cancellation, "unavailable");
+  assert.deepEqual(hosted.execution.usage, { input: 12, output: 3, total: null });
+  const html = workspaceExecution(hosted);
+  assert.match(html, /recorded-model/); assert.match(html, /old-session/); assert.doesNotMatch(html, /new-model|current-session|must not leak/);
+});
+
+test("workspace links reject unsafe schemes, embedded credentials and encoded tokens", async () => {
+  const { safeLink } = await import("../lib/tracker/links.mjs");
+  for (const url of ["javascript:alert(1)", "data:text/html,x", "https://user:password@example.test/", "https://example.test/?token=secret", "https://example.test/?%74oken=secret", `https://example.test/${"x".repeat(2100)}`]) assert.equal(safeLink(url), null, url);
+  assert.equal(safeLink("https://github.com/acme/atlas/pull/42"), "https://github.com/acme/atlas/pull/42");
+});
+
+test("workspace redacts supplied secrets before truncating metadata and findings", async () => {
+  const { workspaceProjection } = await import("../lib/tracker/workspace.mjs");
+  const { redact } = await import("../lib/execution_io.mjs");
+  const secret = "opaque-" + "s".repeat(700);
+  const entry = { firstPartyReview: { result: { findings: [{ description: secret }] } } };
+  const w = workspaceProjection({ id: "task", entry, run: { id: "run", execution: { model: secret, sessionId: secret } }, presentation: taskPresentation({ entry }), sanitize: v => redact(v, [secret]) });
+  assert.equal(w.execution.model, "[redacted]"); assert.equal(w.execution.session, "[redacted]");
+  assert.equal(w.review.findings[0].description, "[redacted]");
 });

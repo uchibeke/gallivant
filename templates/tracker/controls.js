@@ -7,7 +7,7 @@ const lifecycle = trackerLifecycle();
 
 // A live, bounded status feed; it never opens raw reviewer output or submits work.
 const reviewActivity = document.getElementById("review-activity");
-if (reviewActivity) {
+if (reviewActivity && !document.querySelector?.(".workspace")) {
   const log = document.getElementById("review-activity-log"), status = document.getElementById("review-activity-state");
   const url = `${BASE}/api/run/review-activity?id=${encodeURIComponent(reviewActivity.dataset.entry)}`;
   let previous = log.firstElementChild?.textContent || "";
@@ -100,7 +100,7 @@ if (runControls) {
       if (control.status === "failed" && control.action === "message" && !note.value) note.value = control.note || lastMessage.querySelector("pre").textContent;
       syncButtons();
       // Follow the newest run unless that would discard a draft or interrupt typing.
-      if (!note.value && document.activeElement !== note) { location.replace(refresh.href); return; }
+      if (runControls.dataset.pinned !== "true" && !note.value && document.activeElement !== note) { location.replace(refresh.href); return; }
       refresh.hidden = false;
     } catch (e) { if (!active()) return; status.textContent = e.message; lifecycle.schedule(poll, 5000); }
   };

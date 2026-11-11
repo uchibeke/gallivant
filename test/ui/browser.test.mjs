@@ -113,7 +113,7 @@ test("five viewport widths, landscape and 200 percent zoom contain long content 
       for (const path of [`${base}/`, runPath(base), `${base}/runs`]) {
         await page.goto(origin + path);
         assert.deepEqual(await noOverflow(page), { width, scroll: width }, path);
-        for (const element of await page.locator("nav a, .menu summary, #groupby, #filter, .run-actions button, #run-note").all()) {
+        for (const element of await page.locator("nav a:visible, .menu summary:visible, #groupby:visible, #filter:visible, .run-actions button:visible, #run-note:visible").all()) {
           const rect = await element.boundingBox();
           assert.ok(rect && rect.x >= 0 && rect.x + rect.width <= width + 1, `${path}: control fits ${width}`);
           assert.ok(rect.height >= 44, `${path}: touch target ${rect.height}`);
@@ -377,20 +377,20 @@ test("settled requests refresh controls from current ownership rather than the s
 test("read failures preserve content and drafts; page exit stops refresh", { timeout: 30_000 }, async t => {
   const { page, origin, state } = await open(t);
   let reads = 0;
-  page.on("request", request => { if (request.url().includes("/api/run/review-activity")) reads++; });
+  page.on("request", request => { if (request.url().includes("/api/run/workspace")) reads++; });
   await page.goto(origin + runPath(""));
-  await page.waitForFunction(() => document.querySelector("#review-activity-state").textContent.includes("10 seconds"));
-  const saved = await page.locator("#review-activity-log").textContent();
+  await page.waitForFunction(() => document.querySelector("#workspace-state").textContent.includes("snapshot current"));
+  const saved = await page.locator("#workspace-review-content").textContent();
   await page.locator("#run-note").fill("A draft survives a read outage.");
-  const originalRead = state.reviewActivityEntry.bind(state);
-  state.reviewActivityEntry = () => { throw new Error("Fixture read unavailable"); };
+  const originalRead = state.entries.bind(state);
+  state.entries = () => { throw new Error("Fixture read unavailable"); };
   await page.clock.runFor(10_100);
-  await page.waitForFunction(() => document.querySelector("#review-activity-state").textContent.includes("unavailable"));
-  assert.equal(await page.locator("#review-activity-log").textContent(), saved);
+  await page.waitForFunction(() => document.querySelector("#workspace-state").textContent.includes("disconnected"));
+  assert.equal(await page.locator("#workspace-review-content").textContent(), saved);
   assert.equal(await page.locator("#run-note").inputValue(), "A draft survives a read outage.");
-  state.reviewActivityEntry = originalRead;
-  await page.clock.runFor(10_100);
-  await page.waitForFunction(() => document.querySelector("#review-activity-state").textContent.includes("10 seconds"));
+  state.entries = originalRead;
+  await page.getByRole("button", { name: "Refresh evidence", exact: true }).click();
+  await page.waitForFunction(() => document.querySelector("#workspace-state").textContent.includes("snapshot current"));
   await page.evaluate(() => dispatchEvent(new PageTransitionEvent("pagehide")));
   const stoppedAt = reads;
   await page.clock.runFor(60_000);
@@ -401,31 +401,31 @@ test("read failures preserve content and drafts; page exit stops refresh", { tim
 test("cached page exit aborts a pending JSON body and restoration restarts the read", { timeout: 30_000 }, async t => {
   const { page, origin, holdReviewBody } = await open(t);
   holdReviewBody();
-  const headers = page.waitForResponse(response => response.url().includes("/api/run/review-activity"));
+  const headers = page.waitForResponse(response => response.url().includes("/api/run/workspace"));
   await page.goto(origin + runPath(""));
   await headers;
-  const aborted = page.waitForEvent("requestfailed", { predicate: request => request.url().includes("/api/run/review-activity") });
+  const aborted = page.waitForEvent("requestfailed", { predicate: request => request.url().includes("/api/run/workspace") });
   await page.evaluate(() => dispatchEvent(new PageTransitionEvent("pagehide", { persisted: true })));
   assert.match((await aborted).failure().errorText, /ABORTED|CANCELLED/);
   holdReviewBody(false);
-  const restored = page.waitForResponse(response => response.url().includes("/api/run/review-activity"));
+  const restored = page.waitForResponse(response => response.url().includes("/api/run/workspace"));
   await page.evaluate(() => dispatchEvent(new PageTransitionEvent("pageshow", { persisted: true })));
   await restored;
-  await page.waitForFunction(() => document.querySelector("#review-activity-state").textContent.includes("10 seconds"));
+  await page.waitForFunction(() => document.querySelector("#workspace-state").textContent.includes("snapshot current"));
 });
 
 test("cached page restoration preserves the composer and resumes one refresh loop without resubmitting actions", { timeout: 30_000 }, async t => {
   const { page, origin, state } = await open(t);
   let reads = 0, posts = 0, documents = 0;
   page.on("request", request => {
-    if (request.url().includes("/api/run/review-activity")) reads++;
+    if (request.url().includes("/api/run/workspace")) reads++;
     if (request.method() === "POST") posts++;
     if (request.isNavigationRequest()) documents++;
   });
   for (const base of ["", "/gallivant"]) {
     state.update(TASK, { control: null });
     await page.goto(origin + runPath(base));
-    await page.waitForFunction(() => document.querySelector("#review-activity-state").textContent.includes("10 seconds"));
+    await page.waitForFunction(() => document.querySelector("#workspace-state").textContent.includes("snapshot current"));
     await page.locator("#run-note").fill("A cached draft stays with this task.\nKeep the selection too.");
     const accepted = page.waitForResponse(r => r.request().method() === "POST");
     await page.getByRole("button", { name: "Recheck PR", exact: true }).click();
@@ -447,7 +447,7 @@ test("cached page restoration preserves the composer and resumes one refresh loo
       await page.clock.runFor(60_000);
       assert.equal(reads, stoppedAt, "cached pages stop polling");
       state.update(TASK, { control: { ...state.get(TASK).control, status: "applied", message: "Applied while away." } });
-      const refreshed = page.waitForResponse(r => r.url().includes("/api/run/review-activity"));
+      const refreshed = page.waitForResponse(r => r.url().includes("/api/run/workspace"));
       await page.evaluate(() => dispatchEvent(new PageTransitionEvent("pageshow", { persisted: true })));
       await refreshed;
       await page.waitForFunction(() => document.querySelector("#control-status").dataset.state === "success");
@@ -458,9 +458,9 @@ test("cached page restoration preserves the composer and resumes one refresh loo
       }), { same: true, value: before.value, start: 2, end: 12, direction: "backward", focused: true, scroll: before.scroll, url: before.url });
       assert.equal(documents, navigations, "restoration does not reload the document");
       assert.equal(posts, submissions, "restoration never replays an action");
-      await page.waitForFunction(() => document.querySelector("#review-activity-state").textContent.includes("10 seconds"));
+      await page.waitForFunction(() => document.querySelector("#workspace-state").textContent.includes("snapshot current"));
       const resumedAt = reads;
-      const tick = page.waitForResponse(r => r.url().includes("/api/run/review-activity"));
+      const tick = page.waitForResponse(r => r.url().includes("/api/run/workspace"));
       await page.clock.runFor(10_100);
       await tick;
       assert.equal(reads, resumedAt + 1, "exactly one refresh loop resumes");
@@ -476,6 +476,7 @@ test("restored live logs resume from their cursor and preserve rows, history and
   for (const base of ["", "/gallivant"]) {
     await page.goto(origin + runPath(base));
     await page.waitForFunction(() => document.querySelector("#log").textContent.includes("Fixture line 600"));
+    await page.locator("#workspace-activity").evaluate(el => { el.open = true; });
     await page.getByRole("button", { name: "load earlier lines", exact: true }).click();
     await page.waitForFunction(() => document.querySelector("#log").textContent.includes("Fixture run:"));
     await page.locator("#run-note").fill("Keep the draft while the log reconnects.");
