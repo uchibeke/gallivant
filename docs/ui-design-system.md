@@ -111,8 +111,9 @@ pixel-regression gate; CI qualifies geometry, semantics, keyboard and contrast.
 node test/ui/capture.mjs foundation-overview-dark
 ```
 
-Only `docs/ui/previews/before-overview-desktop.png` and
-`docs/ui/previews/foundation-overview-dark.png` are approved product captures.
+The foundation approved `docs/ui/previews/before-overview-desktop.png` and
+`docs/ui/previews/foundation-overview-dark.png`. See the
+[overview guide](ui-overview.md) for its subsequent approved captures.
 Do not regenerate the before image from redesigned source. Keep all other
 screenshots/traces in a temporary directory or CI artifacts. Browser tools,
 fixtures and these preview images are excluded from the published package.

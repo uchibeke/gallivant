@@ -35,12 +35,16 @@ if (reviewActivity) {
 // Relative times must age while the dashboard stays open.
 const relativeTimes = document.querySelectorAll?.("time[data-relative-time]") || [];
 if (relativeTimes.length) {
-  const refreshTimes = () => relativeTimes.forEach(el => {
-    const at = Date.parse(el.getAttribute("datetime"));
-    if (!Number.isFinite(at)) { el.textContent = "unknown"; return; }
-    const ms = Math.max(0, Date.now() - at), minutes = Math.round(ms / 60_000), hours = Math.round(minutes / 60);
-    el.textContent = ms < 45_000 ? "just now" : minutes < 60 ? `${minutes}m ago` : hours < 48 ? `${hours}h ago` : `${Math.round(hours / 24)}d ago`;
-  });
+  const refreshTimes = () => {
+    const selection = globalThis.getSelection?.();
+    if (selection && !selection.isCollapsed) return;
+    (document.querySelectorAll?.("time[data-relative-time]") || []).forEach(el => {
+      const at = Date.parse(el.getAttribute("datetime"));
+      if (!Number.isFinite(at)) { el.textContent = "unknown"; return; }
+      const ms = Math.max(0, Date.now() - at), minutes = Math.round(ms / 60_000), hours = Math.round(minutes / 60);
+      el.textContent = ms < 45_000 ? "just now" : minutes < 60 ? `${minutes}m ago` : hours < 48 ? `${hours}h ago` : `${Math.round(hours / 24)}d ago`;
+    });
+  };
   const tickTimes = () => { refreshTimes(); lifecycle.schedule(tickTimes, 30_000); };
   lifecycle.onResume(tickTimes);
   tickTimes();

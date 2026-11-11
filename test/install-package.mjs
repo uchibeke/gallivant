@@ -16,7 +16,7 @@ try {
   assert.equal(packed.name, "@uchibeke/gallivant");
   for (const f of packed.files) assert.ok(!/(^|\/)(?:\.env[^/]*|\.git|\.npmrc|test|audit|prds|plans|design)(?:\/|$)/.test(f.path), `private/test payload: ${f.path}`);
   assert.ok(packed.files.some(f => f.path === "README.md"), "README is packaged");
-  for (const name of ["tokens.css", "primitives.css", "shell.css", "tracker.css", "lifecycle.js", "shell.js", "controls.js", "tracker.js"])
+  for (const name of ["tokens.css", "primitives.css", "shell.css", "tracker.css", "lifecycle.js", "shell.js", "controls.js", "tracker.js", "overview.js", "overview.css"])
     assert.ok(packed.files.some(f => f.path === `templates/tracker/${name}`), `runtime asset: ${name}`);
   for (const file of packed.files)
     assert.ok(!/(?:playwright|axe-core|chromium|docs\/ui\/previews|test-results)/.test(file.path), `development-only payload: ${file.path}`);
@@ -136,7 +136,7 @@ esac
   const ui = await fixture({ runtime: installed });
   try {
     for (const base of ["", "/gallivant"]) {
-      for (const path of ["/", `/run?id=${encodeURIComponent(TASK)}&run=${RUN}`, "/runs", "/api/status", "/api/runs", "/tracker.css", "/tracker.js"]) {
+      for (const path of ["/", `/run?id=${encodeURIComponent(TASK)}&run=${RUN}`, "/runs", "/api/status", "/api/overview?attention=attention", "/api/runs", "/tracker.css", "/tracker.js"]) {
         const response = await fetch(ui.origin + base + path);
         assert.equal(response.status, 200, `installed UI: ${base}${path}`);
         const body = await response.text();
@@ -144,6 +144,7 @@ esac
         if (path === "/tracker.css") assert.match(body, /--gv-focus/);
         if (path === "/tracker.js") assert.match(body, /trackerLifecycle/);
         if (path === "/") assert.match(body, /Skip to main content/);
+        if (path.startsWith("/api/overview")) assert.match(JSON.parse(body).content, /data-task-id=/);
       }
     }
   } finally { await ui.close(); }
