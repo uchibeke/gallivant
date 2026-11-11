@@ -112,6 +112,15 @@ test("cache preparation refuses symlinks and preserves existing ignore rules", t
   assert.equal(readFileSync(ignore, "utf8"), "keep existing rules\n");
 });
 
+test("describing scratch paths does not preempt known checkout-creation refusals", t => {
+  const root = mkdtempSync(join(tmpdir(), "runtime-temp-preflight-")); t.after(() => rmSync(root, { recursive: true, force: true }));
+  writeFileSync(join(root, "parent-conflict"), "operator file");
+  const cwd = join(root, "parent-conflict", "task");
+  assert.doesNotThrow(() => runtimeEnvironment({}, process.execPath, cwd));
+  assert.doesNotThrow(() => sessionExports(process.execPath, cwd));
+  assert.equal(readFileSync(join(root, "parent-conflict"), "utf8"), "operator file");
+});
+
 test("task temporary aliases preserve Unix sockets in long worktree paths", { skip: process.platform === "win32" }, t => {
   const root = mkdtempSync(join(tmpdir(), "runtime-socket-")), cwd = join(root, "long-task-name-".repeat(10));
   mkdirSync(cwd);
