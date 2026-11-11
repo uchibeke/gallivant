@@ -104,7 +104,7 @@ if (theme) theme.addEventListener("change", () => {
   for (const link of document.querySelectorAll("a[href]")) {
     if (link.getAttribute("href").startsWith("#")) continue;
     const target = new URL(link.href);
-    if (target.origin !== url.origin || ![base + "/", base + "/run", base + "/runs", base + "/chains"].includes(target.pathname)) continue;
+    if (target.origin !== url.origin || ![base + "/", base + "/run", base + "/runs", base + "/chains", base + "/task/new"].includes(target.pathname)) continue;
     if (theme.value) target.searchParams.set("theme", theme.value); else target.searchParams.delete("theme");
     link.href = target.pathname + target.search + target.hash;
   }

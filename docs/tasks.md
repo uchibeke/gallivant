@@ -1,5 +1,8 @@
 # Natural-language tasks
 
+The local overview also offers **New task** for [guided preparation and explicit
+Start](task-intake-ui.md), using the same question, revision and readiness services.
+
 Start here when you know the outcome but do not want to hand-write a PRD. The
 output can be code, a research report, documentation or content; it must belong
 to a GitHub repository and have verifiable acceptance criteria. Preparation
