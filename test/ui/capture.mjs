@@ -17,5 +17,4 @@ try {
   await page.evaluate(() => document.fonts.ready);
   mkdirSync("docs/ui/previews", { recursive: true });
   await page.screenshot({ path: `docs/ui/previews/${name}.png`, fullPage: true });
-  console.log(`${name}: Chromium ${browser.version()}, fixture v1, ${viewport.width} × ${viewport.height}, ${NOW}`);
 } finally { await browser?.close(); await world.close(); }
