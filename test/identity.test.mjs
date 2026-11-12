@@ -281,6 +281,7 @@ function repoWithSomethingToMerge() {
   // `mergeBase` merges `origin/<base>`, so the remote-tracking ref is what has to exist. There is no remote to fetch
   // from, so the exec below answers the fetch and this ref stands in for what it would have brought.
   g(["update-ref", "refs/remotes/origin/main", g(["rev-parse", "main"]).trim()]);
+  writeFileSync(join(dir, ".git", "FETCH_HEAD"), `${g(["rev-parse", "main"]).trim()}\t\tbranch 'main' of fixture\n`);
   return dir;
 }
 
@@ -289,7 +290,7 @@ const realGitExec = async (cmd, args, opts) => {
   if (args[0] === "fetch") return { stdout: "" };
   if (args[0] === "remote" && args[1] === "get-url") return { stdout: "/fixture/local-origin" };
   try { return { stdout: execFileSync(cmd, args, { ...opts, stdio: ["ignore", "pipe", "pipe"], encoding: "utf8" }) }; }
-  catch (e) { throw new Error(String(e.stderr || e.stdout || e.message)); }
+  catch (e) { throw Object.assign(new Error(String(e.stderr || e.stdout || e.message)), { code: e.status }); }
 };
 
 test("the daemon's own base merge commits as the operator, in a checkout where git can find no identity at all", { skip: !hasGit() }, async () => {
@@ -324,14 +325,8 @@ test("with no identity resolvable the base merge fails, and that failure must no
   const dir = repoWithSomethingToMerge();
   const git = makeGit({ config: { worktrees: dir }, exec: realGitExec });   // the old default: no identity at all
 
-  const r = await git.mergeBase(dir, "main");
-  // This is the misreport itself, and it is the bug's whole consequence. `mergeBase` cannot tell a content conflict
-  // from any other reason `git merge` exited non-zero, so a missing committer comes back wearing `conflict: true`, and
-  // `mergeBaseInto` hands that to the operator as "your branch cannot be merged with its base". The two branches touch
-  // different files; there is no conflict to find.
-  assert.equal(r.merged, false);
-  assert.equal(r.conflict, true, "a missing committer is indistinguishable from a real conflict to every caller");
-  assert.match(r.why, /identity unknown|Please tell me who you are|empty ident/i, "and the reason git gave was about the committer, not about a conflict");
+  await assert.rejects(() => git.mergeBase(dir, "main"), /identity unknown|Please tell me who you are|empty ident/i,
+    "a missing committer cannot authorize a conflict-repair operation");
 
   // Nothing was left half-merged either way: `mergeBase` runs `git merge --abort` before it reports, so the checkout a
   // session would be handed has no conflict markers in it.

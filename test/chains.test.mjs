@@ -162,6 +162,23 @@ test("a chain can depend on an existing owned milestone without stealing its ori
   assert.deepEqual(w.ctx.state.get(FIRST), before, "reading associations cannot transfer ownership");
 });
 
+test("a repaired merged predecessor cannot release its successor without new-head completion evidence", async () => {
+  const w = await anchoredWorld();
+  await w.anchor();
+  w.markPr(FIRST, { state: "MERGED", entryState: STATES.prOpen });
+  w.ctx.state.update(FIRST, { base_repair: { status: "verified" }, completionEvidence: { integration: { qualified: false } } });
+  await tickChains(w.ctx);
+  assert.equal(w.starts(), 1);
+  assert.equal(w.ctx.state.getChain("follow-on").status, "stopped");
+  assert.match(w.ctx.state.getChain("follow-on").reason, /qualified new-head completion/);
+  w.ctx.state.update(FIRST, { state: STATES.done, completionEvidence: { integration: { qualified: true, head: w.prs.get(1).headRefOid } } });
+  await retryChain(w.ctx, { name: "follow-on" });
+  await tickChains(w.ctx);
+  assert.equal(w.starts(), 1, "merge observation and successor dispatch stay separate");
+  await tickChains(w.ctx);
+  assert.equal(w.starts(), 2);
+});
+
 test("status preserves a pending predecessor until merge and then shows successor positions", async () => {
   const w = await anchoredWorld({ count: 3 });
   await w.anchor();

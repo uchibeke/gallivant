@@ -608,7 +608,7 @@ test("a --resnapshot whose base merge is refused leaves the snapshot alone, so t
   // whole resume on a conflict, and it used to run AFTER `resolvePrdSnapshot`: nothing ran, but the snapshot and the
   // fingerprint had already moved, so the next attempt compared as `same`, built an empty `briefChanged`, and resumed a
   // session that was never told its remembered contract was obsolete. Two refusals, checked separately because
-  // `mergeBaseInto` produces `conflict: true` by two different routes and only one of them is a real conflict.
+  // a conflict is recorded while a failed fetch remains a bounded transport failure.
   for (const [what, git] of [
     ["a conflict", { ...fakeGit(), mergeBase: async (_d, base) => ({ merged: false, conflict: true, base, why: "CONFLICT (content): Merge conflict in src/a.ts" }) }],
     ["a failed fetch", { ...fakeGit(), mergeBase: async () => { throw new Error("fatal: couldn't find remote ref main"); } }],
@@ -617,7 +617,7 @@ test("a --resnapshot whose base merge is refused leaves the snapshot alone, so t
     // merge to refuse. This world does not set one by default, because nothing else in this file needs the merge.
     const w = world({ repoText: CRITERION_ADDED, entry: { state: STATES.needsHuman, reason: "prd-changed", base: "main" } });
     w.ctx.git = git;
-    await assert.rejects(() => resume(w.ctx, { handle: "widget#142", resnapshot: true }), /cannot be merged with origin\/main/, what);
+    await assert.rejects(() => resume(w.ctx, { handle: "widget#142", resnapshot: true }), /cannot be merged with origin\/main|couldn't find remote ref main/, what);
     assert.equal(w.runner.started.length, 0, `${what}: nothing was resumed`);
     assert.equal(w.ctx.readPrd(w.id), GOOD_PRD, `${what}: the snapshot is untouched`);
     assert.equal(w.state.get(w.id).prd_fingerprint, prdFingerprint(parsePrd(GOOD_PRD, REL)), `${what}: and so is the fingerprint`);
