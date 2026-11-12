@@ -216,10 +216,27 @@ The merge commit stays local until the session pushes, so nothing on GitHub move
 is watching is unchanged, the reviewer clock is not reset, and the round is still counted from the session's own push,
 which carries the merge with it as one head move rather than two.
 
-A merge that conflicts is aborted, so a session is never handed a checkout with conflict markers in it. The entry then
-stops with reason `base-conflict`, naming the base it could not merge, and `gallivant why` prints the conflict git
-reported. A `gallivant resume` refuses instead of stopping, because there is an operator reading the output: it prints
-the conflict and the `git merge` command that resolves it, and resumes nothing.
+When a watched PR conflicts, the initial merge failure, task head and exact base SHA are recorded and that attempted
+merge is aborted. A clean owned checkout with an unchanged approved brief, carried sources and recoverable local
+session can then run one bounded repair through the existing runner. The same coordinator serves GitHub and qualified
+Bitbucket adapters. Nonconflicting merges keep the ordinary fast path.
+
+The repair agent fetches the base but merges the recorded SHA, even if the base moves again. It must inspect both
+changes against the brief, preserve applicable base and task behavior, run the brief's Verify commands, commit the
+merge and push only its task branch. Newer base changes do not always supersede task work. Removing a superseded task
+edit requires an explanation and tests of the resulting behavior. Blindly taking either side is prohibited.
+
+Each repair reserves one existing `max_iterations` round before dispatch, including an ambiguous launch. The exact
+task-head/base-SHA pair is never dispatched twice automatically. Missing permissions, session, host qualification,
+base identity or checkout ownership stop recovery. No credentials, context paths, guardrails, review policy, merge
+authority or deployment authority are widened. Changed inputs retain the normal explicit approval requirements.
+
+Restart recovery reconciles only the recorded operation and session. It never aborts or resets an unfinished repair.
+Dirty files, unknown ownership, unresolved merges and failed pushes stop with the worktree intact. Unchanged approved
+brief/source overlays may remain untracked; recovery never stages or deletes them to make the tree clean. After a
+push, Git must prove that the observed remote head contains both the repair commit and pinned base. Old readiness and
+head-bound review evidence are invalidated; new-head CI, required reviewer clearance and the completion gate still
+decide readiness. See [repair troubleshooting](commands.md#base-repair-troubleshooting).
 
 Every merge is recorded the moment it happens, not when the round finally starts, because several things after it can
 decline the round. The log says what was merged into what and when, and `gallivant why` prints the same thing with the

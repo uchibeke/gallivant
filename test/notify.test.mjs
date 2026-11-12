@@ -158,7 +158,7 @@ test("four entries each transitioning once in a single tick produce exactly four
 
   assert.equal(w.notify.sent.length, 4, `one per transition, got ${JSON.stringify(w.notify.sent)}`);
   assert.deepEqual(w.notify.sent.map(s => [s[0], s[1], s[2]].filter(x => x !== undefined)).sort(), [
-    ["needs", 202, "conflict"], ["needs", 203, "iterations"], ["needs", 204, "reviewer-silent"], ["ready", 201],
+    ["needs", 202, "base-repair-prerequisite"], ["needs", 203, "iterations"], ["needs", 204, "reviewer-silent"], ["ready", 201],
   ].sort());
   assert.deepEqual(new Set(w.notify.sent.map(s => s[1])).size, 4, "no entry notified for another entry's transition");
 });
