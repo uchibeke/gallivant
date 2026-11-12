@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { mkdirSync, writeFileSync, readFileSync, rmSync } from "node:fs";
+import { mkdirSync, writeFileSync, readFileSync, rmSync, symlinkSync, existsSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { pathToFileURL } from "node:url";
 import { execFileSync } from "node:child_process";
@@ -19,7 +19,7 @@ const baseCode = "export function calculate(n) { return Math.max(0, n); }\n";
 
 // Native repositories and the real execution ledger; the worker is deliberately
 // controlled by the fixture, with no paid provider calls or host writes.
-function world(t, { hostConflict = true, superseded = false, state: stateName = STATES.prOpen, host = "github.com" } = {}) {
+function world(t, { hostConflict = true, superseded = false, baseUpdate = "conflict", state: stateName = STATES.prOpen, host = "github.com" } = {}) {
   const home = tempHome(); t.after(() => rmSync(home, { recursive: true, force: true }));
   const origin = join(home, "origin"), tree = join(home, "trees", "task"), operator = join(home, "operator");
   const calls = [];
@@ -35,8 +35,11 @@ function world(t, { hostConflict = true, superseded = false, state: stateName = 
   g(["clone", "-q", origin, tree], home); g(["checkout", "-qb", "work/repair"]);
   write(join(tree, "shared.mjs"), "export function calculate(n) { return n + 1; }\n");
   g(["add", "shared.mjs"]); g(["commit", "-qm", "Add task behavior"]); g(["push", "-q", "origin", "work/repair"]);
-  write(join(origin, "shared.mjs"), superseded ? "export function calculate(n) { return Math.max(0, n + 1); }\n" : baseCode);
-  g(["add", "shared.mjs"], origin); g(["commit", "-qm", "Preserve safe base behavior"], origin);
+  if (baseUpdate !== "none") {
+    const file = baseUpdate === "independent" ? "base.mjs" : "shared.mjs";
+    write(join(origin, file), superseded ? "export function calculate(n) { return Math.max(0, n + 1); }\n" : baseCode);
+    g(["add", file], origin); g(["commit", "-qm", "Preserve safe base behavior"], origin);
+  }
   const head = g(["rev-parse", "HEAD"]), base = g(["rev-parse", "HEAD"], origin);
   const prd = "docs/prds/widget-export.md", source = "AGENTS.md";
   for (const dir of [tree, operator]) { write(join(dir, prd), GOOD_PRD); write(join(dir, source), "Keep approved security requirements.\n"); }
@@ -86,6 +89,81 @@ function world(t, { hostConflict = true, superseded = false, state: stateName = 
   };
   return { ...ctx, ctx, home, id, tree, origin, operator, prd, source, head, base, g, calls, raw, runner, entry, tick, beginMerge, resolveMerge };
 }
+
+test("resume recreates private approved overlays after checking a clean branch against its base", async t => {
+  for (const baseUpdate of ["none", "independent"]) await t.test(baseUpdate, async t => {
+    const w = world(t, { hostConflict: false, baseUpdate });
+    w.ctx.config.harness = { ...CONFIG.harness, claude: { ...CONFIG.harness.claude, bin: harnessBin(w.home, "claude") } };
+    rmSync(w.tree, { recursive: true });
+    w.git.fromBranch = async ({ branch, path }) => { w.g(["clone", "-q", "--branch", branch, w.origin, path], w.home); return path; };
+    const before = w.entry();
+    const result = await resume(w.ctx, { handle: w.id });
+    assert.equal(result.session, before.session);
+    assert.equal(w.raw.started.length, 2);
+    const prompt = w.raw.started.at(-1).args.at(-1);
+    assert.match(prompt, /npm test/);
+    assert.match(prompt, /this is the same session/);
+    assert.match(prompt, /keeping this branch on its base is done for you/);
+    assert.equal(readFileSync(join(w.tree, w.prd), "utf8"), GOOD_PRD);
+    assert.equal(readFileSync(join(w.tree, w.source), "utf8"), w.ctx.readSource());
+    assert.equal(w.g(["show", "HEAD:shared.mjs"]), "export function calculate(n) { return n + 1; }");
+    assert.equal(await w.git.containsCommit(w.tree, w.base), true);
+    assert.equal(w.g(["ls-files", "--", w.prd, w.source]), "", "restored private inputs are never staged");
+    if (baseUpdate === "none") assert.equal(w.g(["rev-parse", "HEAD"]), w.head);
+    else assert.equal(readFileSync(join(w.tree, "base.mjs"), "utf8"), baseCode);
+  });
+});
+
+test("daemon fix recreation permits a private brief absent from the branch before its base check", async t => {
+  const w = world(t, { hostConflict: false, baseUpdate: "none" });
+  rmSync(w.tree, { recursive: true });
+  w.git.fromBranch = async ({ branch, path }) => { w.g(["clone", "-q", "--branch", branch, w.origin, path], w.home); return path; };
+  await w.tick();
+  assert.equal(w.raw.started.length, 2);
+  assert.equal(w.entry().last.exit, null);
+  assert.equal(w.entry().reason, null);
+  assert.equal(w.g(["rev-parse", "HEAD"]), w.head);
+  assert.equal(readFileSync(join(w.tree, w.source), "utf8"), w.ctx.readSource());
+});
+
+test("pre-merge missing-overlay allowance preserves existing edits, deletions and links", async t => {
+  for (const fault of ["ignored edit", "tracked deletion", "dangling link", "linked parent"]) await t.test(fault, async t => {
+    const w = world(t, { hostConflict: false, baseUpdate: "none" });
+    rmSync(join(w.tree, w.prd));
+    // Hidden files still require byte validation; missing files may never hide
+    // a tracked deletion or a link escaping the owned checkout.
+    if (fault === "tracked deletion") {
+      w.g(["add", w.source]); w.g(["commit", "-qm", "Track fixture instructions"]);
+    }
+    else write(join(w.tree, ".git/info/exclude"), `${w.source}\ndocs/\n`);
+    if (fault === "ignored edit") write(join(w.tree, w.source), "Keep unfinished operator edits.\n");
+    if (fault === "tracked deletion" || fault === "dangling link") rmSync(join(w.tree, w.source));
+    if (fault === "dangling link") symlinkSync(join(w.home, "absent"), join(w.tree, w.source));
+    if (fault === "linked parent") {
+      rmSync(join(w.tree, "docs"), { recursive: true });
+      symlinkSync(join(w.home, "absent"), join(w.tree, "docs"));
+    }
+    const status = w.g(["status", "--porcelain=v1", "-z"]);
+    const index = readFileSync(join(w.tree, ".git/index"));
+    w.git.mergeBase = async () => assert.fail("unsafe overlays must stop before merging");
+    await assert.rejects(makeTick(w.ctx).mergeBaseInto(w.id, w.entry()), /immutable approved snapshot|unfinished repository edits|symlink/);
+    assert.deepEqual(readFileSync(join(w.tree, ".git/index")), index);
+    assert.equal(w.g(["status", "--porcelain=v1", "-z"]), status);
+    assert.equal(w.raw.started.length, 1);
+    if (fault === "ignored edit") assert.equal(readFileSync(join(w.tree, w.source), "utf8"), "Keep unfinished operator edits.\n");
+  });
+});
+
+test("repair admission still requires every private approved overlay to exist", async t => {
+  const w = world(t);
+  rmSync(join(w.tree, w.prd));
+  await w.tick();
+  assert.equal(w.entry().reason, "base-repair-dirty");
+  assert.equal(w.raw.started.length, 1);
+  assert.equal(w.entry().base_repair, undefined);
+  assert.equal(existsSync(join(w.tree, w.prd)), false);
+  assert.equal(w.g(["rev-parse", "HEAD"]), w.head);
+});
 
 for (const hostConflict of [true, false]) test(`native overlapping merge dispatches once from ${hostConflict ? "host conflict" : "normal fix merge"}`, async t => {
   const w = world(t, { hostConflict });
@@ -140,10 +218,11 @@ test("restart adopts the accepted repair ledger without touching its dirty merge
 });
 
 test("unrelated dirty recovery, unknown ownership and failed push preserve work", async t => {
-  for (const fault of ["dirty", "session", "base", "branch", "operation", "push"]) await t.test(fault, async t => {
+  for (const fault of ["dirty", "missing-overlay", "session", "base", "branch", "operation", "push"]) await t.test(fault, async t => {
     const w = world(t); await w.tick();
     await w.resolveMerge({ push: fault !== "push" });
     if (fault === "dirty") write(join(w.tree, "unrelated.txt"), "Operator edits\n");
+    if (fault === "missing-overlay") rmSync(join(w.tree, w.source));
     if (["session", "base", "branch"].includes(fault)) w.state.update(w.id, { [fault]: "different" });
     if (fault === "operation") w.state.update(w.id, { base_repair: { ...w.entry().base_repair, operationId: "foreign" } });
     const index = readFileSync(join(w.tree, ".git/index")), content = readFileSync(join(w.tree, "shared.mjs"));
@@ -151,6 +230,7 @@ test("unrelated dirty recovery, unknown ownership and failed push preserve work"
     assert.equal(w.entry().state, STATES.needsHuman); assert.match(w.entry().reason, /^base-repair-/);
     assert.deepEqual(readFileSync(join(w.tree, ".git/index")), index); assert.deepEqual(readFileSync(join(w.tree, "shared.mjs")), content);
     if (fault === "dirty") assert.equal(readFileSync(join(w.tree, "unrelated.txt"), "utf8"), "Operator edits\n");
+    if (fault === "missing-overlay") { assert.equal(w.entry().reason, "base-repair-dirty"); assert.equal(existsSync(join(w.tree, w.source)), false); }
     await w.tick(); assert.equal(w.raw.started.length, 2); assert.equal(w.entry().iteration, 1);
   });
 });
