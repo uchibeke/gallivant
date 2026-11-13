@@ -44,7 +44,9 @@ run. They balance work, not decide correctness. New tests receive a small defaul
 weight; new files and unsupported syntax do not disappear. Jobs run up to two
 independent 50-second lanes, sharing setup and leaving room for process startup.
 Measured whole-file timings account for suites whose dynamic cases are absent
-from the literal test index.
+from the literal test index. Slow parameterized pack operations have explicit
+top-level names with shared assertion helpers, so one residual cannot accumulate
+all of their real pack work.
 The runner has a
 100-second execution ceiling within the job's two-minute deadline. A single
 known test over 95 seconds is refused with an instruction to split that test,
@@ -56,8 +58,8 @@ still proved before regression execution using Ubuntu's packaged Bubblewrap
 AppArmor profile or macOS Command Line Tools. There is no unsandboxed fallback.
 Browser checks retain Chromium, Firefox, WebKit, pinned visual comparisons,
 synthetic fixtures and read-only workflow permissions. Four file-based browser
-shards use the approved ARM64 image; one also runs the installed-package browser
-smoke check. They share one reusable workflow so the full browser suite is not
+shards and a separate installed-package browser smoke job use the approved ARM64
+image. Packaging gets its own setup and execution budget. They share one reusable workflow so the full browser suite is not
 scheduled twice for the same source update.
 
 ## Required checks and concurrency

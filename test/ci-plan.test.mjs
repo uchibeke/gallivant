@@ -80,6 +80,23 @@ test("docs-only CI rejects missing anchors and links broken by changing another 
   result = check(); assert.notEqual(result.status, 0); assert.match(result.stdout + result.stderr, /anchor #missing/);
 });
 
+test("expensive parameterized package cases get named units rather than accumulating in one residual", () => {
+  const root = fileURLToPath(new URL("..", import.meta.url));
+  const weights = JSON.parse(readFileSync(new URL("../scripts/ci-weights.json", import.meta.url), "utf8"));
+  const units = testUnits(root, ["test/plugin-package.test.mjs"], weights);
+  const residual = units.find(unit => unit.residual);
+  for (const name of [
+    "public preflight refuses omitted oauth",
+    "public preflight refuses omitted review",
+    "public preflight refuses omitted publication",
+    "packed transient bytes cannot inherit clean source snapshots: lib/tasks.mjs",
+    "packed transient bytes cannot inherit clean source snapshots: node_modules/smol-toml/dist/index.js",
+  ]) {
+    assert.equal(units.filter(unit => unit.names?.includes(name)).length, 1, name);
+    assert.ok(residual.exclude.includes(name), "the residual must not repeat the expensive case");
+  }
+});
+
 test("indexing parses JavaScript rather than treating string examples as registrations", () => {
   const source = `import { test as scenario } from 'node:test';
     const example = 'test("fake",()=>{})';

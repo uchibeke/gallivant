@@ -5,11 +5,17 @@ permissions:
   contents: read
 jobs:
   chromium:
-    name: Browser UI (shard ${{ matrix.shard }}/4)
+    name: ${{ matrix.name }}
     strategy:
       fail-fast: false
       matrix:
-        shard: [1, 2, 3, 4]
+        include:
+          - {name: 'Browser UI (shard 1/4)', shard: 1}
+          - {name: 'Browser UI (shard 2/4)', shard: 2}
+          - {name: 'Browser UI (shard 3/4)', shard: 3}
+          - {name: 'Browser UI (shard 4/4)', shard: 4}
+          # Packaging has its own setup/execution budget, outside browser shards.
+          - {name: Installed browser package, shard: 0}
     runs-on: ubuntu-24.04-arm
     timeout-minutes: 2
     # Browser revisions, fonts and OS match the approved PNG references.
@@ -28,7 +34,8 @@ jobs:
           node-version: 22
       - run: npm ci --ignore-scripts --no-audit --no-fund
       - run: node --test --test-concurrency=1 --test-shard=${{ matrix.shard }}/4 test/ui/*.test.mjs
+        if: matrix.shard > 0
       - run: npm run test:install
-        if: matrix.shard == 1
+        if: matrix.shard == 0
         env:
           UI_INSTALL_BROWSER: '1'
