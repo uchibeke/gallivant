@@ -95,8 +95,11 @@ landscape, 200% content zoom plus its equivalent reduced CSS viewport, keyboard
 navigation, axe WCAG AA rules, malicious text, CSP and protected controls.
 The existing transport tests additionally cover remote peers and port mismatch.
 Browser checks complement those tests; automated accessibility is not a complete
-manual accessibility audit. Firefox/WebKit journeys run in final qualification.
-The runtime OS/Node matrix and release workflow remain separate and unchanged.
+manual accessibility audit. Firefox/WebKit journeys and pinned visual comparisons
+run in final qualification. The browser checks share the change-aware runtime
+workflow through one reusable workflow; release validation still requires full
+qualification. See [CI policy](ci.md) for selection, bounded shards and the
+preserved native isolation gates.
 
 ## Capture provenance
 

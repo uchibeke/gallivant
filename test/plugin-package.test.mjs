@@ -140,7 +140,8 @@ test("configured listing copy is reproducible in the ZIP without changing identi
   }
 });
 
-for (const field of ["oauth", "review", "publication"]) test(`public preflight refuses omitted ${field}`, t => {
+// Explicit names keep these real pack operations independently shardable.
+function refusesOmittedField(t, field) {
   gitFixture(t);
   const input = fixture(); delete input.config[field];
   assert.equal(validatePublicRelease(input.config).ok, false);
@@ -148,7 +149,10 @@ for (const field of ["oauth", "review", "publication"]) test(`public preflight r
   assert.equal(existsSync(input.out), false);
   const manifest = buildPluginPackage({ ...input, internal: true });
   assert.equal(manifest.submissionReady, false, "older internal fixtures remain usable without claiming submission");
-});
+}
+test("public preflight refuses omitted oauth", t => refusesOmittedField(t, "oauth"));
+test("public preflight refuses omitted review", t => refusesOmittedField(t, "review"));
+test("public preflight refuses omitted publication", t => refusesOmittedField(t, "publication"));
 
 test("submission inputs reject unsupported auth, unknown metadata and credential smuggling", t => {
   gitFixture(t);
@@ -442,7 +446,7 @@ for (const change of ["payload", "head", "status-failure"]) test(`public packagi
   assert.equal(existsSync(input.out), false, "remove tarball and staged plugin on failed revalidation");
 });
 
-for (const transient of ["lib/tasks.mjs", "node_modules/smol-toml/dist/index.js"]) test(`packed transient bytes cannot inherit clean source snapshots: ${transient}`, t => {
+function rejectsTransientPackedBytes(t, transient) {
   gitFixture(t);
   const original = childProcess.execFileSync;
   t.mock.method(childProcess, "execFileSync", (file, args, options) => {
@@ -453,7 +457,9 @@ for (const transient of ["lib/tasks.mjs", "node_modules/smol-toml/dist/index.js"
   const input = fixture();
   assert.throws(() => buildPluginPackage(input), { code: "PACKAGE_SOURCE", message: /Packed.*bytes differ/ });
   assert.equal(existsSync(input.out), false);
-});
+}
+test("packed transient bytes cannot inherit clean source snapshots: lib/tasks.mjs", t => rejectsTransientPackedBytes(t, "lib/tasks.mjs"));
+test("packed transient bytes cannot inherit clean source snapshots: node_modules/smol-toml/dist/index.js", t => rejectsTransientPackedBytes(t, "node_modules/smol-toml/dist/index.js"));
 
 for (const missing of ["node_modules/smol-toml/dist/index.js", "node_modules/smol-toml/package.json"]) test(`public packaging requires every proven bundled path: ${missing}`, t => {
   gitFixture(t);

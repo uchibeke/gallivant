@@ -3,49 +3,150 @@ on:
   push:
     branches: [main]
   pull_request:
+  schedule:
+    - cron: '23 5 * * *'
   workflow_call:
+    inputs:
+      full:
+        type: boolean
+        default: true
 permissions:
   contents: read
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.event_name }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 jobs:
-  test:
+  plan:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 2
+    outputs:
+      units: ${{ steps.plan.outputs.units }}
+      smoke: ${{ steps.plan.outputs.smoke }}
+      has_units: ${{ steps.plan.outputs.has_units }}
+      browser: ${{ steps.plan.outputs.browser }}
+      mode: ${{ steps.plan.outputs.mode }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: ./.github/actions/ci-dependencies
+      - run: npm run lint
+      - id: plan
+        env:
+          CI_EVENT: ${{ inputs.full && 'release' || github.event_name }}
+          CI_BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
+        run: node scripts/ci.mjs plan "$RUNNER_TEMP/ci-plan.json"
+      - env:
+          CI_EVENT: ${{ inputs.full && 'release' || github.event_name }}
+          CI_BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
+        run: node scripts/ci.mjs docs "$RUNNER_TEMP/ci-plan.json"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ci-plan
+          path: ${{ runner.temp }}/ci-plan.json
+          retention-days: 3
+          overwrite: true
+          if-no-files-found: error
+  unit:
+    needs: plan
+    if: needs.plan.outputs.has_units == 'true'
+    name: Regression (${{ matrix.os }}, ${{ matrix.node }}, shard ${{ matrix.index }})
     strategy:
-      fail-fast: false
+      fail-fast: true
+      matrix: ${{ fromJSON(needs.plan.outputs.units) }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 2
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/ci-dependencies
+        with:
+          node: ${{ matrix.node }}
+      - uses: ./.github/actions/ubuntu-apt
+        if: runner.os == 'Linux'
+      - name: Prepare native verification boundary
+        shell: bash
+        run: |
+          if [ "$RUNNER_OS" = Linux ]; then
+            sudo apt-get update -qq
+            sudo apt-get install --yes bubblewrap apparmor-profiles
+            sudo install -m 644 /usr/share/apparmor/extra-profiles/bwrap-userns-restrict /etc/apparmor.d/bwrap-userns-restrict
+            sudo apparmor_parser -r /etc/apparmor.d/bwrap-userns-restrict
+          else
+            sudo xcode-select --switch /Library/Developer/CommandLineTools
+          fi
+          node test/verification-host.mjs
+      - uses: actions/download-artifact@v4
+        with:
+          name: ci-plan
+          path: ${{ runner.temp }}/ci-plan
+      - env:
+          CI_SHARD: ${{ matrix.index }}
+        run: node scripts/ci.mjs run "$RUNNER_TEMP/ci-plan/ci-plan.json"
+  smoke:
+    needs: plan
+    name: Installed package (${{ matrix.os }}, ${{ matrix.node }})
+    strategy:
+      fail-fast: true
+      matrix: ${{ fromJSON(needs.plan.outputs.smoke) }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 2
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/ci-dependencies
+        with:
+          node: ${{ matrix.node }}
+      - run: npm run test:install
+  browser:
+    needs: plan
+    if: needs.plan.outputs.browser == 'true'
+    uses: ./.github/workflows/ui.yml
+  ci:
+    name: CI
+    if: always()
+    needs: [plan, unit, smoke, browser]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 2
+    steps:
+      - name: Require the complete selected plan
+        env:
+          PLAN: ${{ needs.plan.result }}
+          UNIT: ${{ needs.unit.result }}
+          SMOKE: ${{ needs.smoke.result }}
+          BROWSER: ${{ needs.browser.result }}
+          HAS_UNITS: ${{ needs.plan.outputs.has_units }}
+          HAS_BROWSER: ${{ needs.plan.outputs.browser }}
+        run: |
+          set -euo pipefail
+          test "$PLAN" = success
+          test "$SMOKE" = success
+          case "$HAS_UNITS" in
+            true) test "$UNIT" = success ;;
+            false) test "$UNIT" = skipped ;;
+            *) exit 1 ;;
+          esac
+          case "$HAS_BROWSER" in
+            true) test "$BROWSER" = success ;;
+            false) test "$BROWSER" = skipped ;;
+            *) exit 1 ;;
+          esac
+  # Keep the existing required names during rollout. These are aggregation
+  # gates, not claims that every platform suite ran. Actual coverage is above.
+  # Removing them before changing the ruleset would block every open PR.
+  test:
+    if: always()
+    needs: ci
+    strategy:
       matrix:
         os: [ubuntu-latest, macos-latest]
         node: [22, 24]
-    # Preserve required-check names while retaining the qualified Linux image.
-    # ubuntu-latest moved to 26.04, which removed the installed AppArmor profile.
-    runs-on: ${{ matrix.os == 'ubuntu-latest' && 'ubuntu-24.04' || matrix.os }}
-    timeout-minutes: 30
+    runs-on: ubuntu-24.04
+    timeout-minutes: 2
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: ${{ matrix.node }}
-      - name: Configure Ubuntu package downloads
-        if: runner.os == 'Linux'
-        uses: ./.github/actions/ubuntu-apt
-      - name: Install Linux verification sandbox
-        if: runner.os == 'Linux'
-        run: |
-          sudo apt-get update
-          sudo apt-get install --yes bubblewrap apparmor-profiles
-          sudo install -m 644 /usr/share/apparmor/extra-profiles/bwrap-userns-restrict /etc/apparmor.d/bwrap-userns-restrict
-          sudo apparmor_parser -r /etc/apparmor.d/bwrap-userns-restrict
-      - name: Select sandbox-supported macOS Git runtime
-        if: runner.os == 'macOS'
-        run: sudo xcode-select --switch /Library/Developer/CommandLineTools
-      - name: Verify native isolation before the suite
-        run: node test/verification-host.mjs
-      - name: Explain macOS sandbox preflight failure
-        if: failure() && runner.os == 'macOS'
-        run: sudo log show --last 2m --style compact --predicate 'eventMessage CONTAINS "Sandbox:"'
-      - run: npm ci --ignore-scripts
-      - run: npm run lint
-      # CPU budgets need a quiet process after the concurrent functional suite.
-      # Both commands are required on every OS/Node combination; no test is lost.
-      - name: Run functional test suite
-        run: node --test --test-skip-pattern='^the screen and mapping stay fast at the request and mapping limits$' test/*.test.mjs
-      - name: Run isolated task-intake CPU budget
-        run: node --test --test-name-pattern='^the screen and mapping stay fast at the request and mapping limits$' test/task-profile.test.mjs
-      - run: npm run test:install
+      - env:
+          RESULT: ${{ needs.ci.result }}
+        run: test "$RESULT" = success
