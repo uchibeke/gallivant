@@ -8,9 +8,17 @@
   let key = `task-intake-v1:${root.dataset.instance}:${initialTask || "new"}`;
   let busy = false, canRetry = false, stale = false, confirmation = null;
   let lastDraft = null;
+  let observation = null, cancelObservation = null, observationFailures = 0;
+  const feedback = trackerFeedback(status, { mirror: $("intake-local-feedback") });
   const read = () => JSON.parse(localStorage.getItem(key) || "{}");
   const write = value => localStorage.setItem(key, JSON.stringify(value));
-  const message = (text, state = "current") => { status.textContent = text; status.dataset.state = state; };
+  const message = (text, state = "current", options = {}) => feedback.show(text, { state, ...options });
+  const preparing = task => ["preparing", "validating"].includes(task?.status);
+  const phaseMessage = task => task.status === "ready" ? "Requirements ready. Review them before starting."
+    : task.status === "needs-input" ? "Your answers are needed to finish preparing this task."
+    : task.status === "blocked" ? "Preparation needs attention. Review the saved reason and recovery actions."
+    : task.implementation ? "Implementation has started. Open the task workspace for progress."
+    : `Saved preparation status: ${task.status}.`;
   const snapshot = () => {
     const el = $("intake-review");
     return el ? { taskId: el.dataset.task, revision: Number(el.dataset.revision), status: el.dataset.status, canStart: el.dataset.canStart === "true" } : null;
@@ -56,7 +64,8 @@
       el.disabled = busy || pending || stale || (el.id === "intake-open-start" && !snapshot()?.canStart);
     });
     $("intake-start").disabled = busy || pending || stale;
-    $("intake-refresh").disabled = busy;
+    $("intake-refresh").disabled = busy || !!observation;
+    $("intake-refresh").setAttribute('aria-busy', String(!!observation));
     retry.hidden = !pending; retry.disabled = busy || !canRetry;
   }
   function restoreAnswers() {
@@ -86,13 +95,17 @@
       restoreAnswers();
       if (focus) $("intake-review-title").focus();
       else {
-        const target = position.id && $(position.id);
-        target?.focus({ preventScroll: true });
+        const target = position.id ? $(position.id) : null;
+        target?.focus?.({ preventScroll: true });
         if (target?.setSelectionRange && position.start != null) target.setSelectionRange(position.start, position.end, position.direction);
         if (target) target.scrollTop = position.top;
         scrollTo(0, position.pageY);
       }
       lastDraft = JSON.stringify(draft());
+      for (const step of root.querySelectorAll('[data-intake-step]')) {
+        if (Number(step.dataset.intakeStep) === (result.task.implementation ? 3 : preparing(result.task) ? 1 : 2)) step.setAttribute('aria-current', 'step');
+        else step.removeAttribute('aria-current');
+      }
     }
     availability();
   }
@@ -104,8 +117,65 @@
     const query = op?.action === "prepare" ? { repositoryId: op.input.repositoryId, operationId: op.input.operationId } : { taskId: op?.input.taskId || task?.taskId };
     return `${base}/api/task/intake?${new URLSearchParams({ ...query, theme: document.documentElement.dataset.theme || "" })}`;
   };
+  const resolvedOperation = (op, task) => !!op && !!task && (op.action === "prepare" || task.revision !== op.input.expectedRevision);
+  const savedLink = task => {
+    const link = $("intake-saved-task");
+    if (!task || !link) return;
+    const url = new URL(location.href); url.searchParams.set("task", task.taskId);
+    link.href = url.pathname + url.search; link.hidden = false;
+  };
+  function scheduleObservation(delay = 2000) {
+    cancelObservation?.();
+    if (operation() || preparing(snapshot())) cancelObservation = lifecycle.schedule(observe, delay);
+  }
+  async function observe() {
+    if (observation) return;
+    const op = operation(), scope = key, task = snapshot();
+    if (!op && !preparing(task)) return;
+    const request = observation = {}, live = lifecycle.guard();
+    availability();
+    try {
+      const result = await lifecycle.read(urlForRead(op), "Saved progress is unavailable.", 8000);
+      if (!live() || observation !== request || scope !== key || (operation()?.input.operationId || null) !== (op?.input.operationId || null)) return;
+      observationFailures = 0; savedLink(result.task);
+      const resolved = resolvedOperation(op, result.task);
+      // A new revision invalidates the old retry even while preparation is
+      // pending. The same unresolved revision preserves a prior explicit read.
+      if (resolved) canRetry = false;
+      if (!busy && result.task && !preparing(result.task) && (!op || resolved)) {
+        if (op) await settle(op, scope);
+        if (!live() || scope !== key || busy) return;
+        canRetry = false;
+        apply(result);
+        message(phaseMessage(result.task), result.task.status === "blocked" ? "error" : "success");
+      } else if (result.task && preparing(result.task)) {
+        message(`Preparing requirements · saved revision ${result.task.revision}.`, "pending", {
+          pending: true, detail: "Checking saved progress automatically. You can reopen this preparation; implementation still requires a separate Start.",
+        });
+      } else if (op && !busy) {
+        // Observing unchanged input cannot revoke an already validated retry.
+        // Missing preparation still permits only the retained original request.
+        canRetry = canRetry || !result.task;
+        message(canRetry ? "Saved status checked. Retry same request is available." : "Checking saved progress. The original request is retained.", "pending", {
+          detail: canRetry ? "No request has been resent. An explicit retry reuses the saved input and identity." : "No new request is being sent. Refresh saved status before choosing any recovery action.",
+        });
+      }
+    } catch {
+      if (!live() || observation !== request) return;
+      observationFailures++;
+      message(observationFailures >= 3 ? "Progress updates paused. Refresh saved status to reconnect; your request is retained." : "Progress connection interrupted. Checking again; your request is retained.", "error");
+    } finally {
+      if (observation === request) {
+        observation = null;
+        if (live()) {
+          availability();
+          if (observationFailures < 3) scheduleObservation(observationFailures ? Math.min(30000, 5000 * 2 ** observationFailures) : 5000);
+        }
+      }
+    }
+  }
   async function refresh() {
-    if (busy) return;
+    if (busy || observation) return;
     const op = operation(), scope = key;
     if (!op && !snapshot()) { message("No saved task yet. Preparation requires the explicit Prepare action."); return; }
     busy = true; canRetry = false; availability();
@@ -114,18 +184,33 @@
       const result = await lifecycle.read(urlForRead(op), "Saved status is unavailable. Last review and drafts retained.");
       if (!live()) return;
       // Changed revisions are observed, never automatically approved or retried.
-      const resolved = op && result.task && (op.action === "prepare" || result.task.revision !== op.input.expectedRevision);
+      const resolved = resolvedOperation(op, result.task);
       canRetry = !!op && !resolved;
-      apply(result);
       if (resolved) await settle(op, scope);
+      apply(result);
+      savedLink(result.task); observationFailures = 0;
       message(canRetry ? "Saved status checked. Retry only the original request with its retained identity." : "Saved revision refreshed. Review it before any further action.");
     } catch (error) { stale = true; message(error.message, "error"); }
-    finally { busy = false; availability(); }
+    finally { busy = false; availability(); scheduleObservation(); }
   }
   async function send(op, replay = false) {
     if (busy || replay && !canRetry) return;
+    if (!op?.input || !["prepare", "answer", "resume", "validate", "start"].includes(op.action)) {
+      message("Saved request type is unsupported. Keep this request and inspect it before continuing.", "error"); return;
+    }
     if (!checkpoint(true)) return;
     busy = true; canRetry = false;
+    const activeButton = op.action === "prepare" ? $("intake-prepare") : op.action === "answer" ? $("intake-answers")?.querySelector('button[type="submit"]')
+      : op.action === "start" ? $("intake-start") : root.querySelector(`[data-intake-action="${op.action}"]`);
+    const idleLabel = activeButton?.textContent;
+    const progress = {
+      prepare: ["Preparing requirements…", "Preparing…"], answer: ["Saving answers and updating requirements…", "Updating…"],
+      resume: ["Continuing preparation…", "Continuing…"], validate: ["Checking readiness…", "Checking…"], start: ["Starting the approved task…", "Starting…"],
+    }[op.action];
+    availability();
+    message(progress[0], "pending", { pending: true, button: activeButton, label: progress[1],
+      detail: op.action === "start" ? "Submitting only the revision you approved. Waiting for its saved result." : "Preparing the saved requirements. Implementation begins only after a separate Start.",
+    });
     let claimed;
     const scope = key;
     try {
@@ -138,7 +223,7 @@
       });
       if (!claimed) { message("Another unresolved request is retained. Refresh saved status before continuing."); return; }
       availability();
-      message(`${op.action === "start" ? "Submitting explicit Start" : "Saving preparation request"}… Keep this page or return to check the saved status.`);
+      observationFailures = 0; scheduleObservation();
       const controller = new AbortController(), timer = setTimeout(() => controller.abort(), 15_000);
       let response, result;
       const stop = () => controller.abort();
@@ -152,18 +237,24 @@
         if (result.noEffects || [400, 403, 413, 415].includes(response.status)) await settle(claimed, scope);
         stale = true; message(result.error || "Request outcome is uncertain. Check saved status before retrying.", "error"); return;
       }
+      if (!result.task || typeof result.content !== 'string' || !Number.isSafeInteger(result.task.revision)) throw new Error('Saved result is unavailable');
       if (claimed.action === "answer") {
         const saved = read();
         for (const [id, value] of Object.entries(claimed.input.answers)) if (saved.answers?.[id] === value) delete saved.answers[id];
         write(saved);
       }
-      apply(result, true);
       await settle(claimed, scope);
-      message("Saved for review. Execution requires explicit Start.");
+      apply(result, true); savedLink(result.task);
+      message(preparing(result.task) ? "Preparation is saved and awaiting its next result. Refresh saved status to inspect recovery actions." : phaseMessage(result.task), result.task?.status === "blocked" ? "error" : "success");
       if (claimed.action === "start" && result.task?.implementation) location.assign($("intake-workspace").href);
     } catch (error) {
-      message(claimed ? "Response uncertain. The original request and draft are retained. Refresh saved status before retrying; do not create a new request." : error.message, "error");
-    } finally { busy = false; availability(); }
+      message(claimed ? "Response uncertain. The original request and draft are retained. Checking saved progress; do not create a new request." : error.message, "error", {
+        detail: claimed ? "The provider may still be working. Status checks only read the saved request; they never resubmit it." : "",
+      });
+    } finally {
+      if (activeButton) { activeButton.textContent = idleLabel; activeButton.setAttribute("aria-busy", "false"); }
+      busy = false; availability(); scheduleObservation();
+    }
   }
   function revisionAction(action) {
     const task = snapshot();
@@ -220,4 +311,6 @@
   } catch { message("Browser storage is unavailable. Enable it before sending any request.", "error"); }
   lastDraft = JSON.stringify(draft());
   availability();
+  scheduleObservation();
+  lifecycle.onResume(() => { observation = null; observationFailures = 0; scheduleObservation(0); });
 })();

@@ -127,7 +127,24 @@ there is no state migration or task-engine change to reverse.
 `links.mjs` supplies one safe outgoing-link contract for SSR and browser decoration.
 `navigation.js` applies it to initial and dynamically inserted links, with a visible
 new-tab hint. Internal navigation, downloads and modified clicks retain native
-browser behavior. The shell supplies a dismissible, sticky loading panel inside
-the document; it does not depend on a parent viewport or a second router. Loading
+browser behavior. The shell delays navigation progress by 200ms, so fast page changes do not flash
+a loading panel. Its sticky host has zero height and an absolutely positioned
+panel, so showing it never moves the document, including inside a host frame. Loading
 uses text plus static skeleton bars and respects reduced motion. Page restoration
 clears pending feedback. It never retries a control or changes task authority.
+
+## Shared request feedback
+
+`feedback.js` supplies `trackerFeedback(status, { mirror, region })`. A controller
+calls `show(text, { state, pending, detail, button, label })` to display a status,
+optional feedback beside the triggering action, `aria-busy` and a working label.
+It uses text nodes, semantic tokens and reduced-motion-safe indicators. It never
+starts work, certifies completion, disables authority checks or retries a request.
+Navigation, task preparation and coordinator controls share this helper.
+
+Use a single live status for announcements; visual mirrors use `aria-live="off"`.
+Keep confirmation separate from status. The preparation journey highlights the
+saved phase, not an invented percentage. The header has one labelled New task
+action; approval instructions belong in the preparation flow. Disclosure chevrons
+use `disclosureIcon()` for a padded, non-shrinking slot and consistent rotation.
+Other shared icons sit in controls with gaps and 44px touch targets.

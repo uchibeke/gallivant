@@ -36,12 +36,16 @@ browser storage. Web Locks coordinate submissions across tabs. Tokens and known
 credential patterns are not persisted. Storage failure disables new requests;
 keep the draft and restore storage before continuing.
 
-An uncertain response never triggers an automatic POST. Use **Refresh saved
-status** first. If the operation is still unresolved at the same revision,
+An uncertain response never triggers an automatic POST. The page observes saved
+status automatically; **Refresh saved status** also requests a bounded read. If the operation is still unresolved at the same revision,
 **Retry same request** reuses its original input and identity. A changed revision
 must be reviewed again. A saved implementation offers **Open task workspace**;
 never create another preparation to recover it. A failed read retains the last
 review and answer draft, but disables Start until a successful refresh.
+
+Background reads of the same unresolved revision preserve retry eligibility from
+that saved-status check. Observing a newer revision revokes the old retry, including
+when the newer preparation is still pending. Retrying always requires a click.
 
 Repository removal, unsupported preparation, failed provider access and readiness
 denials remain visible. Repair the configured provider through the CLI; choosing
@@ -73,3 +77,25 @@ real Chromium renders of those synthetic fixtures, not live-provider evidence.
 The runtime package includes the new modules and shared assets through its
 existing `lib`, `templates` and `docs/*.md` entries. Roll back with the prior
 package; saved task records retain their existing version and CLI recovery paths.
+
+## Visible progress and recovery
+
+Every submission immediately displays a working button label and feedback beside
+the action, with a live status near the top of the page. The Describe & prepare,
+Clarify & review and Start steps track the saved phase. A response timeout does
+not mean the provider stopped: the original request identity stays fenced against
+a fresh submission.
+
+While a request is pending, the page reads the existing intake status endpoint
+after two seconds and then every five seconds. It shows the saved revision and a
+link to reopen preparation. After a lost response or reload, it can discover the
+finished requirements or questions without another POST or model turn. Reads have
+an eight-second deadline, back off after failures, pause after three consecutive
+failures, and use the shared lifecycle for hidden/offline pages and restoration.
+**Refresh saved status** reconnects observation; explicit recovery actions keep
+their original approval requirements.
+
+A saved `preparing` state is an observation, not proof of provider health. Remote
+preparation that requires collection still uses the existing explicit Resume
+action; status polling never performs it. No observation can start implementation,
+change the approved revision or repeat a paid request.

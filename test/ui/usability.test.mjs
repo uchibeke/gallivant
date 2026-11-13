@@ -80,10 +80,10 @@ test("shared navigation shows a skeleton while a page is pending and Chains pres
   // held navigation to finish before resolving against a document.
   const pending = await page.evaluate(() => {
     document.querySelector('nav a[href="/gallivant/chains"]').click();
-    return new Promise(resolve => queueMicrotask(() => resolve({ hidden: document.getElementById('page-loading').hidden,
+    return new Promise(resolve => setTimeout(() => resolve({ hidden: document.getElementById('page-loading').hidden,
       busy: document.getElementById('main').getAttribute('aria-busy'),
       text: document.getElementById('page-loading-status').textContent,
-      skeleton: document.getElementById('page-loading-status').dataset.skeleton })));
+      skeleton: document.getElementById('page-loading-status').dataset.skeleton }), 250));
   });
   assert.equal(pending.hidden, false); assert.equal(pending.busy, 'true');
   assert.match(pending.text, /Opening Chains/); assert.equal(pending.skeleton, 'true');
