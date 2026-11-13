@@ -138,7 +138,11 @@
       const result = await lifecycle.read(urlForRead(op), "Saved progress is unavailable.", 8000);
       if (!live() || observation !== request || scope !== key || (operation()?.input.operationId || null) !== (op?.input.operationId || null)) return;
       observationFailures = 0; savedLink(result.task);
-      if (!busy && result.task && !preparing(result.task) && (!op || resolvedOperation(op, result.task))) {
+      const resolved = resolvedOperation(op, result.task);
+      // A new revision invalidates the old retry even while preparation is
+      // pending. The same unresolved revision preserves a prior explicit read.
+      if (resolved) canRetry = false;
+      if (!busy && result.task && !preparing(result.task) && (!op || resolved)) {
         if (op) await settle(op, scope);
         if (!live() || scope !== key || busy) return;
         canRetry = false;
@@ -149,10 +153,11 @@
           pending: true, detail: "Checking saved progress automatically. You can reopen this preparation; implementation still requires a separate Start.",
         });
       } else if (op && !busy) {
-        // A missing or unchanged observation cannot authorize another POST.
-        canRetry = !result.task;
-        message("Checking saved progress. The original request is retained.", "pending", {
-          detail: "No new request is being sent. Refresh saved status before choosing any recovery action.",
+        // Observing unchanged input cannot revoke an already validated retry.
+        // Missing preparation still permits only the retained original request.
+        canRetry = canRetry || !result.task;
+        message(canRetry ? "Saved status checked. Retry same request is available." : "Checking saved progress. The original request is retained.", "pending", {
+          detail: canRetry ? "No request has been resent. An explicit retry reuses the saved input and identity." : "No new request is being sent. Refresh saved status before choosing any recovery action.",
         });
       }
     } catch {

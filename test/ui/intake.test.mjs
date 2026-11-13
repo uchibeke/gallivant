@@ -30,10 +30,10 @@ async function fill(page, text = INTAKE_REQUEST) {
   await page.locator("#intake-text").fill(text);
 }
 const state = (page, value) => page.waitForFunction(value => document.querySelector("#intake-review")?.dataset.status === value, value);
-async function prepare(page) {
+async function prepare(page, expected = "needs-input") {
   await fill(page);
   await page.getByRole("button", { name: "Prepare requirements", exact: true }).click();
-  await state(page, "needs-input");
+  await state(page, expected);
 }
 async function answer(page) {
   await page.getByLabel("Which file format should export use?").fill("Use CSV.");
@@ -212,6 +212,75 @@ test("unaccepted answer retries exact input after observation, while failed prep
   assert.deepEqual(inputs[0], inputs[1]);
   const saved = taskStore(home).list()[0]; assert.equal(saved.answers["q-r-1"], "Use CSV."); assert.ok(saved.draft);
   assert.equal(calls.start, 0); assert.equal(saved.runAuthorized, false);
+});
+
+for (const base of ["", "/gallivant"]) for (const action of ["answer", "resume", "validate", "start"]) test(`unchanged background reads preserve an observed ${action} retry at ${base || "/"}`, { timeout: 30_000 }, async t => {
+  const world = await open(t, { question: ["answer", "resume"].includes(action) });
+  const { page, origin, calls, home } = world;
+  if (action === "resume") world.failPreparation(new Error("Synthetic provider unavailable."));
+  await page.goto(`${origin}${base}/task/new`);
+  await prepare(page, action === "resume" ? "blocked" : action === "answer" ? "needs-input" : "ready");
+  if (action === "validate") {
+    const store = taskStore(home), saved = store.list()[0];
+    saved.status = "blocked"; saved.readiness = { ...saved.readiness, allow: false }; store.save(saved);
+    await page.reload();
+  }
+  let reject = true; const inputs = [];
+  await page.route(`**/api/task/intake/${action}?*`, route => {
+    inputs.push(route.request().postDataJSON());
+    return reject ? route.abort() : route.continue();
+  });
+  if (action === "answer") {
+    await page.getByLabel("Which file format should export use?").fill("Use CSV.");
+    await page.getByRole("button", { name: "Save answers and prepare", exact: true }).click();
+  } else if (action === "start") {
+    await page.getByRole("button", { name: "Review Start", exact: true }).click();
+    await page.getByRole("button", { name: "Start approved revision", exact: true }).click();
+  } else await page.locator(`[data-intake-action="${action}"]`).click();
+  await page.waitForFunction(() => document.getElementById("intake-status").textContent.includes("Response uncertain"));
+  assert.equal(await page.locator("#intake-retry").isDisabled(), true);
+  await page.locator("#intake-refresh").click();
+  await page.waitForFunction(() => !document.getElementById("intake-retry").disabled);
+  const before = { ...calls };
+  for (const delay of [2500, 5500, 5500]) {
+    const response = page.waitForResponse(r => r.request().method() === "GET" && new URL(r.url()).pathname.endsWith("/api/task/intake"));
+    await page.clock.runFor(delay); await (await response).finished();
+    await page.waitForFunction(() => !document.getElementById("intake-refresh").disabled);
+    assert.equal(await page.locator("#intake-retry").isDisabled(), false, "same revision preserves eligibility from the explicit saved read");
+  }
+  assert.deepEqual(calls, before, "background observation performs no preparation, verification or implementation");
+  assert.equal(inputs.length, 1, "polling never retries the POST");
+  reject = false; world.failPreparation(null);
+  const retried = page.waitForResponse(r => r.request().method() === "POST" && new URL(r.url()).pathname.endsWith(`/api/task/intake/${action}`));
+  await page.locator("#intake-retry").click();
+  const response = await retried, result = await response.json();
+  assert.equal(response.status(), 200, JSON.stringify(result));
+  if (action === "start") await page.waitForURL(url => url.pathname === `${base}/run`);
+  else await state(page, result.task.status);
+  assert.deepEqual(inputs[1], inputs[0], "explicit retry preserves the exact original payload and operation identity");
+  assert.equal(inputs.length, 2); assert.equal(calls.start, action === "start" ? 1 : 0);
+});
+
+for (const base of ["", "/gallivant"]) test(`a newer preparing revision revokes the old observed retry at ${base || "/"}`, { timeout: 30_000 }, async t => {
+  const { page, origin, home, calls } = await open(t);
+  await page.goto(`${origin}${base}/task/new`); await prepare(page);
+  const inputs = [];
+  await page.route("**/api/task/intake/answer?*", route => { inputs.push(route.request().postDataJSON()); return route.abort(); });
+  await page.getByLabel("Which file format should export use?").fill("Use CSV.");
+  await page.getByRole("button", { name: "Save answers and prepare", exact: true }).click();
+  await page.waitForFunction(() => document.getElementById("intake-status").textContent.includes("Response uncertain"));
+  await page.locator("#intake-refresh").click();
+  await page.waitForFunction(() => !document.getElementById("intake-retry").disabled);
+  const retained = await page.evaluate(() => localStorage.getItem(Object.keys(localStorage).find(key => key.endsWith(":operation"))));
+  const store = taskStore(home), saved = store.list()[0];
+  saved.revision++; saved.status = "preparing"; store.save(saved);
+  const response = page.waitForResponse(r => r.request().method() === "GET" && new URL(r.url()).pathname.endsWith("/api/task/intake"));
+  await page.clock.runFor(2500); await (await response).finished();
+  await page.waitForFunction(() => !document.getElementById("intake-refresh").disabled);
+  assert.equal(await page.locator("#intake-retry").isDisabled(), true);
+  assert.equal(await page.locator("#intake-open-start").isDisabled(), true);
+  assert.equal(await page.evaluate(() => localStorage.getItem(Object.keys(localStorage).find(key => key.endsWith(":operation")))), retained);
+  assert.equal(inputs.length, 1); assert.equal(calls.prepare, 1); assert.equal(calls.start, 0);
 });
 
 test("stale review cannot start another contract and hostile text is escaped", { timeout: 30_000 }, async t => {

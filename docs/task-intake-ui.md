@@ -43,6 +43,10 @@ must be reviewed again. A saved implementation offers **Open task workspace**;
 never create another preparation to recover it. A failed read retains the last
 review and answer draft, but disables Start until a successful refresh.
 
+Background reads of the same unresolved revision preserve retry eligibility from
+that saved-status check. Observing a newer revision revokes the old retry, including
+when the newer preparation is still pending. Retrying always requires a click.
+
 Repository removal, unsupported preparation, failed provider access and readiness
 denials remain visible. Repair the configured provider through the CLI; choosing
 the bounded model route is an explicit owner choice, never a fallback.
