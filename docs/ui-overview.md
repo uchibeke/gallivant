@@ -97,8 +97,9 @@ ship with the public guides.
 Outgoing HTTP(S) links use the shared safe-link policy, open in a new tab with
 `noopener noreferrer`, and include a visible arrow and an accessible hint. This
 also applies to links added by live updates. Internal navigation stays in the
-current view. Native navigation displays a dismissible loading placeholder; slow
-navigation retains the current page and never replays an action. Saved artifacts
+current view. Native navigation delays its dismissible progress panel by 200ms; fast changes
+show no transient loader. The panel never shifts the header or current content,
+and slow navigation never replays an action. Saved artifacts
 show a loading placeholder until their bounded metadata read settles. Empty lists
 explain what is missing and offer the existing filter, setup or preparation paths.
 

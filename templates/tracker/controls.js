@@ -66,6 +66,7 @@ if (runControls) {
   let pending = runControls.dataset.pending === "true", uncertain = Boolean(operation), closed = runControls.dataset.closed === "true", sending = false;
   let reading = null, cancelTimer, failures = 0, canReplay = false, restoredFailure = null, deliveryGeneration = 0;
   const saved = store.initial;
+  const requestFeedback = trackerFeedback(status);
   if (note && saved.value) {
     note.value = saved.value;
     note.setSelectionRange(saved.start || 0, saved.end || 0, saved.direction || "none");
@@ -99,7 +100,7 @@ if (runControls) {
   const feedback = (control, reason) => {
     const view = controlFeedback(control, reason);
     status.setAttribute?.("data-status", view.state); status.setAttribute?.("data-state", view.tone);
-    if (status.textContent !== view.text) status.textContent = view.text;
+    requestFeedback.show(view.text, { state: view.tone, pending: ["queued", "applying"].includes(control?.status) });
     if (times) times.textContent = view.times;
   };
   const markUncertain = message => {

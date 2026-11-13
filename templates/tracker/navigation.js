@@ -43,9 +43,10 @@
   const indicator = document.getElementById('page-loading'), status = document.getElementById('page-loading-status');
   if (!indicator || !status) return;
   const main = document.getElementById('main');
-  let deadline = null, previousBusy = null;
+  let deadline = null, reveal = null, previousBusy = null;
+  const feedback = trackerFeedback(status);
   const clear = () => {
-    clearTimeout(deadline); deadline = null; indicator.hidden = true;
+    clearTimeout(deadline); clearTimeout(reveal); deadline = reveal = null; indicator.hidden = true;
     if (main?.dataset.navigationPending) {
       delete main.dataset.navigationPending;
       if (previousBusy === null) main.removeAttribute('aria-busy'); else main.setAttribute('aria-busy', previousBusy);
@@ -54,10 +55,13 @@
   function begin(label) {
     clear(); previousBusy = main?.getAttribute('aria-busy') ?? null;
     if (main) { main.dataset.navigationPending = 'true'; main.setAttribute('aria-busy', 'true'); }
-    status.textContent = label; status.classList.add('loading'); status.dataset.skeleton = 'true'; indicator.hidden = false;
+    feedback.show(label, { pending: true }); status.dataset.skeleton = 'true';
+    // Fast native navigations need no transient panel. A zero-height host keeps
+    // slower progress visible without shifting the header or current content.
+    reveal = setTimeout(() => { indicator.hidden = false; }, 200);
     deadline = setTimeout(() => {
-      status.classList.remove('loading'); delete status.dataset.skeleton;
-      status.textContent = 'This view is taking longer to open. You can keep using the current page.';
+      delete status.dataset.skeleton;
+      feedback.show('This view is taking longer to open. You can keep using the current page.', { state: 'pending' });
     }, 10000);
   }
   document.addEventListener('click', event => {

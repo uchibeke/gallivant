@@ -2,8 +2,6 @@
 .overview { max-width: 1600px; margin: auto; border-left: 0; padding-top: 24px; }
 .overview-heading, .overview-connection { display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
 .overview-heading { padding-top: 20px; padding-bottom: 20px; }
-.new-task { display: flex; align-items: center; gap: 12px; }
-.new-task span { color: var(--gv-subtle); font-size: 12px; max-width: 145px; }
 .overview-connection { justify-content: flex-start; margin: 8px 0 16px; font-size: 13px; }
 .overview-connection p { margin: 0; flex: 1 1 240px; }
 .overview-connection button { font-size: 12px; }
@@ -47,9 +45,8 @@
 .task-progress span:first-child { color: var(--gv-text); }
 .task-primary-links a { display: inline-flex; align-items: center; min-height: 44px; font-size: 13px; font-weight: 600; }
 .task-context { grid-column: 1 / -1; margin-top: 8px; }
-.task-context > summary { display: flex; align-items: center; justify-content: space-between; color: var(--gv-accent); font-size: 12px; list-style: none; }
+.task-context > summary { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 8px; color: var(--gv-accent); font-size: 13px; list-style: none; }
 .task-context > summary::-webkit-details-marker { display: none; }
-.task-context[open] > summary .icon { transform: rotate(180deg); }
 .task-context-body { padding: 12px 0 20px; border-top: 1px solid var(--gv-line); font-size: 13px; }
 .task-context-body > p:first-child { margin-top: 0; }
 .context-facts { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px 24px; }

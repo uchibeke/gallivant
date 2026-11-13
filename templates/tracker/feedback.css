@@ -1,0 +1,13 @@
+.feedback-status { margin: 0; overflow-wrap: anywhere; }
+.feedback-status[data-busy="true"]::before, button[data-pending-label][aria-busy="true"]::before {
+  content: ""; display: inline-block; width: 12px; height: 12px; margin-inline-end: 8px;
+  border: 2px solid currentColor; border-inline-end-color: transparent; border-radius: 50%; vertical-align: -.1em;
+  animation: feedback-turn 1s linear infinite;
+}
+.feedback-panel { padding: 12px 16px; border: 1px solid var(--gv-line); border-inline-start: 3px solid var(--gv-accent); border-radius: 8px; background: var(--gv-bench); margin-top: 12px; }
+.feedback-panel[data-state="error"] { border-inline-start-color: var(--gv-danger); }
+.feedback-panel [data-feedback-message] { margin: 0; font-weight: 600; }
+.feedback-panel [data-feedback-detail] { margin: 4px 0 0; color: var(--gv-muted); font-size: 13px; }
+.feedback-panel[data-busy="true"] [data-feedback-message]::before { content: ""; display: inline-block; width: 8px; height: 8px; margin-inline-end: 8px; border-radius: 50%; background: var(--gv-accent); }
+@keyframes feedback-turn { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .feedback-status::before, button[data-pending-label][aria-busy="true"]::before { animation: none; } }

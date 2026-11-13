@@ -113,7 +113,7 @@ test("review activity updates as text and reports connection failures without di
 
 // Run the actual browser script; these elements only supply events, values and attributes.
 function controls({ session = true, pending = false } = {}) {
-  const el = props => ({ value: "", textContent: "", hidden: true, on: {}, focus() {},
+  const el = props => ({ value: "", textContent: "", hidden: true, dataset: {}, on: {}, focus() {},
     addEventListener(event, fn) { this.on[event] = fn; }, ...props });
   const buttons = ["recheck", "resume", "message", "cancel"].map(action => el({
     textContent: action, dataset: { action, available: String(!pending && (action === "recheck" || action === "cancel" || session)) },

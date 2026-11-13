@@ -1,10 +1,9 @@
-.top { display: flex; flex-wrap: wrap; gap: 24px; align-items: center; padding: 18px var(--gv-pad); background: var(--gv-surface); border-bottom: 1px solid var(--gv-line); }
-.brand { display: flex; align-items: center; gap: 12px; color: var(--gv-text); text-decoration: none; font-size: 20px; font-weight: 700; letter-spacing: -.4px; margin-right: 24px; }
-.brand > .icon { width: 36px; height: 36px; color: var(--gv-accent); }
-.brand small { display: block; color: var(--gv-subtle); font-size: 9px; letter-spacing: 1.5px; font-weight: 500; }
-.shell-tools { display: flex; align-items: center; flex-wrap: wrap; gap: 16px; margin-left: auto; }
+.top { display: flex; flex-wrap: wrap; gap: 16px; align-items: center; padding: 12px var(--gv-pad); background: var(--gv-surface); border-bottom: 1px solid var(--gv-line); }
+.brand { display: flex; align-items: center; gap: 12px; color: var(--gv-text); text-decoration: none; font-size: 20px; font-weight: 700; letter-spacing: -.4px; margin-right: 8px; }
+.brand > .icon { width: 28px; height: 28px; color: var(--gv-accent); }
+.shell-tools { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; margin-left: auto; }
 .home { display: inline-flex; align-items: center; gap: 6px; min-height: 44px; color: var(--gv-muted); }
-.page-heading { padding: 28px var(--gv-pad) 26px; border-bottom: 1px solid var(--gv-line); }
+.page-heading { display: flex; align-items: center; justify-content: space-between; gap: 24px; flex-wrap: wrap; padding: 28px var(--gv-pad) 26px; border-bottom: 1px solid var(--gv-line); }
 .eyebrow { color: var(--gv-subtle); font-size: 11px; letter-spacing: 1.5px; text-transform: uppercase; margin: 0 0 4px; }
 h1 { font-size: 30px; line-height: 1.25; letter-spacing: -.8px; margin: 0; font-weight: 650; }
 .page-heading p:last-child { margin: 8px 0 0; color: var(--gv-muted); }
@@ -63,7 +62,7 @@ dl.facts dd { margin: 0; min-width: 0; }
 .run-controls pre, #control-status { white-space: pre-wrap; overflow-wrap: anywhere; }
 #control-status:empty { display: none; }
 #last-message { margin-top: 16px; }
-summary { min-height: 44px; padding: 10px 0; }
+summary { min-height: 44px; padding: 10px 8px; }
 .loadmore { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
 @media (max-width: 1000px) {
   .top { gap: 16px; padding: 16px 24px; }
@@ -76,9 +75,13 @@ summary { min-height: 44px; padding: 10px 0; }
   .top { padding: 16px; gap: 12px; }
   .brand { flex: 1; }
   .views { order: 3; width: 100%; }
-  .shell-tools { margin-left: 0; }
-  .shell-tools .home { width: 100%; }
-  .page-heading { padding: 24px 16px; }
+  .shell-tools { margin-left: auto; gap: 4px; }
+  .shell-tools .home { width: 44px; justify-content: center; }
+  .home-label, .navigate-label, .shell-tools kbd, .menu-label { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+  #commands-open { width: 44px; height: 44px; justify-content: center; padding: 10px; }
+  .shell-tools .menu summary { padding: 6px; gap: 0; }
+  .shell-tools .menu .disclosure-icon { width: 24px; height: 24px; margin-inline-start: 2px; padding: 3px; }
+  .page-heading { display: flex; align-items: center; justify-content: space-between; gap: 24px; flex-wrap: wrap; padding: 24px 16px; }
   .layout { grid-template-columns: minmax(0, 1fr); }
   aside { border-bottom: 1px solid var(--gv-line); padding: 16px; }
   .controls input { width: auto; flex: 1 1 100%; }
@@ -91,9 +94,7 @@ summary { min-height: 44px; padding: 10px 0; }
 }
 @media (max-width: 400px) {
   .brand { font-size: 18px; }
-  .brand small { font-size: 8px; }
   .menu summary { padding: 8px; font-size: 12px; }
-  .menu summary .icon:first-child { display: none; }
 }
 
 /* Task summaries reflow as labelled records on small screens. Table header
@@ -125,3 +126,7 @@ summary { min-height: 44px; padding: 10px 0; }
   .run-controls { padding: 16px; }
   .composer-buttons { display: grid; grid-template-columns: 1fr; }
 }
+
+#commands-open, .header-action { display: inline-flex; align-items: center; justify-content: center; gap: 8px; }
+.header-action { flex: 0 0 auto; text-decoration: none; font-weight: 600; }
+.header-action:hover { text-decoration: underline; }
