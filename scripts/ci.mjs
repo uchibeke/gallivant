@@ -10,6 +10,13 @@ const output = (key, value) => { if (process.env.GITHUB_OUTPUT) appendFileSync(p
 const event = process.env.CI_EVENT || "pull_request", base = process.env.CI_BASE_SHA;
 const paths = () => event === "pull_request" || event === "push" && base && !/^0+$/.test(base) ? changedPaths(root, base) : [];
 const execute = promisify(execFile);
+const testEnvironment = () => {
+  const env = { ...process.env };
+  // All explicit child runners, including docs checks, need their own protocol.
+  delete env.NODE_TEST_CONTEXT;
+  env.FORCE_COLOR = "0";
+  return env;
+};
 
 async function runLane(units, deadline) {
   const files = new Map();
@@ -19,9 +26,7 @@ async function runLane(units, deadline) {
     const group = files.get(key) || { file: unit.file, residual: Boolean(unit.residual), names: [], exclude: unit.exclude || [] };
     group.names.push(...unit.names || []); files.set(key, group);
   }
-  const env = { ...process.env };
-  delete env.NODE_TEST_CONTEXT; // Explicit child runners cannot inherit a parent's internal test protocol.
-  env.FORCE_COLOR = "0";
+  const env = testEnvironment();
   for (const group of files.values()) {
     const names = group.residual ? group.exclude : group.names;
     // Node 22 and 24 do not use the same default reporter. Verify one stable
@@ -84,5 +89,8 @@ if (command === "plan") {
       if (relative(root, target).startsWith("..") || !existsSync(target)) throw new Error(`Broken local documentation link in ${file}: ${link}`);
     }
   }
+  // Keep the canonical whole-document graph/anchor regression on the docs-only
+  // fast path too: changed-file existence checks cannot find broken inbound links.
+  execFileSync(process.execPath, ["--test", "--test-reporter=tap", "test/docs-links.test.mjs"], { stdio: "inherit", env: testEnvironment() });
   console.log(`Documentation and PRD checks passed (${plan.mode}).`);
 } else throw new Error("Use ci.mjs plan|run|docs");

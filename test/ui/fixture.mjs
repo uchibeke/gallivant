@@ -59,7 +59,7 @@ export async function fixture({ runtime = new URL("../../", import.meta.url), em
   let holdReviewBody = false;
   const server = createServer((req, res) => {
     // Simulate a stalled read after real handler headers, for cancellation tests.
-    if (holdReviewBody && new URL(req.url, "http://fixture").pathname.endsWith("/api/run/review-activity")) {
+    if (holdReviewBody && new URL(req.url, "http://fixture").pathname.endsWith("/api/run/workspace")) {
       res.end = body => { res.write(String(body).slice(0, 1)); return res; };
     }
     if (req.url === "/host-tokens.css" || req.url === "/zoom.css") {

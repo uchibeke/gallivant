@@ -37,6 +37,49 @@ test("affected tests follow transitive imports while new and deleted dependencie
   for (const path of ["lib/new.mjs", "lib/deleted.mjs"]) assert.equal(selection(root, [path], "pull_request").files.length, 2);
 });
 
+test("computed repository consumers survive nonempty selection, including through shared helpers", t => {
+  const { root, put } = fixture(t);
+  put("test/computed.test.mjs", 'import "./helpers/computed.mjs";');
+  put("test/helpers/computed.mjs", 'const name="leaf"; export const source=new URL(`../../lib/${name}.mjs`,import.meta.url);');
+  put("test/dynamic.test.mjs", 'const target="../lib/leaf.mjs"; export const load=()=>import(target);');
+  assert.deepEqual(selection(root, ["lib/leaf.mjs"], "pull_request").files,
+    ["test/a.test.mjs", "test/computed.test.mjs", "test/dynamic.test.mjs"]);
+  assert.equal(indexFile('new URL("../lib/leaf.mjs",import.meta.url)').computed, false);
+  assert.deepEqual(indexFile('new URL(`../lib/leaf.mjs`,import.meta.url)').references, ["../lib/leaf.mjs"]);
+});
+
+test("real portable browser contracts remain selected for computed module inputs", () => {
+  const root = fileURLToPath(new URL("..", import.meta.url));
+  for (const path of ["lib/task_delivery_view.mjs", "lib/tracker/presentation.mjs"]) {
+    const selected = selection(root, [path], "pull_request");
+    assert.ok(selected.files.includes("test/portable-contracts.test.mjs"), path);
+    assert.ok(selected.files.length > 1, "coverage does not depend on the empty-selection fallback");
+  }
+});
+
+test("docs-only CI rejects missing anchors and links broken by changing another document", t => {
+  const { root, put } = fixture(t);
+  put("README.md", "See [guide](docs/guide.md#target).\n"); put("CONTRIBUTING.md", "# Contributing\n"); put("SECURITY.md", "# Security\n");
+  put("docs/guide.md", "# Target\n");
+  put("test/docs-links.test.mjs", readFileSync(new URL("./docs-links.test.mjs", import.meta.url), "utf8"));
+  put("plan.json", JSON.stringify({ mode: "docs" }));
+  const env = { ...process.env, GIT_CONFIG_GLOBAL: "/dev/null", GIT_CONFIG_NOSYSTEM: "1" };
+  const git = args => execFileSync("git", args, { cwd: root, env, stdio: "pipe" });
+  const commit = () => { git(["add", "."]); git(["-c", "user.name=Fixture", "-c", "user.email=fixture@example.invalid", "commit", "-qm", "fixture"]); };
+  git(["init", "-q"]); commit();
+  const base = git(["rev-parse", "HEAD"]).toString().trim();
+  const runner = fileURLToPath(new URL("../scripts/ci.mjs", import.meta.url));
+  const check = () => spawnSync(process.execPath, [runner, "docs", join(root, "plan.json")], { cwd: root,
+    env: { ...env, CI_EVENT: "pull_request", CI_BASE_SHA: base }, encoding: "utf8" });
+  let result = check(); assert.equal(result.status, 0, result.stdout + result.stderr);
+  put("docs/guide.md", "# Renamed\n"); commit();
+  result = check(); assert.notEqual(result.status, 0); assert.match(result.stdout + result.stderr, /README.md.*guide.md#target/);
+  rmSync(join(root, "docs/guide.md")); commit();
+  result = check(); assert.notEqual(result.status, 0); assert.match(result.stdout + result.stderr, /README.md.*guide.md#target/);
+  put("docs/guide.md", "# Target\n"); put("README.md", "# Readme\n[missing](#missing)\n"); commit();
+  result = check(); assert.notEqual(result.status, 0); assert.match(result.stdout + result.stderr, /anchor #missing/);
+});
+
 test("indexing parses JavaScript rather than treating string examples as registrations", () => {
   const source = `import { test as scenario } from 'node:test';
     const example = 'test("fake",()=>{})';

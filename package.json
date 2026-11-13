@@ -41,6 +41,7 @@
     "CONTRIBUTING.md",
     "SECURITY.md",
     "docs/*.md",
+    "docs/ui/previews/*.png",
     "npm-shrinkwrap.json"
   ],
   "engines": {

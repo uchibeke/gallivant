@@ -1,0 +1,34 @@
+name: Browser UI
+on:
+  workflow_call:
+permissions:
+  contents: read
+jobs:
+  chromium:
+    name: Browser UI (shard ${{ matrix.shard }}/4)
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3, 4]
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 2
+    # Browser revisions, fonts and OS match the approved PNG references.
+    container: mcr.microsoft.com/playwright:v1.58.2-noble@sha256:6446946a1d9fd62d9ae501312a2d76a43ee688542b21622056a372959b65d63d
+    env:
+      UI_VISUAL: '1'
+      # Actions mounts /github/home with a different owner; Firefox rejects it.
+      # Match the root user running this pinned container, including package smoke.
+      HOME: /root
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm ci --ignore-scripts --no-audit --no-fund
+      - run: node --test --test-concurrency=1 --test-shard=${{ matrix.shard }}/4 test/ui/*.test.mjs
+      - run: npm run test:install
+        if: matrix.shard == 1
+        env:
+          UI_INSTALL_BROWSER: '1'

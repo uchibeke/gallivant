@@ -12,7 +12,7 @@ its separately protected workflow and deadline.
 
 | Input | Coverage |
 | --- | --- |
-| Documentation/PRD-only PR | Syntax, changed local links, canonical PRD validation and an installed tarball smoke test. |
+| Documentation/PRD-only PR | Syntax, changed local links, canonical operator-document links and anchors (including inbound references), PRD validation and an installed tarball smoke test. |
 | Tracker styles/assets | Tracker/control/status/service unit coverage, real browser UI suite, Linux/Node 22 and macOS/Node 24 installed-package checks. |
 | Other recognized source changes | Tests with direct/transitive repository dependencies, browser checks and installed-package checks. New or deleted dependencies with no known consumer fall back to all regressions. |
 | Runtime/process/Git/sandbox/dependency/workflow changes | Full selected regression inventory on Linux/macOS and Node 22/24. |
@@ -22,7 +22,9 @@ its separately protected workflow and deadline.
 
 Production source imports and literal repository file references drive the
 dependency graph. Styles have an explicit presentation boundary; changes to
-server modules still use their real consumers. Unrecognized inputs cannot
+server modules still use their real consumers. Tests with computed repository
+references or dynamic imports, and their transitive consumers, are retained
+conservatively because a literal-only graph cannot prove them unrelated. Unrecognized inputs cannot
 create an empty green code check. PR diffs require an exact base SHA; there is no
 fallback to a guessed branch or only the last commit. Renames include deletion
 and addition. Deleted files remain part of selection.
@@ -52,8 +54,10 @@ job exceeds its deadline; do not merely increase or suppress the gate.
 The intake CPU-budget test remains in its own process/job. Native isolation is
 still proved before regression execution using Ubuntu's packaged Bubblewrap
 AppArmor profile or macOS Command Line Tools. There is no unsandboxed fallback.
-The browser job retains pinned Chromium, synthetic fixtures and read-only
-workflow permissions. Browser checks now share this workflow so they are not
+Browser checks retain Chromium, Firefox, WebKit, pinned visual comparisons,
+synthetic fixtures and read-only workflow permissions. Four file-based browser
+shards use the approved ARM64 image; one also runs the installed-package browser
+smoke check. They share one reusable workflow so the full browser suite is not
 scheduled twice for the same source update.
 
 ## Required checks and concurrency

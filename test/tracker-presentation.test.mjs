@@ -59,7 +59,7 @@ test("completion projection never upgrades exit, skipped receipts, stale heads, 
   }
   const stale = project({ entry: { ...base(), reviewObservation: { head: "old", binding: "old", checks: { settled: true }, external: "clear" },
     reviewPolicy: { version: 1, mode: "first-party-required" }, firstPartyReview: { binding: "old", status: "completed", result: { verdict: "clear" } } } });
-  assert.equal(stale.review.status, "unknown"); assert.equal(stale.phase.id, "unknown");
+  assert.equal(stale.review.status, "stale-head"); assert.equal(stale.phase.id, "unknown");
 });
 
 test("provider observations distinguish pending, unchecked, quota, dispatch and credentials without inferring access", () => {
@@ -97,7 +97,7 @@ test("checks keep absent, explicitly unconfigured, pending and passed observatio
   for (const [count, settled, zeroChecks, expected] of [[0, false, false, "not-observed"], [0, true, true, "not-configured"], [1, false, false, "pending"], [1, true, false, "passed"]]) {
     const entry = { ...base(), reviewPolicy: { version: 1, zeroChecks }, reviewObservation: { head: "head", binding: "binding", checks: { count, settled } } };
     assert.equal(project({ entry }).checks.status, expected);
-    assert.equal(project({ entry: { ...entry, cursor: { fixed_sha: "new" } } }).checks.status, "unknown");
+    assert.equal(project({ entry: { ...entry, cursor: { fixed_sha: "new" } } }).checks.status, "stale-head");
   }
 });
 
@@ -145,6 +145,40 @@ test("ended and uncertain runs expose ownership without authorizing another writ
   }
 });
 
+test("operator stops retain attention independently of unresolved ownership and automatic waits", () => {
+  for (const run of [null, { ...running, id: "different-attempt" }, { ...running, running: false, exit: 1 },
+    { ...running, execution: { providerState: "status-unknown" } }]) {
+    for (const reason of ["run-stop-unverified", "dispatch-refused", null]) {
+      const entry = { ...base(), state: "needs-human", reason, last: { run: "attempt", exit: null, at: START } };
+      const p = project({ entry, run });
+      assert.equal(p.phase.id, "reconciling");
+      assert.equal(p.attention.group, "attention");
+      assert.equal(p.attention.actor, "operator");
+      assert.equal(p.attention.source, "entry.reason/task.status");
+      assert.match(p.nextAction, /reconcile/i);
+      assert.doesNotMatch(p.attention.explanation, /Waiting on automatic/);
+      if (reason === "run-stop-unverified") assert.equal(p.attention.title, "Execution stop unconfirmed");
+      for (const key of ["resume", "message", "interrupt"]) {
+        assert.equal(p.controls[key], false);
+        assert.equal(controlAvailability(entry, run, {})[key], false);
+      }
+      assert.deepEqual(taskView({ repo: entry.repo }, { entry, run, now: NOW, maxIterations: 5 }).presentation.attention, p.attention);
+    }
+  }
+  // A task-level stop uses the same projection even without a registry stop.
+  const entry = { ...base(), last: { run: "attempt", exit: null } };
+  for (const status of ["blocked", "needs-input"]) assert.equal(project({ entry, task: { status } }).attention.group, "attention");
+  // An unresolved run alone, or an actual retry allowance, remains a wait.
+  assert.equal(project({ entry }).attention.group, "waiting");
+  for (const retry of [{ network_retry: { phase: "waiting", attempts: 1, first_at: START, run: "attempt", code: "ENOTFOUND", next_at: NOW } },
+    { retry: { op: "ready-label-write", count: 1 } }]) {
+    const stopped = { ...entry, state: "needs-human", reason: "provider-network", ...retry };
+    assert.equal(project({ entry: stopped }).attention.group, "waiting");
+    assert.equal(project({ entry: { ...stopped, last: { run: "attempt", exit: 1 } } }).phase.id, "retry_wait");
+    assert.equal(project({ entry: { ...stopped, dispatch_stopped: true } }).attention.group, "attention");
+  }
+});
+
 test("active work takes precedence over older check waits and supplied completion cannot upgrade current evidence", () => {
   const entry = { ...base(), last: { run: "attempt", exit: null }, reviewObservation: { head: "head", binding: "binding", checks: { settled: false, count: 1 } } };
   assert.equal(project({ entry, run: running }).phase.id, "implementing");
@@ -173,7 +207,7 @@ test("overview, detail, CLI and task summaries share facts and retain API fields
   }
 });
 
-test("1000 frozen tasks project purely with bounded data and at most 100 rendered rows", () => {
+test("1000 frozen tasks project purely with bounded data and at most 25 overview rows", () => {
   const entry = base();
   const deepFreeze = object => { Object.freeze(object); Object.values(object).filter(v => v && typeof v === "object").forEach(deepFreeze); return object; };
   deepFreeze(entry); const before = JSON.stringify(entry);
@@ -181,8 +215,8 @@ test("1000 frozen tasks project purely with bounded data and at most 100 rendere
   assert.equal(JSON.stringify(entry), before);
   assert.ok(rows.every(row => JSON.stringify(row.presentation).length < 4000));
   const m = { needs_you: [], running: rows, done: [] }, html = dashboard(m);
-  assert.equal((html.match(/<tr>/g) || []).length, 101); // One populated section header, 100 rows.
-  assert.equal((html.match(/class="row"/g) || []).length, 100);
+  assert.equal((html.match(/data-task-id=/g) || []).length, 25);
+  assert.equal((html.match(/class="row"/g) || []).length, 0);
   assert.equal(taskWindow(m, 100).model.running[0].id, "task-100");
   assert.ok(html.length < 300000);
 });
@@ -197,4 +231,61 @@ test("malformed and legacy observations stay usable with bounded diagnostics and
   const html = runPage({ id: "task", entry, handle: "task", run: null, model: m, maxIterations: 5 });
   assert.doesNotMatch(html, /secret-provider-payload/);
   assert.match(html, /Phase unknown/);
+});
+
+test("attention remains visible across active ownership, failed controls, review disposition and qualified readiness", () => {
+  const entry = { ...base(), last: { run: "attempt", exit: null } };
+  for (const run of [running, { ...running, execution: { providerState: "status-unknown" } }]) {
+    const p = project({ entry, run, divergence: { reason: "prd-changed" } });
+    assert.equal(p.attention.group, "attention"); assert.equal(p.attention.title, "Approved brief changed");
+    assert.match(p.attention.nextAction, /approved copy/);
+  }
+  const failed = project({ entry: { ...entry, control: { status: "failed", action: "message", message: "private detail" } }, run: running });
+  assert.equal(failed.attention.group, "attention"); assert.equal(failed.attention.title, "Control request failed");
+  assert.doesNotMatch(JSON.stringify(failed), /private detail/);
+  assert.equal(project({ entry: qualified() }).attention.group, "ready");
+  const integrated = project({ entry: { ...qualified(), state: "done", control: { status: "failed" }, completionEvidence: { integration: { qualified: true } } } });
+  assert.equal(integrated.attention.group, "ended", "historical control failures do not reopen an integrated delivery");
+  assert.equal(project({ entry: { ...base(), network_retry: { phase: "waiting" } } }).attention.group, "waiting");
+  const review = { ...base(), reviewPolicy: { version: 1, mode: "first-party-required" }, firstPartyReview: { binding: "binding", status: "completed", result: { verdict: "findings" } } };
+  assert.equal(project({ entry: review }).attention.group, "attention");
+  assert.equal(project({ entry: { ...review, reviewHead: "old" } }).review.verdict, "unknown");
+  assert.notEqual(project({ entry: { ...review, reviewHead: "old" } }).attention.group, "attention");
+  const dispatched = project({ entry: { ...review, last: entry.last, firstPartyReview: { ...review.firstPartyReview, disposition: { status: "dispatched" } } }, run: running });
+  assert.equal(dispatched.attention.group, "progressing");
+  for (const status of ["pending", "dispatch-intent"]) {
+    const waiting = project({ entry: { ...review, firstPartyReview: { ...review.firstPartyReview, disposition: { status } } } });
+    assert.equal(waiting.attention.group, "waiting"); assert.equal(waiting.attention.actor, "coordinator");
+  }
+});
+
+test("workspace metadata stays bound to the selected attempt and preserves hosted limitations", async () => {
+  const { workspaceProjection, workspaceExecution } = await import("../lib/tracker/workspace.mjs");
+  const { capabilitiesFor } = await import("../lib/capabilities.mjs");
+  const entry = { repo: "acme/atlas", state: "pr-open", session: "current-session", last: { run: "new" },
+    execution: { model: "new-model", costUsd: 500 } };
+  const p = taskPresentation({ entry });
+  const old = workspaceProjection({ id: "task", entry, run: { id: "old" }, presentation: p });
+  assert.equal(old.execution.model, null); assert.equal(old.execution.session, null); assert.equal(old.execution.costUsd, null);
+  const hosted = workspaceProjection({ id: "task", entry, run: { id: "old", execution: { provider: "codex-cloud", model: "recorded-model", sessionId: "old-session", costUsd: 0.5, usage: { input_tokens: 12, output_tokens: 3, arbitrary: "must not leak" } } }, presentation: p, capabilities: capabilitiesFor("codex-cloud") });
+  assert.equal(hosted.execution.available, "unavailable"); assert.equal(hosted.execution.cancellation, "unavailable");
+  assert.deepEqual(hosted.execution.usage, { input: 12, output: 3, total: null });
+  const html = workspaceExecution(hosted);
+  assert.match(html, /recorded-model/); assert.match(html, /old-session/); assert.doesNotMatch(html, /new-model|current-session|must not leak/);
+});
+
+test("workspace links reject unsafe schemes, embedded credentials and encoded tokens", async () => {
+  const { safeLink } = await import("../lib/tracker/links.mjs");
+  for (const url of ["javascript:alert(1)", "data:text/html,x", "https://user:password@example.test/", "https://example.test/?token=secret", "https://example.test/?%74oken=secret", `https://example.test/${"x".repeat(2100)}`]) assert.equal(safeLink(url), null, url);
+  assert.equal(safeLink("https://github.com/acme/atlas/pull/42"), "https://github.com/acme/atlas/pull/42");
+});
+
+test("workspace redacts supplied secrets before truncating metadata and findings", async () => {
+  const { workspaceProjection } = await import("../lib/tracker/workspace.mjs");
+  const { redact } = await import("../lib/execution_io.mjs");
+  const secret = "opaque-" + "s".repeat(700);
+  const entry = { firstPartyReview: { result: { findings: [{ description: secret }] } } };
+  const w = workspaceProjection({ id: "task", entry, run: { id: "run", execution: { model: secret, sessionId: secret } }, presentation: taskPresentation({ entry }), sanitize: v => redact(v, [secret]) });
+  assert.equal(w.execution.model, "[redacted]"); assert.equal(w.execution.session, "[redacted]");
+  assert.equal(w.review.findings[0].description, "[redacted]");
 });

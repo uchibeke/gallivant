@@ -14,7 +14,7 @@ import { taskStore } from "../lib/task_store.mjs";
 import { ready } from "../lib/commands/ready.mjs";
 import { start } from "../lib/commands/start.mjs";
 import { taskCommand, readTaskStdin, renderTask } from "../lib/commands/task.mjs";
-import { check, parsePrd } from "../lib/prd.mjs";
+import { check, parsePrd, verifyCommands as draftVerifyCommands } from "../lib/prd.mjs";
 import { makeRunner } from "../lib/run.mjs";
 import { runEnv, RUN_GIT_CONFIG, makeGit } from "../lib/git.mjs";
 import { prepareTurn, preparationPreflightRetryable } from "../lib/task_prepare.mjs";
@@ -30,7 +30,7 @@ import { draftFor } from "./fixtures/task-intake.mjs";
 import { publicationTailConnectors } from "./fixtures/owner-actions.mjs";
 import { profileRequests } from "../templates/plugin/task-profile-requests.mjs";
 import { DELIVERY_CAPABILITIES, PROFILE_VERSION, deliveryScreen, deliveryQuestion } from "../lib/task_profile.mjs";
-import { modelSummary, capabilitySummary } from "../lib/task_delivery_view.mjs";
+import { modelSummary, capabilitySummary, taskView } from "../lib/task_delivery_view.mjs";
 import { tempHome, CONFIG, GOOD_PRD, harnessBin, fakeCredential, fakeIdentity, silentLog, fakeRunner, makeClock, codexLines, claudeResultLines, geminiLines, opencodeLines, gooseLines } from "./helpers.mjs";
 
 // Exercise durable runner/environment logic using disposable Node executables,
@@ -2248,6 +2248,31 @@ test("legacy interrupted answers recover mapped ownership on duplicate reply and
     assert.match(recovered.draft.text,/Explicit requirement r-2: "Do not add dependencies\."/);
     assert.equal((await reopened.answer(input)).revision,recovered.revision); assert.equal(calls,3); assert.deepEqual(w.ctx.state.entries(),[]);
   }
+});
+
+test("review verification follows the saved selection without promoting discovered candidates", async () => {
+  const w = world({ prepare: async (_ctx, task) => {
+    const output = draftFor(task, { question: true });
+    output.verify = task.answers["q-r-1"] ? ["npm test"] : [];
+    return JSON.stringify(output);
+  } });
+  const pending = await w.service.prepare({ text: REQUEST });
+  assert.equal(pending.status, "needs-input");
+  assert.deepEqual(pending.selectedVerifyCommands, []);
+  assert.deepEqual(taskView(pending).selectedVerifyCommands, []);
+  assert.ok(pending.verifyCommands.some(v => v.command === "npm run lint"));
+  const ready = await w.service.answer({ taskId: pending.taskId, expectedRevision: pending.revision,
+    operationId: "select-test-only", answers: { "q-r-1": "Use CSV." } });
+  assert.equal(ready.status, "ready");
+  const inspected = createTaskService(w.ctx).inspect({ taskId: ready.taskId });
+  for (const result of [ready, inspected]) {
+    assert.deepEqual(result.selectedVerifyCommands, ["npm test"]);
+    assert.deepEqual(taskView(result).selectedVerifyCommands, draftVerifyCommands(parsePrd(result.draft.text, result.draft.path)));
+    assert.ok(result.verifyCommands.some(v => v.command === "npm run lint"), "candidate discovery remains compatible");
+  }
+  const started = await approveStart(w, ready);
+  assert.equal(started.status, "started");
+  assert.deepEqual(started.selectedVerifyCommands, draftVerifyCommands(parsePrd(w.snapshots.get(started.implementation.id), started.draft.path)));
 });
 
 test("feature-only Verify scripts require their pinned manifest through repair and fresh-base dispatch", async t => {

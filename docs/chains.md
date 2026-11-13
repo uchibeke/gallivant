@@ -78,6 +78,18 @@ If the current task needs a correction, use the existing `say`, `recheck` or `re
 session, checkout and review budget belong to the normal run lifecycle. Recovering that task does not require a
 second chain retry; the chain continues watching its current milestone.
 
+A new base commit, including a merged predecessor, can trigger a bounded conflict repair in the current task's own
+session and checkout. The repair pins that base SHA and consumes the existing iteration allowance. Newer base code
+does not automatically supersede task work: the combined behavior must satisfy the approved brief and current
+security requirements. Both sides must be inspected, any superseded task edit explained, and the result verified.
+
+Repairing or pushing a conflict never starts a successor. Remote ancestry, new-head CI, required reviewer clearance
+and the completion gate must pass before readiness; the host must then prove integration into the planned base.
+An early external merge without that repaired-head decision stops the chain. Dirty recovery, ambiguous ownership,
+failed pushes, changed inputs and exhausted or duplicate repair attempts retain the checkout and stop with the
+[named repair reason](commands.md#base-repair-troubleshooting). Fix the current task's evidence before retrying the
+chain; a chain retry cannot resnapshot an active repair or grant another worker authority.
+
 ## Change the remaining plan
 
 Changing a queued PRD or a carried source pauses dispatch rather than silently accepting new instructions. Review
@@ -129,3 +141,10 @@ Repository identity, credential transport and PR evidence are defined by the
 Bitbucket's live no-reviewer path has been qualified on a disposable public
 repository. Independent Bitbucket review remains unvalidated. Existing IDs and
 chain ownership are retained without a state migration.
+
+## Browser workspace
+
+The [chain workspace](ui-chains.md) provides an ordered dependency list, saved
+merge evidence, task and PR links, and explicit review/confirmation for future
+retry, changed-input approval and cancellation. It uses the same chain services
+and merge gates as the CLI. New chains are still created with CLI intake.

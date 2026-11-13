@@ -21,6 +21,26 @@ function world(over = {}) {
   return { ctx, state, id, home, runner, gh, tick: makeTick(ctx) };
 }
 
+test("request identities reconcile applied corrections and history without a second continuation", async () => {
+  const w = world();
+  const before = w.state.get(w.id);
+  const input = { handle: w.id, action: "message", note: "Keep the approved scope.", requestId: "browser-correction" };
+  const queued = requestControl(w.ctx, input);
+  assert.deepEqual(requestControl(w.ctx, input), queued);
+  assert.throws(() => requestControl(w.ctx, { ...input, note: "Different input" }), /different input/);
+  await applyControl(w.ctx, w.id);
+  const applied = requestControl(w.ctx, input);
+  assert.equal(applied.status, "applied");
+  assert.ok(applied.at && applied.started_at && applied.finished_at);
+  assert.equal(w.runner.started.length, 1);
+  assert.equal(w.state.get(w.id).session, before.session);
+  assert.equal(w.state.get(w.id).iteration, before.iteration);
+  requestControl(w.ctx, { handle: w.id, action: "recheck", requestId: "later-request" });
+  assert.deepEqual(requestControl(w.ctx, input), applied);
+  assert.equal(w.state.get(w.id).control.id, "later-request");
+  assert.equal(w.runner.started.length, 1);
+});
+
 test("queued unknown recovery settles one bounded observation without turning into continuation", async () => {
   for (const result of ["accepted", "accepted-unresolved", "unknown", "denied"]) {
     const w=world(),job={id:"owned-run",running:true,execution:{providerState:"status-unknown",acceptance:"unknown"}},calls=[];

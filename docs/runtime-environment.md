@@ -73,6 +73,13 @@ libraries can still need operator-approved paths. Other harnesses receive the
 same initial PATH/cache contract but retain their own native shell behavior.
 Remote/cloud adapters run on another machine and are not assigned local paths.
 
+Local implementation sessions also receive task-scoped `TMPDIR`, `TMP` and
+`TEMP`. A short `/tmp/gvt-…` alias points into the ignored
+`.cache/gallivant/tmp` directory, keeping Unix socket paths short even when the
+checkout path is long. Dispatch refuses occupied or redirected aliases.
+[Post-merge workspace cleanup](workspace-cleanup.md) removes this scratch data
+and its verified alias, while preserving task and review evidence.
+
 ## Diagnosing a mismatch
 
 Run this in the affected harness's tool shell before installing dependencies:

@@ -370,6 +370,46 @@ Two things to know about it:
 - **GET is read-only; run controls require a local POST.** The run page groups Recheck PR, Resume agent and Cancel task separately from the message composer and its Send message button. These enqueue one request in the existing registry; the daemon applies it after any active run settles. The write requires a loopback peer, a loopback Host matching the serving port, an exact same-origin request and a per-server CSRF token. Mounted trackers keep the host's authentication, and remote readers do not receive controls.
 - **It binds to 127.0.0.1 and has no password.** Loopback is a local-machine boundary, not account authentication or isolation from other local processes. Do not expose it through an unauthenticated tunnel or public proxy: pages show repository state, local paths and agent output.
 
+### System health and keyboard navigation
+
+Open **System health** at `/health` (or `/gallivant/health` when mounted).
+It reads saved coordinator and selected-account observations through
+`/api/system-health`. The standalone server identity endpoint `/api/health`
+and existing ports are unchanged. Refresh never runs a provider probe or model.
+An expired success becomes pending until the coordinator's scheduled check;
+installation, configured entries, declared support, live qualification and
+account readiness remain separate. Unknown model access is not a successful
+inference check. Use the shown CLI remedy or the existing task controls after
+repairing a prerequisite. Health reads do not change task activity timestamps.
+
+The overview and health page retain the last good snapshot after a read failure,
+retry with bounded backoff, and pause automatic retries after three failures.
+Use **Refresh** to retry. Scheduled reads pause while the page is hidden or
+offline and resume when visible and connected. **Apply updates** lets you keep
+reading focused content before accepting a newer snapshot.
+
+**Navigate** or **Ctrl/⌘ K** opens existing destinations and the task-list search.
+**/** focuses the current view's search, or opens navigation if it has none.
+Typing fields keep their shortcuts. Escape closes navigation and restores focus.
+Search and filter state travels in the URL for reload, copied links and browser
+history. Appearance keeps theme in the URL and density in local storage scoped
+to the mount; host theme tokens remain authoritative.
+
+Empty workspaces show copyable CLI commands for supported repository setup,
+setup diagnosis and the written-brief workflow. Commands are copied only;
+review them in the target repository's terminal before executing. `init` supports
+GitHub with Codex or Claude; hosted providers and Bitbucket use their documented
+operator configuration. Preparation and Start still enforce existing readiness
+and explicit authorization.
+
+The health previews in `docs/ui/previews/health-desktop.png` and
+`docs/ui/previews/health-mobile.png` are real Chromium renders of the synthetic
+observations in `test/ui/health-fixture.mjs`. Regenerate with
+`node test/ui/capture.mjs health-desktop` and `node test/ui/capture.mjs health-mobile`.
+They demonstrate stale, pending, quota and unsupported states, not live account
+qualification. Deploy this UI by restarting the existing serving process; rollback
+uses the preceding package without a state migration.
+
 ### Rechecking and updating a run
 
 `needs-human` stops normal review and check processing. GitHub labels may trigger a repository's workflows, but they do not restart Gallivant. For a resolved review/CI blocker use **Recheck PR** on `/run?id=...`, or:
@@ -484,7 +524,8 @@ For a stopped or running PR: state and reason, the PR and checkout paths, the ba
 
 It also reports every merge the daemon made into this branch, with the commit and the time, because an operator reading
 a diff they did not expect needs to know where the extra commit came from. A merge that failed is reported too, with
-the conflict git gave and the fact that it was aborted, so the checkout is known to be clean. History is only ever
+the conflict Git gave and whether the initial abort succeeded. Current checkout cleanliness is checked separately.
+For automatic repairs it also prints the exact operation, session, task head, pinned base, round and remote proof. History is only ever
 added to: no rebase, no force-push. See [keeping a branch on its base](config.md#keeping-a-branch-on-its-base).
 
 When the brief has changed since the run started it prints every difference, one line each, what the completion gate is doing about it (nothing: neither brief is judged while it is in dispute) and the command that resolves it. This is where the whole difference goes, because a `status` row has space for one line of it and five changed criteria do not fit. It prints for a running entry as well as a stopped one, since you will ask `why` before the daemon's next tick has had a chance to stop anything. It also reports whether the brief was re-readied, by comparing the `aport_decision` in the frontmatter with the one recorded at `start`: a changed id means you put the edit through `gallivant ready`, which is worth knowing and is never what decides the verdict. See [editing the brief after the work has started](prd.md#editing-the-brief-after-the-work-has-started).
@@ -528,13 +569,13 @@ recreated from the branch first; the session's memory lives in the harness, not 
 
 When the checkout is clean, the base branch is merged in before the session carries on, which is the case that needs it most: an entry stopped
 hours or days ago and the base has moved since. The session is told about the merge commit so it does not try to undo a
-commit that is not its own. A merge that conflicts is aborted and the resume is refused, printing the conflict and the
-`git merge` command that resolves it, so nothing is resumed into a checkout with conflict markers in it. See [keeping a
+commit that is not its own. A merge that conflicts is recorded and aborted. An eligible watched PR enters the same
+bounded base repair operation as the daemon; other entries stop with the conflict and recovery instructions. See [keeping a
 branch on its base](config.md#keeping-a-branch-on-its-base).
 
 A dirty checkout is preserved: the resumed session is explicitly told to commit only its task changes, fetch and merge the intended base into the task branch, resolve conflicts within scope, then verify and push. Unrelated edits that prevent the merge must be reported rather than discarded or committed. This exception does not authorize merging a PR, writing to the base, rebasing or force-pushing.
 
-So is an entry whose brief has changed, and that refusal is the opposite of what a resume usually does. The session
+Resume also refuses an entry whose brief has changed. The session
 holds what the last run learned, and what it learned is the OLD brief: resuming into a changed contract would put a
 session that believes one thing back to work while the gate judges another, and nobody would be told. The refusal names
 every difference. `--resnapshot` is the deliberate answer to it: the edited brief becomes the one the gate judges, the
@@ -558,6 +599,31 @@ owned run settles, replace provider memory carrying retired learned advice while
 preserving the approved brief, checkout, PR, review progress and allowance. It
 requires recorded learned context or its revocation, and does not reset task state
 or bypass cancellation. See [learning recovery](learning.md).
+
+### Base repair troubleshooting
+
+Watched PRs with a clean owned checkout and continuing local session automatically repair a base conflict using the
+same runner, approved inputs, permissions and iteration allowance. The initial failed merge is recorded and aborted;
+the repair merges its pinned base commit, tests the combined behavior and pushes only the task branch. Newer base
+changes do not always supersede task work: the result must satisfy the approved brief and current security requirements.
+
+Use `gallivant why <handle>` to inspect a repair stop:
+
+| Reason | Recovery |
+| --- | --- |
+| `base-repair-inputs` | Restore the approved brief and carried instructions. Automatic repair cannot approve changed snapshots. |
+| `base-repair-prerequisite` | Restore the named host, local continuation capability, base, credential or provider prerequisite. |
+| `base-repair-ownership` | Restore the matching repository, branch, session and execution ledger. Never delete the operation to force another launch. |
+| `base-repair-dirty`, `base-repair-unresolved` | Preserve the index and files. Reconcile unrelated edits explicitly; finish the owned merge, verification and commit in its task checkout. |
+| `base-repair-push`, `base-repair-no-merge` | Inspect the saved SHAs, finish the pinned merge and push the task branch. Resume after remote evidence agrees. |
+| `base-repair-failed` | Inspect the owned worker log and failed verification/provider result. No second paid operation is launched automatically. |
+| `base-repair-duplicate`, `base-repair-iterations` | Review the original failure and existing iteration allowance. Recheck never repeats the same input or resets the budget. |
+| `base-repair-evidence`, `base-repair-review` | Reconcile inconsistent host/base evidence or missing new-head review, CI and completion evidence. A clean merge alone cannot release a successor. |
+
+For a recorded repair, `resume` reconciles that exact operation and remote proof. A proven refusal before dispatch may
+retry the same operation after its prerequisite is restored; an ambiguous or paid launch cannot spend another operation.
+It cannot change session or resnapshot its instructions. An unresolved merge or unrelated edits remain intact.
+Transient Git/API observations use the normal bounded retry counter and never create a model retry loop.
 
 ## `gallivant recheck <handle>`
 

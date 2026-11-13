@@ -464,10 +464,10 @@ test("a stop that matters more than the comment wins, and the counted round surv
   w.gh.data.pr = prFixture({ headRefOid: "d4e5f6a", mergeable: "CONFLICTING" });
   await w.tick.tick();
   const e = w.entry();
-  assert.deepEqual([e.state, e.reason], [STATES.needsHuman, "conflict"], "the reason a person can act on wins");
+  assert.deepEqual([e.state, e.reason], [STATES.needsHuman, "base-repair-inputs"], "the reason a person can act on wins");
   assert.equal(e.iteration, 1, "and the round the push earned is still counted");
   assert.ok(e.round_comment, "with the comment still recorded as owed");
-  assert.deepEqual(w.notify.sent, [["needs", 142, "conflict"]], "told once, about the conflict");
+  assert.deepEqual(w.notify.sent, [["needs", 142, "base-repair-inputs"]], "told once, about the conflict");
 });
 
 // The duplicate ask, found on a live PR: two comments five seconds apart, both `@codex review`, one tagged `round` and
@@ -812,10 +812,10 @@ test("the iteration cap stops the loop before a run starts", async () => {
   assert.ok(w.gh.calls.some(c => c[0] === "addLabel" && c[2] === NEEDS_LABEL), "the PR itself says a person is needed, not only the phone");
 });
 
-test("conflict, merged and closed are terminal", async () => {
+test("conflict without recovery prerequisites stops; merged and closed are terminal", async () => {
   const c = world({}, { pr: prFixture({ mergeable: "CONFLICTING" }) });
   await c.tick.tick();
-  assert.equal(c.entry().reason, "conflict");
+  assert.equal(c.entry().reason, "base-repair-inputs");
   assert.equal(c.notify.sent.length, 1);
   await c.tick.tick();
   assert.equal(c.notify.sent.length, 1, "needs-human is notified once");
@@ -932,10 +932,10 @@ for (const killed of [false, true]) test(`unverifiable shutdown stops visibly wi
  */
 test("a timeout kill records the limit it exceeded, where that limit came from, and the work it interrupted", async () => {
   const w = world({}, { reviews: [review({ id: 1, by: BOT, bot: true, state: "CHANGES_REQUESTED", at: at(5) })] });
-  // The state on disk in the real case: uncommitted work, and nothing committed at all.
-  w.git.dirty = async () => ({ modified: 6, untracked: 4 });
   w.clock.advance(6);
   await w.tick.tick();
+  // The worker leaves uncommitted work, and nothing committed at all.
+  w.git.dirty = async () => ({ modified: 6, untracked: 4 });
   w.clock.advance(31);
   await w.tick.tick();
 
@@ -1492,7 +1492,7 @@ test("a PR that was ready and then stops loses the ready label as it gains needs
   // Both labels at once is a contradiction for a person reading the PR and for anything automating on labels.
   const w = world({ state: STATES.ready }, { pr: prFixture({ mergeable: "CONFLICTING" }) });
   await w.tick.tick();
-  assert.deepEqual([w.entry().state, w.entry().reason], [STATES.needsHuman, "conflict"]);
+  assert.deepEqual([w.entry().state, w.entry().reason], [STATES.needsHuman, "base-repair-inputs"]);
   const labels = w.gh.calls.filter(c => c[0] === "addLabel" || c[0] === "removeLabel");
   assert.deepEqual(labels, [["removeLabel", 142, READY_LABEL], ["addLabel", 142, NEEDS_LABEL]]);
 });
@@ -1882,9 +1882,9 @@ test("needs-human labels that fail to write are retried on a later tick, rather 
   w.gh.removeLabel = async (repo, n, label) => { w.gh.calls.push(["removeLabel", n, label]); if (fail) throw new Error("HTTP 429: rate limited"); };
   await w.tick.tick();
 
-  assert.deepEqual([w.entry().state, w.entry().reason], [STATES.needsHuman, "conflict"], "the entry is stopped regardless: the labels are not what stops it");
+  assert.deepEqual([w.entry().state, w.entry().reason], [STATES.needsHuman, "base-repair-inputs"], "the entry is stopped regardless: the labels are not what stops it");
   assert.equal(w.entry().labels_pending, true, "but the unfinished write is recorded");
-  assert.deepEqual(w.notify.sent, [["needs", 142, "conflict"]], "and the operator is told once, now, not after the labels land");
+  assert.deepEqual(w.notify.sent, [["needs", 142, "base-repair-inputs"]], "and the operator is told once, now, not after the labels land");
 
   // The next tick finishes the write and nothing else.
   fail = false;

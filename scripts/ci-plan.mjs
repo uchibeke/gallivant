@@ -29,10 +29,17 @@ export function indexFile(source) {
     if (call?.type === "CallExpression" && call.callee.type === "Identifier" && bindings.has(call.callee.name) && typeof call.arguments[0]?.value === "string") names.push(call.arguments[0].value);
   }
   const references = new Set();
+  const repositoryReference = /^(?:\.\.?\/|lib\/|bin\/|templates\/|scripts\/|test\/)/;
+  let computed = false;
   walk(ast, node => {
-    if (typeof node.value === "string" && /^(?:\.\.?\/|lib\/|bin\/|templates\/|scripts\/|test\/)/.test(node.value)) references.add(node.value);
+    const value = node.type === "TemplateLiteral" && !node.expressions.length ? node.quasis[0].value.cooked : node.value;
+    if (typeof value === "string" && repositoryReference.test(value)) references.add(value);
+    if (node.type === "TemplateLiteral" && node.expressions.length && repositoryReference.test(node.quasis[0].value.cooked || "")) computed = true;
+    if (node.type === "ImportExpression" && typeof node.source?.value !== "string") computed = true;
+    if (node.type === "NewExpression" && node.callee.name === "URL" && typeof node.arguments[0]?.value !== "string" &&
+      node.arguments[1]?.object?.type === "MetaProperty" && node.arguments[1]?.property?.name === "url") computed = true;
   });
-  return { names: [...new Set(names)], references: [...references] };
+  return { names: [...new Set(names)], references: [...references], computed };
 }
 
 const docsOnly = paths => paths.length > 0 && paths.every(path => /^(?:(?:README|CONTRIBUTING|SECURITY|LICENSE)(?:\.md)?|docs\/.*\.(?:md|png|svg|jpg|webp))$/.test(path));
@@ -43,12 +50,13 @@ export function selection(root, changed, event) {
   if (!files.length) throw new Error("No regression test inventory; refusing to construct an empty CI plan");
   const full = event === "schedule" || event === "release";
   if (!full && docsOnly(changed)) return { mode: "docs", files: [], platforms: [], smoke: [{ os: "ubuntu-24.04", node: 22 }], browser: false };
-  const graph = new Map();
+  const graph = new Map(), uncertain = new Set();
   const dependencies = file => {
     if (graph.has(file)) return graph.get(file);
     graph.set(file, new Set());
     if (!/\.(?:mjs|js)$/.test(file) || !existsSync(resolve(root, file))) return graph.get(file);
     const indexed = indexFile(readFileSync(resolve(root, file), "utf8"));
+    if (indexed.computed) uncertain.add(file);
     for (const ref of indexed.references) {
       const dep = relative(root, resolve(ref.startsWith(".") ? dirname(resolve(root, file)) : root, ref)).replaceAll("\\", "/");
       if (!dep.startsWith("../") && existsSync(resolve(root, dep)) && /\.(?:mjs|js|json|css|html|md)$/.test(dep)) graph.get(file).add(dep);
@@ -61,6 +69,12 @@ export function selection(root, changed, event) {
     visited.add(file);
     return [...dependencies(file)].some(dep => reaches(dep, target, visited));
   };
+  const hasComputedDependencies = (file, visited = new Set()) => {
+    if (visited.has(file)) return false;
+    visited.add(file);
+    const deps = dependencies(file);
+    return uncertain.has(file) || [...deps].some(dep => hasComputedDependencies(dep, visited));
+  };
   let selected;
   const unknown = changed.some(path => !docsOnly([path]) && (!existsSync(resolve(root, path)) || !/^(?:lib\/.*\.(?:mjs|js)$|test\/.*\.test\.mjs$|test\/ui\/|templates\/tracker\/)/.test(path)));
   const sensitive = changed.some(risky);
@@ -72,6 +86,10 @@ export function selection(root, changed, event) {
     if (changed.some(path => path.startsWith("templates/tracker/") || path.startsWith("test/ui/"))) targets.add("lib/tracker/assets.mjs");
     selected = files.filter(file => [...targets].some(path => reaches(file, path)));
   }
+  // A partial static graph is not evidence that a consumer is unaffected.
+  // Retain computed consumers, including through shared test helpers, even
+  // when another test has an ordinary import edge to the changed module.
+  selected = files.filter(file => selected.includes(file) || hasComputedDependencies(file));
   if (!selected.length) selected = files; // Missing or computed dependencies cannot create an empty green gate.
   const qualify = full || event === "pull_request" && (sensitive || unknown);
   const platforms = qualify ? [

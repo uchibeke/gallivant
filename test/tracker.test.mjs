@@ -191,22 +191,22 @@ function world({ entry = {}, runs = {}, latest = null, entries = {} } = {}) {
   return { home, ctx, state, root, clock };
 }
 
-test("the dashboard groups every entry the way status already groups them, and links each to its log", async () => {
+test("the overview groups canonical attention and links each task to its workspace", async () => {
   const w = world({ runs: { "2026-09-24T02-00-00-000-fix": { lines: ["hello"], exit: 0, endedAt: Date.parse(T0) + 4000 } }, latest: "2026-09-24T02-00-00-000-fix" });
   w.state.put("acme/widget/other", { ...w.state.get(ID), pr: 7, state: STATES.needsHuman, reason: "conflict" });
   w.state.put("acme/widget/shipped", { ...w.state.get(ID), pr: 9, state: STATES.done });
   const r = res();
-  handle(w.ctx, req("/"), r);
+  handle(w.ctx, req("/?sort=attention"), r);
   await r.ended;
   assert.equal(r.code, 200);
   const body = r.body();
-  assert.match(body, /<h2>needs you<\/h2>/);
-  assert.match(body, /<h2>running<\/h2>/);
-  assert.match(body, /<h2>closed or ended<\/h2>/);
+  assert.match(body, /<h2>Needs attention<\/h2>/);
+  assert.match(body, /<h2>In progress<\/h2>/);
+  assert.match(body, /<h2>Completed<\/h2>/);
   assert.match(body, /widget#7/, "the needs-human entry is listed");
   assert.match(body, /conflict/, "with the reason status would show");
-  assert.match(body, /href="\/run\?id=acme%2Fwidget%2Fwidget-export"/, "every row links to its run page");
-  assert.match(body, /daemon has never run here/, "no daemon.json says so plainly rather than implying health");
+  assert.match(body, /href="\/run\?[^\"]*id=acme%2Fwidget%2Fwidget-export"/, "every row links to its run page");
+  assert.match(body, /No coordinator observation is recorded/, "no daemon.json says so plainly rather than implying health");
 });
 
 test("review activity exposes only bounded progress, never the reviewer evidence", async () => {
@@ -249,7 +249,7 @@ test("the sidebar lists every entry in a collapsible group with a count, on both
   w.state.put("acme/widget/stuck", { ...w.state.get(ID), pr: 7, state: STATES.needsHuman, reason: "conflict", harness: "codex" });
   w.state.put("acme/widget/shipped", { ...w.state.get(ID), pr: 9, state: STATES.done, harness: "codex" });
 
-  for (const path of ["/", "/runs", `/run?id=${encodeURIComponent(ID)}`]) {
+  for (const path of ["/runs", `/run?id=${encodeURIComponent(ID)}`]) {
     const r = res();
     handle(w.ctx, req(path), r);
     await r.ended;
@@ -261,7 +261,7 @@ test("the sidebar lists every entry in a collapsible group with a count, on both
   }
 
   const dash = res();
-  handle(w.ctx, req("/"), dash);
+  handle(w.ctx, req(`/run?id=${encodeURIComponent(ID)}`), dash);
   await dash.ended;
   const body = dash.body();
   // The groups are the sections status already uses, each with the number of rows in it.
@@ -312,13 +312,13 @@ test("grouping switches between state and harness, and nothing else", async () =
   w.state.put("acme/widget/stuck", { ...w.state.get(ID), pr: 7, state: STATES.needsHuman, reason: "conflict", harness: "codex" });
 
   const byState = res();
-  handle(w.ctx, req("/"), byState);
+  handle(w.ctx, req(`/run?id=${encodeURIComponent(ID)}`), byState);
   await byState.ended;
   assert.match(byState.body(), /data-group="needs_you"/, "state is the default, matching what the dashboard leads with");
   assert.match(byState.body(), /<option value="state" selected>/);
 
   const byHarness = res();
-  handle(w.ctx, req("/?by=harness"), byHarness);
+  handle(w.ctx, req(`/run?id=${encodeURIComponent(ID)}&by=harness`), byHarness);
   await byHarness.ended;
   const body = byHarness.body();
   assert.match(body, /data-group="harness:claude"/);
@@ -335,7 +335,7 @@ test("grouping switches between state and harness, and nothing else", async () =
 
   // A grouping nobody offers falls back to the default rather than rendering an empty sidebar.
   const junk = res();
-  handle(w.ctx, req("/?by=" + encodeURIComponent("'; drop--")), junk);
+  handle(w.ctx, req(`/run?id=${encodeURIComponent(ID)}&by=` + encodeURIComponent("'; drop--")), junk);
   await junk.ended;
   assert.match(junk.body(), /data-group="needs_you"/);
   assert.ok(!junk.body().includes("drop--"), "and is not echoed into the page");
@@ -2197,4 +2197,140 @@ test("unrecoverable burst history reports a retention gap instead of claiming th
   assert.ok(p.pane.children.some(row => row.textContent === "projection history expired"));
   assert.match(p.els.earlierstate.textContent, /some history is unavailable/);
   assert.equal(p.els.earlier.hidden, true);
+});
+
+test("protected chain adapter rejects unauthorized, stale, oversized and pinned mutations at root and mount", async () => {
+  const { chainRevision } = await import("../lib/chains.mjs");
+  const w = world();
+  w.state.createChain({ name: "recovery", status: "stopped", repo: "acme/widget", base: "main", index: 0,
+    steps: [{ id: "acme/widget/future", digest: "a".repeat(64) }], reason: "repair prerequisite" });
+  const before = w.state.getChain("recovery");
+  for (const base of ["", "/gallivant"]) {
+    const route = base ? mount(w.ctx).handle : (req, res) => handle(w.ctx, req, res);
+    const page = res(); await route({ ...req(`${base}/chains?chain=recovery`, localHeaders), socket: localSocket }, page);
+    const token = /data-token="([a-f0-9]+)"/.exec(page.body())?.[1]; assert.ok(token);
+    const input = { action: "retry", stage: "review", revision: chainRevision(before), requestId: "chain-protected-request" };
+    async function post(body = input, change = {}) {
+      const request = Readable.from([typeof body === "string" ? body : JSON.stringify(body)]);
+      Object.assign(request, { method: "POST", url: `${base}/api/chain/control?chain=recovery`, headers: { ...localHeaders, "x-gallivant-token": token }, socket: localSocket, ...change });
+      const response = res(); await route(request, response); await response.ended; return response;
+    }
+    for (const change of [
+      { headers: { ...localHeaders, "x-gallivant-token": "wrong" } },
+      { headers: { ...localHeaders, "x-gallivant-token": token, origin: "https://evil.example" } },
+      { headers: { ...localHeaders, "x-gallivant-token": token, host: "evil.example:8791", origin: "http://evil.example:8791" } },
+      { socket: { ...localSocket, remoteAddress: "192.168.1.9" } },
+    ]) assert.equal((await post(input, change)).code, 403);
+    assert.equal((await post("x".repeat(33000))).code, 413);
+    assert.equal((await post("{")).code, 400);
+    assert.equal((await post({ ...input, action: "start" })).code, 409);
+    assert.equal((await post({ ...input, revision: "b".repeat(64) })).code, 409);
+    assert.equal((await post({ ...input, path: "/etc/passwd" })).code, 409);
+    assert.equal((await post(input, { headers: { ...localHeaders, "x-gallivant-token": token, "content-type": "text/plain" } })).code, 415);
+    const acceptedReview = await post(); assert.equal(acceptedReview.code, 200, acceptedReview.body());
+    assert.deepEqual(w.state.getChain("recovery"), before);
+  }
+  writeJsonAtomic(join(w.home, "runtime-pin.json"), { version: 1 });
+  const page = res(); await handle(w.ctx, { ...req("/chains?chain=recovery", localHeaders), socket: localSocket }, page);
+  assert.match(page.body(), /artifact-pinned/);
+  assert.match(page.body(), /data-chain-action="retry" disabled/);
+  const token = /data-token="([a-f0-9]+)"/.exec(page.body())[1];
+  const request = Readable.from([JSON.stringify({ action: "cancel", stage: "confirm", revision: chainRevision(before), requestId: "pinned-cancel-request" })]);
+  Object.assign(request, { method: "POST", url: "/api/chain/control?chain=recovery", headers: { ...localHeaders, "x-gallivant-token": token }, socket: localSocket });
+  const response = res(); await handle(w.ctx, request, response); assert.equal(response.code, 409);
+  assert.deepEqual(w.state.getChain("recovery"), before);
+});
+
+
+test("health projection separates coordinator states and never rewrites meaningful activity", async () => {
+  const { coordinatorPresentation } = await import("../lib/tracker/health.mjs");
+  const now = Date.parse(T0), at = new Date(now).toISOString();
+  for (const [record, state] of [[null, "unknown"], [{ alive: true, lastTick: at }, "up"],
+    [{ runtimeBusy: true, startedAt: at }, "busy"], [{ alive: false, lastTick: at }, "down"],
+    [{ alive: true, stale: true, lastTick: at }, "stale"],
+    [{ alive: true, lastTick: new Date(now - 900_000).toISOString() }, "stale"],
+    [{ alive: true }, "unknown"], [{ unverified: true, lastTick: at }, "unknown"]]) {
+    const health = coordinatorPresentation(record, { now });
+    assert.equal(health.state, state); assert.ok(health.nextStep.length > 20);
+    assert.equal(health.observedAt, record?.lastTick || record?.startedAt || null);
+  }
+  const w = world(), before = JSON.stringify(w.state.entries());
+  for (const base of ["", "/gallivant"]) for (const path of ["/health", "/api/system-health"]) {
+    const response = res(); await handle(w.ctx, req(base + path), response, { base }); await response.ended;
+    assert.equal(response.code, 200); assert.equal(JSON.stringify(w.state.entries()), before);
+  }
+});
+
+test("health reads canonical account expiry, allowlists diagnostics and respects capability declarations", async () => {
+  const { systemHealth } = await import("../lib/tracker/health.mjs");
+  const w = world(), now = w.clock.now(), secret = "private-credential-do-not-render";
+  w.ctx.config.harness = { codex: { bin: `/private/${secret}` }, "openai-agents": { account: secret }, "codex-cloud": {} };
+  const scopes = {
+    '["codex","operator"]': { ok: true, scope: "local-sign-in", observedAt: now - 10, nextAttemptAt: now + 1000, detail: secret, fix: secret },
+    [JSON.stringify(["openai-agents", secret])]: { ok: false, code: "AGENTS_QUOTA", observedAt: now - 10, nextAttemptAt: now + 1000, detail: secret, fix: secret },
+  };
+  writeJsonAtomic(join(w.home, "provider-health.json"), { version: 1, scopes });
+  let result = systemHealth(w.ctx);
+  const codex = result.providers.find(p => p.name === "codex");
+  assert.equal(codex.transport, "Local"); assert.equal(codex.installed, "observed installed");
+  assert.equal(codex.qualification, "unknown"); assert.equal(codex.account.inference, "unknown");
+  assert.match(codex.dispatch, /start rechecks/);
+  assert.equal(result.providers.find(p => p.name === "openai-agents").account.status, "quota-exhausted");
+  assert.equal(result.providers.find(p => p.name === "codex-cloud").dispatch, "unavailable");
+  assert.equal(result.providers.find(p => p.name === "goose").installed, "unknown");
+  assert.equal(result.hosts.find(h => h.host === "bitbucket.org").labels, false);
+  assert.equal(result.hosts.find(h => h.host === "github.com").labels, true);
+  assert.ok(!JSON.stringify(result).includes(secret));
+  scopes['["codex","operator"]'].nextAttemptAt = now - 1;
+  writeJsonAtomic(join(w.home, "provider-health.json"), { version: 1, scopes });
+  result = systemHealth(w.ctx);
+  assert.equal(result.providers.find(p => p.name === "codex").dispatch, "pending");
+  const saved = readFileSync(join(w.home, "provider-health.json"), "utf8");
+  for (const base of ["", "/gallivant"]) {
+    const response = res(); await handle(w.ctx, req(base + "/api/system-health"), response, { base });
+    assert.equal(response.code, 200); assert.ok(!response.body().includes(secret));
+  }
+  assert.equal(readFileSync(join(w.home, "provider-health.json"), "utf8"), saved);
+});
+
+test("onboarding commands quote shell metacharacters and do not contain machine paths", async () => {
+  const { cliCommand, onboarding } = await import("../lib/tracker/onboarding.mjs");
+  const { execFileSync } = await import("node:child_process");
+  const hostile = "a'b $HOME `id` $(id); *";
+  assert.equal(execFileSync("/bin/sh", ["-c", cliCommand("printf", "%s", hostile)], { encoding: "utf8" }), hostile);
+  const content = onboarding({ repositories: 0, tasks: 0, configuredProviders: 0 });
+  assert.match(content, /Copy initialize repository command/); assert.match(content, /Bitbucket/);
+  assert.doesNotMatch(content, /\/Users\/|\/home\/|\/private\/|data-action=/);
+});
+
+test("account observation expiry agrees across status, task presentation and system health", async () => {
+  const { model } = await import("../lib/commands/status.mjs");
+  const w = world({ entry: { harness: "codex" } }), now = w.clock.now();
+  w.ctx.config.harness = { codex: { bin: "/fixture/codex" } };
+  writeJsonAtomic(join(w.home, "daemon.json"), { pid: process.pid, identity: processIdentity(process.pid), lastTick: T0,
+    probes: { codex: { ok: true, scope: "local-sign-in", observedAt: now, nextAttemptAt: now + 1000 } } });
+  const scopes = { '["codex","operator"]': { ok: true, scope: "local-sign-in", observedAt: now - 1000, nextAttemptAt: now - 1 } };
+  writeJsonAtomic(join(w.home, "provider-health.json"), { version: 1, scopes });
+  let result = model(w.ctx);
+  assert.equal(result.providerHealth.codex.status, "pending");
+  assert.deepEqual(result.running[0].presentation.provider, result.providerHealth.codex);
+  assert.deepEqual(result.health.providers.find(p => p.name === "codex").account, result.providerHealth.codex);
+  scopes['["codex","operator"]'] = { ok: true, nextAttemptAt: now + 1000 };
+  writeJsonAtomic(join(w.home, "provider-health.json"), { version: 1, scopes });
+  result = model(w.ctx);
+  assert.equal(result.providerHealth.codex.status, "unknown", "success with no observation timestamp cannot establish account health");
+  assert.equal(result.health.providers.find(p => p.name === "codex").dispatch, "unknown");
+});
+
+test("health read failures preserve the JSON boundary and base-aware error assets", async () => {
+  const w = world(), secret = "private-broken-health-content";
+  writeFileSync(join(w.home, "provider-health.json"), secret);
+  for (const base of ["", "/gallivant"]) {
+    const api = res(); await handle(w.ctx, req(base + "/api/system-health"), api, { base });
+    assert.equal(api.code, 500); assert.match(api.headers["content-type"], /application\/json/);
+    assert.deepEqual(JSON.parse(api.body()), { error: "internal error" });
+    const page = res(); await handle(w.ctx, req(base + "/health?theme=light"), page, { base });
+    assert.equal(page.code, 500); assert.ok(page.body().includes(`href="${base}/tracker.css"`));
+    assert.match(page.body(), /data-theme="light"/); assert.ok(!page.body().includes(secret));
+  }
 });

@@ -64,6 +64,8 @@ jobs:
       - uses: ./.github/actions/ci-dependencies
         with:
           node: ${{ matrix.node }}
+      - uses: ./.github/actions/ubuntu-apt
+        if: runner.os == 'Linux'
       - name: Prepare native verification boundary
         shell: bash
         run: |
@@ -102,16 +104,7 @@ jobs:
   browser:
     needs: plan
     if: needs.plan.outputs.browser == 'true'
-    name: Browser UI
-    runs-on: ubuntu-24.04
-    timeout-minutes: 2
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          persist-credentials: false
-      - uses: ./.github/actions/ci-dependencies
-      - run: npx --no-install playwright install --with-deps chromium
-      - run: npm run test:ui
+    uses: ./.github/workflows/ui.yml
   ci:
     name: CI
     if: always()

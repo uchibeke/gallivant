@@ -418,7 +418,7 @@ test("an entry with no base recorded merges nothing, which is how every pre-exis
   assert.equal(w.runner.started.length, 1, "and the round still runs");
 });
 
-test("a conflicting merge stops the entry, names the base, and spawns nothing", async () => {
+test("a conflicting merge with missing recovery prerequisites stops and retains the original failure", async () => {
   const git = { ...fakeGit(), mergeBase: async (_d, base) => ({ merged: false, conflict: true, base, why: "CONFLICT (content): Merge conflict in src/a.ts" }) };
   const w = tickWorld({ base: "staging" }, { pr: prFixture({ baseRefName: "staging" }), reviews: [review({ id: 1, by: BOT, bot: true, state: "CHANGES_REQUESTED", at: at(5) })] }, { git });
   w.clock.advance(6);
@@ -426,12 +426,12 @@ test("a conflicting merge stops the entry, names the base, and spawns nothing", 
 
   assert.equal(w.runner.started.length, 0, "no session is handed a tree that could not be merged");
   assert.equal(w.entry().state, STATES.needsHuman);
-  assert.equal(w.entry().reason, "base-conflict", "a reason of its own, not the PR-level `conflict`");
+  assert.equal(w.entry().reason, "base-repair-inputs");
   assert.equal(w.entry().base_merge.conflict, true);
   assert.equal(w.entry().base_merge.base, "staging");
-  assert.match(w.entry().last.event, /cannot merge origin\/staging into gallivant\/widget-export/);
+  assert.match(w.entry().last.event, /operator checkout|snapshot/);
   assert.match(w.entry().base_merge.why, /Merge conflict in src\/a\.ts/);
-  assert.deepEqual(w.notify.sent, [["needs", 142, "base-conflict"]], "and the operator is rung once");
+  assert.deepEqual(w.notify.sent, [["needs", 142, "base-repair-inputs"]], "and the operator is rung once");
   // The cursor is untouched: the feedback that would have started this round is still new, so it is acted on once the
   // conflict is resolved rather than lost to a cursor that moved for a round that never ran.
   assert.equal(w.entry().cursor.since, T0);
@@ -459,16 +459,19 @@ test("a merge that happened is recorded even when a later step of the dispatch d
   assert.ok(w.entry().retry, "the declining write is still counted, so the wait is still bounded");
 });
 
-test("a merge failure that is not a conflict is treated the same way: stop, name the base, spawn nothing", async () => {
+test("a Git failure that is not a conflict uses bounded retries without a paid repair", async () => {
   // A fetch that cannot reach the remote, a rev-parse against a base that is gone. Nothing was merged and the tree is
-  // untouched, so the outcome for this round is the same as a conflict's, and retrying every tick would never resolve.
+  // untouched. Bounded transport retries must not turn this into a paid model operation.
   const git = { ...fakeGit(), mergeBase: async () => { throw new Error("fatal: couldn't find remote ref staging"); } };
   const w = tickWorld({ base: "staging" }, { pr: prFixture({ baseRefName: "staging" }), reviews: [review({ id: 1, by: BOT, bot: true, state: "CHANGES_REQUESTED", at: at(5) })] }, { git });
   w.clock.advance(6);
   await w.tick.tick();
   assert.equal(w.runner.started.length, 0);
-  assert.equal(w.entry().reason, "base-conflict");
-  assert.match(w.entry().base_merge.why, /couldn't find remote ref staging/);
+  assert.equal(w.entry().retry.op, "base merge");
+  for (let i = 0; i < 4; i++) await w.tick.tick();
+  assert.equal(w.entry().reason, "stuck");
+  assert.match(w.entry().last.event, /couldn't find remote ref staging/);
+  assert.equal(w.entry().base_repair, undefined);
 });
 
 test("an outstanding review does not hold the merge up, and the merge does not force-push", async () => {
@@ -565,7 +568,7 @@ test("resume refuses on a conflicting merge, resumes nothing, and says how to re
   const w = resumeWorld({}, { git: { mergeBase: async (_d, base) => ({ merged: false, conflict: true, base, why: "CONFLICT (content): Merge conflict in src/a.ts" }) } });
   await assert.rejects(() => resume(w.ctx, { handle: "widget#142" }), e => {
     assert.match(e.message, /cannot be merged with origin\/staging/);
-    assert.match(e.message, /Nothing was resumed, and the checkout was left clean/);
+    assert.match(e.message, /Nothing was resumed; the attempted merge was aborted/);
     assert.match(e.message, /git merge origin\/staging/, "and the operator is given the command");
     return true;
   });
@@ -597,7 +600,7 @@ test("status and why show the base a PR will target, and a merge that changed th
   assert.match(text, /History was added to, never rewritten: no rebase, no force-push/);
 });
 
-test("why reports a merge that failed, and says the checkout was left clean", () => {
+test("why reports the initial aborted merge without claiming the current checkout is clean", () => {
   const { state, id } = seededState({
     base: "staging", state: STATES.needsHuman, reason: "base-conflict",
     base_merge: { at: at(3), base: "staging", conflict: true, why: "CONFLICT (content): Merge conflict in src/a.ts" },
@@ -607,7 +610,8 @@ test("why reports a merge that failed, and says the checkout was left clean", ()
   assert.match(text, /base merge FAILED/);
   assert.match(text, /origin\/staging could not be merged into gallivant\/widget-export/);
   assert.match(text, /Merge conflict in src\/a\.ts/);
-  assert.match(text, /The merge was aborted, so the checkout is clean/);
+  assert.match(text, /The initial merge was aborted; inspect current checkout status/);
+  assert.doesNotMatch(text, /checkout is clean/);
 });
 
 test("an entry with no base prints no base line, so a recovered PR is not told a branch it does not have", () => {
