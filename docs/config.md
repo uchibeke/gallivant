@@ -42,7 +42,7 @@ See [installation](install.md) for the first-run sequence.
 | `harness.codex-cloud` | absent | Recognized for configuration/recovery, but new dispatch is unavailable. See [Cloud blocker](codex-cloud.md). |
 | `execution` | bounded defaults | Transport/probe deadlines, progress cadence, concurrency, backoff and event limits. See [execution scheduling](execution.md#scheduling-and-limits). |
 | `intake_model` | absent | The explicitly funded planner route for natural-language intake: `{ adapter, model, endpoint, credential_env, budget, timeout_ms }`. The key is read from the named environment variable at call time. Configurable ceilings are 12 calls, 100,000 input and 16,000 output tokens per call and a $10 allowance; configuration can lower them. Timeout defaults to two minutes, configurable up to five. Existing approved route/task budgets remain pinned. See [typed delivery profiles](task-profiles.md#configuring-the-model-route). |
-| `repos` | [] | The repositories Gallivant watches, appended by `start` and `register` and read by `up` to recover from GitHub. Each entry is either `"owner/name"` or an object: `{ "repo": "owner/name", "base": "staging", "run_timeout_minutes": 90 }`. Both object keys are optional. See below. |
+| `repos` | [] | The repositories Gallivant watches, appended by `start` and `register` and read by `up` to recover from GitHub. Each entry is either `"owner/name"` or an object: `{ "repo": "owner/name", "base": "staging", "run_timeout_minutes": 90 }`. Optional fields include `package_auth` for private dependencies. See below. |
 
 The default allows 60 rounds as an upper allowance for unattended review. It is not a target or a promise of completion:
 large tasks can exhaust it, while missing external prerequisites cannot be solved by more rounds. Reaching the cap
@@ -90,6 +90,52 @@ still asks that CLI to resume its exact session, but whether the CLI applies the
 new model to that conversation is native provider behavior, not a Gallivant
 continuity guarantee. Gallivant does not pass a per-run `--model` flag or route
 around an exhausted provider account.
+
+## Private package access
+
+Private dependency access is an operator-owned repository setting,disabled by
+ default. For GitHub Packages on a github.com repository:
+
+```json
+{
+  "repos": [{
+    "repo": "acme/widget",
+    "package_auth": {
+      "provider": "github-packages",
+      "packages": ["@acme/content-editor", "@acme/services-core"]
+    }
+  }]
+}
+```
+
+This reuses that repository's selected GitHub credential. It needs package read
+access; no new scopes are requested automatically. Keep the repository's normal
+`.npmrc` registry mapping and reference `${NODE_AUTH_TOKEN}` or
+`${GITHUB_PACKAGES_TOKEN}` there, never a token literal. No token is written to
+config, the checkout or a user npmrc. Do not export an account token into the
+whole daemon as a package-auth workaround.
+
+Before the first coding turn and each continuation, the coordinator checks the
+exact configured packages against the fixed GitHub npm registry. The check has
+the shared execution deadline, refuses redirects, never reads response bodies,
+and caches successful checks for five minutes per repository, credential and
+package list. Authentication, access and network failures stop before a paid
+coding turn; repair access, then Resume agent. Fresh initial starts fail before
+creating their checkout or start claim. Review-fix failures retain feedback and
+iteration allowance with reason `dependency-auth`.
+
+Only the selected local CLI coding session receives the package credential as
+`NODE_AUTH_TOKEN` and `GITHUB_PACKAGES_TOKEN`. Other repositories do not receive
+it; inherited package-token variables are cleared. Preparation, independent
+review and credential-free Verify execution retain their existing isolation.
+Hosted routes currently refuse this setting before dispatch rather than sending
+the token to a remote provider. Install dependencies in the coding checkout;
+this does not grant installation credentials to isolated verification commands.
+
+Changing this config needs a coordinator restart. Existing agent processes keep
+their original environment, so explicitly resume stopped runs afterward; do not
+start another worker over an active one. See [run controls](commands.md#rechecking-and-updating-a-run)
+for the distinction between resuming work and rechecking a PR.
 
 ## The base branch
 

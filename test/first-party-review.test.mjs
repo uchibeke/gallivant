@@ -172,9 +172,9 @@ test("reviewer environment retains selected model access but excludes coding and
   const nativeHome = tempHome(), cwd = tempHome();
   const env = preparationEnvironment("codex", cwd, {}, { HOME: nativeHome, PATH: process.env.PATH,
     OPENAI_API_KEY: "provider-only", HOST_API_TOKEN: "host-secret", GIT_HOST_TOKEN: "git-secret",
-    BITBUCKET_TOKEN: "bitbucket-secret", GH_TOKEN: "github-secret", SSH_AUTH_SOCK: "/private/agent.sock" });
+    BITBUCKET_TOKEN: "bitbucket-secret", GH_TOKEN: "github-secret", NODE_AUTH_TOKEN: "package-private", GITHUB_PACKAGES_TOKEN: "package-private", NPM_TOKEN: "package-private", SSH_AUTH_SOCK: "/private/agent.sock" });
   assert.equal(env.OPENAI_API_KEY, "provider-only");
-  for (const key of ["HOST_API_TOKEN", "GIT_HOST_TOKEN", "BITBUCKET_TOKEN", "GH_TOKEN", "SSH_AUTH_SOCK"]) assert.equal(env[key] || "", "", key);
+  for (const key of ["HOST_API_TOKEN", "GIT_HOST_TOKEN", "BITBUCKET_TOKEN", "GH_TOKEN", "NODE_AUTH_TOKEN", "GITHUB_PACKAGES_TOKEN", "NPM_TOKEN", "SSH_AUTH_SOCK"]) assert.equal(env[key] || "", "", key);
   assert.equal(env.GIT_SSH_COMMAND, "false"); assert.equal(env.GIT_TERMINAL_PROMPT, "0");
 });
 

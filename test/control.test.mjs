@@ -421,3 +421,15 @@ test("the daemon notifies and retries stop labels when an operator interrupt can
   assert.equal(w.ctx.notify.sent.length, 1);
   assert.equal(w.runner.started.length, 1);
 });
+
+ test("package preflight failure preserves resume context and gives an actionable stop", async () => {
+  const w = world();
+  w.ctx.packageAuthPreflight = async () => { throw Object.assign(new Error("Private-package access failed before dispatch"), { code: "PACKAGE_AUTH" }); };
+  const before = w.state.get(w.id);
+  w.state.update(w.id, { control: { id: "package-resume", action: "resume", status: "queued", note: "" } });
+  await applyControl(w.ctx, w.id);
+  const after = w.state.get(w.id);
+  assert.equal(w.runner.started.length, 0); assert.equal(after.reason, "dependency-auth");
+  assert.equal(after.session, before.session); assert.equal(after.iteration, before.iteration);
+  assert.equal(after.control.status, "failed"); assert.match(after.control.message, /Private-package access/);
+});

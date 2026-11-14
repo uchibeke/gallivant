@@ -24,7 +24,7 @@ const receiptBlock = () => "\n```" + RECEIPT_TAG + "\n" + JSON.stringify({
   ],
 }, null, 2) + "\n```\n";
 
-function world(stateOver = {}, ghOver = {}, { config = CONFIG, readPrd = () => null } = {}) {
+function world(stateOver = {}, ghOver = {}, { config = CONFIG, readPrd = () => null, packageAuthPreflight } = {}) {
   const clock = makeClock();
   const { state, id } = seededState(stateOver);
   const gh = fakeGh(ghOver);
@@ -36,9 +36,21 @@ function world(stateOver = {}, ghOver = {}, { config = CONFIG, readPrd = () => n
   // `git` is returned as well as injected, so a test can move what the checkout looks like (uncommitted work at a kill,
   // for instance) after the world is built, the way it already moves the clock and the reviews.
   const git = fakeGit();
-  const tick = makeTick({ credential: fakeCredential(), identity: fakeIdentity(),  config, state, gh, git, notify, log, clock, ownLogin: "me", runnerFor: () => runner, readPrd });
+  const tick = makeTick({ credential: fakeCredential(), identity: fakeIdentity(),  config, state, gh, git, notify, log, clock, ownLogin: "me", runnerFor: () => runner, readPrd, packageAuthPreflight });
   return { clock, state, id, gh, git, runner, notify, tick, logged, entry: () => state.get(id) };
 }
+
+test("private-package refusal retains feedback without starting or repeatedly charging a fix", async () => {
+  let probes = 0;
+  const w = world({}, { reviews: [review({ id: 9101, by: BOT, bot: true, state: "CHANGES_REQUESTED", at: at(5) })] }, {
+    packageAuthPreflight: async () => { probes++; throw Object.assign(new Error("Package read access failed before dispatch"), { code: "PACKAGE_AUTH" }); },
+  });
+  w.clock.advance(6); const cursor = w.entry().cursor;
+  await w.tick.tick(); await w.tick.tick();
+  assert.equal(w.entry().state, STATES.needsHuman); assert.equal(w.entry().reason, "dependency-auth");
+  assert.equal(w.runner.started.length, 0); assert.equal(w.entry().iteration, 0);
+  assert.deepEqual(w.entry().cursor, cursor); assert.equal(probes, 1);
+});
 
 test("a recovered handoff ledger gives the first new session its context instructions", async () => {
   const w = world({ harness: "codex", session: null, execution: null, execution_handoff: null,
