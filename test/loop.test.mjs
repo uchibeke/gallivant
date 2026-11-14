@@ -1,3 +1,4 @@
+import { makePackageAuthPreflight } from "../lib/package_auth.mjs";
 // Gaps in the loop's coverage that are not about one command: what `start` records on success and when the harness
 // is signed out, a ready entry reopened by a command comment, a recreated checkout, and register-then-tick end to
 // end. Kept out of tick.test.mjs and commands.test.mjs so those files stay one topic each.
@@ -43,6 +44,29 @@ function startWorld({ signIn = {} } = {}) {
   };
   return { ctx, prdPath, worktree, runner, snapshots, home };
 }
+
+test("Claude and Codex starts receive package auth only after repository preflight", async () => {
+  for (const harness of ["claude", "codex"]) {
+    const w = startWorld(); let probes = 0;
+    writeFileSync(w.prdPath, GOOD_PRD.replace("harness: codex", `harness: ${harness}`));
+    w.ctx.config.harness[harness] = { ...CONFIG.harness[harness], bin: harnessBin(w.home, harness) };
+    w.ctx.config.repos = [{ repo: "acme/widget", package_auth: { provider: "github-packages", packages: ["@acme/editor"] } }];
+    w.ctx.packageAuthPreflight = makePackageAuthPreflight({ fetch: async () => { probes++; assert.equal(w.runner.started.length, 0); return { status: 200, body: { cancel: async () => {} } }; } });
+    await start(w.ctx, { path: w.prdPath });
+    assert.equal(probes, 1); assert.equal(w.runner.started.length, 1);
+    assert.equal(w.runner.started[0].opts.env.NODE_AUTH_TOKEN, "t-for-test");
+    assert.equal(w.runner.started[0].opts.env.GITHUB_PACKAGES_TOKEN, "t-for-test");
+  }
+});
+
+test("package access failure stops initial start before cloning, snapshots or paid dispatch", async () => {
+  const w = startWorld(); let cloned = false, probes = 0;
+  w.ctx.git.create = async () => { cloned = true; throw new Error("must not clone"); };
+  w.ctx.packageAuthPreflight = async () => { probes++; throw Object.assign(new Error("Private-package access failed (HTTP 401)"), { code: "PACKAGE_AUTH" }); };
+  await assert.rejects(start(w.ctx, { path: w.prdPath }), { code: "PACKAGE_AUTH" });
+  assert.equal(probes, 1); assert.equal(cloned, false); assert.equal(w.runner.started.length, 0);
+  assert.equal(w.snapshots.size, 0); assert.equal(w.ctx.state.entries().length, 0);
+});
 
 test("a successful start records a running entry with its session, our branch name and the checkout it runs in", async () => {
   const w = startWorld();

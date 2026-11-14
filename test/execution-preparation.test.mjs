@@ -37,7 +37,7 @@ test("shared local preparation preserves selected defaults, tools-off authority 
   const root = tempHome(), cwd = join(root, "turn"), runner = fakeRunner(Date);
   const config = { ...CONFIG, harness: { claude: { ...CONFIG.harness.claude, bin: harnessBin(root, "claude") } } };
   const service = makeExecution({ root, taskId: "intake/local", provider: "claude", runner });
-  const prepared = await service.prepare({ kind: "intake", environment: "isolated-checkout", config, cwd, callerCwd: root, sourceEnv: { PATH: process.env.PATH, HOME: root, ANTHROPIC_MODEL: "selected-model", UNRELATED_SECRET: "private" }, prompt: "draft" });
+  const prepared = await service.prepare({ kind: "intake", environment: "isolated-checkout", config, cwd, callerCwd: root, sourceEnv: { PATH: process.env.PATH, HOME: root, ANTHROPIC_MODEL: "selected-model", UNRELATED_SECRET: "private", NODE_AUTH_TOKEN: "package-private", GITHUB_PACKAGES_TOKEN: "package-private", NPM_TOKEN: "package-private" }, prompt: "draft" });
   assert.equal(isPreparationReceipt("claude", prepared.receipt), true);
   assert.equal(prepared.receipt.taskId, "intake/local");
   assert.match(prepared.receipt.fingerprint, /^[a-f0-9]{64}$/);
@@ -45,6 +45,7 @@ test("shared local preparation preserves selected defaults, tools-off authority 
   assert.equal(prepared.spec.options.inheritEnv, false);
   assert.equal(prepared.spec.options.env.ANTHROPIC_MODEL, "selected-model");
   assert.equal(prepared.spec.options.env.UNRELATED_SECRET, undefined);
+  for (const key of ["NODE_AUTH_TOKEN", "GITHUB_PACKAGES_TOKEN", "NPM_TOKEN"]) assert.equal(prepared.spec.options.env[key], undefined);
   const ordinary = buildRun({ harness: "claude", config, mode: "start", session: "unused", prompt: "draft", cwd });
   assert.ok(!ordinary.args.includes("--tools"));
   assert.ok(prepared.spec.args.includes("--restricted"));

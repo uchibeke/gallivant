@@ -2765,7 +2765,7 @@ test("a stop during sandbox preparation prevents Verify dispatch and removes the
 });
 
 test("verification uses a credential-free environment and removes private profiles on success and failure", async t => {
-  const keys = ["GH_TOKEN", "GITHUB_TOKEN", "AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY", "AWS_SESSION_TOKEN", "OPENAI_API_KEY", "ANTHROPIC_API_KEY", "DATABASE_URL", "CUSTOM_CREDENTIAL", "SSH_AUTH_SOCK", "NPM_CONFIG_TOKEN", "HTTP_PROXY", "NODE_OPTIONS", "ENV", "BASH_ENV"];
+  const keys = ["GH_TOKEN", "GITHUB_TOKEN", "AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY", "AWS_SESSION_TOKEN", "OPENAI_API_KEY", "ANTHROPIC_API_KEY", "DATABASE_URL", "CUSTOM_CREDENTIAL", "SSH_AUTH_SOCK", "NPM_CONFIG_TOKEN", "NODE_AUTH_TOKEN", "GITHUB_PACKAGES_TOKEN", "NPM_TOKEN", "HTTP_PROXY", "NODE_OPTIONS", "ENV", "BASH_ENV"];
   const inherited = Object.fromEntries(keys.map(key => [key, process.env[key]])), observations = [];
   try {
     for (const failing of [false, true]) {

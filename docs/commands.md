@@ -600,6 +600,15 @@ preserving the approved brief, checkout, PR, review progress and allowance. It
 requires recorded learned context or its revocation, and does not reset task state
 or bypass cancellation. See [learning recovery](learning.md).
 
+### Private dependency authentication
+
+A `dependency-auth` stop means the configured package-read preflight failed
+before a coding turn. Restore the selected repository credential's package read
+access or registry connectivity, then use **Resume agent**. PR rechecks do not
+install dependencies or change a worker's environment. See
+[private package access](config.md#private-package-access) for repository-scoped
+configuration. A successful provider sign-in is not proof of package access.
+
 ### Base repair troubleshooting
 
 Before each automatic review/CI fix round, the coordinator fetches the recorded
