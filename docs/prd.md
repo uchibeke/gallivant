@@ -89,6 +89,11 @@ These keys beyond `status` and `harness` are read if present:
   The saved, approved brief supplies these exceptions; editing the session's copy cannot grant permission. Changing
   the list changes the contract and uses the normal `prd-changed` repair/approval flow.
 
+  If an exact path is both a carried source and an approved output, its committed
+  result may evolve during implementation and base refreshes. The original saved
+  source remains the authoritative context; preflight does not overwrite it or
+  accept unfinished edits as a new snapshot. The PRD itself stays immutable.
+
   Task work logs, session transcripts, scratch files, audit chronology and review/handoff notes belong outside Git.
   Create scratch space with `mktemp -d`; put concise verification results in the PR receipt. Keep lasting project
   documentation and release/rollback instructions concise. The commit hook and final remote PR-diff check reject

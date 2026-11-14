@@ -602,6 +602,24 @@ or bypass cancellation. See [learning recovery](learning.md).
 
 ### Base repair troubleshooting
 
+Before each automatic review/CI fix round, the coordinator fetches the recorded
+base branch and merges its current commit into the owned task branch. It does
+not run an ambiguous `git pull`, rebase, force-push, or write to the base branch.
+This is the usual feature-branch integration workflow: inspect incoming changes,
+preserve both applicable behaviors, and rerun verification on the combined head.
+The target branch is part of the task; its commit is allowed to advance. A base
+refresh does not resnapshot the PRD, grant new permissions, or retain clearance
+for an older task head. Conflict repair pins the fetched base commit for that
+operation; a later base advance is reconciled in a later round.
+
+A carried document explicitly listed in the approved `publish_files` may also be
+an output. Its committed content can evolve between rounds without replacing
+the coordinator's saved context snapshot. Preflight requires its working copy
+to match the current commit using Git's checkout conversion rules (including CRLF
+line endings and expanded identifiers), rather than raw blob bytes. Staged/unfinished changes, private or unapproved
+context edits, and changes to the PRD itself still stop automatic merging.
+Adding an exception to the worker's PRD cannot authorize it.
+
 Watched PRs with a clean owned checkout and continuing local session automatically repair a base conflict using the
 same runner, approved inputs, permissions and iteration allowance. The initial failed merge is recorded and aborted;
 the repair merges its pinned base commit, tests the combined behavior and pushes only the task branch. Newer base
