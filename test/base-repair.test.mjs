@@ -463,6 +463,19 @@ test("transient Git failures retry finitely without creating a repair operation"
   assert.equal(w.entry().base_repair, undefined); assert.equal(w.raw.started.length, 1);
 });
 
+test("numeric Git exit codes retain bounded retries for both conflict and feedback merges", async t => {
+  for (const hostConflict of [true, false]) await t.test(`host conflict ${hostConflict}`, async t => {
+    const w = world(t, { hostConflict }); let calls = 0;
+    w.git.mergeBase = async () => { calls++; throw Object.assign(new Error("Git fetch exited with status 128"), { code: 128 }); };
+    const session = w.entry().session, cursor = w.entry().cursor;
+    for (let i = 0; i < 6; i++) await w.tick();
+    assert.equal(calls, 5); assert.equal(w.entry().reason, "stuck");
+    assert.equal(w.entry().base_repair, undefined); assert.equal(w.raw.started.length, 1);
+    assert.equal(w.entry().session, session); assert.equal(w.entry().iteration, 0);
+    assert.deepEqual(w.entry().cursor, cursor); assert.match(w.entry().last.event, /status 128/);
+  });
+});
+
 test("an active unrelated worker fences the merge and every repair launch", async t => {
   const w = world(t);
   w.raw.start("unrelated", "fixture", [], {});
