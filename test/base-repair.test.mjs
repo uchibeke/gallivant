@@ -92,8 +92,8 @@ function world(t, { hostConflict = true, superseded = false, baseUpdate = "confl
 
 // A real task can carry a release guide and explicitly approve updating it.
 // Its published result must not replace the coordinator's requirement snapshot.
-function withPublishedGuide(w) {
-  const guide = "docs/release/guide.md", original = "Approved release context.\n", updated = "Updated candidate and rollback instructions.\n";
+function withPublishedGuide(w, { eol = "\n" } = {}) {
+  const guide = "docs/release/guide.md", original = `Approved release context.${eol}`, updated = `Updated candidate and rollback instructions.${eol}`;
   const brief = GOOD_PRD.replace("---\n", `---\npublish_files:\n  - ${guide}\n  - ${w.prd}\n`);
   const readSource = w.ctx.readSource;
   w.ctx.readPrd = () => brief;
@@ -134,13 +134,85 @@ for (const host of ["github.com", "bitbucket.org"]) test(`committed published co
   });
 });
 
+test("published context respects Git checkout conversions before and after an approved edit", async t => {
+  for (const conversion of ["attributes", "autocrlf", "ident"]) for (const changed of [false, true]) await t.test(`${conversion}: ${changed ? "updated output" : "unchanged snapshot"}`, async t => {
+    const w = world(t, { hostConflict: false, baseUpdate: "independent" });
+    if (conversion === "autocrlf") w.g(["config", "core.autocrlf", "true"]);
+    else {
+      write(join(w.tree, ".gitattributes"), `docs/release/guide.md ${conversion === "ident" ? "ident" : "text eol=crlf"}\n`);
+      w.g(["add", ".gitattributes"]); w.g(["commit", "-qm", "Define checkout conversion"]);
+    }
+    const doc = withPublishedGuide(w, { eol: conversion === "ident" ? "\n" : "\r\n" });
+    if (conversion === "ident") {
+      write(join(w.tree, doc.guide), "$Id$\n" + doc.updated);
+      w.g(["add", doc.guide]); w.g(["commit", "-qm", "Use checkout identifier"]);
+    }
+    // Force Git itself to produce the configured working-copy representation.
+    rmSync(join(w.tree, doc.guide));
+    w.g(["checkout-index", "-f", "--", doc.guide]);
+    const checkout = readFileSync(join(w.tree, doc.guide), "utf8");
+    assert.notEqual(checkout, w.g(["show", `HEAD:${doc.guide}`]) + "\n");
+    assert.equal(w.g(["diff", "--name-only", "HEAD", "--", doc.guide]), "");
+    if (!changed) {
+      const readSource = w.ctx.readSource;
+      w.ctx.readSource = (id, path) => path === doc.guide ? checkout : readSource(id, path);
+      write(join(w.operator, doc.guide), checkout);
+    }
+    const head = w.g(["rev-parse", "HEAD"]);
+    w.gh.data.pr.headRefOid = head;
+    w.state.update(w.id, { cursor: { ...w.entry().cursor, fixed_sha: head } });
+    await w.tick();
+    assert.equal(w.raw.started.length, 2, JSON.stringify(w.entry()));
+    assert.equal(w.entry().reason, null);
+    assert.equal(readFileSync(join(w.tree, doc.guide), "utf8"), checkout);
+    assert.equal(w.ctx.readSource(w.id, doc.guide), changed ? doc.original : checkout);
+    assert.equal(await w.git.containsCommit(w.tree, w.base), true);
+  });
+});
+
+test("published output validation refuses changes after its Git cleanliness proof", async t => {
+  for (const change of ["working copy", "commit"]) await t.test(change, async t => {
+    const w = world(t, { hostConflict: false, baseUpdate: "none" });
+    const doc = withPublishedGuide(w);
+    let changed = false;
+    const git = makeGit({ config: w.ctx.config, identity: fakeIdentity(), exec: async (command, args, options) => {
+      const result = await execFileAsync(command, args, options);
+      if (!changed && args[0] === "hash-object") {
+        changed = true;
+        if (change === "working copy") write(join(w.tree, doc.guide), "Concurrent unfinished edit.\n");
+        else {
+          write(join(w.tree, "concurrent.mjs"), "export const changed = true;\n");
+          w.g(["add", "concurrent.mjs"]); w.g(["commit", "-qm", "Concurrent task commit"]);
+        }
+      }
+      return result;
+    } });
+    const { repairOverlays } = await import("../lib/base_repair.mjs");
+    await assert.rejects(git.assertClean(w.tree, repairOverlays(w.ctx, w.id, w.entry())), /immutable approved snapshot|head changed/);
+    assert.equal(changed, true);
+    assert.equal(w.raw.started.length, 1);
+    assert.equal(w.ctx.readSource(w.id, doc.guide), doc.original);
+    if (change === "working copy") assert.equal(readFileSync(join(w.tree, doc.guide), "utf8"), "Concurrent unfinished edit.\n");
+  });
+});
+
 test("publication approval cannot admit unfinished outputs or changed private authority", async t => {
-  for (const fault of ["unstaged output", "staged output", "deleted output", "linked output", "committed private instructions", "committed published brief", "worker-only publication approval"]) await t.test(fault, async t => {
+  for (const fault of ["unstaged output", "staged output", "assumed unchanged output", "skip-worktree output", "skip-worktree deleted output", "deleted output", "linked output", "committed private instructions", "committed published brief", "worker-only publication approval"]) await t.test(fault, async t => {
     const w = world(t, { hostConflict: false, baseUpdate: "independent" });
     const doc = withPublishedGuide(w);
     if (["unstaged output", "staged output"].includes(fault)) {
       write(join(w.tree, doc.guide), "Unfinished operator edits.\n");
       if (fault === "staged output") w.g(["add", doc.guide]);
+    }
+    if (["assumed unchanged output", "skip-worktree output"].includes(fault)) {
+      write(join(w.tree, doc.guide), "Unfinished hidden output.\n");
+      w.g(["update-index", fault === "assumed unchanged output" ? "--assume-unchanged" : "--skip-worktree", "--", doc.guide]);
+      assert.equal(w.g(["diff", "--name-only", "HEAD", "--", doc.guide]), "", "the ordinary Git diff must actually hide this edit");
+    }
+    if (fault === "skip-worktree deleted output") {
+      w.g(["update-index", "--skip-worktree", "--", doc.guide]);
+      rmSync(join(w.tree, doc.guide));
+      assert.equal(w.g(["diff", "--name-only", "HEAD", "--", doc.guide]), "");
     }
     if (fault === "deleted output") rmSync(join(w.tree, doc.guide));
     if (fault === "linked output") { rmSync(join(w.tree, doc.guide)); symlinkSync(join(w.home, "outside"), join(w.tree, doc.guide)); }

@@ -113,6 +113,8 @@
   "public review cases accept fixed host controls and preserve them in the packaged metadata": 9.63,
   "publication and cancellation have one ordering across push, PR writes and another process": 1.12,
   "publication approval cannot admit unfinished outputs or changed private authority": 7,
+  "published context respects Git checkout conversions before and after an approved edit": 13,
+  "published output validation refuses changes after its Git cleanliness proof": 4,
   "qualified handoff releases the runtime pin only after every independent owner is idle": 1.21,
   "queued local output has explicit stable gaps for expiry, missing diagnostics and missing redaction metadata": 4.14,
   "raw boundary whitespace is refused before preparation or answers can select a trimmed alias while internal spaces retain exact delivery": 1.49,

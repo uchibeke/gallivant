@@ -615,7 +615,8 @@ operation; a later base advance is reconciled in a later round.
 A carried document explicitly listed in the approved `publish_files` may also be
 an output. Its committed content can evolve between rounds without replacing
 the coordinator's saved context snapshot. Preflight requires its working copy
-to match the current commit. Staged/unfinished changes, private or unapproved
+to match the current commit using Git's checkout conversion rules (including CRLF
+line endings and expanded identifiers), rather than raw blob bytes. Staged/unfinished changes, private or unapproved
 context edits, and changes to the PRD itself still stop automatic merging.
 Adding an exception to the worker's PRD cannot authorize it.
 
