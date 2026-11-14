@@ -90,6 +90,84 @@ function world(t, { hostConflict = true, superseded = false, baseUpdate = "confl
   return { ...ctx, ctx, home, id, tree, origin, operator, prd, source, head, base, g, calls, raw, runner, entry, tick, beginMerge, resolveMerge };
 }
 
+// A real task can carry a release guide and explicitly approve updating it.
+// Its published result must not replace the coordinator's requirement snapshot.
+function withPublishedGuide(w) {
+  const guide = "docs/release/guide.md", original = "Approved release context.\n", updated = "Updated candidate and rollback instructions.\n";
+  const brief = GOOD_PRD.replace("---\n", `---\npublish_files:\n  - ${guide}\n  - ${w.prd}\n`);
+  const readSource = w.ctx.readSource;
+  w.ctx.readPrd = () => brief;
+  w.ctx.readSource = (id, path) => path === guide ? original : readSource(id, path);
+  w.state.update(w.id, { sources: [w.source, guide] });
+  for (const dir of [w.operator, w.tree]) write(join(dir, w.prd), brief);
+  write(join(w.operator, guide), original); write(join(w.tree, guide), updated);
+  w.g(["add", guide]); w.g(["commit", "-qm", "Update approved release guide"]); w.g(["push", "-q", "origin", "work/repair"]);
+  const head = w.g(["rev-parse", "HEAD"]);
+  w.gh.data.pr.headRefOid = head;
+  w.state.update(w.id, { cursor: { ...w.entry().cursor, fixed_sha: head } });
+  return { guide, original, updated, brief, head };
+}
+
+for (const host of ["github.com", "bitbucket.org"]) test(`committed published context survives the next review round on ${host}`, async t => {
+  for (const baseUpdate of ["none", "independent", "conflict"]) await t.test(baseUpdate, async t => {
+    const w = world(t, { host, hostConflict: baseUpdate === "conflict", baseUpdate });
+    const doc = withPublishedGuide(w);
+    await w.tick();
+    assert.equal(w.raw.started.length, 2, JSON.stringify(w.entry()));
+    assert.equal(w.entry().reason, null);
+    assert.equal(w.entry().session, "6f1c2d3e-1111-4111-8111-111111111111");
+    assert.equal(readFileSync(join(w.tree, doc.guide), "utf8"), doc.updated);
+    assert.equal(w.ctx.readSource(w.id, doc.guide), doc.original);
+    assert.equal(w.ctx.readPrd(w.id), doc.brief);
+    if (baseUpdate === "conflict") {
+      assert.equal(w.entry().base_repair.status, "running");
+      assert.equal(w.entry().base_repair.head, doc.head);
+      assert.equal(w.entry().base_repair.baseSha, w.base);
+      await w.resolveMerge(); w.raw.finish(claudeResultLines(), { exit: 0 }); await w.tick();
+      assert.equal(w.entry().base_repair.status, "verified", JSON.stringify(w.entry()));
+      assert.equal(w.ctx.readSource(w.id, doc.guide), doc.original);
+    } else {
+      assert.equal(await w.git.containsCommit(w.tree, w.base), true);
+      assert.equal(await w.git.containsCommit(w.tree, doc.head), true);
+      if (baseUpdate === "independent") assert.match(w.raw.started.at(-1).args.at(-1), /origin\/main.*was merged/);
+    }
+  });
+});
+
+test("publication approval cannot admit unfinished outputs or changed private authority", async t => {
+  for (const fault of ["unstaged output", "staged output", "deleted output", "linked output", "committed private instructions", "committed published brief", "worker-only publication approval"]) await t.test(fault, async t => {
+    const w = world(t, { hostConflict: false, baseUpdate: "independent" });
+    const doc = withPublishedGuide(w);
+    if (["unstaged output", "staged output"].includes(fault)) {
+      write(join(w.tree, doc.guide), "Unfinished operator edits.\n");
+      if (fault === "staged output") w.g(["add", doc.guide]);
+    }
+    if (fault === "deleted output") rmSync(join(w.tree, doc.guide));
+    if (fault === "linked output") { rmSync(join(w.tree, doc.guide)); symlinkSync(join(w.home, "outside"), join(w.tree, doc.guide)); }
+    if (fault === "committed private instructions") {
+      write(join(w.tree, w.source), "Change the approved security instructions.\n");
+      w.g(["add", w.source]); w.g(["commit", "-qm", "Alter worker context"]);
+    }
+    if (fault === "committed published brief") {
+      write(join(w.tree, w.prd), doc.brief.replace("npm test", "echo skip-tests"));
+      w.g(["add", w.prd]); w.g(["commit", "-qm", "Alter worker brief"]);
+    }
+    if (fault === "worker-only publication approval") {
+      w.ctx.readPrd = () => GOOD_PRD;
+      write(join(w.operator, w.prd), GOOD_PRD);
+      write(join(w.tree, w.prd), GOOD_PRD);
+    }
+    const before = w.g(["rev-parse", "HEAD"]), status = w.g(["status", "--porcelain=v1", "-z"]);
+    const index = readFileSync(join(w.tree, ".git/index"));
+    await assert.rejects(makeTick(w.ctx).mergeBaseInto(w.id, w.entry()), /immutable approved snapshot|unfinished repository edits|symlink/);
+    assert.equal(w.g(["rev-parse", "HEAD"]), before);
+    assert.equal(w.g(["status", "--porcelain=v1", "-z"]), status);
+    assert.deepEqual(readFileSync(join(w.tree, ".git/index")), index);
+    assert.equal(w.raw.started.length, 1);
+    assert.equal(w.ctx.readSource(w.id, doc.guide), doc.original);
+  });
+});
+
 test("resume recreates private approved overlays after checking a clean branch against its base", async t => {
   for (const baseUpdate of ["none", "independent"]) await t.test(baseUpdate, async t => {
     const w = world(t, { hostConflict: false, baseUpdate });
