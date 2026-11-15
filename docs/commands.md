@@ -654,8 +654,9 @@ It cannot change session or resnapshot its instructions. An unresolved merge or 
 Transient Git/API observations use the normal bounded retry counter and never create a model retry loop.
 
 If you merge a PR yourself, the daemon observes the host's merge into the approved base, closes the run and evaluates
-the next chain milestone. This also works after a conflict repair or a push between polls. It waits for owned agents
-to settle and preserves local work during cleanup. It records integration separately from readiness: a manual merge
+the next chain milestone. This also works after a conflict repair or a push between polls. If an accepted author is
+still running, it retires that exact execution through its cancellation ledger and waits for confirmed cessation.
+Host observations keep their normal cadence; cleanup preserves local work. It records integration separately from readiness: a manual merge
 does not invent passing CI, reviewer clearance or an APort completion decision. Cancelled chains stay cancelled and
 changed successor briefs still require an explicit plan review and resnapshot.
 
