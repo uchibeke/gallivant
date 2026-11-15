@@ -79,7 +79,7 @@ test("unproved temporary ownership retains the checkout instead of blocking term
   t.after(() => rmSync(env.TMPDIR, { recursive: true, force: true }));
   writeFileSync(join(env.TMPDIR, ".runtime-owner.json"), "unproved ownership");
   const result = await cleanupMergedWorkspace(w.ctx, w.id, w.entry, w.pr);
-  assert.equal(result.status, "retained"); assert.match(result.reason, /ownership changed/);
+  assert.equal(result.status, "retained"); assert.match(result.reason, /CLEANUP_BOUNDARY/);
   assert.equal(existsSync(w.path), true); assert.equal(existsSync(env.TMPDIR), true);
 });
 
