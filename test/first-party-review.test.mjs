@@ -750,7 +750,13 @@ test("late external and trusted human feedback reopen internal clearance; zero c
   assert.equal(external.entry().state,"ready-for-human");
   external.gh.data.reviews.push({id:56,user:{login:CONFIG.reviewer.login,type:"Bot"},state:"CHANGES_REQUESTED",submitted_at:at(11),commit_id:head,body:"The deletion breaks existing callers; preserve the public function."});
   await external.tick.tick(); assert.notEqual(external.entry().state,"ready-for-human"); assert.equal(external.runner.started.length,1);
-  const noCi=tickWorld(); noCi.gh.data.pr.statusCheckRollup=[]; await noCi.tick.tick(); assert.equal(noCi.entry().reason,"missing-ci");
+  const last = { at: at(9), run: "owned-settled-run", exit: 0, cost: 1.25, denials: [] };
+  const noCi=tickWorld({over:{last}}); noCi.gh.data.pr.statusCheckRollup=[]; await noCi.tick.tick(); assert.equal(noCi.entry().reason,"missing-ci");
+  assert.equal(noCi.entry().last.run, last.run, "a missing CI diagnostic cannot disconnect the owned run");
+  assert.equal(noCi.entry().last.exit, last.exit);
+  assert.equal(noCi.entry().last.cost, last.cost);
+  assert.deepEqual(noCi.entry().last.denials, last.denials);
+  assert.match(noCi.entry().last.event, /No checks reported/);
 });
 
 test("versioned policies keep ready delivery targets monitored for late feedback",async()=>{
