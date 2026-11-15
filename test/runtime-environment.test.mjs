@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { mkdtempSync, writeFileSync, readFileSync, mkdirSync, symlinkSync, realpathSync, readdirSync, existsSync, statSync, rmSync } from "node:fs";
+import { mkdtempSync, writeFileSync, readFileSync, mkdirSync, symlinkSync, realpathSync, readdirSync, existsSync, statSync, rmSync, lstatSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, dirname } from "node:path";
 import { execFileSync } from "node:child_process";
@@ -84,7 +84,9 @@ test("checkout cache survives a real offline npm ci and stays out of Git changes
   const sentinel = join(env.NPM_CONFIG_CACHE, "cached-data");
   writeFileSync(sentinel, "retained");
   const temporary = execFileSync(process.execPath, ["--input-type=module", "-e", "import {mkdtempSync,writeFileSync} from 'node:fs';import {tmpdir} from 'node:os';import {join} from 'node:path';const p=mkdtempSync(join(tmpdir(),'tool-output-'));writeFileSync(join(p,'fixture'),'generated');process.stdout.write(p)"], { cwd, env, encoding: "utf8" });
-  assert.ok(realpathSync(temporary).startsWith(join(realpathSync(cwd), ".cache/gallivant/tmp/tool-output-")));
+  assert.ok(realpathSync(temporary).startsWith(join(env.TMPDIR, "tool-output-")));
+  assert.equal(lstatSync(env.TMPDIR).isSymbolicLink(), false);
+  assert.equal(realpathSync(env.TMPDIR), env.TMPDIR, "executor writable roots must be canonical directories");
   writeFileSync(join(cwd, "package.json"), JSON.stringify({ name: "offline-cache-fixture", version: "1.0.0" }));
   writeFileSync(join(cwd, "package-lock.json"), JSON.stringify({ name: "offline-cache-fixture", version: "1.0.0", lockfileVersion: 3, packages: { "": { name: "offline-cache-fixture", version: "1.0.0" } } }));
   mkdirSync(join(cwd, "node_modules", "stale"), { recursive: true });
@@ -121,7 +123,7 @@ test("describing scratch paths does not preempt known checkout-creation refusals
   assert.equal(readFileSync(join(root, "parent-conflict"), "utf8"), "operator file");
 });
 
-test("task temporary aliases preserve Unix sockets in long worktree paths", { skip: process.platform === "win32" }, t => {
+test("canonical task temporary directories preserve Unix sockets in long worktree paths", { skip: process.platform === "win32" }, t => {
   const root = mkdtempSync(join(tmpdir(), "runtime-socket-")), cwd = join(root, "long-task-name-".repeat(10));
   mkdirSync(cwd);
   t.after(() => { removeRuntimeTemporaryAlias(cwd); rmSync(root, { recursive: true, force: true }); });
@@ -137,11 +139,42 @@ test("occupied and redirected temporary aliases are never overwritten or recursi
   t.after(() => { rmSync(alias, { force: true }); rmSync(cwd, { recursive: true, force: true }); });
   mkdirSync(outside); writeFileSync(join(outside, "keep"), "keep");
   mkdirSync(alias);
-  assert.throws(() => prepareRuntimeCache(cwd, env), /alias is occupied/);
+  assert.throws(() => prepareRuntimeCache(cwd, env), /directory.*(?:ownership.*missing|occupied)/);
   rmSync(alias, { recursive: true }); symlinkSync(outside, alias, "dir");
-  assert.throws(() => prepareRuntimeCache(cwd, env), /alias is occupied/);
-  assert.throws(() => removeRuntimeTemporaryAlias(cwd), /alias is occupied/);
+  assert.throws(() => prepareRuntimeCache(cwd, env), /directory.*occupied/);
+  assert.throws(() => removeRuntimeTemporaryAlias(cwd), /directory.*occupied/);
   assert.equal(readFileSync(join(outside, "keep"), "utf8"), "keep");
+});
+
+test("new dispatch preserves a live legacy alias; settled cleanup removes only the owned scratch generations", t => {
+  const cwd = mkdtempSync(join(tmpdir(), "runtime-legacy-scratch-")), env = runtimeEnvironment(process.env, process.execPath, cwd);
+  t.after(() => { removeRuntimeTemporaryAlias(cwd); rmSync(cwd, { recursive: true, force: true }); });
+  const legacy = env.TMPDIR.replace("gvt2-", "gvt-"), target = join(realpathSync(cwd), ".cache/gallivant/tmp");
+  mkdirSync(target, { recursive: true }); writeFileSync(join(target, "active-worker"), "keep");
+  symlinkSync(target, legacy, process.platform === "win32" ? "junction" : "dir");
+  prepareRuntimeCache(cwd, env);
+  assert.equal(lstatSync(env.TMPDIR).isSymbolicLink(), false);
+  assert.equal(lstatSync(legacy).isSymbolicLink(), true);
+  assert.equal(readFileSync(join(legacy, "active-worker"), "utf8"), "keep");
+  writeFileSync(join(env.TMPDIR, "scratch"), "disposable");
+  removeRuntimeTemporaryAlias(cwd);
+  assert.equal(existsSync(env.TMPDIR), false); assert.equal(existsSync(legacy), false);
+  assert.equal(readFileSync(join(target, "active-worker"), "utf8"), "keep");
+});
+
+test("temporary cleanup refuses missing, redirected and mismatched ownership markers", t => {
+  const cwd = mkdtempSync(join(tmpdir(), "runtime-scratch-owner-")), env = runtimeEnvironment(process.env, process.execPath, cwd);
+  const marker = join(env.TMPDIR, ".runtime-owner.json");
+  t.after(() => { rmSync(env.TMPDIR, { recursive: true, force: true }); rmSync(cwd, { recursive: true, force: true }); });
+  prepareRuntimeCache(cwd, env); const approved = readFileSync(marker, "utf8");
+  writeFileSync(join(env.TMPDIR, "keep"), "keep");
+  writeFileSync(marker, approved.replace('"version":2', '"version":3'));
+  assert.throws(() => removeRuntimeTemporaryAlias(cwd), /ownership changed/);
+  rmSync(marker); assert.throws(() => removeRuntimeTemporaryAlias(cwd), /ownership is missing/);
+  const outside = join(cwd, "outside-owner"); writeFileSync(outside, approved); symlinkSync(outside, marker);
+  assert.throws(() => removeRuntimeTemporaryAlias(cwd), /ownership changed/);
+  assert.equal(readFileSync(join(env.TMPDIR, "keep"), "utf8"), "keep");
+  assert.equal(readFileSync(outside, "utf8"), approved);
 });
 
 test("every local adapter receives identical runtime environment on start and resume", () => {
