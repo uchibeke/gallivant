@@ -309,6 +309,7 @@ test("interrupted delivery is not replayed, and closed PRs cannot be resumed", a
   assert.match(w.state.get(w.id).control.message, /interrupted/);
   requestControl(w.ctx, { handle: w.id, action: "resume" });
   w.gh.data.pr = prFixture({ state: "MERGED" });
+  w.ctx.providerHealth = { get: () => ({ ok: false, pending: true }) };
   await applyControl(w.ctx, w.id);
   assert.equal(w.state.get(w.id).control.status, "failed");
   assert.equal(w.runner.started.length, 0);

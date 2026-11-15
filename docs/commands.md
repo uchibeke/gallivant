@@ -645,12 +645,19 @@ Use `gallivant why <handle>` to inspect a repair stop:
 | `base-repair-push`, `base-repair-no-merge` | Inspect the saved SHAs, finish the pinned merge and push the task branch. Resume after remote evidence agrees. |
 | `base-repair-failed` | Inspect the owned worker log and failed verification/provider result. No second paid operation is launched automatically. |
 | `base-repair-duplicate`, `base-repair-iterations` | Review the original failure and existing iteration allowance. Recheck never repeats the same input or resets the budget. |
-| `base-repair-evidence`, `base-repair-review` | Reconcile inconsistent host/base evidence or missing new-head review, CI and completion evidence. A clean merge alone cannot release a successor. |
+| `base-repair-evidence` | Reconcile inconsistent host/base evidence. A repair push alone cannot release a successor. |
+| `base-repair-review` (older versions) | Update Gallivant and recheck. A confirmed maintainer merge closes the run and releases its chain dependency; missing readiness evidence remains unverified. |
 
 For a recorded repair, `resume` reconciles that exact operation and remote proof. A proven refusal before dispatch may
 retry the same operation after its prerequisite is restored; an ambiguous or paid launch cannot spend another operation.
 It cannot change session or resnapshot its instructions. An unresolved merge or unrelated edits remain intact.
 Transient Git/API observations use the normal bounded retry counter and never create a model retry loop.
+
+If you merge a PR yourself, the daemon observes the host's merge into the approved base, closes the run and evaluates
+the next chain milestone. This also works after a conflict repair or a push between polls. It waits for owned agents
+to settle and preserves local work during cleanup. It records integration separately from readiness: a manual merge
+does not invent passing CI, reviewer clearance or an APort completion decision. Cancelled chains stay cancelled and
+changed successor briefs still require an explicit plan review and resnapshot.
 
 ## `gallivant recheck <handle>`
 
