@@ -240,3 +240,25 @@ test("an unproved merge into the approved base cannot authorize cleanup", async 
     runnerFor: () => fakeRunner(clock), readPrd: () => null, cleanupMergedWorkspace: async () => { calls++; return { status: "done" }; } });
   await tick.tick(); assert.equal(calls, 0); assert.equal(state.get(id).reason, "pr-identity");
 });
+
+test("a maintainer push and merge between polls closes the task with the observed head", async () => {
+  const head = "b".repeat(40), merge = "f".repeat(40);
+  const { state, id } = seededState({ state: STATES.needsHuman, reason: "base-repair-review",
+    base_repair: { status: "blocked" }, cursor: { fixed_sha: "a".repeat(40), since: T0 } });
+  const gh = fakeGh({ pr: prFixture({ state: "MERGED", strictIdentity: true, headRefOid: head,
+    isCrossRepository: false, mergedAt: at(2), mergeCommit: { oid: merge } }) });
+  let calls = 0, ancestry = 0;
+  gh.containsCommit = async (_repo, _base, sha) => { ancestry++; assert.equal(sha, merge); return true; };
+  const clock = makeClock(), runner = fakeRunner(clock);
+  const tick = makeTick({ config: CONFIG, state, gh, git: fakeGit(), notify: fakeNotify(), log: silentLog, clock,
+    runnerFor: () => runner, readPrd: () => null,
+    cleanupMergedWorkspace: async () => { calls++; return { status: "retained", reason: "unpublished work" }; } });
+  await tick.tick();
+  const entry = state.get(id);
+  assert.equal(entry.state, STATES.done); assert.equal(entry.reason, null);
+  assert.equal(entry.completionEvidence.terminal.head, head);
+  assert.equal(entry.completionEvidence.integration.qualified, false);
+  assert.equal(entry.cursor.fixed_sha, "a".repeat(40), "observing a merge must not rewrite the author cursor");
+  assert.equal(entry.workspace_cleanup.status, "retained");
+  assert.equal(calls, 1); assert.equal(ancestry, 1); assert.equal(runner.started.length, 0);
+});

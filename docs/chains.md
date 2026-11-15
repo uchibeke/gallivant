@@ -85,7 +85,11 @@ security requirements. Both sides must be inspected, any superseded task edit ex
 
 Repairing or pushing a conflict never starts a successor. Remote ancestry, new-head CI, required reviewer clearance
 and the completion gate must pass before readiness; the host must then prove integration into the planned base.
-An early external merge without that repaired-head decision stops the chain. Dirty recovery, ambiguous ownership,
+A maintainer can merge before Gallivant records readiness. Once the owned author has settled and the host proves
+that exact PR merged into the planned base, Gallivant closes the run and releases its successor, including after
+a conflict repair. Missing CI, review or APort completion evidence remains unverified; observing your merge never
+creates an approval or changes failed attestations. Cleanup uses the usual ownership checks and retains local work.
+Dirty recovery, ambiguous ownership,
 failed pushes, changed inputs and exhausted or duplicate repair attempts retain the checkout and stop with the
 [named repair reason](commands.md#base-repair-troubleshooting). Fix the current task's evidence before retrying the
 chain; a chain retry cannot resnapshot an active repair or grant another worker authority.

@@ -298,7 +298,9 @@ test("recovery operations prove actor, file revision, branch/base and merge ance
   assert.match(await terminalIdentityProblem(f.registry.api, e, { ...snapshot, state: "CLOSED", hostState: "DECLINED" }), /DECLINED/);
   const merged = { ...snapshot, state: "MERGED", mergeCommit: { oid: BASE }, mergedAt: NOW };
   assert.equal(await terminalIdentityProblem(f.registry.api, e, merged), null);
-  assert.match(await terminalIdentityProblem(f.registry.api, e, { ...merged, headRefOid: BASE }), /recorded head/);
+  assert.equal(await terminalIdentityProblem(f.registry.api, e, { ...merged, headRefOid: BASE }), null,
+    "a maintainer can merge a new head between polls without changing the approved PR identity");
+  assert.match(await terminalIdentityProblem({ containsCommit: async () => false }, e, { ...merged, headRefOid: BASE }), /merge commit/);
   assert.match(await terminalIdentityProblem({ containsCommit: async () => false }, e, merged), /merge commit/);
   assert.ok(f.calls.every(c => c.method === "GET"));
   for (const metadata of [

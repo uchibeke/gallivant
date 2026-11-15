@@ -162,19 +162,15 @@ test("a chain can depend on an existing owned milestone without stealing its ori
   assert.deepEqual(w.ctx.state.get(FIRST), before, "reading associations cannot transfer ownership");
 });
 
-test("a repaired merged predecessor cannot release its successor without new-head completion evidence", async () => {
+test("a maintainer merge releases a repaired predecessor without fabricating completion evidence", async () => {
   const w = await anchoredWorld();
   await w.anchor();
   w.markPr(FIRST, { state: "MERGED", entryState: STATES.prOpen });
-  w.ctx.state.update(FIRST, { base_repair: { status: "verified" }, completionEvidence: { integration: { qualified: false } } });
+  w.ctx.state.update(FIRST, { base_repair: { status: "blocked" }, completionEvidence: { integration: { qualified: false } } });
   await tickChains(w.ctx);
   assert.equal(w.starts(), 1);
-  assert.equal(w.ctx.state.getChain("follow-on").status, "stopped");
-  assert.match(w.ctx.state.getChain("follow-on").reason, /qualified new-head completion/);
-  w.ctx.state.update(FIRST, { state: STATES.done, completionEvidence: { integration: { qualified: true, head: w.prs.get(1).headRefOid } } });
-  await retryChain(w.ctx, { name: "follow-on" });
-  await tickChains(w.ctx);
-  assert.equal(w.starts(), 1, "merge observation and successor dispatch stay separate");
+  assert.equal(w.ctx.state.getChain("follow-on").status, "active");
+  assert.equal(w.ctx.state.get(FIRST).completionEvidence.integration.qualified, false);
   await tickChains(w.ctx);
   assert.equal(w.starts(), 2);
 });
@@ -238,7 +234,7 @@ test("local or remote predecessor identity changes fail closed, including after 
   for (const patch of [
     { state: "CLOSED" }, { number: 9 }, { headRefName: "other" }, { baseRefName: "other" },
     { url: `https://github.com/acme/other/pull/1` }, { url: "not a URL" }, { isCrossRepository: true },
-    { mergeCommit: null }, { mergedAt: null }, { strictIdentity: true, headRefOid: "different" },
+    { mergeCommit: null }, { mergedAt: null },
   ]) {
     const w = await anchoredWorld();
     await w.anchor();
@@ -249,11 +245,11 @@ test("local or remote predecessor identity changes fail closed, including after 
   }
 });
 
-test("a merged anchor still waits for an active author and uses the strict host head contract", async () => {
+test("a maintainer merge between polls still waits for the active author and proves host ancestry", async () => {
   const w = await anchoredWorld();
   await w.anchor();
-  w.markPr(FIRST, { state: "MERGED", strictIdentity: true });
-  w.ctx.state.update(FIRST, e => ({ cursor: { ...e.cursor, fixed_sha: w.prs.get(1).headRefOid }, last: { ...e.last, exit: null } }));
+  w.markPr(FIRST, { state: "MERGED", strictIdentity: true, headRefOid: "b".repeat(40) });
+  w.ctx.state.update(FIRST, e => ({ cursor: { ...e.cursor, fixed_sha: "a".repeat(40) }, last: { ...e.last, exit: null } }));
   await tickChains(w.ctx);
   assert.equal(w.ctx.state.getChain("follow-on").after.merged, null);
   w.ctx.state.update(FIRST, e => ({ last: { ...e.last, exit: 0 } }));

@@ -606,12 +606,24 @@ test("repaired head waits for fresh reviewer clearance and the completion gate b
   assert.equal(w.entry().state, STATES.done); assert.equal(w.entry().completionEvidence.integration.qualified, true);
 });
 
-test("an early external merge cannot bypass repaired-head completion or clean up its checkout", async t => {
-  const w = world(t); await w.tick(); const repaired = await w.resolveMerge();
-  w.raw.finish(claudeResultLines(), { exit: 0 }); await w.tick();
-  w.ctx.cleanupMergedWorkspace = async () => assert.fail("unqualified repair must retain its checkout");
-  w.gh.data.pr.state = "MERGED"; w.gh.data.pr.mergedAt = at(10); w.gh.data.pr.mergeCommit = { oid: repaired };
-  await w.tick();
-  assert.equal(w.entry().state, STATES.needsHuman); assert.equal(w.entry().reason, "base-repair-review");
-  assert.equal(readFileSync(join(w.tree, "shared.mjs"), "utf8"), combined);
+test("a maintainer merge closes repaired tasks without inventing readiness or repeating work", async t => {
+  for (const status of ["verified", "blocked"]) await t.test(status, async t => {
+    const w = world(t); await w.tick(); const repaired = await w.resolveMerge();
+    w.raw.finish(claudeResultLines(), { exit: 0 }); await w.tick();
+    w.state.update(w.id, e => ({ state: STATES.needsHuman, reason: "base-repair-review",
+      base_repair: { ...e.base_repair, status } }));
+    const before = structuredClone(w.entry()); let cleaned = 0;
+    w.ctx.cleanupMergedWorkspace = async () => { cleaned++; return { status: "retained", reason: "local work preserved" }; };
+    w.gh.data.pr.state = "MERGED"; w.gh.data.pr.mergedAt = at(10); w.gh.data.pr.mergeCommit = { oid: repaired };
+    await w.tick();
+    assert.equal(w.entry().state, STATES.done); assert.equal(w.entry().reason, null);
+    assert.equal(w.entry().completionEvidence.integration.qualified, false);
+    assert.equal(w.entry().completionEvidence.terminal.head, repaired);
+    assert.equal(w.entry().base_repair.status, status, "a merge cannot certify an unproved repair");
+    assert.deepEqual(w.entry().firstPartyReview, before.firstPartyReview);
+    assert.equal(w.entry().iteration, before.iteration); assert.equal(w.entry().session, before.session);
+    assert.equal(cleaned, 1); assert.equal(w.raw.started.length, 2);
+    assert.equal(readFileSync(join(w.tree, "shared.mjs"), "utf8"), combined);
+    await w.tick(); assert.equal(w.entry().state, STATES.done); assert.equal(w.raw.started.length, 2);
+  });
 });
