@@ -9,6 +9,7 @@ import { makeState, STATES } from "../lib/state.mjs";
 import { writeJsonAtomic } from "../lib/fs.mjs";
 import { start } from "../lib/commands/start.mjs";
 import { makeTick } from "../lib/tick.mjs";
+import { makeExecution } from "../lib/execution.mjs";
 import { model } from "../lib/commands/status.mjs";
 import { overviewWindow } from "../lib/tracker/overview.mjs";
 import { CONFIG, GOOD_PRD, T0, tempHome, fakeRunner, makeClock, silentLog, fakeCredential, fakeIdentity, harnessBin, prFixture, codexLines } from "./helpers.mjs";
@@ -748,6 +749,33 @@ test("the normal daemon tick settles entries before advancing their chains and d
   await daemon.tick();
   assert.equal(w.starts(), 2);
   assert.equal(w.ctx.state.get(SECOND).state, STATES.running);
+});
+
+test("a maintainer merge retires the owned live author before releasing its chain successor", async () => {
+  const w = world(), executions = new Map();
+  w.ctx.executionFor = (id, provider) => {
+    if (!executions.has(id)) {
+      const raw = w.ctx.runnerFor(id), root = join(w.home, "runs", id.replaceAll("/", "__"));
+      raw.root = root; raw.dirOf = run => join(root, run);
+      executions.set(id, makeExecution({ root, taskId: id, provider, runner: raw, clock: w.ctx.clock }));
+    }
+    return executions.get(id);
+  };
+  await w.queue(); await tickChains(w.ctx);
+  const entry = w.ctx.state.get(FIRST);
+  w.ctx.state.update(FIRST, { pr: 1, url: `https://github.com/${REPO}/pull/1`, state: STATES.prOpen });
+  w.prs.set(1, prFixture({ number: 1, strictIdentity: true, url: `https://github.com/${REPO}/pull/1`,
+    headRefName: entry.branch, state: "MERGED", mergeCommit: { oid: MERGE }, mergedAt: T0 }));
+  await tickChains(w.ctx);
+  assert.equal(w.ctx.state.getChain("release").index, 0, "the author is still live");
+  await makeTick(w.ctx).tickEntry(FIRST, w.ctx.state.get(FIRST));
+  assert.equal(w.ctx.state.get(FIRST).state, STATES.done);
+  assert.equal(executions.get(FIRST).current().running, false);
+  await tickChains(w.ctx);
+  assert.equal(w.ctx.state.getChain("release").index, 1);
+  assert.equal(w.starts(), 1, "merge observation and successor dispatch remain separate");
+  await tickChains(w.ctx);
+  assert.equal(w.starts(), 2); assert.equal(w.ctx.state.get(SECOND).state, STATES.running);
 });
 
 test("fast progress ticks retain chain review cadence, bound outage retries and reconcile on restart", async t => {
