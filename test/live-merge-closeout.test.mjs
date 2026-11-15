@@ -8,6 +8,7 @@ import { makeTick } from "../lib/tick.mjs";
 import { executionLive } from "../lib/execution_contract.mjs";
 import { makeGit, worktreePath } from "../lib/git.mjs";
 import { cleanupMergedWorkspace } from "../lib/workspace_cleanup.mjs";
+import { controlPending } from "../lib/control_contract.mjs";
 import { CONFIG, T0, at, makeClock, seededState, fakeRunner, fakeGh, fakeGit, fakeNotify, silentLog, prFixture, STATES } from "./helpers.mjs";
 
 const HEAD = "a".repeat(40), MERGE = "b".repeat(40);
@@ -43,7 +44,7 @@ async function world(t, { remote = false, delayed = false } = {}) {
   let cleanupCalls = 0;
   const ctx = { config: { ...CONFIG, home }, state, clock, gh, git: fakeGit(), log: silentLog,
     notify: fakeNotify(), ownLogin: "me", runnerFor: () => raw, executionFor: () => execution, readPrd: () => null,
-    cleanupMergedWorkspace: async () => { cleanupCalls++; return execution.current()?.running || executionLive(execution.current())
+    cleanupMergedWorkspace: async () => { cleanupCalls++; return execution.current()?.running || executionLive(execution.current()) || controlPending(state.get(id).control)
       ? { status: "pending", reason: "author execution has not settled" } : { status: "retained", reason: "local work preserved" }; } };
   return { id, state, clock, raw, execution, gh, calls, ctx, tick: () => makeTick(ctx).tickEntry(id, state.get(id)),
     entry: () => state.get(id), cleanups: () => cleanupCalls,
@@ -170,4 +171,32 @@ test("merged-author retirement retains real uncommitted and unpublished task wor
   assert.equal(existsSync(path), true);
   assert.equal(readFileSync(join(path, "app.txt"), "utf8"), "uncommitted correction\n");
   assert.equal(readFileSync(join(path, "unpublished.txt"), "utf8"), "retain me\n");
+});
+
+test("merged authors settle queued corrections before cleanup despite pending provider health", async t => {
+  for (const action of ["message", "resume", "recheck"]) await t.test(action, async t => {
+    const w = await world(t), note = action === "message" ? "Preserve the full existing post." : "";
+    const control = { id: "7e85d332-0a21-49b4-87e7-a0fa851212e1", action, note, status: "queued", interrupt: false, at: T0 };
+    const history = [{ id: "older-control", action: "message", status: "failed", note: "Earlier operator context" }];
+    w.state.update(w.id, { control, control_history: history });
+    w.ctx.providerHealth = { get: () => ({ ok: false, pending: true }) };
+    await w.tick();
+    assert.equal(w.entry().state, STATES.done); assert.equal(w.entry().control.status, "failed");
+    assert.equal(w.entry().control.id, control.id); assert.equal(w.entry().control.note, note);
+    assert.match(w.entry().control.message, /follow-up PRD/);
+    assert.deepEqual(w.entry().control_history, history);
+    assert.equal(w.cleanups(), 1); assert.equal(w.raw.started.length, 1);
+  });
+});
+
+test("unconfirmed remote cancellation retains queued input until the owned run settles", async t => {
+  const w = await world(t, { remote: true, delayed: true });
+  w.state.update(w.id, { control: { id: "83c60b58-5e0f-4b6d-b68d-42b1f03a87b6", action: "message", note: "Keep existing behavior", status: "queued", interrupt: false, at: T0 } });
+  w.ctx.providerHealth = { get: () => ({ ok: false, pending: true }) };
+  await w.tick();
+  assert.equal(w.entry().control.status, "queued"); assert.equal(w.cleanups(), 0);
+  w.confirm(); w.clock.advance(3); await w.tick();
+  assert.equal(w.entry().state, STATES.done); assert.equal(w.entry().control.status, "failed");
+  assert.equal(w.entry().control.note, "Keep existing behavior");
+  assert.equal(w.calls.filter(c => c === "cancel").length, 1);
 });
