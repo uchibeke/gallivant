@@ -73,6 +73,16 @@ test("local edits, untracked files, unpublished branches, stashes and Git locks 
   }
 });
 
+test("unproved temporary ownership retains the checkout instead of blocking terminal closeout forever", async t => {
+  const w = fixture(t), env = runtimeEnvironment(process.env, process.execPath, w.path);
+  prepareRuntimeCache(w.path, env);
+  t.after(() => rmSync(env.TMPDIR, { recursive: true, force: true }));
+  writeFileSync(join(env.TMPDIR, ".runtime-owner.json"), "unproved ownership");
+  const result = await cleanupMergedWorkspace(w.ctx, w.id, w.entry, w.pr);
+  assert.equal(result.status, "retained"); assert.match(result.reason, /ownership changed/);
+  assert.equal(existsSync(w.path), true); assert.equal(existsSync(env.TMPDIR), true);
+});
+
 test("cleanup Git probes never execute worker-defined fsmonitor hooks or clean/process filters", async t => {
   const w = fixture(t), marker = join(w.home, "callback-executed"), script = join(w.path, ".git", "worker-callback");
   writeFileSync(join(w.path, ".gitattributes"), "app.txt filter=probe\n");
