@@ -660,6 +660,14 @@ Host observations keep their normal cadence; cleanup preserves local work. It re
 does not invent passing CI, reviewer clearance or an APort completion decision. Cancelled chains stay cancelled and
 changed successor briefs still require an explicit plan review and resnapshot.
 
+### Runtime scratch directories
+
+Local harnesses receive a private, canonical temporary directory per task. Its short path supports Unix sockets
+and avoids executors rejecting symlinked writable roots. npm's cache stays in the task clone. New dispatches leave
+older workers' temporary aliases intact; merged-workspace cleanup removes scratch only after execution settles
+and directory ownership is verified. If an older run reports a symlinked temporary root, update and resume the
+same task; do not relax its sandbox or discard the checkout.
+
 ## `gallivant recheck <handle>`
 
 Queue a new evaluation of an existing PR's checks, review and completion gate.
