@@ -89,6 +89,10 @@ A maintainer can merge before Gallivant records readiness. Once the owned author
 that exact PR merged into the planned base, Gallivant closes the run and releases its successor, including after
 a conflict repair. Missing CI, review or APort completion evidence remains unverified; observing your merge never
 creates an approval or changes failed attestations. Cleanup uses the usual ownership checks and retains local work.
+If its accepted author is still running, the coordinator observes the merge at the existing host polling cadence,
+retires that exact execution through its cancellation ledger, and waits for confirmed cessation before cleanup
+or successor dispatch. An unavailable host or unproved identity cannot terminate work; an unconfirmed remote
+cancellation stays pending without sending another accepted cancellation or publishing late results.
 Dirty recovery, ambiguous ownership,
 failed pushes, changed inputs and exhausted or duplicate repair attempts retain the checkout and stop with the
 [named repair reason](commands.md#base-repair-troubleshooting). Fix the current task's evidence before retrying the
