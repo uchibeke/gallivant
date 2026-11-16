@@ -421,6 +421,13 @@ gallivant say agent-passport#396 --note "The external blocker is resolved; conti
 
 Recheck returns the entry to watching without resetting its iteration count or check dispatch markers. The existing loop reads checks, review and the completion gate again. It does not rerun GitHub Actions or override a failed check. Unchanged failures stop again without spending another fixer round. To deliberately reset a spent round budget, use `register`.
 
+For GitHub legacy status contexts left pending by a failed workflow, the adapter can use the linked Actions run as
+failure evidence. The link must identify the same repository and run; authenticated API evidence must prove a terminal
+failure and match the context's current-attempt time window. A separate workflow head is permitted because repository
+workflows can report on several PRs. The normal CI fixer receives the failure, while the original pending status remains
+in the record. Workflow success never substitutes for a successful current-head status. Reads are bounded and cached;
+unavailable, stale or contradictory evidence leaves the check pending. Actions API read access is required for this recovery.
+
 An agent execution failure requires **Resume agent**, not Recheck. Recognized
 temporary connection failures have [bounded automatic recovery](network-recovery.md);
 status shows their next attempt. Recheck refuses to clear that failure or its
