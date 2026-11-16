@@ -91,7 +91,8 @@ test("foreign, malformed and ambiguous URLs are never fetched", async t => {
 test("stale, contradictory and unbound API records retain pending", async t => {
   for (const [name, patch] of Object.entries({ id: { id: RUN + 1 }, repository: { repository: { id: 123, full_name: "other/repo" } },
     "repository-id": { repository: { id: null, full_name: REPO } }, url: { html_url: "https://github.com/other/repo/actions/runs/123" },
-    head: { head_sha: "short" }, attempt: { run_attempt: 0 }, "invalid-time": { updated_at: "invalid" },
+    head: { head_sha: "short" }, attempt: { run_attempt: 0 }, "invalid-status": { status: ["completed"] },
+    "invalid-conclusion": { conclusion: ["failure"] }, "invalid-time": { updated_at: "invalid" },
     "future-time": { updated_at: at(8) }, "before-status": { updated_at: at(1) }, "newer-attempt": { run_attempt: 2, run_started_at: at(3) },
     "reversed-time": { run_started_at: at(-1) } })) await t.test(name, async () => {
     const w = world({ record: id => workflow(id, patch) }), pr = await w.view();
@@ -123,6 +124,11 @@ test("bounded rotating reads qualify every context without duplicate reads for o
   assert.equal(w.calls.length, 10); assert.equal(new Set(w.calls).size, 10);
   const shared = world({ check: checks.map(c => ({ ...c, targetUrl: url(RUN) })) });
   assert.equal((await shared.view()).statusCheckRollup.every(c => c.outcome === "failed"), true); assert.equal(shared.calls.length, 1);
+});
+
+test("returned diagnostic evidence cannot mutate the authenticated workflow cache", async () => {
+  const w = world(), first = await w.view(); first.statusCheckRollup[0].actionsRun.conclusion = "success";
+  assert.equal((await w.view()).statusCheckRollup[0].outcome, "failed"); assert.equal(w.calls.length, 1);
 });
 
 test("closed PRs, ordinary check runs and already-final status contexts do not incur enrichment reads", async () => {
