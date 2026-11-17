@@ -195,7 +195,7 @@ Local task submission:
 8. Copies those snapshots into the checkout at their original repository paths, creating directories as needed. The PRD is usually only in your own checkout; this copy lets the session commit it with the implementation. Copies in the session's checkout are writable and are never read back for a decision.
 9. Starts the session detached with the PRD as its prompt, records the session id, and remembers the repo for recovery.
 
-The entry is `running` until the daemon sees the run end. Then either a PR exists on the branch and the entry enters `pr-open`, or a successful worker that did not open one stops with `no-pr`. A failed or incomplete worker without a PR stops with `harness-error`; inspect its run log. Recognized terminal connection failures use the bounded [network recovery](network-recovery.md) path instead.
+The entry is `running` until the daemon sees the run end. Then either a PR exists on the branch and the entry enters `pr-open`, or a successful worker that did not open one stops with `no-pr`. A failed or incomplete worker without a PR stops with `harness-error`; inspect its run log. Recognized terminal connection, model-capacity and service-busy failures use the bounded [provider recovery](network-recovery.md) path instead.
 
 Workers must collect verification results before returning. Claude launches disable
 native background shell/subagent execution and disallow `Monitor`, which otherwise
@@ -429,7 +429,7 @@ in the record. Workflow success never substitutes for a successful current-head 
 unavailable, stale or contradictory evidence leaves the check pending. Actions API read access is required for this recovery.
 
 An agent execution failure requires **Resume agent**, not Recheck. Recognized
-temporary connection failures have [bounded automatic recovery](network-recovery.md);
+temporary connection and provider-capacity failures have [bounded automatic recovery](network-recovery.md);
 status shows their next attempt. Recheck refuses to clear that failure or its
 recovery budget. Authentication, policy and uncertain-launch failures still need
 operator intervention. Existing stopped jobs require one explicit resume after upgrade.
