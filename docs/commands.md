@@ -576,8 +576,8 @@ recreated from the branch first; the session's memory lives in the harness, not 
 
 When the checkout is clean, the base branch is merged in before the session carries on, which is the case that needs it most: an entry stopped
 hours or days ago and the base has moved since. The session is told about the merge commit so it does not try to undo a
-commit that is not its own. A merge that conflicts is recorded and aborted. An eligible watched PR enters the same
-bounded base repair operation as the daemon; other entries stop with the conflict and recovery instructions. See [keeping a
+commit that is not its own. A merge that conflicts is recorded and aborted. An eligible watched PR or explicitly resumed
+stopped PR enters the same bounded base repair operation as the daemon; other entries stop with the conflict and recovery instructions. See [keeping a
 branch on its base](config.md#keeping-a-branch-on-its-base).
 
 A dirty checkout is preserved: the resumed session is explicitly told to commit only its task changes, fetch and merge the intended base into the task branch, resolve conflicts within scope, then verify and push. Unrelated edits that prevent the merge must be reported rather than discarded or committed. This exception does not authorize merging a PR, writing to the base, rebasing or force-pushing.
@@ -659,6 +659,16 @@ For a recorded repair, `resume` reconciles that exact operation and remote proof
 retry the same operation after its prerequisite is restored; an ambiguous or paid launch cannot spend another operation.
 It cannot change session or resnapshot its instructions. An unresolved merge or unrelated edits remain intact.
 Transient Git/API observations use the normal bounded retry counter and never create a model retry loop.
+
+**Resume agent** and **Send message** use this same repair path after the recorded worker has settled. A message is
+retained with the repair and quoted to the continuing session; it cannot change the approved brief or weaken a guardrail.
+Only the exact request currently being applied may launch that repair. Cancelling, replacing or revoking the request
+still blocks dispatch. CLI notes use the same 4,000-character limit as UI messages and are rejected before Git changes
+when oversized. Automatic provider recovery does not inherit this explicit operator repair approval: a new conflicting
+base still requires an operator continuation, and an ambiguous or already paid failed repair cannot silently relaunch.
+If an operator has already repaired and pushed a failed operation, Resume reconciles its proof and returns to watching
+without starting another worker. Send message first reconciles that proof, then actually delivers the correction through
+the normal continuation checks. A merged PR or superseding cancellation still prevents that follow-up.
 
 If you merge a PR yourself, the daemon observes the host's merge into the approved base, closes the run and evaluates
 the next chain milestone. This also works after a conflict repair or a push between polls. If an accepted author is

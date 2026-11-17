@@ -9,6 +9,8 @@ import { makeExecution } from "../lib/execution.mjs";
 import { makeState, newEntry, entryId } from "../lib/state.mjs";
 import { makeTick } from "../lib/tick.mjs";
 import { resume } from "../lib/commands/resume.mjs";
+import { requestControl, applyControl, MAX_NOTE } from "../lib/control.mjs";
+import { quote } from "../lib/prompt.mjs";
 import { makeHostRegistry } from "../lib/hosts.mjs";
 import { execFileAsync } from "../lib/process.mjs";
 import { CONFIG, GOOD_PRD, T0, at, tempHome, makeClock, fakeRunner, fakeGh, fakeNotify, fakeCredential, fakeIdentity, silentLog, prFixture, claudeResultLines, review, STATES, harnessBin } from "./helpers.mjs";
@@ -89,6 +91,145 @@ function world(t, { hostConflict = true, superseded = false, baseUpdate = "confl
   };
   return { ...ctx, ctx, home, id, tree, origin, operator, prd, source, head, base, g, calls, raw, runner, entry, tick, beginMerge, resolveMerge };
 }
+
+// A real operator continuation sees a clean task clone with private carried
+// inputs ignored by Git, while the repair proof still validates their bytes.
+function continuationWorld(t, options) {
+  const w = world(t, options);
+  write(join(w.tree, ".git", "info", "exclude"), `/${w.prd}\n/${w.source}\n`);
+  w.ctx.home = w.home;
+  w.ctx.coordinatorHealth = () => ({ alive: true, stale: false });
+  w.ctx.config.harness = { ...CONFIG.harness, claude: { ...CONFIG.harness.claude, bin: harnessBin(w.home, "claude") } };
+  return w;
+}
+
+test("owned UI resume and message repair conflicts from watching and explicitly stopped tasks", async t => {
+  for (const action of ["resume", "message"]) for (const state of [STATES.prOpen, STATES.needsHuman]) await t.test(`${action} ${state}`, async t => {
+    const w = continuationWorld(t, { state });
+    if (state === STATES.needsHuman) {
+      w.raw.finish(claudeResultLines(), { exit: 1 });
+      w.state.update(w.id, e => ({ reason: "harness-error", last: { ...e.last, exit: 1 } }));
+    }
+    const note = action === "message" ? "Preserve the guest path.\n````An operator clarification is not a new brief.````" : "";
+    const request = requestControl(w.ctx, { handle: w.id, action, note, requestId: `repair-${action}` });
+    await applyControl(w.ctx, w.id);
+    const entry = w.entry(), prompt = w.raw.started.at(-1).args.at(-1);
+    assert.equal(entry.control.id, request.id); assert.equal(entry.control.status, "applied", JSON.stringify(entry));
+    assert.equal(entry.base_repair.status, "running"); assert.equal(entry.state, STATES.prOpen);
+    assert.equal(entry.iteration, 1); assert.equal(w.raw.started.length, 2);
+    assert.equal(entry.firstPartyReview, null); assert.equal(entry.review_readiness, null);
+    assert.ok(entry.completionEvidence.delivery.invalidatedAt, "old completion cannot survive the repaired head");
+    if (note) { assert.equal(entry.base_repair.operatorNote, note); assert.ok(prompt.includes(quote(note))); assert.match(prompt, /does not change the approved brief/); }
+    assert.equal(readFileSync(join(w.tree, w.source), "utf8"), "Keep approved security requirements.\n");
+    await w.tick(); assert.equal(w.raw.started.length, 2, "the applied control cannot duplicate the repair");
+  });
+});
+
+test("explicit CLI resume can repair a clean conflict after a settled harness failure", async t => {
+  const w = continuationWorld(t, { state: STATES.needsHuman });
+  w.raw.finish(claudeResultLines(), { exit: 1 });
+  w.state.update(w.id, e => ({ reason: "harness-error", last: { ...e.last, exit: 1 } }));
+  const result = await resume(w.ctx, { handle: w.id });
+  assert.equal(result.run, w.entry().last.run); assert.equal(w.entry().base_repair.status, "running");
+  assert.equal(w.raw.started.length, 2); assert.equal(w.entry().iteration, 1);
+});
+
+test("oversized operator repair messages fail before any Git or dispatch side effects", async t => {
+  const w = continuationWorld(t), before = structuredClone(w.entry()), calls = w.calls.length;
+  await assert.rejects(() => resume(w.ctx, { handle: w.id, note: "x".repeat(MAX_NOTE + 1) }), /Messages must be at most/);
+  assert.deepEqual(w.entry(), before); assert.equal(w.calls.length, calls);
+  assert.equal(w.raw.started.length, 1); assert.equal(w.entry().base_repair, undefined);
+});
+
+test("superseding or revoked UI ownership still fences repair before paid dispatch", async t => {
+  for (const change of ["new-id", "cancel", "queued", "removed"]) await t.test(change, async t => {
+    const w = continuationWorld(t), clean = w.git.assertClean;
+    const request = requestControl(w.ctx, { handle: w.id, action: "resume", requestId: "original-repair" });
+    let changed = false;
+    w.git.assertClean = async (...args) => {
+      await clean(...args);
+      if (!changed && w.entry().base_repair?.status === "prepared") {
+        changed = true;
+        const current = w.entry().control;
+        w.state.update(w.id, { control: change === "removed" ? null : { ...current,
+          ...(change === "new-id" ? { id: "replacement-repair" } : {}),
+          ...(change === "cancel" ? { id: "cancel-repair", action: "cancel", status: "queued" } : {}),
+          ...(change === "queued" ? { status: "queued" } : {}) } });
+      }
+    };
+    await applyControl(w.ctx, w.id);
+    assert.ok(changed); assert.equal(w.raw.started.length, 1, "a stale owner must not submit");
+    assert.equal(w.entry().base_repair.charged, false); assert.equal(w.entry().iteration, 0);
+    if (change === "new-id") assert.equal(w.entry().control.id, "replacement-repair");
+    if (change === "cancel") { assert.equal(w.entry().control.id, "cancel-repair"); assert.equal(w.entry().control.status, "queued"); }
+    assert.notEqual(w.entry().control?.status, "applied");
+    assert.notEqual(w.entry().last.run, request.id);
+  });
+});
+
+test("UI retry of a proven unsubmitted repair retains its operation and current message", async t => {
+  const w = continuationWorld(t); w.ctx.hosts.credential = fakeCredential(null);
+  await w.tick();
+  const op = structuredClone(w.entry().base_repair);
+  assert.equal(op.charged, false); assert.equal(w.raw.started.length, 1);
+  w.ctx.hosts.credential = fakeCredential();
+  const note = "Keep the existing accessibility behavior while resolving this conflict.";
+  requestControl(w.ctx, { handle: w.id, action: "message", note, requestId: "retry-repair" });
+  await applyControl(w.ctx, w.id);
+  assert.equal(w.entry().control.status, "applied", JSON.stringify(w.entry()));
+  assert.equal(w.entry().base_repair.operationId, op.operationId);
+  assert.equal(w.entry().base_repair.operatorNote, note);
+  assert.ok(w.raw.started.at(-1).args.at(-1).includes(quote(note)));
+  assert.equal(w.entry().iteration, 1); assert.equal(w.entry().base_repair_attempts.length, 1);
+  assert.equal(w.raw.started.length, 2);
+});
+
+test("automatic provider recovery cannot use explicit conflict repair admission", async t => {
+  const w = continuationWorld(t, { state: STATES.needsHuman });
+  w.state.update(w.id, { reason: "provider-network" });
+  await assert.rejects(() => resume(w.ctx, { handle: w.id, automaticNetworkRecovery: true }), /cannot be merged/);
+  assert.equal(w.raw.started.length, 1); assert.equal(w.entry().base_repair, undefined); assert.equal(w.entry().iteration, 0);
+});
+
+test("a pushed repair reconciliation reports watching or actually delivers an operator message once", async t => {
+  for (const action of ["resume", "message"]) await t.test(action, async t => {
+    const w = continuationWorld(t); await w.tick(); await w.resolveMerge();
+    w.raw.finish(claudeResultLines(), { exit: 1 }); await w.tick();
+    assert.equal(w.entry().base_repair.status, "blocked"); assert.equal(w.raw.started.length, 2);
+    const note = action === "message" ? "After the repair, also preserve the verified guest behavior." : "";
+    requestControl(w.ctx, { handle: w.id, action, note, requestId: "reconcile-pushed-repair" });
+    await applyControl(w.ctx, w.id);
+    assert.equal(w.entry().base_repair.status, "verified"); assert.equal(w.entry().control.status, "applied", JSON.stringify(w.entry()));
+    if (note) {
+      assert.equal(w.raw.started.length, 3); assert.ok(w.raw.started.at(-1).args.at(-1).includes(quote(note)));
+      assert.equal(w.entry().control.run, w.entry().last.run);
+    } else {
+      assert.equal(w.raw.started.length, 2, "a plain proof reconciliation cannot buy a second worker");
+      assert.equal(w.entry().control.run, null); assert.match(w.entry().control.message, /Watching PR checks/);
+    }
+    await applyControl(w.ctx, w.id); assert.equal(w.raw.started.length, note ? 3 : 2);
+  });
+});
+
+test("merge or superseding cancellation during pushed repair proof blocks the follow-up message", async t => {
+  for (const change of ["merged", "cancel"]) await t.test(change, async t => {
+    const w = continuationWorld(t); await w.tick(); await w.resolveMerge();
+    w.raw.finish(claudeResultLines(), { exit: 1 }); await w.tick();
+    requestControl(w.ctx, { handle: w.id, action: "message", note: "A follow-up correction.", requestId: "proof-follow-up" });
+    const fetch = w.git.fetchBranchHead;
+    w.git.fetchBranchHead = async (...args) => {
+      const result = await fetch(...args);
+      if (change === "merged") w.gh.data.pr.state = "MERGED";
+      else w.state.update(w.id, { control: { id: "new-cancel", action: "cancel", status: "queued", at: T0 } });
+      return result;
+    };
+    await applyControl(w.ctx, w.id);
+    assert.equal(w.entry().base_repair.status, "verified", "the existing remote push proof remains recorded");
+    assert.equal(w.raw.started.length, 2, "terminal integration or a new owner cannot launch a follow-up");
+    if (change === "cancel") { assert.equal(w.entry().control.id, "new-cancel"); assert.equal(w.entry().control.status, "queued"); }
+    else assert.equal(w.entry().control.status, "failed");
+  });
+});
 
 // A real task can carry a release guide and explicitly approve updating it.
 // Its published result must not replace the coordinator's requirement snapshot.
