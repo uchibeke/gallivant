@@ -564,7 +564,7 @@ test("resume merges the base in before carrying on, and tells the session about 
   assert.ok(r.run);
 });
 
-test("resume refuses a conflicting merge without repair ownership and says how to resolve it", async () => {
+test("resume refuses a conflicting merge with a different observed base and says how to recover", async () => {
   const w = resumeWorld({}, { git: { mergeBase: async (_d, base) => ({ merged: false, conflict: true, base, why: "CONFLICT (content): Merge conflict in src/a.ts" }) } });
   await assert.rejects(() => resume(w.ctx, { handle: "widget#142" }), e => {
     assert.match(e.message, /cannot be merged with origin\/staging/);
@@ -574,8 +574,8 @@ test("resume refuses a conflicting merge without repair ownership and says how t
   });
   assert.equal(w.runner.started.length, 0, "nothing was spawned");
   assert.equal(w.entry().state, STATES.needsHuman, "the task remains stopped");
-  assert.equal(w.entry().reason, "base-repair-ownership", "explicit continuation still requires a durable repair ledger");
-  assert.match(w.entry().last.event, /durable task execution ledger/);
+  assert.equal(w.entry().reason, "base-repair-ownership", "explicit continuation must match the PR target base");
+  assert.match(w.entry().last.event, /Observed PR branch\/base differs from the approved task/);
   assert.equal(w.entry().base_repair, undefined, "no operation was authorized");
   assert.equal(w.entry().base_repair_attempts, undefined, "the input was not consumed");
   assert.equal(w.entry().iteration, 1, "no paid round was charged");
