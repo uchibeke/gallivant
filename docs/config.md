@@ -279,8 +279,21 @@ authority or deployment authority are widened. Changed inputs retain the normal 
 
 Restart recovery reconciles only the recorded operation and session. It never aborts or resets an unfinished repair.
 Dirty files, unknown ownership, unresolved merges and failed pushes stop with the worktree intact. Unchanged approved
-brief/source overlays may remain untracked; recovery never stages or deletes them to make the tree clean. After a
-push, Git must prove that the observed remote head contains both the repair commit and pinned base. Old readiness and
+brief/source overlays may remain untracked; recovery never stages or deletes them to make the tree clean. A tracked
+private input that exactly matches its approved snapshot may temporarily use its clean committed bytes for a normal
+base merge. Its original bytes and permissions are backed up privately under the checkout's Git directory, then
+restored after the merge or a successful conflict abort. The approved copy is never staged or included in that merge
+commit. Unrelated edits, staged files, links and changed ownership still block this path.
+
+If that temporary input handling reveals real code conflicts, recovery restores the inputs and stops with
+`base-repair-overlay` before charging or launching a repair worker. A raw worker merge would otherwise fail on the
+same approved input. An operator must own that merge, keep the approved working copies out of its commit, resolve
+and verify the intended changes, then resume the same task. This case is not yet an autonomous repair path. If an
+abort or restoration fails, the checkout and private `gallivant-merge-overlays` backup remain intact; another merge
+is refused until the owner reconciles the index and restores those exact approved bytes. Do not delete that backup
+to force continuation or commit its private contents.
+
+After a push, Git must prove that the observed remote head contains both the repair commit and pinned base. Old readiness and
 head-bound review evidence are invalidated; new-head CI, required reviewer clearance and the completion gate still
 decide readiness. See [repair troubleshooting](commands.md#base-repair-troubleshooting).
 

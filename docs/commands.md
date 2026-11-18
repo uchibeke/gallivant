@@ -649,6 +649,7 @@ Use `gallivant why <handle>` to inspect a repair stop:
 | `base-repair-prerequisite` | Restore the named host, local continuation capability, base, credential or provider prerequisite. |
 | `base-repair-ownership` | Restore the matching repository, branch, session and execution ledger. Never delete the operation to force another launch. |
 | `base-repair-dirty`, `base-repair-unresolved` | Preserve the index and files. Reconcile unrelated edits explicitly; finish the owned merge, verification and commit in its task checkout. |
+| `base-repair-overlay` | Approved private inputs were restored after a conflicting merge, or their private recovery backup needs attention. An operator must own the merge while keeping those approved copies out of its commit. Preserve `gallivant-merge-overlays` under the checkout's Git directory until the index and exact approved bytes are reconciled; then resume the same task. No automatic repair worker is charged for this limitation. See [approved input handling](config.md#keeping-a-branch-on-its-base). |
 | `base-repair-push`, `base-repair-no-merge` | Inspect the saved SHAs, finish the pinned merge and push the task branch. Resume after remote evidence agrees. |
 | `base-repair-failed` | Inspect the owned worker log and failed verification/provider result. No second paid operation is launched automatically. |
 | `base-repair-duplicate`, `base-repair-iterations` | Review the original failure and existing iteration allowance. Recheck never repeats the same input or resets the budget. |
