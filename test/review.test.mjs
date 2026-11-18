@@ -13,7 +13,7 @@ import { writeJsonAtomic } from "../lib/fs.mjs";
 import { resume } from "../lib/commands/resume.mjs";
 import { makeState, newEntry, STATES } from "../lib/state.mjs";
 import { makeTick } from "../lib/tick.mjs";
-import { startPrompt, resumePrompt, fixPrompt } from "../lib/prompt.mjs";
+import { startPrompt, resumePrompt, fixPrompt, registerPrompt, baseRepairPrompt } from "../lib/prompt.mjs";
 import { model } from "../lib/commands/status.mjs";
 import { READY_LABEL } from "../lib/gh.mjs";
 import { CONFIG, GOOD_PRD, T0, tempHome, fakeGh, fakeGit, fakeRunner, fakeNotify, fakeCredential, fakeIdentity, makeClock, silentLog, harnessBin } from "./helpers.mjs";
@@ -113,6 +113,27 @@ test("only sessions without a PR are told to open one, using the recorded base",
   }
   assert.match(fixPrompt({ repo: "acme/widget", pr: 142, events: [] }), /Do not open new PRs/);
   assert.match(resumePrompt({ repo: "acme/widget", pr: 142 }), /Do not open new PRs/);
+});
+
+test("every implementation path submits evidence for coordinator-owned completion without worker account credentials", () => {
+  const prompts = [
+    startPrompt({ prd: { text: GOOD_PRD }, repo: "acme/widget", branch: "feature", base: "staging", verify: [] }),
+    resumePrompt({ repo: "acme/widget", pr: null, branch: "feature", base: "staging", reason: "no-pr" }),
+    resumePrompt({ repo: "acme/widget", pr: 142, branch: "feature", base: "staging" }),
+    fixPrompt({ repo: "acme/widget", pr: 142, events: [] }),
+    registerPrompt({ repo: "acme/widget", pr: 142 }),
+    baseRepairPrompt({ repo: "acme/widget", pr: 142, branch: "feature", prd: REL,
+      operation: { operationId: "repair", head: "a".repeat(40), baseSha: "b".repeat(40), base: "staging" } }),
+  ];
+  for (const prompt of prompts) {
+    assert.match(prompt, /coordinator builds the per-task passport/i);
+    assert.match(prompt, /observed CI and required reviewer clearance/);
+    assert.match(prompt, /do not need APORT_AGENT_ID or APORT_API_KEY/);
+    assert.match(prompt, /separate skill's completion call before submitting that review PR/);
+    assert.match(prompt, /aport_decision records PRD readiness, not task completion/);
+    assert.match(prompt, /Never claim an APort ALLOW or mark the task complete yourself/);
+    assert.match(prompt, /actual credential or permission failure.*remains a blocker/);
+  }
 });
 
 test("resume refuses changed supporting bytes until accepted, then updates both copies and the prompt", async () => {
