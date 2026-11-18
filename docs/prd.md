@@ -220,6 +220,8 @@ Review fixes return to the same session with current findings and checks. The
 
 Passing the contract gets a PRD started. Getting the PR to `ready-for-human` needs a second gate at the other end, shaped after APort's `deliverable.task.complete.v1` policy: the agent must attest, with evidence, that every acceptance criterion holds.
 
+The implementation session submits a regular PR for review with its evidence receipt; it does not mark the task complete. The coordinator owns completion evaluation, builds the per-task passport and uses observed CI and required review results. Workers do not need `APORT_AGENT_ID`, `APORT_API_KEY`, a newly registered passport or a separate completion-skill call to open that review PR. The brief's `aport_decision` records readiness of the brief, not completion of the implementation, and its availability through a decision lookup is not a publication prerequisite. Actual missing credentials for the implementation or required verification still block those operations and leave the affected attestations unmet.
+
 Each Acceptance criteria bullet becomes a criterion with a stable id, `ac-1`, `ac-2`, in order. The session is told, at start and on every fix round, to end the PR body with a receipt:
 
 ````markdown
