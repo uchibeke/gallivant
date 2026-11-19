@@ -163,6 +163,87 @@ test("Board writes use stable IDs, noSync, a dedicated owner queue, and resolve 
   assert.deepEqual(calls.findLast(call => call[0] === "label").slice(1), [delivered.ownerItemId, { set: { state: "resolved" }, if: { state: "open" } }]);
 });
 
+test("intake events keep canonical thread identity, link by bare intake ID, and resolve answered questions", async () => {
+  const home = tempHome(), cfg = config(), calls = [];
+  const handle = {
+    me: async () => ({ actor: { id: "actor-1" }, can: { work: ["post", "label"], "needs-owner": ["post", "label"] } }),
+    schema: async name => ({ name: name.split("@")[0], version: Number(name.split("@")[1]) }),
+    post: async (channel, options) => { calls.push(["post", channel, options]); return { id: options.id }; },
+    reply: async (id, options) => { calls.push(["reply", id, options]); return { id: options.id }; },
+    label: async (id, options) => { calls.push(["label", id, options]); return { id }; },
+  };
+  const adapter = createBoardCollaborationAdapter(cfg, { clientFor: async () => ({ handle, block: (_schema, data) => JSON.stringify(data) }) });
+  const service = createCollaborationService({ adapter, store: createCollaborationStore(home), config: cfg });
+  const intakeId = "task-0123456789abcdef01234567", threadTaskId = `acme/widget/${intakeId}`;
+  const needsInput = { taskId: intakeId, repo: "acme/widget", revision: 1, status: "needs-input", updatedAt: T0, questions: [{ id: "q1" }] };
+  const accepted = { ...needsInput, revision: 2, status: "ready", updatedAt: "2026-09-24T02:01:00.000Z", readiness: { digest: "ready-digest" }, questions: [] };
+  service.observeTask(null, needsInput, { taskId: threadTaskId, intakeId });
+  service.observeTask(needsInput, accepted, { taskId: threadTaskId, intakeId });
+
+  const events = Object.values(createCollaborationStore(home).read().deliveries).map(item => item.event);
+  assert.deepEqual(events.map(event => event.task.id), [threadTaskId, threadTaskId]);
+  for (const event of events) assert.equal(new URL(event.links.task).searchParams.get("task"), intakeId);
+  assert.deepEqual(await service.flush(), { ok: true, delivered: 2 });
+  const ownerPost = calls.find(call => call[0] === "post" && call[1] === "needs-owner");
+  assert.ok(ownerPost, "unanswered intake questions enter the owner queue");
+  assert.deepEqual(calls.findLast(call => call[0] === "label").slice(1), [ownerPost[2].id, { set: { state: "resolved" }, if: { state: "open" } }]);
+});
+
+test("a failed owner transition blocks later task transitions until its retry succeeds", async () => {
+  const home = tempHome(), clock = makeClock(), calls = [], cfg = config({ significant_events: ["needs-owner", "resumed"], retry: { max_attempts: 3, base_seconds: 1, max_seconds: 2 } });
+  let failOwner = true;
+  const adapter = recorder({
+    async deliver(thread, event) {
+      calls.push(event.transition.type);
+      if (event.transition.type === "needs-owner" && failOwner) { failOwner = false; throw Object.assign(new Error("temporary timeout"), { code: "timeout" }); }
+      if (event.transition.type === "needs-owner") return { threadId: "thread-1", externalId: event.id, ownerItemId: "owner-1" };
+      assert.equal(thread.ownerItemId, "owner-1", "resume observes the successfully saved owner item");
+      return { threadId: "thread-1", externalId: event.id, ownerItemId: thread.ownerItemId };
+    },
+  });
+  const service = createCollaborationService({ adapter, store: createCollaborationStore(home), config: cfg, clock });
+  const opened = entry("pr-open"), blocked = entry("needs-human", { reason: "checks-red", updated_at: "2026-09-24T02:01:00.000Z" });
+  const resumed = entry("pr-open", { control: { id: "recheck-1", action: "recheck" }, updated_at: "2026-09-24T02:02:00.000Z" });
+  service.observeEntry(TASK, opened, blocked);
+  service.observeEntry(TASK, blocked, resumed);
+
+  assert.deepEqual(await service.flush(), { ok: true, delivered: 1 });
+  assert.deepEqual(calls, ["needs-owner"], "the later resume cannot overtake a failed owner write");
+  assert.deepEqual(await service.flush(), { ok: true, delivered: 0 });
+  clock.advance(1);
+  assert.deepEqual(await service.flush(), { ok: true, delivered: 2 });
+  assert.deepEqual(calls, ["needs-owner", "needs-owner", "resumed"]);
+});
+
+test("repeated rechecks in one run have distinct events and close each corresponding owner item", async () => {
+  const home = tempHome(), cfg = config({ significant_events: ["needs-owner", "resumed"] }), calls = [];
+  const handle = {
+    me: async () => ({ actor: { id: "actor-1" }, can: { work: ["post", "label"], "needs-owner": ["post", "label"] } }),
+    schema: async name => ({ name: name.split("@")[0], version: Number(name.split("@")[1]) }),
+    post: async (channel, options) => { calls.push(["post", channel, options]); return { id: options.id }; },
+    reply: async (id, options) => { calls.push(["reply", id, options]); return { id: options.id }; },
+    label: async (id, options) => { calls.push(["label", id, options]); return { id }; },
+  };
+  const adapter = createBoardCollaborationAdapter(cfg, { clientFor: async () => ({ handle, block: (_schema, data) => JSON.stringify(data) }) });
+  const service = createCollaborationService({ adapter, store: createCollaborationStore(home), config: cfg });
+  const opened = entry("pr-open"), blocked1 = entry("needs-human", { reason: "checks-red", updated_at: "2026-09-24T02:01:00.000Z" });
+  const resumed1 = entry("pr-open", { control: { id: "recheck-1", action: "recheck", status: "applying" }, updated_at: "2026-09-24T02:02:00.000Z" });
+  const blocked2 = entry("needs-human", { reason: "checks-red", updated_at: "2026-09-24T02:03:00.000Z" });
+  const resumed2 = entry("pr-open", { control: { id: "recheck-2", action: "recheck", status: "applying" }, updated_at: "2026-09-24T02:02:00.000Z" });
+  service.observeEntry(TASK, opened, blocked1);
+  service.observeEntry(TASK, blocked1, resumed1);
+  service.observeEntry(TASK, resumed1, blocked2);
+  service.observeEntry(TASK, blocked2, resumed2);
+
+  const resumedEvents = Object.values(createCollaborationStore(home).read().deliveries).map(item => item.event).filter(event => event.transition.type === "resumed");
+  assert.equal(resumedEvents.length, 2);
+  assert.notEqual(resumedEvents[0].id, resumedEvents[1].id);
+  assert.deepEqual(await service.flush(), { ok: true, delivered: 4 });
+  const ownerIds = calls.filter(call => call[0] === "post" && call[1] === "needs-owner").map(call => call[2].id);
+  assert.equal(ownerIds.length, 2);
+  assert.deepEqual(calls.filter(call => call[0] === "label").map(call => call[1]), ownerIds);
+});
+
 test("deny, timeout, replay, and malformed Board responses are bounded and never mutate canonical state or disclose secrets", async () => {
   const home = tempHome(), clock = makeClock(), cfg = config({ significant_events: ["accepted"], retry: { max_attempts: 2, base_seconds: 1, max_seconds: 2 } });
   const canonical = join(home, "state.json"), original = '{"version":1,"entries":{"canonical":{"state":"running"}}}\n';
