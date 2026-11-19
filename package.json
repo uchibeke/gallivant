@@ -22,6 +22,10 @@
     "./task-delivery/views": "./lib/task_delivery_view.mjs",
     "./task-delivery/store": "./lib/task_delivery_store.mjs",
     "./task-delivery/mcp": "./lib/task_delivery_mcp.mjs",
+    "./collaboration": "./lib/collaboration.mjs",
+    "./collaboration/board": "./lib/board_collaboration.mjs",
+    "./collaboration/contracts": "./lib/collaboration_contract.mjs",
+    "./collaboration/store": "./lib/collaboration_store.mjs",
     "./runtime/coordinator": "./lib/coordinator.mjs",
     "./runtime/node": "./lib/runtime_node.mjs",
     "./runtime/state": "./lib/runtime_state.mjs",
@@ -98,10 +102,14 @@
     "smol-toml": "1.9.0"
   },
   "peerDependencies": {
-    "@modelcontextprotocol/sdk": "1.32.1"
+    "@modelcontextprotocol/sdk": "1.32.1",
+    "@vercel/board": "0.50.0"
   },
   "peerDependenciesMeta": {
     "@modelcontextprotocol/sdk": {
+      "optional": true
+    },
+    "@vercel/board": {
       "optional": true
     }
   },
