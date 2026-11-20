@@ -4,6 +4,7 @@ import { mkdirSync, writeFileSync, readFileSync, rmSync, symlinkSync, existsSync
 import { join, dirname } from "node:path";
 import { pathToFileURL } from "node:url";
 import { execFileSync } from "node:child_process";
+import { createHash } from "node:crypto";
 import { makeGit } from "../lib/git.mjs";
 import { makeExecution } from "../lib/execution.mjs";
 import { makeState, newEntry, entryId } from "../lib/state.mjs";
@@ -424,6 +425,28 @@ function withPublishedGuide(w, { eol = "\n" } = {}) {
   w.state.update(w.id, { cursor: { ...w.entry().cursor, fixed_sha: head } });
   return { guide, original, updated, brief, head };
 }
+
+test("coordinator repair prompt identifies immutable private overlays without publishing their contents or outputs", async t => {
+  const w = world(t), doc = withPublishedGuide(w);
+  const approved = w.ctx.readSource(w.id, w.source);
+  await w.tick();
+  assert.equal(w.entry().base_repair.status, "running");
+  const prompt = w.raw.started.at(-1).args.at(-1);
+  const manifest = JSON.parse(prompt.match(/paths and hashes only\):\n(\[[\s\S]*?\n\])/)[1]);
+  const sha256 = text => createHash("sha256").update(text, "utf8").digest("hex");
+  assert.deepEqual(manifest, [{ path: w.source, sha256: sha256(approved) }]);
+  assert.ok(!manifest.some(item => item.path === w.prd || item.path === doc.guide));
+  assert.ok(!prompt.includes(approved.trim()), "private source contents are not embedded in the manifest");
+  for (const pattern of [/expected private context, not unfinished task work/, /Missing or mismatched files, staged context, other dirty files/, /Do not commit, delete, rewrite or resnapshot private context/, /Git itself reports.*overwrite private context/, /Do not merge the PR/, /rebase or force-push/]) assert.match(prompt, pattern);
+  write(join(w.tree, w.source), "Worker-edited instructions are not approval.\n");
+  assert.notEqual(manifest[0].sha256, sha256(readFileSync(join(w.tree, w.source), "utf8")));
+  assert.equal(manifest[0].sha256, sha256(w.ctx.readSource(w.id, w.source)));
+  const edited = world(t);
+  write(join(edited.tree, edited.source), "Worker-edited instructions are not approval.\n");
+  await edited.tick();
+  assert.equal(edited.raw.started.length, 1, "edited context cannot authorize repair dispatch or a new manifest");
+  assert.equal(edited.ctx.readSource(edited.id, edited.source), approved);
+});
 
 for (const host of ["github.com", "bitbucket.org"]) test(`committed published context survives the next review round on ${host}`, async t => {
   for (const baseUpdate of ["none", "independent", "conflict"]) await t.test(baseUpdate, async t => {
