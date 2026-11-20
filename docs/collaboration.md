@@ -57,7 +57,7 @@ Add this block to `$GALLIVANT_HOME/config.json` and keep that file mode 600:
     "schema": "gallivant-task-transition@1",
     "significant_events": [
       "accepted", "started", "pr-opened", "needs-owner",
-      "stopped", "resumed", "ready"
+      "stopped", "resumed", "ready", "completed"
     ],
     "owner_decision_hours": 72,
     "retry": {
@@ -94,7 +94,8 @@ Only configured significant state changes are queued. The structured event
 contains a version, stable task/run/event idempotency key, transition and bounded
 reason, actor/source provenance, and dashboard link. A Needs owner event also
 contains a bounded requested decision and expiry and is posted to the dedicated
-queue. Pull-request URLs are included when present.
+queue. A `completed` event records a merged or closed pull request and resolves
+any outstanding owner item. Pull-request URLs are included when present.
 
 Prompts, transcripts, credentials, local paths, raw diffs, comments, checks,
 session output, logs and private configuration are never event inputs. Board

@@ -177,6 +177,37 @@ test("Board writes use stable IDs, noSync, a dedicated owner queue, and resolve 
   assert.deepEqual(calls.findLast(call => call[0] === "label").slice(1), [delivered.ownerItemId, { set: { state: "resolved" }, if: { state: "open" } }]);
 });
 
+test("merged and closed PR terminal writes resolve outstanding owner items", async () => {
+  for (const outcome of ["merged", "closed"]) {
+    const home = tempHome(), calls = [], cfg = config(), state = makeState(home);
+    const handle = {
+      me: async () => ({ actor: { id: "actor-1" }, can: { work: ["post", "label"], "needs-owner": ["post", "label"] } }),
+      schema: async name => ({ name: name.split("@")[0], version: Number(name.split("@")[1]) }),
+      post: async (channel, options) => { calls.push(["post", channel, options]); return { id: options.id }; },
+      reply: async (id, options) => { calls.push(["reply", id, options]); return { id: options.id }; },
+      label: async (id, options) => { calls.push(["label", id, options]); return { id }; },
+    };
+    const adapter = createBoardCollaborationAdapter(cfg, { clientFor: async () => ({ handle, block: (_schema, data) => JSON.stringify(data) }) });
+    const store = createCollaborationStore(home), service = createCollaborationService({ adapter, store, config: cfg });
+    const observed = withCollaborationState(state, service);
+    observed.put(TASK, entry("pr-open", { pr: 17, url: "https://github.com/acme/widget/pull/17" }));
+    observed.update(TASK, { state: "needs-human", reason: "checks-red", updated_at: "2026-09-24T02:01:00.000Z" });
+    assert.deepEqual(await service.flush(), { ok: true, delivered: 3 });
+    const ownerPost = calls.find(call => call[0] === "post" && call[1] === "needs-owner");
+    assert.ok(ownerPost, `${outcome} fixture starts with an open owner item`);
+
+    observed.update(TASK, {
+      state: "done", reason: null, updated_at: "2026-09-24T02:02:00.000Z",
+      last: { run: RUN, at: "2026-09-24T02:02:00.000Z", event: `PR ${outcome}` },
+    });
+    const completed = Object.values(store.read().deliveries).map(item => item.event).find(event => event.transition.type === "completed");
+    assert.equal(completed.transition.state, "done");
+    assert.equal(completed.transition.reason, `pr-${outcome}`);
+    assert.deepEqual(await service.flush(), { ok: true, delivered: 1 });
+    assert.deepEqual(calls.findLast(call => call[0] === "label").slice(1), [ownerPost[2].id, { set: { state: "resolved" }, if: { state: "open" } }]);
+  }
+});
+
 test("intake events keep canonical thread identity, link by bare intake ID, and resolve answered questions", async () => {
   const home = tempHome(), cfg = config(), calls = [];
   const handle = {
