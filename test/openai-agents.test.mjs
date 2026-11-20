@@ -13,6 +13,10 @@ import { validateAgentsConfig } from "../lib/openai_agents_config.mjs";
 import { agentsHttp } from "../lib/openai_agents_http.mjs";
 import { contentHash, prepareAgentsSources, AGENTS_WORKSPACE_HELPER } from "../lib/openai_agents_sources.mjs";
 import { start } from "../lib/commands/start.mjs";
+import { createCollaborationService, withCollaborationState } from "../lib/collaboration.mjs";
+import { collaborationSettings } from "../lib/collaboration_contract.mjs";
+import { createCollaborationStore } from "../lib/collaboration_store.mjs";
+import { createBoardCollaborationAdapter } from "../lib/board_collaboration.mjs";
 import { agentsInput } from "../lib/openai_agents_input.mjs";
 import { publicationPolicyOf, assertPublicationPaths } from "../lib/work_artifacts.mjs";
 import { parsePrd } from "../lib/prd.mjs";
@@ -1189,6 +1193,67 @@ test("managed artifacts reach the single PR writer with actual file and current-
   const published = await reconcileExecutionResult(ctx, { id: "acme/widget/task", entry, result, dir: f.service().dirOf(job.id), verify: async () => { assert.equal(readFileSync(join(worktree, "answer.txt"), "utf8"), changed); calls.push("verify"); return { stdout: "verified", stderr: "" }; } });
   assert.deepEqual(calls, ["commit", "verify", "push", "PR"]); assert.equal(published.pr.number, 42); assert.equal(published.evidence[0].source, "coordinator-executed"); assert.equal(published.evidence[0].head, head);
   await reconcileExecutionResult(ctx, { id: "acme/widget/task", entry, result, dir: f.service().dirOf(job.id) }); assert.equal(calls.length, 4);
+});
+
+test("initial remote launch failures open one owner item until the owner repairs and resumes", async () => {
+  for (const outcome of ["prepare", "submit", "reply-loss", "success"]) {
+    const f = launchFixture(), { ctx } = f, ownerPosts = [], resolutions = [];
+    const cfg = collaborationSettings({
+      adapter: "board", profile: "task-relay", channel: "work", needs_owner_channel: "owner", link_base_url: "https://tracker.example",
+      policy: { allow_us_storage: true, allow_board_managed_retention: true },
+    });
+    const handle = {
+      me: async () => ({ can: { work: ["post", "label"], owner: ["post", "label"] } }),
+      schema: async () => ({ id: cfg.schema }),
+      post: async (channel, item) => { if (channel === "owner") ownerPosts.push(item); return { id: item.id }; },
+      reply: async (_thread, item) => ({ id: item.id }),
+      label: async (id, change) => resolutions.push([id, change.set.state]),
+    };
+    const store = createCollaborationStore(f.root);
+    const adapter = createBoardCollaborationAdapter(cfg, { clientFor: async () => ({ handle, block: (_schema, data) => JSON.stringify(data) }) });
+    const connect = () => {
+      ctx.collaboration = createCollaborationService({ config: cfg, store, adapter, clock: f.clock });
+      ctx.state = withCollaborationState(makeState(f.root), ctx.collaboration);
+    };
+    connect();
+    await launchAccess(f, async () => {
+      if (outcome === "reply-loss") f.lose("/agents/sessions/sess-1/events");
+      const refused = outcome === "prepare" || outcome === "submit";
+      if (refused) ctx.executionFor = () => {
+        const execution = f.service(), original = execution[outcome];
+        execution[outcome] = request => unsupportedHost(() => original(request));
+        return execution;
+      };
+      const launch = start(ctx, { path: f.prdPath });
+      if (outcome === "success") await launch;
+      else await assert.rejects(launch, { code: refused ? "EXECUTION_VERIFICATION_SANDBOX" : "AGENTS_TRANSPORT" });
+      await ctx.collaboration.flush();
+      assert.equal(ownerPosts.length, refused ? 1 : 0, outcome);
+      if (!refused) return;
+
+      const [item] = ownerPosts, event = JSON.parse(item.text);
+      assert.equal(item.labels.state, "open");
+      assert.equal(event.task.id, f.id);
+      assert.equal(event.transition.reason, outcome === "prepare" ? "launch-preparation" : "dispatch-refused");
+      assert.match(event.transition.requested_decision, /repair.*resume/i);
+      assert.ok(Date.parse(event.transition.expires_at) > f.clock.now());
+      assert.equal(new URL(event.links.task).searchParams.get("id"), f.id);
+      assert.equal(f.sessions.size, 0);
+      assert.deepEqual(resolutions, []);
+
+      connect();
+      await assert.rejects(resume(ctx, { handle: f.id }), { code: "EXECUTION_VERIFICATION_SANDBOX" });
+      await ctx.collaboration.flush();
+      assert.equal(ownerPosts.length, 1);
+      assert.deepEqual(resolutions, []);
+      ctx.executionFor = f.service;
+      await resume(ctx, { handle: f.id });
+      await ctx.collaboration.flush();
+      assert.equal(ctx.state.get(f.id).state, STATES.running);
+      assert.equal(ownerPosts.length, 1);
+      assert.deepEqual(resolutions, [[item.id, "resolved"]]);
+    });
+  }
 });
 
 for (const [fault, name] of [

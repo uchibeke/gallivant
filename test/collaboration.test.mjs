@@ -236,6 +236,19 @@ test("intake events keep canonical thread identity, link by bare intake ID, and 
   assert.deepEqual(calls.findLast(call => call[0] === "label").slice(1), [ownerPost[2].id, { set: { state: "resolved" }, if: { state: "open" } }]);
 });
 
+test("intake adoption of an unsubmitted checkout waits for a run before emitting started", () => {
+  const store = createCollaborationStore(tempHome());
+  const service = createCollaborationService({ adapter: recorder(), store, config: config() });
+  const blocked = { taskId: TASK, status: "blocked", revision: 1 };
+  const adopted = { ...blocked, status: "started", implementation: { state: "needs-human", run: null } };
+  service.observeTask(blocked, adopted);
+  assert.deepEqual(store.read().deliveries, {});
+  const running = { ...adopted, implementation: { state: "running", run: RUN } };
+  service.observeTask(adopted, running);
+  service.observeTask(running, running);
+  assert.deepEqual(Object.values(store.read().deliveries).map(({ event }) => [event.transition.type, event.task.run_id]), [["started", RUN]]);
+});
+
 test("a failed owner transition blocks later task transitions until its retry succeeds", async () => {
   const home = tempHome(), clock = makeClock(), calls = [], cfg = config({ significant_events: ["needs-owner", "resumed"], retry: { max_attempts: 3, base_seconds: 1, max_seconds: 2 } });
   let failOwner = true;

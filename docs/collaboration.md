@@ -98,6 +98,10 @@ contains a bounded requested decision and expiry and is posted to the dedicated
 queue. A `completed` event records a merged or closed pull request and resolves
 any outstanding owner item. Pull-request URLs are included when present.
 
+A failed initial remote launch opens an owner request when preparation fails or
+dispatch is refused before submission. The item stays open across failed retries
+and resolves when the owner repairs the prerequisites and resumes the task.
+
 Prompts, transcripts, credentials, local paths, raw diffs, comments, checks,
 session output, logs and private configuration are never event inputs. Board
 posts use stable IDs and `noSync`; retries and daemon restarts therefore reuse
