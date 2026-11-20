@@ -7,7 +7,7 @@ import { makeState, resolveHandle, newEntry, entryId, idSlug, prdIdOf, advanceCu
 import { isAtOrAfter, floorSecond } from "../lib/time.mjs";
 import { renderBlock, parseBlock, upsertBlock } from "../lib/block.mjs";
 import { quote, fixPrompt, startPrompt } from "../lib/prompt.mjs";
-import { buildRun, assertSafeArgv, assertSafeEnv, adapters, compareVersions, contextSupport, MIN_VERSIONS } from "../lib/harness.mjs";
+import { buildRun, buildPreparationRun, assertSafeArgv, assertSafeEnv, adapters, compareVersions, contextSupport, MIN_VERSIONS } from "../lib/harness.mjs";
 import { parsePrd, verifyCommands, withFrontmatterKey, fencedBlocks, findPlaceholder } from "../lib/prd.mjs";
 import { makeRunner, isOurProcess } from "../lib/run.mjs";
 import { branchFor, prdIdFromBranch, isOurBranch, makeGit } from "../lib/git.mjs";
@@ -16,6 +16,28 @@ import { validate, DEFAULTS, merge, discoverHarnesses, whence, validateContextPa
 import { signInFix, probeFix } from "../lib/probe.mjs";
 import { HOME } from "../lib/fs.mjs";
 import { messages } from "../lib/notify.mjs";
+
+test("explicit local Codex model overrides inherited defaults for starts, resumes and restricted preparation", () => {
+  const model = "account-supported-model";
+  const config = { ...CONFIG, harness: { codex: { ...CONFIG.harness.codex, model } } };
+  assert.deepEqual(validate(config).filter(p => p.includes("harness.codex.model")), []);
+  const options = { harness: "codex", config, session: "11111111-1111-4111-8111-111111111111", prompt: "test", cwd: "/w" };
+  for (const spec of [buildRun({ ...options, mode: "start" }), buildRun({ ...options, mode: "resume" }), buildPreparationRun({ ...options, mode: "start", session: null })]) {
+    assert.equal(spec.args.filter(a => a === "--model").length, 1);
+    assert.equal(spec.args[spec.args.indexOf("--model") + 1], model);
+    assert.equal(spec.args.at(-1).endsWith("test"), true);
+    assert.doesNotThrow(() => assertSafeArgv(spec.args));
+  }
+  for (const mode of ["start", "resume"]) {
+    const inherited = buildRun({ ...options, config: CONFIG, mode });
+    assert.equal(inherited.args.includes("--model"), false, "absent selection keeps the CLI default");
+  }
+  for (const invalid of [null, "", 123, "--dangerously-bypass-approvals-and-sandbox", "model\nother", "model --yolo", "x".repeat(201)]) {
+    const bad = { ...config, harness: { codex: { ...config.harness.codex, model: invalid } } };
+    assert.ok(validate(bad).some(p => p.includes("harness.codex.model")), JSON.stringify(invalid));
+    assert.throws(() => buildRun({ ...options, config: bad, mode: "start" }), /harness.codex.model/);
+  }
+});
 import { guardrailMode } from "../lib/aport.mjs";
 import { repoFromRemote, remoteMatches, repositoryMatches, makeGh, MAX_DIFF_BYTES, READY_LABEL } from "../lib/gh.mjs";
 import { CONFIG, T0, at, tempHome, claudeResultLines, codexLines, geminiLines, opencodeLines, gooseLines, GOOD_PRD } from "./helpers.mjs";
