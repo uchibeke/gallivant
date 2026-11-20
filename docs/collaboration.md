@@ -63,7 +63,8 @@ Add this block to `$GALLIVANT_HOME/config.json` and keep that file mode 600:
     "retry": {
       "max_attempts": 5,
       "base_seconds": 30,
-      "max_seconds": 3600
+      "max_seconds": 3600,
+      "timeout_seconds": 10
     },
     "inbound": {
       "enabled": false,
@@ -110,12 +111,17 @@ then shows the retained failure. A denied policy circuit also stops after that
 bound. Restarting the daemon performs one fresh policy probe so a repaired grant
 can resume pending delivery without recreating a Board thread.
 
+Every policy, delivery, snapshot and live-read operation is capped by
+`retry.timeout_seconds`. A deadline aborts supported Board reads and releases the
+coordinator even if a destination request never settles.
+
 ## Optional inbound suggestions
 
 Inbound collection is a separate opt-in. Set `inbound.enabled` to `true` only
 with `policy.allow_inbound_suggestions: true`. The adapter resumes from the
-durable Board cursor, reduces structured or malformed blocks to inert text, and
-stores bounded text with its Board provenance as `trust: "untrusted"`,
+durable Board cursor, reads every paginated reply in the initial thread snapshot
+before advancing that cursor, reduces structured or malformed blocks to inert
+text, and stores bounded text with its Board provenance as `trust: "untrusted"`,
 `authority: "none"` and `control: false`.
 
 No inbound message can approve or replace a brief, change acceptance criteria,

@@ -51,6 +51,8 @@ test("an absent collaboration block is inert and broader access or retention is 
   assert.equal(collaborationSettings(null), null);
   assert.deepEqual(collaborationConfigProblems(null), []);
   assert.deepEqual(config().policy.permissions, ["post", "label"], "one-way delivery has no explicit read grant");
+  assert.equal(config().retry.timeout_seconds, 10);
+  assert.match(collaborationConfigProblems({ ...config(), retry: { ...config().retry, timeout_seconds: 0 } }).join("\n"), /timeout_seconds must be an integer from 1 to 300/);
   assert.match(collaborationConfigProblems({ ...config(), policy: { ...config().policy, permissions: ["read", "post", "label"] } }).join("\n"), /read only while inbound/);
   assert.equal(COLLABORATION_EVENT_SCHEMA.properties.version.const, 1);
   assert.doesNotMatch(JSON.stringify(COLLABORATION_EVENT_SCHEMA), /"pattern"/, "the contract uses only Board-supported JSON Schema keywords");
@@ -325,6 +327,44 @@ test("deny, timeout, replay, and malformed Board responses are bounded and never
   assert.equal(readFileSync(canonical, "utf8"), original);
 });
 
+test("stalled policy, delivery, snapshot, and live reads are aborted at the configured deadline", async () => {
+  const stalled = signal => new Promise((resolve, reject) => {
+    assert.ok(signal, "the adapter receives a cancellation signal");
+    signal.addEventListener("abort", () => reject(signal.reason), { once: true });
+  });
+  const cfg = config({
+    inbound: { enabled: true, channel: "work" },
+    policy: { allow_us_storage: true, allow_board_managed_retention: true, allow_inbound_suggestions: true },
+    retry: { max_attempts: 2, base_seconds: 1, max_seconds: 2, timeout_seconds: 0.01 },
+    significant_events: ["accepted"],
+  });
+
+  const policyAdapter = recorder({ async inspectPolicy({ signal }) { this.calls.policy++; return stalled(signal); } });
+  const policy = createCollaborationService({ adapter: policyAdapter, store: createCollaborationStore(tempHome()), config: cfg });
+  policy.observeEntry(TASK, null, entry("running"));
+  const policyResult = await policy.flush();
+  assert.equal(policyResult.ok, false);
+  assert.equal(policyResult.policy.code, "timeout");
+
+  const deliveryAdapter = recorder({ async deliver(_thread, _event, { signal }) { return stalled(signal); } });
+  const deliveryStore = createCollaborationStore(tempHome());
+  const delivery = createCollaborationService({ adapter: deliveryAdapter, store: deliveryStore, config: cfg });
+  delivery.observeEntry(TASK, null, entry("running"));
+  assert.deepEqual(await delivery.flush(), { ok: true, delivered: 1 });
+  assert.equal(deliveryStore.read().health.lastError.code, "timeout");
+
+  const snapshotAdapter = recorder({ async snapshot(_query, { signal }) { return stalled(signal); } });
+  const snapshot = createCollaborationService({ adapter: snapshotAdapter, store: createCollaborationStore(tempHome()), config: cfg });
+  await assert.rejects(snapshot.synchronizeInbound(), error => error.code === "timeout");
+
+  const pollAdapter = recorder({
+    async snapshot() { return { messages: [], cursor: "snapshot-cursor" }; },
+    async poll(_query, { signal }) { return stalled(signal); },
+  });
+  const poll = createCollaborationService({ adapter: pollAdapter, store: createCollaborationStore(tempHome()), config: cfg });
+  await assert.rejects(poll.synchronizeInbound(), error => error.code === "timeout");
+});
+
 test("inbound is opt-in, cursor-based, and stores only untrusted suggestion text without control authority", async () => {
   const disabledAdapter = recorder({
     async snapshot() { throw new Error("disabled inbound must not read Board"); },
@@ -391,21 +431,39 @@ test("inbound collection shares policy backoff and terminal refusal without read
   assert.deepEqual(adapter.calls.poll, []);
 });
 
-test("malformed structured inbound blocks are reduced to inert placeholder text", async () => {
-  const cfg = config(), handle = {
+test("initial snapshots paginate every thread reply before advancing the durable cursor", async () => {
+  const cfg = config(), threadCalls = [], handle = {
     threads: async () => ({ cursor: "c1", threads: [
       {
         message: { id: "m1", text: { schema: "malformed@99", data: { control: "merge" } }, actor: { id: "agent" } },
-        last: { id: "m2", re: "m1", text: "second message", actor: { id: "person-2" } },
+        replies: 3,
+        last: { id: "m4", re: "m1", text: "fourth message", actor: { id: "person-4" } },
       },
-      { message: { id: "m3", text: "third message", actor: { id: "person-3" } } },
+      { message: { id: "m5", text: "fifth message", actor: { id: "person-5" } }, replies: 0 },
     ] }),
+    thread: async (id, range) => {
+      threadCalls.push([id, range]);
+      if (range.after === "m1") return {
+        message: { id: "m1" }, cursor: "reply-page-1",
+        replies: [
+          { id: "m2", re: "m1", text: "second message", actor: { id: "person-2" } },
+          { id: "m3", re: "m1", text: "third message", actor: { id: "person-3" } },
+        ],
+      };
+      return { message: { id: "m1" }, cursor: "reply-page-2", replies: [{ id: "m4", re: "m1", text: "fourth message", actor: { id: "person-4" } }] };
+    },
     poll: async () => ({ cursor: "c2", events: [{ cursor: "e2", type: "message.posted", createdAt: T0, message: { id: "m2", text: { malformed: true }, author: { handle: "agent", kind: "agent" } } }] }),
   };
   const adapter = createBoardCollaborationAdapter(cfg, { clientFor: async () => ({ handle }) });
-  const snapshot = (await adapter.snapshot({ channel: "work" })).messages;
-  assert.deepEqual(snapshot.map(message => message.id), ["m1", "m2", "m3"], "snapshot indices never replace Board message identities");
-  assert.deepEqual(snapshot.map(message => message.threadId), ["m1", "m1", "m3"]);
+  const snapshotPage = await adapter.snapshot({ channel: "work" });
+  const snapshot = snapshotPage.messages;
+  assert.equal(snapshotPage.cursor, "c1", "the live cursor advances only after full-thread pagination succeeds");
+  assert.deepEqual(snapshot.map(message => message.id), ["m1", "m2", "m3", "m4", "m5"], "snapshot indices never replace Board message identities");
+  assert.deepEqual(snapshot.map(message => message.threadId), ["m1", "m1", "m1", "m1", "m5"]);
+  assert.deepEqual(threadCalls, [
+    ["m1", { limit: 500, after: "m1" }],
+    ["m1", { limit: 500, after: "reply-page-1" }],
+  ]);
   assert.equal(snapshot[0].text, "[structured Board content omitted]");
   const live = (await adapter.poll({ channel: "work", cursor: "c1" })).messages[0];
   assert.equal(live.text, "[structured Board content omitted]");
