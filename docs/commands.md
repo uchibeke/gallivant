@@ -670,6 +670,16 @@ If an operator has already repaired and pushed a failed operation, Resume reconc
 without starting another worker. Send message first reconciles that proof, then actually delivers the correction through
 the normal continuation checks. A merged PR or superseding cancellation still prevents that follow-up.
 
+This also applies to a recorded repair refused before dispatch: after you finish, test and push its exact pinned merge,
+Resume can reconcile the existing result without provider access or another round. The original operation keeps its
+uncharged status and has no invented execution record. New-head CI, review and completion checks still apply.
+
+A recorded pushed repair may bring in a newer committed copy of a private carried source. Reconciliation restores its
+exact approved snapshot as a private working-copy overlay only when the committed file matches the pinned base and
+the index, working copy, repository and settled execution owner are proved unchanged. The newer committed document,
+PRD and authority snapshots are not rewritten. Edited, staged, linked, missing or task-only changed inputs still stop
+for explicit reconciliation; an ordinary base refresh does not grant permission to accept changed private authority.
+
 If you merge a PR yourself, the daemon observes the host's merge into the approved base, closes the run and evaluates
 the next chain milestone. This also works after a conflict repair or a push between polls. If an accepted author is
 still running, it retires that exact execution through its cancellation ledger and waits for confirmed cessation.
