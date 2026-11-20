@@ -26,9 +26,11 @@ vercel board schemas create gallivant-task-transition@1 \
   --description 'Sanitized task transition from the local coordinator.'
 ```
 
-Use a Board profile whose effective grants cover only those two channels and
-only `post` and `label`. Add `read` only if inbound suggestions are separately
-enabled. The adapter narrows its handle again and
+Use a Board profile whose configured grants cover only those two channels and
+only `post` and `label`. Board reports the `read` permission implied by `label`;
+the policy check normalizes that implication without enabling inbound collection.
+Add an explicit `read` grant only if inbound suggestions are separately enabled.
+The adapter narrows its handle again and
 `gallivant doctor` checks the resulting grants and immutable schema before any
 task data is sent. It reports the exact extra channel, permission, missing grant
 or schema mismatch it finds.

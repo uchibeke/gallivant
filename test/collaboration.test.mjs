@@ -50,7 +50,7 @@ const entry = (state, over = {}) => ({
 test("an absent collaboration block is inert and broader access or retention is refused before delivery", async () => {
   assert.equal(collaborationSettings(null), null);
   assert.deepEqual(collaborationConfigProblems(null), []);
-  assert.deepEqual(config().policy.permissions, ["post", "label"], "one-way delivery has no read grant");
+  assert.deepEqual(config().policy.permissions, ["post", "label"], "one-way delivery has no explicit read grant");
   assert.match(collaborationConfigProblems({ ...config(), policy: { ...config().policy, permissions: ["read", "post", "label"] } }).join("\n"), /read only while inbound/);
   assert.equal(COLLABORATION_EVENT_SCHEMA.properties.version.const, 1);
   assert.doesNotMatch(JSON.stringify(COLLABORATION_EVENT_SCHEMA), /"pattern"/, "the contract uses only Board-supported JSON Schema keywords");
@@ -60,7 +60,21 @@ test("an absent collaboration block is inert and broader access or retention is 
   }).join("\n"), /cannot be guaranteed by Board/);
 
   const cfg = config();
+  const impliedRead = {
+    work: ["read", "post", "label"],
+    "needs-owner": ["read", "post", "label"],
+  };
+  assert.equal(boardAccessRisk(impliedRead, cfg), null, "Board's reported label-to-read implication is allowed");
+  assert.equal(boardAccessRisk({ work: ["post", "label"], "needs-owner": ["post", "label"] }, cfg), null, "unexpanded grants use the same closure");
+  assert.match(boardAccessRisk({ ...impliedRead, work: [...impliedRead.work, "react"] }, cfg), /includes react/);
   assert.match(boardAccessRisk({ "*": "all" }, cfg), /access includes \*/);
+  const allowed = await checkBoardCollaboration(cfg, { clientFor: async () => ({
+    handle: {
+      me: async () => ({ actor: { id: "board-user" }, can: impliedRead }),
+      schema: async () => ({ name: "gallivant-task-transition", version: 1 }),
+    },
+  }) });
+  assert.equal(allowed.ok, true, "doctor accepts Board's expanded effective grants");
   const checked = await checkBoardCollaboration(cfg, { clientFor: async () => ({
     handle: {
       me: async () => ({ can: { "*": "all" } }),
