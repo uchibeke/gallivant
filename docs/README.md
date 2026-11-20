@@ -22,6 +22,7 @@ requirements and checks.
 | Write a brief with acceptance criteria, source files and verification commands | [PRD contract](prd.md) |
 | Find commands, monitor progress, message or resume a run | [Commands](commands.md) |
 | Configure repositories, credentials, harnesses and execution limits | [Configuration](config.md) |
+| Mirror significant task transitions to Vercel Board | [Board collaboration](collaboration.md) |
 | Request and verify Codex reviews against the current commit | [Codex review procedure](codex-review.md) |
 | Use the local dashboard and understand product boundaries | [Application](app.md) |
 | Run coding work on an API-backed hosted environment | [OpenAI Agents API](openai-agents.md) |

@@ -35,10 +35,14 @@
         "node": ">=22"
       },
       "peerDependencies": {
-        "@modelcontextprotocol/sdk": "1.32.1"
+        "@modelcontextprotocol/sdk": "1.32.1",
+        "@vercel/board": "0.50.0"
       },
       "peerDependenciesMeta": {
         "@modelcontextprotocol/sdk": {
+          "optional": true
+        },
+        "@vercel/board": {
           "optional": true
         }
       }
