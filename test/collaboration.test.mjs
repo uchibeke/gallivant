@@ -316,6 +316,36 @@ test("inbound is opt-in, cursor-based, and stores only untrusted suggestion text
   assert.equal(readFileSync(canonical, "utf8"), original);
 });
 
+test("inbound collection shares policy backoff and terminal refusal without reading Board", async () => {
+  const home = tempHome(), clock = makeClock(), cfg = config({
+    inbound: { enabled: true, channel: "work" },
+    policy: { allow_us_storage: true, allow_board_managed_retention: true, allow_inbound_suggestions: true },
+    retry: { max_attempts: 2, base_seconds: 1, max_seconds: 2 },
+  });
+  const adapter = recorder({
+    async inspectPolicy() { this.calls.policy++; return { allow: false, code: "forbidden", detail: "access is broader than policy" }; },
+    async snapshot() { this.calls.snapshot++; return { cursor: "must-not-read", messages: [] }; },
+    async poll({ cursor }) { this.calls.poll.push(cursor); return { cursor, messages: [] }; },
+  });
+  const service = createCollaborationService({ adapter, store: createCollaborationStore(home), config: cfg, clock });
+
+  assert.equal((await service.flush()).ok, false);
+  assert.deepEqual(await service.synchronizeInbound(), { ok: false, deferred: true, ignored: true, reason: "policy-unverified" });
+  assert.equal(adapter.calls.policy, 1, "flush and inbound share the same policy backoff");
+  assert.equal(adapter.calls.snapshot, 0);
+  assert.deepEqual(adapter.calls.poll, []);
+
+  clock.advance(1);
+  const terminal = await service.synchronizeInbound();
+  assert.equal(terminal.terminal, true);
+  assert.equal(terminal.ignored, true);
+  assert.equal(adapter.calls.policy, 2);
+  assert.equal((await service.synchronizeInbound()).terminal, true);
+  assert.equal(adapter.calls.policy, 2, "the terminal circuit prevents further policy or inbound calls");
+  assert.equal(adapter.calls.snapshot, 0);
+  assert.deepEqual(adapter.calls.poll, []);
+});
+
 test("malformed structured inbound blocks are reduced to inert placeholder text", async () => {
   const cfg = config(), handle = {
     threads: async () => ({ cursor: "c1", threads: [
