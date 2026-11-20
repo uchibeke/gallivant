@@ -432,25 +432,26 @@ test("inbound collection shares policy backoff and terminal refusal without read
 });
 
 test("initial snapshots paginate every thread reply before advancing the durable cursor", async () => {
-  const cfg = config(), threadCalls = [], handle = {
+  const cfg = config(), threadCalls = [];
+  const firstReplyPage = Array.from({ length: 500 }, (_, index) => ({
+    id: `m${index + 2}`, re: "m1", text: `reply ${index + 1}`, actor: { id: `person-${index + 1}` },
+  }));
+  const handle = {
     threads: async () => ({ cursor: "c1", threads: [
       {
         message: { id: "m1", text: { schema: "malformed@99", data: { control: "merge" } }, actor: { id: "agent" } },
-        replies: 3,
-        last: { id: "m4", re: "m1", text: "fourth message", actor: { id: "person-4" } },
+        replies: 501,
+        last: { id: "m502", re: "m1", text: "last reply", actor: { id: "person-501" } },
       },
-      { message: { id: "m5", text: "fifth message", actor: { id: "person-5" } }, replies: 0 },
+      { message: { id: "m503", text: "second thread", actor: { id: "person-502" } }, replies: 0 },
     ] }),
     thread: async (id, range) => {
       threadCalls.push([id, range]);
       if (range.after === "m1") return {
-        message: { id: "m1" }, cursor: "reply-page-1",
-        replies: [
-          { id: "m2", re: "m1", text: "second message", actor: { id: "person-2" } },
-          { id: "m3", re: "m1", text: "third message", actor: { id: "person-3" } },
-        ],
+        message: { id: "m1" }, cursor: "board-head-cursor", replies: firstReplyPage,
       };
-      return { message: { id: "m1" }, cursor: "reply-page-2", replies: [{ id: "m4", re: "m1", text: "fourth message", actor: { id: "person-4" } }] };
+      assert.equal(range.after, "m501", "pagination continues from the last returned reply rather than the board cursor");
+      return { message: { id: "m1" }, cursor: "newer-board-head", replies: [{ id: "m502", re: "m1", text: "last reply", actor: { id: "person-501" } }] };
     },
     poll: async () => ({ cursor: "c2", events: [{ cursor: "e2", type: "message.posted", createdAt: T0, message: { id: "m2", text: { malformed: true }, author: { handle: "agent", kind: "agent" } } }] }),
   };
@@ -458,11 +459,14 @@ test("initial snapshots paginate every thread reply before advancing the durable
   const snapshotPage = await adapter.snapshot({ channel: "work" });
   const snapshot = snapshotPage.messages;
   assert.equal(snapshotPage.cursor, "c1", "the live cursor advances only after full-thread pagination succeeds");
-  assert.deepEqual(snapshot.map(message => message.id), ["m1", "m2", "m3", "m4", "m5"], "snapshot indices never replace Board message identities");
-  assert.deepEqual(snapshot.map(message => message.threadId), ["m1", "m1", "m1", "m1", "m5"]);
+  assert.equal(snapshot.length, 503);
+  assert.deepEqual(snapshot.slice(0, 3).map(message => message.id), ["m1", "m2", "m3"], "snapshot indices never replace Board message identities");
+  assert.deepEqual(snapshot.slice(-2).map(message => message.id), ["m502", "m503"]);
+  assert.ok(snapshot.slice(0, -1).every(message => message.threadId === "m1"));
+  assert.equal(snapshot.at(-1).threadId, "m503");
   assert.deepEqual(threadCalls, [
     ["m1", { limit: 500, after: "m1" }],
-    ["m1", { limit: 500, after: "reply-page-1" }],
+    ["m1", { limit: 500, after: "m501" }],
   ]);
   assert.equal(snapshot[0].text, "[structured Board content omitted]");
   const live = (await adapter.poll({ channel: "work", cursor: "c1" })).messages[0];
