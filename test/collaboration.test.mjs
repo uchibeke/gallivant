@@ -318,11 +318,20 @@ test("inbound is opt-in, cursor-based, and stores only untrusted suggestion text
 
 test("malformed structured inbound blocks are reduced to inert placeholder text", async () => {
   const cfg = config(), handle = {
-    threads: async () => ({ cursor: "c1", threads: [{ message: { id: "m1", text: { schema: "malformed@99", data: { control: "merge" } }, actor: { id: "agent" } } }] }),
+    threads: async () => ({ cursor: "c1", threads: [
+      {
+        message: { id: "m1", text: { schema: "malformed@99", data: { control: "merge" } }, actor: { id: "agent" } },
+        last: { id: "m2", re: "m1", text: "second message", actor: { id: "person-2" } },
+      },
+      { message: { id: "m3", text: "third message", actor: { id: "person-3" } } },
+    ] }),
     poll: async () => ({ cursor: "c2", events: [{ cursor: "e2", type: "message.posted", createdAt: T0, message: { id: "m2", text: { malformed: true }, author: { handle: "agent", kind: "agent" } } }] }),
   };
   const adapter = createBoardCollaborationAdapter(cfg, { clientFor: async () => ({ handle }) });
-  assert.equal((await adapter.snapshot({ channel: "work" })).messages[0].text, "[structured Board content omitted]");
+  const snapshot = (await adapter.snapshot({ channel: "work" })).messages;
+  assert.deepEqual(snapshot.map(message => message.id), ["m1", "m2", "m3"], "snapshot indices never replace Board message identities");
+  assert.deepEqual(snapshot.map(message => message.threadId), ["m1", "m1", "m3"]);
+  assert.equal(snapshot[0].text, "[structured Board content omitted]");
   const live = (await adapter.poll({ channel: "work", cursor: "c1" })).messages[0];
   assert.equal(live.text, "[structured Board content omitted]");
   assert.equal(live.id, "e2");
