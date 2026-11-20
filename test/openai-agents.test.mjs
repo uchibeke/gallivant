@@ -1229,7 +1229,12 @@ test("initial remote launch failures open one owner item until the owner repairs
       else await assert.rejects(launch, { code: refused ? "EXECUTION_VERIFICATION_SANDBOX" : "AGENTS_TRANSPORT" });
       await ctx.collaboration.flush();
       assert.equal(ownerPosts.length, refused ? 1 : 0, outcome);
-      if (!refused) return;
+      if (!refused) {
+        if (outcome === "reply-loss") await makeTick(ctx).tickEntry(f.id, ctx.state.get(f.id));
+        const types = Object.values(store.read().deliveries).map(item => item.event.transition.type);
+        assert.deepEqual(types, ["accepted", "started"], outcome);
+        return;
+      }
 
       const [item] = ownerPosts, event = JSON.parse(item.text);
       assert.equal(item.labels.state, "open");
