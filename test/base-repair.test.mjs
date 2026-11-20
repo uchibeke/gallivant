@@ -329,6 +329,30 @@ test("operator push recovery refuses incomplete ancestry, remote mismatches and 
   });
 });
 
+test("prepared clean merges reconcile an exact push and retain the normal unpushed launch path", async t => {
+  for (const pushed of [true, false]) await t.test(pushed ? "pushed" : "unpushed", async t => {
+    const w = continuationWorld(t, { baseUpdate: "independent" }); await managedPreviousRun(w);
+    w.ctx.hosts.credential = fakeCredential(null); await w.tick();
+    const op = structuredClone(w.entry().base_repair);
+    assert.equal(op.charged, false); assert.ok(op.mergeSha);
+    assert.equal(w.g(["rev-parse", "HEAD"]), op.mergeSha);
+    if (pushed) {
+      w.g(["push", "origin", "HEAD:work/repair"]); w.gh.data.pr.headRefOid = op.mergeSha; w.gh.data.pr.mergeable = "MERGEABLE";
+    }
+    w.ctx.hosts.credential = fakeCredential();
+    const result = await resume(w.ctx, { handle: w.id });
+    assert.equal(w.entry().base_repair.operationId, op.operationId);
+    if (pushed) {
+      assert.equal(result.reconciled, true); assert.equal(w.entry().base_repair.status, "verified");
+      assert.equal(w.entry().base_repair.charged, false); assert.equal(w.entry().base_repair.run, null);
+      assert.equal(w.raw.started.length, 2); assert.equal(w.entry().iteration, 0);
+    } else {
+      assert.equal(w.entry().base_repair.status, "running"); assert.equal(w.entry().base_repair.charged, true);
+      assert.equal(w.entry().base_repair.mergeSha, op.mergeSha); assert.equal(w.raw.started.length, 3); assert.equal(w.entry().iteration, 1);
+    }
+  });
+});
+
 test("operator push reconciliation preserves cancellation and terminal ownership during its final await", async t => {
   for (const fault of ["cancelled", "merged", "session"]) await t.test(fault, async t => {
     const w = continuationWorld(t); await managedPreviousRun(w); w.ctx.hosts.credential = fakeCredential(null); await w.tick();
