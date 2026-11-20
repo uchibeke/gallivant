@@ -671,7 +671,7 @@ without starting another worker. Send message first reconciles that proof, then 
 the normal continuation checks. A merged PR or superseding cancellation still prevents that follow-up.
 
 This also applies to a recorded repair refused before dispatch: after you finish, test and push its exact pinned merge,
-Resume can reconcile the existing result without provider access or another round. The original operation keeps its
+Resume can reconcile the existing result without another execution or round. The original operation keeps its
 uncharged status and has no invented execution record. New-head CI, review and completion checks still apply.
 
 A recorded pushed repair may bring in a newer committed copy of a private carried source. Reconciliation restores its
