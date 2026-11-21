@@ -7,8 +7,11 @@ import { makeRecoveryCooldowns, hostScope, providerScope, serviceScope } from ".
 import { makeTick } from "../lib/tick.mjs";
 import { makeState, newEntry } from "../lib/state.mjs";
 import { DEFAULTS } from "../lib/config.mjs";
-import { nextAttempt, recoveryDeadline, runRecoveryWork } from "../lib/execution_io.mjs";
+import { nextAttempt } from "../lib/execution_io.mjs";
+import { boundedCall, recoveryDeadline, runRecoveryWork } from "../lib/recovery_io.mjs";
+import { execFileAsync } from "../lib/process.mjs";
 import { makeGh } from "../lib/gh.mjs";
+import { makeBitbucket } from "../lib/hosts/bitbucket.mjs";
 import { makePackageAuthPreflight } from "../lib/package_auth.mjs";
 import { evaluateHosted } from "../lib/deliverable.mjs";
 import { supervisorStatus } from "../lib/daemon.mjs";
@@ -238,6 +241,28 @@ test("boot PR discovery honors a repository cooldown across wakes", async () => 
   w.clock.set(new Date(retryAt).toISOString());
   await runRecoveryWork(reconcile);
   assert.deepEqual(listed, [backedOff, available, backedOff]);
+});
+
+test("native transport deadlines share the recovery budget across awaits without leaking between lanes", async () => {
+  const repo = "acme/widget", gate = Promise.withResolvers(), budgetError = { code: "RECOVERY_IO_BUDGET" };
+  const bitbucket = makeBitbucket({
+    credential: async () => ({ host: "bitbucket.org", repository: repo, email: "fixture@example.invalid", token: "fixture" }),
+    fetch: () => assert.fail("an expired lane cannot start host I/O"),
+  });
+  const expired = runRecoveryWork(async () => {
+    await gate.promise;
+    await assert.rejects(boundedCall(() => assert.fail("an expired lane cannot start transport I/O")), budgetError);
+    assert.throws(() => execFileAsync(process.execPath, ["--version"]), budgetError);
+    await assert.rejects(bitbucket.repoDefaultBranch(repo), budgetError);
+  }, 0);
+  try {
+    assert.equal(recoveryDeadline(60_000), 60_000);
+    await runRecoveryWork(async () => {
+      assert.equal(recoveryDeadline(50), 50);
+      assert.ok(recoveryDeadline(60_000) <= 10_000);
+      assert.equal(await boundedCall(() => "available"), "available");
+    }, 10_000);
+  } finally { gate.resolve(); await expired; }
 });
 
 test("shared service cooldowns preserve long Retry-After across restart and serialize only the next outage probe", async () => {
