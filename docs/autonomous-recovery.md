@@ -132,9 +132,13 @@ The default worker concurrency is four. Author launches share the existing
 execution concurrency limit. Host writes serialize for each repository.
 Portable coordinator embeds can lower their entry and chain capacities.
 Independent cursors persist across wakes, and a chain still waits for its own
-predecessor evidence when that entry is settling. A lane item has 30 seconds
-of service I/O budget. The underlying transport's shorter deadlines still
-apply. Accepted author processes keep their separately approved run allowance.
+predecessor evidence when that entry is settling. Host reads, captured review
+progress and maintenance can share a cycle for one task. They run in sequence
+for that task while other tasks can use the available lane slots. A lane item
+has 30 seconds of service I/O budget. The underlying transport's shorter
+deadlines still apply. Accepted author processes keep their separately approved
+run allowance. Startup PR discovery resumes unfinished repositories on later
+wakes and observes the relevant host cooldown.
 
 `gallivant status --json` reports cycle duration, maximum queue delay, oldest
 due age, selected and due counts, saturation, and recorded progress transitions
@@ -147,7 +151,8 @@ The deterministic capacity fixture uses 13 due host items, four slots and
 25,000 retained records across four fake-clock cycles. Its p50/p95/p99 were
 100/200/200 ms for cycle duration and 800/1050/1050 ms for queue delay and
 oldest due age. A separate fixture holds a host read for 60 simulated seconds
-while a local cancellation, local settlement and independent chain finish.
+while a local cancellation, local settlement, maintenance and an independent
+chain finish.
 These samples characterize the fixture workload. M06 owns the measured live
 capacity and native release targets.
 

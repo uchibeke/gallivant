@@ -7,12 +7,14 @@ import { makeRecoveryCooldowns, hostScope, providerScope, serviceScope } from ".
 import { makeTick } from "../lib/tick.mjs";
 import { makeState, newEntry } from "../lib/state.mjs";
 import { DEFAULTS } from "../lib/config.mjs";
-import { nextAttempt } from "../lib/execution_io.mjs";
+import { nextAttempt, recoveryDeadline, runRecoveryWork } from "../lib/execution_io.mjs";
 import { makeGh } from "../lib/gh.mjs";
 import { makePackageAuthPreflight } from "../lib/package_auth.mjs";
 import { evaluateHosted } from "../lib/deliverable.mjs";
 import { supervisorStatus } from "../lib/daemon.mjs";
-import { CONFIG, T0, STATES, fakeGh, fakeGit, fakeNotify, fakeRunner, makeClock, silentLog, tempHome } from "./helpers.mjs";
+import { makeBootReconciler } from "../lib/commands/up.mjs";
+import { renderBlock } from "../lib/block.mjs";
+import { CONFIG, T0, STATES, fakeGh, fakeGit, fakeNotify, fakeRunner, makeClock, prFixture, silentLog, tempHome } from "./helpers.mjs";
 
 test("structural scans skip large settled history and keep durable bounded lane cursors", t => {
   const now = Date.parse(T0);
@@ -63,9 +65,12 @@ function tickWorld() {
   return { ctx, state, clock, entry };
 }
 
-test("a slow host lane cannot delay local settlement, cancellation or an independent chain", { timeout: 10_000 }, async () => {
+test("a slow host lane cannot delay local settlement, cancellation, maintenance or an independent chain", { timeout: 10_000 }, async () => {
   const w = tickWorld(), host = "acme/slow/host", control = "acme/local/control", settlement = "acme/local/settle";
-  w.entry(host, { pr: 1 });
+  const maintenance = "acme/local/maintenance", runtime_cleanup = { code: "pending", next_at: w.clock.now() };
+  w.ctx.config.execution = { concurrency: 1 };
+  w.entry(host, { pr: 1, runtime_cleanup });
+  w.entry(maintenance, { state: STATES.done, runtime_cleanup });
   w.entry("acme/provider/wait", { state: STATES.needsHuman, reason: "provider-network", network_retry: {
     phase: "waiting", attempts: 0, run: "prior", code: "SERVICE_BUSY", first_at: T0, next_at: new Date(w.clock.now() + 60_000).toISOString(),
   } });
@@ -77,6 +82,11 @@ test("a slow host lane cannot delay local settlement, cancellation or an indepen
   w.state.update(control, { control: { id: "cancel", action: "cancel", status: "queued", at: T0 } });
   w.ctx.cleanupMergedWorkspace = async () => assert.fail("local settlement has no workspace to delete");
   const slow = Promise.withResolvers(), hostStarted = Promise.withResolvers(), otherChain = Promise.withResolvers(), progressed = Promise.withResolvers();
+  const maintained = Promise.withResolvers(), maintenanceOrder = [];
+  w.ctx.maintainWorkspace = async (id) => {
+    maintenanceOrder.push(id);
+    if (id === maintenance) maintained.resolve();
+  };
   w.ctx.gh.prView = async () => { hostStarted.resolve(); return slow.promise; };
   w.state.createChain({ name: "independent", status: "active", index: 0, repo: "acme/local", steps: [{ id: "acme/local/not-started", dispatch: "unknown" }] });
   w.ctx.notify.error = async () => otherChain.resolve();
@@ -88,16 +98,98 @@ test("a slow host lane cannot delay local settlement, cancellation or an indepen
   };
   const ticker = makeTick(w.ctx), ticking = ticker.tick();
   try {
-    await Promise.all([hostStarted.promise, otherChain.promise, progressed.promise]);
+    await Promise.all([hostStarted.promise, otherChain.promise, progressed.promise, maintained.promise]);
     assert.equal(w.state.get(settlement).last.exit, 1);
     assert.equal(w.state.get(control).control.status, "applied");
     assert.equal(w.state.getChain("independent").status, "stopped");
     assert.equal(cancelled.started.length, 0);
+    assert.deepEqual(maintenanceOrder, [maintenance]);
     w.clock.advance(1);
   } finally { slow.resolve({ state: "OPEN", headRefName: "work/host" }); await ticking; }
   assert.equal(ticker.metrics.durationMs, 60_000);
   assert.equal(ticker.metrics.lanes.control.progressed, 1);
   assert.equal(ticker.metrics.lanes.settlement.progressed, 1);
+  assert.deepEqual(maintenanceOrder, [maintenance, host]);
+});
+
+test("an always-due host poll gives captured review and runtime cleanup a serialized turn", async () => {
+  const w = tickWorld(), id = "acme/widget/overlap", order = [];
+  Object.assign(w.ctx.config, { poll_seconds: 30, recovery_scan_seconds: 60, execution: { progressMs: 60_000, concurrency: 1 } });
+  w.ctx.executionFor = w.ctx.runnerFor;
+  w.entry(id, { pr: 142, firstPartyReview: { status: "running" }, runtime_cleanup: { code: "pending", next_at: w.clock.now() } });
+  w.ctx.gh.prView = async () => {
+    order.push("host");
+    // Record time while the per-task decision belongs to the host worker.
+    await Promise.resolve();
+    assert.equal(order.at(-1), "host");
+    throw Object.assign(new Error("fixture host unavailable"), { code: "GH_TRANSPORT" });
+  };
+  w.ctx.reviewService = { progress: async (_id, entry) => {
+    order.push("review");
+    assert.equal(entry.review_next_at, w.clock.now() + 30_000);
+    return entry.firstPartyReview;
+  } };
+  w.ctx.maintainWorkspace = async (task, entry) => {
+    order.push("maintenance");
+    assert.equal(task, id);
+    assert.equal(entry.runtime_cleanup.next_at, w.clock.now());
+    w.state.update(id, { runtime_cleanup: { code: "removed", next_at: w.clock.now() + 30_000 } });
+  };
+
+  const ticker = makeTick(w.ctx);
+  for (let i = 0; i < 4; i++) {
+    assert.deepEqual(await ticker.tick(), [{ id, ok: false, error: "fixture host unavailable" }]);
+    assert.equal(ticker.metrics.lanes.host.selected, 1);
+    assert.equal(ticker.metrics.lanes.reviewer.selected, 1);
+    assert.equal(ticker.metrics.lanes.maintenance.progressed, 1);
+    w.clock.advance(0.5);
+  }
+  assert.deepEqual(order, Array.from({ length: 4 }, () => ["host", "review", "maintenance"]).flat());
+});
+
+test("boot reconciliation resumes the unfinished PR after its service budget expires", async () => {
+  const w = tickWorld(), firstRepo = "acme/widget", secondRepo = "acme/other";
+  const listed = [], comments = [];
+  const pr = (repo, number, key) => prFixture({ number, url: `https://github.com/${repo}/pull/${number}`, headRefName: `work/${key}`,
+    body: renderBlock({ branch: `work/${key}`, harness: "codex", prd: `docs/prds/${key}.md`, session: "6f1c2d3e-1111-4111-8111-111111111111" }) });
+  w.ctx.gh.prListMine = async (repo) => {
+    listed.push(repo);
+    return repo === firstRepo ? [pr(repo, 1, "first"), pr(repo, 2, "deferred"), pr(repo, 3, "remaining")] : [pr(repo, 4, "other")];
+  };
+  w.ctx.gh.issueComments = async (_repo, number) => {
+    comments.push(number);
+    if (number === 2 && comments.length === 2) runRecoveryWork(() => recoveryDeadline(), 0);
+    return [];
+  };
+  w.ctx.gh.userFor = async () => "me";
+  const reconcile = makeBootReconciler(w.ctx, "me", [firstRepo, secondRepo]);
+  assert.deepEqual(await runRecoveryWork(reconcile), [`${firstRepo}/first`]);
+  assert.equal(w.state.get(`${firstRepo}/deferred`), null);
+  assert.deepEqual(await runRecoveryWork(reconcile), [`${secondRepo}/other`]);
+  assert.deepEqual(await runRecoveryWork(reconcile), [`${firstRepo}/deferred`, `${firstRepo}/remaining`]);
+  assert.deepEqual(await runRecoveryWork(reconcile), []);
+  assert.equal(w.state.entries().length, 4);
+  assert.deepEqual(listed, [firstRepo, secondRepo]);
+  assert.deepEqual(comments, [1, 2, 4, 2, 3]);
+});
+
+test("boot PR discovery honors a repository cooldown across wakes", async () => {
+  const w = tickWorld(), backedOff = "acme/backed-off", available = "acme/widget", listed = [];
+  const retryAt = w.clock.now() + 2 * 24 * 3_600_000;
+  w.ctx.gh.prListMine = async (repo) => {
+    listed.push(repo);
+    if (repo === backedOff && w.clock.now() < retryAt) throw Object.assign(new Error("fixture rate limit"), { code: "SERVICE_COOLDOWN", retryAt });
+    return [];
+  };
+  const reconcile = makeBootReconciler(w.ctx, "me", [backedOff, available]);
+  await runRecoveryWork(reconcile);
+  await runRecoveryWork(reconcile);
+  w.clock.set(new Date(retryAt - 1).toISOString());
+  await runRecoveryWork(reconcile);
+  assert.deepEqual(listed, [backedOff, available]);
+  w.clock.set(new Date(retryAt).toISOString());
+  await runRecoveryWork(reconcile);
+  assert.deepEqual(listed, [backedOff, available, backedOff]);
 });
 
 test("shared service cooldowns preserve long Retry-After across restart and serialize only the next outage probe", async () => {

@@ -64,12 +64,20 @@ test("parallel checks deduplicate but credential, package and repo changes canno
 
 test("failed, redirected and timed-out probes cannot grant access or disclose secrets", async () => {
   for (const status of [401, 403, 404, 429, 302, 500]) {
-    let calls = 0;
-    const preflight = makePackageAuthPreflight({ fetch: async () => { calls++; return response(status); } });
+    const capacity = status === 429 || status >= 500;
+    let calls = 0, discarded = 0;
+    const preflight = makePackageAuthPreflight({ fetch: async () => {
+      calls++;
+      return { ...response(status), body: { cancel: async () => { discarded++; } } };
+    } });
     for (let retry = 0; retry < 2; retry++) await assert.rejects(preflight(input), error => {
-      assert.equal(error.code, "PACKAGE_AUTH"); assert.doesNotMatch(error.message, /package-test-secret/); return true;
+      assert.equal(error.code, capacity ? "REGISTRY_CAPACITY" : "PACKAGE_AUTH");
+      if (capacity) assert.equal(error.status, status);
+      assert.doesNotMatch(error.message, /package-test-secret/);
+      return true;
     });
-    assert.equal(calls, 2, "failed authentication is not cached as clearance");
+    assert.equal(calls, 2, "a failed probe is not cached as clearance");
+    assert.equal(discarded, calls);
   }
   const redirected = makePackageAuthPreflight({ fetch: async () => { throw new Error("Bearer package-test-secret"); } });
   await assert.rejects(redirected(input), error => !error.message.includes("package-test-secret"));
