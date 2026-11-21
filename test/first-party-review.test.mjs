@@ -839,8 +839,8 @@ test("a transient stopped observation never cancels a reviewer confirmed running
   assert.equal((await service.reconcile(w.id,w.entry,w.pr)).status,"completed");
 });
 
-function reviewServiceWorld() {
-  const w = evidenceWorld(), clock = makeClock(), runners = new Map();
+function reviewServiceWorld(clock = makeClock()) {
+  const w = evidenceWorld(), runners = new Map();
   const calls = { downloads: 0, snapshots: 0, submits: 0, cancellations: 0, settlements: 0 };
   w.gh.reviewEvidence = async () => { calls.downloads++; return { ...structuredClone(source), head: w.pr.headRefOid, base: w.pr.baseRefOid }; };
   w.gh.prView = async () => { calls.snapshots++; return w.pr; };
@@ -864,6 +864,75 @@ function reviewServiceWorld() {
       r.result = { ok, finished: true, error, lastMessage: raw, denials: [], cost: null };
     } };
 }
+
+test("expired recovery budgets defer reviewer preparation with the original reservation", async () => {
+  const { ctx, state, id, gh, entry, notify } = tickWorld();
+  const w = reviewServiceWorld(ctx.clock);
+  w.ctx.gh.prView = gh.prView;
+  ctx.config = { ...config, poll_seconds: 30 };
+  w.ctx.config = ctx.config;
+  ctx.executionFor = ctx.runnerFor;
+  const executionFor = w.ctx.executionFor;
+  let preparations = 0;
+  w.ctx.executionFor = key => {
+    const runner = executionFor(key);
+    runner.prepare = async () => {
+      if (++preparations <= 2) runRecoveryWork(() => recoveryDeadline(), 0);
+      return { receipt: {}, spec: {} };
+    };
+    return runner;
+  };
+  const restart = () => {
+    ctx.reviewService = w.service();
+    return makeTick(ctx);
+  };
+  let ticker = restart();
+  await ticker.tick();
+  const waiting = entry().firstPartyReview;
+  assert.equal(preparations, 1, entry().last?.event);
+  assert.equal(entry().state, "pr-open", entry().last?.event);
+  assert.equal(waiting.status, "running");
+  assert.equal(waiting.run, null);
+  assert.equal(waiting.retryAt, ctx.clock.now() + 30_000);
+  const reserved = ctx.reviewService.inspect(id);
+  const job = reserved.jobs[waiting.key];
+  assert.equal(job.status, "preparing");
+  assert.equal(job.prepareAfter, waiting.retryAt);
+  assert.equal(job.retries, 0);
+  assert.equal(w.calls.submits, 0);
+
+  ctx.clock.advance(0.25);
+  state.update(id, { review_next_at: 0 });
+  ticker = restart();
+  await ticker.tick();
+  assert.equal(ticker.metrics.lanes.host.selected, 1);
+  assert.equal(ticker.metrics.lanes.reviewer.selected, 0);
+  assert.equal(preparations, 1, "a fresh host check still honors the saved preparation wait");
+  assert.deepEqual(ctx.reviewService.inspect(id), reserved);
+
+  ctx.clock.advance(0.25);
+  await ticker.tick();
+  assert.equal(ticker.metrics.lanes.host.selected, 0);
+  assert.equal(ticker.metrics.lanes.reviewer.selected, 1);
+  assert.equal(preparations, 2);
+  assert.equal(entry().firstPartyReview.retryAt, ctx.clock.now() + 30_000);
+  assert.equal(w.calls.submits, 0);
+
+  ctx.clock.advance(0.5);
+  await ticker.tick();
+  const resumed = ctx.reviewService.inspect(id);
+  assert.deepEqual(Object.keys(resumed.jobs), [job.key]);
+  assert.equal(resumed.spentReservedUsd, reserved.spentReservedUsd);
+  assert.equal(resumed.jobs[job.key].deadline, job.deadline);
+  assert.equal(resumed.jobs[job.key].retries, 0);
+  assert.equal(resumed.retryHistory, undefined);
+  assert.equal(entry().firstPartyReview.retryAt, undefined);
+  assert.equal(entry().firstPartyReview.run, "run-1");
+  assert.equal(w.calls.submits, 1);
+  assert.equal(w.calls.cancellations, 0);
+  assert.equal(entry().state, "pr-open");
+  assert.deepEqual(notify.sent, []);
+});
 
 test("confirmed reviewer capacity and routing failures retry with persisted backoff and the same evidence", async () => {
   for (const error of ["Selected model is at capacity. Please try a different model.", "workspace routing discovery failed"]) {
