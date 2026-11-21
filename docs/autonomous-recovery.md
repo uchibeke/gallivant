@@ -168,6 +168,10 @@ would exceed its approved retry window, the paid retry expires and safe
 reconciliation remains eligible. Auth, billing and hard quota require their
 existing remedies.
 
+Queued controls retain their request identity and wait for the recorded retry
+time when a shared cooldown blocks the PR read or a proven unsubmitted launch.
+An observation-only resume keeps its original run identity while it waits.
+
 ## Long-running execution and coordinator availability
 
 The `why` report surfaces evidence from the current run or saved tool phase

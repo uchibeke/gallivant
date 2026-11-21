@@ -6,8 +6,10 @@ import { requestControl, applyControl, cancelControl, recoverControl, interruptC
 import { makeState } from "../lib/state.mjs";
 import { makeTick } from "../lib/tick.mjs";
 import { makePackageAuthPreflight } from "../lib/package_auth.mjs";
-import { runRecoveryWork } from "../lib/recovery_io.mjs";
-import { NEEDS_LABEL } from "../lib/gh.mjs";
+import { recoveryDeadline, runRecoveryWork } from "../lib/recovery_io.mjs";
+import { hostScope, makeRecoveryCooldowns, providerScope, serviceScope } from "../lib/recovery_cooldown.mjs";
+import { dispatchNotSentError } from "../lib/execution_io.mjs";
+import { NEEDS_LABEL, READY_LABEL, makeGh } from "../lib/gh.mjs";
 import { CONFIG, seededState, makeClock, fakeGh, fakeGit, fakeNotify, fakeRunner, fakeCredential, fakeIdentity, harnessBin, GOOD_PRD, silentLog, STATES, review, at, checkRun, prFixture } from "./helpers.mjs";
 
 function world(over = {}) {
@@ -486,4 +488,204 @@ test("registry budget deferral retains the same approved queued message", async 
   assert.equal(w.runner.started.length, 1);
   assert.equal(w.state.get(w.id).control.status, "applied");
   assert.match(w.runner.started[0].args.at(-1), /Keep the approved scope/);
+});
+
+test("shared host cooldowns retain queued controls and their deadline across restart", async t => {
+  for (const action of ["message", "resume", "recheck"]) await t.test(action, async () => {
+    const w = world(), { clock } = w.ctx;
+    const before = w.state.get(w.id);
+    const token = "control-host-fixture", scope = hostScope("github.com", token);
+    const firstDeadline = clock.now() + 48 * 3600_000;
+    let calls = 0;
+    const attach = () => {
+      const cooldowns = makeRecoveryCooldowns({ home: w.home, clock });
+      const gh = makeGh({ clock, cooldowns, credential: fakeCredential(token),
+        exec: async () => { calls++; return { stdout: JSON.stringify(await w.gh.prView()) }; } });
+      w.ctx.host = { ...w.gh, prView: gh.prView };
+      return cooldowns;
+    };
+    const cooldowns = attach();
+    cooldowns.record(scope, { status: 429, retryAt: firstDeadline });
+    const note = action === "message" ? "Keep the approved scope." : "";
+    const request = requestControl(w.ctx, { handle: w.id, action, note, requestId: "cooldown-" + action });
+    await makeTick(w.ctx).tick();
+    let waiting = w.state.get(w.id);
+    assert.deepEqual([waiting.control.id, waiting.control.note, waiting.control.status], [request.id, note, "queued"]);
+    assert.equal(waiting.control.next_at, firstDeadline);
+    assert.equal(waiting.control.started_at, undefined);
+    assert.equal(waiting.control.finished_at, undefined);
+    assert.deepEqual(waiting.last, before.last);
+    assert.equal(waiting.iteration, before.iteration);
+    assert.equal(calls, 0);
+    assert.equal(w.runner.started.length, 0);
+
+    w.ctx.state = makeState(w.home);
+    const later = attach();
+    const ticker = makeTick(w.ctx);
+    clock.set(new Date(firstDeadline - 1).toISOString());
+    await ticker.tick();
+    assert.equal(ticker.metrics.lanes.control.selected, 0);
+    assert.equal(await applyControl(w.ctx, w.id), true);
+    assert.equal(calls, 0);
+    assert.equal(w.ctx.state.get(w.id).control.next_at, firstDeadline);
+
+    const finalDeadline = firstDeadline + 24 * 3600_000;
+    later.record(scope, { status: 429, retryAt: finalDeadline });
+    clock.set(new Date(firstDeadline).toISOString());
+    await ticker.tick();
+    waiting = w.ctx.state.get(w.id);
+    assert.equal(waiting.control.next_at, finalDeadline);
+    assert.equal(waiting.control.status, "queued");
+    assert.equal(calls, 0);
+
+    clock.set(new Date(finalDeadline).toISOString());
+    await ticker.tick();
+    const applied = w.ctx.state.get(w.id).control;
+    assert.equal(applied.id, request.id);
+    assert.equal(applied.note, note);
+    assert.equal(applied.status, "applied");
+    assert.ok(calls > 0);
+    assert.equal(w.runner.started.length, action === "recheck" ? 0 : 1);
+    if (note) assert.match(w.runner.started[0].args.at(-1), /Keep the approved scope/);
+    await ticker.tick();
+    assert.equal(w.runner.started.length, action === "recheck" ? 0 : 1);
+  });
+});
+
+test("a queued control distinguishes a host retry deadline from a permission refusal", async t => {
+  for (const status of [429, 403]) await t.test(String(status), async () => {
+    const w = world(), { clock } = w.ctx;
+    let requests = 0;
+    const gh = makeGh({ clock, credential: fakeCredential(), exec: async () => {
+      requests++;
+      const header = status === 429 ? "Retry-After: 172800" : "X-RateLimit-Remaining: 42";
+      throw Object.assign(new Error(`HTTP ${status}`), { stdout: `HTTP/2.0 ${status}\r\n${header}\r\n\r\n{}` });
+    } });
+    w.ctx.host = { ...w.gh, prView: gh.prView };
+    requestControl(w.ctx, { handle: w.id, action: "recheck" });
+    await applyControl(w.ctx, w.id);
+    const control = w.state.get(w.id).control;
+    assert.equal(requests, 1);
+    assert.equal(control.status, status === 429 ? "queued" : "failed");
+    assert.equal(control.next_at, status === 429 ? clock.now() + 172800_000 : undefined);
+    assert.equal(control.started_at, undefined);
+    assert.equal(w.runner.started.length, 0);
+  });
+});
+
+test("budget exhaustion before claiming a control keeps it scheduled", async () => {
+  const w = world();
+  w.gh.prView = async () => recoveryDeadline();
+  const request = requestControl(w.ctx, { handle: w.id, action: "resume" });
+  await runRecoveryWork(() => applyControl(w.ctx, w.id), 0);
+  const waiting = w.state.get(w.id).control;
+  assert.equal(waiting.id, request.id);
+  assert.equal(waiting.status, "queued");
+  assert.equal(waiting.next_at, w.ctx.clock.now() + CONFIG.poll_seconds * 1000);
+  assert.equal(waiting.started_at, undefined);
+  assert.equal(w.runner.started.length, 0);
+});
+
+test("a recheck survives a shared cooldown between idempotent label removals", async () => {
+  const w = world(), { clock } = w.ctx;
+  const scope = hostScope("github.com", "label-fixture");
+  const cooldowns = makeRecoveryCooldowns({ clock });
+  const deadline = clock.now() + 172800_000;
+  const labels = new Set([READY_LABEL, NEEDS_LABEL]);
+  w.gh.removeLabel = async (_repo, _pr, label) => cooldowns.call(scope, () => {
+    if (labels.delete(label) && label === READY_LABEL) cooldowns.record(scope, { status: 429, retryAt: deadline });
+  });
+  requestControl(w.ctx, { handle: w.id, action: "recheck" });
+  await applyControl(w.ctx, w.id);
+  const waiting = w.state.get(w.id).control;
+  assert.deepEqual([...labels], [NEEDS_LABEL]);
+  assert.equal(waiting.status, "queued");
+  assert.equal(waiting.next_at, deadline);
+
+  clock.set(new Date(deadline).toISOString());
+  await applyControl(w.ctx, w.id);
+  assert.equal(labels.size, 0);
+  assert.equal(w.state.get(w.id).control.id, waiting.id);
+  assert.equal(w.state.get(w.id).control.status, "applied");
+  assert.equal(w.runner.started.length, 0);
+});
+
+test("a registry cooldown after claiming a message preserves a proven unsubmitted turn", async () => {
+  const w = world(), { clock } = w.ctx;
+  const repo = w.state.get(w.id).repo;
+  const cooldowns = makeRecoveryCooldowns({ clock });
+  const deadline = clock.now() + 72 * 3600_000;
+  cooldowns.record(serviceScope("registry", "https://npm.pkg.github.com", "registry-fixture"), { status: 429, retryAt: deadline });
+  w.ctx.credential = fakeCredential("registry-fixture");
+  w.ctx.config.repos = [{ repo, package_auth: { provider: "github-packages", packages: ["@acme/editor"] } }];
+  let probes = 0;
+  w.ctx.packageAuthPreflight = makePackageAuthPreflight({ clock, cooldowns, fetch: async () => {
+    probes++;
+    return { status: 200, body: { cancel: async () => {} } };
+  } });
+  const request = requestControl(w.ctx, { handle: w.id, action: "message", note: "Owned input." });
+  await w.tick.tick();
+  const queued = w.state.get(w.id).control;
+  assert.equal(queued.id, request.id);
+  assert.equal(queued.note, request.note);
+  assert.equal(queued.status, "queued");
+  assert.equal(queued.started_at, undefined);
+  assert.equal(queued.next_at, deadline);
+  assert.equal(probes, 0);
+  assert.equal(w.runner.started.length, 0);
+
+  clock.set(new Date(deadline).toISOString());
+  await w.tick.tick();
+  assert.equal(w.state.get(w.id).control.status, "applied");
+  assert.equal(probes, 1);
+  assert.equal(w.runner.started.length, 1);
+});
+
+test("a cooldown without non-submission proof cannot replay a claimed dispatch", async () => {
+  const w = world();
+  const cooldowns = makeRecoveryCooldowns({ clock: w.ctx.clock });
+  const scope = providerScope("claude", "fixture");
+  cooldowns.record(scope, { status: 429, retryAt: w.ctx.clock.now() + 3600_000 });
+  const start = w.runner.start;
+  w.runner.start = (...args) => { start(...args); throw cooldowns.deferred(scope); };
+  requestControl(w.ctx, { handle: w.id, action: "resume" });
+  await applyControl(w.ctx, w.id);
+  assert.equal(w.state.get(w.id).control.status, "failed");
+  assert.equal(w.state.get(w.id).control.next_at, undefined);
+  assert.equal(w.runner.started.length, 1);
+});
+
+test("a cooldown preserves an observation-only resume of the original uncertain run", async () => {
+  const w = world(), { clock } = w.ctx;
+  const cooldowns = makeRecoveryCooldowns({ clock });
+  const scope = providerScope("openai-agents", "fixture");
+  const deadline = clock.now() + 48 * 3600_000;
+  cooldowns.record(scope, { status: 429, retryAt: deadline });
+  const job = { id: "original", running: true, execution: { acceptance: "unknown", providerState: "status-unknown" } };
+  const calls = [];
+  w.ctx.executionFor = () => ({
+    capabilities: { transport: "remote" }, current: () => job,
+    recover: async input => {
+      const deferred = cooldowns.deferred(scope);
+      if (deferred) throw dispatchNotSentError(deferred);
+      calls.push(input);
+      job.execution = { acceptance: "accepted", providerState: "running" };
+      return job;
+    },
+  });
+  w.state.update(w.id, { last: { run: job.id }, control: { id: "recover-original", action: "resume", status: "queued" } });
+  assert.equal(await recoverControl(w.ctx, w.id), true);
+  const saved = w.state.get(w.id).control;
+  assert.equal(saved.status, "queued");
+  assert.equal(saved.recoveryRun, job.id);
+  assert.equal(saved.next_at, deadline);
+  assert.deepEqual(calls, []);
+  assert.equal(await recoverControl(w.ctx, w.id), true);
+  assert.deepEqual(w.state.get(w.id).control, saved);
+
+  clock.set(new Date(deadline).toISOString());
+  assert.equal(await recoverControl(w.ctx, w.id), true);
+  assert.deepEqual(calls, [{ authorized: true, operationId: "control-recovery:recover-original" }]);
+  assert.equal(w.state.get(w.id).control.status, "applied");
+  assert.equal(w.runner.started.length, 0);
 });
