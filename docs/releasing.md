@@ -12,6 +12,14 @@ version npm serves as `latest`. When `init` or another documented command change
 behavior, release the version that carries it before, or together with, the
 documentation that describes it.
 
+## Recovery candidate notes
+
+Recovery qualification now has an offline fixture aggregate and independently
+attested native, live and overnight phases. New automatic mutations remain
+off until a matching canary is admitted. Reviewed legacy adoption and explicit
+canaries create registry version 3. Drain accepted work and keep a matching
+runtime and state backup before switching artifacts. [Evidence and rollout status](recovery-qualification.md)
+
 ## One-time launch setup
 
 1. Review all branches and Git history, author metadata, issues, PR discussions,

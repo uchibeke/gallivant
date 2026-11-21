@@ -2450,11 +2450,12 @@ for (const operation of ["create", "edit"]) test(`verified PR ${operation} can r
   const f = resultFixture(), checkpoint = join(f.dir, "result-application.json");
   const head = f.result.inputHead;
   const pr = prFixture({ number: 1, headRefName: f.entry.branch, headRefOid: head });
-  let rows = operation === "edit" ? [pr] : [], lookupFailed = true, held = false, holdOnLookup = false, writes = 0;
+  let rows = operation === "edit" ? [pr] : [], lookupFailed = true, held = false, holdOnLookup = false, writes = 0, profilePresent = true;
   let remoteHead = head;
   if (operation === "edit") f.entry.pr = pr.number;
-  f.ctx.state = { get: () => ({ ...f.entry, recovery_profile: { version: 1, digest: "fixture" } }),
-    load: () => ({ recovery: { holds: { [`task/${f.id}`]: { active: held } } } }) };
+  const profile = { id: "publication-recovery", mode: "recover", digest: "f".repeat(64) };
+  f.ctx.state = { get: () => ({ ...f.entry, recovery_profile: { version: 1, digest: profile.digest } }),
+    load: () => ({ recovery: { profiles: profilePresent ? [profile] : [], holds: { [`task/${f.id}`]: { active: held } } } }) };
   const reopen = () => ({ ...f.ctx, host: makeHostRegistry({ credential: async () => ({ token: "fixture" }), exec: async (_cmd, args) => {
     if (args[0] === "api") {
       assert.deepEqual(args, ["api", `repos/${f.entry.repo}/commits/${encodeURIComponent(f.entry.branch)}`]);
@@ -2485,6 +2486,10 @@ for (const operation of ["create", "edit"]) test(`verified PR ${operation} can r
   assert.equal(writes, 0);
   assert.equal(readJson(checkpoint).phase, "pushed");
   held = false; holdOnLookup = false;
+  profilePresent = false;
+  await assert.rejects(reconcileExecutionResult(reopen(), f), /paused by task control or recovery hold/);
+  assert.equal(writes, 0);
+  profilePresent = true;
   assert.equal((await reconcileExecutionResult(reopen(), f)).pr.number, pr.number);
   assert.equal((await reconcileExecutionResult(reopen(), f)).pr.number, pr.number);
   assert.equal(readJson(checkpoint).phase, "published");

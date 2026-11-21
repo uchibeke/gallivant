@@ -336,6 +336,11 @@ contains `--run`. Approve the visible ready revision with the separate start
 command above. The task service starts the daemon; `gallivant start` with no path also opens the dashboard.
 Read [task operations](tasks.md) for selected context, revisions, recovery and costs.
 
+New recovery recipes stay in observation mode until an operator pins a profile
+and admits the task, route and recipe to a qualified canary. Use `gallivant why
+HANDLE` to inspect a stopped task and `gallivant recovery drain` before changing
+runtimes. [Recovery qualification and rollout](recovery-qualification.md)
+
 ### From a written brief
 
 `new` uses the first configured harness. Pass `--harness` with another configured

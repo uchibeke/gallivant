@@ -3,6 +3,7 @@ import { inspectReviewLink } from "../lib/review_link.mjs";
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { mkdirSync, readFileSync, writeFileSync, statSync } from "node:fs";
+import { join } from "node:path";
 import { createHash } from "node:crypto";
 import { PNG } from "pngjs";
 import { evaluateReviews } from "../lib/review_evaluation.mjs";
@@ -13,8 +14,9 @@ import { selectReviewPolicy, legacyReviewPolicy, policyConfig, reviewBinding, re
 import { DEFAULTS } from "../lib/config.mjs";
 import { redact } from "../lib/execution_io.mjs";
 import { recoveryDeadline, runRecoveryWork } from "../lib/recovery_io.mjs";
+import { recoveryAdminIntent } from "../lib/operator_intent.mjs";
 import { aggregateReviewResults, captureReviewEvidence, partitionReviewEvidence, planReviewSynthesis, reducedReviewReport, reviewReports, synthesisReviewEvidence, validateReviewResult, reviewPrompt, REVIEW_VALIDATION_VERSION } from "../lib/review_evidence.mjs";
-import { buildReviewRun, createReviewService, imageReviewRouteFingerprint, reviewRouteFingerprint } from "../lib/first_party_review.mjs";
+import { buildReviewRun, createReviewService, imageReviewRouteFingerprint, reviewExecutionId, reviewRouteFingerprint } from "../lib/first_party_review.mjs";
 import { copyReviewImage, inspectReviewImage } from "../lib/review_image.mjs";
 import { makeTick } from "../lib/tick.mjs";
 import { makeGh } from "../lib/gh.mjs";
@@ -864,6 +866,50 @@ function reviewServiceWorld(clock = makeClock()) {
       r.result = { ok, finished: true, error, lastMessage: raw, denials: [], cost: null };
     } };
 }
+
+test("a reviewer preparation cannot submit across a scoped disable and enable", async () => {
+  const t = tickWorld(), w = reviewServiceWorld(t.ctx.clock);
+  const { profile } = admitFixture(t.ctx, t.id, "review-output-retry", "codex");
+  w.ctx.state = t.state;
+  const arrived = Promise.withResolvers(), release = Promise.withResolvers(), baseExecutionFor = w.ctx.executionFor;
+  let held = false;
+  w.ctx.executionFor = key => {
+    const runner = baseExecutionFor(key);
+    runner.prepare = async () => {
+      if (!held) { held = true; arrived.resolve(); await release.promise; }
+      return { receipt: {}, spec: {} };
+    };
+    return runner;
+  };
+  const service = w.service(), pending = service.reconcile(t.id, t.entry(), w.pr);
+  await arrived.promise;
+  const scope = `profile/${profile.id}`;
+  for (const [generation, action] of ["disable", "enable"].entries())
+    t.state.setRecoveryHold(scope, action, generation, recoveryAdminIntent(t.state.file, action, scope, generation));
+  release.resolve();
+  await pending;
+  assert.equal(w.calls.submits, 0);
+  assert.equal(Object.values(service.inspect(t.id).jobs)[0].status, "preparing");
+  await service.reconcile(t.id, t.entry(), w.pr);
+  assert.equal(w.calls.submits, 1);
+});
+
+test("a new review head preserves uncertain cancellation and waits for exact cessation", async () => {
+  const w = reviewServiceWorld(), service = w.service();
+  const first = await service.reconcile(w.id, w.entry, w.pr);
+  const saved = service.inspect(w.id).jobs[first.key];
+  const original = w.ctx.executionFor(reviewExecutionId(join(w.ctx.home, "reviews"), w.id, first.key));
+  original.cancel = async () => { w.calls.cancellations++; return { confirmed: false }; };
+  w.pr.headRefOid = "d".repeat(40);
+  await assert.rejects(service.reconcile(w.id, w.entry, w.pr), /uncertain cancellation/);
+  assert.equal(service.inspect(w.id).jobs[first.key].cancellationUnresolved, true);
+  await assert.rejects(w.service().reconcile(w.id, w.entry, w.pr), /uncertain cancellation/);
+  assert.equal(w.calls.submits, 1);
+  assert.equal(w.calls.cancellations, 1);
+  w.finish(saved, { endedAt: w.clock.now() });
+  await w.service().reconcile(w.id, w.entry, w.pr);
+  assert.equal(w.calls.submits, 2);
+});
 
 test("expired recovery budgets defer reviewer preparation with the original reservation", async () => {
   const { ctx, state, id, gh, entry, notify } = tickWorld();
