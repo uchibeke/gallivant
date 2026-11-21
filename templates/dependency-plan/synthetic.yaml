@@ -1,0 +1,23 @@
+version: 1
+name: synthetic-console
+repositories:
+  example:
+    repository: example-org/example-project
+    checkout: .
+    base: main
+nodes:
+  - id: foundation-finished
+    type: anchor
+    target:
+      plan: synthetic-foundation
+      boundary: terminal
+  - id: console
+    type: group
+    mode: parallel
+    file: fragments/console.yaml
+    needs: [foundation-finished]
+  - id: qualification
+    type: task
+    repository: example
+    prd: docs/prds/synthetic-qualification.md
+    needs: [console]

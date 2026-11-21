@@ -67,6 +67,8 @@ const HELP = `gallivant: give an agent a task, let the review loop run, go outsi
   gallivant task resume|validate|start <task-id> --revision <n> [--run] [--no-daemon] [--json]
                                          shared versioned operations; start --run approves the reviewed revision
   gallivant ready <prd.md> [--check]     check the PRD against the contract; flip it to ready when it passes
+  gallivant plan validate <file> [--dir <directory>] [--checkout <relative-directory>] [--json]
+                                         compile a local JSON or YAML dependency plan for inspection
   gallivant start [prd.md] [--no-daemon] [--no-server] [--no-open] [--port 8791] [--base <branch>]
                                          start the daemon and dashboard, then open it; optionally start a ready PRD
                                          --base sets the branch the PR targets and remembers it for this repository
@@ -126,11 +128,27 @@ const OPTIONS = {
 };
 
 async function dispatch(argv) {
-  const options = argv[0] === "learn" ? { ...OPTIONS, run: { type: "string" } } : OPTIONS;
+  const options = argv[0] === "learn" ? { ...OPTIONS, run: { type: "string" } }
+    : argv[0] === "plan" ? { dir: OPTIONS.dir, json: OPTIONS.json, help: OPTIONS.help, checkout: { type: "string", multiple: true } }
+    : OPTIONS;
   const { values, positionals } = parseArgs({ args: argv, options, allowPositionals: true });
   const [cmd, arg] = positionals;
   if (values.version) { console.log(VERSION); return 0; }
   if (values.help || !cmd || cmd === "help") { console.log(HELP); return 0; }
+  if (cmd === "plan") {
+    if (arg !== "validate" || positionals.length !== 3 || Object.keys(values).some(key => !["dir", "checkout", "json"].includes(key))) {
+      throw new Error("usage: plan validate <file> [--dir <directory>] [--checkout <relative-directory>] [--json]");
+    }
+    const { compileDependencyPlan } = await import("../lib/dependency_plan.mjs");
+    const preview = compileDependencyPlan(positionals[2], { directory: values.dir, checkouts: values.checkout });
+    if (values.json) console.log(JSON.stringify(preview));
+    else {
+      const { graph, graphDigest, approvalDigest } = preview;
+      const tasks = graph.nodes.filter(node => node.type === "task").length;
+      console.log(`${graph.name}: ${tasks} tasks, ${graph.nodes.length - tasks} unresolved anchors, ${graph.edges.length} dependencies\ngraphDigest ${graphDigest}\napprovalDigest ${approvalDigest}`);
+    }
+    return 0;
+  }
   if (values.after !== undefined && (cmd !== "chain" || !values.after.trim())) throw new Error("--after requires a registered PR URL or handle when queuing a new chain");
   if (cmd === "init") {
     if (arg) throw new Error("init takes no positional argument; run it from inside the target checkout");

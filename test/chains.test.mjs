@@ -5,6 +5,7 @@ import { dirname, join } from "node:path";
 import { existsSync, mkdirSync, readFileSync, writeFileSync, rmSync } from "node:fs";
 import { makeGit } from "../lib/git.mjs";
 import { queueChain, retryChain, cancelChain, tickChains, chainRows, renderChains } from "../lib/chains.mjs";
+import { compileLinearChain } from "../lib/dependency_plan.mjs";
 import { makeState, STATES } from "../lib/state.mjs";
 import { writeJsonAtomic } from "../lib/fs.mjs";
 import { start } from "../lib/commands/start.mjs";
@@ -111,6 +112,16 @@ async function anchoredWorld(options = {}) {
   w.anchor = selector => queueChain(w.ctx, { name: "follow-on", paths: w.paths.slice(1), after: selector ?? `${REPO}#1` });
   return w;
 }
+
+test("the linear preview adapts the queued CLI description without changing saved chain state", async () => {
+  const w = world({ count: 3 });
+  const chain = await queueChain(w.ctx, { name: "release", paths: w.paths, base: "release/base" });
+  const graph = compileLinearChain(chain);
+  assert.deepEqual(graph.nodes.map(node => [node.taskId, node.base]), chain.steps.map(step => [step.id, "release/base"]));
+  assert.deepEqual(graph.edges, [{ from: "first-step", to: "second-step" }, { from: "second-step", to: "third-step" }]);
+  assert.deepEqual(w.ctx.state.getChain(chain.name), chain);
+  assert.equal(w.starts(), 0);
+});
 
 test("an existing registered PR gates one new milestone without adopting or restarting its run", async () => {
   const w = await anchoredWorld();
