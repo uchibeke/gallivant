@@ -5,6 +5,8 @@ import { join } from "node:path";
 import { requestControl, applyControl, cancelControl, recoverControl, interruptControl, lastMessage, controlFailure, controlPending } from "../lib/control.mjs";
 import { makeState } from "../lib/state.mjs";
 import { makeTick } from "../lib/tick.mjs";
+import { makePackageAuthPreflight } from "../lib/package_auth.mjs";
+import { runRecoveryWork } from "../lib/recovery_io.mjs";
 import { NEEDS_LABEL } from "../lib/gh.mjs";
 import { CONFIG, seededState, makeClock, fakeGh, fakeGit, fakeNotify, fakeRunner, fakeCredential, fakeIdentity, harnessBin, GOOD_PRD, silentLog, STATES, review, at, checkRun, prFixture } from "./helpers.mjs";
 
@@ -450,4 +452,38 @@ test("the daemon notifies and retries stop labels when an operator interrupt can
   assert.equal(w.runner.started.length, 0); assert.equal(after.reason, "dependency-auth");
   assert.equal(after.session, before.session); assert.equal(after.iteration, before.iteration);
   assert.equal(after.control.status, "failed"); assert.match(after.control.message, /Private-package access/);
+});
+
+test("registry budget deferral retains the same approved queued message", async () => {
+  const w = world();
+  const before = w.state.get(w.id);
+  w.ctx.config.repos = [{ repo: before.repo, package_auth: { provider: "github-packages", packages: ["@acme/editor"] } }];
+  let expire = true, probes = 0;
+  const preflight = makePackageAuthPreflight({ fetch: async () => {
+    probes++;
+    return { status: 200, body: { cancel: async () => {} } };
+  } });
+  w.ctx.packageAuthPreflight = input => expire ? runRecoveryWork(() => preflight(input), 0) : preflight(input);
+  const request = requestControl(w.ctx, { handle: w.id, action: "message", note: "Keep the approved scope.", requestId: "package-message" });
+  await w.tick.tick();
+  const waiting = w.state.get(w.id);
+  assert.equal(waiting.control.status, "queued");
+  assert.equal(waiting.control.id, request.id);
+  assert.equal(waiting.control.note, request.note);
+  assert.equal(waiting.control.next_at, w.ctx.clock.now() + CONFIG.poll_seconds * 1000);
+  assert.equal(waiting.reason, before.reason);
+  assert.equal(waiting.session, before.session);
+  assert.equal(waiting.iteration, before.iteration);
+  assert.equal(probes, 0);
+  assert.equal(w.runner.started.length, 0);
+
+  expire = false;
+  await w.tick.tick();
+  assert.equal(probes, 0);
+  w.ctx.clock.advance(CONFIG.poll_seconds / 60);
+  await w.tick.tick();
+  assert.equal(probes, 1);
+  assert.equal(w.runner.started.length, 1);
+  assert.equal(w.state.get(w.id).control.status, "applied");
+  assert.match(w.runner.started[0].args.at(-1), /Keep the approved scope/);
 });

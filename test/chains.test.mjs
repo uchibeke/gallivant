@@ -3,6 +3,8 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { dirname, join } from "node:path";
 import { existsSync, mkdirSync, readFileSync, writeFileSync, rmSync } from "node:fs";
+import { makePackageAuthPreflight } from "../lib/package_auth.mjs";
+import { runRecoveryWork } from "../lib/recovery_io.mjs";
 import { makeGit } from "../lib/git.mjs";
 import { queueChain, retryChain, cancelChain, tickChains, chainRows, renderChains } from "../lib/chains.mjs";
 import { compileLinearChain } from "../lib/dependency_plan.mjs";
@@ -339,6 +341,39 @@ test("queue approves a plan without starting work; ticks start its first PRD exa
   await tickChains(w.ctx);
   assert.equal(w.starts(), 1, "daemon reload cannot dispatch the same approved step twice");
   assert.equal(w.clones.length, 1);
+});
+
+test("an expired package preflight leaves an unclaimed chain step scheduled", async () => {
+  const w = world();
+  w.ctx.config.repos = [{ repo: REPO, package_auth: { provider: "github-packages", packages: ["@acme/editor"] } }];
+  let expire = true, probes = 0;
+  const preflight = makePackageAuthPreflight({ fetch: async () => {
+    probes++;
+    return { status: 200, body: { cancel: async () => {} } };
+  } });
+  w.ctx.packageAuthPreflight = input => expire ? runRecoveryWork(() => preflight(input), 0) : preflight(input);
+  await w.queue();
+  await makeTick(w.ctx).tick();
+  const deferred = w.ctx.state.getChain("release");
+  assert.equal(deferred.status, "active");
+  assert.equal(deferred.failures, 0);
+  assert.equal(deferred.steps[0].dispatch, null);
+  assert.equal(w.ctx.state.startClaim(FIRST), null);
+  assert.ok(Date.parse(deferred.rateLimitUntil) > w.ctx.clock.now());
+  assert.equal(probes, 0);
+  assert.equal(w.clones.length, 0);
+  assert.equal(w.starts(), 0);
+
+  expire = false;
+  w.ctx.state = makeState(w.home);
+  const ticker = makeTick(w.ctx);
+  await ticker.tick();
+  assert.equal(probes, 0);
+  w.ctx.clock.set(deferred.rateLimitUntil);
+  await ticker.tick();
+  assert.equal(probes, 1);
+  assert.equal(w.starts(), 1);
+  assert.ok(w.ctx.state.get(FIRST));
 });
 
 test("Bitbucket rate limiting pauses a queued chain without consuming its failure budget", async () => {

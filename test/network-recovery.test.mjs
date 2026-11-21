@@ -3,13 +3,15 @@ import assert from "node:assert/strict";
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { makeTick } from "../lib/tick.mjs";
+import { makePackageAuthPreflight } from "../lib/package_auth.mjs";
+import { runRecoveryWork } from "../lib/recovery_io.mjs";
 import { resume } from "../lib/commands/resume.mjs";
 import { applyControl } from "../lib/control.mjs";
 import { model, render } from "../lib/commands/status.mjs";
 import { why } from "../lib/commands/why.mjs";
 import { runPage } from "../lib/tracker/pages.mjs";
 import { completionView, coordinatorEntryActive } from "../lib/task_completion.mjs";
-import { networkFailure, transientProviderFailure, retryPlan, validNetworkRetry, networkRecoveryDetail, needsAgentResume } from "../lib/network_recovery.mjs";
+import { networkFailure, transientProviderFailure, retryPlan, validNetworkRetry, networkRecoveryDetail, needsAgentResume, networkRecoveryDeadline } from "../lib/network_recovery.mjs";
 import { CONFIG, T0, at, makeClock, fakeGh, fakeRunner, fakeGit, fakeNotify, seededState, claudeResultLines, silentLog, STATES, tempHome, fakeCredential, fakeIdentity, harnessBin, checkRun } from "./helpers.mjs";
 
 const CAPACITY = "Selected model is at capacity. Please try a different model.";
@@ -170,6 +172,37 @@ test("preflight refusal stops automatic recovery without resetting the bound", a
   assert.equal(w.entry().reason, "network-recovery-blocked");
   assert.equal(w.entry().network_retry.attempts, 1);
   assert.equal(w.runner.started.length, 1);
+});
+
+test("a registry budget deferral preserves the original unspent network retry", async () => {
+  const w = world();
+  await w.fail();
+  w.ctx.config.repos = [{ repo: w.entry().repo, package_auth: { provider: "github-packages", packages: ["@acme/editor"] } }];
+  let expire = true, probes = 0;
+  const preflight = makePackageAuthPreflight({ fetch: async () => {
+    probes++;
+    return { status: 200, body: { cancel: async () => {} } };
+  } });
+  w.ctx.packageAuthPreflight = input => expire ? runRecoveryWork(() => preflight(input), 0) : preflight(input);
+  const original = w.entry().network_retry;
+  w.clock.set(original.next_at);
+  await w.tick();
+  const waiting = w.entry().network_retry;
+  assert.deepEqual(waiting, { ...original, next_at: at(1 + CONFIG.poll_seconds / 60) });
+  assert.equal(networkRecoveryDeadline(waiting), networkRecoveryDeadline(original));
+  assert.equal(w.entry().reason, "provider-network");
+  assert.equal(w.runner.started.length, 1);
+  assert.equal(probes, 0);
+
+  expire = false;
+  w.restart();
+  await w.tick();
+  assert.equal(probes, 0);
+  w.clock.set(waiting.next_at);
+  await w.tick();
+  assert.equal(probes, 1);
+  assert.equal(w.runner.started.length, 2);
+  assert.equal(w.entry().network_retry.attempts, original.attempts + 1);
 });
 
 test("local sign-in health never claims API connectivity", () => {

@@ -133,6 +133,9 @@ coding turn; repair access, then Resume agent. Fresh initial starts fail before
 creating their checkout or start claim. Review-fix failures retain feedback and
 iteration allowance with reason `dependency-auth`.
 
+An expired recovery service budget defers the registry check to a later
+scheduled poll. The original dispatch or retry allowance still applies.
+
 Only the selected local CLI coding session receives the package credential as
 `NODE_AUTH_TOKEN` and `GITHUB_PACKAGES_TOKEN`. Other repositories do not receive
 it; inherited package-token variables are cleared. Preparation, independent

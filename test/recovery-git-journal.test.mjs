@@ -11,6 +11,8 @@ import { cleanupMergedWorkspace } from "../lib/workspace_cleanup.mjs";
 import { requestControl } from "../lib/control.mjs";
 import { why } from "../lib/commands/why.mjs";
 import { resume } from "../lib/commands/resume.mjs";
+import { makePackageAuthPreflight } from "../lib/package_auth.mjs";
+import { runRecoveryWork } from "../lib/recovery_io.mjs";
 import { makeHostRegistry } from "../lib/hosts.mjs";
 import { contentDigest } from "../lib/hash.mjs";
 import { actionsRepairEvidence } from "../lib/hosts/github_actions_status.mjs";
@@ -131,6 +133,33 @@ async function world(t, { ci = false, overlay = true, attributes = null } = {}) 
   };
   return { home, origin, tree, local, state, id, head, base, start, clock, raw, ctx, git, gh, g, commit, entry, tick, resolve, verified };
 }
+
+test("registry budget expiry leaves the approved repair journal ready to resume", async t => {
+  const w = await world(t);
+  w.ctx.config.repos = [{ repo: w.entry().repo, package_auth: { provider: "github-packages", packages: ["@acme/editor"] } }];
+  let expire = true, probes = 0;
+  const preflight = makePackageAuthPreflight({ clock: w.clock, fetch: async () => {
+    probes++;
+    return { status: 200, body: { cancel: async () => {} } };
+  } });
+  w.ctx.packageAuthPreflight = input => expire ? runRecoveryWork(() => preflight(input), 0) : preflight(input);
+  await w.tick();
+  const journal = w.entry().base_repair;
+  assert.equal(journal.status, "prepared");
+  assert.equal(journal.journal.phase, "planned");
+  assert.equal(w.entry().state, STATES.prOpen);
+  assert.equal(w.entry().iteration, 0);
+  assert.equal(w.g(["rev-parse", "HEAD"]), w.head);
+  assert.equal(w.raw.started.length, 1);
+  assert.equal(probes, 0);
+
+  expire = false;
+  await w.tick();
+  assert.equal(w.raw.started.length, 2);
+  assert.equal(w.entry().base_repair.status, "running");
+  assert.equal(w.entry().base_repair.operationId, journal.operationId);
+  assert.equal(probes, 1, "route and launch checks share the successful probe");
+});
 
 test("journaled merge preserves both parents and the tracked identity while restoring private context", async t => {
   const w = await world(t);
