@@ -10,6 +10,7 @@ import { makeTick } from "../lib/tick.mjs";
 import { cleanupMergedWorkspace } from "../lib/workspace_cleanup.mjs";
 import { requestControl } from "../lib/control.mjs";
 import { why } from "../lib/commands/why.mjs";
+import { resume } from "../lib/commands/resume.mjs";
 import { makeHostRegistry } from "../lib/hosts.mjs";
 import { contentDigest } from "../lib/hash.mjs";
 import { actionsRepairEvidence } from "../lib/hosts/github_actions_status.mjs";
@@ -18,7 +19,7 @@ import { recoveryDigest } from "../lib/recovery_digest.mjs";
 import { acceptedRecovery, planRecovery } from "../lib/recovery_recipes.mjs";
 import { admitFixture } from "./recovery-recipe-fixture.mjs";
 import { CONFIG, GOOD_PRD, T0, at, tempHome, makeClock, fakeRunner, fakeGh, fakeNotify, fakeCredential, fakeIdentity,
-  silentLog, prFixture, claudeResultLines, STATES } from "./helpers.mjs";
+  silentLog, prFixture, claudeResultLines, harnessBin, STATES } from "./helpers.mjs";
 
 const fail = () => Object.assign(new Error("fixture disk full"), { code: "ENOSPC" });
 const mkdir = dir => fs.mkdirSync(dir, { recursive: true });
@@ -38,7 +39,7 @@ function scratch(t) {
   return dir;
 }
 
-async function world(t, { ci = false, overlay = true } = {}) {
+async function world(t, { ci = false, overlay = true, attributes = null } = {}) {
   const home = scratch(t), origin = join(home, "remote"), tree = join(home, "trees", "task"), local = join(home, "registry"), operator = join(home, "operator");
   mkdir(origin); mkdir(dirname(tree)); mkdir(local); mkdir(operator);
   const g = (args, cwd = tree) => execFileSync("git", args, { cwd, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"], timeout: 10_000,
@@ -48,6 +49,10 @@ async function world(t, { ci = false, overlay = true } = {}) {
     return g(["rev-parse", "HEAD"], dir);
   };
   g(["init", "-q", "-b", "main"], origin);
+  if (attributes) {
+    write(join(origin, ".gitattributes"), attributes);
+    g(["add", "--", ".gitattributes"], origin);
+  }
   const start = commit(initial, origin);
   g(["clone", "-q", origin, tree], home);
   g(["checkout", "-qb", branch]);
@@ -78,7 +83,8 @@ async function world(t, { ci = false, overlay = true } = {}) {
   const gh = fakeGh({ pr: prFixture({ headRefName: branch, headRefOid: head, baseRefOid: base, mergeable: ci ? "MERGEABLE" : "CONFLICTING" }) });
   gh.repoPermissions = async () => ({ pullRequestCreate: "proved", apiRepositoryWrite: "proved" });
   gh.now = () => new Date(clock.now()).toISOString();
-  const config = { ...CONFIG, home, worktrees: dirname(tree), harness: { ...CONFIG.harness, claude: { ...CONFIG.harness.claude, model: "fixture" } } };
+  const config = { ...CONFIG, home, worktrees: dirname(tree), harness: { ...CONFIG.harness,
+    claude: { ...CONFIG.harness.claude, bin: harnessBin(home, "claude"), model: "fixture" } } };
   const git = makeGit({ config, identity: fakeIdentity() });
   git.originOf = async () => "https://github.com/acme/widget.git";
   git.ensureHttpsRemote = async () => {};
@@ -154,6 +160,16 @@ test("journaled merge preserves both parents and the tracked identity while rest
   assert.ok(report.includes(`Verify on ${repaired}: 1 passed`));
   assert.ok(!report.includes(w.home));
   assert.ok(!report.includes(approvedOverlay.trim()));
+
+  w.state.update(w.id, { brief_changes: ["Replacement pending"] });
+  await assert.rejects(resume(w.ctx, { handle: w.id }), /Reconcile displaced private overlays/);
+  assert.equal(w.raw.started.length, 2);
+  w.state.update(w.id, { brief_changes: null });
+  const continued = await resume(w.ctx, { handle: w.id, note: "Keep identity roles wired." });
+  assert.equal(continued.run, w.raw.started[2].id);
+  assert.match(w.raw.started[2].args.join(" "), /Keep identity roles wired\./);
+  assert.match(w.raw.started[2].args.join(" "), /Planning context with no identity wiring/);
+  assert.equal(fs.readFileSync(join(w.tree, source), "utf8"), wired);
 });
 
 test("checkpoint loss replays the exact open merge without restaging and keeps a moved base pinned", async t => {
@@ -176,6 +192,29 @@ test("checkpoint loss replays the exact open merge without restaging and keeps a
   assert.equal(w.entry().base_repair.baseSha, w.base);
   assert.deepEqual(fs.readFileSync(join(w.tree, ".git", "index")), index);
   assert.deepEqual(fs.readFileSync(join(w.tree, file)), bytes);
+  assert.equal(w.raw.started.length, 2);
+});
+
+test("interrupted merge replays exact conflict bytes with CRLF checkout attributes", async t => {
+  const w = await world(t, { overlay: false, attributes: "*.mjs text eol=crlf\n" });
+  const merge = w.git.beginRepairMerge;
+  w.git.beginRepairMerge = async (...args) => { await merge.apply(w.git, args); throw fail(); };
+  await w.tick();
+  assert.equal(w.entry().base_repair.journal.phase, "merging");
+  const path = join(w.tree, file);
+  const index = fs.readFileSync(join(w.tree, ".git", "index"));
+  const original = fs.readFileSync(path, "utf8");
+  assert.match(original, /<<<<<<< HEAD\r\n/);
+  write(path, original.replaceAll("\r\n", "\n"));
+  await w.tick();
+  assert.match(w.entry().base_repair.failure, /partial resolutions/);
+  assert.equal(w.raw.started.length, 1);
+
+  write(path, original);
+  await w.tick();
+  assert.equal(w.entry().base_repair.status, "running", w.entry().base_repair.failure);
+  assert.equal(fs.readFileSync(path, "utf8"), original);
+  assert.deepEqual(fs.readFileSync(join(w.tree, ".git", "index")), index);
   assert.equal(w.raw.started.length, 2);
 });
 
@@ -334,25 +373,26 @@ test("known stale hook derivation can refresh, while foreign policy and override
 });
 
 function installCI(w, { baseConclusion = "success", conclusion = "failure" } = {}) {
-  const repo = "acme/widget", workflow = 72, jobName = "Regression", stepName = "Check identity";
+  const repo = "acme/widget", workflow = 72, stepName = "Check identity";
+  const jobName = runId => runId === 4 ? "Artifact storage" : "Regression";
   const url = (run, job) => `https://github.com/${repo}/actions/runs/${run}/job/${job}`;
   const run = (id, head, result) => ({ id, head_sha: head, status: "completed", conclusion: result, run_attempt: 1, workflow_id: workflow,
     html_url: `https://github.com/${repo}/actions/runs/${id}`, repository: { id: 1, full_name: repo }, head_repository: { id: 1 },
     created_at: T0, run_started_at: T0, updated_at: at(1) });
   const job = (id, runId, head, result) => ({ id, run_id: runId, run_attempt: 1, head_sha: head, status: "completed", conclusion: result,
-    name: jobName, completed_at: at(1), check_run_url: `https://api.github.com/repos/${repo}/check-runs/${id}`,
+    name: jobName(runId), completed_at: at(1), check_run_url: `https://api.github.com/repos/${repo}/check-runs/${id}`,
     steps: [{ name: stepName, number: 2, conclusion: result, status: "completed" }] });
   const head = () => w.gh.data.pr.headRefOid;
   const read = path => {
     if (path.includes("/actions/workflows/")) return { workflow_runs: [run(1, w.base, baseConclusion)], total_count: 1 };
     if (path.includes("/annotations")) return [{ annotation_level: "failure", path: file, message: "private fixture diagnostic" }];
     const id = Number(path.match(/\/actions\/runs\/(\d+)/)[1]);
-    const [sha, result] = id === 1 ? [w.base, baseConclusion] : id === 2 ? [w.head, conclusion] : [head(), "success"];
+    const [sha, result] = id === 1 ? [w.base, baseConclusion] : id === 2 ? [w.head, conclusion] : [head(), id === 4 ? "timed_out" : "success"];
     if (!path.includes("/jobs?")) return run(id, sha, result);
     return { jobs: [job(id * 10, id, sha, result)], total_count: 1 };
   };
   w.gh.repairCIEvidence = actionsRepairEvidence(read, w.clock);
-  const check = (headSha, outcome, runId) => ({ headSha, outcome, name: jobName, source: { host: "github.com" }, url: url(runId, runId * 10), updatedAt: at(1) });
+  const check = (headSha, outcome, runId) => ({ headSha, outcome, name: jobName(runId), source: { host: "github.com" }, url: url(runId, runId * 10), updatedAt: at(1) });
   w.gh.data.pr.statusCheckRollup = [check(w.head, "failed", 2)];
   return check;
 }
@@ -379,10 +419,30 @@ test("scoped CI repair preserves the original job and requires the same step on 
   w.gh.data.pr.statusCheckRollup = [check(w.head, "passed", 3)];
   await w.tick();
   assert.equal(w.entry().base_repair.journal.ciClear, undefined);
-  w.gh.data.pr.statusCheckRollup = [check(head, "passed", 3)];
+  w.gh.data.pr.statusCheckRollup = [check(head, "passed", 3), check(head, "failed", 4)];
   await w.tick();
-  assert.equal(w.entry().base_repair.journal.ciClear.job, 30);
+  assert.equal(w.entry().base_repair.journal.ciClear?.job, 30);
   assert.equal(w.entry().base_repair.journal.ci.job, 20);
+  assert.match(w.entry().recovery_wait?.reason, /CI infrastructure failure/);
+  assert.equal(w.raw.started.length, 2);
+  assert.equal(w.entry().review_readiness, null);
+});
+
+test("a stopped task records repaired-job clearance after its iteration budget is exhausted", async t => {
+  const w = await world(t, { ci: true });
+  const check = installCI(w);
+  await w.tick();
+  const head = w.commit(combined);
+  w.raw.finish(claudeResultLines(), { exit: 0 });
+  await w.tick();
+  assert.equal(w.entry().base_repair.remoteSha, head);
+
+  w.state.update(w.id, { state: STATES.needsHuman, reason: "checks-red", iteration: w.ctx.config.max_iterations });
+  w.gh.data.pr.statusCheckRollup = [check(head, "passed", 3), check(head, "failed", 4)];
+  await w.tick();
+  assert.equal(w.entry().base_repair.journal.ciClear?.job, 30);
+  assert.equal(w.entry().state, STATES.needsHuman);
+  assert.equal(w.raw.started.length, 2);
 });
 
 test("CI infrastructure or the same failing base job stays observation-only", async t => {
