@@ -127,6 +127,23 @@ test("legacy control cancellation verifies cessation instead of trusting the kil
   }
 });
 
+test("cancellation retains the confirmed control outcome if the follow-up execution read fails", async () => {
+  const w = world(), run = w.runner.start("fix", "claude", [], {});
+  const saved = { version: 1, providerState: "running" };
+  w.state.update(w.id, { last: { run: run.id, exit: null }, execution: saved });
+  w.runner.cancel = async () => {
+    w.runner.current = () => { throw new Error("fixture observation unavailable"); };
+    return { confirmed: true };
+  };
+  requestControl(w.ctx, { handle: w.id, action: "cancel" });
+  assert.equal(await cancelControl(w.ctx, w.id), true);
+  const entry = w.state.get(w.id);
+  assert.equal(entry.control.status, "applied");
+  assert.equal(entry.reason, "cancelled");
+  assert.deepEqual(entry.execution, saved);
+  assert.equal(await cancelControl(w.ctx, w.id), false);
+});
+
 test("host identity outages cannot delay local or hosted cancellation", async () => {
   for (const failure of ["host unreachable", "HTTP 429", "HTTP 401"]) {
     for (const transport of ["local", "remote-confirmed", "remote-unconfirmed"]) {

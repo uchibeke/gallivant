@@ -147,6 +147,54 @@ test("an always-due host poll gives captured review and runtime cleanup a serial
   assert.deepEqual(order, Array.from({ length: 4 }, () => ["host", "review", "maintenance"]).flat());
 });
 
+test("a correction recorded between scans joins the author lane without reading settled history", async () => {
+  const w = tickWorld(), owner = "acme/widget/owner", foreign = "acme/widget/foreign", history = "acme/widget/history";
+  const provider = "openai-agents", started = w.clock.now();
+  const previous = { run: "old-run", exit: 0 }, reads = [], reconciled = [];
+  const ledger = new Map(), cursor = { since: T0, dispatched: ["feedback-1"] };
+  w.entry(owner, { harness: provider, pr: 142, last: previous, review_next_at: started + 30_000 });
+  w.entry(foreign, { harness: provider, pr: 143, last: previous, review_next_at: started + 120_000 });
+  w.entry(history, { harness: provider, state: STATES.done, last: previous, workspace_cleanup: { status: "retained" } });
+  w.ctx.executionFor = id => ({
+    state: () => { reads.push(id); return { current: ledger.get(id) }; },
+    current: () => ledger.get(id),
+    reconcile: async options => { reconciled.push([id, options.force]); },
+  });
+  let hostReads = 0;
+  w.ctx.gh.prView = async () => { hostReads++; throw new Error("unexpected host read"); };
+  const ticker = makeTick(w.ctx);
+  await ticker.tick();
+  assert.deepEqual(reads, [owner, foreign]);
+
+  const run = { id: "accepted-run", running: true, startedAt: started, execution: {
+    version: 1, taskId: owner, runId: "accepted-run", operationId: "old-run:0:fix", provider, transport: "remote",
+    acceptance: "accepted", providerState: "running", nextAttemptAt: started + 120_000,
+    workflow: { cursor, lastEvent: "fixed feedback-1" },
+  } };
+  ledger.set(owner, run);
+  ledger.set(foreign, run);
+  ledger.set(history, run);
+  w.clock.advance(0.5);
+  await ticker.tick();
+  assert.equal(ticker.metrics.lanes.host.selected, 1);
+  assert.equal(w.state.get(owner).last.run, previous.run);
+  assert.deepEqual(reads, [owner, foreign]);
+  assert.equal(hostReads, 0);
+
+  w.clock.advance(1 / 6);
+  await ticker.tick();
+  assert.deepEqual(reconciled, [[owner, false]]);
+  assert.equal(ticker.metrics.lanes.author.selected, 1);
+  assert.equal(w.state.get(owner).last.run, run.id);
+  assert.deepEqual(w.state.get(owner).cursor, cursor);
+  w.clock.advance(1 / 3);
+  await ticker.tick();
+  assert.equal(ticker.metrics.lanes.author.selected, 0);
+  assert.equal(w.state.get(foreign).last.run, previous.run);
+  assert.ok(!reads.includes(history));
+  assert.equal(hostReads, 0);
+});
+
 test("boot reconciliation resumes the unfinished PR after its service budget expires", async () => {
   const w = tickWorld(), firstRepo = "acme/widget", secondRepo = "acme/other";
   const listed = [], comments = [];

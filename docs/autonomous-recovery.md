@@ -117,6 +117,10 @@ provider and review polling. Shared service cooldowns can defer an individual
 account or credential past those intervals. An entry with a remaining cleanup,
 delivery, cancellation or accepted execution stays eligible after terminal
 closeout. Settled retained history consumes no author or host slots.
+For active entries, the scan reads saved author ledgers locally to find work
+whose dispatch acknowledgement reached the ledger before the registry. The
+task, provider, run and preceding operation must match before the existing
+author or settlement lane can reconcile it.
 
 | Lane | Items per cycle on a standalone coordinator |
 | --- | ---: |

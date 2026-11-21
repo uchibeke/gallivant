@@ -207,6 +207,7 @@ test("confirmed registry cancellations release the pin only after execution and 
   const ctx = { state, clock: makeClock(), log: silentLog, runnerFor: () => ({ current: () => job, cancel: async () => ({ confirmed }) }) };
   await cancelControl(ctx, id);
   assert.equal(state.get(id).reason, "cancellation-requested");
+  assert.equal(state.get(id).execution, undefined, "a versionless execution observation must stay out of the registry");
   assert.throws(() => migrateRuntimeState({ home, manifest: update }), { code: "RUNTIME_ACTIVE_PIN" });
   state.update(id, { control: { action: "cancel", status: "queued" } }); confirmed = true;
   await cancelControl(ctx, id);
