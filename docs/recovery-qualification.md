@@ -12,7 +12,7 @@ approved manifest digest and exact recovery profile.
 
 | Scope | Result and evidence |
 | --- | --- |
-| Offline faults and replay | All 101 required tests and all 133 aggregate tests passed on macOS ARM64 with Node 22.22.0. The full fixture report digest is `e241a6b0a59f8e087a739d11bfa4af50ffc676fb6d63a5d18a101a5d5eef6e1b`. It binds code digest `ce1e85ccc5e895e9bb1b6f15a465c1b2f105e1807eaaeb7e0c67db077a955630`. [Fixture aggregate](../scripts/qualify-autonomous-recovery.mjs) |
+| Offline faults and replay | All 102 required tests passed. The macOS ARM64 fixture aggregate passed 137 tests on both Node 22.22.0 and Node 24.15.0. The report digests are `e188e5a75be53eaabee84045191696e2b30949d21705ae429b56349df21bef60` and `57108d4a3ffcf9c7a9979e57effd9262acf891044c9c52440cbf8ceb576dcd0b` in that order. Both record checkout `99e36e4937b82e306d94a40c16f42dac46ddebeb` and tested code digest `4953794a39522c9bccff2a29c8279dba36e478e7944a58a0cf2d376fb9b51431`. [Fixture aggregate](../scripts/qualify-autonomous-recovery.mjs) |
 | Native Linux and macOS | Unvalidated. This task's protected registry contained no pinned qualification manifest. `--native` exited 1 with `RECOVERY_QUALIFICATION`. A macOS ARM64 Node 22.22.0 fixture run exercises real local process and Git calls. It has no admitted environment or independent supervisor receipt. |
 | Live GitHub, Bitbucket private and Bitbucket public | Unvalidated. `--live` exited 1 at manifest admission. Repository access for implementation and a local Chromium 145.0.7632.6 PNG capture were observed separately. The selected disposable repository bindings, route entitlement, and any required installed host or capture behavior still need owner proofs. |
 | Overnight recovery and a true authority gate | Unvalidated. `--overnight` exited 1 at manifest admission. The operator needs separately approved exact cases and maintenance scope. |
@@ -163,9 +163,11 @@ Use `gallivant why HANDLE` to inspect the task, `gallivant recovery disable
 profile/ID GENERATION` to fence new recovery effects, and `gallivant cancel
 HANDLE` to request cessation of active work. An observe stage with a newer
 generation also fences new automatic recipes. Accepted collection and
-cancellation records remain with the same owner, and a verified merge can
-close out while workspaces are retained. A disable never grants related
-publications, new submissions or cleanup.
+cancellation records remain with the same owner. A remote result collected
+during a hold stays pending through restart. Releasing the hold resumes
+publication from that result. If a maintainer has already merged the exact PR
+into the approved base, closeout can proceed during the hold and preserve the
+collected output.
 
 Before a runtime change, stop new intake, let accepted operations and cleanup
 settle, and inspect `gallivant recovery drain`. Use the matching emitted

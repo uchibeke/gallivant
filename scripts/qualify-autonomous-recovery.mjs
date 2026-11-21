@@ -24,6 +24,9 @@ const contracts = {
     "accepted correction recovers workflow ownership after a lost registry acknowledgement",
     "completed local output survives a successor, restart and cursor replay with exact paginated history",
     "interrupted verification blocks replay while lost publication replies reuse verified evidence",
+    "a recovery hold arriving after verification fences publication without spending another verification",
+    "a held remote result keeps publication owed across restart and publishes once after release",
+    "a held remote result preserves merged closeout without publishing late output",
     "uncertain PR creation survives worker restart and only observes the original verified publication",
     "verified PR create can retry a failed lookup before its write",
     "canonical artifact targets survive native commit acknowledgement loss without changing the private manifest",
@@ -67,11 +70,13 @@ function fixtureEnvironment() {
 }
 const escape = name => name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
-function runContracts(suites, names, deadline) {
+export function runContracts(suites, names, deadline) {
   const timeout = Math.min(120_000, deadline - Date.now());
   if (timeout <= 0) return { suites, selected: names, result: "failed", timeout: true, exit: null, passed: 0 };
   const selection = names.length ? [`--test-name-pattern=^(?:${names.map(escape).join("|")})$`] : [];
-  const result = spawnSync(process.execPath, ["--test", `--test-timeout=${Math.max(1, timeout - 5000)}`, ...selection, ...suites.map(suite => `test/${suite}`)], {
+  const args = ["--test", "--test-reporter=tap", "--test-concurrency=1", `--test-timeout=${Math.max(1, timeout - 5000)}`,
+    ...selection, ...suites.map(suite => `test/${suite}`)];
+  const result = spawnSync(process.execPath, args, {
     cwd: root, env: fixtureEnvironment(), encoding: "utf8", timeout, maxBuffer: 8 * 1024 * 1024,
   });
   const output = result.stdout ?? "";

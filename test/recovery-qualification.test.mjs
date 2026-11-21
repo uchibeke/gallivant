@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { generateKeyPairSync, sign } from "node:crypto";
 import { linkSync, mkdirSync, readFileSync, realpathSync, unlinkSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { qualificationCommand } from "../scripts/qualify-autonomous-recovery.mjs";
+import { qualificationCommand, runContracts } from "../scripts/qualify-autonomous-recovery.mjs";
 import { checkQualificationEvidence, loadQualification, protectedQualification,
   qualificationBinding, qualificationInventory, qualifiedCombinations } from "../lib/recovery_qualification.mjs";
 import { qualifyAdmitted } from "../lib/recovery_qualification_run.mjs";
@@ -129,6 +129,14 @@ function manifestFixture() {
   };
   return { id, ctx, root, manifest, manifestPath, artifact, environment, scope, write, proof, bundle, receipts };
 }
+
+test("fixture contracts aggregate named test successes on the configured runtime", () => {
+  const name = "qualification resolves only the exact protected manifest and rejects CLI authority";
+  const report = runContracts(["recovery-qualification.test.mjs"], [name], Date.now() + 15_000);
+  assert.equal(report.result, "passed");
+  assert.equal(report.passed, 1);
+  assert.deepEqual(report.missing, []);
+});
 
 test("qualification resolves only the exact protected manifest and rejects CLI authority", async () => {
   const f = manifestFixture(), { ctx, id, artifact } = f;
