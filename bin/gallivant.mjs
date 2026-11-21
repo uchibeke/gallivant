@@ -147,7 +147,7 @@ async function dispatch(argv) {
     noDaemon: values["no-daemon"], noServer: values["no-server"], noOpen: values["no-open"], foreground: values.foreground };
   if (cmd === "recovery") {
     const report = await recoveryCommand(makeContext({ readOnly: true }), positionals.slice(1));
-    console.log(JSON.stringify(report, null, 2));
+    process.stdout.write(JSON.stringify(report, null, 2) + "\n");
     return report.readiness && !report.readiness.ready ? 1 : 0;
   }
   if (cmd === "learn") {

@@ -71,6 +71,18 @@ function patch(op, overrides = {}, envelopeOnly = false) {
   const diff = `diff --git a/answer.txt b/answer.txt\nindex 3367afd..3e75765 100644\n--- a/answer.txt\n+++ b/answer.txt\n@@ -1 +1 @@\n-old\n+new\ndiff --git a/${CLOUD_RESULT_PATH} b/${CLOUD_RESULT_PATH}\nnew file mode 100644\n--- /dev/null\n+++ b/${CLOUD_RESULT_PATH}\n@@ -0,0 +1 @@\n+${JSON.stringify(receipt)}\n`;
   return envelopeOnly ? diff.slice(diff.indexOf(`diff --git a/${CLOUD_RESULT_PATH}`)) : diff;
 }
+
+test("Cloud authority revoked during preparation fences the CLI and releases the unsent operation", async t => {
+  const f = fixture(t), execution = f.service();
+  const guard = () => {
+    if (f.calls.some(args => args[1] === "list")) throw Object.assign(new Error("profile revoked"), { code: "RECOVERY_BINDING" });
+  };
+  await assert.rejects(execution.submit(input, guard), { code: "RECOVERY_BINDING", dispatchNotSent: true });
+  assert.equal(f.calls.some(args => args[1] === "exec" && !args.includes("--help")), false);
+  assert.deepEqual(execution.state().operations, {});
+  assert.deepEqual(readJson(join(f.root, "cloud.json")).operations, {});
+  assert.equal((await execution.submit(input)).execution.acceptance, "accepted");
+});
 function delayedSubmission(t, delayMs) {
   const f = fixture(t), subprocesses = []; let entered;
   t.mock.timers.enable({ apis: ["setTimeout"] });

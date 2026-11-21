@@ -46,7 +46,7 @@ const config = { account: "fixture", organization: "org-fixture", project: "proj
 const head = "a".repeat(40), initial = "original\n", changed = "corrected\n";
 const sources = { data: Buffer.from("snapshot").toString("base64"), hash: contentHash("snapshot"), hashes: { "answer.txt": contentHash(initial) }, modes: { "answer.txt": 0o644 }, inputHead: head, repo: "acme/widget", branch: "work/widget" };
 const input = { operationId: "implementation", prompt: "Implement the approved brief", inputHead: head, repo: sources.repo, branch: sources.branch, base: "main", model: config.model, environment: config.environment, allowance: config.allowance, sources };
-function fixture({ taskId = "acme/widget/task" } = {}) {
+function fixture({ taskId = "acme/widget/task", credential = () => "offline-test-key" } = {}) {
   const root = mkdtempSync(join(tmpdir(), "agents-offline-")), calls = [], sessions = new Map(), turns = new Map();
   let now = 1_800_000_000_000;
   const clock = { now: () => now, advance: ms => { now += ms; } };
@@ -109,7 +109,7 @@ function fixture({ taskId = "acme/widget/task" } = {}) {
     return new Response(value === null ? null : JSON.stringify(value), { status: value === null ? 202 : 200 });
   };
   let fixtureEnvironment = "connected";
-  const http = agentsHttp({ credential: () => "offline-test-key", organization: config.organization, project: config.project, fetcher, clock });
+  const http = agentsHttp({ credential, organization: config.organization, project: config.project, fetcher, clock });
   const transport = () => makeAgentsTransport({ root, taskId, account: config.account, config, http, clock });
   const service = (limits = {}) => makeExecution({ root, taskId, account: config.account, provider: "openai-agents", transport: transport(), capabilities: { ...capabilitiesFor("openai-agents"), models: [config.model] }, clock, limits, jitter: () => 0 });
   const finish = (status = "completed") => { const turn = [...turns.values()].at(-1); turn.status = status; turn.completed_at = clock.now() / 1000; sessions.get(turn.session_id).status = "idle"; return turn; };
@@ -120,6 +120,32 @@ function fixture({ taskId = "acme/widget/task" } = {}) {
   };
   return { root, clock, calls, sessions, turns, http, fetcher, transport, service, finish, artifact, syncArtifactSize: () => { artifactPages[1].data[0].size_bytes = Buffer.byteLength(content()); }, setArtifactBytes: v => { artifactBytes = v; }, setEvents: v => { events = v; }, setItems: v => { items = v; }, setEnvironment: v => { fixtureEnvironment = v; }, fail: v => { failure = v; }, failAt: (route, status, retryAfter = "2") => { failure = { route, status, retryAfter }; }, lose: v => { lost = v; }, loseAnswer: v => { answerFault = v; }, getResult: () => result };
 }
+
+test("Agents authority revoked while resolving credentials prevents the first provider write", async () => {
+  let held = false;
+  const f = fixture({ credential: async () => { held = true; return "offline-test-key"; } }), execution = f.service();
+  const guard = () => { if (held) throw Object.assign(new Error("task held"), { code: "RECOVERY_BINDING" }); };
+  await assert.rejects(execution.submit(input, guard), { code: "RECOVERY_BINDING", dispatchNotSent: true });
+  assert.equal(f.calls.length, 0);
+  assert.deepEqual(execution.state().operations, {});
+  assert.deepEqual(JSON.parse(readFileSync(join(f.root, "agents.json"), "utf8")).operations, {});
+});
+
+test("Agents authority revoked during subscription retains setup ownership and sends no model input", async () => {
+  const f = fixture(), execution = f.service();
+  const guard = () => {
+    if (f.calls.some(c => c.method === "GET" && c.route.endsWith("/events"))) throw Object.assign(new Error("route revoked"), { code: "RECOVERY_BINDING", dispatchNotSent: true });
+  };
+  await assert.rejects(execution.submit(input, guard), { code: "RECOVERY_BINDING" });
+  assert.equal(f.sessions.size, 1);
+  assert.equal(f.turns.size, 0);
+  const [op] = Object.values(JSON.parse(readFileSync(join(f.root, "agents.json"), "utf8")).operations);
+  assert.ok(f.sessions.has(op.sessionId));
+  assert.equal(op.sendIntent, false);
+  assert.equal(execution.state().allowance.reservedUsd, input.allowance.reservedUsd);
+  await assert.rejects(f.service().submit(input), { code: "EXECUTION_UNKNOWN" });
+  assert.equal(f.sessions.size, 1);
+});
 async function unsupportedHost(fn) {
   const descriptor = Object.getOwnPropertyDescriptor(process, "platform");
   Object.defineProperty(process, "platform", { ...descriptor, value: "unsupported-fixture" });

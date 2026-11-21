@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { join } from "node:path";
 import { mkdirSync, writeFileSync, readFileSync } from "node:fs";
 import { adoptionInventory, validateReviewedBatch } from "../lib/recovery_inventory.mjs";
-import { preflightRecoveryDecision } from "../lib/commands/recovery.mjs";
+import { preflightRecoveryDecision, recoveryCommand, requireAuthorRoute } from "../lib/commands/recovery.mjs";
 import { turnBinding } from "../lib/recovery_preflight.mjs";
 import { prdFingerprint } from "../lib/prd.mjs";
 import { recoveryAdminIntent } from "../lib/operator_intent.mjs";
@@ -124,6 +124,43 @@ test("protected profile revocation during shared service preflight fences the sa
   decision.expected.snapshot = turnBinding(ctx, id, state.get(id), parsePrd(GOOD_PRD, id));
   await assert.rejects(preflightRecoveryDecision(ctx, id, decision), { code: "RECOVERY_AUTHORITY" });
   assert.equal(state.get(id).recovery_profile.digest, profile.digest);
+});
+
+test("author preflight reads expiring owner evidence without a prior run and rechecks expiry before dispatch", async () => {
+  const { state, id } = fixture();
+  const entry = state.update(id, { harness: route.harness, last: { run: null } });
+  let now = 100, modelProof = true, run = null;
+  const clock = { now: () => now };
+  const ctx = { state, clock, readPrd: () => GOOD_PRD, executionFor: () => ({ current: () => run }),
+    config: { ...CONFIG, harness: { [route.harness]: { model: route.model, account: route.account } } },
+    gh: { repoPermissions: async () => ({ push: true }), branchExists: async () => true, prListByHead: async () => [], tokenScopes: async () => "repo" },
+    git: { authorStorage: async () => {} }, checkHarness: async () => ({ ok: true }),
+    authorCapabilityEvidence: async ({ binding, capability }) => capability !== "model" || modelProof
+      ? { ok: true, binding, expiresAt: capability === "model" ? 105 : now + 600 } : null };
+  const preflight = () => recoveryCommand(ctx, ["preflight", id]);
+  const report = await preflight();
+  assert.equal(report.mode, "observe");
+  assert.equal(report.readiness.ready, true);
+  assert.equal(report.readiness.expiresAt, 105);
+  const author = await requireAuthorRoute(ctx, id, entry, () => {});
+  author.assertFresh();
+  now = 105;
+  assert.throws(() => author.assertFresh(), { code: "AUTHOR_PREFLIGHT" });
+  assert.deepEqual((await preflight()).readiness.diagnostics.map(d => d.check), ["model"]);
+  modelProof = false;
+  now = 100000;
+  state.update(id, { last: { run: "owned" } });
+  run = { id: "owned", execution: { taskId: id, runId: "owned", provider: route.harness, model: route.model, account: route.account,
+    acceptance: "accepted", providerState: "succeeded", observedAt: now, completedAt: now - 60000,
+    recoveryRouteDigest: hash(route), recoveryProfileDigest: entry.recovery_profile.digest } };
+  assert.deepEqual((await preflight()).readiness.diagnostics.map(d => d.check), ["model"]);
+  run.execution.completedAt = now - 59999;
+  assert.equal((await preflight()).readiness.expiresAt, now + 1);
+  run.execution.taskId = "another-task";
+  assert.deepEqual((await preflight()).readiness.diagnostics.map(d => d.check), ["model"]);
+  state.update(id, { recovery_profile: null });
+  delete ctx.config.harness[route.harness].model;
+  assert.deepEqual((await preflight()).readiness.diagnostics.map(d => d.check), ["profile", "model"]);
 });
 
 test("disposable qualification binds the protected manifest and cannot become operator authority", async () => {

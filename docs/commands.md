@@ -836,4 +836,4 @@ owned stopped timeout/provider failure can be retried with `--retry --reason
 new bounded allowance; it never accepts a failed result or bypasses review.
 See [first-party review](first-party-review.md#waiting-for-qualification-and-explicitly-retrying-a-stopped-probe).
 
-Use `recovery inventory [profile-id]` for a read-only adoption proposal and `recovery preflight <handle> <decision.json>` for an admitted route. The [recovery policy reference](autonomous-recovery.md#recovery-policy-and-admission) describes profile administration, scoped holds, exact task admission and the migration format.
+Use `recovery inventory [profile-id]` for a read-only adoption proposal. Use `recovery preflight <handle>` to inspect the proposed author route, or append a decision JSON path to check a specific recovery decision. The [recovery policy reference](autonomous-recovery.md#recovery-policy-and-admission) describes profile administration, scoped holds, exact task admission and the migration format.
