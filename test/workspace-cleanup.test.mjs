@@ -10,6 +10,7 @@ import { createReviewService } from "../lib/first_party_review.mjs";
 import { reviewDigest } from "../lib/review_policy.mjs";
 import { makeTick } from "../lib/tick.mjs";
 import { runtimeEnvironment, prepareRuntimeCache } from "../lib/runtime-environment.mjs";
+import { ownRuntimeFixture } from "./owned-fixtures.mjs";
 import { CONFIG, T0, at, fakeGh, fakeGit, fakeRunner, fakeNotify, makeClock, prFixture, seededState, silentLog, STATES } from "./helpers.mjs";
 
 function fixture(t, repo = "acme/widget") {
@@ -44,7 +45,7 @@ test("confirmed merged clones are removed for both hosts; durable evidence survi
     writeFileSync(evidence, "immutable receipt");
     mkdirSync(join(w.path, "node_modules", "large-package"), { recursive: true });
     writeFileSync(join(w.path, "node_modules", "large-package", "generated"), "cache");
-    const env = runtimeEnvironment(process.env, process.execPath, w.path); prepareRuntimeCache(w.path, env);
+    const env = runtimeEnvironment(process.env, process.execPath, w.path); prepareRuntimeCache(w.path, env); ownRuntimeFixture(t, w.path);
     const scratch = execFileSync(process.execPath, ["-e", "const fs=require('fs'),os=require('os'),path=require('path');const p=fs.mkdtempSync(path.join(os.tmpdir(),'fixture-'));fs.writeFileSync(path.join(p,'output'),'scratch');process.stdout.write(p)"], { env: { ...process.env, ...env }, encoding: "utf8" });
     assert.ok(existsSync(scratch));
     assert.equal((await cleanupMergedWorkspace(w.ctx, w.id, w.entry, w.pr)).status, "done");
@@ -76,7 +77,7 @@ test("local edits, untracked files, unpublished branches, stashes and Git locks 
 test("unproved temporary ownership retains the checkout instead of blocking terminal closeout forever", async t => {
   const w = fixture(t), env = runtimeEnvironment(process.env, process.execPath, w.path);
   prepareRuntimeCache(w.path, env);
-  t.after(() => rmSync(env.TMPDIR, { recursive: true, force: true }));
+  ownRuntimeFixture(t, w.path);
   writeFileSync(join(env.TMPDIR, ".runtime-owner.json"), "unproved ownership");
   const result = await cleanupMergedWorkspace(w.ctx, w.id, w.entry, w.pr);
   assert.equal(result.status, "retained"); assert.match(result.reason, /CLEANUP_BOUNDARY/);

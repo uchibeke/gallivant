@@ -406,3 +406,27 @@ including separate SSH and API credentials when using SSH Git. Setup checks
 transport access; a live public repository run has reached ready with explicit
 no-reviewer policy. Independent review and a clean Linux installation have not
 been qualified. Check `gallivant doctor` before starting your own repository.
+
+## Host supervision
+
+An operator can qualify a separate supervisor on Linux or macOS for a pinned,
+installed coordinator. The supervisor owns restart accounting and host
+configuration. Qualify the installed executable, version, absolute state
+directory, lease identity, crash behavior and restart throttle together.
+
+- On Linux, use a dedicated service-manager unit with an absolute
+  `ExecStart` pointing at the pinned installation and its foreground `up`
+  command. Qualify a dead-lease check and restart rate limits such as
+  `RestartSec` and `StartLimitBurst`. Verify that the unit's process and
+  cgroup policy preserves detached authors when the coordinator exits.
+- On macOS, use a dedicated launchd job with an absolute executable in
+  `ProgramArguments` and a fixed state directory. Qualify a dead-lease check
+  before restart and configure `ThrottleInterval`. Test intentional stops
+  and the survival of detached workers before enabling automatic restart.
+
+The adapter must prove the exact recorded lease owner is dead, honor intentional
+shutdown, and wait on occupied or unverifiable PIDs. It starts only the pinned
+installation and makes no task, provider, Git or update decisions. A live-hung
+restart needs its own qualified fencing. Native Linux and macOS service-manager
+qualification is M06 work. Disable automatic restart with the host manager before
+stopping the coordinator or changing its executable. [Recovery diagnostics](autonomous-recovery.md#long-running-execution-and-coordinator-availability)

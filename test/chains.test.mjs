@@ -344,19 +344,24 @@ test("queue approves a plan without starting work; ticks start its first PRD exa
 test("Bitbucket rate limiting pauses a queued chain without consuming its failure budget", async () => {
   const w = world();
   await w.queue();
+  let reads = 0;
   w.ctx.gh.refSha = async () => {
+    reads++;
     const error = new Error("Bitbucket API rate limited");
     error.code = "BB_RATE_LIMIT";
+    error.retryAfter = "172800";
     throw error;
   };
   await tickChains(w.ctx);
   const paused = w.ctx.state.getChain("release");
   assert.equal(paused.status, "active");
   assert.equal(paused.failures, 0);
-  assert.ok(Date.parse(paused.rateLimitUntil) > Date.now() + 10 * 60_000);
+  assert.equal(Date.parse(paused.rateLimitUntil), w.ctx.clock.now() + 172800_000);
+  w.ctx.clock.advance(120);
   for (let i = 0; i < 6; i++) await tickChains(w.ctx);
   assert.equal(w.ctx.state.getChain("release").status, "active");
   assert.equal(w.starts(), 0);
+  assert.equal(reads, 1, "the former two-hour cap cannot advance a server deadline");
 });
 
 test("an active legacy-prefix milestone survives upgrade and its neutral-prefix successor still waits for merge", async () => {
@@ -798,7 +803,7 @@ test("fast progress ticks retain chain review cadence, bound outage retries and 
   w.ctx.gh.prView = async (...args) => { reads++; return prView(...args); };
   w.ctx.clock.advance(2); await tick.tick(); assert.equal(reads, 1);
   for (let i = 0; i < 11; i++) { w.ctx.clock.advance(1 / 6); await tick.tick(); }
-  assert.equal(reads, 1); assert.equal(w.starts(), 1); assert.ok(progress >= 12);
+  assert.equal(reads, 1); assert.equal(w.starts(), 1); assert.equal(progress, 0, "settled predecessor history has no author polls");
   w.ctx.clock.advance(1 / 6); await tick.tick(); assert.equal(reads, 2);
   w.ctx.gh.prView = async () => { reads++; throw new Error("GitHub offline"); };
   w.ctx.clock.advance(2); await tick.tick(); assert.equal(w.ctx.state.getChain("release").failures, 1);

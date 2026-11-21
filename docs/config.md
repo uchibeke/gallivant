@@ -534,3 +534,27 @@ and the completion receipt.
 `review.mode` selects `external-required`, `first-party-required`, or `both-required` for new tasks. `review.route: "codex"` requires a successful isolated live qualification. `review.specialist` allows at most one of `security` or `regression`. Defaults and bounds, per-repository settings, separate review allowances, explicit zero-check CI policy and the `legacy_no_review` exception are documented in [First-party review](first-party-review.md). A config edit cannot change an existing task policy; use `review policy <handle> --mode <mode> --reason "..."` to revoke readiness and explicitly re-evaluate. `reviewer: null` alone no longer authorizes an unattended new start.
 
 Recovery profiles are revisioned coordinator registry records. A new start selects a profile by exact digest. A global default cannot enroll an existing task. See the [profile fields, route tuple and generation rules](autonomous-recovery.md#recovery-policy-and-admission).
+
+## Recovery scheduling and headroom
+
+`recovery_scan_seconds` defaults to 60 and accepts integers from 10 to 600.
+It controls structural eligibility checks inside the existing loop. Review
+polling and execution progress continue to use their existing cadences.
+
+`resource_headroom` is optional. It accepts the following keys.
+
+| Key | Default | Meaning |
+| --- | ---: | --- |
+| `minimum_free_bytes` | 67,108,864 | Free bytes required per state, checkout, Git metadata and temporary mount |
+| `minimum_free_inodes` | 128 | Free inodes on each target mount |
+| `minimum_memory_bytes` | 33,554,432 | Minimum OS and process-available memory |
+| `maximum_load_per_cpu` | 4 | Maximum one-minute load per available CPU. Zero disables the load check |
+| `warm_cache_hours` | 12 | Warm period for the coordinator-created task-local npm cache |
+| `cleanup` | `observe` | `qualified` enables new cleanup only with a matching protected recipe, scope and qualification |
+| `journal_reserve` | `null` | A filesystem qualification pin with numeric `device` and `fs_type` when separately approved |
+
+The reserve is a preallocated 4 MiB file on the coordinator journal volume.
+Keep it disabled until the exact platform and volume are qualified. Restore
+`cleanup: "observe"` and `journal_reserve: null` to disable new resource
+mutations. Preserve receipts, pending intents and execution state when changing
+these settings. [Workspace retention and inspection](workspace-cleanup.md)

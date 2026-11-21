@@ -107,7 +107,7 @@ test("embedded coordinator resolves authenticated identity when plain context ha
   await coordinator.wake();
   assert.deepEqual(calls,["schedule","identity","schedule"],"the real tick succeeds without a test-only injected login");
   ctx.gh.user=async()=>{throw Object.assign(new Error("identity unavailable"),{code:"GH_UNAVAILABLE"});};
-  await assert.rejects(coordinator.wake(),{code:"GH_UNAVAILABLE"});
+  assert.deepEqual(await coordinator.wake(), [], "an unavailable identity does not abort independent coordinator lanes");
 });
 
 test("pre-registration intake and execution records retain their exact active artifact pin", async t => {
@@ -356,7 +356,7 @@ test("chain review cadence survives fast wakes, process restart and failed advan
     assert.equal(readJson(join(home, "coordinator.json")).chainCursor, null);
     assert.equal(readJson(join(home, "coordinator.json")).nextChainAt, deadline);
   }
-  assert.equal(progress, 14, "one bounded entry still reconciles on every wake");
+  assert.equal(progress, 0, "settled chain predecessors do not use author slots");
   clock.advance(10 / 60);
   const broken = { ...ctx, state: { ...state, chains: () => { throw new Error("fixture state read failure"); } } };
   await assert.rejects(coordinator(broken).wake(), /fixture state read failure/);

@@ -1480,9 +1480,10 @@ test("unchanged reviewer polls do not write the registry or refresh the task tim
 test("local reviewer progress is not held behind unrelated provider reconciliation", async () => {
   const old = { key: "captured-review", binding: "old-binding", status: "running" };
   const w = tickWorld({ over: { firstPartyReview: old, review_next_at: Number.MAX_SAFE_INTEGER } });
-  w.ctx.executionFor = () => w.runner;
-  w.runner.reconcile = async () => {};
-  const paused = pauseCall(w.runner, "reconcile");
+  const authorId = "acme/other/active", author = { ...w.runner, current: () => null, reconcile: async () => {} };
+  w.state.put(authorId, { repo: "acme/other", state: "running", harness: "codex", last: { run: "owned-author", exit: null } });
+  w.ctx.executionFor = id => id === authorId ? author : w.runner;
+  const paused = pauseCall(author, "reconcile");
   let progress = 0;
   w.ctx.reviewService.progress = async () => { progress++; return old; };
   w.gh.prView = async () => assert.fail("local review cannot fetch a new host snapshot");

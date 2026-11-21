@@ -82,7 +82,9 @@ function stoppedRunner(members, stopMembers) {
   writeFileSync(join(root, "latest-run"), id);
   writeFileSync(join(root, id, "job.json"), JSON.stringify({ id, pid: 100, bin: "agent", exit: 137, killed: true, killAfter: 1, stopMembers }));
   const signals = [];
-  const runner = makeRunner(root, { clock: { now: () => 24 * 60 * 60_000 }, processes: () => members, signal: (...args) => signals.push(args) });
+  const runner = makeRunner(root, { clock: { now: () => 24 * 60 * 60_000 }, processes: () => members,
+    exists: pid => Boolean(members?.some(member => member.pid === pid)), birth: pid => members?.find(member => member.pid === pid)?.started,
+    signal: (...args) => signals.push(args) });
   return { runner, signals, id };
 }
 
@@ -92,7 +94,7 @@ test("a restarted daemon can finish a verified cancellation hours later", () => 
   assert.equal(runner.current().running, true);
   assert.deepEqual(signals, [], "reads never signal");
   runner.kill(id);
-  assert.deepEqual(signals, [[-100, "SIGKILL"]]);
+  assert.deepEqual(signals, [[102, "SIGKILL"]]);
 });
 
 test("PID reuse cannot authorize signalling a cancelled group", () => {
@@ -108,7 +110,7 @@ test("a descendant in a shared outside group never authorizes stopping unrelated
   assert.deepEqual(owned.map(m => m.pid), [100, 102]);
   const { runner, signals, id } = stoppedRunner(owned, owned);
   runner.kill(id);
-  assert.deepEqual(signals, [[102, "SIGKILL"], [-100, "SIGKILL"]]);
+  assert.deepEqual(signals, [[102, "SIGKILL"], [100, "SIGKILL"]]);
 });
 
 test("unreadable process state fails closed instead of starting over orphaned tools", () => {

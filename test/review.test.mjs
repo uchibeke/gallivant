@@ -345,12 +345,11 @@ test("daemon exclusion survives missing health, rejects a second owner, and rele
   next.release();
 });
 
-test("a stale daemon lock can be recovered without trusting its reusable PID", () => {
+test("a mismatched identity for an occupied PID does not authorize removing its lease", () => {
   const home = tempHome();
   writeJsonAtomic(join(home, "daemon.lock"), { pid: process.pid, identity: "v2:old process", instance: "old" });
-  const lock = acquireDaemon(home);
-  try { assert.equal(readDaemon(home).instance, lock.owner.instance); }
-  finally { lock.release(); }
+  assert.throws(() => acquireDaemon(home), /PID still occupied/);
+  assert.equal(readDaemon(home).instance, "old");
 });
 
 test("daemon identity and exclusion survive a caller's locale and timezone change", () => {
@@ -399,7 +398,7 @@ test("health write failure still publishes exclusive ownership during startup", 
   assert.equal(readDaemon(w.home).alive, true);
   await assert.rejects(() => up(w.ctx, { once: true }), /already running/);
   rejectProbe(new Error("offline"));
-  await assert.rejects(() => boot, /offline/);
+  await boot;
   assert.equal(readDaemon(w.home), null);
 });
 
@@ -412,7 +411,7 @@ test("down cannot signal an unrelated reused PID or a stopped daemon", () => {
   }
 });
 
-test("up publishes ownership before a slow GitHub probe and releases it on boot failure", async () => {
+test("up publishes ownership before a slow GitHub probe and releases it after an offline one-shot cycle", async () => {
   const w = world();
   let rejectProbe;
   w.ctx.gh.user = () => new Promise((_resolve, reject) => { rejectProbe = reject; });
@@ -421,8 +420,9 @@ test("up publishes ownership before a slow GitHub probe and releases it on boot 
   assert.equal(readDaemon(w.home).starting, true);
   await assert.rejects(() => up(w.ctx, { once: true }), /already running/);
   rejectProbe(new Error("GitHub unavailable"));
-  await assert.rejects(() => boot, /GitHub unavailable/);
+  await boot;
   assert.equal(readDaemon(w.home).alive, false);
+  assert.match(readDaemon(w.home).probes.gh.detail, /GitHub unavailable/);
 });
 
 test("background startup catches spawn errors and cancels an unreported child at timeout", async () => {

@@ -1199,7 +1199,7 @@ test("a needs-human entry without a PR is left alone: no PR lookup, no error", a
   let looked = false;
   w.gh.prView = async () => { looked = true; return prFixture(); };
   const results = await w.tick.tick();
-  assert.deepEqual(results.map(r => r.ok), [true]);
+  assert.deepEqual(results, [], "a stopped task without a due obligation uses no lane slot");
   assert.equal(looked, false);
 });
 
