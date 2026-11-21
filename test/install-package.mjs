@@ -4,6 +4,7 @@
 import assert from "node:assert/strict";
 import { execFileSync, spawnSync } from "node:child_process";
 import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, readdirSync, rmSync, realpathSync, statSync, existsSync } from "node:fs";
+import { createRequire } from "node:module";
 import { tmpdir } from "node:os";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -16,7 +17,8 @@ const mode = p => statSync(p).mode & 0o777;
 try {
   const packed = JSON.parse(run("npm", ["pack", "--ignore-scripts", "--json", "--pack-destination", root], { cwd: source }))[0];
   assert.equal(packed.name, "@uchibeke/gallivant");
-  for (const f of packed.files) assert.ok(!/(^|\/)(?:\.env[^/]*|\.git|\.npmrc|test|audit|prds|plans|design)(?:\/|$)/.test(f.path), `private/test payload: ${f.path}`);
+  const syntheticBriefs = new Set(["plan-view", "task-view", "qualification"].map(name => `templates/dependency-plan/docs/prds/synthetic-${name}.md`));
+  for (const f of packed.files) assert.ok(syntheticBriefs.has(f.path) || !/(^|\/)(?:\.env[^/]*|\.git|\.npmrc|test|audit|prds|plans|design)(?:\/|$)/.test(f.path), `private/test payload: ${f.path}`);
   assert.ok(packed.files.some(f => f.path === "README.md"), "README is packaged");
   for (const name of ["tokens.css", "primitives.css", "shell.css", "tracker.css", "lifecycle.js", "shell.js", "control-drafts.js", "controls.js", "tracker.js", "overview.js", "overview.css", "workspace.js", "workspace.css", "activity-render.js", "chains.js", "chains.css", "intake.js", "intake.css", "health.css"])
     assert.ok(packed.files.some(f => f.path === `templates/tracker/${name}`), `runtime asset: ${name}`);
@@ -87,7 +89,7 @@ esac
   // Doctor has open items on a fresh machine (no APort hook, no ruleset), and init's exit code is doctor's.
   assert.equal(first.status, 1, first.stderr);
   const out = first.stdout;
-  assert.match(out, new RegExp(`Package:\\s+@uchibeke/gallivant ${packed.version.replace(/\\./g, "\\.")} \\(run by npx\\)`));
+  assert.match(out, new RegExp(`Package:\\s+@uchibeke/gallivant ${packed.version.replace(/\\./g, "\\.")} \\(run by npx\\)`), first.stderr);
   const running = out.match(/^Running:\s+(\S+)$/m)?.[1];
   assert.ok(running && running.startsWith(cache) && /[\\/]_npx[\\/]/.test(running) && running.endsWith("bin/gallivant.mjs"), `selected binary from the npx cache: ${running}`);
   assert.ok(!running.startsWith(source), "the source checkout was not what ran");
@@ -130,6 +132,12 @@ esac
   assert.equal(command("--version").trim(), packed.version);
   assert.match(command("--help"), /--no-server/);
   assert.match(command("--help"), /gallivant init/);
+  const example = join(installed, "templates/dependency-plan");
+  const validateExample = extension => JSON.parse(command("plan", "validate", `synthetic.${extension}`, "--dir", example, "--json"));
+  assert.equal(validateExample("yaml").graphDigest, validateExample("json").graphDigest);
+  const yamlPackage = createRequire(cli).resolve("yaml/package.json");
+  assert.equal(JSON.parse(readFileSync(yamlPackage, "utf8")).license, "ISC");
+  assert.match(readFileSync(join(dirname(yamlPackage), "LICENSE"), "utf8"), /Permission to use, copy, modify/);
   assert.match(command("new", "first-task"), /docs\/prds\/first-task.md/);
   // A new brief is deliberately a draft with instructions to replace. Verify
   // that its packaged template loads, then check a complete offline fixture.
