@@ -42,7 +42,8 @@ function world(stateOver = {}, ghOver = {}, { config = CONFIG, readPrd = () => n
 
 test("private-package refusal retains feedback without starting or repeatedly charging a fix", async () => {
   let probes = 0;
-  const w = world({}, { reviews: [review({ id: 9101, by: BOT, bot: true, state: "CHANGES_REQUESTED", at: at(5) })] }, {
+  const w = world({}, { pr: prFixture({ headRefOid: "bad1234", statusCheckRollup: [checkRun({ name: "test", conclusion: "FAILURE" })] }),
+    reviews: [review({ id: 9101, by: BOT, bot: true, state: "CHANGES_REQUESTED", at: at(5) })] }, {
     packageAuthPreflight: async () => { probes++; throw Object.assign(new Error("Package read access failed before dispatch"), { code: "PACKAGE_AUTH" }); },
   });
   w.clock.advance(6); const cursor = w.entry().cursor;
@@ -50,6 +51,8 @@ test("private-package refusal retains feedback without starting or repeatedly ch
   assert.equal(w.entry().state, STATES.needsHuman); assert.equal(w.entry().reason, "dependency-auth");
   assert.equal(w.runner.started.length, 0); assert.equal(w.entry().iteration, 0);
   assert.deepEqual(w.entry().cursor, cursor); assert.equal(probes, 1);
+  const ci = w.entry().recovery_record.incidents.find(i => i.cause === "checks-red");
+  assert.equal(ci.head, "bad1234"); assert.equal(ci.attempts, 0);
 });
 
 test("a recovered handoff ledger gives the first new session its context instructions", async () => {
@@ -1214,6 +1217,36 @@ test("a review that landed while the start run was still going is seen once the 
   assert.equal(w.entry().cursor.since, at(3), "the cursor then moves to the review that was dispatched");
 });
 
+test("automatic CI correction retains the failed host head and original run until verified green", async () => {
+  const w = world({ last: { run: "previous", exit: 0, at: T0 } }, {
+    pr: prFixture({ headRefOid: "bad1234", statusCheckRollup: [checkRun({ name: "unit", conclusion: "FAILURE", at: at(1) })] }),
+  });
+  w.clock.advance(4);
+  await w.tick.tick();
+  assert.equal(w.runner.started.length, 1, w.logged.join("\n"));
+  const [incident] = w.entry().recovery_record.incidents;
+  assert.ok(incident, "the host failure is recorded before dispatch consumes the event");
+  assert.equal(incident.cause, "checks-red");
+  assert.equal(incident.evidence, "reviewObservation");
+  assert.equal(incident.head, "bad1234");
+  assert.equal(incident.run, "previous");
+  assert.equal(incident.at, at(4));
+  assert.equal(incident.attempts, 1);
+
+  w.runner.finish(claudeResultLines());
+  w.gh.data.pr = prFixture({ headRefOid: "fed4321", statusCheckRollup: [checkRun({ name: "unit", status: "IN_PROGRESS" })] });
+  w.clock.advance(4);
+  await w.tick.tick(); // The push is verified, but its checks are still pending.
+  assert.equal(w.entry().verified_progress.head, "fed4321");
+  assert.deepEqual(w.entry().recovery_record.incidents, [incident]);
+  w.gh.data.pr = prFixture({ headRefOid: "fed4321", statusCheckRollup: [checkRun({ name: "unit", conclusion: "SUCCESS", at: at(9) })] });
+  w.clock.advance(1);
+  await w.tick.tick();
+  assert.equal(w.entry().reviewObservation.checks.settled, true);
+  assert.deepEqual(w.entry().recovery_record.incidents, []);
+  assert.equal(w.runner.started.length, 1);
+});
+
 test("a failing check on a head the loop itself pushed is dispatched once, then stops with checks-red", async () => {
   const w = world({ iteration: 1, cursor: { since: T0, fixed_sha: "a1b2c3d", checks_sha: null, receipt_hash: null } },
     { pr: prFixture({ statusCheckRollup: [checkRun({ name: "test", conclusion: "FAILURE", at: at(1) })] }), reviews: clearReviewer() });
@@ -1221,6 +1254,7 @@ test("a failing check on a head the loop itself pushed is dispatched once, then 
   await w.tick.tick();
   assert.equal(w.runner.started.length, 1, "red CI on the current head dispatches a fix");
   assert.equal(w.entry().cursor.checks_sha, "a1b2c3d");
+  const [original] = w.entry().recovery_record.incidents;
   w.runner.finish(claudeResultLines());
   w.gh.data.pr = prFixture({ headRefOid: "d4e5f6a", statusCheckRollup: [checkRun({ name: "test", conclusion: "FAILURE", at: at(9) })] });
   w.clock.advance(4);
@@ -1228,6 +1262,7 @@ test("a failing check on a head the loop itself pushed is dispatched once, then 
   w.clock.advance(1);
   await w.tick.tick(); // new head, red again: dispatched again
   assert.equal(w.runner.started.length, 2);
+  assert.deepEqual(w.entry().recovery_record.incidents, [{ ...original, attempts: 2 }]);
   w.runner.finish(claudeResultLines());
   w.gh.data.pr = prFixture({ headRefOid: "d4e5f6a", statusCheckRollup: [checkRun({ name: "test", conclusion: "FAILURE", at: at(9) })] });
   await w.tick.tick(); // no push this time
