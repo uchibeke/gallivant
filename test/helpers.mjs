@@ -56,6 +56,9 @@ export const CONFIG = {
   repos: ["acme/widget"],
 };
 
+// Keep host load and memory independent of fake dispatch while retaining native mount checks.
+export const FIXTURE_HEADROOM = Object.freeze({ minimum_memory_bytes: 0, maximum_load_per_cpu: 0 });
+
 export const T0 = "2026-09-24T02:00:00.000Z";
 export const at = (minutesAfter, base = T0) => new Date(Date.parse(base) + minutesAfter * 60_000).toISOString();
 

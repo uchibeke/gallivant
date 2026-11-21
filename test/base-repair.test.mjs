@@ -8,12 +8,13 @@ import { makeGit } from "../lib/git.mjs";
 import { makeExecution } from "../lib/execution.mjs";
 import { makeState, newEntry, entryId } from "../lib/state.mjs";
 import { makeTick } from "../lib/tick.mjs";
+import { checkAuthorStorage } from "../lib/recovery_preflight.mjs";
 import { resume } from "../lib/commands/resume.mjs";
 import { requestControl, applyControl, MAX_NOTE } from "../lib/control.mjs";
 import { quote } from "../lib/prompt.mjs";
 import { makeHostRegistry } from "../lib/hosts.mjs";
 import { execFileAsync } from "../lib/process.mjs";
-import { CONFIG, GOOD_PRD, T0, at, tempHome, makeClock, fakeRunner, fakeGh, fakeNotify, fakeCredential, fakeIdentity, silentLog, prFixture, claudeResultLines, review, STATES, harnessBin } from "./helpers.mjs";
+import { CONFIG, FIXTURE_HEADROOM, GOOD_PRD, T0, at, tempHome, makeClock, fakeRunner, fakeGh, fakeNotify, fakeCredential, fakeIdentity, silentLog, prFixture, claudeResultLines, review, STATES, harnessBin } from "./helpers.mjs";
 
 const write = (file, text) => { mkdirSync(dirname(file), { recursive: true }); writeFileSync(file, text); };
 const combined = "export function calculate(n) { return Math.max(0, n) + 1; }\n";
@@ -60,14 +61,16 @@ function world(t, { hostConflict = true, superseded = false, baseUpdate = "confl
   const gh = fakeGh({ pr: prFixture({ url, headRefName: "work/repair", headRefOid: head, mergeable: hostConflict ? "CONFLICTING" : "MERGEABLE" }),
     reviews: hostConflict ? [] : [review({ id: 1, by: "me", state: "CHANGES_REQUESTED", at: at(5) })] });
   gh.now = () => new Date(clock.now()).toISOString();
-  const git = makeGit({ config: { home, worktrees: dirname(tree) }, identity: fakeIdentity() });
+  const config = { ...CONFIG, home, worktrees: dirname(tree), resource_headroom: FIXTURE_HEADROOM,
+    ...(host === "bitbucket.org" ? { repos: [{ repo, reviewer: null, trusted_authors: ["{11111111-1111-4111-8111-111111111111}"] }] } : {}) };
+  const git = makeGit({ config, identity: fakeIdentity() });
   // Host binding is faked only at the transport edge; fetch/merge/ancestry/index
   // proofs operate on real Git objects through makeGit.
   git.originOf = async () => `https://${host}/acme/widget.git`;
   git.ensureHttpsRemote = async () => {};
   const runner = makeExecution({ root: join(home, "runs"), taskId: id, provider: "claude", runner: raw, legacySessionId: state.get(id).session, clock });
   const registry = makeHostRegistry({ credential: fakeCredential() });
-  const ctx = { config: { ...CONFIG, home, worktrees: dirname(tree), ...(host === "bitbucket.org" ? { repos: [{ repo, reviewer: null, trusted_authors: ["{11111111-1111-4111-8111-111111111111}"] }] } : {}) }, state, clock, ownLogin: "me", gh, host: gh, hosts: registry, git,
+  const ctx = { config, state, clock, ownLogin: "me", gh, host: gh, hosts: registry, git,
     log: silentLog, notify: fakeNotify(), credential: fakeCredential(), identity: fakeIdentity(), runnerFor: () => runner,
     readPrd: () => GOOD_PRD, readSource: () => "Keep approved security requirements.\n" };
   const tick = async () => {
@@ -102,6 +105,17 @@ function continuationWorld(t, options) {
   w.ctx.config.harness = { ...CONFIG.harness, claude: { ...CONFIG.harness.claude, bin: harnessBin(w.home, "claude") } };
   return w;
 }
+
+test("repair fixtures tolerate host pressure while checking native Git mounts", async t => {
+  const w = world(t);
+  const paths = { stateDir: w.home, worktree: w.tree, gitDirs: [join(w.tree, ".git")] };
+  const adapters = { pressure: () => ({ memoryBytes: 0, loadPerCpu: 8 }) };
+  assert.throws(() => checkAuthorStorage(paths, adapters), /memory, process-pressure/);
+  assert.deepEqual(checkAuthorStorage(paths, adapters, w.ctx.config).blocked, []);
+  const { mounts } = await w.git.authorStorage(w.tree, w.home);
+  assert.deepEqual(Object.keys(mounts), ["state", "checkout", "scratch", "git-1", "git-2", "git-3"]);
+  assert.throws(() => checkAuthorStorage({ ...paths, gitDirs: [join(w.tree, "missing")] }, adapters, w.ctx.config), /git-1-unverified/);
+});
 
 test("owned UI resume and message repair conflicts from watching and explicitly stopped tasks", async t => {
   for (const action of ["resume", "message"]) for (const state of [STATES.prOpen, STATES.needsHuman]) await t.test(`${action} ${state}`, async t => {

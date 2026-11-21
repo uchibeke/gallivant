@@ -18,7 +18,7 @@ import { planOverlayMoves, relocateOverlays, restoredOverlay } from "../lib/work
 import { recoveryDigest } from "../lib/recovery_digest.mjs";
 import { acceptedRecovery, planRecovery } from "../lib/recovery_recipes.mjs";
 import { admitFixture } from "./recovery-recipe-fixture.mjs";
-import { CONFIG, GOOD_PRD, T0, at, tempHome, makeClock, fakeRunner, fakeGh, fakeNotify, fakeCredential, fakeIdentity,
+import { CONFIG, FIXTURE_HEADROOM, GOOD_PRD, T0, at, tempHome, makeClock, fakeRunner, fakeGh, fakeNotify, fakeCredential, fakeIdentity,
   silentLog, prFixture, claudeResultLines, harnessBin, STATES } from "./helpers.mjs";
 
 const fail = () => Object.assign(new Error("fixture disk full"), { code: "ENOSPC" });
@@ -83,7 +83,7 @@ async function world(t, { ci = false, overlay = true, attributes = null } = {}) 
   const gh = fakeGh({ pr: prFixture({ headRefName: branch, headRefOid: head, baseRefOid: base, mergeable: ci ? "MERGEABLE" : "CONFLICTING" }) });
   gh.repoPermissions = async () => ({ pullRequestCreate: "proved", apiRepositoryWrite: "proved" });
   gh.now = () => new Date(clock.now()).toISOString();
-  const config = { ...CONFIG, home, worktrees: dirname(tree), harness: { ...CONFIG.harness,
+  const config = { ...CONFIG, home, worktrees: dirname(tree), resource_headroom: FIXTURE_HEADROOM, harness: { ...CONFIG.harness,
     claude: { ...CONFIG.harness.claude, bin: harnessBin(home, "claude"), model: "fixture" } } };
   const git = makeGit({ config, identity: fakeIdentity() });
   git.originOf = async () => "https://github.com/acme/widget.git";
