@@ -11,6 +11,7 @@ import { acquireDaemon, processIdentity } from "../lib/daemon.mjs";
 import { down, readDaemon, up, upInBackground } from "../lib/commands/up.mjs";
 import { writeJsonAtomic } from "../lib/fs.mjs";
 import { resume } from "../lib/commands/resume.mjs";
+import { publicationPolicyOf, workArtifactReason } from "../lib/work_artifacts.mjs";
 import { makeState, newEntry, STATES } from "../lib/state.mjs";
 import { makeTick } from "../lib/tick.mjs";
 import { startPrompt, resumePrompt, fixPrompt, registerPrompt, baseRepairPrompt } from "../lib/prompt.mjs";
@@ -147,6 +148,34 @@ test("resume refuses changed supporting bytes until accepted, then updates both 
   assert.equal(w.sources.get(SOURCE), "updated support");
   assert.equal(readFileSync(join(w.worktree, SOURCE), "utf8"), "updated support");
   assert.match(w.runner.started[0].args.at(-1), /source changed: docs\/support.md/);
+});
+
+test("clean resume installs publication policy from the accepted snapshot after base preparation cached the old brief", async t => {
+  const evidence = "docs/evidence/qualification.md";
+  const withException = BRIEF.replace("harness: codex", `harness: codex\npublish_files: [${evidence}]`);
+  for (const [name, before, after, sources, output, blocked] of [
+    ["remove carried source", BRIEF, GOOD_PRD, [SOURCE], SOURCE, false],
+    ["add carried source", GOOD_PRD, BRIEF, [], SOURCE, true],
+    ["approve evidence output", BRIEF, withException, [SOURCE], evidence, false],
+    ["revoke evidence output", withException, BRIEF, [SOURCE], evidence, true],
+  ]) await t.test(name, async () => {
+    const w = world();
+    t.after(() => rmSync(w.home, { recursive: true, force: true }));
+    w.ctx.writePrd(w.id, before);
+    writeFileSync(join(w.worktree, REL), before);
+    writeFileSync(join(w.checkout, REL), after);
+    w.state.update(w.id, { base: "main", sources });
+    const installed = [];
+    w.ctx.git.installHooks = (_dir, policy) => { installed.push(structuredClone(policy)); return { installed: true }; };
+    await w.run({ resnapshot: true });
+    assert.deepEqual(installed[0], publicationPolicyOf(parsePrd(before, REL), { sources, base: "main" }), "base preparation uses the previously approved brief");
+    const accepted = publicationPolicyOf(parsePrd(after, REL), { sources: w.state.get(w.id).sources, base: "main" });
+    assert.deepEqual(installed.at(-1), accepted, "dispatch uses the replacement approved snapshot, including removed restrictions");
+    assert.equal(Boolean(workArtifactReason(output, installed.at(-1))), blocked, "the resulting hook honors grants and revocations");
+    assert.equal(w.runner.started.length, 1);
+    assert.equal(w.state.get(w.id).session, "session");
+    assert.equal(w.ctx.readPrd(w.id), after);
+  });
 });
 
 test("explicit resnapshot preserves unfinished work and unchanged carried instructions", async () => {
