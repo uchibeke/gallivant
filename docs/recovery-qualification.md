@@ -12,7 +12,7 @@ approved manifest digest and exact recovery profile.
 
 | Scope | Result and evidence |
 | --- | --- |
-| Offline faults and replay | All 102 required tests passed. The macOS ARM64 fixture aggregate passed 137 tests on both Node 22.22.0 and Node 24.15.0. The report digests are `e188e5a75be53eaabee84045191696e2b30949d21705ae429b56349df21bef60` and `57108d4a3ffcf9c7a9979e57effd9262acf891044c9c52440cbf8ceb576dcd0b` in that order. Both record checkout `99e36e4937b82e306d94a40c16f42dac46ddebeb` and tested code digest `4953794a39522c9bccff2a29c8279dba36e478e7944a58a0cf2d376fb9b51431`. [Fixture aggregate](../scripts/qualify-autonomous-recovery.mjs) |
+| Offline faults and replay | All 102 required tests passed. The macOS ARM64 fixture aggregate passed 143 tests on both Node 22.22.0 and Node 24.15.0. The report digests are `2afe75da3653043fe093ae3a33655ab3d3ccd063a91d5f210583afabfe0e6946` and `ccf1d3a8c274744c85ffc9113a3ea8e364ea12cb87537e09e0dc78d440722fc4` in that order. Both record checkout `424587b5e761f4e3a1bce73a88f8285717469217` and tested code digest `ec54c6b2488e843e1f8be2e6bd3df8c730f6ea73a03a4f3e4ec91bde22c34062`. [Fixture aggregate](../scripts/qualify-autonomous-recovery.mjs) |
 | Native Linux and macOS | Unvalidated. This task's protected registry contained no pinned qualification manifest. `--native` exited 1 with `RECOVERY_QUALIFICATION`. A macOS ARM64 Node 22.22.0 fixture run exercises real local process and Git calls. It has no admitted environment or independent supervisor receipt. |
 | Live GitHub, Bitbucket private and Bitbucket public | Unvalidated. `--live` exited 1 at manifest admission. Repository access for implementation and a local Chromium 145.0.7632.6 PNG capture were observed separately. The selected disposable repository bindings, route entitlement, and any required installed host or capture behavior still need owner proofs. |
 | Overnight recovery and a true authority gate | Unvalidated. `--overnight` exited 1 at manifest admission. The operator needs separately approved exact cases and maintenance scope. |
@@ -167,7 +167,9 @@ cancellation records remain with the same owner. A remote result collected
 during a hold stays pending through restart. Releasing the hold resumes
 publication from that result. If a maintainer has already merged the exact PR
 into the approved base, closeout can proceed during the hold and preserve the
-collected output.
+collected output. Retiring a live author requires a fresh merge proof while the
+task's recovery scopes permit cancellation. A cancellation accepted before a
+hold keeps its original settlement path.
 
 Before a runtime change, stop new intake, let accepted operations and cleanup
 settle, and inspect `gallivant recovery drain`. Use the matching emitted

@@ -9,6 +9,8 @@ import { executionLive } from "../lib/execution_contract.mjs";
 import { makeGit, worktreePath } from "../lib/git.mjs";
 import { cleanupMergedWorkspace } from "../lib/workspace_cleanup.mjs";
 import { controlPending } from "../lib/control_contract.mjs";
+import { profileDigest } from "../lib/recovery_authority.mjs";
+import { recoveryAdminIntent } from "../lib/operator_intent.mjs";
 import { CONFIG, T0, at, makeClock, seededState, fakeRunner, fakeGh, fakeGit, fakeNotify, silentLog, prFixture, STATES } from "./helpers.mjs";
 
 const HEAD = "a".repeat(40), MERGE = "b".repeat(40);
@@ -51,6 +53,14 @@ async function world(t, { remote = false, delayed = false } = {}) {
     confirm: () => { killConfirmed = true; if (remote) observation.state = "cancelled"; } };
 }
 
+function installRecoveryProfile({ id, state }) {
+  const profile = { version: 1, storeId: "fixture", id: "closeout", revision: 1, mode: "observe", routes: [], recipes: [],
+    taskLimits: { mutations: 0, paidTurns: 0, spendMicros: 0 }, cleanup: [], holdGeneration: 0, revocationGeneration: 0, qualification: null };
+  profile.digest = profileDigest(profile);
+  state.putRecoveryProfile(profile, null, recoveryAdminIntent(state.file, "profile", profile.digest, null));
+  state.update(id, { recovery_profile: { version: 1, digest: profile.digest } });
+}
+
 test("a maintainer merge retires only its owned local author and closes without readiness", async t => {
   const w = await world(t);
   w.state.update(w.id, { firstPartyReview: { status: "completed", verdict: "findings", head: HEAD },
@@ -75,6 +85,9 @@ test("accepted remote cancellation is observed without duplicate cancellation or
   assert.notEqual(w.entry().state, STATES.done); assert.equal(w.cleanups(), 0);
   assert.equal(w.entry().execution.providerState, "cancellation-requested");
   assert.equal(w.calls.filter(c => c === "cancel").length, 1);
+  installRecoveryProfile(w);
+  const scope = `task/${w.id}`;
+  w.state.setRecoveryHold(scope, "hold", 0, recoveryAdminIntent(w.state.file, "hold", scope, 0));
   for (let i = 0; i < 3; i++) { w.clock.advance(3); await w.tick(); }
   assert.equal(w.calls.filter(c => c === "cancel").length, 1);
   assert.equal(w.gh.calls.filter(c => c[0] === "prView").length, 1, "cancellation owns pending observations");
@@ -211,6 +224,43 @@ test("a hold arriving during merge proof fences retirement despite a queued corr
   assert.equal(w.entry().control.status, "failed");
   assert.deepEqual(w.calls, ["kill"]);
   assert.equal(w.cleanups(), 1);
+});
+
+test("a repository disable and enable during merge proof require fresh retirement evidence", async t => {
+  for (const remote of [false, true]) await t.test(remote ? "hosted author" : "local author", async t => {
+    const w = await world(t, { remote });
+    installRecoveryProfile(w);
+    const scope = `repo/${w.entry().repo}`;
+    w.gh.containsCommit = async () => {
+      for (const [generation, action] of ["disable", "enable"].entries()) {
+        w.state.setRecoveryHold(scope, action, generation, recoveryAdminIntent(w.state.file, action, scope, generation));
+      }
+      return true;
+    };
+    const cessation = remote ? "cancel" : "kill";
+    await w.tick();
+    assert.equal(w.state.recoverySettings().holds[scope]?.generation, 2);
+    assert.equal(w.execution.state().stopped, null);
+    assert.equal(executionLive(w.execution.current()), true);
+    assert.equal(w.calls.filter(call => call === cessation).length, 0);
+    assert.equal(w.cleanups(), 0);
+
+    w.gh.containsCommit = async () => true;
+    w.clock.advance(CONFIG.poll_seconds / 60);
+    await w.tick();
+    assert.equal(w.entry().state, STATES.done);
+    assert.equal(w.calls.filter(call => call === cessation).length, 1);
+    assert.equal(w.cleanups(), 1);
+  });
+});
+
+test("settled hosted closeout cannot start cancellation of a live author", async t => {
+  const w = await world(t, { remote: true }), run = w.execution.current();
+  await assert.rejects(w.execution.cancel("pr-merged", {
+    runId: run.id, operationId: run.execution.operationId, profile: run.execution.recoveryProfileDigest, settledRemote: true,
+  }), { code: "EXECUTION_OWNERSHIP" });
+  assert.equal(w.execution.state().stopped, null);
+  assert.equal(w.calls.includes("cancel"), false);
 });
 
 test("unconfirmed remote cancellation retains queued input until the owned run settles", async t => {

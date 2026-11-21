@@ -45,6 +45,12 @@ const contracts = {
     "external merge of a stopped predecessor waits for retained cleanup and releases one successor across restart",
     "a maintainer merge retires the owned live author before releasing its chain successor",
   ],
+  "live-merge-closeout.test.mjs": [
+    "accepted remote cancellation is observed without duplicate cancellation or late publication",
+    "a hold arriving during merge proof fences retirement despite a queued correction",
+    "a repository disable and enable during merge proof require fresh retirement evidence",
+    "settled hosted closeout cannot start cancellation of a live author",
+  ],
   "workspace-cleanup.test.mjs": [
     "interrupted deletion retries only its approved directory inode",
     "operator paths, shared task inputs, chain inputs, linked worktrees and symlink ancestors are preserved",
