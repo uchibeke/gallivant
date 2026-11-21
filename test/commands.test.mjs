@@ -52,6 +52,7 @@ function startWorld({ credential = fakeCredential(), identity = fakeIdentity() }
     },
     git: { toplevel: async () => repoDir, create: async () => worktree },
     runnerFor: () => fakeRunner(clock),
+    readPrd: id => snapshots.get(id) ?? null,
     writePrd: (id, text) => snapshots.set(id, text),
     credential,
   };

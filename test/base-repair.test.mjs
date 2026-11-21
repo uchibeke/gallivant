@@ -224,7 +224,8 @@ test("merge or superseding cancellation during pushed repair proof blocks the fo
       return result;
     };
     await applyControl(w.ctx, w.id);
-    assert.equal(w.entry().base_repair.status, "verified", "the existing remote push proof remains recorded");
+    assert.equal(w.entry().verified_progress.kind, "verified-push", "the existing remote push proof remains recorded");
+    assert.equal(w.entry().base_repair.status, change === "cancel" ? "blocked" : "verified", "a superseded request cannot accept a failed paid result");
     assert.equal(w.raw.started.length, 2, "terminal integration or a new owner cannot launch a follow-up");
     if (change === "cancel") { assert.equal(w.entry().control.id, "new-cancel"); assert.equal(w.entry().control.status, "queued"); }
     else assert.equal(w.entry().control.status, "failed");
