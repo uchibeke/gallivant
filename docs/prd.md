@@ -265,6 +265,8 @@ Who decides. The built-in rules run first and list every problem at once. When t
 
 APort's deny names one problem at a time (evaluation stops at the first failing rule) and does not include the criterion id, which is why the local pass runs first.
 
+When the recovery service budget expires, the hosted decision stays pending until a later review poll. The failure count stays unchanged and the hosted decision remains required even with `deliverable.on_unreachable: local`.
+
 ## Provenance on a decision
 
 Both gates send a `meta` object inside the context they already send:

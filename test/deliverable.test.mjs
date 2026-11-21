@@ -1,11 +1,13 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
+import { performance } from "node:perf_hooks";
 import { criteriaFromPrd, parseReceipt, evaluate, gate, taskPassport, evaluateHosted, receiptInstructions, receiptHash, RECEIPT_TAG, DEFAULT_LIMITS, MAX_POLICY_BYTES, provenance } from "../lib/deliverable.mjs";
 import { parsePrd } from "../lib/prd.mjs";
 import { VERSION } from "../lib/fs.mjs";
 import { makeTick, COMPLETION_GATE } from "../lib/tick.mjs";
 import { READY_LABEL } from "../lib/gh.mjs";
 import { DEFAULT_DELIVERABLE } from "../lib/config.mjs";
+import { runRecoveryWork } from "../lib/recovery_io.mjs";
 import { CONFIG, GOOD_PRD, at, makeClock, fakeGh, fakeRunner, fakeGit, fakeNotify, seededState, prFixture, review, comment, checkRun, claudeResultLines, silentLog, STATES, fakeCredential, fakeIdentity } from "./helpers.mjs";
 
 const prd = parsePrd(GOOD_PRD, "/r/docs/prds/widget-export.md");
@@ -142,6 +144,20 @@ test("a failed later chunk never turns earlier hosted allows into completion", a
   assert.equal(result.pending, true);
 });
 
+test("an expired recovery budget before the evaluator request cannot use local fallback", async () => {
+  let calls = 0;
+  const result = await runRecoveryWork(() => gate({
+    taskId: "t", prBody: receiptBlock(), criteria, checksGreen: true,
+    limits: { ...DEFAULT_DELIVERABLE, on_unreachable: "local" },
+    fetch: async () => { calls++; return { ok: true, status: 200, json: async () => allowResponse }; },
+  }), 0);
+  assert.equal(calls, 0);
+  assert.equal(result.allow, false);
+  assert.equal(result.pending, true);
+  assert.equal(result.decisionId, null);
+  assert.equal(result.denials[0].code, "RECOVERY_IO_BUDGET");
+});
+
 test("the local blocked-pattern scan agrees with the hosted case-insensitive matcher", () => {
   const result = evaluate({ criteria, limits: LOCAL, context: { ...parseReceipt(receiptBlock()).receipt, tests_passing: true, output_content: "CONSOLE.LOG('debug')" } });
   assert.ok(result.denials.some(d => d.code === "oap.blocked_pattern_detected"));
@@ -165,13 +181,13 @@ test("with evaluator aport the hosted verdict confirms or overrides a local pass
   assert.deepEqual([localFail.allow, localFail.source], [false, "local"]);
 });
 
-function world(stateOver = {}, ghOver = {}) {
+function world(stateOver = {}, ghOver = {}, { fetch = fetchWith(200, allowResponse) } = {}) {
   const clock = makeClock();
   const { state, id } = seededState(stateOver);
   const gh = fakeGh(ghOver);
   const runner = fakeRunner(clock);
   const notify = fakeNotify();
-  const tick = makeTick({ credential: fakeCredential(), identity: fakeIdentity(),  config: CONFIG, state, gh, git: fakeGit(), notify, log: silentLog, clock, ownLogin: "me", runnerFor: () => runner, readPrd: () => GOOD_PRD, fetch: fetchWith(200, allowResponse) });
+  const tick = makeTick({ credential: fakeCredential(), identity: fakeIdentity(),  config: CONFIG, state, gh, git: fakeGit(), notify, log: silentLog, clock, ownLogin: "me", runnerFor: () => runner, readPrd: () => GOOD_PRD, fetch });
   return { clock, state, id, gh, runner, notify, tick, entry: () => state.get(id) };
 }
 const clearReviewer = () => [review({ id: 2, by: "chatgpt-codex-connector[bot]", bot: true, state: "COMMENTED", at: at(3), body: "**Reviewed commit:** `a1b2c3d`" })];
@@ -281,6 +297,49 @@ test("an unreachable evaluator retries without spending a round, then stops with
   assert.equal(state.get(id).reason, "stuck");
   assert.match(state.get(id).last.event, /completion gate.*ECONNREFUSED/);
   assert.equal(runner.started.length, 0, "an infrastructure failure must not spend a fixer run");
+});
+
+test("budget expiry between evaluator chunks defers completion without counting as a failure", async t => {
+  let monotonicTime = 0, expireBudget = true, lastOutput;
+  t.mock.method(performance, "now", () => monotonicTime);
+  const retry = { op: COMPLETION_GATE, count: 1, error: "earlier evaluator failure" };
+  const parts = [];
+  const w = world({ retry, rereview: { at: at(0), nudged: false } }, {
+    pr: prFixture({ statusCheckRollup: [checkRun({ name: "test", conclusion: "SUCCESS" })], body: receiptBlock() }),
+    reviews: clearReviewer(),
+  }, { fetch: async (_url, { body }) => {
+    const { context } = JSON.parse(body);
+    parts.push(context.meta.output_scan.part);
+    lastOutput = context.output_content;
+    return { ok: true, status: 200, json: async () => {
+      if (expireBudget) monotonicTime += 60_000;
+      return allowResponse;
+    } };
+  } });
+  w.gh.prDiff = async () => "diff --git a/output.txt b/output.txt\n--- a/output.txt\n+++ b/output.txt\n@@ -1 +1,2 @@\n+" +
+    "z".repeat(MAX_POLICY_BYTES) + "\n+last line\n";
+  w.clock.advance(4);
+  for (let i = 0; i < 6; i++) {
+    await w.tick.tick();
+    assert.equal(w.entry().state, STATES.prOpen);
+    assert.deepEqual(w.entry().retry, retry);
+    assert.equal(w.entry().review_next_at, w.clock.now() + CONFIG.poll_seconds * 1000);
+    assert.equal(parts.length, i + 1);
+    assert.equal(parts.at(-1), 0, "the first chunk passed before the budget expired");
+    assert.deepEqual(await w.tick.tick(), [], "the scheduler waits until the next due observation");
+    w.clock.advance(CONFIG.poll_seconds / 60);
+  }
+  assert.deepEqual(w.notify.sent, []);
+  assert.ok(!w.gh.calls.some(c => c[0] === "addLabel"));
+  expireBudget = false;
+  await w.tick.tick();
+  assert.equal(parts[6], 0, "the next decision checks the complete output");
+  assert.ok(parts.at(-1) > 0);
+  assert.match(lastOutput, /last line$/);
+  assert.equal(w.entry().state, STATES.ready);
+  assert.equal(w.entry().retry, null);
+  assert.equal(w.runner.started.length, 0);
+  assert.deepEqual(w.notify.sent, [["ready", 142]]);
 });
 
 test("a current-head Codex clean comment and a large output reach ready after a transient gate failure", async () => {
