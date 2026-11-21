@@ -835,3 +835,5 @@ owned stopped timeout/provider failure can be retried with `--retry --reason
 "explanation"` on that same command. This preserves its history and reserves a
 new bounded allowance; it never accepts a failed result or bypasses review.
 See [first-party review](first-party-review.md#waiting-for-qualification-and-explicitly-retrying-a-stopped-probe).
+
+Use `recovery inventory [profile-id]` for a read-only adoption proposal and `recovery preflight <handle> <decision.json>` for an admitted route. The [recovery policy reference](autonomous-recovery.md#recovery-policy-and-admission) describes profile administration, scoped holds, exact task admission and the migration format.

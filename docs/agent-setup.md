@@ -228,3 +228,5 @@ safety and the printed next steps. It does not use a real account, invoke a
 model or certify a provider's current availability. A first authorized
 end-to-end task is still needed to verify the user's actual repository
 permissions, provider entitlement, sandbox, CI and review integration.
+
+Before a profiled author turn, inspect the approved route, model entitlement, package access, required capture surface and Git metadata and scratch mounts. Resolve missing access with the operator. Use the [recovery preflight and migration commands](autonomous-recovery.md#recovery-policy-and-admission) to inspect admission and existing stopped work.

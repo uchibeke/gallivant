@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 // CLI entry. Parses arguments, builds the context, calls one command. No logic lives here.
+import { recoveryCommand, recoveryUsage } from "../lib/commands/recovery.mjs";
 import { reviewCommand } from "../lib/commands/review.mjs";
 import { acquireCliMutation } from "../lib/daemon.mjs";
 import { parseArgs } from "node:util";
@@ -33,6 +34,7 @@ const HELP = `gallivant: give an agent a task, let the review loop run, go outsi
                                          set up the repository you are in: private config, this repo in repos,
                                          then doctor's report. Safe to repeat; never signs in or overwrites settings
   gallivant --version                    print the installed version
+  gallivant ${recoveryUsage}
   gallivant doctor [--send] [--probe]   install checklist and health probe
   gallivant doctor --network <https-origin> [--json]   bounded DNS/HTTPS diagnosis
   gallivant learn [--repo owner/repo] [--since YYYY-MM-DD] [--until YYYY-MM-DD] [--dry-run]
@@ -53,7 +55,7 @@ const HELP = `gallivant: give an agent a task, let the review loop run, go outsi
   gallivant task [prepare] "<request>" [--stdin] [--dir <checkout>] [--repo <owner/repo>]
                 [--base <branch>] [--harness <name>] [--context <file>] [--request-id <id>] [--run] [--json]
                 [--completion-target delivery_ready|integrated] [--delivery pull_request] [--route harness|model]
-                [--verify <command>] [--no-daemon]
+                [--implementation-target <file>] [--verify <command>] [--no-daemon]
                                          prepare an isolated brief for review; approve later with task start --run
                                          --delivery selects the typed delivery profile (the only delivery authority);
                                          --route drafts through the connected harness or the operator's bounded model route
@@ -116,6 +118,8 @@ const OPTIONS = {
   answer: { type: "string", multiple: true }, verify: { type: "string", multiple: true },
   since: { type: "string" }, until: { type: "string" }, "dry-run": { type: "boolean" },
   mode: { type: "string" }, status: { type: "string" }, from: { type: "string" }, reason: { type: "string" },
+  "implementation-target": { type: "string", multiple: true },
+  "recovery-profile": { type: "string" },
   "host-config": { type: "string" },
   "key-path": { type: "string" }, "ssh-keygen": { type: "string" }, "learning-budget": { type: "string" },
   finding: { type: "string" }, capability: { type: "string" },
@@ -141,6 +145,11 @@ async function dispatch(argv) {
   // Validate before a PRD can dispatch paid work.
   const serviceOptions = { port: ["start", "serve"].includes(cmd) ? trackerPort(values.port) : undefined,
     noDaemon: values["no-daemon"], noServer: values["no-server"], noOpen: values["no-open"], foreground: values.foreground };
+  if (cmd === "recovery") {
+    const report = await recoveryCommand(makeContext({ readOnly: true }), positionals.slice(1));
+    console.log(JSON.stringify(report, null, 2));
+    return report.readiness && !report.readiness.ready ? 1 : 0;
+  }
   if (cmd === "learn") {
     const ctx = makeContext({ needConfig: arg !== "setup" && (arg !== "doctor" || !!values.repo), readOnly: !!values["dry-run"] || ["list", "show", "report", "explain", "doctor"].includes(arg) });
     const owner = !values["dry-run"] && !["list", "show", "report", "explain", "doctor", "setup"].includes(arg) ? acquireCliMutation(ctx.home) : null;
@@ -225,7 +234,7 @@ async function dispatch(argv) {
     case "serve": {
       if (cmd === "serve" && arg) throw new Error("serve does not take a PRD; use gallivant start <prd.md>");
       if (cmd === "start" && arg) {
-        const r = await start(ctx, { path: arg, base: values.base });
+        const r = await start(ctx, { path: arg, base: values.base, recoveryProfile: values["recovery-profile"] });
         console.log(`${r.id}: started in ${r.worktree} on ${r.branch} -> ${r.base} (run ${r.run})`);
         if (r.baseSource === "flag") console.log(`Base branch ${r.base} remembered for this repository; later starts here need no --base.`);
         else if (r.baseSource === "config") console.log(`Base branch ${r.base} comes from repos in config.json.`);

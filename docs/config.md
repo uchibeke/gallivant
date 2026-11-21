@@ -532,3 +532,5 @@ and the completion receipt.
 ## Versioned review policy
 
 `review.mode` selects `external-required`, `first-party-required`, or `both-required` for new tasks. `review.route: "codex"` requires a successful isolated live qualification. `review.specialist` allows at most one of `security` or `regression`. Defaults and bounds, per-repository settings, separate review allowances, explicit zero-check CI policy and the `legacy_no_review` exception are documented in [First-party review](first-party-review.md). A config edit cannot change an existing task policy; use `review policy <handle> --mode <mode> --reason "..."` to revoke readiness and explicitly re-evaluate. `reviewer: null` alone no longer authorizes an unattended new start.
+
+Recovery profiles are revisioned coordinator registry records. A new start selects a profile by exact digest. A global default cannot enroll an existing task. See the [profile fields, route tuple and generation rules](autonomous-recovery.md#recovery-policy-and-admission).

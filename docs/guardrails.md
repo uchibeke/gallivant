@@ -365,3 +365,5 @@ are forced into a result. Verification permits private inputs to remain untracke
 and modes exactly match the coordinator snapshots. Editing, staging, deleting or substituting them fails publication.
 Codex Cloud's Git-only input transport cannot provide this privacy for new/changed inputs and refuses before commit
 or push; its dispatch is separately unavailable until repository binding is qualified. See [codex-cloud.md](codex-cloud.md).
+
+Recovery policy requires an enforced outer execution boundary for same-UID workers. Owner-only file modes and verification receipts from a different adapter cannot qualify an author. Completion credentials stay with the coordinator. The [recovery admission contract](autonomous-recovery.md#recovery-policy-and-admission) lists the scoped controls and qualification limits.
