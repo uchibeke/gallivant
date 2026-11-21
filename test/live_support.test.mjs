@@ -27,21 +27,22 @@ test("live suite checkpoints preserve the ledger through partial writes, termina
         import os from 'node:os';
         import cp from 'node:child_process';
         import { syncBuiltinESMExports } from 'node:module';
+        import { interceptFileWrites } from ${JSON.stringify(new URL("./atomic-write-fixture.mjs", import.meta.url).href)};
         const ledger = ${JSON.stringify(ledger)}, fault = ${JSON.stringify(fault)};
-        const write = fs.writeFileSync, rename = fs.renameSync;
+        const rename = fs.renameSync;
         os.homedir = () => ${JSON.stringify(root)};
         cp.execFile = (cmd, args, opts, done) => {
           assert.equal(cmd, 'opencode'); assert.deepEqual(args, ['--version']);
           done(null, '0.0.0\\n', '');
         };
-        fs.writeFileSync = (path, data, options) => {
-          if ((path === ledger || path.startsWith(ledger + '.')) && ['partial-write', 'terminated-write'].includes(fault)) {
-            write(path, String(data).slice(0, 9), options);
+        interceptFileWrites(fs, (path, data, forward) => {
+          if ((path === ledger || String(path).startsWith(ledger + '.')) && ['partial-write', 'terminated-write'].includes(fault)) {
+            forward(String(data).slice(0, 9));
             if (fault === 'terminated-write') process.kill(process.pid, 'SIGKILL');
             throw Object.assign(new Error('injected partial checkpoint write'), { code: 'ENOSPC' });
           }
-          return write(path, data, options);
-        };
+          return forward(data);
+        });
         fs.renameSync = (from, to) => {
           if (to === ledger && fault === 'rename') throw new Error('injected checkpoint rename failure');
           return rename(from, to);
@@ -67,7 +68,7 @@ test("live suite checkpoints preserve the ledger through partial writes, termina
       }
       assert.equal(statSync(ledger).mode & 0o777, 0o600);
       const temps = readdirSync(root).filter(p => p.endsWith(".tmp"));
-      assert.equal(temps.length, fault ? 1 : 0);
+      assert.equal(temps.length, fault === "terminated-write" ? 1 : 0);
       for (const path of temps) assert.equal(statSync(join(root, path)).mode & 0o777, 0o600);
     } finally { rmSync(root, { recursive: true, force: true }); }
   }

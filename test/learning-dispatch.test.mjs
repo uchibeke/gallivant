@@ -5,6 +5,7 @@ import { createLearningService } from "../lib/learning.mjs";
 import { repo, fixture } from "./learning-fixtures.mjs";
 import { hash } from "../lib/learning_data.mjs";
 import { makeTick } from "../lib/tick.mjs";
+import { RECOVERY_LANES } from "../lib/recovery_schedule.mjs";
 import { learnCommand } from "../lib/commands/learn.mjs";
 import { rmSync } from "node:fs";
 import { makeTrust } from "../lib/events.mjs";
@@ -144,24 +145,28 @@ test("automatic identity lookup has a cancellable bounded post-dispatch deadline
 test("bounded automatic observation rotates across stable watched order and failed writes", async t => {
   const seeded = seededState(); t.after(() => rmSync(seeded.home, { recursive: true, force: true }));
   const template = seeded.state.get(seeded.id), clock = makeClock(), runner = fakeRunner(clock);
-  const records = new Map(Array.from({ length: 201 }, (_, i) => [`entry-${i}`, { ...structuredClone(template), pr: i + 1, url: `https://github.com/acme/widget/pull/${i + 1}` }]));
+  const records = new Map(Array.from({ length: 201 }, (_, i) => [`entry-${String(i).padStart(3, "0")}`, { ...structuredClone(template), pr: i + 1, url: `https://github.com/acme/widget/pull/${i + 1}` }]));
   const state = { ...seeded.state, entries: () => [...records], get: id => records.get(id), update: (id, patch) => { const old = records.get(id); const next = { ...old, ...(typeof patch === "function" ? patch(old) : patch) }; records.set(id, next); return next; } };
   const gh = fakeGh(); gh.prView = async (_repo, pr) => ({ ...gh.data.pr, number: pr, url: `https://github.com/acme/widget/pull/${pr}` });
   gh.setRecoveryMetadata = async (_repo, pr) => ({ ...gh.data.pr, number: pr, url: `https://github.com/acme/widget/pull/${pr}` });
   let resolutions = 0;
   const observed = [], learning = { identityFor: () => repo, mode: () => "collect", resolveRepo: async () => { resolutions++; return repo; }, observe: async (_repo, snapshot) => { observed.push(snapshot.pr.number); if (snapshot.pr.number === 1) throw new Error("temporary write failure"); } };
   const tick = makeTick({ config: CONFIG, state, gh, git: fakeGit(), notify: fakeNotify(), log: silentLog, clock, ownLogin: "me", runnerFor: () => runner, executionFor: () => runner, readPrd: () => null, learning });
-  for (let i = 0; i < 3; i++) {
-    const before = observed.length, results = await tick.tick();
-    assert(results.every(r => r.ok)); assert.equal(observed.length - before, 100);
-    assert.equal(runner.started.length, 0);
-    await tick.tick(); assert.equal(observed.length - before, 100, "idle progress ticks retain the next observation window");
-    clock.advance(2);
+  const capacity = RECOVERY_LANES.host;
+  for (let start = 0; start < records.size; start += capacity) {
+    const size = Math.min(capacity, records.size - start), results = await tick.tick();
+    assert.ok(results.every(r => r.ok));
+    assert.equal(tick.metrics.lanes.host.selected, size);
+    assert.equal(observed.length, start + size);
+    assert.deepEqual(observed.slice(start).sort((a, b) => a - b), Array.from({ length: size }, (_, i) => start + i + 1));
   }
-  assert.equal(new Set(observed).size, 201);
-  assert.equal(resolutions, 3, "one immutable identity check per repository in each observation batch");
-  assert.deepEqual(observed.slice(0, 100).sort((a, b) => a - b), Array.from({ length: 100 }, (_, i) => i + 1));
-  assert.deepEqual(observed.slice(100, 200).sort((a, b) => a - b), Array.from({ length: 100 }, (_, i) => i + 101));
+  assert.deepEqual(await tick.tick(), [], "all watched entries now await their host cadence");
+  assert.equal(observed.length, records.size);
+  assert.equal(resolutions, Math.ceil(records.size / capacity), "one immutable identity check per repository in each observation batch");
+  clock.advance(CONFIG.poll_seconds / 60);
+  await tick.tick();
+  assert.deepEqual(observed.slice(records.size).sort((a, b) => a - b), Array.from({ length: capacity }, (_, i) => i + 1));
+  assert.equal(runner.started.length, 0);
 });
 
 
@@ -194,10 +199,12 @@ test("accepted fix ownership and cursor survive learning audit failure and resta
 });
 
 test("accepted execution recovery persists ownership before retryable delivery audit", async t => {
-  for (const transport of ["local", "remote"]) {
-    const { state, id, home } = seededState(); t.after(() => rmSync(home, { recursive: true, force: true }));
+  for (const [transport, provider] of [["cli", "claude"], ["remote", "openai-agents"]]) {
+    const { state, id, home } = seededState({ harness: provider }); t.after(() => rmSync(home, { recursive: true, force: true }));
     const clock = makeClock(), runner = fakeRunner(clock), entry = state.get(id);
-    const run = { id: "accepted-run", running: true, execution: { version: 1, acceptance: "accepted", transport,
+    const runId = "accepted-run";
+    const run = { id: runId, running: true, execution: { version: 1, taskId: id, runId, provider, acceptance: "accepted", providerState: "running", transport,
+      ...(transport === "remote" ? { providerJobId: "accepted-job", turnId: "root-turn" } : {}),
       operationId: `${entry.last?.run || "initial"}:${entry.iteration}:fix`,
       workflow: { cursor: { ...entry.cursor, since: at(1) } },
       learning: { repo, key: "c".repeat(64), rules: [] } } };
