@@ -1,3 +1,4 @@
+import { admitFixture } from "./recovery-recipe-fixture.mjs";
 import { inspectReviewLink } from "../lib/review_link.mjs";
 import { test } from "node:test";
 import assert from "node:assert/strict";
@@ -837,6 +838,58 @@ test("confirmed reviewer capacity and routing failures retry with persisted back
   w.finish(retry,{endedAt:w.clock.now(),raw:JSON.stringify(clear(retry.evidence))});
   record=await service.reconcile(w.id,w.entry,w.pr);assert.equal(record.status,"completed");
   }
+});
+
+test("a stopped reviewer reaches current-head clearance from its owned capacity retry without an author turn", async () => {
+  const w = reviewServiceWorld(), t = tickWorld();
+  w.id = t.id;
+  w.pr.body = receipt(t.id);
+  t.gh.data.pr = w.pr;
+  const e = t.entry();
+  await t.gh.setRecoveryMetadata(e.repo, e.pr, { prd: e.prd, harness: e.harness, session: e.session, branch: e.branch }, { taskId: t.id });
+  w.pr.body = t.gh.data.pr.body;
+  const after = "a".repeat(110_000) + "\n";
+  const patch = `diff --git a/a.js b/a.js\nnew file mode 100644\n--- /dev/null\n+++ b/a.js\n@@ -0,0 +1 @@\n+${after}`;
+  w.ctx.gh.reviewEvidence = async () => ({ ...source, diff: patch, context: [{ path: "a.js", status: "added", patch, before: null, after }] });
+  const service = w.service();
+  let first, job;
+  for (let piece = 0; piece < 30; piece++) {
+    first = await service.reconcile(w.id, w.entry, w.pr);
+    job = Object.values(service.inspect(w.id).jobs).find(j => j.status === "running");
+    if (job.evidence.version === 3) break;
+    w.finish(job, { endedAt: w.clock.now(), raw: JSON.stringify(scopedClear(job.evidence)) });
+  }
+  assert.equal(job.evidence.version, 3);
+  const originalCount = w.calls.submits;
+  const accepted = Object.values(service.inspect(w.id).jobs).filter(j => j.status === "completed");
+  assert.ok(accepted.length > 1);
+  w.finish(job, { ok: false, raw: null, error: "Selected model is at capacity. Please try a different model.", endedAt: w.clock.now() });
+  const pending = await service.reconcile(w.id, w.entry, w.pr);
+  assert.equal(pending.status, "running");
+  t.state.update(t.id, { state: "needs-human", reason: "first-party-review-failed", reviewHead: head, reviewBinding: first.binding,
+    cursor: { since: T0, fixed_sha: head }, firstPartyReview: { ...first, status: "failed", errorCode: "REVIEW_PROVIDER" } });
+  const { run } = admitFixture(t.ctx, t.id, "review-output-retry", "codex");
+  const reviewerFor = w.ctx.executionFor;
+  Object.assign(w.ctx, { state: t.state, clock: w.clock, recoveryQualificationFor: t.ctx.recoveryQualificationFor,
+    executionFor: (id, ...args) => id === t.id ? { current: () => run } : reviewerFor(id, ...args) });
+  t.ctx.reviewService = w.service();
+  await t.tick.tickEntry(t.id, t.entry());
+  assert.equal(w.calls.submits, originalCount);
+  w.clock.advance(5); t.ctx.clock.advance(5);
+  await t.tick.tickEntry(t.id, t.entry());
+  assert.equal(w.calls.submits, originalCount + 1, JSON.stringify(t.entry().recovery_wait));
+  const retry = Object.values(w.service().inspect(t.id).jobs).find(j => j.retryOf === job.key);
+  assert.equal(retry.evidence.digest, job.evidence.digest);
+  w.finish(retry, { endedAt: w.clock.now(), raw: JSON.stringify(clear(retry.evidence)) });
+  t.ctx.clock.advance(5);
+  await t.tick.tickEntry(t.id, t.entry());
+  assert.equal(t.entry().firstPartyReview.result?.reviewedHead, head, JSON.stringify(t.entry().recovery_wait));
+  assert.equal(t.entry().firstPartyReview.result.verdict, "clear");
+  assert.equal(t.entry().state, "pr-open");
+  t.ctx.clock.advance(5); await t.tick.tickEntry(t.id, t.entry());
+  assert.equal(t.entry().state, "ready-for-human", JSON.stringify([t.entry().reason, t.entry().retry, t.entry().reviewBinding]));
+  for (const piece of accepted) assert.deepEqual(w.service().inspect(t.id).jobs[piece.key], piece);
+  assert.equal(w.calls.submits, originalCount + 1); assert.equal(t.runner.started.length, 0);
 });
 
 test("a previously stopped capacity failure can recover the exact owned job after upgrade", async () => {

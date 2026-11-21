@@ -837,3 +837,5 @@ new bounded allowance; it never accepts a failed result or bypasses review.
 See [first-party review](first-party-review.md#waiting-for-qualification-and-explicitly-retrying-a-stopped-probe).
 
 Use `recovery inventory [profile-id]` for a read-only adoption proposal and `recovery preflight <handle> <decision.json>` for an admitted route. The [recovery policy reference](autonomous-recovery.md#recovery-policy-and-admission) describes profile administration, scoped holds, exact task admission and the migration format.
+
+For a stopped admitted task, `gallivant why HANDLE` shows its recovery phase, original operation reservation and confirmed paid submissions. Use `gallivant recovery hold task/ID GENERATION` to fence the next effect, or `gallivant cancel HANDLE` to request cancellation of active work. See the [recipe prerequisites and stop conditions](autonomous-recovery.md#deterministic-reconciliation).

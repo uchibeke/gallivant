@@ -884,3 +884,32 @@ test("chain review hides protected paths, preserves legacy unknowns and refuses 
   await assert.rejects(reviewChainRetry(w.ctx, { name: "release", resnapshot: true }), /repository or task identity/);
   assert.equal(w.ctx.state.getChain("release").status, "stopped"); assert.equal(w.starts(), 0);
 });
+
+test("external merge of a stopped predecessor waits for retained cleanup and releases one successor across restart", async () => {
+  const w = await anchoredWorld();
+  await w.anchor();
+  w.markPr(FIRST, { state: "MERGED", entryState: STATES.needsHuman });
+  w.ctx.state.update(FIRST, { reason: "reviewer-silent" });
+  let cleanups = 0;
+  w.ctx.cleanupMergedWorkspace = async (_id, entry, pr) => ({ status: ++cleanups === 1 ? "pending" : "retained",
+    reason: "local work", pr: entry.pr, head: pr.headRefOid });
+  const poll = async () => {
+    w.ctx.clock.advance(2);
+    await makeTick(w.ctx).tickEntry(FIRST, w.ctx.state.get(FIRST));
+    await tickChains(w.ctx);
+  };
+  await poll();
+  assert.equal(w.starts(), 1);
+  assert.equal(w.ctx.state.get(FIRST).workspace_cleanup.status, "pending");
+  w.ctx.state = makeState(w.home);
+  await poll();
+  const predecessor = w.ctx.state.get(FIRST);
+  assert.equal(predecessor.workspace_cleanup.status, "retained");
+  assert.equal(predecessor.completionEvidence.terminal.mergeCommit, MERGE);
+  assert.equal(predecessor.completionEvidence.integration.qualified, false);
+  await tickChains(w.ctx);
+  w.ctx.state = makeState(w.home);
+  await tickChains(w.ctx);
+  assert.equal(w.starts(), 2);
+  assert.equal(cleanups, 2);
+});

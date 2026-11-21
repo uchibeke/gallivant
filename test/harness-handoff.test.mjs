@@ -3,7 +3,9 @@ import assert from "node:assert/strict";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { executionEpoch, makeExecution, reserveExecutionEpoch } from "../lib/execution.mjs";
-import { tempHome } from "./helpers.mjs";
+import { prepareRecoveryHandoff } from "../lib/recovery_handoff.mjs";
+import { admitFixture } from "./recovery-recipe-fixture.mjs";
+import { CONFIG, GOOD_PRD, T0, makeClock, fakeRunner, seededState, tempHome } from "./helpers.mjs";
 
 const taskId = "acme/widget/recovery";
 const runId = "run-previous-claude";
@@ -91,4 +93,58 @@ test("registry loss recovers the latest reserved provider epoch, including A to 
   assert.throws(() => executionEpoch({ root, taskId, entry: { ...recovered("claude"), pr: 21 }, provider: "claude", account: "operator" }),
     { code: "EXECUTION_OWNERSHIP" }, "another PR cannot inherit this ledger merely by reusing the task ID");
   assert.equal(readFileSync(join(root, "execution.json"), "utf8"), original);
+});
+
+for (const pr of [null, 142]) test(`automatic capacity handoff preserves the original ledger and reserves one new epoch for PR ${pr}`, async () => {
+  const { home, state, id } = seededState({ harness: "codex", pr, url: pr ? "https://github.com/acme/widget/pull/142" : null, state: "needs-human", reason: "provider-network", iteration: 2 });
+  const root = join(home, "author");
+  mkdirSync(root);
+  const target = { harness: "claude", provider: "fixture", model: "target", account: "operator", environment: "isolated",
+    dataLocation: "local", credentialRef: "credential:target", capabilities: ["handoff-session"], maxSpendMicros: 50_000 };
+  const clock = makeClock(T0), ctx = { home, state, clock, config: { ...CONFIG, harness: { codex: { model: "fixture" }, claude: { model: "target" } } },
+    readPrd: () => GOOD_PRD, git: { authorStorage() {} }, checkHarness: async () => ({ ok: true }),
+    authorCapabilityEvidence: ({ binding }) => ({ binding, ok: true, expiresAt: clock.now() + 60_000 }),
+    gh: { repoPermissions: async () => ({ pullRequestCreate: "proved", apiRepositoryWrite: "proved" }), branchExists: async () => true,
+      prListByHead: async () => pr ? [{ number: pr }] : [] } };
+  const { profile, run } = admitFixture(ctx, id, "route-handoff", "codex", undefined, [target]);
+  Object.assign(run.execution, { recoveryProfileDigest: profile.digest, providerState: "failed" });
+  run.exit = 1;
+  const before = state.update(id, { last: { run: run.id, exit: 1 }, execution: run.execution,
+    network_retry: { phase: "waiting", code: "MODEL_CAPACITY", run: run.id, attempts: 0, first_at: T0, next_at: T0 } });
+  const bytes = JSON.stringify({ version: 1, provider: "codex", account: "operator", taskId: id, current: run,
+    operations: { [run.execution.operationId]: { acceptance: "accepted", runId: run.id } } });
+  writeFileSync(join(root, "execution.json"), bytes);
+  const independent = "acme/widget/other-task";
+  state.put(independent, { ...before, pr: null, url: null });
+  ctx.executionFor = () => ({ root, ledgerEpoch: state.get(id).execution_epoch ?? 0,
+    current: () => state.get(id).harness === "codex" ? run : null,
+    outcome: () => ({ ok: false, finished: true, error: "Selected model is at capacity. Please try a different model." }) });
+  const first = await prepareRecoveryHandoff(ctx, id);
+  state.update(independent, { iteration: 3 });
+  const replay = await prepareRecoveryHandoff(ctx, id);
+  assert.deepEqual(replay.marker, first.marker);
+  assert.equal(state.get(id).iteration, 2);
+  assert.deepEqual(state.get(id).cursor, before.cursor);
+  assert.equal(state.get(independent).iteration, 3);
+  assert.equal(state.get(id).session, null);
+  assert.notEqual(first.marker.session, run.execution.sessionId);
+  assert.equal(state.get(id).recovery_actions.total.paidTurns, 1);
+  const epoch = JSON.parse(readFileSync(join(root, "execution-1.json")));
+  assert.equal(epoch.handoff.recovery.previousOperation, run.execution.operationId);
+  assert.equal(epoch.handoff.recovery.operation, first.marker.operation);
+  assert.equal(epoch.handoff.pr, pr);
+  const runner = fakeRunner(clock);
+  const targetOwner = () => makeExecution({ root, taskId: id, provider: "claude", runner, ledgerEpoch: 1,
+    ledgerFile: join(root, "execution-1.json") });
+  const input = { operationId: first.marker.operation, previousOperationId: run.execution.operationId,
+    recoveryIntent: replay.plan.key, recordedSessionId: replay.marker.session, name: "handoff",
+    spec: { cmd: "fixture", args: [], options: {} } };
+  await assert.rejects(targetOwner().submit({ ...input, recordedSessionId: "wrong" }), { code: "EXECUTION_OWNERSHIP" });
+  replay.plan.executing();
+  const accepted = await targetOwner().submit(input, replay.plan.guard);
+  assert.equal(accepted.execution.sessionId, replay.marker.session);
+  assert.equal((await targetOwner().submit(input)).id, accepted.id);
+  assert.equal(runner.started.length, 1);
+  await assert.rejects(targetOwner().submit({ ...input, name: "different" }), { code: "EXECUTION_CONFLICT" });
+  assert.equal(readFileSync(join(root, "execution.json"), "utf8"), bytes);
 });

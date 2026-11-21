@@ -2410,6 +2410,36 @@ test("interrupted verification blocks replay while lost publication replies reus
   assert.deepEqual(readJson(join(f.dir, "verification.json")), evidence);
 });
 
+test("a recovery hold arriving after verification fences publication without spending another verification", async () => {
+  const f = resultFixture();
+  let held = false;
+  f.ctx.state = { get: () => ({ ...f.entry, recovery_profile: { version: 1, digest: "fixture" } }),
+    load: () => ({ recovery: { holds: { [`task/${f.id}`]: { active: held } } } }) };
+  const verify = f.verify;
+  f.verify = async (...args) => { const result = await verify(...args); held = true; return result; };
+  await assert.rejects(reconcileExecutionResult(f.ctx, f), /paused by task control or recovery hold/);
+  assert.deepEqual(f.calls, ["commit", "verify"]);
+  held = false;
+  await reconcileExecutionResult(f.ctx, f);
+  assert.deepEqual(f.calls, ["commit", "verify", "push", "PR"]);
+});
+
+test("uncertain PR creation survives worker restart and only observes the original verified publication", async () => {
+  const f = resultFixture(), observed = { number: 7, url: "https://github.com/acme/widget/pull/7" };
+  let writes = 0, reads = 0;
+  f.ctx.gh.publishResultPr = async input => {
+    if (input.observeOnly) { reads++; return observed; }
+    writes++;
+    throw new Error("accepted but reply lost");
+  };
+  await assert.rejects(reconcileExecutionResult(f.ctx, f), /reply lost/);
+  assert.equal(readJson(join(f.dir, "result-application.json")).phase, "publishing");
+  assert.deepEqual((await reconcileExecutionResult(f.ctx, f)).pr, observed);
+  assert.deepEqual((await reconcileExecutionResult(f.ctx, f)).pr, observed);
+  assert.deepEqual(f.calls, ["commit", "verify", "push"]);
+  assert.deepEqual([writes, reads], [1, 1]);
+});
+
 test("failed remote verification survives polls and restart, settles workflow and permits explicit correction", async t => {
   const f = await collectedArtifactFixture(), state = makeState(f.ctx.home), attempts = join(f.entry.worktree, "verify-attempts.txt");
   f.ctx.readPrd = () => `# Brief\n\n## Verify\n\n- \`node -e 'require("fs").appendFileSync(${JSON.stringify(attempts)}, "x"); process.exit(2)'\`\n`;
