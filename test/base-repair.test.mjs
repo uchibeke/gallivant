@@ -757,6 +757,12 @@ test("a maintainer merge closes repaired tasks without inventing readiness or re
       base_repair: { ...e.base_repair, status } }));
     const before = structuredClone(w.entry()); let cleaned = 0;
     w.ctx.cleanupMergedWorkspace = async () => { cleaned++; return { status: "retained", reason: "local work preserved" }; };
+    w.g(["merge", "--ff-only", "work/repair"], w.origin);
+    w.gh.containsCommit = async (repository, base, sha) => {
+      assert.equal(repository, w.entry().repo);
+      w.g(["merge-base", "--is-ancestor", sha, base], w.origin);
+      return true;
+    };
     w.gh.data.pr.state = "MERGED"; w.gh.data.pr.mergedAt = at(10); w.gh.data.pr.mergeCommit = { oid: repaired };
     await w.tick();
     assert.equal(w.entry().state, STATES.done); assert.equal(w.entry().reason, null);

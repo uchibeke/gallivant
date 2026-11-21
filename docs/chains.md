@@ -157,3 +157,5 @@ The [chain workspace](ui-chains.md) provides an ordered dependency list, saved
 merge evidence, task and PR links, and explicit review/confirmation for future
 retry, changed-input approval and cancellation. It uses the same chain services
 and merge gates as the CLI. New chains are still created with CLI intake.
+
+A maintainer can merge a predecessor while it is stopped. The coordinator checks the exact PR and base ancestry, waits for owned authors to cease and records the cleanup outcome before claiming a successor. A retained checkout can contain dirty work or a later milestone's inputs. It counts as settled cleanup. Inspect the predecessor with `gallivant why HANDLE` and the chain with `gallivant chain NAME`. A closed, unmerged PR leaves its successful-integration successor unclaimed.
