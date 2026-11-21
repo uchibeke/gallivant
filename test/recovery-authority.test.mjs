@@ -126,7 +126,7 @@ test("protected profile revocation during shared service preflight fences the sa
   assert.equal(state.get(id).recovery_profile.digest, profile.digest);
 });
 
-test("disposable qualification binds the protected manifest and cannot become operator authority", () => {
+test("disposable qualification binds the protected manifest and cannot become operator authority", async () => {
   const { state, id, profile, decision, run } = fixture();
   const action = "verify-disposable-isolation", reference = "manifest:fixture", manifestDigest = hash(["manifest"]);
   const scopedRoute = { ...route, capabilities: [action] };
@@ -139,6 +139,20 @@ test("disposable qualification binds the protected manifest and cannot become op
     postcondition: "isolation-proved", expected: recoveryBinding(id, entry, run, decision.expected.snapshot, next, scopedRoute, [null, null, null]) });
   const inspect = () => inspectRecoveryAdmission({ registry: state.load(), id, run, route: scopedRoute, snapshot: decision.expected.snapshot, decision, now: 50 });
   assert.equal(inspect().mode, "observe");
+  const ctx = { state, config: CONFIG, clock: { now: () => 50 }, readPrd: () => GOOD_PRD,
+    executionFor: () => ({ current: () => run }) };
+  decision.expected.snapshot = turnBinding(ctx, id, entry, parsePrd(GOOD_PRD, id));
+  const preflight = () => preflightRecoveryDecision(ctx, id, decision);
+  assert.equal((await preflight()).disposable.eligible, false);
+  ctx.disposableQualificationOwner = { baselineFor: ({ binding }) => ({ binding, disposableOnly: true,
+    owned: true, isolated: true, launchDigest: hash("fixture-launch"), expiresAt: 150 }) };
+  const checked = await preflight();
+  assert.equal(checked.mode, "observe");
+  assert.equal(checked.disposable.eligible, true);
+  assert.equal(checked.disposable.expiresAt, decision.deadline);
+  assert.equal(checked.disposable.evidenceRoot, next.qualification.evidenceRoot);
+  ctx.disposableQualificationOwner.baselineFor = () => ({ ...checked.disposable, binding: hash("unrelated launch") });
+  assert.equal((await preflight()).disposable.eligible, false);
   decision.manifest.reference = "manifest:replacement";
   assert.throws(inspect, /manifest mismatch/);
   decision.authority = "operator-intent";

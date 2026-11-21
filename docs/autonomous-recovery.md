@@ -66,6 +66,8 @@ A version 1 decision names the recipe and version, action, authority, purpose, o
 
 Disposable qualification uses `admitted-recovery-intent`, purpose `disposable-qualification` and `verify-disposable-isolation` under the exact manifest reference and digest. A standalone denial probe cannot qualify the author that would run outside that probe. The verification owner uses the existing macOS sandbox or Linux namespace adapter. Author, review and intake owners require independent qualification of their actual launch, protected storage, snapshot, credential and control boundaries. All installed author combinations currently report observation-only for new recovery actions. Qualification and rollout belong to M06.
 
+For a qualification decision, preflight returns `disposable.eligible` for the single manifest action. The fixture owner must attest its baseline isolation, ownership, exact launch digest and expiry against the task, operation, approved manifest and evidence root. M06 can consume that result for the same launch after revalidation. Without an installed fixture owner the result is false. Production recipe admission remains observation-only.
+
 Use `recovery hold task/<id> <generation>` or `recovery hold chain/<name> <generation>`. Release that same scope with `recovery resume`. For a repository or profile use `recovery disable repo/<owner>/<repo>` or `recovery disable profile/<id>` with its generation, and `recovery enable` to release it. Supply 0 for the first transition. The command returns the new generation and operator provenance. An applied hold survives restart. A chain hold fences future claims while admitted children keep their own controls.
 
 ## Stopped-task migration dry run
