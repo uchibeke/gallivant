@@ -189,6 +189,30 @@ test("merged authors settle queued corrections before cleanup despite pending pr
   });
 });
 
+test("a hold arriving during merge proof fences retirement despite a queued correction", async t => {
+  const w = await world(t);
+  const control = { id: "correction", action: "message", note: "Keep the approved behavior", status: "queued", at: T0 };
+  w.state.update(w.id, { control });
+  w.gh.containsCommit = async () => {
+    w.state.update(w.id, { hold: { active: true } });
+    return true;
+  };
+  await w.tick();
+  assert.equal(w.execution.state().stopped, null);
+  assert.equal(w.execution.current().running, true);
+  assert.deepEqual(w.entry().control, control);
+  assert.equal(w.cleanups(), 0);
+
+  w.gh.containsCommit = async () => true;
+  w.state.update(w.id, { hold: { active: false } });
+  w.clock.advance(CONFIG.poll_seconds / 60);
+  await w.tick();
+  assert.equal(w.entry().state, STATES.done);
+  assert.equal(w.entry().control.status, "failed");
+  assert.deepEqual(w.calls, ["kill"]);
+  assert.equal(w.cleanups(), 1);
+});
+
 test("unconfirmed remote cancellation retains queued input until the owned run settles", async t => {
   const w = await world(t, { remote: true, delayed: true });
   w.state.update(w.id, { control: { id: "83c60b58-5e0f-4b6d-b68d-42b1f03a87b6", action: "message", note: "Keep existing behavior", status: "queued", interrupt: false, at: T0 } });
