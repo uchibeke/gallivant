@@ -172,12 +172,19 @@ test("retained checkout proof can change after closeout without reopening the ta
 
 test("owned fixture trees are removed on process exit and leave unrelated siblings alone", () => {
   const outside = tempHome(), fixtureModule = new URL("./owned-fixtures.mjs", import.meta.url).href;
+  const sibling = join(outside, "unrelated");
+  fs.mkdirSync(sibling);
   for (const code of [0, 23]) {
-    const program = "import { fixtureHome } from " + JSON.stringify(fixtureModule) + "; console.log(fixtureHome()); process.exit(" + code + ");";
+    const program = `
+      import { fixtureHome } from ${JSON.stringify(fixtureModule)};
+      process.stdout.write(fixtureHome(), () => process.exit(${code}));
+    `;
     const out = spawnSync(process.execPath, ["--input-type=module", "-e", program], { encoding: "utf8", env: { ...process.env, TMPDIR: outside }, timeout: 5000 });
     assert.equal(out.status, code, out.stderr);
-    assert.equal(fs.existsSync(dirname(out.stdout.trim())), false, out.stderr);
-    assert.equal(fs.existsSync(outside), true);
+    const fixtureRoot = dirname(out.stdout);
+    assert.equal(dirname(fixtureRoot), outside, "child reports its own fixture under the test root");
+    assert.equal(fs.existsSync(fixtureRoot), false, out.stderr);
+    assert.equal(fs.existsSync(sibling), true);
   }
 });
 
