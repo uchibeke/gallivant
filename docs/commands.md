@@ -316,6 +316,8 @@ recover an existing task.
 
 ## `gallivant status [--all] [--json]`
 
+Each task includes a read-only recovery summary. Use `--all` to include settled history and `--json` for the original incident reference, three activity clocks, retry deadline and outstanding obligations. [Recovery observations](autonomous-recovery.md)
+
 ```
 gallivant  daemon up since 6h ago  last tick 40s ago  next in 80s  gh ok  claude signed-in (API unchecked)  codex signed-in (API unchecked)
 

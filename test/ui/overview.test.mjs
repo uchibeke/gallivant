@@ -54,7 +54,7 @@ test("overview prioritizes decisions with qualified readiness, meaningful summar
       assert.equal(await task.locator("button[data-action]").count(), 0, "mutations stay in protected task controls");
     }
     assert.match(await row(page, ids[4]).textContent(), /automatic coordinator work/);
-    assert.match(await row(page, ids[2]).textContent(), /2026-09-24T14:10:00.000Z/);
+    assert.equal(await row(page, ids[2]).locator("time").getAttribute("datetime"), state.get(ids[2]).created_at);
     assert.match(await row(page, ids[6]).textContent(), /7\/8/);
   }
   assert.equal(JSON.stringify(state.entries()), saved);
@@ -72,7 +72,7 @@ test("stopped tasks with missing owned runs stay actionable without enabling ano
     assert.equal(await task.evaluate(el => el.closest("section").dataset.kind), "attention");
     assert.equal(await task.locator(".task-decision strong").textContent(), "Execution stop unconfirmed");
     assert.match(await task.locator(".task-decision p").textContent(), /reconcile its status before starting another writer/);
-    assert.equal(await task.locator("time").getAttribute("datetime"), at);
+    assert.equal(await task.locator("time").getAttribute("datetime"), state.get(id).created_at);
     const snapshot = await (await context.request.get(`${origin}${base}/api/status`)).json();
     const p = snapshot.needs_you.find(task => task.id === id).presentation;
     assert.equal(p.phase.id, "reconciling");
@@ -127,7 +127,7 @@ test("snapshot refresh reconciles filter choices without replacing drafts, selec
   const repo = "acme/new-repository", id = `${repo}/new-task`, chain = "next-release", harness = "fixture-harness";
   // A completed synthetic chain permits registration/removal without any dispatch.
   state.createChain({ name: chain, repo, base: "main", status: "done", index: 0, steps: [{ id }] });
-  const entry = { ...state.get(ids[7]), repo, harness, pr: 52, url: `https://github.com/${repo}/pull/52`,
+  const entry = { ...state.get(ids[7]), recovery_record: undefined, repo, harness, pr: 52, url: `https://github.com/${repo}/pull/52`,
     reviewObservation: { head: "head", binding: "binding", external: "waiting", checks: { count: 1, settled: false }, observedAt: NOW } };
   const choices = { repo, phase: "ci_wait", harness, chain };
   for (const base of ["", "/gallivant"]) {
@@ -295,12 +295,14 @@ test("keyed refresh preserves disclosure, selection, focus, scroll and meaningfu
   assert.equal(await page.evaluate(() => scrollY), y);
   // Structural changes while reading are offered, never forced into the scrolled list.
   await page.locator("#main").evaluate(el => el.focus({ preventScroll: true }));
-  state.update(ids[0], { state: "pr-open", reason: null, activity_at: "2026-09-24T14:29:00.000Z" });
+  state.update(ids[0], { state: "pr-open", reason: null, verified_progress: { kind: "verified-push", head: "next-head", at: "2026-09-24T14:29:00.000Z" } });
   await page.clock.runFor(10_000); await updated(page);
   assert.equal(await page.evaluate(() => scrollY), y);
   assert.equal(await details.getAttribute("open"), "");
   await page.locator("#overview-apply").click();
   assert.match(await page.locator("#overview-status").textContent(), /^Current/);
+  assert.equal(await page.locator("[data-task-id]").first().getAttribute("data-task-id"), ids[0]);
+  assert.equal(await task.locator("time").getAttribute("datetime"), "2026-09-24T14:29:00.000Z");
   assert.equal(await page.locator("[data-task-id]").count(), 8);
 });
 

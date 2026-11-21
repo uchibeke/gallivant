@@ -1,6 +1,5 @@
 import { readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { NOW } from "./fixture.mjs";
 export const LONG_REPO = `acme/${"long-repository-name-".repeat(9)}platform`;
 export function seedOverview(world) {
   const { state, ctx } = world;
@@ -16,7 +15,7 @@ export function seedOverview(world) {
     { state: "needs-human", network_retry: { phase: "waiting", run: "attempt", attempts: 1, code: "ENOTFOUND", first_at: "2026-09-24T14:00:00.000Z", next_at: "2026-09-24T14:35:00.000Z" } },
     { state: "ready-for-human", task: { completion: { version: 1, target: "integrated" } }, completionEvidence: { delivery: { repository: LONG_REPO, pr: 47, head: "head", base: "main", gate: { allow: true } } } },
     { state: "running", harness: "claude", last: { run: "active-run", exit: null, at: "2026-09-24T14:15:00.000Z" } },
-    { reviewObservation: { head: "head", binding: "binding", external: "waiting", checks: { count: 1, settled: true }, observedAt: NOW } },
+    { reviewObservation: { head: "head", binding: "binding", external: "waiting", checks: { count: 1, settled: true }, observedAt: "2026-09-24T14:27:00.000Z" } },
   ];
   entries.forEach((entry, i) => state.put(ids[i], { ...common, ...entry, pr: 42 + i, url: `https://github.com/${LONG_REPO}/pull/${42 + i}` }));
   const path = join(world.home, "state.json");

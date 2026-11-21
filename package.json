@@ -3,6 +3,9 @@
   "version": "0.3.0",
   "description": "Turn repository tasks into reviewed pull requests with local or hosted agents, acceptance checks and a persistent review loop.",
   "type": "module",
+  "browser": {
+    "./lib/recovery_digest.mjs": "./lib/recovery_digest_browser.mjs"
+  },
   "bin": {
     "gallivant": "bin/gallivant.mjs",
     "task-review": "bin/task-review.mjs",
@@ -96,6 +99,7 @@
     "url": "https://github.com/uchibeke/gallivant.git"
   },
   "dependencies": {
+    "@noble/hashes": "2.4.0",
     "ajv": "8.20.0",
     "jpeg-js": "0.4.4",
     "pngjs": "7.0.0",

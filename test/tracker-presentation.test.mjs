@@ -196,7 +196,7 @@ test("overview, detail, CLI and task summaries share facts and retain API fields
   const entry = { ...base(), state: "needs-human", reason: "checks-red" }, id = "acme/widget/task";
   const ctx = { home, state: { entries: () => [[id, entry]], get: () => entry, chains: () => [] }, config: CONFIG, clock: { now: () => Date.parse(NOW) }, log: silentLog, runnerFor: () => ({ current: () => null }) };
   const m = model(ctx), row = m.needs_you[0], p = row.presentation;
-  const view = taskView({ repo: entry.repo, completion: completionView(null, entry) }, { entry, maxIterations: CONFIG.max_iterations, now: NOW, controls: controlAvailability(entry, null, {}) });
+  const view = taskView({ repo: entry.repo, implementation: { id }, completion: completionView(null, entry) }, { entry, maxIterations: CONFIG.max_iterations, now: NOW, controls: controlAvailability(entry, null, {}) });
   assert.deepEqual(view.presentation, p);
   assert.deepEqual(modelSummary(view).presentation, p); assert.deepEqual(taskListSummary(view).presentation, p);
   for (const key of ["id", "handle", "label", "detail", "state", "reason", "round", "since", "base", "run"]) assert.ok(Object.hasOwn(row, key), key);

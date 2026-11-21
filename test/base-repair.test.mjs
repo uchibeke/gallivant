@@ -636,11 +636,12 @@ test("normal fix merge refuses a checkout outside the saved worktree root before
 test("an initial abort failure records the conflict and preserves the failed merge without dispatch", async t => {
   const w = world(t); let aborts = 0;
   w.ctx.git = makeGit({ config: w.ctx.config, identity: fakeIdentity(), exec: async (cmd, args, options) => {
-    if (cmd === "git" && args[0] === "merge" && args[1] === "--abort") { aborts++; throw new Error("fixture abort refused"); }
+    if (cmd === "git" && args[0] === "merge" && args[1] === "--abort") { aborts++; throw Object.assign(new Error("fixture index write refused"), { code: "ENOSPC" }); }
     return execFileAsync(cmd, args, options);
   } });
   w.ctx.git.originOf = w.git.originOf; w.ctx.git.ensureHttpsRemote = w.git.ensureHttpsRemote;
   await w.tick();
+  assert.equal(w.entry().base_merge.resourceCode, "ENOSPC");
   assert.equal(w.entry().base_merge.aborted, false); assert.equal(w.entry().base_merge.head, w.head);
   assert.equal(w.entry().base_merge.baseSha, w.base); assert.match(w.entry().base_merge.why, /CONFLICT/);
   assert.equal(w.entry().state, STATES.needsHuman); assert.equal(w.raw.started.length, 1);

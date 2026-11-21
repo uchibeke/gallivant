@@ -1,5 +1,7 @@
 # Let an agent set up Gallivant
 
+When diagnosing a stopped task, inspect the approved revision, original incident and productive time in the shared status view before deciding whether to use an existing control. [Recovery observations and ownership](autonomous-recovery.md)
+
 Give the prompt below to your coding agent. It can inspect prerequisites, run
 the published setup command, read the resulting report and validate a first task.
 You handle account login and any required trust prompts. Setup does not need

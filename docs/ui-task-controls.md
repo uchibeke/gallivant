@@ -1,5 +1,7 @@
 # Task messaging and recovery
 
+Open the task facts to see the recovery step, original failure, cumulative attempts, cancellation, PR checks and chain obligation. The same facts appear in the mounted Command Center. [Recovery observations](autonomous-recovery.md)
+
 Task actions always target the current logical task, including when an older
 attempt is selected. Message agent queues a correction for the same session
 after current work settles. Interrupt is off by default; when supported, its

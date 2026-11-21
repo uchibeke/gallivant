@@ -31,7 +31,7 @@ test("workspace separates canonical evidence, findings, execution metadata and s
   for (const base of ["", "/gallivant"]) {
     await page.goto(origin + path(base)); await ready(page);
     const summary = await page.locator("#workspace-summary").innerText();
-    for (const text of [TASK, RUN, "main", "delivery_ready", "round 1/5", "search-release", "10m ago", "Checks need attention"]) assert.ok(summary.includes(text), text);
+    for (const text of [TASK, RUN, "main", "delivery_ready", "round 1/5", "search-release", "12m ago", "Checks need attention"]) assert.ok(summary.includes(text), text);
     assert.equal(await page.locator("#workspace-activity").getAttribute("open"), null);
     const cards = page.locator(".evidence-card"); assert.equal(await cards.count(), 6);
     assert.match(await cards.nth(0).innerText(), /pending/); assert.match(await cards.nth(1).innerText(), /findings/);
