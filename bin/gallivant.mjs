@@ -77,7 +77,7 @@ const HELP = `gallivant: give an agent a task, let the review loop run, go outsi
                                          inspect chains, stop future work, or retry after fixing a blocker
   gallivant up [--once]                  the daemon: recover from GitHub, then tick every poll_seconds
   gallivant down                         stop the daemon and standalone dashboard; active runs keep going
-  gallivant status [--all] [--json]      needs-you, running, daemon health
+  gallivant status [--all] [--json]      task phase, recovery evidence, daemon health
   gallivant serve [--port 8791] [--no-open] [--no-daemon] [--foreground]
                                          same startup as start without a PRD; foreground keeps the tracker attached
   gallivant why <handle>                 why a PR stopped; handle is <repo>#<pr>, a PRD path, or the id
