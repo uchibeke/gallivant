@@ -12,6 +12,7 @@ import { messages } from "../lib/notify.mjs";
 import { selectReviewPolicy, legacyReviewPolicy, policyConfig, reviewBinding, reviewVerdict, reviewDisclosure, reviewDigest, REVIEW_DEFAULTS, validateReviewSettings } from "../lib/review_policy.mjs";
 import { DEFAULTS } from "../lib/config.mjs";
 import { redact } from "../lib/execution_io.mjs";
+import { recoveryDeadline, runRecoveryWork } from "../lib/recovery_io.mjs";
 import { aggregateReviewResults, captureReviewEvidence, partitionReviewEvidence, planReviewSynthesis, reducedReviewReport, reviewReports, synthesisReviewEvidence, validateReviewResult, reviewPrompt, REVIEW_VALIDATION_VERSION } from "../lib/review_evidence.mjs";
 import { buildReviewRun, createReviewService, imageReviewRouteFingerprint, reviewRouteFingerprint } from "../lib/first_party_review.mjs";
 import { copyReviewImage, inspectReviewImage } from "../lib/review_image.mjs";
@@ -197,6 +198,8 @@ test("complete evidence includes deletion context, immutable brief, checks and r
 
 test("only known read failures during evidence capture are marked retryable", async () => {
   for (const [fault, retryable] of [
+    [{ code: "RECOVERY_IO_BUDGET" }, true], [{ code: "SERVICE_COOLDOWN" }, true],
+    [{ code: "GH_TRANSPORT" }, true], [{ code: "GH_RATE_LIMIT", status: 403 }, true],
     [{ code: "BB_TRANSPORT", uncertain: false }, true], [{ code: "BB_TRANSPORT", uncertain: true }, false],
     [{ code: "BB_RATE_LIMIT" }, true], [{ code: "BB_HTTP", status: 503 }, true], [{ code: "BB_HTTP", status: 403 }, false],
     [{ code: "BB_OVERSIZED" }, false], [{ code: "BB_IDENTITY" }, false],
@@ -467,6 +470,44 @@ test("a transient capture read retries without clearance, then reviews the fresh
   await w.tick.tick(); assert.equal(w.entry().state, "ready-for-human"); assert.equal(w.entry().retry, null); assert.equal(attempts, 2);
   const denied = tickWorld(); denied.ctx.reviewService.reconcile = async () => { throw Object.assign(new Error("access denied"), { code: "BB_HTTP", status: 403 }); };
   await denied.tick.tick(); assert.equal(denied.entry().reason, "first-party-review-failed");
+});
+
+test("expired recovery budgets defer publication and evidence reads until the next due tick", async t => {
+  for (const boundary of ["publication paths", "evidence source", "evidence binding"]) await t.test(boundary, async () => {
+    const w = tickWorld(), reconcile = w.ctx.reviewService.reconcile;
+    let expired = true;
+    const read = (stage, readHost) => async () => {
+      if (expired && stage === boundary) runRecoveryWork(() => recoveryDeadline(), 0);
+      return readHost();
+    };
+    const host = {
+      reviewEvidence: read("evidence source", () => structuredClone(source)),
+      prView: read("evidence binding", w.gh.prView),
+    };
+    w.gh.prDiff = read("publication paths", w.gh.prDiff);
+    w.ctx.reviewService.reconcile = async (id, entry, pr) => {
+      await captureReviewEvidence({ id, entry, pr, host, readPrd: w.ctx.readPrd });
+      return reconcile(id, entry, pr);
+    };
+    for (let i = 0; i < 6; i++) {
+      await w.tick.tick();
+      const entry = w.entry();
+      assert.equal(entry.state, "pr-open");
+      assert.equal(entry.review_next_at, w.ctx.clock.now() + config.poll_seconds * 1000);
+      assert.equal(entry.retry, null);
+      assert.equal(entry.firstPartyReview?.status, undefined);
+      assert.equal(entry.review_readiness, undefined);
+      assert.deepEqual(w.notify.sent, []);
+      assert.deepEqual(await w.tick.tick(), [], "capture waits for the scheduled retry");
+      w.ctx.clock.advance(config.poll_seconds / 60);
+    }
+    expired = false;
+    await w.tick.tick();
+    assert.equal(w.entry().state, "ready-for-human");
+    assert.equal(w.entry().firstPartyReview?.status, "completed");
+    assert.equal(w.calls(), 1);
+    assert.equal(w.runner.started.length, 0);
+  });
 });
 
 function reviewMutationWorld() {
@@ -798,8 +839,8 @@ test("a transient stopped observation never cancels a reviewer confirmed running
   assert.equal((await service.reconcile(w.id,w.entry,w.pr)).status,"completed");
 });
 
-function reviewServiceWorld() {
-  const w = evidenceWorld(), clock = makeClock(), runners = new Map();
+function reviewServiceWorld(clock = makeClock()) {
+  const w = evidenceWorld(), runners = new Map();
   const calls = { downloads: 0, snapshots: 0, submits: 0, cancellations: 0, settlements: 0 };
   w.gh.reviewEvidence = async () => { calls.downloads++; return { ...structuredClone(source), head: w.pr.headRefOid, base: w.pr.baseRefOid }; };
   w.gh.prView = async () => { calls.snapshots++; return w.pr; };
@@ -823,6 +864,75 @@ function reviewServiceWorld() {
       r.result = { ok, finished: true, error, lastMessage: raw, denials: [], cost: null };
     } };
 }
+
+test("expired recovery budgets defer reviewer preparation with the original reservation", async () => {
+  const { ctx, state, id, gh, entry, notify } = tickWorld();
+  const w = reviewServiceWorld(ctx.clock);
+  w.ctx.gh.prView = gh.prView;
+  ctx.config = { ...config, poll_seconds: 30 };
+  w.ctx.config = ctx.config;
+  ctx.executionFor = ctx.runnerFor;
+  const executionFor = w.ctx.executionFor;
+  let preparations = 0;
+  w.ctx.executionFor = key => {
+    const runner = executionFor(key);
+    runner.prepare = async () => {
+      if (++preparations <= 2) runRecoveryWork(() => recoveryDeadline(), 0);
+      return { receipt: {}, spec: {} };
+    };
+    return runner;
+  };
+  const restart = () => {
+    ctx.reviewService = w.service();
+    return makeTick(ctx);
+  };
+  let ticker = restart();
+  await ticker.tick();
+  const waiting = entry().firstPartyReview;
+  assert.equal(preparations, 1, entry().last?.event);
+  assert.equal(entry().state, "pr-open", entry().last?.event);
+  assert.equal(waiting.status, "running");
+  assert.equal(waiting.run, null);
+  assert.equal(waiting.retryAt, ctx.clock.now() + 30_000);
+  const reserved = ctx.reviewService.inspect(id);
+  const job = reserved.jobs[waiting.key];
+  assert.equal(job.status, "preparing");
+  assert.equal(job.prepareAfter, waiting.retryAt);
+  assert.equal(job.retries, 0);
+  assert.equal(w.calls.submits, 0);
+
+  ctx.clock.advance(0.25);
+  state.update(id, { review_next_at: 0 });
+  ticker = restart();
+  await ticker.tick();
+  assert.equal(ticker.metrics.lanes.host.selected, 1);
+  assert.equal(ticker.metrics.lanes.reviewer.selected, 0);
+  assert.equal(preparations, 1, "a fresh host check still honors the saved preparation wait");
+  assert.deepEqual(ctx.reviewService.inspect(id), reserved);
+
+  ctx.clock.advance(0.25);
+  await ticker.tick();
+  assert.equal(ticker.metrics.lanes.host.selected, 0);
+  assert.equal(ticker.metrics.lanes.reviewer.selected, 1);
+  assert.equal(preparations, 2);
+  assert.equal(entry().firstPartyReview.retryAt, ctx.clock.now() + 30_000);
+  assert.equal(w.calls.submits, 0);
+
+  ctx.clock.advance(0.5);
+  await ticker.tick();
+  const resumed = ctx.reviewService.inspect(id);
+  assert.deepEqual(Object.keys(resumed.jobs), [job.key]);
+  assert.equal(resumed.spentReservedUsd, reserved.spentReservedUsd);
+  assert.equal(resumed.jobs[job.key].deadline, job.deadline);
+  assert.equal(resumed.jobs[job.key].retries, 0);
+  assert.equal(resumed.retryHistory, undefined);
+  assert.equal(entry().firstPartyReview.retryAt, undefined);
+  assert.equal(entry().firstPartyReview.run, "run-1");
+  assert.equal(w.calls.submits, 1);
+  assert.equal(w.calls.cancellations, 0);
+  assert.equal(entry().state, "pr-open");
+  assert.deepEqual(notify.sent, []);
+});
 
 test("confirmed reviewer capacity and routing failures retry with persisted backoff and the same evidence", async () => {
   for (const error of ["Selected model is at capacity. Please try a different model.", "workspace routing discovery failed"]) {
@@ -1480,9 +1590,10 @@ test("unchanged reviewer polls do not write the registry or refresh the task tim
 test("local reviewer progress is not held behind unrelated provider reconciliation", async () => {
   const old = { key: "captured-review", binding: "old-binding", status: "running" };
   const w = tickWorld({ over: { firstPartyReview: old, review_next_at: Number.MAX_SAFE_INTEGER } });
-  w.ctx.executionFor = () => w.runner;
-  w.runner.reconcile = async () => {};
-  const paused = pauseCall(w.runner, "reconcile");
+  const authorId = "acme/other/active", author = { ...w.runner, current: () => null, reconcile: async () => {} };
+  w.state.put(authorId, { repo: "acme/other", state: "running", harness: "codex", last: { run: "owned-author", exit: null } });
+  w.ctx.executionFor = id => id === authorId ? author : w.runner;
+  const paused = pauseCall(author, "reconcile");
   let progress = 0;
   w.ctx.reviewService.progress = async () => { progress++; return old; };
   w.gh.prView = async () => assert.fail("local review cannot fetch a new host snapshot");

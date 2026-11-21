@@ -107,3 +107,83 @@ The coordinator checks the candidate's commit parents or pinned-base ancestry, s
 Inspect the journal ID, operation, full pinned SHA, verification and stop with `why` or `status --all --json`. Restore the matching ledger, checkout or runtime proof before using Recheck. The current recipes require an isolated local clone and a qualified native session. Hosted and linked-worktree adapters, ambiguous merge projections, and GitHub jobs without complete comparison evidence require operator inspection. The native Git and injected-fault fixtures do not qualify a production adapter. Linux and macOS adapter qualification and rollout belong to M06.
 
 To pause future effects, use `gallivant recovery hold task/ID GENERATION`. To stop an active author, use `gallivant cancel HANDLE` and inspect its cancellation result. To disable the recipes for an admitted profile, use `gallivant recovery disable profile/ID GENERATION`. Saved reservations and ledger evidence survive all three controls.
+
+## Scheduling and cycle measurements
+
+The coordinator classifies structural changes every 60 seconds by default
+(`recovery_scan_seconds`). Registry changes between cycles can wake eligibility
+sooner. The existing execution progress cadence and `poll_seconds` still govern
+provider and review polling. Shared service cooldowns can defer an individual
+account or credential past those intervals. An entry with a remaining cleanup,
+delivery, cancellation or accepted execution stays eligible after terminal
+closeout. Settled retained history consumes no author or host slots.
+For active entries, the scan reads saved author ledgers locally to find work
+whose dispatch acknowledgement reached the ledger before the registry. The
+task, provider, run and preceding operation must match before the existing
+author or settlement lane can reconcile it.
+
+| Lane | Items per cycle on a standalone coordinator |
+| --- | ---: |
+| Control | 4 |
+| Settlement | 8 |
+| Author reconciliation | 8 |
+| Git host and PR review | 12 |
+| Captured reviewer progress | 4 |
+| Chain | 4 |
+| Maintenance | 4 |
+
+The default worker concurrency is four. Author launches share the existing
+execution concurrency limit. Host writes serialize for each repository.
+Portable coordinator embeds can lower their entry and chain capacities.
+Independent cursors persist across wakes, and a chain still waits for its own
+predecessor evidence when that entry is settling. Host reads, captured review
+progress and maintenance can share a cycle for one task. They run in sequence
+for that task while other tasks can use the available lane slots. A lane item
+has 30 seconds of service I/O budget. The underlying transport's shorter
+deadlines still apply. Accepted author processes keep their separately approved
+run allowance. Startup PR discovery resumes unfinished repositories on later
+wakes and observes the relevant host cooldown.
+
+`gallivant status --json` reports cycle duration, maximum queue delay, oldest
+due age, selected and due counts, saturation, and recorded progress transitions
+by lane. The rolling window keeps up to 120 cycles and reports p50, p95 and p99
+for duration, queue delay and oldest due age. Each cycle starts after the
+previous one finishes plus the wake interval. Inspect the measured distribution
+when evaluating latency.
+
+The deterministic capacity fixture uses 13 due host items, four slots and
+25,000 retained records across four fake-clock cycles. Its p50/p95/p99 were
+100/200/200 ms for cycle duration and 800/1050/1050 ms for queue delay and
+oldest due age. A separate fixture holds a host read for 60 simulated seconds
+while a local cancellation, local settlement, maintenance and an independent
+chain finish.
+These samples characterize the fixture workload. M06 owns the measured live
+capacity and native release targets.
+
+The coordinator records cooldowns in `recovery-cooldowns.json`. Scope is the
+Git host and credential, provider and account, or service endpoint and identity.
+A server deadline remains a lower bound when local backoff reaches its cap.
+A deadline over seven days is reported as suspended. For an author retry that
+would exceed its approved retry window, the paid retry expires and safe
+reconciliation remains eligible. Auth, billing and hard quota require their
+existing remedies.
+
+Queued controls retain their request identity and wait for the recorded retry
+time when a shared cooldown blocks the PR read or a proven unsubmitted launch.
+An observation-only resume keeps its original run identity while it waits.
+
+## Long-running execution and coordinator availability
+
+The `why` report surfaces evidence from the current run or saved tool phase
+after prolonged silence. Investigation starts after 15 minutes for unresolved
+provider phases, 30 for other author phases and 60 for observed tools. It reads
+bounded evidence. The configured hard allowance defaults to 720 minutes.
+The existing owned cessation protocol handles approved deadlines and operator
+cancellation. A missing final event stays visible as unresolved result evidence.
+
+A stopped coordinator cannot recover itself. `status` reports coordinator-down
+recovery unavailable when no independently qualified host supervisor is
+available. A stale heartbeat accompanies a live or unverified owner without
+changing its lease. Takeover after an alive-hung coordinator requires separate
+durable fencing and bounded-cycle proof. See the Linux and macOS deployment
+boundaries. [Host supervision](install.md#host-supervision)

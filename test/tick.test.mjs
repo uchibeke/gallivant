@@ -1,7 +1,9 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { join } from "node:path";
+import { performance } from "node:perf_hooks";
 import { makeTick, roundComment, receiptRoundComment, nudgeComment } from "../lib/tick.mjs";
+import { makePackageAuthPreflight } from "../lib/package_auth.mjs";
 import { READY_LABEL, NEEDS_LABEL, ROUND_MARKER, NUDGE_MARKER, makeGh, MAX_DIFF_BYTES } from "../lib/gh.mjs";
 import { RECEIPT_TAG } from "../lib/deliverable.mjs";
 import { parseBlock, renderBlock } from "../lib/block.mjs";
@@ -53,6 +55,41 @@ test("private-package refusal retains feedback without starting or repeatedly ch
   assert.deepEqual(w.entry().cursor, cursor); assert.equal(probes, 1);
   const ci = w.entry().recovery_record.incidents.find(i => i.cause === "checks-red");
   assert.equal(ci.head, "bad1234"); assert.equal(ci.attempts, 0);
+});
+
+test("an exhausted registry preflight budget defers the same feedback to the next due poll", async t => {
+  let time = 0, expire = true, probes = 0;
+  t.mock.method(performance, "now", () => time);
+  const w = world({}, { pr: prFixture({ headRefOid: "bad1234", statusCheckRollup: [checkRun({ name: "test", conclusion: "FAILURE" })] }),
+    reviews: [review({ id: 9102, by: BOT, bot: true, state: "CHANGES_REQUESTED", at: at(5), body: "Retain this feedback." })] }, {
+    config: { ...CONFIG, repos: [{ repo: "acme/widget", package_auth: { provider: "github-packages", packages: ["@acme/editor"] } }] },
+    packageAuthPreflight: makePackageAuthPreflight({ fetch: async () => {
+      probes++;
+      return { status: 200, body: { cancel: async () => {} } };
+    } }),
+  });
+  w.git.authorStorage = async () => { if (expire) time += 60_000; };
+  w.clock.advance(6);
+  const original = w.entry();
+  await w.tick.tick();
+  const waiting = w.entry();
+  assert.equal(waiting.state, STATES.prOpen);
+  assert.equal(waiting.review_next_at, w.clock.now() + CONFIG.poll_seconds * 1000);
+  assert.deepEqual(waiting.cursor, original.cursor);
+  assert.deepEqual(waiting.last, original.last);
+  assert.equal(waiting.iteration, 0);
+  assert.equal(probes, 0);
+  assert.equal(w.runner.started.length, 0);
+  assert.deepEqual(w.notify.sent, []);
+
+  expire = false;
+  assert.deepEqual(await w.tick.tick(), []);
+  assert.equal(probes, 0);
+  w.clock.advance(CONFIG.poll_seconds / 60);
+  await w.tick.tick();
+  assert.equal(probes, 1);
+  assert.equal(w.runner.started.length, 1);
+  assert.match(w.runner.started[0].args.at(-1), /Retain this feedback/);
 });
 
 test("a recovered handoff ledger gives the first new session its context instructions", async () => {
@@ -1199,7 +1236,7 @@ test("a needs-human entry without a PR is left alone: no PR lookup, no error", a
   let looked = false;
   w.gh.prView = async () => { looked = true; return prFixture(); };
   const results = await w.tick.tick();
-  assert.deepEqual(results.map(r => r.ok), [true]);
+  assert.deepEqual(results, [], "a stopped task without a due obligation uses no lane slot");
   assert.equal(looked, false);
 });
 

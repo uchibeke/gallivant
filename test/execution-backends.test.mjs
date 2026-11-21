@@ -697,6 +697,7 @@ for (const reply of ["failure", "success", "cancel", "ownership-change", "timeou
   for (const [name, harness, pr] of [["remote", "openai-agents", 1], ["local", "codex", 2], ["review", "codex", 3]]) {
     state.put(`acme/widget/${name}`, { ...newEntry({ repo: "acme/widget", harness, pr, branch: `work/${pr}`, base: "main", worktree: tempHome(), state: STATES.ready, nowIso: T0 }), cursor: { since: T0, fixed_sha: "a1b2c3d" }, ...(name === "remote" ? { execution: { version: 1, allowance } } : {}) });
   }
+  state.put("acme/widget/active", { ...newEntry({ repo: "acme/widget", harness: "codex", state: STATES.running, nowIso: T0 }), last: { run: "already-owned", exit: null } });
   gh.prView = async (_repo, pr) => prFixture({ number: pr, headRefName: `work/${pr}`, ...(pr === 3 ? { state: "MERGED" } : {}) });
   gh.data.comments = [comment({ id: 99, by: "me", at: new Date(f.clock.now()).toISOString(), body: "@gallivant fix the header" })];
   local.reconcile = async () => { progress++; };
@@ -712,7 +713,7 @@ for (const reply of ["failure", "success", "cancel", "ownership-change", "timeou
   assert.equal(f.calls.length, 0, "expired cache cannot prepare or dispatch a paid remote turn");
   assert.equal(Object.keys(f.service.state().operations).length, 0);
   assert.equal(local.started.length, 1, "fresh provider dispatch continues before the slow probe replies");
-  assert.equal(state.get("acme/widget/review").state, STATES.done); assert.ok(progress >= 2);
+  assert.equal(state.get("acme/widget/review").state, STATES.done); assert.equal(progress, 1);
   const beforeReply = { remoteCalls: f.calls.length, localRuns: local.started.length, progress, reviewed: state.get("acme/widget/review").state,
     fencedHealth: health.get("openai-agents", "test"), freshHealth: health.get("codex", "operator") };
   if (reply === "cancel") state.update("acme/widget/remote", { dispatch_stopped: "cancellation-requested" });
@@ -761,7 +762,7 @@ test("pending provider health leaves every GitHub review worker available to unr
   const refreshing = health.refresh([["codex", "operator"]]), ticking = makeTick(ctx).tick();
   await new Promise(resolve => setImmediate(resolve));
   assert.equal(state.get("acme/widget/task-9").state, STATES.done, "eight pending dispatches cannot consume four review workers");
-  assert.equal(reads, 9); assert.equal(progress, 9);
+  assert.equal(reads, 9); assert.equal(progress, 0, "idle PR observations do not poll author executions");
   finish({ ok: false, detail: "fixture login expired" }); await refreshing;
   assert.ok((await ticking).every(result => result.ok));
   for (let pr = 1; pr < 9; pr++) assert.equal(state.get(`acme/widget/task-${pr}`).cursor.since, T0);
@@ -924,11 +925,13 @@ function legacyCancellationFixture() {
   const root = tempHome(), clock = makeClock(), id = "legacy-active", signals = [];
   const session = "22222222-2222-4222-8222-222222222222";
   mkdirSync(join(root, id));
-  writeJsonAtomic(join(root, id, "job.json"), { id, pid: 123456789, bin: "codex", name: "legacy", startedAt: clock.now(), exit: null });
+  writeJsonAtomic(join(root, id, "job.json"), { id, pid: 123456789, birth: "leader", bin: "codex", name: "legacy", startedAt: clock.now(), exit: null });
   writeFileSync(join(root, "latest-run"), id);
   let members = [{ pid: 123456789, group: 123456789, started: "leader" }, { pid: 123456790, group: 123456790, started: "tool" }];
   const open = (controls = {}) => {
-    const runner = makeRunner(root, { clock, probe: () => true, processes: () => members, signal: (pid, sig) => signals.push([pid, sig]) });
+    const runner = makeRunner(root, { clock, probe: () => true, processes: () => members,
+      exists: pid => Boolean(members?.some(member => member.pid === pid)), birth: pid => members?.find(member => member.pid === pid)?.started,
+      signal: (pid, sig) => signals.push([pid, sig]) });
     return makeExecution({ root, taskId: "legacy-task", provider: "codex", runner, clock, legacySessionId: session,
       capabilities: { ...executionRegistry.codex, controls: { cancel: true, ...controls } } });
   };
@@ -939,7 +942,7 @@ test("legacy cancellation stops the owned process tree, survives restart and qua
   const f = legacyCancellationFixture(), service = f.open();
   assert.equal(service.state().current, null);
   assert.deepEqual(await service.cancel(), { confirmed: false });
-  assert.deepEqual(f.signals, [[-123456790, "SIGTERM"], [-123456789, "SIGTERM"]]);
+  assert.deepEqual(f.signals, [[123456790, "SIGTERM"], [123456789, "SIGTERM"]]);
   const saved = service.state();
   assert.equal(saved.current.id, f.id);
   assert.equal(saved.current.execution.runId, f.id);
@@ -957,7 +960,7 @@ test("legacy cancellation stops the owned process tree, survives restart and qua
   await assert.rejects(restarted.submit({ ...input, spec: {} }), { code: "EXECUTION_STOPPED" });
   f.clock.advance(1); // Recovery uses the existing owned process-tree fallback.
   assert.deepEqual(await restarted.cancel(), { confirmed: false });
-  assert.deepEqual(f.signals.slice(-2), [[-123456790, "SIGKILL"], [-123456789, "SIGKILL"]]);
+  assert.deepEqual(f.signals.slice(-2), [[123456790, "SIGKILL"], [123456789, "SIGKILL"]]);
   f.setMembers([]);
   await restarted.reconcile();
   assert.equal(restarted.current().execution.providerState, "cancelled");
@@ -1019,7 +1022,7 @@ test("coordinator reconciliation resumes an owned local kill fallback after rest
   const restarted = f.open(); await restarted.reconcile();
   assert.equal(f.signals.length, 2, "the persisted deadline has not elapsed");
   f.clock.advance(1); assert.equal(restarted.current().running, true); assert.equal(f.signals.length, 2, "read-only access never signals");
-  await restarted.reconcile(); assert.deepEqual(f.signals.slice(-2), [[-123456790, "SIGKILL"], [-123456789, "SIGKILL"]]);
+  await restarted.reconcile(); assert.deepEqual(f.signals.slice(-2), [[123456790, "SIGKILL"], [123456789, "SIGKILL"]]);
   assert.equal(readJson(join(f.root, f.id, "job.json")).killAfter, stopped.killAfter);
   assert.equal(restarted.current().execution.providerState, "cancellation-requested");
   f.setMembers([{ pid: 123456790, group: 123456790, started: "reused-tool" }]);
@@ -1806,10 +1809,12 @@ test("large queued local output uses bounded round-robin pages while unrelated j
   assert.deepEqual(readJson(queueFile).runs, ["second-old", f.id]);
   // A missing execution.current still projects queued pre-upgrade local output.
   const home = tempHome(), state = makeState(home), gh = fakeGh(), local = fakeRunner(f.clock);
-  for (const name of ["backlog", "unrelated", "review"]) state.put(`acme/widget/${name}`, newEntry({ repo: "acme/widget", harness: "codex", pr: name === "review" ? 3 : null, branch: "work/3", base: "main", worktree: tempHome(), state: name === "review" ? STATES.ready : STATES.done, nowIso: T0 }));
+  for (const name of ["backlog", "unrelated", "review"]) state.put(`acme/widget/${name}`, { ...newEntry({ repo: "acme/widget", harness: "codex", pr: name === "review" ? 3 : null, branch: "work/3", base: "main", worktree: tempHome(), state: name === "review" ? STATES.ready : name === "unrelated" ? STATES.running : STATES.done, nowIso: T0 }),
+    ...(name === "backlog" ? { last: { run: next.id, exit: 0 } } : name === "unrelated" ? { last: { run: "active", exit: null } } : {}) });
   gh.prView = async () => prFixture({ number: 3, headRefName: "work/3", state: "MERGED" });
   let progress = 0; local.reconcile = async () => { progress++; };
-  const ctx = { home, config: CONFIG, clock: f.clock, state, gh, git: fakeGit(), log: silentLog, notify: fakeNotify(), ownLogin: "me", readPrd: () => null, credential: fakeCredential(), identity: fakeIdentity(), executionFor: id => id.endsWith("/backlog") ? f.open() : local };
+  const ctx = { home, config: CONFIG, clock: f.clock, state, gh, git: fakeGit(), log: silentLog, notify: fakeNotify(), ownLogin: "me", readPrd: () => null, credential: fakeCredential(), identity: fakeIdentity(), executionFor: id => id.endsWith("/backlog") ? f.open() : local,
+    outputNextAtFor: id => id.endsWith("/backlog") ? f.openRunner().outputNextAt() : null };
   assert.ok((await makeTick(ctx).tick()).every(result => result.ok));
   assert.ok(progress > 0); assert.equal(state.get("acme/widget/review").state, STATES.done);
   assert.equal(outputEvents(join(f.root, "second-old")).length, 100);
@@ -1848,7 +1853,7 @@ test("incompatible local projection state prevents paid intent and preserves own
     if (corruption === "version") writeJsonAtomic(queue, { version: 2, runs: [f.id] });
     if (corruption === "cursor") writeJsonAtomic(join(f.dir, "local-output.json"), { offset: -1 });
     if (corruption === "discard-state") writeJsonAtomic(join(f.dir, "local-output.json"), { offset: 0, discarding: "false" });
-    if (corruption === "queue-write") mkdirSync(`${queue}.${process.pid}.tmp`);
+    if (corruption === "queue-write") mkdirSync(queue);
     await assert.rejects(f.open().submit({ ...input, spec: { cmd: process.execPath, args: ["-e", "process.exit(0)"], options: { cwd: tempHome() } } }), corruption === "version" ? /unsupported local output queue.*preserve.*restore/ : ["cursor", "discard-state"].includes(corruption) ? /invalid local output cursor.*restore/ : { code: "EISDIR" });
     assert.deepEqual(f.open().state().operations, {}); assert.equal(f.open().state().allowance, undefined);
     assert.equal(readFileSync(join(f.root, "latest-run"), "utf8"), f.id);

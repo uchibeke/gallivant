@@ -7,6 +7,7 @@ import { execFileSync } from "node:child_process";
 import { gzipSync, gunzipSync } from "node:zlib";
 import { makeExecution } from "../lib/execution.mjs";
 import { makeProviderHealth } from "../lib/provider_health.mjs";
+import { makeRecoveryCooldowns } from "../lib/recovery_cooldown.mjs";
 import { capabilitiesFor } from "../lib/harness.mjs";
 import { makeAgentsTransport, checkAgentsAccess } from "../lib/openai_agents.mjs";
 import { validateAgentsConfig } from "../lib/openai_agents_config.mjs";
@@ -904,31 +905,36 @@ for (const status of [401, 429]) test(`HTTP ${status} preserves work and bounded
   for (let n = 0; n < 3; n++) { f.fail(status); await f.service().reconcile({ force: true }); }
   const before = f.calls.length; await f.service().reconcile({ force: true }); assert.equal(f.calls.length, before); assert.equal(f.service().current().execution.recoveryAction, "AGENTS_RECOVERY_REQUIRED"); assert.doesNotMatch(readFileSync(join(f.root, "execution.json"), "utf8"), /private provider error/);
 });
-test("Retry-After seconds and HTTP dates remain finite and bounded", async () => {
+test("Retry-After seconds and HTTP dates preserve finite server deadlines", async () => {
   const now = Date.parse("Sun, 06 Nov 1994 08:47:37 GMT"), clock = { now: () => now };
-  for (const [header, expected] of [["120", 120_000], [" 120 ", 120_000], ["0", 0], ["9".repeat(400), 300_000],
+  const lastDate = Date.parse("+275760-09-13T00:00:00.000Z");
+  for (const [header, expected] of [["120", 120_000], [" 120 ", 120_000], ["0", 0], ["9".repeat(400), lastDate - now],
     ["Sun, 06 Nov 1994 08:49:37 GMT", 120_000], ["Sunday, 06-Nov-94 08:49:37 GMT", 120_000], ["Sun Nov  6 08:49:37 1994", 120_000],
-    ["Sun, 06 Nov 1994 09:49:37 GMT", 300_000], ["Sun, 06 Nov 1994 07:49:37 GMT", 0],
+    ["Sun, 06 Nov 1994 09:49:37 GMT", 3_720_000], ["Sun, 06 Nov 1994 07:49:37 GMT", 0],
     [null, 0], ["", 0], ["invalid", 0], ["-1", 0], ["1.5", 0], ["1e3", 0], ["Infinity", 0], ["11/06/2094", 0], ["Sun, 99 Nov 1994 08:49:37 GMT", 0]]) {
     const http = agentsHttp({ credential: () => "offline-test-key", clock, fetcher: async () => new Response("private provider error", { status: 429, headers: header === null ? {} : { "retry-after": header } }) });
     await assert.rejects(http.request("/models/fixture-model"), error => { assert.equal(error.code, "AGENTS_THROTTLED"); assert.equal(error.retryAfterMs, expected, String(header)); return true; });
   }
 });
 test("Agents readiness carries HTTP-date throttling into shared account health after restart", async t => {
-  const f = fixture(), scope = [["openai-agents", config.account]], delay = 120_000;
+  const f = fixture(), scope = [["openai-agents", config.account]], delay = 3_600_000;
   const options = { home: f.root, clock: f.clock, jitter: () => 0, probe: (_provider, _account, signal) => checkAgentsAccess(config, { http: f.http, signal }) };
+  const health = () => makeProviderHealth({ ...options, cooldowns: makeRecoveryCooldowns({ home: f.root, clock: f.clock }) });
   f.failAt(`/models/${config.model}`, 429, new Date(f.clock.now() + delay).toUTCString());
-  await makeProviderHealth(options).refresh(scope);
+  await health().refresh(scope);
   const failure = makeProviderHealth(options).get(...scope[0]);
   assert.equal(failure.detail, "AGENTS_THROTTLED"); assert.equal(failure.retryAfterMs, delay); assert.equal(failure.nextAttemptAt, f.clock.now() + delay);
-  const calls = f.calls.length; f.clock.advance(delay - 1); await makeProviderHealth(options).refresh(scope); assert.equal(f.calls.length, calls);
-  f.clock.advance(1); await makeProviderHealth(options).refresh(scope); assert.equal(makeProviderHealth(options).get(...scope[0]).ok, true);
+  const reopened = health();
+  assert.equal(reopened.get(...scope[0]).code, "SERVICE_COOLDOWN");
+  assert.equal(reopened.get(...scope[0]).nextAttemptAt, f.clock.now() + delay);
+  const calls = f.calls.length; f.clock.advance(delay - 1); await reopened.refresh(scope); assert.equal(f.calls.length, calls);
+  f.clock.advance(1); await reopened.refresh(scope); assert.equal(health().get(...scope[0]).ok, true);
   assert.ok(f.calls.every(v => v.method === "GET")); assert.equal(f.sessions.size, 0);
   t.diagnostic(`readiness retry evidence: ${join(f.root, "provider-health.json")}`);
 });
-for (const [kind, delay] of [["http-date", 120_000], ["malformed", 20_000], ["capped", 300_000]]) test(`throttled ${kind} retry survives restart and defers coordinator polling`, async t => {
+for (const [kind, delay] of [["http-date", 120_000], ["malformed", 20_000], ["prolonged", 172_800_000]]) test(`throttled ${kind} retry survives restart and defers coordinator polling`, async t => {
   const f = fixture(), job = await f.service().submit(input), before = f.clock.now();
-  const header = kind === "http-date" ? new Date(before + delay).toUTCString() : kind === "malformed" ? "bad-delay" : "999999";
+  const header = kind === "http-date" ? new Date(before + delay).toUTCString() : kind === "malformed" ? "bad-delay" : String(delay / 1000);
   f.failAt(`/agents/sessions/${job.execution.sessionId}/events`, 429, header);
   await f.service().reconcile();
   const saved = readJson(join(f.root, "execution.json")).current.execution;

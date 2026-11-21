@@ -230,3 +230,16 @@ end-to-end task is still needed to verify the user's actual repository
 permissions, provider entitlement, sandbox, CI and review integration.
 
 Before a profiled author turn, inspect the approved route, model entitlement, package access, required capture surface and Git metadata and scratch mounts. Resolve missing access with the operator. Use the [recovery preflight and migration commands](autonomous-recovery.md#recovery-policy-and-admission) to inspect admission and existing stopped work.
+
+## Recovery and resource inspection
+
+Use `gallivant status --json` for actual cycle and supervision observations.
+Use `gallivant recovery resources [handle]` for a read-only headroom report
+and `gallivant why HANDLE` for the current run phase or cleanup reason. Pass
+the observed phase, mount role or service deadline to the operator. Leave
+existing author limits, saved execution ownership and pending journals in place.
+
+Host supervision requires a separate operator deployment and qualification.
+An old heartbeat or an unavailable process inspection leaves ownership
+unverified. Setup can report that limitation without installing a service.
+[Host supervision](install.md#host-supervision)

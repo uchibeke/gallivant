@@ -107,7 +107,7 @@ test("embedded coordinator resolves authenticated identity when plain context ha
   await coordinator.wake();
   assert.deepEqual(calls,["schedule","identity","schedule"],"the real tick succeeds without a test-only injected login");
   ctx.gh.user=async()=>{throw Object.assign(new Error("identity unavailable"),{code:"GH_UNAVAILABLE"});};
-  await assert.rejects(coordinator.wake(),{code:"GH_UNAVAILABLE"});
+  assert.deepEqual(await coordinator.wake(), [], "an unavailable identity does not abort independent coordinator lanes");
 });
 
 test("pre-registration intake and execution records retain their exact active artifact pin", async t => {
@@ -207,6 +207,7 @@ test("confirmed registry cancellations release the pin only after execution and 
   const ctx = { state, clock: makeClock(), log: silentLog, runnerFor: () => ({ current: () => job, cancel: async () => ({ confirmed }) }) };
   await cancelControl(ctx, id);
   assert.equal(state.get(id).reason, "cancellation-requested");
+  assert.equal(state.get(id).execution, undefined, "a versionless execution observation must stay out of the registry");
   assert.throws(() => migrateRuntimeState({ home, manifest: update }), { code: "RUNTIME_ACTIVE_PIN" });
   state.update(id, { control: { action: "cancel", status: "queued" } }); confirmed = true;
   await cancelControl(ctx, id);
@@ -356,7 +357,7 @@ test("chain review cadence survives fast wakes, process restart and failed advan
     assert.equal(readJson(join(home, "coordinator.json")).chainCursor, null);
     assert.equal(readJson(join(home, "coordinator.json")).nextChainAt, deadline);
   }
-  assert.equal(progress, 14, "one bounded entry still reconciles on every wake");
+  assert.equal(progress, 0, "settled chain predecessors do not use author slots");
   clock.advance(10 / 60);
   const broken = { ...ctx, state: { ...state, chains: () => { throw new Error("fixture state read failure"); } } };
   await assert.rejects(coordinator(broken).wake(), /fixture state read failure/);

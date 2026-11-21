@@ -45,9 +45,10 @@ test("tool sign-in does not attest model access, browser or private transport; d
 
 test("actual mount paths are checked including Git metadata, scratch bytes and inodes", () => {
   const paths = { stateDir: "/state", worktree: "/tree", gitDirs: ["/meta"], scratch: "/scratch" };
-  for (const [path, stat, expected] of [["/scratch", { bavail: 0n }, /scratch/], ["/state", { ffree: 0n }, /state/], ["/meta", null, /Git metadata/]]) {
+  for (const [path, stat, expected] of [["/scratch", { bavail: 0n }, /scratch/], ["/state", { ffree: 0n }, /state/], ["/meta", null, /git-1/]]) {
     assert.throws(() => checkAuthorStorage(paths, { access(p) { if (p === path && !stat) throw new Error("private path data"); },
-      statfs: p => ({ bavail: 10000n, bsize: 4096n, ffree: 1000n, ...(p === path ? stat : {}) }) }), expected);
+      stat: () => ({ dev: 1, isDirectory: () => true }), pressure: () => ({ memoryBytes: Infinity, loadPerCpu: 0 }),
+      statfs: p => ({ type: 1n, files: 2000n, bavail: 20000n, bsize: 4096n, ffree: 1000n, ...(p === path ? stat : {}) }) }), expected);
   }
 });
 
