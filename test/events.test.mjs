@@ -219,6 +219,24 @@ test("the output scan sees only added lines, never context or removed text", () 
   assert.equal(addedLines(null), "");
 });
 
+test("the output scan keeps added text that looks like a file header", () => {
+  const diff = [
+    "diff --git a/x b/x",
+    "--- a/x",
+    "+++ b/x",
+    "@@ -1 +1,2 @@",
+    " context",
+    "+++ b/example.txt",
+    "diff --git a/y b/y",
+    "--- a/y",
+    "+++ b/y",
+    "@@ -1 +1 @@",
+    "-removed",
+    "+added",
+  ].join("\n");
+  assert.equal(addedLines(diff), "++ b/example.txt\nadded");
+});
+
 test("hasOwnComment finds the daemon's own marked comment after a time and ignores others", () => {
   const list = [
     comment({ id: 1, by: "me", at: at(2), body: `@codex review\n\n${ROUND_MARKER}` }),
