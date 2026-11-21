@@ -24,6 +24,7 @@ import { resume } from "../lib/commands/resume.mjs";
 import { acquireProcessLock } from "../lib/daemon.mjs";
 import { makeGit, GIT_PATH_LIMITS } from "../lib/git.mjs";
 import { execFileAsync } from "../lib/gh.mjs";
+import { makeHostRegistry } from "../lib/hosts.mjs";
 import { requestControl, applyControl, cancelControl, controlFailure } from "../lib/control.mjs";
 import { tempHome, makeClock, CONFIG, T0, fakeGh, fakeNotify, silentLog, fakeGit, fakeCredential, fakeIdentity, fakeRunner, prFixture, comment, harnessBin, GOOD_PRD, codexLines, claudeResultLines, geminiLines, opencodeLines, gooseLines } from "./helpers.mjs";
 const allowance = { remainingUsd: 1, reservedUsd: 0.1 };
@@ -2407,6 +2408,83 @@ test("interrupted verification blocks replay while lost publication replies reus
   const evidence = readJson(join(f.dir, "verification.json"));
   await reconcileExecutionResult(f.ctx, f); await reconcileExecutionResult(f.ctx, f);
   assert.deepEqual(f.calls, ["commit", "verify", "push", "push", "PR"]);
+  assert.deepEqual(readJson(join(f.dir, "verification.json")), evidence);
+});
+
+test("a recovery hold arriving after verification fences publication without spending another verification", async () => {
+  const f = resultFixture();
+  let held = false;
+  f.ctx.state = { get: () => ({ ...f.entry, recovery_profile: { version: 1, digest: "fixture" } }),
+    load: () => ({ recovery: { holds: { [`task/${f.id}`]: { active: held } } } }) };
+  const verify = f.verify;
+  f.verify = async (...args) => { const result = await verify(...args); held = true; return result; };
+  await assert.rejects(reconcileExecutionResult(f.ctx, f), /paused by task control or recovery hold/);
+  assert.deepEqual(f.calls, ["commit", "verify"]);
+  held = false;
+  await reconcileExecutionResult(f.ctx, f);
+  assert.deepEqual(f.calls, ["commit", "verify", "push", "PR"]);
+});
+
+test("uncertain PR creation survives worker restart and only observes the original verified publication", async () => {
+  const f = resultFixture(), observed = { number: 7, url: "https://github.com/acme/widget/pull/7" };
+  let writes = 0, reads = 0;
+  f.ctx.gh.publishResultPr = async input => {
+    if (input.observeOnly) { reads++; return observed; }
+    writes++;
+    throw new Error("accepted but reply lost");
+  };
+  await assert.rejects(reconcileExecutionResult(f.ctx, f), /reply lost/);
+  assert.equal(readJson(join(f.dir, "result-application.json")).phase, "publishing");
+  assert.deepEqual((await reconcileExecutionResult(f.ctx, f)).pr, observed);
+  assert.deepEqual((await reconcileExecutionResult(f.ctx, f)).pr, observed);
+  assert.deepEqual(f.calls, ["commit", "verify", "push"]);
+  assert.deepEqual([writes, reads], [1, 1]);
+});
+
+for (const operation of ["create", "edit"]) test(`verified PR ${operation} can retry a failed lookup before its write`, async () => {
+  const f = resultFixture(), checkpoint = join(f.dir, "result-application.json");
+  const head = f.result.inputHead;
+  const pr = prFixture({ number: 1, headRefName: f.entry.branch, headRefOid: head });
+  let rows = operation === "edit" ? [pr] : [], lookupFailed = true, held = false, holdOnLookup = false, writes = 0;
+  let remoteHead = head;
+  if (operation === "edit") f.entry.pr = pr.number;
+  f.ctx.state = { get: () => ({ ...f.entry, recovery_profile: { version: 1, digest: "fixture" } }),
+    load: () => ({ recovery: { holds: { [`task/${f.id}`]: { active: held } } } }) };
+  const reopen = () => ({ ...f.ctx, host: makeHostRegistry({ credential: async () => ({ token: "fixture" }), exec: async (_cmd, args) => {
+    if (args[0] === "api") {
+      assert.deepEqual(args, ["api", `repos/${f.entry.repo}/commits/${encodeURIComponent(f.entry.branch)}`]);
+      return { stdout: JSON.stringify({ sha: remoteHead }) };
+    }
+    if (args[1] === "list") {
+      if (lookupFailed) throw new Error("PR lookup unavailable");
+      if (holdOnLookup) held = true;
+      return { stdout: JSON.stringify(rows) };
+    }
+    assert.equal(args[1], operation);
+    assert.equal(readJson(checkpoint).phase, "publishing");
+    writes++;
+    rows = [{ ...pr, title: args[args.indexOf("--title") + 1], body: args[args.indexOf("--body") + 1] }];
+    return { stdout: "" };
+  } }).api });
+  await assert.rejects(reconcileExecutionResult(reopen(), f), /PR lookup unavailable/);
+  assert.equal(readJson(checkpoint).phase, "pushed");
+  const evidence = readJson(join(f.dir, "verification.json"));
+  lookupFailed = false;
+  if (operation === "create") {
+    remoteHead = "b".repeat(40);
+    await assert.rejects(reconcileExecutionResult(reopen(), f), /branch head differs/);
+    remoteHead = head;
+  }
+  holdOnLookup = true;
+  await assert.rejects(reconcileExecutionResult(reopen(), f), /paused by task control or recovery hold/);
+  assert.equal(writes, 0);
+  assert.equal(readJson(checkpoint).phase, "pushed");
+  held = false; holdOnLookup = false;
+  assert.equal((await reconcileExecutionResult(reopen(), f)).pr.number, pr.number);
+  assert.equal((await reconcileExecutionResult(reopen(), f)).pr.number, pr.number);
+  assert.equal(readJson(checkpoint).phase, "published");
+  assert.equal(writes, 1);
+  assert.deepEqual(f.calls, ["commit", "verify", "push"]);
   assert.deepEqual(readJson(join(f.dir, "verification.json")), evidence);
 });
 

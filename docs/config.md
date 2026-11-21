@@ -29,12 +29,13 @@ See [installation](install.md) for the first-run sequence.
 | `reviewer` | Codex | `{ login, rereview_comment, blocking_pattern }` or `null`. See below. |
 | `deliverable` | policy defaults | Limits for the completion gate, in the shape of APort's `deliverable.task.complete` passport limits: `evaluator` (`aport` confirms with APort's hosted evaluator using a per-task passport, `local` uses only the built-in rules), `api_url`, `on_unreachable` (`wait`, the default: no decision until APort answers, the daemon retries next tick and stops as `needs-human` after five consecutive failures; `local`: the built-in verdict stands and the log says so), `require_summary`, `min_summary_words`, `require_tests_passing`, `scan_output`, `blocked_patterns`. `null` turns the gate off. See [prd.md](prd.md). |
 | `notify` | null | `{ ntfy: "https://ntfy.sh/<topic>", email: null }`. Null means transitions are logged only. |
+| `collaboration` | null | Optional, one-way Vercel Board delivery for significant task transitions. Null loads no Board package and makes no Board request. See [Board collaboration](collaboration.md). |
 | `worktrees` | required | Directory for per-PRD checkouts. Must be outside the Gallivant home. |
 | `github_token_file` | null | Null means the credential is resolved from the environment or from `gh`, so whichever way you are logged in already works. Set it to the path of a fine-grained PAT to narrow what a run can reach; it then wins over both of the others. See [GitHub credentials](#github-credentials). |
 | `context_paths` | [] | Directories a run may READ in addition to its own checkout: a sibling repository, a folder of design notes. Absolute or `~`-prefixed, and each must exist. Writes do not widen. Your home directory, the Gallivant home, `~/.claude`, `~/.codex`, `~/.config/opencode` and `~/.aport` are refused, as is any parent of them. Claude Code renders each as `--add-dir <dir>`; Codex and Gemini CLI refuse the run rather than escalate; opencode and goose have no such flag and ignore it. Read [guardrails.md](guardrails.md#extra-read-directories-are-a-widening-not-a-feature) before setting it: whatever a run reads can leave in a commit or a PR body. |
 | `harness` | local discovery | Omit it to discover local CLI harnesses on PATH. Explicit entries select the available providers and disable discovery; hosted entries always require explicit configuration. `task` and `new` default to the first configured entry. Select `--harness` or the PRD's `harness:` explicitly when several are configured. |
 | `harness.claude` | | `{ bin, settings }`. `bin` is the absolute path to `claude`; `settings` is the Gallivant settings file with the APort hook and sandbox. |
-| `harness.codex` | | `{ bin }`. |
+| `harness.codex` | | `{ bin, model? }`. Optional `model` explicitly selects an account-supported CLI model for implementation, resume and restricted preparation. Omit it to inherit Codex's default. No automatic model/account fallback is performed; select a model available to the configured CLI account. This does not change global Codex settings or security permissions. Changing the reviewer route requires its normal requalification. |
 | `harness.gemini` | | `{ bin }`. |
 | `harness.opencode` | | `{ bin }`. |
 | `harness.goose` | | `{ bin }`. |
@@ -56,6 +57,14 @@ launch, and keep external setup separate from implementation acceptance. Shared 
 of related code paths before pushing and return control to the daemon for subsequent review batches. These instructions
 help reduce repeated narrow fixes; the existing tests, reviewer and completion gate still decide readiness. A run is
 ready for human review only when its actual criteria pass; more allowance does not authorize fabricating evidence.
+
+## Board collaboration
+
+The optional Board adapter is configured in the same mode-600 private file. It
+publishes a versioned, sanitized summary for selected state transitions while
+the local registry, saved brief, host evidence and completion gate remain
+canonical. Replies are ignored by default. Read [the setup, policy, recovery and
+rollback guide](collaboration.md) before enabling it.
 
 ## Execution providers
 
@@ -523,3 +532,5 @@ and the completion receipt.
 ## Versioned review policy
 
 `review.mode` selects `external-required`, `first-party-required`, or `both-required` for new tasks. `review.route: "codex"` requires a successful isolated live qualification. `review.specialist` allows at most one of `security` or `regression`. Defaults and bounds, per-repository settings, separate review allowances, explicit zero-check CI policy and the `legacy_no_review` exception are documented in [First-party review](first-party-review.md). A config edit cannot change an existing task policy; use `review policy <handle> --mode <mode> --reason "..."` to revoke readiness and explicitly re-evaluate. `reviewer: null` alone no longer authorizes an unattended new start.
+
+Recovery profiles are revisioned coordinator registry records. A new start selects a profile by exact digest. A global default cannot enroll an existing task. See the [profile fields, route tuple and generation rules](autonomous-recovery.md#recovery-policy-and-admission).

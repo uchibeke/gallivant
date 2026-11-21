@@ -5,6 +5,7 @@ import { dirname, join } from "node:path";
 import { existsSync, mkdirSync, readFileSync, writeFileSync, rmSync } from "node:fs";
 import { makeGit } from "../lib/git.mjs";
 import { queueChain, retryChain, cancelChain, tickChains, chainRows, renderChains } from "../lib/chains.mjs";
+import { compileLinearChain } from "../lib/dependency_plan.mjs";
 import { makeState, STATES } from "../lib/state.mjs";
 import { writeJsonAtomic } from "../lib/fs.mjs";
 import { start } from "../lib/commands/start.mjs";
@@ -111,6 +112,16 @@ async function anchoredWorld(options = {}) {
   w.anchor = selector => queueChain(w.ctx, { name: "follow-on", paths: w.paths.slice(1), after: selector ?? `${REPO}#1` });
   return w;
 }
+
+test("the linear preview adapts the queued CLI description without changing saved chain state", async () => {
+  const w = world({ count: 3 });
+  const chain = await queueChain(w.ctx, { name: "release", paths: w.paths, base: "release/base" });
+  const graph = compileLinearChain(chain);
+  assert.deepEqual(graph.nodes.map(node => [node.taskId, node.base]), chain.steps.map(step => [step.id, "release/base"]));
+  assert.deepEqual(graph.edges, [{ from: "first-step", to: "second-step" }, { from: "second-step", to: "third-step" }]);
+  assert.deepEqual(w.ctx.state.getChain(chain.name), chain);
+  assert.equal(w.starts(), 0);
+});
 
 test("an existing registered PR gates one new milestone without adopting or restarting its run", async () => {
   const w = await anchoredWorld();
@@ -883,4 +894,33 @@ test("chain review hides protected paths, preserves legacy unknowns and refuses 
   w.ctx.gh.repoInfo = async () => ({ nameWithOwner: "other/widget", defaultBranch: "main" });
   await assert.rejects(reviewChainRetry(w.ctx, { name: "release", resnapshot: true }), /repository or task identity/);
   assert.equal(w.ctx.state.getChain("release").status, "stopped"); assert.equal(w.starts(), 0);
+});
+
+test("external merge of a stopped predecessor waits for retained cleanup and releases one successor across restart", async () => {
+  const w = await anchoredWorld();
+  await w.anchor();
+  w.markPr(FIRST, { state: "MERGED", entryState: STATES.needsHuman });
+  w.ctx.state.update(FIRST, { reason: "reviewer-silent" });
+  let cleanups = 0;
+  w.ctx.cleanupMergedWorkspace = async (_id, entry, pr) => ({ status: ++cleanups === 1 ? "pending" : "retained",
+    reason: "local work", pr: entry.pr, head: pr.headRefOid });
+  const poll = async () => {
+    w.ctx.clock.advance(2);
+    await makeTick(w.ctx).tickEntry(FIRST, w.ctx.state.get(FIRST));
+    await tickChains(w.ctx);
+  };
+  await poll();
+  assert.equal(w.starts(), 1);
+  assert.equal(w.ctx.state.get(FIRST).workspace_cleanup.status, "pending");
+  w.ctx.state = makeState(w.home);
+  await poll();
+  const predecessor = w.ctx.state.get(FIRST);
+  assert.equal(predecessor.workspace_cleanup.status, "retained");
+  assert.equal(predecessor.completionEvidence.terminal.mergeCommit, MERGE);
+  assert.equal(predecessor.completionEvidence.integration.qualified, false);
+  await tickChains(w.ctx);
+  w.ctx.state = makeState(w.home);
+  await tickChains(w.ctx);
+  assert.equal(w.starts(), 2);
+  assert.equal(cleanups, 2);
 });

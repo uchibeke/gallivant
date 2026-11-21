@@ -186,6 +186,10 @@ gallivant resume widget#142 --resnapshot       # the edit is the brief; the sess
 to reread the brief rather than trust what it remembers. Work already done against a criterion that has not changed
 still stands, which is the whole reason this is a resume and not a restart.
 
+After accepting the replacement, resumed dispatch derives its publication hook, context permissions and task input
+from that approved snapshot, including when base preparation already read the previous brief. Removed restrictions
+and revoked output exceptions take effect on that same resumed turn. Editing the session's copy does not grant approval.
+
 Why a person and not the daemon. A criterion ADDED means the work in flight is valid but incomplete. A criterion
 REWRITTEN means what was built is no longer what is wanted. From the text of two files those are the same event, and
 guessing wrong is expensive in both directions: finish the old brief and you ship the wrong thing, restart and you throw
@@ -272,3 +276,5 @@ Both gates send a `meta` object inside the context they already send:
 `framework` is the harness that did the work, or that the brief names for a readiness decision. `gallivant_version` is the release that asked. A machine running Claude Code and Codex against one passport otherwise produces decisions nobody can tell apart afterwards, and the OAP decision object is closed (`additionalProperties: false`), so the request context is where this belongs. No specification change was needed: the policy packs leave `additionalProperties` unset, which in JSON Schema already permits extra properties, and the hosted validator's context schemas are `.unknown(true)`. An older verifier ignores the field.
 
 It is self-reported and it is never an authorization input. Gallivant asserts these two values and nothing verifies them, so a field the caller controls could be forged the moment anything read it back to decide something. It is recorded for audit and analytics, and the local rules ignore it entirely; a test asserts that a forged `meta` changes no verdict in either direction.
+
+Use `implementation_targets` for exact repository-relative files the owner explicitly asks to change. Typed intake accepts repeated `--implementation-target <file>`. A carried source that is also a target needs an explicit exact output exception or a revised brief. The checker reports the conflicting path. File extensions and the advisory “Where to look” section confer no edit authority. Protected credential and agent-configuration paths cannot be output exceptions.

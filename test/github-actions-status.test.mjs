@@ -12,7 +12,7 @@ const context = (over = {}) => ({ __typename: "StatusContext", id: "status-1", c
 const workflow = (id = RUN, over = {}) => ({ id, repository: { id: 123, full_name: REPO }, html_url: url(id),
   head_sha: BASE, event: "pull_request_target", status: "completed", conclusion: "failure", run_attempt: 1,
   created_at: at(0), run_started_at: at(1), updated_at: at(5), ...over });
-function world({ check = context(), record = id => workflow(id), state = "OPEN" } = {}) {
+function world({ check = context(), record = id => workflow(id), jobs = null, state = "OPEN" } = {}) {
   const clock = makeClock(at(6)), calls = [], logs = [];
   const pr = { ...prFixture({ headRefOid: HEAD, state }), statusCheckRollup: Array.isArray(check) ? check : [check] };
   const client = github.create({ clock, credential: async () => ({ host: "github.com", token: "selected-fixture-credential" }), log: { warn: message => logs.push(message) },
@@ -25,6 +25,7 @@ function world({ check = context(), record = id => workflow(id), state = "OPEN" 
       assert.deepEqual(args, ["api", "--hostname", "github.com", route]);
       assert.equal(options.env.GH_TOKEN, "selected-fixture-credential");
       assert.equal(options.timeout, ACTIONS_STATUS_LIMITS.timeoutMs);
+      if (jobs && route.includes("/jobs?")) return { stdout: JSON.stringify(jobs(route)) };
       const id = Number(route.split("/").at(-1)); calls.push(id);
       return { stdout: JSON.stringify(await record(id)) };
     } });
@@ -137,4 +138,17 @@ test("closed PRs, ordinary check runs and already-final status contexts do not i
     { __typename: "CheckRun", name: "build", status: "IN_PROGRESS", conclusion: null, detailsUrl: url(RUN), startedAt: at(2) }]) {
     const w = world({ check }); await w.view(); assert.deepEqual(w.calls, []);
   }
+});
+
+test("an exact failed attempt job is visible behind a pending context while sibling jobs run", async () => {
+  const w = world({ record: id => workflow(id, { head_sha: HEAD, status: "in_progress", conclusion: null }),
+    jobs: route => {
+      assert.equal(route, `repos/${REPO}/actions/runs/${RUN}/attempts/1/jobs?per_page=100`);
+      return { total_count: 2, jobs: [{ id: 12, run_id: RUN, run_attempt: 1, head_sha: HEAD,
+        status: "completed", conclusion: "failure", completed_at: at(5) }, { id: 13, status: "in_progress" }] };
+    } });
+  const check = (await w.view()).statusCheckRollup[0];
+  assert.equal(check.outcome, "failed");
+  assert.equal(check.failureSource, "github-actions-job");
+  assert.equal(check.actionsRun.failedJob.id, 12);
 });

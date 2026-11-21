@@ -41,7 +41,7 @@ test("coordinator records bounded current-head check and external-review observa
   const before = w.entry(), observation = before.reviewObservation;
   assert.equal(observation.head, "a1b2c3d");
   assert.equal(observation.binding, before.reviewBinding);
-  assert.deepEqual(observation.checks, { settled: true, count: 1 });
+  assert.deepEqual(observation.checks, { settled: true, count: 1, failed: 0 });
   assert.equal(observation.external, "clear");
   assert.ok(JSON.stringify(observation).length < 500);
   w.clock.advance(2); await w.tick.tick();

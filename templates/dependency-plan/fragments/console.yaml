@@ -1,0 +1,10 @@
+version: 1
+children:
+  - id: plan-view
+    type: task
+    repository: example
+    prd: docs/prds/synthetic-plan-view.md
+  - id: task-view
+    type: task
+    repository: example
+    prd: docs/prds/synthetic-task-view.md

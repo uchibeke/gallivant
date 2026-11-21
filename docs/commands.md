@@ -17,6 +17,7 @@ Use `gallivant --help` (or `gallivant help`) for the installed CLI's syntax and
 | Validate/record readiness | `gallivant ready PRD` | `--check` is local validation without hosted recording or file changes. |
 | Start work and services | `gallivant start [PRD]` | No PRD starts/reuses services only; `--no-open` and `--no-server` are available. |
 | Sequence work | `gallivant chain` | Each successor waits for the previous PR to merge; never auto-merges. |
+| Inspect a dependency graph | `gallivant plan validate <file> --json` | Compiles local JSON or YAML and returns a structural preview. |
 | Adopt/reset a PR | `gallivant register PR_URL` | Explicit registration; existing entry resets its review budget and cursor. |
 | Run the coordinator | `gallivant up` | Foreground loop; `--once` performs one cycle. |
 | Stop services | `gallivant down` | Leaves active agent processes running. |
@@ -242,6 +243,12 @@ with exit code 1. Retry `gallivant start` without a PRD, not the original submis
 processes continue; restart monitoring with `gallivant start`. Embedded trackers
 are owned by their host and are not stopped by this command.
 
+## `gallivant plan validate <file> [--dir <directory>] [--checkout <relative-directory>] [--json]`
+
+Compile and check a local dependency plan. The command prints a summary by
+default and returns the normalized graph, source digests and approval digest
+with `--json`. See [the grammar and runnable examples](dependency-plans.md).
+
 ## `gallivant chain [<name> [<first.md> <next.md> ...]] [--base <branch>] [--after <pr-url|handle>]`
 
 Queue at least two ready PRDs in order. All must be new tasks in one checkout of the same repository and on the same
@@ -315,6 +322,8 @@ services after updating the installed code. Do not start the same PRD again to
 recover an existing task.
 
 ## `gallivant status [--all] [--json]`
+
+Each task includes a read-only recovery summary. Use `--all` to include settled history and `--json` for the original incident reference, three activity clocks, retry deadline and outstanding obligations. [Recovery observations](autonomous-recovery.md)
 
 ```
 gallivant  daemon up since 6h ago  last tick 40s ago  next in 80s  gh ok  claude signed-in (API unchecked)  codex signed-in (API unchecked)
@@ -636,10 +645,12 @@ line endings and expanded identifiers), rather than raw blob bytes. Staged/unfin
 context edits, and changes to the PRD itself still stop automatic merging.
 Adding an exception to the worker's PRD cannot authorize it.
 
-Watched PRs with a clean owned checkout and continuing local session automatically repair a base conflict using the
-same runner, approved inputs, permissions and iteration allowance. The initial failed merge is recorded and aborted;
-the repair merges its pinned base commit, tests the combined behavior and pushes only the task branch. Newer base
-changes do not always supersede task work: the result must satisfy the approved brief and current security requirements.
+Watched PRs with a qualified `git-repair` recipe continue the exact pinned merge
+through the existing local author. The journal holds the two expected parents,
+the index and worktree proof, and any private overlay backup references. The
+coordinator verifies the resulting commit before pushing the task ref. Review
+the pinned SHA and journal phase with `why`. Legacy repairs keep their existing
+clean-input and recorded initial-conflict path.
 
 Use `gallivant why <handle>` to inspect a repair stop:
 
@@ -653,12 +664,15 @@ Use `gallivant why <handle>` to inspect a repair stop:
 | `base-repair-failed` | Inspect the owned worker log and failed verification/provider result. No second paid operation is launched automatically. |
 | `base-repair-duplicate`, `base-repair-iterations` | Review the original failure and existing iteration allowance. Recheck never repeats the same input or resets the budget. |
 | `base-repair-evidence` | Reconcile inconsistent host/base evidence. A repair push alone cannot release a successor. |
+| `base-repair-manifest`, `base-repair-overlay` | Preserve the exact index, private backups and working files. Restore the recorded ownership and bytes before Recheck. |
+| `base-repair-verify` | Inspect the exact candidate and recorded Verify exits. Restore the supported verification sandbox or reconcile the failed candidate before publication. |
 | `base-repair-review` (older versions) | Update Gallivant and recheck. A confirmed maintainer merge closes the run and releases its chain dependency; missing readiness evidence remains unverified. |
 
-For a recorded repair, `resume` reconciles that exact operation and remote proof. A proven refusal before dispatch may
-retry the same operation after its prerequisite is restored; an ambiguous or paid launch cannot spend another operation.
-It cannot change session or resnapshot its instructions. An unresolved merge or unrelated edits remain intact.
-Transient Git/API observations use the normal bounded retry counter and never create a model retry loop.
+Use Recheck for a qualified journaled repair. It reconciles the same operation
+and reports an unknown author or push acknowledgement without allocating a
+replacement. `resume` retains its existing reconciliation behavior for legacy
+operations. Holds and `recovery disable profile/ID GENERATION` fence future
+effects and keep the journal and private backups. See [owned Git and CI repair](autonomous-recovery.md#owned-git-and-ci-repair).
 
 **Resume agent** and **Send message** use this same repair path after the recorded worker has settled. A message is
 retained with the repair and quoted to the continuing session; it cannot change the approved brief or weaken a guardrail.
@@ -674,6 +688,7 @@ This also applies to a recorded repair refused before dispatch: after you finish
 Resume can reconcile the existing result without another execution or round. The original operation keeps its
 uncharged status and has no invented execution record. New-head CI, review and completion checks still apply.
 
+Legacy repair workers receive exact digests for the approved brief and immutable carried inputs.
 A recorded pushed repair may bring in a newer committed copy of a private carried source. Reconciliation restores its
 exact approved snapshot as a private working-copy overlay only when the committed file matches the pinned base and
 the index, working copy, repository and settled execution owner are proved unchanged. The newer committed document,
@@ -843,3 +858,7 @@ owned stopped timeout/provider failure can be retried with `--retry --reason
 "explanation"` on that same command. This preserves its history and reserves a
 new bounded allowance; it never accepts a failed result or bypasses review.
 See [first-party review](first-party-review.md#waiting-for-qualification-and-explicitly-retrying-a-stopped-probe).
+
+Use `recovery inventory [profile-id]` for a read-only adoption proposal and `recovery preflight <handle> <decision.json>` for an admitted route. The [recovery policy reference](autonomous-recovery.md#recovery-policy-and-admission) describes profile administration, scoped holds, exact task admission and the migration format.
+
+For a stopped admitted task, `gallivant why HANDLE` shows its recovery phase, original operation reservation and confirmed paid submissions. Use `gallivant recovery hold task/ID GENERATION` to fence the next effect, or `gallivant cancel HANDLE` to request cancellation of active work. See the [recipe prerequisites and stop conditions](autonomous-recovery.md#deterministic-reconciliation).

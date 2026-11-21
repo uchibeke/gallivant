@@ -39,6 +39,7 @@ function startWorld({ signIn = {} } = {}) {
     },
     git: { toplevel: async () => repoDir, create: async () => worktree },
     runnerFor: () => runner,
+    readPrd: id => snapshots.get(id) ?? null,
     writePrd: (id, text) => snapshots.set(id, text),
     credential: fakeCredential(), identity: fakeIdentity(),
   };
@@ -66,6 +67,31 @@ test("package access failure stops initial start before cloning, snapshots or pa
   await assert.rejects(start(w.ctx, { path: w.prdPath }), { code: "PACKAGE_AUTH" });
   assert.equal(probes, 1); assert.equal(cloned, false); assert.equal(w.runner.started.length, 0);
   assert.equal(w.snapshots.size, 0); assert.equal(w.ctx.state.entries().length, 0);
+});
+
+test("initial start releases the claim before cloning if its protected snapshots cannot be read back", async () => {
+  for (const fault of ["missing reader", "changed brief", "missing source", "changed source"]) {
+    const w = startWorld(), sources = new Map();
+    const brief = GOOD_PRD.replace("harness: codex", "harness: codex\nsources: [context.md]");
+    writeFileSync(w.prdPath, brief);
+    writeFileSync(join(w.home, "operator-repo", "context.md"), "approved context");
+    w.ctx.writeSource = (_id, path, text) => sources.set(path, text);
+    w.ctx.readSource = (_id, path) => sources.get(path) ?? null;
+    const { readPrd, readSource } = w.ctx;
+    if (fault === "missing reader") delete w.ctx.readPrd;
+    if (fault === "changed brief") w.ctx.readPrd = () => GOOD_PRD;
+    if (fault === "missing source") w.ctx.readSource = () => null;
+    if (fault === "changed source") w.ctx.readSource = () => "other context";
+    let clones = 0;
+    w.ctx.git.create = async () => { clones++; return w.worktree; };
+    await assert.rejects(start(w.ctx, { path: w.prdPath }), { code: "RECOVERY_BINDING", startUncertain: false });
+    assert.equal(clones, 0);
+    assert.equal(w.runner.started.length, 0);
+    Object.assign(w.ctx, { readPrd, readSource });
+    await start(w.ctx, { path: w.prdPath });
+    assert.equal(clones, 1);
+    assert.equal(w.runner.started.length, 1);
+  }
 });
 
 test("a successful start records a running entry with its session, our branch name and the checkout it runs in", async () => {

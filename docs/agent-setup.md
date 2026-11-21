@@ -1,5 +1,7 @@
 # Let an agent set up Gallivant
 
+When diagnosing a stopped task, inspect the approved revision, original incident and productive time in the shared status view before deciding whether to use an existing control. [Recovery observations and ownership](autonomous-recovery.md)
+
 Give the prompt below to your coding agent. It can inspect prerequisites, run
 the published setup command, read the resulting report and validate a first task.
 You handle account login and any required trust prompts. Setup does not need
@@ -226,3 +228,5 @@ safety and the printed next steps. It does not use a real account, invoke a
 model or certify a provider's current availability. A first authorized
 end-to-end task is still needed to verify the user's actual repository
 permissions, provider entitlement, sandbox, CI and review integration.
+
+Before a profiled author turn, inspect the approved route, model entitlement, package access, required capture surface and Git metadata and scratch mounts. Resolve missing access with the operator. Use the [recovery preflight and migration commands](autonomous-recovery.md#recovery-policy-and-admission) to inspect admission and existing stopped work.

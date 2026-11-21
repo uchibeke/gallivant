@@ -270,6 +270,27 @@ test("Bitbucket publishes or updates one same-repository PR, including read-afte
   assert.equal(timed.calls.at(-1).method, "GET");
 });
 
+test("Bitbucket reaches the PR write fence only after a complete lookup and exact head proof", async () => {
+  let outage = true, held = true, fences = 0;
+  const f = fixture({ intercept: c => outage && c.method === "GET" && c.path === "/pullrequests" ? json({}, 503) : undefined });
+  const publish = options => f.registry.api.publishResultPr({ ...publication, repo: REPO, expectedHead: HEAD, beforeWrite: () => {
+    fences++;
+    if (held) throw new Error("Task is held");
+  }, ...options });
+  await assert.rejects(publish(), /HTTP 503/);
+  outage = false;
+  await assert.rejects(publish({ expectedHead: BASE }), /branch head differs/);
+  await assert.rejects(publish({ observeOnly: true }), /original publication/);
+  assert.equal(fences, 0);
+  await assert.rejects(publish(), /Task is held/);
+  assert.ok(f.calls.every(call => call.method === "GET"));
+  held = false;
+  assert.equal((await publish()).number, 7);
+  assert.equal((await publish({ observeOnly: true })).number, 7);
+  assert.equal(fences, 2);
+  assert.equal(f.calls.filter(call => call.method === "POST").length, 1);
+});
+
 test("Bitbucket publication enforces approved previous text at its final read", async () => {
   for (const field of ["title", "description"]) {
     let edit = false;

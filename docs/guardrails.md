@@ -138,6 +138,16 @@ also affect what is required for readiness. A ready state is therefore a result
 under the configured gates, not a general security or semantic-correctness proof.
 The pre-tool policy, provider sandbox and human merge decision remain separate.
 
+Qualified repair binds the commit hook to the accepted snapshot and pinned
+merge parent. The coordinator can reinstall a known stale derivation through
+the ordinary hook installer and verify its digest. An unexpected hook, custom
+hooks path, protected implementation target or contradictory source
+declaration requires operator correction. A repair leaves workflow definitions,
+assertions, toolchains and the approved Verify commands under their existing
+authority. Private collision backups and journals stay outside the checkout.
+The filesystem proof detects changed paths and bytes under the qualified
+workspace owner. It requires outer isolation from concurrent untrusted writers.
+
 ## What reaches a prompt
 
 GitHub feedback is filtered by `trusted_authors`, the configured reviewer bot
@@ -365,3 +375,5 @@ are forced into a result. Verification permits private inputs to remain untracke
 and modes exactly match the coordinator snapshots. Editing, staging, deleting or substituting them fails publication.
 Codex Cloud's Git-only input transport cannot provide this privacy for new/changed inputs and refuses before commit
 or push; its dispatch is separately unavailable until repository binding is qualified. See [codex-cloud.md](codex-cloud.md).
+
+Recovery policy requires an enforced outer execution boundary for same-UID workers. Owner-only file modes and verification receipts from a different adapter cannot qualify an author. Completion credentials stay with the coordinator. The [recovery admission contract](autonomous-recovery.md#recovery-policy-and-admission) lists the scoped controls and qualification limits.

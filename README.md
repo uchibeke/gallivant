@@ -261,6 +261,7 @@ New tasks can pin `external-required`, `first-party-required`, or `both-required
 | Sequential plans | Queue dependent briefs with a merge gate between milestones | [Chains](docs/chains.md) |
 | Completion checks | Evaluate acceptance evidence with APort or the explicit local evaluator; choose review handoff or watching for merge | [Guardrails](docs/guardrails.md), [milestones](docs/tasks.md#choose-the-delivery-milestone) |
 | Notifications | Configure transition notifications through ntfy | [Configuration](docs/config.md) |
+| Board collaboration | Mirror significant transitions to one-way task threads and a Needs owner queue | [Board collaboration](docs/collaboration.md) |
 | Embedding and integrations | Use versioned task-delivery operations, Node coordination, MCP and plugin packaging; deployment is separate | [Task delivery](docs/task-delivery.md) |
 | Review learning | Collect historical feedback and inspect candidates; rule activation remains unqualified | [Learning](docs/learning.md) |
 

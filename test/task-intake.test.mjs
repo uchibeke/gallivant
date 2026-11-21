@@ -1342,6 +1342,18 @@ function world(overrides = {}) {
   return { home, checkout, ctx, service, runners, snapshots, sources, plans, calls: () => calls, daemonCalls: () => daemonCalls };
 }
 
+test("collaboration observes the qualified task thread separately from the bare intake link identity", async () => {
+  const w = world(), observations = [];
+  w.ctx.collaboration = { observeTask: (...args) => observations.push(args) };
+  const service = createTaskService(w.ctx, { prepare: async (_ctx, task) => JSON.stringify(draftFor(task)) });
+  const prepared = await service.prepare({ text: REQUEST, requestId: "collaboration-identities" });
+  assert.equal(observations.length, 1);
+  const [, value, identity] = observations[0];
+  assert.equal(value.taskId, prepared.taskId);
+  assert.equal(identity.taskId, `acme/widget/${prepared.taskId}`);
+  assert.equal(identity.intakeId, prepared.taskId);
+});
+
 test("preparation run flags return a visible review before separate revision approval", async () => {
   for (const cli of [false, true]) {
     const w = world(), input = { text: REQUEST, requestId: "post-review", run: true };

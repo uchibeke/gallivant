@@ -16,10 +16,10 @@ async function open(t, { empty = false, chains = false, javaScriptEnabled = true
   if (ids.length) {
     const source = world.state.get(ids[7]);
     for (const [id, at, pr] of [["recent-completed", "2026-09-24T14:29:00Z", 90], ["older-completed", "2026-09-24T14:28:00Z", 91]]) world.state.put(`acme/atlas/${id}`, {
-      ...source, repo: "acme/atlas", state: "done", activity_at: at, created_at: at, reviewObservation: null,
+      ...source, recovery_record: undefined, repo: "acme/atlas", state: "done", activity_at: at, created_at: at, reviewObservation: null,
       control: { status: "failed", action: "resume" }, url: `https://github.com/acme/atlas/pull/${pr}`, pr,
     });
-    world.state.put("acme/atlas/status-unobserved", { ...source, repo: "acme/atlas", pr: 92, url: "https://github.com/acme/atlas/pull/92", reviewObservation: null, created_at: null });
+    world.state.put("acme/atlas/status-unobserved", { ...source, recovery_record: undefined, repo: "acme/atlas", pr: 92, url: "https://github.com/acme/atlas/pull/92", reviewObservation: null, created_at: null });
   }
   const context = await browser.newContext({ viewport: { width: 1440, height: 1000 }, reducedMotion: "reduce", javaScriptEnabled }); t.after(() => context.close());
   await context.route("**/*", route => new URL(route.request().url()).origin === world.origin ? route.continue() : route.abort());

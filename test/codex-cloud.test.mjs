@@ -6,7 +6,7 @@ import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 import { gzipSync, gunzipSync } from "node:zlib";
 import { execFileSync } from "node:child_process";
-import { execFileAsync } from "../lib/gh.mjs";
+import { execFileAsync, makeGh } from "../lib/gh.mjs";
 import { makeCloudTransport, checkCloudAccess, cloudCli } from "../lib/codex_cloud.mjs";
 import { validateCloudConfig } from "../lib/codex_cloud_config.mjs";
 import { CLOUD_RESULT_PATH, cloudDiffResult } from "../lib/codex_cloud_result.mjs";
@@ -555,16 +555,25 @@ test("Cloud envelope-only corrections share one PR, restart recovery and bounded
       cursor: { since: T0, dispatched: ["inline:pending"], fixed_sha: inputHead, receipt_hash: receiptHash(beforeBody) },
       public_fix: name === "public-text" ? publicReviewHash(gh.data.pr, []) : null };
     state.put(id, entry);
-    let lostReply = true;
+    const beforePublication = { ...gh.data.pr };
+    let publicationVisible = false;
+    const { publishResultPr } = makeGh({ exec: async (command, args) => {
+      assert.equal(command, "gh");
+      if (args[1] === "list") {
+        assert.deepEqual(args.slice(0, 8), ["pr", "list", "--repo", repo, "--head", branch, "--state", "all"]);
+        calls.push("read PR");
+        return { stdout: JSON.stringify([publicationVisible ? gh.data.pr : beforePublication]) };
+      }
+      assert.deepEqual(args.slice(0, 6), ["pr", "edit", "7", "--repo", repo, "--title"]);
+      assert.equal(args[7], "--body");
+      calls.push("edit PR");
+      Object.assign(gh.data.pr, { title: args[6], body: args[8] });
+      throw new Error("PR update reply lost");
+    } });
     Object.assign(gh, { refSha: async () => inputHead, containsCommit: async (seenRepo, seenBranch, seenHead) => {
       assert.equal(seenRepo, repo); assert.equal(seenBranch, branch); assert.equal(seenHead, inputHead);
       return native(["merge-base", "--is-ancestor", seenHead, "HEAD"]) === "";
-    }, publishResultPr: async data => {
-      calls.push("PR"); assert.equal(data.branch, branch); assert.equal(data.base, "main");
-      gh.data.pr.title = data.title; gh.data.pr.body = data.body;
-      if (lostReply) { lostReply = false; throw new Error("PR update reply lost"); }
-      return { number: gh.data.pr.number, url: gh.data.pr.url };
-    } });
+    }, publishResultPr });
     const ctx = { home: f.root, state, clock: f.clock, config: CONFIG, ownLogin: "me", notify: fakeNotify(), log: silentLog, executionFor: () => f.service(), gh,
       git: { ...git, commitResult: async () => { throw new Error("text-only correction must not commit source files"); }, pushResult: async () => calls.push("push") },
       readPrd: () => "# Brief\n\n## Verify\n\n- `printf verified`\n" };
@@ -573,12 +582,19 @@ test("Cloud envelope-only corrections share one PR, restart recovery and bounded
     assert.deepEqual(calls, []); assert.equal(readJson(join(rejectedDir, "result-application.json")).phase, "blocked");
     await makeTick(ctx).tickEntry(id, state.get(id), { settleOnly: true });
     const dir = f.service().dirOf(child.id), verified = readJson(join(dir, "verification.json"));
-    assert.equal(readJson(join(dir, "result-application.json")).phase, "verified"); assert.equal(state.get(id).last.exit, null);
+    const applicationPath = join(dir, "result-application.json"), pending = readJson(applicationPath);
+    assert.equal(pending.phase, "publishing"); assert.equal(state.get(id).last.exit, null);
+    assert.deepEqual(calls, ["push", "read PR", "edit PR"]);
     assert.equal(verified.head, inputHead); assert.equal(verified.evidence.length, 1); assert.equal(verified.evidence[0].exit, 0); assert.equal(verified.evidence[0].source, "coordinator-executed");
     const restarted = { ...ctx, state: makeState(f.root) };
     await makeTick(restarted).tickEntry(id, restarted.state.get(id), { settleOnly: true });
+    assert.deepEqual(readJson(applicationPath), pending);
+    assert.equal(restarted.state.get(id).last.exit, null);
+    assert.deepEqual(calls, ["push", "read PR", "edit PR", "read PR"]);
+    publicationVisible = true;
     await makeTick(restarted).tickEntry(id, restarted.state.get(id), { settleOnly: true });
-    const settled = restarted.state.get(id), checkpoint = readJson(join(dir, "result-application.json"));
+    await makeTick(restarted).tickEntry(id, restarted.state.get(id), { settleOnly: true });
+    const settled = restarted.state.get(id), checkpoint = readJson(applicationPath);
     assert.equal(settled.last.exit, 0);
     if (name === "review") {
       assert.equal(settled.reason, null); assert.equal(settled.state, STATES.prOpen); assert.equal(settled.iteration, 0); assert.equal(settled.round_comment ?? null, null);
@@ -586,7 +602,8 @@ test("Cloud envelope-only corrections share one PR, restart recovery and bounded
       assert.equal(settled.reason, null); assert.equal(settled.iteration, 1); assert.equal(settled.round_comment.kind, name === "public-text" ? name : "receipt");
     }
     assert.equal(settled.pr, 7); assert.equal(settled.session, first.execution.sessionId); assert.deepEqual(settled.cursor.dispatched, entry.cursor.dispatched);
-    assert.deepEqual(calls, ["push", "PR", "push", "PR"]); assert.equal(checkpoint.phase, "published"); assert.equal(checkpoint.pr, 7);
+    assert.deepEqual(calls, ["push", "read PR", "edit PR", "read PR", "read PR"]);
+    assert.equal(checkpoint.phase, "published"); assert.equal(checkpoint.pr, 7);
     assert.deepEqual(readJson(join(dir, "verification.json")), verified); assert.equal(await git.head(worktree), inputHead); assert.equal(readFileSync(join(worktree, "answer.txt"), "utf8"), "old\n");
     assert.equal(existsSync(join(worktree, CLOUD_RESULT_PATH)), false); assert.deepEqual(await git.dirty(worktree, { strict: true }), { modified: 0, untracked: 0 });
     observations.push({ name, result, checkpoint, verification: verified, pr: { number: settled.pr, head: gh.data.pr.headRefOid, title: gh.data.pr.title, body: gh.data.pr.body }, iteration: settled.iteration, reason: settled.reason, roundKind: settled.round_comment?.kind ?? null, calls, sourceHead: inputHead, sourceHash: contentHash(readFileSync(join(worktree, "answer.txt"))) });

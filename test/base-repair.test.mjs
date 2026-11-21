@@ -240,11 +240,35 @@ test("merge or superseding cancellation during pushed repair proof blocks the fo
       return result;
     };
     await applyControl(w.ctx, w.id);
-    assert.equal(w.entry().base_repair.status, "verified", "the existing remote push proof remains recorded");
+    assert.equal(w.entry().verified_progress.kind, "verified-push", "the existing remote push proof remains recorded");
+    assert.equal(w.entry().base_repair.status, change === "cancel" ? "blocked" : "verified", "a superseded request cannot accept a failed paid result");
     assert.equal(w.raw.started.length, 2, "terminal integration or a new owner cannot launch a follow-up");
     if (change === "cancel") { assert.equal(w.entry().control.id, "new-cancel"); assert.equal(w.entry().control.status, "queued"); }
     else assert.equal(w.entry().control.status, "failed");
   });
+});
+
+test("a superseded resume cannot restore an overlay after a failed repair", async t => {
+  const w = continuationWorld(t, { privateBaseUpdate: true });
+  await w.tick(); await w.resolveMerge();
+  const committed = readFileSync(join(w.tree, w.source), "utf8");
+  assert.match(committed, /New main documentation/);
+  w.raw.finish(claudeResultLines(), { exit: 1 }); await w.tick();
+  assert.equal(w.entry().base_repair.status, "blocked");
+
+  requestControl(w.ctx, { handle: w.id, action: "resume", requestId: "resume-private-overlay" });
+  const fetch = w.git.fetchBranchHead;
+  w.git.fetchBranchHead = async (...args) => {
+    const result = await fetch(...args);
+    w.state.update(w.id, { control: { id: "new-cancel", action: "cancel", status: "queued", at: T0 } });
+    return result;
+  };
+  await applyControl(w.ctx, w.id);
+
+  assert.equal(w.entry().control.id, "new-cancel");
+  assert.equal(w.entry().base_repair.status, "blocked");
+  assert.equal(w.raw.started.length, 2);
+  assert.equal(readFileSync(join(w.tree, w.source), "utf8"), committed);
 });
 
 test("pushed repair restores private context from exact approved snapshots while retaining main's committed document", async t => {
@@ -434,13 +458,16 @@ test("coordinator repair prompt identifies immutable private overlays without pu
   const prompt = w.raw.started.at(-1).args.at(-1);
   const manifest = JSON.parse(prompt.match(/paths and hashes only\):\n(\[[\s\S]*?\n\])/)[1]);
   const sha256 = text => createHash("sha256").update(text, "utf8").digest("hex");
-  assert.deepEqual(manifest, [{ path: w.source, sha256: sha256(approved) }]);
-  assert.ok(!manifest.some(item => item.path === w.prd || item.path === doc.guide));
+  assert.deepEqual(manifest, [
+    { path: w.prd, sha256: sha256(w.ctx.readPrd(w.id)) },
+    { path: w.source, sha256: sha256(approved) },
+  ]);
+  assert.ok(!manifest.some(item => item.path === doc.guide));
   assert.ok(!prompt.includes(approved.trim()), "private source contents are not embedded in the manifest");
   for (const pattern of [/expected private context, not unfinished task work/, /Missing or mismatched files, staged context, other dirty files/, /Do not commit, delete, rewrite or resnapshot private context/, /Git itself reports.*overwrite private context/, /Do not merge the PR/, /rebase or force-push/]) assert.match(prompt, pattern);
   write(join(w.tree, w.source), "Worker-edited instructions are not approval.\n");
-  assert.notEqual(manifest[0].sha256, sha256(readFileSync(join(w.tree, w.source), "utf8")));
-  assert.equal(manifest[0].sha256, sha256(w.ctx.readSource(w.id, w.source)));
+  assert.notEqual(manifest[1].sha256, sha256(readFileSync(join(w.tree, w.source), "utf8")));
+  assert.equal(manifest[1].sha256, sha256(w.ctx.readSource(w.id, w.source)));
   const edited = world(t);
   write(join(edited.tree, edited.source), "Worker-edited instructions are not approval.\n");
   await edited.tick();
@@ -835,11 +862,12 @@ test("normal fix merge refuses a checkout outside the saved worktree root before
 test("an initial abort failure records the conflict and preserves the failed merge without dispatch", async t => {
   const w = world(t); let aborts = 0;
   w.ctx.git = makeGit({ config: w.ctx.config, identity: fakeIdentity(), exec: async (cmd, args, options) => {
-    if (cmd === "git" && args[0] === "merge" && args[1] === "--abort") { aborts++; throw new Error("fixture abort refused"); }
+    if (cmd === "git" && args[0] === "merge" && args[1] === "--abort") { aborts++; throw Object.assign(new Error("fixture index write refused"), { code: "ENOSPC" }); }
     return execFileAsync(cmd, args, options);
   } });
   w.ctx.git.originOf = w.git.originOf; w.ctx.git.ensureHttpsRemote = w.git.ensureHttpsRemote;
   await w.tick();
+  assert.equal(w.entry().base_merge.resourceCode, "ENOSPC");
   assert.equal(w.entry().base_merge.aborted, false); assert.equal(w.entry().base_merge.head, w.head);
   assert.equal(w.entry().base_merge.baseSha, w.base); assert.match(w.entry().base_merge.why, /CONFLICT/);
   assert.equal(w.entry().state, STATES.needsHuman); assert.equal(w.raw.started.length, 1);
@@ -954,6 +982,12 @@ test("a maintainer merge closes repaired tasks without inventing readiness or re
       base_repair: { ...e.base_repair, status } }));
     const before = structuredClone(w.entry()); let cleaned = 0;
     w.ctx.cleanupMergedWorkspace = async () => { cleaned++; return { status: "retained", reason: "local work preserved" }; };
+    w.g(["merge", "--ff-only", "work/repair"], w.origin);
+    w.gh.containsCommit = async (repository, base, sha) => {
+      assert.equal(repository, w.entry().repo);
+      w.g(["merge-base", "--is-ancestor", sha, base], w.origin);
+      return true;
+    };
     w.gh.data.pr.state = "MERGED"; w.gh.data.pr.mergedAt = at(10); w.gh.data.pr.mergeCommit = { oid: repaired };
     await w.tick();
     assert.equal(w.entry().state, STATES.done); assert.equal(w.entry().reason, null);

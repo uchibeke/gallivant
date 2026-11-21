@@ -35,8 +35,9 @@ up the existing daemon if needed. The daemon starts the first task, uses the ord
 then waits for the merge. Each successor starts in its own checkout from the updated base. A final merge completes
 the chain; closing any milestone's PR without merging stops it.
 
-The scope is deliberately linear: one repository, one base, one active milestone per chain. There is no dependency
-graph, stacked-PR mode or automatic merge. Unrelated tasks and other chains can run independently.
+Chain dispatch is linear, with one repository, one base and one active milestone per chain. Unrelated tasks and
+other chains can run independently. Use local validation to inspect JSON or YAML dependency graphs. See
+[declarative dependency plans](dependency-plans.md).
 
 ## Continue after an existing PR
 
@@ -85,6 +86,10 @@ security requirements. Both sides must be inspected, any superseded task edit ex
 
 Repairing or pushing a conflict never starts a successor. Remote ancestry, new-head CI, required reviewer clearance
 and the completion gate must pass before readiness; the host must then prove integration into the planned base.
+Qualified repair journals keep their pinned base through later commits to the
+base branch. A later repair needs separate eligibility within the same task
+budget. A paused journal protects the checkout and private backups even when an
+operator has already merged the PR.
 A maintainer can merge before Gallivant records readiness. Once the owned author has settled and the host proves
 that exact PR merged into the planned base, Gallivant closes the run and releases its successor, including after
 a conflict repair. Missing CI, review or APort completion evidence remains unverified; observing your merge never
@@ -156,3 +161,5 @@ The [chain workspace](ui-chains.md) provides an ordered dependency list, saved
 merge evidence, task and PR links, and explicit review/confirmation for future
 retry, changed-input approval and cancellation. It uses the same chain services
 and merge gates as the CLI. New chains are still created with CLI intake.
+
+A maintainer can merge a predecessor while it is stopped. The coordinator checks the exact PR and base ancestry, waits for owned authors to cease and records the cleanup outcome before claiming a successor. A retained checkout can contain dirty work or a later milestone's inputs. It counts as settled cleanup. Inspect the predecessor with `gallivant why HANDLE` and the chain with `gallivant chain NAME`. A closed, unmerged PR leaves its successful-integration successor unclaimed.

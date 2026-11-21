@@ -12,10 +12,12 @@
       ],
       "license": "Apache-2.0",
       "dependencies": {
+        "@noble/hashes": "2.4.0",
         "ajv": "8.20.0",
         "jpeg-js": "0.4.4",
         "pngjs": "7.0.0",
-        "smol-toml": "1.9.0"
+        "smol-toml": "1.9.0",
+        "yaml": "2.9.1"
       },
       "bin": {
         "gallivant": "bin/gallivant.mjs",
@@ -35,10 +37,14 @@
         "node": ">=22"
       },
       "peerDependencies": {
-        "@modelcontextprotocol/sdk": "1.32.1"
+        "@modelcontextprotocol/sdk": "1.32.1",
+        "@vercel/board": "0.50.0"
       },
       "peerDependenciesMeta": {
         "@modelcontextprotocol/sdk": {
+          "optional": true
+        },
+        "@vercel/board": {
           "optional": true
         }
       }
@@ -550,6 +556,18 @@
         "zod": {
           "optional": false
         }
+      }
+    },
+    "node_modules/@noble/hashes": {
+      "version": "2.4.0",
+      "resolved": "https://registry.npmjs.org/@noble/hashes/-/hashes-2.4.0.tgz",
+      "integrity": "sha512-X5XaVWZIBCT7HHZGm5I7ZQXDwLG+bGXuSrMQAW+7Zvl87h1kmc1ZB1VSRJcpUfoUrGQp4Fkoxm5kZ+Ms+aW+eA==",
+      "license": "MIT",
+      "engines": {
+        "node": ">= 20.19.0"
+      },
+      "funding": {
+        "url": "https://paulmillr.com/funding/"
       }
     },
     "node_modules/accepts": {
@@ -1893,6 +1911,21 @@
       "integrity": "sha512-l4Sp/DRseor9wL6EvV2+TuQn63dMkPjZ/sp9XkghTEbV9KlPS1xUsZ3u7/IQO4wxtcFB4bgpQPRcR3QCvezPcQ==",
       "dev": true,
       "license": "ISC"
+    },
+    "node_modules/yaml": {
+      "version": "2.9.1",
+      "resolved": "https://registry.npmjs.org/yaml/-/yaml-2.9.1.tgz",
+      "integrity": "sha512-3NxN8+78OdzbT7C/WjGsyfPAtJaN3FNDsWxv7Y7mcDsT/oOmgW8BpyQQFFBnvZE3j9Y2Sdz1ULFLezL7Eb2yFw==",
+      "license": "ISC",
+      "bin": {
+        "yaml": "bin.mjs"
+      },
+      "engines": {
+        "node": ">= 14.6"
+      },
+      "funding": {
+        "url": "https://github.com/sponsors/eemeli"
+      }
     },
     "node_modules/zod": {
       "version": "4.6.5",
