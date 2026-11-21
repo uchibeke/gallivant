@@ -12,7 +12,7 @@ import { makeExecution } from "../lib/execution.mjs";
 import { cancelControl } from "../lib/control.mjs";
 import { makeState } from "../lib/state.mjs";
 import { writeJsonAtomic, readJson, canonicalPath } from "../lib/fs.mjs";
-import { CONFIG, tempHome, makeClock, silentLog, fakeGh, fakeGit, fakeNotify } from "./helpers.mjs";
+import { CONFIG, tempHome, makeClock, silentLog, fakeGh, fakeGit, fakeNotify, prFixture } from "./helpers.mjs";
 
 const manifest = { coreVersion: CORE_VERSION, operationVersion: 1, taskVersion: 1, executionVersion: 1, coreSha256: "a".repeat(64) };
 const update = { ...manifest, coreSha256: "b".repeat(64) };
@@ -371,6 +371,38 @@ test("chain review cadence survives fast wakes, process restart and failed advan
   clock.advance(10 / 60); await coordinator().wake();
   assert.deepEqual(reads, [1, 2, 3, 1, 2, 3, 1, 2, 3]); assert.equal(ancestry.length, 3);
   assert.ok(state.chains().every(([, c]) => c.status === "done"));
+});
+
+test("terminal predecessor evidence settles with scheduled chain sweeps disabled", async () => {
+  const home = tempHome(), state = makeState(home), clock = makeClock();
+  migrateRuntimeState({ home, manifest });
+  const anchor = { id: "acme/widget/predecessor", repo: "acme/widget", base: "main", branch: "work/predecessor",
+    pr: 1, url: "https://github.com/acme/widget/pull/1" };
+  const head = "a".repeat(40), merge = "b".repeat(40);
+  const retained = { status: "retained", pr: anchor.pr, head, reason: "local work" };
+  state.put(anchor.id, { ...anchor, harness: "claude", state: "done", worktree: "/fixture", workspace_cleanup: retained });
+  const chain = { name: "follow-on", repo: anchor.repo, base: anchor.base, after: anchor, status: "active", index: 0,
+    steps: [{ id: "acme/widget/successor" }] };
+  state.createChain(chain);
+  const pr = prFixture({ number: anchor.pr, url: anchor.url, baseRefName: anchor.base, headRefName: anchor.branch,
+    headRefOid: head, state: "MERGED", mergeCommit: { oid: merge }, mergedAt: new Date(clock.now()).toISOString() });
+  const ancestry = [];
+  const ctx = { home, state, clock, ownLogin: "me", config: CONFIG, log: silentLog, git: fakeGit(), notify: fakeNotify(),
+    gh: { ...fakeGh({ pr }), containsCommit: async (...args) => { ancestry.push(args); return true; } },
+    cleanupMergedWorkspace: async () => assert.fail("retained cleanup is already settled"),
+    runnerFor: () => assert.fail("settled execution must not relaunch"),
+  };
+  const store = createNodeOwnerStore({ home, durable: true });
+  const coordinator = createNodeCoordinator({ ctx, store, schedule: async () => {}, manifest, maxChains: 0 });
+  await coordinator.wake();
+  const saved = state.get(anchor.id);
+  assert.deepEqual(ancestry, [[anchor.repo, anchor.base, merge]]);
+  assert.equal(saved.completionEvidence.terminal.head, head);
+  assert.equal(saved.completionEvidence.terminal.mergeCommit, merge);
+  assert.equal(saved.completionEvidence.integration.qualified, false);
+  assert.deepEqual(saved.workspace_cleanup, retained);
+  assert.deepEqual(state.getChain(chain.name), chain);
+  assert.equal(readJson(join(home, "coordinator.json")).nextChainAt, undefined);
 });
 
 test("idle upgrade backups require the old artifact and reject inconsistent rollback pins before output", async () => {
