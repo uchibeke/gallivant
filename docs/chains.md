@@ -86,6 +86,10 @@ security requirements. Both sides must be inspected, any superseded task edit ex
 
 Repairing or pushing a conflict never starts a successor. Remote ancestry, new-head CI, required reviewer clearance
 and the completion gate must pass before readiness; the host must then prove integration into the planned base.
+Qualified repair journals keep their pinned base through later commits to the
+base branch. A later repair needs separate eligibility within the same task
+budget. A paused journal protects the checkout and private backups even when an
+operator has already merged the PR.
 A maintainer can merge before Gallivant records readiness. Once the owned author has settled and the host proves
 that exact PR merged into the planned base, Gallivant closes the run and releases its successor, including after
 a conflict repair. Missing CI, review or APort completion evidence remains unverified; observing your merge never

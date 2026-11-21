@@ -645,10 +645,12 @@ line endings and expanded identifiers), rather than raw blob bytes. Staged/unfin
 context edits, and changes to the PRD itself still stop automatic merging.
 Adding an exception to the worker's PRD cannot authorize it.
 
-Watched PRs with a clean owned checkout and continuing local session automatically repair a base conflict using the
-same runner, approved inputs, permissions and iteration allowance. The initial failed merge is recorded and aborted;
-the repair merges its pinned base commit, tests the combined behavior and pushes only the task branch. Newer base
-changes do not always supersede task work: the result must satisfy the approved brief and current security requirements.
+Watched PRs with a qualified `git-repair` recipe continue the exact pinned merge
+through the existing local author. The journal holds the two expected parents,
+the index and worktree proof, and any private overlay backup references. The
+coordinator verifies the resulting commit before pushing the task ref. Review
+the pinned SHA and journal phase with `why`. Legacy repairs keep their existing
+clean-input and recorded initial-conflict path.
 
 Use `gallivant why <handle>` to inspect a repair stop:
 
@@ -662,12 +664,15 @@ Use `gallivant why <handle>` to inspect a repair stop:
 | `base-repair-failed` | Inspect the owned worker log and failed verification/provider result. No second paid operation is launched automatically. |
 | `base-repair-duplicate`, `base-repair-iterations` | Review the original failure and existing iteration allowance. Recheck never repeats the same input or resets the budget. |
 | `base-repair-evidence` | Reconcile inconsistent host/base evidence. A repair push alone cannot release a successor. |
+| `base-repair-manifest`, `base-repair-overlay` | Preserve the exact index, private backups and working files. Restore the recorded ownership and bytes before Recheck. |
+| `base-repair-verify` | Inspect the exact candidate and recorded Verify exits. Restore the supported verification sandbox or reconcile the failed candidate before publication. |
 | `base-repair-review` (older versions) | Update Gallivant and recheck. A confirmed maintainer merge closes the run and releases its chain dependency; missing readiness evidence remains unverified. |
 
-For a recorded repair, `resume` reconciles that exact operation and remote proof. A proven refusal before dispatch may
-retry the same operation after its prerequisite is restored; an ambiguous or paid launch cannot spend another operation.
-It cannot change session or resnapshot its instructions. An unresolved merge or unrelated edits remain intact.
-Transient Git/API observations use the normal bounded retry counter and never create a model retry loop.
+Use Recheck for a qualified journaled repair. It reconciles the same operation
+and reports an unknown author or push acknowledgement without allocating a
+replacement. `resume` retains its existing reconciliation behavior for legacy
+operations. Holds and `recovery disable profile/ID GENERATION` fence future
+effects and keep the journal and private backups. See [owned Git and CI repair](autonomous-recovery.md#owned-git-and-ci-repair).
 
 **Resume agent** and **Send message** use this same repair path after the recorded worker has settled. A message is
 retained with the repair and quoted to the continuing session; it cannot change the approved brief or weaken a guardrail.
