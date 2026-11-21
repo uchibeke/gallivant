@@ -186,6 +186,10 @@ gallivant resume widget#142 --resnapshot       # the edit is the brief; the sess
 to reread the brief rather than trust what it remembers. Work already done against a criterion that has not changed
 still stands, which is the whole reason this is a resume and not a restart.
 
+After accepting the replacement, resumed dispatch derives its publication hook, context permissions and task input
+from that approved snapshot, including when base preparation already read the previous brief. Removed restrictions
+and revoked output exceptions take effect on that same resumed turn. Editing the session's copy does not grant approval.
+
 Why a person and not the daemon. A criterion ADDED means the work in flight is valid but incomplete. A criterion
 REWRITTEN means what was built is no longer what is wanted. From the text of two files those are the same event, and
 guessing wrong is expensive in both directions: finish the old brief and you ship the wrong thing, restart and you throw
