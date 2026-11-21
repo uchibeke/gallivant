@@ -35,8 +35,9 @@ up the existing daemon if needed. The daemon starts the first task, uses the ord
 then waits for the merge. Each successor starts in its own checkout from the updated base. A final merge completes
 the chain; closing any milestone's PR without merging stops it.
 
-The scope is deliberately linear: one repository, one base, one active milestone per chain. There is no dependency
-graph, stacked-PR mode or automatic merge. Unrelated tasks and other chains can run independently.
+Chain dispatch is linear, with one repository, one base and one active milestone per chain. Unrelated tasks and
+other chains can run independently. Use local validation to inspect JSON or YAML dependency graphs. See
+[declarative dependency plans](dependency-plans.md).
 
 ## Continue after an existing PR
 

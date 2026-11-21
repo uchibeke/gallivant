@@ -25,6 +25,7 @@
     "./task-delivery/views": "./lib/task_delivery_view.mjs",
     "./task-delivery/store": "./lib/task_delivery_store.mjs",
     "./task-delivery/mcp": "./lib/task_delivery_mcp.mjs",
+    "./dependency-plans": "./lib/dependency_plan.mjs",
     "./collaboration": "./lib/collaboration.mjs",
     "./collaboration/board": "./lib/board_collaboration.mjs",
     "./collaboration/contracts": "./lib/collaboration_contract.mjs",
@@ -103,7 +104,8 @@
     "ajv": "8.20.0",
     "jpeg-js": "0.4.4",
     "pngjs": "7.0.0",
-    "smol-toml": "1.9.0"
+    "smol-toml": "1.9.0",
+    "yaml": "2.9.1"
   },
   "peerDependencies": {
     "@modelcontextprotocol/sdk": "1.32.1",

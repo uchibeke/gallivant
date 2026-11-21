@@ -17,6 +17,7 @@ Use `gallivant --help` (or `gallivant help`) for the installed CLI's syntax and
 | Validate/record readiness | `gallivant ready PRD` | `--check` is local validation without hosted recording or file changes. |
 | Start work and services | `gallivant start [PRD]` | No PRD starts/reuses services only; `--no-open` and `--no-server` are available. |
 | Sequence work | `gallivant chain` | Each successor waits for the previous PR to merge; never auto-merges. |
+| Inspect a dependency graph | `gallivant plan validate <file> --json` | Compiles local JSON or YAML and returns a structural preview. |
 | Adopt/reset a PR | `gallivant register PR_URL` | Explicit registration; existing entry resets its review budget and cursor. |
 | Run the coordinator | `gallivant up` | Foreground loop; `--once` performs one cycle. |
 | Stop services | `gallivant down` | Leaves active agent processes running. |
@@ -241,6 +242,12 @@ with exit code 1. Retry `gallivant start` without a PRD, not the original submis
 `gallivant down` stops the verified daemon and standalone tracker. Existing agent
 processes continue; restart monitoring with `gallivant start`. Embedded trackers
 are owned by their host and are not stopped by this command.
+
+## `gallivant plan validate <file> [--dir <directory>] [--checkout <relative-directory>] [--json]`
+
+Compile and check a local dependency plan. The command prints a summary by
+default and returns the normalized graph, source digests and approval digest
+with `--json`. See [the grammar and runnable examples](dependency-plans.md).
 
 ## `gallivant chain [<name> [<first.md> <next.md> ...]] [--base <branch>] [--after <pr-url|handle>]`
 
