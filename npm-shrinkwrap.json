@@ -12,6 +12,7 @@
       ],
       "license": "Apache-2.0",
       "dependencies": {
+        "@noble/hashes": "2.4.0",
         "ajv": "8.20.0",
         "jpeg-js": "0.4.4",
         "pngjs": "7.0.0",
@@ -554,6 +555,18 @@
         "zod": {
           "optional": false
         }
+      }
+    },
+    "node_modules/@noble/hashes": {
+      "version": "2.4.0",
+      "resolved": "https://registry.npmjs.org/@noble/hashes/-/hashes-2.4.0.tgz",
+      "integrity": "sha512-X5XaVWZIBCT7HHZGm5I7ZQXDwLG+bGXuSrMQAW+7Zvl87h1kmc1ZB1VSRJcpUfoUrGQp4Fkoxm5kZ+Ms+aW+eA==",
+      "license": "MIT",
+      "engines": {
+        "node": ">= 20.19.0"
+      },
+      "funding": {
+        "url": "https://paulmillr.com/funding/"
       }
     },
     "node_modules/accepts": {

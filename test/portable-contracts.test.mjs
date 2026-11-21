@@ -7,6 +7,7 @@ import { executionLive as nodeExecutionLive } from "../lib/execution.mjs";
 import { EXECUTION_TRANSPORTS, executionLive, PROVIDER_STATES } from "../lib/execution_contract.mjs";
 import { TASK_OPERATIONS } from "../lib/task_delivery_contract.mjs";
 import { MAX_ANSWER_BYTES, MAX_ANSWER_CHARACTERS, MAX_ANSWER_COUNT, MAX_LEGACY_ANSWER_COUNT } from "../lib/task_limits.mjs";
+import { recoveryRecord } from "../lib/recovery_observation.mjs";
 
 test("answer tool description exposes the canonical answer batch limits", () => {
   const answer = TASK_OPERATIONS.find(operation => operation.name === "answer");
@@ -20,6 +21,12 @@ test("answer tool description exposes the canonical answer batch limits", () => 
 });
 
 test("public contract, view and coordinator entries bundle for browsers without Node shims", async () => {
+  const id = "acme/widget/export";
+  const entry = { repo: "acme/widget", state: "needs-human", reason: "no-pr", task: { id: "export", revision: 2 },
+    last: { at: "2026-11-10T12:00:00.000Z", run: "first", exit: 1 } };
+  const saved = recoveryRecord(id, entry);
+  const retry = { ...entry, last: { ...entry.last, run: "second" } };
+  retry.recovery_record = recoveryRecord(id, retry, { ...entry, recovery_record: saved });
   for (const name of ["task_delivery_contract", "task_delivery_view", "coordinator", "task_profile", "tracker/presentation"]) {
     const result = await build({ entryPoints: [fileURLToPath(new URL(`../lib/${name}.mjs`, import.meta.url))], platform: "browser", format: "esm", bundle: true, write: false, logLevel: "silent" });
     const bundled = await import(`data:text/javascript;base64,${Buffer.from(result.outputFiles[0].text).toString("base64")}`);
@@ -39,6 +46,13 @@ test("public contract, view and coordinator entries bundle for browsers without 
         reviewBinding: "current", reviewHead: "head", cursor: { fixed_sha: "head" }, firstPartyReview: { status: "running", binding: "current" } } });
       assert.equal(p.phase.id, "independent_review");
       assert.equal(p.review.status, "running");
+    }
+    if (name === "tracker/presentation" || name === "task_delivery_view") {
+      const observe = e => name === "tracker/presentation" ? bundled.taskPresentation({ id, entry: e }).recovery
+        : bundled.taskView({ taskId: "export", implementation: { id }, repo: e.repo }, { entry: e }).presentation.recovery;
+      assert.equal(observe(entry).incidents[0].id, saved.incidents[0].id, "legacy entries derive the same incident ID in the browser");
+      const [incident] = observe(retry).incidents;
+      assert.deepEqual(incident, { ...saved.incidents[0], attempts: 1 }, "the browser recognizes the saved scope and original run");
     }
   }
 });
