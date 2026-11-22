@@ -20,6 +20,7 @@ import { CONFIG, T0, tempHome, makeClock, silentLog } from "./helpers.mjs";
 import { processIdentity } from "../lib/daemon.mjs";
 import { codeStamp, writeJsonAtomic } from "../lib/fs.mjs";
 import { bindPlanOperator } from "../lib/operator_intent.mjs";
+import { dispatchCapacity } from "../lib/dispatch_capacity.mjs";
 import { diamond, crossCompany, NOW, PLAN, REPO, READER } from "./fixtures/factory-projection.mjs";
 
 /** A fake response: records the status, the headers and the body, and resolves `ended` when the handler is done. */
@@ -2375,6 +2376,40 @@ test("health projection separates coordinator states and never rewrites meaningf
     const response = res(); await handle(w.ctx, req(base + path), response, { base }); await response.ended;
     assert.equal(response.code, 200); assert.equal(JSON.stringify(w.state.entries()), before);
   }
+});
+
+test("System capacity follows saved starts through preparation, dispatch and release on both mounts", async () => {
+  const w = world({ entry: { state: STATES.running } }), repo = w.state.get(ID).repo;
+  w.ctx.config.dispatch_capacity = { authors: 3 };
+  const admission = { repo, limits: dispatchCapacity(w.ctx.config) };
+  const old = `${repo}/older-claim`, preparing = `${repo}/preparing-start`;
+  const olderClaim = w.state.claimStart(old);
+  const claim = w.state.claimStart(preparing, null, null, admission);
+  assert.equal(w.state.get(preparing), null);
+  assert.throws(() => w.state.claimStart(`${repo}/another-start`, null, null, admission), { code: "AUTHOR_CAPACITY" });
+  const check = async (activeAuthors, preparations) => {
+    const saved = w.state.workspaceRecords();
+    for (const base of ["", "/gallivant"]) {
+      const api = res(), page = res();
+      await handle(w.ctx, req(base + "/api/system-health"), api, { base });
+      await handle(w.ctx, req(base + "/system"), page, { base });
+      assert.equal(api.code, 200);
+      assert.equal(page.code, 200);
+      const { capacity } = JSON.parse(api.body()).health;
+      assert.deepEqual([capacity.activeAuthors, capacity.preparations, capacity.authorLimit], [activeAuthors, preparations, 3]);
+      assert.ok(page.body().includes(`<dt>Active authors</dt><dd>${activeAuthors} · recorded tasks</dd>`));
+      assert.ok(page.body().includes(`<dt>Preparation reservations</dt><dd>${preparations}</dd>`));
+      assert.ok(!api.body().includes(claim.token));
+    }
+    assert.deepEqual(w.state.workspaceRecords(), saved);
+  };
+  await check(3, 1);
+  w.state.markStartDispatch(preparing, claim.token, null, null);
+  await check(3, 0);
+  assert.equal(w.state.finishUnsentStart(preparing, claim.token), true);
+  await check(2, 0);
+  w.state.releaseStart(old, olderClaim.token);
+  await check(1, 0);
 });
 
 test("health reads canonical account expiry, allowlists diagnostics and respects capability declarations", async () => {

@@ -84,6 +84,8 @@ shows admitted graphs and linear chains with exact saved prerequisites. **Tasks*
 (`/tasks`) filters registered delivery, intake and future work by outcome.
 Future nodes link to their plan until task registration. **System** (`/system`)
 shows coordinator observations, capacity and execution capability limits.
+The active author count includes slots reserved before task registration.
+Protected views report counts for the work their current identity can read.
 See the [console feature matrix](ui-feature-matrix.md) for current controls and
 the operator paths for qualified or CLI-only features.
 

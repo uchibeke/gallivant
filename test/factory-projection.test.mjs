@@ -5,7 +5,7 @@ import { readFileSync } from "node:fs";
 import { executionCapabilities } from "../lib/capabilities.mjs";
 import { providerScope } from "../lib/recovery_cooldown.mjs";
 import { factoryAccess } from "../lib/tracker/factory_access.mjs";
-import { factoryCatalog, planWindow, NODE_PAGE_SIZE, PLAN_PAGE_SIZE, PREREQUISITE_PAGE_SIZE } from "../lib/tracker/factory_projection.mjs";
+import { capacityProjection, factoryCatalog, planWindow, NODE_PAGE_SIZE, PLAN_PAGE_SIZE, PREREQUISITE_PAGE_SIZE } from "../lib/tracker/factory_projection.mjs";
 import { planPrerequisites } from "../lib/dependency_plan_runtime.mjs";
 import { overviewWindow } from "../lib/tracker/overview.mjs";
 import { diamond, crossCompany, integration, PLAN, READER, REPO, NOW } from "./fixtures/factory-projection.mjs";
@@ -120,6 +120,34 @@ test("saved cooldown and intake budgets keep evidence, bounds and unknown cost d
   assert.equal(intake.evidence.inputRevision, 3);
   assert.equal(intake.budget.preparationAllowanceUsd, 4);
   assert.equal(intake.budget.costUsd, null);
+});
+
+test("capacity counts author reservations only within the reader’s scope", () => {
+  const registered = `${REPO}/running`, outside = "private/repository";
+  const saved = { entries: { [registered]: { repo: REPO, state: "running" } }, starts: {}, dispatch: { authors: {} },
+    plans: { instances: [
+      { id: "visible-plan", scope: { tenant: "local", repositories: [REPO] } },
+      { id: "other-plan", scope: { tenant: "other-company", repositories: [REPO] } },
+    ] } };
+  for (const [task, repo, instanceId] of [
+    ["visible-start", REPO, "visible-plan"], ["other-company-start", REPO, "other-plan"],
+    ["legacy-start", REPO, null], ["private-start", outside, null],
+  ]) {
+    const id = `${repo}/${task}`;
+    saved.starts[id] = { repo, token: task, ...(instanceId ? { plan: { instanceId } } : {}) };
+    saved.dispatch.authors[id] = { repo, token: task, plan: instanceId, graph: Boolean(instanceId), preparing: true };
+  }
+  saved.dispatch.authors[registered] = { repo: REPO, token: "registered-slot", plan: null, graph: false, preparing: false };
+  const config = { dispatch_capacity: { authors: 5 } };
+  const operator = { ...READER, grant: ({ action, scope }) =>
+    action === "read" && scope.tenant === "local" && scope.repositories.every(repo => repo === REPO) ? "repository-read" : null };
+  const project = access => {
+    const { activeAuthors, preparations, authorLimit } = capacityProjection(factoryAccess(saved, access), config);
+    return { activeAuthors, preparations, authorLimit };
+  };
+  assert.deepEqual(project({}), { activeAuthors: 5, preparations: 4, authorLimit: 5 });
+  assert.deepEqual(project({ operator, protectedReads: true }), { activeAuthors: 3, preparations: 2, authorLimit: null });
+  assert.deepEqual(project({ protectedReads: true }), { activeAuthors: 0, preparations: 0, authorLimit: null });
 });
 
 test("plan, node and prerequisite windows preserve the selected scope across pages", () => {
