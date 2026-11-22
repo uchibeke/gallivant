@@ -72,6 +72,9 @@ const HELP = `gallivant: give an agent a task, let the review loop run, go outsi
   gallivant plan preview|queue <file> [--approve <digest>] [--request-id <id>]
                                          resolve a plan and its dispatch limits; queue requires protected authority
   gallivant plan [inspect] [<name>]       inspect admitted plans through the protected operator ingress
+  gallivant plan hold|unhold|cancel <plan> [--group <id>] --request-id <id> [--approve <revision>]
+  gallivant plan retry <plan> --node <id> --request-id <id> [--approve <revision>]
+  gallivant plan attach|edit <plan> <file> [--dir <directory>] --request-id <id> [--approve <revision>]
   gallivant plan migration [--approve <digest>]
                                          review a legacy checkpoint; keep the existing dispatch owner
   gallivant start [prd.md] [--no-daemon] [--no-server] [--no-open] [--port 8791] [--base <branch>]
@@ -151,13 +154,27 @@ async function planCommand(args, values) {
     }
     return 0;
   }
+  const { planControl, PLAN_CONTROL_ACTIONS, previewPlan, queuePlan, inspectPlan, migratePlans } = await import("../lib/dependency_plan_admission.mjs");
+  if (action !== "queue" && PLAN_CONTROL_ACTIONS.includes(action)) {
+    const edit = ["attach", "edit"].includes(action);
+    if (args.length !== (edit ? 3 : 2) || !fields("approve", "request-id",
+      ...(edit ? ["dir", "checkout"] : action === "retry" ? ["node"] : ["group"]))) {
+      throw new Error("Supply the plan, action scope and request ID. See plan --help.");
+    }
+    const command = { action, plan: target, requestId: values["request-id"], stage: values.approve === undefined ? "review" : "confirm",
+      ...(values.approve !== undefined ? { approve: values.approve } : {}),
+      ...(values.group !== undefined ? { group: values.group } : {}),
+      ...(values.node !== undefined ? { node: values.node } : {}),
+      ...(edit ? { input: { file: args[2], options: compileOptions } } : {}) };
+    console.log(JSON.stringify(await planControl(makeContext({ readOnly: true }), command)));
+    return 0;
+  }
   if (["validate", "preview", "queue"].includes(action) && (args.length !== 2 || !fields("dir", "checkout", ...(action === "queue" ? ["approve", "request-id"] : []))) ||
       action === "migration" && (args.length !== 1 || !fields("approve")) ||
       !["validate", "preview", "queue", "migration"].includes(action) && (args.length > (action === "inspect" ? 2 : 1) || !fields()) ||
       values["request-id"] !== undefined && values.approve === undefined) {
     throw new Error("usage: plan validate|preview|queue <file> | plan [inspect] [<name>] | plan migration [--approve <digest>]");
   }
-  const { previewPlan, queuePlan, inspectPlan, migratePlans } = await import("../lib/dependency_plan_admission.mjs");
   const ctx = makeContext({ readOnly: true }), input = { file: target, options: compileOptions };
   const result = action === "preview" ? await previewPlan(ctx, input)
     : action === "queue" ? await queuePlan(ctx, input, { approve: values.approve, requestId: values["request-id"] })
@@ -169,7 +186,8 @@ async function planCommand(args, values) {
 
 async function dispatch(argv) {
   const options = argv[0] === "learn" ? { ...OPTIONS, run: { type: "string" } }
-    : argv[0] === "plan" ? { dir: OPTIONS.dir, json: OPTIONS.json, help: OPTIONS.help, approve: OPTIONS.approve, "request-id": OPTIONS["request-id"], checkout: { type: "string", multiple: true } }
+    : argv[0] === "plan" ? { dir: OPTIONS.dir, json: OPTIONS.json, help: OPTIONS.help, approve: OPTIONS.approve, "request-id": OPTIONS["request-id"],
+      group: { type: "string" }, node: { type: "string" }, checkout: { type: "string", multiple: true } }
     : OPTIONS;
   const { values, positionals } = parseArgs({ args: argv, options, allowPositionals: true });
   const [cmd, arg] = positionals;
