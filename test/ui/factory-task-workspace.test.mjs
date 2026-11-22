@@ -180,7 +180,7 @@ test("brief edits and disconnected reads retain the view and preserve approved i
   assert.equal(await age.getAttribute("datetime"), meaningfulAt);
   assert.notEqual(await age.innerText(), "just now");
   await page.getByRole("button", { name: "Refresh evidence" }).click();
-  await page.locator("#workspace-brief summary").click();
+  await page.getByRole("link", { name: "Review brief changes" }).click();
   await show(page.locator("#workspace-brief"), "--resnapshot");
   await checkRequest(page, "idle");
   assert.equal(await page.getByRole("button", { name: "Resume agent" }).isDisabled(), true);
@@ -304,7 +304,8 @@ test("protected plan task links, capacity waits and permission loss retain the s
   cooldowns.record(routeScope, { status: 429, retryAt: until });
   cooldowns.record(providerScope("openai-agents", "another-tenant-account"), { status: 429, retryAt: until });
   const before = calls.length;
-  await page.goto(runUrl(world, "/gallivant", { id: admittedTask, pq: producer.name }));
+  await page.goto(runUrl(world, "/gallivant", { id: admittedTask, pq: producer.name,
+    plan: producer.instanceId, node: "implementation/api", diagram: "1", po: "1" }));
   await current(page);
   await show(page.locator("#workspace-summary"), "1 prerequisite");
   await show(page.locator("#workspace-summary"), "foundation");
@@ -313,6 +314,8 @@ test("protected plan task links, capacity waits and permission loss retain the s
   assert.equal(selected.get("plan"), producer.instanceId);
   assert.equal(selected.get("node"), "implementation/api");
   assert.equal(selected.get("pq"), producer.name);
+  assert.equal(selected.get("diagram"), "1");
+  assert.equal(selected.get("po"), "1");
   await page.goto(url(world, "/gallivant", "/system", { theme: "dark" }));
   const health = await (await page.request.get(url(world, "/gallivant", "/api/system-health", {}))).json();
   assert.equal(health.health.capacity.waitingCapacity, 1);

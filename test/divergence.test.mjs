@@ -512,9 +512,7 @@ test("why says what to do for a gone brief and for an illegal one, which is not 
   illegal.cleanup();
 });
 
-test("the tracker lists every difference above the facts, and escapes text that came out of a markdown file", () => {
-  // Above the facts because it is the one thing on the page that says the work may be aimed at the wrong target. Escaped
-  // because a criterion is text the operator wrote in a file, which is not hostile but is not this module's to trust.
+test("the workspace opens the brief differences before task facts and escapes markdown text", () => {
   const html = runPage({
     id: "acme/widget/widget-export", handle: "widget#142",
     entry: { state: "pr-open", harness: "claude", iteration: 1, branch: "gallivant/widget-export", worktree: "/tmp/wt", session: "s" },
@@ -524,10 +522,14 @@ test("the tracker lists every difference above the facts, and escapes text that 
       diff: ["criterion added: <script>alert(1)</script>", "Verify command added: `npm run typecheck`"],
     },
   });
-  assert.ok(html.indexOf("prd-changed") < html.indexOf('class="facts"'), "above the facts");
-  assert.match(html, /npm run typecheck/, "every difference, not just the first");
-  assert.doesNotMatch(html, /<script>alert/, "and nothing an operator typed reaches the DOM as markup");
-  assert.match(html, /gallivant resume widget#142 --resnapshot/);
+  assert.match(html, /<h2 id="workspace-decision-heading">Approved brief changed<\/h2>/);
+  assert.match(html, /<details id="workspace-brief"[^>]* open>/);
+  const warning = html.indexOf('id="workspace-brief-change"');
+  assert.ok(warning >= 0 && warning < html.indexOf("Repository / approved base"), "differences appear before task facts");
+  assert.match(html, /<li>criterion added: &lt;script&gt;alert\(1\)&lt;\/script&gt;<\/li>/);
+  assert.match(html, /<li>Verify command added: `npm run typecheck`<\/li>/);
+  assert.doesNotMatch(html, /<script>alert/);
+  assert.match(html, /gallivant resume &#39;widget#142&#39; --resnapshot/);
 });
 
 // ---- resume ---------------------------------------------------------------------------------------------------------

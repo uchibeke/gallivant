@@ -37,13 +37,16 @@ test("completion schemas advertise only supported portable milestones and never 
 });
 test("coordinator records bounded current-head check and external-review observations for presentation", async t => {
   const w = world(t, "integrated");
+  const jobs = Array.from({ length: 10 }, (_, index) => ({ name: `test ${index + 1}`, runId: 9981 + index }));
+  w.gh.data.pr.statusCheckRollup = jobs.map(job => checkRun({ ...job, conclusion: "SUCCESS" }));
   await w.tick.tick();
   const before = w.entry(), observation = before.reviewObservation;
   assert.equal(observation.head, "a1b2c3d");
   assert.equal(observation.binding, before.reviewBinding);
-  assert.deepEqual(observation.checks, { settled: true, count: 1, failed: 0 });
+  assert.deepEqual(observation.checks, { settled: true, count: jobs.length, failed: 0,
+    jobs: jobs.slice(0, 8).map(job => ({ ...job, status: "passed" })) });
   assert.equal(observation.external, "clear");
-  assert.ok(JSON.stringify(observation).length < 500);
+  assert.ok(JSON.stringify(observation).length < 750);
   w.clock.advance(2); await w.tick.tick();
   assert.notEqual(w.entry().reviewObservation.observedAt, observation.observedAt);
   assert.equal(w.entry().activity_at, before.activity_at, "poll observations cannot reset meaningful activity");
