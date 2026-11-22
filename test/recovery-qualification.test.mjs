@@ -340,6 +340,7 @@ test("a pre-disable successor claim cannot survive repository re-enable", () => 
   }
   assert.throws(() => state.validateStart(id, claim.token, chain), /no longer authorizes/);
   state.releaseStart(id, claim.token);
+  assert.equal(state.getChain(name).steps[0].dispatch, dispatch);
   assert.throws(() => state.claimStart(id, chain), /no longer authorizes/);
   const current = { ...chain, holdGenerations: [0, 2, 0] };
   assert.ok(state.validateStart(id, state.claimStart(id, current).token, current) === undefined);

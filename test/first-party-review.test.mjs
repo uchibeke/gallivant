@@ -736,10 +736,11 @@ test("health expiring during preparation and known busy refusals remain retryabl
     if (reason === "health") w.ctx.git.ensureHttpsRemote = async () => { healthy = false; };
     else w.runner.start = () => {
       assert.equal(w.entry().firstPartyReview.disposition.status, "dispatch-intent");
-      throw Object.assign(new Error("owned runner busy before launch"), { code: "BUSY" });
+      throw Object.assign(new Error("owned runner busy before launch"), { code: "BUSY", dispatchNotSent: true });
     };
     await w.tick.tick(); assert.equal(w.runner.started.length, 0); assert.equal(w.entry().iteration, 0);
     assert.equal(w.entry().firstPartyReview.disposition.status, "pending"); assert.equal(w.entry().state, "pr-open");
+    assert.equal(w.ctx.state.hasAuthorReservation(w.id), false);
     healthy = true; w.ctx.git.ensureHttpsRemote = async () => {}; w.runner.start = start;
     await w.tick.tick(); assert.equal(w.runner.started.length, 1); assert.equal(w.entry().reviewHistory.at(-1).disposition.status, "dispatched");
   }

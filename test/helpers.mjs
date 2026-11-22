@@ -132,7 +132,7 @@ export function fakeRunner(clock) {
     root: "/tmp/fake-runs",
     started: runs,
     start(name, cmd, args, opts) {
-      if (cur && cur.running) throw Object.assign(new Error("busy"), { code: "BUSY" });
+      if (cur && cur.running) throw Object.assign(new Error("busy"), { code: "BUSY", dispatchNotSent: true });
       cur = { id: `${runs.length + 1}-${name}`, name, cmd, args, opts, pid: 1, startedAt: clock.now(), exit: null, running: true, lines: [] };
       runs.push(cur);
       return { id: cur.id, pid: 1, startedAt: cur.startedAt };
