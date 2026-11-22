@@ -70,6 +70,10 @@ isolation and live model qualification require their own evidence.
 
 The Chromium suite checks both themes at 360, 390, 768, 1280 and 1440 pixels,
 landscape, 200% zoom, keyboard navigation and axe accessibility rules.
+The dependency qualification aggregate runs it alongside the task decisions
+and activity suite. It records the browser version and synthetic PNG size.
+[Qualification commands](dependency-plan-qualification.md)
+
 Sample captures use synthetic state at 1440 × 1000 in dark mode and
 390 × 844 in light mode. To reproduce them, set `PLAN_UI_CAPTURES` to a
 temporary directory and run the browser suite.
@@ -80,4 +84,4 @@ temporary directory and run the browser suite.
 For rollback, remove browser authoring by withdrawing its input bindings.
 Existing queue, hold, recovery and receipt ownership stays with the plan
 service. Follow the registry drain and version requirements before downgrading.
-[Registry and rollback](dependency-plans.md#references-and-rollback)
+[Registry and rollback](dependency-plans.md#rollout-and-rollback)

@@ -77,7 +77,7 @@ function fixtureEnvironment() {
 }
 const escape = name => name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
-export function runContracts(suites, names, deadline) {
+export function runContracts(suites, names, deadline, observe = () => {}) {
   const timeout = Math.min(120_000, deadline - Date.now());
   if (timeout <= 0) return { suites, selected: names, result: "failed", timeout: true, exit: null, passed: 0 };
   const selection = names.length ? [`--test-name-pattern=^(?:${names.map(escape).join("|")})$`] : [];
@@ -87,13 +87,14 @@ export function runContracts(suites, names, deadline) {
     cwd: root, env: fixtureEnvironment(), encoding: "utf8", timeout, maxBuffer: 8 * 1024 * 1024,
   });
   const output = result.stdout ?? "";
+  observe(output);
   if (output) process.stdout.write(output);
   if (result.stderr) process.stderr.write(result.stderr);
   const metric = label => Number(output.match(new RegExp(`^# ${label} (\\d+)$`, "m"))?.[1]);
   const missing = names.filter(name => !new RegExp(`^ok \\d+ - ${escape(name)}$`, "m").test(output));
   return { suites, selected: names, exit: result.status, timeout: result.error?.code === "ETIMEDOUT",
     result: !result.error && result.status === 0 && metric("pass") > 0 && metric("fail") === 0 &&
-      metric("skipped") === 0 && !missing.length ? "passed" : "failed",
+      metric("skipped") === 0 && metric("todo") === 0 && !missing.length ? "passed" : "failed",
     passed: metric("pass") || 0, missing };
 }
 

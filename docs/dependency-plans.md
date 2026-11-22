@@ -210,8 +210,8 @@ moves but still contains the merge, the receipt can still qualify. A force-push
 that drops the merge fences undispatched consumers. New dispatch needs a
 supported adapter with immutable repository identity and merge proof. Hosted
 routes also need their existing repository, execution and result bindings.
-Fixture coverage alone leaves native and live combinations unqualified.
-[Recovery qualification](recovery-qualification.md)
+Native and live combinations require independent qualification for the exact
+runtime, host, launch and owner routes. [Dependency delivery qualification](dependency-plan-qualification.md)
 
 An author slot covers preparation and remains reserved through any ambiguous
 submission. Confirmed process cessation and result collection release it
@@ -247,6 +247,18 @@ receipt. It can verify that receipt after the producer's workspace is removed.
 A retained workspace satisfies cleanup settlement when its merge and delivery
 evidence qualify. Historical review archives remain available for explicit
 inspection and verified backups.
+
+### Rollout and rollback
+
+1. Compile local examples and intended manifests with `plan validate`.
+2. Resolve read-only previews and verify saved Plans and Tasks projections with
+   graph limits at zero. The protected `plan migration` checkpoint preserves
+   legacy approvals, pending starts and evidence under their original owners.
+3. After verifying the exact host, route and isolation evidence, admit the
+   protected deployment and set positive graph ceilings for explicitly reviewed
+   plans. Older observation-only approvals keep their original limits.
+4. Enable authoring and reviewed UI controls through the authenticated mount's
+   operator and input bindings. Withdraw those bindings to remove UI authoring.
 
 Set both graph ceilings to zero to disable new graph reservations. The existing
 coordinator continues collecting accepted runs, settling task cancellations and

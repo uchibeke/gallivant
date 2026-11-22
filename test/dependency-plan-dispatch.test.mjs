@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { existsSync, mkdirSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, statSync, writeFileSync } from "node:fs";
 import { basename, dirname, join } from "node:path";
 import { test } from "node:test";
 import { queuePlan, previewPlan, inspectPlan } from "../lib/dependency_plan_admission.mjs";
@@ -13,9 +13,12 @@ import { makeExecution } from "../lib/execution.mjs";
 import { canonicalPath, readJson, writeJsonAtomic } from "../lib/fs.mjs";
 import { bindPlanOperator, recoveryAdminIntent } from "../lib/operator_intent.mjs";
 import { hosts } from "../lib/hosts.mjs";
-import { makeRecoverySchedule } from "../lib/recovery_schedule.mjs";
+import { makeRecoverySchedule, RECOVERY_LANES } from "../lib/recovery_schedule.mjs";
 import { makeRecoveryCooldowns, providerScope } from "../lib/recovery_cooldown.mjs";
+import { RECOVERY_REGISTRY_VERSION } from "../lib/registry_versions.mjs";
+import { PLAN_RUNTIME_FORMAT, checkRuntimeState, migrateRuntimeState } from "../lib/runtime_state.mjs";
 import { makeState, STATES } from "../lib/state.mjs";
+import { CORE_VERSION } from "../lib/task_delivery_contract.mjs";
 import { makeTick } from "../lib/tick.mjs";
 import { receiptHash } from "../lib/deliverable.mjs";
 import { normalizePublicBody } from "../lib/block.mjs";
@@ -590,6 +593,8 @@ test("a collected author releases capacity while PR discovery still owns its del
 
 test("lost launch acknowledgement remains observation-only through restart and binds the late exact paid operation", async t => {
   const w = fixture(t, { capacity: 1 }), key = `${PRODUCER}/lost-reply`;
+  const artifact = { ...PLAN_RUNTIME_FORMAT, coreVersion: CORE_VERSION, operationVersion: 1, taskVersion: 1, executionVersion: 1, coreSha256: "a".repeat(64) };
+  migrateRuntimeState({ home: w.home, manifest: artifact });
   const raw = w.ctx.runnerFor(key), spawn = raw.start;
   let hidden = true;
   const current = raw.current;
@@ -610,6 +615,9 @@ test("lost launch acknowledgement remains observation-only through restart and b
   assert.deepEqual(Object.keys(w.ctx.executionFor(key).state().operations), [token]);
   assert.equal(w.ctx.executionFor(key).state().operations[token].acceptance, "unknown");
   assert.equal(w.ctx.state.load().dispatch.authors[key].operation, token);
+  assert.equal(checkRuntimeState({ home: w.home, manifest: artifact }).active, true);
+  assert.throws(() => checkRuntimeState({ home: w.home, manifest: { ...artifact, registryVersion: RECOVERY_REGISTRY_VERSION } }), { code: "RUNTIME_STATE" });
+  assert.throws(() => migrateRuntimeState({ home: w.home, manifest: { ...artifact, coreSha256: "b".repeat(64) } }), { code: "RUNTIME_ACTIVE_PIN" });
   assert.equal(w.started("after"), 0);
   hidden = false;
   await makeTick(w.ctx).tickEntry(key, w.ctx.state.get(key));
@@ -619,25 +627,70 @@ test("lost launch acknowledgement remains observation-only through restart and b
 });
 
 test("plan and node cursors persist, long provider cooldowns avoid clones, and retained history stays out of work lanes", async t => {
-  const w = fixture(t, { capacity: 8 });
-  for (const name of ["alpha", "beta"]) await w.queue(name, Array.from({ length: 6 }, (_, i) => task(`${name}-${i}`)));
+  const w = fixture(t, { capacity: 24 });
+  const names = ["alpha", "beta", "gamma"], perPlan = 6, retained = 15_000;
+  const eligible = names.length * perPlan;
+  for (const name of names) await w.queue(name, Array.from({ length: perPlan }, (_, i) => task(`${name}-${i}`)));
   const state = w.ctx.state.load();
-  for (let index = 0; index < 15_000; index++) state.entries[`${PRODUCER}/historical-${index}`] = { repo: PRODUCER, state: STATES.done, workspace_cleanup: { status: "retained" } };
+  for (let index = 0; index < retained; index++) state.entries[`${PRODUCER}/historical-${index}`] = { repo: PRODUCER, state: STATES.done, workspace_cleanup: { status: "retained" } };
   writeJsonAtomic(w.ctx.state.file, state);
+  const path = w.ctx.state.file, originalBytes = statSync(path).size;
+  const samples = [], waits = [];
+  let dueAt;
+  const trackTick = async (tick = w.tick) => {
+    const current = w.ctx.state, sample = { writes: 0, bytesWritten: 0, starts: 0, wallMs: 0 };
+    // Detect actual atomic registry replacements through the normal dispatch
+    // mutators. Count bytes even when the new snapshot has identical length.
+    const methods = ["claimStart", "markStartClone", "putStarted", "markStartDispatch", "update", "updateGraphNode",
+      "releaseStart", "finishUnsentStart", "releaseAuthorTurn"];
+    w.ctx.state = { ...current };
+    for (const method of methods) w.ctx.state[method] = (...args) => {
+      const before = current.registryStamp();
+      try { return current[method](...args); }
+      finally {
+        if (current.registryStamp() !== before) {
+          sample.writes++;
+          sample.bytesWritten += statSync(path).size;
+        }
+      }
+    };
+    const startedAt = performance.now(), alreadyStarted = w.runners.size;
+    try { await tick(); }
+    finally { w.ctx.state = current; }
+    sample.wallMs = Math.round(performance.now() - startedAt);
+    sample.starts = w.runners.size - alreadyStarted;
+    for (let i = 0; i < sample.starts; i++) waits.push(w.clock.now() - dueAt);
+    samples.push(sample);
+  };
   const cooldowns = makeRecoveryCooldowns({ home: w.home, clock: w.clock });
   w.ctx.cooldowns = cooldowns;
   const scope = providerScope("codex", "operator");
   const delay = 48 * 3_600_000;
   cooldowns.record(scope, { status: 429, retryAfterMs: delay });
-  await w.tick(); w.restart(); await w.advance();
+  dueAt = cooldowns.deferred(scope).retryAt;
+  await trackTick(); w.restart(); await trackTick(w.advance);
   assert.equal(w.calls.some(call => call[0] === "clone"), false);
+  assert.deepEqual(samples.map(sample => sample.writes), [0, 0]);
   w.clock.advance(delay / 60_000);
-  await w.tick();
-  const first = readJson(join(w.home, "recovery-schedule.json"));
-  assert.equal(Object.keys(first.cursors.graphStartNodes).length, 2);
+  await trackTick();
+  const schedule = join(w.home, "recovery-schedule.json"), first = readJson(schedule);
+  assert.equal(Object.keys(first.cursors.graphStartNodes).length, names.length, "every plan gets service on the first eligible tick");
   assert.equal(w.calls.filter(call => call[0] === "clone").length, 4);
-  w.restart(); await w.advance();
-  assert.equal(w.calls.filter(call => call[0] === "clone").length, 8);
-  assert.equal(w.runners.size, 8);
-  assert.equal(w.ctx.state.load().entries[`${PRODUCER}/historical-14999`].state, STATES.done);
+  const eligibleCycles = Math.ceil(eligible / RECOVERY_LANES.graphStart);
+  for (let i = 1; i < eligibleCycles; i++) { w.restart(); await trackTick(w.advance); }
+  const afterBytes = statSync(path).size, max = key => Math.max(...samples.map(sample => sample[key]));
+  const ordered = waits.toSorted((a, b) => a - b);
+  const queueMs = Object.fromEntries([50, 95, 99].map(p => [`p${p}`, ordered[Math.ceil(ordered.length * p / 100) - 1]]));
+  assert.equal(w.calls.filter(call => call[0] === "clone").length, eligible);
+  assert.equal(w.runners.size, eligible);
+  assert.ok([...w.runners.values()].every(runner => runner.current().running), "healthy authors survive independent ticks and restarts");
+  assert.equal(w.ctx.state.load().entries[`${PRODUCER}/historical-${retained - 1}`].state, STATES.done);
+  assert.ok(max("starts") <= RECOVERY_LANES.graphStart);
+  assert.ok(max("writes") > 0 && max("writes") <= RECOVERY_LANES.graphStart * 8);
+  assert.ok(afterBytes - originalBytes < 128 * 1024);
+  assert.ok(queueMs.p99 > 0 && queueMs.p99 <= eligibleCycles * 60_000);
+  t.diagnostic(`dependency-qualification-capacity ${JSON.stringify({ retained, activePlans: names.length, eligible, retryAfterMs: delay,
+    cycles: samples.length, maxStartsPerCycle: max("starts"), maxRegistryWritesPerCycle: max("writes"),
+    maxRegistryBytesWrittenPerCycle: max("bytesWritten"), registryBytes: afterBytes, maxWallCycleMs: max("wallMs"),
+    queueMs, cooldownRegistryWrites: samples[0].writes + samples[1].writes })}`);
 });

@@ -435,6 +435,43 @@ test("a single lifecycle preserves the shell, active focus and disclosures, and 
   assert.equal(requests.length, 3, "departing from Plans ends its reads");
 });
 
+test("served plan navigation exposes empty, filtered, loading and unavailable states without effects", { timeout: 35_000 }, async t => {
+  const world = await open(t), { page, state, calls } = world;
+  for (const base of ["", MOUNT]) {
+    await page.goto(path(world, base));
+    await show(page, "No plans are visible in this workspace.");
+    assert.equal(await page.locator(".chain-workspace").count(), 0);
+  }
+  const plan = await world.queue("reading", [task("first"), task("next", ["first"])]);
+  const saved = readFileSync(state.file), before = calls.length;
+  for (const base of ["", MOUNT]) {
+    await page.goto(path(world, base, { pq: "no match" }));
+    await show(page, "No plans match this page and filters.");
+    await page.goto(path(world, base, { plan: plan.instanceId, node: "absent" }));
+    await show(page, "The linked node is unavailable.");
+    await page.goto(path(world, base, { plan: plan.instanceId, node: "first" }));
+    const entered = Promise.withResolvers(), release = Promise.withResolvers();
+    t.after(() => release.resolve());
+    await page.route("**/api/plans?*", async route => {
+      entered.resolve(); await release.promise; await route.continue().catch(() => {});
+    }, { times: 1 });
+    try {
+      const next = dependencies(page).getByRole("link", { name: "next", exact: true });
+      await next.focus(); await page.keyboard.press("Enter");
+      await entered.promise;
+      assert.match(await page.locator("#chains-status").textContent(), /Loading selected plan view/);
+      assert.equal(await detail(page).locator("h3").textContent(), "first");
+    } finally { release.resolve(); }
+    await page.waitForURL(url => url.searchParams.get("node") === "next");
+    await page.getByRole("button", { name: "Refresh plans" }).click(); await refreshed(page);
+    await page.goBack();
+    await page.waitForURL(url => url.searchParams.get("node") === "first");
+  }
+  assert.deepEqual(readFileSync(state.file), saved);
+  assert.equal(calls.length, before, "GET and refresh do not contact a host");
+  assert.equal(world.spawned(), 0);
+});
+
 test("plan workspace and review are accessible on both mounts, themes, five widths, landscape and zoom", { timeout: 90000 }, async t => {
   const world = await open(t), { page } = world;
   const { producer } = await diamondPlans(world);
@@ -466,6 +503,9 @@ test("plan workspace and review are accessible on both mounts, themes, five widt
   assert.ok((await submit(page).boundingBox()).height >= 44);
   assert.deepEqual((await new AxeBuilder({ page }).withTags(TAGS).analyze()).violations.map(item => item.id), []);
   await capture(page, "dependency-plans-review-mobile");
+  const screenshot = await page.screenshot({ animations: "disabled", timeout: 8000 });
+  assert.equal(screenshot.toString("hex", 0, 8), "89504e470d0a1a0a");
+  t.diagnostic(`dependency-qualification-browser ${JSON.stringify({ engine: "chromium", version: browser.version(), pngBytes: screenshot.byteLength })}`);
   await page.keyboard.press("Escape");
   assert.equal(await review(page).count(), 0);
   assert.ok(await preview(page).evaluate(button => document.activeElement === button));

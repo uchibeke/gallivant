@@ -263,3 +263,10 @@ and the configured graph capacity. A copied digest grants no operator
 authority. Keep active claims and snapshots in place when reviewing a
 migration. [Dependency plan configuration](config.md#dependency-plan-admission)
 [Dependency plan commands](commands.md)
+
+Before a native or live qualification, inspect the existing protected admission
+for the required host, model, review, installed plugin and capture surface.
+Resolve each prerequisite for the exact configured binary, route and account.
+Record unavailable combinations as gated. Running the synthetic fixtures is
+separate from authorizing the disposable case effects.
+[Dependency delivery qualification](dependency-plan-qualification.md)

@@ -20,12 +20,13 @@ try {
   const syntheticBriefs = new Set(["plan-view", "task-view", "qualification"].map(name => `templates/dependency-plan/docs/prds/synthetic-${name}.md`));
   for (const f of packed.files) assert.ok(syntheticBriefs.has(f.path) || !/(^|\/)(?:\.env[^/]*|\.git|\.npmrc|test|audit|prds|plans|design)(?:\/|$)/.test(f.path), `private/test payload: ${f.path}`);
   assert.ok(packed.files.some(f => f.path === "README.md"), "README is packaged");
-  for (const name of ["tokens.css", "primitives.css", "shell.css", "tracker.css", "lifecycle.js", "shell.js", "control-drafts.js", "controls.js", "tracker.js", "overview.js", "overview.css", "workspace.js", "workspace.css", "activity-render.js", "chains.js", "chains.css", "intake.js", "intake.css", "health.css"])
+  for (const name of ["tokens.css", "primitives.css", "shell.css", "tracker.css", "lifecycle.js", "shell.js", "control-drafts.js", "controls.js", "tracker.js", "overview.js", "overview.css", "workspace.js", "workspace.css", "activity-render.js", "chains.js", "chains.css", "plans.js", "plans.css", "intake.js", "intake.css", "health.css"])
     assert.ok(packed.files.some(f => f.path === `templates/tracker/${name}`), `runtime asset: ${name}`);
   for (const file of packed.files)
     assert.ok(!/(?:playwright|axe-core|chromium|firefox|webkit|test-results|fixtures)/.test(file.path), `development-only payload: ${file.path}`);
   const packedPaths = new Set(packed.files.map(f => f.path));
   for (const path of packedPaths) assert.ok(runtimeFile(path), `shared release allowlist: ${path}`);
+  assert.ok(packedPaths.has("docs/dependency-plan-qualification.md"));
   for (const name of ["final-overview-dark", "final-overview-light", "final-task-mobile", "final-chain-desktop", "dependency-plans-desktop", "dependency-plans-review-mobile"])
     assert.ok(packedPaths.has(`docs/ui/previews/${name}.png`), `approved guide asset: ${name}`);
   // Every relative image linked from a shipped guide must exist in the tarball.
@@ -134,7 +135,11 @@ esac
   assert.match(command("--help"), /gallivant init/);
   const example = join(installed, "templates/dependency-plan");
   const validateExample = extension => JSON.parse(command("plan", "validate", `synthetic.${extension}`, "--dir", example, "--json"));
-  assert.equal(validateExample("yaml").graphDigest, validateExample("json").graphDigest);
+  const graphDigest = validateExample("yaml").graphDigest;
+  assert.equal(graphDigest, validateExample("json").graphDigest);
+  const api = `const { compileDependencyPlan } = await import("@uchibeke/gallivant/dependency-plans");
+    console.log(compileDependencyPlan("synthetic.yaml", { directory: process.argv[1] }).graphDigest);`;
+  assert.equal(run(process.execPath, ["--input-type=module", "-e", api, example], { cwd: prefix, env }).trim(), graphDigest);
   const yamlPackage = createRequire(cli).resolve("yaml/package.json");
   assert.equal(JSON.parse(readFileSync(yamlPackage, "utf8")).license, "ISC");
   assert.match(readFileSync(join(dirname(yamlPackage), "LICENSE"), "utf8"), /Permission to use, copy, modify/);
@@ -198,8 +203,8 @@ esac
         assert.equal(response.status, 200, `installed UI: ${base}${path}`);
         const body = await response.text();
         assert.ok(body.length > 20);
-        if (path === "/tracker.css") assert.match(body, /--gv-focus/);
-        if (path === "/tracker.js") assert.match(body, /trackerLifecycle/);
+        if (path === "/tracker.css") { assert.match(body, /--gv-focus/); assert.match(body, /\.plan-diagram/); }
+        if (path === "/tracker.js") { assert.match(body, /trackerLifecycle/); assert.match(body, /function trackerPlanControls/); }
         if (path.startsWith("/api/run/control")) { const control = JSON.parse(body); assert.equal(control.request, null); assert.equal(control.requestId, "not-submitted"); }
         if (path === "/") assert.match(body, /Skip to main content/);
         if (path === "/health" || path === "/system") assert.match(body, /data-health/);

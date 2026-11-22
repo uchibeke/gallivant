@@ -374,6 +374,14 @@ Open **System** for saved provider and coordinator observations, then use
 need an authenticated operator ingress. See [console access](app.md#the-browser-boundary)
 and the [feature matrix](ui-feature-matrix.md) for setup and qualification limits.
 
+To compile a local graph offline, run
+`gallivant plan validate synthetic.yaml --dir templates/dependency-plan` from
+the source checkout. The installed package also includes the example at
+`templates/dependency-plan` inside its package directory. `plan preview` adds
+read-only host binding. Use the protected operator ingress to review and queue a
+graph. Leave graph capacity at zero until that deployment's author, reviewer,
+host and isolation evidence is established. [Dependency plan setup](dependency-plans.md)
+
 On macOS the daemon starts `caffeinate` for its lifetime to prevent idle sleep.
 Closing a laptop lid, losing network or shutting down still interrupts monitoring.
 There is no automatic login/reboot service installer yet.
