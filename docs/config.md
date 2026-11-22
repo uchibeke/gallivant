@@ -340,6 +340,13 @@ isolation outside the worker with an OS account, container or qualified outer
 sandbox. A standalone probe and file modes for a shared user are insufficient.
 Current standalone author routes leave this gate closed.
 
+Start with zero graph ceilings for read-only observation. Admit the exact
+disposable qualification separately from operational plans. Select an existing
+protected task and pin its manifest digest, route allowances and evidence root
+before requesting native or live checks. The signed evidence describes that
+exact environment. Positive ceilings and each plan's protected approval govern
+operational reservations. [Dependency delivery qualification](dependency-plan-qualification.md)
+
 New plan admissions and reviewed controls use registry version 6 and dependency
 plan format 2. Existing version 4 and 5 registries remain readable. A pinned
 namespace requires the matching artifact manifest before accepting the new

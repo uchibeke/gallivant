@@ -119,3 +119,10 @@ a $2 ceiling and verifies actual Bash-tool output rather than assistant claims.
 It does not install packages, access customer data or weaken security settings.
 Native checks for other providers and Linux are separate from local fixture
 coverage; a green fixture does not prove their credentials or model access.
+
+Dependency qualification pins the source, Node environment, registry and plan
+formats and the runtime fingerprint of each disposable case. The packed plan
+compiler, examples, tracker assets and exported modules are checked with
+`npm run test:install`. Existing acceptances and unresolved claims keep their
+artifact pin through restart. Drain and back up the full namespace before
+changing to an incompatible runtime. [Dependency delivery qualification](dependency-plan-qualification.md)

@@ -27,7 +27,8 @@ requirements and checks.
 | Use the local dashboard and understand product boundaries | [Application](app.md) |
 | Run coding work on an API-backed hosted environment | [OpenAI Agents API](openai-agents.md) |
 | Understand the unavailable Codex Cloud dispatch and its required qualification | [Codex Cloud](codex-cloud.md) |
-| Queue dependent tasks with a human merge between steps | [Chains](chains.md) |
+| Queue dependent tasks with a human merge between steps | [Chains](chains.md) · [Dependency plans](dependency-plans.md) |
+| Run the graph and served-browser aggregate or check signed native and live receipts | [Dependency delivery qualification](dependency-plan-qualification.md) |
 | Understand permissions, credentials and completion checks | [Guardrails](guardrails.md) |
 | Keep Node, Git and dependency execution consistent | [Runtime environment](runtime-environment.md) |
 | Diagnose DNS/HTTPS failures and understand automatic recovery | [Network recovery](network-recovery.md) |

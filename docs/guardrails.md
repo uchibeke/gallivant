@@ -20,6 +20,13 @@ and do not inherit those guarantees merely because an adapter exists. Hosted
 Agents has a separate sandbox/artifact-publication boundary described next.
 The APort pre-tool hook and deliverable-completion gate are separate controls.
 
+Dependency plans require scoped operator grants and qualified isolation of the
+registry, input snapshots and control routes. A future anchor grants observation
+of its exact frozen producer. Task and plan controls keep their original owners.
+Disposable qualification uses a separately pinned protected admission and
+independent signed observations. The authorized maintainer owns the exact merge.
+[Plan controls and evidence](dependency-plan-qualification.md)
+
 ## Hosted execution and preparation
 
 Hosted Agents receives the approved source snapshot and configured network/package

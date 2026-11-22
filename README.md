@@ -7,9 +7,10 @@
 
 **Give an agent a task. Let the review loop run. Go outside.**
 
-Gallivant turns a repository task into a reviewed pull request. It runs a coding
-agent in a separate checkout, opens the PR, watches CI and reviewer feedback, and
-continues the same session until the PR is ready for you. You decide what merges.
+Gallivant is a software factory and delivery orchestrator for repository work.
+It runs a coding agent in a separate checkout, opens the PR, watches CI and
+reviewer feedback, and continues the same session until the PR is ready for
+you. You decide what merges.
 
 Use it when you want to:
 
@@ -213,6 +214,18 @@ The next milestone starts only after its predecessor is merged into the planned
 base. You can plan longer work while retaining the merge decision.
 [Chaining tasks](docs/chains.md).
 
+For parallel branches, joins or future-chain dependencies, start by compiling
+the shipped synthetic graph from a source checkout.
+
+```sh
+gallivant plan validate synthetic.yaml --dir templates/dependency-plan --json
+```
+
+Compilation needs only local files. Preview resolves exact repository and input
+bindings. Queue and controls require a protected operator deployment. Graph
+dispatch defaults to off and has separate route and isolation prerequisites.
+[Dependency plans](docs/dependency-plans.md) · [Qualification](docs/dependency-plan-qualification.md)
+
 ## Harness support
 
 `init --harness` accepts `codex` and `claude`. Other adapters are configured by
@@ -260,6 +273,7 @@ New tasks can pin `external-required`, `first-party-required`, or `both-required
 | Review loop | Watch CI and trusted feedback, continue corrections, recover bounded connection failures and inspect stops | [Commands](docs/commands.md), [recovery](docs/network-recovery.md) |
 | Run controls | Message, resume, recheck or cancel from the CLI/dashboard; inspect saved progress and logs | [Dashboard](docs/app.md) |
 | Sequential plans | Queue dependent briefs with a merge gate between milestones | [Chains](docs/chains.md) |
+| Dependency plans | Compile JSON or YAML graphs. Review saved prerequisites, future anchors and parallel work from Plans in a protected deployment | [Manifest and gates](docs/dependency-plans.md) |
 | Completion checks | Evaluate acceptance evidence with APort or the explicit local evaluator; choose review handoff or watching for merge | [Guardrails](docs/guardrails.md), [milestones](docs/tasks.md#choose-the-delivery-milestone) |
 | Notifications | Configure transition notifications through ntfy | [Configuration](docs/config.md) |
 | Board collaboration | Mirror significant transitions to one-way task threads and a Needs owner queue | [Board collaboration](docs/collaboration.md) |
@@ -299,7 +313,8 @@ for the installed version's flags.
 | Dashboard messages, controls and recovery | [Dashboard](docs/app.md) · [Commands](docs/commands.md) |
 | Qualify recovery routes, adopt stopped tasks or disable a canary | [Recovery qualification](docs/recovery-qualification.md) |
 | Models, credentials, limits and notifications | [Configuration](docs/config.md) |
-| Plan sequential work | [Chains](docs/chains.md) |
+| Plan sequential or parallel work | [Chains](docs/chains.md) · [Dependency plans](docs/dependency-plans.md) |
+| Inspect graph, browser and exact native/live evidence | [Dependency delivery qualification](docs/dependency-plan-qualification.md) |
 | Embed task delivery in another application | [Task-delivery package](docs/task-delivery.md) |
 | Understand internals or recorded qualification | [Documentation index](docs/README.md) |
 | Set up from an agent | [Agent setup](docs/agent-setup.md) |

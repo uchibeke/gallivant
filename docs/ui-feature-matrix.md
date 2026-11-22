@@ -1,8 +1,9 @@
 # Console feature matrix
 
-This inventory covers the merged manifest, admission, dispatch and control
-milestones through `5c4fca2`, plus the shared console views. **Implemented**
-means the code path exists. **Qualified** applies to the exact recorded
+This inventory covers the merged dependency compiler, admission, dispatch and
+controls, plus the Plans authoring and task decisions workspaces. The qualification
+report identifies the exact commit, tree and code bytes. **Implemented** means the
+code path exists. **Qualified** applies to the exact recorded
 repository, actor, adapter, route and capability. **Unvalidated** means required
 live evidence is missing. **Planned** features have no enabled console controls.
 
@@ -23,6 +24,7 @@ live evidence is missing. **Planned** features have no enabled console controls.
 | Acceptance and integration | Implemented completion evidence, owner obligations and delivery-ready versus integrated targets. APort and configured local evaluation can produce receipts. Skipped and unknown stay visible. | Merge through the authorized host workflow. There is no dashboard merge action. |
 | Task requests and diagnostics | Implemented saved request status and selected-attempt evidence. | Browser **Message**, **Resume**, **Recheck** and **Cancel** use existing controls. CLI `say`, `resume`, `recheck`, `cancel`, `status` and `why`. Changed inputs and fresh sessions need explicit review. |
 | Recovery and repair | Implemented cause, step, retry, round and ownership evidence, plus bounded base/conflict and CI repair. Autonomous operation requires the admitted profile, native proof and current canary. | CLI `recovery inventory/adopt/canary/drain/resources/preflight/profile/hold/resume/disable/enable`. |
+| Dependency qualification | Fixture and served-browser checks are opt-in. Native or live proof requires an existing protected disposable admission and exact route and owner signatures. | `scripts/qualify-dependency-plans.mjs` runs the aggregate or verifies saved evidence. The console shows saved capabilities and blockers. |
 | Context, publication and private packages | Implemented approvals, snapshots and preflight at dispatch. Task details show saved source and capability limits. | Review/resnapshot explicitly and configure credentials through existing operator setup. |
 | Capacity, cooldown and budgets | System shows occupied reservations, saved capacity waits and service cooldown deadlines. Local System also shows storage headroom and recorded cleanup. Task routes identify provider cap support and unknown task-wide spend. | CLI `recovery resources` supplies task-specific headroom and cleanup guidance. |
 | Learning | Implemented collection, candidate inspection and reviewed lifecycle. Production injection remains unvalidated without exact qualification and signing/isolation proof. | CLI `learn`, `doctor/setup/configure/list/report/show/approve/retire/reject/revise/explain/recover/prune/extract` subcommands. Extraction is explicit and budgeted. |
@@ -32,4 +34,5 @@ live evidence is missing. **Planned** features have no enabled console controls.
 
 See [console navigation and read scope](app.md), [commands](commands.md),
 [execution boundaries](execution.md), [dependency plans](dependency-plans.md)
-and [recovery qualification](recovery-qualification.md).
+[dependency delivery qualification](dependency-plan-qualification.md), and
+[recovery qualification](recovery-qualification.md).

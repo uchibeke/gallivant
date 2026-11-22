@@ -7,8 +7,9 @@ existing run without finding its terminal session.
 
 For a first run, use [installation](install.md) and [natural-language tasks](tasks.md).
 The work can be code, documentation, research or another verifiable repository
-artifact. GitHub pull requests remain the delivery surface; arbitrary browser
-chores, email delivery and deployments are not separate supported task targets.
+artifact. GitHub and Bitbucket Cloud pull requests are the delivery surface,
+subject to the selected host and route gates. Integration stays with the
+authorized maintainer.
 
 ## Start the dashboard
 
@@ -118,7 +119,10 @@ Use the shown refresh action after repairing access. Keep an uncertain request's
 saved identity and check its status; submitting a new task is not a retry.
 Applied controls confirm coordinator application, not model acknowledgement or
 completion. See [task controls](ui-task-controls.md) and
-[qualification and real captures](ui-qualification.md).
+[qualification and real captures](ui-qualification.md). The dependency aggregate
+includes both the served plan and task workspace suites. Its native and live
+matrix tracks the separate proofs needed for operational routes.
+[Dependency delivery qualification](dependency-plan-qualification.md)
 
 ## Local and hosted harnesses
 

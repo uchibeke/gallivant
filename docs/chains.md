@@ -71,6 +71,16 @@ without `--approve` to review, then repeat it with `--approve DIGEST` through
 the qualified operator ingress. The saved request freezes the producer instance,
 node contracts and authorization. A subsequent PR binds to its original start.
 Work appended to the producer leaves the saved boundary unchanged.
+For example, review the command below while the `foundation` chain's final
+task is still queued.
+
+```sh
+gallivant chain rollout --after-chain foundation docs/prds/rollout.md
+```
+
+The consumer waits for that task's original integration and settled closeout.
+A hold or unmerged closure keeps the dependency waiting, and a force-push that
+removes its merge invalidates the evidence for new starts.
 
 These commands require the protected operator boundary. An approval with
 positive graph capacity can dispatch once the exact producer receipts qualify.
