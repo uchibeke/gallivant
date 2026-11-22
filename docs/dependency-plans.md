@@ -125,11 +125,52 @@ before any PR exists. Later production activity fills in observed identities.
 Appending work beyond the frozen nodes leaves their scope unchanged. Changes
 to their approved contracts require review.
 
-Admitted graphs reserve tasks in observation-only mode. A graph task remains
-ineligible for dispatch even after all its dependencies integrate. Existing
-linear chains and `--after` keep their current execution owner. Their saved
-descriptions compile with `compileLinearChain` from the `dependency-plans`
-package export. [PRD chains](chains.md)
+## Dispatch and integration
+
+A parallel group requests eligibility for its independent branches. The
+coordinator admits each ready leaf against the current author, preparation,
+per-plan and per-repository limits. It also applies the graph ceilings recorded
+in the approval. A diamond with one available author slot can run its second
+branch while the first awaits review or merge. The join waits for both exact
+integration receipts. The reviewer and result-collection lanes remain
+available while author capacity is full.
+
+The task's ordinary review, checks, completion and closeout supply the
+receipt. It identifies the producer's original start, host repository, PR,
+approved base and merge commit. A retained workspace counts as settled
+cleanup. A closed-unmerged PR, a missing required verification decision or
+an author still running keeps the dependency gated. Integration remains a
+maintainer action.
+
+Concurrent branches in one repository use distinct clones and branches.
+Overlapping changes can still conflict. The normal base repair and current-head
+review apply after an earlier branch lands. A descendant clone must contain
+the required same-repository merges. For a dependency across repositories, the
+coordinator verifies the producer's receipt on its own host and approved base.
+That edge grants ordering only. The consumer receives its own snapshots and
+scoped credentials.
+
+Each dispatch rechecks the producer PR and current base ancestry. If a base
+moves but still contains the merge, the receipt can still qualify. A force-push
+that drops the merge fences undispatched consumers. New dispatch needs a
+supported adapter with immutable repository identity and merge proof. Hosted
+routes also need their existing repository, execution and result bindings.
+Fixture coverage alone leaves native and live combinations unqualified.
+[Recovery qualification](recovery-qualification.md)
+
+An author slot covers preparation and remains reserved through any ambiguous
+submission. Confirmed process cessation and result collection release it
+while merge, review, publication or cost reconciliation can still be pending.
+The task keeps its configured rounds. Hosted reservations remain in the
+execution ledger and unknown usage remains charged against the allowance.
+Native currency enforcement depends on the provider. An estimate or an author
+slot does not impose a dollar cap across parallel tasks.
+
+The default graph ceilings are zero. A protected deployment can approve
+positive limits for new plans. Earlier observation-only approvals stay
+observation-only. Linear chains and `--after` keep their command behavior.
+Their saved descriptions compile to the same dependency graph for selection
+and use the shared start and completion owners. [PRD chains](chains.md)
 
 The standalone CLI can validate manifests and resolve previews without saved
 producer links. The supplied local author launch does not qualify an operator

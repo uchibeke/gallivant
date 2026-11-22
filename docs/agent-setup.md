@@ -257,8 +257,9 @@ configuration. Use `plan preview FILE --json` to inspect repository bindings,
 source and base-file hashes, configured routes and limits when host access is
 available. Report unverified capabilities from the output as such.
 
-Have the operator review and confirm through the qualified ingress. The local
-author route cannot provide that authority, even with a copied digest. This
-release admits observation-only graphs and preserves the existing linear chain
-owner. Keep active claims and snapshots in place when reviewing a migration.
+Have the operator review and confirm through the qualified ingress. For
+dispatch, verify the exact host and author route, the outer worker isolation
+and the configured graph capacity. A copied digest grants no operator
+authority. Keep active claims and snapshots in place when reviewing a
+migration. [Dependency plan configuration](config.md#dependency-plan-admission)
 [Dependency plan commands](commands.md)
