@@ -1,4 +1,5 @@
 import { test } from "node:test";
+import { contentDigest, sourceManifestDigest } from "../lib/start_contract.mjs";
 import assert from "node:assert/strict";
 import { mkdirSync, writeFileSync, readFileSync, rmSync, symlinkSync, existsSync } from "node:fs";
 import { join, dirname } from "node:path";
@@ -793,6 +794,31 @@ test("live base movement keeps the dispatched SHA pinned and charges another pai
   assert.equal(w.entry().base_repair.baseSha, w.base); assert.equal(w.entry().base_repair.status, "verified");
   w.gh.data.pr.mergeable = "CONFLICTING"; await w.tick();
   assert.equal(w.entry().reason, "base-repair-iterations"); assert.equal(w.raw.started.length, 2);
+});
+
+test("base repair uses exact approved input digests when the operator edits a carried source", async t => {
+  for (const fault of ["none", "snapshot", "checkout", "brief"]) await t.test(fault, async t => {
+    const w = world(t), approved = w.ctx.readSource(w.id, w.source), edit = "Planning text for future tasks.\n";
+    w.state.update(w.id, { snapshot_digest: contentDigest(GOOD_PRD), sources_digest: sourceManifestDigest([[w.source, approved]]) });
+    write(join(w.operator, w.source), edit);
+    if (fault === "snapshot") w.ctx.readSource = () => edit;
+    if (fault === "checkout") write(join(w.tree, w.source), edit);
+    if (fault === "brief") write(join(w.operator, w.prd), GOOD_PRD.replace("npm test", "npm run different"));
+    await w.tick();
+    if (fault !== "none") {
+      assert.equal(w.entry().state, STATES.needsHuman);
+      assert.equal(w.raw.started.length, 1);
+      assert.equal(w.g(["rev-parse", "HEAD"]), w.head);
+      return;
+    }
+    assert.equal(w.entry().base_repair?.status, "running", JSON.stringify(w.entry()));
+    await w.resolveMerge();
+    w.raw.finish(claudeResultLines(), { exit: 0 });
+    await w.tick();
+    assert.equal(w.entry().base_repair.status, "verified");
+    assert.equal(readFileSync(join(w.tree, w.source), "utf8"), approved);
+    assert.equal(readFileSync(join(w.operator, w.source), "utf8"), edit);
+  });
 });
 
 test("changed brief, carried instructions, permissions and checkout identity block repair without resnapshot", async t => {

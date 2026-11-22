@@ -289,6 +289,12 @@ task-head/base-SHA pair is never dispatched twice automatically. Missing permiss
 base identity or checkout ownership stop recovery. No credentials, context paths, guardrails, review policy, merge
 authority or deployment authority are widened. Changed inputs retain the normal explicit approval requirements.
 
+A base repair with pinned brief and source digests uses the exact approved
+copies. Editing a supporting file in the operator checkout alone does not
+stop Git repair. The saved snapshots and the task checkout must still match
+their approvals. Adopt new instructions through explicit resnapshot before
+completion can be certified.
+
 Restart recovery reconciles only the recorded operation and session. It never aborts or resets an unfinished repair.
 Dirty files, unknown ownership, unresolved merges and failed pushes stop with the worktree intact. Unchanged approved
 brief/source overlays may remain untracked; recovery never stages or deletes them to make the tree clean. After a
