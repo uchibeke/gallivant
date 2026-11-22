@@ -8,6 +8,7 @@ import { queueChain, tickChains } from "../lib/chains.mjs";
 import { start } from "../lib/commands/start.mjs";
 import { resume } from "../lib/commands/resume.mjs";
 import { why } from "../lib/commands/why.mjs";
+import { acquireRuntimeOwner } from "../lib/daemon.mjs";
 import { dispatchCapacity } from "../lib/dispatch_capacity.mjs";
 import { makeExecution } from "../lib/execution.mjs";
 import { canonicalPath, readJson, writeJsonAtomic } from "../lib/fs.mjs";
@@ -595,6 +596,9 @@ test("lost launch acknowledgement remains observation-only through restart and b
   const w = fixture(t, { capacity: 1 }), key = `${PRODUCER}/lost-reply`;
   const artifact = { ...PLAN_RUNTIME_FORMAT, coreVersion: CORE_VERSION, operationVersion: 1, taskVersion: 1, executionVersion: 1, coreSha256: "a".repeat(64) };
   migrateRuntimeState({ home: w.home, manifest: artifact });
+  const owner = acquireRuntimeOwner(w.home);
+  t.after(() => owner.release());
+  w.ctx.taskMutationOwner = owner;
   const raw = w.ctx.runnerFor(key), spawn = raw.start;
   let hidden = true;
   const current = raw.current;
@@ -617,7 +621,7 @@ test("lost launch acknowledgement remains observation-only through restart and b
   assert.equal(w.ctx.state.load().dispatch.authors[key].operation, token);
   assert.equal(checkRuntimeState({ home: w.home, manifest: artifact }).active, true);
   assert.throws(() => checkRuntimeState({ home: w.home, manifest: { ...artifact, registryVersion: RECOVERY_REGISTRY_VERSION } }), { code: "RUNTIME_STATE" });
-  assert.throws(() => migrateRuntimeState({ home: w.home, manifest: { ...artifact, coreSha256: "b".repeat(64) } }), { code: "RUNTIME_ACTIVE_PIN" });
+  assert.throws(() => checkRuntimeState({ home: w.home, manifest: { ...artifact, coreSha256: "b".repeat(64) } }), { code: "RUNTIME_ACTIVE_PIN" });
   assert.equal(w.started("after"), 0);
   hidden = false;
   await makeTick(w.ctx).tickEntry(key, w.ctx.state.get(key));
