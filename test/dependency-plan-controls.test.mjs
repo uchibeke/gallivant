@@ -172,7 +172,7 @@ async function fixture(t, { mounted = false, sourceIsWorktree = false } = {}) {
   };
   const node = async (name, id) => (await inspect(name)).graph.nodes.find(node => node.id === id);
   const started = id => runnerFor(taskId(id)).started.length;
-  return { home, root, config, ctx, calls, clock, owner, outside, repository, get, post, badHost, review, confirm, apply, brief, manifest,
+  return { home, root, config, ctx, calls, clock, owner, outside, identity, repository, get, post, badHost, review, confirm, apply, brief, manifest,
     queue, inspect, restart, tick, advance, entry, node, integrate, started };
 }
 
@@ -459,7 +459,10 @@ test("disable and cancel keep an unknown launch owned until accepted collection 
     created_at: new Date(w.clock.now()).toISOString(),
     steps: [{ id: taskId("legacy-child"), relPath: task("legacy-child").prd }] };
   w.ctx.state.createChain(legacy);
-  const response = await w.get(`/chains?chain=legacy&milestone=${encodeURIComponent(taskId("legacy-child"))}`);
+  w.identity("local");
+  const selected = `/chains?chain=legacy&milestone=${encodeURIComponent(taskId("legacy-child"))}`;
+  assert.doesNotMatch(await (await w.get(selected)).text(), /id="milestone-title">legacy-child/);
+  const response = await w.get(selected, "local");
   assert.equal(response.status, 200);
   assert.match(await response.text(), /Selected milestone 1 \/ 1<\/p><h3 id="milestone-title">legacy-child/);
 });

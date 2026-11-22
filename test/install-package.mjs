@@ -176,7 +176,12 @@ esac
     for (const base of ["", "/gallivant"]) {
       if (page) {
         await page.goto(`${ui.origin}${base}/?theme=light`);
-        await page.getByRole("navigation", { name: "Workspace" }).getByRole("link", { name: "Tasks", exact: true }).click();
+        const tasks = page.getByRole("navigation", { name: "Workspace" }).getByRole("link", { name: "Tasks", exact: true });
+        await tasks.click();
+        assert.equal(new URL(page.url()).pathname, `${base}/tasks`);
+        assert.equal(new URL(page.url()).searchParams.get("theme"), "light");
+        assert.equal(await tasks.getAttribute("aria-current"), "page");
+        await page.keyboard.press("/");
         assert.equal(await page.locator(":focus").getAttribute("id"), "overview-q");
         await page.goto(`${ui.origin}${base}/run?id=${encodeURIComponent(TASK)}&run=${RUN}`);
         await page.waitForFunction(() => document.getElementById("workspace-state").textContent.includes("snapshot current"));
@@ -184,7 +189,11 @@ esac
         await page.reload(); assert.equal(await page.locator("#run-note").inputValue(), "Installed package draft");
         assert.equal(await page.locator("#run-note").evaluate(el => getComputedStyle(el).minHeight), "44px");
       }
-      for (const path of ["/", "/health", "/api/system-health", "/task/new", `/run?id=${encodeURIComponent(TASK)}&run=${RUN}`, "/runs", `/chains?chain=${CHAIN}`, `/api/chains?chain=${CHAIN}`, "/api/status", "/api/overview?attention=attention", "/api/runs", `/api/run/control?id=${encodeURIComponent(TASK)}&requestId=not-submitted`, `/api/run/workspace?id=${encodeURIComponent(TASK)}&run=${RUN}`, "/tracker.css", "/tracker.js"]) {
+      for (const path of ["/", "/tasks", `/plans?chain=${CHAIN}`, "/system", "/health", "/api/system-health", "/task/new",
+        `/run?id=${encodeURIComponent(TASK)}&run=${RUN}`, "/runs", `/chains?chain=${CHAIN}`, `/api/chains?chain=${CHAIN}`, `/api/plans?chain=${CHAIN}`,
+        "/api/status", "/api/overview?attention=attention", "/api/tasks?attention=attention", "/api/runs",
+        `/api/run/control?id=${encodeURIComponent(TASK)}&requestId=not-submitted`, `/api/run/workspace?id=${encodeURIComponent(TASK)}&run=${RUN}`,
+        "/tracker.css", "/tracker.js"]) {
         const response = await fetch(ui.origin + base + path);
         assert.equal(response.status, 200, `installed UI: ${base}${path}`);
         const body = await response.text();
@@ -193,7 +202,7 @@ esac
         if (path === "/tracker.js") assert.match(body, /trackerLifecycle/);
         if (path.startsWith("/api/run/control")) { const control = JSON.parse(body); assert.equal(control.request, null); assert.equal(control.requestId, "not-submitted"); }
         if (path === "/") assert.match(body, /Skip to main content/);
-        if (path === "/health") assert.match(body, /data-health/);
+        if (path === "/health" || path === "/system") assert.match(body, /data-health/);
         if (path === "/api/system-health") assert.equal(JSON.parse(body).health.coordinator.state, "unknown");
         if (path === "/task/new") {
           assert.match(body, /Prepare requirements/);
@@ -203,11 +212,14 @@ esac
           assert.equal(denied.status, 409); assert.equal((await denied.json()).code, "TASK_INPUT");
         }
         if (path.startsWith("/chains?")) assert.match(body, /1 of 4 dependencies merged/);
+        if (path.startsWith("/plans?")) assert.match(body, /1 of 4 tasks integrated/);
         if (path.startsWith("/api/chains?")) assert.match(JSON.parse(body).content, /Milestones in dependency order/);
+        if (path.startsWith("/api/plans?")) assert.equal(JSON.parse(body).factory.detail.counts.integrated, 1);
         if (path.startsWith("/api/run/workspace")) { const snapshot = JSON.parse(body); assert.match(snapshot.summary, /Task workspace/); assert.match(snapshot.evidence, /Independent review/); }
-        if (path.startsWith("/api/overview")) {
+        if (path.startsWith("/api/overview") || path.startsWith("/api/tasks")) {
           const snapshot = JSON.parse(body);
           assert.match(snapshot.content, /data-task-id=/);
+          assert.equal(snapshot.factory.version, 1);
           for (const key of ["repo", "phase", "harness", "attention", "chain"]) assert.ok(snapshot.filters.includes(`id="overview-${key}"`));
         }
       }

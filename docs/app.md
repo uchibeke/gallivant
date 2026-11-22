@@ -79,15 +79,35 @@ a path prefix. The tracker provides SSE logs with a bounded initial tail,
 `Last-Event-ID` continuation and explicit history gaps. The CLI, standalone UI and
 mounted UI retain one coordinator and one set of run identities.
 
-Standalone URLs are `/`, `/run?id=…`, `/runs`, `/chains`, `/task/new` and
-`/health`. A host mounting at `/gallivant` serves the same paths under that
-prefix, including assets and APIs. **Tasks** goes to the overview's searchable
-task list. Theme (`?theme=dark|light`), filters, chain selection and historical
-attempts remain in shareable URLs. Ctrl/⌘ K opens navigation, `/` focuses the
-current search, and Escape closes dialogs. Safari on macOS may use Option-Tab
-to include links when full keyboard access is off.
+**Overview** (`/`) starts with decisions and upcoming work. **Plans** (`/plans`)
+shows admitted graphs and linear chains with exact saved prerequisites. **Tasks**
+(`/tasks`) filters registered delivery, intake and future work by outcome.
+Future nodes link to their plan until task registration. **System** (`/system`)
+shows coordinator observations, capacity and execution capability limits.
+The active author count includes slots reserved before task registration.
+Protected views report counts for the work their current identity can read.
+See the [console feature matrix](ui-feature-matrix.md) for current controls and
+the operator paths for qualified or CLI-only features.
+
+Task workspace links (`/run?id=…`), pinned attempts (`&run=…`), run history
+(`/runs`), linear chain links (`/chains`), intake (`/task/new`) and health
+(`/health`) retain their URLs. Command Center keeps its back link.
+A host mounting at `/gallivant` serves the same paths, assets and APIs under
+that prefix. Theme, filters, plan and node selection and history links remain
+shareable. Ctrl/⌘ K opens navigation, `/` focuses the current search and Escape
+closes dialogs.
+
+The loopback console shows local legacy work. Graph work needs authenticated
+`planOperatorForRequest` ingress and current protected read scope. An anchor
+needs both scopes and the original read, observe and link grants. Cross-company
+anchors also require the scoped cross-company grant. When a mount configures
+this ingress, local intake and flat external histories remain on their original
+local or authorized service surfaces.
 
 Connection failures retain the last snapshot with stale/disconnected feedback.
+Observation age is separate from the page refresh time and saved productive
+activity. Refresh successfully after a disconnection before reviewing a chain
+control.
 Use the shown refresh action after repairing access. Keep an uncertain request's
 saved identity and check its status; submitting a new task is not a retry.
 Applied controls confirm coordinator application, not model acknowledgement or

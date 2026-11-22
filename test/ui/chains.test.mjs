@@ -55,6 +55,39 @@ test("chain journey preserves selection, filters, PR and task context across roo
   assert.equal(JSON.stringify(state.chains()), saved); assert.equal(hostReads(), reads, "GET navigation has no host calls");
 });
 
+test("legacy predecessor opens the saved anchor and PR on both mounts", { timeout: 30_000 }, async t => {
+  const { page, origin, state, hostReads } = await open(t);
+  const name = "after-search", milestone = "acme/atlas/predecessor", entry = state.get(TASK);
+  state.createChain({ name, repo: entry.repo, base: entry.base, status: "active", index: 0, created_at: NOW, updated_at: NOW,
+    after: { id: TASK, repo: entry.repo, base: entry.base, branch: entry.branch, pr: entry.pr, url: entry.url, createdAt: entry.created_at },
+    steps: [{ id: milestone, relPath: "docs/prds/predecessor.md" }] });
+  const saved = state.chains(), reads = hostReads();
+  for (const base of ["", "/gallivant"]) {
+    await page.goto(`${origin}${base}/chains?chain=${name}&milestone=${encodeURIComponent(milestone)}&cq=after&cs=active&theme=light`);
+    const selected = page.url(), detail = page.locator(".milestone-detail"), prereqs = detail.locator(".prerequisite-list");
+    const predecessorPR = prereqs.getByRole("link", { name: "PR #42", exact: true });
+    assert.equal(await predecessorPR.getAttribute("href"), entry.url);
+    assert.equal(await predecessorPR.getAttribute("rel"), "noopener noreferrer");
+    assert.equal(await predecessorPR.getAttribute("target"), "_blank");
+    await prereqs.getByRole("link", { name: TASK, exact: true }).click();
+    const link = new URL(page.url());
+    assert.equal(link.pathname, `${base}/plans`);
+    assert.equal(link.searchParams.get("node"), "predecessor-1");
+    assert.equal(link.searchParams.get("cq"), "after");
+    assert.equal(link.searchParams.get("cs"), "active");
+    assert.equal(link.searchParams.get("theme"), "light");
+    assert.equal(await page.locator('[aria-current="step"]').textContent(), "predecessor-1");
+    assert.match(await detail.textContent(), new RegExp(TASK));
+    assert.equal(await detail.getByRole("link", { name: "Open PR", exact: true }).getAttribute("href"), entry.url);
+    assert.equal(await page.getByText("The linked node is unavailable.", { exact: false }).count(), 0);
+    await page.goBack();
+    assert.equal(page.url(), selected);
+    assert.equal(await page.locator('[aria-current="step"]').textContent(), "predecessor");
+  }
+  assert.equal(hostReads(), reads);
+  assert.deepEqual(state.chains(), saved);
+});
+
 test("changed-brief review rejects a newer source and confirms the exact replacement once", { timeout: 60000 }, async t => {
   const { page, origin, state, source } = await open(t);
   await page.goto(origin + path("/gallivant", RECOVERY));

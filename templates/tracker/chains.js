@@ -2,17 +2,21 @@
 (() => {
   const root = document.querySelector?.('[data-chains]');
   if (!root) return;
-  // Pin the server-preselected chain so polling/back navigation keep its context.
-  const initialChain = root.querySelector('.chain-workspace[data-chain]')?.dataset.chain;
+  // Pin the server-preselected identifiers without adding a history entry.
+  const selected = root.querySelector('[data-selected-plan]')?.dataset;
+  const legacy = root.dataset.path === '/chains';
   const initialUrl = new URL(location.href);
-  if (initialChain && !initialUrl.searchParams.has('chain')) {
-    initialUrl.searchParams.set('chain', initialChain); history.replaceState(history.state, '', initialUrl);
+  const selection = legacy ? { chain: selected?.chain, milestone: selected?.selectedMilestone }
+    : { plan: selected?.selectedPlan, node: selected?.selectedNode };
+  for (const [key, value] of Object.entries(selection)) {
+    if (value && !initialUrl.searchParams.has(key)) initialUrl.searchParams.set(key, value);
   }
+  if (initialUrl.href !== location.href) history.replaceState(history.state, '', initialUrl);
   const status = document.getElementById('chains-status'), refresh = document.getElementById('chains-refresh');
   const apply = document.getElementById('chains-apply'), dialog = document.getElementById('chain-confirm');
   const review = document.getElementById('chain-review'), actionStatus = document.getElementById('chain-action-status');
   const submit = document.getElementById('chain-submit'), close = document.getElementById('chain-close');
-  let busy = false, failures = 0, cancelTimer, pending, confirmation, posting = false, trigger;
+  let busy = false, failures = 0, cancelTimer, pending, confirmation, posting = false, trigger, stale = false;
   let observed = status.textContent;
   const supported = typeof dialog.showModal === 'function' && typeof globalThis.crypto?.randomUUID === 'function';
   const enforceSupport = () => {
@@ -33,15 +37,19 @@
     if (typeof data?.content !== 'string' || !Number.isFinite(Date.parse(data.observedAt))) throw new Error('Invalid chain snapshot');
     const next = new DOMParser().parseFromString(data.content, 'text/html').getElementById('chains-results');
     if (!next) throw new Error('Invalid chain snapshot');
-    if (!force && held()) { pending = data; apply.hidden = false; status.textContent = `Updates ready · ${observed}. Apply when ready.`; return; }
+    const restricted = data.factory?.permissions === 'scoped';
+    if (!force && !restricted && held()) { pending = data; apply.hidden = false; status.textContent = `Updates ready · ${observed}. Apply when ready.`; return; }
     const theme = new URL(location.href).searchParams.get('theme');
     for (const link of next.querySelectorAll('a[href]')) {
-      const url = new URL(link.href);
+      const url = new URL(link.getAttribute('href'), location.href);
       if (url.origin !== location.origin) continue;
       if (theme) url.searchParams.set('theme', theme); else url.searchParams.delete('theme');
-      link.href = url.pathname + url.search;
+      link.href = url.pathname + url.search + url.hash;
     }
-    document.getElementById('chains-results').replaceWith(next); enforceSupport();
+    patchSnapshot(document.getElementById('chains-results'), next);
+    if (restricted && dialog.open && !root.querySelector('[data-chain-action]:enabled')) dialog.close();
+    enforceSupport();
+    stale = false;
     pending = null; apply.hidden = true; observed = `snapshot observed ${data.observedAt}`;
     status.textContent = `Current · ${observed}`;
   }
@@ -51,13 +59,16 @@
     busy = true; refresh.disabled = true; cancelTimer?.();
     const active = lifecycle.guard();
     try {
-      const data = await lifecycle.read(`${BASE}/api/chains${location.search}`, 'Chain snapshot unavailable', 8000);
+      const data = await lifecycle.read(`${BASE}/api${root.dataset.path}${location.search}`, 'Plan snapshot unavailable', 8000);
       if (!active()) return;
       render(data); failures = 0;
     } catch {
       if (!active()) return;
       failures++; pending = null; apply.hidden = true;
-      status.textContent = `${failures > 1 ? 'Disconnected' : 'Stale'} · last good ${observed}. ${failures < 3 ? 'Retry scheduled.' : 'Automatic retry paused; use Refresh chains.'}`;
+      stale = true; submit.disabled = true;
+      for (const button of root.querySelectorAll('[data-chain-action]')) button.disabled = true;
+      if (dialog.open) actionStatus.textContent = 'Plan observation is stale. Close this review and refresh before confirming.';
+      status.textContent = `${failures > 1 ? 'Disconnected' : 'Stale'} · last good ${observed}. ${failures < 3 ? 'Retry scheduled.' : 'Automatic retry paused; use Refresh.'}${root.querySelector('[data-chain-action]') ? ' Refresh before reviewing a control.' : ''}`;
     } finally {
       if (active()) { busy = false; refresh.disabled = false; if (failures < 3) schedule(failures ? Math.min(60000, 10000 * 2 ** failures) : 10000); }
     }
@@ -102,7 +113,7 @@
   }
   root.addEventListener('click', async event => {
     const button = event.target.closest('[data-chain-action]');
-    if (!supported || !button || button.disabled || posting || dialog.open) return;
+    if (!supported || !button || button.disabled || busy || posting || dialog.open || stale) return;
     trigger = button;
     const chain = button.closest('[data-chain]');
     confirmation = { name: chain.dataset.chain, action: button.dataset.chainAction, revision: chain.dataset.revision, requestId: crypto.randomUUID() };
@@ -117,7 +128,7 @@
     finally { posting = false; close.disabled = false; schedule(10000); }
   });
   submit.addEventListener('click', async () => {
-    if (posting || submit.disabled) return;
+    if (busy || posting || submit.disabled || stale) return;
     posting = true; submit.disabled = true; close.disabled = true;
     actionStatus.textContent = 'Applying the reviewed scope…';
     try {

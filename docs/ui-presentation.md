@@ -14,7 +14,7 @@ available; presentation labels are not lifecycle transitions.
 | CI and external review wait | `reviewObservation`, recorded by the coordinator from its existing check/review decisions; tied to head and binding. |
 | Provider readiness | Saved provider-health observations and declared capabilities. Pending refresh, quota, credentials, unsupported dispatch and unchecked API access remain distinct. Read access never proves inference access. |
 | Controls and ownership | `controlAvailability` and execution ownership. Ended but unreconciled runs and uncertain cancellation disable writer controls; requests still use the protected canonical service. |
-| Meaningful activity | Recorded task/run/review/control-result event instants, with source pointers. Routine `updated_at` and provider poll times only affect freshness. |
+| Meaningful activity | Saved productive evidence and creation time before the first result. Routine writes, provider polls and retries only affect observation or recovery age. |
 | Attempt duration and rounds | The selected run's timestamps and matching current registry accounting. Historical rounds without matching accounting remain unknown. |
 | Chain position | Existing chain summaries plus each registered step’s index; all recorded members retain their position. |
 | Attention | Shared attention projection of divergence, controls, review disposition, phase and canonical readiness. |
@@ -38,10 +38,21 @@ collect saved facts before calling them. The coordinator's bounded
 Arbitrary provider messages stay out of summary diagnostics. HTML escapes values;
 task delivery views additionally apply their existing scoped secret redaction.
 
-The [overview](ui-overview.md) renders at most 25 tasks per page and preserves
-filters and theme in navigation. The task workspace sidebar retains its 100-row
-window. The existing status API retains its complete
-row collections for compatibility. Run history keeps its existing 200-row limit.
+The version 1 `factory` projection is shared by `/api/overview`, `/api/tasks`,
+`/api/plans`, `/api/chains` and protected inspection through `plan NAME --json`.
+Its outcome counts distinguish integrated, delivery-ready, closed-unmerged,
+cancelled, planned, active, blocked and unknown. Plan counts include executable
+leaves. Anchors show their frozen receipts and do not add to leaf progress.
+Age fields contain the saved instant and an age relative to the snapshot.
+An unrecorded instant or cumulative cost returns null. Prerequisite status
+describes saved evidence and carries no authority to dispatch.
+
+Overview and Tasks return up to 25 tasks per page. Plans returns up to 20 plans,
+25 nodes and 20 prerequisites or frozen targets for the selected node. The
+`plan`, `node`, `co`, `mo` and `po` query fields preserve selection and page
+offsets. For legacy links, `chain` names the plan and `milestone` names the
+original scoped task ID. An explicit missing selection stays unavailable.
+The local status API and run history keep their original access paths.
 
 Regression coverage lives in `test/tracker-presentation.test.mjs`, the existing
 status/completion/control tests, and `test/ui/browser.test.mjs`. Browser tests use

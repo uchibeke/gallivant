@@ -369,6 +369,11 @@ the same startup; supervisors can use `serve --foreground --no-open --no-daemon`
 for a tracker whose daemon is managed separately. `gallivant down` stops both
 standalone services, preserving active agent processes.
 
+Open **System** for saved provider and coordinator observations, then use
+**Overview**, **Plans** and **Tasks** to inspect work. Protected graph records
+need an authenticated operator ingress. See [console access](app.md#the-browser-boundary)
+and the [feature matrix](ui-feature-matrix.md) for setup and qualification limits.
+
 On macOS the daemon starts `caffeinate` for its lifetime to prevent idle sleep.
 Closing a laptop lid, losing network or shutting down still interrupts monitoring.
 There is no automatic login/reboot service installer yet.

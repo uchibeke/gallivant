@@ -19,6 +19,9 @@ import { makeState, newEntry, idSlug, STATES } from "../lib/state.mjs";
 import { CONFIG, T0, tempHome, makeClock, silentLog } from "./helpers.mjs";
 import { processIdentity } from "../lib/daemon.mjs";
 import { codeStamp, writeJsonAtomic } from "../lib/fs.mjs";
+import { bindPlanOperator } from "../lib/operator_intent.mjs";
+import { dispatchCapacity } from "../lib/dispatch_capacity.mjs";
+import { diamond, crossCompany, NOW, PLAN, REPO, READER } from "./fixtures/factory-projection.mjs";
 
 /** A fake response: records the status, the headers and the body, and resolves `ended` when the handler is done. */
 function res() {
@@ -207,6 +210,120 @@ test("the overview groups canonical attention and links each task to its workspa
   assert.match(body, /conflict/, "with the reason status would show");
   assert.match(body, /href="\/run\?[^\"]*id=acme%2Fwidget%2Fwidget-export"/, "every row links to its run page");
   assert.match(body, /No coordinator observation is recorded/, "no daemon.json says so plainly rather than implying health");
+});
+
+test("the served factory shell keeps the selected plan, future task links and filters on both mounts", async () => {
+  const w = world(), { saved, plan } = diamond();
+  const { other } = crossCompany(saved, plan);
+  w.ctx.clock = { now: () => NOW };
+  w.state.workspaceRecords = () => structuredClone(saved);
+  const operator = bindPlanOperator(w.state.file, () => ({ ...READER, principal: "reader",
+    isolation: { registry: w.state.file, qualified: true, workerExcluded: true, launchDigest: "e".repeat(64), expiresAt: Date.now() + 60000 } }));
+  w.ctx.planOperatorForRequest = request => request.headers.reader === "authorized" ? operator : null;
+  w.ctx.gh = new Proxy({}, { get() { throw new Error("Page read called a host"); } });
+  const before = structuredClone(saved);
+  for (const base of ["", "/gallivant"]) {
+    const get = async (path, headers = { reader: "authorized" }) => {
+      const response = res();
+      await handle(w.ctx, { ...req(base + path, { ...localHeaders, ...headers }), socket: localSocket }, response,
+        { base, home: base ? { label: "Command Center", url: "/host" } : null });
+      await response.ended;
+      return response;
+    };
+    const filter = `plan=${PLAN}&node=release&theme=dark&sort=attention`;
+    const plans = await get(`/plans?${filter}`);
+    assert.equal(plans.code, 200);
+    assert.equal(plans.headers["content-security-policy"], CSP);
+    const tabs = /<nav class="views" aria-label="Workspace">(.+?)<\/nav>/.exec(plans.body())?.[1];
+    assert.deepEqual([...tabs.matchAll(/<\/svg>([^<]+)<\/a>/g)].map(m => m[1]), ["Overview", "Plans", "Tasks", "System"]);
+    if (base) assert.match(plans.body(), /href="\/host"[^]*Command Center/);
+    assert.match(plans.body(), /Parallel activity · 2 active tasks/);
+    assert.match(plans.body(), /Saved plan observations are stale/);
+    assert.match(plans.body(), /branches\/api/);
+    assert.match(plans.body(), /Task link available after registration/);
+    assert.doesNotMatch(plans.body(), /private-producer|secret-future|confidential-producer/);
+    const planApi = JSON.parse((await get(`/api/plans?${filter}`)).body());
+    assert.equal(planApi.factory.detail.selected.status, "blocked");
+    assert.equal(planApi.factory.detail.selected.blockerCount, 3);
+    const tasks = await get("/tasks?status=ready&theme=dark");
+    assert.match(tasks.body(), /href="[^"]*\/run\?[^"]*id=acme%2Fproject%2Fready/);
+    assert.doesNotMatch(tasks.body(), /data-task-id="acme\/project\/closed"/);
+    const ready = await get(`/run?id=${REPO}/ready&${filter}`);
+    assert.match(ready.body(), /Back to plan/);
+    assert.match(ready.body(), /#42/);
+    assert.match(ready.body(), /data-action="recheck"[^>]+disabled/);
+    const oldLink = await get(`/run?id=${REPO}/release&theme=dark`);
+    assert.equal(oldLink.code, 302);
+    assert.equal(oldLink.headers.location, `${base}/plans?theme=dark&plan=${PLAN}&node=release`);
+    assert.match((await get("/system")).body(), /<h2 id="capacity-title">Capacity<\/h2>/);
+    const empty = await get("/plans", {});
+    assert.match(empty.body(), /No plans are visible/);
+    const guessed = await get(`/api/plans?plan=${other.id}`);
+    assert.equal(guessed.body(), (await get("/api/plans?plan=missing")).body());
+    assert.equal((await get("/api/run/review-activity?id=private-company/unreleased-repo/secret-future-a")).code, 404);
+    for (const path of ["/api/status", "/api/runs", "/api/tasks", "/system", "/plans", "/"]) {
+      assert.doesNotMatch((await get(path)).body(), /unreleased-repo|private-producer|secret-future|confidential-producer/);
+    }
+  }
+  assert.deepEqual(saved, before);
+});
+
+test("queued legacy milestones match their saved harness in Overview and Tasks at both mounts", async () => {
+  const w = world(), repo = w.state.get(ID).repo;
+  const queued = `${repo}/queued-codex`;
+  w.state.createChain({ name: "queued-chain", repo, base: "main", status: "active", index: 0, created_at: T0,
+    steps: [{ id: queued, relPath: "docs/prds/queued-codex.md", harness: "codex" },
+      { id: `${repo}/queued-other`, relPath: "docs/prds/queued-other.md", harness: "claude" }] });
+  const before = w.state.workspaceRecords(), filter = "?harness=codex&status=planned";
+  for (const base of ["", "/gallivant"]) {
+    const get = async path => {
+      const response = res();
+      await handle(w.ctx, req(base + path + filter), response, { base });
+      assert.equal(response.code, 200);
+      return response.body();
+    };
+    for (const [page, api] of [["/", "/api/overview"], ["/tasks", "/api/tasks"]]) {
+      const body = await get(page);
+      assert.deepEqual([...body.matchAll(/data-task-id="([^"]+)"/g)].map(match => match[1]), [queued]);
+      const { factory } = JSON.parse(await get(api));
+      assert.equal(factory.matched, 1);
+      assert.deepEqual(factory.tasks.map(task => [task.id, task.harness, task.registered]), [[queued, "codex", false]]);
+    }
+  }
+  assert.deepEqual(w.state.workspaceRecords(), before);
+});
+
+test("protected legacy task and chain control reads use the action grants", async () => {
+  const w = world({ entry: { base: "main", state: STATES.needsHuman, reason: "checks-red" } });
+  const name = "scoped-chain", repo = w.state.get(ID).repo;
+  w.state.createChain({ name, repo, base: "main", status: "active", index: 0, created_at: T0,
+    steps: [{ id: `${repo}/future-step`, relPath: "docs/prds/future-step.md" }] });
+  let allow = false;
+  const operator = bindPlanOperator(w.state.file, () => ({ ...READER, principal: "reader",
+    grant: ({ action, scope }) => {
+      if (action === "read" && scope.repositories.includes(repo)) return "local-read";
+      if (allow && (action === "task/recheck" && scope.task === ID || action === "chain/cancel" && scope.chain === name)) return "target-grant";
+      return null;
+    },
+    isolation: { registry: w.state.file, qualified: true, workerExcluded: true, launchDigest: "e".repeat(64), expiresAt: Date.now() + 60_000 } }));
+  w.ctx.planOperatorForRequest = () => operator;
+  const before = w.state.workspaceRecords();
+  for (const granted of [false, true]) {
+    allow = granted;
+    const get = async path => {
+      const response = res();
+      await handle(w.ctx, { ...req(path, localHeaders), socket: localSocket }, response);
+      assert.equal(response.code, 200);
+      return response.body();
+    };
+    const control = JSON.parse(await get(`/api/run/control?id=${encodeURIComponent(ID)}`));
+    assert.equal(control.controls.recheck, granted);
+    assert.equal(control.controls.resume, false);
+    const chain = await get(`/chains?chain=${name}`);
+    assert.equal(/data-chain-action="cancel" disabled/.test(chain), !granted);
+    assert.match(chain, /data-chain-action="resnapshot" disabled/);
+  }
+  assert.deepEqual(w.state.workspaceRecords(), before);
 });
 
 test("review activity exposes only bounded progress, never the reviewer evidence", async () => {
@@ -2259,6 +2376,40 @@ test("health projection separates coordinator states and never rewrites meaningf
     const response = res(); await handle(w.ctx, req(base + path), response, { base }); await response.ended;
     assert.equal(response.code, 200); assert.equal(JSON.stringify(w.state.entries()), before);
   }
+});
+
+test("System capacity follows saved starts through preparation, dispatch and release on both mounts", async () => {
+  const w = world({ entry: { state: STATES.running } }), repo = w.state.get(ID).repo;
+  w.ctx.config.dispatch_capacity = { authors: 3 };
+  const admission = { repo, limits: dispatchCapacity(w.ctx.config) };
+  const old = `${repo}/older-claim`, preparing = `${repo}/preparing-start`;
+  const olderClaim = w.state.claimStart(old);
+  const claim = w.state.claimStart(preparing, null, null, admission);
+  assert.equal(w.state.get(preparing), null);
+  assert.throws(() => w.state.claimStart(`${repo}/another-start`, null, null, admission), { code: "AUTHOR_CAPACITY" });
+  const check = async (activeAuthors, preparations) => {
+    const saved = w.state.workspaceRecords();
+    for (const base of ["", "/gallivant"]) {
+      const api = res(), page = res();
+      await handle(w.ctx, req(base + "/api/system-health"), api, { base });
+      await handle(w.ctx, req(base + "/system"), page, { base });
+      assert.equal(api.code, 200);
+      assert.equal(page.code, 200);
+      const { capacity } = JSON.parse(api.body()).health;
+      assert.deepEqual([capacity.activeAuthors, capacity.preparations, capacity.authorLimit], [activeAuthors, preparations, 3]);
+      assert.ok(page.body().includes(`<dt>Active authors</dt><dd>${activeAuthors} · recorded tasks</dd>`));
+      assert.ok(page.body().includes(`<dt>Preparation reservations</dt><dd>${preparations}</dd>`));
+      assert.ok(!api.body().includes(claim.token));
+    }
+    assert.deepEqual(w.state.workspaceRecords(), saved);
+  };
+  await check(3, 1);
+  w.state.markStartDispatch(preparing, claim.token, null, null);
+  await check(3, 0);
+  assert.equal(w.state.finishUnsentStart(preparing, claim.token), true);
+  await check(2, 0);
+  w.state.releaseStart(old, olderClaim.token);
+  await check(1, 0);
 });
 
 test("health reads canonical account expiry, allowlists diagnostics and respects capability declarations", async () => {

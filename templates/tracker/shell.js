@@ -13,7 +13,7 @@ function carryNavigation(key, value) {
   for (const link of document.querySelectorAll("a[href]")) {
     if (link.getAttribute("href").startsWith("#")) continue;
     const target = new URL(link.href);
-    if (target.origin !== url.origin || ![base + "/", base + "/run", base + "/runs", base + "/chains", base + "/task/new", base + "/health"].includes(target.pathname)) continue;
+    if (target.origin !== url.origin || !["/", "/tasks", "/run", "/runs", "/plans", "/chains", "/task/new", "/system", "/health"].some(path => base + path === target.pathname)) continue;
     if (value) target.searchParams.set(key, value); else target.searchParams.delete(key);
     link.href = target.pathname + target.search + target.hash;
   }

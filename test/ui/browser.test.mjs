@@ -7,10 +7,59 @@ import { chromium } from "playwright";
 import AxeBuilder from "@axe-core/playwright";
 import { fixture, NOW, TASK, RUN, MALICIOUS } from "./fixture.mjs";
 import { idSlug } from "../../lib/state.mjs";
+import { bindPlanOperator } from "../../lib/operator_intent.mjs";
+import { diamond, PLAN, READER } from "../fixtures/factory-projection.mjs";
 
 let browser;
 before(async () => { browser = await chromium.launch(); }, { timeout: 30_000 });
 after(async () => { await browser?.close(); });
+
+test("factory navigation, stale snapshots and responsive plan detail use the shared shell", { timeout: 60000 }, async t => {
+  const { page, origin, ctx, state } = await open(t);
+  const { saved } = diamond();
+  state.workspaceRecords = () => structuredClone(saved);
+  const operator = bindPlanOperator(state.file, () => ({ ...READER, principal: "fixture",
+    isolation: { registry: state.file, qualified: true, workerExcluded: true, launchDigest: "f".repeat(64), expiresAt: Date.now() + 60000 } }));
+  ctx.planOperatorForRequest = () => operator;
+  const tab = name => page.getByRole("navigation", { name: "Workspace", exact: true }).getByRole("link", { name, exact: true });
+  for (const base of ["", "/gallivant"]) {
+    await page.goto(`${origin}${base}/plans?plan=${PLAN}&node=release&theme=dark`);
+    assert.equal(await tab("Plans").getAttribute("aria-current"), "page");
+    assert.match(await page.locator(".milestone-detail").textContent(), /Waiting on prerequisites/);
+    assert.match(await page.locator(".chain-workspace").textContent(), /Parallel activity · 2 active tasks/);
+    assert.equal(await page.getByRole("link", { name: "Open task", exact: true }).count(), 0);
+    await page.locator(".milestone-select").filter({ hasText: /^ready$/ }).click();
+    await page.getByRole("link", { name: "Open task", exact: true }).click();
+    assert.equal(await tab("Tasks").getAttribute("aria-current"), "page");
+    await page.getByRole("link", { name: "Back to plan", exact: true }).click();
+    assert.equal(new URL(page.url()).searchParams.get("node"), "ready");
+    await page.goBack();
+    assert.equal(new URL(page.url()).pathname, `${base}/run`);
+    await page.goBack();
+    await page.route("**/api/plans?*", route => route.fulfill({ status: 503, body: "synthetic read failure" }));
+    await page.getByRole("button", { name: "Refresh plans", exact: true }).click();
+    await page.waitForFunction(() => document.getElementById("chains-status").textContent.startsWith("Stale"));
+    assert.equal(await tab("Plans").getAttribute("aria-current"), "page");
+    assert.equal(await page.locator(".milestone-select[aria-current]").textContent(), "ready");
+    await page.unroute("**/api/plans?*");
+    await tab("Tasks").click();
+    await page.getByRole("navigation", { name: "Task outcomes" }).getByRole("link", { name: /Planned/ }).click();
+    assert.equal(new URL(page.url()).searchParams.get("status"), "planned");
+    assert.equal(await page.locator("[data-task-id]").count(), 1);
+    await page.locator("[data-task-id] h3 a").click();
+    assert.equal(new URL(page.url()).pathname, `${base}/plans`);
+  }
+  for (const theme of ["light", "dark"]) for (const width of [360, 390, 768, 1280, 1440]) {
+    await page.setViewportSize({ width, height: 900 });
+    await page.goto(`${origin}/gallivant/plans?plan=${PLAN}&node=release&theme=${theme}`);
+    const dimensions = await noOverflow(page);
+    assert.ok(dimensions.scroll <= dimensions.width, `${theme} ${width}: ${JSON.stringify(dimensions)}`);
+    if (width === 390 || width === 1440) await contrast(page);
+  }
+  await page.setViewportSize({ width: 780, height: 390 });
+  await page.addStyleTag({ url: `${origin}/zoom.css` });
+  assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), "landscape at 200% zoom");
+});
 
 async function open(t, options = {}) {
   const world = await fixture(options);
@@ -277,7 +326,7 @@ test("1000 tasks use bounded real DOM pages with no probe, host, model or state 
     await page.locator("#overview-q").fill("task-999");
     await page.getByRole("button", { name: "Apply filters", exact: true }).click();
     assert.equal(await page.locator("[data-task-id]").count(), 1);
-    assert.match(await page.locator(".overview-scope").textContent(), /1 matching task.*1000 registered/);
+    assert.match(await page.locator(".overview-scope").textContent(), /1 matching task.*1000 visible/);
     assert.ok(requests.every(path => !path.includes("/api/run/")), "search loads no per-row data or transcripts");
     page.off("request", track);
   }
@@ -388,13 +437,13 @@ test("read failures preserve content and drafts; page exit stops refresh", { tim
   await page.waitForFunction(() => document.querySelector("#workspace-state").textContent.includes("snapshot current"));
   const saved = await page.locator("#workspace-review-content").textContent();
   await page.locator("#run-note").fill("A draft survives a read outage.");
-  const originalRead = state.entries.bind(state);
-  state.entries = () => { throw new Error("Fixture read unavailable"); };
+  const originalRead = state.workspaceRecords;
+  state.workspaceRecords = () => { throw new Error("Fixture read unavailable"); };
   await page.clock.runFor(10_100);
   await page.waitForFunction(() => document.querySelector("#workspace-state").textContent.includes("disconnected"));
   assert.equal(await page.locator("#workspace-review-content").textContent(), saved);
   assert.equal(await page.locator("#run-note").inputValue(), "A draft survives a read outage.");
-  state.entries = originalRead;
+  state.workspaceRecords = originalRead;
   await page.getByRole("button", { name: "Refresh evidence", exact: true }).click();
   await page.waitForFunction(() => document.querySelector("#workspace-state").textContent.includes("snapshot current"));
   await page.evaluate(() => dispatchEvent(new PageTransitionEvent("pagehide")));

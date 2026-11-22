@@ -31,7 +31,7 @@ async function open(t, { empty = false, chains = false, javaScriptEnabled = true
 test("newest activity leads across status groups; completed and unknown tabs select and restore correctly", { timeout: 60000 }, async t => {
   const w = await open(t), { page, origin, context, state } = w, saved = JSON.stringify(state.entries());
   for (const base of ["", "/gallivant"]) {
-    await page.goto(`${origin}${base}/`);
+    await page.goto(`${origin}${base}/?sort=recent`);
     assert.deepEqual(await page.locator('[data-task-id]').evaluateAll(rows => rows.slice(0, 2).map(row => row.dataset.taskId)), ['acme/atlas/recent-completed', 'acme/atlas/older-completed']);
     assert.equal(await page.locator('.overview-total[aria-current="page"]').getAttribute('data-kind'), 'all');
     await page.locator('[data-key="total:ended"]').click();
@@ -71,25 +71,25 @@ test("external PR links open a safe new tab; live links share the policy and int
   assert.equal(await page.locator('.task-identity h3 a').first().getAttribute('target'), null);
 });
 
-test("shared navigation shows a skeleton while a page is pending and Chains preselects a real item", { timeout: 30000 }, async t => {
+test("shared navigation shows a skeleton while a page is pending and Plans preselects a real item", { timeout: 30000 }, async t => {
   const { page, origin, state } = await open(t, { chains: true }); const saved = JSON.stringify(state.chains());
   await page.goto(`${origin}/gallivant/`);
   let release; const gate = new Promise(resolve => { release = resolve; }); t.after(() => release());
-  await page.route(`${origin}/gallivant/chains*`, async route => { await gate; await route.continue(); });
+  await page.route(`${origin}/gallivant/plans*`, async route => { await gate; await route.continue(); });
   // Read the outgoing document directly: locators wait for the deliberately
   // held navigation to finish before resolving against a document.
   const pending = await page.evaluate(() => {
-    document.querySelector('nav a[href="/gallivant/chains"]').click();
+    document.querySelector('nav a[href="/gallivant/plans"]').click();
     return new Promise(resolve => setTimeout(() => resolve({ hidden: document.getElementById('page-loading').hidden,
       busy: document.getElementById('main').getAttribute('aria-busy'),
       text: document.getElementById('page-loading-status').textContent,
       skeleton: document.getElementById('page-loading-status').dataset.skeleton }), 250));
   });
   assert.equal(pending.hidden, false); assert.equal(pending.busy, 'true');
-  assert.match(pending.text, /Opening Chains/); assert.equal(pending.skeleton, 'true');
-  release(); await page.waitForURL('**/gallivant/chains*');
+  assert.match(pending.text, /Opening Plans/); assert.equal(pending.skeleton, 'true');
+  release(); await page.waitForURL('**/gallivant/plans*');
   await page.locator('.chain-workspace').waitFor();
-  assert.ok(new URL(page.url()).searchParams.get('chain'));
+  assert.ok(new URL(page.url()).searchParams.get('plan'));
   assert.equal(await page.locator('.chain-index-list [aria-current="page"]').count(), 1);
   assert.equal(await page.locator('#page-loading').isVisible(), false);
   await page.goBack(); assert.equal(await page.locator('#page-loading').isVisible(), false);

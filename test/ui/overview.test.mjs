@@ -98,7 +98,7 @@ test("all overview filters and page context survive task navigation, theme, relo
     const params = new URLSearchParams({ q: "brief", repo: LONG_REPO, phase: "operator_attention", harness: "codex", attention: "attention", chain: "release", theme: "dark" });
     await page.goto(`${origin}${base}/?${params}`);
     assert.equal(await page.locator("[data-task-id]").count(), 1);
-    assert.match(await page.locator(".overview-scope").textContent(), /1 matching task.*8 registered/);
+    assert.match(await page.locator(".overview-scope").textContent(), /1 matching task.*8 visible/);
     for (const [key, value] of params) if (key !== "theme") assert.equal(await page.locator(`#overview-${key}`).inputValue(), value);
     await page.locator("[data-task-id] h3 a").click();
     await page.getByRole("link", { name: "Overview", exact: true }).click();
@@ -207,7 +207,8 @@ test("pending predecessor chains appear in refreshed choices and filters alongsi
     await page.locator("#overview-chain").selectOption(name);
     await page.getByRole("button", { name: "Apply filters", exact: true }).click();
     await page.waitForURL(url => url.searchParams.get("chain") === name);
-    assert.equal(await page.locator("[data-task-id]").count(), 1);
+    assert.equal(await page.locator("[data-task-id]").count(), 3);
+    assert.equal(await page.locator('[data-task-id][data-outcome="planned"]').count(), 2);
     assert.equal(await row(page, id).count(), 1);
     await row(page, id).locator("h3 a").click();
     await page.getByRole("link", { name: "Overview", exact: true }).click();
@@ -217,9 +218,10 @@ test("pending predecessor chains appear in refreshed choices and filters alongsi
     // Once the recorded predecessor merge is observed, only owned membership remains.
     state.updateChain(name, { after: { ...after, merged: { sha: "a".repeat(40), at: NOW } } });
     await page.locator("#overview-refresh").click(); await updated(page);
-    assert.equal(await page.locator("[data-task-id]").count(), 0);
+    assert.equal(await page.locator("[data-task-id]").count(), 2);
+    assert.equal(await row(page, id).count(), 0);
     assert.equal(await page.locator("#overview-chain").inputValue(), name);
-    assert.match(await page.locator("#overview-chain option:checked").textContent(), /no current tasks/);
+    assert.equal(await page.locator("#overview-chain option:checked").textContent(), name);
     const refreshed = await (await context.request.get(`${origin}${base}/api/status`)).json();
     assert.deepEqual(refreshed.needs_you.find(row => row.id === id).presentation.chains.map(chain => chain.name), ["release"]);
     assert.equal(JSON.stringify(state.entries()), saved);
@@ -264,7 +266,7 @@ test("overview retains its last snapshot on failed and slow reads with bounded r
 
 test("keyed refresh preserves disclosure, selection, focus, scroll and meaningful age", { timeout: 30_000 }, async t => {
   const { page, origin, state, ids } = await open(t);
-  await page.goto(`${origin}/`);
+  await page.goto(`${origin}/?sort=recent`);
   const task = row(page, ids[0]), details = task.locator(".task-context");
   await details.locator(":scope > summary").click();
   await task.locator(".technical-reason > summary").click();

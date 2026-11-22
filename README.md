@@ -171,13 +171,14 @@ The steps below describe the same flow for readers without Mermaid rendering.
 
 ## While it works
 
-The workspace puts decisions and blockers first. **Tasks** focuses the existing
-search and filters; **Chains** explains merge waits; **System health** separates
-saved capability observations from unknown account access. **New task** prepares
+The workspace puts decisions and blockers first. **Plans** shows dependencies,
+parallel work and integration receipts. **Tasks** includes registered and planned
+work, search, outcome filters and run history. **System** separates saved
+capability observations from unknown account access. **New task** prepares
 code, documentation or research for a repository pull request, asks questions,
 and requires approval of the exact revision before implementation starts.
 
-![Dark overview with attention, progress and waiting lanes](docs/ui/previews/final-overview-dark.png)
+![Dark overview with attention lanes and task outcome filters](docs/ui/previews/final-overview-dark.png)
 
 This is the real served interface with identifiable synthetic tasks and a fixed
 clock, not production activity. See the [light overview and mobile task view](docs/ui-qualification.md#approved-captures)
