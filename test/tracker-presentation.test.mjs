@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { taskPresentation, presentationDetail } from "../lib/tracker/presentation.mjs";
+import { taskPresentation, presentationDetail, readinessLabel } from "../lib/tracker/presentation.mjs";
 import { providerPresentation } from "../lib/tracker/provider_presentation.mjs";
 import { instant, attemptPresentation } from "../lib/tracker/presentation_time.mjs";
 import { taskWindow } from "../lib/tracker/presentation_html.mjs";
@@ -60,6 +60,48 @@ test("completion projection never upgrades exit, skipped receipts, stale heads, 
   const stale = project({ entry: { ...base(), reviewObservation: { head: "old", binding: "old", checks: { settled: true }, external: "clear" },
     reviewPolicy: { version: 1, mode: "first-party-required" }, firstPartyReview: { binding: "old", status: "completed", result: { verdict: "clear" } } } });
   assert.equal(stale.review.status, "stale-head"); assert.equal(stale.phase.id, "unknown");
+});
+
+test("acceptance and claimed readiness stay bound to the saved head, brief and evaluator", () => {
+  const entry = { ...base(), prd_fingerprint: "fixture-brief", completionEvidence: { acceptance: {
+    allow: false, source: "local", repository: "acme/widget", pr: 12, base: "main",
+    head: "head", binding: "binding", brief: "fixture-brief", observedAt: START,
+  } } };
+  assert.equal(project({ entry }).acceptance.status, "denied");
+  assert.equal(project({ entry }).acceptance.source, "local");
+  for (const patch of [{ cursor: { fixed_sha: "new-head" } }, { reviewBinding: "different-policy" },
+    { prd_fingerprint: "edited-brief" }, { base: "different-base" }]) {
+    assert.equal(project({ entry: { ...entry, ...patch } }).acceptance.status, "stale-head");
+  }
+  assert.equal(project({ entry, divergence: { reason: "prd-changed" } }).acceptance.status, "stale-head");
+  assert.equal(readinessLabel(project({ entry: qualified(), divergence: { reason: "prd-changed" } })), "stale-head");
+  const old = { id: "earlier", running: true, startedAt: START, execution: { transport: "remote", acceptance: "unknown" } };
+  const after = project({ entry: { ...qualified(), last: { run: "current", exit: 0 } }, run: old });
+  assert.equal(after.attempt.id, "earlier");
+  assert.equal(after.ownership, "settled"); assert.equal(after.outcome, "ready");
+});
+
+test("requested cancellation and dispatch restrictions differ from settled cancellation", () => {
+  const entry = { ...base(), state: "needs-human" };
+  const pending = project({ entry: { ...entry, dispatch_stopped: "cancellation-requested" } });
+  assert.equal(pending.outcome, "active");
+  assert.equal(pending.attention.title, "Cancellation unconfirmed");
+  const stopped = project({ entry: { ...entry, dispatch_stopped: "recovery-profile-revoked" } });
+  assert.equal(stopped.outcome, "blocked");
+  assert.equal(project({ entry: { ...entry, reason: "cancelled", dispatch_stopped: "cancellation-requested" } }).outcome, "cancelled");
+});
+
+test("recorded Verify passes only qualify when the selected candidate checkpoint settled", async () => {
+  const { workspaceVerification } = await import("../lib/tracker/workspace.mjs");
+  const head = "a".repeat(40);
+  const evidence = { head, source: "coordinator-executed", exit: 0, output: "PRIVATE VERIFY OUTPUT",
+    sandbox: { version: 1, driver: "sandbox-exec", filesystem: "checkout-and-runtime", network: "disabled", probe: "passed" } };
+  const record = { version: 1, head, evidence: [evidence] };
+  assert.deepEqual(workspaceVerification(record, null), { head, passed: 1, failed: 0, status: "partial" });
+  assert.equal(workspaceVerification(record, { appliedHead: head, phase: "published" }).status, "passed");
+  assert.equal(workspaceVerification({ ...record, evidence: [{ ...evidence, exit: 1 }] }, { appliedHead: head, phase: "blocked" }).status, "failed");
+  assert.equal(workspaceVerification({ ...record, evidence: [] }, { appliedHead: head, phase: "verified" }).status, "unavailable");
+  assert.doesNotMatch(JSON.stringify(workspaceVerification(record, null)), /PRIVATE VERIFY OUTPUT/);
 });
 
 test("provider observations distinguish pending, unchecked, quota, dispatch and credentials without inferring access", () => {

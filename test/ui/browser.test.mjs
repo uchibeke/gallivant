@@ -104,6 +104,7 @@ test("root and mounted routes serve real assets, APIs, links and historical sele
       assert.equal(resource.status(), 200, path); assert.ok((await resource.body()).length > 20);
     }
     await page.goto(`${origin}${runPath(base)}`);
+    await page.locator("#workspace-activity > summary").click();
     await page.waitForFunction(() => document.querySelector("#log").textContent.includes("Fixture run:"));
     assert.equal(await page.locator("#log").getAttribute("data-run"), RUN);
     await page.waitForFunction(() => document.querySelector("#logstate").textContent === "finished");
@@ -242,6 +243,7 @@ test("malicious rendered text is inert and CSP blocks inline script and external
     assert.ok(!(await page.locator("main").textContent()).includes(MALICIOUS), "summary excludes arbitrary source prose");
     assert.equal(await page.locator("img, [onerror]").count(), 0);
     await page.goto(origin + runPath(base));
+    await page.locator("#workspace-activity > summary").click();
     await page.waitForFunction(() => document.querySelector("#log").textContent.includes("<img"));
     assert.equal(await page.locator("#log img").count(), 0);
     const blocked = await page.evaluate(async () => {
@@ -273,7 +275,8 @@ test("overview and detail show the same canonical presentation as the status API
       ["delivery target", p.delivery.target], ["last meaningful activity", p.activity.at], ["next action", p.nextAction]]) {
       assert.equal(await page.locator(`[data-fact="${key}"]`).textContent(), value);
     }
-    assert.match(await page.locator("main").textContent(), /selected attempt duration20m/);
+    const attempt = page.locator("#workspace-summary .workspace-facts > div").filter({ hasText: "Selected attempt" });
+    assert.match(await attempt.textContent(), new RegExp(`${RUN} · 20m 0s`));
   }
   assert.equal(JSON.stringify(state.entries()), saved, "presentation GETs cannot write state");
 });
@@ -530,8 +533,8 @@ test("restored live logs resume from their cursor and preserve rows, history and
   appendFileSync(join(dir, "job.log"), Array.from({ length: 600 }, (_, i) => `Fixture line ${i + 1}\n`).join(""));
   for (const base of ["", "/gallivant"]) {
     await page.goto(origin + runPath(base));
-    await page.waitForFunction(() => document.querySelector("#log").textContent.includes("Fixture line 600"));
     await page.locator("#workspace-activity").evaluate(el => { el.open = true; });
+    await page.waitForFunction(() => document.querySelector("#log").textContent.includes("Fixture line 600"));
     await page.getByRole("button", { name: "load earlier lines", exact: true }).click();
     await page.waitForFunction(() => document.querySelector("#log").textContent.includes("Fixture run:"));
     await page.locator("#run-note").fill("Keep the draft while the log reconnects.");

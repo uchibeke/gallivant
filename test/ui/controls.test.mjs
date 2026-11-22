@@ -39,6 +39,7 @@ test("keyboard messaging shows exact coordinator states, timestamps and a recove
   await status(page, "queued");
   await page.waitForFunction(() => document.getElementById("run-note").value === "");
   assert.equal(state.get(TASK).control.interrupt, false);
+  assert.equal(await page.locator("#control-request-identity").innerText(), state.get(TASK).control.id);
   assert.match(await page.locator("#control-times").textContent(), /Requested: 2026-09-24T14:30:00.000Z/);
   settle(world, "applying"); await check(page, "applying");
   assert.match(await page.locator("#control-times").textContent(), /Applying: 2026-09-24T14:30/);

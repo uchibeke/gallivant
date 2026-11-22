@@ -4,63 +4,87 @@ const workspace = document.querySelector?.(".workspace");
 if (workspace) {
   const status = document.getElementById("workspace-state");
   const retry = document.getElementById("workspace-retry");
-  const query = new URLSearchParams(location.search);
-  query.set("id", workspace.dataset.entry);
-  if (workspace.dataset.run) query.set("run", workspace.dataset.run);
-  const endpoint = `${BASE}/api/run/workspace?${query}`;
-  let busy = false, cancelTimer, failures = 0, lastGood = null, currentRead = null;
+  const newAttempt = document.getElementById("workspace-new-attempt");
+  const feedback = trackerFeedback(status);
+  const targets = Object.entries({
+    summary: "workspace-summary", evidence: "workspace-evidence-content", review: "workspace-review-content",
+    recovery: "workspace-recovery-content", activity: "workspace-provenance-content", execution: "workspace-execution-content",
+  }).map(([key, id]) => [key, document.getElementById(id)]);
+  const rendered = new Map();
+  let cancelTimer, failures = 0, lastGood = workspace.dataset.observed, currentRead = null;
+  const announce = (message, state, access = "current") => {
+    feedback.show(message, { state });
+    globalThis.dispatchEvent(new CustomEvent("workspace-evidence-state", { detail: access }));
+  };
+  const restrict = restricted => {
+    for (const child of workspace.children) {
+      if (!child.matches(".workspace-freshness")) child.hidden = restricted;
+    }
+    if (restricted) {
+      newAttempt.hidden = true;
+      document.getElementById("workspace-activity").open = false;
+    }
+  };
   const refresh = async () => {
-    if (busy) return;
-    cancelTimer?.(); busy = true; retry.disabled = true;
-    status.textContent = "Refreshing task evidence; displayed snapshot retained.";
+    if (currentRead) return;
+    cancelTimer?.();
+    retry.setAttribute("aria-busy", "true");
     const active = lifecycle.guard(), request = currentRead = {};
     try {
-      const data = await lifecycle.read(endpoint, "Task evidence could not be retrieved");
+      const query = new URLSearchParams(location.search);
+      query.set("id", workspace.dataset.entry);
+      if (workspace.dataset.run) query.set("run", workspace.dataset.run);
+      else query.set("attempt", "none");
+      const data = await lifecycle.read(`${BASE}/api/run/workspace?${query}`, "Task evidence could not be retrieved");
       if (!active()) return;
-      if (data.id !== workspace.dataset.entry ||
-          ![data.summary, data.evidence, data.review, data.execution].every(v => typeof v === "string")) throw new Error("Task snapshot unavailable");
-      if ((data.run || "") !== workspace.dataset.run) {
-        document.getElementById("workspace-new-attempt").hidden = false;
-        status.textContent = "A new attempt has been recorded. Open the new attempt to inspect its output; this view is preserved.";
-        failures = 0; return;
-      }
-      // Never replace selected text or a focused disclosure/link. Try again on
-      // the next scheduled read, without stealing focus or scrolling the page.
-      const selection = globalThis.getSelection?.();
-      const targets = [["workspace-summary", data.summary], ["workspace-evidence-content", data.evidence],
-        ["workspace-review-content", data.review], ["workspace-execution-content", data.execution]];
-      if (selection && !selection.isCollapsed || targets.some(([id]) => document.getElementById(id).contains(document.activeElement))) {
-        status.textContent = "New task observation available; updates pause while you read or select text. Refresh evidence when ready.";
-      } else {
-        for (const [id, html] of targets) {
-          const target = document.getElementById(id);
-          if (target.dataset.snapshot === html) continue;
-          const expanded = [...target.querySelectorAll("details")].map(el => el.open);
-          target.innerHTML = html; target.dataset.snapshot = html;
-          [...target.querySelectorAll("details")].forEach((el, i) => { el.open = expanded[i] || false; });
-        }
-        lastGood = data.snapshotAt || "unknown";
-        status.textContent = `Task snapshot current · ${lastGood}. Each evidence source has its own observation time.`;
-      }
+      if (data.id !== workspace.dataset.entry || (data.run || "") !== workspace.dataset.run ||
+          !targets.every(([key]) => typeof data[key] === "string")) throw new Error("Task snapshot unavailable");
+      if (workspace.dataset.restricted === "true") { restrict(false); delete workspace.dataset.restricted; }
+      workspace.dataset.briefChanged = String(data.briefChanged === true);
       failures = 0;
-    } catch {
+      const latest = data.latest || "";
+      newAttempt.hidden = !latest || latest === workspace.dataset.latest || latest === workspace.dataset.run;
+      const selection = globalThis.getSelection?.();
+      const holdingText = selection && !selection.isCollapsed &&
+        (workspace.contains(selection.anchorNode) || workspace.contains(selection.focusNode));
+      const changes = targets.filter(([key]) => rendered.get(key) !== data[key]);
+      if (changes.length && (holdingText || changes.some(([, target]) => target.contains(document.activeElement)))) {
+        announce("Task updates are available. Evidence refresh pauses while you use the current view.", "pending", "deferred");
+        return;
+      }
+      for (const [key, target] of changes) {
+        const next = target.cloneNode(false);
+        next.innerHTML = data[key];
+        patchSnapshot(target, next);
+        rendered.set(key, data[key]);
+      }
+      lastGood = data.snapshotAt || lastGood;
+      announce(!newAttempt.hidden ? "Task snapshot current. A new attempt is available." :
+        data.freshness === "stale" ? "Task snapshot current. The last task observation is stale." : "Task snapshot current.", "current");
+    } catch (error) {
       if (!active()) return;
       failures++;
-      status.textContent = `Task evidence disconnected; last good snapshot retained${lastGood ? ` (${lastGood})` : ""}. Check the local server connection, then Refresh evidence. This read failure does not establish worker failure or completion.`;
+      const restricted = [401, 403].includes(error.status) || error.status === 404 && workspace.dataset.scoped === "true";
+      if (restricted) { workspace.dataset.restricted = "true"; restrict(true); }
+      const message = restricted ? "Task or attempt unavailable within this workspace scope." :
+        error.status === 404 ? "Task or selected attempt missing. Last saved evidence retained." :
+          `Task evidence disconnected. Last good snapshot retained${lastGood ? ` (${lastGood})` : ""}.`;
+      announce(message, "error", restricted || error.status === 404 ? "unavailable" : "stale");
     } finally {
       if (currentRead === request) {
-        busy = false; retry.disabled = false; currentRead = null;
-        if (active()) cancelTimer = lifecycle.schedule(refresh, Math.min(60_000, 10_000 * 2 ** failures));
+        retry.removeAttribute("aria-busy"); currentRead = null;
+        if (active() && failures < 3) cancelTimer = lifecycle.schedule(refresh, Math.min(60_000, 10_000 * 2 ** failures));
       }
     }
   };
-  retry.addEventListener("click", refresh);
-  lifecycle.onResume(() => { currentRead = null; busy = false; refresh(); });
+  retry.addEventListener("click", () => { failures = 0; refresh(); });
+  lifecycle.onResume(() => { currentRead = null; refresh(); });
   refresh();
 
   const artifacts = document.getElementById("workspace-artifacts");
   if (artifacts) {
     const state = document.getElementById("artifact-state"), list = document.getElementById("artifact-list");
+    const verification = document.getElementById("attempt-verification");
     const retryResult = document.getElementById("artifact-retry");
     let reading = null, loaded = false;
     const readResult = async () => {
@@ -81,7 +105,12 @@ if (workspace) {
           fragment.append(row);
         }
         list.replaceChildren(fragment); loaded = true;
-        state.textContent = `Saved result · showing ${Math.min(result.artifacts.length, 20)} of ${result.artifacts.length} projected artifacts (projection capped at 100). Output source: selected run result; total inventory may be unknown.`;
+        state.textContent = `Saved result · showing ${Math.min(result.artifacts.length, 20)} of ${result.artifacts.length} projected artifacts (projection capped at 100).`;
+        const verify = result.verification;
+        verification.textContent = verify
+          ? `Selected attempt Verify · ${verify.status} · ${verify.passed} passed, ${verify.failed} failed · head ${verify.head}`
+          : "No coordinator Verify results recorded for this attempt.";
+        verification.hidden = false;
       } catch {
         if (active()) state.textContent = "Saved result unavailable or not collected. Last good artifact metadata retained. Retry result after collection or restoring the local connection; worker outcome remains separate.";
       } finally {

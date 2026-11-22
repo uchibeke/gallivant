@@ -25,11 +25,13 @@ explains preserved files and remote uncertainty. An applied cancellation can
 mean only that future dispatch stopped: remote work may continue until the
 provider confirms cancellation. The UI keeps observing that distinction.
 
-Requests show queued, applying, applied, failed or uncertain status with saved
-request, application and finish timestamps where available. Applied means the
-coordinator applied the request, not that a model acknowledged the message or
-the task completed. Failed requests retain the reason and message for editing.
-Check request status reads saved state without starting work.
+Requests show idle, submitting, accepted, queued, working, final or uncertain
+feedback. The original request ID stays visible during submission and
+reconciliation. Saved timestamps include the next retry when recorded.
+Acceptance confirms the saved queue entry. An applied request confirms the
+coordinator's action. Inspect the task evidence for the correction or delivery
+outcome. Failed messages remain editable. **Check request status** reads saved
+state without starting work.
 
 Drafts use browser local storage, scoped to the server instance and task. They
 retain text, selection and reading position across reloads and navigation.
@@ -58,8 +60,9 @@ identities migrate on the first locked update; no server task state changes.
 A delivery timeout preserves the original immutable input and request ID.
 Check request status reconciles that ID against the current request and bounded
 service history. Retry same request becomes available only after a successful
-read establishes that the request is absent and the task's latest request has
-not changed. It reads again before replaying the same identity. Unresolved
+read finds the unacknowledged identity absent and confirms the same latest
+request. It reads again before replaying the same identity. A known
+acknowledgement prevents replay. Unresolved
 identities never expire or get evicted to make room for drafts. If another
 request replaced the saved baseline and the identity cannot be found, inspect
 the current execution; the UI refuses to create another request from that

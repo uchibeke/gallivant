@@ -39,10 +39,8 @@ if (relativeTimes.length) {
     const selection = globalThis.getSelection?.();
     if (selection && !selection.isCollapsed) return;
     (document.querySelectorAll?.("time[data-relative-time]") || []).forEach(el => {
-      const at = Date.parse(el.getAttribute("datetime"));
-      if (!Number.isFinite(at)) { el.textContent = "unknown"; return; }
-      const ms = Math.max(0, Date.now() - at), minutes = Math.round(ms / 60_000), hours = Math.round(minutes / 60);
-      el.textContent = ms < 45_000 ? "just now" : minutes < 60 ? `${minutes}m ago` : hours < 48 ? `${hours}h ago` : `${Math.round(hours / 24)}d ago`;
+      const age = ago(el.getAttribute("datetime"));
+      if (el.textContent !== age) el.textContent = age;
     });
   };
   const tickTimes = () => { refreshTimes(); lifecycle.schedule(tickTimes, 30_000); };
@@ -57,6 +55,7 @@ if (runControls) {
   const buttons = [...runControls.querySelectorAll("button[data-action]")];
   const note = document.getElementById("run-note"), form = document.getElementById("message-form");
   const status = document.getElementById("control-status"), times = document.getElementById("control-times");
+  const identity = document.getElementById("control-request-identity");
   const refresh = document.getElementById("control-refresh"), check = document.getElementById("control-check");
   const retry = document.getElementById("control-retry"), draftStatus = document.getElementById("draft-status");
   const lastMessage = document.getElementById("last-message"), interrupt = document.getElementById("interrupt-run");
@@ -64,7 +63,8 @@ if (runControls) {
   const endpoint = `${BASE}/api/run/control?id=${encodeURIComponent(runControls.dataset.entry)}`;
   let operation = store.initial.operation, latestId = runControls.dataset.requestId || "";
   let pending = runControls.dataset.pending === "true", uncertain = Boolean(operation), closed = runControls.dataset.closed === "true", sending = false;
-  let reading = null, cancelTimer, failures = 0, canReplay = false, restoredFailure = null, deliveryGeneration = 0;
+  let reading = null, cancelTimer, failures = 0, canReplay = false, restoredFailure = null, deliveryGeneration = 0, taskEvidence = "current";
+  let composerAvailable = !note?.disabled;
   const saved = store.initial;
   const requestFeedback = trackerFeedback(status);
   if (note && saved.value) {
@@ -89,23 +89,36 @@ if (runControls) {
     return ok;
   };
   const syncButtons = () => {
+    const changed = document.getElementById("main")?.dataset.briefChanged === "true";
     for (const button of buttons) {
       button.setAttribute?.("aria-busy", String(pending || sending));
       button.disabled = pending || sending || uncertain || closed || button.dataset.available !== "true"
+        || taskEvidence === "unavailable" || taskEvidence === "stale" && button.dataset.action !== "cancel"
+        || changed && ["resume", "message"].includes(button.dataset.action)
         || (button.dataset.action === "message" && !note.value.trim());
     }
-    if (retry) { retry.hidden = closed || !uncertain; retry.disabled = closed || sending || !canReplay; retry.setAttribute("aria-busy", String(Boolean(reading))); }
+    if (retry) {
+      retry.hidden = closed || runControls.dataset.mode === "read" || !uncertain;
+      retry.disabled = closed || ["stale", "unavailable"].includes(taskEvidence) || sending || !canReplay;
+      retry.setAttribute("aria-busy", String(Boolean(reading)));
+    }
     if (check) { check.disabled = sending; check.setAttribute("aria-busy", String(Boolean(reading))); }
   };
-  const feedback = (control, reason) => {
-    const view = controlFeedback(control, reason);
+  const feedback = (control, reason, phase) => {
+    const view = controlFeedback(control, reason, phase);
     status.setAttribute?.("data-status", view.state); status.setAttribute?.("data-state", view.tone);
-    requestFeedback.show(view.text, { state: view.tone, pending: ["queued", "applying"].includes(control?.status) });
-    if (times) times.textContent = view.times;
+    status.dataset.status = view.state; status.dataset.phase = view.phase;
+    requestFeedback.show(view.text, { state: view.tone, pending: ["submitting", "queued", "accepted", "working"].includes(view.phase) });
+    if (times && times.textContent !== view.times) times.textContent = view.times;
+    if (identity) {
+      const id = control?.id || operation?.requestId || "";
+      if (identity.textContent !== id) identity.textContent = id;
+      identity.parentElement.hidden = !id;
+    }
   };
   const markUncertain = message => {
     uncertain = Boolean(operation); canReplay = false;
-    feedback({ action: operation?.action, status: "uncertain", message });
+    feedback({ action: operation?.action, status: "uncertain", message, id: operation?.requestId });
     syncButtons();
   };
   const schedule = delay => { cancelTimer?.(); cancelTimer = lifecycle.schedule(poll, delay); };
@@ -116,7 +129,10 @@ if (runControls) {
     for (const button of buttons) button.dataset.available = String(data.controls?.[button.dataset.action] === true);
     // While our accepted request is pending, allow a newer draft in an already
     // enabled composer. Never enable an initially unavailable capability.
-    if (note && (!pending || closed)) note.disabled = closed || data.controls?.message !== true;
+    if (note && (!pending || closed)) {
+      composerAvailable = !closed && data.controls?.message === true;
+      if (document.activeElement !== note) note.disabled = !composerAvailable;
+    }
     if (interrupt) {
       interrupt.disabled = pending || closed || data.controls?.interrupt !== true;
       if (interrupt.disabled) interrupt.checked = false;
@@ -168,7 +184,8 @@ if (runControls) {
         markUncertain("No saved result for this request was found. Your draft is retained.");
         // History is bounded. A different latest request may mean our identity
         // was evicted; never replay it as new paid work in that case.
-        canReplay = data.requestId === operation.requestId && latestId === operation.previousId && !pending && !closed && data.controls?.[operation.action] === true;
+        canReplay = !operation.acknowledged && data.requestId === operation.requestId && latestId === operation.previousId &&
+          !pending && !closed && data.controls?.[operation.action] === true;
         if (closed && data.requestId === operation.requestId) {
           operation = await store.settle(operation.requestId);
           uncertain = Boolean(operation);
@@ -195,32 +212,25 @@ if (runControls) {
   async function deliver() {
     deliveryGeneration++;
     sending = true; canReplay = false; syncButtons(); cancelTimer?.(); refresh.hidden = true;
-    feedback({ action: operation.action, status: "queued", message: "Sending request; awaiting the server receipt." });
-    const controller = new AbortController(), deadline = setTimeout(() => controller.abort(), 15_000);
+    feedback({ action: operation.action, id: operation.requestId }, null, { submitting: true });
     try {
       // Only service inputs cross the boundary, including after storage restore.
       const payload = { action: operation.action, requestId: operation.requestId,
         ...(operation.action === "message" ? { note: operation.note, interrupt: operation.interrupt } : {}) };
-      const response = await fetch(endpoint, { method: "POST", signal: controller.signal,
-        headers: { "Content-Type": "application/json", "X-Gallivant-Token": runControls.dataset.token }, body: JSON.stringify(payload) });
-      const data = await response.json();
-      clearTimeout(deadline);
+      const data = await trackerControlPost(endpoint, payload, runControls.dataset.token);
       if (!await lifecycle.whenActive()) return;
-      if (!response.ok) {
-        if (response.status >= 400 && response.status < 500) {
-          feedback({ action: operation.action, status: "failed", message: data.error || "The server refused this request. Repair the prerequisite and try again." });
-          operation = await store.settle(operation.requestId); uncertain = Boolean(operation); pending = false; persist(); schedule(10_000); return;
-        }
-        throw new Error("Response unconfirmed");
-      }
       if (data.id !== operation.requestId || !["queued", "applying", "applied", "failed"].includes(data.status)) throw new Error("Receipt identity unavailable");
       latestId = data.id; pending = ["queued", "applying"].includes(data.status);
-      if (await accept(data)) feedback(data); schedule(1000);
-    } catch {
-      if (!await lifecycle.whenActive()) return;
-      markUncertain("Delivery response was lost or timed out. Your draft is retained. Check saved status before retrying.");
+      if (await accept(data)) feedback(data, null, { acknowledged: true });
       schedule(1000);
-    } finally { clearTimeout(deadline); sending = false; syncButtons(); }
+    } catch (error) {
+      if (!await lifecycle.whenActive()) return;
+      if (error.refused) {
+        feedback({ action: operation.action, id: operation.requestId, status: "failed", message: error.message });
+        operation = await store.settle(operation.requestId); uncertain = Boolean(operation); pending = false; persist();
+      } else markUncertain("Delivery response was lost or timed out. Your draft is retained. Checking saved status for the original request.");
+      schedule(1000);
+    } finally { sending = false; syncButtons(); }
   }
   const submit = async action => {
     const button = buttons.find(b => b.dataset.action === action);
@@ -245,7 +255,8 @@ if (runControls) {
   for (const button of buttons.filter(b => b.dataset.action !== "message")) button.addEventListener("click", () => submit(button.dataset.action));
   form?.addEventListener("submit", event => { event.preventDefault(); submit("message"); });
   note?.addEventListener("input", () => { persist(); syncButtons(); });
-  for (const event of ["select", "keyup", "click", "scroll", "blur"]) note?.addEventListener(event, persist);
+  for (const event of ["select", "keyup", "click", "scroll"]) note?.addEventListener(event, persist);
+  note?.addEventListener("blur", () => { persist(); note.disabled = !composerAvailable; });
   globalThis.addEventListener?.("pagehide", persist);
   document.getElementById("discard-draft")?.addEventListener("click", () => { note.value = ""; persist(); syncButtons(); note.focus(); });
   document.getElementById("restore-message")?.addEventListener("click", () => {
@@ -254,9 +265,9 @@ if (runControls) {
   });
   check?.addEventListener("click", poll);
   retry?.addEventListener("click", async () => {
-    if (!operation || sending || reading) return;
+    if (!operation || ["stale", "unavailable"].includes(taskEvidence) || sending || reading) return;
     await poll(); // Reconcile again immediately before an explicit retry.
-    if (uncertain && canReplay) await deliver();
+    if (uncertain && canReplay && !["stale", "unavailable"].includes(taskEvidence)) await deliver();
   });
   const synchronize = () => {
     if (sending) return;
@@ -270,6 +281,7 @@ if (runControls) {
     } catch { markUncertain("Browser storage unavailable. Check request status before further work."); }
   };
   globalThis.addEventListener?.("storage", event => { if (store.changed(event)) synchronize(); });
+  globalThis.addEventListener?.("workspace-evidence-state", event => { taskEvidence = event.detail; syncButtons(); });
   lifecycle.onResume(() => { reading = null; synchronize(); if (!sending) poll(); });
   if (uncertain) markUncertain("Restored an unconfirmed request. Checking its saved identity before further work.");
   syncButtons();
