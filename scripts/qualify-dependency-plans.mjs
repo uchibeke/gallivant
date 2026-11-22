@@ -9,13 +9,16 @@ import { runContracts } from "./qualify-autonomous-recovery.mjs";
 const modes = new Set(["--fixtures", "--native", "--live", "--check-evidence"]);
 
 function fixtures(artifact, runtime) {
-  const deadline = Date.now() + 240_000, measurements = {};
+  const measurements = {};
   const observe = output => {
     for (const [, kind, line] of output.matchAll(/^# dependency-qualification-(load|capacity|browser) (.+)$/gm)) {
       measurements[kind] = JSON.parse(line);
     }
   };
-  const results = dependencyFixtureGroups.map(({ id, suites, selected }) => ({ id, ...runContracts(suites, selected, deadline, observe) }));
+  // Each group gets its own bounded window, including the served browser suite.
+  const results = dependencyFixtureGroups.map(({ id, suites, selected }) => ({
+    id, ...runContracts(suites, selected, Date.now() + 120_000, observe),
+  }));
   const passed = completeDependencyFixtureResults(results) && ["load", "capacity", "browser"].every(kind => measurements[kind]);
   const report = { version: 1, mode: "fixtures", artifact, runtime, results, measurements,
     matrix: dependencyQualificationMatrix(), result: passed ? "passed" : "failed" };
