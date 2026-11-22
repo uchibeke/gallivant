@@ -80,7 +80,11 @@ a path prefix. The tracker provides SSE logs with a bounded initial tail,
 mounted UI retain one coordinator and one set of run identities.
 
 **Overview** (`/`) starts with decisions and upcoming work. **Plans** (`/plans`)
-shows admitted graphs and linear chains with exact saved prerequisites. **Tasks**
+shows admitted graphs and linear chains with exact saved prerequisites. It
+includes a bounded dependency diagram, guided authoring and scoped plan reviews
+through the protected service. [Plan workspace](ui-plans.md)
+
+**Tasks**
 (`/tasks`) filters registered delivery, intake and future work by outcome.
 Future nodes link to their plan until task registration. **System** (`/system`)
 shows coordinator observations, capacity and execution capability limits.
@@ -106,7 +110,7 @@ local or authorized service surfaces.
 
 Connection failures retain the last snapshot with stale/disconnected feedback.
 Observation age is separate from the page refresh time and saved productive
-activity. Refresh successfully after a disconnection before reviewing a chain
+activity. Refresh successfully after a disconnection before confirming a plan or chain
 control.
 Use the shown refresh action after repairing access. Keep an uncertain request's
 saved identity and check its status; submitting a new task is not a retry.

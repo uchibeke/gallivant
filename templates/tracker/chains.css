@@ -46,13 +46,13 @@
 .chain-actions { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
 .chain-actions button { width: 100%; }
 .chain-actions p { font-size: 12px; line-height: 1.6; color: var(--gv-muted); }
-#chain-confirm { color: var(--gv-text); background: var(--gv-surface); border: 1px solid var(--gv-line-strong); border-radius: var(--gv-r); width: min(760px, calc(100% - 32px)); max-height: calc(100dvh - 32px); padding: 24px; overflow-wrap: anywhere; }
-#chain-confirm::backdrop { background: #0009; }
-#chain-review { max-height: 55dvh; overflow: auto; }
-#chain-review dl { display: grid; gap: 6px; }
-#chain-review dt { color: var(--gv-muted); margin-top: 10px; }
-#chain-review dd { margin: 0; font-family: var(--gv-mono); font-size: 12px; }
+.review-confirm { color: var(--gv-text); background: var(--gv-surface); border: 1px solid var(--gv-line-strong); border-radius: var(--gv-r); width: min(760px, calc(100% - 32px)); max-height: calc(100dvh - 32px); padding: 24px; overflow-wrap: anywhere; }
+.review-confirm::backdrop { background: #0009; }
+.review-confirm-body { max-height: 55dvh; overflow: auto; }
+.review-confirm-body dl { display: grid; gap: 6px; }
+.review-confirm-body dt { color: var(--gv-muted); margin-top: 10px; }
+.review-confirm-body dd { margin: 0; font-family: var(--gv-mono); font-size: 12px; }
 @media (max-width: 1100px) { #chains-results { grid-template-columns: minmax(0, 1fr); } .chain-index-list { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; } }
 @media (max-width: 700px) { .chain-columns, .chain-actions { grid-template-columns: minmax(0, 1fr); } .chain-index-list { grid-template-columns: repeat(2, minmax(0, 1fr)); } .chain-filters label { flex: 1 1 160px; min-width: 0; } .milestone-select { min-height: 44px; } }
-@media (max-width: 420px) { .chain-index-list { grid-template-columns: minmax(0, 1fr); } .chain-title h2 { font-size: 22px; } #chain-confirm { padding: 16px; } }
+@media (max-width: 420px) { .chain-index-list { grid-template-columns: minmax(0, 1fr); } .chain-title h2 { font-size: 22px; } .review-confirm { padding: 16px; } }
 @media (max-width: 700px) { .plan-detail-jump { display: inline-flex; align-items: center; min-height: 44px; } }

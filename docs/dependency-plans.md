@@ -156,6 +156,13 @@ graph task uses its existing run control endpoint and a scoped
 In an authenticated mount, legacy mutations use the local operator's
 corresponding `task/*` or `chain/*` grant.
 
+The browser adapter uses a `manifest` object with `format` (`json` or `yaml`)
+and exact UTF-8 `text` in place of `file`. The server resolves references
+through `planInputs.bindings`. This transport uses an allowlisted review view.
+Send `stage: "reconcile"` with the original command identity and `approve`
+to read the saved receipt after an uncertain response. This stage never
+recompiles or applies a control. [Plan workspace and bindings](ui-plans.md)
+
 `GET /api/plan` lists authorized plans or inspects one with `?plan=NAME`.
 It reads the saved registry. Queue, edit and attach reviews read local inputs
 and host bindings through explicit requests. Unknown provider acceptance,
