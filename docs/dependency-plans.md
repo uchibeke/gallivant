@@ -117,6 +117,53 @@ request receipt together. Supply `--request-id ID` to name the request. When
 omitted, the approved digest is the request ID. Repeat the same digest and
 request ID after a lost response to retrieve the saved result.
 
+## Review and confirm plan controls
+
+Review a plan or group action with a new request ID and repeat the command
+with `--approve` set to the returned `revision`. After a lost confirmation
+response, repeat the same confirmation to retrieve its stored result. A stale
+review requires a new review against the current plan.
+
+```sh
+gallivant plan hold console-follow-through --group console --request-id hold-console
+gallivant plan hold console-follow-through --group console --request-id hold-console --approve REVISION
+gallivant plan retry console-follow-through --node console/plan-view --request-id retry-plan-view
+gallivant plan edit console-follow-through revised.yml --request-id revise-console
+gallivant plan attach console-follow-through linked.yml --request-id attach-producer
+```
+
+| Action | Scope and review gate |
+| --- | --- |
+| Queue | Approves the exact manifest, sources, repository bindings and policy. Use a new name and separately approved task identities for a new plan instance. |
+| Attach | Reviews a replacement manifest that adds a producer link to an existing plan. Both scopes require current read, observe and link grants. Cross-tenant links also require a scoped cross-company grant. |
+| Hold / unhold | Sets or clears the selected plan or group's dispatch hold. Enclosing holds and task, repository and recovery holds continue to apply. Releasing a hold makes eligible future work available for scheduling. |
+| Cancel | Permanently fences future dispatch in the selected plan or group, including starts that have yet to be submitted. Existing accepted tasks retain their task controls and can still close out. Dependent work waits for qualified integration. |
+| Retry | Rearms a blocked node under its approved inputs. Retrying a provably unsubmitted start requires the original clone and execution identity. Use task Resume or Recheck for admitted work. Reconcile ambiguous acceptance and inspect partial or replaced clones through their original owners. |
+| Edit | Reviews changed inputs or dependencies for undispatched, unreserved work. The response includes old and new hashes for the graph, source files and affected dependency closure. Existing links, frozen producer contracts, active work and policy limits constrain the proposed changes. |
+
+Use a qualified operator ingress for these commands. The protected service is
+`planControl`. Its HTTP adapter uses `POST /api/plan/control` with the same
+loopback, Host, Origin, CSRF, JSON size and mutation checks as existing controls.
+Send `action`, `stage` (`review` or `confirm`), `requestId` and `plan` for
+actions on an existing instance. Supply `group` or `node` for a scoped action,
+`file` for queue, attach or edit, and `approve` for confirmation. Manifest
+paths are relative to the deployment's `planInputs.directory` and its approved
+checkouts. An authenticated tracker host supplies `planOperatorForRequest(req)`
+with the bound current operator for that request. The legacy tracker pages
+remain within the host's operator-only boundary. A request for an admitted
+graph task uses its existing run control endpoint and a scoped
+`task/message`, `task/resume`, `task/recheck` or `task/cancel` grant.
+In an authenticated mount, legacy mutations use the local operator's
+corresponding `task/*` or `chain/*` grant.
+
+`GET /api/plan` lists authorized plans or inspects one with `?plan=NAME`.
+It reads the saved registry. Queue, edit and attach reviews read local inputs
+and host bindings through explicit requests. Unknown provider acceptance,
+unqualified routes, unresolved Git ownership and upstream approval changes
+remain inspect-only until their existing owners resolve the gate. The
+standalone installation can compile manifests and resolve previews. Graph
+mutations require the protected ingress described in [configuration](config.md#dependency-plan-admission).
+
 `plan inspect NAME` shows the immutable approval and separate runtime and
 control generations. Future anchors require current read, observe and link
 grants for both sides. Cross-company links require an additional scoped grant.
@@ -182,3 +229,25 @@ ingress for graph queue, inspection, migration or future links. A deployment
 must enclose the exact worker launch outside protected state and controls and
 bind its authenticated operator through the coordinator's authority port.
 [Configuration and feature gates](config.md#dependency-plan-admission)
+
+## References and rollback
+
+The registry keeps approved source bytes while a plan needs them, with exact
+approval hashes and integration receipts retained after settlement. Cleanup
+protects eligible dispatch inputs, unresolved starts and active task
+references. A downstream anchor retains the original producer contract and
+receipt. It can verify that receipt after the producer's workspace is removed.
+A retained workspace satisfies cleanup settlement when its merge and delivery
+evidence qualify. Historical review archives remain available for explicit
+inspection and verified backups.
+
+Set both graph ceilings to zero to disable new graph reservations. The existing
+coordinator continues collecting accepted runs, settling task cancellations and
+closing merged work. Use `recovery drain` to inspect outstanding graph plans,
+claims, reservations and task obligations. Complete or cancel future dispatch
+and reconcile unresolved starts under the compatible runtime before switching
+artifacts. Back up the full private namespace and its matching runtime manifest.
+Registry format 6 preserves scoped controls and compact references. For an
+incompatible rollback, keep that namespace and restore a coherent backup with
+its matching artifact in a separate location. Linear chains retain their
+existing execution owner and deep links.

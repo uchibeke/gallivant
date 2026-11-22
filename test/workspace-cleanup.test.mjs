@@ -95,6 +95,18 @@ test("cleanup Git probes never execute worker-defined fsmonitor hooks or clean/p
   assert.equal(proof.dirty, false); assert.equal(existsSync(marker), false);
 });
 
+test("an unsubmitted checkout proof allows approved overlays but detects staged and unrelated work", async t => {
+  const w = fixture(t), options = { approvedInputs: ["brief.md"] };
+  writeFileSync(join(w.path, "brief.md"), "approved brief\n");
+  assert.equal((await w.ctx.git.cleanupProof(w.path)).dirty, true);
+  assert.equal((await w.ctx.git.cleanupProof(w.path, options)).dirty, false);
+  writeFileSync(join(w.path, "unrelated.txt"), "preserve me\n");
+  assert.equal((await w.ctx.git.cleanupProof(w.path, options)).dirty, true);
+  rmSync(join(w.path, "unrelated.txt"));
+  w.git("add", "brief.md");
+  assert.equal((await w.ctx.git.cleanupProof(w.path, options)).dirty, true);
+});
+
 test("operator paths, shared task inputs, chain inputs, linked worktrees and symlink ancestors are preserved", async t => {
   for (const change of [
     w => { w.entry.checkout = w.path; },

@@ -4656,8 +4656,18 @@ test("packed package exposes shared operations and help in a clean installed dir
   const packed = JSON.parse(execFileSync("npm", ["pack", "--json", "--ignore-scripts", "--pack-destination", root], { cwd: repo, encoding: "utf8", env: { ...process.env, NPM_CONFIG_CACHE: join(root, "cache"), NPM_CONFIG_USERCONFIG: "/dev/null" } }));
   execFileSync("tar", ["-xf", join(root, packed[0].filename), "--strip-components=1", "-C", installed]);
   const emptyHome = join(root, "no-config");
-  const imported = spawnSync(process.execPath, ["--input-type=module", "-e", "globalThis.fetch=()=>{throw Error('unexpected network')}; const {createTaskService,TASK_VERSION}=await import('@uchibeke/gallivant/tasks'); console.log(typeof createTaskService,TASK_VERSION)"], { cwd: root, env: { ...process.env, GALLIVANT_HOME: emptyHome }, encoding: "utf8" });
-  assert.equal(imported.status, 0, imported.stderr); assert.equal(imported.stdout.trim(), "function 1"); assert.equal(existsSync(emptyHome), false);
+  const inspect = `
+    globalThis.fetch = () => { throw Error("unexpected network"); };
+    const { createTaskService, TASK_VERSION } = await import("@uchibeke/gallivant/tasks");
+    const { routes } = await import("@uchibeke/gallivant/lib/commands/serve.mjs");
+    const { localPlanPath } = await import("@uchibeke/gallivant/lib/dependency_plan_sources.mjs");
+    console.log(typeof createTaskService, TASK_VERSION, typeof routes["GET /api/plan"], localPlanPath("./plan.yaml", "manifest"));
+  `;
+  const imported = spawnSync(process.execPath, ["--input-type=module", "-e", inspect],
+    { cwd: root, env: { ...process.env, GALLIVANT_HOME: emptyHome }, encoding: "utf8", timeout: 5000 });
+  assert.equal(imported.status, 0, imported.stderr);
+  assert.equal(imported.stdout.trim(), "function 1 function plan.yaml");
+  assert.equal(existsSync(emptyHome), false);
   const help = spawnSync(process.execPath, [join(installed, "bin", "gallivant.mjs"), "task", "--help"], { cwd: root, env: { ...process.env, GALLIVANT_HOME: emptyHome }, encoding: "utf8" });
   assert.equal(help.status, 0, help.stderr); assert.match(help.stdout, /task answer.*--revision/); assert.match(help.stdout, /isolated brief/); assert.equal(existsSync(emptyHome), false);
 });

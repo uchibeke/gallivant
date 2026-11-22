@@ -340,12 +340,10 @@ isolation outside the worker with an OS account, container or qualified outer
 sandbox. A standalone probe and file modes for a shared user are insufficient.
 Current standalone author routes leave this gate closed.
 
-Observation-only admission and reviewed checkpoints use registry version 4
-and dependency plan format 1. Durable author reservations or dispatch-enabled
-approvals require registry version 5. Previous registries remain readable.
-To roll back, disable new graph author admission, settle owned work and use a
-compatible runtime or restore its matching private namespace in a separate
-location. [Runtime backup and restore](task-delivery.md#build-configure-upgrade-and-rollback)
+New plan admissions and reviewed controls use registry version 6 and dependency
+plan format 2. Existing version 4 and 5 registries remain readable. A pinned
+namespace requires the matching artifact manifest before accepting the new
+format. [Plan controls and rollback](dependency-plans.md#references-and-rollback)
 
 ## What is deliberately not a key
 
