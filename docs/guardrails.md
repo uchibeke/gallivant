@@ -377,3 +377,9 @@ Codex Cloud's Git-only input transport cannot provide this privacy for new/chang
 or push; its dispatch is separately unavailable until repository binding is qualified. See [codex-cloud.md](codex-cloud.md).
 
 Recovery policy requires an enforced outer execution boundary for same-UID workers. Owner-only file modes and verification receipts from a different adapter cannot qualify an author. Completion credentials stay with the coordinator. The [recovery admission contract](autonomous-recovery.md#recovery-policy-and-admission) lists the scoped controls and qualification limits.
+
+Disposable approval pins synthetic repositories, refs, static patch and base
+digests, route and credential references, time and spend. Independent owners
+sign bound evidence outside the author, reviewer and preparation sandboxes.
+The shipped hosts use an independent maintainer for fixture integration.
+[Qualification evidence and merge scope](recovery-qualification.md)

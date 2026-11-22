@@ -538,6 +538,12 @@ and the completion receipt.
 
 Recovery profiles are revisioned coordinator registry records. A new start selects a profile by exact digest. A global default cannot enroll an existing task. See the [profile fields, route tuple and generation rules](autonomous-recovery.md#recovery-policy-and-admission).
 
+Canary admissions pin an exact profile, task bindings, owner/recipe
+combinations and evidence expiry. Profile revision or a scoped disable fences
+queued recovery. Keep the disposable qualification profile separate from
+profiles used for canaries. Model, credential and capture capabilities require
+proof from the selected launch. [Qualification and rollout](recovery-qualification.md)
+
 ## Recovery scheduling and headroom
 
 `recovery_scan_seconds` defaults to 60 and accepts integers from 10 to 600.

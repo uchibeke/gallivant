@@ -60,13 +60,13 @@ The version 1 profile has the following required fields. The schema rejects addi
 | `routes` | Each tuple names `harness`, `provider`, `model`, `account`, `environment`, `dataLocation`, `credentialRef`, `capabilities` and `maxSpendMicros`. Use a symbolic `credential:<name>` reference. Credential resolution remains with the original adapter. |
 | `cleanup` | Each entry names an absolute canonical `root`, allowed `classes` (settled scratch or settled checkout), `retentionSeconds` and `maxBytes`. The workspace owner still needs exact ownership and settlement proof before deletion. |
 | `revocationGeneration`, `holdGeneration` | Nonnegative generation counters. Scoped administrative records also retain their own monotonic generations. |
-| `qualification` | Null or an exact `manifest:<name>` reference, manifest digest, absolute `evidenceRoot` and enumerated fixture `actions`. Only the protected profile supplies the binding. |
+| `qualification` | Null or an exact `manifest:<name>` reference, manifest digest, absolute `evidenceRoot` and enumerated fixture `actions`. Use a separate protected task for disposable qualification. [Manifest contract](recovery-qualification.md) |
 
 A version 1 decision names the recipe and version, action, authority, purpose, optional manifest binding, expected task/snapshot/profile/route/ownership/holds digests and profile revision. It includes accepted-and-settled preconditions, an operation key, deadline in Unix milliseconds, budget reservation and enumerated postcondition. The recipe table in `lib/recovery_authority.mjs` is the shared action vocabulary. The read-only command `recovery preflight <handle> <decision.json>` returns diagnostics for the proposed route. A missing exact model entitlement or required browser proof stays visible. Local sign-in and a version response prove neither. Package reads use the repository's opt-in policy. The preflight never installs a runtime or purchases an inference probe.
 
-Disposable qualification uses `admitted-recovery-intent`, purpose `disposable-qualification` and `verify-disposable-isolation` under the exact manifest reference and digest. A standalone denial probe cannot qualify the author that would run outside that probe. The verification owner uses the existing macOS sandbox or Linux namespace adapter. Author, review and intake owners require independent qualification of their actual launch, protected storage, snapshot, credential and control boundaries. All installed author combinations currently report observation-only for new recovery actions. Qualification and rollout belong to M06.
+Disposable qualification uses `admitted-recovery-intent`, purpose `disposable-qualification` and `verify-disposable-isolation` under the exact manifest reference and digest. The verification owner uses the existing macOS sandbox or Linux namespace adapter. Author, review and intake owners need separate proof of their actual launch, protected storage, snapshot, credential and control boundaries. The shipped author combinations remain observation-only for new recovery actions. [Qualification evidence](recovery-qualification.md)
 
-For a qualification decision, preflight returns `disposable.eligible` for the single manifest action. The fixture owner must attest its baseline isolation, ownership, exact launch digest and expiry against the task, operation, approved manifest and evidence root. M06 can consume that result for the same launch after revalidation. Without an installed fixture owner the result is false. Production recipe admission remains observation-only.
+For a qualification decision, preflight returns `disposable.eligible` for the isolation action. The fixture owner must attest its baseline isolation, ownership, exact launch digest and expiry against the task, operation, approved manifest and evidence root. Each qualification case revalidates this binding at its write boundary. Production recipe admission also requires a separate canary and a current execution-owner receipt.
 
 Use `recovery hold task/<id> <generation>` or `recovery hold chain/<name> <generation>`. Release that same scope with `recovery resume`. For a repository or profile use `recovery disable repo/<owner>/<repo>` or `recovery disable profile/<id>` with its generation, and `recovery enable` to release it. Supply 0 for the first transition. The command returns the new generation and operator provenance. An applied hold survives restart. A chain hold fences future claims while admitted children keep their own controls.
 
@@ -74,7 +74,17 @@ Use `recovery hold task/<id> <generation>` or `recovery hold chain/<name> <gener
 
 Run `recovery inventory <profile-id>` to obtain a read-only proposal and its digest. Each candidate binds the registry entry, approved brief and sources, profile, exact owned execution, review ledger, referenced review executions and hydrated immutable history. Holds, uncertain acceptance, divergence and human decisions exclude a task. An inventory with no matching protected profile has no candidates.
 
-A reviewed batch has exactly `version: 1`, the `proposalDigest` and an explicit nonempty `candidateIds` list. Validate it against a fresh inventory before activation. The migration owner must quiesce affected writers, verify the complete digest set again under the registry lock, and durably back up the registry, snapshots, referenced ledgers and immutable archive as one recovery point. Prepare the replacement records first, then atomically publish a version 3 registry naming them. Recovery before the registry replacement uses the old generation. Recovery after replacement uses the new records. Restore a coherent generation as a unit after draining accepted work. This release emits and validates the plan only. Activation and downgrade qualification remain with M06.
+A reviewed batch has exactly `version: 1`, the `proposalDigest` and an explicit nonempty `candidateIds` list. Stop the coordinator normally, then run `gallivant recovery adopt PROFILE APPROVAL.json ABSOLUTE_BACKUP_PATH`. The command takes the existing maintenance and registry locks, revalidates the batch, syncs a private backup of the registry and selected snapshots, execution ledgers and referenced review history, then publishes one version 3 registry. A mismatch leaves the original state in place. A crash before publication can leave a private backup to inspect. The command preserves executions and budgets. Adopting a task does not enroll it in a canary.
+
+Use `recovery canary APPROVAL.json` for explicit observe, operational and
+semantic stages. Use a task hold or profile disable to fence new reservations.
+The coordinator still observes accepted operations, settles cancellation and
+checks the exact merged PR. A disabled task can retain its checkout. An
+already recorded deletion intent stays available for reconciliation.
+Use `recovery drain` and the artifact-specific `task-delivery-state check` before
+changing runtimes. Version 3 state requires a compatible artifact. Preserve the
+current state and its backups when an older runtime refuses it.
+[Canary approval and rollback](recovery-qualification.md#rollout-and-rollback)
 
 ## Deterministic reconciliation
 
@@ -104,7 +114,7 @@ A newly tracked base path may displace an approved untracked planning copy. The 
 
 The coordinator checks the candidate's commit parents or pinned-base ancestry, scope and approved Verify exits before publishing to the task ref. It observes an uncertain push against the exact remote ref and PR. A new head requires fresh CI, reviewer and completion observations. Moving the base ref creates a separate eligibility decision with the same task counters. The in-flight operation keeps its pinned base.
 
-Inspect the journal ID, operation, full pinned SHA, verification and stop with `why` or `status --all --json`. Restore the matching ledger, checkout or runtime proof before using Recheck. The current recipes require an isolated local clone and a qualified native session. Hosted and linked-worktree adapters, ambiguous merge projections, and GitHub jobs without complete comparison evidence require operator inspection. The native Git and injected-fault fixtures do not qualify a production adapter. Linux and macOS adapter qualification and rollout belong to M06.
+Inspect the journal ID, operation, full pinned SHA, verification and stop with `why` or `status --all --json`. Restore the matching ledger, checkout or runtime proof before using Recheck. These recipes require an isolated local clone and a qualified native session. Hosted and linked-worktree adapters, ambiguous merge projections, and GitHub jobs without complete comparison evidence require operator inspection. The Git and injected-fault results are fixture evidence. [Native and live status](recovery-qualification.md)
 
 To pause future effects, use `gallivant recovery hold task/ID GENERATION`. To stop an active author, use `gallivant cancel HANDLE` and inspect its cancellation result. To disable the recipes for an admitted profile, use `gallivant recovery disable profile/ID GENERATION`. Saved reservations and ledger evidence survive all three controls.
 
@@ -157,8 +167,9 @@ The deterministic capacity fixture uses 13 due host items, four slots and
 oldest due age. A separate fixture holds a host read for 60 simulated seconds
 while a local cancellation, local settlement, maintenance and an independent
 chain finish.
-These samples characterize the fixture workload. M06 owns the measured live
-capacity and native release targets.
+These samples characterize the fixture workload. See the
+[qualification report](recovery-qualification.md) for measured capacity and
+the current status of native and live results.
 
 The coordinator records cooldowns in `recovery-cooldowns.json`. Scope is the
 Git host and credential, provider and account, or service endpoint and identity.

@@ -40,6 +40,12 @@ Exhaustion stops with `provider-network-exhausted` and notifies the operator.
 The existing `network_retry` state and reason names are retained for compatibility;
 status and `why` show the actual failure code, retry count and next deadline.
 
+For a scoped hold or a revoked recovery profile, inspect the original operation
+with `gallivant why HANDLE`. Observation and accepted work remain with their
+original owner. Restore the exact authority or use the existing cancel control
+to request cessation. Each waiting provider or host retains its own deadline.
+[Recovery controls and rollback](recovery-qualification.md#rollout-and-rollback)
+
 Only allowlisted terminal harness errors qualify. Assistant suggestions, bare
 HTTP 429 codes, unknown failures, login/token expiry, billing and exhausted usage
 do not authorize paid retries. No reset timestamp is inferred from error prose.

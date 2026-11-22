@@ -861,6 +861,12 @@ See [first-party review](first-party-review.md#waiting-for-qualification-and-exp
 
 Use `recovery inventory [profile-id]` for a read-only adoption proposal and `recovery preflight <handle> <decision.json>` for an admitted route. The [recovery policy reference](autonomous-recovery.md#recovery-policy-and-admission) describes profile administration, scoped holds, exact task admission and the migration format.
 
+Apply an unchanged reviewed batch with `recovery adopt PROFILE APPROVAL.json
+ABSOLUTE_BACKUP_PATH` after stopping the coordinator. Use `recovery canary
+APPROVAL.json` to admit an exact set of tasks and combinations to a stage.
+`recovery drain` lists unresolved work before a runtime change.
+[Approval shapes and rollback](recovery-qualification.md#rollout-and-rollback)
+
 For a stopped admitted task, `gallivant why HANDLE` shows its recovery phase, original operation reservation and confirmed paid submissions. Use `gallivant recovery hold task/ID GENERATION` to fence the next effect, or `gallivant cancel HANDLE` to request cancellation of active work. See the [recipe prerequisites and stop conditions](autonomous-recovery.md#deterministic-reconciliation).
 
 `gallivant recovery resources [handle]` prints a read-only, redacted report of

@@ -239,6 +239,12 @@ and `gallivant why HANDLE` for the current run phase or cleanup reason. Pass
 the observed phase, mount role or service deadline to the operator. Leave
 existing author limits, saved execution ownership and pending journals in place.
 
+Use `recovery inventory PROFILE` to show an adoption proposal. The operator
+reviews its exact candidate IDs and chooses the private backup destination
+before applying it. A signed native or live case is specific to its admitted
+environment. Record missing host, model, or capture proof as gated.
+[Recovery qualification and rollout](recovery-qualification.md)
+
 Host supervision requires a separate operator deployment and qualification.
 An old heartbeat or an unavailable process inspection leaves ownership
 unverified. Setup can report that limitation without installing a service.

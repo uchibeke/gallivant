@@ -26,6 +26,8 @@ import { makeGit, GIT_PATH_LIMITS } from "../lib/git.mjs";
 import { execFileAsync } from "../lib/gh.mjs";
 import { makeHostRegistry } from "../lib/hosts.mjs";
 import { requestControl, applyControl, cancelControl, controlFailure } from "../lib/control.mjs";
+import { profileDigest } from "../lib/recovery_authority.mjs";
+import { recoveryAdminIntent } from "../lib/operator_intent.mjs";
 import { tempHome, makeClock, CONFIG, T0, fakeGh, fakeNotify, silentLog, fakeGit, fakeCredential, fakeIdentity, fakeRunner, prFixture, comment, harnessBin, GOOD_PRD, codexLines, claudeResultLines, geminiLines, opencodeLines, gooseLines } from "./helpers.mjs";
 const allowance = { remainingUsd: 1, reservedUsd: 0.1 };
 const input = { operationId: "first", inputHead: "a".repeat(40), allowance };
@@ -2419,8 +2421,9 @@ test("interrupted verification blocks replay while lost publication replies reus
 test("a recovery hold arriving after verification fences publication without spending another verification", async () => {
   const f = resultFixture();
   let held = false;
-  f.ctx.state = { get: () => ({ ...f.entry, recovery_profile: { version: 1, digest: "fixture" } }),
-    load: () => ({ recovery: { holds: { [`task/${f.id}`]: { active: held } } } }) };
+  const profile = { id: "publication-recovery", mode: "recover", digest: "f".repeat(64) };
+  f.ctx.state = { get: () => ({ ...f.entry, recovery_profile: { version: 1, digest: profile.digest } }),
+    load: () => ({ recovery: { profiles: [profile], holds: { [`task/${f.id}`]: { active: held } } } }) };
   const verify = f.verify;
   f.verify = async (...args) => { const result = await verify(...args); held = true; return result; };
   await assert.rejects(reconcileExecutionResult(f.ctx, f), /paused by task control or recovery hold/);
@@ -2450,11 +2453,12 @@ for (const operation of ["create", "edit"]) test(`verified PR ${operation} can r
   const f = resultFixture(), checkpoint = join(f.dir, "result-application.json");
   const head = f.result.inputHead;
   const pr = prFixture({ number: 1, headRefName: f.entry.branch, headRefOid: head });
-  let rows = operation === "edit" ? [pr] : [], lookupFailed = true, held = false, holdOnLookup = false, writes = 0;
+  let rows = operation === "edit" ? [pr] : [], lookupFailed = true, held = false, holdOnLookup = false, writes = 0, profilePresent = true;
   let remoteHead = head;
   if (operation === "edit") f.entry.pr = pr.number;
-  f.ctx.state = { get: () => ({ ...f.entry, recovery_profile: { version: 1, digest: "fixture" } }),
-    load: () => ({ recovery: { holds: { [`task/${f.id}`]: { active: held } } } }) };
+  const profile = { id: "publication-recovery", mode: "recover", digest: "f".repeat(64) };
+  f.ctx.state = { get: () => ({ ...f.entry, recovery_profile: { version: 1, digest: profile.digest } }),
+    load: () => ({ recovery: { profiles: profilePresent ? [profile] : [], holds: { [`task/${f.id}`]: { active: held } } } }) };
   const reopen = () => ({ ...f.ctx, host: makeHostRegistry({ credential: async () => ({ token: "fixture" }), exec: async (_cmd, args) => {
     if (args[0] === "api") {
       assert.deepEqual(args, ["api", `repos/${f.entry.repo}/commits/${encodeURIComponent(f.entry.branch)}`]);
@@ -2485,6 +2489,10 @@ for (const operation of ["create", "edit"]) test(`verified PR ${operation} can r
   assert.equal(writes, 0);
   assert.equal(readJson(checkpoint).phase, "pushed");
   held = false; holdOnLookup = false;
+  profilePresent = false;
+  await assert.rejects(reconcileExecutionResult(reopen(), f), /paused by task control or recovery hold/);
+  assert.equal(writes, 0);
+  profilePresent = true;
   assert.equal((await reconcileExecutionResult(reopen(), f)).pr.number, pr.number);
   assert.equal((await reconcileExecutionResult(reopen(), f)).pr.number, pr.number);
   assert.equal(readJson(checkpoint).phase, "published");
@@ -2639,6 +2647,98 @@ test("collection and unavailable publication I/O remain pending and recover with
     assert.equal(f.provider.calls.filter(call => call[0] === "submit").length, 1); assert.equal(f.provider.calls.filter(call => call[0] === "continue").length, 0);
     assert.deepEqual(f.calls, ["commit", "push", "PR"]);
   }
+});
+
+async function heldPublicationFixture({ existing: pr = null } = {}) {
+  const f = await collectedArtifactFixture(), state = makeState(f.ctx.home);
+  const { id, entry, job, provider } = f;
+  const limit = { mutations: 0, paidTurns: 0, spendMicros: 0 };
+  const profile = { version: 1, storeId: "fixture", id: "publication", revision: 1, mode: "observe", routes: [],
+    recipes: [], taskLimits: limit, cleanup: [], holdGeneration: 0, revocationGeneration: 0, qualification: null };
+  profile.digest = profileDigest(profile);
+  state.putRecoveryProfile(profile, null, recoveryAdminIntent(state.file, "profile", profile.digest, null));
+  state.put(id, { ...entry, ...(pr ? { state: STATES.prOpen, pr: pr.number, url: pr.url } : {}),
+    recovery_profile: { version: 1, digest: profile.digest }, last: { run: job.id, exit: null } });
+  const scope = `profile/${profile.id}`;
+  const control = (action, generation) => state.setRecoveryHold(scope, action, generation, recoveryAdminIntent(state.file, action, scope, generation));
+  control("disable", 0);
+  const gh = fakeGh({ pr: pr || prFixture({ number: 1, headRefName: entry.branch, headRefOid: f.result.inputHead }) });
+  gh.publishResultPr = async input => {
+    const published = await f.ctx.gh.publishResultPr(input);
+    gh.data.prsByHead = [gh.data.pr];
+    return published;
+  };
+  gh.containsCommit = async () => true;
+  const ctx = { ...f.ctx, state, clock: provider.clock, config: CONFIG, git: { ...fakeGit(), ...f.ctx.git },
+    gh, ownLogin: "me", log: silentLog, notify: fakeNotify(), executionFor: () => f.reopen(), readPrd: () => "# Brief\n" };
+  provider.observe({ state: "succeeded" });
+  return { ...f, ctx, state, gh, control, checkpoint: join(f.dir, "result-application.json"),
+    count: action => provider.calls.filter(call => call[0] === action).length };
+}
+
+test("a held remote result keeps publication owed across restart and publishes once after release", async () => {
+  for (const withControl of [false, true]) {
+    const f = await heldPublicationFixture();
+    await makeTick(f.ctx).tickEntry(f.id, f.state.get(f.id));
+    const cached = readFileSync(join(f.dir, "result.json"));
+    assert.equal(readJson(f.checkpoint), null);
+    assert.equal(f.state.get(f.id).last.exit, null);
+    assert.equal(f.state.get(f.id).state, STATES.running);
+    assert.deepEqual(f.calls, []);
+    assert.equal(f.count("collect"), 1);
+
+    f.ctx.state = makeState(f.ctx.home);
+    if (withControl) {
+      // Record a lost control acknowledgement without applying another turn.
+      requestControl(f.ctx, { handle: f.id, action: "message", note: "An earlier request." });
+      f.state.update(f.id, current => ({ control: { ...current.control, status: "applying" } }));
+      await makeTick(f.ctx).tick();
+      assert.equal(f.state.get(f.id).control.status, "failed");
+      // A queued non-interrupting message waits for the accepted publication.
+      requestControl(f.ctx, { handle: f.id, action: "message", note: "Check the published result." });
+      f.ctx.providerHealth = { get: () => ({ pending: true }) };
+      await makeTick(f.ctx).tick();
+      assert.equal(f.state.get(f.id).control.status, "queued");
+      assert.deepEqual(f.calls, []);
+    }
+    f.control("enable", 1);
+    await makeTick(f.ctx).tick();
+    await makeTick(f.ctx).tick();
+    assert.equal(f.state.get(f.id).pr, 1);
+    assert.equal(f.state.get(f.id).last.exit, 0);
+    assert.equal(readJson(f.checkpoint).phase, "published");
+    assert.deepEqual(f.calls, ["commit", "push", "PR"]);
+    assert.deepEqual(readFileSync(join(f.dir, "result.json")), cached);
+    assert.equal(f.count("collect"), 1);
+    assert.equal(f.count("submit"), 1);
+    assert.equal(f.count("continue"), 0);
+  }
+});
+
+test("a held remote result preserves merged closeout without publishing late output", async () => {
+  const pr = prFixture({ number: 1, headRefName: "work/result", headRefOid: "a".repeat(40), baseRefOid: "b".repeat(40),
+    headRepository: { nameWithOwner: "acme/widget" }, baseRepository: { nameWithOwner: "acme/widget" } });
+  const f = await heldPublicationFixture({ existing: pr });
+  await makeTick(f.ctx).tick();
+  assert.equal(f.state.get(f.id).last.exit, null);
+  const cached = readFileSync(join(f.dir, "result.json")), merge = "c".repeat(40);
+  f.provider.clock.advance(CONFIG.poll_seconds / 60);
+  Object.assign(f.gh.data.pr, { state: "MERGED", mergeCommit: { oid: merge }, mergedAt: new Date(f.provider.clock.now()).toISOString() });
+  f.gh.containsCommit = async () => false;
+  await makeTick(f.ctx).tick();
+  assert.equal(f.state.get(f.id).last.exit, null);
+  f.gh.containsCommit = async () => true;
+  f.provider.clock.advance(CONFIG.poll_seconds / 60);
+  await makeTick(f.ctx).tick();
+  assert.equal(f.state.get(f.id).state, STATES.done);
+  assert.equal(f.state.get(f.id).completionEvidence.terminal.mergeCommit, merge);
+  f.control("enable", 1);
+  await makeTick(f.ctx).tick();
+  assert.equal(readJson(f.checkpoint), null);
+  assert.deepEqual(readFileSync(join(f.dir, "result.json")), cached);
+  assert.deepEqual(f.calls, []);
+  assert.equal(f.count("cancel"), 0, "already-collected results require no remote stop");
+  assert.equal(f.count("submit"), 1);
 });
 
 test("a rejected result cannot settle until its blocked checkpoint is durable", async () => {
