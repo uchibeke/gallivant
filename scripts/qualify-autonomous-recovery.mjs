@@ -154,7 +154,7 @@ export async function qualificationCommand(args, { ctx, task = process.env.GALLI
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   try {
     const report = await qualificationCommand(process.argv.slice(2));
-    console.log(JSON.stringify(report));
+    process.stdout.write(`${JSON.stringify(report)}\n`);
     if (report.result !== "passed") process.exitCode = 1;
   } catch (error) {
     const remedy = error.code === "RECOVERY_QUALIFICATION" ? error.message : "Inspect the protected coordinator or fixture diagnostics before retrying.";
