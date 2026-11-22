@@ -438,6 +438,74 @@ test("a graph continuation rechecks the approved round cap before spawn after re
   assert.equal(w.entryFor("bounded").iteration, 2);
 });
 
+test("a graph base repair launches its last approved round exactly once", async t => {
+  for (const replaceSlot of [false, true]) await t.test(replaceSlot ? "a replaced slot fences the original operation" : "the reserved round launches once", async t => {
+    const w = fixture(t, { capacity: 1 }), id = `${PRODUCER}/repair`, runner = w.ctx.runnerFor(id);
+    const execution = makeExecution({ root: join(w.home, "native"), taskId: id, provider: "codex", clock: w.clock, runner });
+    w.ctx.executionFor = () => execution;
+    w.ctx.config.max_iterations = 1;
+    await w.queue("repair-round", [task("repair")]);
+    await w.tick();
+    const pr = w.finish("repair"), firstRun = w.entryFor("repair").last.run;
+    execution.settle(firstRun, () => 0);
+    const prior = execution.current();
+    w.ctx.state.update(id, { session: prior.execution.sessionId, execution: prior.execution });
+
+    Object.assign(w.ctx.git, {
+      toplevel: async path => path,
+      currentBranch: async () => pr.headRefName,
+      originOf: async () => `https://github.com/${PRODUCER}.git`,
+      head: async () => HEAD,
+      mergeState: async () => ({ head: null, unmerged: false, other: [] }),
+      assertClean: async () => {},
+      fetchBranchHead: async () => BASE,
+      mergeBase: async () => ({ conflict: true, aborted: true, head: HEAD, baseSha: BASE }),
+    });
+    w.ctx.config.max_iterations = 5;
+    w.restart();
+    let replacement;
+    runner.prepareStart = () => {
+      const registry = w.ctx.state.load(), current = registry.entries[id], slot = registry.dispatch.authors[id];
+      assert.equal(current.base_repair.status, "dispatching");
+      assert.equal(current.base_repair.charged, true);
+      assert.equal(current.iteration, 1);
+      assert.equal(slot.operation, current.base_repair.operationId);
+      if (replaceSlot) {
+        replacement = { ...slot, token: "replaced-reservation" };
+        registry.dispatch.authors[id] = replacement;
+        writeJsonAtomic(w.ctx.state.file, registry);
+      }
+    };
+
+    const tick = makeTick(w.ctx);
+    const launch = () => tick.repairBaseConflict(id, w.entryFor("repair"), pr);
+    const launched = await launch();
+    const entry = w.entryFor("repair"), repair = entry.base_repair;
+    assert.equal(entry.iteration, 1);
+    assert.equal(repair.charged, true);
+    if (replaceSlot) {
+      assert.equal(launched, undefined);
+      assert.equal(entry.reason, "base-repair-ownership");
+      assert.equal(execution.current().id, firstRun);
+      assert.equal(w.started("repair"), 1);
+      assert.deepEqual(Object.keys(execution.state().operations), [entry.start_token]);
+      assert.ok(replacement);
+      assert.deepEqual(w.ctx.state.load().dispatch.authors[id], replacement);
+      return;
+    }
+
+    assert.equal(repair.status, "running", entry.last.event);
+    assert.equal(launched.run, entry.last.run);
+    assert.equal(execution.current().execution.operationId, repair.operationId);
+    assert.equal(w.ctx.state.load().dispatch.authors[id].operation, repair.operationId);
+    await launch();
+    await assert.rejects(tick.startRun(id, w.entryFor("repair"), { name: "fix", prompt: "Address another review finding." }), { code: "PLAN_ITERATIONS" });
+    assert.equal(w.started("repair"), 2);
+    assert.equal(w.entryFor("repair").iteration, 1);
+    assert.deepEqual(Object.keys(execution.state().operations), [entry.start_token, repair.operationId]);
+  });
+});
+
 test("a graph author keeps its approved repository timeout across configuration changes", async t => {
   const w = fixture(t);
   w.ctx.config.repos = [{ repo: PRODUCER, run_timeout_minutes: 4 }];
