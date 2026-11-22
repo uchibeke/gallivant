@@ -18,6 +18,7 @@ import { recoveryAdminIntent } from "../lib/operator_intent.mjs";
 import { aggregateReviewResults, captureReviewEvidence, partitionReviewEvidence, planReviewSynthesis, reducedReviewReport, reviewReports, synthesisReviewEvidence, validateReviewResult, reviewPrompt, REVIEW_VALIDATION_VERSION } from "../lib/review_evidence.mjs";
 import { buildReviewRun, createReviewService, imageReviewRouteFingerprint, reviewExecutionId, reviewRouteFingerprint } from "../lib/first_party_review.mjs";
 import { copyReviewImage, inspectReviewImage } from "../lib/review_image.mjs";
+import { makeExecution } from "../lib/execution.mjs";
 import { makeTick } from "../lib/tick.mjs";
 import { makeGh } from "../lib/gh.mjs";
 import { reviewCommand } from "../lib/commands/review.mjs";
@@ -850,7 +851,12 @@ function reviewServiceWorld(clock = makeClock()) {
     if (!runners.has(key)) {
       const r = { job: null, result: null,
         prepare: async () => ({ receipt: {}, spec: {} }),
-        submit: async input => { r.job = { id: `run-${++calls.submits}`, name: input.name, running: true }; return r.job; },
+        submit: async (input, guard) => {
+          guard?.();
+          r.beforeDispatch?.();
+          guard?.({ beforeDispatch: true });
+          r.job = { id: `run-${++calls.submits}`, name: input.name, running: true }; return r.job;
+        },
         current: () => r.job, lines: () => [], outcome: () => r.result,
         settle: () => { calls.settlements++; return r.job; },
         cancel: async () => { calls.cancellations++; r.job.running = false; }, sanitize: value => value };
@@ -892,6 +898,78 @@ test("a reviewer preparation cannot submit across a scoped disable and enable", 
   assert.equal(Object.values(service.inspect(t.id).jobs)[0].status, "preparing");
   await service.reconcile(t.id, t.entry(), w.pr);
   assert.equal(w.calls.submits, 1);
+});
+
+test("a reviewer guard refusal restores preparation while unknown acceptance retains ownership", async t => {
+  for (const boundary of ["before intent", "after intent", "after start"]) await t.test(boundary, async () => {
+    const owner = tickWorld(), w = reviewServiceWorld(owner.ctx.clock);
+    const { profile } = admitFixture(owner.ctx, owner.id, "review-output-retry", "codex");
+    w.ctx.state = owner.state;
+    const scope = `profile/${profile.id}`;
+    const hold = (action, generation) => owner.state.setRecoveryHold(scope, action, generation,
+      recoveryAdminIntent(owner.state.file, action, scope, generation));
+    let rawRun, sends = 0, prepares = 0, execution, injected = false;
+    const raw = {
+      current: () => rawRun ?? null,
+      start(name, _cmd, _args, { runId }) {
+        sends++;
+        if (boundary === "after start") throw Object.assign(new Error("lost launch acknowledgement"), { code: "REVIEW_HELD" });
+        return rawRun = { id: runId, name, running: true, startedAt: w.clock.now(), exit: null };
+      },
+      prepareStart() {
+        if (boundary === "after intent" && !injected) { injected = true; hold("disable", 0); }
+      },
+    };
+    w.ctx.executionFor = taskId => {
+      const runner = makeExecution({ root: join(w.ctx.home, "fixture-execution"), taskId, provider: "codex", runner: raw, clock: w.clock });
+      execution = runner;
+      return {
+        ...runner,
+        prepare: async input => { prepares++; return { receipt: { fixture: prepares }, spec: { cmd: process.execPath, args: [], options: { cwd: input.cwd } } }; },
+        // Exercise the real local dispatch ledger with an in-process launch
+        // and a synthetic preparation receipt.
+        submit({ kind: _kind, preparation: _preparation, ...input }, guard) {
+          if (boundary === "before intent" && !injected) { injected = true; hold("disable", 0); }
+          return runner.submit(input, guard);
+        },
+      };
+    };
+    const service = w.service(), run = () => service.reconcile(owner.id, owner.entry(), w.pr);
+    if (boundary === "after start") {
+      await assert.rejects(run(), { code: "REVIEW_HELD" });
+      assert.equal(execution.current().execution.acceptance, "unknown");
+      const pending = Object.values(service.inspect(owner.id).jobs)[0];
+      assert.equal(pending.status, "launch-intent");
+      await w.service().reconcile(owner.id, owner.entry(), w.pr);
+      assert.equal(sends, 1);
+      assert.equal(prepares, 1);
+      assert.deepEqual(Object.values(service.inspect(owner.id).jobs), [pending]);
+      return;
+    }
+    const paused = await run();
+    assert.equal(paused.status, "running");
+    const ledger = service.inspect(owner.id), job = ledger.jobs[paused.key];
+    assert.equal(job.status, "preparing");
+    assert.equal(job.preparation, undefined);
+    assert.equal(job.run, null);
+    assert.equal(execution.current(), null);
+    assert.deepEqual(execution.state().operations, {});
+    assert.equal(execution.state().dispatchRefusals?.length ?? 0, boundary === "after intent" ? 1 : 0);
+    assert.equal(sends, 0);
+
+    hold("enable", 1);
+    const restarted = w.service();
+    const running = await restarted.reconcile(owner.id, owner.entry(), w.pr);
+    assert.equal(running.key, job.key);
+    assert.equal(execution.current().execution.operationId, `review-${job.key}`);
+    await restarted.reconcile(owner.id, owner.entry(), w.pr);
+    const resumed = restarted.inspect(owner.id);
+    assert.equal(resumed.jobs[job.key].deadline, job.deadline);
+    assert.equal(resumed.jobs[job.key].cancellationUnresolved, undefined);
+    assert.equal(resumed.spentReservedUsd, ledger.spentReservedUsd);
+    assert.equal(prepares, 2);
+    assert.equal(sends, 1);
+  });
 });
 
 test("a new review head preserves uncertain cancellation and waits for exact cessation", async () => {
@@ -1024,17 +1102,39 @@ test("a stopped reviewer reaches current-head clearance from its owned capacity 
   assert.equal(pending.status, "running");
   t.state.update(t.id, { state: "needs-human", reason: "first-party-review-failed", reviewHead: head, reviewBinding: first.binding,
     cursor: { since: T0, fixed_sha: head }, firstPartyReview: { ...first, status: "failed", errorCode: "REVIEW_PROVIDER" } });
-  const { run } = admitFixture(t.ctx, t.id, "review-output-retry", "codex");
+  const { run, profile } = admitFixture(t.ctx, t.id, "review-output-retry", "codex");
   const reviewerFor = w.ctx.executionFor;
+  const scope = `profile/${profile.id}`;
+  let refused = false;
   Object.assign(w.ctx, { state: t.state, clock: w.clock, recoveryQualificationFor: t.ctx.recoveryQualificationFor,
-    executionFor: (id, ...args) => id === t.id ? { current: () => run } : reviewerFor(id, ...args) });
+    executionFor: (id, ...args) => {
+      if (id === t.id) return { current: () => run };
+      const reviewer = reviewerFor(id, ...args);
+      reviewer.beforeDispatch = () => {
+        if (refused) return;
+        refused = true;
+        t.state.setRecoveryHold(scope, "disable", 0, recoveryAdminIntent(t.state.file, "disable", scope, 0));
+      };
+      return reviewer;
+    } });
   t.ctx.reviewService = w.service();
   await t.tick.tickEntry(t.id, t.entry());
   assert.equal(w.calls.submits, originalCount);
   w.clock.advance(5); t.ctx.clock.advance(5);
   await t.tick.tickEntry(t.id, t.entry());
+  assert.equal(w.calls.submits, originalCount);
+  const deferred = Object.values(w.service().inspect(t.id).jobs).find(j => j.retryOf === job.key);
+  assert.equal(deferred.status, "preparing");
+  assert.equal(t.entry().recovery_actions.total.paidTurns, 0);
+  t.state.setRecoveryHold(scope, "enable", 1, recoveryAdminIntent(t.state.file, "enable", scope, 1));
+  w.clock.advance(2); t.ctx.clock.advance(2);
+  await t.tick.tickEntry(t.id, t.entry());
   assert.equal(w.calls.submits, originalCount + 1, JSON.stringify(t.entry().recovery_wait));
   const retry = Object.values(w.service().inspect(t.id).jobs).find(j => j.retryOf === job.key);
+  assert.equal(retry.key, deferred.key);
+  assert.equal(retry.deadline, deferred.deadline);
+  assert.equal(t.entry().recovery_actions.submittedRecipes["review-output-retry"].paidTurns, 1);
+  assert.equal(t.entry().recovery_actions.total.paidTurns, 1);
   assert.equal(retry.evidence.digest, job.evidence.digest);
   w.finish(retry, { endedAt: w.clock.now(), raw: JSON.stringify(clear(retry.evidence)) });
   t.ctx.clock.advance(5);

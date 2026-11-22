@@ -12,7 +12,7 @@ approved manifest digest and exact recovery profile.
 
 | Scope | Result and evidence |
 | --- | --- |
-| Offline faults and replay | All 102 required tests passed. The macOS ARM64 fixture aggregate passed 143 tests on both Node 22.22.0 and Node 24.15.0. The report digests are `2afe75da3653043fe093ae3a33655ab3d3ccd063a91d5f210583afabfe0e6946` and `ccf1d3a8c274744c85ffc9113a3ea8e364ea12cb87537e09e0dc78d440722fc4` in that order. Both record checkout `424587b5e761f4e3a1bce73a88f8285717469217` and tested code digest `ec54c6b2488e843e1f8be2e6bd3df8c730f6ea73a03a4f3e4ec91bde22c34062`. [Fixture aggregate](../scripts/qualify-autonomous-recovery.mjs) |
+| Offline faults and replay | All 102 required tests passed. The macOS ARM64 fixture aggregate passed 147 tests on both Node 22.22.0 and Node 24.15.0. The report digests are `3e9246aed38686d0b612a592c32280eaed53fc96cc1ccdba382f85f62644f72e` and `db5dc78137cfe0095b331081eb6845247264953536b7f9d222d228caff073f2b` in that order. Both record checkout `28b6ee2ca34b0c667e77476f9c831f31c6d893dc` and tested code digest `ad75a49b304b056c5baf2ea6a7854c540095d446274748143aa12dbdbbdc6ade`. [Fixture aggregate](../scripts/qualify-autonomous-recovery.mjs) |
 | Native Linux and macOS | Unvalidated. This task's protected registry contained no pinned qualification manifest. `--native` exited 1 with `RECOVERY_QUALIFICATION`. A macOS ARM64 Node 22.22.0 fixture run exercises real local process and Git calls. It has no admitted environment or independent supervisor receipt. |
 | Live GitHub, Bitbucket private and Bitbucket public | Unvalidated. `--live` exited 1 at manifest admission. Repository access for implementation and a local Chromium 145.0.7632.6 PNG capture were observed separately. The selected disposable repository bindings, route entitlement, and any required installed host or capture behavior still need owner proofs. |
 | Overnight recovery and a true authority gate | Unvalidated. `--overnight` exited 1 at manifest admission. The operator needs separately approved exact cases and maintenance scope. |
@@ -27,6 +27,11 @@ snapshots and bindings, hostile input, reviewer piece and synthesis output,
 unverified cancellation, and independent maintainer evidence. The resource
 fixtures exercise bytes and inodes, retained inputs, shared cooldowns, fair
 lanes, healthy long-running tools, and a live lease and a proven-dead lease.
+
+Reviewer fixtures cover refusal at both launch checks. A proven pre-dispatch
+refusal restores preparation with the original job, deadline and allowance.
+An unresolved launch acknowledgement keeps its original execution for
+reconciliation.
 
 The machine-readable inventory pairs each shipped harness with GitHub,
 private Bitbucket and public Bitbucket and lists six owners separately. It

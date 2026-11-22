@@ -65,6 +65,7 @@ const contracts = {
     "a stopped reviewer reaches current-head clearance from its owned capacity retry without an author turn",
     "review qualification survives OAuth token refresh but not account, subject, provider or API-key changes",
     "a reviewer preparation cannot submit across a scoped disable and enable",
+    "a reviewer guard refusal restores preparation while unknown acceptance retains ownership",
     "a new review head preserves uncertain cancellation and waits for exact cessation",
   ],
 };
