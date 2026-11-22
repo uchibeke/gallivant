@@ -249,3 +249,16 @@ Host supervision requires a separate operator deployment and qualification.
 An old heartbeat or an unavailable process inspection leaves ownership
 unverified. Setup can report that limitation without installing a service.
 [Host supervision](install.md#host-supervision)
+
+## Dependency plan setup checks
+
+Run `plan validate FILE --json` to check local manifest structure without
+configuration. Use `plan preview FILE --json` to inspect repository bindings,
+source and base-file hashes, configured routes and limits when host access is
+available. Report unverified capabilities from the output as such.
+
+Have the operator review and confirm through the qualified ingress. The local
+author route cannot provide that authority, even with a copied digest. This
+release admits observation-only graphs and preserves the existing linear chain
+owner. Keep active claims and snapshots in place when reviewing a migration.
+[Dependency plan commands](commands.md)

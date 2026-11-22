@@ -13,6 +13,7 @@ import { recoveryAdminIntent } from "../lib/operator_intent.mjs";
 import { prepareRecoveryCanary, recoveryDrainStatus } from "../lib/recovery_rollout.mjs";
 import { recoveryHeld } from "../lib/recovery_recipes.mjs";
 import { rolloutAllows } from "../lib/recovery_eligibility.mjs";
+import { PLAN_REGISTRY_VERSION } from "../lib/registry_versions.mjs";
 import { recoveryCommand } from "../lib/commands/recovery.mjs";
 import { checkRuntimeState } from "../lib/runtime_state.mjs";
 import { acquireRuntimeOwner } from "../lib/daemon.mjs";
@@ -236,7 +237,7 @@ test("canaries require complete evidence, advance explicitly, and fence a stale 
   };
   const operational = { ...selected, generation: 1, stage: "operational", evidence: digest(proof),
     combinations: qualifiedCombinations(f.scope()), qualificationTask: id };
-  const check = recipe => rolloutAllows(ctx.state.load(), task, profile, route, recipe, { artifact: digest(artifact),
+  const check = (recipe, registry = ctx.state.load()) => rolloutAllows(registry, task, profile, route, recipe, { artifact: digest(artifact),
     surface: "github", environment }, ctx.clock.now());
   assert.throws(() => admit({ ...operational, generation: 0 }), /stage/);
   admit(selected);
@@ -244,6 +245,7 @@ test("canaries require complete evidence, advance explicitly, and fence a stale 
   assert.throws(() => admit({ ...operational, combinations: [key("foreign route")] }), /unqualified/);
   admit(operational);
   assert.equal(check("provider-continuation"), true);
+  assert.equal(check("provider-continuation", { ...ctx.state.load(), version: PLAN_REGISTRY_VERSION }), true);
   assert.equal(check("git-repair"), false);
   const semantic = { ...operational, stage: "semantic", generation: 2 }, reviewed = prepareRecoveryCanary(ctx, semantic);
   ctx.state.update(task, { snapshot_digest: key("replacement") });

@@ -300,6 +300,27 @@ Every merge is recorded the moment it happens, not when the round finally starts
 decline the round. The log says what was merged into what and when, and `gallivant why` prints the same thing with the
 commit, so an operator reading a diff they did not expect can see where the extra commit came from.
 
+## Dependency plan admission
+
+Plan previews inherit the configured repository, harness, review, completion
+and resource policies. They report current recovery hold generations and any
+unverified execution capability. Admitted graphs have a live-author limit of
+zero in this release. The existing chain owner continues linear dispatch.
+
+Protected plan operations require an authenticated operator with scoped grants.
+For an embedded deployment, the trusted coordinator ingress supplies its
+current principal, grants and exact worker-isolation proof using
+`bindPlanOperator`. The proof must cover the registry, snapshots, operator
+ingress and coordinator control routes for the actual deployment. Configure
+isolation outside the worker with an OS account, container or qualified outer
+sandbox. A standalone probe and file modes for a shared user are insufficient.
+Current standalone author routes leave this gate closed.
+
+Plan admission and reviewed checkpoint migration write registry version 4
+and dependency plan format 1. Use the matching runtime artifact and private
+namespace export for backup and restore. Previous registries remain readable
+without migration. [Runtime backup and restore](task-delivery.md#build-configure-upgrade-and-rollback)
+
 ## What is deliberately not a key
 
 Two bounds the daemon enforces have no setting, and both are fixed numbers with their reasoning written at the
