@@ -267,6 +267,40 @@ APort's deny names one problem at a time (evaluation stops at the first failing 
 
 When the recovery service budget expires, the hosted decision stays pending until a later review poll. The failure count stays unchanged and the hosted decision remains required even with `deliverable.on_unreachable: local`.
 
+### Inspect the payload with a mock verifier
+
+Run the walkthrough from a source checkout with Node.js 22 or later. See [test/deliverable.test.mjs](../test/deliverable.test.mjs).
+
+```sh
+node --test --test-reporter=spec --test-name-pattern='completion receipt walkthrough' test/deliverable.test.mjs
+```
+
+The walkthrough uses a synthetic widget export brief, receipt, check rollup and diff. Each `POST` diagnostic
+prints the mock endpoint and the serialized request body produced by the real gate. The Git host, verifier
+and corrective runner are in-process test doubles, so the walkthrough runs offline.
+
+For PR completion, the `passport` carries the approved brief's criterion IDs and descriptions and the
+policy limits. The `context` carries the coordinator's task ID, the receipt's output type, summary and
+attestations, the observed `tests_passing` value, the generated agent and idempotency identifiers, and
+provenance. With scanning enabled, `output_content` contains the added hunk lines with their diff markers
+stripped. Setting `deliverable.scan_output: false` omits that field for PR completion.
+
+PRD readiness uses the same endpoint with `output_type: "document"`. Its `output_content` contains the Markdown
+body after removing frontmatter, and its criteria and attestations come from the PRD contract checker. Only the
+PR completion request in the walkthrough carries `tests_passing`.
+
+| Fixture | Observed behavior |
+| --- | --- |
+| In-progress CI with a receipt claiming green checks | The PR stays open with zero verifier requests. Observed success on the next check permits the request. |
+| Clean additions and `evaluator: "local"` | The built-in rules accept the receipt with zero verifier requests. |
+| A blocked marker on an added line | The local scan returns `oap.blocked_pattern_detected` before any verifier request, even on a line that starts with `++`. |
+| Hosted denial with fallback configured | The deny code goes into the corrective receipt round. |
+| Connection failure with `on_unreachable: "wait"` | The PR stays open with a pending gate retry and no corrective round. |
+| The same failure with `on_unreachable: "local"` | The local pass stands and the log records `local (aport unreachable)`. |
+
+The coordinator tests require Node to launch `ps` and inspect its own process for the task lock. If the tests
+report `cannot identify this task review decision`, run the command in an environment that permits that check.
+
 ## Provenance on a decision
 
 Both gates send a `meta` object inside the context they already send:
