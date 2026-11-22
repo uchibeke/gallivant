@@ -249,6 +249,17 @@ Compile and check a local dependency plan. The command prints a summary by
 default and returns the normalized graph, source digests and approval digest
 with `--json`. See [the grammar and runnable examples](dependency-plans.md).
 
+| Command | Effect |
+|---|---|
+| `gallivant plan preview FILE --json` | Resolve the full approval through bounded read-only host and checkout checks. |
+| `gallivant plan queue FILE --approve DIGEST [--request-id ID]` | Save one reviewed observation-only plan through the qualified operator ingress. Reuse the same request identity after a lost response. |
+| `gallivant plan [inspect] [NAME]` | List or inspect admitted plans in the authenticated operator's scope. |
+| `gallivant plan migration [--approve DIGEST]` | Preview or seal the exact legacy checkpoint. Legacy dispatch retains ownership. |
+
+Preview and queue accept the validation command's `--dir` and `--checkout`
+arguments. Queue without a digest returns the proposal. Admission, protected
+inspection and saved producer links require a qualified deployment. [Dependency plan admission](dependency-plans.md#resolved-preview-and-admission)
+
 ## `gallivant chain [<name> [<first.md> <next.md> ...]] [--base <branch>] [--after <pr-url|handle>]`
 
 Queue at least two ready PRDs in order. All must be new tasks in one checkout of the same repository and on the same
@@ -266,6 +277,8 @@ brings the existing daemon up if needed. Independent runs continue alongside it.
 |---|---|
 | `gallivant chain launch first.md next.md` | Approve the order and current brief/source fingerprints, then queue dispatch. |
 | `gallivant chain launch --after your-org/repo#123 next.md` | Wait for the registered predecessor's verified merge, then start the new task. |
+| `gallivant chain launch --after-chain foundation next.md` | Review a future terminal boundary. An approved request registers observation-only work. |
+| `gallivant chain launch --after-node foundation:checks/unit next.md` | Review one future task boundary. An approved request registers observation-only work. |
 | `gallivant chain launch --retry` | Recheck a stopped chain after its cause is resolved. |
 | `gallivant chain launch --retry --resnapshot` | Explicitly accept updated briefs and carried sources for unstarted tasks. |
 | `gallivant chain launch --cancel` | Stop future dispatch; preserve already started work and its review loop. |

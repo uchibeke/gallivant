@@ -62,6 +62,27 @@ new chain to change it. Progress counts only the newly queued milestones and dis
 Keep the predecessor registered until the chain finishes. Run a version supporting `--after` on every coordinator
 using this home; do not downgrade while these chains remain active.
 
+## Review work after a future milestone
+
+Use `--after-chain NAME` to reference a producer's current terminal boundary.
+Use `--after-node NAME:NODE` for one exact task, including a qualified ID such
+as `checks/unit`. Both commands take one or more ready PRDs. Run the command
+without `--approve` to review, then repeat it with `--approve DIGEST` through
+the qualified operator ingress. The saved request freezes the producer instance,
+node contracts and authorization. A subsequent PR binds to its original start.
+Work appended to the producer leaves the saved boundary unchanged.
+
+These two commands reserve observation-only work. They require the protected
+operator boundary, and graph dispatch is disabled in this milestone. Chains
+queued with ordinary PRD paths or `--after` continue to advance under the
+existing coordinator. [Dependency plan admission](dependency-plans.md#resolved-preview-and-admission)
+
+`plan migration` previews a legacy checkpoint. In a qualified namespace,
+`plan migration --approve DIGEST` seals the reviewed version and references
+while keeping original chain approvals, pending claims and execution ownership.
+Review again if the checkpoint moved. Active conversion to graph dispatch is
+deferred until the graph dispatcher is qualified.
+
 ## Inspect progress
 
 ```sh

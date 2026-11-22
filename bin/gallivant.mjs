@@ -69,6 +69,11 @@ const HELP = `gallivant: give an agent a task, let the review loop run, go outsi
   gallivant ready <prd.md> [--check]     check the PRD against the contract; flip it to ready when it passes
   gallivant plan validate <file> [--dir <directory>] [--checkout <relative-directory>] [--json]
                                          compile a local JSON or YAML dependency plan for inspection
+  gallivant plan preview|queue <file> [--approve <digest>] [--request-id <id>]
+                                         resolve and review an observation-only plan; queue requires protected authority
+  gallivant plan [inspect] [<name>]       inspect admitted plans through the protected operator ingress
+  gallivant plan migration [--approve <digest>]
+                                         review a legacy checkpoint; keep the existing dispatch owner
   gallivant start [prd.md] [--no-daemon] [--no-server] [--no-open] [--port 8791] [--base <branch>]
                                          start the daemon and dashboard, then open it; optionally start a ready PRD
                                          --base sets the branch the PR targets and remembers it for this repository
@@ -77,6 +82,9 @@ const HELP = `gallivant: give an agent a task, let the review loop run, go outsi
   gallivant chain <name> <prd1.md> <prd2.md> ... [--base <branch>]
   gallivant chain <name> --after <pr-url|handle> <next.md> ...
                                          queue ready PRDs; each starts after the previous PR is merged
+  gallivant chain <name> --after-chain <producer> <next.md> ... [--approve <digest>]
+  gallivant chain <name> --after-node <producer:node> <next.md> ... [--approve <digest>]
+                                         review future boundaries; protected admission is observation-only
   gallivant chain [<name>] [--cancel | --retry [--resnapshot]]
                                          inspect chains, stop future work, or retry after fixing a blocker
   gallivant up [--once]                  the daemon: recover from GitHub, then tick every poll_seconds
@@ -112,7 +120,8 @@ const OPTIONS = {
   send: { type: "boolean" }, probe: { type: "boolean" }, help: { type: "boolean", short: "h" }, version: { type: "boolean", short: "v" },
   "no-server": { type: "boolean" }, "no-open": { type: "boolean" }, foreground: { type: "boolean" }, worktrees: { type: "string" },
   "no-daemon": { type: "boolean" }, note: { type: "string" }, resnapshot: { type: "boolean" }, "fresh-session": { type: "boolean" }, interrupt: { type: "boolean" },
-  base: { type: "string" }, after: { type: "string" }, harness: { type: "string" }, session: { type: "string" }, worktree: { type: "string" }, dir: { type: "string" }, port: { type: "string" },
+  base: { type: "string" }, after: { type: "string" }, "after-chain": { type: "string" }, "after-node": { type: "string" }, approve: { type: "string" },
+  harness: { type: "string" }, session: { type: "string" }, worktree: { type: "string" }, dir: { type: "string" }, port: { type: "string" },
   cancel: { type: "boolean" }, retry: { type: "boolean" }, wait: { type: "boolean" },
   run: { type: "boolean" }, stdin: { type: "boolean" }, repo: { type: "string" }, revision: { type: "string" },
   "request-id": { type: "string" }, context: { type: "string", multiple: true },
@@ -127,20 +136,13 @@ const OPTIONS = {
   finding: { type: "string" }, capability: { type: "string" },
 };
 
-async function dispatch(argv) {
-  const options = argv[0] === "learn" ? { ...OPTIONS, run: { type: "string" } }
-    : argv[0] === "plan" ? { dir: OPTIONS.dir, json: OPTIONS.json, help: OPTIONS.help, checkout: { type: "string", multiple: true } }
-    : OPTIONS;
-  const { values, positionals } = parseArgs({ args: argv, options, allowPositionals: true });
-  const [cmd, arg] = positionals;
-  if (values.version) { console.log(VERSION); return 0; }
-  if (values.help || !cmd || cmd === "help") { console.log(HELP); return 0; }
-  if (cmd === "plan") {
-    if (arg !== "validate" || positionals.length !== 3 || Object.keys(values).some(key => !["dir", "checkout", "json"].includes(key))) {
-      throw new Error("usage: plan validate <file> [--dir <directory>] [--checkout <relative-directory>] [--json]");
-    }
+async function planCommand(args, values) {
+  const [action, target] = args;
+  const compileOptions = { directory: values.dir, checkouts: values.checkout };
+  const fields = (...keys) => Object.keys(values).every(key => ["json", ...keys].includes(key));
+  if (action === "validate" && args.length === 2 && fields("dir", "checkout")) {
     const { compileDependencyPlan } = await import("../lib/dependency_plan.mjs");
-    const preview = compileDependencyPlan(positionals[2], { directory: values.dir, checkouts: values.checkout });
+    const preview = compileDependencyPlan(target, compileOptions);
     if (values.json) console.log(JSON.stringify(preview));
     else {
       const { graph, graphDigest, approvalDigest } = preview;
@@ -149,7 +151,48 @@ async function dispatch(argv) {
     }
     return 0;
   }
+  if (["validate", "preview", "queue"].includes(action) && (args.length !== 2 || !fields("dir", "checkout", ...(action === "queue" ? ["approve", "request-id"] : []))) ||
+      action === "migration" && (args.length !== 1 || !fields("approve")) ||
+      !["validate", "preview", "queue", "migration"].includes(action) && (args.length > (action === "inspect" ? 2 : 1) || !fields()) ||
+      values["request-id"] !== undefined && values.approve === undefined) {
+    throw new Error("usage: plan validate|preview|queue <file> | plan [inspect] [<name>] | plan migration [--approve <digest>]");
+  }
+  const { previewPlan, queuePlan, inspectPlan, migratePlans } = await import("../lib/dependency_plan_admission.mjs");
+  const ctx = makeContext({ readOnly: true }), input = { file: target, options: compileOptions };
+  const result = action === "preview" ? await previewPlan(ctx, input)
+    : action === "queue" ? await queuePlan(ctx, input, { approve: values.approve, requestId: values["request-id"] })
+    : action === "migration" ? migratePlans(ctx, values.approve)
+    : inspectPlan(ctx, action === "inspect" ? target : action);
+  console.log(JSON.stringify(result));
+  return 0;
+}
+
+async function dispatch(argv) {
+  const options = argv[0] === "learn" ? { ...OPTIONS, run: { type: "string" } }
+    : argv[0] === "plan" ? { dir: OPTIONS.dir, json: OPTIONS.json, help: OPTIONS.help, approve: OPTIONS.approve, "request-id": OPTIONS["request-id"], checkout: { type: "string", multiple: true } }
+    : OPTIONS;
+  const { values, positionals } = parseArgs({ args: argv, options, allowPositionals: true });
+  const [cmd, arg] = positionals;
+  if (values.version) { console.log(VERSION); return 0; }
+  if (values.help || !cmd || cmd === "help") { console.log(HELP); return 0; }
+  if (cmd === "plan") return planCommand(positionals.slice(1), values);
   if (values.after !== undefined && (cmd !== "chain" || !values.after.trim())) throw new Error("--after requires a registered PR URL or handle when queuing a new chain");
+  const afterChain = values["after-chain"], afterNode = values["after-node"];
+  if ([afterChain, afterNode].some(value => value !== undefined)) {
+    const options = ["after-chain", "after-node", "approve", "request-id", "base", "json", "no-daemon"];
+    if (cmd !== "chain" || positionals.length < 3 || (afterChain === undefined) === (afterNode === undefined) ||
+        Object.keys(values).some(key => !options.includes(key)) || values["request-id"] !== undefined && values.approve === undefined) {
+      throw new Error("Supply one future producer reference and ready PRD paths when queuing a new chain.");
+    }
+    const { futurePlanTarget, queuePlan } = await import("../lib/dependency_plan_admission.mjs");
+    const target = futurePlanTarget(arg, afterChain, afterNode);
+    const ctx = makeContext({ readOnly: true });
+    const report = await queuePlan(ctx, { linear: { name: arg, paths: positionals.slice(2), base: values.base, target } },
+      { approve: values.approve, requestId: values["request-id"] });
+    console.log(JSON.stringify(report));
+    return 0;
+  }
+  if (values.approve !== undefined) throw new Error("--approve is available only for protected plan commands and future chain references");
   if (cmd === "init") {
     if (arg) throw new Error("init takes no positional argument; run it from inside the target checkout");
     const r = await init({ harness: values.harness, worktrees: values.worktrees, hostConfig: values["host-config"], base: values.base });
@@ -209,7 +252,10 @@ async function dispatch(argv) {
     }
   }
   const ctx = makeContext();
-  const mutating = ["start", "resume", "register", "remove", "recheck", "say", "cancel"].includes(cmd) || cmd === "review" && arg !== "status" || cmd === "chain" && (positionals.length > 2 || values.cancel || values.retry);
+  // Check maintenance/pin eligibility up front. The queue operation takes its
+  // actual mutation lease after host reads, immediately before admission.
+  if (cmd === "chain" && positionals.length > 2) acquireCliMutation(ctx.home).release();
+  const mutating = ["start", "resume", "register", "remove", "recheck", "say", "cancel"].includes(cmd) || cmd === "review" && arg !== "status" || cmd === "chain" && (values.cancel || values.retry);
   const owner = mutating ? acquireCliMutation(ctx.home) : null;
   try {
   if (cmd === "recheck" || cmd === "say" || cmd === "cancel") {
