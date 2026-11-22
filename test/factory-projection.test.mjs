@@ -150,10 +150,11 @@ test("plan, node and prerequisite windows preserve the selected scope across pag
 });
 
 test("legacy linear records expose the same statuses and prerequisite evidence", () => {
-  const before = `${REPO}/prepare`, after = `${REPO}/finish`;
+  const before = `${REPO}/prepare`, after = `${REPO}/finish`, older = `${REPO}/older-step`;
   const legacy = { name: "older-plan", repo: REPO, base: "main", status: "active", index: 1,
     created_at: "2026-11-21T12:00:00Z", updated_at: "2026-11-22T10:00:00Z",
-    steps: [{ id: before, merged: { pr: 9, sha: "a".repeat(40), at: "2026-11-22T08:00:00Z" } }, { id: after }] };
+    steps: [{ id: before, merged: { pr: 9, sha: "a".repeat(40), at: "2026-11-22T08:00:00Z" } },
+      { id: after, harness: "codex" }, { id: older }] };
   const data = catalog({ chains: { [legacy.name]: legacy } });
   const shared = planWindow(data, { plan: legacy.name, node: "finish" });
   const compatibility = planWindow(data, { plan: legacy.name, milestone: after }, { legacyOnly: true });
@@ -161,6 +162,12 @@ test("legacy linear records expose the same statuses and prerequisite evidence",
   assert.deepEqual(shared.detail.selected.dependencies.map(d => d.status), ["integrated"]);
   assert.equal(shared.detail.counts.integrated, 1);
   assert.equal(shared.detail.selected.registered, false);
+  assert.equal(shared.detail.selected.harness, "codex");
+  assert.equal(shared.detail.selected.capability.harness, "codex");
+  assert.equal(shared.detail.selected.capability.dispatch, "unknown");
+  const planned = harness => overviewWindow({ factory: data }, { harness, status: "planned" }).rows.map(row => row.id);
+  assert.deepEqual(planned("codex"), [after]);
+  assert.deepEqual(planned("unknown"), [older]);
   assert.equal(planWindow(data, { plan: legacy.name, milestone: "other/repo/finish" }, { legacyOnly: true }).detail.missingNode, true);
 });
 

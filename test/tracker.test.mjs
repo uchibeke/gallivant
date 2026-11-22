@@ -267,6 +267,31 @@ test("the served factory shell keeps the selected plan, future task links and fi
   assert.deepEqual(saved, before);
 });
 
+test("queued legacy milestones match their saved harness in Overview and Tasks at both mounts", async () => {
+  const w = world(), repo = w.state.get(ID).repo;
+  const queued = `${repo}/queued-codex`;
+  w.state.createChain({ name: "queued-chain", repo, base: "main", status: "active", index: 0, created_at: T0,
+    steps: [{ id: queued, relPath: "docs/prds/queued-codex.md", harness: "codex" },
+      { id: `${repo}/queued-other`, relPath: "docs/prds/queued-other.md", harness: "claude" }] });
+  const before = w.state.workspaceRecords(), filter = "?harness=codex&status=planned";
+  for (const base of ["", "/gallivant"]) {
+    const get = async path => {
+      const response = res();
+      await handle(w.ctx, req(base + path + filter), response, { base });
+      assert.equal(response.code, 200);
+      return response.body();
+    };
+    for (const [page, api] of [["/", "/api/overview"], ["/tasks", "/api/tasks"]]) {
+      const body = await get(page);
+      assert.deepEqual([...body.matchAll(/data-task-id="([^"]+)"/g)].map(match => match[1]), [queued]);
+      const { factory } = JSON.parse(await get(api));
+      assert.equal(factory.matched, 1);
+      assert.deepEqual(factory.tasks.map(task => [task.id, task.harness, task.registered]), [[queued, "codex", false]]);
+    }
+  }
+  assert.deepEqual(w.state.workspaceRecords(), before);
+});
+
 test("protected legacy task and chain control reads use the action grants", async () => {
   const w = world({ entry: { base: "main", state: STATES.needsHuman, reason: "checks-red" } });
   const name = "scoped-chain", repo = w.state.get(ID).repo;
