@@ -495,10 +495,12 @@ for (const missing of ["lib/tasks.mjs", "bin/package-plugin.mjs", "templates/plu
 });
 
 test("guide captures share source verification without admitting diagnostic images", t => {
-  for (const path of ["docs/ui/previews/final-overview-dark.png", "docs/ui/previews/foundation-overview-dark.png"]) {
+  for (const path of ["docs/ui/previews/final-overview-dark.png", "docs/ui/previews/foundation-overview-dark.png",
+    "docs/ui/previews/dependency-plans-desktop.png", "docs/ui/previews/dependency-plans-review-mobile.png"]) {
     assert.equal(runtimeFile(path), true); assert.equal(payloadChange(path), true);
   }
-  for (const path of ["docs/ui/previews/private.png", "docs/ui/previews/final-overview-dark.png.js", "docs/ui/previews/../private.png", "docs/audit/private.png"]) assert.equal(runtimeFile(path), false);
+  for (const path of ["docs/ui/previews/private.png", "docs/ui/previews/dependency-plans-private.png",
+    "docs/ui/previews/final-overview-dark.png.js", "docs/ui/previews/../private.png", "docs/audit/private.png"]) assert.equal(runtimeFile(path), false);
   for (const path of ["docs/ui/.npmignore", "docs/ui/previews/.npmrc"]) {
     assert.equal(packagingControl(path), true); assert.equal(runtimeFile(path), false);
   }

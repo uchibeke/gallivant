@@ -26,7 +26,7 @@ try {
     assert.ok(!/(?:playwright|axe-core|chromium|firefox|webkit|test-results|fixtures)/.test(file.path), `development-only payload: ${file.path}`);
   const packedPaths = new Set(packed.files.map(f => f.path));
   for (const path of packedPaths) assert.ok(runtimeFile(path), `shared release allowlist: ${path}`);
-  for (const name of ["final-overview-dark", "final-overview-light", "final-task-mobile", "final-chain-desktop"])
+  for (const name of ["final-overview-dark", "final-overview-light", "final-task-mobile", "final-chain-desktop", "dependency-plans-desktop", "dependency-plans-review-mobile"])
     assert.ok(packedPaths.has(`docs/ui/previews/${name}.png`), `approved guide asset: ${name}`);
   // Every relative image linked from a shipped guide must exist in the tarball.
   for (const file of packed.files.filter(f => f.path.endsWith(".md"))) {
