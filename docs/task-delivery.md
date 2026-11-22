@@ -264,7 +264,7 @@ MCP or the scoped operation API, but is not itself a deployed multi-tenant servi
 ## Build, configure, upgrade and rollback
 
 For a namespace with dependency plans, use a runtime artifact declaring
-`registryVersion: 3` and `dependencyPlanVersion: 1`. `task-delivery-state export`
+`registryVersion: 4` and `dependencyPlanVersion: 1`. `task-delivery-state export`
 and `import` use the same maintenance locks and file checks as `backup` and
 `rollback`. Export the entire namespace with its pinned artifact. Restore into
 a fresh path with that artifact and the versioned backup envelope. The registry

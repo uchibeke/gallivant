@@ -15,6 +15,11 @@ Changed sources require the existing explicit approval flow. Closed or merged
 work requires a follow-up brief. Unavailable capabilities and unresolved
 execution ownership remain visible beside the controls.
 
+An observation-only recovery profile shows the reason for the gate. A new
+automatic recipe needs an operator-admitted canary for the exact task and
+route. Use Recheck PR to refresh host evidence and the CLI recovery controls
+to hold future effects or inspect a drain. [Recovery commands](commands.md)
+
 Stop this task contains Cancel task. Confirmation names the logical task and
 explains preserved files and remote uncertainty. An applied cancellation can
 mean only that future dispatch stopped: remote work may continue until the

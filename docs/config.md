@@ -316,7 +316,7 @@ isolation outside the worker with an OS account, container or qualified outer
 sandbox. A standalone probe and file modes for a shared user are insufficient.
 Current standalone author routes leave this gate closed.
 
-Plan admission and reviewed checkpoint migration write registry version 3
+Plan admission and reviewed checkpoint migration write registry version 4
 and dependency plan format 1. Use the matching runtime artifact and private
 namespace export for backup and restore. Previous registries remain readable
 without migration. [Runtime backup and restore](task-delivery.md#build-configure-upgrade-and-rollback)
@@ -558,6 +558,12 @@ and the completion receipt.
 `review.mode` selects `external-required`, `first-party-required`, or `both-required` for new tasks. `review.route: "codex"` requires a successful isolated live qualification. `review.specialist` allows at most one of `security` or `regression`. Defaults and bounds, per-repository settings, separate review allowances, explicit zero-check CI policy and the `legacy_no_review` exception are documented in [First-party review](first-party-review.md). A config edit cannot change an existing task policy; use `review policy <handle> --mode <mode> --reason "..."` to revoke readiness and explicitly re-evaluate. `reviewer: null` alone no longer authorizes an unattended new start.
 
 Recovery profiles are revisioned coordinator registry records. A new start selects a profile by exact digest. A global default cannot enroll an existing task. See the [profile fields, route tuple and generation rules](autonomous-recovery.md#recovery-policy-and-admission).
+
+Canary admissions pin an exact profile, task bindings, owner/recipe
+combinations and evidence expiry. Profile revision or a scoped disable fences
+queued recovery. Keep the disposable qualification profile separate from
+profiles used for canaries. Model, credential and capture capabilities require
+proof from the selected launch. [Qualification and rollout](recovery-qualification.md)
 
 ## Recovery scheduling and headroom
 

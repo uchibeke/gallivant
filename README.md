@@ -296,6 +296,7 @@ for the installed version's flags.
 | Write a brief or define noncoding acceptance checks | [PRD contract](docs/prd.md) |
 | Use API-backed hosted execution | [OpenAI Agents](docs/openai-agents.md) |
 | Dashboard messages, controls and recovery | [Dashboard](docs/app.md) · [Commands](docs/commands.md) |
+| Qualify recovery routes, adopt stopped tasks or disable a canary | [Recovery qualification](docs/recovery-qualification.md) |
 | Models, credentials, limits and notifications | [Configuration](docs/config.md) |
 | Plan sequential work | [Chains](docs/chains.md) |
 | Embed task delivery in another application | [Task-delivery package](docs/task-delivery.md) |
