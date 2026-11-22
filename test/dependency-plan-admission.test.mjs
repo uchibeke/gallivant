@@ -255,15 +255,32 @@ test("future boundaries freeze exact legacy nodes, bind PRs later, retain receip
   ctx.state.update(step.id, pr);
   assert.equal(anchorView(ctx, "other-consumer").observed[0].pr.number, 91);
   const merge = { pr: 91, sha: MERGE, at: T0 }, evidence = { state: "MERGED", repository: REPO, pr: 91, base: "main", head: HEAD, mergeCommit: MERGE, mergedAt: T0 };
-  ctx.state.updateChain("producer", chain => ({ steps: chain.steps.map((item, index) => index === 1 ? { ...item, merged: merge } : item) }));
+  ctx.state.updateChain("producer", chain => ({ steps: chain.steps.map((item, index) => index === 1 ?
+    { ...item, entry: { token: claim.token, pr: 91 }, merged: merge } : item) }));
   assert.equal(anchorView(ctx, "consumer").observed[0].status, "merge-unqualified");
   ctx.state.update(step.id, { state: "done", last: { ...entry.last, exit: 0 }, completionEvidence: { terminal: evidence, integration: { ...evidence, qualified: true } },
     workspace_cleanup: { status: "retained", pr: 91, head: HEAD } });
   assert.equal(anchorView(ctx, "consumer").observed[0].receipt.sha, MERGE);
   ctx.state.updateChain("producer", { status: "done", index: 3 });
   ctx.state.remove(step.id);
-  assert.equal(anchorView(ctx, "consumer").observed[0].status, "integrated");
-  assert.equal(anchorView(ctx, "consumer").observed[0].receipt.number, 91);
+  const integrated = anchorView(ctx, "consumer").observed[0];
+  assert.equal(integrated.status, "integrated");
+  assert.equal(integrated.receipt.number, 91);
+  const generation = inspectPlan(ctx, "consumer").runtimeGeneration;
+  await queueChain(ctx, { name: "later-work", paths: [step.path, brief("later-step")] });
+  const replacement = installLegacyEntry(ctx.state, "later-work", 0, { number: 92 });
+  assert.notEqual(replacement.claim.token, claim.token);
+  assert.deepEqual(anchorView(ctx, "consumer").observed[0], integrated);
+  assert.deepEqual(anchorView(ctx, "other-consumer").observed[0], integrated);
+  assert.equal(inspectPlan(ctx, "consumer").runtimeGeneration, generation);
+  assert.deepEqual(ctx.state.get(step.id), replacement.entry);
+  cancelChain(ctx, "later-work");
+  ctx.state.remove(step.id);
+  ctx.state = makeState(ctx.home);
+  assert.deepEqual(anchorView(ctx, "consumer").observed[0], integrated);
+  ctx.state.updateChain("producer", chain => ({ steps: chain.steps.map((item, index) => index === 1 ?
+    { ...item, merged: { ...merge, sha: "d".repeat(40) } } : item) }));
+  assert.deepEqual(anchorView(ctx, "consumer").observed[0], { id: "tail", status: "producer-unavailable" });
   assert.equal(ctx.state.get(`${REPO}/consumer`), null);
 });
 
