@@ -70,7 +70,7 @@ const HELP = `gallivant: give an agent a task, let the review loop run, go outsi
   gallivant plan validate <file> [--dir <directory>] [--checkout <relative-directory>] [--json]
                                          compile a local JSON or YAML dependency plan for inspection
   gallivant plan preview|queue <file> [--approve <digest>] [--request-id <id>]
-                                         resolve and review an observation-only plan; queue requires protected authority
+                                         resolve a plan and its dispatch limits; queue requires protected authority
   gallivant plan [inspect] [<name>]       inspect admitted plans through the protected operator ingress
   gallivant plan migration [--approve <digest>]
                                          review a legacy checkpoint; keep the existing dispatch owner
@@ -84,7 +84,7 @@ const HELP = `gallivant: give an agent a task, let the review loop run, go outsi
                                          queue ready PRDs; each starts after the previous PR is merged
   gallivant chain <name> --after-chain <producer> <next.md> ... [--approve <digest>]
   gallivant chain <name> --after-node <producer:node> <next.md> ... [--approve <digest>]
-                                         review future boundaries; protected admission is observation-only
+                                         review future boundaries and admit work through protected authority
   gallivant chain [<name>] [--cancel | --retry [--resnapshot]]
                                          inspect chains, stop future work, or retry after fixing a blocker
   gallivant up [--once]                  the daemon: recover from GitHub, then tick every poll_seconds

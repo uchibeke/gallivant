@@ -352,6 +352,7 @@ test("reviewed migration preserves active chain, pending claim and inputs while 
   const pending = ctx.state.claimStart(`${REPO}/pending-first`, { name: "pending", index: 0, dispatch: "pending-dispatch" });
   const old = ctx.state.load();
   old.version = RECOVERY_REGISTRY_VERSION;
+  delete old.dispatch; // The migration input predates durable dispatch reservations.
   old.recovery = { version: 1, storeId: "existing-recovery-store", profiles: [], holds: {} };
   for (const chain of Object.values(old.chains)) delete chain.plan_instance;
   old.entries[`${REPO}/predecessor`].reviewHistory = [{ key: "pre-existing", evidence: { diff: "private old review" } }];

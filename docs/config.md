@@ -310,8 +310,26 @@ commit, so an operator reading a diff they did not expect can see where the extr
 
 Plan previews inherit the configured repository, harness, review, completion
 and resource policies. They report current recovery hold generations and any
-unverified execution capability. Admitted graphs have a live-author limit of
-zero in this release. The existing chain owner continues linear dispatch.
+unverified execution capability.
+
+`dispatch_capacity` is an optional object in the coordinator config. Counts
+are integers up to 64. Set both graph ceilings above zero to approve graph
+dispatch in a protected deployment.
+
+| Key | Default | Scope |
+| --- | ---: | --- |
+| `authors` | 8 | Live author reservations across manual, linear and graph work |
+| `per_repository` | 8 | Live authors in one host repository |
+| `per_plan` | 8 | Live authors in one plan or linear chain |
+| `preparations` | 4 | Concurrent initial preparations, including clone work |
+| `graph_authors` | 0 | Live authors admitted by graph dispatch |
+| `graph_per_repository` | 0 | Live graph authors in one host repository |
+
+Only graph ceilings accept zero. Lower limits apply to new reservations.
+The approval pins the upper limits for a graph, and current configuration can
+further narrow admission. Active runs retain their original task allowances.
+The reviewer and reconciliation work lanes use their existing independent
+limits and budgets. `execution.concurrency` governs bounded coordinator I/O.
 
 Protected plan operations require an authenticated operator with scoped grants.
 For an embedded deployment, the trusted coordinator ingress supplies its
@@ -322,10 +340,12 @@ isolation outside the worker with an OS account, container or qualified outer
 sandbox. A standalone probe and file modes for a shared user are insufficient.
 Current standalone author routes leave this gate closed.
 
-Plan admission and reviewed checkpoint migration write registry version 4
-and dependency plan format 1. Use the matching runtime artifact and private
-namespace export for backup and restore. Previous registries remain readable
-without migration. [Runtime backup and restore](task-delivery.md#build-configure-upgrade-and-rollback)
+Observation-only admission and reviewed checkpoints use registry version 4
+and dependency plan format 1. Durable author reservations or dispatch-enabled
+approvals require registry version 5. Previous registries remain readable.
+To roll back, disable new graph author admission, settle owned work and use a
+compatible runtime or restore its matching private namespace in a separate
+location. [Runtime backup and restore](task-delivery.md#build-configure-upgrade-and-rollback)
 
 ## What is deliberately not a key
 

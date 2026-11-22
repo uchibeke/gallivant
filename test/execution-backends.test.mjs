@@ -977,6 +977,22 @@ test("legacy cancellation stops the owned process tree, survives restart and qua
   assert.equal(readJson(join(f.root, f.id, "job.json")).execution.providerState, "cancelled");
 });
 
+test("native launch preparation failures release the exact ledger intent and reserved cost", async () => {
+  const root = tempHome(), clock = makeClock(), runner = makeRunner(root, { clock });
+  const service = makeExecution({ root, taskId: "native-refusal", provider: "codex", runner, clock });
+  const launch = () => service.start("start", process.execPath, [], {
+    cwd: root, execution: input, runtimeSettings: { settings: "missing-launch-argument" },
+  });
+  for (let attempt = 0; attempt < 2; attempt++) {
+    await assert.rejects(launch(), { dispatchNotSent: true, message: /runtime settings do not match/ });
+    const ledger = service.state();
+    assert.deepEqual(ledger.operations, {});
+    assert.equal(ledger.allowance, undefined);
+    assert.equal(ledger.current, null);
+    assert.equal(runner.current(), null);
+  }
+});
+
 test("lost local launch acknowledgement recovers an existing stop before shutdown and cannot redispatch", async t => {
   const observations = [];
   for (const reason of ["operator-cancelled", "timeout"]) {

@@ -5,7 +5,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { join } from "node:path";
 import { existsSync, readFileSync, mkdirSync, writeFileSync, symlinkSync, lstatSync } from "node:fs";
-import { assertRuntimePin, checkRuntimeState, migrateRuntimeState, backupRuntimeState, restoreRuntimeState } from "../lib/runtime_state.mjs";
+import { assertRuntimePin, checkRuntimeState, migrateRuntimeState, backupRuntimeState, restoreRuntimeState, PLAN_RUNTIME_FORMAT } from "../lib/runtime_state.mjs";
 import { createNodeCoordinator, createNodeOwnerStore } from "../lib/runtime_node.mjs";
 import { CORE_VERSION } from "../lib/task_delivery_contract.mjs";
 import { makeExecution } from "../lib/execution.mjs";
@@ -18,6 +18,15 @@ const manifest = { coreVersion: CORE_VERSION, operationVersion: 1, taskVersion: 
 const update = { ...manifest, coreSha256: "b".repeat(64) };
 const taskId = "task-" + "1".repeat(24);
 const remote = { transport: "remote", provider: "openai-agents", acceptance: "accepted", providerJobId: "owned", turnId: "root", providerState: "succeeded", collected: true };
+
+test("runtime ingress requires the pinned reservation format before the first registry write", () => {
+  const home = tempHome(), current = { ...manifest, ...PLAN_RUNTIME_FORMAT };
+  migrateRuntimeState({ home, manifest });
+  assert.throws(() => assertRuntimePin({ home, manifest: current }), { code: "COORDINATOR_PIN" });
+  migrateRuntimeState({ home, manifest: current });
+  assert.throws(() => assertRuntimePin({ home, manifest }), { code: "COORDINATOR_PIN" });
+  assert.doesNotThrow(() => assertRuntimePin({ home, manifest: current }));
+});
 
 test("archived v2 registry supports coordinator wake and integrity-checked backup and restore", async () => {
   const home = tempHome(), id = "acme/widget/history", state = makeState(home);

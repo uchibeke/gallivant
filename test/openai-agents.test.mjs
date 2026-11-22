@@ -1270,26 +1270,46 @@ test("initial remote launch failures open one owner item until the owner repairs
 for (const [fault, name] of [
   ["reply-loss", "initial launch reply loss remains registered for coordinator restart without a second implementation"],
   ["pre-send-refusal", "initial launch pre-send refusal remains registered for safe coordinator recovery"],
+  ["ledger-refusal", "initial dispatch without a ledger intent releases its slot and resumes the exact launch"],
   ["legacy-refusal", "legacy initial refusal resumes from private non-dispatch proof without creating an unrelated implementation"],
   ["prepare-refusal", "initial preparation refusal supports the shared operator control after repair and restart"],
 ]) test(name, async t => {
   const f = launchFixture(), { ctx, prdPath } = f, state = ctx.state;
   ctx.executionFor = () => {
     const service = f.service(), method = fault === "prepare-refusal" ? "prepare" : "submit", original = service[method];
-    if (fault !== "reply-loss") service[method] = request => unsupportedHost(() => original(request));
+    if (fault === "ledger-refusal") service.submit = async () => { throw Object.assign(new Error("dispatch input refused before reservation"), { code: "EXECUTION_INPUT" }); };
+    else if (fault !== "reply-loss") service[method] = request => unsupportedHost(() => original(request));
     return service;
   };
   await launchAccess(f, async () => {
     if (fault !== "reply-loss") {
-      await assert.rejects(start(ctx, { path: prdPath }), { code: "EXECUTION_VERIFICATION_SANDBOX" });
+      const code = fault === "ledger-refusal" ? "EXECUTION_INPUT" : "EXECUTION_VERIFICATION_SANDBOX";
+      await assert.rejects(start(ctx, { path: prdPath }), { code });
       const refused = makeState(f.root).get("acme/widget/task");
       assert.equal(refused.state, STATES.needsHuman); assert.equal(refused.reason, fault === "prepare-refusal" ? "launch-preparation" : "dispatch-refused");
       assert.equal(refused.last.run, null); assert.equal(refused.initial_dispatch.status, "unsubmitted");
       assert.equal(state.startClaim(f.id), null);
+      assert.equal(state.hasAuthorReservation(f.id), false);
       assert.equal(f.service().current(), null); assert.equal(f.service().state().allowance, undefined);
       assert.equal(f.sessions.size, 0); assert.equal(f.turns.size, 0);
       await makeTick({ ...ctx, state: makeState(f.root) }).tickEntry("acme/widget/task", refused);
       assert.equal(f.service().current(), null); assert.equal(f.sessions.size, 0);
+      if (fault === "ledger-refusal") {
+        await assert.rejects(resume(ctx, { handle: f.id }), { code });
+        assert.deepEqual(state.get(f.id).initial_dispatch, refused.initial_dispatch);
+        assert.equal(state.hasAuthorReservation(f.id), false);
+        const update = state.update;
+        state.update = (...args) => {
+          const saved = update(...args);
+          if (saved?.initial_dispatch?.status === "dispatching") throw new Error("dispatch marker acknowledgement lost");
+          return saved;
+        };
+        try { await assert.rejects(resume(ctx, { handle: f.id }), /dispatch marker acknowledgement lost/); }
+        finally { state.update = update; }
+        assert.deepEqual(state.get(f.id).initial_dispatch, refused.initial_dispatch);
+        assert.equal(state.hasAuthorReservation(f.id), false);
+        assert.deepEqual(f.service().state().operations, {});
+      }
       ctx.executionFor = f.service; ctx.state = makeState(f.root);
       if (fault === "legacy-refusal") ctx.state.update(f.id, { initial_dispatch: null });
       const page = launchPage(f), pagePath = join(f.root, "initial-controls.html"); writeFileSync(pagePath, page);
@@ -1318,6 +1338,7 @@ for (const [fault, name] of [
     }
     f.lose("/agents/sessions/sess-1/events"); await assert.rejects(start(ctx, { path: prdPath }), { code: "AGENTS_TRANSPORT" });
     const pending = makeState(f.root).get("acme/widget/task"); assert.ok(pending); assert.equal(pending.reason, "dispatch-intent"); assert.equal(pending.execution.acceptance, "unknown"); assert.ok(pending.last.run);
+    assert.equal(makeState(f.root).hasAuthorReservation(f.id), true);
     await assert.rejects(resume(ctx, { handle: f.id }), /no session to resume/);
     // A process crash can occur before the launcher copies the job into registry
     // state. The pre-I/O operation marker must still prove exact ownership.

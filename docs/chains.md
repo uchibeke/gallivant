@@ -72,16 +72,17 @@ the qualified operator ingress. The saved request freezes the producer instance,
 node contracts and authorization. A subsequent PR binds to its original start.
 Work appended to the producer leaves the saved boundary unchanged.
 
-These two commands reserve observation-only work. They require the protected
-operator boundary, and graph dispatch is disabled in this milestone. Chains
-queued with ordinary PRD paths or `--after` continue to advance under the
-existing coordinator. [Dependency plan admission](dependency-plans.md#resolved-preview-and-admission)
+These commands require the protected operator boundary. An approval with
+positive graph capacity can dispatch once the exact producer receipts qualify.
+The ordinary PRD-path and `--after` commands use the shared author limits and
+retain their linear progression. [Dependency plan dispatch](dependency-plans.md#dispatch-and-integration)
 
 `plan migration` previews a legacy checkpoint. In a qualified namespace,
 `plan migration --approve DIGEST` seals the reviewed version and references
 while keeping original chain approvals, pending claims and execution ownership.
-Review again if the checkpoint moved. Active conversion to graph dispatch is
-deferred until the graph dispatcher is qualified.
+Review again if the checkpoint moved. The coordinator reads the legacy
+checkpoint through the linear graph adapter and retains the original claim
+and run identities.
 
 ## Inspect progress
 
