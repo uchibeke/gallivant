@@ -203,6 +203,39 @@ test("independent starts overlap and a hold generation changed during clone fenc
   assert.equal(w.ctx.state.load().dispatch.authors[`${PRODUCER}/slow`], undefined);
 });
 
+test("a graph leaf must still own its reserved author slot at spawn", async t => {
+  const w = fixture(t), id = `${PRODUCER}/fenced`, runner = w.ctx.runnerFor(id);
+  const execution = makeExecution({ root: join(w.home, "native"), taskId: id, provider: "codex", clock: w.clock, runner });
+  w.ctx.executionFor = taskId => taskId === id ? execution : w.ctx.runnerFor(taskId);
+  let replacement;
+  runner.prepareStart = () => {
+    const registry = w.ctx.state.load(), entry = registry.entries[id], slot = registry.dispatch.authors[id];
+    assert.equal(entry.initial_dispatch.status, "dispatching");
+    assert.equal(slot.token, entry.start_token);
+    assert.equal(slot.operation, entry.start_token);
+    assert.equal(slot.preparing, false);
+    replacement = { ...slot, token: "replaced-author-reservation" };
+    registry.dispatch.authors[id] = replacement;
+    writeJsonAtomic(w.ctx.state.file, registry);
+  };
+  await w.queue("spawn-fence", [task("fenced"), task("sibling")]);
+
+  const results = await w.tick();
+  const entry = w.entryFor("fenced");
+  assert.ok(replacement);
+  assert.equal(w.started("fenced"), 0);
+  assert.equal(w.started("sibling"), 1);
+  assert.equal(entry.last.run, null);
+  assert.ok(existsSync(entry.worktree));
+  assert.equal(results.find(result => result.node === "fenced")?.error, "PLAN_START_FENCE");
+  assert.deepEqual(execution.state().operations, {});
+  assert.equal(execution.state().dispatchRefusals.at(-1).operationId, entry.start_token);
+  w.restart(); await w.advance();
+  assert.equal(w.started("fenced"), 0);
+  assert.equal(w.entryFor("fenced").start_token, entry.start_token);
+  assert.deepEqual(w.ctx.state.load().dispatch.authors[id], replacement);
+});
+
 test("cross-plan consumers share an immutable producer and never use another repository's SHA in a clone", async t => {
   const w = fixture(t);
   await w.queue("producer", [task("ship")]);
