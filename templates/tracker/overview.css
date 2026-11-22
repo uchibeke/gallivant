@@ -88,3 +88,7 @@
   .task-context { margin-top: 0; }
   .context-facts { grid-template-columns: minmax(0, 1fr); }
 }
+.outcome-filters, .workspace-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; }
+.outcome-filters { margin-block: 12px; }
+.outcome-filters a, .workspace-actions a { display: inline-flex; align-items: center; gap: 6px; min-height: 44px; padding-inline: 8px; }
+.outcome-filters a[aria-current="page"] { background: var(--gv-accent-soft); border-radius: var(--gv-r); color: var(--gv-text); }

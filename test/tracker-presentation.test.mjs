@@ -267,11 +267,23 @@ test("workspace metadata stays bound to the selected attempt and preserves hoste
   const p = taskPresentation({ entry });
   const old = workspaceProjection({ id: "task", entry, run: { id: "old" }, presentation: p });
   assert.equal(old.execution.model, null); assert.equal(old.execution.session, null); assert.equal(old.execution.costUsd, null);
+  const unknown = workspaceProjection({ id: "task", entry, run: { id: "old" }, presentation: p,
+    capabilities: { continuation: "current-only", cost: { source: "current-ledger" }, controls: { cancel: true } } });
+  assert.equal(unknown.execution.continuation, null);
+  assert.equal(unknown.execution.costSource, null);
+  assert.equal(unknown.execution.cancellation, "unknown");
   const hosted = workspaceProjection({ id: "task", entry, run: { id: "old", execution: { provider: "codex-cloud", model: "recorded-model", sessionId: "old-session", costUsd: 0.5, usage: { input_tokens: 12, output_tokens: 3, arbitrary: "must not leak" } } }, presentation: p, capabilities: capabilitiesFor("codex-cloud") });
   assert.equal(hosted.execution.available, "unavailable"); assert.equal(hosted.execution.cancellation, "unavailable");
   assert.deepEqual(hosted.execution.usage, { input: 12, output: 3, total: null });
   const html = workspaceExecution(hosted);
   assert.match(html, /recorded-model/); assert.match(html, /old-session/); assert.doesNotMatch(html, /new-model|current-session|must not leak/);
+});
+
+test("the run history adapter uses saved attempt identity before the current task harness", async () => {
+  const { attemptHarness } = await import("../lib/tracker/runs.mjs");
+  assert.equal(attemptHarness({ bin: "/approved/bin/claude" }), "claude");
+  assert.equal(attemptHarness({ execution: { provider: "codex-cloud" } }, "codex"), "codex-cloud");
+  assert.equal(attemptHarness({ bin: "/runtime/launcher" }), "unknown");
 });
 
 test("workspace links reject unsafe schemes, embedded credentials and encoded tokens", async () => {

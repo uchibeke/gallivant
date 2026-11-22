@@ -18,6 +18,7 @@ Use `gallivant --help` (or `gallivant help`) for the installed CLI's syntax and
 | Start work and services | `gallivant start [PRD]` | No PRD starts/reuses services only; `--no-open` and `--no-server` are available. |
 | Sequence work | `gallivant chain` | Each successor waits for the previous PR to merge; never auto-merges. |
 | Inspect a dependency graph | `gallivant plan validate <file> --json` | Compiles local JSON or YAML and returns a structural preview. |
+| Review approved graph work | `gallivant plan [NAME]`, `plan preview/queue`, `plan attach/edit/hold/unhold/cancel/retry/migration` | Protected operator ingress for admission and changes. Plans displays the saved dependency projection. |
 | Adopt/reset a PR | `gallivant register PR_URL` | Explicit registration; existing entry resets its review budget and cursor. |
 | Run the coordinator | `gallivant up` | Foreground loop; `--once` performs one cycle. |
 | Stop services | `gallivant down` | Leaves active agent processes running. |

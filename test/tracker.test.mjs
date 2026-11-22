@@ -19,6 +19,8 @@ import { makeState, newEntry, idSlug, STATES } from "../lib/state.mjs";
 import { CONFIG, T0, tempHome, makeClock, silentLog } from "./helpers.mjs";
 import { processIdentity } from "../lib/daemon.mjs";
 import { codeStamp, writeJsonAtomic } from "../lib/fs.mjs";
+import { bindPlanOperator } from "../lib/operator_intent.mjs";
+import { diamond, crossCompany, NOW, PLAN, REPO, READER } from "./fixtures/factory-projection.mjs";
 
 /** A fake response: records the status, the headers and the body, and resolves `ended` when the handler is done. */
 function res() {
@@ -207,6 +209,62 @@ test("the overview groups canonical attention and links each task to its workspa
   assert.match(body, /conflict/, "with the reason status would show");
   assert.match(body, /href="\/run\?[^\"]*id=acme%2Fwidget%2Fwidget-export"/, "every row links to its run page");
   assert.match(body, /No coordinator observation is recorded/, "no daemon.json says so plainly rather than implying health");
+});
+
+test("the served factory shell keeps the selected plan, future task links and filters on both mounts", async () => {
+  const w = world(), { saved, plan } = diamond();
+  const { other } = crossCompany(saved, plan);
+  w.ctx.clock = { now: () => NOW };
+  w.state.workspaceRecords = () => structuredClone(saved);
+  const operator = bindPlanOperator(w.state.file, () => ({ ...READER, principal: "reader",
+    isolation: { registry: w.state.file, qualified: true, workerExcluded: true, launchDigest: "e".repeat(64), expiresAt: Date.now() + 60000 } }));
+  w.ctx.planOperatorForRequest = request => request.headers.reader === "authorized" ? operator : null;
+  w.ctx.gh = new Proxy({}, { get() { throw new Error("Page read called a host"); } });
+  const before = structuredClone(saved);
+  for (const base of ["", "/gallivant"]) {
+    const get = async (path, headers = { reader: "authorized" }) => {
+      const response = res();
+      await handle(w.ctx, { ...req(base + path, { ...localHeaders, ...headers }), socket: localSocket }, response,
+        { base, home: base ? { label: "Command Center", url: "/host" } : null });
+      await response.ended;
+      return response;
+    };
+    const filter = `plan=${PLAN}&node=release&theme=dark&sort=attention`;
+    const plans = await get(`/plans?${filter}`);
+    assert.equal(plans.code, 200);
+    assert.equal(plans.headers["content-security-policy"], CSP);
+    const tabs = /<nav class="views" aria-label="Workspace">(.+?)<\/nav>/.exec(plans.body())?.[1];
+    assert.deepEqual([...tabs.matchAll(/<\/svg>([^<]+)<\/a>/g)].map(m => m[1]), ["Overview", "Plans", "Tasks", "System"]);
+    if (base) assert.match(plans.body(), /href="\/host"[^]*Command Center/);
+    assert.match(plans.body(), /Parallel activity · 2 active tasks/);
+    assert.match(plans.body(), /Saved plan observations are stale/);
+    assert.match(plans.body(), /branches\/api/);
+    assert.match(plans.body(), /Task link available after registration/);
+    assert.doesNotMatch(plans.body(), /private-producer|secret-future|confidential-producer/);
+    const planApi = JSON.parse((await get(`/api/plans?${filter}`)).body());
+    assert.equal(planApi.factory.detail.selected.status, "blocked");
+    assert.equal(planApi.factory.detail.selected.blockerCount, 3);
+    const tasks = await get("/tasks?status=ready&theme=dark");
+    assert.match(tasks.body(), /href="[^"]*\/run\?[^"]*id=acme%2Fproject%2Fready/);
+    assert.doesNotMatch(tasks.body(), /data-task-id="acme\/project\/closed"/);
+    const ready = await get(`/run?id=${REPO}/ready&${filter}`);
+    assert.match(ready.body(), /Back to plan/);
+    assert.match(ready.body(), /#42/);
+    assert.match(ready.body(), /data-action="recheck"[^>]+disabled/);
+    const oldLink = await get(`/run?id=${REPO}/release&theme=dark`);
+    assert.equal(oldLink.code, 302);
+    assert.equal(oldLink.headers.location, `${base}/plans?theme=dark&plan=${PLAN}&node=release`);
+    assert.match((await get("/system")).body(), /<h2 id="capacity-title">Capacity<\/h2>/);
+    const empty = await get("/plans", {});
+    assert.match(empty.body(), /No plans are visible/);
+    const guessed = await get(`/api/plans?plan=${other.id}`);
+    assert.equal(guessed.body(), (await get("/api/plans?plan=missing")).body());
+    assert.equal((await get("/api/run/review-activity?id=private-company/unreleased-repo/secret-future-a")).code, 404);
+    for (const path of ["/api/status", "/api/runs", "/api/tasks", "/system", "/plans", "/"]) {
+      assert.doesNotMatch((await get(path)).body(), /unreleased-repo|private-producer|secret-future|confidential-producer/);
+    }
+  }
+  assert.deepEqual(saved, before);
 });
 
 test("review activity exposes only bounded progress, never the reviewer evidence", async () => {

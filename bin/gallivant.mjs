@@ -72,6 +72,7 @@ const HELP = `gallivant: give an agent a task, let the review loop run, go outsi
   gallivant plan preview|queue <file> [--approve <digest>] [--request-id <id>]
                                          resolve a plan and its dispatch limits; queue requires protected authority
   gallivant plan [inspect] [<name>]       inspect admitted plans through the protected operator ingress
+                                         JSON for a selected plan includes its saved factory projection
   gallivant plan hold|unhold|cancel <plan> [--group <id>] --request-id <id> [--approve <revision>]
   gallivant plan retry <plan> --node <id> --request-id <id> [--approve <revision>]
   gallivant plan attach|edit <plan> <file> [--dir <directory>] --request-id <id> [--approve <revision>]
@@ -94,7 +95,7 @@ const HELP = `gallivant: give an agent a task, let the review loop run, go outsi
   gallivant down                         stop the daemon and standalone dashboard; active runs keep going
   gallivant status [--all] [--json]      task phase, recovery evidence, daemon health
   gallivant serve [--port 8791] [--no-open] [--no-daemon] [--foreground]
-                                         same startup as start without a PRD; foreground keeps the tracker attached
+                                         open Overview, Plans, Tasks and System; foreground keeps the tracker attached
   gallivant why <handle>                 why a PR stopped; handle is <repo>#<pr>, a PRD path, or the id
   gallivant resume <handle> [--note "..."] [--resnapshot] [--fresh-session]
                                          put a stopped entry back to work in the session that was doing it;

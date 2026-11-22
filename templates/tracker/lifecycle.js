@@ -65,3 +65,29 @@ function trackerLifecycle() {
     whenActive: () => stopped && cached ? new Promise(resolve => waiting.add(resolve)) : Promise.resolve(!stopped),
   };
 }
+
+// Keyed nodes and native details survive. Never replace the list or an open disclosure.
+const snapshotKey = node => node.nodeType === 1 ? node.getAttribute("data-key") : null;
+function patchSnapshot(current, next) {
+  if (current.nodeType === Node.TEXT_NODE) {
+    if (current.data !== next.data) current.data = next.data;
+    return;
+  }
+  if (current.nodeType !== Node.ELEMENT_NODE) return;
+  for (const attr of [...current.attributes]) {
+    if (current.tagName === "DETAILS" && attr.name === "open") continue;
+    if (!next.hasAttribute(attr.name)) current.removeAttribute(attr.name);
+  }
+  for (const attr of next.attributes) {
+    if (current.getAttribute(attr.name) !== attr.value) current.setAttribute(attr.name, attr.value);
+  }
+  const keyed = new Map([...current.childNodes].filter(snapshotKey).map(node => [snapshotKey(node), node]));
+  let cursor = current.firstChild;
+  for (const child of next.childNodes) {
+    let existing = snapshotKey(child) ? keyed.get(snapshotKey(child)) : cursor && !snapshotKey(cursor) && cursor.nodeType === child.nodeType && cursor.nodeName === child.nodeName ? cursor : null;
+    if (!existing) { existing = child.cloneNode(true); current.insertBefore(existing, cursor); }
+    else { if (existing !== cursor) current.insertBefore(existing, cursor); patchSnapshot(existing, child); }
+    cursor = existing.nextSibling;
+  }
+  while (cursor) { const next = cursor.nextSibling; cursor.remove(); cursor = next; }
+}

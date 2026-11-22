@@ -118,16 +118,16 @@ test("keyboard discovery uses existing search, retains typing shortcuts and carr
     assert.equal(await page.evaluate(() => document.activeElement.name), "q");
     await page.keyboard.press("Control+k"); assert.equal(await page.locator("#commands").getAttribute("open"), null);
     const nav = () => page.getByRole("navigation", { name: "Workspace", exact: true });
-    await nav().getByRole("link", { name: "Chains", exact: true }).click();
-    await page.getByRole("button", { name: "Filter chains", exact: true }).click();
-    await nav().getByRole("link", { name: "System health", exact: true }).click();
+    await nav().getByRole("link", { name: "Plans", exact: true }).click();
+    await page.getByRole("button", { name: "Filter plans", exact: true }).click();
+    await nav().getByRole("link", { name: "System", exact: true }).click();
     assert.equal(new URL(page.url()).searchParams.get("q"), "search");
     await page.locator("#commands-open").click();
     assert.equal(await page.locator("#commands [data-action]").count(), 0);
     await page.locator("#command-search").fill("activity"); await page.getByRole("button", { name: "Search tasks", exact: true }).click();
-    assert.equal(new URL(page.url()).pathname, `${base}/`); assert.equal(new URL(page.url()).searchParams.get("q"), "activity");
+    assert.equal(new URL(page.url()).pathname, `${base}/tasks`); assert.equal(new URL(page.url()).searchParams.get("q"), "activity");
     assert.equal(await page.locator("[data-task-id]").count(), 1);
-    await page.goBack(); assert.equal(new URL(page.url()).pathname, `${base}/health`);
+    await page.goBack(); assert.equal(new URL(page.url()).pathname, `${base}/system`);
     await page.reload(); assert.equal(new URL(page.url()).searchParams.get("harness"), "codex");
   }
 });

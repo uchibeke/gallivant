@@ -42,11 +42,11 @@ test('slow navigation feedback never shifts the document, standalone, mounted or
     await frame.locator('#main').waitFor();
     let release; const gate = new Promise(resolve => { release = resolve; });
     const hold = async route => { await gate; await route.continue(); };
-    await page.route(origin + '/gallivant/chains*', hold);
+    await page.route(origin + '/gallivant/plans*', hold);
     try {
       const observation = await frame.evaluate(() => {
         const main = document.getElementById('main'), before = main.getBoundingClientRect().top;
-        [...document.querySelectorAll('nav a')].find(link => link.textContent.trim() === 'Chains').click();
+        [...document.querySelectorAll('nav a')].find(link => link.textContent.trim() === 'Plans').click();
         const immediate = document.getElementById('page-loading').hidden;
         return new Promise(resolve => setTimeout(() => resolve({ immediate,
           delayed: document.getElementById('page-loading').hidden, before, after: main.getBoundingClientRect().top,
@@ -56,8 +56,8 @@ test('slow navigation feedback never shifts the document, standalone, mounted or
       assert.equal(observation.immediate, true); assert.equal(observation.delayed, false);
       assert.equal(observation.before, observation.after); assert.equal(observation.height, 0); assert.equal(observation.busy, 'true');
     } finally { release(); }
-    await frame.waitForURL('**/gallivant/chains*');
-    await page.unroute(origin + '/gallivant/chains*', hold);
+    await frame.waitForURL('**/gallivant/plans*');
+    await page.unroute(origin + '/gallivant/plans*', hold);
   }
 });
 
