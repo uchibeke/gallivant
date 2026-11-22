@@ -444,10 +444,10 @@ test("plan validate works without config, host binaries or registered state", t 
     assert.equal(debug.stdout, "");
     assert.match(debug.stderr, /unset LOG_TOKENS and LOG_STREAM/);
   }
-  const unsupported = spawnSync(process.execPath, [cli, "plan", "queue", "synthetic.yaml", "--dir", examples], {
+  const unconfigured = spawnSync(process.execPath, [cli, "plan", "queue", "synthetic.yaml", "--dir", examples], {
     env, encoding: "utf8", timeout: 15_000,
   });
-  assert.equal(unsupported.status, 1, unsupported.stderr);
-  assert.match(unsupported.stderr, /usage: plan validate/);
+  assert.equal(unconfigured.status, 1, unconfigured.stderr);
+  assert.match(unconfigured.stderr, /No config at/);
   assert.equal(existsSync(home), false);
 });

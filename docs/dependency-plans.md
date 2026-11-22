@@ -98,8 +98,42 @@ The digest function can also bind the hash of a later admission record, includin
 verified repository identities, base pins and resolved targets.
 
 Structural validation checks local inputs and reports declared repository
-identities, bases and anchor targets. Resolving saved producer identities or
-granting authority requires a separate protected admission step. The existing
-linear chain provides the current dispatch workflow. Its saved description can
-be projected into the same graph with `compileLinearChain` from the
-`dependency-plans` package export. See [PRD chains](chains.md).
+identities, bases and anchor targets.
+
+## Resolved preview and admission
+
+`plan preview FILE --json` verifies the Git checkout against the host's repository
+identity and reads the intended branch and base-file bytes. It runs the normal
+ready-brief checks against the captured source closure and reports file hashes,
+configured routes, review requirements, policy limits and applicable controls.
+The report omits source contents, absolute checkout paths and credentials. A
+configured route can still report unverified model access. The preview performs
+bounded reads and leaves the registry and host unchanged.
+
+Use the same file and checkout options for `plan queue FILE --approve DIGEST`.
+Without `--approve`, queue returns the preview. A qualified operator ingress
+checks the exact proposal and saves the approval, snapshots, ownership and
+request receipt together. Supply `--request-id ID` to name the request. When
+omitted, the approved digest is the request ID. Repeat the same digest and
+request ID after a lost response to retrieve the saved result.
+
+`plan inspect NAME` shows the immutable approval and separate runtime and
+control generations. Future anchors require current read, observe and link
+grants for both sides. Cross-company links require an additional scoped grant.
+An anchor freezes the producer's instance and terminal or exact task nodes
+before any PR exists. Later production activity fills in observed identities.
+Appending work beyond the frozen nodes leaves their scope unchanged. Changes
+to their approved contracts require review.
+
+Admitted graphs reserve tasks in observation-only mode. A graph task remains
+ineligible for dispatch even after all its dependencies integrate. Existing
+linear chains and `--after` keep their current execution owner. Their saved
+descriptions compile with `compileLinearChain` from the `dependency-plans`
+package export. [PRD chains](chains.md)
+
+The standalone CLI can validate manifests and resolve previews without saved
+producer links. The supplied local author launch does not qualify an operator
+ingress for graph queue, inspection, migration or future links. A deployment
+must enclose the exact worker launch outside protected state and controls and
+bind its authenticated operator through the coordinator's authority port.
+[Configuration and feature gates](config.md#dependency-plan-admission)

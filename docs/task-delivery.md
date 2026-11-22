@@ -263,6 +263,16 @@ MCP or the scoped operation API, but is not itself a deployed multi-tenant servi
 
 ## Build, configure, upgrade and rollback
 
+For a namespace with dependency plans, use a runtime artifact declaring
+`registryVersion: 4` and `dependencyPlanVersion: 1`. `task-delivery-state export`
+and `import` use the same maintenance locks and file checks as `backup` and
+`rollback`. Export the entire namespace with its pinned artifact. Restore into
+a fresh path with that artifact and the versioned backup envelope. The registry
+holds immutable plan snapshots and anchor observations. It also refers to
+legacy approval snapshots and execution ledgers, which the export preserves.
+To roll back to code without graph support, restore the matching pre-upgrade
+backup under its original artifact. Preserve any newer namespace separately.
+
 Build from the same tagged/merged source and explicit core version. Commit or
 remove npm ignore/configuration controls before a public build, including ignored
 controls or directories under the runtime payload. Internal builds record these
