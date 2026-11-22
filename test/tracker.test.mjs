@@ -267,6 +267,39 @@ test("the served factory shell keeps the selected plan, future task links and fi
   assert.deepEqual(saved, before);
 });
 
+test("protected legacy task and chain control reads use the action grants", async () => {
+  const w = world({ entry: { base: "main", state: STATES.needsHuman, reason: "checks-red" } });
+  const name = "scoped-chain", repo = w.state.get(ID).repo;
+  w.state.createChain({ name, repo, base: "main", status: "active", index: 0, created_at: T0,
+    steps: [{ id: `${repo}/future-step`, relPath: "docs/prds/future-step.md" }] });
+  let allow = false;
+  const operator = bindPlanOperator(w.state.file, () => ({ ...READER, principal: "reader",
+    grant: ({ action, scope }) => {
+      if (action === "read" && scope.repositories.includes(repo)) return "local-read";
+      if (allow && (action === "task/recheck" && scope.task === ID || action === "chain/cancel" && scope.chain === name)) return "target-grant";
+      return null;
+    },
+    isolation: { registry: w.state.file, qualified: true, workerExcluded: true, launchDigest: "e".repeat(64), expiresAt: Date.now() + 60_000 } }));
+  w.ctx.planOperatorForRequest = () => operator;
+  const before = w.state.workspaceRecords();
+  for (const granted of [false, true]) {
+    allow = granted;
+    const get = async path => {
+      const response = res();
+      await handle(w.ctx, { ...req(path, localHeaders), socket: localSocket }, response);
+      assert.equal(response.code, 200);
+      return response.body();
+    };
+    const control = JSON.parse(await get(`/api/run/control?id=${encodeURIComponent(ID)}`));
+    assert.equal(control.controls.recheck, granted);
+    assert.equal(control.controls.resume, false);
+    const chain = await get(`/chains?chain=${name}`);
+    assert.equal(/data-chain-action="cancel" disabled/.test(chain), !granted);
+    assert.match(chain, /data-chain-action="resnapshot" disabled/);
+  }
+  assert.deepEqual(w.state.workspaceRecords(), before);
+});
+
 test("review activity exposes only bounded progress, never the reviewer evidence", async () => {
   const w=world({entry:{reviewPolicy:{version:1,mode:"first-party-required",route:{name:"codex",fingerprint:"f".repeat(64),qualification:"run-1"},external:null,specialist:null,zeroChecks:true,limits:{timeoutMs:900000,maxJobs:2048,retries:2,budgetUsd:100,maxInputBytes:100000}},firstPartyReview:{status:"running",phase:"source-review",pieces:[{status:"completed"},{status:"running"}],evidence:{brief:"private review evidence"}}}});
   const page=res();handle(w.ctx,req(`/run?id=${encodeURIComponent(ID)}`),page);await page.ended;

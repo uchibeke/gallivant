@@ -178,7 +178,7 @@ capability observations from unknown account access. **New task** prepares
 code, documentation or research for a repository pull request, asks questions,
 and requires approval of the exact revision before implementation starts.
 
-![Dark overview with attention, progress and waiting lanes](docs/ui/previews/final-overview-dark.png)
+![Dark overview with attention lanes and task outcome filters](docs/ui/previews/final-overview-dark.png)
 
 This is the real served interface with identifiable synthetic tasks and a fixed
 clock, not production activity. See the [light overview and mobile task view](docs/ui-qualification.md#approved-captures)

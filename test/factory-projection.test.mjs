@@ -164,6 +164,29 @@ test("legacy linear records expose the same statuses and prerequisite evidence",
   assert.equal(planWindow(data, { plan: legacy.name, milestone: "other/repo/finish" }, { legacyOnly: true }).detail.missingNode, true);
 });
 
+test("legacy predecessor evidence stays attached to its saved anchor within reader scope", () => {
+  const after = { id: `${REPO}/foundation`, repo: REPO, base: "main", branch: "work/foundation",
+    pr: 9, url: `https://github.com/${REPO}/pull/9` };
+  const milestone = `${REPO}/predecessor`;
+  const legacy = { name: "release-after-foundation", repo: REPO, base: "main", status: "active", index: 0, after,
+    created_at: "2026-11-21T12:00:00Z", steps: [{ id: milestone }] };
+  const saved = { chains: { [legacy.name]: legacy }, entries: { [after.id]: { repo: REPO } } };
+  const dependency = () => planWindow(catalog(saved), { plan: legacy.name, milestone }, { legacyOnly: true }).detail.selected.dependencies[0];
+  assert.deepEqual(dependency(), { id: "predecessor-1", status: "waiting", receipt: null, taskId: after.id, pr: after.pr, url: after.url });
+  const anchor = planWindow(catalog(saved), { plan: legacy.name, node: "predecessor-1" }).detail.selected;
+  assert.equal(anchor.taskId, after.id);
+  assert.equal(anchor.url, after.url);
+
+  after.merged = { pr: after.pr, sha: "a".repeat(40), at: "2026-11-22T08:00:00Z" };
+  assert.equal(dependency().status, "integrated");
+  assert.equal(dependency().receipt.merge, after.merged.sha);
+
+  saved.entries[after.id].plan = { instanceId: "out-of-scope" };
+  assert.deepEqual(dependency(), { id: "predecessor-1", status: "unavailable", receipt: null });
+  const denied = planWindow(catalog(saved), { plan: legacy.name, node: "predecessor-1" }).detail.selected;
+  assert.deepEqual(denied, { id: "predecessor-1", type: "anchor", status: "unavailable", dependencies: [], dependencyCount: 0, dependencyOffset: 0 });
+});
+
 test("the console feature matrix covers public CLI commands, providers and qualification limits", () => {
   const matrix = readFileSync(new URL("../docs/ui-feature-matrix.md", import.meta.url), "utf8");
   const help = execFileSync(process.execPath, ["bin/gallivant.mjs", "--help"], { encoding: "utf8", timeout: 5_000 });

@@ -28,7 +28,7 @@ import { CONFIG, GOOD_PRD, fakeCredential, fakeIdentity, fakeNotify, fakeGit, fa
 import { requestControl } from "../lib/control.mjs";
 import { resume } from "../lib/commands/resume.mjs";
 import { doctor } from "../lib/commands/doctor.mjs";
-import { routes } from "../lib/commands/serve.mjs";
+import { handle } from "../lib/commands/serve.mjs";
 import { checkHarness } from "../lib/probe.mjs";
 import { reconcileExecutionResult } from "../lib/execution_result.mjs";
 import { readJson, writeJsonAtomic } from "../lib/fs.mjs";
@@ -460,8 +460,9 @@ async function launchAccess(f, fn) {
 }
 function launchPage(f) {
   let code, html;
-  routes["GET /run"](f.ctx, { headers: { host: "127.0.0.1:8791" }, socket: { remoteAddress: "127.0.0.1", localPort: 8791 } },
-    { writeHead: value => { code = value; }, end: value => { html = value; } }, new URL(`http://127.0.0.1/run?id=${encodeURIComponent(f.id)}`), {});
+  handle(f.ctx, { method: "GET", url: `/run?id=${encodeURIComponent(f.id)}`,
+    headers: { host: "127.0.0.1:8791" }, socket: { remoteAddress: "127.0.0.1", localPort: 8791 } },
+    { writeHead: value => { code = value; }, end: value => { html = value; } });
   assert.equal(code, 200); return html;
 }
 test("managed readiness proves native isolation before API reads and doctor reports unsupported hosts", async t => {
