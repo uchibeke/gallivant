@@ -6,6 +6,9 @@ import { queuePlan, previewPlan, inspectPlan } from "../lib/dependency_plan_admi
 import { tickDependencyPlans } from "../lib/dependency_plan_dispatch.mjs";
 import { queueChain, tickChains } from "../lib/chains.mjs";
 import { start } from "../lib/commands/start.mjs";
+import { resume } from "../lib/commands/resume.mjs";
+import { why } from "../lib/commands/why.mjs";
+import { dispatchCapacity } from "../lib/dispatch_capacity.mjs";
 import { makeExecution } from "../lib/execution.mjs";
 import { canonicalPath, readJson, writeJsonAtomic } from "../lib/fs.mjs";
 import { bindPlanOperator, recoveryAdminIntent } from "../lib/operator_intent.mjs";
@@ -30,14 +33,14 @@ function put(path, text) {
   return path;
 }
 
-function fixture(t, { capacity = 4, perRepo = capacity, graph = capacity, preparation = capacity, consumer = CONSUMER } = {}) {
+function fixture(t, { capacity = 4, perRepo = capacity, graph = capacity, preparation = capacity, consumer = CONSUMER, harness = "codex" } = {}) {
   const home = canonicalPath(tempHome()), root = canonicalPath(tempHome()), clock = makeClock();
   const repositories = [PRODUCER, consumer], dirs = new Map(repositories.map(repo => [repo, join(root, basename(repo))]));
   const ids = new Map(repositories.map(repo => [repo, `host-id-${basename(repo)}`]));
   const bases = new Map(repositories.map(repo => [repo, BASE])), integrated = new Map(), prs = new Map();
   const runners = new Map(), prds = new Map(), calls = [], clones = new Map();
   const config = { ...structuredClone(CONFIG), poll_seconds: 1, home, worktrees: join(home, "worktrees"),
-    harness: { codex: { bin: harnessBin(home) } }, deliverable: { ...CONFIG.deliverable, evaluator: "local" },
+    harness: { [harness]: { bin: harnessBin(home, harness) } }, deliverable: { ...CONFIG.deliverable, evaluator: "local" },
     dispatch_capacity: { authors: capacity, per_repository: perRepo, per_plan: capacity, preparations: preparation, graph_authors: graph, graph_per_repository: graph } };
   const unlocked = () => assert.equal(existsSync(join(home, "state.json.lock")), false);
   const runnerFor = id => {
@@ -88,7 +91,7 @@ function fixture(t, { capacity = 4, perRepo = capacity, graph = capacity, prepar
   ctx.planAuthority = bindPlanOperator(ctx.state.file, () => ({ principal: "operator-fixture", tenant: "local",
     grant: ({ action }) => permitted ? `${action}-proof` : null,
     isolation: { registry: ctx.state.file, qualified: true, workerExcluded: true, launchDigest: "a".repeat(64), expiresAt: Date.now() + 30_000 } }));
-  const brief = (name, repo = PRODUCER) => put(join(dirs.get(repo), "docs/prds", `${name}.md`), GOOD_PRD);
+  const brief = (name, repo = PRODUCER) => put(join(dirs.get(repo), "docs/prds", `${name}.md`), GOOD_PRD.replace("harness: codex", `harness: ${harness}`));
   const queue = async (name, nodes) => {
     for (const node of nodes) if (node.type === "task") brief(node.id, node.repository === "two" ? consumer : PRODUCER);
     const file = put(join(root, `${name}.json`), JSON.stringify({ version: 1, name, repositories: {
@@ -392,6 +395,76 @@ test("graph continuations respect the approved author ceiling even after live li
   await fix();
   assert.equal(w.started("first"), 2);
   assert.equal(submitted, 1);
+});
+
+test("a graph fix uses the approved per-run budget after the configured budget rises", async t => {
+  const w = fixture(t, { harness: "claude" });
+  w.ctx.config.max_budget_usd = 2;
+  await w.queue("approved-budget", [task("bounded")]);
+  await w.tick();
+  assert.equal(w.started("bounded"), 1);
+  w.finish("bounded");
+
+  w.ctx.config.max_budget_usd = 40;
+  w.restart();
+  const id = `${PRODUCER}/bounded`;
+  await makeTick(w.ctx).startRun(id, w.entryFor("bounded"), { name: "fix", prompt: "Address the review finding." });
+  const args = w.ctx.runnerFor(id).started.at(-1).args;
+  assert.equal(args[args.indexOf("--max-budget-usd") + 1], "2");
+  assert.equal(w.ctx.config.max_budget_usd, 40);
+});
+
+test("a graph continuation rechecks the approved round cap before spawn after restart", async t => {
+  const w = fixture(t);
+  w.ctx.config.max_iterations = 2;
+  await w.queue("approved-rounds", [task("bounded")]);
+  await w.tick();
+  w.finish("bounded");
+
+  w.ctx.config.max_iterations = 30;
+  w.restart();
+  const id = `${PRODUCER}/bounded`, tick = makeTick(w.ctx);
+  w.ctx.state.update(id, { iteration: 1 });
+  await assert.rejects(tick.startRun(id, w.entryFor("bounded"), {
+    name: "fix", prompt: "Address the review finding.",
+    beforeDispatch: async () => { w.ctx.state.update(id, { iteration: 2 }); },
+  }), { code: "PLAN_ITERATIONS" });
+  w.ctx.git.exists = () => assert.fail("an exhausted graph resume cannot prepare a checkout");
+  await assert.rejects(resume(w.ctx, { handle: id }), { code: "PLAN_ITERATIONS" });
+  const entry = w.entryFor("bounded");
+  assert.throws(() => w.ctx.state.reserveAuthorTurn(id, entry.last.run, "exhausted", dispatchCapacity(w.ctx.config)), { code: "PLAN_ITERATIONS" });
+  assert.equal(w.ctx.state.hasAuthorReservation(id), false);
+  assert.equal(w.started("bounded"), 1);
+  assert.equal(w.entryFor("bounded").iteration, 2);
+});
+
+test("a graph author keeps its approved repository timeout across configuration changes", async t => {
+  const w = fixture(t);
+  w.ctx.config.repos = [{ repo: PRODUCER, run_timeout_minutes: 4 }];
+  await w.queue("approved-runtime", [task("bounded")]);
+  await w.tick();
+  w.finish("bounded");
+
+  w.ctx.config.repos[0].run_timeout_minutes = 40;
+  w.restart();
+  const id = `${PRODUCER}/bounded`, entry = w.entryFor("bounded");
+  const { job } = await makeTick(w.ctx).startRun(id, entry, { name: "fix", prompt: "Address the review finding." });
+  w.ctx.state.update(id, { last: { ...entry.last, run: job.id, exit: null } });
+
+  w.ctx.config.repos[0].run_timeout_minutes = 1;
+  w.restart();
+  w.clock.advance(2);
+  await makeTick(w.ctx).tickEntry(id, w.entryFor("bounded"));
+  assert.equal(w.ctx.runnerFor(id).current().running, true);
+
+  w.ctx.config.repos[0].run_timeout_minutes = 40;
+  w.restart();
+  w.clock.advance(3);
+  await makeTick(w.ctx).tickEntry(id, w.entryFor("bounded"));
+  assert.equal(w.ctx.runnerFor(id).current().running, false);
+  assert.equal(w.entryFor("bounded").timeout?.limit, 4);
+  assert.equal(w.entryFor("bounded").timeout?.source, "plan");
+  assert.match(why(w.ctx, { handle: id }), /approved plan's repository timeout/);
 });
 
 test("a collected author releases capacity while PR discovery still owns its delayed host read", async t => {

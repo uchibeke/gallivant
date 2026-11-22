@@ -162,10 +162,13 @@ Fixture coverage alone leaves native and live combinations unqualified.
 An author slot covers preparation and remains reserved through any ambiguous
 submission. Confirmed process cessation and result collection release it
 while merge, review, publication or cost reconciliation can still be pending.
-The task keeps its configured rounds. Hosted reservations remain in the
-execution ledger and unknown usage remains charged against the allowance.
-Native currency enforcement depends on the provider. An estimate or an author
-slot does not impose a dollar cap across parallel tasks.
+An admitted graph task keeps its approved round limit, per-run budget and
+repository timeout across fixes, resumes and coordinator restarts. Hosted
+continuations use the approved execution route and its provider allowance.
+Hosted reservations remain in the execution ledger and unknown usage remains
+charged against the allowance. Native currency enforcement depends on the
+provider. An estimate or an author slot does not impose a dollar cap across
+parallel tasks.
 
 The default graph ceilings are zero. A protected deployment can approve
 positive limits for new plans. Earlier observation-only approvals stay
