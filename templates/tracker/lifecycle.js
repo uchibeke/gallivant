@@ -27,7 +27,7 @@ function trackerLifecycle() {
     const deadline = setTimeout(() => request.abort(), timeoutMs);
     try {
       const response = await fetch(url, { cache: "no-store", signal: signal ? AbortSignal.any([request.signal, signal]) : request.signal });
-      if (!response.ok) throw new Error(failure);
+      if (!response.ok) throw Object.assign(new Error(failure), { status: response.status });
       return await response.json();
     }
     finally { clearTimeout(deadline); requests.delete(request); }
@@ -93,6 +93,7 @@ function patchSnapshot(current, next) {
     if (!next.hasAttribute(attr.name)) current.removeAttribute(attr.name);
   }
   for (const attr of next.attributes) {
+    if (current.tagName === "DETAILS" && attr.name === "open") continue;
     if (current.getAttribute(attr.name) !== attr.value) current.setAttribute(attr.name, attr.value);
   }
   const keyed = new Map([...current.childNodes].filter(snapshotKey).map(node => [snapshotKey(node), node]));

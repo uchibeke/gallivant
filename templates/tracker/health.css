@@ -17,6 +17,8 @@
 .health-provider, .health-hosts article { min-width: 0; padding: 20px; border: 1px solid var(--gv-line); border-radius: var(--gv-r); background: var(--gv-surface); }
 .health-provider h3, .health-hosts h3 { margin: 0; font-size: 17px; }
 .health-account { min-height: 48px; color: var(--gv-warning); }
+.health-cooldowns { display: grid; gap: 12px; padding-inline-start: 22px; }
+.health-cooldowns time { overflow-wrap: anywhere; }
 .health-facts { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 8px 20px; }
 .health-facts dd { font-size: 13px; }
 .health-next { border-top: 1px solid var(--gv-line); padding-top: 16px; }

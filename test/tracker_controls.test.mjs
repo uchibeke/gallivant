@@ -2,6 +2,20 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { ASSETS } from "../lib/tracker/assets.mjs";
+import { controlFeedback } from "../lib/tracker/control_feedback.mjs";
+
+test("request feedback keeps coordinator acceptance and execution progress separate", () => {
+  const receipt = { action: "message", status: "queued", at: "2026-09-24T14:30:00.000Z", next_at: Date.parse("2026-10-03T14:30:00.000Z") };
+  assert.equal(controlFeedback(null).phase, "idle");
+  assert.equal(controlFeedback(receipt, null, { submitting: true }).phase, "submitting");
+  assert.equal(controlFeedback(receipt).phase, "queued");
+  assert.equal(controlFeedback(receipt, null, { acknowledged: true }).phase, "accepted");
+  assert.match(controlFeedback(receipt).times, /Next retry: 2026-10-03T14:30:00.000Z/);
+  assert.equal(controlFeedback({ ...receipt, status: "applying" }).phase, "working");
+  assert.match(controlFeedback({ ...receipt, status: "applied" }).text, /does not confirm model acknowledgement or task completion/);
+  assert.equal(controlFeedback({ ...receipt, status: "failed" }).phase, "final");
+  assert.equal(controlFeedback({ ...receipt, status: "superseded" }).phase, "uncertain");
+});
 import { redact } from "../lib/execution_io.mjs";
 
 function draftStorage({ supported = true } = {}) {

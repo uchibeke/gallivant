@@ -9,6 +9,7 @@ const pane = document.getElementById("log"), state = document.getElementById("lo
 const MAX_LINES = 2000;
 const MAX_HISTORY_LINES = 2000;
 if (pane) {
+  const disclosure = pane.closest?.("#workspace-activity");
   // Auto-scroll follows the reader: the pane jumps to the bottom only when it was already at the bottom, so
   // scrolling up to read something does not yank you back down on the next line.
   const atBottom = () => pane.scrollHeight - pane.scrollTop - pane.clientHeight < 40;
@@ -214,7 +215,7 @@ if (pane) {
       const r = await fetch(BASE + "/api/run/history?" + h.toString(), { headers: { accept: "application/json" }, signal: request.signal });
       if (!r.ok) throw new Error("history " + r.status);
       const got = await r.json();
-      if (disconnected || !active()) return;
+      if (historyRequest !== request || disconnected || !active()) return;
       const lines = Array.isArray(got.lines) ? got.lines : [];
       const present = new Set([...pane.children].filter(row => replayId(row.dataset.replay) !== null).map(row => `${row.dataset.replay}:${row.dataset.replayRow ?? 0}`));
       const queued = new Set(pending.map(event => event.id).filter(id => id !== null));
@@ -262,7 +263,7 @@ if (pane) {
       else if (recoveryBefore === null && (got.before ?? 0) <= 0) tell("this is the first line of the run");
       if (historyWindowed) tell(`${earlierState?.textContent || ""} · History capped at 2,000 rows; middle output omitted. Reopen this attempt to reset to its tail.`);
     } catch {
-      if (disconnected || !active()) return;
+      if (historyRequest !== request || disconnected || !active()) return;
       // The pane is the only place a reader sees this, so it says what happened rather than going quiet. The button
       // stays available: a failed fetch is worth retrying and nothing was consumed.
       tell("Could not load earlier lines; displayed output retained. Retry load earlier lines after restoring the local connection.");
@@ -275,30 +276,36 @@ if (pane) {
   };
   earlier?.addEventListener("click", loadEarlier);
 
+  const disconnect = () => {
+    es?.close(); es = null;
+    if (historyRequest) tell("Loading paused. Load earlier lines to retry.");
+    historyRequest?.abort(); historyRequest = null; busy = false;
+    if (earlier) earlier.disabled = (recoveryBefore ?? oldest ?? 0) <= 1;
+  };
   globalThis.addEventListener?.("pagehide", event => {
     // The reconnect cursor includes received but unpainted events. Keep the
     // bounded paused queue with the cached document so following cannot skip it.
     if (event?.persisted) paint();
     else pending = [];
-    disconnected = true; es.close();
-    if (historyRequest) tell("Loading paused; load earlier lines to retry.");
-    historyRequest?.abort(); historyRequest = null; busy = false;
+    disconnected = true; disconnect();
   });
   lifecycle.onResume(() => {
     disconnected = false;
     if (earlier) earlier.disabled = (recoveryBefore ?? oldest ?? 0) <= 1;
-    if (!closed) connect();
+    connect();
   });
   const say = text => { if (state) { state.textContent = text; state.classList?.toggle("loading", text === "reconnecting"); } };
   const connect = () => {
+    if (es || closed || disconnected || document.hidden || globalThis.navigator?.onLine === false || disclosure && !disclosure.open) return;
     const active = lifecycle.guard();
     // EventSource cannot set Last-Event-ID on a new connection. Its initial URL
     // carries the same cursor; subsequent network retries use the normal header.
     say("reconnecting");
-    es = new EventSource(lastEventId === null ? url : url + "&after=" + lastEventId);
-    es.addEventListener("gap", e => { if (!active()) return; note(JSON.parse(e.data), "skip"); tell("some history is unavailable; saved results are separate from logs"); });
-    es.addEventListener("skipped", e => {
-      if (!active()) return;
+    const source = es = new EventSource(lastEventId === null ? url : url + "&after=" + lastEventId);
+    const current = () => active() && es === source;
+    source.addEventListener("gap", e => { if (!current()) return; note(JSON.parse(e.data), "skip"); tell("some history is unavailable; saved results are separate from logs"); });
+    source.addEventListener("skipped", e => {
+      if (!current()) return;
       const n = Number(e.data);
       if (!Number.isFinite(n) || n <= 0) return;
       note(n + ' earlier lines not shown; "load earlier lines" above fetches them, and the whole log is in the run folder', "skip");
@@ -306,8 +313,8 @@ if (pane) {
       oldest ??= n + 1;
       offer(recoveryBefore !== null ? recoveryBefore - 1 : n);
     });
-    es.onmessage = e => {
-      if (!active()) return;
+    source.onmessage = e => {
+      if (!current()) return;
       const text = JSON.parse(e.data);
       // A terminal frame is the one thing the stream sends that is not a log line, and it is where the pane stops
       // reconnecting. Every one of them is bracketed and nothing else the server sends is.
@@ -318,7 +325,7 @@ if (pane) {
         if (closed) return;
         paint();
         closed = true;
-        es.close();
+        source.close();
         if (pending.length) terminalPending = text;
         else note(text.slice(1, -1), "d " + (text === "[exit 0]" ? "ok" : "bad"));
         say(text === "[no run]" ? "no run on disk" : text === "[exit 0]" ? "finished" : text.slice(1, -1));
@@ -331,9 +338,17 @@ if (pane) {
         push(text, replayId(e.lastEventId));
       }
     };
-    es.onopen = () => { if (active()) say("live"); };
+    source.onopen = () => { if (current()) say("live"); };
     // readyState 2 is closed, which is the normal end of a finished run and not a failure to report.
-    es.onerror = () => { if (active() && es.readyState !== 2) say("Output disconnected; displayed lines retained. Reconnecting to the same attempt; check the local server connection."); };
+    source.onerror = () => { if (current() && source.readyState !== 2) say("Output disconnected. Displayed lines retained while reconnecting to the same attempt."); };
   };
+  const checkVisibility = () => {
+    if (document.hidden || globalThis.navigator?.onLine === false || disclosure && !disclosure.open) disconnect();
+    else connect();
+  };
+  disclosure?.addEventListener("toggle", checkVisibility);
+  document.addEventListener?.("visibilitychange", checkVisibility);
+  globalThis.addEventListener?.("offline", checkVisibility);
+  globalThis.addEventListener?.("online", checkVisibility);
   connect();
 }

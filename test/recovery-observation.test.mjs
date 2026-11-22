@@ -106,8 +106,11 @@ test("incident survives a verified push, changed run, reworded review and restar
   assert.equal(w.view().recovery.incidents.length, 2);
   w.update(review("head2", "review-3", { verdict: "clear", findings: [] }, 9));
   assert.equal(w.view().recovery.incidents.length, 0); assert.equal(w.view().recovery.attempts, 2);
+  const settled = taskPresentation({ id, entry: makeState(w.home).get(id) }).recovery;
+  assert.deepEqual(settled.original, { ...original, attempts: 1 }, "first failure persists after the active incident clears");
   w.update({ ...review("head2", "review-4", first, 10), task: { ...base.task, revision: 2 } });
   assert.notEqual(w.view().recovery.incidents[0].id, original.id);
+  assert.notEqual(w.view().recovery.original.id, original.id, "different approved inputs do not inherit the origin");
 });
 
 test("authority gates, stopped external merges, pending cleanup and settled history remain distinct", () => {

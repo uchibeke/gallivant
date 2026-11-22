@@ -205,7 +205,7 @@ test("the overview groups canonical attention and links each task to its workspa
   const body = r.body();
   assert.match(body, /<h2>Needs attention<\/h2>/);
   assert.match(body, /<h2>In progress<\/h2>/);
-  assert.match(body, /<h2>Completed<\/h2>/);
+  assert.match(body, /<h2>Ended<\/h2>/);
   assert.match(body, /widget#7/, "the needs-human entry is listed");
   assert.match(body, /conflict/, "with the reason status would show");
   assert.match(body, /href="\/run\?[^\"]*id=acme%2Fwidget%2Fwidget-export"/, "every row links to its run page");
@@ -251,7 +251,8 @@ test("the served factory shell keeps the selected plan, future task links and fi
     const ready = await get(`/run?id=${REPO}/ready&${filter}`);
     assert.match(ready.body(), /Back to plan/);
     assert.match(ready.body(), /#42/);
-    assert.match(ready.body(), /data-action="recheck"[^>]+disabled/);
+    assert.match(ready.body(), /This view has read access/);
+    assert.doesNotMatch(ready.body(), /data-action="recheck"|data-token=/);
     const oldLink = await get(`/run?id=${REPO}/release&theme=dark`);
     assert.equal(oldLink.code, 302);
     assert.equal(oldLink.headers.location, `${base}/plans?theme=dark&plan=${PLAN}&node=release`);

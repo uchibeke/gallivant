@@ -87,9 +87,11 @@ through the protected service. [Plan workspace](ui-plans.md)
 **Tasks**
 (`/tasks`) filters registered delivery, intake and future work by outcome.
 Future nodes link to their plan until task registration. **System** (`/system`)
-shows coordinator observations, capacity and execution capability limits.
-The active author count includes slots reserved before task registration.
-Protected views report counts for the work their current identity can read.
+shows coordinator and supervisor observations, service cooldown deadlines,
+capacity, bytes and inodes of storage headroom, and retained cleanup. The
+active author count includes slots reserved before task registration. Protected
+views show authorized task counts and approved route cooldowns. Local operator
+views show installation-wide observations.
 See the [console feature matrix](ui-feature-matrix.md) for current controls and
 the operator paths for qualified or CLI-only features.
 

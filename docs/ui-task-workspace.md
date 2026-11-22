@@ -1,30 +1,39 @@
 # Task workspace
 
-Open a task from Overview, or keep an existing `/run?id=…&run=…` bookmark.
-The summary identifies the logical task separately from the selected attempt:
-repository, approved base, delivery target, evidenced phase, next action, activity
-age, task rounds and chain position. Task facts and provenance expand in place.
-Missing observations remain unknown; worker exit is not delivery acceptance.
+Open a task from Overview or keep an existing `/run?id=…&run=…` bookmark.
+The task opens on its phase, recorded outcome, responsible actor and next
+action. The summary shows meaningful activity age, task rounds, plan membership
+and saved prerequisites. Review approved brief and carried-source changes in
+place. Approved graph tasks keep their pinned inputs when continued.
 
-Delivery evidence separates current-head CI, independent review, external review,
-acceptance receipt, delivery readiness and owner publication. Expand Provenance
-for each source, observation time and head. Old-head observations stay stale;
-zero configured checks differ from checks not observed, and a skipped receipt
-never displays as accepted. PR links open the existing delivery owner.
-Reviewer findings are bounded to eight summaries, separate from author output
-and operator messages. Raw reviewer evidence is not loaded by the workspace.
+Delivery evidence shows the saved task head and review policy. CI includes up to
+eight canonical job observations with failures first. Reviewer activity shows
+up to eight findings and the recorded reviewer pieces. Each evidence card
+offers its saved source, time and head. Old-head observations are marked stale.
+Missing checks, an explicit zero-check policy, a skipped or denied acceptance
+gate, delivery readiness and integration each retain their own status. PR
+links open the host evidence in a new tab.
+
+Task activity shows the original incident, review, recovery, acceptance and
+delivery observations when recorded. Recovery shows the pinned profile and
+hold, active incident and attempt count, next retry and any pinned repair base.
+Open **Task route and limits** for the approved graph route or recorded task
+route, continuation, cancellation and budget qualification.
 
 Attempts lists the twelve most recent runs and links to the existing run history.
 Explicitly selected attempts keep their own duration, session, output and result
 through refresh, reload, applied control requests and browser back. A newer run
 is offered as a link. Task actions still apply to the current logical task.
-The execution disclosure shows recorded provider/model, session, cost, token
-counts and configured limitations; missing numbers are unknown, not zero.
+The execution disclosure shows provider/model, session, timing, recorded cost
+and token counts for that attempt. Missing usage stays unknown.
 Artifacts load on demand from the existing saved-result route, with twenty visible
-paths from its bounded projection. Paths are text, not filesystem access links.
+paths from its bounded projection. Coordinator Verify results include the
+candidate head and completion status when recorded. Paths display as text.
 
-Activity is optional. Search loaded output highlights matching rows; Next match
-moves within that window. Load earlier lines uses the existing history cursor.
+Open **Activity · Agent log** to request diagnostics. Closing it pauses the
+stream and retains the displayed rows. **Search loaded output** highlights
+matching rows. **Next match** moves within that window. **Load earlier lines**
+uses the existing history cursor.
 The initial tail has at most 400 events. The display retains at most 2,000 live
 rows plus 2,000 explicitly loaded history rows, with truncation and gap notices.
 Scrolling away pauses following; Follow live output explicitly returns to the
@@ -34,32 +43,29 @@ history rather than silently growing the DOM. Cached-page navigation retains
 that paused buffer, including final output from an attempt that has ended;
 Follow live output reveals it after returning.
 
-Task snapshots refresh every ten seconds while visible, backing off to at most
-sixty seconds after errors. A read failure retains the last good snapshot and
-explains how to retry. Each evidence source retains its own timestamp; a current
-local snapshot does not prove provider connectivity. Artifact and output failures
-are reported separately and do not classify the task as failed or complete.
-Navigation disposes requests and streams; cached-page restoration resumes them.
+Task snapshots refresh every ten seconds while visible. After repeated errors,
+use **Refresh evidence** to reconnect. A failed read keeps the last snapshot
+and gates actions that need current evidence. Loss of read scope hides task
+details. Source timestamps stay tied to recorded observations. Expanded
+sections, selected attempts and draft edits survive refreshes, and navigation
+closes streams and pending reads.
 
 ## Qualification and captures
 
-`npm run test:ui` serves real pages through the shared synthetic fixture, at both
-root and `/gallivant` mounts. The workspace scenarios cover historical navigation,
-read failures, hostile text, bounded indexed 10,000-event history, text selection,
-keyboard disclosure, both themes and 360/390/768/1280/1440 CSS-pixel widths.
-The shared browser suite covers landscape, 200% zoom, accessibility, lifecycle,
-and protected controls. `npm run test:install` checks packed-runtime assets. No live model or provider is called.
+`test/ui/factory-task-workspace.test.mjs` serves synthetic task, plan and System
+state through the real HTTP handlers at root and `/gallivant` mounts. It verifies
+current and stale evidence, changed briefs, saved controls, permission loss,
+capacity waits, responsive layout, 200% zoom, keyboard operation and reduced
+motion. The workspace and controls suites cover bounded output and request
+reconciliation. The fixture exercises real browser rendering with local state.
 
-The approved PNGs use `test/ui/workspace-fixture.mjs`, a fixed clock, dark theme,
-Chromium and device scale 1. Desktop is 1440 × 1000 and mobile is 390 × 844;
-full-page captures show the actual rendered product:
+Set `FACTORY_TASK_CAPTURES` to a temporary directory to render synthetic
+Overview, task and System captures during the suite.
 
 ```sh
-node test/ui/capture.mjs task-workspace-desktop
-node test/ui/capture.mjs task-workspace-mobile
+capture_dir="$(mktemp -d)"
+FACTORY_TASK_CAPTURES="$capture_dir" node --test --test-concurrency=1 test/ui/factory-task-workspace.test.mjs
 ```
 
-Only `docs/ui/previews/task-workspace-desktop.png` and
-`docs/ui/previews/task-workspace-mobile.png` are published for this milestone.
-Other diagnostic captures belong in temporary storage. Revert the workspace
-code/assets to roll back; there is no state migration or changed control effect.
+Revert the console code and assets to roll back. Saved CI, acceptance and
+incident observations are additive.

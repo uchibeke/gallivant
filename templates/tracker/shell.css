@@ -1,5 +1,5 @@
 .top { display: flex; flex-wrap: wrap; gap: 16px; align-items: center; padding: 12px var(--gv-pad); background: var(--gv-surface); border-bottom: 1px solid var(--gv-line); }
-.brand { display: flex; align-items: center; gap: 12px; color: var(--gv-text); text-decoration: none; font-size: 20px; font-weight: 700; letter-spacing: -.4px; margin-right: 8px; }
+.brand { display: flex; align-items: center; gap: 12px; min-height: 44px; color: var(--gv-text); text-decoration: none; font-size: 20px; font-weight: 700; letter-spacing: -.4px; margin-right: 8px; }
 .brand > .icon { width: 28px; height: 28px; color: var(--gv-accent); }
 .shell-tools { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; margin-left: auto; }
 .home { display: inline-flex; align-items: center; gap: 6px; min-height: 44px; color: var(--gv-muted); }

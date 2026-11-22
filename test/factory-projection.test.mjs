@@ -18,7 +18,7 @@ test("factory DTO counts leaves only and preserves the exact parallel join", () 
   const before = structuredClone(saved);
   const { detail, version } = view(saved, { node: "release" });
   assert.equal(version, 1);
-  assert.deepEqual(detail.counts, { integrated: 1, ready: 1, "closed-unmerged": 1, cancelled: 1, planned: 1, active: 2, blocked: 0, unknown: 1 });
+  assert.deepEqual(detail.counts, { integrated: 1, ready: 1, "closed-unmerged": 1, cancelled: 1, failed: 0, planned: 1, active: 2, blocked: 0, unknown: 1 });
   assert.equal(detail.total, 8);
   assert.deepEqual(detail.active, ["branches/api", "branches/ui"]);
   assert.equal(detail.selected.registered, false);

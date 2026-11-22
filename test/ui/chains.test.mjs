@@ -43,9 +43,14 @@ test("chain journey preserves selection, filters, PR and task context across roo
     assert.equal(await page.locator('[aria-current="step"]').textContent(), "search-index");
     await page.getByRole("link", { name: "Open task", exact: true }).click();
     assert.equal(new URL(page.url()).pathname, `${base}/run`);
+    await page.waitForFunction(() => document.getElementById("workspace-state").textContent.startsWith("Task snapshot current"));
     await page.getByRole("link", { name: `Back to chain ${CHAIN}`, exact: true }).click();
-    assert.equal(new URL(page.url()).searchParams.get("cq"), "search");
-    assert.equal(new URL(page.url()).searchParams.get("cs"), "active");
+    const returned = new URL(page.url());
+    assert.equal(returned.pathname, `${base}/chains`);
+    assert.equal(returned.searchParams.get("chain"), CHAIN);
+    assert.equal(returned.searchParams.get("milestone"), TASK);
+    assert.equal(returned.searchParams.get("cq"), "search");
+    assert.equal(returned.searchParams.get("cs"), "active");
     assert.equal(await page.locator('[aria-current="step"]').textContent(), "search-index");
     await page.getByRole("link", { name: "migration-rollout", exact: true }).click();
     assert.match(await page.locator(".milestone-detail").textContent(), /Wait for milestone 2 to merge/);

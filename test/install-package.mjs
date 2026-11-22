@@ -215,7 +215,16 @@ esac
         if (path.startsWith("/plans?")) assert.match(body, /1 of 4 tasks integrated/);
         if (path.startsWith("/api/chains?")) assert.match(JSON.parse(body).content, /Milestones in dependency order/);
         if (path.startsWith("/api/plans?")) assert.equal(JSON.parse(body).factory.detail.counts.integrated, 1);
-        if (path.startsWith("/api/run/workspace")) { const snapshot = JSON.parse(body); assert.match(snapshot.summary, /Task workspace/); assert.match(snapshot.evidence, /Independent review/); }
+        if (path.startsWith("/api/run/workspace")) {
+          const snapshot = JSON.parse(body);
+          assert.equal(snapshot.version, 1);
+          assert.equal(snapshot.id, TASK);
+          assert.equal(snapshot.run, RUN);
+          assert.match(snapshot.summary, /<h2 id="workspace-decision-heading">Ready for handoff<\/h2>/);
+          assert.match(snapshot.evidence, /Independent review/);
+          assert.match(snapshot.recovery, /Task route and limits/);
+          assert.match(snapshot.execution, /Selected attempt session/);
+        }
         if (path.startsWith("/api/overview") || path.startsWith("/api/tasks")) {
           const snapshot = JSON.parse(body);
           assert.match(snapshot.content, /data-task-id=/);
