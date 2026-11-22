@@ -130,7 +130,8 @@ to their approved contracts require review.
 A parallel group requests eligibility for its independent branches. The
 coordinator admits each ready leaf against the current author, preparation,
 per-plan and per-repository limits. It also applies the graph ceilings recorded
-in the approval. A diamond with one available author slot can run its second
+in the approval to initial starts and author continuations, including fix
+rounds. A diamond with one available author slot can run its second
 branch while the first awaits review or merge. The join waits for both exact
 integration receipts. The reviewer and result-collection lanes remain
 available while author capacity is full.

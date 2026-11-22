@@ -9,7 +9,7 @@ import { createTaskDelivery } from "../lib/task_delivery.mjs";
 import { createDeliveryStore } from "../lib/task_delivery_store.mjs";
 import { ownerDelivery, validateOwnerDelivery, assertDeliveryAnswer } from "../lib/owner_delivery.mjs";
 import { CORE_VERSION, taskRejectionForModel } from "../lib/task_delivery_contract.mjs";
-import { migrateRuntimeState } from "../lib/runtime_state.mjs";
+import { migrateRuntimeState, PLAN_RUNTIME_FORMAT } from "../lib/runtime_state.mjs";
 import { taskStore } from "../lib/task_store.mjs";
 import { ready } from "../lib/commands/ready.mjs";
 import { start } from "../lib/commands/start.mjs";
@@ -1106,7 +1106,7 @@ test("completion target is creation-only, survives canonical start and conflicts
 test("scoped delivery API carries the selected milestone through durable prepare/start and saved projections", async () => {
   const w = world(), scope = { tenant: "alice", account: "alice", environment: "preview", region: "US", scopes: ["task-delivery:read", "task-delivery:write"], repositories: ["widget"] };
   w.ctx.clock = makeClock(); // Compare the same snapshot on operation replay.
-  const manifest = { coreVersion: CORE_VERSION, coreSha256: "a".repeat(64), operationVersion: 1, taskVersion: 1, executionVersion: 1 };
+  const manifest = { coreVersion: CORE_VERSION, coreSha256: "a".repeat(64), operationVersion: 1, taskVersion: 1, executionVersion: 1, ...PLAN_RUNTIME_FORMAT };
   migrateRuntimeState({ home: w.home, manifest });
   let scheduled = 0;
   const delivery = createTaskDelivery({ manifest, authorize: async () => scope, store: createDeliveryStore(join(w.home, "delivery")),
@@ -1132,6 +1132,33 @@ test("scoped delivery API carries the selected milestone through durable prepare
   assert.equal((await delivery.dispatch("list", {}, "alice")).tasks[0].completion.target, "integrated");
   assert.deepEqual(await delivery.dispatch("start", start, "alice"), started);
   assert.equal(w.runners.size, 1); assert.ok(scheduled > 0);
+});
+
+test("an older scoped runtime pin fences new author reservations and can still replay the refusal", async () => {
+  const w = world(), scope = { tenant: "alice", account: "alice", environment: "preview", region: "US", scopes: ["task-delivery:read", "task-delivery:write"], repositories: ["widget"] };
+  w.ctx.clock = makeClock();
+  const manifest = { coreVersion: CORE_VERSION, coreSha256: "a".repeat(64), operationVersion: 1, taskVersion: 1, executionVersion: 1 };
+  migrateRuntimeState({ home: w.home, manifest });
+  let clones = 0;
+  const create = w.ctx.git.create;
+  w.ctx.git.create = async input => { clones++; return create(input); };
+  const delivery = createTaskDelivery({ manifest, authorize: async () => scope, store: createDeliveryStore(join(w.home, "delivery")), schedule: async () => {},
+    contextFor: async () => ({ ctx: w.ctx, repository: { dir: w.checkout, repo: "acme/widget" }, taskOptions: { prepare: async (_ctx, task) => JSON.stringify(draftFor(task)) } }) });
+  const prepared = await delivery.dispatch("prepare", { repositoryId: "widget", text: REQUEST, harness: "codex", allowance: { budgetUsd: 1, runtimeMs: 60000 }, operationId: "prepare", expectedRevision: 0 }, "alice");
+  assert.equal(prepared.status, "ready");
+
+  const registry = w.ctx.state.load();
+  const request = { taskId: prepared.taskId, expectedRevision: prepared.revision, operationId: "old-pin-start", run: true };
+  const blocked = await delivery.dispatch("start", request, "alice");
+  assert.equal(blocked.status, "blocked");
+  assert.equal(blocked.errorCode, "RUNTIME_STATE");
+  assert.match(blocked.failures[0], /migrate with the exact runtime\.json/);
+  assert.equal(clones, 0);
+  assert.equal(w.runners.size, 0);
+  assert.equal(taskStore(w.home).read(prepared.taskId).dispatchIntent, null);
+  assert.deepEqual(w.ctx.state.load(), registry);
+  assert.deepEqual(await delivery.dispatch("start", request, "alice"), blocked);
+  assert.equal(migrateRuntimeState({ home: w.home, manifest: { ...manifest, ...PLAN_RUNTIME_FORMAT, coreSha256: "b".repeat(64) } }).active, false);
 });
 
 test("new task criteria collapse identical owner coverage without dropping constraints or rewriting legacy drafts", async () => {
@@ -5567,7 +5594,7 @@ test("the model route drafts through the configured text-only endpoint when the 
 
 test("the delivery dispatcher accepts typed profiles and routes, exposes them to discovery, views and model summaries, and rejects unsupported actions by schema", async () => {
   const w = world(), scope = { tenant: "alice", account: "alice", environment: "preview", region: "US", scopes: ["task-delivery:read", "task-delivery:write"], repositories: ["widget"] };
-  const manifest = { coreVersion: CORE_VERSION, coreSha256: "a".repeat(64), operationVersion: 1, taskVersion: 1, executionVersion: 1 };
+  const manifest = { coreVersion: CORE_VERSION, coreSha256: "a".repeat(64), operationVersion: 1, taskVersion: 1, executionVersion: 1, ...PLAN_RUNTIME_FORMAT };
   migrateRuntimeState({ home: w.home, manifest });
   const delivery = createTaskDelivery({ manifest, authorize: async () => scope, store: createDeliveryStore(join(w.home, "delivery")),
     contextFor: async () => ({ ctx: w.ctx, repository: { dir: w.checkout, repo: "acme/widget" }, taskOptions: { prepare: async (_ctx, task) => JSON.stringify(draftFor(task)) } }), schedule: async () => {} });

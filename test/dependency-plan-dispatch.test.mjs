@@ -340,6 +340,60 @@ test("narrowing capacity fences admissions across repositories and preserves adm
   assert.equal(w.started("third"), 1);
 });
 
+test("graph fix rounds occupy the graph lane across restart until the author settles", async t => {
+  const w = fixture(t, { capacity: 3, graph: 1 });
+  await w.queue("fix-first", [task("first")]);
+  await w.tick();
+  w.finish("first");
+
+  const id = `${PRODUCER}/first`, entry = w.entryFor("first");
+  const { job } = await makeTick(w.ctx).startRun(id, entry, { name: "fix", prompt: "Address the review finding." });
+  w.ctx.state.update(id, { last: { ...entry.last, run: job.id, exit: null } });
+  await w.queue("fix-next", [task("next", [], "two")]);
+  w.restart();
+  await w.advance();
+  assert.equal(w.started("next", CONSUMER), 0);
+  assert.equal(w.ctx.state.load().dispatch.authors[id].graph, true);
+
+  // A reservation from the preceding runtime may still own a live fix round.
+  const saved = w.ctx.state.load();
+  saved.dispatch.authors[id].graph = false;
+  writeJsonAtomic(w.ctx.state.file, saved);
+  w.restart();
+  await w.advance();
+  assert.equal(w.started("next", CONSUMER), 0);
+  assert.equal(w.ctx.runnerFor(id).current().id, job.id);
+
+  w.ctx.runnerFor(id).finish(codexLines(), { exit: 0 });
+  w.ctx.state.update(id, current => ({ last: { ...current.last, exit: 0 } }));
+  await w.advance();
+  assert.equal(w.started("next", CONSUMER), 1);
+  assert.equal(w.entryFor("first").state, STATES.prOpen);
+});
+
+test("graph continuations respect the approved author ceiling even after live limits increase", async t => {
+  const w = fixture(t, { capacity: 1, graph: 3 });
+  await w.queue("pinned-capacity", [task("first")]);
+  await w.tick();
+  w.finish("first");
+  Object.assign(w.ctx.config.dispatch_capacity, { authors: 3, per_repository: 3, per_plan: 3 });
+  await start(w.ctx, { path: w.brief("competing", CONSUMER) });
+
+  const id = `${PRODUCER}/first`, entry = w.entryFor("first");
+  let submitted = 0;
+  const fix = () => makeTick(w.ctx).startRun(id, entry, { name: "fix", prompt: "Address the review finding.", beforeDispatch: () => { submitted++; } });
+  await assert.rejects(fix(), { code: "AUTHOR_CAPACITY" });
+  assert.equal(w.started("first"), 1);
+  assert.equal(submitted, 0);
+  assert.equal(w.entryFor("first").iteration, entry.iteration);
+  assert.deepEqual(Object.keys(w.ctx.state.load().dispatch.authors), [`${CONSUMER}/competing`]);
+
+  w.finish("competing", { repo: CONSUMER });
+  await fix();
+  assert.equal(w.started("first"), 2);
+  assert.equal(submitted, 1);
+});
+
 test("a collected author releases capacity while PR discovery still owns its delayed host read", async t => {
   const w = fixture(t, { capacity: 1 });
   await w.queue("publication", [task("collected"), task("descendant", ["collected"])]);
