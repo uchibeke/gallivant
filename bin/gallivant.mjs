@@ -4,6 +4,7 @@ import { recoveryCommand, recoveryUsage } from "../lib/commands/recovery.mjs";
 import { reviewCommand } from "../lib/commands/review.mjs";
 import { acquireCliMutation } from "../lib/daemon.mjs";
 import { parseArgs } from "node:util";
+import { resolve } from "node:path";
 import { makeContext } from "../lib/context.mjs";
 import { start } from "../lib/commands/start.mjs";
 import { register } from "../lib/commands/register.mjs";
@@ -16,9 +17,9 @@ import { ready } from "../lib/commands/ready.mjs";
 import { newPrd } from "../lib/commands/new.mjs";
 import { resume } from "../lib/commands/resume.mjs";
 import { startServices } from "../lib/commands/start_services.mjs";
-import { trackerPort, stopTracker } from "../lib/tracker_process.mjs";
+import { trackerPort, readTracker, stopTracker } from "../lib/tracker_process.mjs";
 import { init, renderInit } from "../lib/commands/init.mjs";
-import { VERSION } from "../lib/fs.mjs";
+import { VERSION, gallivantHome } from "../lib/fs.mjs";
 import { hasConfig } from "../lib/config.mjs";
 import { resolveHandle } from "../lib/state.mjs";
 import { requestControl } from "../lib/control.mjs";
@@ -69,10 +70,15 @@ const HELP = `gallivant: give an agent a task, let the review loop run, go outsi
   gallivant task resume|validate|start <task-id> --revision <n> [--run] [--no-daemon] [--json]
                                          shared versioned operations; start --run approves the reviewed revision
   gallivant ready <prd.md> [--check]     check the PRD against the contract; flip it to ready when it passes
+  gallivant plan setup [--check] [--worker <os-user>] [--json]
+                                         check or enroll the isolated local worker and operator
   gallivant plan validate <file> [--dir <directory>] [--checkout <relative-directory>] [--json]
                                          compile a local JSON or YAML dependency plan for inspection
-  gallivant plan preview|queue <file> [--approve <digest>] [--request-id <id>]
-                                         resolve a plan and its dispatch limits; queue requires protected authority
+  gallivant plan preview <file> [--dir <directory>] [--checkout <relative-directory>]
+  gallivant plan queue <file> --approve <digest> [--request-id <id>]
+                                         queue the exact reviewed plan through the private local service
+  gallivant plan session --repo <owner/repo> [--repo <owner/repo> ...]
+                                         issue a short-lived tracker session for configured repositories
   gallivant plan [inspect] [<name>]       inspect admitted plans through the protected operator ingress
                                          JSON for a selected plan includes its saved factory projection
   gallivant plan hold|unhold|cancel <plan> [--group <id>] --request-id <id> [--approve <revision>]
@@ -146,8 +152,27 @@ const OPTIONS = {
 
 async function planCommand(args, values) {
   const [action, target] = args;
-  const compileOptions = { directory: values.dir, checkouts: values.checkout };
+  const compileOptions = { directory: resolve(values.dir ?? process.cwd()), checkouts: values.checkout };
   const fields = (...keys) => Object.keys(values).every(key => ["json", ...keys].includes(key));
+  if (action === "setup") {
+    if (args.length !== 1 || !fields("check", "worker")) throw new Error("usage: plan setup [--check] [--worker USER] [--json]");
+    const { setupLocalPlans } = await import("../lib/local_plan_service.mjs");
+    const { privatePlanConfig } = await import("../lib/local_plan_boundary.mjs");
+    const home = gallivantHome();
+    const rawConfig = privatePlanConfig(home);
+    const ctx = makeContext({ home, readOnly: true, rawConfig });
+    const report = await setupLocalPlans(ctx, { check: values.check, worker: values.worker }, { tracker: () => readTracker(home) });
+    if (values.json) console.log(JSON.stringify(report));
+    else {
+      console.log(`Host: ${report.host.join(", ")} · ${report.platform}/${report.architecture}`);
+      console.log(`Worker: ${report.worker.route} · ${report.worker.executable ?? "unconfigured"} · ${report.worker.account ?? "no OS account selected"}`);
+      console.log(`Isolation: ${report.isolation.status} (${report.isolation.launcher}) · model access: ${report.worker.modelAccess}`);
+      console.log(`Approval access: ${report.approvalAccess}`);
+      console.log(`Graph capacity: ${report.capacity.graph_authors} total, ${report.capacity.graph_per_repository} per repository`);
+      if (report.prerequisite || report.next) console.log(report.prerequisite || report.next);
+    }
+    return report.prerequisite && (values.check || report.approvalAccess !== "enrolled") ? 1 : 0;
+  }
   if (action === "validate" && args.length === 2 && fields("dir", "checkout")) {
     const { compileDependencyPlan } = await import("../lib/dependency_plan.mjs");
     const preview = compileDependencyPlan(target, compileOptions);
@@ -160,6 +185,12 @@ async function planCommand(args, values) {
     return 0;
   }
   const { planControl, PLAN_CONTROL_ACTIONS, previewPlan, queuePlan, inspectPlan, migratePlans } = await import("../lib/dependency_plan_admission.mjs");
+  const { callLocalPlans } = await import("../lib/local_plan_service.mjs");
+  if (action === "session") {
+    if (args.length !== 1 || !values.repo?.length || !fields("repo")) throw new Error("usage: plan session --repo OWNER/REPO");
+    console.log(JSON.stringify(await callLocalPlans(gallivantHome(), { op: "session", repositories: values.repo })));
+    return 0;
+  }
   if (action !== "queue" && PLAN_CONTROL_ACTIONS.includes(action)) {
     const edit = ["attach", "edit"].includes(action);
     if (args.length !== (edit ? 3 : 2) || !fields("approve", "request-id",
@@ -171,7 +202,8 @@ async function planCommand(args, values) {
       ...(values.group !== undefined ? { group: values.group } : {}),
       ...(values.node !== undefined ? { node: values.node } : {}),
       ...(edit ? { input: { file: args[2], options: compileOptions } } : {}) };
-    console.log(JSON.stringify(await planControl(makeContext({ readOnly: true }), command)));
+    const ctx = makeContext({ readOnly: true });
+    console.log(JSON.stringify(ctx.localPlans.enabled ? await callLocalPlans(ctx.home, { op: "control", ...command }) : await planControl(ctx, command)));
     return 0;
   }
   if (["validate", "preview", "queue"].includes(action) && (args.length !== 2 || !fields("dir", "checkout", ...(action === "queue" ? ["approve", "request-id"] : []))) ||
@@ -181,6 +213,24 @@ async function planCommand(args, values) {
     throw new Error("usage: plan validate|preview|queue <file> | plan [inspect] [<name>] | plan migration [--approve <digest>]");
   }
   const ctx = makeContext({ readOnly: true }), input = { file: target, options: compileOptions };
+  if (action === "queue" && !values.approve) throw new Error("Preview the plan and supply its exact approval digest with --approve.");
+  if (ctx.localPlans.enabled) {
+    const approve = values.approve;
+    const selector = action === "inspect" ? target : action;
+    const command = action === "preview" ? { op: "preview", ...input }
+      : action === "queue" ? { op: "control", action, stage: "confirm", input, approve, requestId: values["request-id"] ?? approve }
+      : action === "migration" ? { op: "migration", approve }
+      : { op: "inspect", selector };
+    let result;
+    try { result = await callLocalPlans(ctx.home, command); }
+    catch (error) {
+      if (action !== "preview" || error.code !== "PLAN_QUALIFICATION") throw error;
+      result = await previewPlan(ctx, input);
+      result.observation.localSetup = error.message;
+    }
+    console.log(JSON.stringify(action === "queue" ? { ...result, planLink: `/plans?plan=${encodeURIComponent(result.instanceId)}` } : result));
+    return 0;
+  }
   const result = action === "preview" ? await previewPlan(ctx, input)
     : action === "queue" ? await queuePlan(ctx, input, { approve: values.approve, requestId: values["request-id"] })
     : action === "migration" ? migratePlans(ctx, values.approve)
@@ -192,7 +242,7 @@ async function planCommand(args, values) {
 async function dispatch(argv) {
   const options = argv[0] === "learn" ? { ...OPTIONS, run: { type: "string" } }
     : argv[0] === "plan" ? { dir: OPTIONS.dir, json: OPTIONS.json, help: OPTIONS.help, approve: OPTIONS.approve, "request-id": OPTIONS["request-id"],
-      group: { type: "string" }, node: { type: "string" }, checkout: { type: "string", multiple: true } }
+      check: OPTIONS.check, repo: { type: "string", multiple: true }, worker: { type: "string" }, group: { type: "string" }, node: { type: "string" }, checkout: { type: "string", multiple: true } }
     : OPTIONS;
   const { values, positionals } = parseArgs({ args: argv, options, allowPositionals: true });
   const [cmd, arg] = positionals;
@@ -210,8 +260,11 @@ async function dispatch(argv) {
     const { futurePlanTarget, queuePlan } = await import("../lib/dependency_plan_admission.mjs");
     const target = futurePlanTarget(arg, afterChain, afterNode);
     const ctx = makeContext({ readOnly: true });
-    const report = await queuePlan(ctx, { linear: { name: arg, paths: positionals.slice(2), base: values.base, target } },
-      { approve: values.approve, requestId: values["request-id"] });
+    const input = { linear: { name: arg, paths: positionals.slice(2).map(path => resolve(path)), base: values.base, target } };
+    const approve = values.approve, requestId = values["request-id"] ?? approve;
+    const { callLocalPlans } = await import("../lib/local_plan_service.mjs");
+    const report = ctx.localPlans.enabled ? await callLocalPlans(ctx.home, approve === undefined ? { op: "preview", ...input }
+      : { op: "control", action: "queue", stage: "confirm", input, approve, requestId }) : await queuePlan(ctx, input, { approve, requestId });
     console.log(JSON.stringify(report));
     return 0;
   }

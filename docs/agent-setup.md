@@ -252,16 +252,22 @@ unverified. Setup can report that limitation without installing a service.
 
 ## Dependency plan setup checks
 
+Use `gallivant plan setup --check --json` in the operator terminal to identify
+the first missing requirement. The local route uses a dedicated unprivileged
+OS account and the configured Codex executable. Complete account provisioning
+and sign-in under that account. `plan setup` enrolls the same private home and
+reports when the service needs to reload. [Local setup and support matrix](dependency-plans.md#local-install)
+
 Run `plan validate FILE --json` to check local manifest structure without
 configuration. Use `plan preview FILE --json` to inspect repository bindings,
 source and base-file hashes, configured routes and limits when host access is
 available. Report unverified capabilities from the output as such.
 
-Have the operator review and confirm through the qualified ingress. For
-dispatch, verify the exact host and author route, the outer worker isolation
-and the configured graph capacity. A copied digest grants no operator
-authority. Keep active claims and snapshots in place when reviewing a
-migration. [Dependency plan configuration](config.md#dependency-plan-admission)
+Have the operator review the exact digest in the terminal before running
+`gallivant plan queue FILE --approve DIGEST`. Use the same file and checkout
+arguments. The coordinator owns the saved approval across terminal closure and
+restart. Keep active claims and snapshots in place when reviewing a migration.
+[Dependency plan configuration](config.md#dependency-plan-admission)
 [Dependency plan commands](commands.md)
 
 Before a native or live qualification, inspect the existing protected admission

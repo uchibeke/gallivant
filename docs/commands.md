@@ -252,17 +252,21 @@ with `--json`. See [the grammar and runnable examples](dependency-plans.md).
 
 | Command | Effect |
 |---|---|
+| `gallivant plan setup --check [--worker USER] [--json]` | Report the selected host, worker identity and launch, approval access, configured graph ceilings and first prerequisite. Runs bounded checks without admitting work or writing config. |
+| `gallivant plan setup [--worker USER]` | Enroll the qualified local worker and operator for this home and set positive graph ceilings. Reports when to reload. |
 | `gallivant plan preview FILE --json` | Resolve the full approval through bounded read-only host and checkout checks. |
-| `gallivant plan queue FILE --approve DIGEST [--request-id ID]` | Save one reviewed plan through the qualified operator ingress. The approved graph capacity controls dispatch eligibility. Reuse the same request identity after a lost response. |
+| `gallivant plan queue FILE --approve DIGEST [--request-id ID]` | Save one reviewed plan through the private local service. Returns the receipt and tracker path. Reuse the digest and request identity after a lost response. |
 | `gallivant plan [inspect] [NAME]` | List or inspect admitted plans in the authenticated operator's scope. |
+| `gallivant plan session --repo OWNER/REPO [--repo OWNER/REPO ...]` | Issue a short-lived tracker session scoped to the named repositories. At `/plan-session`, use `operator` as the username and the session value as the password. |
 | `gallivant plan migration [--approve DIGEST]` | Preview or seal the exact legacy checkpoint. Legacy dispatch retains ownership. |
 | `gallivant plan hold NAME [--group GROUP] --request-id ID` | Review a future-dispatch hold. Repeat with `--approve REVISION` to apply it. `unhold` and `cancel` use the same scoped review. |
 | `gallivant plan retry NAME --node NODE --request-id ID` | Review rearming a blocked or provably unsubmitted node. |
 | `gallivant plan edit NAME FILE --request-id ID` | Review exact changes to future work. `attach` adds a reviewed producer link using the same review and confirmation flow. |
 
 Preview and queue accept the validation command's `--dir` and `--checkout`
-arguments. Queue without a digest returns the proposal. Admission, protected
-inspection and saved producer links require a qualified deployment. [Dependency plan admission](dependency-plans.md#resolved-preview-and-admission)
+arguments. Use the resolved preview's `approvalDigest` before its displayed
+expiry. Admission, protected inspection and saved producer links require a
+qualified deployment. [Dependency plan admission](dependency-plans.md#resolved-preview-and-admission)
 
 Maintainers run `node scripts/qualify-dependency-plans.mjs --fixtures` from the
 source checkout. The three protected modes use the exact admitted task,

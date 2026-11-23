@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { existsSync, mkdirSync, statSync, writeFileSync } from "node:fs";
 import { basename, dirname, join } from "node:path";
 import { test } from "node:test";
+import { stringify } from "yaml";
 import { queuePlan, previewPlan, inspectPlan } from "../lib/dependency_plan_admission.mjs";
 import { tickDependencyPlans } from "../lib/dependency_plan_dispatch.mjs";
 import { queueChain, tickChains } from "../lib/chains.mjs";
@@ -92,17 +93,26 @@ function fixture(t, { capacity = 4, perRepo = capacity, graph = capacity, prepar
       fileAt: async () => null,
     },
   };
-  let permitted = true;
-  ctx.planAuthority = bindPlanOperator(ctx.state.file, () => ({ principal: "operator-fixture", tenant: "local",
+  let permitted = true, operatorOpen = true;
+  const approvedScope = () => ({ principal: "operator-fixture", tenant: "local",
     grant: ({ action }) => permitted ? `${action}-proof` : null,
-    isolation: { registry: ctx.state.file, qualified: true, workerExcluded: true, launchDigest: "a".repeat(64), expiresAt: Date.now() + 30_000 } }));
+    isolation: { registry: ctx.state.file, qualified: true, workerExcluded: true, launchDigest: "a".repeat(64), expiresAt: Date.now() + 30_000 } });
+  ctx.planAuthority = bindPlanOperator(ctx.state.file, () => operatorOpen ? approvedScope() : null);
+  const dispatchAuthority = bindPlanOperator(ctx.state.file, approvedScope, { dispatchOnly: true });
   const brief = (name, repo = PRODUCER) => put(join(dirs.get(repo), "docs/prds", `${name}.md`), GOOD_PRD.replace("harness: codex", `harness: ${harness}`));
-  const queue = async (name, nodes) => {
-    for (const node of nodes) if (node.type === "task") brief(node.id, node.repository === "two" ? consumer : PRODUCER);
-    const file = put(join(root, `${name}.json`), JSON.stringify({ version: 1, name, repositories: {
+  const queue = async (name, nodes, format = "json") => {
+    const writeBriefs = children => {
+      for (const node of children) {
+        if (node.type === "task") brief(node.id, node.repository === "two" ? consumer : PRODUCER);
+        else if (node.type === "group") writeBriefs(node.children);
+      }
+    };
+    writeBriefs(nodes);
+    const manifest = { version: 1, name, repositories: {
       one: { repository: PRODUCER, checkout: basename(PRODUCER), base: "main" },
       two: { repository: consumer, checkout: basename(consumer), base: "main" },
-    }, nodes }));
+    }, nodes };
+    const file = put(join(root, `${name}.${format}`), format === "yaml" ? stringify(manifest) : JSON.stringify(manifest));
     const input = { file, options: { directory: root, checkouts: repositories.map(repo => basename(repo)) } };
     return queuePlan(ctx, input, { approve: (await previewPlan(ctx, input)).approvalDigest });
   };
@@ -110,7 +120,7 @@ function fixture(t, { capacity = 4, perRepo = capacity, graph = capacity, prepar
   const restart = () => { ctx.state = makeState(home); schedule = makeRecoverySchedule({ home, clock }); };
   const tick = async () => {
     const cycle = schedule.begin();
-    const result = await tickDependencyPlans(ctx, cycle);
+    const result = await tickDependencyPlans({ ...ctx, planAuthority: dispatchAuthority }, cycle);
     cycle.finish();
     return result;
   };
@@ -139,13 +149,21 @@ function fixture(t, { capacity = 4, perRepo = capacity, graph = capacity, prepar
   };
   const node = (plan, id) => inspectPlan(ctx, plan).graph.nodes.find(node => node.id === id);
   return { home, ctx, clock, queue, brief, tick, advance, restart, finish, merge, node, entryFor, started, calls, runners, integrated, bases, ids,
-    revoke: () => { permitted = false; } };
+    closeOperator: () => { operatorOpen = false; }, revoke: () => { permitted = false; } };
 }
 
-test("capacity-one diamond releases author slots before integration and joins only after both exact receipts", async t => {
+test("nested YAML diamond dispatches across operator exit and restart, joining only after both exact receipts", async t => {
   const w = fixture(t, { capacity: 1 });
-  await w.queue("diamond", [task("root"), task("left", ["root"]), task("right", ["root"]), task("join", ["left", "right"])]);
+  await w.queue("diamond", [{ id: "delivery", type: "group", mode: "sequence", children: [task("root"),
+    { id: "fan", type: "group", mode: "parallel", children: [task("left"), task("right")] }, task("join")] }], "yaml");
+  w.closeOperator();
+  assert.throws(() => inspectPlan(w.ctx, "diamond"), { code: "PLAN_AUTHORITY" });
   await w.tick();
+  assert.equal(w.started("root"), 1);
+  const key = `${PRODUCER}/root`, reserved = w.ctx.state.load().dispatch.authors[key];
+  w.restart();
+  await w.tick();
+  assert.deepEqual(w.ctx.state.load().dispatch.authors[key], reserved);
   assert.equal(w.started("root"), 1);
   await assert.rejects(start(w.ctx, { path: w.brief("manual") }), { code: "AUTHOR_CAPACITY" });
   w.finish("root");

@@ -221,9 +221,13 @@ the shipped synthetic graph from a source checkout.
 gallivant plan validate synthetic.yaml --dir templates/dependency-plan --json
 ```
 
-Compilation needs only local files. Preview resolves exact repository and input
-bindings. Queue and controls require a protected operator deployment. Graph
-dispatch defaults to off and has separate route and isolation prerequisites.
+On a GitHub and local Codex installation, provision a dedicated worker account
+and run `gallivant plan setup --check`. Once the account and path checks pass, enroll the
+operator with `gallivant plan setup`. Start the coordinator with
+`gallivant start --no-server`, then preview a plan and queue its exact approval
+digest. The coordinator continues from the saved approval as predecessor PRs
+are merged. [Worker setup and first plan](docs/dependency-plans.md#local-install)
+
 [Dependency plans](docs/dependency-plans.md) · [Qualification](docs/dependency-plan-qualification.md)
 
 ## Harness support
@@ -273,7 +277,7 @@ New tasks can pin `external-required`, `first-party-required`, or `both-required
 | Review loop | Watch CI and trusted feedback, continue corrections, recover bounded connection failures and inspect stops | [Commands](docs/commands.md), [recovery](docs/network-recovery.md) |
 | Run controls | Message, resume, recheck or cancel from the CLI/dashboard; inspect saved progress and logs | [Dashboard](docs/app.md) |
 | Sequential plans | Queue dependent briefs with a merge gate between milestones | [Chains](docs/chains.md) |
-| Dependency plans | Compile JSON or YAML graphs. Review saved prerequisites, future anchors and parallel work from Plans in a protected deployment | [Manifest and gates](docs/dependency-plans.md) |
+| Dependency plans | Compile JSON or YAML graphs, queue an approved revision from the local CLI, and follow prerequisites and parallel work from Plans | [Local install and manifest](docs/dependency-plans.md#local-install) |
 | Completion checks | Evaluate acceptance evidence with APort or the explicit local evaluator; choose review handoff or watching for merge | [Guardrails](docs/guardrails.md), [milestones](docs/tasks.md#choose-the-delivery-milestone) |
 | Notifications | Configure transition notifications through ntfy | [Configuration](docs/config.md) |
 | Board collaboration | Mirror significant transitions to one-way task threads and a Needs owner queue | [Board collaboration](docs/collaboration.md) |
