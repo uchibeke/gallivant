@@ -130,6 +130,21 @@ test("a measured slow residual gets its own lane even when literal cases are che
   assert.deepEqual(lanes[1].units[0].names, ["a"]);
 });
 
+test("CI sharding accounts for the observed macOS recovery and dependency runtimes", () => {
+  const root = fileURLToPath(new URL("..", import.meta.url));
+  const weights = JSON.parse(readFileSync(new URL("../scripts/ci-weights.json", import.meta.url), "utf8"));
+  // Whole-file elapsed seconds, rounded up, from runs 45216984469 and 45210691674.
+  const observed = new Map([
+    ["test/recovery-git-journal.test.mjs", 57],
+    ["test/dependency-plan-dispatch.test.mjs", 21],
+  ]);
+  const lanes = shardUnits(testUnits(root, [...observed.keys()], weights));
+  for (const lane of lanes) {
+    const elapsed = lane.units.reduce((sum, unit) => sum + observed.get(unit.file), 0);
+    assert.ok(lane.seconds >= elapsed, `macOS lane estimated ${lane.seconds}s for ${elapsed}s of observed work`);
+  }
+});
+
 test("real sharded Node execution retains nested, dynamic, aliased and prefix-overlapping tests exactly once", t => {
   const { root, put } = fixture(t);
   put("package.json", '{"type":"module"}');
