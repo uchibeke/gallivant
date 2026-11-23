@@ -82,9 +82,9 @@ const HELP = `gallivant: give an agent a task, let the review loop run, go outsi
                                          review a legacy checkpoint; keep the existing dispatch owner
   gallivant start [prd.md] [--no-daemon] [--no-server] [--no-open] [--port 8791] [--base <branch>]
                                          start the daemon and dashboard, then open it; optionally start a ready PRD
+                                         --base sets the branch the PR targets and remembers it for this repository
   gallivant ci-timing <owner/repo> [--json]
                                          show the saved CI timing and activation revision
-                                         --base sets the branch the PR targets and remembers it for this repository
   gallivant register <pr-url> [--harness <name>] [--session <id>] [--worktree <dir>]
                                          watch a hand-made PR; on an existing entry, reset it
   gallivant chain <name> <prd1.md> <prd2.md> ... [--base <branch>]
@@ -324,7 +324,7 @@ async function dispatch(argv) {
         const r = await start(ctx, { path: arg, base: values.base, recoveryProfile: values["recovery-profile"] });
         console.log(`${r.id}: started in ${r.worktree} on ${r.branch} -> ${r.base} (run ${r.run})`);
         const timing = ctx.state.get(r.id)?.ciTiming;
-        if (timing) console.log(`CI ${timing.timing === "after-review" ? "after review" : "immediately"}${timing.revision ? ` · approved revision ${timing.revision}` : ""}`);
+        if (timing) process.stdout.write(`CI ${timing.timing === "after-review" ? "after review" : "immediately"}${timing.revision ? ` · approved revision ${timing.revision}` : ""}\n`);
         if (r.baseSource === "flag") console.log(`Base branch ${r.base} remembered for this repository; later starts here need no --base.`);
         else if (r.baseSource === "config") console.log(`Base branch ${r.base} comes from repos in config.json.`);
       }
@@ -337,10 +337,11 @@ async function dispatch(argv) {
       if (!arg || positionals.length !== 2) throw new Error("ci-timing needs one repository identity");
       const repo = repositoryIdentity(arg).key;
       const view = ciTimingView(ctx.config, ctx.state, repo);
-      console.log(values.json ? JSON.stringify(view, null, 2) : [
+      const text = values.json ? JSON.stringify(view, null, 2) : [
         `${repo} · CI ${view.timing === "after-review" ? "after review" : "immediately"}`,
         view.activation, view.revision && `Approval revision ${view.revision}`,
-      ].filter(Boolean).join("\n"));
+      ].filter(Boolean).join("\n");
+      process.stdout.write(text + "\n");
       return 0;
     }
     case "register": { if (!arg) throw new Error("register needs a PR URL"); const r = await register(ctx, { url: arg, harness: values.harness, session: values.session, worktree: values.worktree }); console.log(`${r.id}: watching PR #${r.pr} with ${r.harness}`); return 0; }
