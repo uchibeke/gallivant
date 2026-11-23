@@ -2,11 +2,10 @@
 
 Pull-request CI selects tests by the actual base-to-head diff. It does not delete
 regressions or assume an unchanged component will never need testing again.
-Each CI job has a two-minute hard limit. A timeout, failed setup, missing plan,
-unobserved selected test or failed test fails the merge gate; partial output is
-never a pass. Runner queue time and separate dependency jobs can make total
-workflow elapsed time longer than two minutes. Release publishing itself keeps
-its separately protected workflow and deadline.
+Regression test execution has a 100-second limit. A timeout, failed setup,
+missing plan, unobserved selected test or failed test fails the merge gate.
+Runner queueing and dependency setup contribute to total workflow time.
+Release publishing keeps its separately protected workflow and deadline.
 
 ## Selection
 
@@ -48,9 +47,7 @@ Measured whole-file timings account for suites whose dynamic cases are absent
 from the literal test index. Slow parameterized pack operations have explicit
 top-level names with shared assertion helpers, so one residual cannot accumulate
 all of their real pack work.
-The runner has a
-100-second execution ceiling within the job's two-minute deadline. A single
-known test over 95 seconds is refused with an instruction to split that test,
+A single known test over 95 seconds is refused with an instruction to split it,
 not silently omit it. Adjust case structure or rebalance measured weights if a
 job exceeds its deadline; do not merely increase or suppress the gate.
 
@@ -68,6 +65,9 @@ scheduled twice for the same source update.
 The always-running `CI` job explicitly requires the plan, selected shards,
 installed-package checks and any required browser check to succeed. A dependency
 being cancelled or unexpectedly skipped cannot turn that gate green.
+
+Regression jobs receive the same checkout-bound plan as a bounded compressed
+job output. The uploaded plan remains available for diagnostics.
 
 The four existing `test (os, node)` contexts remain as tiny compatibility merge
 gates depending on `CI`, preserving the current Protect main ruleset during

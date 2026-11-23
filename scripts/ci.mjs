@@ -2,9 +2,13 @@ import { readFileSync, writeFileSync, appendFileSync, existsSync, lstatSync } fr
 import { resolve, dirname, relative } from "node:path";
 import { execFileSync, execFile } from "node:child_process";
 import { promisify } from "node:util";
+import { brotliCompressSync, brotliDecompressSync, constants as compression } from "node:zlib";
 import { selection, testUnits, shardUnits, parallelShards, changedPaths, patternFor } from "./ci-plan.mjs";
 
 const root = process.cwd(), command = process.argv[2];
+// Keep the single environment value below Linux's 128 KiB argument limit.
+const MAX_PLAN_ENV_BYTES = 96 * 1024;
+const MAX_PLAN_JSON_BYTES = 1024 * 1024;
 const sha = () => execFileSync("git", ["rev-parse", "HEAD"], { encoding: "utf8" }).trim();
 const output = (key, value) => { if (process.env.GITHUB_OUTPUT) appendFileSync(process.env.GITHUB_OUTPUT, `${key}=${typeof value === "string" ? value : JSON.stringify(value)}\n`); };
 const event = process.env.CI_EVENT || "pull_request", base = process.env.CI_BASE_SHA;
@@ -14,9 +18,19 @@ const testEnvironment = () => {
   const env = { ...process.env };
   // All explicit child runners, including docs checks, need their own protocol.
   delete env.NODE_TEST_CONTEXT;
+  delete env.CI_REGRESSION_PLAN;
   env.FORCE_COLOR = "0";
   return env;
 };
+
+function readRegressionPlan(path) {
+  if (path) return JSON.parse(readFileSync(path, "utf8"));
+  const payload = process.env.CI_REGRESSION_PLAN;
+  if (!payload || payload.length > MAX_PLAN_ENV_BYTES) throw new Error("Missing or oversized CI regression plan output");
+  const compressed = Buffer.from(payload, "base64");
+  if (compressed.toString("base64") !== payload) throw new Error("Invalid CI regression plan encoding");
+  return JSON.parse(brotliDecompressSync(compressed, { maxOutputLength: MAX_PLAN_JSON_BYTES }).toString("utf8"));
+}
 
 async function runLane(units, deadline) {
   const files = new Map();
@@ -56,18 +70,29 @@ if (command === "plan") {
   const weights = JSON.parse(readFileSync(new URL("./ci-weights.json", import.meta.url)));
   const shards = parallelShards(shardUnits(testUnits(root, selected.files, weights)));
   const plan = { version: 1, sha: sha(), ...selected, shards };
-  writeFileSync(process.argv[3], JSON.stringify(plan));
+  const serialized = JSON.stringify(plan);
+  writeFileSync(process.argv[3], serialized);
   const matrix = selected.platforms.flatMap(platform => shards.map((_, index) => ({ ...platform, index })));
   if (matrix.length > 240) throw new Error("CI plan exceeds the bounded matrix; split or rebalance the inventory");
+  if (process.env.GITHUB_OUTPUT && matrix.length) {
+    if (Buffer.byteLength(serialized) > MAX_PLAN_JSON_BYTES)
+      throw new Error("CI regression plan exceeds its expanded size budget; split or rebalance the inventory");
+    const payload = brotliCompressSync(serialized, {
+      params: { [compression.BROTLI_PARAM_QUALITY]: 6 },
+    }).toString("base64");
+    if (payload.length > MAX_PLAN_ENV_BYTES)
+      throw new Error("CI regression plan exceeds its job output budget; split or rebalance the inventory");
+    output("regression_plan", payload);
+  }
   output("units", { include: matrix.length ? matrix : [{ os: "ubuntu-24.04", node: 22, index: -1 }] });
   output("smoke", { include: selected.smoke });
   output("has_units", Boolean(matrix.length)); output("browser", selected.browser);
   output("mode", selected.mode);
-  const summary = `## CI plan\n\nMode: **${selected.mode}**. Selected ${selected.files.length} test files in ${shards.length} bounded shards. ${matrix.length} OS/Node shard jobs.\n\nOrdinary files run intact. Partitioned files retain named tests and an exhaustive residual for dynamic registrations. Each job has a two-minute hard limit; timeout fails the gate. Full four-platform qualification is retained for sensitive PRs, nightly runs and release calls.\n`;
+  const summary = `## CI plan\n\nMode: **${selected.mode}**. Selected ${selected.files.length} test files in ${shards.length} bounded shards. ${matrix.length} OS/Node shard jobs.\n\nOrdinary files run intact. Partitioned files retain named tests and an exhaustive residual for dynamic registrations. Shard test execution has a 100-second limit. A timeout fails the gate. Full four-platform qualification is retained for sensitive PRs, nightly runs and release calls.\n`;
   if (process.env.GITHUB_STEP_SUMMARY) appendFileSync(process.env.GITHUB_STEP_SUMMARY, summary);
   console.log(summary);
 } else if (command === "run") {
-  const plan = JSON.parse(readFileSync(process.argv[3])), index = Number(process.env.CI_SHARD);
+  const plan = readRegressionPlan(process.argv[3]), index = Number(process.env.CI_SHARD);
   if (plan.version !== 1 || plan.sha !== sha() || !Number.isInteger(index) || !plan.shards[index]) throw new Error("CI plan identity or shard mismatch");
   const lanes = plan.shards[index].lanes;
   if (!Array.isArray(lanes) || !lanes.length || lanes.length > 2 || lanes.some(lane => !Array.isArray(lane) || !lane.length)) throw new Error("Invalid CI shard lanes");
