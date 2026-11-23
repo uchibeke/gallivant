@@ -25,6 +25,7 @@ jobs:
       has_units: ${{ steps.plan.outputs.has_units }}
       browser: ${{ steps.plan.outputs.browser }}
       mode: ${{ steps.plan.outputs.mode }}
+      regression_plan: ${{ steps.plan.outputs.regression_plan }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -78,13 +79,10 @@ jobs:
             sudo xcode-select --switch /Library/Developer/CommandLineTools
           fi
           node test/verification-host.mjs
-      - uses: actions/download-artifact@v4
-        with:
-          name: ci-plan
-          path: ${{ runner.temp }}/ci-plan
       - env:
           CI_SHARD: ${{ matrix.index }}
-        run: node scripts/ci.mjs run "$RUNNER_TEMP/ci-plan/ci-plan.json"
+          CI_REGRESSION_PLAN: ${{ needs.plan.outputs.regression_plan }}
+        run: node scripts/ci.mjs run
   smoke:
     needs: plan
     name: Installed package (${{ matrix.os }}, ${{ matrix.node }})

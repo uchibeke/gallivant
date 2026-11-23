@@ -297,8 +297,20 @@ completion can be certified.
 
 Restart recovery reconciles only the recorded operation and session. It never aborts or resets an unfinished repair.
 Dirty files, unknown ownership, unresolved merges and failed pushes stop with the worktree intact. Unchanged approved
-brief/source overlays may remain untracked; recovery never stages or deletes them to make the tree clean. After a
-push, Git must prove that the observed remote head contains both the repair commit and pinned base. Old readiness and
+brief/source overlays may remain untracked; recovery never stages or deletes them to make the tree clean. During
+an ordinary base refresh, a tracked private input that matches its approved snapshot may temporarily use the clean
+Git checkout representation of the committed file. The coordinator backs up the original bytes and permissions
+under the checkout's Git directory and restores them after the merge or a successful conflict abort. The merge
+commit contains the tracked Git version. Unrelated edits, staged files, links and changed ownership block this path.
+
+If that temporary input handling reveals real code conflicts, recovery restores the inputs and stops with
+`base-repair-overlay` before charging or launching a repair worker. A raw worker merge would otherwise fail on the
+same approved input. An operator must own that merge, keep the approved working copies out of its commit, resolve
+and verify the intended changes, then resume the same task. If an abort or restoration fails, preserve the checkout
+and private `gallivant-merge-overlays` backup. Before the next merge or qualified repair, the owner must reconcile
+the index and restore those exact approved bytes.
+
+After a push, Git must prove that the observed remote head contains both the repair commit and pinned base. Old readiness and
 head-bound review evidence are invalidated; new-head CI, required reviewer clearance and the completion gate still
 decide readiness. See [repair troubleshooting](commands.md#base-repair-troubleshooting).
 

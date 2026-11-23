@@ -24,7 +24,7 @@ const baseCode = "export function calculate(n) { return Math.max(0, n); }\n";
 
 // Native repositories and the real execution ledger; the worker is deliberately
 // controlled by the fixture, with no paid provider calls or host writes.
-function world(t, { hostConflict = true, superseded = false, baseUpdate = "conflict", privateBaseUpdate = false, state: stateName = STATES.prOpen, host = "github.com" } = {}) {
+function world(t, { hostConflict = true, superseded = false, baseUpdate = "conflict", privateBaseUpdate = false, state: stateName = STATES.prOpen, host = "github.com", trackedBrief = false } = {}) {
   const home = tempHome(); t.after(() => rmSync(home, { recursive: true, force: true }));
   const origin = join(home, "origin"), tree = join(home, "trees", "task"), operator = join(home, "operator");
   const calls = [];
@@ -35,16 +35,18 @@ function world(t, { hostConflict = true, superseded = false, baseUpdate = "confl
   };
   mkdirSync(origin); mkdirSync(dirname(tree)); mkdirSync(operator);
   g(["init", "-q", "-b", "main"], origin);
+  if (trackedBrief) write(join(origin, "docs/prds/widget-export.md"), `${GOOD_PRD}\nOriginal tracked metadata.\n`);
   write(join(origin, "shared.mjs"), "export function calculate(n) { return n; }\n");
-  if (privateBaseUpdate) { write(join(origin, "AGENTS.md"), "Keep approved security requirements.\n"); g(["add", "AGENTS.md"], origin); }
-  g(["add", "shared.mjs"], origin); g(["commit", "-qm", "Initial behavior"], origin);
+  if (privateBaseUpdate) write(join(origin, "AGENTS.md"), "Keep approved security requirements.\n");
+  g(["add", "."], origin); g(["commit", "-qm", "Initial behavior"], origin);
   g(["clone", "-q", origin, tree], home); g(["checkout", "-qb", "work/repair"]);
   write(join(tree, "shared.mjs"), "export function calculate(n) { return n + 1; }\n");
   g(["add", "shared.mjs"]); g(["commit", "-qm", "Add task behavior"]); g(["push", "-q", "origin", "work/repair"]);
   if (baseUpdate !== "none") {
     const file = baseUpdate === "independent" ? "base.mjs" : "shared.mjs";
     write(join(origin, file), superseded ? "export function calculate(n) { return Math.max(0, n + 1); }\n" : baseCode);
-    g(["add", file], origin); g(["commit", "-qm", "Preserve safe base behavior"], origin);
+    if (trackedBrief) write(join(origin, "docs/prds/widget-export.md"), `${GOOD_PRD}\nUpdated base metadata.\n`);
+    g(["add", "."], origin); g(["commit", "-qm", "Preserve safe base behavior"], origin);
     if (privateBaseUpdate) {
       write(join(origin, "AGENTS.md"), "Keep approved security requirements.\nNew main documentation.\n");
       g(["add", "AGENTS.md"], origin); g(["commit", "-qm", "Update base documentation"], origin);
@@ -112,6 +114,23 @@ function continuationWorld(t, options) {
   w.ctx.config.harness = { ...CONFIG.harness, claude: { ...CONFIG.harness.claude, bin: harnessBin(w.home, "claude") } };
   return w;
 }
+
+test("a code conflict with an approved tracked input stops unpaid instead of dispatching a doomed raw merge", async t => {
+  const w = world(t, { trackedBrief: true });
+  await w.tick();
+  assert.equal(w.entry().state, STATES.needsHuman);
+  assert.equal(w.entry().reason, "base-repair-overlay");
+  assert.match(w.entry().last.event, /No repair worker was dispatched/);
+  assert.equal(w.raw.started.length, 1, "only the existing settled task run exists");
+  assert.equal(w.entry().base_repair, undefined);
+  assert.equal(w.entry().base_repair_attempts, undefined);
+  assert.equal(w.entry().iteration, 0);
+  assert.equal(w.entry().base_merge.aborted, true);
+  assert.equal(w.entry().base_merge.overlayConflict, true);
+  assert.equal(readFileSync(join(w.tree, w.prd), "utf8"), GOOD_PRD);
+  assert.equal(w.g(["rev-parse", "HEAD"]), w.head);
+  assert.deepEqual(await w.git.mergeState(w.tree), { head: null, unmerged: 0, other: [] });
+});
 
 async function managedPreviousRun(w) {
   const job = await w.runner.continue({ operationId: "managed-initial", name: "managed-initial", sessionId: w.entry().session,

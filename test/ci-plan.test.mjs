@@ -5,6 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { execFileSync, spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
+import { brotliCompressSync, brotliDecompressSync } from "node:zlib";
 import { indexFile, selection, testUnits, shardUnits, parallelShards, changedPaths, CPU_TEST } from "../scripts/ci-plan.mjs";
 
 const fixture = t => {
@@ -268,6 +269,27 @@ test("real sharded Node execution retains nested, dynamic, aliased and prefix-ov
   plan.shards=[{lanes:[[{file:"test/a.test.mjs",names:["does not exist"]}]]}]; put("plan.json",JSON.stringify(plan));
   const missing=spawnSync(process.execPath,[runner,"run",join(root,"plan.json")],{cwd:root,env:{...env,CI_SHARD:"0"},encoding:"utf8"});
   assert.notEqual(missing.status,0,"zero matching tests cannot be green");
+
+  const output = join(root, "outputs");
+  const file = join(root, "generated-plan.json");
+  const planned = spawnSync(process.execPath, [runner, "plan", file], {
+    cwd: root, env: { ...env, GITHUB_OUTPUT: output, CI_EVENT: "release" }, encoding: "utf8",
+  });
+  assert.equal(planned.status, 0, planned.stdout + planned.stderr);
+  const prefix = "regression_plan=";
+  const payload = readFileSync(output, "utf8").split("\n").find(line => line.startsWith(prefix))?.slice(prefix.length);
+  assert.ok(payload);
+  const decoded = brotliDecompressSync(Buffer.from(payload, "base64")).toString("utf8");
+  assert.equal(decoded, readFileSync(file, "utf8"));
+  const runFromOutput = value => spawnSync(process.execPath, [runner, "run"], {
+    cwd: root, env: { ...env, CI_SHARD: "0", CI_REGRESSION_PLAN: value }, encoding: "utf8",
+  });
+  const transported = runFromOutput(payload);
+  assert.equal(transported.status, 0, transported.stdout + transported.stderr);
+  const stale = { ...JSON.parse(decoded), sha: "0".repeat(40) };
+  assert.match(runFromOutput(brotliCompressSync(JSON.stringify(stale)).toString("base64")).stderr, /CI plan identity or shard mismatch/);
+  assert.match(runFromOutput("").stderr, /Missing or oversized CI regression plan output/);
+  assert.match(runFromOutput("invalid!").stderr, /Invalid CI regression plan encoding/);
 });
 
 test("changed paths require a commit identity rather than shell input or a guessed base", () => {

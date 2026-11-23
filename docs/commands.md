@@ -681,11 +681,12 @@ Use `gallivant why <handle>` to inspect a repair stop:
 | `base-repair-prerequisite` | Restore the named host, local continuation capability, base, credential or provider prerequisite. |
 | `base-repair-ownership` | Restore the matching repository, branch, session and execution ledger. Never delete the operation to force another launch. |
 | `base-repair-dirty`, `base-repair-unresolved` | Preserve the index and files. Reconcile unrelated edits explicitly; finish the owned merge, verification and commit in its task checkout. |
+| `base-repair-overlay` | Preserve the exact index, private backups and working files. For an ordinary refresh, preserve `gallivant-merge-overlays` under the checkout's Git directory until the owner reconciles the original approved bytes and index. If the restored inputs revealed a code conflict, finish and verify the operator-owned merge before resuming. See [approved input handling](config.md#keeping-a-branch-on-its-base). |
 | `base-repair-push`, `base-repair-no-merge` | Inspect the saved SHAs, finish the pinned merge and push the task branch. Resume after remote evidence agrees. |
 | `base-repair-failed` | Inspect the owned worker log and failed verification/provider result. No second paid operation is launched automatically. |
 | `base-repair-duplicate`, `base-repair-iterations` | Review the original failure and existing iteration allowance. Recheck never repeats the same input or resets the budget. |
 | `base-repair-evidence` | Reconcile inconsistent host/base evidence. A repair push alone cannot release a successor. |
-| `base-repair-manifest`, `base-repair-overlay` | Preserve the exact index, private backups and working files. Restore the recorded ownership and bytes before Recheck. |
+| `base-repair-manifest` | Preserve the exact index, private backups and working files. Restore the recorded ownership and bytes before Recheck. |
 | `base-repair-verify` | Inspect the exact candidate and recorded Verify exits. Restore the supported verification sandbox or reconcile the failed candidate before publication. |
 | `base-repair-review` (older versions) | Update Gallivant and recheck. A confirmed maintainer merge closes the run and releases its chain dependency; missing readiness evidence remains unverified. |
 
