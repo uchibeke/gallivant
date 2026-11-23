@@ -113,6 +113,26 @@ test("dispatch workflow rendering rejects unsupported concurrency settings", () 
   }
 });
 
+test("generated dispatch steps use the workspace root while the original suite keeps its run defaults", () => {
+  const source = original
+    .replace("jobs:", "defaults:\n  run:\n    shell: sh\n    working-directory: frontend\njobs:")
+    .replace("    steps:", "    defaults:\n      run:\n        working-directory: packages/ui\n    steps:");
+  const before = parse(source);
+  const rendered = renderPilotWorkflow(source, proposal);
+  const after = parse(rendered.text);
+  const guard = after.jobs.review_ci_candidate;
+  const selected = after.jobs.browser;
+  const [, confirm, ...tests] = selected.steps;
+
+  assert.equal(guard.steps[0]["working-directory"], ".");
+  assert.equal(guard.steps[0].uses, undefined);
+  assert.equal(confirm["working-directory"], ".");
+  assert.deepEqual(after.defaults, before.defaults);
+  assert.deepEqual(selected.defaults, before.jobs.browser.defaults);
+  assert.deepEqual(tests, before.jobs.browser.steps.slice(1));
+  assert.equal(verifyPilotWorkflow(source, rendered.text, proposal).workflowName, "Browser");
+});
+
 test("the generated candidate step admits only the current exact approval, head, base and test merge", async () => {
   const shell = parse(renderPilotWorkflow(original, proposal).text).jobs.review_ci_candidate.steps[0].run;
   const code = shell.split("\n").slice(1, -1).join("\n");
