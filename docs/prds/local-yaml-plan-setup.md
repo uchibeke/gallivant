@@ -41,8 +41,8 @@ Update README, agent setup, commands, config and dependency plan documentation. 
 Queue these three briefs in order through the existing linear chain on the approved base.
 
 1. [Local YAML plan setup](local-yaml-plan-setup.md)
-2. [Task and plan file viewer](task-and-plan-file-viewer.md)
-3. [Plan approval links and operator API](plan-approval-links-and-operator-api.md)
+2. Task and plan file viewer (`task-and-plan-file-viewer.md`)
+3. Plan approval links and operator API (`plan-approval-links-and-operator-api.md`)
 
 ## Verify
 
