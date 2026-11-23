@@ -69,8 +69,7 @@ test("shared start refuses pending after-review setup before cloning and leaves 
   assert.equal(readFileSync(pending.prdPath, "utf8"), GOOD_PRD);
   const immediate = startWorld();
   const result = await start(immediate.ctx, { path: immediate.prdPath });
-  assert.equal(result.ciTiming.timing, "immediate");
-  assert.equal(immediate.ctx.state.get(result.id).ciTiming.revision, null);
+  assert.deepEqual(immediate.ctx.state.get(result.id).ciTiming, { version: 1, timing: "immediate", revision: null });
   assert.deepEqual(JSON.parse(readFileSync(join(immediate.home, "config.json"))).repos, ["acme/widget"]);
 });
 

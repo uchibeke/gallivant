@@ -323,7 +323,8 @@ async function dispatch(argv) {
       if (cmd === "start" && arg) {
         const r = await start(ctx, { path: arg, base: values.base, recoveryProfile: values["recovery-profile"] });
         console.log(`${r.id}: started in ${r.worktree} on ${r.branch} -> ${r.base} (run ${r.run})`);
-        console.log(`CI ${r.ciTiming.timing === "after-review" ? "after review" : "immediately"}${r.ciTiming.revision ? ` · approved revision ${r.ciTiming.revision}` : ""}`);
+        const timing = ctx.state.get(r.id)?.ciTiming;
+        if (timing) console.log(`CI ${timing.timing === "after-review" ? "after review" : "immediately"}${timing.revision ? ` · approved revision ${timing.revision}` : ""}`);
         if (r.baseSource === "flag") console.log(`Base branch ${r.base} remembered for this repository; later starts here need no --base.`);
         else if (r.baseSource === "config") console.log(`Base branch ${r.base} comes from repos in config.json.`);
       }
